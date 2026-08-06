@@ -795,8 +795,8 @@ namespace {
                 << "\t}\n"
                 << "\treturn SIZE_MAX;\n"
                 << "}\n"
-                // Map of reversed nibbles                       0  1  2  3  4  5  6  7   8  9 10 11 12 14 15
-                << "static const uint8_t __mrustc_revmap[16] = { 0, 8, 4,12, 2,10, 6,14,  1, 9, 5,13, 3, 7,15};\n"
+                // Map of reversed nibbles                       0  1  2  3  4  5  6  7   8  9 10 11 12 13 14 15
+                << "static const uint8_t __mrustc_revmap[16] = { 0, 8, 4,12, 2,10, 6,14,  1, 9, 5,13, 3,11, 7,15};\n"
                 << "static inline uint8_t __mrustc_bitrev8(uint8_t v) { if(v==0||v==0xFF) return v; return __mrustc_revmap[v>>4]|(__mrustc_revmap[v&15]<<4); }\n"
                 << "static inline uint16_t __mrustc_bitrev16(uint16_t v) { if(v==0) return 0; return ((uint16_t)__mrustc_bitrev8(v>>8))|((uint16_t)__mrustc_bitrev8(v)<<8); }\n"
                 << "static inline uint32_t __mrustc_bitrev32(uint32_t v) { if(v==0) return 0; return ((uint32_t)__mrustc_bitrev16(v>>16))|((uint32_t)__mrustc_bitrev16(v)<<16); }\n"
@@ -2785,6 +2785,44 @@ namespace {
                         << "\tconst uint8_t* mask = (const uint8_t*)&arg1;\n"
                         << "\tuint8_t* dst = (uint8_t*)&rv;\n"
                         << "\tfor(int i = 0; i < " << 256/8 << "; i ++) dst[i] = (mask[i] < 0x80 ? src[(i & 16) | (mask[i] & 0xF)] : 0);\n"
+                        << "\treturn rv;\n"
+                        ;
+                }
+                // Multiply-add intrinsics used by simd-adler32 (via png's flate2)
+                else if( item.m_linkage.name == "llvm.x86.ssse3.pmadd.ub.sw.128" || item.m_linkage.name == "llvm.x86.avx2.pmadd.ub.sw" ) {
+                    int n = (item.m_linkage.name == "llvm.x86.avx2.pmadd.ub.sw" ? 32 : 16);
+                    m_of
+                        << "\tconst uint8_t* a = (const uint8_t*)&arg0;\n"
+                        << "\tconst int8_t* b = (const int8_t*)&arg1;\n"
+                        << "\tint16_t* dst = (int16_t*)&rv;\n"
+                        << "\tfor(int i = 0; i < " << n/2 << "; i ++) {\n"
+                        << "\t\tint32_t v = (int32_t)a[2*i]*b[2*i] + (int32_t)a[2*i+1]*b[2*i+1];\n"
+                        << "\t\tdst[i] = (int16_t)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));\n"
+                        << "\t}\n"
+                        << "\treturn rv;\n"
+                        ;
+                }
+                else if( item.m_linkage.name == "llvm.x86.sse2.pmadd.wd" || item.m_linkage.name == "llvm.x86.avx2.pmadd.wd" ) {
+                    int n = (item.m_linkage.name == "llvm.x86.avx2.pmadd.wd" ? 16 : 8);
+                    m_of
+                        << "\tconst int16_t* a = (const int16_t*)&arg0;\n"
+                        << "\tconst int16_t* b = (const int16_t*)&arg1;\n"
+                        << "\tint32_t* dst = (int32_t*)&rv;\n"
+                        << "\tfor(int i = 0; i < " << n/2 << "; i ++) dst[i] = (int32_t)a[2*i]*b[2*i] + (int32_t)a[2*i+1]*b[2*i+1];\n"
+                        << "\treturn rv;\n"
+                        ;
+                }
+                else if( item.m_linkage.name == "llvm.x86.sse2.psad.bw" || item.m_linkage.name == "llvm.x86.avx2.psad.bw" ) {
+                    int n = (item.m_linkage.name == "llvm.x86.avx2.psad.bw" ? 32 : 16);
+                    m_of
+                        << "\tconst uint8_t* a = (const uint8_t*)&arg0;\n"
+                        << "\tconst uint8_t* b = (const uint8_t*)&arg1;\n"
+                        << "\tuint64_t* dst = (uint64_t*)&rv;\n"
+                        << "\tfor(int k = 0; k < " << n/8 << "; k ++) {\n"
+                        << "\t\tuint64_t sum = 0;\n"
+                        << "\t\tfor(int j = 0; j < 8; j ++) { int d = (int)a[k*8+j] - (int)b[k*8+j]; sum += (d < 0 ? -d : d); }\n"
+                        << "\t\tdst[k] = sum;\n"
+                        << "\t}\n"
                         << "\treturn rv;\n"
                         ;
                 }
