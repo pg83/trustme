@@ -409,13 +409,20 @@ namespace {
                             this->context.possible_equate_ivar_bounds(sp, src_inner.data().as_Infer().index, std::move(tys));
                             return ;
                         }
-                        // A pointer cast doesn't constrain its source; while a coercion rule is
-                        // still pending on this ivar, let the later ivar_poss passes use it
-                        // instead of forcing the cast target (bytemuck's checked slice casts).
+                        // A pointer cast doesn't constrain its source. If a real *coercion*
+                        // is still pending on this ivar, defer so the later ivar_poss passes
+                        // can resolve it instead of us forcing the cast target (bytemuck's
+                        // checked slice casts). Bounds-only ivars (e.g. `p as *mut _ as *mut
+                        // u8` in alloc's rc.rs) have no coercion to wait on, so equate now -
+                        // deferring those leaves spare rules and aborts typecheck.
                         auto src_idx = src_inner.data().as_Infer().index;
-                        if( src_idx < this->context.possible_ivar_vals.size() && this->context.possible_ivar_vals[src_idx].has_rules() )
+                        if( src_idx < this->context.possible_ivar_vals.size() )
                         {
-                            return ;
+                            const auto& poss = this->context.possible_ivar_vals[src_idx];
+                            if( !poss.types_coerce_to.empty() || !poss.types_coerce_from.empty() )
+                            {
+                                return ;
+                            }
                         }
                         this->context.equate_types(sp, dst_inner, src_inner);
                     }
