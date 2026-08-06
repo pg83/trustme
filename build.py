@@ -462,6 +462,39 @@ for _start in range(0, len(rustlings_cases), 10):
         color="green",
     ))
 
+# Rust By Example Markdown fences that the reference Rust 1.90 compiler can
+# build and run as independent programs.  Preserve each fence, shard by ten.
+rust_by_example_root = Path(__file__).parent / "tests" / "rust_by_example"
+rust_by_example_cases = [
+    _line.split("\t")
+    for _line in (rust_by_example_root / "cases.tsv").read_text().splitlines()
+]
+rust_by_example_tests = []
+for _start in range(0, len(rust_by_example_cases), 10):
+    _shard = rust_by_example_cases[_start:_start + 10]
+    _paths = [_case for _case, _origin, _edition in _shard]
+    _digest = hashlib.sha256(("\0".join(_paths)).encode()).hexdigest()[:12]
+    _stamp = "$(B)/tests/rust_by_example/" + _digest + ".stamp"
+    rust_by_example_tests.append(command(
+        name="rust_by_example_" + _digest,
+        inputs=[
+            "$(S)/tests/rust_by_example/adapter.py",
+            "$(S)/tests/rust_by_example/cases.tsv",
+            *("$(S)/tests/rust_by_example/upstream/" + _case for _case in _paths),
+            *TESTS_LIB,
+        ],
+        outputs=[_stamp],
+        cmd=[
+            "python3", "$(S)/tests/rust_by_example/adapter.py",
+            "$(S)/tests/rust_by_example/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/rust_by_example/upstream", "$(B)/tests/libstd.tar", _stamp,
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="BE",
+        color="green",
+    ))
+
 # Rust's library unit tests are grouped only at compilation.  Each explicit
 # #[test] function is still a separate runtime node selected from its harness.
 rust_lib_root = Path(__file__).parent / "tests" / "rust_lib"
@@ -632,6 +665,7 @@ group(
     *gccrs_tests,
     *rust_quiz_tests,
     *rustlings_tests,
+    *rust_by_example_tests,
     *rust_lib_tests,
     *rust_doctests,
     *rustsmith_tests,
@@ -642,6 +676,7 @@ group("rust_1_90", *rust_1_90_tests)
 group("gccrs", *gccrs_tests)
 group("rust_quiz", *rust_quiz_tests)
 group("rustlings", *rustlings_tests)
+group("rust_by_example", *rust_by_example_tests)
 group("rust_lib", *rust_lib_tests)
 group("rust_doctest", *rust_doctests)
 group("rustsmith", *rustsmith_tests)
