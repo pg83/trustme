@@ -364,6 +364,42 @@ for _case in rust_1_90_cases:
         color="green",
     ))
 
-group("test", resvg, *unit_tests, *rust_1_90_tests)
+# gccrs' no_core execute tests need no Rust standard library.  Preserve the
+# upstream file boundary and let the adapter interpret its dg-* invariants.
+gccrs_root = Path(__file__).parent / "tests" / "gccrs"
+gccrs_cases = (gccrs_root / "cases.txt").read_text().splitlines()
+gccrs_case_set = set(gccrs_cases)
+gccrs_support = []
+for _path in sorted((gccrs_root / "upstream").rglob("*")):
+    _relative = _path.relative_to(gccrs_root / "upstream").as_posix()
+    if _path.is_file() and _relative not in gccrs_case_set:
+        gccrs_support.append("$(S)/tests/gccrs/upstream/" + _relative)
+
+gccrs_tests = []
+for _case in gccrs_cases:
+    _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
+    _src = "$(S)/tests/gccrs/upstream/" + _case
+    gccrs_tests.append(command(
+        name="gccrs_" + _digest,
+        inputs=[
+            _src,
+            *gccrs_support,
+            "$(S)/tests/gccrs/adapter.py",
+            "$(S)/tests/gccrs/cases.txt",
+            *TESTS_LIB,
+        ],
+        outputs=["$(B)/tests/gccrs/" + _case + ".stamp"],
+        cmd=[
+            "python3", "$(S)/tests/gccrs/adapter.py",
+            _case, _src, "$(B)/tests/gccrs/" + _case + ".stamp",
+        ],
+        deps=[rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="GX",
+        color="green",
+    ))
+
+group("test", resvg, *unit_tests, *rust_1_90_tests, *gccrs_tests)
 group("unit", *unit_tests)
 group("rust_1_90", *rust_1_90_tests)
+group("gccrs", *gccrs_tests)
