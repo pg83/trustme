@@ -2459,9 +2459,90 @@ void Context::add_binding_inner(const Span& sp, const ::HIR::PatternBinding& pb,
 }
 
 // NOTE: Mutates the pattern to add ivars to contained paths
+namespace {
+    // Pattern constant paths never pass through the expression visitors, so any `_` holes in
+    // them (e.g. `<S as Format<_>>::FORMAT`) have to be populated here, once, before the
+    // pattern is (re)visited. Registers the implied trait bound at the same time.
+    void fixup_pattern_value_paths(Context& context, const Span& sp, ::HIR::Pattern::Value& val)
+    {
+        if( auto* ve = val.opt_Named() )
+        {
+            if( ve->binding && ve->path.m_data.is_UfcsKnown() ) {
+                auto& pe = ve->path.m_data.as_UfcsKnown();
+                context.m_ivars.add_ivars(pe.type);
+                context.m_ivars.add_ivars_params(pe.trait.m_params);
+                context.m_ivars.add_ivars_params(pe.params);
+                context.add_trait_bound(sp, pe.type, pe.trait.m_path, pe.trait.m_params.clone());
+            }
+            else if( ve->binding && ve->path.m_data.is_UfcsInherent() ) {
+                auto& pe = ve->path.m_data.as_UfcsInherent();
+                context.m_ivars.add_ivars(pe.type);
+                context.m_ivars.add_ivars_params(pe.params);
+                context.m_ivars.add_ivars_params(pe.impl_params);
+            }
+        }
+    }
+    void fixup_pattern_value_paths(Context& context, const Span& sp, ::HIR::Pattern& pat)
+    {
+        TU_MATCH_HDRA( (pat.m_data), {)
+        TU_ARMA(Any, e) {}
+        TU_ARMA(Box, e) {
+            fixup_pattern_value_paths(context, sp, *e.sub);
+            }
+        TU_ARMA(Ref, e) {
+            fixup_pattern_value_paths(context, sp, *e.sub);
+            }
+        TU_ARMA(Tuple, e) {
+            for(auto& subpat : e.sub_patterns)
+                fixup_pattern_value_paths(context, sp, subpat);
+            }
+        TU_ARMA(SplitTuple, e) {
+            for(auto& subpat : e.leading)
+                fixup_pattern_value_paths(context, sp, subpat);
+            for(auto& subpat : e.trailing)
+                fixup_pattern_value_paths(context, sp, subpat);
+            }
+        TU_ARMA(PathValue, e) {}
+        TU_ARMA(PathTuple, e) {
+            for(auto& subpat : e.leading)
+                fixup_pattern_value_paths(context, sp, subpat);
+            for(auto& subpat : e.trailing)
+                fixup_pattern_value_paths(context, sp, subpat);
+            }
+        TU_ARMA(PathNamed, e) {
+            for(auto& subpat : e.sub_patterns)
+                fixup_pattern_value_paths(context, sp, subpat.second);
+            }
+        TU_ARMA(Or, e) {
+            for(auto& subpat : e)
+                fixup_pattern_value_paths(context, sp, subpat);
+            }
+        TU_ARMA(Value, e) {
+            fixup_pattern_value_paths(context, sp, e.val);
+            }
+        TU_ARMA(Range, e) {
+            if(e.start) fixup_pattern_value_paths(context, sp, *e.start);
+            if(e.end  ) fixup_pattern_value_paths(context, sp, *e.end);
+            }
+        TU_ARMA(Slice, e) {
+            for(auto& subpat : e.sub_patterns)
+                fixup_pattern_value_paths(context, sp, subpat);
+            }
+        TU_ARMA(SplitSlice, e) {
+            for(auto& subpat : e.leading)
+                fixup_pattern_value_paths(context, sp, subpat);
+            for(auto& subpat : e.trailing)
+                fixup_pattern_value_paths(context, sp, subpat);
+            }
+        }
+    }
+}
+
 void Context::handle_pattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeRef& type, bool is_irrefutable/*=false*/)
 {
     TRACE_FUNCTION_F("pat = " << pat << ", type = " << type);
+
+    fixup_pattern_value_paths(*this, sp, pat);
 
     // TODO: 1.29 includes "match ergonomics" which allows automatic insertion of borrow/deref when matching
     // - Handling this will make pattern matching slightly harder (all patterns needing revisist)
@@ -2570,6 +2651,13 @@ void Context::handle_pattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::T
                 TU_ARM(pv, Named, ve) {
                     DEBUG("TODO: Look up the path and get the type: " << ve.path);
                     if( ve.binding ) {
+                        if( ve.path.m_data.is_UfcsKnown() ) {
+                            // Trait-associated constant: its type can name trait params, so
+                            // map them through the (pre-populated) params from the path.
+                            const auto& pe = ve.path.m_data.as_UfcsKnown();
+                            auto ms = MonomorphStatePtr(&pe.type, &pe.trait.m_params, nullptr);
+                            return ms.monomorph_type(sp, ve.binding->m_type);
+                        }
                         return ve.binding->m_type.clone();
                     }
                     else if( ve.path.m_data.is_Generic() ) {
@@ -3266,7 +3354,7 @@ void Context::handle_pattern_direct_inner(const Span& sp, ::HIR::Pattern& pat, c
     }
 
     struct H {
-        static void handle_value(Context& context, const Span& sp, const ::HIR::TypeRef& type, const ::HIR::Pattern::Value& val) {
+        static void handle_value(Context& context, const Span& sp, const ::HIR::TypeRef& type, ::HIR::Pattern::Value& val) {
             TU_MATCH(::HIR::Pattern::Value, (val), (v),
             (Integer,
                 DEBUG("Integer " << ::HIR::TypeRef(v.type));
@@ -3290,7 +3378,13 @@ void Context::handle_pattern_direct_inner(const Span& sp, ::HIR::Pattern& pat, c
                 // TODO: Check the type.
                 ),
             (Named,
-                // TODO: Get type of the value and equate it
+                // A trait-associated constant: equate against its type through the (already
+                // populated) trait params, so `<S as Format<_>>::FORMAT` pins the `_`.
+                if( v.binding && v.path.m_data.is_UfcsKnown() ) {
+                    const auto& pe = v.path.m_data.as_UfcsKnown();
+                    auto ms = MonomorphStatePtr(&pe.type, &pe.trait.m_params, nullptr);
+                    context.equate_types(sp, type, ms.monomorph_type(sp, v.binding->m_type));
+                }
                 )
             )
         }
