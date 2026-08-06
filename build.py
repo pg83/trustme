@@ -399,6 +399,41 @@ for _case in gccrs_cases:
         color="green",
     ))
 
+# Positive gccrs compile-suite inputs have no runtime contract.  Compile ten
+# crate roots per node; all copied sources are inputs because a few use mod!.
+gccrs_compile_root = Path(__file__).parent / "tests" / "gccrs_compile"
+gccrs_compile_cases = (gccrs_compile_root / "cases.txt").read_text().splitlines()
+gccrs_compile_sources = [
+    "$(S)/tests/gccrs_compile/upstream/"
+    + _path.relative_to(gccrs_compile_root / "upstream").as_posix()
+    for _path in sorted((gccrs_compile_root / "upstream").rglob("*"))
+    if _path.is_file()
+]
+gccrs_compile_tests = []
+for _start in range(0, len(gccrs_compile_cases), 10):
+    _shard = gccrs_compile_cases[_start:_start + 10]
+    _digest = hashlib.sha256(("\0".join(_shard)).encode()).hexdigest()[:12]
+    _stamp = "$(B)/tests/gccrs_compile/" + _digest + ".stamp"
+    gccrs_compile_tests.append(command(
+        name="gccrs_compile_" + _digest,
+        inputs=[
+            "$(S)/tests/gccrs_compile/adapter.py",
+            "$(S)/tests/gccrs_compile/cases.txt",
+            *gccrs_compile_sources,
+            *TESTS_LIB,
+        ],
+        outputs=[_stamp],
+        cmd=[
+            "python3", "$(S)/tests/gccrs_compile/adapter.py",
+            "$(S)/tests/gccrs_compile/cases.txt", str(_start), str(len(_shard)),
+            "$(S)/tests/gccrs_compile/upstream", _stamp,
+        ],
+        deps=[rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="GC",
+        color="green",
+    ))
+
 # Rust Quiz programs each print one documented answer.  Store the answer as a
 # tiny sidecar instead of vendoring the prose explanations or upstream crate.
 rust_quiz_root = Path(__file__).parent / "tests" / "rust_quiz"
@@ -838,6 +873,7 @@ group(
     *unit_tests,
     *rust_1_90_tests,
     *gccrs_tests,
+    *gccrs_compile_tests,
     *rust_quiz_tests,
     *rustlings_tests,
     *rust_by_example_tests,
@@ -854,6 +890,7 @@ group(
 group("unit", *unit_tests)
 group("rust_1_90", *rust_1_90_tests)
 group("gccrs", *gccrs_tests)
+group("gccrs_compile", *gccrs_compile_tests)
 group("rust_quiz", *rust_quiz_tests)
 group("rustlings", *rustlings_tests)
 group("rust_by_example", *rust_by_example_tests)
