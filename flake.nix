@@ -84,19 +84,21 @@
         };
 
       mkDevShell =
-        pkgs: toolchain: stdenv:
+        pkgs: toolchain: stdenv: extraPackages: linkerFlags:
         (pkgs.mkShell.override { inherit stdenv; }) {
           inputsFrom = [ toolchain ];
           hardeningDisable = [ "format" ];
 
-          packages = with pkgs; [
-            cacert
-            curl
-            git
-            gnutar
-            patch
-            zstd
-          ];
+          packages =
+            (with pkgs; [
+              cacert
+              curl
+              git
+              gnutar
+              patch
+              zstd
+            ])
+            ++ extraPackages;
 
           SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
           GOFLAGS = "-mod=vendor";
@@ -107,6 +109,7 @@
             export CC=cc
             export CXX=c++
             export AR=ar
+            export LDFLAGS="${linkerFlags}"
           '';
         };
     in
@@ -134,8 +137,9 @@
           toolchain = self.packages.${system}.toolchain;
         in
         {
-          default = mkDevShell pkgs toolchain pkgs.gcc16Stdenv;
-          clang = mkDevShell pkgs toolchain pkgs.llvmPackages.libcxxStdenv;
+          default = mkDevShell pkgs toolchain pkgs.gcc16Stdenv [ ] "";
+          # Use the wrapped LLVM binutils so -fuse-ld=lld keeps Nix RPATHs.
+          clang = mkDevShell pkgs toolchain pkgs.llvmPackages.libcxxStdenv [ pkgs.llvmPackages.bintools ] "-fuse-ld=lld";
         }
       );
     };
