@@ -23,9 +23,7 @@ def require_env(name: str) -> str:
 
 
 def mrustc_link(work: str) -> str:
-    """minicargo selects the mrustc protocol by the compiler's basename, so give
-    it a link named `mrustc` regardless of what our binary is called. Returns the
-    link path to use as MRUSTC_PATH."""
+    """Give the graph-built compiler a stable `mrustc` basename and return it."""
     rustc = os.path.realpath(require_env("RUSTC"))
     bindir = os.path.join(work, "bin")
     os.makedirs(bindir, exist_ok=True)

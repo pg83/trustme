@@ -32,20 +32,21 @@ binaries, fixing mrustc as we go.
 ```
 rustc/      the compiler sources (flat), and mrustc's original README
 cargo/      our cargo, rewritten in Go — vendors dependencies by lockfile
-tools/      minicargo, the transitional per-crate build driver
 tests/      the test graph: build a real project, run its tests
 build       the build engine (shared across the monorepo)
 build.py    the build graph for everything above
 ```
 
-`cargo` does not resolve dependencies — it trusts a committed `Cargo.lock` and
-produces a hermetic vendored archive. Building projects is still driven by
-`minicargo` for now; the Go cargo will grow to subsume it.
+`cargo` provides Cargo-compatible `build`, `test`, and `vendor` commands. It
+resolves path, workspace, patched, target-specific, and vendored dependencies,
+runs build scripts, and schedules mrustc/codegen jobs in parallel. The test
+graph uses its archive extension (`cargo vendor -Zarchive=...`) to pass a
+hermetic vendor tree between isolated nodes.
 
 ## building
 
 ```
-./build                 # rustc + minicargo + cargo
+./build                 # rustc + cargo
 ./build unit            # the one-file compiler regressions
 ./build resvg           # build resvg from source and render-test it
 ./build test            # everything under test

@@ -22,8 +22,8 @@ def main() -> int:
     with lib.workdir() as work:
         src = lib.untar(src_tar, os.path.join(work, "src"))
         lib.run([cargo, "vendor",
-                 "--manifest-dir", os.path.join(src, subdir),
-                 "--out", out])
+                 "--manifest-path", os.path.join(src, subdir, "Cargo.toml"),
+                 "-Zarchive=" + out])
     return 0
 
 

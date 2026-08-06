@@ -1,5 +1,5 @@
 #
-# minicargo overrides file
+# cargo manifest overrides file
 #
 
 [add.'library/rustc-std-workspace-core'.dependencies.compiler_builtins]

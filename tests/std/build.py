@@ -5,7 +5,7 @@ graph node — built once, depended on by every project build.
 
     build.py <rust-src.tar> <out.tar>
 
-Environment: RUSTC, MINICARGO, CC, BUILD_JOBS.
+Environment: RUSTC, CARGO, CC, BUILD_JOBS.
 """
 import os
 import sys
@@ -21,7 +21,7 @@ MANIFEST_OVERRIDES = os.path.join(HERE, "rustc-1.90.0-overrides.toml")
 def main() -> int:
     src_tar = os.path.abspath(sys.argv[1])
     out = os.path.abspath(sys.argv[2])
-    minicargo = lib.require_env("MINICARGO")
+    cargo = lib.require_env("CARGO")
     jobs = lib.require_env("BUILD_JOBS")
 
     with lib.workdir() as work:
@@ -30,7 +30,7 @@ def main() -> int:
         env["MRUSTC_TARGET_VER"] = "1.90"
         env["RUSTC_VERSION"] = "1.90.0"
         env["STD_ENV_ARCH"] = env.get("STD_ENV_ARCH", "x86_64")
-        env["MINICARGO_DEFER_CODEGEN"] = "0"
+        env["CARGO_MRUSTC_DEFER_CODEGEN"] = "1"
         env.setdefault("CC", "cc")
 
         src = lib.untar(src_tar, os.path.join(work, "rust-src"))
@@ -38,17 +38,18 @@ def main() -> int:
         os.makedirs(outdir, exist_ok=True)
 
         lib.log("[libstd] standard library")
-        lib.run([minicargo, "-j", jobs,
-                 "--vendor-dir", os.path.join(src, "vendor"),
-                 "--script-overrides", OVERRIDES,
-                 "--manifest-overrides", MANIFEST_OVERRIDES,
-                 "--output-dir", outdir,
-                 os.path.join(src, "mrustc-stdlib") + os.sep],
+        lib.run([cargo, "build", "--release", "-j", jobs,
+                 "--manifest-path", os.path.join(src, "mrustc-stdlib", "Cargo.toml"),
+                 "--target-dir", outdir,
+                 "-Zvendor-dir=" + os.path.join(src, "vendor"),
+                 "-Zscript-overrides=" + OVERRIDES,
+                 "-Zmanifest-overrides=" + MANIFEST_OVERRIDES],
                 env=env)
 
         lib.log("[libstd] libproc_macro")
-        lib.run([minicargo, "-j", jobs, "--output-dir", outdir,
-                 os.path.join(HERE, "libproc_macro")],
+        lib.run([cargo, "build", "--release", "-j", jobs,
+                 "--manifest-path", os.path.join(HERE, "libproc_macro", "Cargo.toml"),
+                 "--target-dir", outdir],
                 env=env)
 
         lib.log(f"[libstd] packing {out}")

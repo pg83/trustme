@@ -27,7 +27,7 @@ def main() -> int:
 
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
         binary = os.path.join(work, "t")
-        lib.run([rustc, src, "-L", libstd, "-o", binary,
+        lib.run([rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
                  "--crate-type", "bin", "--edition", "2021"], env=env)
         lib.run([binary], env=env)
 

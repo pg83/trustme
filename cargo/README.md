@@ -1,24 +1,35 @@
 # cargo
 
-A minimal, lockfile-driven cargo replacement for the rustc (mrustc-derived)
-toolchain, written in Go.
+A Cargo-compatible package manager and build driver for this mrustc-derived
+toolchain.
 
-It does **not** resolve dependencies — it trusts a committed `Cargo.lock` — and
-currently implements one stage:
+Supported commands:
 
+```text
+cargo build [Cargo options]
+cargo test [Cargo options] [-- test arguments]
+cargo vendor [PATH] --manifest-path Cargo.toml
 ```
-cargo vendor --manifest-dir DIR --out OUT.tar.zst
+
+`build` and `test` support Cargo manifests and workspaces, path and vendored
+registry dependencies, semver requirements, patches, renamed/optional/target
+dependencies, feature unification, editions and Cargo target kinds. Builds use
+the Cargo build-script protocol, host/target separation, incremental timestamps,
+parallel jobs, proc macros, and mrustc's deferred C-codegen mode.
+
+Backend-only inputs use Cargo's unstable option namespace instead of replacing
+standard Cargo flags:
+
+```text
+-Zvendor-dir=DIR
+-Zscript-overrides=DIR
+-Zmanifest-overrides=FILE
+-Zlib-search=DIR
+-Zemit-mmir
+-Zdry-run
+-Zpause
 ```
 
-`vendor` reads `DIR/Cargo.lock`, downloads every registry dependency from the
-crates.io CDN, verifies each `.crate` against its lockfile SHA-256, lays the
-extracted sources out exactly as `cargo vendor` would (bare crate name, or
-`name-version` when a crate appears at multiple versions), writes the
-`.cargo/config.toml` vendor redirect, and packs the whole tree into a
-reproducible `.tar.zst`.
-
-The archive is the hermetic input a downstream build consumes offline — see
-`tests/`, where the vendor step is one graph node and the offline build is
-another.
-
-Set `SSL_CERT_FILE` to a CA bundle if the environment lacks system certs.
+`vendor` follows Cargo's destination and `--manifest-path` interface. The test
+graph additionally uses `-Zarchive=FILE.tar.zst` to create a reproducible,
+checksum-verified archive for transport between isolated build nodes.

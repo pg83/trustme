@@ -21,7 +21,7 @@ func crateURL(p Pkg) string {
 	return fmt.Sprintf("https://static.crates.io/crates/%s/%s-%s.crate", p.name, p.name, p.version)
 }
 
-func vendorLayout(pkgs []Pkg) map[int]string {
+func vendorLayout(pkgs []Pkg, versioned bool) map[int]string {
 	counts := map[string]int{}
 
 	for _, p := range pkgs {
@@ -37,7 +37,7 @@ func vendorLayout(pkgs []Pkg) map[int]string {
 			continue
 		}
 
-		if counts[p.name] > 1 {
+		if versioned || counts[p.name] > 1 {
 			names[i] = fmt.Sprintf("%s-%s", p.name, p.version)
 		} else {
 			names[i] = p.name
@@ -47,8 +47,8 @@ func vendorLayout(pkgs []Pkg) map[int]string {
 	return names
 }
 
-func vendorAll(pkgs []Pkg, vendorDir string) {
-	layout := vendorLayout(pkgs)
+func vendorAll(pkgs []Pkg, vendorDir string, versioned bool) {
+	layout := vendorLayout(pkgs, versioned)
 	client := &http.Client{Timeout: 120 * time.Second}
 	n := 0
 	total := len(layout)

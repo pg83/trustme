@@ -166,42 +166,14 @@ rustc = program(
     ldflags=["-lz"],
 )
 
-# minicargo: the transitional per-crate build driver. It links the same
-# common support sources (now flat in the root) plus its own sources under
-# tools/minicargo. Kept until the Go cargo learns to orchestrate builds.
-MINICARGO = [
-    "$(S)/tools/minicargo/main.cpp",
-    "$(S)/tools/minicargo/manifest.cpp",
-    "$(S)/tools/minicargo/repository.cpp",
-    "$(S)/tools/minicargo/cfg.cpp",
-    "$(S)/tools/minicargo/build.cpp",
-    "$(S)/tools/minicargo/jobs.cpp",
-    "$(S)/tools/minicargo/file_timestamp.cpp",
-    "$(S)/tools/minicargo/os.cpp",
-    "$(S)/tools/minicargo/resolve_0minicargo.cpp",
-    "$(S)/tools/minicargo/resolve_cargo.cpp",
-    # shared support library (flat in the root)
-    "$(S)/rustc/toml.cpp",
-    "$(S)/rustc/path.cpp",
-    "$(S)/rustc/common_debug.cpp",
-    "$(S)/rustc/jobserver.cpp",
-]
-
-minicargo = program(
-    srcs=MINICARGO,
-    name="minicargo",
-    output="$(B)/minicargo/minicargo",
-    cppflags=["-I$(S)/tools/minicargo", "-I$(S)/rustc"],
-    cxxflags=["-std=c++14"],
-    ldflags=["-lz", "-pthread"],
-)
-
-# cargo: the new lockfile-driven cargo, written in Go. Building it is just a
-# `go build` dropped into the graph as a command node. GOCACHE is pinned into
-# the build dir so the compile is incremental and stays out of $HOME.
+# cargo: Cargo-compatible package resolver and mrustc build driver, written in
+# Go. Dependencies are checked in under cargo/vendor, so this node is offline.
 cargo = command(
     name="cargo",
-    inputs=build.glob("$(S)/cargo/*.go") + ["$(S)/cargo/go.mod"],
+    inputs=(
+        build.glob("$(S)/cargo/**/*.go")
+        + ["$(S)/cargo/go.mod", "$(S)/cargo/go.sum", "$(S)/cargo/vendor/modules.txt"]
+    ),
     outputs=["$(B)/cargo/cargo"],
     cmd=[
         "go", "build",
@@ -211,7 +183,7 @@ cargo = command(
     cwd="$(S)/cargo",
     env={
         "GOCACHE": "$(B)/gocache",
-        "GOFLAGS": "-mod=mod",
+        "GOFLAGS": "-mod=vendor",
         "GOTOOLCHAIN": "local",
     },
     descr="GO",
@@ -221,9 +193,6 @@ cargo = command(
 # symlinks would collide with the rustc/ and cargo/ source directories. They
 # are built as $(B)/rustc and $(B)/cargo and referenced from there (e.g. by the
 # test graph).
-install(minicargo)
-
-
 # --- tests -----------------------------------------------------------------
 # A test is one real project, built by our toolchain and exercised. The graph
 # is tar-based: each node produces a single archive, and downstream nodes
@@ -237,7 +206,7 @@ install(minicargo)
 
 TOOLCHAIN_ENV = {
     "RUSTC": "$(B)/rustc/rustc",
-    "MINICARGO": "$(B)/minicargo/minicargo",
+    "CARGO": "$(B)/cargo/cargo",
 }
 
 # All node scripts are Python and share tests/lib.py.
@@ -265,7 +234,7 @@ libstd = command(
     ),
     outputs=["$(B)/tests/libstd.tar"],
     cmd=["python3", "$(S)/tests/std/build.py", "$(B)/tests/rust-src.tar", "$(B)/tests/libstd.tar"],
-    deps=[std_src, rustc, minicargo],
+    deps=[std_src, rustc, cargo],
     env=TOOLCHAIN_ENV,
     descr="LS",
     color="cyan",
@@ -318,7 +287,7 @@ resvg = command(
         ],
         ["sh", "-c", "> $(B)/tests/resvg.stamp"],
     ],
-    deps=[resvg_src, resvg_vendor, libstd, rustc, minicargo],
+    deps=[resvg_src, resvg_vendor, libstd, rustc, cargo],
     env=TOOLCHAIN_ENV,
     descr="TS",
     color="magenta",
@@ -346,4 +315,3 @@ for _src in build.glob("$(S)/tests/unit/test_*.rs"):
 
 group("test", resvg, *unit_tests)
 group("unit", *unit_tests)
-

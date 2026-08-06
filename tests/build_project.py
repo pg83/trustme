@@ -6,7 +6,7 @@ depends on the shared libstd tar, never rebuilding it.
     build_project.py <src.tar> <vendor.tar.zst> <libstd.tar> <manifest-subdir> <test-cmd...>
 
 The test command runs with @BIN@ replaced by the freshly built executable.
-Environment: RUSTC, MINICARGO, CC, BUILD_JOBS.
+Environment: RUSTC, CARGO, CC, BUILD_JOBS.
 """
 import os
 import sys
@@ -21,14 +21,14 @@ def main() -> int:
     libstd_tar = os.path.abspath(sys.argv[3])
     subdir = sys.argv[4]
     test_cmd = sys.argv[5:]
-    minicargo = lib.require_env("MINICARGO")
+    cargo = lib.require_env("CARGO")
     jobs = lib.require_env("BUILD_JOBS")
 
     with lib.workdir() as work:
         env = dict(os.environ)
         env["MRUSTC_PATH"] = lib.mrustc_link(work)
         env["MRUSTC_TARGET_VER"] = "1.90"
-        env["MINICARGO_DEFER_CODEGEN"] = "0"
+        env["CARGO_MRUSTC_DEFER_CODEGEN"] = "1"
         env.setdefault("CC", "cc")
 
         src = lib.untar(src_tar, os.path.join(work, "src"))
@@ -38,18 +38,21 @@ def main() -> int:
         os.makedirs(out, exist_ok=True)
 
         lib.log(f"[build] {subdir}")
-        lib.run([minicargo, "-j", jobs, ".",
-                 "--vendor-dir", os.path.join(vroot, "vendor"),
-                 "-L", libstd,
-                 "--output-dir", out],
+        lib.run([cargo, "build", "--release", "-j", jobs,
+                 "--manifest-path", os.path.join(src, subdir, "Cargo.toml"),
+                 "--target-dir", out,
+                 "-Zvendor-dir=" + os.path.join(vroot, "vendor"),
+                 "-Zlib-search=" + os.path.join(libstd, "release")],
                 cwd=os.path.join(src, subdir), env=env)
 
-        binary = os.path.join(out, os.path.basename(subdir))
+        binary = os.path.join(out, "release", os.path.basename(subdir))
         if not os.access(binary, os.X_OK):
             binary = next(
-                (os.path.join(out, f) for f in sorted(os.listdir(out))
-                 if os.access(os.path.join(out, f), os.X_OK)
-                 and os.path.isfile(os.path.join(out, f))),
+                (os.path.join(root, f)
+                 for root, _, files in os.walk(out)
+                 for f in sorted(files)
+                 if os.access(os.path.join(root, f), os.X_OK)
+                 and os.path.isfile(os.path.join(root, f))),
                 binary)
 
         lib.log(f"[test] {binary}")

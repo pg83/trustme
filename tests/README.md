@@ -22,17 +22,17 @@ The nodes:
   add the `mrustc-stdlib` shim. Output: `rust-src.tar`. (Set `RUST_SRC` to reuse
   a local tree.)
 - **`libstd`** — build the standard library and `libproc_macro` from that source
-  with `minicargo`, using `std/script-overrides` and the manifest overrides.
-  Output: `libstd.tar`. Depends on `rustc`, `minicargo`, `std_src`. **Shared by
+  with `cargo`, using `std/script-overrides` and the manifest overrides.
+  Output: `libstd.tar`. Depends on `rustc`, `cargo`, `std_src`. **Shared by
   every project test.**
 - **`<proj>_src`** — clone the project at a pinned revision → `*-src.tar`.
   (Set `SRC_OVERRIDE` to reuse a local checkout.)
 - **`<proj>_vendor`** — `cargo vendor` the project's locked dependencies into a
   hermetic `tar.zst`. Depends on the Go `cargo`.
 - **`<proj>`** — the plan's node 2: unpack the vendor tar and `libstd.tar`, build
-  the project offline with `minicargo`, and run its test (for resvg: render a
+  the project offline with `cargo`, and run its test (for resvg: render a
   reference SVG and validate the PNG). Depends on `<proj>_vendor`, `libstd`,
-  `<proj>_src`, `rustc`, `minicargo`.
+  `<proj>_src`, `rustc`, `cargo`.
 
 Nodes exchange **tar archives** because the build engine only promotes declared
 file outputs; each node unpacks what it needs into a private temp dir.
@@ -46,8 +46,8 @@ shared `libstd` and run, and must exit 0. They depend only on `libstd` and
 
 Two fixes are not expressible as a single std-only file and are covered by the
 resvg integration instead: forwarding a `#[repr(C)]` above a `#[derive]` to a
-proc-macro derive (harfrust/bytemuck `Pod`), and minicargo's `src/main.rs`
-binary-path fallback (resvg's CLI binary).
+proc-macro derive (harfrust/bytemuck `Pod`), and Cargo's `src/main.rs`
+binary-target discovery (resvg's CLI binary).
 
 ## running
 
