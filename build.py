@@ -1,4 +1,5 @@
 import hashlib
+import json
 from pathlib import Path
 
 import build
@@ -361,6 +362,38 @@ for _case in rust_1_90_cases:
         deps=[libstd, rustc],
         env={"RUSTC": "$(B)/rustc/rustc"},
         descr="RP",
+        color="green",
+    ))
+
+# Positive check-pass/build-pass cases from Rust 1.90.  check-pass is compiled
+# as a library through the available full pipeline; failures stay observable.
+rust_ui_compile_root = Path(__file__).parent / "tests" / "rust_ui_compile"
+rust_ui_compile_cases = json.loads(
+    (rust_ui_compile_root / "cases.json").read_text()
+)
+rust_ui_compile_tests = []
+for _start in range(0, len(rust_ui_compile_cases), 10):
+    _shard = rust_ui_compile_cases[_start:_start + 10]
+    _paths = [_case["path"] for _case in _shard]
+    _digest = hashlib.sha256(("\0".join(_paths)).encode()).hexdigest()[:12]
+    _stamp = "$(B)/tests/rust_ui_compile/" + _digest + ".stamp"
+    rust_ui_compile_tests.append(command(
+        name="rust_ui_compile_" + _digest,
+        inputs=[
+            "$(S)/tests/rust_ui_compile/adapter.py",
+            "$(S)/tests/rust_ui_compile/cases.json",
+            *("$(S)/tests/rust_ui_compile/upstream/" + _case for _case in _paths),
+            *TESTS_LIB,
+        ],
+        outputs=[_stamp],
+        cmd=[
+            "python3", "$(S)/tests/rust_ui_compile/adapter.py",
+            "$(S)/tests/rust_ui_compile/cases.json", str(_start), str(len(_shard)),
+            "$(S)/tests/rust_ui_compile/upstream", "$(B)/tests/libstd.tar", _stamp,
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="UC",
         color="green",
     ))
 
@@ -872,6 +905,7 @@ group(
     resvg,
     *unit_tests,
     *rust_1_90_tests,
+    *rust_ui_compile_tests,
     *gccrs_tests,
     *gccrs_compile_tests,
     *rust_quiz_tests,
@@ -889,6 +923,7 @@ group(
 )
 group("unit", *unit_tests)
 group("rust_1_90", *rust_1_90_tests)
+group("rust_ui_compile", *rust_ui_compile_tests)
 group("gccrs", *gccrs_tests)
 group("gccrs_compile", *gccrs_compile_tests)
 group("rust_quiz", *rust_quiz_tests)
