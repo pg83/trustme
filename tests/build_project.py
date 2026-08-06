@@ -6,7 +6,7 @@ depends on the shared libstd tar, never rebuilding it.
     build_project.py <src.tar> <vendor.tar.zst> <libstd.tar> <manifest-subdir> <test-cmd...>
 
 The test command runs with @BIN@ replaced by the freshly built executable.
-Environment: RUSTC, MINICARGO, CC.
+Environment: RUSTC, MINICARGO, CC, BUILD_JOBS.
 """
 import os
 import sys
@@ -22,6 +22,7 @@ def main() -> int:
     subdir = sys.argv[4]
     test_cmd = sys.argv[5:]
     minicargo = lib.require_env("MINICARGO")
+    jobs = lib.require_env("BUILD_JOBS")
 
     with lib.workdir() as work:
         env = dict(os.environ)
@@ -37,7 +38,7 @@ def main() -> int:
         os.makedirs(out, exist_ok=True)
 
         lib.log(f"[build] {subdir}")
-        lib.run([minicargo, ".",
+        lib.run([minicargo, "-j", jobs, ".",
                  "--vendor-dir", os.path.join(vroot, "vendor"),
                  "-L", libstd,
                  "--output-dir", out],

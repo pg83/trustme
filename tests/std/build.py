@@ -5,7 +5,7 @@ graph node — built once, depended on by every project build.
 
     build.py <rust-src.tar> <out.tar>
 
-Environment: RUSTC, MINICARGO, CC.
+Environment: RUSTC, MINICARGO, CC, BUILD_JOBS.
 """
 import os
 import sys
@@ -22,6 +22,7 @@ def main() -> int:
     src_tar = os.path.abspath(sys.argv[1])
     out = os.path.abspath(sys.argv[2])
     minicargo = lib.require_env("MINICARGO")
+    jobs = lib.require_env("BUILD_JOBS")
 
     with lib.workdir() as work:
         env = dict(os.environ)
@@ -37,7 +38,7 @@ def main() -> int:
         os.makedirs(outdir, exist_ok=True)
 
         lib.log("[libstd] standard library")
-        lib.run([minicargo,
+        lib.run([minicargo, "-j", jobs,
                  "--vendor-dir", os.path.join(src, "vendor"),
                  "--script-overrides", OVERRIDES,
                  "--manifest-overrides", MANIFEST_OVERRIDES,
@@ -46,7 +47,7 @@ def main() -> int:
                 env=env)
 
         lib.log("[libstd] libproc_macro")
-        lib.run([minicargo, "--output-dir", outdir,
+        lib.run([minicargo, "-j", jobs, "--output-dir", outdir,
                  os.path.join(HERE, "libproc_macro")],
                 env=env)
 

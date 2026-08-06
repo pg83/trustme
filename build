@@ -2054,6 +2054,7 @@ class Executor:
         args = [self._mount(arg, work) for arg in command]
         env = os.environ.copy()
         env.update({key: self._mount(value, work) for key, value in node.env.items()})
+        env["BUILD_JOBS"] = str(self.jobs)
         env["TMPDIR"] = str(work)
         cwd = self._mount(node.cwd, work)
         if not args:
