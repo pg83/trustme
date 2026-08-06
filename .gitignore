@@ -8,7 +8,6 @@
 
 # convenience root symlinks the build engine publishes for built targets
 /rustc
-/cargo
 /minicargo
 /std_src
 /libstd

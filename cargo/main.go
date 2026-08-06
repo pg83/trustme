@@ -1,11 +1,3 @@
-// Command cargo is a minimal, lockfile-driven cargo replacement for the rustc
-// (mrustc-derived) toolchain. It does not resolve dependencies — it trusts a
-// committed Cargo.lock — and currently implements one stage: producing a
-// hermetic vendored source archive that a downstream build consumes offline.
-//
-// Usage:
-//
-//	cargo vendor --manifest-dir DIR --out OUT.tar.zst
 package main
 
 import (
@@ -16,20 +8,29 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
+	exc := try(func() {
+		dispatch(os.Args)
+	})
+
+	exc.catch(func(e *Exception) {
+		fmt.Fprintln(os.Stderr, "cargo:", e.error())
+		os.Exit(1)
+	})
+}
+
+func dispatch(args []string) {
+	if len(args) < 2 {
 		usage()
 		os.Exit(2)
 	}
-	switch os.Args[1] {
+
+	switch args[1] {
 	case "vendor":
-		if err := cmdVendor(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "cargo vendor:", err)
-			os.Exit(1)
-		}
+		cmdVendor(args[2:])
 	case "-h", "--help", "help":
 		usage()
 	default:
-		fmt.Fprintf(os.Stderr, "cargo: unknown command %q\n", os.Args[1])
+		fmt.Fprintf(os.Stderr, "cargo: unknown command %q\n", args[1])
 		usage()
 		os.Exit(2)
 	}
@@ -45,50 +46,37 @@ run "cargo vendor -h" for options
 `)
 }
 
-func cmdVendor(args []string) error {
+func cmdVendor(args []string) {
 	fs := flag.NewFlagSet("vendor", flag.ExitOnError)
 	manifestDir := fs.String("manifest-dir", ".", "directory containing Cargo.lock")
 	out := fs.String("out", "vendor.tar.zst", "output .tar.zst archive")
 	keep := fs.String("keep-dir", "", "also leave the unpacked vendor tree at this path")
+
 	fs.Parse(args)
 
 	lockPath := filepath.Join(*manifestDir, "Cargo.lock")
-	pkgs, err := parseLock(lockPath)
-	if err != nil {
-		return err
-	}
-
+	pkgs := parseLock(lockPath)
 	work := *keep
+
 	if work == "" {
-		work, err = os.MkdirTemp("", "cargo-vendor-")
-		if err != nil {
-			return err
-		}
-		defer os.RemoveAll(work)
+		work = throw2(os.MkdirTemp("", "cargo-vendor-"))
+
+		defer func() {
+			throw(os.RemoveAll(work))
+		}()
 	} else {
-		if err := os.MkdirAll(work, 0o755); err != nil {
-			return err
-		}
+		throw(os.MkdirAll(work, 0o755))
 	}
 
 	vendorDir := filepath.Join(work, "vendor")
-	if err := os.MkdirAll(vendorDir, 0o755); err != nil {
-		return err
-	}
-	if err := vendorAll(pkgs, vendorDir); err != nil {
-		return err
-	}
-	if err := writeConfig(work); err != nil {
-		return err
-	}
 
-	outAbs, err := filepath.Abs(*out)
-	if err != nil {
-		return err
-	}
-	if err := tarZstd(work, outAbs); err != nil {
-		return err
-	}
+	throw(os.MkdirAll(vendorDir, 0o755))
+	vendorAll(pkgs, vendorDir)
+	writeConfig(work)
+
+	outAbs := throw2(filepath.Abs(*out))
+
+	tarZstd(work, outAbs)
+
 	fmt.Fprintf(os.Stderr, "wrote %s\n", *out)
-	return nil
 }
