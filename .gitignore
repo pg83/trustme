@@ -5,3 +5,14 @@
 *.rlib
 /rustc
 .temp.txt
+
+# convenience root symlinks the build engine publishes for built targets
+/rustc
+/cargo
+/minicargo
+/std_src
+/libstd
+/resvg
+/resvg_src
+/resvg_vendor
+/unit_*

@@ -1292,7 +1292,12 @@ class BuildContext:
                 pass
             else:
                 if not stat.S_ISLNK(info.st_mode):
-                    raise BuildError(f"refusing to replace non-symlink: {link}")
+                    # A real file/dir shares this target's name (e.g. the rustc/
+                    # and cargo/ source directories): skip the convenience symlink
+                    # rather than clobber it. The binary is still at its output.
+                    print(f"build: not publishing {target.name}: {link} exists",
+                          file=sys.stderr)
+                    continue
             output = self.physical(target.root.outputs[0])
             publications.append((link, os.path.relpath(output, self.source_root)))
         for link, relative in publications:
