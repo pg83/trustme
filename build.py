@@ -399,7 +399,45 @@ for _case in gccrs_cases:
         color="green",
     ))
 
-group("test", resvg, *unit_tests, *rust_1_90_tests, *gccrs_tests)
+# Rust Quiz programs each print one documented answer.  Store the answer as a
+# tiny sidecar instead of vendoring the prose explanations or upstream crate.
+rust_quiz_root = Path(__file__).parent / "tests" / "rust_quiz"
+rust_quiz_cases = (rust_quiz_root / "cases.txt").read_text().splitlines()
+rust_quiz_tests = []
+for _case in rust_quiz_cases:
+    _number = _case.split("-", 1)[0]
+    _src = "$(S)/tests/rust_quiz/upstream/" + _case
+    _expected = _src[:-len(".rs")] + ".stdout"
+    rust_quiz_tests.append(command(
+        name="rust_quiz_" + _number,
+        inputs=[
+            _src,
+            _expected,
+            "$(S)/tests/rust_quiz/adapter.py",
+            "$(S)/tests/rust_quiz/cases.txt",
+            *TESTS_LIB,
+        ],
+        outputs=["$(B)/tests/rust_quiz/" + _case + ".stamp"],
+        cmd=[
+            "python3", "$(S)/tests/rust_quiz/adapter.py",
+            _case, _src, _expected, "$(B)/tests/libstd.tar",
+            "$(B)/tests/rust_quiz/" + _case + ".stamp",
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="RQ",
+        color="green",
+    ))
+
+group(
+    "test",
+    resvg,
+    *unit_tests,
+    *rust_1_90_tests,
+    *gccrs_tests,
+    *rust_quiz_tests,
+)
 group("unit", *unit_tests)
 group("rust_1_90", *rust_1_90_tests)
 group("gccrs", *gccrs_tests)
+group("rust_quiz", *rust_quiz_tests)
