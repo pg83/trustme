@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import self-contained runtime assertions from Rust 1.90's UI suite.
+"""Import self-contained stable runtime tests from Rust 1.90's UI suite.
 
 Usage: import.py /path/to/rust-1.90.0
 
@@ -33,9 +33,7 @@ def selected(text: str) -> bool:
         return False
     if not re.search(r"\bfn\s+main\s*\(", text):
         return False
-    if not re.search(r"\bassert(?:_eq|_ne)?!\s*\(", text):
-        return False
-    if len(text.splitlines()) > 200 or "#![feature" in text:
+    if "#![feature" in text:
         return False
     if any(re.search(rf"^//@.*{re.escape(item)}", text, re.MULTILINE)
            for item in REJECTED_DIRECTIVES):
@@ -60,6 +58,9 @@ def main() -> int:
     source = Path(sys.argv[1]).resolve() / "tests" / "ui"
     if not source.is_dir():
         raise SystemExit(f"missing Rust UI suite: {source}")
+
+    if UPSTREAM.exists():
+        shutil.rmtree(UPSTREAM)
 
     cases = []
     for path in sorted(source.rglob("*.rs")):
