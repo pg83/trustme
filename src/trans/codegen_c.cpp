@@ -7692,7 +7692,7 @@ namespace {
                     MIR_ASSERT(mir_res, size_slot / size_val * size_val == size_slot, size_slot << " not a multiple of " << size_val);
                     m_of << "for(int i = 0; i < " << div << "; i++) { int j = "; emit_param(e.args.at(2)); m_of << ".DATA[i];";
                     m_of << "((uint" << (size_val*8) << "_t*)&"; emit_lvalue(e.ret_val); m_of << ")[i]";
-                    m_of << " = ((uint" << (size_val*8) << "_t*)(j < " << div << " ? &"; emit_param(e.args.at(1)); m_of << " : &"; emit_param(e.args.at(1)); m_of << "))[j % " << div << "];";
+                    m_of << " = ((uint" << (size_val*8) << "_t*)(j < " << div << " ? &"; emit_param(e.args.at(0)); m_of << " : &"; emit_param(e.args.at(1)); m_of << "))[j % " << div << "];";
                     m_of << "}";
                 }
                 else if( name_strip == "simd_shuffle" ) {
@@ -7712,7 +7712,7 @@ namespace {
                     if(TARGETVER_LEAST_1_90)    m_of << "._0";
                     m_of << ".DATA[i];";
                     m_of << " ((uint" << (size_val*8) << "_t*)&"; emit_lvalue(e.ret_val); m_of << ")[i]";
-                    m_of << " = ((uint" << (size_val*8) << "_t*)(j < " << div << " ? &"; emit_param(e.args.at(1)); m_of << " : &"; emit_param(e.args.at(1)); m_of << "))[j % " << div << "];";
+                    m_of << " = ((uint" << (size_val*8) << "_t*)(j < " << div << " ? &"; emit_param(e.args.at(0)); m_of << " : &"; emit_param(e.args.at(1)); m_of << "))[j % " << div << "];";
                     m_of << "}";
                 }
                 else if( name_strip == "simd_cast" ) {
