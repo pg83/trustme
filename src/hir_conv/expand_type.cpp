@@ -369,6 +369,7 @@ public:
 
                 gp.m_params.m_lifetimes.resize( enm.m_params.m_lifetimes.size() );
                 gp.m_params.m_types.resize( enm.m_params.m_types.size() );
+                gp.m_params.m_values.resize( enm.m_params.m_values.size() );
 
                 auto idx = ti.as_Enum().find_variant(gp.m_path.components().back());
                 return ::HIR::Pattern::PathBinding::make_Enum({ &enm, static_cast<unsigned>(idx) });
@@ -380,6 +381,7 @@ public:
 
         gp.m_params.m_lifetimes.resize( str.m_params.m_lifetimes.size() );
         gp.m_params.m_types.resize( str.m_params.m_types.size() );
+        gp.m_params.m_values.resize( str.m_params.m_values.size() );
 
         return ::HIR::Pattern::PathBinding::make_Struct(&str);
     }
