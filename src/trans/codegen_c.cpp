@@ -2815,6 +2815,54 @@ namespace {
                 else if( item.m_linkage.name == "llvm.x86.sse2.storeu.dq" ) {
                     m_of << "\tmemcpy(arg0, &arg1, sizeof(arg1));\n";
                 }
+                // SHA-NI: the sha2 crate takes this path when runtime detection
+                // reports hardware support; portable C keeps it correct.
+                else if( item.m_linkage.name == "llvm.x86.sha256rnds2" ) {
+                    m_of
+                        << "\tconst uint32_t* st_cdgh = (const uint32_t*)&arg0;\n"
+                        << "\tconst uint32_t* st_abef = (const uint32_t*)&arg1;\n"
+                        << "\tconst uint32_t* wk = (const uint32_t*)&arg2;\n"
+                        << "\tuint32_t* dst = (uint32_t*)&rv;\n"
+                        << "\tuint32_t a = st_abef[3], b = st_abef[2], e = st_abef[1], f = st_abef[0];\n"
+                        << "\tuint32_t c = st_cdgh[3], d = st_cdgh[2], g = st_cdgh[1], h = st_cdgh[0];\n"
+                        << "\tfor(int i = 0; i < 2; i ++) {\n"
+                        << "\t\tuint32_t ch = (e & f) ^ (~e & g);\n"
+                        << "\t\tuint32_t maj = (a & b) ^ (a & c) ^ (b & c);\n"
+                        << "\t\tuint32_t s0 = (a >> 2 | a << 30) ^ (a >> 13 | a << 19) ^ (a >> 22 | a << 10);\n"
+                        << "\t\tuint32_t s1 = (e >> 6 | e << 26) ^ (e >> 11 | e << 21) ^ (e >> 25 | e << 7);\n"
+                        << "\t\tuint32_t t = ch + s1 + wk[i] + h;\n"
+                        << "\t\th = g; g = f; f = e; e = t + d; d = c; c = b; b = a; a = t + maj + s0;\n"
+                        << "\t}\n"
+                        << "\tdst[3] = a; dst[2] = b; dst[1] = e; dst[0] = f;\n"
+                        << "\treturn rv;\n"
+                        ;
+                }
+                else if( item.m_linkage.name == "llvm.x86.sha256msg1" ) {
+                    m_of
+                        << "\tconst uint32_t* w = (const uint32_t*)&arg0;\n"
+                        << "\tconst uint32_t* w2 = (const uint32_t*)&arg1;\n"
+                        << "\tuint32_t* dst = (uint32_t*)&rv;\n"
+                        << "\tfor(int i = 0; i < 4; i ++) {\n"
+                        << "\t\tuint32_t x = (i < 3 ? w[i+1] : w2[0]);\n"
+                        << "\t\tdst[i] = w[i] + ((x >> 7 | x << 25) ^ (x >> 18 | x << 14) ^ (x >> 3));\n"
+                        << "\t}\n"
+                        << "\treturn rv;\n"
+                        ;
+                }
+                else if( item.m_linkage.name == "llvm.x86.sha256msg2" ) {
+                    m_of
+                        << "\tconst uint32_t* w = (const uint32_t*)&arg0;\n"
+                        << "\tconst uint32_t* prev = (const uint32_t*)&arg1;\n"
+                        << "\tuint32_t* dst = (uint32_t*)&rv;\n"
+                        << "\tuint32_t w14 = prev[2], w15 = prev[3];\n"
+                        << "\tuint32_t w16 = w[0] + ((w14 >> 17 | w14 << 15) ^ (w14 >> 19 | w14 << 13) ^ (w14 >> 10));\n"
+                        << "\tuint32_t w17 = w[1] + ((w15 >> 17 | w15 << 15) ^ (w15 >> 19 | w15 << 13) ^ (w15 >> 10));\n"
+                        << "\tuint32_t w18 = w[2] + ((w16 >> 17 | w16 << 15) ^ (w16 >> 19 | w16 << 13) ^ (w16 >> 10));\n"
+                        << "\tuint32_t w19 = w[3] + ((w17 >> 17 | w17 << 15) ^ (w17 >> 19 | w17 << 13) ^ (w17 >> 10));\n"
+                        << "\tdst[0] = w16; dst[1] = w17; dst[2] = w18; dst[3] = w19;\n"
+                        << "\treturn rv;\n"
+                        ;
+                }
                 // Add with carry
                 // `fn llvm_addcarry_u32(a: u8, b: u32, c: u32) -> (u8, u32)`
                 else if( item.m_linkage.name == "llvm.x86.addcarry.32") {
