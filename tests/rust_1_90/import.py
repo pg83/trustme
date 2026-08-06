@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import self-contained stable runtime tests from Rust 1.90's UI suite.
+"""Import self-contained runtime tests from Rust 1.90's UI suite.
 
 Usage: import.py /path/to/rust-1.90.0
 
@@ -32,8 +32,6 @@ def selected(text: str) -> bool:
     if not re.search(r"^//@\s*run-pass(?:\s|$)", text, re.MULTILINE):
         return False
     if not re.search(r"\bfn\s+main\s*\(", text):
-        return False
-    if "#![feature" in text:
         return False
     if any(re.search(rf"^//@.*{re.escape(item)}", text, re.MULTILINE)
            for item in REJECTED_DIRECTIVES):
