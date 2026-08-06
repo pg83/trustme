@@ -194,5 +194,26 @@ minicargo = program(
     ldflags=["-lz", "-pthread"],
 )
 
-install(rustc, minicargo)
+# cargo: the new lockfile-driven cargo, written in Go. Building it is just a
+# `go build` dropped into the graph as a command node. GOCACHE is pinned into
+# the build dir so the compile is incremental and stays out of $HOME.
+cargo = command(
+    name="cargo",
+    inputs=build.glob("$(S)/cargo/*.go") + ["$(S)/cargo/go.mod"],
+    outputs=["$(B)/cargo"],
+    cmd=[
+        "go", "build",
+        "-o", "$(B)/cargo",
+        "./cargo",
+    ],
+    cwd="$(S)",
+    env={
+        "GOCACHE": "$(B)/gocache",
+        "GOFLAGS": "-mod=mod",
+        "GOTOOLCHAIN": "local",
+    },
+    descr="GO",
+)
+
+install(rustc, minicargo, cargo)
 
