@@ -137,7 +137,7 @@ class CMacroUseHandler:
                     }
                     else {
                     }
-                    path = AST::AbsolutePath(imp->path.crate_name(), imp->path.components().to_vec());
+                    path = AST::AbsolutePath(imp->path.crate_name(), imp->path.components_vec());
                 }
 
                 MacroRef    mr;
@@ -346,4 +346,3 @@ STATIC_DECORATOR("macro_use", CMacroUseHandler);
 STATIC_DECORATOR("macro_export", CMacroExportHandler);
 STATIC_DECORATOR("macro_reexport", CMacroReexportHandler);
 STATIC_DECORATOR("rustc_builtin_macro", CBuiltinMacroHandler);
-

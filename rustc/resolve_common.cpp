@@ -27,7 +27,7 @@
 namespace {
 
     AST::AbsolutePath sp_to_ap(const HIR::SimplePath& sp) {
-        return AST::AbsolutePath(sp.crate_name(), sp.components().to_vec());
+        return AST::AbsolutePath(sp.crate_name(), sp.components_vec());
     }
 
     ResolveItemRef_Type as_Namespace(ResolveItemRef ir) {

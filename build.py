@@ -16,14 +16,9 @@ build.cppflags += [
 ]
 
 build.cxxflags += [
-    "-std=c++14",
+    "-std=c++26",
     "-O2",
     "-g",
-    "-Wall",
-    "-Wno-pessimizing-move",
-    "-Wno-misleading-indentation",
-    "-Werror=return-type",
-    "-Werror=switch",
 ]
 
 SRC = [

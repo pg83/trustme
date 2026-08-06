@@ -349,7 +349,7 @@ void Resolve_Index_Module_Wildcard__glob_in_hir_mod(
             if( vep->is_Import() ) {
                 const auto& spath = vep->as_Import().path;
                 pb.path.crate = spath.crate_name();
-                pb.path.nodes = spath.components().to_vec();
+                pb.path.nodes = spath.components_vec();
 
                 ASSERT_BUG(sp, crate.m_extern_crates.count(spath.crate_name()) == 1, "Crate " << spath.crate_name() << " is not loaded");
                 const auto* hmod = &crate.m_extern_crates.at(spath.crate_name()).m_hir->m_root_module;
@@ -420,7 +420,7 @@ void Resolve_Index_Module_Wildcard__glob_in_hir_mod(
             if( ve.ent.is_Import() ) {
                 const auto& spath = ve.ent.as_Import().path;
                 pb.path.crate = spath.crate_name();
-                pb.path.nodes = spath.components().to_vec();
+                pb.path.nodes = spath.components_vec();
 
                 ASSERT_BUG(sp, crate.m_extern_crates.count(spath.crate_name()) == 1, "Crate " << spath.crate_name() << " is not loaded");
                 const auto* hmod = &crate.m_extern_crates.at(spath.crate_name()).m_hir->m_root_module;
@@ -475,7 +475,7 @@ void Resolve_Index_Module_Wildcard__glob_in_hir_mod(
             ::AST::PathBinding<::AST::PathBinding_Macro>    pb;
             if(const auto* ep = e.ent.opt_Import()) {
                 pb.path.crate = ep->path.crate_name();
-                pb.path.nodes = ep->path.components().to_vec();
+                pb.path.nodes = ep->path.components_vec();
                 // NOTE: This shouldn't ever be pointing at an import, and no other handling needed
             }
             else {

@@ -153,6 +153,10 @@ public:
     ::std::span<const RcString> components() const {
         return m_members.empty() ? std::span<const RcString>() : std::span<const RcString>(m_members.begin() + 1, m_members.end());
     }
+    ::std::vector<RcString> components_vec() const {
+        const auto values = components();
+        return {values.begin(), values.end()};
+    }
 
     SimplePath operator+(const RcString& s) const;
 
@@ -387,4 +391,3 @@ private:
 }   // namespace HIR
 
 #endif
-

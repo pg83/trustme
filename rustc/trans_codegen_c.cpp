@@ -1302,7 +1302,6 @@ namespace {
                 {
                     args.push_back( a.c_str() );
                 }
-                args.push_back("-Wno-psabi");   // Suppress "note: the ABI for passing parameters with 128-byte alignment has changed in GCC 4.6"
                 switch(opt.opt_level)
                 {
                 case 0: break;

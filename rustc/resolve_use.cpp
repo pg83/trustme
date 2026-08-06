@@ -855,7 +855,7 @@ namespace {
                     ERROR(span, E0000, "Unable to find variant " << path);
                 }
                 ap.crate = e.path.crate_name();
-                ap.nodes = e.path.components().to_vec();
+                ap.nodes = e.path.components_vec();
                 ap.nodes.push_back(name);
                 if( enm.m_data.is_Data() && enm.m_data.as_Data()[idx].is_struct ) {
                     rv.type.set(ap, ::AST::PathBinding_Type::make_EnumVar({ nullptr, static_cast<unsigned int>(idx), &enm }));
@@ -867,7 +867,7 @@ namespace {
             }
             else {
                 ap.crate = e.path.crate_name();
-                ap.nodes = e.path.components().to_vec();
+                ap.nodes = e.path.components_vec();
                 hmod = reinterpret_cast<const ::HIR::Module*>(ptr);
             }
             }
@@ -917,7 +917,7 @@ namespace {
             DEBUG("E : Mod " << nodes.back().name() << " = " << item_ptr->tag_str());
             if( item_ptr->is_Import() ) {
                 const auto& e = item_ptr->as_Import();
-                ap = AST::AbsolutePath(e.path.crate_name(), e.path.components().to_vec());
+                ap = AST::AbsolutePath(e.path.crate_name(), e.path.components_vec());
                 if( e.path.crate_name() == rcstring_crate_builtins ) {
                     auto t = coretype_fromstring(e.path.components().front().c_str());
                     rv.type.set(ap, ::AST::PathBinding_Type::make_Primitive(t));
@@ -993,7 +993,7 @@ namespace {
             DEBUG("E : Value " << nodes.back().name() << " = " << item_ptr->tag_str());
             if( item_ptr->is_Import() ) {
                 const auto& e = item_ptr->as_Import();
-                ap = AST::AbsolutePath(e.path.crate_name(), e.path.components().to_vec());
+                ap = AST::AbsolutePath(e.path.crate_name(), e.path.components_vec());
                 // This doesn't need to recurse - it can just do a single layer (as no Import should refer to another)
                 const auto& ec = crate.m_extern_crates.at( e.path.crate_name() );
                 if( e.is_variant )
@@ -1064,7 +1064,7 @@ namespace {
                 const auto& c = *crate.m_extern_crates.at(imp->path.crate_name()).m_hir;    // Have to manually look up, AST doesn't have a `get_mod_by_path`
                 const auto& mod = c.get_mod_by_path(span, imp->path, /*ignore_last=*/true, /*ignore_crate=*/true);
                 item_ptr = &mod.m_macro_items.at(imp->path.components().back())->ent;
-                ap = AST::AbsolutePath(imp->path.crate_name(), imp->path.components().to_vec());
+                ap = AST::AbsolutePath(imp->path.crate_name(), imp->path.components_vec());
             }
             else {
             }

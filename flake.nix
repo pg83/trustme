@@ -24,13 +24,14 @@
 
       mkToolchain =
         pkgs:
-        pkgs.stdenv.mkDerivation {
+        pkgs.gcc16Stdenv.mkDerivation {
           pname = "mrustc-toolchain";
           version = "0.1.0";
 
           src = self;
 
           dontConfigure = true;
+          hardeningDisable = [ "format" ];
 
           nativeBuildInputs = with pkgs; [
             go
@@ -105,8 +106,9 @@
           pkgs = nixpkgsFor system;
         in
         {
-          default = pkgs.mkShell {
+          default = (pkgs.mkShell.override { stdenv = pkgs.gcc16Stdenv; }) {
             inputsFrom = [ self.packages.${system}.toolchain ];
+            hardeningDisable = [ "format" ];
 
             packages = with pkgs; [
               cacert

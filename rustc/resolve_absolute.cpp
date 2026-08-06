@@ -23,7 +23,7 @@ namespace
 {
     static const RcString rcstring_Self = RcString::new_interned("Self");
     AST::AbsolutePath sp_to_ap(const HIR::SimplePath& sp) {
-        return AST::AbsolutePath(sp.crate_name(), sp.components().to_vec());
+        return AST::AbsolutePath(sp.crate_name(), sp.components_vec());
     }
 
     struct GenericSlot
@@ -3012,5 +3012,4 @@ void Resolve_Absolutise(AST::Crate& crate)
 {
     Resolve_Absolute_Mod(crate, crate.root_module());
 }
-
 
