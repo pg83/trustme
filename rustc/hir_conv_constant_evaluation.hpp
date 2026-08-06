@@ -1,6 +1,7 @@
 /*
  */
 #include "hir_hir.hpp"
+#include <std/mem/obj_pool.h>
 
 namespace MIR {
     namespace eval {
@@ -38,6 +39,10 @@ struct Evaluator
     };
 
     Span    root_span;
+    // All values and relocations created by one constant evaluation form a
+    // single graph. Nothing in that graph escapes `evaluate_constant`:
+    // `allocation_to_encoded` deep-copies the result into an EncodedLiteral.
+    stl::ObjPool::Ref value_pool;
     StaticTraitResolve  resolve;
     Newval& nvs;
     unsigned int eval_index;
@@ -50,6 +55,7 @@ struct Evaluator
 public:
     Evaluator(const Span& sp, const ::HIR::Crate& crate, Newval& nvs):
         root_span(sp),
+        value_pool(stl::ObjPool::fromMemory()),
         resolve(crate),
         nvs( nvs )
         , eval_index(s_next_eval_index++)
@@ -82,4 +88,3 @@ private:
 };
 
 } // namespace HIR
-

@@ -82,58 +82,38 @@ namespace MIR { namespace eval {
     class Constant;
     class StaticRef;
     class RelocPtr;
-    template<typename T> class RefCountPtr
+    template<typename T> class EvalPtr
     {
         friend class RelocPtr;
     protected:
-        T*  m_ptr;
+        T* m_ptr;
     public:
-        ~RefCountPtr() {
-            if(m_ptr)
-            {
-                m_ptr->reference_count -= 1;
-                if(m_ptr->reference_count == 0)  {
-                    this->dealloc(m_ptr);
-                }
-            }
-            m_ptr = nullptr;
-        }
-        RefCountPtr(const RefCountPtr& x):
-            m_ptr(x.m_ptr)
-        {
-            if(m_ptr)
-            {
-                x.m_ptr->reference_count += 1;
-            }
-        }
-        RefCountPtr(RefCountPtr&& x): m_ptr(x.m_ptr) { x.m_ptr = nullptr; }
-
-        RefCountPtr(): m_ptr(nullptr) {}
+        EvalPtr(): m_ptr(nullptr) {}
 
         operator bool() const { return m_ptr != 0; }
         T* operator->() { return m_ptr; }
+        const T* operator->() const { return m_ptr; }
         T& operator*() { return *m_ptr; }
-    protected:
-        void dealloc(T* p); // Note: Should be overridden for each type
+        const T& operator*() const { return *m_ptr; }
     };
     /// "Statically allocated" constant data
-    class ConstantPtr final: public RefCountPtr<Constant>
+    class ConstantPtr final: public EvalPtr<Constant>
     {
     public:
-        static ConstantPtr allocate(const void* data, size_t len);
+        static ConstantPtr allocate(stl::ObjPool* pool, const void* data, size_t len);
     };
     /// Mutable allocation
-    class AllocationPtr final: public RefCountPtr<Allocation>
+    class AllocationPtr final: public EvalPtr<Allocation>
     {
     public:
-        static AllocationPtr allocate(const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeRef& ty);
-        static AllocationPtr allocate_ro(const void* data, size_t len);
+        static AllocationPtr allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeRef& ty);
+        static AllocationPtr allocate_ro(stl::ObjPool* pool, const void* data, size_t len);
     };
     /// Reference to a `static`
-    class StaticRefPtr final: public RefCountPtr<StaticRef>
+    class StaticRefPtr final: public EvalPtr<StaticRef>
     {
     public:
-        static StaticRefPtr allocate(::HIR::Path p, const EncodedLiteral* lit);
+        static StaticRefPtr allocate(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit);
     };
 
     /// Common interface for data storage
@@ -167,19 +147,19 @@ namespace MIR { namespace eval {
             TAG_StaticRef,
         };
     public:
-        ~RelocPtr();
-        RelocPtr(const RelocPtr& x): ptr(0) { *this = x; }
-        RelocPtr(RelocPtr&& x): ptr(x.ptr) { x.ptr = 0; }
-        RelocPtr& operator=(const RelocPtr& x);
-        RelocPtr& operator=(RelocPtr&& x) { this->~RelocPtr(); this->ptr = x.ptr; x.ptr = 0; return *this; }
+        ~RelocPtr() = default;
+        RelocPtr(const RelocPtr&) = default;
+        RelocPtr(RelocPtr&&) = default;
+        RelocPtr& operator=(const RelocPtr&) = default;
+        RelocPtr& operator=(RelocPtr&&) = default;
 
         RelocPtr(): ptr(0) {}
-        RelocPtr(AllocationPtr p): ptr(0) { set(reinterpret_cast<uintptr_t>(p.m_ptr), TAG_Allocation); p.m_ptr = nullptr; }
-        RelocPtr(ConstantPtr   p): ptr(0) { set(reinterpret_cast<uintptr_t>(p.m_ptr), TAG_Constant  ); p.m_ptr = nullptr; }
-        RelocPtr(StaticRefPtr  p): ptr(0) { set(reinterpret_cast<uintptr_t>(p.m_ptr), TAG_StaticRef ); p.m_ptr = nullptr; }
+        RelocPtr(AllocationPtr p): ptr(0) { set(reinterpret_cast<uintptr_t>(p.m_ptr), TAG_Allocation); }
+        RelocPtr(ConstantPtr   p): ptr(0) { set(reinterpret_cast<uintptr_t>(p.m_ptr), TAG_Constant  ); }
+        RelocPtr(StaticRefPtr  p): ptr(0) { set(reinterpret_cast<uintptr_t>(p.m_ptr), TAG_StaticRef ); }
 
         operator bool() const { return ptr != 0; }
-        bool operator==(const RelocPtr& x) { return ptr == x.ptr; }
+        bool operator==(const RelocPtr& x) const { return ptr == x.ptr; }
 
               IValue& as_value()       { return *as_value_ptr(); }
         const IValue& as_value() const { return *as_value_ptr(); }
@@ -217,15 +197,13 @@ namespace MIR { namespace eval {
     /// Constant data
     class Constant final: public IValue
     {
+        friend struct stl::Embed<Constant>;
         friend class ConstantPtr;
-        friend class RefCountPtr<Constant>;
-        unsigned    reference_count;
         unsigned    const length;
         const uint8_t*  const data;
 
         Constant(const void* data, size_t len)
-            : reference_count(1)
-            , length(len)
+            : length(len)
             , data(reinterpret_cast<const uint8_t*>(data))
         {
         }
@@ -276,26 +254,25 @@ namespace MIR { namespace eval {
     };
     class Allocation final: public IValue
     {
+        friend struct stl::Embed<Allocation>;
         friend class AllocationPtr;
-        friend class RefCountPtr<Allocation>;
     public:
         struct Reloc {
             size_t  offset;
             RelocPtr    ptr;
         };
     private:
-        unsigned    reference_count;
         unsigned    length;
         bool    is_readonly;
         ::HIR::TypeRef  m_type;
         std::vector<Reloc>  relocations;
-        uint8_t data[1];
+        uint8_t* data;
 
-        Allocation(size_t len, const ::HIR::TypeRef& ty)
-            : reference_count(1)
-            , length(len)
+        Allocation(uint8_t* data, size_t len, const ::HIR::TypeRef& ty)
+            : length(len)
             , is_readonly(false)
             , m_type(ty.clone())
+            , data(data)
         {
             memset(data, 0, len + (len + 7) / 8);
         }
@@ -442,15 +419,15 @@ namespace MIR { namespace eval {
     };
     class StaticRef final: public IValue
     {
-        friend class RefCountPtr<StaticRef>;
+        friend struct stl::Embed<StaticRef>;
         friend class StaticRefPtr;
 
-        unsigned reference_count;
+        stl::ObjPool* pool;
         ::HIR::Path m_path;
         const EncodedLiteral*  m_encoded;
 
-        StaticRef(::HIR::Path p, const EncodedLiteral* lit = nullptr)
-            : reference_count(1)
+        StaticRef(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit = nullptr)
+            : pool(pool)
             , m_path(std::move(p))
             , m_encoded(lit)
         {
@@ -520,11 +497,11 @@ namespace MIR { namespace eval {
                     if(r.ofs == ofs) {
                         RelocPtr    reloc;
                         if( r.p ) {
-                            return RelocPtr(StaticRefPtr::allocate(r.p->clone(), nullptr));
+                            return RelocPtr(StaticRefPtr::allocate(pool, r.p->clone(), nullptr));
                             TODO(Span(), "Convert relocation pointer - " << *r.p);
                         }
                         else {
-                            return RelocPtr(AllocationPtr::allocate_ro(r.bytes.data(), r.bytes.size()));
+                            return RelocPtr(AllocationPtr::allocate_ro(pool, r.bytes.data(), r.bytes.size()));
                         }
                     }
                 }
@@ -747,79 +724,41 @@ namespace MIR { namespace eval {
     }
 
     // ---
-    template<>
-    void RefCountPtr<Constant>::dealloc(Constant* v)
-    {
-        delete v;
-    }
-    ConstantPtr ConstantPtr::allocate(const void* data, size_t len)
+    ConstantPtr ConstantPtr::allocate(stl::ObjPool* pool, const void* data, size_t len)
     {
         ConstantPtr rv;
-        rv.m_ptr = new Constant(data, len);
+        rv.m_ptr = pool->make<Constant>(data, len);
         return rv;
     }
     // ---
-    template<>
-    void RefCountPtr<Allocation>::dealloc(Allocation* v)
-    {
-        free(v);
-    }
-    AllocationPtr AllocationPtr::allocate(const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeRef& ty)
+    AllocationPtr AllocationPtr::allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeRef& ty)
     {
         size_t len;
         if( !Target_GetSizeOf(Span(), resolve, ty, len) )    throw Defer();
-        auto* rv_raw = reinterpret_cast<Allocation*>( malloc(sizeof(Allocation) + len + ((len+7) / 8)) );
+        auto* data = static_cast<uint8_t*>(pool->allocate(len + ((len+7) / 8)));
         AllocationPtr   rv;
         // TODO: Include the current location from `state` in the allocation header
-        rv.m_ptr = new(rv_raw) Allocation(len, ty);
+        rv.m_ptr = pool->make<Allocation>(data, len, ty);
         return rv;
     }
-    AllocationPtr AllocationPtr::allocate_ro(const void* data, size_t len)
+    AllocationPtr AllocationPtr::allocate_ro(stl::ObjPool* pool, const void* data_in, size_t len)
     {
-        auto* rv_raw = reinterpret_cast<Allocation*>( malloc(sizeof(Allocation) + len + ((len+7) / 8)) );
+        auto* data = static_cast<uint8_t*>(pool->allocate(len + ((len+7) / 8)));
         AllocationPtr   rv;
-        rv.m_ptr = new(rv_raw) Allocation(len, HIR::TypeRef());
-        rv->write_bytes(0, data, len);
+        rv.m_ptr = pool->make<Allocation>(data, len, HIR::TypeRef());
+        rv->write_bytes(0, data_in, len);
         rv->is_readonly = true;
         return rv;
     }
     // ---
-    template<>
-    void RefCountPtr<StaticRef>::dealloc(StaticRef* v)
-    {
-        delete v;
-    }
-    StaticRefPtr StaticRefPtr::allocate(::HIR::Path p, const EncodedLiteral* lit)
+    StaticRefPtr StaticRefPtr::allocate(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit)
     {
         StaticRefPtr rv;
-        rv.m_ptr = new StaticRef(std::move(p), lit);
+        rv.m_ptr = pool->make<StaticRef>(pool, std::move(p), lit);
         return rv;
     }
 
     // --- RelocPtr ---
-    RelocPtr::~RelocPtr()
-    {
-        switch(ptr & 3)
-        {
-        case TAG_Allocation: { AllocationPtr p; p.m_ptr = this->as_allocation(); } break;
-        case TAG_Constant  : { ConstantPtr   p; p.m_ptr = this->as_constant  (); } break;
-        case TAG_StaticRef : { StaticRefPtr  p; p.m_ptr = this->as_staticref (); } break;
-        case 3: assert("Unexpected tag");
-        }
-    }
-    RelocPtr& RelocPtr::operator=(const RelocPtr& x)
-    {
-        switch(x.ptr & 3)
-        {
-        case TAG_Allocation: { AllocationPtr p; p.m_ptr = x.as_allocation(); auto p2 = p; p.m_ptr=nullptr; p2.m_ptr=nullptr; } break;
-        case TAG_Constant  : { ConstantPtr   p; p.m_ptr = x.as_constant  (); auto p2 = p; p.m_ptr=nullptr; p2.m_ptr=nullptr; } break;
-        case TAG_StaticRef : { StaticRefPtr  p; p.m_ptr = x.as_staticref (); auto p2 = p; p.m_ptr=nullptr; p2.m_ptr=nullptr; } break;
-        case 3: assert("Unexpected tag");
-        }
-        this->~RelocPtr();
-        this->ptr = x.ptr;
-        return *this;
-    }
     IValue* RelocPtr::as_value_ptr() const
     {
         assert(ptr);
@@ -992,6 +931,7 @@ namespace MIR { namespace eval {
     class CallStackEntry
     {
     public:
+        stl::ObjPool* const value_pool;
         const unsigned  frame_index;
         const std::vector<std::pair< HIR::Pattern, HIR::TypeRef>> arg_defs;
         const HIR::TypeRef  ret_type;
@@ -1015,6 +955,7 @@ namespace MIR { namespace eval {
         CallStackEntry(CallStackEntry&& ) = delete;
 
         CallStackEntry(
+            stl::ObjPool* value_pool,
             unsigned frame_index,
             const Span& root_span,
             const StaticTraitResolve& resolve,
@@ -1030,14 +971,15 @@ namespace MIR { namespace eval {
             const ::HIR::GenericParams* item_params_def,
             const ::HIR::GenericParams* impl_params_def
         )
-            : frame_index(frame_index)
+            : value_pool(value_pool)
+            , frame_index(frame_index)
             , arg_defs(std::move(arg_defs))
             , ret_type(std::move(exp_ty))
             , root_resolve(resolve)
             , resolve(resolve.m_crate)
             , state { root_span, this->resolve, std::move(path_str), this->ret_type, this->arg_defs, fcn }
             , ms(std::move(ms))
-            , retval( AllocationPtr::allocate(root_resolve, state, ret_type) )
+            , retval( AllocationPtr::allocate(value_pool, root_resolve, state, ret_type) )
             , args(args)
         {
             this->resolve.set_both_generics_raw(impl_params_def, item_params_def);
@@ -1046,7 +988,7 @@ namespace MIR { namespace eval {
             for(size_t i = 0; i < state.m_fcn.locals.size(); i ++)
             {
                 local_types.push_back( state.m_resolve.monomorph_expand(state.sp, state.m_fcn.locals[i], this->ms) );
-                locals.push_back( AllocationPtr::allocate(root_resolve, state, local_types.back()) );
+                locals.push_back( AllocationPtr::allocate(value_pool, root_resolve, state, local_types.back()) );
             }
 
             state.m_monomorphed_rettype = &ret_type;
@@ -1084,7 +1026,7 @@ namespace MIR { namespace eval {
                     // If there's no MIR and no HIR then this is an external static (which can only be borrowed)
                     if( !s.m_value && !s.m_value.m_mir ) {
                         DEBUG("No value and no mir");
-                        return StaticRefPtr::allocate(std::move(p), nullptr);
+                        return StaticRefPtr::allocate(value_pool, std::move(p), nullptr);
                     }
 
                     auto& item = const_cast<::HIR::Static&>(s);
@@ -1125,7 +1067,7 @@ namespace MIR { namespace eval {
                     // Does this need monomorph? No, becuase the value is known and thus not generic?
                     *out_ty = s.m_type.clone();
                 }
-                return StaticRefPtr::allocate(std::move(p), &s.m_value_res);
+                return StaticRefPtr::allocate(value_pool, std::move(p), &s.m_value_res);
             }
             else
             {
@@ -1133,7 +1075,7 @@ namespace MIR { namespace eval {
                 if( out_ty ) {
                     MIR_TODO(state, "Get type for " << ent.tag_str() << " (" << p << ")");
                 }
-                return StaticRefPtr::allocate(std::move(p), nullptr);
+                return StaticRefPtr::allocate(value_pool, std::move(p), nullptr);
             }
         }
 
@@ -1382,7 +1324,7 @@ namespace MIR { namespace eval {
                     reloc = RelocPtr(get_staticref(r.p->clone()));
                 }
                 else {
-                    reloc = RelocPtr(AllocationPtr::allocate_ro(r.bytes.data(), r.bytes.size()));
+                    reloc = RelocPtr(AllocationPtr::allocate_ro(value_pool, r.bytes.data(), r.bytes.size()));
                 }
                 dst.slice(r.ofs, r.len).set_reloc(std::move(reloc));
             }
@@ -1403,10 +1345,10 @@ namespace MIR { namespace eval {
                 dst.write_uint(state, 1, e2.v);
             }
             TU_ARM(c, Bytes, e2) {
-                dst.write_ptr(state, EncodedLiteral::PTR_BASE, ConstantPtr::allocate(e2.data(), e2.size()));
+                dst.write_ptr(state, EncodedLiteral::PTR_BASE, ConstantPtr::allocate(value_pool, e2.data(), e2.size()));
             }
             TU_ARM(c, StaticString, e2) {
-                dst.write_ptr(state, EncodedLiteral::PTR_BASE, ConstantPtr::allocate(e2.data(), e2.size()));
+                dst.write_ptr(state, EncodedLiteral::PTR_BASE, ConstantPtr::allocate(value_pool, e2.data(), e2.size()));
                 dst.slice(Target_GetPointerBits()/8).write_uint(state, Target_GetPointerBits(), e2.size());
             }
             TU_ARM(c, Const, e2) {
@@ -1946,6 +1888,7 @@ namespace HIR {
     )
     {
         this->call_stack.push_back(new CallStackEntry(
+            this->value_pool.mutPtr(),
             this->num_frames,
             this->root_span, this->resolve,
             std::move(print_path), std::move(exp), std::move(arg_defs), fcn, std::move(ms),
@@ -2542,12 +2485,12 @@ namespace HIR {
                 else if( te->name == "type_name" ) {
                     auto ty = local_state.monomorph_expand(te->params.m_types.at(0));
                     auto name = state.intrinsic_type_name(ty);
-                    dst.write_ptr(state, EncodedLiteral::PTR_BASE, AllocationPtr::allocate_ro(name.data(), name.size()));
+                    dst.write_ptr(state, EncodedLiteral::PTR_BASE, AllocationPtr::allocate_ro(local_state.value_pool, name.data(), name.size()));
                     dst.slice(Target_GetPointerBits()/8).write_uint(state, Target_GetPointerBits(), name.size());
                 }
                 else if( te->name == "type_id" ) {
                     auto ty = local_state.monomorph_expand(te->params.m_types.at(0));
-                    dst.write_ptr(state, EncodedLiteral::PTR_BASE, StaticRefPtr::allocate(HIR::Path(mv$(ty), "#type_id"), nullptr));
+                    dst.write_ptr(state, EncodedLiteral::PTR_BASE, StaticRefPtr::allocate(local_state.value_pool, HIR::Path(mv$(ty), "#type_id"), nullptr));
                 }
                 else if( te->name == "needs_drop" ) {
                     auto ty = local_state.monomorph_expand(te->params.m_types.at(0));
@@ -2564,11 +2507,11 @@ namespace HIR {
                     else {
                         MIR_ASSERT(state, repr->fields.size() == 3, "Unexpected item count in panic::Location");
                     }
-                    auto val = RelocPtr(AllocationPtr::allocate(resolve, state, ty));
+                    auto val = RelocPtr(AllocationPtr::allocate(local_state.value_pool, resolve, state, ty));
                     dst.write_ptr(state, EncodedLiteral::PTR_BASE, val);
                     auto rv = ValueRef(val);
                     auto pb = Target_GetPointerBits()/8;
-                    rv.slice(repr->fields[0].offset+ 0, pb).write_ptr(state, EncodedLiteral::PTR_BASE, ConstantPtr::allocate("", 0)); // file.ptr
+                    rv.slice(repr->fields[0].offset+ 0, pb).write_ptr(state, EncodedLiteral::PTR_BASE, ConstantPtr::allocate(local_state.value_pool, "", 0)); // file.ptr
                     rv.slice(repr->fields[0].offset+pb, pb).write_uint(state, Target_GetPointerBits(), 0);    // file.len
                     rv.slice(repr->fields[1].offset, 4).write_uint(state, 32, 0);  // line: u32
                     rv.slice(repr->fields[2].offset, 4).write_uint(state, 32, 0);  // col: u32
@@ -2857,7 +2800,7 @@ namespace HIR {
                     call_args.reserve( repr->fields.size() );
                     for(const auto& f : repr->fields) {
                         auto size = local_state.size_of_or_bug(f.ty);
-                        call_args.push_back(AllocationPtr::allocate(resolve, state, f.ty));
+                        call_args.push_back(AllocationPtr::allocate(local_state.value_pool, resolve, state, f.ty));
                         auto vr = ValueRef(call_args.back());
                         vr.copy_from(state, arg_val.slice(f.offset, size));
                     }
@@ -2965,7 +2908,7 @@ namespace HIR {
                 {
                     ::HIR::TypeRef  tmp;
                     const auto& ty = state.get_param_type(tmp, a);
-                    call_args.push_back(AllocationPtr::allocate(resolve, state, ty));
+                    call_args.push_back(AllocationPtr::allocate(local_state.value_pool, resolve, state, ty));
                     auto vr = ValueRef(call_args.back());
                     local_state.write_param( vr, a );
                 }
@@ -3023,7 +2966,7 @@ namespace HIR {
                     for(const auto& fld : arg_tuple_repr->fields)
                     {
                         auto size = local_state.size_of_or_bug(fld.ty);
-                        call_args.push_back(AllocationPtr::allocate(state.m_resolve, state, fld.ty));
+                        call_args.push_back(AllocationPtr::allocate(local_state.value_pool, state.m_resolve, state, fld.ty));
                         auto vr = ValueRef(call_args.back());
                         vr.copy_from(state, arg_tuple.slice(fld.offset, size));
                     }

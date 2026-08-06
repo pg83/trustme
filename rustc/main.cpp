@@ -33,6 +33,16 @@
 #include "memory_dump.hpp"
 #include <std/mem/obj_pool.h>
 
+#ifndef __has_feature
+# define __has_feature(x) 0
+#endif
+
+#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer)
+# define MRUSTC_SANITIZER_BUILD 1
+#else
+# define MRUSTC_SANITIZER_BUILD 0
+#endif
+
 TargetVersion	gTargetVersion = TargetVersion::Rustc1_29;
 
 struct ProgramParams
@@ -233,13 +243,20 @@ int main(int argc, char *argv[])
     }
 
     Expand_Init();
-    auto pool = stl::ObjPool::fromMemory();
+#if MRUSTC_SANITIZER_BUILD
+    // Keep teardown out of production, but make sanitizer builds destroy every
+    // pooled object so ASan/LSan can distinguish real leaks from arena lifetime.
+    auto pool_owner = stl::ObjPool::fromMemory();
+    auto* pool = pool_owner.mutPtr();
+#else
+    auto* pool = stl::ObjPool::fromMemoryRaw();
+#endif
 
     try
     {
         // Parse the crate into AST
         AST::Crate* crate_ptr = CompilePhase<AST::Crate*>("Parse", [&]() {
-            return Parse_Crate(pool.mutPtr(), params.infile, params.edition);
+            return Parse_Crate(pool, params.infile, params.edition);
             });
         AST::Crate& crate = *crate_ptr;
         crate.m_test_harness = params.test_harness;
@@ -528,7 +545,7 @@ int main(int argc, char *argv[])
         // --------------------------------------
         // Construct the HIR beside the AST in the compilation object pool.
         ::HIR::Crate* hir_crate = CompilePhase< ::HIR::Crate*>("HIR Lower", [&]() {
-            return LowerHIR_FromAST(pool.mutPtr(), crate);
+            return LowerHIR_FromAST(pool, crate);
             });
         memory_dump("HIR Gen");
         if( params.debug.dump_hir )
