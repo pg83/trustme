@@ -37,12 +37,25 @@ The nodes:
 Nodes exchange **tar archives** because the build engine only promotes declared
 file outputs; each node unpacks what it needs into a private temp dir.
 
+## unit regressions
+
+`tests/unit/test_*.rs` are self-contained one-file regressions — one per
+compiler fix. Each is its own graph node (`unit_<name>`): compiled against the
+shared `libstd` and run, and must exit 0. They depend only on `libstd` and
+`rustc`, so they are cheap once the standard library is built.
+
+Two fixes are not expressible as a single std-only file and are covered by the
+resvg integration instead: forwarding a `#[repr(C)]` above a `#[derive]` to a
+proc-macro derive (harfrust/bytemuck `Pod`), and minicargo's `src/main.rs`
+binary-path fallback (resvg's CLI binary).
+
 ## running
 
 ```
 ./build libstd            # just the shared standard library
+./build unit              # every one-file compiler regression
 ./build resvg             # the whole resvg chain (build + test)
-./build test              # every project test
+./build test              # everything under test (unit + projects)
 ```
 
 These are heavy and only run when asked for, never as part of the default

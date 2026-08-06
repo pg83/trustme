@@ -237,12 +237,15 @@ TOOLCHAIN_ENV = {
     "MINICARGO": "$(B)/minicargo",
 }
 
+# All node scripts are Python and share tests/lib.py.
+TESTS_LIB = ["$(S)/tests/lib.py"]
+
 # std_src: fetch + patch the rust-1.90 source, add the shim, pack it.
 std_src = command(
     name="std_src",
-    inputs=["$(S)/tests/std/fetch.sh", "$(S)/tests/std/rustc-1.90.0-src.patch"],
+    inputs=["$(S)/tests/std/fetch.py", "$(S)/tests/std/rustc-1.90.0-src.patch"] + TESTS_LIB,
     outputs=["$(B)/tests/rust-src.tar"],
-    cmd=["$(S)/tests/std/fetch.sh", "$(B)/tests/rust-src.tar"],
+    cmd=["python3", "$(S)/tests/std/fetch.py", "$(B)/tests/rust-src.tar"],
     descr="RS",
     color="cyan",
 )
@@ -251,13 +254,14 @@ std_src = command(
 libstd = command(
     name="libstd",
     inputs=(
-        ["$(S)/tests/std/build.sh", "$(S)/tests/std/rustc-1.90.0-overrides.toml"]
+        ["$(S)/tests/std/build.py", "$(S)/tests/std/rustc-1.90.0-overrides.toml"]
         + build.glob("$(S)/tests/std/script-overrides/stable-1.90.0-linux/*.txt")
         + build.glob("$(S)/tests/std/libproc_macro/**/*.rs")
         + build.glob("$(S)/tests/std/libproc_macro/Cargo.toml")
+        + TESTS_LIB
     ),
     outputs=["$(B)/tests/libstd.tar"],
-    cmd=["$(S)/tests/std/build.sh", "$(B)/tests/rust-src.tar", "$(B)/tests/libstd.tar"],
+    cmd=["python3", "$(S)/tests/std/build.py", "$(B)/tests/rust-src.tar", "$(B)/tests/libstd.tar"],
     deps=[std_src, rustc, minicargo],
     env=TOOLCHAIN_ENV,
     descr="LS",
@@ -267,10 +271,10 @@ libstd = command(
 # resvg_src: the project source at a pinned revision.
 resvg_src = command(
     name="resvg_src",
-    inputs=["$(S)/tests/git_src.sh"],
+    inputs=["$(S)/tests/git_src.py"] + TESTS_LIB,
     outputs=["$(B)/tests/resvg-src.tar"],
     cmd=[
-        "$(S)/tests/git_src.sh",
+        "python3", "$(S)/tests/git_src.py",
         "https://github.com/linebender/resvg.git",
         "08c79a3148df4ce8ab08fca72204b142b95423dd",
         "$(B)/tests/resvg-src.tar",
@@ -282,10 +286,10 @@ resvg_src = command(
 # resvg_vendor: vendor resvg's locked dependencies with the Go cargo.
 resvg_vendor = command(
     name="resvg_vendor",
-    inputs=["$(S)/tests/vendor.sh"],
+    inputs=["$(S)/tests/vendor.py"] + TESTS_LIB,
     outputs=["$(B)/tests/resvg-vendor.tar.zst"],
     cmd=[
-        "$(S)/tests/vendor.sh",
+        "python3", "$(S)/tests/vendor.py",
         "$(B)/tests/resvg-src.tar", ".",
         "$(B)/tests/resvg-vendor.tar.zst",
     ],
@@ -298,11 +302,11 @@ resvg_vendor = command(
 # resvg: build resvg offline against the shared libstd, then render-test it.
 resvg = command(
     name="resvg",
-    inputs=["$(S)/tests/build_project.sh", "$(S)/tests/resvg/run.py"],
+    inputs=["$(S)/tests/build_project.py", "$(S)/tests/resvg/run.py"] + TESTS_LIB,
     outputs=["$(B)/tests/resvg.stamp"],
     cmd=[
         [
-            "$(S)/tests/build_project.sh",
+            "python3", "$(S)/tests/build_project.py",
             "$(B)/tests/resvg-src.tar",
             "$(B)/tests/resvg-vendor.tar.zst",
             "$(B)/tests/libstd.tar",
@@ -317,5 +321,26 @@ resvg = command(
     color="magenta",
 )
 
-group("test", resvg)
+# Unit regressions: one self-contained tests/unit/test_*.rs per compiler fix,
+# each its own node — compiled against the shared libstd and run (must exit 0).
+unit_tests = []
+for _src in build.glob("$(S)/tests/unit/test_*.rs"):
+    _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
+    unit_tests.append(command(
+        name="unit_" + _stem,
+        inputs=[_src, "$(S)/tests/unit/run_one.py"] + TESTS_LIB,
+        outputs=["$(B)/tests/unit/" + _stem + ".stamp"],
+        cmd=[
+            "python3", "$(S)/tests/unit/run_one.py",
+            _src, "$(B)/tests/libstd.tar",
+            "$(B)/tests/unit/" + _stem + ".stamp",
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc"},
+        descr="UT",
+        color="green",
+    ))
+
+group("test", resvg, *unit_tests)
+group("unit", *unit_tests)
 
