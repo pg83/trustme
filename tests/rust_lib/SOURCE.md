@@ -1,8 +1,10 @@
 # Rust 1.90 library unit-test corpus
 
-Source: <https://github.com/rust-lang/rust/tree/d8401009a052a5efaed3f5c901c76dd733c04fbe/library>
+Source: <https://github.com/rust-lang/rust/tree/1159e78c4747b02ef996e55082b704c09b970588/library>
 
-Revision: tag `1.90.0`, commit `d8401009a052a5efaed3f5c901c76dd733c04fbe`.
+Revision: tag `1.90.0` (tag object
+`d8401009a052a5efaed3f5c901c76dd733c04fbe`), commit
+`1159e78c4747b02ef996e55082b704c09b970588`.
 
 `upstream/` contains the individual source files from `coretests/tests`,
 `alloctests/tests`, `alloctests/testing`, and `std/tests`.  Explicit `#[test]`
