@@ -103,10 +103,10 @@ public:
     Token();
     Token& operator=(Token&& t)
     {
-        m_type = t.m_type;  t.m_type = TOK_NULL;
-        m_data = ::std::move(t.m_data);
-        m_pos = ::std::move(t.m_pos);
-        m_hygiene = ::std::move(t.m_hygiene);
+        if(this == &t)
+            return *this;
+        this->~Token();
+        new (this) Token(::std::move(t));
         return *this;
     }
     Token(Token&& t):
@@ -190,4 +190,3 @@ public:
     friend ::std::ostream&  operator<<(::std::ostream& os, const Token& tok);
 };
 extern ::std::ostream&  operator<<(::std::ostream& os, const Token& tok);
-

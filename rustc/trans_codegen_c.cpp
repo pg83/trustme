@@ -2694,7 +2694,7 @@ namespace {
             unsigned n_ch = 0;
             while(start != end)
             {
-                const char& v = *start++;
+                const char v = *start++;
                 switch(v)
                 {
                 case '"':
@@ -2707,9 +2707,9 @@ namespace {
                     m_of << "\\n";
                     break;
                 case '?':
-                    if( *(&v + 1) == '?' )
+                    if( end - start >= 2 && start[0] == '?' )
                     {
-                        if( *(&v + 2) == '!' )
+                        if( start[1] == '!' )
                         {
                             // Trigraph! Needs an escape in it.
                             m_of << v;
@@ -2728,7 +2728,7 @@ namespace {
                         else
                             m_of << "\\x" << (unsigned int)static_cast<uint8_t>(v);
                         // If the next character is a hex digit, close/reopen the string.
-                        if( &v < (end-1) && isxdigit(*(&v+1)) ) {
+                        if( start != end && isxdigit(static_cast<unsigned char>(*start)) ) {
                             m_of << "\"\"";
                             n_ch = 0;
                         }
