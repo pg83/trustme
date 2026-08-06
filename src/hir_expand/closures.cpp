@@ -213,6 +213,13 @@ namespace {
             pp = m_monomorphiser.monomorph_path_params(Span(), pp, /*allow_infer*/false);
         }
 
+        void visit(::HIR::ExprNode_ArraySized& node) override {
+            // The default visitor doesn't enter array sizes, so the repeat count's const
+            // generic has to be remapped to the closure's parameter list here.
+            ::HIR::ExprVisitorDef::visit(node);
+            node.m_size = m_monomorphiser.monomorph_arraysize(node.span(), node.m_size);
+        }
+
         void visit_node_ptr(::HIR::ExprNodeP& node_ptr) override {
             assert( node_ptr );
             auto& node = *node_ptr;
@@ -1485,6 +1492,11 @@ namespace {
             }
             void visit(HIR::ExprNode_ConstParam& node) override {
                 node.m_binding = m_monomorph.get_value(node.span(), HIR::GenericRef("", node.m_binding)).as_Generic().binding;
+            }
+            void visit(::HIR::ExprNode_ArraySized& node) override {
+                // The default visitor doesn't enter array sizes; remap the repeat count too.
+                ::HIR::ExprVisitorDef::visit(node);
+                node.m_size = m_monomorph.monomorph_arraysize(node.span(), node.m_size);
             }
 
             // Custom visitor that only updates the captures and path
