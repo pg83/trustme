@@ -429,6 +429,71 @@ for _case in rust_quiz_cases:
         color="green",
     ))
 
+# Rust's library unit tests are grouped only at compilation.  Each explicit
+# #[test] function is still a separate runtime node selected from its harness.
+rust_lib_root = Path(__file__).parent / "tests" / "rust_lib"
+rust_lib_groups = []
+for _line in (rust_lib_root / "groups.tsv").read_text().splitlines():
+    rust_lib_groups.append(_line.split("\t"))
+rust_lib_cases = []
+for _line in (rust_lib_root / "cases.tsv").read_text().splitlines():
+    rust_lib_cases.append(_line.split("\t"))
+rust_lib_sources = [
+    "$(S)/tests/rust_lib/upstream/"
+    + _path.relative_to(rust_lib_root / "upstream").as_posix()
+    for _path in sorted((rust_lib_root / "upstream").rglob("*"))
+    if _path.is_file()
+]
+
+rust_lib_harnesses = {}
+rust_lib_harness_outputs = {}
+for _suite, _harness_group, _kind, _root, _edition in rust_lib_groups:
+    _key = (_suite, _harness_group)
+    _digest = hashlib.sha256(("/".join(_key)).encode()).hexdigest()[:12]
+    _output = "$(B)/tests/rust_lib/harness/" + _suite + "/" + _harness_group
+    rust_lib_harness_outputs[_key] = _output
+    rust_lib_harnesses[_key] = command(
+        name="rust_lib_harness_" + _digest,
+        inputs=[
+            *rust_lib_sources,
+            "$(S)/tests/rust_lib/compile.py",
+            "$(S)/tests/rust_lib/groups.tsv",
+            *TESTS_LIB,
+        ],
+        outputs=[_output],
+        cmd=[
+            "python3", "$(S)/tests/rust_lib/compile.py",
+            _suite, _harness_group, _kind, _root, _edition,
+            "$(S)/tests/rust_lib/upstream", "$(B)/tests/libstd.tar", _output,
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="LH",
+        color="green",
+    )
+
+rust_lib_tests = []
+for _suite, _harness_group, _source, _function, _hint in rust_lib_cases:
+    _case = _suite + "/" + _source + "::" + _hint
+    _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
+    _key = (_suite, _harness_group)
+    _stamp = "$(B)/tests/rust_lib/cases/" + _digest + ".stamp"
+    rust_lib_tests.append(command(
+        name="rust_lib_" + _digest,
+        inputs=[
+            "$(S)/tests/rust_lib/run.py",
+            "$(S)/tests/rust_lib/cases.tsv",
+        ],
+        outputs=[_stamp],
+        cmd=[
+            "python3", "$(S)/tests/rust_lib/run.py",
+            _case, _function, _hint, rust_lib_harness_outputs[_key], _stamp,
+        ],
+        deps=[rust_lib_harnesses[_key]],
+        descr="LT",
+        color="green",
+    ))
+
 group(
     "test",
     resvg,
@@ -436,8 +501,10 @@ group(
     *rust_1_90_tests,
     *gccrs_tests,
     *rust_quiz_tests,
+    *rust_lib_tests,
 )
 group("unit", *unit_tests)
 group("rust_1_90", *rust_1_90_tests)
 group("gccrs", *gccrs_tests)
 group("rust_quiz", *rust_quiz_tests)
+group("rust_lib", *rust_lib_tests)
