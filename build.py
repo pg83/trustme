@@ -533,6 +533,44 @@ for _start in range(0, len(rust_book_cases), 10):
         color="green",
     ))
 
+# Official Exercism solutions linked to their dependency-free integration
+# tests.  The adapter runs ignored tests too; they are only progression gates.
+exercism_rust_root = Path(__file__).parent / "tests" / "exercism_rust"
+exercism_rust_cases = [
+    _line.split("\t")
+    for _line in (exercism_rust_root / "cases.tsv").read_text().splitlines()
+]
+exercism_rust_tests = []
+for _start in range(0, len(exercism_rust_cases), 10):
+    _shard = exercism_rust_cases[_start:_start + 10]
+    _slugs = [_slug for _slug, _crate, _edition, _count in _shard]
+    _digest = hashlib.sha256(("\0".join(_slugs)).encode()).hexdigest()[:12]
+    _stamp = "$(B)/tests/exercism_rust/" + _digest + ".stamp"
+    _sources = []
+    for _slug in _slugs:
+        for _path in sorted((exercism_rust_root / "upstream" / _slug).rglob("*.rs")):
+            _relative = _path.relative_to(exercism_rust_root / "upstream").as_posix()
+            _sources.append("$(S)/tests/exercism_rust/upstream/" + _relative)
+    exercism_rust_tests.append(command(
+        name="exercism_rust_" + _digest,
+        inputs=[
+            "$(S)/tests/exercism_rust/adapter.py",
+            "$(S)/tests/exercism_rust/cases.tsv",
+            *_sources,
+            *TESTS_LIB,
+        ],
+        outputs=[_stamp],
+        cmd=[
+            "python3", "$(S)/tests/exercism_rust/adapter.py",
+            "$(S)/tests/exercism_rust/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/exercism_rust/upstream", "$(B)/tests/libstd.tar", _stamp,
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="EX",
+        color="green",
+    ))
+
 # Rust's library unit tests are grouped only at compilation.  Each explicit
 # #[test] function is still a separate runtime node selected from its harness.
 rust_lib_root = Path(__file__).parent / "tests" / "rust_lib"
@@ -705,6 +743,7 @@ group(
     *rustlings_tests,
     *rust_by_example_tests,
     *rust_book_tests,
+    *exercism_rust_tests,
     *rust_lib_tests,
     *rust_doctests,
     *rustsmith_tests,
@@ -717,6 +756,7 @@ group("rust_quiz", *rust_quiz_tests)
 group("rustlings", *rustlings_tests)
 group("rust_by_example", *rust_by_example_tests)
 group("rust_book", *rust_book_tests)
+group("exercism_rust", *exercism_rust_tests)
 group("rust_lib", *rust_lib_tests)
 group("rust_doctest", *rust_doctests)
 group("rustsmith", *rustsmith_tests)
