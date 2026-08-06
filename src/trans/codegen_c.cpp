@@ -2775,7 +2775,16 @@ namespace {
                         << "\tconst uint8_t* src = (const uint8_t*)&arg0;\n"
                         << "\tconst uint8_t* mask = (const uint8_t*)&arg1;\n"
                         << "\tuint8_t* dst = (uint8_t*)&rv;\n"
-                        << "\tfor(int i = 0; i < " << 128/8 << "; i ++) dst[i] = (mask[i] < 0x80 ? src[i] : 0);\n"
+                        << "\tfor(int i = 0; i < " << 128/8 << "; i ++) dst[i] = (mask[i] < 0x80 ? src[mask[i] & 0xF] : 0);\n"
+                        << "\treturn rv;\n"
+                        ;
+                }
+                else if( item.m_linkage.name == "llvm.x86.avx2.pshuf.b" ) {
+                    m_of
+                        << "\tconst uint8_t* src = (const uint8_t*)&arg0;\n"
+                        << "\tconst uint8_t* mask = (const uint8_t*)&arg1;\n"
+                        << "\tuint8_t* dst = (uint8_t*)&rv;\n"
+                        << "\tfor(int i = 0; i < " << 256/8 << "; i ++) dst[i] = (mask[i] < 0x80 ? src[(i & 16) | (mask[i] & 0xF)] : 0);\n"
                         << "\treturn rv;\n"
                         ;
                 }
