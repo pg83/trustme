@@ -571,6 +571,39 @@ for _start in range(0, len(exercism_rust_cases), 10):
         color="green",
     ))
 
+# Code fences from The Rust Reference, including its documented pass, panic,
+# no-run, and compile-fail modes.  The importer reference-checks every fence.
+rust_reference_root = Path(__file__).parent / "tests" / "rust_reference"
+rust_reference_cases = [
+    _line.split("\t")
+    for _line in (rust_reference_root / "cases.tsv").read_text().splitlines()
+]
+rust_reference_tests = []
+for _start in range(0, len(rust_reference_cases), 10):
+    _shard = rust_reference_cases[_start:_start + 10]
+    _paths = [_case for _case, _origin, _edition, _mode in _shard]
+    _digest = hashlib.sha256(("\0".join(_paths)).encode()).hexdigest()[:12]
+    _stamp = "$(B)/tests/rust_reference/" + _digest + ".stamp"
+    rust_reference_tests.append(command(
+        name="rust_reference_" + _digest,
+        inputs=[
+            "$(S)/tests/rust_reference/adapter.py",
+            "$(S)/tests/rust_reference/cases.tsv",
+            *("$(S)/tests/rust_reference/upstream/" + _case for _case in _paths),
+            *TESTS_LIB,
+        ],
+        outputs=[_stamp],
+        cmd=[
+            "python3", "$(S)/tests/rust_reference/adapter.py",
+            "$(S)/tests/rust_reference/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/rust_reference/upstream", "$(B)/tests/libstd.tar", _stamp,
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="RF",
+        color="green",
+    ))
+
 # Rust's library unit tests are grouped only at compilation.  Each explicit
 # #[test] function is still a separate runtime node selected from its harness.
 rust_lib_root = Path(__file__).parent / "tests" / "rust_lib"
@@ -744,6 +777,7 @@ group(
     *rust_by_example_tests,
     *rust_book_tests,
     *exercism_rust_tests,
+    *rust_reference_tests,
     *rust_lib_tests,
     *rust_doctests,
     *rustsmith_tests,
@@ -757,6 +791,7 @@ group("rustlings", *rustlings_tests)
 group("rust_by_example", *rust_by_example_tests)
 group("rust_book", *rust_book_tests)
 group("exercism_rust", *exercism_rust_tests)
+group("rust_reference", *rust_reference_tests)
 group("rust_lib", *rust_lib_tests)
 group("rust_doctest", *rust_doctests)
 group("rustsmith", *rustsmith_tests)
