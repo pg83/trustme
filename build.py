@@ -495,6 +495,44 @@ for _start in range(0, len(rust_by_example_cases), 10):
         color="green",
     ))
 
+# Source-only targets from the official Rust Book listings, reference-checked
+# with Rust 1.90.  Copying each tiny source tree preserves module resolution.
+rust_book_root = Path(__file__).parent / "tests" / "rust_book"
+rust_book_cases = [
+    _line.split("\t")
+    for _line in (rust_book_root / "cases.tsv").read_text().splitlines()
+]
+rust_book_tests = []
+for _start in range(0, len(rust_book_cases), 10):
+    _shard = rust_book_cases[_start:_start + 10]
+    _case_ids = ["\t".join(_case) for _case in _shard]
+    _digest = hashlib.sha256(("\0".join(_case_ids)).encode()).hexdigest()[:12]
+    _stamp = "$(B)/tests/rust_book/" + _digest + ".stamp"
+    _sources = []
+    for _case, _root, _mode, _edition in _shard:
+        for _path in sorted((rust_book_root / "upstream" / _case).rglob("*.rs")):
+            _relative = _path.relative_to(rust_book_root / "upstream").as_posix()
+            _sources.append("$(S)/tests/rust_book/upstream/" + _relative)
+    rust_book_tests.append(command(
+        name="rust_book_" + _digest,
+        inputs=[
+            "$(S)/tests/rust_book/adapter.py",
+            "$(S)/tests/rust_book/cases.tsv",
+            *_sources,
+            *TESTS_LIB,
+        ],
+        outputs=[_stamp],
+        cmd=[
+            "python3", "$(S)/tests/rust_book/adapter.py",
+            "$(S)/tests/rust_book/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/rust_book/upstream", "$(B)/tests/libstd.tar", _stamp,
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="BK",
+        color="green",
+    ))
+
 # Rust's library unit tests are grouped only at compilation.  Each explicit
 # #[test] function is still a separate runtime node selected from its harness.
 rust_lib_root = Path(__file__).parent / "tests" / "rust_lib"
@@ -666,6 +704,7 @@ group(
     *rust_quiz_tests,
     *rustlings_tests,
     *rust_by_example_tests,
+    *rust_book_tests,
     *rust_lib_tests,
     *rust_doctests,
     *rustsmith_tests,
@@ -677,6 +716,7 @@ group("gccrs", *gccrs_tests)
 group("rust_quiz", *rust_quiz_tests)
 group("rustlings", *rustlings_tests)
 group("rust_by_example", *rust_by_example_tests)
+group("rust_book", *rust_book_tests)
 group("rust_lib", *rust_lib_tests)
 group("rust_doctest", *rust_doctests)
 group("rustsmith", *rustsmith_tests)
