@@ -228,6 +228,10 @@ WorkspaceManifest WorkspaceManifest::load_from_toml(const ::helpers::path& works
             }
             else if( key == "lints" ) {
             }
+            else if( key == "default-members" || key == "resolver" || key == "exclude" ) {
+                // Which members build by default (and how deps resolve):
+                // irrelevant when pointed at a single package directory.
+            }
             else {
                 eh.error("Unknown item in [workspace] `", key, "`");
             }
