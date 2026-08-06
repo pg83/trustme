@@ -7788,29 +7788,39 @@ namespace {
                     MIR_ASSERT(mir_res, size_val > 0, size_slot << " / " << div << " == 0?");
                     MIR_ASSERT(mir_res, size_slot >= size_val, size_slot << " < " << size_val);
                     MIR_ASSERT(mir_res, size_slot / size_val * size_val == size_slot, size_slot << " not a multiple of " << size_val);
+                    // Indices address the concatenation of both input vectors, so the split
+                    // point is the INPUT element count, not the index count.
+                    size_t size_in = 0;
+                    Target_GetSizeOf(sp, m_resolve, params.m_types.at(0), size_in);
+                    size_t n_in = size_in / size_val;
+                    MIR_ASSERT(mir_res, n_in > 0, "Zero-sized shuffle input");
                     m_of << "for(int i = 0; i < " << div << "; i++) { int j = "; emit_param(e.args.at(2)); m_of << ".DATA[i];";
                     m_of << "((uint" << (size_val*8) << "_t*)&"; emit_lvalue(e.ret_val); m_of << ")[i]";
-                    m_of << " = ((uint" << (size_val*8) << "_t*)(j < " << div << " ? &"; emit_param(e.args.at(0)); m_of << " : &"; emit_param(e.args.at(1)); m_of << "))[j % " << div << "];";
+                    m_of << " = ((uint" << (size_val*8) << "_t*)(j < " << n_in << " ? &"; emit_param(e.args.at(0)); m_of << " : &"; emit_param(e.args.at(1)); m_of << "))[j < " << n_in << " ? j : j - " << n_in << "];";
                     m_of << "}";
                 }
                 else if( name_strip == "simd_shuffle" ) {
-                    //const auto& vec_ty = params.m_types.at(0);
+                    const auto& vec_ty = params.m_types.at(0);
                     const auto& map_ty = params.m_types.at(1);
                     const auto& ret_ty = params.m_types.at(2);
-                    //size_t size_vec = 0;
+                    size_t size_vec = 0;
                     size_t size_map = 0;
                     size_t size_ret = 0;
-                    //Target_GetSizeOf(sp, m_resolve, vec_ty, size_vec);
+                    Target_GetSizeOf(sp, m_resolve, vec_ty, size_vec);
                     Target_GetSizeOf(sp, m_resolve, map_ty, size_map);
                     Target_GetSizeOf(sp, m_resolve, ret_ty, size_ret);
                     size_t div = size_map / 4;  // map must be u32s
                     size_t size_val = size_ret / div;
+                    // Indices address the concatenation of both inputs; split on the input
+                    // element count (an extract's map can be shorter than the vector).
+                    size_t n_in = size_vec / size_val;
+                    MIR_ASSERT(mir_res, n_in > 0, "Zero-sized shuffle input");
                     m_of << "for(int i = 0; i < " << div << "; i++) {";
                     m_of << " int j = "; emit_param(e.args.at(2));
                     if(TARGETVER_LEAST_1_90)    m_of << "._0";
                     m_of << ".DATA[i];";
                     m_of << " ((uint" << (size_val*8) << "_t*)&"; emit_lvalue(e.ret_val); m_of << ")[i]";
-                    m_of << " = ((uint" << (size_val*8) << "_t*)(j < " << div << " ? &"; emit_param(e.args.at(0)); m_of << " : &"; emit_param(e.args.at(1)); m_of << "))[j % " << div << "];";
+                    m_of << " = ((uint" << (size_val*8) << "_t*)(j < " << n_in << " ? &"; emit_param(e.args.at(0)); m_of << " : &"; emit_param(e.args.at(1)); m_of << "))[j < " << n_in << " ? j : j - " << n_in << "];";
                     m_of << "}";
                 }
                 else if( name_strip == "simd_cast" ) {
