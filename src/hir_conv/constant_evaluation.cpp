@@ -3682,6 +3682,8 @@ namespace {
 
         static void visit_enum_inner(const ::HIR::Crate& crate, const ::HIR::ItemPath& p, const ::HIR::Module& mod, const ::HIR::ItemPath& mod_path, const char* name, ::HIR::Enum& item)
         {
+            if( item.discriminants_evaluated )
+                return ;
             auto ty = ::HIR::Enum::get_repr_type(item.m_tag_repr);
             bool is_signed = false;
             switch(ty)
@@ -3823,8 +3825,35 @@ namespace {
     }
 }   // namespace
 
+namespace {
+    // Discriminant values must be known before anything else is evaluated: an array size in
+    // an early module can cast a variant of an enum that the main pass visits later.
+    struct EnumValueExpander:
+        public ::HIR::Visitor
+    {
+        const ::HIR::Crate& m_crate;
+        const ::HIR::Module* m_mod;
+        const ::HIR::ItemPath* m_mod_path;
+        EnumValueExpander(const ::HIR::Crate& crate): m_crate(crate), m_mod(nullptr), m_mod_path(nullptr) {}
+        void visit_module(::HIR::ItemPath p, ::HIR::Module& mod) override {
+            auto saved_mp = m_mod_path;
+            auto saved_m = m_mod;
+            m_mod = &mod;
+            m_mod_path = &p;
+            ::HIR::Visitor::visit_module(p, mod);
+            m_mod = saved_m;
+            m_mod_path = saved_mp;
+        }
+        void visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) override {
+            Expander::visit_enum_inner(m_crate, p, *m_mod, *m_mod_path, p.get_name(), item);
+        }
+    };
+}
+
 void ConvertHIR_ConstantEvaluate(::HIR::Crate& crate)
 {
+    EnumValueExpander { crate }.visit_crate( crate );
+
     Expander    exp { crate };
     exp.visit_crate( crate );
     exp.m_pass = Expander::Pass::Values;
