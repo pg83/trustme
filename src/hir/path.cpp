@@ -7,6 +7,7 @@
  */
 #include <hir/path.hpp>
 #include <hir/type.hpp>
+#include <hir/expr.hpp>
 #include <algorithm>
 
 namespace {
@@ -449,7 +450,40 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const
             if( val_t.is_Infer() || val_x.is_Infer() ) {
                 return Compare::Fuzzy;
             }
-            if( val_t != val_x ) {
+            // An unevaluated value that is a plain integer literal can still be compared
+            // exactly; treating it as fuzzy made impl selection on const generics pick the
+            // first candidate (harfrust's `SelectAtomic<8/16/32>`).
+            struct H2 {
+                static bool get_literal(const ::HIR::ConstGeneric& v, U128& out) {
+                    if( const auto* ev = v.opt_Evaluated() ) {
+                        auto sl = EncodedLiteralSlice(**ev);
+                        if( sl.m_size == 0 || sl.m_size > 16 )
+                            return false;
+                        out = sl.read_uint(sl.m_size);
+                        return true;
+                    }
+                    if( const auto* uev = v.opt_Unevaluated() ) {
+                        if( !(*uev)->expr || !*(*uev)->expr )
+                            return false;
+                        const auto& node = **(*uev)->expr;
+                        if( const auto* lit = dynamic_cast<const ::HIR::ExprNode_Literal*>(&node) ) {
+                            if( const auto* i = lit->m_data.opt_Integer() ) {
+                                out = i->m_value;
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                    return false;
+                }
+            };
+            U128    lit_t, lit_x;
+            if( H2::get_literal(val_t, lit_t) && H2::get_literal(val_x, lit_x) ) {
+                if( lit_t != lit_x )
+                    return Compare::Unequal;
+                // Equal literals: continue (leaves `rv` as-is)
+            }
+            else if( val_t != val_x ) {
                 if( val_t.is_Unevaluated() || val_x.is_Unevaluated() ) {
                     return Compare::Fuzzy;
                 }
