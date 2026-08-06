@@ -1,0 +1,12 @@
+// Extracted from library/core/src/num/f128.rs:986
+#![allow(unused)]
+#![feature(f128)]
+fn main() {
+    
+    let bytes = 12.5f128.to_le_bytes();
+    assert_eq!(
+        bytes,
+        [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+         0x00, 0x00, 0x00, 0x00, 0x00, 0x90, 0x02, 0x40]
+    );
+}

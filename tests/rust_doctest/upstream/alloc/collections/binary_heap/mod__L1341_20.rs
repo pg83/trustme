@@ -1,0 +1,9 @@
+// Extracted from library/alloc/src/collections/binary_heap/mod.rs:1341
+#![allow(unused)]
+extern crate alloc;
+fn main() {
+    use std::collections::BinaryHeap;
+    let heap = BinaryHeap::from([1, 3]);
+    
+    assert_eq!(heap.len(), 2);
+}

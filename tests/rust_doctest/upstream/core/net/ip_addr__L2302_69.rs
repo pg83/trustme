@@ -1,0 +1,17 @@
+// Extracted from library/core/src/net/ip_addr.rs:2302
+#![allow(unused)]
+fn main() {
+    use std::net::{IpAddr, Ipv6Addr};
+    
+    let addr = IpAddr::from([
+        0x19u8, 0x18u8, 0x17u8, 0x16u8, 0x15u8, 0x14u8, 0x13u8, 0x12u8,
+        0x11u8, 0x10u8, 0x0fu8, 0x0eu8, 0x0du8, 0x0cu8, 0x0bu8, 0x0au8,
+    ]);
+    assert_eq!(
+        IpAddr::V6(Ipv6Addr::new(
+            0x1918, 0x1716, 0x1514, 0x1312,
+            0x1110, 0x0f0e, 0x0d0c, 0x0b0a,
+        )),
+        addr
+    );
+}

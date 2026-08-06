@@ -1,0 +1,10 @@
+// Extracted from library/core/src/num/f64.rs:1269
+#![allow(unused)]
+fn main() {
+    let value = f64::from_ne_bytes(if cfg!(target_endian = "big") {
+        [0x40, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+    } else {
+        [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x29, 0x40]
+    });
+    assert_eq!(value, 12.5);
+}

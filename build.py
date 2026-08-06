@@ -494,6 +494,36 @@ for _suite, _harness_group, _source, _function, _hint in rust_lib_cases:
         color="green",
     ))
 
+# Assert-bearing library documentation examples, extracted into standalone
+# programs so each fence remains an independent compile-and-run node.
+rust_doctest_root = Path(__file__).parent / "tests" / "rust_doctest"
+rust_doctest_cases = []
+for _line in (rust_doctest_root / "cases.tsv").read_text().splitlines():
+    rust_doctest_cases.append(_line.split("\t"))
+rust_doctests = []
+for _case, _origin, _edition, _mode in rust_doctest_cases:
+    _digest = hashlib.sha256((_case + "\t" + _origin).encode()).hexdigest()[:12]
+    _src = "$(S)/tests/rust_doctest/upstream/" + _case
+    _stamp = "$(B)/tests/rust_doctest/" + _digest + ".stamp"
+    rust_doctests.append(command(
+        name="rust_doctest_" + _digest,
+        inputs=[
+            _src,
+            "$(S)/tests/rust_doctest/adapter.py",
+            "$(S)/tests/rust_doctest/cases.tsv",
+            *TESTS_LIB,
+        ],
+        outputs=[_stamp],
+        cmd=[
+            "python3", "$(S)/tests/rust_doctest/adapter.py",
+            _origin, _src, _edition, _mode, "$(B)/tests/libstd.tar", _stamp,
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="DT",
+        color="green",
+    ))
+
 group(
     "test",
     resvg,
@@ -502,9 +532,11 @@ group(
     *gccrs_tests,
     *rust_quiz_tests,
     *rust_lib_tests,
+    *rust_doctests,
 )
 group("unit", *unit_tests)
 group("rust_1_90", *rust_1_90_tests)
 group("gccrs", *gccrs_tests)
 group("rust_quiz", *rust_quiz_tests)
 group("rust_lib", *rust_lib_tests)
+group("rust_doctest", *rust_doctests)
