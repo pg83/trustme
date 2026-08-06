@@ -637,6 +637,39 @@ for _start in range(0, len(nomicon_cases), 10):
         color="green",
     ))
 
+# The std-only, standalone subset of the official Async Book.  Most of that
+# book requires external executor crates; these four fences do not.
+async_book_root = Path(__file__).parent / "tests" / "async_book"
+async_book_cases = [
+    _line.split("\t")
+    for _line in (async_book_root / "cases.tsv").read_text().splitlines()
+]
+async_book_tests = []
+for _start in range(0, len(async_book_cases), 10):
+    _shard = async_book_cases[_start:_start + 10]
+    _paths = [_case for _case, _origin, _edition, _mode in _shard]
+    _digest = hashlib.sha256(("\0".join(_paths)).encode()).hexdigest()[:12]
+    _stamp = "$(B)/tests/async_book/" + _digest + ".stamp"
+    async_book_tests.append(command(
+        name="async_book_" + _digest,
+        inputs=[
+            "$(S)/tests/async_book/adapter.py",
+            "$(S)/tests/async_book/cases.tsv",
+            *("$(S)/tests/async_book/upstream/" + _case for _case in _paths),
+            *TESTS_LIB,
+        ],
+        outputs=[_stamp],
+        cmd=[
+            "python3", "$(S)/tests/async_book/adapter.py",
+            "$(S)/tests/async_book/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/async_book/upstream", "$(B)/tests/libstd.tar", _stamp,
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="AB",
+        color="green",
+    ))
+
 # Rust's library unit tests are grouped only at compilation.  Each explicit
 # #[test] function is still a separate runtime node selected from its harness.
 rust_lib_root = Path(__file__).parent / "tests" / "rust_lib"
@@ -812,6 +845,7 @@ group(
     *exercism_rust_tests,
     *rust_reference_tests,
     *nomicon_tests,
+    *async_book_tests,
     *rust_lib_tests,
     *rust_doctests,
     *rustsmith_tests,
@@ -827,6 +861,7 @@ group("rust_book", *rust_book_tests)
 group("exercism_rust", *exercism_rust_tests)
 group("rust_reference", *rust_reference_tests)
 group("nomicon", *nomicon_tests)
+group("async_book", *async_book_tests)
 group("rust_lib", *rust_lib_tests)
 group("rust_doctest", *rust_doctests)
 group("rustsmith", *rustsmith_tests)

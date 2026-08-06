@@ -54,7 +54,7 @@ def case_mode(info: str, default_edition: str) -> tuple[str, str] | None:
             break
     if "compile_fail" in tokens:
         return edition, "fail"
-    if "no_run" in tokens:
+    if "no_run" in tokens or "norun" in tokens:
         return edition, "compile"
     if "should_panic" in tokens:
         return edition, "panic"
