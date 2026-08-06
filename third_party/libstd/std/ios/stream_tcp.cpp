@@ -1,0 +1,48 @@
+#include "stream_tcp.h"
+
+#include <std/str/view.h>
+#include <std/sys/throw.h>
+#include <std/str/builder.h>
+#include <std/net/tcp_socket.h>
+
+#include <sys/uio.h>
+
+using namespace stl;
+
+TcpStream::TcpStream(TcpSocket& sock) noexcept
+    : sock(&sock)
+{
+}
+
+TcpStream::~TcpStream() noexcept {
+}
+
+size_t TcpStream::readImpl(void* data, size_t len) {
+    size_t n = 0;
+
+    if (int r = sock->readInf(&n, data, len); r) {
+        Errno(r).raise(StringBuilder() << StringView(u8"tcp read() failed"));
+    }
+
+    return n;
+}
+
+size_t TcpStream::writeImpl(const void* data, size_t len) {
+    size_t n = 0;
+
+    if (int r = sock->writeInf(&n, data, len); r) {
+        Errno(r).raise(StringBuilder() << StringView(u8"tcp write() failed"));
+    }
+
+    return n;
+}
+
+size_t TcpStream::writeVImpl(iovec* iov, size_t count) {
+    size_t n = 0;
+
+    if (int r = sock->writevInf(&n, iov, count); r) {
+        Errno(r).raise(StringBuilder() << StringView(u8"tcp writev() failed"));
+    }
+
+    return n;
+}

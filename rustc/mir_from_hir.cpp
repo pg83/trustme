@@ -3418,13 +3418,4 @@ void HIR_GenerateMIR(::HIR::Crate& crate)
         } };
     ov.visit_crate(crate);
 
-    // Once MIR is generated, free the HIR expression tree (replace each node with an empty tuple node)
-    ::MIR::OuterVisitor ov_free(crate, [&](const auto& res, const auto& p, ::HIR::ExprPtr& expr_ptr, const auto& args, const auto& ty){
-        if( expr_ptr )
-        {
-            expr_ptr.reset(new ::HIR::ExprNode_Tuple(expr_ptr->m_span, {}));
-        }
-        });
-    ov_free.visit_crate(crate);
 }
-

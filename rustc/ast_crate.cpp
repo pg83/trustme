@@ -57,7 +57,8 @@ namespace {
 
 namespace AST {
 
-Crate::Crate():
+Crate::Crate(stl::ObjPool* pool):
+    m_pool(pool),
     m_root_module(AST::AbsolutePath()),
     m_load_std(LOAD_STD)
 {
@@ -274,7 +275,7 @@ RcString Crate::load_extern_crate(Span sp, const RcString& name, const ::std::st
     }
 
     // NOTE: Creating `ExternCrate` loads the crate from the specified path
-    auto ec = ExternCrate { name, path };
+    auto ec = ExternCrate { m_pool, name, path };
     auto real_name = ec.m_hir->m_crate_name;
     assert(real_name != "");
     auto res = m_extern_crates.insert(::std::make_pair( real_name, mv$(ec) ));
@@ -331,13 +332,13 @@ RcString Crate::load_extern_crate(Span sp, const RcString& name, const ::std::st
     return real_name;
 }
 
-ExternCrate::ExternCrate(const RcString& name, const ::std::string& path):
+ExternCrate::ExternCrate(stl::ObjPool* pool, const RcString& name, const ::std::string& path):
     m_name(name),
     m_short_name(name),
     m_filename(path)
 {
     TRACE_FUNCTION_F("name=" << name << ", path='" << path << "'");
-    m_hir = HIR_Deserialise(path);
+    m_hir = HIR_Deserialise(pool, path);
 
     m_hir->post_load_update(name);
     m_name = m_hir->m_crate_name;
@@ -351,4 +352,3 @@ ExternCrate::ExternCrate(const RcString& name, const ::std::string& path):
 }
 
 }   // namespace AST
-

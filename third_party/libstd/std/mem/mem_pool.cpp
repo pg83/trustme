@@ -1,0 +1,85 @@
+#include "new.h"
+#include "mem_pool.h"
+#include "disposer.h"
+
+#include <std/sys/crt.h>
+#include <std/sys/types.h>
+#include <std/dbg/assert.h>
+#include <std/alg/exchange.h>
+
+using namespace stl;
+
+namespace {
+    constexpr size_t initial = 128;
+    constexpr size_t alignment = alignof(max_align_t);
+
+    struct alignas(alignment) ChunkDestructor: public Disposable, public Disposer, public Newable {
+    };
+
+    struct alignas(alignment) Chunk: public Disposable, public Newable {
+        ~Chunk() noexcept override {
+            freeMemory(this);
+        }
+    };
+
+    struct ChunkDisposer: public Chunk, public Disposer {
+    };
+
+    static_assert(sizeof(Chunk) % alignment == 0);
+    static_assert(sizeof(ChunkDisposer) % alignment == 0);
+    static_assert(sizeof(ChunkDestructor) % alignment == 0);
+
+    static void* chk(void* buf) noexcept {
+        STD_ASSERT((size_t)buf % alignof(max_align_t) == 0);
+
+        return buf;
+    }
+}
+
+MemoryPool::MemoryPool()
+    : currentChunk((u8*)allocateMemory(initial))
+    , currentChunkEnd(currentChunk + initial)
+    , ds(new (allocate(sizeof(ChunkDisposer))) ChunkDisposer())
+{
+    STD_ASSERT((size_t)currentChunk % alignof(max_align_t) == 0);
+    ds->submit((ChunkDisposer*)ds);
+}
+
+MemoryPool::MemoryPool(void* buf, size_t len) noexcept
+    : currentChunk((u8*)chk(buf))
+    , currentChunkEnd(currentChunk + len)
+    , ds(new (allocate(sizeof(ChunkDestructor))) ChunkDestructor())
+{
+    STD_ASSERT(len >= initial);
+    STD_ASSERT((size_t)currentChunk % alignof(max_align_t) == 0);
+    ds->submit((ChunkDestructor*)ds);
+}
+
+MemoryPool::~MemoryPool() noexcept {
+    ds->dispose();
+}
+
+void* MemoryPool::allocate(size_t len) {
+    const size_t alignedLen = (len + alignment - 1) & ~(alignment - 1);
+
+    if (currentChunk + alignedLen > currentChunkEnd) {
+        allocateNewChunk(alignedLen + sizeof(Chunk));
+    }
+
+    return exchange(currentChunk, currentChunk + alignedLen);
+}
+
+void MemoryPool::allocateNewChunk(size_t minSize) {
+    size_t nextChunkSize = initial * (((size_t)1) << ds->length());
+
+    while (nextChunkSize < minSize) {
+        nextChunkSize *= 2;
+    }
+
+    auto newChunk = new (allocateMemory(nextChunkSize)) Chunk();
+
+    ds->submit(newChunk);
+
+    currentChunkEnd = (u8*)newChunk + nextChunkSize;
+    currentChunk = (u8*)(newChunk + 1);
+}

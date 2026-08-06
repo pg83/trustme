@@ -12,6 +12,7 @@
 #include "ast_expr.hpp" // For shortcut in array size handling
 #include "ast_crate.hpp"
 #include "hir_from_ast.hpp"
+#include <std/mem/obj_pool.h>
 #include "hir_visitor.hpp"
 #include "macro_rules_macro_rules.hpp"
 #include "hir_item_path.hpp"
@@ -1921,7 +1922,7 @@ namespace {
         //rv.m_markings.is_async = true;
         // Wrap the code in an async block
         if( rv.m_code ) {
-            rv.m_code = HIR::ExprPtr(box$(::HIR::ExprNode_AsyncBlock(sp, std::move(rv.m_code.into_unique()), true) ));
+            rv.m_code = HIR::ExprPtr(::HIR::ExprNodeP(g_crate_ptr->m_pool->make<::HIR::ExprNode_AsyncBlock>(sp, rv.m_code.take_node(), true)));
         }
         // Make the return type be `impl Future<Output=Ret>`
         HIR::TraitPath  future_path;
@@ -2480,9 +2481,9 @@ public:
 ///
 /// - Removes all possibility for unexpanded macros
 /// - Performs desugaring of for/if-let/while-let/...
-::HIR::CratePtr LowerHIR_FromAST(::AST::Crate crate)
+::HIR::Crate* LowerHIR_FromAST(stl::ObjPool* pool, ::AST::Crate& crate)
 {
-    ::HIR::Crate    rv;
+    auto& rv = *pool->make<::HIR::Crate>(pool);
 
     if(crate.m_crate_type != ::AST::Crate::Type::Executable) {
         rv.m_crate_name = crate.m_crate_name_real;
@@ -2650,7 +2651,7 @@ public:
         auto p2 = ext_crate.second.m_filename.rfind('\\');
         auto p = (p1 == ::std::string::npos ? p2 : (p2 == ::std::string::npos ? p1 : ::std::max(p1,p2)));
         auto crate_file = (p == ::std::string::npos ? ext_crate.second.m_filename : ext_crate.second.m_filename.substr(p+1));
-        rv.m_ext_crates.insert( ::std::make_pair( ext_crate.first, ::HIR::ExternCrate { mv$(ext_crate.second.m_hir), crate_file, ext_crate.second.m_filename } ) );
+        rv.m_ext_crates.insert( ::std::make_pair( ext_crate.first, ::HIR::ExternCrate { ext_crate.second.m_hir, crate_file, ext_crate.second.m_filename } ) );
     }
     path_Sized = rv.get_lang_item_path(sp, "sized");
     path_PointeeSized = rv.get_lang_item_path_opt("pointee_sized");
@@ -2933,7 +2934,5 @@ public:
     }
 
     g_crate_ptr = nullptr;
-    return ::HIR::CratePtr( mv$(rv) );
+    return &rv;
 }
-
-

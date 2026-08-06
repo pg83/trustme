@@ -1,0 +1,25 @@
+#pragma once
+
+#include <std/sys/types.h>
+
+namespace stl {
+    class PCG32 {
+        u64 state_;
+        u64 seq_;
+
+    public:
+        PCG32(u64 seq) noexcept;
+        PCG32(const void* seq) noexcept;
+        PCG32(u64 state, u64 seq) noexcept;
+
+        u32 nextU32() noexcept;
+        u64 nextU64() noexcept;
+
+        u32 uniformBiased(u32 n) noexcept {
+            // https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
+            return ((u64)nextU32() * (u64)n) >> 32;
+        }
+
+        u32 uniformUnbiased(u32 n) noexcept;
+    };
+};

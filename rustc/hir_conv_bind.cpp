@@ -804,7 +804,7 @@ namespace {
 
             // Set up the module state
             {
-                expr.m_state = ::HIR::ExprStatePtr(::HIR::ExprState(*m_cur_module.ptr, m_cur_module.path->get_simple_path()));
+                expr.m_state = ::HIR::ExprStatePtr(m_crate.m_pool, ::HIR::ExprState(*m_cur_module.ptr, m_cur_module.path->get_simple_path()));
                 expr.m_state->m_traits = m_ms.m_traits; // TODO: Only obtain the current module's set
                 expr.m_state->m_impl_generics = m_ms.m_impl_generics;
                 expr.m_state->m_item_generics = m_ms.m_item_generics;

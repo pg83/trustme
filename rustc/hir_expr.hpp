@@ -7,13 +7,13 @@
  */
 #pragma once
 
-#include <memory>
 #include "hir_pattern.hpp"
 #include "hir_type.hpp"
 #include "span.hpp"
 #include "hir_visitor.hpp"
 #include "hir_typeck_common.hpp"
 #include "hir_asm.hpp"
+#include <memory>
 
 namespace HIR {
 
@@ -63,8 +63,6 @@ public:
 
     const char* type_name() const;
 };
-
-typedef ::std::unique_ptr<ExprNode> ExprNodeP;
 
 #define NODE_METHODS()  \
     virtual void visit(ExprVisitor& nv) override;
@@ -1006,7 +1004,7 @@ class ExprVisitor
 {
 public:
     virtual ~ExprVisitor() = default;
-    virtual void visit_node_ptr(::std::unique_ptr<ExprNode>& node_ptr);
+    virtual void visit_node_ptr(::HIR::ExprNodeP& node_ptr);
     virtual void visit_node(ExprNode& node);
     #define NV(nt)  virtual void visit(nt& n) = 0;
 
@@ -1063,7 +1061,7 @@ class ExprVisitorDef:
 public:
     #define NV(nt)  virtual void visit(nt& n) override;
 
-    virtual void visit_node_ptr(::std::unique_ptr<ExprNode>& node_ptr) override;
+    virtual void visit_node_ptr(::HIR::ExprNodeP& node_ptr) override;
 
     NV(ExprNode_Block)
     NV(ExprNode_ConstBlock)

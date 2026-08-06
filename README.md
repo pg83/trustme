@@ -32,6 +32,7 @@ binaries, fixing mrustc as we go.
 ```
 rustc/      the compiler sources (flat), and mrustc's original README
 cargo/      our cargo, rewritten in Go — vendors dependencies by lockfile
+third_party/libstd/  the vendored C++ platform library in the rustc graph
 tests/      the test graph: build a real project, run its tests
 build       the build engine (shared across the monorepo)
 build.py    the build graph for everything above
@@ -47,6 +48,7 @@ hermetic vendor tree between isolated nodes.
 
 ```
 ./build                 # rustc + cargo
+./build platform_libstd # just the vendored C++ platform library
 ./build unit            # the one-file compiler regressions
 ./build resvg           # build resvg from source and render-test it
 ./build test            # everything under test
@@ -57,5 +59,7 @@ graph of nodes (fetch → vendor → build against a from-source libstd → run)
 
 ## license
 
-mrustc is MIT licensed; see [`rustc/LICENCE-MIT`](rustc/LICENCE-MIT). Our
-changes carry the same license.
+mrustc is MIT licensed; see [`rustc/LICENCE-MIT`](rustc/LICENCE-MIT). The
+vendored platform library is MIT licensed; see
+[`third_party/libstd/LICENSE`](third_party/libstd/LICENSE). Our changes carry
+the same license.

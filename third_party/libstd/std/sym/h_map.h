@@ -1,0 +1,103 @@
+#pragma once
+
+#include "h_table.h"
+
+#include <std/mem/embed.h>
+#include <std/typ/intrin.h>
+#include <std/alg/destruct.h>
+#include <std/mem/obj_list.h>
+
+namespace stl {
+    class ObjPool;
+
+    template <typename T, typename K, typename H>
+    class HashMap {
+        struct Node: public HashTable::Node, public Embed<T> {
+            using Embed<T>::Embed;
+        };
+
+        ObjList<Node> ol;
+        HashTable st;
+
+        T* insertNode(Node* value) {
+            if (auto prev = (Node*)st.insert(value); prev) {
+                ol.release(prev);
+            }
+
+            return &value->t;
+        }
+
+    public:
+        HashMap(ObjPool* pool)
+            : ol(pool)
+        {
+        }
+
+        ~HashMap() {
+            if constexpr (!stdHasTrivialDestructor(Node)) {
+                st.visit([](auto node) {
+                    destruct((Node*)node);
+                });
+            }
+        }
+
+        T* any() const noexcept {
+            if (auto n = (Node*)st.any(); n) {
+                return &n->t;
+            }
+
+            return nullptr;
+        }
+
+        T* find(K key) const noexcept {
+            if (auto n = (Node*)st.find(H::hash(key)); n) {
+                return &n->t;
+            }
+
+            return nullptr;
+        }
+
+        template <typename... A>
+        T* insert(K key, A&&... a) {
+            auto value = ol.make(forward<A>(a)...);
+
+            return (value->key = H::hash(key), insertNode(value));
+        }
+
+        template <typename... A>
+        T* insertKeyed(A&&... a) {
+            auto value = ol.make(forward<A>(a)...);
+
+            return (value->key = H::hash(value->t.key()), insertNode(value));
+        }
+
+        T& operator[](K key) {
+            if (auto res = find(key); res) {
+                return *res;
+            }
+
+            return *insert(key);
+        }
+
+        bool erase(K key) noexcept {
+            if (auto prev = (Node*)st.erase(H::hash(key)); prev) {
+                ol.release(prev);
+
+                return true;
+            }
+
+            return false;
+        }
+
+        size_t size() const noexcept {
+            return st.size();
+        }
+
+        template <typename F>
+        void visit(F f) {
+            st.visit([f](auto el) {
+                f(((Node*)el)->t);
+            });
+        }
+    };
+}

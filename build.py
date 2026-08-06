@@ -1,7 +1,8 @@
 import build
 
 # Build description for rustc (the mrustc-derived Rust compiler).
-# The compiler sources live flat under rustc/; plain C++14, links zlib.
+# The compiler sources live flat under rustc/; C++26, links the vendored
+# platform library and zlib.
 
 build.includes += ["$(S)/rustc"]
 
@@ -20,6 +21,22 @@ build.cxxflags += [
     "-O2",
     "-g",
 ]
+
+# Keep the platform library in the same imported build graph as its consumers.
+# This mirrors shitty: libstd owns its source discovery and compile flags, while
+# the parent graph supplies reproducible paths and links the resulting archive.
+platform_libstd = import_build(
+    "third_party/libstd/build.py",
+    "libstd.a",
+    extra_cflags=[
+        "-Wno-error",
+        "-ffile-prefix-map=$(S)=.",
+        "-ffile-prefix-map=$(B)=.",
+    ],
+)
+# `libstd` is already the public target for the Rust standard-library test
+# artifact below. Preserve that interface and expose the C++ library explicitly.
+platform_libstd.name = "platform_libstd"
 
 SRC = [
     "$(S)/rustc/ast_ast.cpp",
@@ -65,7 +82,6 @@ SRC = [
     "$(S)/rustc/hir_conv_markings.cpp",
     "$(S)/rustc/hir_conv_resolve_ufcs.cpp",
     "$(S)/rustc/hir_crate_post_load.cpp",
-    "$(S)/rustc/hir_crate_ptr.cpp",
     "$(S)/rustc/hir_deserialise.cpp",
     "$(S)/rustc/hir_dump.cpp",
     "$(S)/rustc/hir_expand_annotate_value_usage.cpp",
@@ -158,6 +174,7 @@ rustc = program(
     srcs=SRC,
     name="rustc",
     output="$(B)/rustc/rustc",
+    deps=[platform_libstd],
     ldflags=["-lz"],
 )
 

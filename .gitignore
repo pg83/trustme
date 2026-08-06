@@ -10,6 +10,7 @@
 /rustc
 /std_src
 /libstd
+/platform_libstd
 /resvg
 /resvg_src
 /resvg_vendor

@@ -1,0 +1,399 @@
+#include "ut.h"
+#include "ctx.h"
+#include "args.h"
+
+#include <std/ios/sys.h>
+#include <std/sys/crt.h>
+#include <std/str/view.h>
+#include <std/thr/pool.h>
+#include <std/thr/guard.h>
+#include <std/thr/mutex.h>
+#include <std/sys/throw.h>
+#include <std/dbg/color.h>
+#include <std/dbg/panic.h>
+#include <std/alg/range.h>
+#include <std/map/treap.h>
+#include <std/alg/qsort.h>
+#include <std/sys/atomic.h>
+#include <std/lib/vector.h>
+#include <std/alg/minmax.h>
+#include <std/str/builder.h>
+#include <std/mem/obj_pool.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+
+using namespace stl;
+
+namespace {
+    struct Exc {
+    };
+
+    struct BufferedExecContext: public ExecContext {
+        mutable StringBuilder buf_;
+        const TestArgs* opts = nullptr;
+
+        ZeroCopyOutput& output() const noexcept override {
+            return buf_;
+        }
+
+        const TestArgs& args() const noexcept override {
+            return *opts;
+        }
+    };
+
+    static bool execute(TestFunc* func, ExecContext& ctx) {
+        auto& outb = ctx.output();
+
+        try {
+            func->execute(ctx);
+
+            outb << Color::bright(AnsiColor::Green)
+                 << StringView(u8"+ ")
+                 << *func
+                 << Color::reset()
+                 << endL;
+        } catch (const Exc&) {
+            outb << Color::bright(AnsiColor::Red)
+                 << StringView(u8"- ")
+                 << *func
+                 << Color::reset()
+                 << endL;
+
+            return false;
+        } catch (Exception& exc) {
+            outb << Color::bright(AnsiColor::Red)
+                 << exc.description()
+                 << endL
+                 << StringView(u8"- ")
+                 << *func
+                 << Color::reset()
+                 << endL;
+
+            return false;
+        }
+
+        return true;
+    }
+
+    struct GetOpt {
+        ObjPool::Ref pool_ = ObjPool::fromMemory();
+        Vector<StringView> includes;
+        Vector<StringView> excludes;
+        TestArgs opts{pool_.mutPtr()};
+        size_t group = 0;
+        size_t groupCount = 1;
+
+        GetOpt(Ctx& ctx) noexcept;
+
+        void help() const noexcept;
+
+        bool matchesGroup(size_t testIndex) const noexcept;
+        bool matchesFilter(StringView testName) const noexcept;
+        bool matchesFilterStrong(StringView testName) const noexcept;
+        bool matchesExclude(StringView testName) const noexcept;
+
+        size_t threads() const noexcept {
+            if (auto sv = opts.find(StringView(u8"threads")); sv) {
+                return (size_t)sv->stou();
+            }
+
+            return 0;
+        }
+    };
+
+    struct TestTiming {
+        u64 timeUs;
+        TestFunc* test;
+    };
+
+    struct Tests: public Treap {
+        Ctx* ctx = 0;
+        GetOpt* opt = 0;
+        size_t ok = 0;
+        size_t err = 0;
+        size_t skip = 0;
+        size_t mute = 0;
+        Vector<TestTiming> timings;
+        Mutex* timingsMu = nullptr;
+
+        bool cmp(void* l, void* r) const noexcept override {
+            return compare(*(const TestFunc*)(l), *(const TestFunc*)(r));
+        }
+
+        static bool compare(const TestFunc& l, const TestFunc& r) noexcept {
+            return l.suite() < r.suite() || (l.suite() == r.suite() && l.name() < r.name());
+        }
+
+        void execute();
+        void handlePanic2();
+        void run(Ctx& ctx_) noexcept;
+
+        static Tests& instance() noexcept;
+
+        void handlePanic1() noexcept {
+            // outbuf->flush();
+        }
+
+        static void panicHandler1() noexcept {
+            instance().handlePanic1();
+        }
+
+        static void panicHandler2() {
+            instance().handlePanic2();
+        }
+    };
+}
+
+void Tests::run(Ctx& ctx_) noexcept {
+    ctx = &ctx_;
+    opt = new GetOpt(ctx_);
+    execute();
+}
+
+void Tests::execute() {
+    setPanicHandler1(panicHandler1);
+    setPanicHandler2(panicHandler2);
+
+    auto opool = ObjPool::fromMemory();
+    auto pool = ThreadPool::simple(opool.mutPtr(), opt->threads());
+
+    size_t topN = 0;
+
+    if (auto sv = opt->opts.find(StringView(u8"top")); sv) {
+        topN = (size_t)sv->stou();
+    }
+
+    auto mu = Mutex::create(opool.mutPtr());
+
+    if (topN) {
+        timingsMu = mu;
+    }
+
+    StringBuilder sb;
+    size_t testIndex = 0;
+
+    visit([&](void* el) {
+        auto test = (TestFunc*)el;
+
+        if (!opt->matchesGroup(testIndex++)) {
+            return;
+        }
+
+        sb.reset();
+        sb << *test;
+
+        if (test->name().startsWith(u8"_") && !opt->matchesFilterStrong(StringView(sb))) {
+            ++mute;
+        } else if (!opt->matchesFilter(StringView(sb))) {
+            ++skip;
+        } else {
+            pool->submit([&, test] {
+                BufferedExecContext bctx;
+
+                bctx.opts = &opt->opts;
+
+                u64 t0 = monotonicNowUs();
+
+                if (::execute(test, bctx)) {
+                    stdAtomicAddAndFetch(&ok, 1, MemoryOrder::Relaxed);
+                } else {
+                    stdAtomicAddAndFetch(&err, 1, MemoryOrder::Relaxed);
+                }
+
+                if (timingsMu) {
+                    u64 dt = monotonicNowUs() - t0;
+                    LockGuard guard(timingsMu);
+                    timings.pushBack(TestTiming{dt, test});
+                }
+
+                stdoutStream().write(bctx.buf_.data(), bctx.buf_.length());
+            });
+        }
+    });
+
+    pool->join();
+
+    auto&& outb = sysO;
+
+    if (!timings.empty()) {
+        quickSort(timings.mutBegin(), timings.mutEnd(), [](const TestTiming& a, const TestTiming& b) {
+            return a.timeUs > b.timeUs;
+        });
+
+        outb << endL
+             << StringView(u8"Slowest tests:")
+             << endL;
+
+        size_t n = ::min(topN, timings.length());
+
+        for (size_t i = 0; i < n; ++i) {
+            auto& t = timings[i];
+
+            outb << StringView(u8"  ")
+                 << t.timeUs
+                 << StringView(u8" us ")
+                 << *t.test
+                 << endL;
+        }
+
+        outb << endL;
+    }
+
+    outb << Color::bright(AnsiColor::Green)
+         << StringView(u8"OK: ")
+         << ok
+         << Color::reset();
+
+    if (err) {
+        outb << StringView(u8", ")
+             << Color::bright(AnsiColor::Red)
+             << StringView(u8"ERR: ")
+             << err
+             << Color::reset();
+    }
+
+    if (skip) {
+        outb << StringView(u8", ")
+             << Color::bright(AnsiColor::Yellow)
+             << StringView(u8"SKIP: ")
+             << skip
+             << Color::reset();
+    }
+
+    if (mute) {
+        outb << StringView(u8", ")
+             << Color::bright(AnsiColor::Blue)
+             << StringView(u8"MUTE: ")
+             << mute
+             << Color::reset();
+    }
+
+    outb << endL << flsH << finI;
+
+    exit(err);
+}
+
+void Tests::handlePanic2() {
+    ctx->printTB();
+    fflush(stdout);
+    fflush(stderr);
+    throw Exc();
+}
+
+Tests& Tests::instance() noexcept {
+    static auto res = new Tests();
+
+    return *res;
+}
+
+GetOpt::GetOpt(Ctx& ctx) noexcept {
+    for (int i = 1; i < ctx.argc; ++i) {
+        StringView arg(ctx.argv[i]);
+
+        if (arg.startsWith(u8"--") && arg.length() > 2) {
+            opts.parse(arg);
+        } else if (arg.startsWith(u8"-") && arg.length() > 1) {
+            excludes.pushBack(StringView(arg.data() + 1, arg.length() - 1));
+        } else {
+            includes.pushBack(arg);
+        }
+    }
+
+    help();
+
+    if (auto value = opts.find(StringView(u8"group")); value) {
+        group = (size_t)value->stou();
+    }
+
+    if (auto value = opts.find(StringView(u8"group-count")); value) {
+        groupCount = (size_t)value->stou();
+    }
+
+    if (!groupCount || group >= groupCount) {
+        sysE << StringView(u8"invalid test group: require 0 <= group < group-count") << endL << flsH;
+        exit(2);
+    }
+}
+
+void GetOpt::help() const noexcept {
+    if (!opts.find(StringView(u8"help"))) {
+        return;
+    }
+
+    auto out = sysE;
+
+    out << StringView(u8"Usage: test-binary [FILTER...] [--OPTION[=VALUE]]") << endL
+        << endL
+        << StringView(u8"Filters:") << endL
+        << StringView(u8"  Suite::Test    run tests whose full name starts with the prefix") << endL
+        << StringView(u8"  -Suite::Test   exclude tests matching the prefix") << endL
+        << StringView(u8"  (tests prefixed with _ are muted unless explicitly included)") << endL
+        << endL
+        << StringView(u8"Options:") << endL
+        << StringView(u8"  --help         print this help") << endL
+        << StringView(u8"  --group=N      run shard N (zero based)") << endL
+        << StringView(u8"  --group-count=N  split tests into N shards") << endL
+        << StringView(u8"  --threads=N    run tests in parallel using N threads") << endL
+        << StringView(u8"  --top=N        show N slowest tests") << endL
+        << StringView(u8"  --OPT          equivalent to --OPT=1") << endL
+        << StringView(u8"  --OPT=VALUE    set option OPT to VALUE") << endL
+        << flsH;
+
+    exit(0);
+}
+
+bool GetOpt::matchesGroup(size_t testIndex) const noexcept {
+    return testIndex % groupCount == group;
+}
+
+bool GetOpt::matchesFilter(StringView testName) const noexcept {
+    if (matchesExclude(testName)) {
+        return false;
+    }
+
+    if (includes.empty()) {
+        return true;
+    }
+
+    return matchesFilterStrong(testName);
+}
+
+bool GetOpt::matchesFilterStrong(StringView testName) const noexcept {
+    if (matchesExclude(testName)) {
+        return false;
+    }
+
+    for (auto prefix : range(includes)) {
+        if (testName.startsWith(prefix)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool GetOpt::matchesExclude(StringView testName) const noexcept {
+    for (auto prefix : range(excludes)) {
+        if (testName.startsWith(prefix)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+template <>
+void stl::output<ZeroCopyOutput, TestFunc>(ZeroCopyOutput& buf, const TestFunc& test) {
+    buf << test.suite()
+        << StringView(u8"::")
+        << test.name();
+}
+
+void Ctx::run() {
+    Tests::instance().run(*this);
+}
+
+void TestFunc::registerMe() {
+    Tests::instance().insert(this);
+}

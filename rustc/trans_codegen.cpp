@@ -16,7 +16,7 @@
 #include "trans_codegen.hpp"
 #include "trans_monomorphise.hpp"
 
-void Trans_Codegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::CratePtr crate_ptr, TransList list, const ::std::string& hir_file)
+void Trans_Codegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* crate_ptr, TransList list, const ::std::string& hir_file)
 {
     static Span sp;
 
@@ -211,4 +211,3 @@ void Trans_Codegen(const ::std::string& outfile, CodegenOutput out_ty, const Tra
     // Would drop the entire crate, but finalise tends to need it
     codegen->finalise(opt, out_ty, hir_file);
 }
-

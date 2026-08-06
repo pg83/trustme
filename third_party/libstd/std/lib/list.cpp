@@ -1,0 +1,179 @@
+#include "list.h"
+
+#include <std/alg/xchg.h>
+#include <std/alg/exchange.h>
+
+using namespace stl;
+
+namespace {
+    static void link(IntrusiveNode* a, IntrusiveNode* b) noexcept {
+        a->next = b;
+        b->prev = a;
+    }
+
+    static void xchgWithEmpty(IntrusiveNode& l, IntrusiveNode& r) noexcept {
+        IntrusiveList::insertAfter(&l, &r);
+        l.remove();
+    }
+}
+
+void IntrusiveList::insertAfter(IntrusiveNode* pos, IntrusiveNode* node) noexcept {
+    node->remove();
+    link(node, pos->next);
+    link(pos, node);
+}
+
+unsigned IntrusiveList::length() const noexcept {
+    unsigned res = 0;
+
+    for (auto c = front(), e = end(); c != e; c = c->next) {
+        ++res;
+    }
+
+    return res;
+}
+
+void IntrusiveList::xchg(IntrusiveList& r) noexcept {
+    IntrusiveNode n;
+
+    xchgWithEmpty(r.head, n);
+    xchgWithEmpty(head, r.head);
+    xchgWithEmpty(n, head);
+}
+
+void IntrusiveList::xchgWithEmptyList(IntrusiveList& r) noexcept {
+    xchgWithEmpty(head, r.head);
+}
+
+namespace {
+    static void splitImpl(IntrusiveNode* end, IntrusiveNode* a, IntrusiveNode* b) noexcept {
+        IntrusiveNode* p[] = {a, b};
+
+        int x = 0;
+
+        for (auto c = end->next; c != end; c = c->next, x ^= 1) {
+            link(exchange(p[x], c), c);
+        }
+
+        link(p[0], a);
+        link(p[1], b);
+
+        end->reset();
+    }
+
+    static void split(IntrusiveList& s, IntrusiveList* l, IntrusiveList* r) noexcept {
+        IntrusiveList a;
+        IntrusiveList b;
+
+        splitImpl(s.mutEnd(), a.mutEnd(), b.mutEnd());
+
+        l->pushBack(a);
+        r->pushBack(b);
+    }
+
+    template <typename Compare>
+    static void merge(IntrusiveList& d, IntrusiveList& l, IntrusiveList& r, Compare&& cmp) noexcept {
+        while (!l.empty() && !r.empty()) {
+            if (cmp(r.front(), l.front())) {
+                d.pushBack(r.popFront());
+            } else {
+                d.pushBack(l.popFront());
+            }
+        }
+
+        while (!l.empty()) {
+            d.pushBack(l.popFront());
+        }
+
+        while (!r.empty()) {
+            d.pushBack(r.popFront());
+        }
+    }
+
+    template <typename Compare>
+    static void sort(IntrusiveList& d, Compare&& cmp) noexcept {
+        if (d.almostEmpty()) {
+            return;
+        }
+
+        IntrusiveList l;
+        IntrusiveList r;
+
+        split(d, &l, &r);
+
+        sort(l, cmp);
+        sort(r, cmp);
+
+        merge(d, l, r, cmp);
+    }
+}
+
+void IntrusiveList::cutHalf(IntrusiveList& other) noexcept {
+    if (almostEmpty()) {
+        return;
+    }
+
+    auto slow = head.next;
+    auto fast = head.next;
+
+    while (fast->next != &head && fast->next->next != &head) {
+        slow = slow->next;
+        fast = fast->next->next;
+    }
+
+    auto mid = slow->next;
+    auto back = head.prev;
+
+    link(slow, &head);
+    link(&other.head, mid);
+    link(back, &other.head);
+}
+
+void IntrusiveList::splitHalf(IntrusiveList& l, IntrusiveList& r) noexcept {
+    IntrusiveList tmp;
+    xchgWithEmptyList(tmp);
+    ::split(tmp, &l, &r);
+}
+
+void IntrusiveList::sort(Compare1 cmp) noexcept {
+    ::sort(*this, cmp);
+}
+
+void IntrusiveList::sort(Compare2 cmp, void* ctx) noexcept {
+    ::sort(*this, [cmp, ctx](const IntrusiveNode* l, const IntrusiveNode* r) -> bool {
+        return cmp(ctx, l, r);
+    });
+}
+
+IntrusiveNode* IntrusiveList::popFrontOrNull() noexcept {
+    if (empty()) {
+        return nullptr;
+    }
+
+    return popFront();
+}
+
+IntrusiveNode* IntrusiveList::popBackOrNull() noexcept {
+    if (empty()) {
+        return nullptr;
+    }
+
+    return popBack();
+}
+
+void IntrusiveList::pushBack(IntrusiveList& lst) noexcept {
+    if (lst.empty()) {
+        // nothing to do
+    } else if (empty()) {
+        lst.xchgWithEmptyList(*this);
+    } else {
+        link(mutBack(), lst.mutFront());
+        link(lst.mutBack(), mutEnd());
+        lst.head.reset();
+    }
+}
+
+void IntrusiveList::pushFront(IntrusiveList& lst) noexcept {
+    lst.pushBack(*this);
+    lst.xchgWithEmptyList(*this);
+}

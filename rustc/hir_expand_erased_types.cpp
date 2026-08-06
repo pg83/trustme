@@ -144,7 +144,7 @@ namespace {
                 visit_type(ty);
         }
 
-        void visit_node_ptr(::std::unique_ptr< ::HIR::ExprNode>& node_ptr) override {
+        void visit_node_ptr(::HIR::ExprNodeP& node_ptr) override {
             assert(node_ptr);
             node_ptr->visit(*this);
             visit_type(node_ptr->m_res_type);
@@ -202,4 +202,3 @@ void HIR_Expand_ErasedType(::HIR::Crate& crate)
     OuterVisitor_Fixup  ov_fix(crate);
     ov_fix.visit_crate(crate);
 }
-

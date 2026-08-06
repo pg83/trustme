@@ -8,48 +8,29 @@
 #include "hir_expr_ptr.hpp"
 #include "hir_expr.hpp"
 #include "hir_expr_state.hpp"
+#include <std/mem/obj_pool.h>
 
 ::HIR::ExprPtr::ExprPtr() = default;
-::HIR::ExprPtr::ExprPtr(::std::unique_ptr< ::HIR::ExprNode> v):
+::HIR::ExprPtr::ExprPtr(::HIR::ExprNodeP v):
     node( mv$(v) )
 {
 }
 ::HIR::ExprPtr::~ExprPtr() = default;
 ::HIR::ExprPtr::ExprPtr(ExprPtr&&) = default;
 ::HIR::ExprPtr& ::HIR::ExprPtr::operator=(ExprPtr&&) = default;
-::std::unique_ptr< ::HIR::ExprNode> HIR::ExprPtr::into_unique()
+::HIR::ExprNodeP HIR::ExprPtr::take_node()
 {
-    return node.into_unique();
+    return ::HIR::ExprNodeP(node.release());
 }
 
-
-::HIR::ExprPtrInner::ExprPtrInner(::std::unique_ptr< ::HIR::ExprNode> v):
-    ptr( v.release() )
+::HIR::ExprStatePtr::ExprStatePtr(stl::ObjPool* pool, ExprState x):
+    ptr(pool->make<ExprState>(::std::move(x)))
 {
 }
-::HIR::ExprPtrInner::~ExprPtrInner()
+::HIR::ExprStatePtr::~ExprStatePtr() = default;
+::HIR::ExprStatePtr HIR::ExprStatePtr::clone(stl::ObjPool* pool) const
 {
-    delete ptr;
-}
-::std::unique_ptr< ::HIR::ExprNode> HIR::ExprPtrInner::into_unique()
-{
-    ::std::unique_ptr< ::HIR::ExprNode> rv( this->ptr );
-    this->ptr = nullptr;
-    return rv;
-}
-
-::HIR::ExprStatePtr::ExprStatePtr(ExprState x):
-    ptr(new ExprState( ::std::move(x) ))
-{
-}
-::HIR::ExprStatePtr::~ExprStatePtr()
-{
-    delete ptr;
-    ptr = nullptr;
-}
-::HIR::ExprStatePtr HIR::ExprStatePtr::clone() const
-{
-    auto rv = ::HIR::ExprStatePtr(::HIR::ExprState((*this)->m_module, (*this)->m_mod_path));
+    auto rv = ::HIR::ExprStatePtr(pool, ::HIR::ExprState((*this)->m_module, (*this)->m_mod_path));
     rv->m_traits = (*this)->m_traits;
     rv->m_impl_generics = (*this)->m_impl_generics;
     rv->m_item_generics = (*this)->m_item_generics;
@@ -103,14 +84,4 @@ void HIR::ExprPtr::set_mir(::MIR::FunctionPointer mir)
 {
     assert( !this->m_mir );
     m_mir = ::std::move(mir);
-    // Reset the HIR tree to be a placeholder node (thus freeing the backing memory)
-    if( false && node )
-    {
-        auto sp = node->span();
-        node = ExprPtrInner(::std::unique_ptr<HIR::ExprNode>(new ::HIR::ExprNode_Loop(
-                        sp, "",
-                        ::std::unique_ptr<HIR::ExprNode>(new ::HIR::ExprNode_Tuple(sp, {}))
-                        )));
-    }
 }
-

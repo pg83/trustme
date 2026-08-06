@@ -16,9 +16,12 @@ namespace AST {
     class Crate;
     class ExprNode;
 }
+namespace stl {
+    class ObjPool;
+}
 
 /// Parse a crate from the given file
-extern AST::Crate Parse_Crate(::std::string mainfile, AST::Edition edition);
+extern AST::Crate* Parse_Crate(stl::ObjPool* pool, ::std::string mainfile, AST::Edition edition);
 
 extern void Expand_Init();
 extern void Expand(::AST::Crate& crate);
@@ -30,4 +33,3 @@ extern void Dump_Rust(const char *Filename, const AST::Crate& crate);
 extern void DumpAST_Node(::std::ostream& os, const AST::ExprNode& node);
 
 #endif
-

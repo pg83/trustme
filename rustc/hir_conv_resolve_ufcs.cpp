@@ -15,6 +15,7 @@
 #include "hir_expr.hpp"
 #include "hir_visitor.hpp"
 #include "hir_typeck_static.hpp"
+#include <std/mem/obj_pool.h>
 #include <algorithm>    // std::remove_if
 
 namespace resolve_ufcs {
@@ -214,7 +215,7 @@ namespace resolve_ufcs {
                 public ::HIR::ExprVisitorDef
             {
                 Visitor& upper_visitor;
-                ::std::unique_ptr< ::HIR::ExprNode> m_replacement;
+                ::HIR::ExprNodeP m_replacement;
 
 
                 ExprVisitor(Visitor& uv):
@@ -239,7 +240,7 @@ namespace resolve_ufcs {
                 }
 
 
-                void visit_node_ptr(::std::unique_ptr< ::HIR::ExprNode>& node_ptr) {
+                void visit_node_ptr(::HIR::ExprNodeP& node_ptr) {
                     ::HIR::ExprVisitorDef::visit_node_ptr(node_ptr);
                     if(m_replacement) {
                         m_replacement.swap(node_ptr);
@@ -275,7 +276,7 @@ namespace resolve_ufcs {
                             if( ent.is_Enum() && ent.as_Enum().find_variant(gp.m_path.components().back()) != SIZE_MAX )
                             {
                                 // Rewrite!
-                                m_replacement.reset(new ::HIR::ExprNode_TupleVariant(sp, mv$(gp), /*is_struct*/false, mv$(node.m_args)));
+                                m_replacement.reset(upper_visitor.m_crate.m_pool->make<::HIR::ExprNode_TupleVariant>(sp, mv$(gp), /*is_struct*/false, mv$(node.m_args)));
                                 DEBUG(&node << ": Replacing with TupleVariant " << m_replacement.get());
                                 return ;
                             }
@@ -286,14 +287,14 @@ namespace resolve_ufcs {
                     MonomorphState  discard;
                     auto v = upper_visitor.m_resolve.get_value(node.span(), node.m_path, discard, true);
                     if( v.is_Constant() || v.is_Static() ) {
-                        m_replacement.reset(new ::HIR::ExprNode_CallValue(sp,
-                            ::std::make_unique<HIR::ExprNode_PathValue>(
+                        m_replacement.reset(upper_visitor.m_crate.m_pool->make<::HIR::ExprNode_CallValue>(sp,
+                            ::HIR::ExprNodeP(upper_visitor.m_crate.m_pool->make<HIR::ExprNode_PathValue>(
                                 sp,
                                 std::move(node.m_path),
                                 v.is_Constant() ? ::HIR::ExprNode_PathValue::Target::CONSTANT
                                 : v.is_Static() ? ::HIR::ExprNode_PathValue::Target::STATIC
                                 : ::HIR::ExprNode_PathValue::Target::UNKNOWN
-                                ),
+                                )),
                                 mv$(node.m_args)
                             ));
                         DEBUG(&node << ": Replacing with CallValue " << m_replacement.get());
@@ -318,7 +319,7 @@ namespace resolve_ufcs {
                                 auto idx = enm.find_variant(gp.m_path.components().back());
                                 if( enm.m_data.is_Value() || enm.m_data.as_Data().at(idx).type == HIR::TypeRef::new_unit() )
                                 {
-                                    m_replacement.reset(new ::HIR::ExprNode_UnitVariant(sp, mv$(gp), /*is_struct*/false));
+                                    m_replacement.reset(upper_visitor.m_crate.m_pool->make<::HIR::ExprNode_UnitVariant>(sp, mv$(gp), /*is_struct*/false));
                                     DEBUG(&node << ": Replacing with UnitVariant " << m_replacement.get());
                                 }
                                 else

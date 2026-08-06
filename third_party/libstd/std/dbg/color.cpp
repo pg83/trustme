@@ -1,0 +1,21 @@
+#include "color.h"
+
+#include <std/str/view.h>
+#include <std/ios/out_buf.h>
+
+using namespace stl;
+
+template <>
+void stl::output<ZeroCopyOutput, Color>(ZeroCopyOutput& buf, Color color) {
+    buf << StringView(u8"\033[");
+
+    if (color.color == AnsiColor::Reset) {
+        buf << StringView(u8"0");
+    } else {
+        auto add = color.brightKind ? 60 : 0;
+
+        buf << (u64)(29 + add + (int)color.color);
+    }
+
+    buf << StringView(u8"m");
+}

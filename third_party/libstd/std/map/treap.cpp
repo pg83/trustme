@@ -1,0 +1,125 @@
+#include "treap.h"
+#include "treap_node.h"
+
+#include <std/alg/xchg.h>
+#include <std/lib/vector.h>
+#include <std/rng/split_mix_64.h>
+
+using namespace stl;
+
+namespace {
+    static u64 prio(const void* el) noexcept {
+        return splitMix64((size_t)el);
+    }
+
+    static TreapNode* merge(TreapNode* l, TreapNode* r) noexcept {
+        if (!l) {
+            return r;
+        } else if (!r) {
+            return l;
+        } else if (prio(l) > prio(r)) {
+            return (l->right = merge(l->right, r), l);
+        } else {
+            return (r->left = merge(l, r->left), r);
+        }
+    }
+}
+
+void Treap::split(TreapNode* t, void* k, TreapNode** l, TreapNode** r) noexcept {
+    if (!t) {
+        *l = nullptr;
+        *r = nullptr;
+    } else if (cmp(t->key(), k)) {
+        split(t->right, k, &t->right, r);
+        *l = t;
+    } else {
+        split(t->left, k, l, &t->left);
+        *r = t;
+    }
+}
+
+void Treap::insert(TreapNode* node) noexcept {
+    TreapNode* l;
+    TreapNode* r;
+
+    split(root, node->key(), &l, &r);
+    root = merge(merge(l, node), r);
+}
+
+TreapNode* Treap::find(void* key) const noexcept {
+    auto t = root;
+
+    while (t) {
+        if (auto tkey = t->key(); cmp(key, tkey)) {
+            t = t->left;
+        } else if (cmp(tkey, key)) {
+            t = t->right;
+        } else {
+            return t;
+        }
+    }
+
+    return nullptr;
+}
+
+TreapNode* Treap::erase(void* key) noexcept {
+    auto ptr = &root;
+
+    while (auto current = *ptr) {
+        if (auto ckey = current->key(); cmp(key, ckey)) {
+            ptr = &current->left;
+        } else if (cmp(ckey, key)) {
+            ptr = &current->right;
+        } else {
+            *ptr = merge(current->left, current->right);
+            current->left = nullptr;
+            current->right = nullptr;
+
+            return current;
+        }
+    }
+
+    return nullptr;
+}
+
+TreapNode* Treap::remove(TreapNode* node) noexcept {
+    return erase(node->key());
+}
+
+void Treap::visitImpl(VisitorFace&& vis) {
+    if (root) {
+        root->visit(vis);
+    }
+}
+
+size_t Treap::length() const noexcept {
+    size_t res = 0;
+
+    ((Treap*)this)->visit([&res](void*) {
+        res += 1;
+    });
+
+    return res;
+}
+
+TreapNode* Treap::min() const noexcept {
+    auto t = root;
+
+    while (t && t->left) {
+        t = t->left;
+    }
+
+    return t;
+}
+
+void Treap::xchg(Treap& other) noexcept {
+    stl::xchg(root, other.root);
+}
+
+size_t Treap::height() const noexcept {
+    if (root) {
+        return root->height();
+    }
+
+    return 0;
+}

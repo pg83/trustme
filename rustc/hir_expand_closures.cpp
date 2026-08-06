@@ -11,6 +11,7 @@
 #include <algorithm>
 #include "hir_expr_state.hpp"
 #include "hir_expand_main_bindings.hpp"
+#include <std/mem/obj_pool.h>
 
 namespace {
     inline HIR::ExprNodeP mk_exprnodep(HIR::ExprNode* en, ::HIR::TypeRef ty){ en->m_res_type = mv$(ty); return HIR::ExprNodeP(en); }
@@ -24,7 +25,7 @@ namespace {
     const RcString rcstring_call_mut  = RcString::new_interned("call_mut");
     const RcString rcstring_call      = RcString::new_interned("call");
 }
-#define NEWNODE(TY, CLASS, ...)  mk_exprnodep(new HIR::ExprNode_##CLASS(__VA_ARGS__), TY)
+#define NEWNODE(TY, CLASS, ...)  mk_exprnodep(m_pool->make<HIR::ExprNode_##CLASS>(__VA_ARGS__), TY)
 
 namespace {
 
@@ -156,10 +157,12 @@ namespace {
         const ::std::vector< ::HIR::ExprNode_Closure::AvuCache::Capture>&  m_captures;
 
         const Monomorphiser& m_monomorphiser;
+        stl::ObjPool* m_pool;
 
         ::HIR::ExprNodeP    m_replacement;
     public:
         ExprVisitor_Mutate(
+            stl::ObjPool* pool,
             const ::HIR::TypeRef& closure_type,
             const ::std::vector<unsigned int>& local_vars,
             const ::std::vector< ::HIR::ExprNode_Closure::AvuCache::Capture >& captures,
@@ -169,7 +172,8 @@ namespace {
             m_closure_type(closure_type),
             m_local_vars(local_vars),
             m_captures(captures),
-            m_monomorphiser(mcb)
+            m_monomorphiser(mcb),
+            m_pool(pool)
         {
         }
 
@@ -366,6 +370,7 @@ namespace {
     public:
         const ::HIR::Crate& m_crate;
         StaticTraitResolve  m_resolve;
+        stl::ObjPool* m_pool;
         const Monomorphiser&    m_monomorphiser;
         const OutState* m_out;
         bool    m_run_eat;
@@ -373,6 +378,7 @@ namespace {
         ExprVisitor_Fixup(const ::HIR::Crate& crate, const ::HIR::GenericParams* params, const Monomorphiser& monomorphiser, const OutState* out):
             m_crate(crate),
             m_resolve(crate),
+            m_pool(crate.m_pool),
             m_monomorphiser( monomorphiser ),
             m_out(out),
             m_run_eat(false)
@@ -687,6 +693,7 @@ namespace {
         public ::HIR::ExprVisitorDef
     {
         const StaticTraitResolve& m_resolve;
+        stl::ObjPool* m_pool;
         const ::HIR::TypeRef*   m_self_type;
         const ::std::vector< ::HIR::TypeRef>& m_variable_types;
         const ::HIR::ExprPtr& m_expr_ptr;
@@ -698,6 +705,7 @@ namespace {
     public:
         ExprVisitor_Extract(const StaticTraitResolve& resolve, const ::HIR::TypeRef* self_type, const ::std::vector< ::HIR::TypeRef>& var_types, const ::HIR::ExprPtr& expr_ptr, OutState& out, const char* new_type_suffix):
             m_resolve(resolve),
+            m_pool(resolve.m_crate.m_pool),
             m_self_type(self_type),
             m_variable_types(var_types),
             m_expr_ptr(expr_ptr),
@@ -1072,7 +1080,7 @@ namespace {
 
             DEBUG("--- Mutate inner code");
             // 2. Iterate over the nodes and rewrite variable accesses to either renumbered locals, or field accesses
-            ExprVisitor_Mutate    ev { node.m_res_type, node.m_avu_cache.local_vars, node.m_avu_cache.captured_vars, monomorph_cb };
+            ExprVisitor_Mutate    ev { m_pool, node.m_res_type, node.m_avu_cache.local_vars, node.m_avu_cache.captured_vars, monomorph_cb };
             ev.visit_node_ptr( node.m_code );
             // NOTE: `ev` is used down in `Args` to convert the argument destructuring pattern
 
@@ -1273,6 +1281,7 @@ namespace {
 
                 struct H2 {
                     static ::std::pair<::HIR::ExprNode_Closure::Class, HIR::TraitImpl> make_dispatch(
+                            stl::ObjPool* m_pool,
                             const Span& sp,
                             ::HIR::ExprNode_Closure::Class c,
                             ::HIR::GenericParams params,
@@ -1325,9 +1334,9 @@ namespace {
                         return ::std::make_pair(c, mv$(fcn));
                     }
                 };
-                m_out.impls_closure.push_back( H2::make_dispatch(sp, ::HIR::ExprNode_Closure::Class::Once  , params.clone(), trait_params.clone(), closure_type, args_ty, ret_type) );
-                m_out.impls_closure.push_back( H2::make_dispatch(sp, ::HIR::ExprNode_Closure::Class::Mut   , params.clone(), trait_params.clone(), closure_type, args_ty, ret_type) );
-                m_out.impls_closure.push_back( H2::make_dispatch(sp, ::HIR::ExprNode_Closure::Class::Shared, params.clone(), mv$(trait_params)   , closure_type, args_ty, ret_type) );
+                m_out.impls_closure.push_back( H2::make_dispatch(m_pool, sp, ::HIR::ExprNode_Closure::Class::Once  , params.clone(), trait_params.clone(), closure_type, args_ty, ret_type) );
+                m_out.impls_closure.push_back( H2::make_dispatch(m_pool, sp, ::HIR::ExprNode_Closure::Class::Mut   , params.clone(), trait_params.clone(), closure_type, args_ty, ret_type) );
+                m_out.impls_closure.push_back( H2::make_dispatch(m_pool, sp, ::HIR::ExprNode_Closure::Class::Shared, params.clone(), mv$(trait_params)   , closure_type, args_ty, ret_type) );
 
                 // 2. Split args_pat/args_ty into separate arguments
                 ::std::vector<::std::pair< ::HIR::Pattern, ::HIR::TypeRef>> args_split;
@@ -1440,14 +1449,14 @@ namespace {
             for(auto& ti : m_out.impls_closure) {
                 for(auto& m : ti.second.m_methods) {
                     if(!m.second.data.m_code.m_state) {
-                        m.second.data.m_code.m_state = m_expr_ptr.m_state.clone();
+                        m.second.data.m_code.m_state = m_expr_ptr.m_state.clone(m_pool);
                     }
                 }
             }
             for(auto& ti : m_out.impls_type) {
                 for(auto& m : ti->m_methods) {
                     if(!m.second.data.m_code.m_state) {
-                        m.second.data.m_code.m_state = m_expr_ptr.m_state.clone();
+                        m.second.data.m_code.m_state = m_expr_ptr.m_state.clone(m_pool);
                     }
                 }
             }
@@ -1582,7 +1591,7 @@ namespace {
                 rv.capture_usages.push_back(cap.second);
                 auto cap_ty = monomorph_cb.monomorph_type(sp, m_variable_types.at(cap.first));
                 rv.struct_ents.push_back(HIR::VisEnt<HIR::TypeRef> { HIR::Publicity::new_none(), cap_ty.clone() });
-                rv.capture_nodes.push_back(HIR::ExprNodeP(new ::HIR::ExprNode_Variable(sp, "", cap.first)));
+                rv.capture_nodes.push_back(HIR::ExprNodeP(m_pool->make<::HIR::ExprNode_Variable>(sp, "", cap.first)));
                 switch(cap.second)
                 {
                 case ::HIR::ValueUsage::Unknown:
@@ -1594,13 +1603,13 @@ namespace {
                     rv.capture_nodes.back()->m_res_type = cap_ty.clone();
                     cap_ty = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, std::move(cap_ty));
                     rv.struct_ents.back().ent = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, std::move(rv.struct_ents.back().ent));
-                    rv.capture_nodes.back() = HIR::ExprNodeP(new ::HIR::ExprNode_Borrow(sp, ::HIR::BorrowType::Shared, std::move(rv.capture_nodes.back())));
+                    rv.capture_nodes.back() = HIR::ExprNodeP(m_pool->make<::HIR::ExprNode_Borrow>(sp, ::HIR::BorrowType::Shared, std::move(rv.capture_nodes.back())));
                     break;
                 case ::HIR::ValueUsage::Mutate:
                     rv.capture_nodes.back()->m_res_type = cap_ty.clone();
                     cap_ty = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, std::move(cap_ty));
                     rv.struct_ents.back().ent = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, std::move(rv.struct_ents.back().ent));
-                    rv.capture_nodes.back() = HIR::ExprNodeP(new ::HIR::ExprNode_Borrow(sp, ::HIR::BorrowType::Unique, std::move(rv.capture_nodes.back())));
+                    rv.capture_nodes.back() = HIR::ExprNodeP(m_pool->make<::HIR::ExprNode_Borrow>(sp, ::HIR::BorrowType::Unique, std::move(rv.capture_nodes.back())));
                     break;
                 }
                 rv.capture_nodes.back()->m_res_type = mv$(cap_ty);
@@ -1720,9 +1729,9 @@ namespace {
                 drop_self_arg_ty = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, std::move(drop_self_arg_ty));
                 fcn_drop.m_args.push_back(std::make_pair( HIR::Pattern(), mv$(drop_self_arg_ty) ));
                 fcn_drop.m_return = ::HIR::TypeRef::new_unit();
-                fcn_drop.m_code.reset( new ::HIR::ExprNode_Tuple(sp, {}) );
+                fcn_drop.m_code.reset(m_pool->make<::HIR::ExprNode_Tuple>(sp, ::std::vector<HIR::ExprNodeP>{}));
                 fcn_drop.m_code->m_res_type = ::HIR::TypeRef::new_unit();
-                fcn_drop.m_code.m_state = m_expr_ptr.m_state.clone();
+                fcn_drop.m_code.m_state = m_expr_ptr.m_state.clone(m_pool);
                 ::HIR::TraitImpl    drop_impl;
                 drop_impl.m_params = params.clone();
                 drop_impl.m_type = ::HIR::TypeRef::new_path( ::HIR::GenericPath(gen_struct_path, params.make_nop_params(0)), &gen_struct_ref );
@@ -1746,7 +1755,7 @@ namespace {
             // - ` { ... }`
             // Emit as a top-level generator
             // - It has a populated body, non-zero `m_obj_ptr`, and unset `m_obj_path`
-            auto v = ::std::make_unique<::HIR::ExprNode_GeneratorWrapper>(sp, HIR::TypeRef(), mv$(body_node), /*move*/false, /*pinned*/false, /*future*/false);
+            auto* v = m_pool->make<::HIR::ExprNode_GeneratorWrapper>(sp, HIR::TypeRef(), mv$(body_node), /*move*/false, /*pinned*/false, /*future*/false);
             v->m_yield_ty = monomorph_cb.monomorph_type(sp, node.m_yield_ty);
             v->m_return   = monomorph_cb.monomorph_type(sp, node.m_return);
             v->m_capture_usages = std::move(cr_vars.capture_usages);
@@ -1755,9 +1764,9 @@ namespace {
             v->m_state_data_type = mv$(state_type);
             v->m_state_idx_enum = mv$(state_idx_type.first);
             v->m_drop_fcn_ptr = fcn_drop_ptr;
-            body_node.reset(v.release());
+            body_node.reset(v);
             fcn_resume.m_code.reset( body_node.release() );
-            fcn_resume.m_code.m_state = m_expr_ptr.m_state.clone();
+            fcn_resume.m_code.m_state = m_expr_ptr.m_state.clone(m_pool);
             fcn_resume.m_code.m_bindings = std::move(cr_vars.new_locals);
 
 
@@ -1878,9 +1887,9 @@ namespace {
                 drop_self_arg_ty = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, std::move(drop_self_arg_ty));
                 fcn_drop.m_args.push_back(std::make_pair( HIR::Pattern(), mv$(drop_self_arg_ty) ));
                 fcn_drop.m_return = ::HIR::TypeRef::new_unit();
-                fcn_drop.m_code.reset( new ::HIR::ExprNode_Tuple(sp, {}) );
+                fcn_drop.m_code.reset(m_pool->make<::HIR::ExprNode_Tuple>(sp, ::std::vector<HIR::ExprNodeP>{}));
                 fcn_drop.m_code->m_res_type = ::HIR::TypeRef::new_unit();
-                fcn_drop.m_code.m_state = m_expr_ptr.m_state.clone();
+                fcn_drop.m_code.m_state = m_expr_ptr.m_state.clone(m_pool);
                 ::HIR::TraitImpl    drop_impl;
                 drop_impl.m_params = params.clone();
                 drop_impl.m_type = ::HIR::TypeRef::new_path( ::HIR::GenericPath(gen_struct_path, params.make_nop_params(0)), &gen_struct_ref );
@@ -1903,7 +1912,7 @@ namespace {
             // - ` { ... }`
             // Emit as a top-level generator
             // - It has a populated body, non-zero `m_obj_ptr`, and unset `m_obj_path`
-            auto v = ::std::make_unique<::HIR::ExprNode_GeneratorWrapper>(sp, HIR::TypeRef(), std::move(body_node), false, false, /*future*/true);
+            auto* v = m_pool->make<::HIR::ExprNode_GeneratorWrapper>(sp, HIR::TypeRef(), std::move(body_node), false, false, /*future*/true);
             v->m_return   = monomorph_cb.monomorph_type(sp, return_ty);
             v->m_capture_usages = std::move(cr_vars.capture_usages);
             v->m_res_type = fcn_resume.m_return.clone();
@@ -1911,8 +1920,8 @@ namespace {
             v->m_state_data_type = mv$(state_type);
             v->m_state_idx_enum = mv$(state_idx_type.first);
             v->m_drop_fcn_ptr = fcn_drop_ptr;
-            fcn_resume.m_code.reset( v.release() );
-            fcn_resume.m_code.m_state = m_expr_ptr.m_state.clone();
+            fcn_resume.m_code.reset(v);
+            fcn_resume.m_code.m_state = m_expr_ptr.m_state.clone(m_pool);
             fcn_resume.m_code.m_bindings = std::move(cr_vars.new_locals);
 
 
@@ -2196,7 +2205,7 @@ void HIR_Expand_Closures_Expr(const ::HIR::Crate& crate_ro, ::HIR::TypeRef& exp_
     {
         for( auto& m : impl->m_methods )
         {
-            m.second.data.m_code.m_state = ::HIR::ExprStatePtr(*exp.m_state);
+            m.second.data.m_code.m_state = ::HIR::ExprStatePtr(crate.m_pool, *exp.m_state);
             m.second.data.m_code.m_state->stage = ::HIR::ExprState::Stage::Typecheck;
         }
         impl->m_src_module = exp.m_state->m_mod_path;
@@ -2205,7 +2214,7 @@ void HIR_Expand_Closures_Expr(const ::HIR::Crate& crate_ro, ::HIR::TypeRef& exp_
     {
         for( auto& m : impl.second.m_methods )
         {
-            m.second.data.m_code.m_state = ::HIR::ExprStatePtr(*exp.m_state);
+            m.second.data.m_code.m_state = ::HIR::ExprStatePtr(crate.m_pool, *exp.m_state);
             m.second.data.m_code.m_state->stage = ::HIR::ExprState::Stage::Typecheck;
         }
         impl.second.m_src_module = exp.m_state->m_mod_path;
@@ -2214,7 +2223,7 @@ void HIR_Expand_Closures_Expr(const ::HIR::Crate& crate_ro, ::HIR::TypeRef& exp_
     {
         for( auto& m : impl.second.m_methods )
         {
-            m.second.data.m_code.m_state = ::HIR::ExprStatePtr(*exp.m_state);
+            m.second.data.m_code.m_state = ::HIR::ExprStatePtr(crate.m_pool, *exp.m_state);
             m.second.data.m_code.m_state->stage = ::HIR::ExprState::Stage::Typecheck;
         }
         impl.second.m_src_module = exp.m_state->m_mod_path;
@@ -2261,4 +2270,3 @@ void HIR_Expand_Closures(::HIR::Crate& crate)
     };
     OuterVisitorPass2(crate).visit_crate(crate);
 }
-

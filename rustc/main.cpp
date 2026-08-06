@@ -31,6 +31,7 @@
 #include "target_detect.h"	// tools/common/target_detect.h
 #include "debug_inner.hpp"
 #include "memory_dump.hpp"
+#include <std/mem/obj_pool.h>
 
 TargetVersion	gTargetVersion = TargetVersion::Rustc1_29;
 
@@ -232,13 +233,15 @@ int main(int argc, char *argv[])
     }
 
     Expand_Init();
+    auto pool = stl::ObjPool::fromMemory();
 
     try
     {
         // Parse the crate into AST
-        AST::Crate crate = CompilePhase<AST::Crate>("Parse", [&]() {
-            return Parse_Crate(params.infile, params.edition);
+        AST::Crate* crate_ptr = CompilePhase<AST::Crate*>("Parse", [&]() {
+            return Parse_Crate(pool.mutPtr(), params.infile, params.edition);
             });
+        AST::Crate& crate = *crate_ptr;
         crate.m_test_harness = params.test_harness;
         crate.m_crate_name_suffix = params.crate_name_suffix;
         //crate.m_crate_name = params.crate_name;
@@ -523,10 +526,9 @@ int main(int argc, char *argv[])
         // --------------------------------------
         // HIR Section
         // --------------------------------------
-        // Construct the HIR from the AST
-        // - Note `LowerHIR_FromAST` consumes the AST
-        ::HIR::CratePtr hir_crate = CompilePhase< ::HIR::CratePtr>("HIR Lower", [&]() {
-            return LowerHIR_FromAST(mv$( crate ));
+        // Construct the HIR beside the AST in the compilation object pool.
+        ::HIR::Crate* hir_crate = CompilePhase< ::HIR::Crate*>("HIR Lower", [&]() {
+            return LowerHIR_FromAST(pool.mutPtr(), crate);
             });
         memory_dump("HIR Gen");
         if( params.debug.dump_hir )
@@ -849,20 +851,20 @@ int main(int argc, char *argv[])
             throw "";
         case ::AST::Crate::Type::RustLib:
             // Generate a linkable .o
-            CompilePhaseV("Trans Codegen", [&]() { Trans_Codegen(params.outfile, CodegenOutput::StaticLibrary, trans_opt, std::move(hir_crate), std::move(items), hir_file); });
+            CompilePhaseV("Trans Codegen", [&]() { Trans_Codegen(params.outfile, CodegenOutput::StaticLibrary, trans_opt, hir_crate, std::move(items), hir_file); });
             break;
         case ::AST::Crate::Type::RustDylib:
         case ::AST::Crate::Type::CDylib:
             // Generate a .so/.dll
-            CompilePhaseV("Trans Codegen", [&]() { Trans_Codegen(params.outfile, CodegenOutput::DynamicLibrary, trans_opt, std::move(hir_crate), std::move(items), hir_file); });
+            CompilePhaseV("Trans Codegen", [&]() { Trans_Codegen(params.outfile, CodegenOutput::DynamicLibrary, trans_opt, hir_crate, std::move(items), hir_file); });
             break;
         case ::AST::Crate::Type::ProcMacro: {
             // Needs: An executable (the actual macro handler), metadata (for `extern crate foo;`)
             // - Metadata was done before enumerate
-            CompilePhaseV("Trans Codegen", [&]() { Trans_Codegen(params.outfile, CodegenOutput::Executable, trans_opt, std::move(hir_crate), std::move(items), hir_file); });
+            CompilePhaseV("Trans Codegen", [&]() { Trans_Codegen(params.outfile, CodegenOutput::Executable, trans_opt, hir_crate, std::move(items), hir_file); });
             break; }
         case ::AST::Crate::Type::Executable:
-            CompilePhaseV("Trans Codegen", [&]() { Trans_Codegen(params.outfile, CodegenOutput::Executable, trans_opt, std::move(hir_crate), std::move(items), ""); });
+            CompilePhaseV("Trans Codegen", [&]() { Trans_Codegen(params.outfile, CodegenOutput::Executable, trans_opt, hir_crate, std::move(items), ""); });
             break;
         }
     }

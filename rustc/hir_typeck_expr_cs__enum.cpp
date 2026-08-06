@@ -2163,7 +2163,7 @@ namespace typecheck
 void Typecheck_Code_CS__EnumerateRules(
     Context& context, const typeck::ModuleState& ms,
     t_args& args, const ::HIR::TypeRef& result_type,
-    ::HIR::ExprPtr& expr, ::std::unique_ptr<HIR::ExprNode>& root_ptr
+    ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& root_ptr
     )
 {
     TRACE_FUNCTION;

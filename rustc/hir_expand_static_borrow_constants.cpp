@@ -17,6 +17,7 @@
 #include "hir_expand_main_bindings.hpp"
 #include "hir_expr_state.hpp"
 #include "trans_target.hpp"
+#include <std/mem/obj_pool.h>
 
 
 extern RcString    g_core_crate;    // Defined in hir/from_ast.cpp
@@ -24,7 +25,7 @@ extern RcString    g_core_crate;    // Defined in hir/from_ast.cpp
 namespace {
     inline HIR::ExprNodeP mk_exprnodep(HIR::ExprNode* en, ::HIR::TypeRef ty){ en->m_res_type = mv$(ty); return HIR::ExprNodeP(en); }
 }
-#define NEWNODE(TY, CLASS, ...)  mk_exprnodep(new HIR::ExprNode_##CLASS(__VA_ARGS__), TY)
+#define NEWNODE(TY, CLASS, ...)  mk_exprnodep(m_resolve.m_crate.m_pool->make<HIR::ExprNode_##CLASS>(__VA_ARGS__), TY)
 
 namespace static_borrow_constants {
 
@@ -647,7 +648,7 @@ namespace static_borrow_constants {
         void visit_node_ptr(::HIR::ExprPtr& root) {
             root->visit(*this);
         }
-        void visit_node_ptr(::std::unique_ptr<::HIR::ExprNode>& root) override {
+        void visit_node_ptr(::HIR::ExprNodeP& root) override {
             root->visit(*this);
         }
 
@@ -921,7 +922,7 @@ namespace static_borrow_constants {
 
             ASSERT_BUG(node->span(), m_expr_ptr.m_state, "");
             auto val_expr = HIR::ExprPtr(mv$(node));
-            val_expr.m_state = m_expr_ptr.m_state.clone();
+            val_expr.m_state = m_expr_ptr.m_state.clone(m_resolve.m_crate.m_pool);
             val_expr.m_state->stage = ::HIR::ExprState::Stage::Sbc;
 
             val_expr.m_bindings.resize(v.binding_mapping.size());
@@ -1391,7 +1392,7 @@ void HIR_Expand_StaticBorrowConstants_Expr(const ::HIR::Crate& crate, const ::HI
 
                 auto& s = crate.m_new_values.back().second->ent.as_Static();
                 ASSERT_BUG(Span(), !s.m_value.m_state, "ExprState set already");
-                s.m_value.m_state = ::HIR::ExprStatePtr(::HIR::ExprState(crate.m_root_module, ::HIR::SimplePath(crate.m_crate_name)));
+                s.m_value.m_state = ::HIR::ExprStatePtr(crate.m_pool, ::HIR::ExprState(crate.m_root_module, ::HIR::SimplePath(crate.m_crate_name)));
                 s.m_value.m_state->stage = ::HIR::ExprState::Stage::Sbc;
                 s.m_value.m_state->m_impl_generics = nullptr;
                 s.m_value.m_state->m_item_generics = &s.m_params;

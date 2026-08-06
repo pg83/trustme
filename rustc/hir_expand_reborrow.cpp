@@ -10,11 +10,12 @@
 #include "hir_typeck_static.hpp"
 #include <algorithm>
 #include "hir_expand_main_bindings.hpp"
+#include <std/mem/obj_pool.h>
 
 namespace {
     inline HIR::ExprNodeP mk_exprnodep(HIR::ExprNode* en, ::HIR::TypeRef ty){ en->m_res_type = mv$(ty); return HIR::ExprNodeP(en); }
 }
-#define NEWNODE(TY, CLASS, ...)  mk_exprnodep(new HIR::ExprNode_##CLASS(__VA_ARGS__), TY)
+#define NEWNODE(TY, CLASS, ...)  mk_exprnodep(m_crate.m_pool->make<HIR::ExprNode_##CLASS>(__VA_ARGS__), TY)
 
 namespace {
 
@@ -36,7 +37,7 @@ namespace {
             root->visit(*this);
 
             // 1. Convert into an ExprNodeP
-            auto np = root.into_unique();
+            auto np = root.take_node();
             // 2. Pass to do_reborrow
             np = do_reborrow(mv$(np));
             // 3. Convert back

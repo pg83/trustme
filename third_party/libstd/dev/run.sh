@@ -1,0 +1,23 @@
+#!/bin/sh
+
+set -xue
+
+EXTRA=
+#EXTRA=lib/build/opt/O0
+
+~/monorepo/ix/ix run \
+    set/dev/cc \
+    bld/python \
+    bld/sh \
+    bld/box \
+    ${EXTRA} \
+    lib/c++ \
+    lib/kernel \
+    lib/aws/lc \
+    lib/c/ares \
+    lib/uring \
+    lib/xxhash \
+    ${EXTRA} \
+    -- ./dev/build.sh
+
+time timeout 10s ./.build/tst/test --top=20

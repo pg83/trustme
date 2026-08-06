@@ -16,6 +16,7 @@
 #include "hir_typeck_expr_visit.hpp"
 #include "hir_typeck_expr_cs.hpp"
 #include "hir_conv_main_bindings.hpp"
+#include <std/mem/obj_pool.h>
 
 namespace {
     inline HIR::ExprNodeP mk_exprnodep(HIR::ExprNode* en, ::HIR::TypeRef ty){ en->m_res_type = mv$(ty); return HIR::ExprNodeP(en); }
@@ -78,7 +79,7 @@ namespace {
         }
     };
 }
-#define NEWNODE(TY, SP, CLASS, ...)  mk_exprnodep(new HIR::ExprNode##CLASS(SP ,## __VA_ARGS__), TY)
+#define NEWNODE(TY, SP, CLASS, ...)  mk_exprnodep(context.m_crate.m_pool->make<HIR::ExprNode##CLASS>(SP ,## __VA_ARGS__), TY)
 
 namespace {
 
@@ -698,7 +699,7 @@ namespace {
                     // Turn this revisit into a coercion point with the new result type
                     // - Mangle this node to be a passthrough to a copy of itself.
 
-                    node.m_value = ::HIR::ExprNodeP( new ::HIR::ExprNode_Emplace(node.span(), node.m_type, mv$(node.m_place), mv$(node.m_value)) );
+                    node.m_value = ::HIR::ExprNodeP(context.m_crate.m_pool->make<::HIR::ExprNode_Emplace>(node.span(), node.m_type, mv$(node.m_place), mv$(node.m_value)));
                     node.m_type = ::HIR::ExprNode_Emplace::Type::Noop;
                     node.m_value->m_res_type = mv$(newty);
                     inner_ty = &node.m_value->m_res_type;
@@ -4213,11 +4214,11 @@ const ::HIR::TypeRef& Context::get_var(const Span& sp, unsigned int idx) const {
         // Would emit borrow+unsize+deref, but that requires knowing the borrow class.
         // HACK: Emit an invalid _Unsize op that is fixed once usage type is known.
         auto ty_dst_c = ty_dst.clone();
-        val_node = NEWNODE( mv$(ty_dst), span, _Unsize,  mv$(val_node), mv$(ty_dst_c) );
+        val_node = mk_exprnodep(m_crate.m_pool->make<HIR::ExprNode_Unsize>(span, mv$(val_node), mv$(ty_dst_c)), mv$(ty_dst));
         DEBUG("- Unsize " << &*val_node << " -> " << val_node->m_res_type);
     }
     else {
-        val_node = NEWNODE( mv$(ty_dst), span, _Deref,  mv$(val_node) );
+        val_node = mk_exprnodep(m_crate.m_pool->make<HIR::ExprNode_Deref>(span, mv$(val_node)), mv$(ty_dst));
         DEBUG("- Deref " << &*val_node << " -> " << val_node->m_res_type);
     }
 
@@ -4546,7 +4547,7 @@ namespace {
                             // TODO: Replace with a call to context.create_autoderef to handle cases where the below assertion would fire.
                             ASSERT_BUG(span, !node_ptr->m_res_type.data().is_Array(), "Array->Slice shouldn't be in deref coercions");
                             auto ty = mv$(types[i]);
-                            node_ptr = ::HIR::ExprNodeP(new ::HIR::ExprNode_Deref( mv$(span), mv$(node_ptr) ));
+                            node_ptr = ::HIR::ExprNodeP(context.m_crate.m_pool->make<::HIR::ExprNode_Deref>(mv$(span), mv$(node_ptr)));
                             DEBUG("- Deref " << &*node_ptr << " -> " << ty);
                             node_ptr->m_res_type = mv$(ty);
                             context.m_ivars.get_type(node_ptr->m_res_type);
@@ -5225,7 +5226,7 @@ namespace {
                         {
                             DEBUG("- NEWNODE _Cast " << &*node_ptr << " -> " << dst);
                             auto span = node_ptr->span();
-                            node_ptr = ::HIR::ExprNodeP(new ::HIR::ExprNode_Cast( mv$(span), mv$(node_ptr), dst.clone() ));
+                            node_ptr = ::HIR::ExprNodeP(context.m_crate.m_pool->make<::HIR::ExprNode_Cast>(mv$(span), mv$(node_ptr), dst.clone()));
                             node_ptr->m_res_type = dst.clone();
                         }
                     }
@@ -5249,7 +5250,7 @@ namespace {
                         DEBUG("- NEWNODE _Cast " << &*node_ptr << " -> " << dst);
                         {
                             auto span = node_ptr->span();
-                            node_ptr = ::HIR::ExprNodeP(new ::HIR::ExprNode_Cast( mv$(span), mv$(node_ptr), dst.clone() ));
+                            node_ptr = ::HIR::ExprNodeP(context.m_crate.m_pool->make<::HIR::ExprNode_Cast>(mv$(span), mv$(node_ptr), dst.clone()));
                             node_ptr->m_res_type = dst.clone();
                         }
                     }
@@ -7999,7 +8000,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
 {
     TRACE_FUNCTION;
 
-    auto root_ptr = expr.into_unique();
+    auto root_ptr = expr.take_node();
     assert(!ms.m_mod_paths.empty());
     Context context { ms.m_crate, ms.m_impl_generics, ms.m_item_generics, ms.m_mod_paths.back(), ms.m_current_trait };
 

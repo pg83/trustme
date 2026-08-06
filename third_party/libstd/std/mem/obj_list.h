@@ -1,0 +1,39 @@
+#pragma once
+
+#include "new.h"
+#include "embed.h"
+#include "free_list.h"
+
+#include <std/typ/support.h>
+#include <std/alg/destruct.h>
+
+namespace stl {
+    class ObjPool;
+
+    template <typename T>
+    class ObjList {
+        struct TT: public Embed<T>, public Newable {
+            using Embed<T>::Embed;
+        };
+
+        static_assert(sizeof(TT) == sizeof(T));
+        static_assert(alignof(TT) <= alignof(max_align_t));
+
+        FreeList* fl;
+
+    public:
+        ObjList(ObjPool* pool)
+            : fl(FreeList::create(pool, sizeof(TT)))
+        {
+        }
+
+        template <typename... A>
+        T* make(A&&... a) {
+            return &(new (fl->allocate()) TT(forward<A>(a)...))->t;
+        }
+
+        void release(T* t) {
+            fl->release(destruct((TT*)(void*)t));
+        }
+    };
+}

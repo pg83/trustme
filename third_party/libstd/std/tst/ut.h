@@ -1,0 +1,47 @@
+#pragma once
+
+#include <std/ios/sys.h>
+#include <std/str/view.h>
+#include <std/sys/types.h>
+#include <std/dbg/insist.h>
+#include <std/map/treap_node.h>
+
+namespace stl {
+    class TestArgs;
+    class ZeroCopyOutput;
+
+    struct ExecContext {
+        virtual ZeroCopyOutput& output() const noexcept = 0;
+        virtual const TestArgs& args() const noexcept = 0;
+    };
+
+    struct TestFunc: public TreapNode {
+        virtual void execute(ExecContext& ctx) const = 0;
+        virtual StringView suite() const = 0;
+        virtual StringView name() const = 0;
+
+        void registerMe();
+    };
+}
+
+#define STD_TEST_SUITE(_name)                     \
+    namespace Suite_##_name {                     \
+        using S_V = ::stl::StringView;            \
+        static const auto S_N = S_V(u8## #_name); \
+    }                                             \
+    namespace Suite_##_name
+
+#define STD_TEST(_name)                           \
+    static struct Test_##_name: ::stl::TestFunc { \
+        Test_##_name() {                          \
+            registerMe();                         \
+        }                                         \
+        ::stl::StringView suite() const {         \
+            return S_N;                           \
+        }                                         \
+        ::stl::StringView name() const {          \
+            return u8## #_name;                   \
+        }                                         \
+        void execute(ExecContext& ctx) const;     \
+    } REG_##_name;                                \
+    void Test_##_name::execute([[maybe_unused]] ExecContext& _ctx) const

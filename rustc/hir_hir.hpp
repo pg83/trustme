@@ -26,12 +26,14 @@
 #include "hir_pattern.hpp"
 #include "hir_expr_ptr.hpp"
 #include "hir_generic_params.hpp"
-#include "hir_crate_ptr.hpp"
 #include "hir_encoded_literal.hpp"
 #include "hir_inherent_cache.hpp"
 #include "hir_asm.hpp"
 
 class Monomorphiser;
+namespace stl {
+class ObjPool;
+}
 
 namespace HIR {
 
@@ -659,7 +661,7 @@ public:
 class ExternCrate
 {
 public:
-    ::HIR::CratePtr m_data;
+    ::HIR::Crate* m_data = nullptr;
     ::std::string   m_basename; // Just the filename (serialised)
     ::std::string   m_path; // The path used to load this crate
 };
@@ -671,6 +673,7 @@ public:
 class Crate
 {
 public:
+    stl::ObjPool* m_pool;
     RcString   m_crate_name;
     AST::Edition    m_edition;
 
@@ -748,6 +751,11 @@ public:
     ::std::vector<ExternLibrary>    m_ext_libs;
     /// Extra paths for the linker
     ::std::vector<::std::string>    m_link_paths;
+
+    explicit Crate(stl::ObjPool* pool = nullptr)
+        : m_pool(pool)
+    {
+    }
 
     /// Method called to populate runtime state after deserialisation
     /// See hir/crate_post_load.cpp

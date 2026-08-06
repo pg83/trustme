@@ -1,0 +1,191 @@
+# std
+
+A C++ standard library replacement built around a single idea: **ObjPool owns everything, and everything lives close together.**
+
+This one decision compounds across the entire stack. Code runs faster — objects that work together sit next to each other in memory, so the CPU prefetcher does its job instead of chasing scattered heap pointers. Projects build faster — public headers traffic in interface pointers, not template-heavy containers, so changing an implementation does not recompile half the codebase. Memory management is safer — there are no manual `delete` calls, no `shared_ptr` ref-count races, no use-after-free from dangling owners; the pool owns everything and destroys it in one shot. And the mental model is simpler — instead of tracking which `unique_ptr` owns which object and in what order destructors fire, you know the answer up front: the pool owns it, and when the pool dies, everything dies.
+
+## The Problem
+
+A typical C++ class accumulates heap-allocated members — `std::vector`, `std::map`, `std::deque`, `std::string` — each managing its own little island of memory. When an object holds five containers, its data is scattered across six or more disjoint heap regions. The CPU prefetcher cannot help you. Cache lines are wasted on allocator metadata. And every header that declares those containers drags in thousands of lines of template machinery, punishing build times across the entire project.
+
+Interfaces (pure virtual classes) solve the header problem — a forward-declared pointer compiles instantly — but they make the data locality problem worse. Now you have indirection to a heap-allocated implementation *and* each implementation still scatters its own members across the heap.
+
+## The Idea
+
+What if a single bump allocator owned every object in a logical unit of work, and every sub-object lived in the same contiguous arena?
+
+```cpp
+ObjPool pool = ObjPool::fromMemory();
+
+auto* reactor = ReactorIface::create(exec, threadPool, &pool);
+auto* client  = HttpClient::create(&pool, input);
+auto* poller  = PollerIface::create(&pool);
+```
+
+Each `create` call placement-news the concrete implementation into the pool's arena. The reactor, the poller it uses, the HTTP client, the chunked-transfer decoder inside that client — they all live in the same growing region of memory, allocated in the order they were constructed.
+
+## How ObjPool Works
+
+**Allocation** is a pointer bump — O(1), a few instructions:
+
+```cpp
+void* MemoryPool::allocate(size_t len) {
+    const size_t aligned = (len + alignment - 1) & ~(alignment - 1);
+
+    if (current + aligned > end) {
+        allocateNewChunk(aligned + sizeof(Chunk));
+    }
+
+    return exchange(current, current + aligned);
+}
+```
+
+Chunks grow exponentially, so even large object graphs rarely trigger more than a handful of `malloc` calls.
+
+**Destruction** is automatic. When an object has a non-trivial destructor, `ObjPool::make` wraps it in a `Disposable` node and adds it to a LIFO chain. When the pool dies, every tracked object is destroyed in reverse construction order — no manual cleanup, no `shared_ptr` overhead, no ref-count traffic:
+
+```cpp
+template <typename T, typename... A>
+T* make(A&&... a) {
+    if constexpr (trivially_destructible<T>) {
+        // zero overhead — just bump the pointer
+        return &makeImpl<Wrapper1>(args...)->t;
+    } else {
+        // one extra pointer for the destructor chain
+        auto res = makeImpl<Wrapper2>(args...);
+        submit(res);
+        return &res->t;
+    }
+}
+```
+
+Trivially-destructible objects (integers, POD structs, pointers) cost exactly zero bookkeeping.
+
+## Why This Beats the Conventional Layout
+
+Consider a reactor that manages file descriptors, timers, a wake-up event, and a poller:
+
+**Conventional approach** — members are `std::vector`, `std::unordered_map`, etc.:
+
+```
+ReactorState object     [heap block A]
+  → vector<Fd> data     [heap block B]
+  → unordered_map<...>  [heap block C, D, E...]
+  → Poller impl         [heap block F]
+    → epoll internals   [heap block G]
+```
+
+Seven allocations, seven cache misses on a cold access, seven sources of fragmentation. Every header includes `<vector>`, `<unordered_map>`, `<memory>`. Build times suffer.
+
+**ObjPool approach:**
+
+```
+Pool arena chunk
+  [ ReactorState | PollerIface(Epoll) | IntMap | DeadlineTreap | ... ]
+```
+
+One arena. Objects are packed in construction order. A linear scan through the reactor's state is a linear scan through memory. The poller — even though it is accessed through a virtual interface — sits bytes away from the reactor that uses it.
+
+## Interfaces Without the Penalty
+
+The standard advice is: *interfaces cost you data locality.* You pay for a vtable pointer, and the concrete object could be anywhere on the heap.
+
+With ObjPool, the second cost disappears. The concrete object is allocated from the same arena as its owner. The vtable pointer is still there (one pointer per object, unavoidable with virtual dispatch), but the data behind it is *closer* than it would be if you had inlined a `std::vector` — because `std::vector`'s heap buffer is always elsewhere, while the pool-allocated implementation is right next door.
+
+This means you can freely use interfaces to:
+
+- **Decouple headers.** A header declares `PollerIface*` — one line, no platform includes. The `.cpp` picks `EpollPoller`, `KqueuePoller`, or `PollPoller` at construction time.
+- **Swap implementations.** Testing with a mock poller? Same interface, same pool.
+- **Compose decorators.** `ZeroCopyInput` wraps into `ChunkedInput` wraps into `LimitedInput` — each allocated from the same pool, each sitting next to the other in memory.
+
+All without sacrificing the data locality you would get from a monolithic class with everything inlined.
+
+## Build Time
+
+Because public APIs traffic in interface pointers, headers are minimal. A file that uses `HttpClient*` does not include the HTTP parser, the chunked transfer decoder, the socket layer, or the TLS implementation. It includes a struct with four virtual methods.
+
+The concrete implementations — often hundreds of lines with platform-specific includes — live in `.cpp` files. Changes to an implementation do not trigger recompilation of its users.
+
+See for yourself — these headers define rich subsystems in remarkably few lines:
+
+- **[coro.h](std/thr/coro.h)** — a full coroutine executor with scheduling, I/O polling, synchronization primitives, and thread offloading. 81 lines.
+- **[http_srv.h](std/net/http_srv.h)** — an HTTP server with request/response interfaces, SSL support, and server lifecycle control. 53 lines.
+- **[pool.h](std/thr/pool.h)** — a thread pool with sync, simple, and work-stealing backends, task submission, and per-thread local storage. 33 lines.
+
+The library's own build system does not track header dependencies at all — any header change rebuilds everything. This is practical because the entire library compiles in a couple of seconds from scratch, making fine-grained dependency tracking pointless overhead.
+
+## Storing Complex Objects in Vector
+
+`Vector<T>` requires `T` to be trivially destructible — no strings, no containers, no objects with custom destructors. This is by design: it lets `Vector` use raw `memcpy` for growth and avoids destructor bookkeeping entirely.
+
+To store complex objects, use a hybrid scheme: **ObjPool holds the objects, Vector holds the pointers.**
+
+```cpp
+ObjPool pool;
+
+Vector<Connection*> conns;
+
+auto* c = pool.make<Connection>(addr, port);
+conns.pushBack(c);
+```
+
+This gives you the best of both worlds:
+
+- **Objects still live close together.** `pool.make` bump-allocates them sequentially, so iterating through the vector and dereferencing each pointer hits nearly-contiguous memory.
+- **Vector operations are trivial.** Every element is 8 bytes. Growth is always a `memcpy` of pointers — no move constructors, no exception safety gymnastics. `Vector<T*>` is exactly `sizeof(void*)` in size.
+- **No move/copy requirement on T.** The objects themselves are never relocated. You can store types with self-referential pointers, mutex members, or anything else that cannot be moved.
+- **Destruction is automatic.** The pool tracks non-trivial destructors and fires them in reverse order when it dies. The vector of pointers is trivially destructible — nothing to clean up.
+
+This pattern appears throughout the codebase: `Vector<ReactorIface*>` for reactor lists, `Vector<Header*>` for HTTP headers, `Vector<Worker*>` for thread pool indices. In each case, the objects are pool-allocated and the vector is just a lightweight index over them.
+
+Compared to `std::vector<T>` for non-trivial `T`:
+
+| | `std::vector<T>` | `ObjPool` + `Vector<T*>` |
+|---|---|---|
+| Element size in vector | `sizeof(T)` (often large) | 8 bytes (pointer) |
+| Growth cost | move/copy every element | `memcpy` pointers |
+| Requires movable `T` | Yes | No |
+| Data locality | Elements contiguous, but growth copies them | Elements arena-contiguous, pointers contiguous |
+| Destructor tracking | Per-element in vector | Per-element in pool |
+
+## Lifetime
+
+ObjPool uses atomic reference counting (`ARC`) for its own lifetime. You hold an `IntrusivePtr<ObjPool>`, and when the last reference drops, the pool destroys every tracked object and frees every chunk.
+
+Within the pool, there is no per-object lifetime management. Objects live exactly as long as the pool does. This is not a limitation — it is the model. A request handler creates a pool, builds everything it needs, processes the request, and drops the pool. One deallocation tears down the entire object graph.
+
+For the cases where individual object recycling matters (connection pools, free lists), `ObjList<T>` provides typed allocation with O(1) reuse from a free list, backed by the same arena mechanics.
+
+## Strings
+
+There is no owning string class. Strings follow a three-phase lifecycle: **build, intern, use.**
+
+**Build** — `Buffer` and `StringBuilder` accumulate bytes. `StringBuilder` doubles as a `ZeroCopyOutput`, so any code that writes to an `Output` can produce a string:
+
+```cpp
+StringBuilder sb;
+sb << "GET " << path << " HTTP/1.1\r\n";
+```
+
+**Intern** — once the string is ready, `ObjPool::intern` copies it into the pool's arena and returns a `StringView`:
+
+```cpp
+StringView header = pool->intern(sb);
+```
+
+The pool now owns the bytes. The `StringBuilder` (or `Buffer`) can be reused or destroyed — the interned data lives as long as the pool.
+
+**Use** — all further string operations work on `StringView`, a non-owning `(ptr, len)` pair. Comparison, hashing, splitting, prefix/suffix checks, parsing — everything takes and returns `StringView`. No allocations, no copies, no lifetime concerns beyond the pool scope.
+
+This means the hot path — request parsing, header lookup, URL matching — never allocates. Strings are compared by pointer arithmetic on arena-contiguous memory. The only heap activity is during the build phase, and even that disappears when building directly into a pool-backed output.
+
+## Summary
+
+| Concern | Conventional | ObjPool |
+|---|---|---|
+| Data locality | Scattered across heap | Packed in arena order |
+| Allocation cost | `malloc` per object | Pointer bump |
+| Deallocation | Per-object `free` / ref-count | Drop the pool |
+| Header weight | Heavy (containers, templates) | Light (interface pointers) |
+| Build time | Slow (transitive includes) | Fast (decoupled headers) |
+| Interface cost | Heap-scattered impl | Arena-adjacent impl |

@@ -19,13 +19,13 @@ const char* ::HIR::ExprNode::type_name() const
     return typeid(*this).name();
 }
 
-void ::HIR::ExprVisitor::visit_node_ptr(::std::unique_ptr< ::HIR::ExprNode>& node_ptr) {
+void ::HIR::ExprVisitor::visit_node_ptr(::HIR::ExprNodeP& node_ptr) {
     assert(node_ptr);
     node_ptr->visit(*this);
 }
 void ::HIR::ExprVisitor::visit_node(::HIR::ExprNode& node) {
 }
-void ::HIR::ExprVisitorDef::visit_node_ptr(::std::unique_ptr< ::HIR::ExprNode>& node_ptr) {
+void ::HIR::ExprVisitorDef::visit_node_ptr(::HIR::ExprNodeP& node_ptr) {
     assert(node_ptr);
     TRACE_FUNCTION_F(&*node_ptr << " " << node_ptr->type_name());
     node_ptr->visit(*this);
@@ -498,4 +498,3 @@ void ::HIR::ExprVisitorDef::visit_generic_path(::HIR::Visitor::PathContext pc, :
 {
     visit_path_params(path.m_params);
 }
-

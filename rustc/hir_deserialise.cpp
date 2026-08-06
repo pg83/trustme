@@ -16,6 +16,7 @@ namespace {
 #include "mir_mir.hpp"
 #include "macro_rules_macro_rules.hpp"
 #include "hir_serialise_lowlevel.hpp"
+#include <std/mem/obj_pool.h>
 #include <typeinfo>
 
 namespace {
@@ -240,7 +241,7 @@ namespace {
         ::HIR::ValueParamDef deserialise_valueparamdef();
         ::HIR::GenericBound deserialise_genericbound();
 
-        ::HIR::Crate deserialise_crate();
+        void deserialise_crate(::HIR::Crate& rv);
         ::HIR::ExternLibrary deserialise_extlib();
         ::HIR::Module deserialise_module();
 
@@ -1736,10 +1737,8 @@ namespace {
             m_in.read_string()
             };
     }
-    ::HIR::Crate HirDeserialiser::deserialise_crate()
+    void HirDeserialiser::deserialise_crate(::HIR::Crate& rv)
     {
-        ::HIR::Crate    rv;
-
         // NOTE: This MUST be the first item
         this->m_crate_name = m_in.read_istring();
         assert(this->m_crate_name != "" && "Empty crate name loaded from metadata");
@@ -1775,20 +1774,19 @@ namespace {
 
         //rv.m_proc_macros = deserialise_vec< ::HIR::ProcMacro>();
 
-        return rv;
     }
 //}
 
-::HIR::CratePtr HIR_Deserialise(const ::std::string& filename)
+::HIR::Crate* HIR_Deserialise(stl::ObjPool* pool, const ::std::string& filename)
 {
     try
     {
         ::HIR::serialise::Reader    in{ filename + ".hir" };    // HACK!
         HirDeserialiser  s { in };
 
-        ::HIR::Crate    rv = s.deserialise_crate();
-
-        return ::HIR::CratePtr( mv$(rv) );
+        auto* rv = pool->make<::HIR::Crate>(pool);
+        s.deserialise_crate(*rv);
+        return rv;
     }
     catch(int)
     { ::std::abort(); }
@@ -1802,7 +1800,6 @@ namespace {
     {
         ::std::cerr << "Unable to load crate from " << filename << ": Deserialisation failure" << ::std::endl;
         ::std::abort();
-        //return ::HIR::CratePtr();
     }
     #endif
 }
@@ -1830,8 +1827,6 @@ RcString HIR_Deserialise_JustName(const ::std::string& filename)
     {
         ::std::cerr << "Unable to load crate from " << filename << ": Deserialisation failure" << ::std::endl;
         ::std::abort();
-        //return ::HIR::CratePtr();
     }
     #endif
 }
-

@@ -1089,7 +1089,7 @@ namespace {
         }
 
     public:
-        void visit_node_ptr(::std::unique_ptr< ::HIR::ExprNode>& node_ptr) override {
+        void visit_node_ptr(::HIR::ExprNodeP& node_ptr) override {
             assert(node_ptr);
             visit_type(node_ptr->m_res_type);
             DEBUG("RES: " << node_ptr->m_res_type);
@@ -2655,7 +2655,7 @@ namespace {
                     ep->visit(*this);
                 }
 
-                void visit_node_ptr(::std::unique_ptr< ::HIR::ExprNode>& node_ptr) override {
+                void visit_node_ptr(::HIR::ExprNodeP& node_ptr) override {
                     assert(node_ptr);
                     visit_type(node_ptr->m_res_type);
                     HIR::ExprVisitorDef::visit_node_ptr(node_ptr);

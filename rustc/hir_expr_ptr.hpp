@@ -6,13 +6,13 @@
  * - HIR Expression
  */
 #pragma once
-#include <memory>
 #include <vector>
 #include <cassert>
 
 #include "mir_mir_ptr.hpp"
 
 struct Span;
+namespace stl { class ObjPool; }
 
 namespace HIR {
 
@@ -21,36 +21,39 @@ class ExprNode;
 class Crate;
 class ExprState;
 
-class ExprPtrInner
+class ExprNodeP
 {
     ::HIR::ExprNode* ptr;
 public:
-    ExprPtrInner():
+    ExprNodeP():
         ptr(nullptr)
     {}
-    ExprPtrInner(::std::unique_ptr< ::HIR::ExprNode> _);
-    ExprPtrInner(ExprPtrInner&& x):
+    ExprNodeP(::HIR::ExprNode* p):
+        ptr(p)
+    {}
+    ExprNodeP(ExprNodeP&& x):
         ptr(x.ptr)
     {
         x.ptr = nullptr;
     }
-    ~ExprPtrInner();
+    ExprNodeP(const ExprNodeP&) = delete;
+    ~ExprNodeP() = default;
 
-    ExprPtrInner& operator=(ExprPtrInner&& x)
+    ExprNodeP& operator=(ExprNodeP&& x)
     {
-        this->~ExprPtrInner();
         ptr = x.ptr;
         x.ptr = nullptr;
         return *this;
     }
+    ExprNodeP& operator=(const ExprNodeP&) = delete;
 
-    ::std::unique_ptr< ::HIR::ExprNode> into_unique();
     operator bool () const { return ptr != nullptr; }
     ::HIR::ExprNode* get() const { return ptr; }
-    void reset(::HIR::ExprNode* p) {
-        this->~ExprPtrInner();
-        this->ptr = p;
+    void reset(::HIR::ExprNode* p = nullptr) {
+        ptr = p;
     }
+    ::HIR::ExprNode* release() { auto* rv = ptr; ptr = nullptr; return rv; }
+    void swap(ExprNodeP& x) { auto* p = ptr; ptr = x.ptr; x.ptr = p; }
 
           ::HIR::ExprNode& operator*()       { assert(ptr); return *ptr; }
     const ::HIR::ExprNode& operator*() const { assert(ptr); return *ptr; }
@@ -62,17 +65,17 @@ class ExprStatePtr
     ::HIR::ExprState*   ptr;
 public:
     ExprStatePtr(): ptr(nullptr) {}
-    ExprStatePtr(ExprState );
+    ExprStatePtr(stl::ObjPool* pool, ExprState);
     ExprStatePtr(const ExprStatePtr&) = delete;
     ExprStatePtr(ExprStatePtr&& x): ptr(x.ptr) { x.ptr = nullptr; }
     ~ExprStatePtr();
 
     ExprStatePtr& operator=(const ExprStatePtr&) = delete;
-    ExprStatePtr& operator=(ExprStatePtr&& x) { this->~ExprStatePtr(); ptr = x.ptr; x.ptr = nullptr; return *this; }
+    ExprStatePtr& operator=(ExprStatePtr&& x) { ptr = x.ptr; x.ptr = nullptr; return *this; }
 
     operator bool () const { return ptr != nullptr; }
 
-    ExprStatePtr clone() const;
+    ExprStatePtr clone(stl::ObjPool* pool) const;
 
           ::HIR::ExprState& operator*()       { assert(ptr); return *ptr; }
     const ::HIR::ExprState& operator*() const { assert(ptr); return *ptr; }
@@ -83,7 +86,7 @@ public:
 class ExprPtr
 {
     //::HIR::Path m_path;
-    ::HIR::ExprPtrInner node;
+    ::HIR::ExprNodeP node;
 
 
 public:
@@ -98,14 +101,13 @@ public:
 
 public:
     ExprPtr();
-    ExprPtr(::std::unique_ptr< ::HIR::ExprNode> _);
+    ExprPtr(::HIR::ExprNodeP node);
     ~ExprPtr();
     ExprPtr(const ExprPtr&) = delete;
     ExprPtr(ExprPtr&&);
     ExprPtr& operator=(ExprPtr&&);
 
-    /// Take the innards and turn into a unique_ptr - used so typecheck can edit the root node.
-    ::std::unique_ptr< ::HIR::ExprNode> into_unique();
+    ::HIR::ExprNodeP take_node();
     operator bool () const { return node; }
     ::HIR::ExprNode* get() const { return node.get(); }
     void reset(::HIR::ExprNode* p) { node.reset(p); }

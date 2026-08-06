@@ -9,8 +9,14 @@
 
 #include "ast_ast.hpp"
 #include "ast_types.hpp"
-#include "hir_crate_ptr.hpp"
 #include "ast_edition.hpp"
+
+namespace HIR {
+class Crate;
+}
+namespace stl {
+class ObjPool;
+}
 
 namespace AST {
 
@@ -52,6 +58,7 @@ public:
 class Crate
 {
 public:
+    stl::ObjPool* m_pool;
     ::AST::AttributeList    m_attrs;
 
     ::std::map< ::std::string, ::AST::AbsolutePath> m_lang_items;
@@ -98,7 +105,7 @@ public:
     RcString    m_crate_name_real;  // user name '-' suffix
     AST::Path   m_prelude_path;
 
-    Crate();
+    explicit Crate(stl::ObjPool* pool = nullptr);
 
     const Module& root_module() const { return m_root_module; }
           Module& root_module()       { return m_root_module; }
@@ -130,9 +137,9 @@ public:
     RcString    m_name;
     RcString    m_short_name;
     ::std::string   m_filename;
-    ::HIR::CratePtr m_hir;
+    ::HIR::Crate* m_hir = nullptr;
 
-    ExternCrate(const RcString& name, const ::std::string& path);
+    ExternCrate(stl::ObjPool* pool, const RcString& name, const ::std::string& path);
 
     ExternCrate(ExternCrate&&) = default;
     ExternCrate& operator=(ExternCrate&&) = default;

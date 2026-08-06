@@ -1,0 +1,123 @@
+#include "output.h"
+#include "in_zc.h"
+#include "out_buf.h"
+
+#include <std/sys/crt.h>
+#include <std/str/view.h>
+#include <std/alg/range.h>
+#include <std/alg/exchange.h>
+
+#include <alloca.h>
+#include <sys/uio.h>
+
+using namespace stl;
+
+Output::~Output() noexcept {
+}
+
+ZeroCopyOutput* Output::upgrade() noexcept {
+    return nullptr;
+}
+
+void Output::flushImpl() {
+}
+
+void Output::finishImpl() {
+}
+
+size_t Output::writeV(iovec* iov, size_t iovcnt) {
+    size_t res = 0;
+
+    while (iovcnt > 0) {
+        auto written = writeVImpl(iov, iovcnt);
+
+        res += written;
+
+        while (iovcnt > 0 && written >= iov->iov_len) {
+            written -= iov->iov_len;
+            iov++;
+            iovcnt--;
+        }
+
+        if (written > 0) {
+            iov->iov_base = (char*)iov->iov_base + written;
+            iov->iov_len -= written;
+        }
+    }
+
+    return res;
+}
+
+size_t Output::writeVImpl(iovec* parts, size_t count) {
+    size_t res = 0;
+
+    for (const auto& it : range(parts, parts + count)) {
+        res += write(it.iov_base, it.iov_len);
+    }
+
+    return res;
+}
+
+size_t Output::writeV(const StringView* parts, size_t count) {
+    auto io = (iovec*)alloca(count * sizeof(iovec));
+
+    memZero(io, io + count);
+
+    for (size_t i = 0; i < count; ++i) {
+        io[i].iov_len = parts[i].length();
+        io[i].iov_base = (void*)parts[i].data();
+    }
+
+    return writeV(io, count);
+}
+
+void Output::writeC(const void* data, size_t len) {
+    auto b = (u8*)data;
+    auto e = b + len;
+
+    while (b < e) {
+        b += writeImpl(b, e - b);
+    }
+}
+
+size_t Output::hintImpl() const noexcept {
+    return 0;
+}
+
+bool Output::hint(size_t* res) const noexcept {
+    if (const auto h = hintImpl(); h) {
+        *res = h;
+
+        return true;
+    }
+
+    return false;
+}
+
+size_t Output::writeP(const void* data, size_t len) {
+    if (len) {
+        return writeImpl(data, len);
+    }
+
+    return 0;
+}
+
+void Output::recvFromI(Input& in) {
+    OutBuf(*this).recvFromI(in);
+}
+
+void Output::recvFromZ(ZeroCopyInput& in) {
+    const void* chunk;
+
+    while (auto len = in.next(&chunk)) {
+        in.commit(writeP(chunk, len));
+    }
+}
+
+size_t Output::hint(size_t def) const noexcept {
+    if (auto h = hint(); h) {
+        return h;
+    }
+
+    return def;
+}

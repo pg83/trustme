@@ -13,6 +13,7 @@
 #include "ast_crate.hpp"
 #include "parse_parseerror.hpp"
 #include "parse_common.hpp"
+#include <std/mem/obj_pool.h>
 #include <cassert>
 #include "hir_hir.hpp"  // ABI_RUST - TODO: Move elsewhere?
 #include "expand_cfg.hpp"   // check_cfg - for `mod nonexistant;`
@@ -2560,7 +2561,7 @@ void Parse_ModRoot(TokenStream& lex, AST::Module& mod, AST::AttributeList& mod_a
     lex.parse_state().module = prev_mod;
 }
 
-AST::Crate Parse_Crate(::std::string mainfile, AST::Edition edition)
+AST::Crate* Parse_Crate(stl::ObjPool* pool, ::std::string mainfile, AST::Edition edition)
 {
     Token   tok;
 
@@ -2570,15 +2571,15 @@ AST::Crate Parse_Crate(::std::string mainfile, AST::Edition edition)
     p = (p == ::std::string::npos ? mainfile.find_last_of('\\') : p);
     ::std::string mainpath = mainfile == "-" ? "-" : (p != ::std::string::npos ? ::std::string(mainfile.begin(), mainfile.begin()+p+1) : "./");
 
-    AST::Crate  crate;
-    crate.m_edition = edition;
+    auto* crate = pool->make<AST::Crate>(pool);
+    crate->m_edition = edition;
 
     //crate.root_module().m_file_info.file_path = mainfile;
-    crate.root_module().m_file_info.path = mainpath;
-    crate.root_module().m_file_info.controls_dir = true;
+    crate->root_module().m_file_info.path = mainpath;
+    crate->root_module().m_file_info.controls_dir = true;
 
-    lex.parse_state().crate = &crate;
-    Parse_ModRoot(lex, crate.root_module(), crate.m_attrs);
+    lex.parse_state().crate = crate;
+    Parse_ModRoot(lex, crate->root_module(), crate->m_attrs);
 
     return crate;
 }
