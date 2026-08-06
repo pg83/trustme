@@ -608,6 +608,12 @@ void Resolve_Use_Mod(const ::AST::Crate& crate, ::AST::Module& mod, ::AST::Path 
 
     for( const auto& imp : mod.m_items )
     {
+        // A satisfied types-only lookup can stop before touching later globs; resolving them
+        // here can hit the recursion limit and raise a spurious error (e.g. libc 0.2.189's
+        // `new` module, where sibling globs re-export through an earlier glob import).
+        if( types_only && !rv.type.is_Unbound() ) {
+            break;
+        }
         if( ! imp->data.is_Use() )
             continue ;
         const auto& imp_data = imp->data.as_Use();
