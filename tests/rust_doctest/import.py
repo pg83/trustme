@@ -135,18 +135,22 @@ def main() -> int:
         for source_file in sorted(crate_root.rglob("*.rs")):
             relative = source_file.relative_to(crate_root)
             lines = doc_lines(source_file.read_text(errors="surrogateescape"))
-            ordinal = 0
+            legacy_assert_ordinal = 0
             for line, info, code_lines in fences(lines):
                 mode = runtime_mode(info)
-                raw_code = "\n".join(code_lines)
                 if mode is None:
                     continue
-                if not re.search(r"\bassert(?:_eq|_ne)?!\s*\(", raw_code):
-                    continue
+                raw_code = "\n".join(code_lines)
                 if "#[test]" in raw_code:
                     continue
-                ordinal += 1
-                name = f"{relative.stem}__L{line}_{ordinal}.rs"
+                # Preserve the names produced by the original assert-only
+                # importer so widening the corpus remains a compact git diff.
+                if re.search(r"\bassert(?:_eq|_ne)?!\s*\(", raw_code):
+                    legacy_assert_ordinal += 1
+                    suffix = str(legacy_assert_ordinal)
+                else:
+                    suffix = "runtime"
+                name = f"{relative.stem}__L{line}_{suffix}.rs"
                 destination = UPSTREAM / crate / relative.parent / name
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 program = standalone(crate, code_lines)
