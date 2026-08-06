@@ -204,9 +204,9 @@ cargo = command(
     cmd=[
         "go", "build",
         "-o", "$(B)/cargo",
-        "./cargo",
+        ".",
     ],
-    cwd="$(S)",
+    cwd="$(S)/cargo",
     env={
         "GOCACHE": "$(B)/gocache",
         "GOFLAGS": "-mod=mod",
@@ -215,5 +215,35 @@ cargo = command(
     descr="GO",
 )
 
-install(rustc, minicargo, cargo)
+# cargo is intentionally not install()ed: the convenience root symlink would
+# collide with the cargo/ source directory. It is built as $(B)/cargo and
+# referenced from there (e.g. by the test graph).
+install(rustc, minicargo)
+
+
+# --- tests -----------------------------------------------------------------
+# A test is one real project, built by our toolchain and exercised. Each is a
+# command node driving tests/<proj>/test.sh, which chains the stages (libstd
+# from source, vendor via the Go cargo, offline build, run). They are heavy
+# (a from-scratch libstd plus a full project build) and only run on request:
+# `./build resvg_test` or `./build test`. See tests/README.md.
+resvg_test = command(
+    name="resvg_test",
+    inputs=build.glob("$(S)/tests/**/*.sh") + build.glob("$(S)/tests/**/*.py"),
+    outputs=["$(B)/tests/resvg.stamp"],
+    cmd=[
+        ["$(S)/tests/resvg/test.sh", "$(B)/tests/resvg"],
+        ["touch", "$(B)/tests/resvg.stamp"],
+    ],
+    deps=[rustc, minicargo, cargo],
+    env={
+        "RUSTC": "$(B)/rustc",
+        "MINICARGO": "$(B)/minicargo",
+        "CARGO": "$(B)/cargo",
+    },
+    descr="TS",
+    color="magenta",
+)
+
+group("test", resvg_test)
 
