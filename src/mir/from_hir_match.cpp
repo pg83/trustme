@@ -2140,12 +2140,27 @@ void PatternRulesetBuilder::append_from(const Span& sp, const ::HIR::Pattern& pa
             }
             else if( pe.val.is_ByteString() ) {
                 const auto& s = pe.val.as_ByteString().v;
-                ::std::vector<uint8_t>  data;
-                data.reserve(s.size());
-                for(auto c : s)
-                    data.push_back(c);
+                // When matching a fixed-size array, expand to per-element rules so the
+                // field paths line up with `[a, b, ...]` patterns in sibling arms.
+                if( e.inner.data().is_Array() ) {
+                    const auto& ae = e.inner.data().as_Array();
+                    ASSERT_BUG(sp, ae.size.is_Known() && ae.size.as_Known() == s.size(),
+                        "Byte string pattern size mismatch - " << pat << " vs " << e.inner);
+                    m_field_path.push_back(0);
+                    for(auto c : s) {
+                        this->push_rule( PatternRule::make_Value( ::MIR::Constant::make_Uint({ U128(static_cast<uint8_t>(c)), ::HIR::CoreType::U8 }) ) );
+                        m_field_path.back() ++;
+                    }
+                    m_field_path.pop_back();
+                }
+                else {
+                    ::std::vector<uint8_t>  data;
+                    data.reserve(s.size());
+                    for(auto c : s)
+                        data.push_back(c);
 
-                this->push_rule( PatternRule::make_Value( mv$(data) ) );
+                    this->push_rule( PatternRule::make_Value( mv$(data) ) );
+                }
             }
             // TODO: Handle named values
             else {
