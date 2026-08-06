@@ -382,8 +382,9 @@ PackageManifest PackageManifest::load_from_toml(const ::std::string& path, const
                     tgt.m_path = ::helpers::path("src") / "bin" / tgt.m_name.c_str() + ".rs";
                     if( !::std::ifstream(package_dir / tgt.m_path).good() )
                         tgt.m_path = ::helpers::path("src") / "bin" / tgt.m_name.c_str() / "main.rs";
-                    //if( !::std::ifstream(package_dir / tgt.m_path).good() )
-                    //    throw ::std::runtime_error(format("Unable to find source file for ", tgt.m_name, " - ", package_dir / tgt.m_path));
+                    // A binary named after the package lives at `src/main.rs` (resvg)
+                    if( !::std::ifstream(package_dir / tgt.m_path).good() )
+                        tgt.m_path = "src/main.rs";
                 }
                 break;
             case PackageTarget::Type::Test:
