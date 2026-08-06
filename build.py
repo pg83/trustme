@@ -222,28 +222,99 @@ install(rustc, minicargo)
 
 
 # --- tests -----------------------------------------------------------------
-# A test is one real project, built by our toolchain and exercised. Each is a
-# command node driving tests/<proj>/test.sh, which chains the stages (libstd
-# from source, vendor via the Go cargo, offline build, run). They are heavy
-# (a from-scratch libstd plus a full project build) and only run on request:
-# `./build resvg_test` or `./build test`. See tests/README.md.
-resvg_test = command(
-    name="resvg_test",
-    inputs=build.glob("$(S)/tests/**/*.sh") + build.glob("$(S)/tests/**/*.py"),
+# A test is one real project, built by our toolchain and exercised. The graph
+# is tar-based: each node produces a single archive, and downstream nodes
+# unpack what they need (the build engine only promotes declared file outputs).
+#
+# The standard library is a *shared* pair of nodes — fetched and built once,
+# then depended on by every project. See tests/README.md.
+#
+# These are heavy (a from-scratch libstd plus a full project build) and only
+# run on request: `./build test`, or a single artifact like `./build resvg`.
+
+TOOLCHAIN_ENV = {
+    "RUSTC": "$(B)/rustc",
+    "MINICARGO": "$(B)/minicargo",
+}
+
+# std_src: fetch + patch the rust-1.90 source, add the shim, pack it.
+std_src = command(
+    name="std_src",
+    inputs=["$(S)/tests/std/fetch.sh", "$(S)/tests/std/rustc-1.90.0-src.patch"],
+    outputs=["$(B)/tests/rust-src.tar"],
+    cmd=["$(S)/tests/std/fetch.sh", "$(B)/tests/rust-src.tar"],
+    descr="RS",
+    color="cyan",
+)
+
+# libstd: build the standard library (+ libproc_macro) once, from that source.
+libstd = command(
+    name="libstd",
+    inputs=(
+        ["$(S)/tests/std/build.sh", "$(S)/tests/std/rustc-1.90.0-overrides.toml"]
+        + build.glob("$(S)/tests/std/script-overrides/stable-1.90.0-linux/**")
+        + build.glob("$(S)/tests/std/libproc_macro/**")
+    ),
+    outputs=["$(B)/tests/libstd.tar"],
+    cmd=["$(S)/tests/std/build.sh", "$(B)/tests/rust-src.tar", "$(B)/tests/libstd.tar"],
+    deps=[std_src, rustc, minicargo],
+    env=TOOLCHAIN_ENV,
+    descr="LS",
+    color="cyan",
+)
+
+# resvg_src: the project source at a pinned revision.
+resvg_src = command(
+    name="resvg_src",
+    inputs=["$(S)/tests/git_src.sh"],
+    outputs=["$(B)/tests/resvg-src.tar"],
+    cmd=[
+        "$(S)/tests/git_src.sh",
+        "https://github.com/linebender/resvg.git",
+        "08c79a3148df4ce8ab08fca72204b142b95423dd",
+        "$(B)/tests/resvg-src.tar",
+    ],
+    descr="RS",
+    color="magenta",
+)
+
+# resvg_vendor: vendor resvg's locked dependencies with the Go cargo.
+resvg_vendor = command(
+    name="resvg_vendor",
+    inputs=["$(S)/tests/vendor.sh"],
+    outputs=["$(B)/tests/resvg-vendor.tar.zst"],
+    cmd=[
+        "$(S)/tests/vendor.sh",
+        "$(B)/tests/resvg-src.tar", ".",
+        "$(B)/tests/resvg-vendor.tar.zst",
+    ],
+    deps=[resvg_src, cargo],
+    env={"CARGO": "$(B)/cargo"},
+    descr="VN",
+    color="magenta",
+)
+
+# resvg: build resvg offline against the shared libstd, then render-test it.
+resvg = command(
+    name="resvg",
+    inputs=["$(S)/tests/build_project.sh", "$(S)/tests/resvg/run.py"],
     outputs=["$(B)/tests/resvg.stamp"],
     cmd=[
-        ["$(S)/tests/resvg/test.sh", "$(B)/tests/resvg"],
+        [
+            "$(S)/tests/build_project.sh",
+            "$(B)/tests/resvg-src.tar",
+            "$(B)/tests/resvg-vendor.tar.zst",
+            "$(B)/tests/libstd.tar",
+            "crates/resvg",
+            "python3", "$(S)/tests/resvg/run.py", "@BIN@",
+        ],
         ["touch", "$(B)/tests/resvg.stamp"],
     ],
-    deps=[rustc, minicargo, cargo],
-    env={
-        "RUSTC": "$(B)/rustc",
-        "MINICARGO": "$(B)/minicargo",
-        "CARGO": "$(B)/cargo",
-    },
+    deps=[resvg_src, resvg_vendor, libstd, rustc, minicargo],
+    env=TOOLCHAIN_ENV,
     descr="TS",
     color="magenta",
 )
 
-group("test", resvg_test)
+group("test", resvg)
 

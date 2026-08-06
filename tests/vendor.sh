@@ -1,22 +1,24 @@
 #!/bin/sh
-# Vendor a project's locked dependencies into a hermetic tar.zst using the Go
-# cargo.
+# Vendor a project's locked dependencies into a hermetic tar.zst with the Go
+# cargo. This is a `<proj>_vendor` graph node.
 #
-#   vendor.sh <project-manifest-dir> <out.tar.zst> [keep-dir]
+#   vendor.sh <project-src.tar> <manifest-subdir> <out.tar.zst>
 #
 # Environment:
-#   CARGO           path to the Go cargo binary
+#   CARGO           the Go cargo binary
 #   SSL_CERT_FILE   CA bundle, if the environment lacks system certs
 set -eu
 
-manifest_dir="$1"
-out="$2"
-keep="${3:-}"
+src_tar="$1"
+subdir="$2"       # dir within the source tree holding Cargo.lock (may be ".")
+out="$3"
 
-CARGO="${CARGO:?set CARGO to the cargo binary}"
+CARGO="${CARGO:?set CARGO}"
 
-if [ -n "$keep" ]; then
-    "$CARGO" vendor --manifest-dir "$manifest_dir" --out "$out" --keep-dir "$keep"
-else
-    "$CARGO" vendor --manifest-dir "$manifest_dir" --out "$out"
-fi
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+src="$work/src"
+mkdir -p "$src"
+tar -C "$src" -xf "$src_tar"
+
+"$CARGO" vendor --manifest-dir "$src/$subdir" --out "$out"

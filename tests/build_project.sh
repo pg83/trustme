@@ -1,48 +1,57 @@
 #!/bin/sh
-# Build one cargo project offline with our toolchain and run its test.
+# Build one project offline against a prebuilt libstd and run its test. This is
+# a `<proj>` graph node (the plan's node 2: "builds and runs the tests"). It
+# depends on the shared libstd tar, never rebuilding it.
 #
-#   build_project.sh <project-manifest-dir> <vendor-dir> <libstd-dir> <out-dir> <test-cmd...>
+#   build_project.sh <src.tar> <vendor.tar.zst> <libstd.tar> <manifest-subdir> <test-cmd...>
+#
+# The test command runs with @BIN@ replaced by the freshly built executable.
 #
 # Environment:
-#   RUSTC     path to the mrustc binary (named `mrustc`)
-#   MINICARGO path to the minicargo binary
-#   CC        C compiler for generated code
+#   RUSTC      the mrustc binary (any name; a `mrustc` link is made)
+#   MINICARGO  the minicargo binary
+#   CC         C compiler for the generated code
 set -eu
 
-manifest_dir="$1"; shift
-vendor_dir="$1"; shift
-libstd_dir="$1"; shift
-out="$1"; shift
-# remaining args: the test command, with @BIN@ replaced by the built binary
+src_tar="$1"; shift
+vendor_tar="$1"; shift
+libstd_tar="$1"; shift
+subdir="$1"; shift
+# remaining args: the test command with @BIN@ placeholder
 
 MINICARGO="${MINICARGO:?set MINICARGO}"
-export MRUSTC_PATH="${RUSTC:?set RUSTC to the mrustc binary (named mrustc)}"
+: "${RUSTC:?set RUSTC}"
+
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+mkdir -p "$work/bin"
+ln -sf "$(readlink -f "$RUSTC")" "$work/bin/mrustc"
+export MRUSTC_PATH="$work/bin/mrustc"
 export MRUSTC_TARGET_VER=1.90
 export MINICARGO_DEFER_CODEGEN=0
 export CC="${CC:-cc}"
 
-mkdir -p "$out"
+src="$work/src";     mkdir -p "$src";     tar -C "$src" -xf "$src_tar"
+libstd="$work/libstd"; mkdir -p "$libstd"; tar -C "$libstd" -xf "$libstd_tar"
+vroot="$work/vendor"; mkdir -p "$vroot";  tar -C "$vroot" --zstd -xf "$vendor_tar"
+out="$work/out";     mkdir -p "$out"
 
-echo "[build] $manifest_dir" >&2
-( cd "$manifest_dir" && "$MINICARGO" . \
-    --vendor-dir "$vendor_dir" \
-    -L "$libstd_dir" \
+echo "[build] $subdir" >&2
+( cd "$src/$subdir" && "$MINICARGO" . \
+    --vendor-dir "$vroot/vendor" \
+    -L "$libstd" \
     --output-dir "$out" )
 
-# The project's binary name is the crate name; the caller passes the test
-# command with @BIN@ standing in for the built executable.
-bin="$out/$(basename "$manifest_dir")"
-if [ ! -x "$bin" ]; then
-    # fall back to the first executable in the output dir
-    bin="$(find "$out" -maxdepth 1 -type f -perm -u+x | head -n1)"
-fi
+bin="$out/$(basename "$subdir")"
+[ -x "$bin" ] || bin="$(find "$out" -maxdepth 1 -type f -perm -u+x | head -n1)"
 
 echo "[test] $bin" >&2
 cmd=""
 for a in "$@"; do
     case "$a" in
         @BIN@) cmd="$cmd \"$bin\"" ;;
-        *) cmd="$cmd \"$a\"" ;;
+        *)     cmd="$cmd \"$a\"" ;;
     esac
 done
 eval "$cmd"

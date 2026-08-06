@@ -1,46 +1,50 @@
 # tests
 
 Each test is **one real-world Rust project, built by our toolchain and then
-exercised**. A test is expressed as a small chain of build-graph nodes, so the
-work is cached and parallelised like any other build:
+exercised**. Every stage is a build-graph node, so work is cached and
+parallelised like any other build, and the expensive standard-library build is
+**shared** across all projects rather than repeated per test.
 
 ```
-                 cargo (Go)                 rustc + minicargo
-                     │                             │
-        ┌────────────┴───────────┐     ┌───────────┴────────────┐
-        ▼                        ▼     ▼                        ▼
-  <proj>_src ──► <proj>_vendor ──►  <proj>_build ──► <proj>_test
-  (fetch source)  (vendor deps       (offline build of         (run the built
-                   → tar.zst)         the project against       binary / its
-                                      a from-source libstd)     test)
+   std_src ─► libstd ─────────────────────────┐
+  (fetch +   (build libcore/liballoc/libstd/   │  (shared: built once)
+   patch      libtest/libproc_macro once,      │
+   rust src)  → libstd.tar)                     ▼
+                              cargo (Go)   ┌─► resvg  ──► (render test)
+                                  │        │  (build offline against
+   resvg_src ─► resvg_vendor ─────┘────────┘   libstd, then run its test)
+  (clone @rev)  (vendor deps → tar.zst)
 ```
 
-The nodes, in order:
+The nodes:
 
-1. **`std_src`** — download `rustc-1.90.0-src`, apply `std/rustc-1.90.0-src.patch`,
-   and drop in the `mrustc-stdlib` shim crate. Output: `rust-src.tar`.
-2. **`libstd`** — build libcore / liballoc / libstd / libtest (and friends) from
-   that source with `minicargo`, using `std/script-overrides` and
-   `std/rustc-1.90.0-overrides.toml`. Output: `libstd.tar`. Depends on `rustc`,
-   `minicargo`, `std_src`.
-3. **`<proj>_src`** — fetch the project's source at a pinned revision.
-4. **`<proj>_vendor`** — `cargo vendor` the project's locked dependencies into a
-   hermetic `tar.zst`. Depends on the Go `cargo`.
-5. **`<proj>_build`** — unpack the vendor tar, and build the project offline with
-   `minicargo` against the from-source libstd. Depends on `<proj>_vendor`,
-   `libstd`, `rustc`, `minicargo`.
-6. **`<proj>_test`** — run the project's own check (for resvg: render a reference
-   SVG and validate the PNG). Grouped under `test`.
+- **`std_src`** — download `rustc-1.90.0-src`, apply `std/rustc-1.90.0-src.patch`,
+  add the `mrustc-stdlib` shim. Output: `rust-src.tar`. (Set `RUST_SRC` to reuse
+  a local tree.)
+- **`libstd`** — build the standard library and `libproc_macro` from that source
+  with `minicargo`, using `std/script-overrides` and the manifest overrides.
+  Output: `libstd.tar`. Depends on `rustc`, `minicargo`, `std_src`. **Shared by
+  every project test.**
+- **`<proj>_src`** — clone the project at a pinned revision → `*-src.tar`.
+  (Set `SRC_OVERRIDE` to reuse a local checkout.)
+- **`<proj>_vendor`** — `cargo vendor` the project's locked dependencies into a
+  hermetic `tar.zst`. Depends on the Go `cargo`.
+- **`<proj>`** — the plan's node 2: unpack the vendor tar and `libstd.tar`, build
+  the project offline with `minicargo`, and run its test (for resvg: render a
+  reference SVG and validate the PNG). Depends on `<proj>_vendor`, `libstd`,
+  `<proj>_src`, `rustc`, `minicargo`.
 
-The graph lives in the repo-root `build.py`; this directory holds the per-test
-data (`resvg/run.py`) and the shared libstd build inputs (`std/`).
+Nodes exchange **tar archives** because the build engine only promotes declared
+file outputs; each node unpacks what it needs into a private temp dir.
 
 ## running
 
 ```
-./build resvg_test        # the whole chain for resvg
+./build libstd            # just the shared standard library
+./build resvg             # the whole resvg chain (build + test)
 ./build test              # every project test
 ```
 
-These are heavy (a from-scratch libstd plus a full project build); they only run
-when asked for, never as part of the default `./build`.
+These are heavy and only run when asked for, never as part of the default
+`./build`. If the environment lacks system CA certs, set
+`SSL_CERT_FILE=/etc/ssl/cert.pem` for the vendor step.
