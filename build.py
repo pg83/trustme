@@ -1,3 +1,6 @@
+import hashlib
+from pathlib import Path
+
 import build
 
 # Build description for rustc (the mrustc-derived Rust compiler).
@@ -325,5 +328,42 @@ for _src in build.glob("$(S)/tests/unit/test_*.rs"):
         color="green",
     ))
 
-group("test", resvg, *unit_tests)
+# Vendored Rust 1.90 run-pass tests. Keep one source file per graph node for
+# now; sharding can be added later without changing the checked-in corpus.
+rust_1_90_root = Path(__file__).parent / "tests" / "rust_1_90"
+rust_1_90_cases = (rust_1_90_root / "cases.txt").read_text().splitlines()
+rust_1_90_tests = []
+for _case in rust_1_90_cases:
+    _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
+    _src = "$(S)/tests/rust_1_90/upstream/" + _case
+    _sidecars = []
+    _source_base = rust_1_90_root / "upstream" / _case[:-len(".rs")]
+    for _suffix in (".run.stdout", ".run.stderr"):
+        if Path(str(_source_base) + _suffix).exists():
+            _sidecars.append(
+                "$(S)/tests/rust_1_90/upstream/" + _case[:-len(".rs")] + _suffix
+            )
+    rust_1_90_tests.append(command(
+        name="rust_1_90_" + _digest,
+        inputs=[
+            _src,
+            *_sidecars,
+            "$(S)/tests/rust_1_90/adapter.py",
+            "$(S)/tests/rust_1_90/cases.txt",
+            *TESTS_LIB,
+        ],
+        outputs=["$(B)/tests/rust_1_90/" + _case + ".stamp"],
+        cmd=[
+            "python3", "$(S)/tests/rust_1_90/adapter.py",
+            _case, _src, "$(B)/tests/libstd.tar",
+            "$(B)/tests/rust_1_90/" + _case + ".stamp",
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="RP",
+        color="green",
+    ))
+
+group("test", resvg, *unit_tests, *rust_1_90_tests)
 group("unit", *unit_tests)
+group("rust_1_90", *rust_1_90_tests)
