@@ -3,6 +3,7 @@
 
 import os
 import re
+import shlex
 import subprocess
 import sys
 
@@ -26,6 +27,14 @@ def main() -> int:
 
     edition_match = re.search(r"^//@\s*edition:\s*(\d+)", text, re.MULTILINE)
     edition = edition_match.group(1) if edition_match else "2015"
+    compile_flags = []
+    for value in re.findall(r"^//@\s*compile-flags:\s*(.*)$", text,
+                            re.MULTILINE):
+        compile_flags.extend(shlex.split(value))
+    run_flags = []
+    for value in re.findall(r"^//@\s*run-flags:\s*(.*)$", text,
+                            re.MULTILINE):
+        run_flags.extend(shlex.split(value))
     environment = dict(os.environ)
     environment["MRUSTC_TARGET_VER"] = "1.90"
     environment.setdefault("CC", "cc")
@@ -41,6 +50,7 @@ def main() -> int:
                 rustc,
                 source,
                 "-L", os.path.join(libstd, "release"),
+                *compile_flags,
                 "-o", binary,
                 "--crate-type", "bin",
                 "--edition", edition,
@@ -57,7 +67,7 @@ def main() -> int:
 
         try:
             run_result = subprocess.run(
-                [binary],
+                [binary, *run_flags],
                 env=environment,
                 cwd=work,
                 stdout=subprocess.PIPE,

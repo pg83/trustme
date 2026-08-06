@@ -20,8 +20,6 @@ REJECTED_DIRECTIVES = (
     "aux-crate",
     "proc-macro",
     "revisions",
-    "compile-flags",
-    "run-flags",
     "needs-",
     "ignore-",
     "only-",
@@ -35,6 +33,11 @@ def selected(text: str) -> bool:
         return False
     if any(re.search(rf"^//@.*{re.escape(item)}", text, re.MULTILINE)
            for item in REJECTED_DIRECTIVES):
+        return False
+    # These two tests need tests/auxiliary/rust_test_helpers.c and belong with
+    # the native/auxiliary import rather than a source-only adapter.
+    if re.search(r"^//@\s*compile-flags:.*rust_test_helpers", text,
+                 re.MULTILINE):
         return False
 
     # Keep this first tranche genuinely one-file. Multi-file tests belong in
