@@ -165,5 +165,34 @@ rustc = program(
     ldflags=["-lz"],
 )
 
-install(rustc)
+# minicargo: the transitional per-crate build driver. It links the same
+# common support sources (now flat in the root) plus its own sources under
+# tools/minicargo. Kept until the Go cargo learns to orchestrate builds.
+MINICARGO = [
+    "$(S)/tools/minicargo/main.cpp",
+    "$(S)/tools/minicargo/manifest.cpp",
+    "$(S)/tools/minicargo/repository.cpp",
+    "$(S)/tools/minicargo/cfg.cpp",
+    "$(S)/tools/minicargo/build.cpp",
+    "$(S)/tools/minicargo/jobs.cpp",
+    "$(S)/tools/minicargo/file_timestamp.cpp",
+    "$(S)/tools/minicargo/os.cpp",
+    "$(S)/tools/minicargo/resolve_0minicargo.cpp",
+    "$(S)/tools/minicargo/resolve_cargo.cpp",
+    # shared support library (flat in the root)
+    "$(S)/toml.cpp",
+    "$(S)/path.cpp",
+    "$(S)/common_debug.cpp",
+    "$(S)/jobserver.cpp",
+]
+
+minicargo = program(
+    srcs=MINICARGO,
+    name="minicargo",
+    cppflags=["-I$(S)/tools/minicargo"],
+    cxxflags=["-std=c++14"],
+    ldflags=["-lz", "-pthread"],
+)
+
+install(rustc, minicargo)
 
