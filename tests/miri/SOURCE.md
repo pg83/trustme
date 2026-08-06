@@ -7,8 +7,8 @@ the `src/tools/miri` tree stored by `rust-lang/rust` tag `1.90.0` (commit
 `1159e78c4747b02ef996e55082b704c09b970588`).  In the Miri repository that
 tree is materialized by commit `2042e98bd9b41a6cf2063c47da92f9cec8ee591e`.
 
-The importer considers assert-bearing files under `tests/pass`.  Each file is
-copied alone into an empty directory and retained only if the official Rust
+The importer considers every file under `tests/pass`.  Each file is copied
+alone into an empty directory and retained only if the official Rust
 1.90.0 compiler can build it and the native executable exits successfully.
 This excludes nightly-only, Miri-shim-only, non-native, and auxiliary-file
 cases without rewriting upstream sources.  `cases.tsv` is the exact retained

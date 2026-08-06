@@ -4,7 +4,6 @@
 import argparse
 import concurrent.futures
 import os
-import re
 import shutil
 import subprocess
 import tempfile
@@ -12,15 +11,11 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-ASSERTION = re.compile(r"\b(?:debug_)?assert(?:_eq|_ne)?!")
 
 
 def check_case(rustc: Path, source: Path, pass_root: Path) -> tuple[str, bytes] | None:
     relative = source.relative_to(pass_root).as_posix()
     contents = source.read_bytes()
-    text = contents.decode("utf-8", errors="surrogateescape")
-    if ASSERTION.search(text) is None:
-        return None
 
     with tempfile.TemporaryDirectory(prefix="miri-import-") as work_name:
         work = Path(work_name)
@@ -31,7 +26,8 @@ def check_case(rustc: Path, source: Path, pass_root: Path) -> tuple[str, bytes] 
             [
                 str(rustc),
                 "--edition", "2021",
-                "-C", "linker=/usr/bin/gcc",
+                "-C", "linker=clang",
+                "-C", "link-arg=-fuse-ld=lld",
                 str(isolated_source),
                 "-o", str(binary),
             ],
