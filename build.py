@@ -429,6 +429,39 @@ for _case in rust_quiz_cases:
         color="green",
     ))
 
+# Official solved Rustlings exercises retain the upstream distinction between
+# normal binaries and rustc test harnesses.  Run ten files per build node.
+rustlings_root = Path(__file__).parent / "tests" / "rustlings"
+rustlings_cases = [
+    _line.split("\t")
+    for _line in (rustlings_root / "cases.tsv").read_text().splitlines()
+]
+rustlings_tests = []
+for _start in range(0, len(rustlings_cases), 10):
+    _shard = rustlings_cases[_start:_start + 10]
+    _paths = [_case for _case, _mode in _shard]
+    _digest = hashlib.sha256(("\0".join(_paths)).encode()).hexdigest()[:12]
+    _stamp = "$(B)/tests/rustlings/" + _digest + ".stamp"
+    rustlings_tests.append(command(
+        name="rustlings_" + _digest,
+        inputs=[
+            "$(S)/tests/rustlings/adapter.py",
+            "$(S)/tests/rustlings/cases.tsv",
+            *("$(S)/tests/rustlings/upstream/" + _case for _case in _paths),
+            *TESTS_LIB,
+        ],
+        outputs=[_stamp],
+        cmd=[
+            "python3", "$(S)/tests/rustlings/adapter.py",
+            "$(S)/tests/rustlings/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/rustlings/upstream", "$(B)/tests/libstd.tar", _stamp,
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="RL",
+        color="green",
+    ))
+
 # Rust's library unit tests are grouped only at compilation.  Each explicit
 # #[test] function is still a separate runtime node selected from its harness.
 rust_lib_root = Path(__file__).parent / "tests" / "rust_lib"
@@ -494,7 +527,7 @@ for _suite, _harness_group, _source, _function, _hint in rust_lib_cases:
         color="green",
     ))
 
-# Assert-bearing library documentation examples, extracted into standalone
+# Runnable library documentation examples, extracted into standalone
 # programs so each fence remains an independent compile-and-run node.
 rust_doctest_root = Path(__file__).parent / "tests" / "rust_doctest"
 rust_doctest_cases = []
@@ -562,7 +595,7 @@ for _start in range(0, len(rustsmith_cases), 10):
         color="green",
     ))
 
-# Self-contained, assert-bearing Miri pass programs from Rust 1.90.  Like the
+# Self-contained native Miri pass programs from Rust 1.90.  Like the
 # RustSmith corpus, shard by ten while keeping every upstream source separate.
 miri_root = Path(__file__).parent / "tests" / "miri"
 miri_cases = (miri_root / "cases.tsv").read_text().splitlines()
@@ -598,6 +631,7 @@ group(
     *rust_1_90_tests,
     *gccrs_tests,
     *rust_quiz_tests,
+    *rustlings_tests,
     *rust_lib_tests,
     *rust_doctests,
     *rustsmith_tests,
@@ -607,6 +641,7 @@ group("unit", *unit_tests)
 group("rust_1_90", *rust_1_90_tests)
 group("gccrs", *gccrs_tests)
 group("rust_quiz", *rust_quiz_tests)
+group("rustlings", *rustlings_tests)
 group("rust_lib", *rust_lib_tests)
 group("rust_doctest", *rust_doctests)
 group("rustsmith", *rustsmith_tests)
