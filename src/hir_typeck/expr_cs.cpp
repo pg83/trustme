@@ -409,6 +409,14 @@ namespace {
                             this->context.possible_equate_ivar_bounds(sp, src_inner.data().as_Infer().index, std::move(tys));
                             return ;
                         }
+                        // A pointer cast doesn't constrain its source; while a coercion rule is
+                        // still pending on this ivar, let the later ivar_poss passes use it
+                        // instead of forcing the cast target (bytemuck's checked slice casts).
+                        auto src_idx = src_inner.data().as_Infer().index;
+                        if( src_idx < this->context.possible_ivar_vals.size() && this->context.possible_ivar_vals[src_idx].has_rules() )
+                        {
+                            return ;
+                        }
                         this->context.equate_types(sp, dst_inner, src_inner);
                     }
                     else
