@@ -562,6 +562,35 @@ for _start in range(0, len(rustsmith_cases), 10):
         color="green",
     ))
 
+# Self-contained, assert-bearing Miri pass programs from Rust 1.90.  Like the
+# RustSmith corpus, shard by ten while keeping every upstream source separate.
+miri_root = Path(__file__).parent / "tests" / "miri"
+miri_cases = (miri_root / "cases.tsv").read_text().splitlines()
+miri_tests = []
+for _start in range(0, len(miri_cases), 10):
+    _shard = miri_cases[_start:_start + 10]
+    _digest = hashlib.sha256(("\0".join(_shard)).encode()).hexdigest()[:12]
+    _stamp = "$(B)/tests/miri/" + _digest + ".stamp"
+    miri_tests.append(command(
+        name="miri_" + _digest,
+        inputs=[
+            "$(S)/tests/miri/adapter.py",
+            "$(S)/tests/miri/cases.tsv",
+            *("$(S)/tests/miri/upstream/" + _case for _case in _shard),
+            *TESTS_LIB,
+        ],
+        outputs=[_stamp],
+        cmd=[
+            "python3", "$(S)/tests/miri/adapter.py",
+            "$(S)/tests/miri/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/miri/upstream", "$(B)/tests/libstd.tar", _stamp,
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="MI",
+        color="green",
+    ))
+
 group(
     "test",
     resvg,
@@ -572,6 +601,7 @@ group(
     *rust_lib_tests,
     *rust_doctests,
     *rustsmith_tests,
+    *miri_tests,
 )
 group("unit", *unit_tests)
 group("rust_1_90", *rust_1_90_tests)
@@ -580,3 +610,4 @@ group("rust_quiz", *rust_quiz_tests)
 group("rust_lib", *rust_lib_tests)
 group("rust_doctest", *rust_doctests)
 group("rustsmith", *rustsmith_tests)
+group("miri", *miri_tests)
