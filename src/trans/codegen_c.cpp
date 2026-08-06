@@ -5666,7 +5666,10 @@ namespace {
                         if( pe->spec.opt_Explicit() )
                         {
                             // Ignore, handled explicitly above
-                            if( pe->input ) {
+                            // An in+out explicit register is fully covered by its
+                            // "+" output constraint; emitting a matching input for
+                            // it too is rejected by clang.
+                            if( pe->input && !pe->output ) {
                                 inputs.push_back(&se.params[i]);
                             }
                         }
