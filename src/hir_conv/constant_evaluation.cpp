@@ -2678,10 +2678,13 @@ namespace HIR {
                     auto val = local_state.read_param_uint(ti.bits, e.args.at(0));
                     U128    rv;
                     for(size_t i = 0; i < ti.bits; i ++) {
+                        // Shift before inserting - shifting after leaks the first bit out of
+                        // the top and drops the last one (broke miniz_oxide's reversed-bits
+                        // lookup table).
+                        rv <<= 1;
                         if( (val & 1) != 0 ) {
                             rv |= 1;
                         }
-                        rv <<= 1;
                         val >>= 1;
                     }
                     dst.write_uint(state, ti.bits, rv);
