@@ -30,7 +30,8 @@ void Resolve_Use_Mod(const ::AST::Crate& crate, ::AST::Module& mod, ::AST::Path 
 ::AST::Path::Bindings Resolve_Use_GetBinding(
     const Span& span, const ::AST::Crate& crate, const ::AST::AbsolutePath& source_mod_path,
     const ::AST::Path& path, ::std::span< const ::AST::Module* > parent_modules,
-    bool types_only=false
+    bool types_only=false,
+    bool soft_fail=false
     );
 
 ::AST::Path::Bindings Resolve_Use_GetBinding_Mod(
@@ -38,7 +39,8 @@ void Resolve_Use_Mod(const ::AST::Crate& crate, ::AST::Module& mod, ::AST::Path 
     const ::AST::Crate& crate, const ::AST::AbsolutePath& source_mod_path, const ::AST::Module& mod,
     const RcString& des_item_name,
     ::std::span< const ::AST::Module* > parent_modules,
-    bool types_only = false
+    bool types_only = false,
+    bool require_visible = false
     );
 ::AST::Path::Bindings Resolve_Use_GetBinding__ext(const Span& span, const ::AST::Crate& crate, const AST::ExternCrate& ec, const ::HIR::Module& hmodr, const ::AST::Path& path, unsigned int start, AST::AbsolutePath ap={});
 ::AST::Path::Bindings Resolve_Use_GetBinding__ext(const Span& span, const ::AST::Crate& crate, const ::AST::Path& path,  const AST::ExternCrate& ec, unsigned int start);
@@ -367,7 +369,8 @@ void Resolve_Use_Mod(const ::AST::Crate& crate, ::AST::Module& mod, ::AST::Path 
         const ::AST::Crate& crate, const ::AST::AbsolutePath& source_mod_path, const ::AST::Module& mod,
         const RcString& des_item_name,
         ::std::span< const ::AST::Module* > parent_modules,
-        bool types_only// = false
+        bool types_only,// = false
+        bool require_visible// = false
     )
 {
     ::AST::Path::Bindings   rv;
@@ -401,6 +404,10 @@ void Resolve_Use_Mod(const ::AST::Crate& crate, ::AST::Module& mod, ::AST::Path 
     {
         const auto& item = *ip;
         if( item.data.is_None() )
+            continue ;
+        // When reached through a glob import, private items aren't re-exported (usvg's
+        // crate-root `pub use parser::*` must not expose the private `parser::filter`).
+        if( require_visible && !item.vis.is_visible(source_mod_path) )
             continue ;
 
         if( item.name == des_item_name ) {
@@ -637,7 +644,7 @@ void Resolve_Use_Mod(const ::AST::Crate& crate, ::AST::Module& mod, ::AST::Path 
                     if( ::std::find(resolve_stack_ptrs.begin(), resolve_stack_ptrs.end(), &imp_data) == resolve_stack_ptrs.end() )
                     {
                         resolve_stack_ptrs.push_back( &imp_data );
-                        bindings_ = Resolve_Use_GetBinding(sp2, crate, mod.path(), Resolve_Use_AbsolutisePath(sp2, crate, mod.path(), imp_e.path), parent_modules, /*type_only=*/true);
+                        bindings_ = Resolve_Use_GetBinding(sp2, crate, mod.path(), Resolve_Use_AbsolutisePath(sp2, crate, mod.path(), imp_e.path), parent_modules, /*type_only=*/true, /*soft_fail=*/true);
                         if( bindings_.type.is_Unbound() ) {
                             DEBUG("Recursion detected, skipping " << imp_e.path);
                             resolve_stack_ptrs.pop_back();
@@ -665,12 +672,16 @@ void Resolve_Use_Mod(const ::AST::Crate& crate, ::AST::Module& mod, ::AST::Path 
                     }
                 TU_ARMA(Module, e) {
                     if( e.module_ ) {
-                        // TODO: Prevent infinite recursion?
-                        static ::std::vector<const AST::Module*>  s_use_glob_mod_stack;
-                        if( ::std::find(s_use_glob_mod_stack.begin(), s_use_glob_mod_stack.end(), &*e.module_) == s_use_glob_mod_stack.end() )
+                        // Prevent infinite recursion - keyed by (module, name) so an
+                        // in-flight search for a *different* name doesn't block this one
+                        // (libc resolves `crate::linux` through `new::*` while a search
+                        // inside `new` is still on the stack).
+                        static ::std::vector<::std::pair<const AST::Module*, RcString>>  s_use_glob_mod_stack;
+                        auto ent = ::std::make_pair(&*e.module_, des_item_name);
+                        if( ::std::find(s_use_glob_mod_stack.begin(), s_use_glob_mod_stack.end(), ent) == s_use_glob_mod_stack.end() )
                         {
-                            s_use_glob_mod_stack.push_back( &*e.module_ );
-                            rv.merge_from( Resolve_Use_GetBinding_Mod(span, crate, mod.path(), *e.module_, des_item_name, {}) );
+                            s_use_glob_mod_stack.push_back( ent );
+                            rv.merge_from( Resolve_Use_GetBinding_Mod(span, crate, mod.path(), *e.module_, des_item_name, {}, /*types_only=*/false, /*require_visible=*/true) );
                             s_use_glob_mod_stack.pop_back();
                         }
                         else
@@ -1106,7 +1117,8 @@ namespace {
 ::AST::Path::Bindings Resolve_Use_GetBinding(
     const Span& span, const ::AST::Crate& crate, const ::AST::AbsolutePath& source_mod_path,
     const ::AST::Path& path, ::std::span< const ::AST::Module* > parent_modules,
-    bool types_only/*=false*/
+    bool types_only/*=false*/,
+    bool soft_fail/*=false*/
     )
 {
     TRACE_FUNCTION_F(path);
@@ -1157,6 +1169,10 @@ namespace {
         default:
             ERROR(span, E0000, "Unexpected item type " << b.type.binding.tag_str() << " in import of " << path);
         TU_ARMA(Unbound, e) {
+            // During speculative glob resolution a miss just skips the glob; the recursion
+            // guard can hide a module that a later direct resolution will find.
+            if( soft_fail )
+                return ::AST::Path::Bindings();
             ERROR(span, E0000, "Cannot find component " << i << " of " << path << " (" << b.type.binding << ")");
             }
         TU_ARMA(Crate, e) {
