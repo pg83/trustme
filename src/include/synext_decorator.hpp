@@ -50,6 +50,9 @@ public:
     virtual ~ExpandDecorator() = default;
     virtual AttrStage   stage() const = 0;
     virtual bool run_during_iter() const { return false; }
+    // Whether `handle` should receive the item's full attribute list instead of only the
+    // attributes written after the invoking one (derive macros need the full set).
+    virtual bool wants_all_attrs() const { return false; }
 
     virtual void    handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate) const { unexpected(sp, mi, "crate"); }
     virtual void    handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t mod_idx, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item&i) const { unexpected(sp, mi, "item"); }

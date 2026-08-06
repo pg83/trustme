@@ -466,6 +466,9 @@ namespace {
         const Span& sp;
         ProcMacroInv&   m_pmi;
         bool emit_all_attrs;
+        // Derive inputs must not include `#[derive(...)]` attributes themselves (rustc
+        // strips them before invoking a derive macro).
+        bool skip_derive_attrs = false;
         Visitor(const Span& sp, ProcMacroInv& pmi):
             sp(sp),
             m_pmi(pmi)
@@ -1241,6 +1244,12 @@ namespace {
                     this->visit_attr(na);
                 }
             }
+            if( this->skip_derive_attrs && a.name().is_trivial()
+                && (a.name().as_trivial() == "derive" || a.name().as_trivial() == "derive_const") )
+            {
+                DEBUG("Skip " << a << " (derive input)");
+                return ;
+            }
             auto is_local = (a.name().is_trivial() && m_pmi.attr_is_used(a.name().as_trivial()));
             if( this->emit_all_attrs || is_local )
             {
@@ -1674,6 +1683,7 @@ namespace {
 {
     return ProcMacro_Invoke(sp, crate, mac_path, nullptr, [&](Visitor& v){
         DEBUG("derive on struct");
+        v.skip_derive_attrs = true;
         v.visit_top_attrs(attrs);
         v.visit_struct(item_name, vis, i);
         });
@@ -1682,6 +1692,7 @@ namespace {
 {
     return ProcMacro_Invoke(sp, crate, mac_path, nullptr, [&](Visitor& v){
         DEBUG("derive on enum");
+        v.skip_derive_attrs = true;
         v.visit_top_attrs(attrs);
         v.visit_enum(item_name, vis, i);
         });
@@ -1690,6 +1701,7 @@ namespace {
 {
     return ProcMacro_Invoke(sp, crate, mac_path, nullptr, [&](Visitor& v){
         DEBUG("derive on union");
+        v.skip_derive_attrs = true;
         v.visit_top_attrs(attrs);
         v.visit_union(item_name, vis, i);
         });

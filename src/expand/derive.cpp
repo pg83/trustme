@@ -2199,7 +2199,11 @@ class Decorator_Derive:
 {
 public:
     AttrStage stage() const override { return AttrStage::Pre; }
-    void handle(const Span& sp, const AST::Attribute& attr, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override
+    // A derive macro must see every attribute on the item (e.g. a `#[repr(C)]` written
+    // above the derive, which bytemuck's `Pod` checks for); the input serialiser strips
+    // `derive` attributes themselves.
+    bool wants_all_attrs() const override { return true; }
+    void handle(const Span& sp, const AST::Attribute& attr, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t mod_idx, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override
     {
         TU_MATCH_DEF(::AST::Item, (i), (e),
         (

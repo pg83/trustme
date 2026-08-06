@@ -320,8 +320,11 @@ void Expand_Attrs(
 {
     Expand_Attrs(es, attrs, stage,  [&](const Span& sp, const ExpandDecorator& d, const AST::Attribute& a){
         if(!item.is_None()) {
-            // Pass attributes _after_ this attribute
-            d.handle(sp, a, es.crate, path, mod, mod_idx, get_attrs_after(attrs, a), vis, item);
+            // Pass attributes _after_ this attribute (or all of them, if the decorator asks)
+            auto attrs_slice = d.wants_all_attrs()
+                ? slice<const AST::Attribute>(attrs.m_items.data(), attrs.m_items.size())
+                : get_attrs_after(attrs, a);
+            d.handle(sp, a, es.crate, path, mod, mod_idx, attrs_slice, vis, item);
         }
         });
 }
