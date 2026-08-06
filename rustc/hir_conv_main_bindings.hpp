@@ -39,7 +39,7 @@ extern void ConvertHIR_ConstantEvaluate_Constant(const ::HIR::Crate& crate, cons
 extern void ConvertHIR_ConstantEvaluate_MethodParams(
     const Span& sp,
     const ::HIR::Crate& crate, const HIR::SimplePath& mod_path, const ::HIR::GenericParams* impl_generics, const ::HIR::GenericParams* item_generics,
-    const ::HIR::GenericParams& params_def,
+    const ::HIR::GenericParams* params_def,
     ::HIR::PathParams& params
 );
 extern void ConvertHIR_ConstantEvaluate_ConstGeneric(const Span& sp, const ::HIR::Crate& crate, const HIR::TypeRef& ty, ::HIR::ConstGeneric& cg);

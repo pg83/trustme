@@ -9,10 +9,14 @@
 #include "hir_expr.hpp"
 #include "hir_expr_state.hpp"
 
+::HIR::ExprPtr::ExprPtr() = default;
 ::HIR::ExprPtr::ExprPtr(::std::unique_ptr< ::HIR::ExprNode> v):
     node( mv$(v) )
 {
 }
+::HIR::ExprPtr::~ExprPtr() = default;
+::HIR::ExprPtr::ExprPtr(ExprPtr&&) = default;
+::HIR::ExprPtr& ::HIR::ExprPtr::operator=(ExprPtr&&) = default;
 ::std::unique_ptr< ::HIR::ExprNode> HIR::ExprPtr::into_unique()
 {
     return node.into_unique();
@@ -109,5 +113,4 @@ void HIR::ExprPtr::set_mir(::MIR::FunctionPointer mir)
                         )));
     }
 }
-
 

@@ -3971,7 +3971,7 @@ namespace {
 void ConvertHIR_ConstantEvaluate_MethodParams(
     const Span& sp,
     const ::HIR::Crate& crate, const HIR::SimplePath& mod_path, const ::HIR::GenericParams* impl_generics, const ::HIR::GenericParams* item_generics,
-    const ::HIR::GenericParams& params_def,
+    const ::HIR::GenericParams* params_def,
     ::HIR::PathParams& params
     )
 {
@@ -3997,9 +3997,10 @@ void ConvertHIR_ConstantEvaluate_MethodParams(
                     throw Defer();
                 }
 
+                ASSERT_BUG(sp, params_def, "Missing generic parameter definitions for " << params);
                 auto idx = static_cast<size_t>(&v - &params.m_values.front());
-                ASSERT_BUG(sp, idx < params_def.m_values.size(), "");
-                const auto& ty = params_def.m_values[idx].m_type;
+                ASSERT_BUG(sp, idx < params_def->m_values.size(), "");
+                const auto& ty = params_def->m_values[idx].m_type;
                 ASSERT_BUG(sp, !monomorphise_type_needed(ty), "" << ty);
                 MonomorphState  ms;
                 ms.pp_impl = &ue.params_impl;

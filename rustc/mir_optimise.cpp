@@ -5306,7 +5306,7 @@ bool MIR_Optimise_DeadAssignments(::MIR::TypeResolve& state, ::MIR::Function& fc
 
     for(auto& bb : fcn.blocks)
     {
-        for(auto it = bb.statements.begin(), next = it+1; it != bb.statements.end(); it = next, next = it+1 )
+        for(auto it = bb.statements.begin(); it != bb.statements.end(); )
         {
             state.set_cur_stmt(&bb - &fcn.blocks.front(), it - bb.statements.begin());
 
@@ -5315,24 +5315,30 @@ bool MIR_Optimise_DeadAssignments(::MIR::TypeResolve& state, ::MIR::Function& fc
                 auto idx = it->as_Drop().slot.as_Local();
                 if( !read_locals[idx] && fcn.locals[idx].data().is_Borrow() ) {
                     DEBUG(state << "Drop of unread value, remove - " << *it);
-                    next = it = bb.statements.erase(it);
+                    it = bb.statements.erase(it);
                     continue;
                 }
             }
 
             // Not an assignment, ignore
-            if( !(it->is_Assign() && it->as_Assign().dst.is_Local()) )
+            if( !(it->is_Assign() && it->as_Assign().dst.is_Local()) ) {
+                ++it;
                 continue ;
+            }
             auto idx = it->as_Assign().dst.as_Local();
             // Local was read, ignore it
-            if( read_locals[idx] )
+            if( read_locals[idx] ) {
+                ++it;
                 continue;
+            }
             // If the local was dropped, then ignore IF it's not a borrow (TODO: Only if there's drop glue?)
-            if( dropped_locals[idx] && !fcn.locals[idx].data().is_Borrow() )
+            if( dropped_locals[idx] && !fcn.locals[idx].data().is_Borrow() ) {
+                ++it;
                 continue;
+            }
             // Remove the assignment, as it's unused
             DEBUG(state << "Unread assignment, remove - " << *it);
-            next = it = bb.statements.erase(it);
+            it = bb.statements.erase(it);
             changed = true;
         }
     }

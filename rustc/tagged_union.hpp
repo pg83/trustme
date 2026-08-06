@@ -154,16 +154,40 @@
 #define TU_DATANAME(name)   Data_##name
 // Internals of TU_CONS
 #define TU_CONS_I(__name, __tag, __type) \
-    __name(__type v): m_tag(TAG_##__tag) { new (&m_data.__tag) __type( ::std::move(v) ); } \
-    static self_t make_##__tag(__type v) { return __name( ::std::move(v) ); }\
+    __name(__type&& v): m_tag(TAG_##__tag) { TU_move_inplace(m_data.__tag, ::std::move(v)); } \
+    template<typename _TU_Dummy = void> \
+    __name(const __type& v): m_tag(TAG_##__tag) { TU_copy_inplace(m_data.__tag, v); } \
+    static self_t make_##__tag(__type&& v) { return __name(::std::move(v)); } \
+    template<typename _TU_Dummy = void> \
+    static self_t make_##__tag(const __type& v) { return __name(v); }\
     bool is_##__tag() const { return m_tag == TAG_##__tag; } \
     const __type* opt_##__tag() const { if(m_tag == TAG_##__tag) return &m_data.__tag; return nullptr; } \
           __type* opt_##__tag()       { if(m_tag == TAG_##__tag) return &m_data.__tag; return nullptr; } \
     const __type& as_##__tag() const { assert(m_tag == TAG_##__tag); return m_data.__tag; } \
           __type& as_##__tag()       { assert(m_tag == TAG_##__tag); return m_data.__tag; } \
-    __type unwrap_##__tag() { return ::std::move(this->as_##__tag()); } \
+    template<typename _TU_Type = __type> \
+    _TU_Type unwrap_##__tag() { return ::std::move(this->as_##__tag()); } \
 // Define a tagged union constructor
 #define TU_CONS(__name, name, ...) TU_CONS_I(__name, name, TU_DATANAME(name))
+
+// Declarations used when a tagged union owns recursive types that are not
+// complete until later in the translation unit.
+#define TU_CONS_I_DECL(__name, __tag, __type) \
+    __name(__type v); \
+    static self_t make_##__tag(__type v); \
+    bool is_##__tag() const { return m_tag == TAG_##__tag; } \
+    const __type* opt_##__tag() const { if(m_tag == TAG_##__tag) return &m_data.__tag; return nullptr; } \
+          __type* opt_##__tag()       { if(m_tag == TAG_##__tag) return &m_data.__tag; return nullptr; } \
+    const __type& as_##__tag() const { assert(m_tag == TAG_##__tag); return m_data.__tag; } \
+          __type& as_##__tag()       { assert(m_tag == TAG_##__tag); return m_data.__tag; } \
+    __type unwrap_##__tag(); \
+
+#define TU_CONS_DECL(__name, name, ...) TU_CONS_I_DECL(__name, name, TU_DATANAME(name))
+
+#define TU_CONS_IMPL(__name, name, ...) \
+    __name::__name(__name::TU_DATANAME(name) v): m_tag(TAG_##name) { new (&m_data.name) __name::TU_DATANAME(name)(::std::move(v)); } \
+    __name __name::make_##name(__name::TU_DATANAME(name) v) { return __name(::std::move(v)); } \
+    __name::TU_DATANAME(name) __name::unwrap_##name() { return ::std::move(this->as_##name()); } \
 
 // Type definitions_
 #define TU_TYPEDEF(name, ...)    typedef __VA_ARGS__ TU_DATANAME(name);/*
@@ -176,7 +200,7 @@
 */
 
 // move constructor internals
-#define TU_MOVE_CASE(tag, ...)  case TAG_##tag: new(&m_data.tag) TU_DATANAME(tag)( ::std::move(x.m_data.tag) ); break;/*
+#define TU_MOVE_CASE(tag, ...)  case TAG_##tag: TU_move_inplace(m_data.tag, ::std::move(x.m_data.tag)); break;/*
 */
 
 // "tag_to_str" internals
@@ -192,6 +216,8 @@
 #define TU_UNION_FIELDS(...)    TU_EXP1( TU_GMX(__VA_ARGS__)(TU_UNION_FIELD,__VA_ARGS__) )
 
 #define TU_CONSS(_name, ...) TU_EXP1( TU_GMA(__VA_ARGS__)(TU_CONS, (_name), __VA_ARGS__) )
+#define TU_CONSS_DECL(_name, ...) TU_EXP1( TU_GMA(__VA_ARGS__)(TU_CONS_DECL, (_name), __VA_ARGS__) )
+#define TU_CONSS_IMPL(_name, ...) TU_EXP1( TU_GMA(__VA_ARGS__)(TU_CONS_IMPL, (_name), __VA_ARGS__) )
 #define TU_TYPEDEFS(...)     TU_EXP1( TU_GMX(__VA_ARGS__)(TU_TYPEDEF   ,__VA_ARGS__) )
 #define TU_TAGS(...)         TU_EXP1( TU_GMX(__VA_ARGS__)(TU_TAG       ,__VA_ARGS__) )
 #define TU_DEST_CASES(...)   TU_EXP1( TU_GMX(__VA_ARGS__)(TU_DEST_CASE ,__VA_ARGS__) )
@@ -260,13 +286,73 @@ class _name TU_EXP _inherit { \
     TU_EXP _extra\
 }
 
+/**
+ * Tagged union variant for recursive types. Lifetime operations and variant
+ * constructors are emitted by TAGGED_UNION_OUT_OF_LINE_IMPL after all variant
+ * types have become complete.
+ */
+#if defined(__clang__)
+#define TAGGED_UNION_OUT_OF_LINE(_name, _def, ...) \
+_Pragma("clang diagnostic push"); \
+_Pragma("clang diagnostic ignored \"-Wnon-c-typedef-for-linkage\""); \
+    TU_EXP1(_TAGGED_UNION_OUT_OF_LINE(_name, _def, (TU_EXP(__VA_ARGS__)))) \
+_Pragma("clang diagnostic pop");
+#else
+#define TAGGED_UNION_OUT_OF_LINE(_name, _def, ...) \
+    TU_EXP1(_TAGGED_UNION_OUT_OF_LINE(_name, _def, (TU_EXP(__VA_ARGS__))))
+#endif
+
+#define _TAGGED_UNION_OUT_OF_LINE(_name, _def, _variants) \
+class _name { \
+    typedef _name self_t;/*
+*/public:\
+    TU_TYPEDEFS _variants/*
+*/  enum Tag { \
+        TAGDEAD, \
+        TU_TAGS _variants\
+    };/*
+*/ private:\
+    Tag m_tag; \
+    union DataUnion { TU_UNION_FIELDS _variants DataUnion() {} ~DataUnion() {} } m_data;/*
+*/ public:\
+    _name();/*
+*/  _name(const _name&) = delete;/*
+*/  _name(_name&& x) noexcept;/*
+*/  _name& operator=(_name&& x);/*
+*/  ~_name(); \
+    \
+    Tag tag() const { return m_tag; }\
+    const char* tag_str() const { return tag_to_str(m_tag); }\
+    TU_CONSS_DECL(_name, TU_EXP _variants) \
+/*
+*/    static const char *tag_to_str(Tag tag) { \
+        switch(tag) {/*
+*/          case TAGDEAD: return "ERR:DEAD";/*
+*/          TU_TOSTR_CASES _variants/*
+*/      } return ""; \
+    }/*
+*/    static Tag tag_from_str(const ::std::string& str) { \
+        if(0); /*
+*/      TU_FROMSTR_CASES _variants/*
+*/      else throw ::std::runtime_error("enum "#_name" No conversion"); \
+    }\
+}
+
+#define TAGGED_UNION_OUT_OF_LINE_IMPL(_name, _def, ...) \
+    _name::_name(): m_tag(TAG_##_def) { new (&m_data._def) TU_DATANAME(_def)(); } \
+    _name::_name(_name&& x) noexcept: m_tag(x.m_tag) { switch(m_tag) { case TAGDEAD: break; TU_MOVE_CASES(TU_EXP(__VA_ARGS__)) } x.m_tag = TAGDEAD; } \
+    _name& _name::operator=(_name&& x) { switch(m_tag) { case TAGDEAD: break; TU_DEST_CASES(TU_EXP(__VA_ARGS__)) } m_tag = x.m_tag; switch(m_tag) { case TAGDEAD: break; TU_MOVE_CASES(TU_EXP(__VA_ARGS__)) } return *this; } \
+    _name::~_name() { switch(m_tag) { case TAGDEAD: break; TU_DEST_CASES(TU_EXP(__VA_ARGS__)) } m_tag = TAGDEAD; } \
+    TU_CONSS_IMPL(_name, TU_EXP(__VA_ARGS__))
+
 /*
 */
 
 namespace {
     template<typename T> static void TU_destruct_inplace(T& v) { v.~T(); }
+    template<typename T> static void TU_move_inplace(T& dst, T&& src) { new(&dst) T(::std::move(src)); }
+    template<typename T> static void TU_copy_inplace(T& dst, const T& src) { new(&dst) T(src); }
 }
 
 
 #endif
-

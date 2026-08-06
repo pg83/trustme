@@ -15,6 +15,28 @@ namespace {
 }
 
 namespace HIR {
+    TraitPath::TraitPath():
+        m_trait_ptr(nullptr)
+    {
+    }
+    TraitPath::TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path):
+        m_hrtbs(::std::move(hrtbs)),
+        m_path(::std::move(path)),
+        m_trait_ptr(nullptr)
+    {
+    }
+    TraitPath::TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path, assoc_list_t type_bounds, ::std::map<RcString, AtyBound> trait_bounds, const ::HIR::Trait* trait_ptr):
+        m_hrtbs(::std::move(hrtbs)),
+        m_path(::std::move(path)),
+        m_type_bounds(::std::move(type_bounds)),
+        m_trait_bounds(::std::move(trait_bounds)),
+        m_trait_ptr(trait_ptr)
+    {
+    }
+    TraitPath::~TraitPath() = default;
+    TraitPath::TraitPath(TraitPath&&) = default;
+    TraitPath& TraitPath::operator=(TraitPath&&) = default;
+
     ::std::ostream& operator<<(::std::ostream& os, const ::HIR::SimplePath& x)
     {
         if( x.crate_name() != "" ) {
@@ -656,4 +678,3 @@ Ordering HIR::Path::ord(const ::HIR::Path& x) const
 bool ::HIR::Path::operator==(const Path& x) const {
     return this->ord(x) == ::OrdEqual;
 }
-

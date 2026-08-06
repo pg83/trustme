@@ -82,6 +82,33 @@
             platforms = lib.platforms.linux;
           };
         };
+
+      mkDevShell =
+        pkgs: toolchain: stdenv:
+        (pkgs.mkShell.override { inherit stdenv; }) {
+          inputsFrom = [ toolchain ];
+          hardeningDisable = [ "format" ];
+
+          packages = with pkgs; [
+            cacert
+            curl
+            git
+            gnutar
+            patch
+            zstd
+          ];
+
+          SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+          GOFLAGS = "-mod=vendor";
+          GOTOOLCHAIN = "local";
+
+          shellHook = ''
+            unset CPPFLAGS CFLAGS CXXFLAGS LDFLAGS
+            export CC=cc
+            export CXX=c++
+            export AR=ar
+          '';
+        };
     in
     {
       packages = forAllSystems (
@@ -104,32 +131,11 @@
         system:
         let
           pkgs = nixpkgsFor system;
+          toolchain = self.packages.${system}.toolchain;
         in
         {
-          default = (pkgs.mkShell.override { stdenv = pkgs.gcc16Stdenv; }) {
-            inputsFrom = [ self.packages.${system}.toolchain ];
-            hardeningDisable = [ "format" ];
-
-            packages = with pkgs; [
-              cacert
-              curl
-              git
-              gnutar
-              patch
-              zstd
-            ];
-
-            SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-            GOFLAGS = "-mod=vendor";
-            GOTOOLCHAIN = "local";
-
-            shellHook = ''
-              unset CPPFLAGS CFLAGS CXXFLAGS LDFLAGS
-              export CC=cc
-              export CXX=c++
-              export AR=ar
-            '';
-          };
+          default = mkDevShell pkgs toolchain pkgs.gcc16Stdenv;
+          clang = mkDevShell pkgs toolchain pkgs.llvmPackages.libcxxStdenv;
         }
       );
     };

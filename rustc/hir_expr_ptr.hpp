@@ -97,11 +97,12 @@ public:
     ::HIR::ExprStatePtr m_state;
 
 public:
-    ExprPtr() {}
+    ExprPtr();
     ExprPtr(::std::unique_ptr< ::HIR::ExprNode> _);
+    ~ExprPtr();
     ExprPtr(const ExprPtr&) = delete;
-    ExprPtr(ExprPtr&&) = default;
-    ExprPtr& operator=(ExprPtr&&) = default;
+    ExprPtr(ExprPtr&&);
+    ExprPtr& operator=(ExprPtr&&);
 
     /// Take the innards and turn into a unique_ptr - used so typecheck can edit the root node.
     ::std::unique_ptr< ::HIR::ExprNode> into_unique();

@@ -12,6 +12,51 @@
 #include "ast_crate.hpp"
 #include "ast_expr.hpp"
 
+TAGGED_UNION_OUT_OF_LINE_IMPL(TypeData, None,
+    (None, struct { }),
+    (Any,  struct { }),
+    (Bang, struct { }),
+    (Unit, struct { }),
+    (Macro, struct {
+        ::std::unique_ptr<::AST::MacroInvocation> inv;
+        }),
+    (Primitive, struct {
+        enum eCoreType core_type;
+        }),
+    (Function, struct {
+        Type_Function   info;
+        }),
+    (Tuple, struct {
+        ::std::vector<TypeRef> inner_types;
+        }),
+    (Borrow, struct {
+        AST::LifetimeRef lifetime;
+        bool is_mut;
+        ::std::unique_ptr<TypeRef> inner;
+        }),
+    (Pointer, struct {
+        bool is_mut;
+        ::std::unique_ptr<TypeRef> inner;
+        }),
+    (Array, struct {
+        ::std::unique_ptr<TypeRef> inner;
+        ::std::shared_ptr<AST::ExprNode> size;
+        }),
+    (Slice, struct {
+        ::std::unique_ptr<TypeRef> inner;
+        }),
+    (Generic, struct {
+        RcString name;
+        unsigned int index;
+        }),
+    (Path, ::std::unique_ptr<AST::Path>),
+    (TraitObject, struct {
+        ::std::vector<Type_TraitPath>   traits;
+        ::std::vector<AST::LifetimeRef> lifetimes;
+        }),
+    (ErasedType, std::unique_ptr<Type_ErasedType>)
+    );
+
 /// Mappings from internal type names to the core type enum
 static const struct {
     const char* name;
@@ -41,6 +86,29 @@ static const struct {
     //{"uint", CORETYPE_UINT},
     {"usize", CORETYPE_UINT},
 };
+
+AST::HigherRankedBounds::HigherRankedBounds() = default;
+AST::HigherRankedBounds::~HigherRankedBounds() = default;
+AST::HigherRankedBounds::HigherRankedBounds(HigherRankedBounds&&) = default;
+AST::HigherRankedBounds& AST::HigherRankedBounds::operator=(HigherRankedBounds&&) = default;
+AST::HigherRankedBounds::HigherRankedBounds(const HigherRankedBounds&) = default;
+bool AST::HigherRankedBounds::empty() const
+{
+    return m_lifetimes.empty();
+}
+
+Type_Function::Type_Function() = default;
+Type_Function::Type_Function(AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool is_variadic):
+    hrbs(mv$(hrbs)),
+    is_unsafe(is_unsafe),
+    m_abi(mv$(abi)),
+    m_rettype(mv$(ret)),
+    m_arg_types(mv$(args)),
+    is_variadic(is_variadic)
+{
+}
+Type_Function::~Type_Function() = default;
+Type_Function::Type_Function(Type_Function&&) = default;
 
 enum eCoreType coretype_fromstring(const char* name)
 {
@@ -173,6 +241,9 @@ Type_TraitPath::Type_TraitPath(AST::HigherRankedBounds hrbs, AST::Path path)
     , path(box$(path))
 {
 }
+Type_TraitPath::Type_TraitPath() = default;
+Type_TraitPath::~Type_TraitPath() = default;
+Type_TraitPath::Type_TraitPath(Type_TraitPath&&) = default;
 Type_TraitPath::Type_TraitPath(const Type_TraitPath& x)
     : hrbs(x.hrbs)
     , path(std::make_unique<AST::Path>(*x.path))
@@ -427,4 +498,3 @@ namespace AST {
         return os;
     }
 }
-

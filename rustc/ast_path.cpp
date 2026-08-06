@@ -133,6 +133,10 @@ PathBinding_Macro PathBinding_Macro::clone() const
     os << (x.m_is_paren ? ")" : ">");
     return os;
 }
+PathParams::PathParams() = default;
+PathParams::~PathParams() = default;
+PathParams::PathParams(PathParams&&) = default;
+PathParams& PathParams::operator=(PathParams&&) = default;
 PathParams::PathParams(const PathParams& x)
     : m_is_paren(x.m_is_paren)
 {

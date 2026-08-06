@@ -27,17 +27,15 @@ class AttributeList
 public:
     ::std::vector<Attribute> m_items;
 
-    AttributeList() {}
-    AttributeList(::std::vector<Attribute> items):
-        m_items( mv$(items) )
-    {
-    }
+    AttributeList();
+    AttributeList(::std::vector<Attribute> items);
+    ~AttributeList();
 
     // Move present
-    AttributeList(AttributeList&&) = default;
-    AttributeList& operator=(AttributeList&&) = default;
+    AttributeList(AttributeList&&);
+    AttributeList& operator=(AttributeList&&);
     // No copy assign, but explicit copy
-    explicit AttributeList(const AttributeList&) = default;
+    explicit AttributeList(const AttributeList&);
     AttributeList& operator=(const AttributeList&) = delete;
     // Explicit clone
     AttributeList clone() const;
@@ -54,13 +52,6 @@ public:
 
     friend ::std::ostream& operator<<(::std::ostream& os, const AttributeList& x);
 };
-
-TAGGED_UNION(AttributeData, None,
-    (None, struct {}),
-    (ValueUnexpanded, AST::ExprNodeP),
-    (String, struct { ::std::string val; }),
-    (List,  struct { ::std::vector<Attribute> sub_items; })
-    );
 
 struct AttributeName
 {
@@ -132,7 +123,13 @@ public:
     }
 };
 
+TAGGED_UNION(AttributeData, None,
+    (None, struct {}),
+    (ValueUnexpanded, AST::ExprNodeP),
+    (String, struct { ::std::string val; }),
+    (List,  struct { ::std::vector<Attribute> sub_items; })
+    );
+
 }   // namespace AST
 
 #endif
-

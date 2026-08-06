@@ -44,9 +44,13 @@ namespace AST {
         //::std::vector<TypeParam>    m_types;
         //::std::vector<GenericBound>    m_bounds;
 
-        bool empty() const {
-            return m_lifetimes.empty();
-        }
+        HigherRankedBounds();
+        ~HigherRankedBounds();
+        HigherRankedBounds(HigherRankedBounds&&);
+        HigherRankedBounds& operator=(HigherRankedBounds&&);
+        HigherRankedBounds(const HigherRankedBounds&);
+
+        bool empty() const;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const HigherRankedBounds& x);
     };
@@ -75,16 +79,10 @@ struct Type_Function
     ::std::vector<TypeRef>  m_arg_types;
     bool is_variadic;
 
-    Type_Function() {}
-    Type_Function(AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool is_variadic):
-        hrbs(mv$(hrbs)),
-        is_unsafe(is_unsafe),
-        m_abi(mv$(abi)),
-        m_rettype(mv$(ret)),
-        m_arg_types(mv$(args)),
-        is_variadic(is_variadic)
-    {}
-    Type_Function(Type_Function&& other) = default;
+    Type_Function();
+    Type_Function(AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool is_variadic);
+    ~Type_Function();
+    Type_Function(Type_Function&& other);
     Type_Function(const Type_Function& other);
 
     Ordering ord(const Type_Function& x) const;
@@ -95,8 +93,10 @@ struct Type_TraitPath
     AST::HigherRankedBounds hrbs;
     ::std::unique_ptr<AST::Path>    path;
 
-    Type_TraitPath() {}
+    Type_TraitPath();
     Type_TraitPath(AST::HigherRankedBounds hrbs, AST::Path path);
+    ~Type_TraitPath();
+    Type_TraitPath(Type_TraitPath&&);
     Type_TraitPath(const Type_TraitPath&);
 
     Ordering ord(const Type_TraitPath& x) const;
@@ -110,9 +110,10 @@ struct Type_ErasedType
     ::std::unique_ptr<AST::PathParams> use;
     /// Was this `impl` from 2024 or later edition? This changes the behaviour if `use` is not present
     bool is_edition_2024_or_later;
+
 };
 
-TAGGED_UNION(TypeData, None,
+TAGGED_UNION_OUT_OF_LINE(TypeData, None,
     (None, struct { }),
     (Any,  struct { }),
     (Bang, struct { }),

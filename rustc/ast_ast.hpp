@@ -297,18 +297,11 @@ class Trait
     bool m_is_unsafe;
     NamedList<Item> m_items;
 public:
-    Trait():
-        m_is_marker(false),
-        m_is_unsafe(false)
-    {}
-    Trait(GenericParams params, ::std::vector< Spanned<Type_TraitPath> > supertraits, ::std::vector< Spanned<LifetimeRef> > lifetimes):
-        m_params( mv$(params) ),
-        m_supertraits( mv$(supertraits) ),
-        m_lifetimes( mv$(lifetimes) ),
-        m_is_marker(false),
-        m_is_unsafe(false)
-    {
-    }
+    Trait();
+    Trait(GenericParams params, ::std::vector< Spanned<Type_TraitPath> > supertraits, ::std::vector< Spanned<LifetimeRef> > lifetimes);
+    ~Trait();
+    Trait(Trait&&);
+    Trait& operator=(Trait&&);
 
     const GenericParams& params() const { return m_params; }
           GenericParams& params()       { return m_params; }
@@ -582,11 +575,10 @@ private:
     //NamedList<Static>    m_statics;
 
 public:
-    Impl(Impl&&) /*noexcept*/ = default;
-    Impl(ImplDef def):
-        m_def( mv$(def) )
-    {}
-    Impl& operator=(Impl&&) = default;
+    Impl(Impl&&) /*noexcept*/;
+    Impl(ImplDef def);
+    ~Impl();
+    Impl& operator=(Impl&&);
 
     void add_function(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Function fcn);
     void add_type    (Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, GenericParams params, TypeRef type);
@@ -630,9 +622,10 @@ public:
     };
     std::vector<Link>   m_libraries;
 
-    ExternBlock(::std::string abi):
-        m_abi( mv$(abi) )
-    {}
+    ExternBlock(::std::string abi);
+    ~ExternBlock();
+    ExternBlock(ExternBlock&&);
+    ExternBlock& operator=(ExternBlock&&);
 
     const ::std::string& abi() const { return m_abi; }
 
@@ -726,11 +719,11 @@ public:
     ::std::vector<Import>   m_item_imports;
 
 public:
-    Module() {}
-    Module(::AST::AbsolutePath path):
-        m_my_path( mv$(path) )
-    {
-    }
+    Module();
+    Module(::AST::AbsolutePath path);
+    ~Module();
+    Module(Module&&);
+    Module& operator=(Module&&);
 
     bool is_anon() const {
         return m_my_path.nodes.size() > 0 && m_my_path.nodes.back().c_str()[0] == '#';

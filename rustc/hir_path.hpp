@@ -306,6 +306,13 @@ public:
 
     const ::HIR::Trait* m_trait_ptr;
 
+    TraitPath();
+    TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path);
+    TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path, assoc_list_t type_bounds, ::std::map<RcString, AtyBound> trait_bounds, const ::HIR::Trait* trait_ptr = nullptr);
+    ~TraitPath();
+    TraitPath(TraitPath&&);
+    TraitPath& operator=(TraitPath&&);
+
     TraitPath clone() const;
     Compare compare_with_placeholders(const Span& sp, const TraitPath& x, t_cb_resolve_type resolve_placeholder) const;
 

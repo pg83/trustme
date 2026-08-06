@@ -177,10 +177,7 @@ public:
     {}
 
     struct TagStruct {};
-    Pattern(TagStruct, Span sp, Path path, ::std::vector<StructPatternEntry> sub_patterns, bool is_exhaustive):
-        m_span( mv$(sp) ),
-        m_data( Data::make_Struct( { ::std::move(path), ::std::move(sub_patterns), is_exhaustive } ) )
-    {}
+    Pattern(TagStruct, Span sp, Path path, ::std::vector<StructPatternEntry> sub_patterns, bool is_exhaustive);
 
 
     const Span& span() const { return m_span; }

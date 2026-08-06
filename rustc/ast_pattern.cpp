@@ -177,6 +177,12 @@ Pattern::~Pattern()
 {
 }
 
+AST::Pattern::Pattern(TagStruct, Span sp, Path path, ::std::vector<StructPatternEntry> sub_patterns, bool is_exhaustive):
+    m_span(mv$(sp)),
+    m_data(Data::make_Struct({ ::std::move(path), ::std::move(sub_patterns), is_exhaustive }))
+{
+}
+
 AST::Pattern AST::Pattern::clone() const
 {
     AST::Pattern    rv;
@@ -265,4 +271,3 @@ AST::Pattern AST::Pattern::clone() const
 }
 
 }   // namespace AST
-

@@ -281,11 +281,12 @@ struct PathParams
     ::std::vector< PathParamEnt >  m_entries;
     bool m_is_paren = false;
 
-    PathParams(PathParams&& x) = default;
+    PathParams(PathParams&& x);
     PathParams(const PathParams& x);
-    PathParams() {}
+    PathParams();
+    ~PathParams();
 
-    PathParams& operator=(PathParams&& x) = default;
+    PathParams& operator=(PathParams&& x);
     PathParams& operator=(const PathParams& x) = delete;
 
     bool is_empty() const {

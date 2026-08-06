@@ -2454,7 +2454,7 @@ void Expand_Mod_IndexAnon(::AST::Crate& crate, ::AST::Module& mod)
 
     for( auto& mp : mod.anon_mods() )
     {
-        if( mp.unique() ) {
+        if( mp.use_count() == 1 ) {
             DEBUG("- " << mp->path() << " dropped due to node destruction");
             mp.reset();
         }
@@ -2741,5 +2741,4 @@ void Expand(::AST::Crate& crate)
         }
     }
 }
-
 

@@ -21,6 +21,31 @@
 
 namespace AST {
 
+Trait::Trait():
+    m_is_marker(false),
+    m_is_unsafe(false)
+{
+}
+Trait::Trait(GenericParams params, ::std::vector< Spanned<Type_TraitPath> > supertraits, ::std::vector< Spanned<LifetimeRef> > lifetimes):
+    m_params(mv$(params)),
+    m_supertraits(mv$(supertraits)),
+    m_lifetimes(mv$(lifetimes)),
+    m_is_marker(false),
+    m_is_unsafe(false)
+{
+}
+Trait::~Trait() = default;
+Trait::Trait(Trait&&) = default;
+Trait& Trait::operator=(Trait&&) = default;
+
+Impl::Impl(ImplDef def):
+    m_def(mv$(def))
+{
+}
+Impl::~Impl() = default;
+Impl::Impl(Impl&&) = default;
+Impl& Impl::operator=(Impl&&) = default;
+
 
 namespace {
     ::std::vector<Attribute> clone_mivec(const ::std::vector<Attribute>& v) {
@@ -418,6 +443,14 @@ UseItem UseItem::clone() const
         };
 }
 
+ExternBlock::ExternBlock(::std::string abi):
+    m_abi(mv$(abi))
+{
+}
+ExternBlock::~ExternBlock() = default;
+ExternBlock::ExternBlock(ExternBlock&&) = default;
+ExternBlock& ExternBlock::operator=(ExternBlock&&) = default;
+
 void ExternBlock::add_item(Named<Item> named_item)
 {
     ASSERT_BUG(named_item.span,
@@ -429,6 +462,15 @@ ExternBlock ExternBlock::clone() const
 {
     TODO(Span(), "Clone an extern block");
 }
+
+Module::Module() = default;
+Module::Module(::AST::AbsolutePath path):
+    m_my_path(mv$(path))
+{
+}
+Module::~Module() = default;
+Module::Module(Module&&) = default;
+Module& Module::operator=(Module&&) = default;
 
 ::std::shared_ptr<AST::Module> Module::add_anon() {
     auto rv = ::std::shared_ptr<AST::Module>( new Module(m_my_path + RcString::new_interned(FMT("#" << m_anon_modules.size()))) );
@@ -643,3 +685,12 @@ std::ostream& operator<<(std::ostream& os, const GenericParam& x)
 }
 
 }    // namespace AST
+AST::AttributeList::AttributeList() = default;
+AST::AttributeList::AttributeList(::std::vector<AST::Attribute> items):
+    m_items(mv$(items))
+{
+}
+AST::AttributeList::~AttributeList() = default;
+AST::AttributeList::AttributeList(AttributeList&&) = default;
+AST::AttributeList& AST::AttributeList::operator=(AttributeList&&) = default;
+AST::AttributeList::AttributeList(const AttributeList&) = default;
