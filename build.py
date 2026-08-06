@@ -252,8 +252,9 @@ libstd = command(
     name="libstd",
     inputs=(
         ["$(S)/tests/std/build.sh", "$(S)/tests/std/rustc-1.90.0-overrides.toml"]
-        + build.glob("$(S)/tests/std/script-overrides/stable-1.90.0-linux/**")
-        + build.glob("$(S)/tests/std/libproc_macro/**")
+        + build.glob("$(S)/tests/std/script-overrides/stable-1.90.0-linux/*.txt")
+        + build.glob("$(S)/tests/std/libproc_macro/**/*.rs")
+        + build.glob("$(S)/tests/std/libproc_macro/Cargo.toml")
     ),
     outputs=["$(B)/tests/libstd.tar"],
     cmd=["$(S)/tests/std/build.sh", "$(B)/tests/rust-src.tar", "$(B)/tests/libstd.tar"],
@@ -308,7 +309,7 @@ resvg = command(
             "crates/resvg",
             "python3", "$(S)/tests/resvg/run.py", "@BIN@",
         ],
-        ["touch", "$(B)/tests/resvg.stamp"],
+        ["sh", "-c", "> $(B)/tests/resvg.stamp"],
     ],
     deps=[resvg_src, resvg_vendor, libstd, rustc, minicargo],
     env=TOOLCHAIN_ENV,
