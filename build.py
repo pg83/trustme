@@ -524,6 +524,44 @@ for _case, _origin, _edition, _mode in rust_doctest_cases:
         color="green",
     ))
 
+# Fixed RustSmith programs and rustc 1.90 stdout oracles.  Keep sources and
+# oracles individual on disk, but run ten per node so the graph stays compact.
+rustsmith_root = Path(__file__).parent / "tests" / "rustsmith"
+rustsmith_cases = [
+    _line.split("\t")
+    for _line in (rustsmith_root / "cases.tsv").read_text().splitlines()
+]
+rustsmith_tests = []
+for _start in range(0, len(rustsmith_cases), 10):
+    _shard = rustsmith_cases[_start:_start + 10]
+    _first = _shard[0][0]
+    _last = _shard[-1][0]
+    _stamp = "$(B)/tests/rustsmith/" + _first + "-" + _last + ".stamp"
+    _inputs = [
+        "$(S)/tests/rustsmith/upstream/" + _stem + _suffix
+        for _stem, _seed in _shard
+        for _suffix in (".rs", ".args", ".stdout")
+    ]
+    rustsmith_tests.append(command(
+        name="rustsmith_" + _first + "_" + _last,
+        inputs=[
+            "$(S)/tests/rustsmith/adapter.py",
+            "$(S)/tests/rustsmith/cases.tsv",
+            *_inputs,
+            *TESTS_LIB,
+        ],
+        outputs=[_stamp],
+        cmd=[
+            "python3", "$(S)/tests/rustsmith/adapter.py",
+            "$(S)/tests/rustsmith/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/rustsmith/upstream", "$(B)/tests/libstd.tar", _stamp,
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="RS",
+        color="green",
+    ))
+
 group(
     "test",
     resvg,
@@ -533,6 +571,7 @@ group(
     *rust_quiz_tests,
     *rust_lib_tests,
     *rust_doctests,
+    *rustsmith_tests,
 )
 group("unit", *unit_tests)
 group("rust_1_90", *rust_1_90_tests)
@@ -540,3 +579,4 @@ group("gccrs", *gccrs_tests)
 group("rust_quiz", *rust_quiz_tests)
 group("rust_lib", *rust_lib_tests)
 group("rust_doctest", *rust_doctests)
+group("rustsmith", *rustsmith_tests)

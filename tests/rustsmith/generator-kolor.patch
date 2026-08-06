@@ -1,0 +1,27 @@
+diff --git a/build.gradle.kts b/build.gradle.kts
+index 1b0d3ca..86f9d6b 100644
+--- a/build.gradle.kts
++++ b/build.gradle.kts
+@@ -31 +31,0 @@ dependencies {
+-    implementation("com.andreapivetta.kolor:kolor:1.0.0")
+diff --git a/src/main/kotlin/com/andreapivetta/kolor/Compat.kt b/src/main/kotlin/com/andreapivetta/kolor/Compat.kt
+new file mode 100644
+index 0000000..d32191f
+--- /dev/null
++++ b/src/main/kotlin/com/andreapivetta/kolor/Compat.kt
+@@ -0,0 +1,15 @@
++package com.andreapivetta.kolor
++
++enum class Color {
++    GREEN,
++    LIGHT_BLUE,
++    LIGHT_RED,
++    MAGENTA,
++    YELLOW,
++}
++
++object Kolor {
++    fun foreground(text: String, color: Color): String = text
++}
++
++fun String.lightBlue(): String = this
