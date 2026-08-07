@@ -56,7 +56,7 @@ def main() -> int:
                 binary)
 
         lib.log(f"[test] {binary}")
-        lib.run([binary if a == "@BIN@" else a for a in test_cmd])
+        lib.run([binary if a == "@BIN@" else a for a in test_cmd], timeout=60)
     return 0
 
 

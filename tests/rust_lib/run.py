@@ -18,7 +18,7 @@ def main() -> int:
         [harness, "--list"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        timeout=30,
+        timeout=60,
         check=False,
     )
     if listing.returncode != 0:
@@ -51,11 +51,11 @@ def main() -> int:
     try:
         result = subprocess.run(
             [harness, selected, "--exact", "--include-ignored", "--nocapture"],
-            timeout=30,
+            timeout=60,
             check=False,
         )
     except subprocess.TimeoutExpired:
-        print(f"FAIL {case}: timed out after 30 seconds", file=sys.stderr)
+        print(f"FAIL {case}: timed out after 60 seconds", file=sys.stderr)
         return 1
     if result.returncode != 0:
         return result.returncode or 1

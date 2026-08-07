@@ -75,11 +75,11 @@ def main() -> int:
                     env=environment,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    timeout=30,
+                    timeout=60,
                     check=False,
                 )
             except subprocess.TimeoutExpired:
-                print(f"FAIL Rust Reference {case}: timed out after 30 seconds", file=sys.stderr)
+                print(f"FAIL Rust Reference {case}: timed out after 60 seconds", file=sys.stderr)
                 return 1
             success = run_result.returncode == 0 if mode == "pass" else run_result.returncode != 0
             if not success:

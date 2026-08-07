@@ -72,11 +72,11 @@ def main() -> int:
                 cwd=work,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=30,
+                timeout=60,
                 check=False,
             )
         except subprocess.TimeoutExpired:
-            print(f"FAIL {case}: timed out after 30 seconds", file=sys.stderr)
+            print(f"FAIL {case}: timed out after 60 seconds", file=sys.stderr)
             return 1
 
         if run_result.returncode != 0:

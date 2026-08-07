@@ -10,9 +10,9 @@ def log(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
 
 
-def run(argv, *, cwd=None, env=None) -> None:
+def run(argv, *, cwd=None, env=None, timeout=None) -> None:
     """Run a command, inheriting stdio, raising on failure."""
-    subprocess.run(argv, cwd=cwd, env=env, check=True)
+    subprocess.run(argv, cwd=cwd, env=env, timeout=timeout, check=True)
 
 
 def require_env(name: str) -> str:

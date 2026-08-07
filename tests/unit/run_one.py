@@ -35,10 +35,11 @@ def main() -> int:
                  *mode, "--edition", "2021"], env=env)
         if test_harness:
             listing = subprocess.run([binary, "--list"], env=env,
-                                     stdout=subprocess.PIPE, check=True)
+                                     stdout=subprocess.PIPE, timeout=60,
+                                     check=True)
             if b": test" not in listing.stdout:
                 raise RuntimeError("test harness contains no tests")
-        lib.run([binary], env=env)
+        lib.run([binary], env=env, timeout=60)
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)
     open(stamp, "w").close()

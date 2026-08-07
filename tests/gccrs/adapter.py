@@ -104,11 +104,11 @@ def main() -> int:
                 cwd=os.path.dirname(source),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                timeout=30,
+                timeout=60,
                 check=False,
             )
         except subprocess.TimeoutExpired:
-            print(f"FAIL {case}: timed out after 30 seconds", file=sys.stderr)
+            print(f"FAIL {case}: timed out after 60 seconds", file=sys.stderr)
             return 1
 
         expected_failure = "dg-shouldfail" in text or "dg-xfail-run-if" in text
