@@ -2683,6 +2683,30 @@ namespace HIR {
                         } else {
                             throw Defer();
                         }
+                    } else if (te->name == "size_of_val") {
+                        auto ty = local_state.monomorph_expand(te->params.m_types.at(0));
+                        size_t size_val;
+                        size_t align_val;
+                        if (!Target_GetSizeAndAlignOf(state.sp, this->resolve, ty, size_val, align_val)) {
+                            throw Defer();
+                        }
+                        if (size_val == SIZE_MAX) {
+                            size_t item_size;
+                            if (const auto* slice = ty.data().opt_Slice()) {
+                                if (!Target_GetSizeOf(state.sp, this->resolve, slice->inner, item_size)) {
+                                    throw Defer();
+                                }
+                            } else if (ty == ::HIR::CoreType::Str) {
+                                item_size = 1;
+                            } else {
+                                throw Defer();
+                            }
+                            auto arg = local_state.get_lval(e.args.at(0).as_LValue());
+                            const auto len = arg.slice(Target_GetPointerBits() / 8).read_usize(state);
+                            MIR_ASSERT(state, item_size == 0 || len <= SIZE_MAX / item_size, "`size_of_val` overflow for " << ty);
+                            size_val = len * item_size;
+                        }
+                        dst.write_uint(state, Target_GetPointerBits(), U128(size_val));
                     } else if (te->name == "align_of" || te->name == "min_align_of") {
                         auto ty = local_state.monomorph_expand(te->params.m_types.at(0));
                         size_t align_val;
