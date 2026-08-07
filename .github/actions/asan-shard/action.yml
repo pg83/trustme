@@ -19,9 +19,17 @@ runs:
         TEST_GROUP: ${{ inputs.shard }}
         TEST_GROUP_COUNT: ${{ inputs.shard_count }}
       run: |
-        nix --extra-experimental-features 'nix-command flakes' \
-          develop .#clang -c \
+        docker run --rm \
+          --volume "$GITHUB_WORKSPACE:/workspace" \
+          --workdir /workspace \
+          --env TEST_GROUP \
+          --env TEST_GROUP_COUNT \
+          ubuntu:26.04 \
           bash -euxo pipefail -c '
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install --yes --no-install-recommends \
+              clang curl golang-go libclang-rt-dev lld llvm patch python3 zlib1g-dev
             clang++ --version
             ld.lld --version
             export CC="$(command -v clang)"
