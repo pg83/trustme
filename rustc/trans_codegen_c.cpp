@@ -7907,24 +7907,18 @@ namespace {
                     m_of << ")";
                 } else if (name == "maxnumf32" || name == "maxnumf64") {
                     emit_lvalue(e.ret_val);
-                    m_of << " = (";
+                    m_of << " = fmax" << (name.back() == '2' ? "f" : "") << "(";
                     emit_param(e.args.at(0));
-                    m_of << " > ";
+                    m_of << ", ";
                     emit_param(e.args.at(1));
-                    m_of << ") ? ";
-                    emit_param(e.args.at(0));
-                    m_of << " : ";
-                    emit_param(e.args.at(1));
+                    m_of << ")";
                 } else if (name == "minnumf32" || name == "minnumf64") {
                     emit_lvalue(e.ret_val);
-                    m_of << " = (";
+                    m_of << " = fmin" << (name.back() == '2' ? "f" : "") << "(";
                     emit_param(e.args.at(0));
-                    m_of << " < ";
+                    m_of << ", ";
                     emit_param(e.args.at(1));
-                    m_of << ") ? ";
-                    emit_param(e.args.at(0));
-                    m_of << " : ";
-                    emit_param(e.args.at(1));
+                    m_of << ")";
                 } else {
                     MIR_BUG(mir_res, "Unknown float intrinsic '" << name << "'");
                 }

@@ -2944,6 +2944,15 @@ namespace HIR {
                         auto bits = local_state.read_param_uint(ti.bits, e.args.at(0));
                         bits &= ~(U128(1) << (ti.bits - 1));
                         dst.write_uint(state, ti.bits, bits);
+                    } else if (te->name == "minnumf16" || te->name == "minnumf32" || te->name == "minnumf64" || te->name == "minnumf128" || te->name == "maxnumf16" || te->name == "maxnumf32" || te->name == "maxnumf64" || te->name == "maxnumf128") {
+                        ::HIR::TypeRef tmp;
+                        auto ti = TypeInfo::for_type(state.get_param_type(tmp, e.args.at(0)));
+                        MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
+                        auto lhs = local_state.read_param_float(ti.bits, e.args.at(0));
+                        auto rhs = local_state.read_param_float(ti.bits, e.args.at(1));
+                        bool is_min = te->name == "minnumf16" || te->name == "minnumf32" || te->name == "minnumf64" || te->name == "minnumf128";
+                        auto value = is_min ? float_value_minimum_number(lhs, rhs) : float_value_maximum_number(lhs, rhs);
+                        dst.write_float(state, ti.bits, value);
                     } else if (te->name == "assume") {
                         auto val = local_state.read_param_uint(8, e.args.at(0));
                         MIR_ASSERT(state, val != 0, "`assume` failed");

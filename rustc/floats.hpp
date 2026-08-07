@@ -42,6 +42,14 @@ inline FloatValue float_value_remainder(FloatValue lhs, FloatValue rhs) {
     return ::fmodf128(lhs, rhs);
 }
 
+inline FloatValue float_value_minimum_number(FloatValue lhs, FloatValue rhs) {
+    return ::fminf128(lhs, rhs);
+}
+
+inline FloatValue float_value_maximum_number(FloatValue lhs, FloatValue rhs) {
+    return ::fmaxf128(lhs, rhs);
+}
+
 inline std::ostream& operator<<(std::ostream& os, const FloatValue& value) {
     return os << static_cast<long double>(static_cast<_Float128>(value));
 }
