@@ -97,7 +97,7 @@ std	run-time-detect	crate	std/tests/run-time-detect.rs	2024
 std	seq-compare	crate	std/tests/seq-compare.rs	2024
 std	slice-from-array-issue-113238	crate	std/tests/slice-from-array-issue-113238.rs	2024
 std	switch-stdout	crate	std/tests/switch-stdout.rs	2024
-std	sync	crate	std/tests/sync/lib.rs	2024
+std	sync	adapter-crate	std_sync.rs	2024
 std	thread	crate	std/tests/thread.rs	2024
 std	thread_local	crate	std/tests/thread_local/lib.rs	2024
 std	time	crate	std/tests/time.rs	2024

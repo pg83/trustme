@@ -30,6 +30,8 @@ def main() -> int:
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
         if kind == "crate":
             source = os.path.join(upstream, root)
+        elif kind == "adapter-crate":
+            source = os.path.join(os.path.dirname(__file__), "adapter", root)
         elif kind in ("module", "adapter-module", "module-shard"):
             preamble = os.path.join(upstream, suite, "preamble.rs")
             wrapper = open(preamble, encoding="utf-8", errors="surrogateescape").read()
