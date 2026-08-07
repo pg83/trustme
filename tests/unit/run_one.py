@@ -8,6 +8,7 @@ one compiler fix that must compile and exit 0.
 Environment: RUSTC, CC.
 """
 import os
+import re
 import subprocess
 import sys
 
@@ -22,6 +23,8 @@ def main() -> int:
     rustc = lib.require_env("RUSTC")
     source_text = open(src, encoding="utf-8", errors="surrogateescape").read()
     test_harness = "//@ test-harness" in source_text
+    edition_match = re.search(r"^//@\s*edition:\s*(\d+)", source_text, re.MULTILINE)
+    edition = edition_match.group(1) if edition_match else "2021"
 
     with lib.workdir() as work:
         env = dict(os.environ)
@@ -32,7 +35,7 @@ def main() -> int:
         binary = os.path.join(work, "t")
         mode = ["--test"] if test_harness else ["--crate-type", "bin"]
         lib.run([rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
-                 *mode, "--edition", "2021"], env=env)
+                 *mode, "--edition", edition], env=env)
         if test_harness:
             listing = subprocess.run([binary, "--list"], env=env,
                                      stdout=subprocess.PIPE, timeout=60,

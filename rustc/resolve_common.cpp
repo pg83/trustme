@@ -190,8 +190,8 @@ namespace {
                     i += 1;
                     } while (i < base_nodes.size() && base_nodes[base_nodes.size() - i].name().c_str()[0] == '#');
 
-                    // If not found, and 2018 - look for a crate
-                    if (crate.m_edition >= AST::Edition::Rust2018) {
+                    // If not found, look for an implicit crate allowed in this edition.
+                    if (crate.m_edition >= AST::Edition::Rust2018 || name == "core") {
                         DEBUG("Trying implicit externs for " << name);
                         DEBUG(FmtLambda([&](std::ostream& os) {
                             for (const auto& v : AST::g_implicit_crates) {
