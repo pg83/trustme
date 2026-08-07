@@ -18,6 +18,7 @@
 namespace HIR {
 
     class Struct;
+    class Union;
     class Enum;
     class Constant;
 
@@ -95,6 +96,7 @@ namespace HIR {
             Unbound,
             ((Unbound, struct {}),
              (Struct, const Struct*),
+             (Union, const Union*),
              (Enum,
               struct {
                   const Enum* ptr;
@@ -106,6 +108,7 @@ namespace HIR {
                 TU_MATCH_HDRA( (*this), {)
                 TU_ARMA(Unbound, e) return e;
                 TU_ARMA(Struct, e) return e;
+                TU_ARMA(Union, e) return e;
                 TU_ARMA(Enum, e) return e;
                 }
                 abort();

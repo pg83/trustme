@@ -1230,6 +1230,9 @@ const ::HIR::Struct& HIR::pattern_get_struct(const Span& sp, const ::HIR::Path& 
         TU_ARMA(Struct, be) {
             str_p = be;
         }
+        TU_ARMA(Union, be) {
+            BUG(sp, "Tuple pattern used on union " << path);
+        }
         TU_ARMA(Enum, be) {
             const auto& enm = *be.ptr;
             if (is_tuple) {
@@ -1263,6 +1266,9 @@ const ::HIR::t_tuple_fields& HIR::pattern_get_tuple(const Span& sp, const ::HIR:
 }
 
 const ::HIR::t_struct_fields& HIR::pattern_get_named(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding) {
+    if (binding.is_Union()) {
+        return binding.as_Union()->m_variants;
+    }
     return pattern_get_struct(sp, path, binding, false).m_data.as_Named();
 }
 

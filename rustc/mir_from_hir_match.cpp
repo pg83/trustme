@@ -1789,6 +1789,22 @@ void PatternRulesetBuilder::append_from(const Span& sp, const ::HIR::Pattern& pa
                         TU_ARMA(Any, pe) {
                             this->push_rule(PatternRule::make_Any({}));
                         }
+                        TU_ARMA(PathNamed, pe) {
+                            ASSERT_BUG(sp, pe.binding.is_Union() && pe.binding.as_Union() == pbe, "Union pattern binding mismatch");
+                            ASSERT_BUG(sp, pe.sub_patterns.size() == 1, "Union pattern must select exactly one field");
+
+                            const auto& field_pattern = pe.sub_patterns.front();
+                            auto field_it = ::std::find_if(pbe->m_variants.begin(), pbe->m_variants.end(), [&](const auto& field) {
+                                return field.name == field_pattern.first;
+                            });
+                            ASSERT_BUG(sp, field_it != pbe->m_variants.end(), "Unable to find union field " << field_pattern.first);
+
+                            const auto field_index = static_cast<unsigned>(field_it - pbe->m_variants.begin());
+                            ASSERT_BUG(sp, field_index < FIELD_INDEX_MAX, "Too-large union field index");
+                            m_field_path.push_back(field_index);
+                            this->append_from(sp, field_pattern.second, maybe_monomorph(field_it->ty));
+                            m_field_path.pop_back();
+                        }
             }
                 }
                 TU_ARMA(ExternType, pbe) {

@@ -330,8 +330,19 @@ public:
             }
         }
 
-        // Has to be a struct
-        const auto& str = m_crate.get_struct_by_path(sp, gp.m_path);
+        const auto& ti = m_crate.get_typeitem_by_path(sp, gp.m_path);
+        if (ti.is_Union()) {
+            const auto& unn = ti.as_Union();
+
+            gp.m_params.m_lifetimes.resize(unn.m_params.m_lifetimes.size());
+            gp.m_params.m_types.resize(unn.m_params.m_types.size());
+            gp.m_params.m_values.resize(unn.m_params.m_values.size());
+
+            return ::HIR::Pattern::PathBinding::make_Union(&unn);
+        }
+
+        ASSERT_BUG(sp, ti.is_Struct(), "Pattern path " << gp.m_path << " didn't point to a struct or union (" << ti.tag_str() << ")");
+        const auto& str = ti.as_Struct();
 
         gp.m_params.m_lifetimes.resize(str.m_params.m_lifetimes.size());
         gp.m_params.m_types.resize(str.m_params.m_types.size());

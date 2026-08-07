@@ -2688,6 +2688,12 @@ void Context::handle_pattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::T
                                 context.add_ivars_params(p.m_params);
                                 possible_type = ::HIR::TypeRef::new_path(p.clone(), ::HIR::TypePathBinding(be));
                             }
+                            TU_ARMA(Union, be) {
+                                auto& p = e.path.m_data.as_Generic();
+                                assert(be);
+                                context.add_ivars_params(p.m_params);
+                                possible_type = ::HIR::TypeRef::new_path(p.clone(), ::HIR::TypePathBinding(be));
+                            }
                             TU_ARMA(Enum, be) {
                                 auto& p = e.path.m_data.as_Generic();
                                 assert(be.ptr);
@@ -2706,6 +2712,12 @@ void Context::handle_pattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::T
                                 context.add_ivars_params(p.m_params);
                                 possible_type = ::HIR::TypeRef::new_path(p.clone(), ::HIR::TypePathBinding(be));
                             }
+                            TU_ARMA(Union, be) {
+                                auto& p = e.path.m_data.as_Generic();
+                                assert(be);
+                                context.add_ivars_params(p.m_params);
+                                possible_type = ::HIR::TypeRef::new_path(p.clone(), ::HIR::TypePathBinding(be));
+                            }
                             TU_ARMA(Enum, be) {
                                 auto& p = e.path.m_data.as_Generic();
                                 assert(be.ptr);
@@ -2719,6 +2731,12 @@ void Context::handle_pattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::T
                     TU_ARMA(Unbound, _)
                         BUG(sp, "");
                             TU_ARMA(Struct, be) {
+                                auto& p = e.path.m_data.as_Generic();
+                                assert(be);
+                                context.add_ivars_params(p.m_params);
+                                possible_type = ::HIR::TypeRef::new_path(p.clone(), ::HIR::TypePathBinding(be));
+                            }
+                            TU_ARMA(Union, be) {
                                 auto& p = e.path.m_data.as_Generic();
                                 assert(be);
                                 context.add_ivars_params(p.m_params);
@@ -3046,6 +3064,9 @@ void Context::handle_pattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::T
                                 const auto& str = *be;
                                 ASSERT_BUG(sp, str.m_data.is_Unit(), "PathValue used on non-unit struct variant");
                             }
+                            TU_ARMA(Union, be) {
+                                BUG(sp, "PathValue used for union");
+                            }
                             TU_ARMA(Enum, be) {
                                 const auto& enm = *be.ptr;
                                 if (const auto* ee = enm.m_data.opt_Data()) {
@@ -3319,6 +3340,12 @@ void Context::handle_pattern_direct_inner(const Span& sp, ::HIR::Pattern& pat, c
             TU_ARMA(Unbound, _)
                 BUG(sp, "");
                 TU_ARMA(Struct, be) {
+                    auto& p = path.m_data.as_Generic();
+                    assert(be);
+                    context.add_ivars_params(p.m_params);
+                    return ::HIR::TypeRef::new_path(p.clone(), ::HIR::TypePathBinding(be));
+                }
+                TU_ARMA(Union, be) {
                     auto& p = path.m_data.as_Generic();
                     assert(be);
                     context.add_ivars_params(p.m_params);
@@ -3671,6 +3698,9 @@ void Context::handle_pattern_direct_inner(const Span& sp, ::HIR::Pattern& pat, c
             BUG(sp, "");
                 TU_ARMA(Struct, str) {
                     assert(str->m_data.is_Unit());
+                }
+                TU_ARMA(Union, unn) {
+                    BUG(sp, "PathValue used for union");
                 }
                 TU_ARMA(Enum, be) {
                     if (const auto* ee = be.ptr->m_data.opt_Data()) {

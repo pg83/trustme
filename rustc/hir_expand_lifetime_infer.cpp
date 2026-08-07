@@ -869,6 +869,9 @@ namespace {
                             flds = &pbe->m_data.as_Tuple();
                             // TODO: Equate type?
                         }
+                        TU_ARMA(Union, pbe) {
+                            BUG(sp, "Tuple pattern used on union");
+                        }
                 }
                 assert(flds);
                 auto ms = MonomorphStatePtr(nullptr, &pe.path.m_data.as_Generic().m_params, nullptr);
