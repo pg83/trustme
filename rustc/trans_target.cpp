@@ -1705,8 +1705,9 @@ namespace {
                                 auto& ents = variants[var_i].ents;
                                 auto& var_ty = variants[var_i].type;
                                 if (e[var_i].type != HIR::TypeRef::new_unit()) {
-                                    // - Sort
-                                    ::std::sort(ents.begin(), ents.end(), sortfn_struct_fields);
+                                    if (enm.m_tag_repr == HIR::Enum::Repr::Auto) {
+                                        ::std::sort(ents.begin(), ents.end(), sortfn_struct_fields);
+                                    }
                                     // - Add tag
                                     ents.insert(ents.begin(), Ent());
                                     ents[0].align = tag_size;

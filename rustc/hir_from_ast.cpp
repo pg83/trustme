@@ -1316,6 +1316,7 @@ namespace {
     // NOTE: empty enums are encoded as empty Data enums
     else {
         ::std::vector<::HIR::Enum::DataVariant> variants;
+        const auto variant_repr = is_repr_c || repr != ::HIR::Enum::Repr::Auto ? ::HIR::Struct::Repr::C : ::HIR::Struct::Repr::Rust;
         for (const auto& var : ent.variants()) {
             if (var.m_data.is_Unit()) {
                 // TODO: Should this make its own unit-like struct?
@@ -1336,7 +1337,7 @@ namespace {
                 }
 
                 auto ty_name = RcString::new_interned(FMT(path.name << "#" << var.m_name));
-                push_struct(ty_name, ::HIR::Struct{LowerHIR_GenericParams(ent.params(), nullptr), ::HIR::Struct::Repr::Rust, mv$(data)});
+                push_struct(ty_name, ::HIR::Struct{LowerHIR_GenericParams(ent.params(), nullptr), variant_repr, mv$(data)});
                 auto ty_ipath = path;
                 ty_ipath.name = ty_name.c_str();
                 auto ty_path = ty_ipath.get_full_path();
