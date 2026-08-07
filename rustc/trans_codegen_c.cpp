@@ -6457,17 +6457,13 @@ namespace {
                     emit_ctype(ty);
                     m_of << ")";
                 } else if (const auto* te = inner_ty.data().opt_Slice()) {
-                    if (!ty.data().is_Slice()) {
-                        m_of << "mrustc_max( ALIGNOF(";
-                        emit_ctype(ty);
-                        m_of << "), ";
-                    }
                     m_of << "ALIGNOF(";
-                    emit_ctype(te->inner);
-                    m_of << ")";
-                    if (!ty.data().is_Slice()) {
-                        m_of << " )";
+                    if (ty.data().is_Slice()) {
+                        emit_ctype(te->inner);
+                    } else {
+                        emit_ctype(ty);
                     }
+                    m_of << ")";
                 } else if (inner_ty == ::HIR::CoreType::Str) {
                     if (!ty.data().is_Primitive()) {
                         m_of << "ALIGNOF(";
