@@ -1874,7 +1874,7 @@ namespace {
 
                         emit_struct_inner(ty, repr, /*packing_max_align=*/0);
 
-                        if (repr->size > 0) {
+                        if (repr->size > 0 && repr->size != SIZE_MAX) {
                             m_of << "typedef char sizeof_assert_";
                             emit_ctype(ty);
                             m_of << "[ (sizeof(";
