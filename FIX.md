@@ -20,6 +20,7 @@
     - ~~const-eval не реализовывал float remainder;~~ Сделано через `std::fmod`, сохраняющий Rust/IEEE знак остатка. Красный `test_const_float_remainder.rs` проверяет `10.0 % 2.0 == 0.0` и `-5.5 % 2.0 == -1.5`; `coretests/floats` доходит до следующего отдельного TODO на intrinsic `fabsf64`.
     - ~~const-eval не реализовывал `fabsf{16,32,64,128}`;~~ Сделано точным побитовым сбросом sign bit без потери NaN payload и `f128` precision. Красный `test_const_float_abs.rs` проверяет `abs()` и `is_finite()`; `coretests/floats` доходит до следующей отдельной panic-ветки в constant evaluation.
     - ~~float arithmetic наследовала host-dependent знак NaN (`0.0 / 0.0` давало `0xfff8_0000_0000_0000`);~~ Сделано: MIR const propagation нормализует арифметический NaN в positive preferred NaN, а interpreter пишет canonical NaN отдельно для `f16/f32/f64/f128`. Красный `test_const_nan_sign.rs` проверяет и локальное деление, и `f64::NAN` из заново собранной `libstd`; `coretests/floats` проходит этот assert и доходит до следующей отдельной panic-ветки в constant evaluation.
+    - ~~`SwitchValue` в const interpreter читал `ti.bits / 8` как количество бит и сравнивал `U128` с `uint64_t` через обрезающий до 32 бит overload;~~ Сделано: чтение использует полную битовую ширину, switch-литерал явно расширяется до `U128`. Красный `test_const_switch_u64.rs` проверяет высокое `u64`-значение; `coretests/floats` полностью проходит `nan::const_` и доходит до отдельного сбоя `f128::MIN_POSITIVE_NORMAL.is_normal()`.
 
 ### P1 — максимальная отдача на одну починку
 
