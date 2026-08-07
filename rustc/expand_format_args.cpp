@@ -342,7 +342,6 @@ namespace {
 
                     if (*s == '0' && s[1] != '$') { // Special case `0$` to be an argument index, instead of zero pad
                         args.zero_pad = true;
-                        args.align_char = '0';
                         s++;
                     } else {
                         //args.zero_pad = false;
@@ -842,6 +841,9 @@ namespace {
                         }
                         if (frag.args.alternate) {
                             flags |= 1 << Flag::Alternate;
+                        }
+                        if (frag.args.zero_pad) {
+                            flags |= 1 << Flag::SignAwareZeroPad;
                         }
                         switch (frag.args.debug_ty) {
                             case FmtArgs::Debug::Normal:
