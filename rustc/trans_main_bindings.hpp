@@ -10,27 +10,26 @@
 #include "trans_trans_list.hpp"
 
 namespace HIR {
-class Crate;
+    class Crate;
 }
 
-struct TransOptions
-{
-    ::std::string   mode = "c";
+struct TransOptions {
+    ::std::string mode = "c";
     unsigned int opt_level = 0;
     bool emit_debug_info = false;
-    ::std::string   build_command_file;
+    ::std::string build_command_file;
 
-    ::std::string   panic_crate;
+    ::std::string panic_crate;
 
-    ::std::vector< ::std::string>   library_search_dirs;
-    ::std::vector< ::std::string>   libraries;
+    ::std::vector<::std::string> library_search_dirs;
+    ::std::vector<::std::string> libraries;
 };
 
 enum class CodegenOutput {
-    Object, // .o
+    Object,         // .o
     StaticLibrary,  // .a
     DynamicLibrary, // .so
-    Executable, // no suffix, includes main stub (TODO: Can't that just be added earlier?)
+    Executable,     // no suffix, includes main stub (TODO: Can't that just be added earlier?)
 };
 
 extern TransList Trans_Enumerate_Main(const ::HIR::Crate& crate);

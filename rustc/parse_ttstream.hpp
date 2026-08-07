@@ -11,19 +11,21 @@
 #include "parse_tokenstream.hpp"
 
 /// Borrowed TTStream
-class TTStream:
-    public TokenStream
-{
-    ::std::vector< ::std::pair<unsigned int, const TokenTree*> > m_stack;
+class TTStream: public TokenStream {
+    ::std::vector<::std::pair<unsigned int, const TokenTree*>> m_stack;
     Span m_parent_span;
     AST::Edition m_edition = AST::Edition::Rust2015;
-    const Ident::Hygiene*   m_hygiene_ptr = nullptr;
+    const Ident::Hygiene* m_hygiene_ptr = nullptr;
+
 public:
     TTStream(Span parent, ParseState ps, const TokenTree& input_tt);
     ~TTStream();
 
     Position getPosition() const override;
-    Span outerSpan() const override { return m_parent_span; }
+
+    Span outerSpan() const override {
+        return m_parent_span;
+    }
 
 protected:
     AST::Edition realGetEdition() const override;
@@ -32,15 +34,14 @@ protected:
 };
 
 /// Owned TTStream
-class TTStreamO:
-    public TokenStream
-{
-    Span    m_parent_span;
-    Position    m_last_pos;
-    TokenTree   m_input_tt;
-    ::std::vector< ::std::pair<unsigned int, TokenTree*> > m_stack;
+class TTStreamO: public TokenStream {
+    Span m_parent_span;
+    Position m_last_pos;
+    TokenTree m_input_tt;
+    ::std::vector<::std::pair<unsigned int, TokenTree*>> m_stack;
     AST::Edition m_edition = AST::Edition::Rust2015;
-    const Ident::Hygiene*   m_hygiene_ptr = nullptr;
+    const Ident::Hygiene* m_hygiene_ptr = nullptr;
+
 public:
     TTStreamO(Span parent, ParseState ps, TokenTree input_tt);
     ~TTStreamO();
@@ -49,7 +50,10 @@ public:
     TTStreamO& operator=(TTStreamO&& x) = default;
 
     Position getPosition() const override;
-    Span outerSpan() const override { return m_parent_span; }
+
+    Span outerSpan() const override {
+        return m_parent_span;
+    }
 
 protected:
     AST::Edition realGetEdition() const override;

@@ -12,22 +12,21 @@
 class TypeRef;
 class TokenTree;
 struct Ident;
+
 namespace AST {
     class Visibility;
     class Pattern;
     class Path;
     class ExprNode;
     class Attribute;
-    template<typename T> struct Named;
+    template <typename T>
+    struct Named;
     class Item;
 };
 
-
-class InterpolatedFragment
-{
+class InterpolatedFragment {
 public:
-    enum Type
-    {
+    enum Type {
         TT,
         PAT,
         PATH,
@@ -43,24 +42,31 @@ public:
     } m_type;
 
     // Owned type-pruned pointer
-    void*   m_ptr;
+    void* m_ptr;
 
-    InterpolatedFragment(InterpolatedFragment&& );
-    InterpolatedFragment& operator=(InterpolatedFragment&& );
+    InterpolatedFragment(InterpolatedFragment&&);
+    InterpolatedFragment& operator=(InterpolatedFragment&&);
     //InterpolatedFragment(const InterpolatedFragment& );
 
-    InterpolatedFragment(TokenTree );
+    InterpolatedFragment(TokenTree);
     InterpolatedFragment(::AST::Pattern);
     InterpolatedFragment(::AST::Path);
     InterpolatedFragment(::TypeRef);
-    InterpolatedFragment(::AST::Attribute );
-    InterpolatedFragment(::AST::Named<AST::Item> );
+    InterpolatedFragment(::AST::Attribute);
+    InterpolatedFragment(::AST::Named<AST::Item>);
     ~InterpolatedFragment();
-    InterpolatedFragment(Type , ::AST::ExprNode*);
-    InterpolatedFragment(AST::Visibility);  // :vis
+    InterpolatedFragment(Type, ::AST::ExprNode*);
+    InterpolatedFragment(AST::Visibility); // :vis
 
-    TokenTree& as_tt() { assert(m_type == TT); return *reinterpret_cast<TokenTree*>(m_ptr); }
-    const TokenTree& as_tt() const { assert(m_type == TT); return *reinterpret_cast<TokenTree*>(m_ptr); }
+    TokenTree& as_tt() {
+        assert(m_type == TT);
+        return *reinterpret_cast<TokenTree*>(m_ptr);
+    }
+
+    const TokenTree& as_tt() const {
+        assert(m_type == TT);
+        return *reinterpret_cast<TokenTree*>(m_ptr);
+    }
 
     friend ::std::ostream& operator<<(::std::ostream& os, const InterpolatedFragment& x);
 };

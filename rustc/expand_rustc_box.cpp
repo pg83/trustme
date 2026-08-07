@@ -9,12 +9,11 @@
 #include "ast_generics.hpp"
 #include "ast_ast.hpp"
 
-
 // #[rustc_box] - Marks the `Box::new` inner constructor
-class CHandler_RustBox:
-    public ExpandDecorator
-{
-    AttrStage   stage() const override { return AttrStage::Post; }
+class CHandler_RustBox: public ExpandDecorator {
+    AttrStage stage() const override {
+        return AttrStage::Post;
+    }
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNodeP& expr) const override {
         auto* n = dynamic_cast<AST::ExprNode_CallPath*>(expr.get());
@@ -26,4 +25,5 @@ class CHandler_RustBox:
         expr->set_span(span);
     }
 };
+
 STATIC_DECORATOR("rustc_box", CHandler_RustBox);

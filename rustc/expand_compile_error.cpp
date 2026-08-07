@@ -14,14 +14,10 @@
 #include "ast_expr.hpp"
 #include "ast_crate.hpp"
 
-class CExpander_CompileError:
-    public ExpandProcMacro
-{
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override
-    {
+class CExpander_CompileError: public ExpandProcMacro {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         ERROR(sp, E0000, "compile_error! " << tt);
     }
 };
 
 STATIC_MACRO("compile_error", CExpander_CompileError);
-

@@ -8,11 +8,11 @@
 #pragma once
 #include <memory>
 
-
-class JobServer
-{
+class JobServer {
 public:
-    virtual ~JobServer() {}
+    virtual ~JobServer() {
+    }
+
     /// <summary>
     /// Create a jobserver instance (client, or server if `server_jobs` is non-zero and there isn't already a server)
     /// </summary>

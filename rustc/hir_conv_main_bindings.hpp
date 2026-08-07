@@ -8,6 +8,7 @@
 #pragma once
 
 struct Span;
+
 namespace HIR {
     class Crate;
     class ItemPath;
@@ -36,11 +37,6 @@ extern void ConvertHIR_ResolveUFCS_Expr(const ::HIR::Crate& crate, const ::HIR::
 extern void ConvertHIR_ConstantEvaluate_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp);
 extern void ConvertHIR_ConstantEvaluate_Enum(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, const ::HIR::Enum& enm);
 extern void ConvertHIR_ConstantEvaluate_Constant(const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::ItemPath& ip, ::HIR::Constant& e);
-extern void ConvertHIR_ConstantEvaluate_MethodParams(
-    const Span& sp,
-    const ::HIR::Crate& crate, const HIR::SimplePath& mod_path, const ::HIR::GenericParams* impl_generics, const ::HIR::GenericParams* item_generics,
-    const ::HIR::GenericParams* params_def,
-    ::HIR::PathParams& params
-);
+extern void ConvertHIR_ConstantEvaluate_MethodParams(const Span& sp, const ::HIR::Crate& crate, const HIR::SimplePath& mod_path, const ::HIR::GenericParams* impl_generics, const ::HIR::GenericParams* item_generics, const ::HIR::GenericParams* params_def, ::HIR::PathParams& params);
 extern void ConvertHIR_ConstantEvaluate_ConstGeneric(const Span& sp, const ::HIR::Crate& crate, const HIR::TypeRef& ty, ::HIR::ConstGeneric& cg);
 extern void ConvertHIR_ConstantEvaluate_ArraySize(const Span& sp, const ::HIR::Crate& crate, const ::HIR::SimplePath& path, ::HIR::ArraySize& size);

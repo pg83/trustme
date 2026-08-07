@@ -9,6 +9,7 @@
 #pragma once
 
 class TokenStream;
+
 namespace AST {
     class Attribute;
     class AttributeList;

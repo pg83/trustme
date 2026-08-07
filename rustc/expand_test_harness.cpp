@@ -9,12 +9,11 @@
 #include "ast_expr.hpp"
 #include "ast_crate.hpp"
 #include "main_bindings.hpp"
-#include "hir_hir.hpp"  // ABI_RUST
+#include "hir_hir.hpp" // ABI_RUST
 
-#define NEWNODE(_ty, ...)   ::AST::ExprNodeP(new ::AST::ExprNode##_ty(__VA_ARGS__))
+#define NEWNODE(_ty, ...) ::AST::ExprNodeP(new ::AST::ExprNode##_ty(__VA_ARGS__))
 
-void Expand_TestHarness(::AST::Crate& crate)
-{
+void Expand_TestHarness(::AST::Crate& crate) {
     ASSERT_BUG(Span(), crate.m_ext_cratename_test != "", "Crate `test` not loaded");
     ASSERT_BUG(Span(), crate.m_ext_cratename_std != "", "Crate `std` not loaded");
     auto c_test = crate.m_ext_cratename_test;
@@ -33,125 +32,93 @@ void Expand_TestHarness(::AST::Crate& crate)
     // ```
 
     // ---- main function ----
-    auto main_fn = ::AST::Function { Span(), TypeRef(TypeRef::TagUnit(), Span()), {} };
+    auto main_fn = ::AST::Function{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
     {
-        auto call_node = NEWNODE(_CallPath,
-                ::AST::Path(c_test, { ::AST::PathNode("test_main_static") }),
-                ::make_vec1(
-                    NEWNODE(_UniOp, ::AST::ExprNode_UniOp::REF,
-                        NEWNODE(_NamedValue, ::AST::Path("", { ::AST::PathNode("test#"), ::AST::PathNode("TESTS") }))
-                        )
-                    )
-                );
-        main_fn.set_code( mv$(call_node) );
+        auto call_node = NEWNODE(_CallPath, ::AST::Path(c_test, {::AST::PathNode("test_main_static")}), ::make_vec1(NEWNODE(_UniOp, ::AST::ExprNode_UniOp::REF, NEWNODE(_NamedValue, ::AST::Path("", {::AST::PathNode("test#"), ::AST::PathNode("TESTS")})))));
+        main_fn.set_code(mv$(call_node));
     }
 
-
     // ---- test list ----
-    ::std::vector< ::AST::ExprNodeP>    test_nodes;
+    ::std::vector<::AST::ExprNodeP> test_nodes;
 
-    for(const auto& test : crate.m_tests)
-    {
+    for (const auto& test : crate.m_tests) {
         // HACK: Don't emit should_panic tests
-        if( test.panic_type != ::AST::TestDesc::ShouldPanic::No )
-            continue ;
+        if (test.panic_type != ::AST::TestDesc::ShouldPanic::No) {
+            continue;
+        }
 
-        ::AST::ExprNode_StructLiteral::t_values   desc_vals;
+        ::AST::ExprNode_StructLiteral::t_values desc_vals;
         // `name: "foo",`
-        desc_vals.push_back({ {}, "name", NEWNODE(_CallPath,
-                        ::AST::Path(c_test, { ::AST::PathNode("StaticTestName") }),
-                        ::make_vec1( NEWNODE(_String,  test.name) )
-                        ) });
+        desc_vals.push_back({{}, "name", NEWNODE(_CallPath, ::AST::Path(c_test, {::AST::PathNode("StaticTestName")}), ::make_vec1(NEWNODE(_String, test.name)))});
         // `ignore: false,`
-        desc_vals.push_back({ {}, "ignore", NEWNODE(_Bool,  test.ignore) });
+        desc_vals.push_back({{}, "ignore", NEWNODE(_Bool, test.ignore)});
         // `should_panic: ShouldPanic::No,`
         {
-            ::AST::ExprNodeP    should_panic_val;
-            switch(test.panic_type)
-            {
-            case ::AST::TestDesc::ShouldPanic::No:
-                should_panic_val = NEWNODE(_NamedValue,  ::AST::Path(c_test, { ::AST::PathNode("ShouldPanic"), ::AST::PathNode("No") }));
-                break;
-            case ::AST::TestDesc::ShouldPanic::Yes:
-                should_panic_val = NEWNODE(_NamedValue,  ::AST::Path(c_test, { ::AST::PathNode("ShouldPanic"), ::AST::PathNode("Yes") }));
-                break;
-            case ::AST::TestDesc::ShouldPanic::YesWithMessage:
-                should_panic_val = NEWNODE(_CallPath,
-                        ::AST::Path(c_test, { ::AST::PathNode("ShouldPanic"), ::AST::PathNode("YesWithMessage") }),
-                        make_vec1( NEWNODE(_String, test.expected_panic_message) )
-                        );
-                break;
+            ::AST::ExprNodeP should_panic_val;
+            switch (test.panic_type) {
+                case ::AST::TestDesc::ShouldPanic::No:
+                    should_panic_val = NEWNODE(_NamedValue, ::AST::Path(c_test, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("No")}));
+                    break;
+                case ::AST::TestDesc::ShouldPanic::Yes:
+                    should_panic_val = NEWNODE(_NamedValue, ::AST::Path(c_test, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("Yes")}));
+                    break;
+                case ::AST::TestDesc::ShouldPanic::YesWithMessage:
+                    should_panic_val = NEWNODE(_CallPath, ::AST::Path(c_test, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("YesWithMessage")}), make_vec1(NEWNODE(_String, test.expected_panic_message)));
+                    break;
             }
-            desc_vals.push_back({ {}, "should_panic", mv$(should_panic_val) });
+            desc_vals.push_back({{}, "should_panic", mv$(should_panic_val)});
         }
-        if( TARGETVER_LEAST_1_29 && TARGETVER_MOST_1_54 )
-        {
+        if (TARGETVER_LEAST_1_29 && TARGETVER_MOST_1_54) {
             // TODO: Get this from attributes
-            desc_vals.push_back({ {}, "allow_fail", NEWNODE(_Bool, false) });
+            desc_vals.push_back({{}, "allow_fail", NEWNODE(_Bool, false)});
         }
-        if( TARGETVER_LEAST_1_54 )
-        {
+        if (TARGETVER_LEAST_1_54) {
             // TODO: Get this from attributes
-            desc_vals.push_back({ {}, "compile_fail", NEWNODE(_Bool, false) });
-            desc_vals.push_back({ {}, "no_run", NEWNODE(_Bool, false) });
-            desc_vals.push_back({ {}, "test_type", NEWNODE(_NamedValue, ::AST::Path(c_test, { AST::PathNode("TestType"), AST::PathNode("UnitTest") })) });
+            desc_vals.push_back({{}, "compile_fail", NEWNODE(_Bool, false)});
+            desc_vals.push_back({{}, "no_run", NEWNODE(_Bool, false)});
+            desc_vals.push_back({{}, "test_type", NEWNODE(_NamedValue, ::AST::Path(c_test, {AST::PathNode("TestType"), AST::PathNode("UnitTest")}))});
         }
-        if( TARGETVER_LEAST_1_74 )
-        {
-            desc_vals.push_back({ {}, "ignore_message", NEWNODE(_NamedValue, ::AST::Path(crate.m_ext_cratename_std, {AST::PathNode("option"), AST::PathNode("Option"), AST::PathNode("None")})) });
+        if (TARGETVER_LEAST_1_74) {
+            desc_vals.push_back({{}, "ignore_message", NEWNODE(_NamedValue, ::AST::Path(crate.m_ext_cratename_std, {AST::PathNode("option"), AST::PathNode("Option"), AST::PathNode("None")}))});
             auto sp = test.span.get_top_file_span();
-            desc_vals.push_back({ {}, "source_file", NEWNODE(_String, sp.filename.c_str()) });
-            desc_vals.push_back({ {}, "start_line", NEWNODE(_Integer, U128(sp.start_line), CORETYPE_UINT) });
-            desc_vals.push_back({ {}, "start_col" , NEWNODE(_Integer, U128(sp.start_ofs ), CORETYPE_UINT) });
-            desc_vals.push_back({ {}, "end_line"  , NEWNODE(_Integer, U128(sp.end_line  ), CORETYPE_UINT) });
-            desc_vals.push_back({ {}, "end_col"   , NEWNODE(_Integer, U128(sp.end_ofs   ), CORETYPE_UINT) });
+            desc_vals.push_back({{}, "source_file", NEWNODE(_String, sp.filename.c_str())});
+            desc_vals.push_back({{}, "start_line", NEWNODE(_Integer, U128(sp.start_line), CORETYPE_UINT)});
+            desc_vals.push_back({{}, "start_col", NEWNODE(_Integer, U128(sp.start_ofs), CORETYPE_UINT)});
+            desc_vals.push_back({{}, "end_line", NEWNODE(_Integer, U128(sp.end_line), CORETYPE_UINT)});
+            desc_vals.push_back({{}, "end_col", NEWNODE(_Integer, U128(sp.end_ofs), CORETYPE_UINT)});
         }
-        auto desc_expr = NEWNODE(_StructLiteral,  ::AST::Path(c_test, { ::AST::PathNode("TestDesc")}), nullptr, mv$(desc_vals));
+        auto desc_expr = NEWNODE(_StructLiteral, ::AST::Path(c_test, {::AST::PathNode("TestDesc")}), nullptr, mv$(desc_vals));
 
-        ::AST::ExprNode_StructLiteral::t_values   descandfn_vals;
-        descandfn_vals.push_back({ {}, RcString::new_interned("desc"), mv$(desc_expr) });
+        ::AST::ExprNode_StructLiteral::t_values descandfn_vals;
+        descandfn_vals.push_back({{}, RcString::new_interned("desc"), mv$(desc_expr)});
 
         auto test_fcn_node = NEWNODE(_NamedValue, AST::Path(test.path));
-        if(TARGETVER_LEAST_1_74) {
+        if (TARGETVER_LEAST_1_74) {
             // Convert `fn()` into `fn()->Result<(),String>`
             // Use `|| ::test::assert_test_result( fcn() )`
-            test_fcn_node = NEWNODE(_Closure, {}, TypeRef(Span()),
-                NEWNODE(_CallPath, ::AST::Path(c_test, { ::AST::PathNode("assert_test_result") }),
-                    ::make_vec1( NEWNODE(_CallPath, AST::Path(test.path), {}) )
-                    ), false, false);
+            test_fcn_node = NEWNODE(_Closure, {}, TypeRef(Span()), NEWNODE(_CallPath, ::AST::Path(c_test, {::AST::PathNode("assert_test_result")}), ::make_vec1(NEWNODE(_CallPath, AST::Path(test.path), {}))), false, false);
         }
-        auto test_type_var_name  = test.is_benchmark ? "StaticBenchFn" : "StaticTestFn";
-        descandfn_vals.push_back({ {}, RcString::new_interned("testfn"), NEWNODE(_CallPath,
-                        ::AST::Path(c_test, { ::AST::PathNode(test_type_var_name) }),
-                        ::make_vec1( std::move(test_fcn_node) )
-                        ) });
+        auto test_type_var_name = test.is_benchmark ? "StaticBenchFn" : "StaticTestFn";
+        descandfn_vals.push_back({{}, RcString::new_interned("testfn"), NEWNODE(_CallPath, ::AST::Path(c_test, {::AST::PathNode(test_type_var_name)}), ::make_vec1(std::move(test_fcn_node)))});
 
-        test_nodes.push_back( NEWNODE(_StructLiteral,  ::AST::Path(c_test, { ::AST::PathNode("TestDescAndFn")}), nullptr, mv$(descandfn_vals) ) );
+        test_nodes.push_back(NEWNODE(_StructLiteral, ::AST::Path(c_test, {::AST::PathNode("TestDescAndFn")}), nullptr, mv$(descandfn_vals)));
         // NOTE: 1.39+ needs &TestDescAndFn here
-        if(TARGETVER_LEAST_1_39)
-        {
+        if (TARGETVER_LEAST_1_39) {
             test_nodes.back() = NEWNODE(_UniOp, ::AST::ExprNode_UniOp::REF, mv$(test_nodes.back()));
         }
     }
     auto* tests_array = new ::AST::ExprNode_Array(mv$(test_nodes));
 
     size_t test_count = tests_array->m_values.size();
-    auto list_item_ty = TypeRef(Span(), ::AST::Path(c_test, { ::AST::PathNode("TestDescAndFn") }));
+    auto list_item_ty = TypeRef(Span(), ::AST::Path(c_test, {::AST::PathNode("TestDescAndFn")}));
     // NOTE: 1.39+ needs &TestDescAndFn here
-    if(TARGETVER_LEAST_1_39)
-    {
+    if (TARGETVER_LEAST_1_39) {
         list_item_ty = TypeRef(TypeRef::TagReference(), Span(), AST::LifetimeRef::new_static(), false, mv$(list_item_ty));
     }
-    auto tests_list = ::AST::Static { ::AST::Static::Class::STATIC,
-        TypeRef(TypeRef::TagSizedArray(), Span(),
-                mv$(list_item_ty),
-                ::std::shared_ptr<::AST::ExprNode>( new ::AST::ExprNode_Integer(U128(test_count), CORETYPE_UINT) )
-               ),
-        ::AST::Expr( mv$(tests_array) )
-        };
+    auto tests_list = ::AST::Static{::AST::Static::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), mv$(list_item_ty), ::std::shared_ptr<::AST::ExprNode>(new ::AST::ExprNode_Integer(U128(test_count), CORETYPE_UINT))), ::AST::Expr(mv$(tests_array))};
 
     // ---- module ----
-    auto newmod = ::AST::Module { ::AST::AbsolutePath("", { "test#" }) };
+    auto newmod = ::AST::Module{::AST::AbsolutePath("", {"test#"})};
     auto vis_private = AST::Visibility::make_restricted(AST::Visibility::Ty::Private, newmod.path());
     // - TODO: These need to be loaded too.
     //  > They don't actually need to exist here, just be loaded (and use absolute paths)
@@ -162,5 +129,5 @@ void Expand_TestHarness(::AST::Crate& crate)
     newmod.add_item(Span(), vis_private, "TESTS", mv$(tests_list), {});
 
     crate.m_root_module.add_item(Span(), vis_private, "test#", mv$(newmod), {});
-    crate.m_lang_items["mrustc-main"] = ::AST::AbsolutePath("", { "test#", "main" });
+    crate.m_lang_items["mrustc-main"] = ::AST::AbsolutePath("", {"test#", "main"});
 }

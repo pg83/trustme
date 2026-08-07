@@ -8,12 +8,9 @@
 #include "mir_mir_ptr.hpp"
 #include "mir_mir.hpp"
 
-
-void ::MIR::FunctionPointer::reset()
-{
-    if( this->ptr ) {
+void ::MIR::FunctionPointer::reset() {
+    if (this->ptr) {
         delete this->ptr;
         this->ptr = nullptr;
     }
 }
-

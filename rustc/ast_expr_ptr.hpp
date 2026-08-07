@@ -10,61 +10,129 @@
 
 namespace AST {
 
-class ExprNode;
-class NodeVisitor;
+    class ExprNode;
+    class NodeVisitor;
 
-extern ::std::ostream& operator<<(::std::ostream& os, const ExprNode& node);
+    extern ::std::ostream& operator<<(::std::ostream& os, const ExprNode& node);
 
-class ExprNodeP
-{
-    ExprNode*   m_ptr;
-public:
-    ~ExprNodeP();
-    ExprNodeP(): m_ptr(nullptr) {}
-    ExprNodeP(ExprNode* node): m_ptr(node) {}
-    ExprNodeP(std::unique_ptr<ExprNode> node);//: m_ptr(node.release()) {}
+    class ExprNodeP {
+        ExprNode* m_ptr;
 
-    ExprNodeP(ExprNodeP&& x): m_ptr(x.m_ptr) { x.m_ptr = nullptr; }
-    ExprNodeP(const ExprNodeP& x) = delete;
-    ExprNodeP& operator=(ExprNodeP&& x) { this->~ExprNodeP(); this->m_ptr = x.m_ptr; x.m_ptr = nullptr; return *this; }
-    ExprNodeP& operator=(const ExprNodeP& x) = delete;
+    public:
+        ~ExprNodeP();
 
-    operator bool() const { return is_valid(); }
-    bool is_valid() const { return m_ptr != nullptr; }
+        ExprNodeP()
+            : m_ptr(nullptr)
+        {
+        }
 
-    ExprNode& operator*() { return *m_ptr; }
-    const ExprNode& operator*() const { return *m_ptr; }
-    ExprNode* operator->() { return m_ptr; }
-    const ExprNode* operator->() const { return m_ptr; }
+        ExprNodeP(ExprNode* node)
+            : m_ptr(node)
+        {
+        }
 
-    ExprNode* get() { return m_ptr; }
-    const ExprNode* get() const { return m_ptr; }
+        ExprNodeP(std::unique_ptr<ExprNode> node); //: m_ptr(node.release()) {}
 
-    ExprNode* release() { auto rv = m_ptr; m_ptr = nullptr; return rv; }
-    void reset(ExprNode* n = nullptr) { this->~ExprNodeP(); m_ptr = n; }
+        ExprNodeP(ExprNodeP&& x)
+            : m_ptr(x.m_ptr)
+        {
+            x.m_ptr = nullptr;
+        }
 
-    const char* type_name() const;
-};
+        ExprNodeP(const ExprNodeP& x) = delete;
 
-class Expr
-{
-    ::std::shared_ptr<ExprNode> m_node;
-public:
-    Expr(ExprNodeP node);
-    Expr(ExprNode* node);
-    Expr();
+        ExprNodeP& operator=(ExprNodeP&& x) {
+            this->~ExprNodeP();
+            this->m_ptr = x.m_ptr;
+            x.m_ptr = nullptr;
+            return *this;
+        }
 
-    operator bool() const { return is_valid(); }
-    bool is_valid() const { return m_node.get() != nullptr; }
-    const ExprNode& node() const { assert(m_node.get()); return *m_node; }
-          ExprNode& node()       { assert(m_node.get()); return *m_node; }
-    ::std::shared_ptr<ExprNode> take_node() { assert(m_node.get()); return ::std::move(m_node); }
-    void visit_nodes(NodeVisitor& v);
-    void visit_nodes(NodeVisitor& v) const;
+        ExprNodeP& operator=(const ExprNodeP& x) = delete;
 
-    Expr clone() const;
+        operator bool() const {
+            return is_valid();
+        }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const Expr& pat);
-};
+        bool is_valid() const {
+            return m_ptr != nullptr;
+        }
+
+        ExprNode& operator*() {
+            return *m_ptr;
+        }
+
+        const ExprNode& operator*() const {
+            return *m_ptr;
+        }
+
+        ExprNode* operator->() {
+            return m_ptr;
+        }
+
+        const ExprNode* operator->() const {
+            return m_ptr;
+        }
+
+        ExprNode* get() {
+            return m_ptr;
+        }
+
+        const ExprNode* get() const {
+            return m_ptr;
+        }
+
+        ExprNode* release() {
+            auto rv = m_ptr;
+            m_ptr = nullptr;
+            return rv;
+        }
+
+        void reset(ExprNode* n = nullptr) {
+            this->~ExprNodeP();
+            m_ptr = n;
+        }
+
+        const char* type_name() const;
+    };
+
+    class Expr {
+        ::std::shared_ptr<ExprNode> m_node;
+
+    public:
+        Expr(ExprNodeP node);
+        Expr(ExprNode* node);
+        Expr();
+
+        operator bool() const {
+            return is_valid();
+        }
+
+        bool is_valid() const {
+            return m_node.get() != nullptr;
+        }
+
+        const ExprNode& node() const {
+            assert(m_node.get());
+            return *m_node;
+        }
+
+        ExprNode& node() {
+            assert(m_node.get());
+            return *m_node;
+        }
+
+        ::std::shared_ptr<ExprNode> take_node() {
+            assert(m_node.get());
+            return ::std::move(m_node);
+        }
+
+        void visit_nodes(NodeVisitor& v);
+        void visit_nodes(NodeVisitor& v) const;
+
+        Expr clone() const;
+
+        friend ::std::ostream& operator<<(::std::ostream& os, const Expr& pat);
+    };
 
 }

@@ -12,6 +12,7 @@
 struct Span;
 class ExpandProcMacro;
 class MacroRules;
+
 namespace AST {
     class Crate;
     class Module;
@@ -20,6 +21,7 @@ namespace AST {
 
     struct AbsolutePath;
 };
+
 namespace HIR {
     class Crate;
     class Module;
@@ -28,41 +30,15 @@ namespace HIR {
     class ValueItem;
 };
 
-TAGGED_UNION(ResolveModuleRef, None,
-    (None, struct {}),
-    (ImplicitPrelude, struct {}),
-    (Ast, const AST::Module*),
-    (Hir, const HIR::Module*)
-    );
+TAGGED_UNION(ResolveModuleRef, None, (None, struct {}), (ImplicitPrelude, struct {}), (Ast, const AST::Module*), (Hir, const HIR::Module*));
 
-TAGGED_UNION(ResolveItemRef_Macro, None,
-    (None, struct {}),
-    (InternalMacro, ExpandProcMacro*),
-    (ProcMacro, const HIR::ProcMacro*),
-    (MacroRules, const MacroRules*)
-    );
-TAGGED_UNION(ResolveItemRef_Type, None,
-    (None, struct {}),
-    (Ast, const AST::Item*),
-    (Hir, const HIR::TypeItem*),
-    (HirRoot, const HIR::Crate*),
-    (AstRoot, const AST::Module*)
-    );
-TAGGED_UNION(ResolveItemRef_Value, None,
-    (None, struct {}),
-    (Ast, const AST::Item*),
-    (Hir, const HIR::ValueItem*)
-    );
+TAGGED_UNION(ResolveItemRef_Macro, None, (None, struct {}), (InternalMacro, ExpandProcMacro*), (ProcMacro, const HIR::ProcMacro*), (MacroRules, const MacroRules*));
+TAGGED_UNION(ResolveItemRef_Type, None, (None, struct {}), (Ast, const AST::Item*), (Hir, const HIR::TypeItem*), (HirRoot, const HIR::Crate*), (AstRoot, const AST::Module*));
+TAGGED_UNION(ResolveItemRef_Value, None, (None, struct {}), (Ast, const AST::Item*), (Hir, const HIR::ValueItem*));
 
-TAGGED_UNION(ResolveItemRef, None,
-    (None, struct {}),
-    (Namespace, ResolveItemRef_Type),
-    (Value, ResolveItemRef_Value),
-    (Macro, ResolveItemRef_Macro)
-    );
+TAGGED_UNION(ResolveItemRef, None, (None, struct {}), (Namespace, ResolveItemRef_Type), (Value, ResolveItemRef_Value), (Macro, ResolveItemRef_Macro));
 
-enum class ResolveNamespace
-{
+enum class ResolveNamespace {
     Namespace,
     Value,
     Macro,

@@ -11,12 +11,15 @@
 #include <string>
 
 class RcString;
+
 namespace AST {
     class Crate;
 }
+
 namespace HIR {
     class Crate;
 }
+
 namespace stl {
     class ObjPool;
 }

@@ -11,10 +11,9 @@
 
 class Node;
 
-struct NodeRef
-{
-    ::std::unique_ptr<Node>    node;
-    size_t  bb_idx;
+struct NodeRef {
+    ::std::unique_ptr<Node> node;
+    size_t bb_idx;
 
     NodeRef(size_t idx);
     NodeRef(Node node);
@@ -28,32 +27,38 @@ struct NodeRef
 };
 
 // A node corresponds to a C statement/block
-TAGGED_UNION(Node, Block,
-(Block, struct {
-    size_t  next_bb;
-    ::std::vector<NodeRef>  nodes;
-    }),
-(If, struct {
-    size_t  next_bb;
-    const ::MIR::LValue* val;
-    NodeRef arm_true;
-    NodeRef arm_false;
-    }),
-(Switch, struct {
-    size_t  next_bb;
-    const ::MIR::LValue* val;
-    ::std::vector<NodeRef>  arms;
-    }),
-(SwitchValue, struct {
-    size_t  next_bb;
-    const ::MIR::LValue* val;
-    NodeRef def_arm;
-    ::std::vector<NodeRef>  arms;
-    const ::MIR::SwitchValues*  vals;
-    }),
-(Loop, struct {
-    size_t  next_bb;
-    NodeRef code;
+TAGGED_UNION(
+    Node,
+    Block,
+    (Block,
+     struct {
+         size_t next_bb;
+         ::std::vector<NodeRef> nodes;
+     }),
+    (If,
+     struct {
+         size_t next_bb;
+         const ::MIR::LValue* val;
+         NodeRef arm_true;
+         NodeRef arm_false;
+     }),
+    (Switch,
+     struct {
+         size_t next_bb;
+         const ::MIR::LValue* val;
+         ::std::vector<NodeRef> arms;
+     }),
+    (SwitchValue,
+     struct {
+         size_t next_bb;
+         const ::MIR::LValue* val;
+         NodeRef def_arm;
+         ::std::vector<NodeRef> arms;
+         const ::MIR::SwitchValues* vals;
+     }),
+    (Loop, struct {
+        size_t next_bb;
+        NodeRef code;
     })
 );
 

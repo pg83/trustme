@@ -14,10 +14,8 @@
 #include "hir_typeck_helpers.hpp"
 
 // PLAN: Build up a set of conditions that are easier to solve
-struct Context
-{
-    class Revisitor
-    {
+struct Context {
+    class Revisitor {
     public:
         virtual ~Revisitor() = default;
         virtual const Span& span() const = 0;
@@ -25,18 +23,16 @@ struct Context
         virtual bool revisit(Context& context, bool is_fallback) = 0;
     };
 
-    struct Binding
-    {
-        RcString    name;
-        ::HIR::TypeRef  ty;
+    struct Binding {
+        RcString name;
+        ::HIR::TypeRef ty;
         //unsigned int ivar;
     };
 
     /// Inferrence variable equalities
-    struct Coercion
-    {
+    struct Coercion {
         unsigned rule_idx;
-        ::HIR::TypeRef  left_ty;
+        ::HIR::TypeRef left_ty;
         ::HIR::ExprNodeP* right_node_ptr;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const Coercion& v) {
@@ -44,72 +40,72 @@ struct Context
             return os;
         }
     };
-    struct Associated
-    {
+
+    struct Associated {
         unsigned rule_idx;
-        Span    span;
-        ::HIR::TypeRef  left_ty;
+        Span span;
+        ::HIR::TypeRef left_ty;
 
-        ::HIR::SimplePath   trait;
-        ::HIR::PathParams   params;
-        ::HIR::TypeRef  impl_ty;
-        RcString    name;   // if "", no type is used (and left is ignored) - Just does trait selection
-        ::HIR::PathParams   aty_pp;
+        ::HIR::SimplePath trait;
+        ::HIR::PathParams params;
+        ::HIR::TypeRef impl_ty;
+        RcString name; // if "", no type is used (and left is ignored) - Just does trait selection
+        ::HIR::PathParams aty_pp;
 
-                            // HACK: operators are special - the result when both types are primitives is ALWAYS the lefthand side
-        bool    is_operator;
+        // HACK: operators are special - the result when both types are primitives is ALWAYS the lefthand side
+        bool is_operator;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const Associated& v) {
             os << "R" << v.rule_idx << " ";
-            if( v.name == "" ) {
+            if (v.name == "") {
                 os << "req ty " << v.impl_ty << " impl " << v.trait << v.params;
-            }
-            else {
+            } else {
                 os << v.left_ty << " = " << "< `" << v.impl_ty << "` as `" << v.trait << v.params << "` >::" << v.name << v.aty_pp;
             }
-            if( v.is_operator )
+            if (v.is_operator) {
                 os << " - op";
+            }
             return os;
         }
     };
 
-    struct IVarPossible
-    {
+    struct IVarPossible {
         struct CoerceTy {
             enum Op {
                 Coercion,
                 Unsizing,
             } op;
-            ::HIR::TypeRef  ty;
 
-            CoerceTy(::HIR::TypeRef ty, bool is_coerce):
-                op(is_coerce ? Coercion : Unsizing),
-                ty(ty)
+            ::HIR::TypeRef ty;
+
+            CoerceTy(::HIR::TypeRef ty, bool is_coerce)
+                : op(is_coerce ? Coercion : Unsizing)
+                , ty(ty)
             {
             }
         };
 
         // Strong disable (depends on a trait impl)
         bool force_disable = false;
-        // 
+        //
         bool force_no_to = false;
         bool force_no_from = false;
 
         // Possible types from trait impls (may introduce new types)
         // - This is union of all input bounds
-        bool    has_bounded = false;
+        bool has_bounded = false;
         /// If the bounds include this ivar, mark differently (permits any incoming type, but types can be removed)
         /// - If an existing type isn't in the incoming set, it is removed
         /// - But any type in an incoming set is accepted (even if it doesn't already exist)
-        bool    bounds_include_self = false;
+        bool bounds_include_self = false;
         // Target types for coercion/unsizing (these types are known to exist in the function)
         ::std::vector<CoerceTy> types_coerce_to;
         // Source types for coercion/unsizing (these types are known to exist in the function)
         ::std::vector<CoerceTy> types_coerce_from;
         // Possible default types (from generic defaults)
-        ::std::set<::HIR::TypeRef>   types_default;
+        ::std::set<::HIR::TypeRef> types_default;
 
-        ::std::vector<::HIR::TypeRef>   bounded;
+        ::std::vector<::HIR::TypeRef> bounded;
 
         void reset() {
 #if 0
@@ -129,71 +125,75 @@ struct Context
             this->bounded.clear();
 #endif
         }
+
         bool has_rules() const {
-            if( force_disable )
+            if (force_disable) {
                 return true;
-            if( force_no_to   || !types_coerce_to.empty() )
+            }
+            if (force_no_to || !types_coerce_to.empty()) {
                 return true;
-            if( force_no_from || !types_coerce_from.empty() )
+            }
+            if (force_no_from || !types_coerce_from.empty()) {
                 return true;
+            }
             //if( !types_default.empty() )
             //    return true;
-            if( has_bounded )
+            if (has_bounded) {
                 return true;
+            }
             return false;
         }
     };
 
     const ::HIR::Crate& m_crate;
 
-    ::std::vector<Binding>  m_bindings;
-    HMTypeInferrence    m_ivars;
+    ::std::vector<Binding> m_bindings;
+    HMTypeInferrence m_ivars;
     TraitResolution m_resolve;
 
     unsigned next_rule_idx;
     // NOTE: unique_ptr used to reduce copy costs of the list
-    ::std::vector< ::std::unique_ptr<Coercion> > link_coerce;
+    ::std::vector<::std::unique_ptr<Coercion>> link_coerce;
     ::std::vector<Associated> link_assoc;
     /// Nodes that need revisiting (e.g. method calls when the receiver isn't known)
-    ::std::vector< ::HIR::ExprNode*>    to_visit;
+    ::std::vector<::HIR::ExprNode*> to_visit;
     /// Callback-based revisits (e.g. for slice patterns handling slices/arrays)
-    ::std::vector< ::std::unique_ptr<Revisitor> >   adv_revisits;
+    ::std::vector<::std::unique_ptr<Revisitor>> adv_revisits;
 
     // Keep track of if an ivar is used in a context where it has to be Sized
     // - If it is, then we can discount any unsized possibilities
     ::std::vector<bool> m_ivars_sized;
-    ::std::vector< IVarPossible>    possible_ivar_vals;
+    ::std::vector<IVarPossible> possible_ivar_vals;
 
     struct TaitEntry {
-        HIR::PathParams  params;
-        HIR::TypeRef    our_type;
+        HIR::PathParams params;
+        HIR::TypeRef our_type;
 
         TaitEntry(const HIR::PathParams& p, HIR::TypeRef t)
             : params(p.clone())
             , our_type(std::move(t))
-        {}
+        {
+        }
     };
-    ::std::map<HIR::TypeData_ErasedType_AliasInner*, TaitEntry>  m_erased_type_aliases;
+
+    ::std::map<HIR::TypeData_ErasedType_AliasInner*, TaitEntry> m_erased_type_aliases;
 
     const ::HIR::SimplePath m_lang_Box;
 
-    Context(
-        const ::HIR::Crate& crate,
-        const ::HIR::GenericParams* impl_params,
-        const ::HIR::GenericParams* item_params,
-        const ::HIR::SimplePath& mod_path,
-        const ::HIR::GenericPath* current_trait
-        )
-        :m_crate(crate)
-        ,m_resolve(m_ivars, crate, impl_params, item_params, mod_path, current_trait)
-        ,next_rule_idx( 0 )
-        ,m_lang_Box( crate.get_lang_item_path_opt("owned_box") )
+    Context(const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params, const ::HIR::SimplePath& mod_path, const ::HIR::GenericPath* current_trait)
+        : m_crate(crate)
+        , m_resolve(m_ivars, crate, impl_params, item_params, mod_path, current_trait)
+        , next_rule_idx(0)
+        , m_lang_Box(crate.get_lang_item_path_opt("owned_box"))
     {
     }
 
     void dump() const;
 
-    bool take_changed() { return m_ivars.take_changed(); }
+    bool take_changed() {
+        return m_ivars.take_changed();
+    }
+
     bool has_rules() const {
         return !(link_coerce.empty() && link_assoc.empty() && to_visit.empty() && adv_revisits.empty());
     }
@@ -201,6 +201,7 @@ struct Context
     inline void add_ivars(::HIR::TypeRef& ty) {
         m_ivars.add_ivars(ty);
     }
+
     // - Equate two types, with no possibility of coercion
     //  > Errors if the types are incompatible.
     //  > Forces types if one side is an infer
@@ -209,7 +210,7 @@ struct Context
     // - Equate two types, allowing inferrence
     void equate_types_coerce(const Span& sp, const ::HIR::TypeRef& l, ::HIR::ExprNodeP& node_ptr);
     // - Equate a type to an associated type (if name == "", no equation is done, but trait is searched)
-    void equate_types_assoc(const Span& sp, const ::HIR::TypeRef& l,  const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeRef& impl_ty, const char *name, const ::HIR::PathParams& aty_pp, bool is_op=false);
+    void equate_types_assoc(const Span& sp, const ::HIR::TypeRef& l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeRef& impl_ty, const char* name, const ::HIR::PathParams& aty_pp, bool is_op = false);
 
     // Equate const generics (values)
     void equate_values(const Span& sp, const ::HIR::ConstGeneric& rl, const ::HIR::ConstGeneric& rr);
@@ -227,7 +228,7 @@ struct Context
     IVarPossible* get_ivar_possibilities(const Span& sp, unsigned int ivar_index);
 
     enum class IvarUnknownType {
-        /// Coercion to an unknown type (disables 
+        /// Coercion to an unknown type (disables
         To,
         /// Coercion from an unknown type
         From,
@@ -243,12 +244,11 @@ struct Context
     // IVar possibilties
     // ----
 
-    enum class PossibleTypeSource
-    {
+    enum class PossibleTypeSource {
         CoerceTo,   //!< IVar must coerce to this type
         UnsizeTo,   //!< IVar must unsize to this type
-        CoerceFrom,   //!< IVar must coerce from this type
-        UnsizeFrom,   //!< IVar must unsize from this type
+        CoerceFrom, //!< IVar must coerce from this type
+        UnsizeFrom, //!< IVar must unsize from this type
     };
 
     /// Default type
@@ -266,7 +266,7 @@ struct Context
     // ----
 
     // - Add a pattern binding (forcing the type to match)
-    void handle_pattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeRef& type, bool is_irrefutable=false);
+    void handle_pattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeRef& type, bool is_irrefutable = false);
     void handle_pattern_direct_inner(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeRef& type);
     void add_binding_inner(const Span& sp, const ::HIR::PatternBinding& pb, ::HIR::TypeRef type);
 
@@ -277,7 +277,9 @@ struct Context
     void add_revisit(::HIR::ExprNode& node);
     void add_revisit_adv(::std::unique_ptr<Revisitor> ent);
 
-    const ::HIR::TypeRef& get_type(const ::HIR::TypeRef& ty) const { return m_ivars.get_type(ty); }
+    const ::HIR::TypeRef& get_type(const ::HIR::TypeRef& ty) const {
+        return m_ivars.get_type(ty);
+    }
 
     /// Create an autoderef operation from val_node->m_res_type to ty_dst (handling implicit unsizing)
     ::HIR::ExprNodeP create_autoderef(::HIR::ExprNodeP val_node, ::HIR::TypeRef ty_dst) const;
@@ -288,8 +290,7 @@ private:
     }
 };
 
-namespace typecheck
-{
+namespace typecheck {
     extern bool visit_call_populate_cache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) __attribute__((warn_unused_result));
 }
 

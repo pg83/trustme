@@ -10,32 +10,29 @@
 #include "parse_common.hpp"
 #include "parse_ttstream.hpp"
 
-class CExpander:
-    public ExpandProcMacro
-{
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override
-    {
-        Token   tok;
+class CExpander: public ExpandProcMacro {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+        Token tok;
         ::std::string rv;
 
         auto lex = TTStream(sp, ParseState(), tt);
-        while( GET_TOK(tok, lex) != TOK_EOF )
-        {
-            if(!rv.empty())
+        while (GET_TOK(tok, lex) != TOK_EOF) {
+            if (!rv.empty()) {
                 rv += " ";
-            DEBUG(" += " << tok);
-            if( tok.type() == TOK_IDENT  ) {
-                rv += tok.ident().name.c_str();
             }
-            else {
+            DEBUG(" += " << tok);
+            if (tok.type() == TOK_IDENT) {
+                rv += tok.ident().name.c_str();
+            } else {
                 auto v = tok.to_str();
                 const char* s = v.c_str();
                 // Very hacky strip of hygine information (e.g. from paths)
-                if( s[0] == '{' && s[1] ) {
-                    while( *s != '}' && *s )
-                        s ++;
+                if (s[0] == '{' && s[1]) {
+                    while (*s != '}' && *s) {
+                        s++;
+                    }
                     assert(*s);
-                    s ++;
+                    s++;
                 }
                 rv += s;
             }
@@ -44,9 +41,8 @@ class CExpander:
         // TODO: Strip out any `{...}` sequences that aren't from nested
         // strings.
 
-        return box$( TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, mv$(rv), {}))) );
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, mv$(rv), {}))));
     }
 };
 
 STATIC_MACRO("stringify", CExpander);
-

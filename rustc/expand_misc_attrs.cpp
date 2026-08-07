@@ -9,93 +9,103 @@
 #include "ast_generics.hpp"
 #include "ast_ast.hpp"
 
-
 // #[must_use] - Marks a type needing to be consumed
-class CHandler_MustUse:
-    public ExpandDecorator
-{
-    AttrStage   stage() const override { return AttrStage::Pre; }
+class CHandler_MustUse: public ExpandDecorator {
+    AttrStage stage() const override {
+        return AttrStage::Pre;
+    }
 
-    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t , slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item&i) const override {
+    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
         // TODO: only allowed on types
     }
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, AST::Impl& impl, const RcString& name, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item&i) const override {
+
+    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, AST::Impl& impl, const RcString& name, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
         // TODO: only allowed on associated types
     }
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, const AST::AbsolutePath& path, AST::Trait& trait, slice<const AST::Attribute> attrs, AST::Item&i) const override {
+
+    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, const AST::AbsolutePath& path, AST::Trait& trait, slice<const AST::Attribute> attrs, AST::Item& i) const override {
         // TODO: only allowed on associated types
     }
 };
+
 STATIC_DECORATOR("must_use", CHandler_MustUse);
 
 // #[non_exhaustive] - Tag an enum as being extensible
-class CHandler_NonExhaustive:
-    public ExpandDecorator
-{
-    AttrStage   stage() const override { return AttrStage::Pre; }
+class CHandler_NonExhaustive: public ExpandDecorator {
+    AttrStage stage() const override {
+        return AttrStage::Pre;
+    }
 
-    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t , slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item&i) const override {
+    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
         // TODO: only allowed on types
     }
 };
+
 STATIC_DECORATOR("non_exhaustive", CHandler_NonExhaustive);
 
 // #[path] - Already used by this stage
-class CHandler_Path:
-    public ExpandDecorator
-{
-    AttrStage   stage() const override { return AttrStage::Pre; }
+class CHandler_Path: public ExpandDecorator {
+    AttrStage stage() const override {
+        return AttrStage::Pre;
+    }
 
-    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t , slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item&i) const override {
+    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
         // TODO: only allowed on modules
     }
 };
+
 STATIC_DECORATOR("path", CHandler_Path);
 
 // #[rustc_promotable] - ?
-class CHandler_RustcPromotable:
-    public ExpandDecorator
-{
-    AttrStage   stage() const override { return AttrStage::Pre; }
-
-    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t , slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item&i) const override {
+class CHandler_RustcPromotable: public ExpandDecorator {
+    AttrStage stage() const override {
+        return AttrStage::Pre;
     }
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, AST::Impl& impl, const RcString& name, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item&i) const override {
+
+    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
+    }
+
+    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, AST::Impl& impl, const RcString& name, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
         // TODO: only allowed on functions?
     }
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, const AST::AbsolutePath& path, AST::Trait& trait, slice<const AST::Attribute> attrs, AST::Item&i) const override {
+
+    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, const AST::AbsolutePath& path, AST::Trait& trait, slice<const AST::Attribute> attrs, AST::Item& i) const override {
         // TODO: only allowed on functions?
     }
 };
+
 STATIC_DECORATOR("rustc_promotable", CHandler_RustcPromotable);
 
-
 // #[rustc_inherit_overflow_checks]
-class CHandler_RustcInheritOverflowChecks:
-    public ExpandDecorator
-{
-    AttrStage   stage() const override { return AttrStage::Pre; }
+class CHandler_RustcInheritOverflowChecks: public ExpandDecorator {
+    AttrStage stage() const override {
+        return AttrStage::Pre;
+    }
 
-    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t , slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item&i) const override {
+    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
     }
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, AST::Impl& impl, const RcString& name, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item&i) const override {
+
+    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, AST::Impl& impl, const RcString& name, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
     }
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, const AST::AbsolutePath& path, AST::Trait& trait, slice<const AST::Attribute> attrs, AST::Item&i) const override {
+
+    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, const AST::AbsolutePath& path, AST::Trait& trait, slice<const AST::Attribute> attrs, AST::Item& i) const override {
     }
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNodeP& expr) const override {
     }
 };
+
 STATIC_DECORATOR("rustc_inherit_overflow_checks", CHandler_RustcInheritOverflowChecks);
 
 // #[rustc_on_unimplemented]
-class CHandler_RustcOnUnimiplemented:
-    public ExpandDecorator
-{
-    AttrStage   stage() const override { return AttrStage::Pre; }
+class CHandler_RustcOnUnimiplemented: public ExpandDecorator {
+    AttrStage stage() const override {
+        return AttrStage::Pre;
+    }
 
-    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t , slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item&i) const override {
+    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
         // Trait only.
     }
 };
+
 STATIC_DECORATOR("rustc_on_unimplemented", CHandler_RustcOnUnimiplemented);

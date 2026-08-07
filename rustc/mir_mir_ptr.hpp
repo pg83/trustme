@@ -9,35 +9,72 @@
 
 namespace MIR {
 
-class Function;
+    class Function;
 
-class FunctionPointer
-{
-    ::MIR::Function*    ptr;
-public:
-    FunctionPointer(): ptr(nullptr) {}
-    FunctionPointer(::MIR::Function* p): ptr(p) {}
-    FunctionPointer(FunctionPointer&& x): ptr(x.ptr) { x.ptr = nullptr; }
+    class FunctionPointer {
+        ::MIR::Function* ptr;
 
-    ~FunctionPointer() {
-        reset();
-    }
-    FunctionPointer& operator=(FunctionPointer&& x) {
-        reset();
-        ptr = x.ptr;
-        x.ptr = nullptr;
-        return *this;
-    }
+    public:
+        FunctionPointer()
+            : ptr(nullptr)
+        {
+        }
 
-    void reset();
+        FunctionPointer(::MIR::Function* p)
+            : ptr(p)
+        {
+        }
 
-          ::MIR::Function* operator->()       { if(!ptr) throw ""; return ptr; }
-    const ::MIR::Function* operator->() const { if(!ptr) throw ""; return ptr; }
-          ::MIR::Function& operator*()       { if(!ptr) throw ""; return *ptr; }
-    const ::MIR::Function& operator*() const { if(!ptr) throw ""; return *ptr; }
+        FunctionPointer(FunctionPointer&& x)
+            : ptr(x.ptr)
+        {
+            x.ptr = nullptr;
+        }
 
-    operator bool() const { return ptr != nullptr; }
-};
+        ~FunctionPointer() {
+            reset();
+        }
+
+        FunctionPointer& operator=(FunctionPointer&& x) {
+            reset();
+            ptr = x.ptr;
+            x.ptr = nullptr;
+            return *this;
+        }
+
+        void reset();
+
+        ::MIR::Function* operator->() {
+            if (!ptr) {
+                throw "";
+            }
+            return ptr;
+        }
+
+        const ::MIR::Function* operator->() const {
+            if (!ptr) {
+                throw "";
+            }
+            return ptr;
+        }
+
+        ::MIR::Function& operator*() {
+            if (!ptr) {
+                throw "";
+            }
+            return *ptr;
+        }
+
+        const ::MIR::Function& operator*() const {
+            if (!ptr) {
+                throw "";
+            }
+            return *ptr;
+        }
+
+        operator bool() const {
+            return ptr != nullptr;
+        }
+    };
 
 }
-

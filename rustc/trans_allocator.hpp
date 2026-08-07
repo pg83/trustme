@@ -9,18 +9,19 @@
 
 enum class AllocatorDataTy {
     // - Return
-    Unit,   // ()
-    ResultPtr,  // (..., *mut i8) + *mut u8
+    Unit,      // ()
+    ResultPtr, // (..., *mut i8) + *mut u8
     // - Args
     Layout, // usize, usize
     Ptr,    // *mut u8
     Usize,  // usize
 };
+
 struct AllocatorMethod {
     const char* name;
     AllocatorDataTy ret;
-    size_t  n_args;
-    const AllocatorDataTy* args;    // Terminated by Never
+    size_t n_args;
+    const AllocatorDataTy* args; // Terminated by Never
 };
 enum class AllocatorKind {
     Global,
@@ -28,6 +29,5 @@ enum class AllocatorKind {
     DefaultExe,
 };
 
-extern const AllocatorMethod   ALLOCATOR_METHODS[];
+extern const AllocatorMethod ALLOCATOR_METHODS[];
 extern const size_t NUM_ALLOCATOR_METHODS;
-

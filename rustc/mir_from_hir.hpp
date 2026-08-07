@@ -8,31 +8,33 @@
 #pragma once
 #include "mir_mir.hpp"
 #include "hir_type.hpp"
-#include "hir_expr.hpp" // for ExprNode_Match
-#include "hir_typeck_static.hpp"    // StaticTraitResolve for Copy
+#include "hir_expr.hpp"          // for ExprNode_Match
+#include "hir_typeck_static.hpp" // StaticTraitResolve for Copy
 
 class MirBuilder;
 
-class ScopeHandle
-{
+class ScopeHandle {
     friend class MirBuilder;
 
     const MirBuilder& m_builder;
-    unsigned int    idx;
+    unsigned int idx;
 
-    ScopeHandle(const MirBuilder& builder, unsigned int idx):
-        m_builder(builder),
-        idx(idx)
+    ScopeHandle(const MirBuilder& builder, unsigned int idx)
+        : m_builder(builder)
+        , idx(idx)
     {
     }
+
 public:
     ScopeHandle(const ScopeHandle& x) = delete;
-    ScopeHandle(ScopeHandle&& x):
-        m_builder(x.m_builder),
-        idx(x.idx)
+
+    ScopeHandle(ScopeHandle&& x)
+        : m_builder(x.m_builder)
+        , idx(x.idx)
     {
         x.idx = ~0;
     }
+
     ScopeHandle& operator=(const ScopeHandle& x) = delete;
     ScopeHandle& operator=(ScopeHandle&& x) = delete;
     ~ScopeHandle();
@@ -50,117 +52,139 @@ enum class InvalidType {
     Descoped,
 };
 // NOTE: If there's a optional move and a partial merging, it becomes a partial?
-TAGGED_UNION_EX(VarState, (), Invalid, (
-    // Currently invalid
-    (Invalid, InvalidType),
-    // Partially valid (Map of field states)
-    (Partial, struct {
-        ::std::vector<VarState> inner_states;
-        //unsigned int outer_flag;   // If ~0u there's no condition on the outer
-        }),
-    (MovedOut, struct {
-        ::std::unique_ptr<VarState>   inner_state;
-        unsigned int outer_flag;    // If ~0u, the outer is always valid. If set, then the outer may have been moved (but inner state still maybe valid)
-        }),
-    // Optionally valid (integer indicates the drop flag index)
-    (Optional, unsigned int),
-    // Fully valid
-    (Valid, struct {})
-    ),
-    (), (),
+TAGGED_UNION_EX(
+    VarState,
+    (),
+    Invalid,
     (
-        VarState clone() const;
-        bool operator==(const VarState& x) const;
-        bool operator!=(const VarState& x) const { return !(*this == x); }
-        /// Returns `true` if any drop flags were present (i.e. this is possibly optional)
-        bool get_used_drop_flags(std::set<unsigned>* out) const;
-        )
-    );
+        // Currently invalid
+        (Invalid, InvalidType),
+        // Partially valid (Map of field states)
+        (Partial,
+         struct {
+             ::std::vector<VarState> inner_states;
+             //unsigned int outer_flag;   // If ~0u there's no condition on the outer
+         }),
+        (MovedOut,
+         struct {
+             ::std::unique_ptr<VarState> inner_state;
+             unsigned int outer_flag; // If ~0u, the outer is always valid. If set, then the outer may have been moved (but inner state still maybe valid)
+         }),
+        // Optionally valid (integer indicates the drop flag index)
+        (Optional, unsigned int),
+        // Fully valid
+        (Valid, struct {})
+    ),
+    (),
+    (),
+    (VarState clone() const; bool operator==(const VarState & x) const; bool operator!=(const VarState & x) const { return !(*this == x); }
+     /// Returns `true` if any drop flags were present (i.e. this is possibly optional)
+     bool get_used_drop_flags(std::set<unsigned>* out) const;)
+);
 extern ::std::ostream& operator<<(::std::ostream& os, const VarState& x);
 
 struct SplitArm {
-    bool    has_early_terminated = false;
-    bool    always_early_terminated = false;    // Populated on completion
+    bool has_early_terminated = false;
+    bool always_early_terminated = false; // Populated on completion
     //BasicBlockId  source_block;
-    ::std::map<unsigned int, VarState>  states;
-    ::std::map<unsigned int, VarState>  arg_states;
-};
-struct SplitEnd {
-    ::std::map<unsigned int, VarState>  states;
-    ::std::map<unsigned int, VarState>  arg_states;
+    ::std::map<unsigned int, VarState> states;
+    ::std::map<unsigned int, VarState> arg_states;
 };
 
-TAGGED_UNION(ScopeType, Owning,
-    (Owning, struct {
-        bool is_temporary;
-        ::std::vector<unsigned int> slots;  // List of owned variables
-        }),
-    (Split, struct {
-        bool end_state_valid = false;
-        SplitEnd    cond_state;
-        SplitEnd    end_state;
-        ::std::vector<SplitArm> arms;
-        }),
-    (Loop, struct {
-        // NOTE: This contains the original state for variables changed after `exit_state_valid` is true
-        ::std::map<unsigned int,VarState>    changed_slots;
-        ::std::map<unsigned int,VarState>    changed_args;
-        bool exit_state_valid;
-        SplitEnd    exit_state;
-        // TODO: Any drop flags allocated in the loop must be re-initialised at the start of the loop (or before a loopback)
-        ::MIR::BasicBlockId   entry_bb;
-        ::std::vector<unsigned> drop_flags;
-        }),
+struct SplitEnd {
+    ::std::map<unsigned int, VarState> states;
+    ::std::map<unsigned int, VarState> arg_states;
+};
+
+TAGGED_UNION(
+    ScopeType,
+    Owning,
+    (Owning,
+     struct {
+         bool is_temporary;
+         ::std::vector<unsigned int> slots; // List of owned variables
+     }),
+    (Split,
+     struct {
+         bool end_state_valid = false;
+         SplitEnd cond_state;
+         SplitEnd end_state;
+         ::std::vector<SplitArm> arms;
+     }),
+    (Loop,
+     struct {
+         // NOTE: This contains the original state for variables changed after `exit_state_valid` is true
+         ::std::map<unsigned int, VarState> changed_slots;
+         ::std::map<unsigned int, VarState> changed_args;
+         bool exit_state_valid;
+         SplitEnd exit_state;
+         // TODO: Any drop flags allocated in the loop must be re-initialised at the start of the loop (or before a loopback)
+         ::MIR::BasicBlockId entry_bb;
+         ::std::vector<unsigned> drop_flags;
+     }),
     (Freeze, struct {
         /// Has `unfreeze_scope` been called on this entry?
         bool unfrozen = false;
     })
-    );
+);
 
 #define FIELD_DEREF 0xFFFF
-#define FIELD_INDEX_MAX 0x8000  // Above this is a negative field offset
+#define FIELD_INDEX_MAX 0x8000 // Above this is a negative field offset
 
-struct field_path_t
-{
-    ::std::vector<uint16_t>  data;
+struct field_path_t {
+    ::std::vector<uint16_t> data;
 
-    size_t size() const { return data.size(); }
-    void push_back(uint16_t v) { data.push_back(v); }
-    void pop_back() { data.pop_back(); }
-    uint16_t& back() { return data.back(); }
+    size_t size() const {
+        return data.size();
+    }
 
-    bool operator==(const field_path_t& x) const { return data == x.data; }
-    Ordering ord(const field_path_t& x) const { return ::ord(data, x.data); }
+    void push_back(uint16_t v) {
+        data.push_back(v);
+    }
+
+    void pop_back() {
+        data.pop_back();
+    }
+
+    uint16_t& back() {
+        return data.back();
+    }
+
+    bool operator==(const field_path_t& x) const {
+        return data == x.data;
+    }
+
+    Ordering ord(const field_path_t& x) const {
+        return ::ord(data, x.data);
+    }
 
     friend ::std::ostream& operator<<(::std::ostream& os, const field_path_t& x) {
-        for(auto idx : x.data) {
+        for (auto idx : x.data) {
             os << ".";
-            if( idx == FIELD_DEREF ) {
+            if (idx == FIELD_DEREF) {
                 os << "*";
-            }
-            else if( idx > FIELD_INDEX_MAX ) {
+            } else if (idx > FIELD_INDEX_MAX) {
                 idx -= FIELD_INDEX_MAX;
                 idx = FIELD_INDEX_MAX - idx;
                 os << "-" << static_cast<unsigned int>(idx);
-            }
-            else {
+            } else {
                 os << static_cast<unsigned int>(idx);
             }
         }
         return os;
     }
 };
+
 /// Binding from an expanded pattern
-struct PatternBinding
-{
-    field_path_t    field;
-    const ::HIR::PatternBinding*    binding;
-    std::pair<size_t,size_t>    split_slice;
+struct PatternBinding {
+    field_path_t field;
+    const ::HIR::PatternBinding* binding;
+    std::pair<size_t, size_t> split_slice;
 
     PatternBinding(field_path_t field, const ::HIR::PatternBinding& binding)
         : field(std::move(field))
         , binding(&binding)
-        , split_slice(SIZE_MAX,SIZE_MAX)
+        , split_slice(SIZE_MAX, SIZE_MAX)
     {
     }
 
@@ -171,9 +195,10 @@ struct PatternBinding
     bool operator==(const PatternBinding& x) const {
         return field == x.field && binding == x.binding && split_slice == x.split_slice;
     }
+
     friend ::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x) {
         os << *x.binding << x.field;
-        if( x.is_split_slice() ) {
+        if (x.is_split_slice()) {
             os << "[" << x.split_slice.first << "..-" << x.split_slice.second << "]";
         }
         return os;
@@ -181,49 +206,48 @@ struct PatternBinding
 };
 
 /// Helper class to construct MIR
-class MirBuilder
-{
+class MirBuilder {
     friend class ScopeHandle;
 
     const Span& m_root_span;
     const StaticTraitResolve& m_resolve;
-    const ::HIR::TypeRef&   m_ret_ty;
-    const ::HIR::Function::args_t&  m_args;
-    ::MIR::Function&    m_output;
+    const ::HIR::TypeRef& m_ret_ty;
+    const ::HIR::Function::args_t& m_args;
+    ::MIR::Function& m_output;
 
-    const ::HIR::SimplePath*    m_lang_Box;
+    const ::HIR::SimplePath* m_lang_Box;
 
-    unsigned int    m_current_block;
-    bool    m_block_active;
+    unsigned int m_current_block;
+    bool m_block_active;
 
-    ::MIR::RValue   m_result;
-    bool    m_result_valid;
+    ::MIR::RValue m_result;
+    bool m_result_valid;
 
     // TODO: Extra information (e.g. mutability)
-    VarState    m_return_state;
-    ::std::vector<VarState>   m_arg_states;
-    ::std::vector<VarState>   m_slot_states;
-    size_t  m_first_temp_idx;
+    VarState m_return_state;
+    ::std::vector<VarState> m_arg_states;
+    ::std::vector<VarState> m_slot_states;
+    size_t m_first_temp_idx;
 
     /// Mapping between variable slots and MIR arguments (for when the argument is not destructuring)
-    ::std::map<unsigned,unsigned>   m_var_arg_mappings;
+    ::std::map<unsigned, unsigned> m_var_arg_mappings;
 
     /// Re-mapped dropped flags (all flags in the vector are to be set when the key flag is set)
     ::std::map<unsigned, std::vector<unsigned>> m_drop_flag_aliases;
 
-    struct ScopeDef
-    {
+    struct ScopeDef {
         const Span& span;
         bool complete = false;
-        ScopeType   data;
+        ScopeType data;
 
-        ScopeDef(const Span& span):
-            span(span)
+        ScopeDef(const Span& span)
+            : span(span)
         {
         }
-        ScopeDef(const Span& span, ScopeType data):
-            span(span),
-            data(mv$(data))
+
+        ScopeDef(const Span& span, ScopeType data)
+            : span(span)
+            , data(mv$(data))
         {
         }
     };
@@ -232,21 +256,30 @@ class MirBuilder
     ::std::vector<unsigned int> m_scope_stack;
     ScopeHandle m_fcn_scope;
 
-    typedef std::pair<HIR::PatternBinding::Type, MIR::LValue>   var_alias_t;
-    ::std::vector<var_alias_t>  m_variable_aliases;
+    typedef std::pair<HIR::PatternBinding::Type, MIR::LValue> var_alias_t;
+    ::std::vector<var_alias_t> m_variable_aliases;
 
     // LValue used only for the condition of `if`
     // - Using a fixed temporary simplifies parts of lowering (scope related) and reduces load on
     //   the optimiser.
-    ::MIR::LValue   m_if_cond_lval;
+    ::MIR::LValue m_if_cond_lval;
+
 public:
     MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ret_ty, const ::HIR::Function::args_t& args, ::MIR::Function& output);
-    
+
     void final_cleanup();
 
-    const ::HIR::SimplePath* lang_Box() const { return m_lang_Box; }
-    const ::HIR::Crate& crate() const { return m_resolve.m_crate; }
-    const StaticTraitResolve& resolve() const { return m_resolve; }
+    const ::HIR::SimplePath* lang_Box() const {
+        return m_lang_Box;
+    }
+
+    const ::HIR::Crate& crate() const {
+        return m_resolve.m_crate;
+    }
+
+    const StaticTraitResolve& resolve() const {
+        return m_resolve;
+    }
 
     /// Check if the passed type is Box<T> and returns a pointer to the T type if so, otherwise nullptr
     const ::HIR::TypeRef* is_type_owned_box(const ::HIR::TypeRef& ty) const;
@@ -256,19 +289,21 @@ public:
         // Just remember which variables had aliases on them, as we want to clear anything added while saving.
         ::std::vector<bool> set_aliases;
     };
+
     /// Save the current state of aliases (see add_variable_alias)
     SavedAliases save_aliases() const {
-        SavedAliases    rv;
+        SavedAliases rv;
         rv.set_aliases.reserve(m_variable_aliases.size());
-        for(const auto& v : m_variable_aliases) {
+        for (const auto& v : m_variable_aliases) {
             rv.set_aliases.push_back(v.second != MIR::LValue());
         }
         return rv;
     }
+
     void restore_aliases(SavedAliases a) {
         assert(a.set_aliases.size() == m_variable_aliases.size());
-        for(size_t i = 0; i < a.set_aliases.size(); i ++) {
-            if( !a.set_aliases[i] ) {
+        for (size_t i = 0; i < a.set_aliases.size(); i++) {
+            if (!a.set_aliases[i]) {
                 m_variable_aliases.at(i).second = MIR::LValue();
             }
         }
@@ -281,12 +316,12 @@ public:
         ASSERT_BUG(sp, m_variable_aliases[idx].second == MIR::LValue(), "Variable alias #" << idx << " already exists: " << m_variable_aliases[idx].second << " setting " << lv);
         m_variable_aliases[idx] = std::make_pair(ty, mv$(lv));
     }
+
     const var_alias_t* get_variable_alias(const Span& sp, unsigned idx) const {
         ASSERT_BUG(sp, idx < m_variable_aliases.size(), "Variable alias #" << idx << " out of bounds");
-        if(m_variable_aliases[idx].second == MIR::LValue()) {
+        if (m_variable_aliases[idx].second == MIR::LValue()) {
             return nullptr;
-        }
-        else {
+        } else {
             return &m_variable_aliases[idx];
         }
     }
@@ -294,43 +329,48 @@ public:
     // - Values
     ::MIR::LValue get_variable(const Span& sp, unsigned idx) const {
         auto it = m_var_arg_mappings.find(idx);
-        if(it != m_var_arg_mappings.end())
+        if (it != m_var_arg_mappings.end()) {
             return ::MIR::LValue::new_Argument(it->second);
+        }
         return ::MIR::LValue::new_Local(idx);
     }
+
     ::MIR::LValue new_temporary(const ::HIR::TypeRef& ty);
     ::MIR::LValue lvalue_or_temp(const Span& sp, const ::HIR::TypeRef& ty, ::MIR::RValue val);
 
     bool has_result() const {
         return m_result_valid;
     }
+
     void set_result(const Span& sp, ::MIR::RValue val);
     ::MIR::RValue get_result(const Span& sp);
     /// Obtains the result, unwrapping into a LValue (and erroring if not)
     ::MIR::LValue get_result_unwrap_lvalue(const Span& sp);
     /// Obtains the result, copying into a temporary if required
-    ::MIR::LValue get_result_in_lvalue(const Span& sp, const ::HIR::TypeRef& ty, bool allow_missing_value=false);
+    ::MIR::LValue get_result_in_lvalue(const Span& sp, const ::HIR::TypeRef& ty, bool allow_missing_value = false);
     /// Obtains a result in a param (or a lvalue)
-    ::MIR::Param get_result_in_param(const Span& sp, const ::HIR::TypeRef& ty, bool allow_missing_value=false);
+    ::MIR::Param get_result_in_param(const Span& sp, const ::HIR::TypeRef& ty, bool allow_missing_value = false);
 
     ::MIR::LValue get_if_cond() const {
         return m_if_cond_lval.clone();
     }
+
     ::MIR::LValue get_rval_in_if_cond(const Span& sp, ::MIR::RValue val) {
         push_stmt_assign(sp, m_if_cond_lval.clone(), mv$(val));
         return m_if_cond_lval.clone();
     }
+
     ::MIR::LValue get_result_in_if_cond(const Span& sp) {
         return get_rval_in_if_cond(sp, get_result(sp));
     }
 
     // - Statements
     // Push an assignment. NOTE: This also marks the rvalue as moved
-    void push_stmt_assign(const Span& sp, ::MIR::LValue dst, ::MIR::RValue val, bool update_dest_state=true);
+    void push_stmt_assign(const Span& sp, ::MIR::LValue dst, ::MIR::RValue val, bool update_dest_state = true);
     // Push a drop (likely only used by scope cleanup)
-    void push_stmt_drop(const Span& sp, ::MIR::LValue val, unsigned int drop_flag=~0u);
+    void push_stmt_drop(const Span& sp, ::MIR::LValue val, unsigned int drop_flag = ~0u);
     // Push a shallow drop (for Box)
-    void push_stmt_drop_shallow(const Span& sp, ::MIR::LValue val, unsigned int drop_flag=~0u);
+    void push_stmt_drop_shallow(const Span& sp, ::MIR::LValue val, unsigned int drop_flag = ~0u);
     // Push an inline assembly statement (NOTE: inputs aren't marked as moved)
     void push_stmt_asm(const Span& sp, ::MIR::Statement::Data_Asm data);
     // Push a setting/clearing of a drop flag
@@ -349,39 +389,45 @@ public:
     void mark_value_assigned(const Span& sp, const ::MIR::LValue& val);
 
     // Moves control of temporaries up to the specified scope (or to above it)
-    void raise_temporaries(const Span& sp, const ::MIR::LValue& val, const ScopeHandle& scope, bool to_above=false);
-    void raise_temporaries(const Span& sp, const ::MIR::RValue& rval, const ScopeHandle& scope, bool to_above=false);
-
+    void raise_temporaries(const Span& sp, const ::MIR::LValue& val, const ScopeHandle& scope, bool to_above = false);
+    void raise_temporaries(const Span& sp, const ::MIR::RValue& rval, const ScopeHandle& scope, bool to_above = false);
 
     class SaveCodeProto {
         friend class MirBuilder;
         size_t index;
     };
+
     /// @brief Start saving code for later duplication (match guards)
     /// @return Handle to the current save stack entry
     SaveCodeProto code_save_start();
+
     class SavedCode {
         friend class MirBuilder;
-        std::vector<unsigned>   blocks;
+        std::vector<unsigned> blocks;
     };
+
     /// @brief Complete and finalise saved code
     SavedCode code_save_end(SaveCodeProto h);
+
     class CloneMapper {
     public:
         virtual MIR::BasicBlockId update_bb_ref(MIR::BasicBlockId bb_idx) = 0;
     };
+
     /// @brief Insert saved code, applying the supplied mapper
     void insert_cloned(const Span& sp, const SavedCode& c, CloneMapper& mapper);
+
 private:
     struct CodeSaveStackEnt {
         /// Unique index to catch stack violations
-        size_t  index;
+        size_t index;
         /// Basic blocks in the copied region
-        std::vector<unsigned>   blocks;
+        std::vector<unsigned> blocks;
     };
-    std::vector<CodeSaveStackEnt>   m_code_save_stack;
-public:
 
+    std::vector<CodeSaveStackEnt> m_code_save_stack;
+
+public:
     void set_cur_block(unsigned int new_block);
     ::MIR::BasicBlockId pause_cur_block();
 
@@ -411,17 +457,17 @@ public:
     /// Raises every variable defined in the source scope into the target scope
     void raise_all(const Span& sp, ScopeHandle src, const ScopeHandle& target);
     /// Drop all defined values in the scope (emits the drops if `cleanup` is set)
-    void terminate_scope(const Span& sp, ScopeHandle , bool cleanup=true);
+    void terminate_scope(const Span& sp, ScopeHandle, bool cleanup = true);
     /// Terminates a scope early (e.g. via return/break/...)
-    void terminate_scope_early(const Span& sp, const ScopeHandle& , bool loop_exit=false);
+    void terminate_scope_early(const Span& sp, const ScopeHandle&, bool loop_exit = false);
     /// Marks the end of a split arm (end match arm, if body, ...)
-    void end_split_arm(const Span& sp, const ScopeHandle& , bool reachable, bool early=false);
+    void end_split_arm(const Span& sp, const ScopeHandle&, bool reachable, bool early = false);
     /// Terminates the current split early (TODO: What does this mean?)
     void end_split_arm_early(const Span& sp);
     /// Terminates the current split condition clause (used for the conditional portion of a match arm)
     void end_split_condition(const Span& sp, const ScopeHandle&);
     /// Allows mutation through a freeze scope (see `new_scope_freeze`)
-    void unfreeze_scope(const Span& sp, const ScopeHandle& );
+    void unfreeze_scope(const Span& sp, const ScopeHandle&);
 
     const ScopeHandle& fcn_scope() const {
         return m_fcn_scope;
@@ -431,21 +477,20 @@ public:
     void define_variable(unsigned int idx);
     // Helper - Marks a variable/... as moved (and checks if the move is valid)
     void moved_lvalue(const Span& sp, const ::MIR::LValue& lv);
+
 private:
     enum class SlotType {
         /// @brief Local variable (either a binding or a temporary, it matters not). Maps to `LValue::Local`
-        Local,  // Local ~0u is return
+        Local, // Local ~0u is return
         /// Function argument. Maps to `LValue::Argument`
         Argument
     };
-    const VarState& get_slot_state(const Span& sp, unsigned int idx, SlotType type, const ScopeHandle* above_scope=nullptr) const;
+    const VarState& get_slot_state(const Span& sp, unsigned int idx, SlotType type, const ScopeHandle* above_scope = nullptr) const;
     VarState& get_slot_state_mut(const Span& sp, unsigned int idx, SlotType type);
 
-    VarState* get_val_state_mut_p(const Span& sp, const ::MIR::LValue& lv, bool expect_valid=false);
+    VarState* get_val_state_mut_p(const Span& sp, const ::MIR::LValue& lv, bool expect_valid = false);
 
-    void merge_split_lists(const Span& sp, const ScopeHandle& handle,
-        const ::std::map<unsigned int, VarState>& states, ::std::map<unsigned int, VarState>& end_states, MirBuilder::SlotType type
-    );
+    void merge_split_lists(const Span& sp, const ScopeHandle& handle, const ::std::map<unsigned int, VarState>& states, ::std::map<unsigned int, VarState>& end_states, MirBuilder::SlotType type);
 
     void terminate_loop_early(const Span& sp, ScopeType::Data_Loop& sd_loop);
 
@@ -455,7 +500,7 @@ private:
     void complete_scope(ScopeDef& sd);
 
 public:
-    void with_val_type(const Span& sp, const ::MIR::LValue& val, ::std::function<void(const ::HIR::TypeRef&)> cb, const ::MIR::LValue::Wrapper* stop_wrapper=nullptr) const;
+    void with_val_type(const Span& sp, const ::MIR::LValue& val, ::std::function<void(const ::HIR::TypeRef&)> cb, const ::MIR::LValue::Wrapper* stop_wrapper = nullptr) const;
     bool lvalue_is_copy(const Span& sp, const ::MIR::LValue& lv) const;
 
     // Obtain the base fat poiner for a dst reference. Errors if it wasn't via a fat pointer
@@ -464,47 +509,54 @@ public:
     /// Get the set of currently valid (fully,optional,partial) variables
     class SavedActiveLocal {
         friend class MirBuilder;
-        VarState    state;
-        SavedActiveLocal(VarState vs): state(mv$(vs)) {}
+        VarState state;
+
+        SavedActiveLocal(VarState vs)
+            : state(mv$(vs))
+        {
+        }
+
     public:
-        const VarState& get_state() const { return state; }
+        const VarState& get_state() const {
+            return state;
+        }
     };
+
     std::map<unsigned, SavedActiveLocal> get_active_locals(const Span& sp, std::set<unsigned>& saved_drop_flags) const;
 
     // Calls `drop_value_from_state` on the value
     void drop_actve_local(const Span& sp, ::MIR::LValue lv, const SavedActiveLocal& loc);
 };
 
-
-template<typename T>
+template <typename T>
 struct SaveAndEditVal {
-    T&  m_dst;
-    T   m_saved;
-    SaveAndEditVal(T& dst, T newval):
-        m_dst(dst),
-        m_saved(dst)
+    T& m_dst;
+    T m_saved;
+
+    SaveAndEditVal(T& dst, T newval)
+        : m_dst(dst)
+        , m_saved(dst)
     {
         m_dst = mv$(newval);
     }
-    ~SaveAndEditVal()
-    {
+
+    ~SaveAndEditVal() {
         this->m_dst = this->m_saved;
     }
 };
-template<typename T>
+
+template <typename T>
 SaveAndEditVal<T> save_and_edit(T& dst, typename ::std::remove_reference<T&>::type newval) {
-    return SaveAndEditVal<T> { dst, mv$(newval) };
+    return SaveAndEditVal<T>{dst, mv$(newval)};
 }
 
 /// Wrapper interfae
-class MirConverter:
-    public ::HIR::ExprVisitor
-{
+class MirConverter: public ::HIR::ExprVisitor {
 public:
     //virtual void destructure_from(const Span& sp, const ::HIR::Pattern& pat, ::MIR::LValue lval, bool allow_refutable=false) = 0;
     virtual void define_vars_from(const Span& sp, const ::HIR::Pattern& pat) = 0;
 
-    virtual void destructure_from_list(const Span& sp, const ::HIR::TypeRef& ty, ::MIR::LValue lval, const ::std::vector<PatternBinding>& bindings, bool update_states=true) = 0;
+    virtual void destructure_from_list(const Span& sp, const ::HIR::TypeRef& ty, ::MIR::LValue lval, const ::std::vector<PatternBinding>& bindings, bool update_states = true) = 0;
     virtual MIR::LValue get_value_for_binding_path(const Span& sp, const ::HIR::TypeRef& outer_ty, const ::MIR::LValue& outer_lval, const PatternBinding& b) = 0;
     virtual const HIR::TypeRef& get_binding_type(const Span& sp, unsigned index) const = 0;
 
@@ -515,8 +567,11 @@ extern void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::E
 extern void MIR_LowerHIR_Let(MirBuilder& builder, MirConverter& conv, const Span& sp, const ::HIR::Pattern& pat, ::MIR::LValue val, const ::HIR::ExprNode* else_node);
 
 extern void MIR_LowerHIR_GetTypeValueForPath(
-    const Span& sp, MirBuilder& builder,
-    const ::HIR::TypeRef& top_ty, const ::MIR::LValue& top_val,
-    const field_path_t& field_path,// unsigned int field_path_ofs,
-    /*Out ->*/ ::HIR::TypeRef& out_ty, ::MIR::LValue& out_val
+    const Span& sp,
+    MirBuilder& builder,
+    const ::HIR::TypeRef& top_ty,
+    const ::MIR::LValue& top_val,
+    const field_path_t& field_path, // unsigned int field_path_ofs,
+    /*Out ->*/ ::HIR::TypeRef& out_ty,
+    ::MIR::LValue& out_val
 );
