@@ -748,11 +748,9 @@ namespace {
         }
 
         TU_MATCH_HDRA( (t,x), { )
-        TU_ARMA(Infer, te,xe) throw "Unreachable";
+            TU_ARMA(Infer, te,xe) throw "Unreachable";
             TU_ARMA(Unevaluated, te, xe) {
-                if (te == xe) {
-                    return ::HIR::Compare::Equal;
-                }
+                return te->equivalent(*xe) ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal;
             }
             TU_ARMA(Generic, te, xe) throw "Unreachable";
             TU_ARMA(Evaluated, te, xe)

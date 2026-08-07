@@ -1525,7 +1525,8 @@ namespace typecheck {
             const RcString& method_name = node.m_method;
             ::HIR::t_trait_list possible_traits;
             unsigned int max_num_params = 0;
-            auto visit_trait_inner = [&method_name, &max_num_params, &possible_traits](const HIR::SimplePath& p, const HIR::Trait& tr, bool push) {
+            unsigned int max_num_value_params = 0;
+            auto visit_trait_inner = [&method_name, &max_num_params, &max_num_value_params, &possible_traits](const HIR::SimplePath& p, const HIR::Trait& tr, bool push) {
                 auto it = tr.m_values.find(method_name);
                 if (it == tr.m_values.end()) {
                     return;
@@ -1535,6 +1536,9 @@ namespace typecheck {
                 }
                 if (tr.m_params.m_types.size() > max_num_params) {
                     max_num_params = tr.m_params.m_types.size();
+                }
+                if (tr.m_params.m_values.size() > max_num_value_params) {
+                    max_num_value_params = tr.m_params.m_values.size();
                 }
 
                 if (push) {
@@ -1568,8 +1572,13 @@ namespace typecheck {
             }
             //  > Store the possible set of traits for later
             node.m_traits = mv$(possible_traits);
+            node.m_trait_param_type_ivars = max_num_params;
+            node.m_trait_param_ivars.reserve(max_num_params + max_num_value_params);
             for (unsigned int i = 0; i < max_num_params; i++) {
                 node.m_trait_param_ivars.push_back(this->context.m_ivars.new_ivar());
+            }
+            for (unsigned int i = 0; i < max_num_value_params; i++) {
+                node.m_trait_param_ivars.push_back(this->context.m_ivars.new_ivar_val());
             }
 
             {

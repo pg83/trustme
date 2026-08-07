@@ -470,6 +470,7 @@ namespace HIR {
         ConstGeneric_Unevaluated(HIR::ExprPtr ep);
         ConstGeneric_Unevaluated clone() const;
         ConstGeneric_Unevaluated monomorph(const Span& sp, const Monomorphiser& ms, bool allow_infer = true) const;
+        bool equivalent(const ConstGeneric_Unevaluated& x) const;
         Ordering ord(const ConstGeneric_Unevaluated& x) const;
         void fmt(::std::ostream& os) const;
 

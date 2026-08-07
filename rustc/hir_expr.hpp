@@ -688,8 +688,10 @@ namespace HIR {
 
         // - List of possible traits (in-scope traits that contain this method)
         t_trait_list m_traits;
-        // - A pool of ivars to use for searching for trait impls
+        // - A pool of ivars to use for searching for trait impls, with type
+        // ivars first and const value ivars after them.
         ::std::vector<unsigned int> m_trait_param_ivars;
+        unsigned int m_trait_param_type_ivars = 0;
 
         ExprNode_CallMethod(Span sp, ::HIR::ExprNodeP val, RcString method_name, ::HIR::PathParams params, ::std::vector<::HIR::ExprNodeP> args)
             : ExprNode(mv$(sp))

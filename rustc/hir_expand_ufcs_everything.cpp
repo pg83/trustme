@@ -809,7 +809,6 @@ namespace {
         }
 
         void visit_constgeneric(::HIR::ConstGeneric& c) override {
-            HIR::Visitor::visit_constgeneric(c);
             if (auto* e = c.opt_Unevaluated()) {
                 ExprVisitor_Mutate ev(m_crate);
                 ev.visit_node_ptr(*(*e)->expr);

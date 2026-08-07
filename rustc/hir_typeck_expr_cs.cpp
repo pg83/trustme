@@ -969,7 +969,7 @@ namespace {
             // - If running in a mode after stablise (before defaults), fall
             //   back to trait if the inherent is still ambigious.
             ::std::vector<::std::pair<TraitResolution::AutoderefBorrow, ::HIR::Path>> possible_methods;
-            unsigned int deref_count = this->context.m_resolve.autoderef_find_method(node.span(), node.m_traits, node.m_trait_param_ivars, ty, node.m_method, possible_methods);
+            unsigned int deref_count = this->context.m_resolve.autoderef_find_method(node.span(), node.m_traits, node.m_trait_param_ivars, node.m_trait_param_type_ivars, ty, node.m_method, possible_methods);
         try_again:
             if (deref_count != ~0u) {
                 DEBUG("possible_methods = " << possible_methods);
@@ -1056,18 +1056,19 @@ namespace {
                             {
                                 auto& ivars = node.m_trait_param_ivars;
                                 unsigned int n_params = e1.trait.m_params.m_types.size();
-                                while (ivars.size() < n_params) {
-                                    ivars.push_back(context.m_ivars.new_ivar());
-                                }
-                                assert(n_params <= ivars.size());
+                                ASSERT_BUG(sp, node.m_trait_param_type_ivars <= ivars.size(), "Invalid method ivar split");
+                                ASSERT_BUG(sp, n_params <= node.m_trait_param_type_ivars, "Not enough type ivars for duplicate trait method");
                                 ::HIR::PathParams trait_params;
                                 trait_params.m_types.reserve(n_params);
                                 for (unsigned int i = 0; i < n_params; i++) {
                                     trait_params.m_types.push_back(::HIR::TypeRef::new_infer(ivars[i], ::HIR::InferClass::None));
                                     //ASSERT_BUG(sp, m_ivars.get_type( trait_params.m_types.back() ).m_data.as_Infer().index == ivars[i], "A method selection ivar was bound");
                                 }
-                                if (e1.trait.m_params.m_values.size() > 0) {
-                                    TODO(sp, "Populate infer for value generics");
+                                const unsigned int n_values = e1.trait.m_params.m_values.size();
+                                ASSERT_BUG(sp, n_values <= ivars.size() - node.m_trait_param_type_ivars, "Not enough value ivars for duplicate trait method");
+                                trait_params.m_values.reserve(n_values);
+                                for (unsigned int i = 0; i < n_values; i++) {
+                                    trait_params.m_values.push_back(::HIR::ConstGeneric::make_Infer({ivars[node.m_trait_param_type_ivars + i]}));
                                 }
                                 // If one of these was already using the placeholder ivars, then maintain the one with the palceholders
                                 if (e1.trait.m_params != trait_params) {
@@ -2295,7 +2296,7 @@ void Context::equate_types_inner(const Span& sp, const ::HIR::TypeRef& li, const
                 TU_ARMA(Array, l_e, r_e) {
                     this->equate_types_inner(sp, l_e.inner, r_e.inner);
                     if (l_e.size != r_e.size) {
-                        if ((l_e.size.is_Unevaluated() && l_e.size.as_Unevaluated().is_Infer()) || TU_TEST1(r_e.size, Unevaluated, .is_Infer())) {
+                        if (l_e.size.is_Unevaluated() || r_e.size.is_Unevaluated()) {
                             // Handle one side being fully-known
                             if (!l_e.size.is_Unevaluated()) {
                                 assert(l_e.size.is_Known());
@@ -2361,6 +2362,101 @@ void Context::equate_types_inner(const Span& sp, const ::HIR::TypeRef& li, const
     }
 }
 
+namespace {
+    struct ConstExprEquate {
+        Context& context;
+        const Span& sp;
+
+        const ::HIR::ConstGeneric* get_param(const ::HIR::ConstGeneric_Unevaluated& value, unsigned int binding) const {
+            const ::HIR::PathParams* params = nullptr;
+            switch (binding >> 8) {
+                case ::HIR::GENERIC_Impl:
+                    params = &value.params_impl;
+                    break;
+                case ::HIR::GENERIC_Item:
+                    params = &value.params_item;
+                    break;
+                default:
+                    return nullptr;
+            }
+            const unsigned int index = binding & 0xFF;
+            return index < params->m_values.size() ? &params->m_values[index] : nullptr;
+        }
+
+        bool equate_literal(const ::HIR::ExprNode_Literal& left, const ::HIR::ExprNode_Literal& right) const {
+            if (left.m_data.tag() != right.m_data.tag()) {
+                return false;
+            }
+            TU_MATCH_HDRA( (left.m_data, right.m_data), {)
+            TU_ARMA(Integer, l, r) return l.m_type == r.m_type && l.m_value == r.m_value;
+                TU_ARMA(Float, l, r) return l.m_type == r.m_type && l.m_value == r.m_value;
+                TU_ARMA(Boolean, l, r) return l == r;
+                TU_ARMA(String, l, r) return l == r;
+                TU_ARMA(CString, l, r) return l.v == r.v;
+                TU_ARMA(ByteString, l, r) return l == r;
+            }
+            throw "";
+        }
+
+        bool equate_node(const ::HIR::ConstGeneric_Unevaluated& left_value, const ::HIR::ExprNode& left, const ::HIR::ConstGeneric_Unevaluated& right_value, const ::HIR::ExprNode& right) const {
+            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_ConstParam*>(&left)) {
+                const auto* r = dynamic_cast<const ::HIR::ExprNode_ConstParam*>(&right);
+                if (!r) {
+                    return false;
+                }
+                const auto* l_param = get_param(left_value, l->m_binding);
+                const auto* r_param = get_param(right_value, r->m_binding);
+                if (!l_param || !r_param) {
+                    return l->m_binding == r->m_binding;
+                }
+                context.equate_values(sp, *l_param, *r_param);
+                return true;
+            }
+            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_Literal*>(&left)) {
+                const auto* r = dynamic_cast<const ::HIR::ExprNode_Literal*>(&right);
+                return r && equate_literal(*l, *r);
+            }
+            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_BinOp*>(&left)) {
+                const auto* r = dynamic_cast<const ::HIR::ExprNode_BinOp*>(&right);
+                return r && l->m_op == r->m_op && equate_node(left_value, *l->m_left, right_value, *r->m_left) && equate_node(left_value, *l->m_right, right_value, *r->m_right);
+            }
+            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_UniOp*>(&left)) {
+                const auto* r = dynamic_cast<const ::HIR::ExprNode_UniOp*>(&right);
+                return r && l->m_op == r->m_op && equate_node(left_value, *l->m_value, right_value, *r->m_value);
+            }
+            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_Cast*>(&left)) {
+                const auto* r = dynamic_cast<const ::HIR::ExprNode_Cast*>(&right);
+                if (!r) {
+                    return false;
+                }
+                context.equate_types_inner(sp, l->m_dst_type, r->m_dst_type);
+                return equate_node(left_value, *l->m_value, right_value, *r->m_value);
+            }
+            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_ConstBlock*>(&left)) {
+                const auto* r = dynamic_cast<const ::HIR::ExprNode_ConstBlock*>(&right);
+                return r && equate_node(left_value, *l->m_inner, right_value, *r->m_inner);
+            }
+            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_Block*>(&left)) {
+                const auto* r = dynamic_cast<const ::HIR::ExprNode_Block*>(&right);
+                if (!r || l->m_nodes.size() != r->m_nodes.size() || static_cast<bool>(l->m_value_node) != static_cast<bool>(r->m_value_node)) {
+                    return false;
+                }
+                for (unsigned int i = 0; i < l->m_nodes.size(); i++) {
+                    if (!equate_node(left_value, *l->m_nodes[i], right_value, *r->m_nodes[i])) {
+                        return false;
+                    }
+                }
+                return !l->m_value_node || equate_node(left_value, *l->m_value_node, right_value, *r->m_value_node);
+            }
+            return false;
+        }
+
+        bool equate(const ::HIR::ConstGeneric_Unevaluated& left, const ::HIR::ConstGeneric_Unevaluated& right) const {
+            return equate_node(left, **left.expr, right, **right.expr);
+        }
+    };
+}
+
 void Context::equate_values(const Span& sp, const ::HIR::ConstGeneric& rl, const ::HIR::ConstGeneric& rr) {
     const auto& l = this->m_ivars.get_value(rl);
     const auto& r = this->m_ivars.get_value(rr);
@@ -2376,6 +2472,7 @@ void Context::equate_values(const Span& sp, const ::HIR::ConstGeneric& rl, const
         } else {
             if (r.is_Infer()) {
                 this->m_ivars.set_ivar_val_to(r.as_Infer().index, l.clone());
+            } else if (l.is_Unevaluated() && r.is_Unevaluated() && ConstExprEquate{*this, sp}.equate(*l.as_Unevaluated(), *r.as_Unevaluated())) {
             } else {
                 // TODO: What about unevaluated values due to type inference?
                 ERROR(sp, E0000, "Value mismatch between " << l << " and " << r);
@@ -6000,7 +6097,7 @@ namespace {
 
                 DEBUG("Check <" << t << ">::" << node.m_method);
                 ::std::vector<::std::pair<TraitResolution::AutoderefBorrow, ::HIR::Path>> possible_methods;
-                unsigned int deref_count = context.m_resolve.autoderef_find_method(node.span(), node.m_traits, node.m_trait_param_ivars, t, node.m_method, possible_methods);
+                unsigned int deref_count = context.m_resolve.autoderef_find_method(node.span(), node.m_traits, node.m_trait_param_ivars, node.m_trait_param_type_ivars, t, node.m_method, possible_methods);
                 DEBUG("> deref_count = " << deref_count << ", possible_methods={" << possible_methods << "}");
                 // TODO: Detect the above hitting an ivar, and use that instead of this hacky check of if it's `_` or `&_`
                 if (!(t.data().is_Infer() || TU_TEST1(t.data(), Borrow, .inner.data().is_Infer())) && possible_methods.empty()) {

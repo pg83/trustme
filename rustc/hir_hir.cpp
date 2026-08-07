@@ -57,7 +57,7 @@ namespace HIR {
         }
         TU_MATCH_HDRA( (*this, x), {)
         TU_ARMA(Infer, te, xe) return te.index == xe.index;
-            TU_ARMA(Unevaluated, te, xe) return te == xe;
+            TU_ARMA(Unevaluated, te, xe) return te->equivalent(*xe);
             TU_ARMA(Generic, te, xe) return te == xe;
             TU_ARMA(Evaluated, te, xe) return EncodedLiteralSlice(*te) == EncodedLiteralSlice(*xe);
         }
@@ -75,6 +75,9 @@ namespace HIR {
                 }
             }
             TU_ARMA(Unevaluated, te, xe) {
+                if (te->equivalent(*xe)) {
+                    return OrdEqual;
+                }
                 return te->ord(*xe);
             }
             TU_ARMA(Generic, te, xe) {
@@ -111,6 +114,88 @@ namespace HIR {
         rv.params_item = ms.monomorph_path_params(sp, params_item, allow_infer);
         rv.expr = this->expr;
         return rv;
+    }
+
+    namespace {
+        const ::HIR::ConstGeneric* get_unevaluated_param(const ::HIR::ConstGeneric_Unevaluated& value, unsigned int binding) {
+            const ::HIR::PathParams* params = nullptr;
+            switch (binding >> 8) {
+                case ::HIR::GENERIC_Impl:
+                    params = &value.params_impl;
+                    break;
+                case ::HIR::GENERIC_Item:
+                    params = &value.params_item;
+                    break;
+                default:
+                    return nullptr;
+            }
+            const unsigned int index = binding & 0xFF;
+            return index < params->m_values.size() ? &params->m_values[index] : nullptr;
+        }
+
+        bool const_expr_literals_equal(const ::HIR::ExprNode_Literal& left, const ::HIR::ExprNode_Literal& right) {
+            if (left.m_data.tag() != right.m_data.tag()) {
+                return false;
+            }
+            TU_MATCH_HDRA( (left.m_data, right.m_data), {)
+            TU_ARMA(Integer, l, r) return l.m_type == r.m_type && l.m_value == r.m_value;
+                TU_ARMA(Float, l, r) return l.m_type == r.m_type && l.m_value == r.m_value;
+                TU_ARMA(Boolean, l, r) return l == r;
+                TU_ARMA(String, l, r) return l == r;
+                TU_ARMA(CString, l, r) return l.v == r.v;
+                TU_ARMA(ByteString, l, r) return l == r;
+            }
+            throw "";
+        }
+
+        bool const_expr_nodes_equal(const ::HIR::ConstGeneric_Unevaluated& left_value, const ::HIR::ExprNode& left, const ::HIR::ConstGeneric_Unevaluated& right_value, const ::HIR::ExprNode& right) {
+            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_ConstParam*>(&left)) {
+                const auto* r = dynamic_cast<const ::HIR::ExprNode_ConstParam*>(&right);
+                if (!r) {
+                    return false;
+                }
+                const auto* l_param = get_unevaluated_param(left_value, l->m_binding);
+                const auto* r_param = get_unevaluated_param(right_value, r->m_binding);
+                return l_param && r_param ? *l_param == *r_param : l->m_binding == r->m_binding;
+            }
+            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_Literal*>(&left)) {
+                const auto* r = dynamic_cast<const ::HIR::ExprNode_Literal*>(&right);
+                return r && const_expr_literals_equal(*l, *r);
+            }
+            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_BinOp*>(&left)) {
+                const auto* r = dynamic_cast<const ::HIR::ExprNode_BinOp*>(&right);
+                return r && l->m_op == r->m_op && const_expr_nodes_equal(left_value, *l->m_left, right_value, *r->m_left) && const_expr_nodes_equal(left_value, *l->m_right, right_value, *r->m_right);
+            }
+            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_UniOp*>(&left)) {
+                const auto* r = dynamic_cast<const ::HIR::ExprNode_UniOp*>(&right);
+                return r && l->m_op == r->m_op && const_expr_nodes_equal(left_value, *l->m_value, right_value, *r->m_value);
+            }
+            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_Cast*>(&left)) {
+                const auto* r = dynamic_cast<const ::HIR::ExprNode_Cast*>(&right);
+                return r && l->m_dst_type == r->m_dst_type && const_expr_nodes_equal(left_value, *l->m_value, right_value, *r->m_value);
+            }
+            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_ConstBlock*>(&left)) {
+                const auto* r = dynamic_cast<const ::HIR::ExprNode_ConstBlock*>(&right);
+                return r && const_expr_nodes_equal(left_value, *l->m_inner, right_value, *r->m_inner);
+            }
+            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_Block*>(&left)) {
+                const auto* r = dynamic_cast<const ::HIR::ExprNode_Block*>(&right);
+                if (!r || l->m_nodes.size() != r->m_nodes.size() || static_cast<bool>(l->m_value_node) != static_cast<bool>(r->m_value_node)) {
+                    return false;
+                }
+                for (unsigned int i = 0; i < l->m_nodes.size(); i++) {
+                    if (!const_expr_nodes_equal(left_value, *l->m_nodes[i], right_value, *r->m_nodes[i])) {
+                        return false;
+                    }
+                }
+                return !l->m_value_node || const_expr_nodes_equal(left_value, *l->m_value_node, right_value, *r->m_value_node);
+            }
+            return false;
+        }
+    }
+
+    bool ConstGeneric_Unevaluated::equivalent(const ConstGeneric_Unevaluated& x) const {
+        return const_expr_nodes_equal(*this, **this->expr, x, **x.expr);
     }
 
     Ordering ConstGeneric_Unevaluated::ord(const ConstGeneric_Unevaluated& x) const {

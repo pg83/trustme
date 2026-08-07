@@ -538,7 +538,6 @@ namespace static_borrow_constants {
         }
 
         void visit_constgeneric(::HIR::ConstGeneric& c) override {
-            HIR::Visitor::visit_constgeneric(c);
             if (auto* e = c.opt_Unevaluated()) {
                 auto& ep = (*e)->expr;
                 ExprVisitor_Mark ev(m_resolve, m_self_type, *ep);
@@ -1225,7 +1224,6 @@ namespace static_borrow_constants {
         }
 
         void visit_constgeneric(::HIR::ConstGeneric& c) override {
-            HIR::Visitor::visit_constgeneric(c);
             if (auto* e = c.opt_Unevaluated()) {
                 ExprVisitor_Mutate ev(m_resolve, m_self_type, this->get_new_ty_cb(), *(*e)->expr);
                 ev.visit_node_ptr(*(*e)->expr);
