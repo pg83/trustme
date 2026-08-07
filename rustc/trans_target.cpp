@@ -983,6 +983,11 @@ namespace {
                     if (!r) {
                         return false;
                     }
+                    // Preserve the full invalid range for the general niche
+                    // layout instead of collapsing it to the zero value.
+                    if (str->m_struct_markings.bounded_max) {
+                        return false;
+                    }
                     for (size_t i = 0; i < r->fields.size(); i++) {
                         if (get_nonzero_path(sp, resolve, r->fields[i].ty, out_path)) {
                             out_path.sub_fields.push_back(i);
@@ -1163,7 +1168,7 @@ namespace {
                             // Check that the offset of this tag field is >= min_offset
                             auto ofs = get_offset(sp, resolve, r, ve.field);
                             DEBUG("Linear - Tag offset: " << ofs);
-                            if (min_offset <= ofs && ofs + ve.field.size < max_offset) {
+                            if (min_offset <= ofs && ofs + ve.field.size <= max_offset) {
                                 out_path.size = ve.field.size;
                                 out_path.sub_fields.clear();
                                 out_path.sub_fields.insert(out_path.sub_fields.begin(), ve.field.sub_fields.rbegin(), ve.field.sub_fields.rend());
@@ -1174,7 +1179,7 @@ namespace {
                         TU_ARMA(Values, ve) {
                             auto ofs = get_offset(sp, resolve, r, ve.field);
                             DEBUG("Values - Tag offset: " << ofs);
-                            if (min_offset <= ofs && ofs + ve.field.size < max_offset) {
+                            if (min_offset <= ofs && ofs + ve.field.size <= max_offset) {
                                 auto last_value = *std::max_element(ve.values.begin(), ve.values.end());
                                 if (last_value < UINT_MAX) {
                                     out_path.size = ve.field.size;

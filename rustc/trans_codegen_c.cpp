@@ -4297,8 +4297,14 @@ namespace {
                                         // - Only use that if there isn't an explicit tag field in the enum
                                         if (re.field.sub_fields.empty() || type_is_bad_zst(repr->fields[ve.index].ty)) {
                                             emit_lvalue(e.dst);
-                                            emit_enum_path(repr, re.field);
-                                            m_of << " = " << (re.offset + ve.index);
+                                            const auto& slot_ty = emit_enum_path(repr, re.field);
+                                            m_of << " = ";
+                                            if (slot_ty.data().is_Pointer() || slot_ty.data().is_Borrow() || slot_ty.data().is_Function()) {
+                                                m_of << "(";
+                                                emit_ctype(slot_ty);
+                                                m_of << ")(uintptr_t)";
+                                            }
+                                            m_of << (re.offset + ve.index);
                                         } else {
                                             auto vr = Target_GetTypeRepr(sp, m_resolve, repr->fields[ve.index].ty);
                                             //m_of << "assert(&";
@@ -4307,7 +4313,14 @@ namespace {
                                             //emit_lvalue(e.dst); emit_enum_path(repr, re.field);
                                             //m_of << "); ";
                                             emit_lvalue(e.dst);
-                                            m_of << ".DATA.var_" << ve.index << "._" << (vr->fields.size() - 1) << " = " << (re.offset + ve.index);
+                                            m_of << ".DATA.var_" << ve.index << "._" << (vr->fields.size() - 1) << " = ";
+                                            const auto& slot_ty = vr->fields.back().ty;
+                                            if (slot_ty.data().is_Pointer() || slot_ty.data().is_Borrow() || slot_ty.data().is_Function()) {
+                                                m_of << "(";
+                                                emit_ctype(slot_ty);
+                                                m_of << ")(uintptr_t)";
+                                            }
+                                            m_of << (re.offset + ve.index);
                                         }
                                         emit_newline = true;
                                     } else {
@@ -4591,26 +4604,32 @@ namespace {
                 }
                 TU_ARMA(Linear, e) {
                     const auto& tag_ty = Target_GetInnerType(sp, m_resolve, *repr, e.field.index, e.field.sub_fields);
-                    switch (tag_ty.data().as_Primitive()) {
-                        case ::HIR::CoreType::Bool:
-                        case ::HIR::CoreType::U8:
-                        case ::HIR::CoreType::I8:
-                        case ::HIR::CoreType::U16:
-                        case ::HIR::CoreType::I16:
-                        case ::HIR::CoreType::U32:
-                        case ::HIR::CoreType::I32:
-                        case ::HIR::CoreType::U64:
-                        case ::HIR::CoreType::I64:
-                        case ::HIR::CoreType::Usize:
-                        case ::HIR::CoreType::Isize:
-                        case ::HIR::CoreType::Char:
-                            break;
-                        default:
-                            MIR_BUG(mir_res, "Invalid tag type?! " << tag_ty);
+                    const bool pointer_tag = tag_ty.data().is_Pointer() || tag_ty.data().is_Borrow() || tag_ty.data().is_Function();
+                    if (!pointer_tag) {
+                        switch (tag_ty.data().as_Primitive()) {
+                            case ::HIR::CoreType::Bool:
+                            case ::HIR::CoreType::U8:
+                            case ::HIR::CoreType::I8:
+                            case ::HIR::CoreType::U16:
+                            case ::HIR::CoreType::I16:
+                            case ::HIR::CoreType::U32:
+                            case ::HIR::CoreType::I32:
+                            case ::HIR::CoreType::U64:
+                            case ::HIR::CoreType::I64:
+                            case ::HIR::CoreType::Usize:
+                            case ::HIR::CoreType::Isize:
+                            case ::HIR::CoreType::Char:
+                                break;
+                            default:
+                                MIR_BUG(mir_res, "Invalid tag type?! " << tag_ty);
+                        }
                     }
 
                     auto emit_variant = [&]() {
 #if 1
+                        if (pointer_tag) {
+                            m_of << "(uintptr_t)";
+                        }
                         emit_lvalue(val);
                         emit_enum_path(repr, e.field);
 #else
@@ -7035,24 +7054,28 @@ namespace {
                             }
                             break;
                             TU_ARM(repr->variants, Linear, ve) {
-                                if (ve.uses_niche()) {
-                                    m_of << "( (*";
-                                    emit_param(e.args.at(0));
-                                    m_of << ")";
-                                    emit_enum_path(repr, ve.field);
-                                    m_of << " < " << ve.offset;
-                                    m_of << " ? " << ve.field.index;
-                                    m_of << " : (*";
-                                    emit_param(e.args.at(0));
-                                    m_of << ")";
-                                    emit_enum_path(repr, ve.field);
-                                    m_of << " - " << ve.offset;
-                                    m_of << " )";
-                                } else {
+                                const auto& tag_ty = Target_GetInnerType(sp, m_resolve, *repr, ve.field.index, ve.field.sub_fields);
+                                const bool pointer_tag = tag_ty.data().is_Pointer() || tag_ty.data().is_Borrow() || tag_ty.data().is_Function();
+                                auto emit_tag = [&]() {
+                                    if (pointer_tag) {
+                                        m_of << "(uintptr_t)";
+                                    }
                                     m_of << "(*";
                                     emit_param(e.args.at(0));
                                     m_of << ")";
                                     emit_enum_path(repr, ve.field);
+                                };
+                                if (ve.uses_niche()) {
+                                    m_of << "( ";
+                                    emit_tag();
+                                    m_of << " < " << ve.offset;
+                                    m_of << " ? " << ve.field.index;
+                                    m_of << " : ";
+                                    emit_tag();
+                                    m_of << " - " << ve.offset;
+                                    m_of << " )";
+                                } else {
+                                    emit_tag();
                                 }
                             }
                             break;
