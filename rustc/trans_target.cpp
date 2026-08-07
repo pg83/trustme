@@ -983,6 +983,19 @@ namespace {
                             return true;
                         }
                     }
+                } else if (te.binding.is_Enum()) {
+                    const TypeRepr* repr = Target_GetTypeRepr(sp, resolve, ty);
+                    if (!repr) {
+                        return false;
+                    }
+                    if (const auto* values = repr->variants.opt_Values()) {
+                        if (std::find(values->values.begin(), values->values.end(), 0) == values->values.end()) {
+                            out_path.sub_fields.insert(out_path.sub_fields.end(), values->field.sub_fields.rbegin(), values->field.sub_fields.rend());
+                            out_path.sub_fields.push_back(values->field.index);
+                            out_path.size = values->field.size;
+                            return true;
+                        }
+                    }
                 }
             }
             break;

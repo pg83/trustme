@@ -59,6 +59,7 @@
 Это важнее добавления очередной принимаемой синтаксической формы:
 
 - ~~неправильный размер enum discriminant: `2` вместо `1`;~~ Сделано: auto repr теперь выбирает минимальный unsigned tag для неотрицательного диапазона и минимальный signed tag, если есть отрицательные значения; `0..=0xe8` занимает `u8`, а не `i16`. Красный `test_enum_discriminant_layout.rs` и полный `enum-discrim-width-stuff.rs` проходят compile+runtime. `nonzero-enum.rs` по-прежнему даёт отдельный `2 != 1` уже на niche layout `Option<E>`.
+- ~~`Option<E>`/`Result<E, ()>` не использовали нулевой niche C-like enum с discriminants `1,2,3`;~~ Сделано: `get_nonzero_path` распознаёт `TypeRepr::Values`, только если `0` отсутствует, и переносит точный tag field path. Красный `test_enum_nonzero_niche_layout.rs` и официальный `nonzero-enum.rs` проходят compile+runtime; все три типа занимают один byte.
 - неправильные `f128` результаты;
 - неправильное форматирование отрицательных чисел;
 - half-open range pattern semantics;
