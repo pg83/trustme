@@ -709,6 +709,13 @@ namespace resolve_ufcs {
             }
         }
 
+        void visit_constgeneric(::HIR::ConstGeneric& val) override {
+            auto saved_visit_exprs = m_visit_exprs;
+            m_visit_exprs = true;
+            ::HIR::Visitor::visit_constgeneric(val);
+            m_visit_exprs = saved_visit_exprs;
+        }
+
         void visit_path(::HIR::Path& p, ::HIR::Visitor::PathContext pc) override {
             static Span sp;
 
