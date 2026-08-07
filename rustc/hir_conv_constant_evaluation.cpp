@@ -31,6 +31,35 @@ namespace {
 
     struct Defer {};
 
+    struct NewvalState_Nop: public HIR::Evaluator::Newval {
+        const Span& sp;
+
+        NewvalState_Nop(const Span& sp)
+            : sp(sp)
+        {
+        }
+
+        ::HIR::Path new_static(::HIR::TypeRef type, EncodedLiteral value) override {
+            TODO(this->sp, "new_static while evaluating a const generic");
+        }
+    };
+
+    EncodedLiteral evaluate_constgeneric(const Span& sp, const ::HIR::Crate& crate, const HIR::TypeRef& type, const ::HIR::ConstGeneric_Unevaluated& value) {
+        const auto& expr = *value.expr;
+        ASSERT_BUG(sp, expr.m_state, "Const-generic expression has no state");
+        const auto& state = *expr.m_state;
+        auto name = FMT("const_" << &expr << "#");
+
+        NewvalState_Nop nvs{sp};
+        auto eval = ::HIR::Evaluator{sp, crate, nvs};
+        eval.resolve.set_both_generics_raw(state.m_impl_generics, state.m_item_generics);
+
+        MonomorphState ms;
+        ms.pp_impl = &value.params_impl;
+        ms.pp_method = &value.params_item;
+        return eval.evaluate_constant(::HIR::ItemPath(state.m_mod_path, name.c_str()), expr, type.clone(), std::move(ms));
+    }
+
     struct NewvalState: public HIR::Evaluator::Newval {
         const ::HIR::Module& mod;
         const ::HIR::ItemPath& mod_path;
@@ -1571,23 +1600,14 @@ namespace MIR {
                         throw Defer{};
                     }
                     TU_ARMA(Unevaluated, ve) {
-                        MIR_TODO(state, "Evaluate const - " << v);
-
-#if 0
-                //::HIR::ItemPath mod_ip { item.m_value.m_state->m_mod_path };
-                //auto nvs = NewvalState(item.m_value.m_state->m_module, mod_ip, FMT("const" << &c << "#"));
-                auto eval = ::HIR::Evaluator(item.m_value.span(), root_resolve.m_crate, nvs);
-                // TODO: Does this need to set generics?
-                try
-                {
-                    item.m_value_res = eval.evaluate_constant(::HIR::ItemPath(p), item.m_value, item.m_type.clone());
-                    item.m_value_state = HIR::Constant::ValueState::Known;
-                }
-                catch(const Defer& )
-                {
-                    item.m_value_state = HIR::Constant::ValueState::Generic;
-                }
-#endif
+                        auto value = ve->monomorph(state.sp, ms, false);
+                        const auto& expr = *value.expr;
+                        MonomorphState value_ms;
+                        value_ms.pp_impl = &value.params_impl;
+                        value_ms.pp_method = &value.params_item;
+                        auto type = value_ms.monomorph_type(state.sp, expr->m_res_type);
+                        tmp = evaluate_constgeneric(state.sp, root_resolve.m_crate, type, value);
+                        return tmp;
                     }
                     TU_ARMA(Evaluated, ve) {
                         return *ve;
@@ -4112,39 +4132,22 @@ void ConvertHIR_ConstantEvaluate_Constant(const ::HIR::Crate& crate, const ::HIR
 void ConvertHIR_ConstantEvaluate_ConstGeneric(const Span& sp, const ::HIR::Crate& crate, const HIR::TypeRef& ty, ::HIR::ConstGeneric& cg) {
     if (auto* cge_p = cg.opt_Unevaluated()) {
         const auto& cge = *cge_p;
-        const auto& e = *cge->expr;
-        ASSERT_BUG(sp, e.m_state, "TODO: Should the expression state be set already?");
-        const auto& s = *e.m_state;
-        auto name = FMT("const_" << &e << "#");
-
-        struct NewvalState_Nop: public HIR::Evaluator::Newval {
-            const Span& sp;
-
-            ::HIR::Path new_static(::HIR::TypeRef type, EncodedLiteral value) override {
-                TODO(this->sp, "new_static - in ConvertHIR_ConstantEvaluate_ConstGeneric");
-            }
-
-            NewvalState_Nop(const Span& sp)
-                : sp(sp)
-            {
-            }
-        } nvs{sp};
-
-        //auto nvs = NewvalState { crate.get_mod_by_path(Span(), mod_path), mod_path, name };
-        auto eval = ::HIR::Evaluator{sp, crate, nvs};
-        eval.resolve.set_both_generics_raw(s.m_impl_generics, s.m_item_generics);
-
-        // Need to look up the required type - to do that requires knowing the item it's for
-        // - Which, might not be known at this point - might be a UfcsInherent
         try {
-            MonomorphState ms;
-            ms.pp_impl = &cge->params_impl;
-            ms.pp_method = &cge->params_item;
-            auto val = eval.evaluate_constant(::HIR::ItemPath(s.m_mod_path, name.c_str()), e, ty.clone(), std::move(ms));
-            cg = HIR::EncodedLiteralPtr(std::move(val));
+            cg = HIR::EncodedLiteralPtr(evaluate_constgeneric(sp, crate, ty, *cge));
         } catch (const Defer&) {
             // Deferred - no update
         }
+    }
+}
+
+void ConvertHIR_ConstantEvaluate_ConstGeneric(const Span& sp, const ::HIR::Crate& crate, ::HIR::ConstGeneric& cg) {
+    if (const auto* value = cg.opt_Unevaluated()) {
+        const auto& expr = *(*value)->expr;
+        MonomorphState ms;
+        ms.pp_impl = &(*value)->params_impl;
+        ms.pp_method = &(*value)->params_item;
+        auto type = ms.monomorph_type(sp, expr->m_res_type);
+        ConvertHIR_ConstantEvaluate_ConstGeneric(sp, crate, type, cg);
     }
 }
 

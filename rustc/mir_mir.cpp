@@ -489,6 +489,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorph_genericpath(sp, ty, false);
     if (const auto* r = resolve()) {
+        r->evaluate_path_params(sp, rv.m_params);
         for (auto& arg : rv.m_params.m_types) {
             r->expand_associated_types(sp, arg);
         }
@@ -504,11 +505,11 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             ::HIR::Path::Data,
             (rv.m_data),
             (e2),
-            (Generic, for (auto& arg : e2.m_params.m_types) r->expand_associated_types(sp, arg);),
-            (UfcsInherent, r->expand_associated_types(sp, e2.type); for (auto& arg : e2.params.m_types) r->expand_associated_types(sp, arg);
+            (Generic, r->evaluate_path_params(sp, e2.m_params); for (auto& arg : e2.m_params.m_types) r->expand_associated_types(sp, arg);),
+            (UfcsInherent, r->expand_associated_types(sp, e2.type); r->evaluate_path_params(sp, e2.params); r->evaluate_path_params(sp, e2.impl_params); for (auto& arg : e2.params.m_types) r->expand_associated_types(sp, arg);
              // TODO: impl params too?
              for (auto& arg : e2.impl_params.m_types) r->expand_associated_types(sp, arg);),
-            (UfcsKnown, r->expand_associated_types(sp, e2.type); for (auto& arg : e2.trait.m_params.m_types) r->expand_associated_types(sp, arg); for (auto& arg : e2.params.m_types) r->expand_associated_types(sp, arg);),
+            (UfcsKnown, r->expand_associated_types(sp, e2.type); r->evaluate_path_params(sp, e2.trait.m_params); r->evaluate_path_params(sp, e2.params); for (auto& arg : e2.trait.m_params.m_types) r->expand_associated_types(sp, arg); for (auto& arg : e2.params.m_types) r->expand_associated_types(sp, arg);),
             (UfcsUnknown, BUG(sp, "Encountered UfcsUnknown");)
         )
     }
@@ -519,6 +520,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorph_path_params(sp, ty, false);
     if (const auto* r = resolve()) {
+        r->evaluate_path_params(sp, rv);
         for (auto& arg : rv.m_types) {
             r->expand_associated_types(sp, arg);
         }
@@ -685,6 +687,9 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
         }
         TU_ARMA(Generic, ce) {
             auto val = monomorphiser().get_value(sp, ce);
+            if (const auto* r = resolve()) {
+                r->evaluate_const_generic(sp, val);
+            }
         TU_MATCH_HDRA( (val), {)
         default:
             TODO(sp, "Monomorphise MIR generic constant " << ce << " = " << val);

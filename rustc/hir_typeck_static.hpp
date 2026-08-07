@@ -174,6 +174,8 @@ public:
     void expand_associated_types(const Span& sp, ::HIR::TypeRef& input) const;
     void expand_associated_types_path(const Span& sp, ::HIR::Path& input) const;
     void evaluate_array_size(const Span& sp, ::HIR::ArraySize& size) const;
+    void evaluate_const_generic(const Span& sp, ::HIR::ConstGeneric& value) const;
+    void evaluate_path_params(const Span& sp, ::HIR::PathParams& params) const;
     bool expand_associated_types_single(const Span& sp, ::HIR::TypeRef& input) const;
 
     // Helper: Run monomorphise+EAT if the type contains generics

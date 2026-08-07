@@ -10,14 +10,6 @@
 
 Исполнять строго сверху вниз.
 
-- [ ] Добавить allocation-free helper, который проходит по `PathParams::m_values` и вычисляет только `Unevaluated` с уже concrete captured substitutions через `ConvertHIR_ConstantEvaluate_ConstGeneric`. Тип каждого const-параметра брать из соответствующего `GenericParams`, не угадывать по значению и не добавлять fallback в mangler.
-- [ ] Вызвать helper в `Trans_Enumerate_FillFrom_PathMono` после `get_ent_fullpath`: отдельно для выбранных impl params (`sub_pp.gdef_impl`), trait params и method/item params. Мутировать уже существующие `path_mono` и `sub_pp` in-place, без второй owning-копии path.
-- [ ] Не допустить создания двух translation keys для синтаксически разных unevaluated expressions, которые вычисляются в одно значение: evaluation должна завершиться до первого помещения concrete path в map и до `Trans_Mangle`.
-- [ ] Закрыть текущий red unit `tests/unit/test_dyn_const_generic_array_return.rs`, который падает в `Mangler::fmt_path_params`: `N + 1` уже имеет `params_impl = Evaluated(3)`, но параметр `SpecArrayEq` всё ещё хранится как `Unevaluated`.
-- [ ] Прогнать `tests/unit/test_const_generic_trait_return_match.rs` как регрессию structural matching и single-visit expression traversal; затем точный upstream `generic_const_exprs/dyn-compatibility-ok.rs`. Оба unit и upstream должны компилироваться и завершаться с кодом 0.
-- [ ] Добавить отдельные units для inherent impl, free item и trait item только там, где они проходят отличным translation path. Все тестовые команды, включая Rust compile node и runtime node, оставить с внешним `timeout 60s`; сборку самого `rustc` не считать тестовым node.
-- [ ] Повторно прогнать `division.rs` и `associated-consts.rs`, чтобы проверить ранее исправленную подстановку array length и не вернуть `Value param out of range`.
-- [ ] После закрытия translation CTFE повторно прогнать `interior-with-const-generic-expr.rs`, `infer-too-generic.rs`, `nested_uneval_unification-{1,2}.rs` и `subexprs_are_const_evalutable.rs`. Сгруппировать их по новой конечной сигнатуре: общую причину оставить одним P2-пунктом, каждый новый ICE записать с точным throw/assert site и первым красным unit.
 - [ ] Устранить trait-alias assert в `hir_from_ast.cpp:963`. Сначала минимальный alias с теми bounds, на которых падает lowering; после фикса проверить исходный UI/run-pass trigger.
 - [ ] Устранить `mir_mir_builder.cpp:217: No value available`. Разделить triggers по конструкции, найти первый общий случай отсутствующего result value и не подставлять фиктивный unit для выражений с не-unit типом.
 - [ ] Исправить slice-pattern lowering в `mir_from_hir_match.cpp:1944` (`too many leading rules`) и отдельный overlap byte-array patterns. Нужны units на leading/rest/trailing patterns и runtime-проверка выбранной match arm.
@@ -42,7 +34,7 @@
 ## P2 — CTFE и MIR semantics
 
 - [ ] Исправить `Encountered Infer value in constant` после подстановки вложенных const expressions. Сначала один минимальный красный unit из общей части `interior-with-const-generic-expr.rs`, `infer-too-generic.rs` и `nested_uneval_unification-1.rs`; определить, где concrete outer argument превращается в `Infer`, и сохранить его до CTFE вместо подстановки фиктивного значения.
-- [ ] Исправить преждевременную CTFE в `subexprs_are_const_evalutable.rs`: выражение `N * 2` должно оставаться параметризованным при проверке generic `foo`, затем вычисляться после вызова `foo::<10>`. Unit должен проверить runtime-длину `21`; нельзя считать unevaluated expression ошибкой до появления concrete substitution.
+- [ ] Устранить рекурсивный Typecheck/CTFE вход в `subexprs_are_const_evalutable.rs`, который заканчивается assert `debug.cpp:49: g_debug_indent_level < MAX_INDENT_LEVEL`. Сначала минимальный red unit на `N * 2` внутри generic `foo`; по backtrace определить цикл между const evaluation и type expansion. После фикса выражение должно оставаться параметризованным при проверке `foo`, вычисляться после `foo::<10>` и дать runtime-длину `21`.
 - [ ] Исправить `Handle expanded generic: Infer(0)` в `nested_uneval_unification-2.rs`. Unit должен отдельно покрыть передачу identity const argument `{{ L }}` через две generic функции и получить массив длины `2`; перед исправлением проверить, является ли это тем же местом потери аргумента, что и предыдущий пункт, и объединить fixes только при общей причине.
 - [ ] Реализовать float `signum` в CTFE: текущий путь ожидает integer, но получает `Float`. Проверить `±1`, `±0`, infinity и NaN для поддержанных float widths.
 - [ ] Исправить rotate intrinsics и их проверку count: нормализовать count по ширине типа и покрыть `0`, `BITS`, `BITS + 1` и signed operand.

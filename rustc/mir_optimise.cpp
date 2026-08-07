@@ -724,6 +724,15 @@ namespace {
         const ::HIR::PathParams* get_hrb_params() const override {
             return nullptr;
         }
+
+        bool has_unevaluated_values() const {
+            const auto check = [](const ::HIR::PathParams& params) {
+                return ::std::any_of(params.m_values.begin(), params.m_values.end(), [](const auto& value) {
+                    return value.is_Unevaluated() || value.is_Infer();
+                });
+            };
+            return check(impl_params) || (fcn_params && check(*fcn_params));
+        }
     };
 
     const ::MIR::Function* get_called_mir(const ::MIR::TypeResolve& state, const TransList* list, const ::HIR::Path& path, ParamsSet& params) {
@@ -1417,6 +1426,10 @@ bool MIR_Optimise_Inlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool
             }
             if (called_mir == &fcn) {
                 DEBUG("Can't inline - recursion");
+                continue;
+            }
+            if (cloner.params.has_unevaluated_values()) {
+                DEBUG("Can't inline - const substitutions are not concrete");
                 continue;
             }
 

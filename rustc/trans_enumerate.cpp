@@ -14,6 +14,7 @@
 #include "mir_helpers.hpp"
 #include "hir_typeck_common.hpp" // monomorph
 #include "hir_typeck_static.hpp" // StaticTraitResolve
+#include "hir_conv_main_bindings.hpp"
 #include "hir_item_path.hpp"
 #include <deque>
 #include <algorithm>
@@ -1321,6 +1322,66 @@ void Trans_Enumerate_Types(EnumState& state) {
 namespace {
     TAGGED_UNION(EntPtr, NotFound, (NotFound, struct {}), (AutoGenerate, struct {}), (Function, const ::HIR::Function*), (Static, const ::HIR::Static*), (Constant, const ::HIR::Constant*));
 
+    bool path_already_enumerated(const EnumState& state, const ::HIR::Path& path) {
+        return state.rv.m_functions.count(path) || state.rv.m_statics.count(path) || state.rv.m_constants.count(path) || state.rv.m_vtables.count(path);
+    }
+
+    void evaluate_translation_params(const Span& sp, const ::HIR::Crate& crate, const ::HIR::GenericParams* defs, ::HIR::PathParams& params) {
+        if (params.m_values.empty()) {
+            return;
+        }
+
+        ASSERT_BUG(sp, defs, "Missing const parameter definitions for " << params);
+        ASSERT_BUG(sp, params.m_values.size() <= defs->m_values.size(), "Too many const parameters in " << params << " for " << defs->fmt_args());
+        for (size_t i = 0; i < params.m_values.size(); i++) {
+            auto& value = params.m_values[i];
+            if (value.is_Unevaluated()) {
+                const auto& type = defs->m_values[i].m_type;
+                ASSERT_BUG(sp, !monomorphise_type_needed(type), "Generic const parameter type " << type << " in " << defs->fmt_args());
+                ConvertHIR_ConstantEvaluate_ConstGeneric(sp, crate, type, value);
+            }
+            ASSERT_BUG(sp, value.is_Evaluated(), "Const parameter was not concrete at translation: " << value);
+        }
+    }
+
+    void evaluate_translation_impl_and_trait_params(const Span& sp, const ::HIR::Crate& crate, ::HIR::Path& path, Trans_Params& pp) {
+        evaluate_translation_params(sp, crate, pp.gdef_impl, pp.pp_impl);
+
+        TU_MATCH_HDRA((path.m_data), {)
+        TU_ARMA(Generic, _pe) {
+            }
+            TU_ARMA(UfcsKnown, pe) {
+                const auto& trait = crate.get_trait_by_path(sp, pe.trait.m_path);
+                evaluate_translation_params(sp, crate, &trait.m_params, pe.trait.m_params);
+            }
+            TU_ARMA(UfcsInherent, pe) {
+                evaluate_translation_params(sp, crate, pp.gdef_impl, pe.impl_params);
+            }
+            TU_ARMA(UfcsUnknown, _pe) {
+                BUG(sp, "UfcsUnknown at translation: " << path);
+            }
+        }
+    }
+
+    void evaluate_translation_item_params(const Span& sp, const ::HIR::Crate& crate, const ::HIR::GenericParams& defs, ::HIR::Path& path, Trans_Params& pp) {
+        evaluate_translation_params(sp, crate, &defs, pp.pp_method);
+
+        TU_MATCH_HDRA((path.m_data), {)
+        TU_ARMA(Generic, pe) {
+                evaluate_translation_params(sp, crate, &defs, pe.m_params);
+            }
+            TU_ARMA(UfcsKnown, pe) {
+                evaluate_translation_params(sp, crate, &defs, pe.params);
+            }
+            TU_ARMA(UfcsInherent, pe) {
+                evaluate_translation_params(sp, crate, &defs, pe.params);
+            }
+            TU_ARMA(UfcsUnknown, _pe) {
+                BUG(sp, "UfcsUnknown at translation: " << path);
+            }
+        }
+    }
+
     EntPtr get_ent_fullpath(const Span& sp, const ::HIR::Crate& crate, const ::HIR::Path& path, ::HIR::PathParams& impl_pp, const ::HIR::GenericParams*& impl_def) {
         TRACE_FUNCTION_F(path);
         StaticTraitResolve resolve{crate};
@@ -1412,20 +1473,8 @@ void Trans_Enumerate_FillFrom_PathMono(EnumState& state, ::HIR::Path path_mono) 
     // Don't want duplicates of lifetime-generic items
     ASSERT_BUG(sp, !monomorphise_path_needed(path_mono, /*ignore_lifetimes=*/false), "Path " << path_mono << " is generic");
     // TODO: If already in the list, return early
-    if (state.rv.m_functions.count(path_mono)) {
-        DEBUG("> Already done function");
-        return;
-    }
-    if (state.rv.m_statics.count(path_mono)) {
-        DEBUG("> Already done static");
-        return;
-    }
-    if (state.rv.m_constants.count(path_mono)) {
-        DEBUG("> Already done constant");
-        return;
-    }
-    if (state.rv.m_vtables.count(path_mono)) {
-        DEBUG("> Already done vtable");
+    if (path_already_enumerated(state, path_mono)) {
+        DEBUG("> Already enumerated");
         return;
     }
 
@@ -1453,11 +1502,16 @@ void Trans_Enumerate_FillFrom_PathMono(EnumState& state, ::HIR::Path path_mono) 
     DEBUG("item_ref.tag_str() = " << item_ref.tag_str());
     DEBUG("sub_pp.pp_method = " << sub_pp.pp_method);
     DEBUG("sub_pp.pp_impl = " << sub_pp.pp_impl);
+    evaluate_translation_impl_and_trait_params(sp, state.crate, path_mono, sub_pp);
     TU_MATCH_HDRA( (item_ref), {)
     TU_ARMA(NotFound, e) {
             BUG(sp, "Item not found for " << path_mono);
         }
         TU_ARMA(AutoGenerate, e) {
+            if (path_already_enumerated(state, path_mono)) {
+                DEBUG("> Already enumerated after const evaluation");
+                return;
+            }
             if (path_mono.m_data.is_Generic()) {
                 // Leave generation of struct/enum constructors to codgen
                 // TODO: Add to a list of required constructors
@@ -1538,15 +1592,30 @@ void Trans_Enumerate_FillFrom_PathMono(EnumState& state, ::HIR::Path path_mono) 
             }
         }
         TU_ARMA(Function, e) {
+            evaluate_translation_item_params(sp, state.crate, e->m_params, path_mono, sub_pp);
+            if (path_already_enumerated(state, path_mono)) {
+                DEBUG("> Already enumerated after const evaluation");
+                return;
+            }
             // Add this path (monomorphised) to the queue
             state.enum_fcn(mv$(path_mono), *e, mv$(sub_pp));
         }
         TU_ARMA(Static, e) {
+            evaluate_translation_item_params(sp, state.crate, e->m_params, path_mono, sub_pp);
+            if (path_already_enumerated(state, path_mono)) {
+                DEBUG("> Already enumerated after const evaluation");
+                return;
+            }
             if (auto* ptr = state.rv.add_static(mv$(path_mono))) {
                 Trans_Enumerate_FillFrom_Static(state, *e, *ptr, mv$(sub_pp));
             }
         }
         TU_ARMA(Constant, e) {
+            evaluate_translation_item_params(sp, state.crate, e->m_params, path_mono, sub_pp);
+            if (path_already_enumerated(state, path_mono)) {
+                DEBUG("> Already enumerated after const evaluation");
+                return;
+            }
             switch (e->m_value_state) {
                 case HIR::Constant::ValueState::Unknown:
                     BUG(sp, "Unevaluated constant: " << path_mono);

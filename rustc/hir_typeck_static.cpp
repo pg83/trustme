@@ -1501,6 +1501,16 @@ void StaticTraitResolve::evaluate_array_size(const Span& sp, ::HIR::ArraySize& s
     ConvertHIR_ConstantEvaluate_ArraySize(sp, m_crate, HIR::SimplePath(m_crate.m_crate_name, {}), size);
 }
 
+void StaticTraitResolve::evaluate_const_generic(const Span& sp, ::HIR::ConstGeneric& value) const {
+    ConvertHIR_ConstantEvaluate_ConstGeneric(sp, m_crate, value);
+}
+
+void StaticTraitResolve::evaluate_path_params(const Span& sp, ::HIR::PathParams& params) const {
+    for (auto& value : params.m_values) {
+        evaluate_const_generic(sp, value);
+    }
+}
+
 void StaticTraitResolve::expand_associated_types_path(const Span& sp, ::HIR::Path& input) const {
     TRACE_FUNCTION_FR(input, input);
     TU_MATCH_HDRA( (input.m_data), { )
@@ -1570,6 +1580,7 @@ void StaticTraitResolve::expand_associated_types_inner(const Span& sp, ::HIR::Ty
         TU_ARMA(Path, e) {
         TU_MATCH_HDRA( (e.path.m_data), { )
         TU_ARMA(Generic, e2) {
+                    evaluate_path_params(sp, e2.m_params);
                     ConvertHIR_ConstantEvaluate_MethodParams(sp, m_crate, HIR::SimplePath(m_crate.m_crate_name, {}), m_impl_generics, m_item_generics, e.binding.get_generics(), e2.m_params);
                     expand_associated_types_params(sp, e2.m_params);
                 }
