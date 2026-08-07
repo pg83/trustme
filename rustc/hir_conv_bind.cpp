@@ -278,16 +278,14 @@ namespace {
             }
         }
 
-        void visit_path_params(::HIR::PathParams& params) override {
-            HIR::Visitor::visit_path_params(params);
-            for (auto& v : params.m_values) {
-                if (auto* ve = v.opt_Unevaluated()) {
-                    if (m_ms.m_impl_generics) {
-                        (*ve)->params_impl = m_ms.m_impl_generics->make_nop_params(0);
-                    }
-                    if (m_ms.m_item_generics) {
-                        (*ve)->params_item = m_ms.m_item_generics->make_nop_params(1);
-                    }
+        void visit_constgeneric(::HIR::ConstGeneric& value) override {
+            HIR::Visitor::visit_constgeneric(value);
+            if (auto* unevaluated = value.opt_Unevaluated()) {
+                if (m_ms.m_impl_generics) {
+                    (*unevaluated)->params_impl = m_ms.m_impl_generics->make_nop_params(0);
+                }
+                if (m_ms.m_item_generics) {
+                    (*unevaluated)->params_item = m_ms.m_item_generics->make_nop_params(1);
                 }
             }
         }

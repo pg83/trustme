@@ -1497,6 +1497,10 @@ void StaticTraitResolve::expand_associated_types(const Span& sp, ::HIR::TypeRef&
     this->expand_associated_types_inner(sp, input);
 }
 
+void StaticTraitResolve::evaluate_array_size(const Span& sp, ::HIR::ArraySize& size) const {
+    ConvertHIR_ConstantEvaluate_ArraySize(sp, m_crate, HIR::SimplePath(m_crate.m_crate_name, {}), size);
+}
+
 void StaticTraitResolve::expand_associated_types_path(const Span& sp, ::HIR::Path& input) const {
     TRACE_FUNCTION_FR(input, input);
     TU_MATCH_HDRA( (input.m_data), { )

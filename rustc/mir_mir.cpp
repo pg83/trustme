@@ -758,7 +758,11 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             return this->clone_constant(se);
         }
         TU_ARMA(SizedArray, se) {
-            return ::MIR::RValue::make_SizedArray({this->clone_param(se.val), monomorphiser().monomorph_arraysize(sp, se.count)});
+            auto count = monomorphiser().monomorph_arraysize(sp, se.count);
+            if (const auto* resolver = resolve()) {
+                resolver->evaluate_array_size(sp, count);
+            }
+            return ::MIR::RValue::make_SizedArray({this->clone_param(se.val), std::move(count)});
         }
         TU_ARMA(Borrow, se) {
             return ::MIR::RValue::make_Borrow({se.type, se.is_raw, this->clone_lval(se.val)});

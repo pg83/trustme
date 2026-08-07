@@ -10,7 +10,7 @@
 
 Исполнять строго сверху вниз.
 
-- [ ] Устранить семейство `hir_typeck_common.cpp:686` (`Value param ... out of range`) на const-generic expressions. Красный unit уже фиксирует `[u8; N / 2]` и вызов с `N = 4`; завершить исправление в два этапа: привязывать `params_impl`/`params_item` у каждого `ConstGeneric_Unevaluated`, независимо от того, встретился он внутри path params или array size; после подстановки вычислять `SizedArray.count` до C codegen. Затем прогнать unit и точные upstream triggers `division.rs`, `associated-consts.rs`, `nested_uneval_unification-1.rs`, `subexprs_are_const_evalutable.rs`; закоммитить только общий fix, не текстовую подстановку в C backend.
+- [ ] Устранить uncaught `char const*` в `generic_const_exprs/dyn-compatibility-ok.rs`, который теперь открывается после исправления const-generic substitutions. Красный unit должен свести случай к вызову метода `&dyn Foo<N> -> [u8; N + 1]`; сначала получить точный throw-site/backtrace, затем чинить общий trait-object/vtable path, не проглатывать исключение.
 - [ ] Устранить assert `visit_expr hit in OuterVisitor` на static-borrow/constant inputs. Unit должен содержать минимальный const/static initializer, который сейчас попадает в expression visitor после ожидаемой фазы.
 - [ ] Устранить trait-alias assert в `hir_from_ast.cpp:963`. Сначала минимальный alias с теми bounds, на которых падает lowering; после фикса проверить исходный UI/run-pass trigger.
 - [ ] Устранить `mir_mir_builder.cpp:217: No value available`. Разделить triggers по конструкции, найти первый общий случай отсутствующего result value и не подставлять фиктивный unit для выражений с не-unit типом.
@@ -35,6 +35,9 @@
 
 ## P2 — CTFE и MIR semantics
 
+- [ ] Исправить `Encountered Infer value in constant` после подстановки вложенных const expressions. Сначала один минимальный красный unit из общей части `interior-with-const-generic-expr.rs`, `infer-too-generic.rs` и `nested_uneval_unification-1.rs`; определить, где concrete outer argument превращается в `Infer`, и сохранить его до CTFE вместо подстановки фиктивного значения.
+- [ ] Исправить преждевременную CTFE в `subexprs_are_const_evalutable.rs`: выражение `N * 2` должно оставаться параметризованным при проверке generic `foo`, затем вычисляться после вызова `foo::<10>`. Unit должен проверить runtime-длину `21`; нельзя считать unevaluated expression ошибкой до появления concrete substitution.
+- [ ] Исправить `Handle expanded generic: Infer(0)` в `nested_uneval_unification-2.rs`. Unit должен отдельно покрыть передачу identity const argument `{{ L }}` через две generic функции и получить массив длины `2`; перед исправлением проверить, является ли это тем же местом потери аргумента, что и предыдущий пункт, и объединить fixes только при общей причине.
 - [ ] Реализовать float `signum` в CTFE: текущий путь ожидает integer, но получает `Float`. Проверить `±1`, `±0`, infinity и NaN для поддержанных float widths.
 - [ ] Исправить rotate intrinsics и их проверку count: нормализовать count по ширине типа и покрыть `0`, `BITS`, `BITS + 1` и signed operand.
 - [ ] Реализовать/исправить CTFE `simd_extract`, сохранив lane type и bounds; invalid lane должен диагностироваться, valid lane — давать точное значение.
