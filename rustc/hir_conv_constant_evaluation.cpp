@@ -2772,8 +2772,7 @@ namespace HIR {
                         auto ty = local_state.monomorph_expand(te->params.m_types.at(0));
                         MIR_ASSERT(state, ty.data().is_Primitive(), "ctpop with non-primitive " << ty);
                         auto ti = TypeInfo::for_type(ty);
-                        //MIR_ASSERT(state, ti.type == TypeInfo::Unsigned, "`ctpop` with non-unsigned " << ty);
-                        auto val = local_state.read_param_uint(ti.bits, e.args.at(0));
+                        auto val = ti.mask(local_state.read_param_uint(ti.bits, e.args.at(0)));
 #ifdef _MSC_VER
                         unsigned rv = __popcnt(val.get_lo() & 0xFFFFFFFF) + __popcnt(val.get_lo() >> 32) + __popcnt(val.get_hi() & 0xFFFFFFFF) + __popcnt(val.get_hi() >> 32);
 #else
@@ -2782,12 +2781,11 @@ namespace HIR {
                         dst.write_uint(state, TARGETVER_LEAST_1_90 ? 32 : ti.bits, U128(rv));
                     }
                     // - CounT Trailing Zeros
-                    else if (te->name == "cttz") {
+                    else if (te->name == "cttz" || te->name == "cttz_nonzero") {
                         auto ty = local_state.monomorph_expand(te->params.m_types.at(0));
                         MIR_ASSERT(state, ty.data().is_Primitive(), "`cttz` with non-primitive " << ty);
                         auto ti = TypeInfo::for_type(ty);
-                        MIR_ASSERT(state, ti.ty == TypeInfo::Unsigned, "`cttz` with non-unsigned " << ty);
-                        auto val = local_state.read_param_uint(ti.bits, e.args.at(0));
+                        auto val = ti.mask(local_state.read_param_uint(ti.bits, e.args.at(0)));
                         unsigned rv = 0;
                         if (val == U128(0)) {
                             rv = ti.bits;
@@ -2804,8 +2802,7 @@ namespace HIR {
                         auto ty = local_state.monomorph_expand(te->params.m_types.at(0));
                         MIR_ASSERT(state, ty.data().is_Primitive(), "`ctlz` with non-primitive " << ty);
                         auto ti = TypeInfo::for_type(ty);
-                        MIR_ASSERT(state, ti.ty == TypeInfo::Unsigned, "`ctlz` with non-unsigned " << ty);
-                        auto val = local_state.read_param_uint(ti.bits, e.args.at(0));
+                        auto val = ti.mask(local_state.read_param_uint(ti.bits, e.args.at(0)));
                         unsigned rv = 0;
                         // Count how many shifts needed to remove the MSB
                         while (val != U128(0)) {
