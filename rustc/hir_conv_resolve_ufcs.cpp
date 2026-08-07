@@ -791,6 +791,18 @@ namespace resolve_ufcs {
                     return;
                 }
 
+                // `<dyn Trait>::item` can name an item supplied by a supertrait.
+                // Resolve it from the trait object's principal trait before
+                // looking for an implementation of the trait object type.
+                if (const auto* trait_object = e.type.data().opt_TraitObject()) {
+                    const auto& principal = trait_object->m_trait;
+                    if (principal.m_trait_ptr && locate_in_trait_and_set(pc, principal.m_path, *principal.m_trait_ptr, p.m_data)) {
+                        DEBUG("Found in trait object bounds, p = " << p);
+                        assert(!p.m_data.is_UfcsUnknown());
+                        return;
+                    }
+                }
+
                 // TODO: Control ordering with a flag in UfcsUnknown
                 // 1. Search for applicable inherent methods (COMES FIRST!)
                 if (this->resolve_UfcsUnknown_inherent(m_cur_mod_path, p, pc, p.m_data)) {

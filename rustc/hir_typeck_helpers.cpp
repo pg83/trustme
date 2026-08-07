@@ -4874,11 +4874,10 @@ TU_ARMA(Alias, ee) {
                 const auto& trait = this->m_crate.get_trait_by_path(sp, e.m_trait.m_path.m_path);
 
                 bool found_trait_object = false;
-                ::HIR::GenericPath final_trait_path;
-                if (const auto* fcn_ptr = this->trait_contains_method(sp, e.m_trait.m_path, trait, ::HIR::TypeRef::new_self(), method_name, final_trait_path)) {
+                auto add_trait_object_method = [&](const ::HIR::Function& fcn, ::HIR::GenericPath final_trait_path) {
                     DEBUG("- Found trait " << final_trait_path << " (trait object)");
                     // - If the receiver is valid, then it's correct (no need to check the type again)
-                    if (const auto* self_ty_p = check_method_receiver(sp, *fcn_ptr, ty, access)) {
+                    if (const auto* self_ty_p = check_method_receiver(sp, fcn, ty, access)) {
                         if (e.m_trait.m_hrtbs) {
                             auto pps = e.m_trait.m_hrtbs->make_empty_params(true);
                             final_trait_path.m_params = MonomorphHrlsOnly(pps).monomorph_path_params(sp, final_trait_path.m_params, true);
@@ -4887,6 +4886,26 @@ TU_ARMA(Alias, ee) {
                         DEBUG("++ " << possibilities.back());
                         rv = true;
                         found_trait_object = true;
+                    }
+                };
+
+                const ::HIR::Function* fcn_ptr = nullptr;
+                if (trait_contains_method_inner(trait, method_name, fcn_ptr)) {
+                    assert(fcn_ptr);
+                    add_trait_object_method(*fcn_ptr, e.m_trait.m_path.clone());
+                } else {
+                    const auto self_ty = ::HIR::TypeRef::new_self();
+                    auto monomorph_cb = MonomorphStatePtr(&self_ty, &e.m_trait.m_path.m_params, nullptr);
+                    for (const auto& st : trait.m_all_parent_traits) {
+                        fcn_ptr = nullptr;
+                        if (!trait_contains_method_inner(*st.m_trait_ptr, method_name, fcn_ptr)) {
+                            continue;
+                        }
+                        assert(fcn_ptr);
+                        static ::HIR::GenericParams empty_hrtbs;
+                        auto _h = monomorph_cb.push_hrb(st.m_hrtbs ? *st.m_hrtbs : empty_hrtbs);
+                        auto final_trait_path = ::HIR::GenericPath(st.m_path.m_path, monomorph_cb.monomorph_path_params(sp, st.m_path.m_params, false));
+                        add_trait_object_method(*fcn_ptr, std::move(final_trait_path));
                     }
                 }
 

@@ -245,16 +245,26 @@ namespace {
 
                     struct M: public Monomorphiser {
                         ::HIR::Trait* trait_ptr;
+                        const ::HIR::PathParams* trait_params;
 
                         ::HIR::TypeRef get_type(const Span& sp, const ::HIR::GenericRef& g) const override {
+                            if (g.group() == 0 && g.idx() < trait_params->m_types.size()) {
+                                return trait_params->m_types[g.idx()].clone();
+                            }
                             return HIR::TypeRef(g.name, g.binding);
                         }
 
                         ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& g) const override {
+                            if (g.group() == 0 && g.idx() < trait_params->m_values.size()) {
+                                return trait_params->m_values[g.idx()].clone();
+                            }
                             return g;
                         }
 
                         ::HIR::LifetimeRef get_lifetime(const Span& sp, const ::HIR::GenericRef& g) const override {
+                            if (g.group() == 0 && g.idx() < trait_params->m_lifetimes.size()) {
+                                return trait_params->m_lifetimes[g.idx()];
+                            }
                             // Shift lifetimes from 1 (value) to 3 (HRL)
                             if ((g.binding >> 8) == 1) {
                                 return (g.binding & 0xFF) + 3 * 256;
@@ -282,6 +292,7 @@ namespace {
                     } m;
 
                     m.trait_ptr = trait_ptr;
+                    m.trait_params = &trait_path.m_params;
                     auto clone_self_cb = [](const auto& t, auto& o) {
                         if (t == ::HIR::TypeRef::new_self()) {
                             o = ::HIR::TypeRef::new_unit();
@@ -362,7 +373,7 @@ namespace {
                             auto self = ::HIR::TypeRef::new_self();
                             auto st_mono = MonomorphStatePtr(&self, &trait_path.m_params, nullptr).monomorph_traitpath(sp, st, false);
                             // NOTE: Doesn't trigger non-object-safe
-                            supertrait_flags->push_back(add_ents_from_trait(*st.m_trait_ptr, st.m_path, nullptr));
+                            supertrait_flags->push_back(add_ents_from_trait(*st.m_trait_ptr, st_mono.m_path, nullptr));
                         }
                     }
                     return true;
