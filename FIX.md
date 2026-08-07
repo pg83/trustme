@@ -16,6 +16,7 @@
   - MIR/const-eval asserts и TODO.
     - ~~fixed-array `ref mut tail @ ..` строил недопустимый cast `&mut T` сразу в `*mut [T; N]`;~~ Сделано: lowering берёт raw pointer на первый элемент rest-подмассива и выполняет корректный thin pointer-to-pointer cast. Красный `test_array_rest_ref_mut.rs` и upstream `borrowck-closures-slice-patterns-ok.rs` проходят compile+runtime.
     - ~~`coroutine/addassign-yield.rs` использовал non-valid `_6` после resume;~~ Сделано: call arguments остаются активными до завершения вычисления всего списка аргументов, поэтому временный `&mut String` сохраняется в coroutine state, если следующий аргумент делает `yield`. Красный `test_coroutine_addassign_yield.rs`, исходный тест и его drop-tracking вариант проходят compile+runtime.
+    - ~~const-eval не умел читать `f16`, а внутренний `F16` неверно кодировал exponent/subnormal;~~ Сделано: 16-битное чтение симметрично записи, binary16↔binary32 conversion корректно обрабатывает normal, subnormal, infinity, NaN и round-to-nearest-even. Красный `test_f16_const_next_down.rs` проверяет локальный литерал и `f16::MIN_POSITIVE.next_down() == 0x03ff`; `libstd` полностью пересобран новым компилятором, `coretests/floats` доходит до следующего отдельного TODO на float remainder.
 
 ### P1 — максимальная отдача на одну починку
 
@@ -35,6 +36,7 @@
 - ~~rest-pattern lowering `ref mut sub @ ..`: 107;~~ HIR и fixed-array MIR blockers сняты; slice/array regression units и оба ближайших upstream borrowck-теста проходят compile+runtime;
 - ~~macro parsing сложных attribute/token значений: 72;~~ Сделано для точного blocker-а: cfg evaluator теперь понимает boolean predicates `cfg(true)`/`cfg(false)`, в том числе вложенный `cfg(not(false))`, после macro substitution. Красный `test_cfg_bool_macro_attribute.rs` проходит compile+runtime; `coretests/floats` проходит Expand и Resolve Use и доходит до отдельного macro-path сбоя `crate::assert_biteq_rt`;
 - ~~macro re-export alias из внешнего модуля терял содержащий module path;~~ Сделано: fast path одночастного relative macro lookup заполняет canonical path текущим модулем, поэтому alias из внешнего parent и повторный import во внешнем child больше не превращают `crate::parent::original` в `crate::original`. Красный двухуровневый `test_macro_rules_reexport_alias.rs` проходит compile+runtime; `coretests/floats` доходит до отдельного const-eval сбоя на `f16`.
+- ~~массовое форматирование изменило control flow старых `if (...) case ...` трюков;~~ Сделано: diff `8dbe2c1d^..8dbe2c1d` проверен по исходным токенам; все шесть опасных `if → case → compound` мест сведены к трём switch-блокам и переписаны явными case/ветками в trait/impl modifiers, block-expression continuation и comparison dispatch. Повторный поиск не находит такой формы в текущем дереве; красные `test_trait_unsafe_method.rs` и `test_block_expression_method.rs` проходят compile+runtime, новый `libstd` полностью собирается.
 - полноценный `offset_of!`: 55, текущий TODO в [parse_expr.cpp](/home/pg/monorepo/trustme/rustc/parse_expr.cpp:1419).
 
 Всего 40 failed harness’ов блокируют 1 772 library leaf tests. Первые десять объясняют 1 303 из них.

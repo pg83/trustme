@@ -691,6 +691,23 @@ AST::Named<AST::Item> Parse_Trait_Item(TokenStream& lex) {
     std::string abi = ABI_RUST;
     AST::Function::Flags fn_flags;
 
+    if (tok.type() == TOK_RWORD_UNSAFE) {
+        fn_flags.is_unsafe = true;
+        GET_TOK(tok, lex);
+    }
+    if (tok.type() == TOK_RWORD_ASYNC) {
+        fn_flags.is_async = true;
+        GET_TOK(tok, lex);
+    }
+    if (tok.type() == TOK_RWORD_EXTERN) {
+        if (GET_TOK(tok, lex) == TOK_STRING) {
+            abi = tok.str();
+            GET_TOK(tok, lex);
+        } else {
+            abi = "C";
+        }
+    }
+
     RcString name;
     ::AST::Item rv;
     switch (tok.type()) {
@@ -754,25 +771,7 @@ AST::Named<AST::Item> Parse_Trait_Item(TokenStream& lex) {
             break;
         }
 
-        // Functions (possibly unsafe)
-        case TOK_RWORD_UNSAFE:
-            fn_flags.is_unsafe = true;
-            if (lex.getTokenIf(TOK_RWORD_ASYNC)) {
-                case TOK_RWORD_ASYNC: {
-                    fn_flags.is_async = true;
-                }
-                    if (lex.getTokenIf(TOK_RWORD_EXTERN)) {
-                        case TOK_RWORD_EXTERN: {
-                            if (GET_TOK(tok, lex) == TOK_STRING) {
-                                abi = tok.str();
-                            } else {
-                                abi = "C";
-                                PUTBACK(tok, lex);
-                            }
-                        }
-                            GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
-                    }
-            }
+        // Functions (possibly unsafe, async, or extern)
         case TOK_RWORD_FN: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
             name = tok.ident().name;
@@ -1193,81 +1192,68 @@ void Parse_Impl_Item(TokenStream& lex, AST::Impl& impl) {
 
     ::std::string abi = ABI_RUST;
     AST::Function::Flags fn_flags;
-    switch (tok.type()) {
-        case TOK_RWORD_TYPE: {
-            GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            auto name = tok.ident().name;
-            auto atype_params = Parse_GenericParamsOpt(lex);
-            GET_CHECK_TOK(tok, lex, TOK_EQUAL);
-            auto ty = Parse_Type(lex);
-            if (lex.getTokenIf(TOK_RWORD_WHERE)) {
-                Parse_WhereClause(lex, atype_params);
-            }
-            GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
-            impl.add_type(lex.end_span(ps), mv$(item_attrs), vis, is_specialisable, name, mv$(atype_params), mv$(ty));
-            break;
+    if (tok.type() == TOK_RWORD_TYPE) {
+        GET_CHECK_TOK(tok, lex, TOK_IDENT);
+        auto name = tok.ident().name;
+        auto atype_params = Parse_GenericParamsOpt(lex);
+        GET_CHECK_TOK(tok, lex, TOK_EQUAL);
+        auto ty = Parse_Type(lex);
+        if (lex.getTokenIf(TOK_RWORD_WHERE)) {
+            Parse_WhereClause(lex, atype_params);
         }
-        case TOK_RWORD_UNSAFE:
-            fn_flags.is_unsafe = true;
-            GET_TOK(tok, lex);
-            if (tok.type() == TOK_RWORD_CONST) {
-                case TOK_RWORD_CONST: {
-                    GET_TOK(tok, lex);
-                    if (tok.type() != TOK_RWORD_FN && tok.type() != TOK_RWORD_UNSAFE && !fn_flags.is_unsafe) {
-                        CHECK_TOK(tok, TOK_IDENT);
-                        auto name = tok.ident().name;
-                        GET_CHECK_TOK(tok, lex, TOK_COLON);
-                        auto ty = Parse_Type(lex);
-                        GET_CHECK_TOK(tok, lex, TOK_EQUAL);
-                        auto val = Parse_Expr(lex);
-                        GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
-
-                        auto i = ::AST::Static(AST::Static::CONST, mv$(ty), mv$(val));
-                        impl.add_static(lex.end_span(ps), mv$(item_attrs), vis, is_specialisable, mv$(name), mv$(i));
-                        break;
-                    } else if (tok.type() == TOK_RWORD_UNSAFE) {
-                        fn_flags.is_unsafe = true;
-                        GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
-                    }
-                    fn_flags.is_const = true;
-                }
-                    if (tok.type() == TOK_RWORD_EXTERN) {
-                            // FALL
-                        case TOK_RWORD_EXTERN: {
-                            if (GET_TOK(tok, lex) == TOK_STRING) {
-                                abi = tok.str();
-                                GET_TOK(tok, lex);
-                            } else {
-                                abi = "C";
-                            }
-                        }
-                            // FALL
-                            if (tok.type() == TOK_RWORD_ASYNC) {
-                                case TOK_RWORD_ASYNC: {
-                                    fn_flags.is_async = true;
-                                    if (lex.getTokenIf(TOK_RWORD_UNSAFE)) {
-                                        fn_flags.is_unsafe = true;
-                                    }
-                                    GET_TOK(tok, lex);
-                                }
-                                    CHECK_TOK(tok, TOK_RWORD_FN);
-                            }
-                    }
-            }
-        case TOK_RWORD_FN: {
-            GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            // TODO: Hygine on function names? - Not in impl blocks?
-            auto name = tok.ident().name;
-            DEBUG("Function " << name);
-            // - Self allowed, can't be prototype-form
-            auto fcn = Parse_FunctionDefWithCode(lex, /*allow_self=*/true, std::move(abi), fn_flags);
-            impl.add_function(lex.end_span(ps), mv$(item_attrs), vis, is_specialisable, mv$(name), mv$(fcn));
-            break;
-        }
-
-        default:
-            throw ParseError::Unexpected(lex, tok);
+        GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
+        impl.add_type(lex.end_span(ps), mv$(item_attrs), vis, is_specialisable, name, mv$(atype_params), mv$(ty));
+        return;
     }
+
+    if (tok.type() == TOK_RWORD_UNSAFE) {
+        fn_flags.is_unsafe = true;
+        GET_TOK(tok, lex);
+    }
+    if (tok.type() == TOK_RWORD_CONST) {
+        GET_TOK(tok, lex);
+        if (tok.type() != TOK_RWORD_FN && tok.type() != TOK_RWORD_UNSAFE && !fn_flags.is_unsafe) {
+            CHECK_TOK(tok, TOK_IDENT);
+            auto name = tok.ident().name;
+            GET_CHECK_TOK(tok, lex, TOK_COLON);
+            auto ty = Parse_Type(lex);
+            GET_CHECK_TOK(tok, lex, TOK_EQUAL);
+            auto val = Parse_Expr(lex);
+            GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
+
+            auto i = ::AST::Static(AST::Static::CONST, mv$(ty), mv$(val));
+            impl.add_static(lex.end_span(ps), mv$(item_attrs), vis, is_specialisable, mv$(name), mv$(i));
+            return;
+        }
+        if (tok.type() == TOK_RWORD_UNSAFE) {
+            fn_flags.is_unsafe = true;
+            GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
+        }
+        fn_flags.is_const = true;
+    }
+    if (tok.type() == TOK_RWORD_EXTERN) {
+        if (GET_TOK(tok, lex) == TOK_STRING) {
+            abi = tok.str();
+            GET_TOK(tok, lex);
+        } else {
+            abi = "C";
+        }
+    }
+    if (tok.type() == TOK_RWORD_ASYNC) {
+        fn_flags.is_async = true;
+        if (lex.getTokenIf(TOK_RWORD_UNSAFE)) {
+            fn_flags.is_unsafe = true;
+        }
+        GET_TOK(tok, lex);
+    }
+    CHECK_TOK(tok, TOK_RWORD_FN);
+    GET_CHECK_TOK(tok, lex, TOK_IDENT);
+    // TODO: Hygine on function names? - Not in impl blocks?
+    auto name = tok.ident().name;
+    DEBUG("Function " << name);
+    // - Self allowed, can't be prototype-form
+    auto fcn = Parse_FunctionDefWithCode(lex, /*allow_self=*/true, std::move(abi), fn_flags);
+    impl.add_function(lex.end_span(ps), mv$(item_attrs), vis, is_specialisable, mv$(name), mv$(fcn));
 }
 
 AST::Named<AST::Item> Parse_ExternBlock_Item(TokenStream& lex, const std::string& abi) {

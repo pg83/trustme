@@ -297,51 +297,32 @@ ExprNodeP Parse_ExprBlockLine(TokenStream& lex, bool* add_silence) {
             // Blocks that don't need semicolons
             // NOTE: If these are followed by a small set of tokens (`.` and `?`) then they are actually the start of an expression
             // HACK: Parse here, but if the next token is one of the set store in a TOK_INTERPOLATED_EXPR and invoke the statement parser
-            case TOK_RWORD_LOOP:
+            case TOK_RWORD_LOOP: {
                 ret = NEWNODE(AST::ExprNode_Loop, "", Parse_ExprBlockNode(lex));
-                if (0) {
-                    case TOK_RWORD_WHILE:
-                        ret = Parse_WhileStmt(lex, Ident(""));
-                }
-                if (0) {
-                    case TOK_RWORD_FOR:
-                        ret = Parse_ForStmt(lex, Ident(""));
-                }
-                if (0) {
-                    case TOK_RWORD_IF:
-                        ret = Parse_IfStmt(lex);
-                }
-                if (0) {
-                    case TOK_RWORD_MATCH:
-                        ret = Parse_Expr_Match(lex);
-                }
-                if (0) {
-                    case TOK_RWORD_UNSAFE:
-                        ret = Parse_ExprBlockNode(lex, AST::ExprNode_Block::Type::Unsafe);
-                }
-                if (0) {
-                    case TOK_RWORD_CONST:
-                        ret = Parse_ExprBlockNode(lex, AST::ExprNode_Block::Type::Const);
-                }
-                if (0) {
-                    case TOK_BRACE_OPEN: {
-                        PUTBACK(tok, lex);
-                        ret = Parse_ExprBlockNode(lex);
-                    }
-
-                        // If the block is followed by `.` or `?`, it's actually an expression!
-                        if (lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
-                            lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, ret.release())));
-                            return Parse_ExprBlockLine_Stmt(lex, *add_silence);
-                        }
-                }
-
-                if (LOOK_AHEAD(lex) == TOK_SEMICOLON) {
-                    GET_TOK(tok, lex);
-                    *add_silence = true;
-                }
-
-                return ret;
+                break;
+            }
+            case TOK_RWORD_WHILE:
+                ret = Parse_WhileStmt(lex, Ident(""));
+                break;
+            case TOK_RWORD_FOR:
+                ret = Parse_ForStmt(lex, Ident(""));
+                break;
+            case TOK_RWORD_IF:
+                ret = Parse_IfStmt(lex);
+                break;
+            case TOK_RWORD_MATCH:
+                ret = Parse_Expr_Match(lex);
+                break;
+            case TOK_RWORD_UNSAFE:
+                ret = Parse_ExprBlockNode(lex, AST::ExprNode_Block::Type::Unsafe);
+                break;
+            case TOK_RWORD_CONST:
+                ret = Parse_ExprBlockNode(lex, AST::ExprNode_Block::Type::Const);
+                break;
+            case TOK_BRACE_OPEN:
+                PUTBACK(tok, lex);
+                ret = Parse_ExprBlockNode(lex);
+                break;
 
             // Flow control
             case TOK_RWORD_DO:
@@ -374,6 +355,19 @@ ExprNodeP Parse_ExprBlockLine(TokenStream& lex, bool* add_silence) {
                 PUTBACK(tok, lex);
                 return Parse_ExprBlockLine_Stmt(lex, *add_silence);
         }
+
+        // If the block is followed by `.` or `?`, it's actually an expression!
+        if (lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
+            lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, ret.release())));
+            return Parse_ExprBlockLine_Stmt(lex, *add_silence);
+        }
+
+        if (LOOK_AHEAD(lex) == TOK_SEMICOLON) {
+            GET_TOK(tok, lex);
+            *add_silence = true;
+        }
+
+        return ret;
     }
 }
 

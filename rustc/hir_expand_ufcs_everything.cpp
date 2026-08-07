@@ -371,85 +371,37 @@ namespace {
 
             const char* langitem = nullptr;
             const char* method = nullptr;
+            bool is_comparison = false;
             switch (node.m_op) {
-                case ::HIR::ExprNode_BinOp::Op::CmpEqu: {
+                case ::HIR::ExprNode_BinOp::Op::CmpEqu:
                     langitem = "eq";
                     method = "eq";
-                }
-                    if (0) {
-                        case ::HIR::ExprNode_BinOp::Op::CmpNEqu: {
-                            langitem = "eq";
-                            method = "ne";
-                        }
-                            if (0)
-                    {
-                                case ::HIR::ExprNode_BinOp::Op::CmpLt: {
-                                    langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
-                                    method = "lt";
-                                }
-                                    if (0) {
-                                        case ::HIR::ExprNode_BinOp::Op::CmpLtE: {
-                                            langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
-                                            method = "le";
-                                        }
-                                            if (0) {
-                                                case ::HIR::ExprNode_BinOp::Op::CmpGt: {
-                                                    langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
-                                                    method = "gt";
-                                                }
-                                                    if (0) {
-                                                        case ::HIR::ExprNode_BinOp::Op::CmpGtE: {
-                                                            langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
-                                                            method = "ge";
-                                                        }
-                                                    }
-                                            }
-                                    }
-                            }
-                    }
-                    {
-                        // 1. Check if the types are valid for primitive comparison
-                        if (ty_l == ty_r) {
-                            TU_MATCH_DEF(
-                                ::HIR::TypeData,
-                                (ty_l.data()),
-                                (e),
-                                (
-                                    // Unknown - Overload
-                                ),
-                                (Pointer,
-                                 // Raw pointer, valid.
-                                 return;),
-                                // TODO: Should comparing &str be handled by the overload, or MIR?
-                                (Primitive, if (e != ::HIR::CoreType::Str) { return; })
-                            )
-                        }
-                        // 2. If not, emit a call with params borrowed
-                        ::HIR::PathParams trait_params;
-                        trait_params.m_types.push_back(ty_r.clone());
-                        ::HIR::GenericPath trait{m_crate.get_lang_item_path(node.span(), langitem), mv$(trait_params)};
-                        ::HIR::PathParams fcn_params;
-                        fcn_params.m_lifetimes.push_back(HIR::LifetimeRef());
-                        fcn_params.m_lifetimes.push_back(HIR::LifetimeRef());
-
-                        auto ty_l_ref = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, ty_l.clone());
-                        auto ty_r_ref = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, ty_r.clone());
-
-                        ::std::vector<::HIR::ExprNodeP> args;
-                        auto sp_left = node.m_left->span();
-                        auto sp_right = node.m_right->span();
-                        args.push_back(NEWNODE(ty_l_ref.clone(), Borrow, sp_left, ::HIR::BorrowType::Shared, mv$(node.m_left)));
-                        args.push_back(NEWNODE(ty_r_ref.clone(), Borrow, sp_right, ::HIR::BorrowType::Shared, mv$(node.m_right)));
-
-                        m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, ::HIR::Path(ty_l.clone(), mv$(trait), RcString::new_interned(method), mv$(fcn_params)), mv$(args));
-
-                        // Populate the cache for later passes
-                        auto& arg_types = dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache.m_arg_types;
-                        arg_types.push_back(mv$(ty_l_ref));
-                        arg_types.push_back(mv$(ty_r_ref));
-                        arg_types.push_back(::HIR::TypeRef(::HIR::CoreType::Bool));
-                        return;
-                    }
+                    is_comparison = true;
+                    break;
+                case ::HIR::ExprNode_BinOp::Op::CmpNEqu:
+                    langitem = "eq";
+                    method = "ne";
+                    is_comparison = true;
+                    break;
+                case ::HIR::ExprNode_BinOp::Op::CmpLt:
+                    langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                    method = "lt";
+                    is_comparison = true;
+                    break;
+                case ::HIR::ExprNode_BinOp::Op::CmpLtE:
+                    langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                    method = "le";
+                    is_comparison = true;
+                    break;
+                case ::HIR::ExprNode_BinOp::Op::CmpGt:
+                    langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                    method = "gt";
+                    is_comparison = true;
+                    break;
+                case ::HIR::ExprNode_BinOp::Op::CmpGtE:
+                    langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                    method = "ge";
+                    is_comparison = true;
                     break;
 
                 case ::HIR::ExprNode_BinOp::Op::Xor:
@@ -507,6 +459,51 @@ namespace {
                     ASSERT_BUG(sp, ty_r == ::HIR::TypeRef(::HIR::CoreType::Bool), "&& operator requires bool");
                     return;
             }
+
+            if (is_comparison) {
+                // 1. Check if the types are valid for primitive comparison
+                if (ty_l == ty_r) {
+                    TU_MATCH_DEF(
+                        ::HIR::TypeData,
+                        (ty_l.data()),
+                        (e),
+                        (
+                            // Unknown - Overload
+                        ),
+                        (Pointer,
+                         // Raw pointer, valid.
+                         return;),
+                        // TODO: Should comparing &str be handled by the overload, or MIR?
+                        (Primitive, if (e != ::HIR::CoreType::Str) { return; })
+                    )
+                }
+                // 2. If not, emit a call with params borrowed
+                ::HIR::PathParams trait_params;
+                trait_params.m_types.push_back(ty_r.clone());
+                ::HIR::GenericPath trait{m_crate.get_lang_item_path(node.span(), langitem), mv$(trait_params)};
+                ::HIR::PathParams fcn_params;
+                fcn_params.m_lifetimes.push_back(HIR::LifetimeRef());
+                fcn_params.m_lifetimes.push_back(HIR::LifetimeRef());
+
+                auto ty_l_ref = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, ty_l.clone());
+                auto ty_r_ref = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, ty_r.clone());
+
+                ::std::vector<::HIR::ExprNodeP> args;
+                auto sp_left = node.m_left->span();
+                auto sp_right = node.m_right->span();
+                args.push_back(NEWNODE(ty_l_ref.clone(), Borrow, sp_left, ::HIR::BorrowType::Shared, mv$(node.m_left)));
+                args.push_back(NEWNODE(ty_r_ref.clone(), Borrow, sp_right, ::HIR::BorrowType::Shared, mv$(node.m_right)));
+
+                m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, ::HIR::Path(ty_l.clone(), mv$(trait), RcString::new_interned(method), mv$(fcn_params)), mv$(args));
+
+                // Populate the cache for later passes
+                auto& arg_types = dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache.m_arg_types;
+                arg_types.push_back(mv$(ty_l_ref));
+                arg_types.push_back(mv$(ty_r_ref));
+                arg_types.push_back(::HIR::TypeRef(::HIR::CoreType::Bool));
+                return;
+            }
+
             assert(langitem);
             assert(method);
 
@@ -540,7 +537,8 @@ namespace {
                 case ::HIR::ExprNode_UniOp::Op::Invert:
                     // Check if the operation is valid in the MIR.
                     if (ty_val.data().is_Primitive()) {
-                        switch (ty_val.data().as_Primitive()) {
+                        switch (ty_val.data().as_Primitive())
+                    {
                             case ::HIR::CoreType::Str:
                             case ::HIR::CoreType::Char:
                             case ::HIR::CoreType::F32:

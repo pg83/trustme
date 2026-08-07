@@ -13,29 +13,79 @@ struct F16 {
 
     F16(float f) {
         union {
-            // 1.8.23
             float f;
             uint32_t i;
         } c;
 
         c.f = f;
-        auto sign_exp = (c.i >> 23) >> 3;
-        auto mantissa = c.i >> (23 - 10);
-        this->v = (sign_exp << 10) | mantissa;
+        const auto sign = static_cast<uint16_t>((c.i >> 16) & 0x8000);
+        const auto exponent = static_cast<int>((c.i >> 23) & 0xFF) - 127;
+        auto mantissa = c.i & 0x7FFFFF;
+
+        if (exponent == 128) {
+            if (mantissa == 0) {
+                v = sign | 0x7C00;
+            } else {
+                auto payload = static_cast<uint16_t>(mantissa >> 13);
+                v = sign | 0x7C00 | payload | (payload == 0);
+            }
+        } else if (exponent > 15) {
+            v = sign | 0x7C00;
+        } else if (exponent >= -14) {
+            auto rounded = mantissa + 0xFFF + ((mantissa >> 13) & 1);
+            auto half_exponent = exponent + 15;
+            if (rounded & 0x800000) {
+                rounded = 0;
+                half_exponent++;
+            }
+            if (half_exponent >= 31) {
+                v = sign | 0x7C00;
+            } else {
+                v = sign | static_cast<uint16_t>(half_exponent << 10) | static_cast<uint16_t>(rounded >> 13);
+            }
+        } else if (exponent < -25) {
+            v = sign;
+        } else {
+            mantissa |= 0x800000;
+            const auto shift = static_cast<unsigned>(-exponent - 1);
+            auto half_mantissa = mantissa >> shift;
+            const auto remainder = mantissa & ((uint32_t(1) << shift) - 1);
+            const auto halfway = uint32_t(1) << (shift - 1);
+            if (remainder > halfway || (remainder == halfway && (half_mantissa & 1))) {
+                half_mantissa++;
+            }
+            v = sign | static_cast<uint16_t>(half_mantissa);
+        }
     }
 
     operator float() const {
-        auto sign_exp = v >> 10;
-        auto mantissa = v & ((1 << 10) - 1);
-        auto sign_ext_f = (sign_exp << 3) | ((sign_exp & 1) == 1 ? 0x7 : 0);
-        auto mantissa_f = (mantissa << (23 - 10)) | ((mantissa & 1) == 1 ? (1 << (23 - 10)) - 1 : 0);
-
         union {
             float f;
             uint32_t i;
         } dc;
 
-        dc.i = (sign_ext_f << 23) | mantissa_f;
+        const auto sign = static_cast<uint32_t>(v & 0x8000) << 16;
+        auto exponent = static_cast<uint32_t>((v >> 10) & 0x1F);
+        auto mantissa = static_cast<uint32_t>(v & 0x03FF);
+        if (exponent == 0) {
+            if (mantissa == 0) {
+                dc.i = sign;
+                return dc.f;
+            }
+            int unbiased_exponent = -14;
+            while ((mantissa & 0x0400) == 0) {
+                mantissa <<= 1;
+                unbiased_exponent--;
+            }
+            mantissa &= 0x03FF;
+            exponent = static_cast<uint32_t>(unbiased_exponent + 127);
+        } else if (exponent == 0x1F) {
+            dc.i = sign | 0x7F800000 | (mantissa << 13);
+            return dc.f;
+        } else {
+            exponent += 127 - 15;
+        }
+        dc.i = sign | (exponent << 23) | (mantissa << 13);
         return dc.f;
     }
 };

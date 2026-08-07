@@ -808,6 +808,11 @@ namespace MIR {
 
             double read_float(const ::MIR::TypeResolve& state, unsigned bits) const {
                 switch (bits) {
+                    case 16: {
+                        F16 v_f16;
+                        read_bytes(state, &v_f16, sizeof(v_f16));
+                        return v_f16;
+                    } break;
                     case 32: {
                         float v_f32 = 0;
                         read_bytes(state, &v_f32, sizeof(v_f32));
