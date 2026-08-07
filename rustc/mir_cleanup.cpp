@@ -153,6 +153,28 @@ const EncodedLiteral* MIR_Cleanup_GetConstant(const MIR::TypeResolve& state, con
 namespace {
     const RcString rcstring_vtable = RcString::new_interned("vtable#");
 
+    bool type_accepts_all_bit_patterns(const Span& sp, const StaticTraitResolve& resolve, const HIR::TypeRef& ty) {
+        if (const auto* primitive = ty.data().opt_Primitive()) {
+            return *primitive != HIR::CoreType::Bool && *primitive != HIR::CoreType::Char && *primitive != HIR::CoreType::Str;
+        }
+        if (const auto* array = ty.data().opt_Array()) {
+            return array->size.as_Known() == 0 || type_accepts_all_bit_patterns(sp, resolve, array->inner);
+        }
+        if (ty.data().is_Tuple() || (ty.data().is_Path() && ty.data().as_Path().binding.is_Struct())) {
+            const auto* repr = Target_GetTypeRepr(sp, resolve, ty);
+            if (!repr) {
+                return false;
+            }
+            for (const auto& field : repr->fields) {
+                if (!type_accepts_all_bit_patterns(sp, resolve, field.ty)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
     ::MIR::Constant create_vtable(HIR::TypeRef ty, const HIR::TraitPath& trait) {
         auto vtable_path = trait.m_hrtbs ? ::HIR::Path(mv$(ty), trait.m_hrtbs->clone(), trait.m_path.clone(), rcstring_vtable) : ::HIR::Path(mv$(ty), trait.m_path.clone(), rcstring_vtable);
         return ::MIR::Constant::make_ItemAddr(box$(vtable_path));
@@ -325,6 +347,25 @@ namespace {
                             if (fld_size == repr->size) {
                                 // Found a suitable field!
                                 DEBUG("Found a covering field");
+                                var_idx = &e - &repr->fields.front();
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // A full-size aggregate made entirely from unrestricted scalar types can
+                // represent the storage without knowing which union field initialized it.
+                if (var_idx == ~0u) {
+                    const auto literal_end = lit.m_ofs + lit.m_size;
+                    const bool has_relocation = std::any_of(lit.m_base.relocations.begin(), lit.m_base.relocations.end(), [&](const auto& relocation) {
+                        return relocation.ofs < literal_end && lit.m_ofs < relocation.ofs + relocation.len;
+                    });
+                    if (!has_relocation) {
+                        for (const auto& e : repr->fields) {
+                            size_t field_size = 0;
+                            if (Target_GetSizeOf(state.sp, state.m_resolve, e.ty, field_size) && field_size == repr->size && type_accepts_all_bit_patterns(state.sp, state.m_resolve, e.ty)) {
+                                DEBUG("Found an unrestricted covering field");
                                 var_idx = &e - &repr->fields.front();
                                 break;
                             }
