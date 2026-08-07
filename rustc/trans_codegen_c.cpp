@@ -7843,10 +7843,9 @@ namespace {
                 if (name == "rintf32" || name == "rintf64") {
                     emit1("round");
                 }
-                // > Round to nearest integer, half-way rounds to zero
+                // > Round to nearest integer, half-way rounds to even
                 else if (name == "round_ties_even_f32" || name == "round_ties_even_f64") {
-                    // TODO: What's the libc version?
-                    emit1("round");
+                    emit1("__builtin_roundeven");
                 } else if (name == "fabsf32" || name == "fabsf64") {
                     emit1("fabs");
                 } else if (name == "copysignf32" || name == "copysignf64") {
