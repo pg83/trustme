@@ -57,7 +57,7 @@ namespace static_borrow_constants {
         {
             m_lang_RangeFull = m_resolve.m_crate.get_lang_item_path_opt("range_full");
             // EVIL hack: Since `range_full` wasn't a lang item until (latest) 1.54, resolve the path here
-            if (m_lang_RangeFull == ::HIR::SimplePath()) {
+            if (!TARGETVER_LEAST_1_54 && m_lang_RangeFull == ::HIR::SimplePath()) {
                 auto sp = ::HIR::SimplePath(g_core_crate, {"ops", "RangeFull"});
                 auto& ti = m_resolve.m_crate.get_typeitem_by_path(Span(), sp);
                 if (ti.is_Import()) {
@@ -624,7 +624,7 @@ namespace static_borrow_constants {
         {
             m_lang_RangeFull = m_resolve.m_crate.get_lang_item_path_opt("range_full");
             // EVIL hack: Since `range_full` wasn't a lang item until (latest) 1.54, resolve the path here
-            if (m_lang_RangeFull == ::HIR::SimplePath()) {
+            if (!TARGETVER_LEAST_1_54 && m_lang_RangeFull == ::HIR::SimplePath()) {
                 auto sp = ::HIR::SimplePath(g_core_crate, {"ops", "RangeFull"});
                 auto& ti = m_resolve.m_crate.get_typeitem_by_path(Span(), sp);
                 if (ti.is_Import()) {

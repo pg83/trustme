@@ -3873,18 +3873,21 @@ TU_ARMA(Alias, ee) {
 
         ::HIR::Compare TraitResolution::type_is_sized(const Span& sp, const ::HIR::TypeRef& type) const {
             bool is_fuzzy = false;
-            bool has_eq = find_trait_impls(sp, m_lang_Sized, ::HIR::PathParams{}, type, [&](auto, auto c) -> bool {
-                switch (c) {
-                    case ::HIR::Compare::Equal:
-                        return true;
-                    case ::HIR::Compare::Fuzzy:
-                        is_fuzzy = true;
-                        return false;
-                    case ::HIR::Compare::Unequal:
-                        return false;
-                }
-                throw "";
-            }, /*magic_trait_impls=*/false);
+            bool has_eq = false;
+            if (!m_lang_Sized.components().empty()) {
+                has_eq = find_trait_impls(sp, m_lang_Sized, ::HIR::PathParams{}, type, [&](auto, auto c) -> bool {
+                    switch (c) {
+                        case ::HIR::Compare::Equal:
+                            return true;
+                        case ::HIR::Compare::Fuzzy:
+                            is_fuzzy = true;
+                            return false;
+                        case ::HIR::Compare::Unequal:
+                            return false;
+                    }
+                    throw "";
+                }, /*magic_trait_impls=*/false);
+            }
             if (has_eq) {
                 return ::HIR::Compare::Equal;
             } else if (is_fuzzy) {
