@@ -2895,16 +2895,20 @@ MetadataType StaticTraitResolve::metadata_type(const Span& sp, const ::HIR::Type
                     return MetadataType::None;
                 }
                 TU_ARMA(Struct, pbe) {
-                    // TODO: Destructure?
                     switch (pbe->m_struct_markings.dst_type) {
-                        case ::HIR::StructMarkings::DstType::None:
-                            return MetadataType::None;
-                        case ::HIR::StructMarkings::DstType::Possible:
-                            return this->metadata_type(sp, e.path.m_data.as_Generic().m_params.m_types.at(pbe->m_struct_markings.unsized_param));
                         case ::HIR::StructMarkings::DstType::Slice:
                             return MetadataType::Slice;
                         case ::HIR::StructMarkings::DstType::TraitObject:
                             return MetadataType::TraitObject;
+                        case ::HIR::StructMarkings::DstType::None:
+                        case ::HIR::StructMarkings::DstType::Possible: {
+                            const auto& params = e.path.m_data.as_Generic().m_params;
+                            auto monomorph = [&](const auto& tpl) {
+                                return this->monomorph_expand(sp, tpl, MonomorphStatePtr(nullptr, &params, nullptr));
+                            };
+                            TU_MATCHA((pbe->m_data), (se), (Unit, return MetadataType::None;), (Tuple, return se.empty() ? MetadataType::None : this->metadata_type(sp, monomorph(se.back().ent));), (Named, return se.empty() ? MetadataType::None : this->metadata_type(sp, monomorph(se.back().ty));))
+                            throw "";
+                        }
                     }
                 }
                 TU_ARMA(ExternType, pbe) {
