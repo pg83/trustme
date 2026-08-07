@@ -1777,21 +1777,44 @@ namespace {
             case TypeInfo::Float: {
                 auto l = local_state.read_param_float(ti.bits, val_l);
                 auto r = local_state.read_param_float(ti.bits, val_r);
+                auto write_result = [&](double value) {
+                    if (!std::isnan(value)) {
+                        dst.write_float(state, ti.bits, value);
+                        return;
+                    }
+
+                    switch (ti.bits) {
+                        case 16:
+                            dst.write_uint(state, ti.bits, U128(0x7e00));
+                            break;
+                        case 32:
+                            dst.write_uint(state, ti.bits, U128(0x7fc00000));
+                            break;
+                        case 64:
+                            dst.write_uint(state, ti.bits, U128(0x7ff8000000000000));
+                            break;
+                        case 128:
+                            dst.write_uint(state, ti.bits, U128(0, 0x7fff800000000000));
+                            break;
+                        default:
+                            MIR_BUG(state, "Invalid float width " << ti.bits);
+                    }
+                };
                 switch (op) {
                     case ::MIR::eBinOp::ADD:
-                        dst.write_float(state, ti.bits, l + r);
+                        write_result(l + r);
                         break;
                     case ::MIR::eBinOp::SUB:
-                        dst.write_float(state, ti.bits, l - r);
+                        write_result(l - r);
                         break;
                     case ::MIR::eBinOp::MUL:
-                        dst.write_float(state, ti.bits, l * r);
+                        write_result(l * r);
                         break;
                     case ::MIR::eBinOp::DIV:
-                        dst.write_float(state, ti.bits, l / r);
+                        write_result(l / r);
                         break;
                     case ::MIR::eBinOp::MOD:
-                        dst.write_float(state, ti.bits, std::fmod(l, r));
+                        write_result(std::fmod(l, r));
                         break;
                     case ::MIR::eBinOp::ADD_OV:
                     case ::MIR::eBinOp::SUB_OV:

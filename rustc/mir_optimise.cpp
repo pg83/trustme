@@ -3109,6 +3109,12 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
 #endif
     bool changed = false;
     TRACE_FUNCTION_FR("", changed);
+    auto make_float_arithmetic_result = [](double value, ::HIR::CoreType type) {
+        if (std::isnan(value)) {
+            value = std::fabs(value);
+        }
+        return ::MIR::Constant::make_Float({value, type});
+    };
 
     // - Remove calls to `size_of` and `align_of` (replace with value if known)
     for (auto& bb : fcn.blocks) {
@@ -3606,7 +3612,7 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                                     break;
                                             TU_ARMA(Float, le, re) {
                                                 MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << val_l << " / " << val_r);
-                                                new_value = ::MIR::Constant::make_Float({le.v + re.v, le.t});
+                                                new_value = make_float_arithmetic_result(le.v + re.v, le.t);
                                             }
                                             TU_ARMA(Int, le, re) {
                                                 MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << val_l << " + " << val_r);
@@ -3625,7 +3631,7 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                                     break;
                                             TU_ARMA(Float, le, re) {
                                                 MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << val_l << " / " << val_r);
-                                                new_value = ::MIR::Constant::make_Float({le.v - re.v, le.t});
+                                                new_value = make_float_arithmetic_result(le.v - re.v, le.t);
                                             }
                                             TU_ARMA(Int, le, re) {
                                                 MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << val_l << " - " << val_r);
@@ -3644,7 +3650,7 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                                     break;
                                             TU_ARMA(Float, le, re) {
                                                 MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << val_l << " / " << val_r);
-                                                new_value = ::MIR::Constant::make_Float({le.v * re.v, le.t});
+                                                new_value = make_float_arithmetic_result(le.v * re.v, le.t);
                                             }
                                             TU_ARMA(Int, le, re) {
                                                 MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << val_l << " * " << val_r);
@@ -3663,7 +3669,7 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                                     break;
                                             TU_ARMA(Float, le, re) {
                                                 MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << val_l << " / " << val_r);
-                                                new_value = ::MIR::Constant::make_Float({le.v / re.v, le.t});
+                                                new_value = make_float_arithmetic_result(le.v / re.v, le.t);
                                             }
                                             TU_ARMA(Int, le, re) {
                                                 MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << val_l << " / " << val_r);
