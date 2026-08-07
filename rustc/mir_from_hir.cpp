@@ -2081,9 +2081,13 @@ namespace {
                         values.push_back(mv$(tmp));
                     }
                 }
-
-                if (const auto* e = values.back().opt_LValue()) {
-                    m_builder.moved_lvalue(arg->span(), *e);
+            }
+            // Keep already evaluated arguments live while evaluating the remaining arguments.
+            // A later argument can yield, so consuming an earlier temporary here would prevent
+            // the coroutine lowering from saving a value that the eventual call still needs.
+            for (size_t i = 0; i < values.size(); i++) {
+                if (const auto* e = values[i].opt_LValue()) {
+                    m_builder.moved_lvalue(args[i]->span(), *e);
                 }
             }
             return values;
