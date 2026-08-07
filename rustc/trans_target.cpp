@@ -1235,7 +1235,8 @@ namespace {
                         }
                         DEBUG("max_size = " << max_size << ", max_align = " << max_align);
 
-                        rv.fields.push_back(TypeRepr::Field{0, enm.get_repr_type(enm.m_tag_repr)});
+                        auto tag_ty = enm.m_tag_repr == ::HIR::Enum::Repr::Auto ? ::HIR::CoreType::U32 : enm.get_repr_type(enm.m_tag_repr);
+                        rv.fields.push_back(TypeRepr::Field{0, tag_ty});
                         size_t tag_size, tag_align;
                         Target_GetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, tag_size, tag_align);
                         size_t data_ofs = tag_size;
