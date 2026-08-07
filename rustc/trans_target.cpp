@@ -509,7 +509,7 @@ bool Target_GetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve,
         }
         TU_ARMA(Diverge, te) {
             out_size = 0;
-            out_align = 0;
+            out_align = 1;
             return true;
         }
         TU_ARMA(Primitive, te) {
