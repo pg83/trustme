@@ -17,13 +17,36 @@ HERE = Path(__file__).resolve().parent
 UPSTREAM = HERE / "upstream"
 REJECTED_DIRECTIVES = (
     "aux-build",
+    "aux-bin",
     "aux-crate",
     "proc-macro",
     "revisions",
     "needs-",
-    "ignore-",
-    "only-",
 )
+
+HOST_CONDITIONS = {
+    "x86_64-unknown-linux-gnu",
+    "linux",
+    "gnu",
+    "x86_64",
+    "64bit",
+    "unix",
+    "elf",
+    "nightly",
+}
+
+
+def selected_for_host(text: str) -> bool:
+    """Apply compiletest's only-/ignore- rules for our native test target."""
+    for match in re.finditer(r"^//@\s*(ignore|only)-([^:\s]+)", text,
+                             re.MULTILINE):
+        kind, condition = match.groups()
+        applies = condition == "test" or condition in HOST_CONDITIONS
+        if kind == "ignore" and applies:
+            return False
+        if kind == "only" and not applies:
+            return False
+    return True
 
 
 def selected(text: str) -> bool:
@@ -33,6 +56,8 @@ def selected(text: str) -> bool:
         return False
     if any(re.search(rf"^//@.*{re.escape(item)}", text, re.MULTILINE)
            for item in REJECTED_DIRECTIVES):
+        return False
+    if not selected_for_host(text):
         return False
     # These two tests need tests/auxiliary/rust_test_helpers.c and belong with
     # the native/auxiliary import rather than a source-only adapter.
