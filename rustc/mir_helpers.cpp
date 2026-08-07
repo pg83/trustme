@@ -268,6 +268,16 @@ const ::HIR::TypeRef& MIR::TypeResolve::get_param_type(::HIR::TypeRef& tmp, cons
                     MIR_BUG(*this, "get_const_type - ItemAddr points to unknown value - " << c);
                 }
                 TU_ARMA(NotYetKnown, ve) {
+                    if (e->m_data.is_UfcsKnown()) {
+                        const auto& pe = e->m_data.as_UfcsKnown();
+                        if (pe.item == "vtable#" && pe.trait.m_path == HIR::SimplePath()) {
+                            ::std::vector<HIR::TypeRef> fields;
+                            fields.push_back(HIR::CoreType::Usize);
+                            fields.push_back(HIR::CoreType::Usize);
+                            fields.push_back(HIR::CoreType::Usize);
+                            return HIR::TypeRef::new_borrow(HIR::BorrowType::Shared, HIR::TypeRef(mv$(fields)));
+                        }
+                    }
                     MIR_BUG(*this, "get_const_type - get_value returned NotYetKnown with signature_only=true");
                 }
                 TU_ARMA(Constant, ve) {
