@@ -72,7 +72,7 @@ coretests	pin_macro	module	coretests/tests/pin_macro.rs	2024
 coretests	ptr	module	coretests/tests/ptr.rs	2024
 coretests	result	module	coretests/tests/result.rs	2024
 coretests	simd	module	coretests/tests/simd.rs	2024
-coretests	slice	module	coretests/tests/slice.rs	2024
+coretests	slice	module-support	coretests/tests/slice.rs|coretests_slice.rs	2024
 coretests	str_lossy	module	coretests/tests/str_lossy.rs	2024
 coretests	task	module	coretests/tests/task.rs	2024
 coretests	time	module	coretests/tests/time.rs	2024

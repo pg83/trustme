@@ -32,7 +32,7 @@ def main() -> int:
             source = os.path.join(upstream, root)
         elif kind == "adapter-crate":
             source = os.path.join(os.path.dirname(__file__), "adapter", root)
-        elif kind in ("module", "adapter-module", "module-shard"):
+        elif kind in ("module", "adapter-module", "module-shard", "module-support"):
             preamble = os.path.join(upstream, suite, "preamble.rs")
             wrapper = open(preamble, encoding="utf-8", errors="surrogateescape").read()
             if suite == "alloctests":
@@ -40,12 +40,13 @@ def main() -> int:
                 support = os.path.relpath(support, work)
                 wrapper += f"\n#[path = {json.dumps(support)}]\nmod testing;\n"
             if root != "-":
-                if kind == "module-shard":
+                if kind in ("module-shard", "module-support"):
                     root, support = root.split("|", 1)
                     support = os.path.join(os.path.dirname(__file__), "adapter", support)
                     wrapper += "\n" + open(
                         support, encoding="utf-8", errors="surrogateescape"
                     ).read()
+                if kind == "module-shard":
                     selected = {
                         line.split("\t")[3]
                         for line in open(
