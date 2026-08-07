@@ -801,8 +801,13 @@ namespace {
             m_of << "typedef struct f16 { uint16_t v; } f16;\n"
                  << "static f16 f16_disabled(){ abort(); }\n"
                  << "static int f16_cmp(f16 a, f16 b){ abort(); }\n"
-                 << "typedef struct f128 { uint128_t v; } f128;\n"
-                 << "static f128 f128_disabled(){ abort(); }\n"
+                 << "typedef struct f128 { uint128_t v; } f128;\n";
+            if (m_options.emulated_i128) {
+                m_of << "static inline f128 make_f128_bits(uint64_t hi, uint64_t lo) { f128 rv = { make128_raw(hi, lo) }; return rv; }\n";
+            } else {
+                m_of << "static inline f128 make_f128_bits(uint64_t hi, uint64_t lo) { f128 rv = { ((uint128_t)hi << 64) | lo }; return rv; }\n";
+            }
+            m_of << "static f128 f128_disabled(){ abort(); }\n"
                  << "static int f128_cmp(f128 a, f128 b){ abort(); }\n";
         }
 
@@ -2521,7 +2526,8 @@ namespace {
             if (ty == HIR::CoreType::F16) {
                 m_of << "f16_disabled()";
             } else if (ty == HIR::CoreType::F128) {
-                m_of << "f128_disabled()";
+                const F128 bits(v);
+                m_of << "make_f128_bits(0x" << ::std::hex << bits.hi << "ull, 0x" << bits.lo << "ull)" << ::std::dec;
             } else if (float_value_is_nan(v)) {
                 m_of << "NAN";
             } else if (float_value_is_infinite(v)) {
