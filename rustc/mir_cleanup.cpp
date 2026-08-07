@@ -502,12 +502,9 @@ namespace {
                         }
                         return mv$(ptr_val);
                     case MetadataType::Slice: {
-                        MIR_ASSERT(state, src_ty.data().is_Array(), "BorrowOf returning slice not of an array, instead " << src_ty);
-                        const auto& te = src_ty.data().as_Array();
-                        MIR_ASSERT(state, te.size.is_Known(), "BorrowOf returning slice of unknown-sized array - " << src_ty);
-                        unsigned int size = te.size.as_Known();
-
-                        auto size_val = ::MIR::Param(::MIR::Constant::make_Uint({U128(size), ::HIR::CoreType::Usize}));
+                        const auto ptr_size = Target_GetPointerBits() / 8;
+                        auto size = lit.slice(ptr_size).read_uint(ptr_size);
+                        auto size_val = ::MIR::Param(::MIR::Constant::make_Uint({size, ::HIR::CoreType::Usize}));
                         return ::MIR::RValue::make_MakeDst({::MIR::Param(mv$(ptr_val)), mv$(size_val)});
                         break;
                     }
