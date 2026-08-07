@@ -19,6 +19,19 @@
 #include <algorithm> // std::remove_if
 
 namespace resolve_ufcs {
+    void expand_trait_impl_type_defaults(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) {
+        Span sp;
+        const auto& trait = crate.get_trait_by_path(sp, trait_path);
+        auto ms = MonomorphStatePtr(&impl.m_type, &impl.m_trait_args, nullptr);
+
+        while (impl.m_trait_args.m_types.size() < trait.m_params.m_types.size()) {
+            const auto& def = trait.m_params.m_types[impl.m_trait_args.m_types.size()];
+            auto ty = ms.monomorph_type(sp, def.m_default);
+            DEBUG("Add default trait arg " << ty << " from " << def.m_default);
+            impl.m_trait_args.m_types.push_back(mv$(ty));
+        }
+    }
+
     class Visitor: public ::HIR::Visitor {
         const ::HIR::Crate& m_crate;
         bool m_visit_exprs;
@@ -192,19 +205,7 @@ namespace resolve_ufcs {
             auto _t = this->push_mod_traits(impl.m_src_module, this->m_crate.get_mod_by_path(Span(), impl.m_src_module));
             auto _g = m_resolve.set_impl_generics(impl.m_type, impl.m_params);
 
-            // HACK: Expand defaults for parameters in trait names here.
-            {
-                Span sp;
-                const auto& trait = m_crate.get_trait_by_path(sp, trait_path);
-                auto ms = MonomorphStatePtr(&impl.m_type, &impl.m_trait_args, nullptr);
-
-                while (impl.m_trait_args.m_types.size() < trait.m_params.m_types.size()) {
-                    const auto& def = trait.m_params.m_types[impl.m_trait_args.m_types.size()];
-                    auto ty = ms.monomorph_type(sp, def.m_default);
-                    DEBUG("Add default trait arg " << ty << " from " << def.m_default);
-                    impl.m_trait_args.m_types.push_back(mv$(ty));
-                }
-            }
+            expand_trait_impl_type_defaults(m_crate, trait_path, impl);
 
             // TODO: Handle resolution of all items in m_resolve.m_type_equalities
             // - params might reference each other, so `set_item_generics` has to have been called
@@ -1066,6 +1067,19 @@ namespace resolve_ufcs {
 using namespace resolve_ufcs;
 
 void ConvertHIR_ResolveUFCS_Outer(::HIR::Crate& crate) {
+    for (auto& impl_group : crate.m_trait_impls) {
+        auto expand_list = [&](auto& impl_list) {
+            for (auto& impl : impl_list) {
+                expand_trait_impl_type_defaults(crate, impl_group.first, *impl);
+            }
+        };
+        for (auto& named : impl_group.second.named) {
+            expand_list(named.second);
+        }
+        expand_list(impl_group.second.non_named);
+        expand_list(impl_group.second.generic);
+    }
+
     Visitor exp{crate, false};
     exp.visit_crate(crate);
 }
