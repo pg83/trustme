@@ -2,13 +2,20 @@
 
 В этом файле остаётся только незакрытая работа. История уже сделанных исправлений находится в git, а не в плане.
 
-Текущий baseline полного plain-clang/lld прогона: граф из 9 942 узлов, 2 916 failed nodes, 2 881 broken requested targets. Команда: `nix develop .#clang -c ./build -B .build-clang -k test`.
+Текущий baseline полного plain-clang/lld прогона: граф из 9 951 тестовых узлов, 2 905 failed nodes, 2 870 broken requested targets. Команда: `nix develop .#clang -c ./build -B .build-clang -k test`. Полный лог этого baseline сохранён в `/tmp/trustme-full-gate-20260807.log`; предыдущий сопоставимый baseline был 2 916/2 881 при 9 942 узлах.
 
 Для каждого compiler fix порядок один: минимальный красный `tests/unit/test_*.rs` → исправление общего пути → зелёный unit → точный upstream trigger → сборка `rustc` под clang/lld → отдельный commit и push. Полный gate запускается после серии точечных исправлений, а не после каждого файла.
 
-## P0 — ICE, assert и зависания
+## P0 — массовые блокеры
 
 Исполнять строго сверху вниз.
+
+- [ ] Исправить `#![no_core]` policy для отсутствующих lang items. Текущие первые blockers: `sized` — 151, `coerce_unsized` — 59, `sub` и `eq` — по 30, `neg` — 12, `add` — 8; всего 359 failed gccrs/gccrs_compile nodes. Начать с собственного `no_core` unit без `Sized` и простой scalar runtime-проверкой. Не подкладывать фиктивный trait: компилятор должен не добавлять implicit bounds и не искать operator/unsize traits, если соответствующий lang item не объявлен. После каждой общей причины гонять только затронутые gccrs cases.
+- [ ] Разделить 50 C-compiler failures на общие codegen-причины: потерянные temporaries (`varN`, 13 diagnostics), неверные aggregate projections (`DATA`/`_N`, 10 diagnostics) и pointer/integer ABI (25 diagnostics). На каждый различный C fragment — свой red Rust unit и runtime invariant.
+- [ ] Свести 40 `Macro_InvokeRules_MatchPattern: No arm matched` nodes к минимальному набору matcher defects. Группировать по fragment kind и repetition shape, а не по исходному тесту; каждую форму фиксировать отдельным unit.
+- [ ] Подключить `-Z mir-opt-level` к реальному уровню MIR optimisations; сейчас unknown flag сразу блокирует 38 nodes. `next-solver` (21 nodes) не подменять no-op: отложить до отдельной реализации solver semantics.
+
+## P1 — ICE, assert и зависания
 
 - [ ] Устранить trait-alias assert в `hir_from_ast.cpp:963`. Сначала минимальный alias с теми bounds, на которых падает lowering; после фикса проверить исходный UI/run-pass trigger.
 - [ ] Устранить `mir_mir_builder.cpp:217: No value available`. Разделить triggers по конструкции, найти первый общий случай отсутствующего result value и не подставлять фиктивный unit для выражений с не-unit типом.
@@ -17,13 +24,12 @@
 - [ ] Разобрать timeout `coretests/net_ipv6_properties`: определить, 60 секунд съедает rustc, внешний clang или runtime. Compiler hang свести к unit; слишком крупный независимый harness разбить на compile shards без изменения тестового содержания.
 - [ ] Разобрать все timeout RustSmith shards. Сначала определить конкретный input внутри каждого shard; одинаковые compiler hangs объединить по stack/phase, каждый новый общий hang фиксировать одним минимальным unit.
 
-## P1 — runtime miscompile и ABI
+## P2 — runtime miscompile и ABI
 
 - [ ] Разделить `i128/u128` runtime failures по операции: arithmetic, comparison, cast, shift и ABI передачи/возврата. На каждую реально отличающуюся причина — маленький unit с точным ожидаемым значением; сначала чинить причину, разблокирующую больше upstream-тестов.
 - [ ] Исправить float runtime methods, где фактический результат `0` вместо `1`. Отделить ошибку C codegen от libstd/CTFE, проверить signed zero, NaN и оба `f32/f64` там, где используется общий emitter.
 - [ ] Исправить drop ordering. Unit должен записывать порядок destructor calls в массив/счётчик и покрывать normal scope exit, early return и partial initialization; не завязывать решение на borrow checker.
 - [ ] Исправить runtime для derived `Copy`/`Clone`, не смешивая derive expansion с последующим move/drop lowering. Проверить aggregate с scalar и nested aggregate fields.
-- [ ] Исправить C backend для fat pointers и arrays: отдельно случаи undeclared `var0`, отсутствующего `.DATA` и неверной передачи metadata. Каждый C compile failure сначала фиксировать минимальным Rust unit, который воспроизводит конкретный испорченный C fragment.
 - [ ] Исправить process environment runtime failures: минимально проверить set/get/remove и различить ошибку платформенного `libstd` от ABI/codegen ошибки компилятора.
 - [ ] Реализовать runtime hidden-caller ABI для `Location::caller()` и проверить filename/line через `#[track_caller]`; const-вариант не считать покрытием runtime-варианта.
 - [ ] Довести runtime `f128` arithmetic/comparison/casts, которые сейчас уходят в `abort()`. Проверять точные binary128 bits, не пропускать значения через host `double`.
@@ -31,7 +37,7 @@
 - [ ] Исправить оставшиеся formatting miscompile: exponent precision и debug-hex parser. На каждый формат — точная строка как runtime invariant.
 - [ ] Разобрать `packed-struct-drop-aligned.rs`: сначала починить `Pin<&mut generator>.resume`, затем проверить фактические layout/drop invariants исходного теста.
 
-## P2 — CTFE и MIR semantics
+## P3 — CTFE и MIR semantics
 
 - [ ] Исправить `Encountered Infer value in constant` после подстановки вложенных const expressions. Сначала один минимальный красный unit из общей части `interior-with-const-generic-expr.rs`, `infer-too-generic.rs` и `nested_uneval_unification-1.rs`; определить, где concrete outer argument превращается в `Infer`, и сохранить его до CTFE вместо подстановки фиктивного значения.
 - [ ] Устранить рекурсивный Typecheck/CTFE вход в `subexprs_are_const_evalutable.rs`, который заканчивается assert `debug.cpp:49: g_debug_indent_level < MAX_INDENT_LEVEL`. Сначала минимальный red unit на `N * 2` внутри generic `foo`; по backtrace определить цикл между const evaluation и type expansion. После фикса выражение должно оставаться параметризованным при проверке `foo`, вычисляться после `foo::<10>` и дать runtime-длину `21`.
@@ -44,7 +50,7 @@
 - [ ] Исправить invalid enum tag `255`: определить layout, из которого CTFE читает неверный discriminant, и проверить valid/invalid niche cases отдельно.
 - [ ] Проверить MIR value propagation на новых failures после P0: не возвращать path-copy алгоритмы и не ослаблять validation ради прохождения теста.
 
-## P3 — stable parser, expansion и resolver
+## P4 — stable parser, expansion и resolver
 
 - [ ] `parser/fn-header-syntactic-pass.rs`: поддержать все допустимые комбинации `const`/`async`/`unsafe`/`extern` перед `fn`, сохранив rejection недопустимого порядка.
 - [ ] `or-patterns/or-patterns-syntactic-pass.rs`: поддержать вложенные or-patterns в tuple/slice/struct contexts; runtime unit должен различать arms.
@@ -59,7 +65,7 @@
 - [ ] Исправить `nll/issue-54943-3.rs` (`!` против `()`) на уровне divergence/coercion, если trigger воспроизводится без borrow-check semantics.
 - [ ] Исправить lifetime временного значения в `offset-of/offset-of-temporaries.rs`, не вводя полноценный borrow checker; сначала доказать минимальным unit, что это lowering/lifetime-elision bug.
 
-## P4 — type system
+## P5 — type system
 
 - [ ] Canonicalization trait objects: deduplicate auto traits и стабилизировать principal/supertrait lookup. Начать с failures, которые не требуют borrow checker.
 - [ ] HRTB и двухслойные binder substitutions: минимизировать каждый failure до конкретного misplaced/de-Bruijn lifetime.
@@ -67,18 +73,16 @@
 - [ ] Generic inference и const generics: группировать по месту потери constraints, отдельно exact impl selection и fallback.
 - [ ] Pattern usefulness/exhaustiveness: сначала runtime-correct arm selection, затем diagnostics compile-fail.
 
-## P5 — compiler modes и CLI
+## P6 — compiler modes и CLI
 
 - [ ] Реализовать настоящий check-only/metadata stop после typecheck для `check-pass`; такой тест считается зелёным без C generation/link/runtime.
 - [ ] Принимать и применять diagnostic-only options `--check-cfg`, `-A` и `-D`, чтобы они не завершали компилятор как unknown option.
 - [ ] Реализовать требуемые output/debug modes вроде `-Z unpretty`; не игнорировать их молча, если тест проверяет output.
 - [ ] Семантически поддержать используемые `-C overflow-checks`, `-C panic`, target features и остальные codegen flags. Игнорирование допустимо только после доказательства, что flag не влияет на проверяемый invariant.
-- [ ] Сохранить полный лог следующего batch gate и построить таблицу `family / phase / signature / exit code / affected nodes`, чтобы следующие приоритеты опирались на точные количества, а не на усечённый terminal stream.
 
-## P6 — отдельные платформенные наборы
+## P7 — отдельные платформенные наборы
 
-- [ ] gccrs `no_core`: сначала добавить минимальные обязательные language items (`sized`, затем реально запрошенные `sub` и остальные), после каждого изменения прогонять весь gccrs shard.
-- [ ] RustSmith: после устранения timeout из P0 разделить настоящие compile/runtime miscompile по общей compiler signature.
+- [ ] RustSmith: после устранения timeout из P1 разделить настоящие compile/runtime miscompile по общей compiler signature.
 - [ ] Остальные vendor/book/reference shards чинить после stable run-pass и library tests, кроме случаев, когда один небольшой общий fix разблокирует сразу несколько семейств.
 
 Не брать в ближайшую очередь compile-fail tests, единственный ожидаемый эффект которых требует полноценного borrow checker. Они остаются красными до отдельного проекта по borrow checking и не должны вытеснять ICE, runtime correctness и stable compile+run.
