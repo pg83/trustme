@@ -4677,6 +4677,7 @@ namespace {
                         case ::HIR::CoreType::I32:
                         case ::HIR::CoreType::I64:
                         case ::HIR::CoreType::Isize:
+                        case ::HIR::CoreType::I128:
                             is_signed = true;
                             break;
                         case ::HIR::CoreType::Bool:
@@ -4686,10 +4687,8 @@ namespace {
                         case ::HIR::CoreType::U64:
                         case ::HIR::CoreType::Usize:
                         case ::HIR::CoreType::Char:
+                        case ::HIR::CoreType::U128:
                             is_signed = false;
-                            break;
-                        case ::HIR::CoreType::I128: // TODO: Emulation
-                        case ::HIR::CoreType::U128: // TODO: Emulation
                             break;
                         case ::HIR::CoreType::F16:
                         case ::HIR::CoreType::F32:
@@ -4701,22 +4700,30 @@ namespace {
                             MIR_BUG(mir_res, "Unsized tag?!");
                     }
 
+                    const bool is_128 = tag_ty == ::HIR::CoreType::I128 || tag_ty == ::HIR::CoreType::U128;
+                    const bool emulated_128 = type_is_emulated_i128(tag_ty);
+                    auto emit_tag = [&]() {
+                        emit_lvalue(val);
+                        emit_enum_path(repr, e.field);
+                    };
+                    auto emit_equal = [&](size_t variant) {
+                        if (emulated_128) {
+                            m_of << (is_signed ? "cmp128s(" : "cmp128(");
+                            emit_tag();
+                            m_of << ", ";
+                            emit_enum_variant_val(repr, variant);
+                            m_of << ") == 0";
+                        } else {
+                            emit_tag();
+                            m_of << " == ";
+                            emit_enum_variant_val(repr, variant);
+                        }
+                    };
+
                     // Optimisation: If there's only one arm with a different value, then emit an `if` isntead of a `switch`
                     if (odd_arm != static_cast<size_t>(-1)) {
                         m_of << indent << "if(";
-                        emit_lvalue(val);
-                        if (e.field.index != 0) {
-                            m_of << ".DATA";
-                        }
-                        m_of << ".TAG == ";
-                        // Handle signed values
-                        if (is_signed) {
-                            m_of << static_cast<int64_t>(e.values[odd_arm]);
-                            m_of << "ll";
-                        } else {
-                            m_of << e.values[odd_arm];
-                            m_of << "ull";
-                        }
+                        emit_equal(odd_arm);
                         m_of << ") {";
                         cb(odd_arm);
                         m_of << "} else {";
@@ -4725,12 +4732,21 @@ namespace {
                         return;
                     }
 
-                    m_of << indent << "switch(";
-                    emit_lvalue(val);
-                    if (e.field.index != 0) {
-                        m_of << ".DATA";
+                    if (is_128) {
+                        for (size_t j = 0; j < n_arms; j++) {
+                            m_of << indent << (j == 0 ? "if(" : "else if(");
+                            emit_equal(j);
+                            m_of << ") {";
+                            cb(j);
+                            m_of << "}\n";
+                        }
+                        m_of << indent << "else { abort(); }\n";
+                        return;
                     }
-                    m_of << ".TAG) {\n";
+
+                    m_of << indent << "switch(";
+                    emit_tag();
+                    m_of << ") {\n";
                     for (size_t j = 0; j < n_arms; j++) {
                         // Handle signed values
                         if (is_signed) {
