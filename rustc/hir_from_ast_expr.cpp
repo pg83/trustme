@@ -158,7 +158,10 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
                 break;
             case ::AST::ExprNode_Flow::YIELD:
                 m_has_yield = true;
-                m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Yield>(v.span(), lower(v.m_value)));
+                {
+                    auto value = v.m_value ? lower(v.m_value) : ::HIR::ExprNodeP(g_crate_ptr->m_pool->make<::HIR::ExprNode_Tuple>(v.span(), ::std::vector<HIR::ExprNodeP>{}));
+                    m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Yield>(v.span(), std::move(value)));
+                }
                 break;
             case ::AST::ExprNode_Flow::CONTINUE:
             case ::AST::ExprNode_Flow::BREAK: {
