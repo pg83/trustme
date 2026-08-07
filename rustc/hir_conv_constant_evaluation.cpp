@@ -4147,6 +4147,11 @@ void ConvertHIR_ConstantEvaluate_ConstGeneric(const Span& sp, const ::HIR::Crate
         ms.pp_impl = &(*value)->params_impl;
         ms.pp_method = &(*value)->params_item;
         auto type = ms.monomorph_type(sp, expr->m_res_type);
+        if (visit_ty_with(type, [](const HIR::TypeRef& t) {
+            return t.data().is_Infer();
+        })) {
+            return;
+        }
         ConvertHIR_ConstantEvaluate_ConstGeneric(sp, crate, type, cg);
     }
 }
