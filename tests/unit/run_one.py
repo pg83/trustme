@@ -8,6 +8,7 @@ one compiler fix that must compile and exit 0.
 Environment: RUSTC, CC.
 """
 import os
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -19,6 +20,8 @@ def main() -> int:
     libstd_tar = os.path.abspath(sys.argv[2])
     stamp = os.path.abspath(sys.argv[3])
     rustc = lib.require_env("RUSTC")
+    source_text = open(src, encoding="utf-8", errors="surrogateescape").read()
+    test_harness = "//@ test-harness" in source_text
 
     with lib.workdir() as work:
         env = dict(os.environ)
@@ -27,8 +30,14 @@ def main() -> int:
 
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
         binary = os.path.join(work, "t")
+        mode = ["--test"] if test_harness else ["--crate-type", "bin"]
         lib.run([rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
-                 "--crate-type", "bin", "--edition", "2021"], env=env)
+                 *mode, "--edition", "2021"], env=env)
+        if test_harness:
+            listing = subprocess.run([binary, "--list"], env=env,
+                                     stdout=subprocess.PIPE, check=True)
+            if b": test" not in listing.stdout:
+                raise RuntimeError("test harness contains no tests")
         lib.run([binary], env=env)
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)

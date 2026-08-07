@@ -60,25 +60,32 @@ class CTestHandler_SP: public ExpandDecorator {
                     td.panic_type = ::AST::TestDesc::ShouldPanic::YesWithMessage;
 
                     TTStream lex(sp, ParseState(), mi.data());
-                    lex.getTokenCheck(TOK_PAREN_OPEN);
-                    while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-                        auto n = lex.getTokenCheck(TOK_IDENT).ident().name;
-                        if (n == "expected") {
-                            lex.getTokenCheck(TOK_EQUAL);
-                            auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
-                            if (auto* v = dynamic_cast<::AST::ExprNode_String*>(&*n)) {
-                                td.expected_panic_message = v->m_value;
-                            } else {
-                                throw ParseError::Unexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);
-                            }
+                    auto parse_message = [&]() {
+                        auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
+                        if (auto* v = dynamic_cast<::AST::ExprNode_String*>(&*n)) {
+                            td.expected_panic_message = v->m_value;
                         } else {
-                            TODO(sp, "Handle #[should_panic(" << n << ")");
+                            throw ParseError::Unexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);
                         }
-                        if (!lex.getTokenIf(TOK_COMMA)) {
-                            break;
+                    };
+                    if (lex.getTokenIf(TOK_EQUAL)) {
+                        parse_message();
+                    } else {
+                        lex.getTokenCheck(TOK_PAREN_OPEN);
+                        while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
+                            auto n = lex.getTokenCheck(TOK_IDENT).ident().name;
+                            if (n == "expected") {
+                                lex.getTokenCheck(TOK_EQUAL);
+                                parse_message();
+                            } else {
+                                TODO(sp, "Handle #[should_panic(" << n << ")");
+                            }
+                            if (!lex.getTokenIf(TOK_COMMA)) {
+                                break;
+                            }
                         }
+                        lex.getTokenCheck(TOK_PAREN_CLOSE);
                     }
-                    lex.getTokenCheck(TOK_PAREN_CLOSE);
                 } else {
                     td.panic_type = ::AST::TestDesc::ShouldPanic::Yes;
                 }

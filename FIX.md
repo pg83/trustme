@@ -19,11 +19,9 @@
 
 ### P1 — максимальная отдача на одну починку
 
-Поддержать `#[should_panic = "message"]`.
+~~Поддержать `#[should_panic = "message"]`.~~ Сделано: test expansion различает name-value `= "message"` и list `expected = "message"`, а harness больше не выкидывает все `should_panic` tests. Красный `test_should_panic_name_value.rs` запускает настоящий `--test` harness и показывает `1 passed`; upstream `lazy::reentrant_init` также появился в listing и проходит runtime. Пять крупных harness’ов с 875 leaf tests больше не блокируются на этом атрибуте, хотя у части остаются следующие независимые ошибки: `alloctests/rc` доходит до внешнего clang и падает на `DynMetadata` ABI, `coretests/slice` — до `Resolve Use`.
 
-Сейчас [expand_test.cpp](/home/pg/monorepo/trustme/rustc/expand_test.cpp:66) при любом payload безусловно ожидает `(`, поэтому name-value форма падает на `=`.
-
-Одна эта починка разблокирует пять крупных harness’ов и 875 leaf tests:
+Затронутые harness’ы:
 
 - `coretests/iter`: 262;
 - `std/sync`: 253;

@@ -42,11 +42,6 @@ void Expand_TestHarness(::AST::Crate& crate) {
     ::std::vector<::AST::ExprNodeP> test_nodes;
 
     for (const auto& test : crate.m_tests) {
-        // HACK: Don't emit should_panic tests
-        if (test.panic_type != ::AST::TestDesc::ShouldPanic::No) {
-            continue;
-        }
-
         ::AST::ExprNode_StructLiteral::t_values desc_vals;
         // `name: "foo",`
         desc_vals.push_back({{}, "name", NEWNODE(_CallPath, ::AST::Path(c_test, {::AST::PathNode("StaticTestName")}), ::make_vec1(NEWNODE(_String, test.name)))});
