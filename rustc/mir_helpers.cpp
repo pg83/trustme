@@ -337,38 +337,52 @@ size_t MIR::TypeResolve::intrinsic_offset_of(const ::HIR::TypeRef& ty, const ::s
         TU_MATCH_HDRA( (values[i].as_Constant()), { )
         default:
             MIR_TODO(*this, "offset_of: field " << values[i]);
+            TU_ARMA(Int, field_idx) {
+                MIR_ASSERT(*this, field_idx.v.is_i64() && field_idx.v >= S128(0), "Invalid tuple field index " << field_idx.v);
+                idx = static_cast<size_t>(field_idx.v.truncate_i64());
+            }
+            TU_ARMA(Uint, field_idx) {
+                MIR_ASSERT(*this, field_idx.v.is_u64() && field_idx.v <= U128(SIZE_MAX), "Invalid tuple field index " << field_idx.v);
+                idx = static_cast<size_t>(field_idx.v.truncate_u64());
+            }
             TU_ARMA(StaticString, field_name) {
-                if (false) {
-                } else if (const auto* bep = cur_ty->data().as_Path().binding.opt_Struct()) {
-                    const auto& str = **bep;
-                TU_MATCH_HDRA((str.m_data), {)
-                TU_ARMA(Named, fields) {
-                            idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
-                                return x.name == field_name;
-                            }) - fields.begin();
-                        }
-                        TU_ARMA(Tuple, fields) {
-                            char* end = nullptr;
-                            idx = ::std::strtoul(field_name.c_str(), &end, 10);
-                            MIR_ASSERT(*this, *end == '\0', "Failed to parse: " << field_name << " as an integer for " << *cur_ty);
-                        }
-                        TU_ARMA(Unit, _) {
-                            MIR_BUG(*this, "Empty struct: " << *cur_ty << " ." << field_name);
-                        }
-                }
-                } else if (const auto* bep = cur_ty->data().as_Path().binding.opt_Union()) {
-                    const auto& unm = **bep;
-                    const auto& fields = unm.m_variants;
-                    idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
-                        return x.name == field_name;
-                    }) - fields.begin();
-                } else if (const auto* bep = cur_ty->data().as_Path().binding.opt_Enum()) {
-                    const auto& enm = **bep;
-                    MIR_ASSERT(*this, enm.m_data.is_Data(), "Non-Data enum: " << *cur_ty << " ." << field_name);
-                    const auto& fields = enm.m_data.as_Data();
-                    idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
-                        return x.name == field_name;
-                    }) - fields.begin();
+                char* end = nullptr;
+                auto numeric_idx = ::std::strtoul(field_name.c_str(), &end, 10);
+                if (end != field_name.c_str() && *end == '\0') {
+                    MIR_ASSERT(*this, numeric_idx <= SIZE_MAX, "Invalid tuple field index " << field_name);
+                    idx = static_cast<size_t>(numeric_idx);
+                } else if (const auto* ty_path = cur_ty->data().opt_Path()) {
+                    if (const auto* bep = ty_path->binding.opt_Struct()) {
+                        const auto& str = **bep;
+                    TU_MATCH_HDRA((str.m_data), {)
+                    TU_ARMA(Named, fields) {
+                                idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
+                                    return x.name == field_name;
+                                }) - fields.begin();
+                            }
+                            TU_ARMA(Tuple, fields) {
+                                MIR_BUG(*this, "Named field on tuple struct: " << *cur_ty << " ." << field_name);
+                            }
+                            TU_ARMA(Unit, _) {
+                                MIR_BUG(*this, "Empty struct: " << *cur_ty << " ." << field_name);
+                            }
+                    }
+                    } else if (const auto* bep = ty_path->binding.opt_Union()) {
+                        const auto& unm = **bep;
+                        const auto& fields = unm.m_variants;
+                        idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
+                            return x.name == field_name;
+                        }) - fields.begin();
+                    } else if (const auto* bep = ty_path->binding.opt_Enum()) {
+                        const auto& enm = **bep;
+                        MIR_ASSERT(*this, enm.m_data.is_Data(), "Non-Data enum: " << *cur_ty << " ." << field_name);
+                        const auto& fields = enm.m_data.as_Data();
+                        idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
+                            return x.name == field_name;
+                        }) - fields.begin();
+                    } else {
+                        MIR_TODO(*this, "offset_of: named field/variant - " << field_name);
+                    }
                 } else {
                     MIR_TODO(*this, "offset_of: named field/variant - " << field_name);
                 }
@@ -378,6 +392,7 @@ size_t MIR::TypeResolve::intrinsic_offset_of(const ::HIR::TypeRef& ty, const ::s
         if(!repr) {
             MIR_BUG(*this, "Calling `offset_of!` on type with non-defined repr: " << *cur_ty);
         }
+        MIR_ASSERT(*this, idx < repr->fields.size(), "Field index " << idx << " out of range for " << *cur_ty);
         cur_ty = &repr->fields[idx].ty;
         base_ofs += repr->fields[idx].offset;
     }

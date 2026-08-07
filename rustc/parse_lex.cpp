@@ -418,8 +418,11 @@ Token Lexer::getTokenInt() {
                         // Single dot followed by a non-digit, could be a float or an integer with a method/field access
                         // NOTE: `1.e1` is not a float
                         if (!ch.isdigit()) {
+                            while (ch.isspace()) {
+                                ch = this->getc();
+                            }
                             this->ungetc();
-                            if (issym(ch)) {
+                            if (ch.isdigit() || issym(ch)) {
                                 this->m_next_tokens.push_back(TOK_DOT);
                                 return Token(val, CORETYPE_ANY);
                             } else {
@@ -949,6 +952,54 @@ FloatValue Lexer::parseFloat(U128 whole) {
         PUTC(ch);
         ch = this->getc_num();
     }
+    auto queue_tuple_indices = [&](Codepoint first) {
+        DEBUG("Detected tuple index chain after float-shaped token - " << sbuf);
+        const char* buf = sbuf.data();
+        auto cit = std::find(buf, buf + sbuf.size(), '.');
+        std::vector<U128> indices;
+        indices.push_back(U128(std::strtoull(buf, nullptr, 10)));
+        indices.push_back(U128(std::strtoull(cit + 1, nullptr, 10)));
+
+        ch = first;
+        while (ch.isspace()) {
+            ch = this->getc();
+        }
+        bool has_trailing_dot = true;
+        while (ch.isdigit()) {
+            this->ungetc();
+            indices.push_back(this->parseInt(nullptr));
+            ch = this->getc();
+            while (ch.isspace()) {
+                ch = this->getc();
+            }
+            if (ch != '.') {
+                has_trailing_dot = false;
+                this->ungetc();
+                break;
+            }
+            ch = this->getc();
+            while (ch.isspace()) {
+                ch = this->getc();
+            }
+        }
+        if (!ch.isdigit() && has_trailing_dot) {
+            this->ungetc();
+        }
+
+        if (has_trailing_dot) {
+            m_next_tokens.push_back(TOK_DOT);
+        }
+        for (size_t i = indices.size(); i-- > 0;) {
+            m_next_tokens.push_back(Token(indices[i], CORETYPE_ANY));
+            if (i > 0) {
+                m_next_tokens.push_back(TOK_DOT);
+            }
+        }
+    };
+    auto queue_float = [&]() {
+        m_next_tokens.push_back(Token::make_float(parse_float_value(sbuf.c_str()), CORETYPE_ANY));
+        return std::numeric_limits<double>::quiet_NaN();
+    };
     // If the current char is a `.`
     if (ch == '.') {
         // TODO: `0.0..` should be a range, so if the next character is `.`, then unget and continue
@@ -974,26 +1025,39 @@ FloatValue Lexer::parseFloat(U128 whole) {
 
             return std::numeric_limits<double>::quiet_NaN();
         } else {
-            this->ungetc();
-
-            //buf[ofs] = '\0';
-            //assert( buf[ofs-1] != '.' );    // Shouldn't be possible (as that would have been handled by the caller as `<int> '..'`
-            DEBUG("Detected double tuple indexing (trailing `.` after a float - " << sbuf << ")");
-            // x.y. -> This should be two integers.
-            // - Parse into `<int> '.' <int>` (ungetting the final `.`)
-            const char* buf = sbuf.data();
-            auto cit = std::find(buf, buf + sbuf.size(), '.');
-            sbuf[cit - sbuf.data()] = '\0';
-            //auto cit = std::find(buf, buf+sizeof(buf), '.');
-            //*cit = '\0';
-            // - Push these in reverse order (as they're popped off the back)
-            m_next_tokens.push_back(TOK_DOT);
-            m_next_tokens.push_back(Token(U128(std::strtoull(cit + 1, nullptr, 10)), CORETYPE_ANY));
-            m_next_tokens.push_back(TOK_DOT);
-            m_next_tokens.push_back(Token(U128(std::strtoull(buf, nullptr, 10)), CORETYPE_ANY));
-
+            while (ch.isspace()) {
+                ch = this->getc();
+            }
+            if (ch.isdigit()) {
+                queue_tuple_indices(ch);
+            } else {
+                this->ungetc();
+                m_next_tokens.push_back(TOK_DOT);
+                queue_float();
+            }
             return std::numeric_limits<double>::quiet_NaN();
         }
+    } else if (ch.isspace()) {
+        while (ch.isspace()) {
+            ch = this->getc();
+        }
+        if (ch != '.') {
+            this->ungetc();
+            return queue_float();
+        }
+
+        ch = this->getc();
+        while (ch.isspace()) {
+            ch = this->getc();
+        }
+        if (ch.isdigit()) {
+            queue_tuple_indices(ch);
+        } else {
+            this->ungetc();
+            m_next_tokens.push_back(TOK_DOT);
+            queue_float();
+        }
+        return std::numeric_limits<double>::quiet_NaN();
     } else {
         if (ch == 'e' || ch == 'E') {
             PUTC(ch);
