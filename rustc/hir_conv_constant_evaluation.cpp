@@ -2914,6 +2914,13 @@ namespace HIR {
                         local_state.write_param(dst, e.args.at(0));
                     } else if (te->name == "unlikely") {
                         local_state.write_param(dst, e.args.at(0));
+                    } else if (te->name == "fabsf16" || te->name == "fabsf32" || te->name == "fabsf64" || te->name == "fabsf128") {
+                        ::HIR::TypeRef tmp;
+                        auto ti = TypeInfo::for_type(state.get_param_type(tmp, e.args.at(0)));
+                        MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
+                        auto bits = local_state.read_param_uint(ti.bits, e.args.at(0));
+                        bits &= ~(U128(1) << (ti.bits - 1));
+                        dst.write_uint(state, ti.bits, bits);
                     } else if (te->name == "assume") {
                         auto val = local_state.read_param_uint(8, e.args.at(0));
                         MIR_ASSERT(state, val != 0, "`assume` failed");
