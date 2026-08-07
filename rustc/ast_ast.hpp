@@ -494,7 +494,9 @@ namespace AST {
                 I16,
                 I32,
                 I64,
-                Isize
+                Isize,
+                U128,
+                I128
             } repr = Repr::Rust;
             bool is_repr_c = false;
             uint64_t align_value = 0;

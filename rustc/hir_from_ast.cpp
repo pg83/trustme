@@ -1284,6 +1284,9 @@ namespace {
         case ::AST::Enum::Markings::Repr::U64:
             repr = ::HIR::Enum::Repr::U64;
             break;
+        case ::AST::Enum::Markings::Repr::U128:
+            repr = ::HIR::Enum::Repr::U128;
+            break;
         case ::AST::Enum::Markings::Repr::Usize:
             repr = ::HIR::Enum::Repr::Usize;
             break;
@@ -1298,6 +1301,9 @@ namespace {
             break;
         case ::AST::Enum::Markings::Repr::I64:
             repr = ::HIR::Enum::Repr::I64;
+            break;
+        case ::AST::Enum::Markings::Repr::I128:
+            repr = ::HIR::Enum::Repr::I128;
             break;
         case ::AST::Enum::Markings::Repr::Isize:
             repr = ::HIR::Enum::Repr::Isize;

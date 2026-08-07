@@ -318,6 +318,9 @@ uint64_t HIR::Enum::get_value(size_t idx) const {
         case ::HIR::Enum::Repr::U64:
             return ::HIR::CoreType::U64;
             break;
+        case ::HIR::Enum::Repr::U128:
+            return ::HIR::CoreType::U128;
+            break;
         case ::HIR::Enum::Repr::Isize:
             return ::HIR::CoreType::Isize;
             break;
@@ -332,6 +335,9 @@ uint64_t HIR::Enum::get_value(size_t idx) const {
             break;
         case ::HIR::Enum::Repr::I64:
             return ::HIR::CoreType::I64;
+            break;
+        case ::HIR::Enum::Repr::I128:
+            return ::HIR::CoreType::I128;
             break;
     }
     throw "";

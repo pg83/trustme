@@ -202,6 +202,8 @@ class CHandler_Repr: public ExpandDecorator {
                     set_repr(::AST::Enum::Markings::Repr::U32);
                 } else if (repr_str == "u64") {
                     set_repr(::AST::Enum::Markings::Repr::U64);
+                } else if (repr_str == "u128") {
+                    set_repr(::AST::Enum::Markings::Repr::U128);
                 } else if (repr_str == "usize") {
                     set_repr(::AST::Enum::Markings::Repr::Usize);
                 } else if (repr_str == "i8") {
@@ -212,6 +214,8 @@ class CHandler_Repr: public ExpandDecorator {
                     set_repr(::AST::Enum::Markings::Repr::I32);
                 } else if (repr_str == "i64") {
                     set_repr(::AST::Enum::Markings::Repr::I64);
+                } else if (repr_str == "i128") {
+                    set_repr(::AST::Enum::Markings::Repr::I128);
                 } else if (repr_str == "isize") {
                     set_repr(::AST::Enum::Markings::Repr::Isize);
                 } else if (repr_str == "align") {

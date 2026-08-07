@@ -2581,7 +2581,12 @@ namespace HIR {
                         const auto& fld = enm_repr->fields[ve.field.index];
                         auto ti = TypeInfo::for_type(fld.ty);
                         MIR_ASSERT(state, ti.ty == TypeInfo::Signed || ti.ty == TypeInfo::Unsigned, "EnumVariant: Values not integer - " << fld.ty);
-                        dst.slice(fld.offset, (ti.bits + 7) / 8).write_uint(state, ti.bits, ve.values.at(e.index));
+                        auto tag_dst = dst.slice(fld.offset, (ti.bits + 7) / 8);
+                        if (ti.ty == TypeInfo::Signed) {
+                            tag_dst.write_sint(state, ti.bits, S128(static_cast<int64_t>(ve.values.at(e.index))));
+                        } else {
+                            tag_dst.write_uint(state, ti.bits, U128(ve.values.at(e.index)));
+                        }
                     }
             }
             }

@@ -8766,9 +8766,19 @@ namespace {
                 case ::HIR::CoreType::Char:
                     m_of << ve.values[idx] << "ull";
                     break;
-                case ::HIR::CoreType::I128: // TODO: Emulation
-                case ::HIR::CoreType::U128: // TODO: Emulation
-                    MIR_TODO(*m_mir_res, "Emulated i128 tag");
+                case ::HIR::CoreType::I128:
+                    if (m_options.emulated_i128) {
+                        m_of << "make128s_raw(" << (static_cast<int64_t>(ve.values[idx]) < 0 ? UINT64_MAX : 0) << "ull, " << ve.values[idx] << "ull)";
+                    } else {
+                        m_of << "((int128_t)(int64_t)" << ve.values[idx] << "ull)";
+                    }
+                    break;
+                case ::HIR::CoreType::U128:
+                    if (m_options.emulated_i128) {
+                        m_of << "make128_raw(0ull, " << ve.values[idx] << "ull)";
+                    } else {
+                        m_of << "((uint128_t)" << ve.values[idx] << "ull)";
+                    }
                     break;
                 case ::HIR::CoreType::F16:
                 case ::HIR::CoreType::F32:

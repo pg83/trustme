@@ -352,6 +352,8 @@ namespace HIR {
             I16,
             I32,
             I64,
+            U128,
+            I128,
         };
 
         struct ValueVariant {
