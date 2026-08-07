@@ -1900,9 +1900,13 @@ namespace {
                     m_of << ";\n";
                 }
                 TU_ARMA(Array, te) {
+                    size_t rust_size;
+                    ASSERT_BUG(sp, Target_GetSizeOf(sp, m_resolve, ty, rust_size), "Unable to determine array size for " << ty);
+                    const bool is_zero_sized = rust_size == 0;
+
                     m_of << "typedef ";
                     size_t align;
-                    if (te.size.as_Known() == 0) {
+                    if (is_zero_sized) {
                         Target_GetAlignOf(sp, m_resolve, ty, align);
                         switch (m_compiler) {
                             case Compiler::Msvc:
@@ -1915,8 +1919,13 @@ namespace {
                     m_of << "struct ";
                     emit_ctype(ty);
                     m_of << " { ";
-                    if (te.size.as_Known() == 0 && m_options.disallow_empty_structs) {
+                    if (is_zero_sized && m_options.disallow_empty_structs) {
                         m_of << "char _d;";
+                    } else if (is_zero_sized) {
+                        if (te.size.as_Known() > 0) {
+                            emit_ctype(te.inner);
+                            m_of << " DATA[1];";
+                        }
                     }
                     // HACK: MSVC doesn't allow arrays larger than 2^31-1 elements
                     else if (m_compiler == Compiler::Msvc && te.size.as_Known() > 0x7FFF'FFFF) {
@@ -1939,7 +1948,7 @@ namespace {
                         m_of << " DATA[" << te.size.as_Known() << "];";
                     }
                     m_of << " } ";
-                    if (te.size.as_Known() == 0) {
+                    if (is_zero_sized) {
                         switch (m_compiler) {
                             case Compiler::Msvc:
                                 break;
