@@ -3,7 +3,7 @@
 fn main() {
     use std::mem::size_of;
     use std::ptr;
-    
+
     const { unsafe {
         const PTR_SIZE: usize = size_of::<*const i32>();
         let mut data1 = [0u8; PTR_SIZE];

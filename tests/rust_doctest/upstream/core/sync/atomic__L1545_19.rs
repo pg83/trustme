@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::sync::atomic::{AtomicPtr, Ordering};
-    
+
     let mut data = 10;
     let mut atomic_ptr = AtomicPtr::new(&mut data);
     let mut other_data = 5;

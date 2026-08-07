@@ -3,6 +3,6 @@
 extern crate alloc;
 fn main() {
     let s = String::from("hello");
-    
+
     let b = s.into_boxed_str();
 }

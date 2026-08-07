@@ -2,13 +2,13 @@
 #![allow(unused)]
 #![feature(ip)]
 fn main() {
-    
+
     use std::net::Ipv6Addr;
     use std::net::Ipv6MulticastScope::*;
-    
+
     // An IPv6 multicast address with global scope (`ff0e::`).
     let address = Ipv6Addr::new(0xff0e, 0, 0, 0, 0, 0, 0, 0);
-    
+
     // Will print "Global scope".
     match address.multicast_scope() {
         Some(InterfaceLocal) => println!("Interface-Local scope"),

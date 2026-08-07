@@ -4,9 +4,13 @@
 Usage: import.py /path/to/rust-1.90.0-or-its-library-directory
 """
 
+import os
 import re
 import shutil
+import subprocess
 import sys
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 
@@ -15,17 +19,20 @@ UPSTREAM = HERE / "upstream"
 CRATES = {"core": "2024", "alloc": "2021", "std": "2024"}
 
 
-def doc_lines(text: str) -> list[str]:
+def doc_lines(text: str) -> list[str | None]:
     result = []
     for line in text.splitlines():
         match = re.match(r"^\s*//[/!] ?(.*)$", line)
-        result.append(match.group(1) if match else "")
+        result.append(match.group(1) if match else None)
     return result
 
 
-def fences(lines: list[str]):
+def fences(lines: list[str | None]):
     index = 0
     while index < len(lines):
+        if lines[index] is None:
+            index += 1
+            continue
         opening = re.match(r"^\s*(```+|~~~+)\s*(.*)$", lines[index])
         if not opening:
             index += 1
@@ -38,10 +45,14 @@ def fences(lines: list[str]):
         closing = re.compile(
             r"^\s*" + re.escape(marker[0]) + "{" + str(len(marker)) + r",}\s*$"
         )
-        while index < len(lines) and not closing.match(lines[index]):
+        while (
+            index < len(lines)
+            and lines[index] is not None
+            and not closing.match(lines[index])
+        ):
             code.append(lines[index])
             index += 1
-        if index < len(lines):
+        if index < len(lines) and lines[index] is not None:
             yield start_line, info, code
             index += 1
 
@@ -97,12 +108,12 @@ def standalone(crate: str, lines: list[str]) -> str:
         prefix.append("extern crate alloc;")
     if re.search(r"\?(?=\s*(?:[.;,)\]}]|$))", code):
         final_line = next((line.strip() for line in reversed(body) if line.strip()), "")
-        has_result_tail = re.match(r"(?:Ok|Err)(?:\s*::|\s*\()", final_line)
+        has_result_tail = re.search(r"(?:^|::)(?:Ok|Err)\s*\(", final_line)
         wrapped = [
             *prefix,
             "fn main() {",
             "    fn doctest() -> Result<(), impl std::fmt::Debug> {",
-            *("        " + line for line in body),
+            *(("        " + line) if line else "" for line in body),
             *([] if has_result_tail else ["        Ok(())"]),
             "    }",
             "    doctest().unwrap();",
@@ -112,24 +123,78 @@ def standalone(crate: str, lines: list[str]) -> str:
         wrapped = [
             *prefix,
             "fn main() {",
-            *("    " + line for line in body),
+            *(("    " + line) if line else "" for line in body),
             "}",
         ]
     return "\n".join(wrapped) + "\n"
 
 
+def reference_accepts(rustc: Path, program: str, edition: str, mode: str) -> bool:
+    with tempfile.TemporaryDirectory(prefix="rust-doctest-reference-") as directory:
+        source = Path(directory) / "doctest.rs"
+        output = Path(directory) / "doctest"
+        source.write_text(program)
+        environment = dict(os.environ)
+        environment["RUSTC_BOOTSTRAP"] = "1"
+        try:
+            compile_result = subprocess.run(
+                [
+                    str(rustc),
+                    str(source),
+                    "--crate-name",
+                    "rust_doctest_reference",
+                    "--crate-type",
+                    "bin",
+                    "--edition",
+                    edition,
+                    "-C",
+                    "linker=clang",
+                    "-C",
+                    "link-arg=-fuse-ld=lld",
+                    "-o",
+                    str(output),
+                ],
+                env=environment,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=60,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return False
+        if compile_result.returncode != 0:
+            return False
+
+        try:
+            run_result = subprocess.run(
+                [str(output)],
+                cwd=directory,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=2,
+                check=False,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            return False
+        if mode == "panic":
+            return run_result.returncode != 0
+        return run_result.returncode == 0
+
+
 def main() -> int:
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: import.py /path/to/rust-1.90.0")
+    if len(sys.argv) != 3:
+        raise SystemExit(
+            "usage: import.py /path/to/rust-1.90.0 /path/to/reference-rustc-1.90"
+        )
     source = Path(sys.argv[1]).resolve()
+    reference_rustc = Path(sys.argv[2]).resolve()
     library = source / "library" if (source / "library").is_dir() else source
     if not all((library / crate / "src").is_dir() for crate in CRATES):
         raise SystemExit(f"missing core/alloc/std sources under {library}")
+    if not reference_rustc.is_file():
+        raise SystemExit(f"missing reference compiler: {reference_rustc}")
 
-    if UPSTREAM.exists():
-        shutil.rmtree(UPSTREAM)
-
-    cases = []
+    candidates = []
     for crate, edition in CRATES.items():
         crate_root = library / crate / "src"
         for source_file in sorted(crate_root.rglob("*.rs")):
@@ -152,18 +217,43 @@ def main() -> int:
                     suffix = "runtime"
                 name = f"{relative.stem}__L{line}_{suffix}.rs"
                 destination = UPSTREAM / crate / relative.parent / name
-                destination.parent.mkdir(parents=True, exist_ok=True)
                 program = standalone(crate, code_lines)
                 origin = f"// Extracted from library/{crate}/src/{relative.as_posix()}:{line}\n"
-                destination.write_text(origin + program)
                 case = destination.relative_to(UPSTREAM).as_posix()
                 source_name = f"{crate}/src/{relative.as_posix()}:{line}"
-                cases.append((case, source_name, edition, mode))
+                candidates.append(
+                    (destination, origin + program, case, source_name, edition, mode)
+                )
+
+    def accepted(candidate):
+        return reference_accepts(
+            reference_rustc, candidate[1], candidate[4], candidate[5]
+        )
+
+    with ThreadPoolExecutor() as executor:
+        accepted_flags = list(executor.map(accepted, candidates))
+
+    if UPSTREAM.exists():
+        shutil.rmtree(UPSTREAM)
+
+    cases = []
+    rejected = []
+    for candidate, is_accepted in zip(candidates, accepted_flags):
+        destination, program, case, source_name, edition, mode = candidate
+        if not is_accepted:
+            rejected.append(source_name)
+            continue
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(program)
+        cases.append((case, source_name, edition, mode))
 
     (HERE / "cases.tsv").write_text(
         "".join("\t".join(case) + "\n" for case in cases)
     )
-    print(f"imported {len(cases)} Rust 1.90 runtime doctests")
+    print(
+        f"imported {len(cases)} Rust 1.90 runtime doctests; "
+        f"reference compiler rejected {len(rejected)}"
+    )
     return 0
 
 

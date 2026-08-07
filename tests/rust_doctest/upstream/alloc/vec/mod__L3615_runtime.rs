@@ -4,7 +4,7 @@ extern crate alloc;
 fn main() {
     use std::sync::Mutex;
     static LONG_LIVED: Mutex<Vec<Vec<u16>>> = Mutex::new(Vec::new());
-    
+
     for i in 0..10 {
         let big_temporary: Vec<u16> = (0..1024).collect();
         // discard most items

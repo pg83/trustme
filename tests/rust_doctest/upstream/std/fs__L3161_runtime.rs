@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     use std::fs::DirBuilder;
-    
+
     let builder = DirBuilder::new();
 }

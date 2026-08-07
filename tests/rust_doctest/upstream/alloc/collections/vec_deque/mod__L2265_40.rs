@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::collections::VecDeque;
-    
+
     let mut buf: VecDeque<_> = [1, 2].into();
     let mut buf2: VecDeque<_> = [3, 4].into();
     buf.append(&mut buf2);

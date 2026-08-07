@@ -3,6 +3,6 @@
 extern crate alloc;
 fn main() {
     let s = "hello";
-    
+
     assert_eq!("HELLO", s.to_uppercase());
 }

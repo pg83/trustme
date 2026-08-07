@@ -4,7 +4,7 @@ extern crate alloc;
 fn main() {
     use std::collections::BTreeSet;
     use std::ops::Bound::Included;
-    
+
     let mut set = BTreeSet::new();
     set.insert(3);
     set.insert(5);

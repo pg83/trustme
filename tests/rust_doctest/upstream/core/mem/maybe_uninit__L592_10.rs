@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::mem::MaybeUninit;
-    
+
     let mut x = MaybeUninit::<bool>::uninit();
     x.write(true);
     let x_init = unsafe { x.assume_init() };

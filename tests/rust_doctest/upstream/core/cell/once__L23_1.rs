@@ -2,10 +2,10 @@
 #![allow(unused)]
 fn main() {
     use std::cell::OnceCell;
-    
+
     let cell = OnceCell::new();
     assert!(cell.get().is_none());
-    
+
     let value: &String = cell.get_or_init(|| {
         "Hello, World!".to_string()
     });

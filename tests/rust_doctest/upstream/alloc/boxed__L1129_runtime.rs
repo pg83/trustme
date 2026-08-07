@@ -4,7 +4,7 @@ extern crate alloc;
 fn main() {
     use std::alloc::{dealloc, Layout};
     use std::ptr;
-    
+
     let x = Box::new(String::from("Hello"));
     let ptr = Box::into_raw(x);
     unsafe {

@@ -4,14 +4,14 @@ extern crate alloc;
 fn main() {
     use std::collections::BinaryHeap;
     use std::cmp::Reverse;
-    
+
     let mut heap = BinaryHeap::new();
-    
+
     // Wrap values in `Reverse`
     heap.push(Reverse(1));
     heap.push(Reverse(5));
     heap.push(Reverse(2));
-    
+
     // If we pop these scores now, they should come back in the reverse order.
     assert_eq!(heap.pop(), Some(Reverse(1)));
     assert_eq!(heap.pop(), Some(Reverse(2)));

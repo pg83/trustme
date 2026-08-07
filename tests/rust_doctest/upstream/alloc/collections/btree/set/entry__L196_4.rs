@@ -3,11 +3,11 @@
 #![feature(btree_set_entry)]
 extern crate alloc;
 fn main() {
-    
+
     use std::collections::BTreeSet;
-    
+
     let mut set = BTreeSet::new();
     let entry = set.entry("horseyland").insert();
-    
+
     assert_eq!(entry.get(), &"horseyland");
 }

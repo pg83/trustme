@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::collections::HashSet;
-    
+
     let mut set = HashSet::with_capacity(100);
     set.insert(1);
     set.insert(2);

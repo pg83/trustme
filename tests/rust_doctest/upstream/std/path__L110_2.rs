@@ -4,7 +4,7 @@ fn main() {
     use std::path::{Component, Path, Prefix};
     use std::path::Prefix::*;
     use std::ffi::OsStr;
-    
+
     fn get_path_prefix(s: &str) -> Prefix<'_> {
         let path = Path::new(s);
         match path.components().next().unwrap() {
@@ -12,7 +12,7 @@ fn main() {
             _ => panic!(),
         }
     }
-    
+
     if cfg!(windows) {
     assert_eq!(Verbatim(OsStr::new("pictures")),
                get_path_prefix(r"\\?\pictures\kittens"));

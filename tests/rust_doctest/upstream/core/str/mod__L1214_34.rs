@@ -7,6 +7,6 @@ fn main() {
     assert_eq!(Some("a"), iter.next());
     assert_eq!(Some("little"), iter.next());
     assert_eq!(Some("lamb"), iter.next());
-    
+
     assert_eq!(None, iter.next());
 }

@@ -3,10 +3,10 @@
 #![feature(strict_provenance_atomic_ptr)]
 fn main() {
     use core::sync::atomic::{AtomicPtr, Ordering};
-    
+
     let array = [1i32, 2i32];
     let atom = AtomicPtr::new(array.as_ptr().wrapping_add(1) as *mut _);
-    
+
     assert!(core::ptr::eq(
         atom.fetch_ptr_sub(1, Ordering::Relaxed),
         &array[1],

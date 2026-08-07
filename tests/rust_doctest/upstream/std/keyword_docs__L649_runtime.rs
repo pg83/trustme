@@ -7,7 +7,7 @@ fn main() {
     } else {
         // something else
     }
-    
+
     match Some(123) {
         Some(x) => {
             // code

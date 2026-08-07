@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     use std::path::PathBuf;
-    
+
     let path: PathBuf = [r"C:\", "windows", "system32.dll"].iter().collect();
 }

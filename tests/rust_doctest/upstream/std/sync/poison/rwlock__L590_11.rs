@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::sync::RwLock;
-    
+
     let lock = RwLock::new(String::new());
     {
         let mut s = lock.write().unwrap();

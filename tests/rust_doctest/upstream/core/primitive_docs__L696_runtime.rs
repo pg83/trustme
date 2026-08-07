@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     let array: [i32; 3] = [0; 3];
-    
+
     for x in &array { }
 }

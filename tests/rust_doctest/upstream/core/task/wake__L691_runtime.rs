@@ -4,7 +4,7 @@
 fn main() {
     use std::future::{Future, poll_fn};
     use std::task::Poll;
-    
+
     // a future that returns pending once.
     fn yield_now() -> impl Future<Output=()> + Unpin {
         let mut yielded = false;
@@ -17,7 +17,7 @@ fn main() {
             return Poll::Ready(())
         })
     }
-    
+
     async fn __() {
     yield_now().await;
     }

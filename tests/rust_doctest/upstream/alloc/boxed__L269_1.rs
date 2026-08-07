@@ -6,6 +6,6 @@ fn main() {
     // Deferred initialization:
     five.write(5);
     let five = unsafe { five.assume_init() };
-    
+
     assert_eq!(*five, 5)
 }

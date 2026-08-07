@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::ffi::OsStr;
-    
+
     let os_str = OsStr::new("Mary had a little lamb");
     let bytes = os_str.as_encoded_bytes();
     let words = bytes.split(|b| *b == b' ');

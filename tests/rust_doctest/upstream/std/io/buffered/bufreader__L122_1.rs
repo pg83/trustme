@@ -3,7 +3,7 @@
 #![feature(bufreader_peek)]
 fn main() {
     use std::io::{Read, BufReader};
-    
+
     let mut bytes = &b"oh, hello there"[..];
     let mut rdr = BufReader::with_capacity(6, &mut bytes);
     assert_eq!(rdr.peek(2).unwrap(), b"oh");

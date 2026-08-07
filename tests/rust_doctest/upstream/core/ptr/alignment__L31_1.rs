@@ -3,6 +3,6 @@
 #![feature(ptr_alignment_type)]
 fn main() {
     use std::ptr::Alignment;
-    
+
     assert_eq!(Alignment::MIN.as_usize(), 1);
 }

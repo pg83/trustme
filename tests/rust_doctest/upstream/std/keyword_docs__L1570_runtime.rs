@@ -5,7 +5,7 @@ fn main() {
         name: String,
         admin: bool,
     }
-    
+
     impl User {
         pub fn new(name: String) -> Self {
             Self {

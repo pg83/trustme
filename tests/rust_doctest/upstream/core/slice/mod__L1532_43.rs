@@ -3,7 +3,7 @@
 fn main() {
     let v = &mut [0, 0, 0, 0, 0];
     let mut count = 1;
-    
+
     let (chunks, remainder) = v.as_chunks_mut();
     remainder[0] = 9;
     for chunk in chunks {

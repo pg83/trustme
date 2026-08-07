@@ -7,7 +7,7 @@ fn main() {
         None => {},
     }
     assert_eq!(x, Some(42));
-    
+
     let mut x: Option<u32> = None;
     assert_eq!(x.iter_mut().next(), None);
 }

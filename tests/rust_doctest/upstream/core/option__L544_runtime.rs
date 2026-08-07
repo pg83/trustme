@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     enum Kingdom { Plant(u32, &'static str), Animal(u32, &'static str) }
-    
+
     // A list of data to search through.
     let all_the_big_things = [
         Kingdom::Plant(250, "redwood"),
@@ -12,7 +12,7 @@ fn main() {
         Kingdom::Animal(19, "fin whale"),
         Kingdom::Animal(15, "north pacific right whale"),
     ];
-    
+
     // We're going to search for the name of the biggest animal,
     // but to start with we've just got `None`.
     let mut name_of_biggest_animal = None;
@@ -27,7 +27,7 @@ fn main() {
             Kingdom::Animal(..) | Kingdom::Plant(..) => ()
         }
     }
-    
+
     match name_of_biggest_animal {
         Some(name) => println!("the biggest animal is {name}"),
         None => println!("there are no animals :("),

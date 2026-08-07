@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::borrow::Cow;
-    
+
     let unboxed = Cow::Borrowed("hello");
     let boxed: Box<str> = Box::from(unboxed);
     println!("{boxed}");

@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     let mut b = [0; 1];
-    
+
     // this panics
     'ß'.encode_utf8(&mut b);
 }

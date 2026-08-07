@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::env;
-    
+
     let key = "PATH";
     match env::var_os(key) {
         Some(paths) => {

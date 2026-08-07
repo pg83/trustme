@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     let c = char::from_digit(20, 10);
-    
+
     assert_eq!(None, c);
 }

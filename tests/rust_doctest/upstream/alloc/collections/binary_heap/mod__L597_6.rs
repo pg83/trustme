@@ -5,7 +5,7 @@ fn main() {
     use std::collections::BinaryHeap;
     let mut heap = BinaryHeap::new();
     assert!(heap.peek_mut().is_none());
-    
+
     heap.push(1);
     heap.push(5);
     heap.push(2);

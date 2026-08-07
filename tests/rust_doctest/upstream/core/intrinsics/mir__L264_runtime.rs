@@ -3,9 +3,9 @@
 #![allow(internal_features)]
 #![feature(core_intrinsics, custom_mir)]
 fn main() {
-    
+
     use core::intrinsics::mir::*;
-    
+
     #[custom_mir(dialect = "built")]
     fn debuginfo(arg: Option<&i32>) {
         mir!(

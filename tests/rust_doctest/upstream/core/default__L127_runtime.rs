@@ -7,7 +7,7 @@ fn main() {
         B,
         C,
     }
-    
+
     impl Default for Kind {
         fn default() -> Self { Kind::A }
     }

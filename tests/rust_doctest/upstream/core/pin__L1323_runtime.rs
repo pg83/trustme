@@ -4,7 +4,7 @@ fn main() {
     use std::pin::pin;
     use std::task::Context;
     use std::future::Future;
-    
+
     fn move_pinned_closure(mut x: impl Future, cx: &mut Context<'_>) {
         let mut x = pin!(x);
         // Create a closure that captures `x: Pin<&mut _>`, which is safe to move.

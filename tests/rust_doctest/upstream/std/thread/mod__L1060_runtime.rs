@@ -4,10 +4,10 @@ fn main() {
     use std::thread;
     use std::sync::{Arc, atomic::{Ordering, AtomicBool}};
     use std::time::Duration;
-    
+
     let flag = Arc::new(AtomicBool::new(false));
     let flag2 = Arc::clone(&flag);
-    
+
     let parked_thread = thread::spawn(move || {
         // We want to wait until the flag is set. We *could* just spin, but using
         // park/unpark is more efficient.
@@ -20,10 +20,10 @@ fn main() {
         }
         println!("Flag received");
     });
-    
+
     // Let some time pass for the thread to be spawned.
     thread::sleep(Duration::from_millis(10));
-    
+
     // Set the flag, and let the thread wake up.
     // There is no race condition here, if `unpark`
     // happens first, `park` will return immediately.
@@ -31,6 +31,6 @@ fn main() {
     flag.store(true, Ordering::Relaxed);
     println!("Unpark the thread");
     parked_thread.thread().unpark();
-    
+
     parked_thread.join().unwrap();
 }

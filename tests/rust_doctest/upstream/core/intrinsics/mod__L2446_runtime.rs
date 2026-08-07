@@ -4,11 +4,11 @@
 #![allow(internal_features)]
 fn main() {
     use std::intrinsics::is_val_statically_known;
-    
+
     fn foo(x: &i32) -> bool {
         is_val_statically_known(x)
     }
-    
+
     fn bar(x: &i32) -> bool {
         is_val_statically_known(
             (x as *const i32).addr()

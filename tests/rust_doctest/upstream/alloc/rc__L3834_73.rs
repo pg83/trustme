@@ -4,8 +4,8 @@
 extern crate alloc;
 fn main() {
     use std::rc::UniqueRc;
-    
+
     let five = UniqueRc::new(5);
-    
+
     assert!(five != UniqueRc::new(6));
 }

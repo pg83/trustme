@@ -3,9 +3,9 @@
 extern crate alloc;
 fn main() {
     use std::collections::BTreeMap;
-    
+
     let mut map = BTreeMap::new();
-    
+
     // entries can now be inserted into the empty map
     map.insert(1, "a");
 }

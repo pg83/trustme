@@ -3,10 +3,10 @@
 fn main() {
     use std::sync::{Arc, Mutex, Condvar};
     use std::thread;
-    
+
     let pair = Arc::new((Mutex::new(false), Condvar::new()));
     let pair2 = Arc::clone(&pair);
-    
+
     thread::spawn(move || {
         let (lock, cvar) = &*pair2;
         let mut started = lock.lock().unwrap();
@@ -14,7 +14,7 @@ fn main() {
         // We notify the condvar that the value has changed.
         cvar.notify_one();
     });
-    
+
     // Wait for the thread to start up.
     let (lock, cvar) = &*pair;
     let mut started = lock.lock().unwrap();

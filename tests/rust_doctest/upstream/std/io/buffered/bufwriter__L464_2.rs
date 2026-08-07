@@ -3,13 +3,13 @@
 fn main() {
     use std::io::{self, BufWriter, Write};
     use std::panic::{catch_unwind, AssertUnwindSafe};
-    
+
     struct PanickingWriter;
     impl Write for PanickingWriter {
       fn write(&mut self, buf: &[u8]) -> io::Result<usize> { panic!() }
       fn flush(&mut self) -> io::Result<()> { panic!() }
     }
-    
+
     let mut stream = BufWriter::new(PanickingWriter);
     write!(stream, "some data").unwrap();
     let result = catch_unwind(AssertUnwindSafe(|| {

@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::collections::VecDeque;
-    
+
     let mut buf = VecDeque::with_capacity(15);
     buf.extend(0..4);
     assert_eq!(buf.capacity(), 15);

@@ -5,10 +5,10 @@ fn main() {
     let max = f32::MAX;
     let lower_than_min = 1.0e-40_f32;
     let zero = 0.0_f32;
-    
+
     assert!(!min.is_subnormal());
     assert!(!max.is_subnormal());
-    
+
     assert!(!zero.is_subnormal());
     assert!(!f32::NAN.is_subnormal());
     assert!(!f32::INFINITY.is_subnormal());

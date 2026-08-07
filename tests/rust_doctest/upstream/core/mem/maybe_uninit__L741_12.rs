@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::mem::MaybeUninit;
-    
+
     let mut x = MaybeUninit::<Vec<u32>>::uninit();
     let mut x_mu = x;
     let mut x = &mut x_mu;

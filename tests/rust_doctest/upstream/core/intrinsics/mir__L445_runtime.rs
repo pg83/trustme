@@ -3,9 +3,9 @@
 #![allow(internal_features)]
 #![feature(custom_mir, core_intrinsics)]
 fn main() {
-    
+
     use core::intrinsics::mir::*;
-    
+
     #[custom_mir(dialect = "built")]
     fn unwrap_deref(opt: Option<&i32>) -> i32 {
         mir! {
@@ -15,7 +15,7 @@ fn main() {
             }
         }
     }
-    
+
     #[custom_mir(dialect = "built")]
     fn set(opt: &mut Option<i32>) {
         mir! {

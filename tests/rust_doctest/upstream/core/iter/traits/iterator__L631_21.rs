@@ -2,7 +2,7 @@
 #![allow(unused)]
 #![feature(iter_intersperse)]
 fn main() {
-    
+
     let mut a = [0, 1, 2].into_iter().intersperse(100);
     assert_eq!(a.next(), Some(0));   // The first element from `a`.
     assert_eq!(a.next(), Some(100)); // The separator.

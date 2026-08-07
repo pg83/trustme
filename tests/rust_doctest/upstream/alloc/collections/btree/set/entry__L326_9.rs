@@ -3,9 +3,9 @@
 #![feature(btree_set_entry)]
 extern crate alloc;
 fn main() {
-    
+
     use std::collections::BTreeSet;
-    
+
     let mut set = BTreeSet::new();
     assert_eq!(set.entry("poneyland").get(), &"poneyland");
 }

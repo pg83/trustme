@@ -3,7 +3,7 @@
 fn main() {
     use std::mem;
     use std::pin::Pin;
-    
+
     fn move_pinned_ref<T>(mut a: T, mut b: T) {
         unsafe {
             let p: Pin<&mut T> = Pin::new_unchecked(&mut a);

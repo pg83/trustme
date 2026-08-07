@@ -5,7 +5,7 @@ fn main() {
     use std::os::windows::io::AsHandle;
     use std::fs::File;
     use std::sync::Arc;
-    
+
     trait MyTrait: AsHandle {}
     impl MyTrait for Arc<File> {}
     impl MyTrait for Box<File> {}

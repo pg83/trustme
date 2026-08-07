@@ -3,9 +3,9 @@
 #![feature(get_mut_unchecked)]
 extern crate alloc;
 fn main() {
-    
+
     use std::sync::Arc;
-    
+
     let mut x = Arc::new(String::new());
     unsafe {
         Arc::get_mut_unchecked(&mut x).push_str("foo")

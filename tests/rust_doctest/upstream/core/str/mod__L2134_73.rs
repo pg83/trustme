@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     let s = "\n Hello\tworld\t\n";
-    
+
     assert_eq!("Hello\tworld", s.trim());
 }

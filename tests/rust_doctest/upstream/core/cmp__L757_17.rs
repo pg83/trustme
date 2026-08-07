@@ -6,6 +6,6 @@ fn main() {
         Top,
         Bottom,
     }
-    
+
     assert!(E::Top < E::Bottom);
 }

@@ -4,7 +4,7 @@ fn main() {
     // deprecated way
     #[allow(deprecated, deprecated_in_future)]
     let e = std::f64::EPSILON;
-    
+
     // intended way
     let e = f64::EPSILON;
 }

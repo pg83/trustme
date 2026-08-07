@@ -6,12 +6,12 @@ fn main() {
         x += y;
         x
     }
-    
+
     // Modifying a mutable variable.
     #[allow(unused_assignments)]
     let mut a = 5;
     a = 6;
-    
+
     assert_eq!(foo(3, 4), 7);
     assert_eq!(a, 6);
 }

@@ -3,8 +3,8 @@
 extern crate alloc;
 fn main() {
     use std::sync::Arc;
-    
+
     let five = Arc::new(5);
-    
+
     let weak_five = Arc::downgrade(&five);
 }

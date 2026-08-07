@@ -2,7 +2,7 @@
 #![allow(unused)]
 #![feature(iterator_try_reduce)]
 fn main() {
-    
+
     let numbers = vec!["1", "2", "3", "4", "5"];
     let max: Result<Option<_>, <usize as std::str::FromStr>::Err> =
         numbers.into_iter().try_reduce(|x, y| {

@@ -2,9 +2,9 @@
 #![allow(unused)]
 fn main() {
     use std::mem::MaybeUninit;
-    
+
     let mut x = MaybeUninit::<String>::uninit();
-    
+
     x.write("Hello".to_string());
     // FIXME(https://github.com/rust-lang/miri/issues/3670):
     // use -Zmiri-disable-leak-check instead of unleaking in tests meant to leak.

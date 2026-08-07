@@ -5,7 +5,7 @@ fn main() {
     // U+00e9: 'latin small letter e with acute'
     assert_eq!(Some('\u{00e9}'), chars.next());
     assert_eq!(None, chars.next());
-    
+
     let mut chars = "é".chars();
     // U+0065: 'latin small letter e'
     assert_eq!(Some('\u{0065}'), chars.next());

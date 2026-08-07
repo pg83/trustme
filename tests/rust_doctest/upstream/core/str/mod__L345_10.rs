@@ -6,10 +6,10 @@ fn main() {
     // start of `老`
     assert!(s.is_char_boundary(6));
     assert!(s.is_char_boundary(s.len()));
-    
+
     // second byte of `ö`
     assert!(!s.is_char_boundary(2));
-    
+
     // third byte of `老`
     assert!(!s.is_char_boundary(8));
 }

@@ -4,7 +4,7 @@ fn main() {
     if cfg!(windows) {
     use std::path::{Component, Path, Prefix};
     use std::ffi::OsStr;
-    
+
     let path = Path::new(r"c:\you\later\");
     match path.components().next().unwrap() {
         Component::Prefix(prefix_component) => {

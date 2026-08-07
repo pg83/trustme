@@ -6,7 +6,7 @@ fn main() {
         field: Field,
         // ...
     }
-    
+
     impl Struct {
         fn field(&mut self) -> &mut Field { &mut self.field }
     }

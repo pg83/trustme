@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     struct Context;
-    
+
     struct Widget {
         children: Vec<Widget>,
         // `context` will be dropped after `children`.

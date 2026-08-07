@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::io::{BufWriter, Write};
-    
+
     let mut buffer = [0u8; 10];
     let mut stream = BufWriter::new(buffer.as_mut());
     write!(stream, "too much data").unwrap();

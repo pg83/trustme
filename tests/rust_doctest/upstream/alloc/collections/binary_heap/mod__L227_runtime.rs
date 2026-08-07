@@ -3,6 +3,6 @@
 extern crate alloc;
 fn main() {
     use std::collections::BinaryHeap;
-    
+
     let heap = BinaryHeap::from([1, 5, 2]);
 }

@@ -3,7 +3,7 @@
 #![feature(maybe_uninit_as_bytes, maybe_uninit_slice)]
 fn main() {
     use std::mem::MaybeUninit;
-    
+
     let val = 0x12345678_i32;
     let uninit = MaybeUninit::new(val);
     let uninit_bytes = uninit.as_bytes();

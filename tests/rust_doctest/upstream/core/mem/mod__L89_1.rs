@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::mem;
-    
+
     let mut v = vec![65, 122];
     // Build a `String` using the contents of `v`
     let s = unsafe { String::from_raw_parts(v.as_mut_ptr(), v.len(), v.capacity()) };

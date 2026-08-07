@@ -2,13 +2,13 @@
 #![allow(unused)]
 fn main() {
     use std::ops::BitOr;
-    
+
     #[derive(Debug, PartialEq)]
     struct BooleanVector(Vec<bool>);
-    
+
     impl BitOr for BooleanVector {
         type Output = Self;
-    
+
         fn bitor(self, Self(rhs): Self) -> Self::Output {
             let Self(lhs) = self;
             assert_eq!(lhs.len(), rhs.len());
@@ -20,7 +20,7 @@ fn main() {
             )
         }
     }
-    
+
     let bv1 = BooleanVector(vec![true, true, false, false]);
     let bv2 = BooleanVector(vec![true, false, true, false]);
     let expected = BooleanVector(vec![true, true, true, false]);

@@ -6,7 +6,7 @@ fn main() {
     struct Type;
     // Pin something inside a `ManuallyDrop`. This is fine on its own.
     let mut pin: Pin<Box<ManuallyDrop<Type>>> = Box::pin(ManuallyDrop::new(Type));
-    
+
     // However, creating a pinning mutable reference to the type *inside*
     // the `ManuallyDrop` is not!
     let inner: Pin<&mut Type> = unsafe {

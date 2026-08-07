@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::collections::VecDeque;
-    
+
     let mut buf: VecDeque<_> = ['a', 'b', 'c'].into();
     let buf2 = buf.split_off(1);
     assert_eq!(buf, ['a']);

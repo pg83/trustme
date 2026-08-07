@@ -5,7 +5,7 @@ fn main() {
     let old = x.replace(5);
     assert_eq!(x, Some(5));
     assert_eq!(old, Some(2));
-    
+
     let mut x = None;
     let old = x.replace(3);
     assert_eq!(x, Some(3));

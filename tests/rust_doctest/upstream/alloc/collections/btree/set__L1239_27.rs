@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::collections::BTreeSet;
-    
+
     let set = BTreeSet::from([3, 1, 2]);
     let mut set_iter = set.iter();
     assert_eq!(set_iter.next(), Some(&1));

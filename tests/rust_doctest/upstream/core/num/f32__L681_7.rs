@@ -3,7 +3,7 @@
 fn main() {
     let f = 7.0_f32;
     let g = -7.0_f32;
-    
+
     assert!(f.is_sign_positive());
     assert!(!g.is_sign_positive());
 }

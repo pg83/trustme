@@ -4,7 +4,7 @@
 fn main() {
     use std::error::Error;
     use core::error::request_value;
-    
+
     fn get_string(err: &impl Error) -> String {
         request_value::<String>(err).unwrap()
     }

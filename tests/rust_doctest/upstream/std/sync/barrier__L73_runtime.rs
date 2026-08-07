@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     use std::sync::Barrier;
-    
+
     let barrier = Barrier::new(10);
 }

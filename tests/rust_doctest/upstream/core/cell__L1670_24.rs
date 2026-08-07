@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::cell::{RefCell, RefMut};
-    
+
     let c = RefCell::new((5, 'b'));
     {
         let b1: RefMut<'_, (u32, char)> = c.borrow_mut();

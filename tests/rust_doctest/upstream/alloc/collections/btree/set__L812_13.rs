@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::collections::BTreeSet;
-    
+
     let mut set = BTreeSet::new();
     assert_eq!(set.last(), None);
     set.insert(1);

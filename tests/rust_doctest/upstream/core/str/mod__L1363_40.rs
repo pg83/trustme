@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     let bananas = "bananas";
-    
+
     assert!(bananas.starts_with("bana"));
     assert!(!bananas.starts_with("nana"));
 }

@@ -5,7 +5,7 @@ fn main() {
         println!("hello world forever!");
         break;
     }
-    
+
     let mut i = 1;
     loop {
         println!("i is {i}");

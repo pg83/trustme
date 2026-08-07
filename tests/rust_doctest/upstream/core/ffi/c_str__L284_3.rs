@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::ffi::CStr;
-    
+
     let mut buffer = [0u8; 16];
     unsafe {
         // Here we might call an unsafe C function that writes a string

@@ -2,9 +2,9 @@
 #![allow(unused)]
 fn main() {
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-    
+
     let localhost_v4 = Ipv4Addr::new(127, 0, 0, 1);
-    
+
     assert_eq!(IpAddr::V4(localhost_v4).to_canonical(), localhost_v4);
     assert_eq!(IpAddr::V6(localhost_v4.to_ipv6_mapped()).to_canonical(), localhost_v4);
     assert_eq!(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)).to_canonical().is_loopback(), true);

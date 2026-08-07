@@ -3,7 +3,7 @@
 fn main() {
     trait Builder {
         type Built;
-    
+
         fn build(&self) -> Self::Built;
     }
 }

@@ -4,7 +4,7 @@ fn main() {
     // deprecated way
     #[allow(deprecated, deprecated_in_future)]
     let r = std::f32::RADIX;
-    
+
     // intended way
     let r = f32::RADIX;
 }

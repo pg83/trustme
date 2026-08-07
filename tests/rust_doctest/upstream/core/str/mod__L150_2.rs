@@ -3,7 +3,7 @@
 fn main() {
     let s = "";
     assert!(s.is_empty());
-    
+
     let s = "not empty";
     assert!(!s.is_empty());
 }

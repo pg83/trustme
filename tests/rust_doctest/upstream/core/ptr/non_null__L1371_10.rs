@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::ptr::NonNull;
-    
+
     // create a slice pointer when starting out with a pointer to the first element
     let mut x = [5, 6, 7];
     let nonnull_pointer = NonNull::new(x.as_mut_ptr()).unwrap();

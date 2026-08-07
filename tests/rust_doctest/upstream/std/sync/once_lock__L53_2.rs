@@ -3,7 +3,7 @@
 fn main() {
     use std::sync::{OnceLock, atomic::{AtomicU32, Ordering}};
     use std::thread;
-    
+
     struct OnceList<T> {
         data: OnceLock<T>,
         next: OnceLock<Box<OnceList<T>>>,
@@ -29,11 +29,11 @@ fn main() {
             })
         }
     }
-    
+
     // Let's exercise this new Sync append-only list by doing a little counting
     static LIST: OnceList<u32> = OnceList::new();
     static COUNTER: AtomicU32 = AtomicU32::new(0);
-    
+
     const LEN: u32 = if cfg!(miri) { 50 } else { 1000 };
     /*
     const LEN: u32 = 1000;
@@ -47,7 +47,7 @@ fn main() {
             });
         }
     });
-    
+
     for i in 0..LEN {
         assert!(LIST.contains(&i));
     }

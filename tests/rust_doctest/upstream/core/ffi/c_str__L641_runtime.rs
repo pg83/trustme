@@ -2,7 +2,7 @@
 #![allow(unused)]
 #![feature(cstr_display)]
 fn main() {
-    
+
     let cstr = c"Hello, world!";
     println!("{}", cstr.display());
 }

@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::marker::PhantomData;
-    
+
     #[allow(dead_code)]
     struct Slice<'a, T> {
         start: *const T,

@@ -2,7 +2,7 @@
 #![allow(unused)]
 #![feature(array_windows)]
 fn main() {
-    
+
     let slice = [0, 1, 2, 3];
     let mut iter = slice.array_windows::<2>();
     assert_eq!(iter.next(), Some(&[0, 1]));

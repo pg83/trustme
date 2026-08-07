@@ -2,6 +2,6 @@
 #![allow(unused)]
 #![feature(cstr_bytes)]
 fn main() {
-    
+
     assert!(c"foo".bytes().eq(*b"foo"));
 }

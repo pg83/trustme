@@ -2,7 +2,7 @@
 #![allow(unused)]
 #![feature(f128)]
 fn main() {
-    
+
     let bytes = 12.5f128.to_ne_bytes();
     assert_eq!(
         bytes,

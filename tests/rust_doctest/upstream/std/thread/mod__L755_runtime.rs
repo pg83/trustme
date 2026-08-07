@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     use std::thread;
-    
+
     thread::yield_now();
 }

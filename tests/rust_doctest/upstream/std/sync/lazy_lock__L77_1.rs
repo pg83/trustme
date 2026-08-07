@@ -2,10 +2,10 @@
 #![allow(unused)]
 fn main() {
     use std::sync::LazyLock;
-    
+
     let hello = "Hello, World!".to_string();
-    
+
     let lazy = LazyLock::new(|| hello.to_uppercase());
-    
+
     assert_eq!(&*lazy, "HELLO, WORLD!");
 }

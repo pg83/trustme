@@ -5,12 +5,12 @@ fn main() {
     use std::{ptr, rc::Rc};
     let inner = String::from("test");
     let ptr = inner.as_ptr();
-    
+
     let rc = Rc::new(inner);
     let inner = Rc::unwrap_or_clone(rc);
     // The inner value was not cloned
     assert!(ptr::eq(ptr, inner.as_ptr()));
-    
+
     let rc = Rc::new(inner);
     let rc2 = rc.clone();
     let inner = Rc::unwrap_or_clone(rc);

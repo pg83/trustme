@@ -2,15 +2,15 @@
 #![allow(unused)]
 #![feature(hash_set_entry)]
 fn main() {
-    
+
     use std::collections::HashSet;
-    
+
     let mut set = HashSet::new();
-    
+
     // nonexistent key
     set.entry("poneyland").or_insert();
     assert!(set.contains("poneyland"));
-    
+
     // existing key
     set.entry("poneyland").or_insert();
     assert!(set.contains("poneyland"));

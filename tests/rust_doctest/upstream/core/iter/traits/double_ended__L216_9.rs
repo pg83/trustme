@@ -8,7 +8,7 @@ fn main() {
         .map(|&s| s.parse::<i32>())
         .try_rfold(0, |acc, x| x.and_then(|y| Ok(acc + y)));
     assert!(sum.is_err());
-    
+
     // Because it short-circuited, the remaining elements are still
     // available through the iterator.
     assert_eq!(it.next_back(), Some(&"1"));

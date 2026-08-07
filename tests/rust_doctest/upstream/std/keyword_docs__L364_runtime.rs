@@ -7,13 +7,13 @@ fn main() {
         SecondVariant,
         ThirdVariant,
     }
-    
+
     enum Location {
         Unknown,
         Anonymous,
         Known(Coord),
     }
-    
+
     enum ComplexEnum {
         Nothing,
         Something(u32),
@@ -22,6 +22,6 @@ fn main() {
             blah: String,
         }
     }
-    
+
     enum EmptyEnum { }
 }

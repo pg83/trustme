@@ -4,7 +4,7 @@ extern crate alloc;
 fn main() {
     use std::collections::BTreeMap;
     use std::ops::Bound::Included;
-    
+
     let mut map = BTreeMap::new();
     map.insert(3, "a");
     map.insert(5, "b");

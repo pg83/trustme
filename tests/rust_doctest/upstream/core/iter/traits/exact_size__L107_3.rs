@@ -3,7 +3,7 @@
 fn main() {
     // a finite range knows exactly how many times it will iterate
     let mut range = 0..5;
-    
+
     assert_eq!(5, range.len());
     let _ = range.next();
     assert_eq!(4, range.len());

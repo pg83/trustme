@@ -5,7 +5,7 @@ fn main() {
         let x = async {
             return 5;
         };
-    
+
         x.await
     }
 }

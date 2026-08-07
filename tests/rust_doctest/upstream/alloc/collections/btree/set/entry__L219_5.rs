@@ -3,15 +3,15 @@
 #![feature(btree_set_entry)]
 extern crate alloc;
 fn main() {
-    
+
     use std::collections::BTreeSet;
-    
+
     let mut set = BTreeSet::new();
-    
+
     // nonexistent key
     set.entry("poneyland").or_insert();
     assert!(set.contains("poneyland"));
-    
+
     // existing key
     set.entry("poneyland").or_insert();
     assert!(set.contains("poneyland"));

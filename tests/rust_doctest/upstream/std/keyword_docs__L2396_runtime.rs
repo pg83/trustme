@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     let mut i = 1;
-    
+
     while i < 100 {
         i *= 2;
         if i == 64 {

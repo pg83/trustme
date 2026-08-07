@@ -2,9 +2,9 @@
 #![allow(unused)]
 #![feature(phantom_variance_markers)]
 fn main() {
-    
+
     use core::marker::{PhantomCovariant, variance};
-    
+
     struct BoundFn<F, P, R>
     where
         F: Fn(P) -> R,
@@ -13,7 +13,7 @@ fn main() {
         parameter: P,
         return_value: PhantomCovariant<R>,
     }
-    
+
     let bound_fn = BoundFn {
         function: core::convert::identity,
         parameter: 5u8,

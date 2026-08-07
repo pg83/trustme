@@ -5,7 +5,7 @@ fn main() {
         where F: Fn(usize) -> usize {
         func(1)
     }
-    
+
     let double = |x| x * 2;
     assert_eq!(call_with_one(double), 2);
 }

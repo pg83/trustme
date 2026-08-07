@@ -5,12 +5,12 @@ fn main() {
     use std::{ptr, sync::Arc};
     let inner = String::from("test");
     let ptr = inner.as_ptr();
-    
+
     let arc = Arc::new(inner);
     let inner = Arc::unwrap_or_clone(arc);
     // The inner value was not cloned
     assert!(ptr::eq(ptr, inner.as_ptr()));
-    
+
     let arc = Arc::new(inner);
     let arc2 = arc.clone();
     let inner = Arc::unwrap_or_clone(arc);

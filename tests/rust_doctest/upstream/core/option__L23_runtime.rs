@@ -8,10 +8,10 @@ fn main() {
             Some(numerator / denominator)
         }
     }
-    
+
     // The return value of the function is an option
     let result = divide(2.0, 3.0);
-    
+
     // Pattern match to retrieve the value
     match result {
         // The division was valid

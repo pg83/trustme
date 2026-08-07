@@ -3,6 +3,6 @@
 #![allow(noop_method_call)]
 fn main() {
     let hello = "Hello"; // &str implements Clone
-    
+
     assert_eq!("Hello", hello.clone());
 }

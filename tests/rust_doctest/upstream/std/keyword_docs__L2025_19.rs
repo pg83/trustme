@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 fn main() {
-    
+
     /// Dereference the given pointer.
     ///
     /// # Safety
@@ -13,7 +13,7 @@ fn main() {
         // SAFETY: the caller is required to ensure that `ptr` is aligned and dereferenceable.
         unsafe { *ptr }
     }
-    
+
     let a = 3;
     let b = &a as *const _;
     // SAFETY: `a` has not been dropped and references are always aligned,

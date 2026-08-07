@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::cell::LazyCell;
-    
+
     let lazy: LazyCell<i32> = LazyCell::new(|| {
         println!("initializing");
         92
@@ -10,7 +10,7 @@ fn main() {
     println!("ready");
     println!("{}", *lazy);
     println!("{}", *lazy);
-    
+
     // Prints:
     //   ready
     //   initializing

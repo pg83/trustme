@@ -5,7 +5,7 @@ fn main() {
         let text = "Fn".to_owned();
         move || println!("This is a: {text}")
     }
-    
+
     let fn_plain = create_fn();
     fn_plain();
 }

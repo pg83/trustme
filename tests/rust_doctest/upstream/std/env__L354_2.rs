@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::env;
-    
+
     let key = "KEY";
     unsafe {
         env::set_var(key, "VALUE");

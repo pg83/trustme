@@ -7,14 +7,14 @@ fn main() {
     unsafe trait MakeEven {
         fn make_even(&self) -> i32;
     }
-    
+
     // SAFETY: Our `make_even` always returns something even.
     unsafe impl MakeEven for i32 {
         fn make_even(&self) -> i32 {
             self << 1
         }
     }
-    
+
     fn use_make_even(x: impl MakeEven) {
         if x.make_even() % 2 == 1 {
             // SAFETY: this can never happen, because all `MakeEven` implementations

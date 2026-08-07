@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::sync::Arc;
-    
+
     let arc = Arc::new(());
     // Method-call syntax
     let arc2 = arc.clone();

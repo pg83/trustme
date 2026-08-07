@@ -6,9 +6,9 @@ fn main() {
         type Item;
         fn next(&mut self) -> Option<Self::Item>;
     }
-    
+
     struct Once<T>(Option<T>);
-    
+
     impl<T> Iterator for Once<T> {
         // associated type definition
         type Item = T;

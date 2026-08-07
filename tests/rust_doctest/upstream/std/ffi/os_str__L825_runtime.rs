@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     use std::ffi::OsStr;
-    
+
     let os_str = OsStr::new("foo");
 }

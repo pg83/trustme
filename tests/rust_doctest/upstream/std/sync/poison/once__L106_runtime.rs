@@ -2,10 +2,10 @@
 #![allow(unused)]
 fn main() {
     use std::sync::Once;
-    
+
     static mut VAL: usize = 0;
     static INIT: Once = Once::new();
-    
+
     // Accessing a `static mut` is unsafe much of the time, but if we do so
     // in a synchronized fashion (e.g., write once or read all) then we're
     // good to go!
@@ -20,7 +20,7 @@ fn main() {
             VAL
         }
     }
-    
+
     fn expensive_computation() -> usize {
         // ...
     2

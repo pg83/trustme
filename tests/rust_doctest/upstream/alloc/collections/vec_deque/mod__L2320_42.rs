@@ -3,10 +3,10 @@
 extern crate alloc;
 fn main() {
     use std::collections::VecDeque;
-    
+
     let mut buf = VecDeque::new();
     buf.extend(1..6);
-    
+
     let keep = [false, true, true, false, true];
     let mut iter = keep.iter();
     buf.retain(|_| *iter.next().unwrap());

@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::path::{Component, Path};
-    
+
     let path = Path::new("/tmp/foo/bar.txt");
     let components = path.components().collect::<Vec<_>>();
     assert_eq!(&components, &[

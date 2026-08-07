@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::thread;
-    
+
     let handler = thread::Builder::new()
         .name("named thread".into())
         .spawn(|| {
@@ -10,6 +10,6 @@ fn main() {
             assert_eq!(handle.name(), Some("named thread"));
         })
         .unwrap();
-    
+
     handler.join().unwrap();
 }

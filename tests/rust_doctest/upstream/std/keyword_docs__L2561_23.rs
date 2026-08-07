@@ -5,7 +5,7 @@ fn main() {
         i: u32,
         f: f32,
     }
-    
+
     let mut u = IntOrFloat { f: 1.0 };
     // Reading the fields of a union is always unsafe
     assert_eq!(unsafe { u.i }, 1065353216);

@@ -7,11 +7,11 @@ fn main() {
             Err(e) => *e = 0,
         }
     }
-    
+
     let mut x: Result<i32, i32> = Ok(2);
     mutate(&mut x);
     assert_eq!(x.unwrap(), 42);
-    
+
     let mut x: Result<i32, i32> = Err(13);
     mutate(&mut x);
     assert_eq!(x.unwrap_err(), 0);

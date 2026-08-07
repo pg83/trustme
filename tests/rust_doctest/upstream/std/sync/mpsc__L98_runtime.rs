@@ -3,7 +3,7 @@
 fn main() {
     use std::thread;
     use std::sync::mpsc::sync_channel;
-    
+
     let (tx, rx) = sync_channel::<i32>(0);
     thread::spawn(move || {
         // This will wait for the parent thread to start receiving

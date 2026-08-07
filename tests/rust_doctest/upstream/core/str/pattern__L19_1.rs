@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     let s = "Can you find a needle in a haystack?";
-    
+
     // &str pattern
     assert_eq!(s.find("you"), Some(4));
     // char pattern

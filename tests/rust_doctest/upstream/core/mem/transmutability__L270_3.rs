@@ -3,9 +3,9 @@
 #![feature(transmutability)]
 fn main() {
     use core::mem::{Assume, TransmuteFrom};
-    
+
     let src: u8 = 1;
-    
+
     let maybe_dst: Option<bool> = if src == 0 || src == 1 {
         // SAFETY: We have checked above that the value of `src` is a bit-valid
         // instance of `bool`.
@@ -15,6 +15,6 @@ fn main() {
     } else {
         None
     };
-    
+
     assert_eq!(maybe_dst, Some(true));
 }

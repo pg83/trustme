@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::collections::HashMap;
-    
+
     let solar_distance = HashMap::from([
         ("Mercury", 0.4),
         ("Venus", 0.7),

@@ -9,7 +9,7 @@ fn main() {
         slice: NonNull<[u8]>,
         _pin: PhantomPinned,
     }
-    
+
     impl Unmovable {
         // Copies the contents of `src` into `self`, fixing up the self-pointer
         // in the process.
@@ -22,12 +22,12 @@ fn main() {
                     slice: NonNull::from(&mut []),
                     _pin: PhantomPinned,
                 };
-    
+
                 let data_ptr = unpinned_src.data.as_ptr() as *const u8;
                 let slice_ptr = unpinned_src.slice.as_ptr() as *const u8;
                 let offset = slice_ptr.offset_from(data_ptr) as usize;
                 let len = unpinned_src.slice.as_ptr().len();
-    
+
                 unpinned_self.slice = NonNull::from(&mut unpinned_self.data[offset..offset+len]);
             }
         }

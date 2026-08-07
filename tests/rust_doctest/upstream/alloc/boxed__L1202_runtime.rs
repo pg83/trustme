@@ -3,7 +3,7 @@
 #![feature(box_vec_non_null)]
 extern crate alloc;
 fn main() {
-    
+
     let x = Box::new(String::from("Hello"));
     let non_null = Box::into_non_null(x);
     unsafe {

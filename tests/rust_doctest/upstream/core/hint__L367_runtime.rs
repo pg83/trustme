@@ -2,12 +2,12 @@
 #![allow(unused)]
 fn main() {
     use std::hint::black_box;
-    
+
     // Same `contains` function.
     fn contains(haystack: &[&str], needle: &str) -> bool {
         haystack.iter().any(|x| x == &needle)
     }
-    
+
     pub fn benchmark() {
         let haystack = vec!["abc", "def", "ghi", "jkl", "mno"];
         let needle = "ghi";

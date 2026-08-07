@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     let words = ["alpha", "beta", "gamma"];
-    
+
     // chars() returns an iterator
     let merged: String = words.iter()
                               .map(|s| s.chars())

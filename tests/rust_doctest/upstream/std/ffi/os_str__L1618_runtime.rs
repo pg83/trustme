@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::ffi::OsStr;
-    
+
     let s = OsStr::new("Hello, world!");
     println!("{}", s.display());
 }

@@ -2,9 +2,9 @@
 #![allow(unused)]
 fn main() {
     use std::ptr::NonNull;
-    
+
     let s: &str = "123";
-    
+
     unsafe {
         let end: NonNull<u8> = NonNull::new(s.as_ptr().cast_mut()).unwrap().add(3);
         println!("{}", end.sub(1).read() as char);

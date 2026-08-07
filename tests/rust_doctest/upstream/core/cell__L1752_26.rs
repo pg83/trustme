@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::cell::{RefCell, RefMut};
-    
+
     let cell = RefCell::new([1, 2, 3, 4]);
     let borrow = cell.borrow_mut();
     let (mut begin, mut end) = RefMut::map_split(borrow, |slice| slice.split_at_mut(2));

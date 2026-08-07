@@ -3,7 +3,7 @@
 fn main() {
     #[derive(Default)]
     struct AddrTracker(Option<usize>);
-    
+
     impl AddrTracker {
         // If we haven't checked the addr of self yet, store the current
         // address. If we have, confirm that the current address is the same
@@ -16,15 +16,15 @@ fn main() {
             }
         }
     }
-    
+
     // Create a tracker and store the initial address
     let mut tracker = AddrTracker::default();
     tracker.check_for_move();
-    
+
     // Here we shadow the variable. This carries a semantic move, and may therefore also
     // come with a mechanical memory *move*
     let mut tracker = tracker;
-    
+
     // May panic!
     // tracker.check_for_move();
 }

@@ -6,7 +6,7 @@ fn main() {
     let a = ByteStr::new(b"abc");
     let b = ByteStr::new(&b"abc"[..]);
     let c = ByteStr::new("abc");
-    
+
     assert_eq!(a, b);
     assert_eq!(a, c);
 }

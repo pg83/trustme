@@ -3,7 +3,7 @@
 fn main() {
     use std::path::Prefix::*;
     use std::ffi::OsStr;
-    
+
     assert!(Verbatim(OsStr::new("pictures")).is_verbatim());
     assert!(VerbatimUNC(OsStr::new("server"), OsStr::new("share")).is_verbatim());
     assert!(VerbatimDisk(b'C').is_verbatim());

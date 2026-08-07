@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::any::Any;
-    
+
     fn is_string(s: &(dyn Any + Send + Sync)) {
         if s.is::<String>() {
             println!("It's a string!");
@@ -10,7 +10,7 @@ fn main() {
             println!("Not a string...");
         }
     }
-    
+
     is_string(&0);
     is_string(&"cookie monster".to_string());
 }

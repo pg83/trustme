@@ -2,7 +2,7 @@
 #![allow(unused)]
 #![feature(iter_macro, coroutines)]
 fn main() {
-    
+
     let it = std::iter::iter!{|| {
         yield 1;
         yield 2;

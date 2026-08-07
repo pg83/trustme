@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     unsafe trait UnsafeTrait {}
-    
+
     unsafe impl UnsafeTrait for i32 {}
 }

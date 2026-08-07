@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     let tuple = ("hello", 5, 'c');
-    
+
     assert_eq!(tuple.0, "hello");
 }

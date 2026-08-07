@@ -2,9 +2,9 @@
 #![allow(unused)]
 #![feature(os_str_slice)]
 fn main() {
-    
+
     use std::ffi::OsStr;
-    
+
     let os_str = OsStr::new("foo=bar");
     let bytes = os_str.as_encoded_bytes();
     if let Some(index) = bytes.iter().position(|b| *b == b'=') {

@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::mem::MaybeUninit;
-    
+
     // Create an explicitly uninitialized reference. The compiler knows that data inside
     // a `MaybeUninit<T>` may be invalid, and hence this is not UB:
     let mut x = MaybeUninit::<&i32>::uninit();

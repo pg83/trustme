@@ -7,7 +7,7 @@ fn main() {
     fn within_standard_deviations(x: f64) -> f64 {
         (x * std::f64::consts::FRAC_1_SQRT_2).erf() * 100.0
     }
-    
+
     // 68% of a normal distribution is within one standard deviation
     assert!((within_standard_deviations(1.0) - 68.269).abs() < 0.01);
     // 95% of a normal distribution is within two standard deviations

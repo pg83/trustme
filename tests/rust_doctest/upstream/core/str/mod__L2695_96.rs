@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     let nope = "j".parse::<u32>();
-    
+
     assert!(nope.is_err());
 }

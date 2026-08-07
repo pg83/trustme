@@ -2,9 +2,9 @@
 #![allow(unused)]
 fn main() {
     use std::thread;
-    
+
     struct SomeStruct;
-    
+
     impl Drop for SomeStruct {
         fn drop(&mut self) {
             if thread::panicking() {
@@ -14,12 +14,12 @@ fn main() {
             }
         }
     }
-    
+
     {
         print!("a: ");
         let a = SomeStruct;
     }
-    
+
     {
         print!("b: ");
         let b = SomeStruct;

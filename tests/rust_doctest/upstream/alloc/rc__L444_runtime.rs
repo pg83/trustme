@@ -4,11 +4,11 @@
 extern crate alloc;
 fn main() {
     use std::rc::{Rc, Weak};
-    
+
     struct Gadget {
         me: Weak<Gadget>,
     }
-    
+
     impl Gadget {
         /// Constructs a reference counted Gadget.
         fn new() -> Rc<Self> {
@@ -19,7 +19,7 @@ fn main() {
                 Gadget { me: me.clone() }
             })
         }
-    
+
         /// Returns a reference counted pointer to Self.
         fn me(&self) -> Rc<Self> {
             self.me.upgrade().unwrap()

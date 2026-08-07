@@ -7,6 +7,6 @@ extern crate alloc;
 fn main() {
     use std::collections::BTreeSet;
     use std::alloc::Global;
-    
+
     let mut set: BTreeSet<i32> = BTreeSet::new_in(Global);
 }

@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     let bananas = "bananas";
-    
+
     assert!(bananas.contains("nana"));
     assert!(!bananas.contains("apples"));
 }

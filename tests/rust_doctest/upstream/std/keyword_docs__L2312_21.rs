@@ -7,13 +7,13 @@ fn main() {
     {
         if second { s2 } else { s1 }
     }
-    
+
     let outer = String::from("Long living ref");
     let longer = &outer;
     {
         let inner = String::from("Short living ref");
         let shorter = &inner;
-    
+
         assert_eq!(select(shorter, longer, false), shorter);
         assert_eq!(select(shorter, longer, true), longer);
     }

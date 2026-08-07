@@ -8,7 +8,7 @@ fn main() {
         let mut ptr: *const u8 = data.as_ptr();
         let step = 2;
         let end_rounded_up = ptr.wrapping_add(6);
-        
+
         let mut out = String::new();
         while ptr != end_rounded_up {
             unsafe {
@@ -18,7 +18,6 @@ fn main() {
         }
         assert_eq!(out, "1, 3, 5, ");
         std::fmt::Result::Ok(())
-        Ok(())
     }
     doctest().unwrap();
 }

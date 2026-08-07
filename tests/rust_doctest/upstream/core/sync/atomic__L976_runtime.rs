@@ -2,9 +2,9 @@
 #![allow(unused)]
 fn main() {
     use std::sync::atomic::{AtomicBool, Ordering};
-    
+
     let val = AtomicBool::new(false);
-    
+
     let new = true;
     let mut old = val.load(Ordering::Relaxed);
     loop {

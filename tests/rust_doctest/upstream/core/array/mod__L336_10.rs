@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::hash::BuildHasher;
-    
+
     let b = std::hash::RandomState::new();
     let a: [u8; 3] = [0xa8, 0x3c, 0x09];
     let s: &[u8] = &[0xa8, 0x3c, 0x09];

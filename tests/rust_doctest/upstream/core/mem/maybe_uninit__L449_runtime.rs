@@ -3,12 +3,12 @@
 fn main() {
     use core::pin::Pin;
     use core::mem::MaybeUninit;
-    
+
     struct PinArena<T> {
         memory: Box<[MaybeUninit<T>]>,
         len: usize,
     }
-    
+
     impl <T> PinArena<T> {
         pub fn capacity(&self) -> usize {
             self.memory.len()

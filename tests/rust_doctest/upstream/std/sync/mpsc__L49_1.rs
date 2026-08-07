@@ -3,7 +3,7 @@
 fn main() {
     use std::thread;
     use std::sync::mpsc::channel;
-    
+
     // Create a simple streaming channel
     let (tx, rx) = channel();
     thread::spawn(move || {

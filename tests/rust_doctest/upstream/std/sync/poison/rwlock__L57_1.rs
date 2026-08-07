@@ -2,9 +2,9 @@
 #![allow(unused)]
 fn main() {
     use std::sync::RwLock;
-    
+
     let lock = RwLock::new(5);
-    
+
     // many reader locks can be held at once
     {
         let r1 = lock.read().unwrap();
@@ -12,7 +12,7 @@ fn main() {
         assert_eq!(*r1, 5);
         assert_eq!(*r2, 5);
     } // read locks are dropped at this point
-    
+
     // only one write lock may be held, however
     {
         let mut w = lock.write().unwrap();

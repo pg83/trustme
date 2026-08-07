@@ -3,10 +3,10 @@
 #![feature(box_vec_non_null)]
 extern crate alloc;
 fn main() {
-    
+
     use std::alloc::{alloc, Layout};
     use std::ptr::NonNull;
-    
+
     unsafe {
         let non_null = NonNull::new(alloc(Layout::new::<i32>()).cast::<i32>())
             .expect("allocation failed");

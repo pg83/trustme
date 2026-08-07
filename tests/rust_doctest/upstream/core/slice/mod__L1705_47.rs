@@ -3,7 +3,7 @@
 fn main() {
     let v = &mut [0, 0, 0, 0, 0];
     let mut count = 1;
-    
+
     for chunk in v.rchunks_mut(2) {
         for elem in chunk.iter_mut() {
             *elem += count;

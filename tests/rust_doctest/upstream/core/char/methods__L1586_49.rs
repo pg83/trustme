@@ -10,7 +10,7 @@ fn main() {
     let space = ' ';
     let lf = '\n';
     let esc = '\x1b';
-    
+
     assert!(uppercase_a.is_ascii_hexdigit());
     assert!(!uppercase_g.is_ascii_hexdigit());
     assert!(a.is_ascii_hexdigit());

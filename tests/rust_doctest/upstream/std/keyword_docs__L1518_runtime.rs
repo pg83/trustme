@@ -6,8 +6,8 @@ fn main() {
         field2: String,
         pub field3: bool
     }
-    
+
     struct Tuple(u32, String);
-    
+
     struct Unit;
 }

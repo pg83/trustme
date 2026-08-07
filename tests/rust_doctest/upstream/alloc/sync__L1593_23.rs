@@ -5,7 +5,7 @@ extern crate alloc;
 fn main() {
     use std::sync::Arc;
     use std::alloc::System;
-    
+
     let x = Arc::new_in("hello".to_owned(), System);
     let (ptr, alloc) = Arc::into_raw_with_allocator(x);
     assert_eq!(unsafe { &*ptr }, "hello");

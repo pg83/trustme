@@ -27,9 +27,9 @@ fn main() {
           // and the enclosing Future would not implement Send.
           log(make_error!("look: {:p}", unsync())).await;
       }
-    
+
       async fn log(error: Error) {/* ... */}
-    
+
       // Returns something without a Sync impl.
       fn unsync() -> *const () {
           0 as *const ()

@@ -2,10 +2,10 @@
 #![allow(unused)]
 fn main() {
     use std::cell::RefCell;
-    
+
     thread_local! {
         static X: RefCell<Vec<i32>> = RefCell::new(Vec::new());
     }
-    
+
     X.with_borrow(|v| assert!(v.is_empty()));
 }

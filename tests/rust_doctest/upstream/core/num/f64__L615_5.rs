@@ -5,10 +5,10 @@ fn main() {
     let max = f64::MAX;
     let lower_than_min = 1.0e-308_f64;
     let zero = 0.0f64;
-    
+
     assert!(min.is_normal());
     assert!(max.is_normal());
-    
+
     assert!(!zero.is_normal());
     assert!(!f64::NAN.is_normal());
     assert!(!f64::INFINITY.is_normal());

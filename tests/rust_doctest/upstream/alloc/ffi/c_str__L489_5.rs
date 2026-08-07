@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::ffi::CString;
-    
+
     let c_string = CString::from(c"foo");
     let bytes = c_string.into_bytes();
     assert_eq!(bytes, vec![b'f', b'o', b'o']);

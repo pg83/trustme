@@ -3,7 +3,7 @@
 #![feature(ip_from)]
 fn main() {
     use std::net::Ipv6Addr;
-    
+
     let addr = Ipv6Addr::from_segments([
         0x20du16, 0x20cu16, 0x20bu16, 0x20au16,
         0x209u16, 0x208u16, 0x207u16, 0x206u16,

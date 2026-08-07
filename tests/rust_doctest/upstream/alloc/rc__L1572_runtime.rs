@@ -3,8 +3,8 @@
 extern crate alloc;
 fn main() {
     use std::rc::Rc;
-    
+
     let five = Rc::new(5);
-    
+
     let weak_five = Rc::downgrade(&five);
 }

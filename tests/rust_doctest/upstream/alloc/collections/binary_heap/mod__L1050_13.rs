@@ -5,6 +5,6 @@ extern crate alloc;
 fn main() {
     use std::collections::BinaryHeap;
     let heap = BinaryHeap::from([1, 2, 3, 4, 5]);
-    
+
     assert_eq!(heap.into_iter_sorted().take(2).collect::<Vec<_>>(), [5, 4]);
 }

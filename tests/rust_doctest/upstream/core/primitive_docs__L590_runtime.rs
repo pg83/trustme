@@ -8,7 +8,7 @@ fn main() {
     #[cfg(any())]
     #[allow(unused_extern_crates)]
     extern crate libc;
-    
+
     unsafe {
         let my_num: *mut i32 = libc::malloc(size_of::<i32>()) as *mut i32;
         if my_num.is_null() {

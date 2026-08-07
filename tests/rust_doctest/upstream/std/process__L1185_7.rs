@@ -3,7 +3,7 @@
 fn main() {
     use std::path::Path;
     use std::process::Command;
-    
+
     let mut cmd = Command::new("ls");
     assert_eq!(cmd.get_current_dir(), None);
     cmd.current_dir("/bin");

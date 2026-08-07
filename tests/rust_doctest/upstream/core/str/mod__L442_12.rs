@@ -5,7 +5,7 @@ fn main() {
     let s = "❤️🧡💛💚💙💜";
     assert_eq!(s.len(), 26);
     assert!(!s.is_char_boundary(13));
-    
+
     let closest = s.ceil_char_boundary(13);
     assert_eq!(closest, 14);
     assert_eq!(&s[..closest], "❤️🧡💛");

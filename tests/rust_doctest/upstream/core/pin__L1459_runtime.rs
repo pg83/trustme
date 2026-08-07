@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::pin::Pin;
-    
+
     let mut val: u8 = 5;
     let mut pinned: Pin<&mut u8> = Pin::new(&mut val);
     println!("{}", pinned); // 5

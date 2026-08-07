@@ -5,7 +5,7 @@
 fn main() {
     use std::array::IntoIter;
     use std::mem::MaybeUninit;
-    
+
     // Hi!  Thanks for reading the code. This is restricted to `Copy` because
     // otherwise it could leak. A fully-general version this would need a drop
     // guard to handle panics from the iterator, but this works for an example.
@@ -28,11 +28,11 @@ fn main() {
                 }
             }
         }
-    
+
         // SAFETY: We've initialized all N items
         unsafe { Ok(buffer.transpose().assume_init()) }
     }
-    
+
     let r: [_; 4] = next_chunk(&mut (10..16)).unwrap();
     assert_eq!(r, [10, 11, 12, 13]);
     let r: IntoIter<_, 40> = next_chunk(&mut (10..16)).unwrap_err();

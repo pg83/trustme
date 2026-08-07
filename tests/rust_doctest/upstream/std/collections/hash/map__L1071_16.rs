@@ -2,19 +2,19 @@
 #![allow(unused)]
 fn main() {
     use std::collections::HashMap;
-    
+
     let mut libraries = HashMap::new();
     libraries.insert("Bodleian Library".to_string(), 1602);
     libraries.insert("Athenæum".to_string(), 1807);
     libraries.insert("Herzogin-Anna-Amalia-Bibliothek".to_string(), 1691);
     libraries.insert("Library of Congress".to_string(), 1800);
-    
+
     // SAFETY: The keys do not overlap.
     let [Some(a), Some(b)] = (unsafe { libraries.get_disjoint_unchecked_mut([
         "Athenæum",
         "Bodleian Library",
     ]) }) else { panic!() };
-    
+
     // SAFETY: The keys do not overlap.
     let got = unsafe { libraries.get_disjoint_unchecked_mut([
         "Athenæum",
@@ -27,7 +27,7 @@ fn main() {
             Some(&mut 1800),
         ],
     );
-    
+
     // SAFETY: The keys do not overlap.
     let got = unsafe { libraries.get_disjoint_unchecked_mut([
         "Athenæum",

@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::collections::BTreeMap;
-    
+
     let mut map: BTreeMap<i32, i32> = (0..8).map(|x| (x, x*10)).collect();
     // Keep only the elements with even-numbered keys.
     map.retain(|&k, _| k % 2 == 0);

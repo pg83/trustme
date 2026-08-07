@@ -2,17 +2,17 @@
 #![allow(unused)]
 fn main() {
     use std::ops::Neg;
-    
+
     #[derive(Debug, PartialEq)]
     enum Sign {
         Negative,
         Zero,
         Positive,
     }
-    
+
     impl Neg for Sign {
         type Output = Self;
-    
+
         fn neg(self) -> Self::Output {
             match self {
                 Sign::Negative => Sign::Positive,
@@ -21,7 +21,7 @@ fn main() {
             }
         }
     }
-    
+
     // A negative positive is a negative.
     assert_eq!(-Sign::Positive, Sign::Negative);
     // A double negative is a positive.

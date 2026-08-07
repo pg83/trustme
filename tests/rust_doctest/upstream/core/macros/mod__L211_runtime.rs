@@ -2,7 +2,7 @@
 #![allow(unused)]
 #![feature(cfg_select)]
 fn main() {
-    
+
     cfg_select! {
         unix => {
             fn foo() { /* unix specific functionality */ }

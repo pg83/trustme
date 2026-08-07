@@ -7,7 +7,7 @@ fn main() {
     assert_eq!(v.strip_prefix(&[10, 40, 30]), Some(&[][..]));
     assert_eq!(v.strip_prefix(&[50]), None);
     assert_eq!(v.strip_prefix(&[10, 50]), None);
-    
+
     let prefix : &str = "he";
     assert_eq!(b"hello".strip_prefix(prefix.as_bytes()),
                Some(b"llo".as_ref()));

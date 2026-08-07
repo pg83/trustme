@@ -4,7 +4,7 @@ fn main() {
     // deprecated way
     #[allow(deprecated, deprecated_in_future)]
     let max = std::f32::MAX_10_EXP;
-    
+
     // intended way
     let max = f32::MAX_10_EXP;
 }

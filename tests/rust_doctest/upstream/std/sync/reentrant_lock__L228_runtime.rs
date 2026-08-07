@@ -3,6 +3,6 @@
 #![feature(reentrant_lock)]
 fn main() {
     use std::sync::ReentrantLock;
-    
+
     let lock = ReentrantLock::new(0);
 }

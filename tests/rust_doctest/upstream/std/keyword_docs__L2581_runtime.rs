@@ -5,9 +5,9 @@ fn main() {
         i: u32,
         f: f32,
     }
-    
+
     let u = IntOrFloat { f: 1.0 };
-    
+
     unsafe {
         match u {
             IntOrFloat { i: 10 } => println!("Found exactly ten!"),

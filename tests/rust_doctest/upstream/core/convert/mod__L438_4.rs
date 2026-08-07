@@ -5,7 +5,7 @@ fn main() {
        let bytes = b"hello".to_vec();
        assert_eq!(bytes, s.into());
     }
-    
+
     let s = "hello".to_string();
     is_hello(s);
 }

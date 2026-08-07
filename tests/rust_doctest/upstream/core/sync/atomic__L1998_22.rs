@@ -2,10 +2,10 @@
 #![allow(unused)]
 fn main() {
     use std::sync::atomic::{AtomicPtr, Ordering};
-    
+
     let ptr: *mut _ = &mut 5;
     let some_ptr = AtomicPtr::new(ptr);
-    
+
     let new: *mut _ = &mut 10;
     assert_eq!(some_ptr.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |_| None), Err(ptr));
     let result = some_ptr.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| {

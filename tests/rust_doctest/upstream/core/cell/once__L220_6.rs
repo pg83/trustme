@@ -2,9 +2,9 @@
 #![allow(unused)]
 #![feature(once_cell_try)]
 fn main() {
-    
+
     use std::cell::OnceCell;
-    
+
     let cell = OnceCell::new();
     assert_eq!(cell.get_or_try_init(|| Err(())), Err(()));
     assert!(cell.get().is_none());

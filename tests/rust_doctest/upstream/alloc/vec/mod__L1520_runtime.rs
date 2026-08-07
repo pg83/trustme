@@ -3,6 +3,6 @@
 extern crate alloc;
 fn main() {
     let v = vec![1, 2, 3];
-    
+
     let slice = v.into_boxed_slice();
 }

@@ -2,10 +2,10 @@
 #![allow(unused)]
 fn main() {
     use std::ops::BitAndAssign;
-    
+
     #[derive(Debug, PartialEq)]
     struct BooleanVector(Vec<bool>);
-    
+
     impl BitAndAssign for BooleanVector {
         // `rhs` is the "right-hand side" of the expression `a &= b`.
         fn bitand_assign(&mut self, rhs: Self) {
@@ -19,7 +19,7 @@ fn main() {
             );
         }
     }
-    
+
     let mut bv = BooleanVector(vec![true, true, false, false]);
     bv &= BooleanVector(vec![true, false, true, false]);
     let expected = BooleanVector(vec![true, false, false, false]);

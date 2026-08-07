@@ -2,9 +2,9 @@
 #![allow(unused)]
 fn main() {
     use std::fmt::{self, Alignment};
-    
+
     struct Foo;
-    
+
     impl fmt::Display for Foo {
         fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
             let s = if let Some(s) = formatter.align() {
@@ -19,7 +19,7 @@ fn main() {
             write!(formatter, "{s}")
         }
     }
-    
+
     assert_eq!(format!("{Foo:<}"), "left");
     assert_eq!(format!("{Foo:>}"), "right");
     assert_eq!(format!("{Foo:^}"), "center");

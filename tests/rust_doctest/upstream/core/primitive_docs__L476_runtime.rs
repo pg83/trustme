@@ -7,7 +7,7 @@ fn main() {
     fn returns_unit() {
         1i64;
     }
-    
+
     let is_i64 = {
         returns_i64()
     };

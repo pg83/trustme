@@ -4,23 +4,23 @@ fn main() {
     use std::sync::{Arc, Condvar, Mutex};
     use std::thread;
     use std::time::Duration;
-    
+
     let pair = Arc::new((Mutex::new(false), Condvar::new()));
     let pair2 = Arc::clone(&pair);
-    
+
     let handle =
     thread::spawn(move || {
         let (lock, cvar) = &*pair2;
-    
+
         // Let's wait 20 milliseconds before notifying the condvar.
         thread::sleep(Duration::from_millis(20));
-    
+
         let mut started = lock.lock().unwrap();
         // We update the boolean value.
         *started = true;
         cvar.notify_one();
     });
-    
+
     // Wait for the thread to start up.
     let (lock, cvar) = &*pair;
     loop {

@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::time::Duration;
-    
+
     let dur = Duration::new(2, 700_000_000);
     // note that due to rounding errors result is slightly
     // different from 0.859_872_611

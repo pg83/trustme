@@ -2,19 +2,19 @@
 #![allow(unused)]
 fn main() {
     use std::ops::BitOr;
-    
+
     #[derive(Debug, PartialEq)]
     struct Scalar(bool);
-    
+
     impl BitOr for Scalar {
         type Output = Self;
-    
+
         // rhs is the "right-hand side" of the expression `a | b`
         fn bitor(self, rhs: Self) -> Self::Output {
             Self(self.0 | rhs.0)
         }
     }
-    
+
     assert_eq!(Scalar(true) | Scalar(true), Scalar(true));
     assert_eq!(Scalar(true) | Scalar(false), Scalar(true));
     assert_eq!(Scalar(false) | Scalar(true), Scalar(true));

@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::rc::Rc;
-    
+
     let x = Rc::new(0);
     let y = Rc::clone(&x);
     let x_ptr = Rc::as_ptr(&x);

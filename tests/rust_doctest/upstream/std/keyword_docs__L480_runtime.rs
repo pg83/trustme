@@ -4,16 +4,16 @@ fn main() {
     fn standalone_function() {
         // code
     }
-    
+
     pub fn public_thing(argument: bool) -> String {
         // code
         "".to_string()
     }
-    
+
     struct Thing {
         foo: i32,
     }
-    
+
     impl Thing {
         pub fn new() -> Self {
             Self {

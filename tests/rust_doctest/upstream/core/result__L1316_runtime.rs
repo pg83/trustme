@@ -3,11 +3,11 @@
 #![feature(never_type)]
 #![feature(unwrap_infallible)]
 fn main() {
-    
+
     fn only_bad_news() -> Result<!, String> {
         Err("Oops, it failed".into())
     }
-    
+
     let error: String = only_bad_news().into_err();
     println!("{error}");
 }

@@ -4,8 +4,8 @@
 extern crate alloc;
 fn main() {
     use std::sync::UniqueArc;
-    
+
     let five = UniqueArc::new(5);
-    
+
     assert!(five < UniqueArc::new(6));
 }

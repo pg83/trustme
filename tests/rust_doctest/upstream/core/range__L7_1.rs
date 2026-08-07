@@ -3,7 +3,7 @@
 #![feature(new_range_api)]
 fn main() {
     use core::range::{Range, RangeFrom, RangeInclusive};
-    
+
     let arr = [0, 1, 2, 3, 4];
     assert_eq!(arr[                      ..   ], [0, 1, 2, 3, 4]);
     assert_eq!(arr[                      .. 3 ], [0, 1, 2      ]);

@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::collections::BTreeMap;
-    
+
     let mut map = BTreeMap::new();
     assert_eq!(map.first_key_value(), None);
     map.insert(1, "b");

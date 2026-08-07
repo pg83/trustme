@@ -2,15 +2,15 @@
 #![allow(unused)]
 fn main() {
     use std::ops::Shr;
-    
+
     #[derive(PartialEq, Debug)]
     struct SpinVector<T: Clone> {
         vec: Vec<T>,
     }
-    
+
     impl<T: Clone> Shr<usize> for SpinVector<T> {
         type Output = Self;
-    
+
         fn shr(self, rhs: usize) -> Self::Output {
             // Rotate the vector by `rhs` places.
             let (a, b) = self.vec.split_at(self.vec.len() - rhs);
@@ -20,7 +20,7 @@ fn main() {
             Self { vec: spun_vector }
         }
     }
-    
+
     assert_eq!(SpinVector { vec: vec![0, 1, 2, 3, 4] } >> 2,
                SpinVector { vec: vec![3, 4, 0, 1, 2] });
 }

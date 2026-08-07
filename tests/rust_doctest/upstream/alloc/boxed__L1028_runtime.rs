@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::alloc::{alloc, Layout};
-    
+
     unsafe {
         let ptr = alloc(Layout::new::<i32>()) as *mut i32;
         // In general .write is required to avoid attempting to destruct

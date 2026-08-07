@@ -2,7 +2,7 @@
 #![allow(unused)]
 #![feature(is_ascii_octdigit)]
 fn main() {
-    
+
     let uppercase_a = b'A';
     let a = b'a';
     let zero = b'0';
@@ -10,7 +10,7 @@ fn main() {
     let nine = b'9';
     let percent = b'%';
     let lf = b'\n';
-    
+
     assert!(!uppercase_a.is_ascii_octdigit());
     assert!(!a.is_ascii_octdigit());
     assert!(zero.is_ascii_octdigit());

@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::ptr::NonNull;
-    
+
     let a = [0; 5];
     let ptr1: NonNull<u32> = NonNull::from(&a[1]);
     let ptr2: NonNull<u32> = NonNull::from(&a[3]);

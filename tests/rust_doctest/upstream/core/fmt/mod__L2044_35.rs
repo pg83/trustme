@@ -2,9 +2,9 @@
 #![allow(unused)]
 fn main() {
     use std::fmt;
-    
+
     struct Foo(f32);
-    
+
     impl fmt::Display for Foo {
         fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
             if let Some(precision) = formatter.precision() {
@@ -16,7 +16,7 @@ fn main() {
             }
         }
     }
-    
+
     assert_eq!(format!("{:.4}", Foo(23.2)), "Foo(23.2000)");
     assert_eq!(format!("{}", Foo(23.2)), "Foo(23.20)");
 }

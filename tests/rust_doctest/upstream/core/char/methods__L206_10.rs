@@ -3,6 +3,6 @@
 fn main() {
     let c = '💯';
     let i = c as u32;
-    
+
     assert_eq!(128175, i);
 }

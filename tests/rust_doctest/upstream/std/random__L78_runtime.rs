@@ -2,9 +2,9 @@
 #![allow(unused)]
 #![feature(random)]
 fn main() {
-    
+
     use std::random::random;
-    
+
     let bits: u128 = random(..);
     let g1 = (bits >> 96) as u32;
     let g2 = (bits >> 80) as u16;

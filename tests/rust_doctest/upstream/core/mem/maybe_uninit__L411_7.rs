@@ -2,9 +2,9 @@
 #![allow(unused)]
 fn main() {
     use std::mem::MaybeUninit;
-    
+
     let mut x = MaybeUninit::<Vec<u8>>::uninit();
-    
+
     {
         let hello = x.write((&b"Hello, world!").to_vec());
         // Setting hello does not leak prior allocations, but drops them

@@ -3,7 +3,7 @@
 fn main() {
     let n = 'ß'.len_utf16();
     assert_eq!(n, 1);
-    
+
     let len = '💣'.len_utf16();
     assert_eq!(len, 2);
 }

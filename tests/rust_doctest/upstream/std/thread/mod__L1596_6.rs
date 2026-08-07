@@ -2,9 +2,9 @@
 #![allow(unused)]
 #![feature(thread_raw)]
 fn main() {
-    
+
     use std::thread::{self, Thread};
-    
+
     let thread = thread::current();
     let id = thread.id();
     let ptr = Thread::into_raw(thread);

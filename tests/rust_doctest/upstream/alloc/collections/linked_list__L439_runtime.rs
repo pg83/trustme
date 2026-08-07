@@ -3,6 +3,6 @@
 extern crate alloc;
 fn main() {
     use std::collections::LinkedList;
-    
+
     let list: LinkedList<u32> = LinkedList::new();
 }

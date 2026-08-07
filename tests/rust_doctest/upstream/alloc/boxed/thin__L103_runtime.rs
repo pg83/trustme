@@ -4,6 +4,6 @@
 extern crate alloc;
 fn main() {
     use std::boxed::ThinBox;
-    
+
     let thin_slice = ThinBox::<[i32]>::new_unsize([1, 2, 3, 4]);
 }

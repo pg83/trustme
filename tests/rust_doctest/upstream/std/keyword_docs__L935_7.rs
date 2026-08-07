@@ -7,7 +7,7 @@ fn main() {
         None => 10,
     };
     assert_eq!(x, 10);
-    
+
     let a_number = Option::Some(10);
     match a_number {
         Some(x) if x <= 5 => println!("0 to 5 num = {x}"),

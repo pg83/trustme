@@ -3,6 +3,6 @@
 fn main() {
     let x = "(///)".to_string();
     let d: Vec<_> = x.split('/').collect();
-    
+
     assert_eq!(d, &["(", "", "", ")"]);
 }

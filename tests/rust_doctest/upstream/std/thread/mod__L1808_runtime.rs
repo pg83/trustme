@@ -2,9 +2,9 @@
 #![allow(unused)]
 fn main() {
     use std::thread;
-    
+
     let builder = thread::Builder::new();
-    
+
     let join_handle: thread::JoinHandle<_> = builder.spawn(|| {
         // some work here
     }).unwrap();

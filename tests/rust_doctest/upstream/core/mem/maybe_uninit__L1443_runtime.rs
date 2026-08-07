@@ -3,6 +3,6 @@
 #![feature(maybe_uninit_uninit_array_transpose)]
 fn main() {
     use std::mem::MaybeUninit;
-    
+
     let data: [MaybeUninit<u8>; 1000] = MaybeUninit::uninit().transpose();
 }

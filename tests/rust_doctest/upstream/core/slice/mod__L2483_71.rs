@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     let mut s = [10, 40, 30, 20, 60, 50];
-    
+
     for group in s.rsplitn_mut(2, |num| *num % 3 == 0) {
         group[0] = 1;
     }

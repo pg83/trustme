@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::mem::MaybeUninit;
-    
+
     let mut x = MaybeUninit::<Vec<u32>>::uninit();
     x.write(vec![0, 1, 2]);
     // Create a reference into the `MaybeUninit<Vec<u32>>`.

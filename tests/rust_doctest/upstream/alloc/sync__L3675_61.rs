@@ -5,6 +5,6 @@ fn main() {
     use std::sync::Arc;
     let x = 5;
     let arc = Arc::new(5);
-    
+
     assert_eq!(Arc::from(x), arc);
 }

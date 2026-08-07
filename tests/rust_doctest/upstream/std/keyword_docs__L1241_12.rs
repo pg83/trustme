@@ -5,13 +5,13 @@ fn main() {
         let closure = || {
             return 5;
         };
-    
+
         let future = async {
             return 10;
         };
-    
+
         return 15;
     }
-    
+
     assert_eq!(foo(), 15);
 }

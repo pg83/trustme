@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     let mut v = [10, 40, 30, 20, 60, 50];
-    
+
     for group in v.split_mut(|num| *num % 3 == 0) {
         group[0] = 1;
     }

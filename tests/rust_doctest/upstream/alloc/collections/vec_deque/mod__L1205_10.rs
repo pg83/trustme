@@ -4,7 +4,7 @@
 extern crate alloc;
 fn main() {
     use std::collections::VecDeque;
-    
+
     let mut buf = VecDeque::new();
     buf.push_front(5);
     buf.push_front(10);

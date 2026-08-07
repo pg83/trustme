@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::thread;
-    
+
     thread::scope(|s| {
         let t = s.spawn(|| {
             panic!("oh no");

@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::slice;
-    
+
     /// Sum the elements of an FFI slice.
     ///
     /// # Safety
@@ -19,7 +19,7 @@ fn main() {
         };
         data.into_iter().sum()
     }
-    
+
     // This could be the result of C++'s std::vector::data():
     let ptr = std::ptr::null();
     // And this could be std::vector::size():

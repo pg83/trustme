@@ -2,7 +2,7 @@
 #![allow(unused)]
 #![feature(thread_spawn_hook)]
 fn main() {
-    
+
     std::thread::add_spawn_hook(|_| {
         ..; // This will run in the parent (spawning) thread.
         move || {

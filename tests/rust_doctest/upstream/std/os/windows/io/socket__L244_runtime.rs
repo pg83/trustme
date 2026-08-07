@@ -5,7 +5,7 @@ fn main() {
     use std::os::windows::io::AsSocket;
     use std::net::UdpSocket;
     use std::sync::Arc;
-    
+
     trait MyTrait: AsSocket {}
     impl MyTrait for Arc<UdpSocket> {}
     impl MyTrait for Box<UdpSocket> {}

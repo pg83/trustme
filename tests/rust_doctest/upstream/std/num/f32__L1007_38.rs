@@ -7,7 +7,7 @@ fn main() {
     // Solving cosh() at 1 gives this result
     let g = ((e * e) + 1.0) / (2.0 * e);
     let abs_difference = (f - g).abs();
-    
+
     // Same result
     assert!(abs_difference <= f32::EPSILON);
 }

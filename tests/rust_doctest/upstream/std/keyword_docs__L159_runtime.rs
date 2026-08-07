@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     const THING: u32 = 0xABAD1DEA;
-    
+
     let foo = 123 + THING;
 }

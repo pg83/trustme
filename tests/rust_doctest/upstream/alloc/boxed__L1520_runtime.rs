@@ -3,7 +3,7 @@
 #![feature(box_as_ptr)]
 extern crate alloc;
 fn main() {
-    
+
     unsafe {
         let mut v = Box::new(0);
         let ptr1 = Box::as_ptr(&v);

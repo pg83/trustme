@@ -5,13 +5,13 @@ fn main() {
     assert_eq!(4, size_of::<i32>());
     assert_eq!(8, size_of::<f64>());
     assert_eq!(0, size_of::<()>());
-    
+
     // Some arrays
     assert_eq!(8, size_of::<[i32; 2]>());
     assert_eq!(12, size_of::<[i32; 3]>());
     assert_eq!(0, size_of::<[i32; 0]>());
-    
-    
+
+
     // Pointer size equality
     assert_eq!(size_of::<&i32>(), size_of::<*const i32>());
     assert_eq!(size_of::<&i32>(), size_of::<Box<i32>>());

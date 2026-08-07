@@ -2,10 +2,10 @@
 #![allow(unused)]
 fn main() {
     use std::cmp::Ordering;
-    
+
     #[derive(Eq)]
     struct Equal(&'static str);
-    
+
     impl PartialEq for Equal {
         fn eq(&self, other: &Self) -> bool { true }
     }
@@ -15,6 +15,6 @@ fn main() {
     impl Ord for Equal {
         fn cmp(&self, other: &Self) -> Ordering { Ordering::Equal }
     }
-    
+
     assert_eq!(Equal("self").max(Equal("other")).0, "other");
 }

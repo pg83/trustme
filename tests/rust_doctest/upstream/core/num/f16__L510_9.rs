@@ -4,7 +4,7 @@
 fn main() {
     // FIXME(f16_f128): ABI issues on MSVC
     #[cfg(all(target_arch = "x86_64", target_os = "linux"))] {
-    
+
     // f16::EPSILON is the difference between 1.0 and the next number up.
     assert_eq!(1.0f16.next_up(), 1.0 + f16::EPSILON);
     // But not for most numbers.

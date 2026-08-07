@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::time::Duration;
-    
+
     let res = Duration::from_secs_f64(0.0);
     assert_eq!(res, Duration::new(0, 0));
     let res = Duration::from_secs_f64(1e-20);

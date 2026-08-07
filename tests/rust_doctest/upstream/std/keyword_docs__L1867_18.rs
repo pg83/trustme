@@ -3,9 +3,9 @@
 fn main() {
     type Meters = u32;
     type Kilograms = u32;
-    
+
     let m: Meters = 3;
     let k: Kilograms = 3;
-    
+
     assert_eq!(m, k);
 }

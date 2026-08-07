@@ -5,7 +5,7 @@ fn main() {
     let ref_transmuted = unsafe {
         std::mem::transmute::<*mut i32, &mut i32>(ptr)
     };
-    
+
     // Use a reborrow instead
     let ref_casted = unsafe { &mut *ptr };
 }

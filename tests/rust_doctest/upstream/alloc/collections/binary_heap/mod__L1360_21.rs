@@ -4,12 +4,12 @@ extern crate alloc;
 fn main() {
     use std::collections::BinaryHeap;
     let mut heap = BinaryHeap::new();
-    
+
     assert!(heap.is_empty());
-    
+
     heap.push(3);
     heap.push(5);
     heap.push(1);
-    
+
     assert!(!heap.is_empty());
 }

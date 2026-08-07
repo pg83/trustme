@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::collections::VecDeque;
-    
+
     let mut deque = VecDeque::new();
     deque.push_back(1);
     deque.clear();

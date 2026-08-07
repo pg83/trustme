@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     use std::time::Instant;
-    
+
     let now = Instant::now();
 }

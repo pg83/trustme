@@ -2,8 +2,8 @@
 #![allow(unused)]
 fn main() {
     use std::collections::HashSet;
-    
+
     let a = HashSet::from([1, 2, 3]);
-    
+
     let mut iter = a.into_iter();
 }

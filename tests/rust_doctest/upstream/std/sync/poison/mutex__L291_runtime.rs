@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     use std::sync::Mutex;
-    
+
     let mutex = Mutex::new(0);
 }

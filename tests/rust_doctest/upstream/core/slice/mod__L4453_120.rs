@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     let mut slice: &[_] = &['a', 'b', 'c', 'd'];
-    
+
     assert_eq!(None, slice.split_off(5..));
     assert_eq!(None, slice.split_off(..5));
     assert_eq!(None, slice.split_off(..=4));

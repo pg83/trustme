@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::fmt::Write;
-    
+
     let mut output = String::new();
     write!(&mut output, "Hello {}!", "world")
         .expect("Error occurred while trying to write in String");

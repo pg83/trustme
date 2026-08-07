@@ -6,7 +6,7 @@ fn main() {
         x: i32,
         y: i32,
     }
-    
+
     impl fmt::Debug for Point {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             write!(f, "Point [{} {}]", self.x, self.y)

@@ -3,7 +3,7 @@
 #![feature(cold_path)]
 fn main() {
     use core::hint::cold_path;
-    
+
     fn foo(x: &[i32]) {
         if let Some(first) = x.get(0) {
             // this is the fast path
@@ -12,7 +12,7 @@ fn main() {
             cold_path();
         }
     }
-    
+
     fn bar(x: i32) -> i32 {
         match x {
             1 => 10,

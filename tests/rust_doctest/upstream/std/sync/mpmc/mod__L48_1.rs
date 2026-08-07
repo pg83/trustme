@@ -2,10 +2,10 @@
 #![allow(unused)]
 #![feature(mpmc_channel)]
 fn main() {
-    
+
     use std::thread;
     use std::sync::mpmc::channel;
-    
+
     // Create a simple streaming channel
     let (tx, rx) = channel();
     thread::spawn(move || {

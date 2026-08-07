@@ -3,7 +3,7 @@
 #![feature(maybe_uninit_as_bytes, maybe_uninit_write_slice, maybe_uninit_slice)]
 fn main() {
     use std::mem::MaybeUninit;
-    
+
     let uninit = [MaybeUninit::new(0x1234u16), MaybeUninit::new(0x5678u16)];
     let uninit_bytes = uninit.as_bytes();
     let bytes = unsafe { uninit_bytes.assume_init_ref() };

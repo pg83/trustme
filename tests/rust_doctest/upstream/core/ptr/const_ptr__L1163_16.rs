@@ -18,7 +18,6 @@ fn main() {
         }
         assert_eq!(out, "5, 3, 1, ");
         std::fmt::Result::Ok(())
-        Ok(())
     }
     doctest().unwrap();
 }

@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::net::Ipv4Addr;
-    
+
     assert_eq!(Ipv4Addr::new(10, 0, 0, 1).is_private(), true);
     assert_eq!(Ipv4Addr::new(10, 10, 10, 10).is_private(), true);
     assert_eq!(Ipv4Addr::new(172, 16, 10, 10).is_private(), true);

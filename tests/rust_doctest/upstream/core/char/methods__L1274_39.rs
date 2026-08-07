@@ -3,7 +3,7 @@
 fn main() {
     let ascii = 'A';
     let non_ascii = '❤';
-    
+
     assert_eq!('a', ascii.to_ascii_lowercase());
     assert_eq!('❤', non_ascii.to_ascii_lowercase());
 }

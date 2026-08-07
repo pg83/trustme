@@ -2,7 +2,7 @@
 #![allow(unused)]
 #![feature(rev_into_inner)]
 fn main() {
-    
+
     let s = "foobar";
     let mut rev = s.chars().rev();
     assert_eq!(rev.next(), Some('r'));

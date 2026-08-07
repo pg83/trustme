@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::io::{self, Write};
-    
+
     let buffer = vec![1, 2, 3, 5, 8];
     let num_bytes = io::sink().write(&buffer).unwrap();
     assert_eq!(num_bytes, 5);

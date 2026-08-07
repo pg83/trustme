@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::ops::Add;
-    
+
     fn foo() -> impl Add<u32> {
         if true {
             unimplemented!()

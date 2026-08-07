@@ -4,7 +4,7 @@ fn main() {
     // deprecated way
     #[allow(deprecated, deprecated_in_future)]
     let d = std::f64::DIGITS;
-    
+
     // intended way
     let d = f64::DIGITS;
 }

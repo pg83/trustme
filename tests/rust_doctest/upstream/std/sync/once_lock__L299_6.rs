@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::sync::OnceLock;
-    
+
     let cell = OnceLock::new();
     let value = cell.get_or_init(|| 92);
     assert_eq!(value, &92);

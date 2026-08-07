@@ -6,9 +6,9 @@ extern crate alloc;
 fn main() {
     use std::collections::BTreeMap;
     use std::alloc::Global;
-    
+
     let mut map = BTreeMap::new_in(Global);
-    
+
     // entries can now be inserted into the empty map
     map.insert(1, "a");
 }

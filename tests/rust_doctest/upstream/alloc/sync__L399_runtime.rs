@@ -3,6 +3,6 @@
 extern crate alloc;
 fn main() {
     use std::sync::Arc;
-    
+
     let five = Arc::new(5);
 }

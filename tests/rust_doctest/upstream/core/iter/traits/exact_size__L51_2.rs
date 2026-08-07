@@ -26,11 +26,11 @@ fn main() {
             5 - self.count
         }
     }
-    
+
     // And now we can use it!
-    
+
     let mut counter = Counter::new();
-    
+
     assert_eq!(5, counter.len());
     let _ = counter.next();
     assert_eq!(4, counter.len());

@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     use std::net::Ipv6Addr;
-    
+
     assert_eq!(Ipv6Addr::BITS, 128);
 }

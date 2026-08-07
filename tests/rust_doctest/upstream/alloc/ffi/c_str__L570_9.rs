@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::ffi::{CString, CStr};
-    
+
     let c_string = CString::from(c"foo");
     let cstr = c_string.as_c_str();
     assert_eq!(cstr,

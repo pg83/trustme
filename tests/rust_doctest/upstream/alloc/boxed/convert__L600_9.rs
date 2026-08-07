@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::error::Error;
-    
+
     let a_string_error = "a string error".to_string();
     let a_boxed_error = Box::<dyn Error + Send + Sync>::from(a_string_error);
     assert!(

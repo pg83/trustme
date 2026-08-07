@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::thread;
-    
+
     let thread_join_handle = thread::spawn(move || {
         // some work here
     });

@@ -3,9 +3,9 @@
 #![feature(arc_is_unique)]
 extern crate alloc;
 fn main() {
-    
+
     use std::sync::Arc;
-    
+
     let arc = Arc::new(5);
     let pointer: *const i32 = &*arc;
     assert!(Arc::is_unique(&arc));

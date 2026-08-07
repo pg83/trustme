@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::sync::atomic::{AtomicBool, Ordering};
-    
+
     let x = AtomicBool::new(false);
     assert_eq!(x.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |_| None), Err(false));
     assert_eq!(x.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| Some(!x)), Ok(false));

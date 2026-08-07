@@ -3,6 +3,6 @@
 fn main() {
     use std::ffi::OsString;
     let s = OsString::from("Grüße, Jürgen ❤");
-    
+
     assert_eq!("GRüßE, JüRGEN ❤", s.to_ascii_uppercase());
 }

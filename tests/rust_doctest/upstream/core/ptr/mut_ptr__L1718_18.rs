@@ -1,0 +1,8 @@
+// Extracted from library/core/src/ptr/mut_ptr.rs:1718
+#![allow(unused)]
+fn main() {
+    use std::ptr;
+
+    let slice: *mut [i8] = ptr::slice_from_raw_parts_mut(ptr::null_mut(), 3);
+    assert!(!slice.is_empty());
+}

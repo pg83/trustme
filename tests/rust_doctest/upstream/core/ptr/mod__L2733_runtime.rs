@@ -2,11 +2,11 @@
 #![allow(unused)]
 fn main() {
     use std::{ptr, mem::MaybeUninit};
-    
+
     struct Demo {
         field: bool,
     }
-    
+
     let mut uninit = MaybeUninit::<Demo>::uninit();
     // `&uninit.as_mut().field` would create a reference to an uninitialized `bool`,
     // and thus be Undefined Behavior!

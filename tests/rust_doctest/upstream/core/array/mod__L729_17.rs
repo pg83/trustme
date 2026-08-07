@@ -2,7 +2,7 @@
 #![allow(unused)]
 #![feature(split_array)]
 fn main() {
-    
+
     let mut v = [1, 0, 3, 0, 5, 6];
     let (left, right) = v.split_array_mut::<2>();
     assert_eq!(left, &mut [1, 0][..]);

@@ -7,7 +7,7 @@ fn main() {
         // to change `do_computation()`.
         divisors.retain(|divisor| *divisor != 0)
     }
-    
+
     /// # Safety
     /// All elements of `divisor` must be non-zero.
     unsafe fn do_computation(i: u32, divisors: &[u32]) -> u32 {
@@ -28,7 +28,7 @@ fn main() {
             acc / divisor
         })
     }
-    
+
     let mut divisors = vec![2, 0, 4];
     prepare_inputs(&mut divisors);
     let result = unsafe {

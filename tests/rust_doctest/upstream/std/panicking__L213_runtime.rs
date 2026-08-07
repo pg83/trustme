@@ -3,7 +3,7 @@
 #![feature(panic_update_hook)]
 fn main() {
     use std::panic;
-    
+
     // Equivalent to
     // let prev = panic::take_hook();
     // panic::set_hook(move |info| {
@@ -14,6 +14,6 @@ fn main() {
         println!("Print custom message and execute panic handler as usual");
         prev(info);
     });
-    
+
     panic!("Custom and then normal");
 }

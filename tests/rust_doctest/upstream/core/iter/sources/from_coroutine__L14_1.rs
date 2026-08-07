@@ -3,7 +3,7 @@
 #![feature(coroutines)]
 #![feature(iter_from_coroutine)]
 fn main() {
-    
+
     let it = std::iter::from_coroutine(#[coroutine] || {
         yield 1;
         yield 2;

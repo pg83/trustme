@@ -3,7 +3,7 @@
 #![feature(allocator_api)]
 extern crate alloc;
 fn main() {
-    
+
     use std::alloc::System;
     use std::collections::BinaryHeap;
     let mut heap = BinaryHeap::new_in(System);

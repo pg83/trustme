@@ -3,9 +3,9 @@
 fn main() {
     use std::sync::{Arc, Mutex};
     use std::thread;
-    
+
     let mutex = Arc::new(Mutex::new(1));
-    
+
     // poison the mutex
     let c_mutex = Arc::clone(&mutex);
     let _ = thread::spawn(move || {
@@ -13,7 +13,7 @@ fn main() {
         *data = 2;
         panic!();
     }).join();
-    
+
     match mutex.lock() {
         Ok(_) => unreachable!(),
         Err(p_err) => {

@@ -30,6 +30,6 @@ fn main() {
     fn get_super_error() -> Result<(), SuperError> {
         Err(SuperError { source: SuperErrorSideKick })
     }
-    
+
     get_super_error().map_err(Report::new).unwrap();
 }

@@ -4,7 +4,7 @@ fn main() {
     // deprecated way
     #[allow(deprecated, deprecated_in_future)]
     let min = std::f64::MIN_10_EXP;
-    
+
     // intended way
     let min = f64::MIN_10_EXP;
 }

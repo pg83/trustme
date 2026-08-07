@@ -5,7 +5,7 @@ fn main() {
     struct Wrap<T> {
         elem: T,
     }
-    
+
     impl<T> Wrap<T> {
         fn new(elem: T) -> Self {
             Self { elem }

@@ -3,7 +3,7 @@
 fn main() {
     let s = "  English";
     assert!(Some('E') == s.trim_left().chars().next());
-    
+
     let s = "  עברית";
     assert!(Some('ע') == s.trim_left().chars().next());
 }

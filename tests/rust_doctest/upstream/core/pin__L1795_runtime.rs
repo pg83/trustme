@@ -3,12 +3,12 @@
 fn main() {
     use core::marker::PhantomPinned as Foo;
     use core::pin::{pin, Pin};
-    
+
     fn stuff(foo: Pin<&mut Foo>) {
         // …
         let _ = foo;
     }
-    
+
     let pinned_foo = pin!(Foo { /* … */ });
     stuff(pinned_foo);
     // or, directly:

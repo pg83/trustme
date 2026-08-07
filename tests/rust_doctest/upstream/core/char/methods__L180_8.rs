@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     let c = char::from_u32(0x2764);
-    
+
     assert_eq!(Some('❤'), c);
 }

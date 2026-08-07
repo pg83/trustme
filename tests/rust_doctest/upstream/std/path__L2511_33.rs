@@ -3,7 +3,7 @@
 fn main() {
     use std::path::Path;
     use std::ffi::OsStr;
-    
+
     assert_eq!(Some(OsStr::new("bin")), Path::new("/usr/bin/").file_name());
     assert_eq!(Some(OsStr::new("foo.txt")), Path::new("tmp/foo.txt").file_name());
     assert_eq!(Some(OsStr::new("foo.txt")), Path::new("foo.txt/.").file_name());

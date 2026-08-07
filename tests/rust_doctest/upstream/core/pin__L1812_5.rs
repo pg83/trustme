@@ -8,16 +8,16 @@ fn main() {
         thread,
     };
     use std::{sync::Arc, task::Wake, thread::Thread};
-    
+
     /// A waker that wakes up the current thread when called.
     struct ThreadWaker(Thread);
-    
+
     impl Wake for ThreadWaker {
         fn wake(self: Arc<Self>) {
             self.0.unpark();
         }
     }
-    
+
     /// Runs a future to completion.
     fn block_on<Fut: Future>(fut: Fut) -> Fut::Output {
         let waker_that_unparks_thread = // …
@@ -32,6 +32,6 @@ fn main() {
             }
         }
     }
-    
+
     assert_eq!(42, block_on(async { 42 }));
 }

@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::collections::BTreeSet;
-    
+
     let mut set = BTreeSet::from([1, 2, 3, 4, 5, 6]);
     // Keep only the even numbers.
     set.retain(|&k| k % 2 == 0);

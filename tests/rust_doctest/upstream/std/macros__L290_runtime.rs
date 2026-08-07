@@ -8,6 +8,6 @@ fn main() {
             dbg!(n * factorial(n - 1))
         }
     }
-    
+
     dbg!(factorial(4));
 }

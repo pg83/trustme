@@ -2,9 +2,9 @@
 #![allow(unused)]
 fn main() {
     use std::sync::atomic::{AtomicUsize, Ordering};
-    
+
     static GLOBAL_THREAD_COUNT: AtomicUsize = AtomicUsize::new(0);
-    
+
     // Note that Relaxed ordering doesn't synchronize anything
     // except the global thread counter itself.
     let old_thread_count = GLOBAL_THREAD_COUNT.fetch_add(1, Ordering::Relaxed);

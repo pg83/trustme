@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::sync::Arc;
-    
+
     let x = Arc::new("hello".to_owned());
     let x_ptr = Arc::into_raw(x);
     assert_eq!(unsafe { &*x_ptr }, "hello");

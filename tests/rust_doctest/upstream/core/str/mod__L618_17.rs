@@ -7,7 +7,7 @@ fn main() {
     // out of bounds
     assert!(v.get_mut(..42).is_none());
     assert_eq!(Some("he"), v.get_mut(0..2).map(|v| &*v));
-    
+
     assert_eq!("hello", v);
     {
         let s = v.get_mut(0..2);

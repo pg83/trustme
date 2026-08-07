@@ -3,7 +3,7 @@
 #![feature(box_vec_non_null)]
 extern crate alloc;
 fn main() {
-    
+
     unsafe {
         let mut v = vec![0];
         let ptr1 = v.as_non_null();

@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::collections::HashMap;
-    
+
     let map = HashMap::from([
         ("a", 1),
     ]);

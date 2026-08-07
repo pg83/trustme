@@ -2,14 +2,14 @@
 #![allow(unused)]
 #![feature(iter_chain)]
 fn main() {
-    
+
     use std::iter::chain;
-    
+
     let a = [1, 2, 3];
     let b = [4, 5, 6];
-    
+
     let mut iter = chain(a, b);
-    
+
     assert_eq!(iter.next(), Some(1));
     assert_eq!(iter.next(), Some(2));
     assert_eq!(iter.next(), Some(3));

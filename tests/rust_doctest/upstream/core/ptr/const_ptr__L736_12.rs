@@ -10,7 +10,7 @@ fn main() {
         assert_eq!(ptr2.sub(2), ptr1);
         assert_eq!(ptr2.offset_from_unsigned(ptr2), 0);
     }
-    
+
     // This would be incorrect, as the pointers are not correctly ordered:
     // ptr1.offset_from_unsigned(ptr2)
 }

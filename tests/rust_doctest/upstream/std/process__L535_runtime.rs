@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::process::Command;
-    
+
     let output = if cfg!(target_os = "windows") {
         Command::new("cmd")
             .args(["/C", "echo hello"])
@@ -15,6 +15,6 @@ fn main() {
             .output()
             .expect("failed to execute process")
     };
-    
+
     let hello = output.stdout;
 }

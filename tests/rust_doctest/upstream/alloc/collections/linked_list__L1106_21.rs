@@ -4,13 +4,13 @@
 extern crate alloc;
 fn main() {
     use std::collections::LinkedList;
-    
+
     let mut d = LinkedList::new();
-    
+
     d.push_front(1);
     d.push_front(2);
     d.push_front(3);
-    
+
     let keep = [false, true, false];
     let mut iter = keep.iter();
     d.retain(|_| *iter.next().unwrap());

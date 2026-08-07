@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::path::Path;
-    
+
     let path = Path::new("foo.txt");
     assert_eq!(path.to_string_lossy(), "foo.txt");
 }

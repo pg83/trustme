@@ -14,7 +14,7 @@ fn main() {
                         push(std::str::from_utf8_unchecked(valid))
                     }
                     push("\u{FFFD}");
-    
+
                     if let Some(invalid_sequence_length) = error.error_len() {
                         input = &after_valid[invalid_sequence_length..]
                     } else {

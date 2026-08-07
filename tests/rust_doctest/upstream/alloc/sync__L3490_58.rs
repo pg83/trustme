@@ -3,8 +3,8 @@
 extern crate alloc;
 fn main() {
     use std::sync::Arc;
-    
+
     let five = Arc::new(5);
-    
+
     assert!(five >= Arc::new(5));
 }

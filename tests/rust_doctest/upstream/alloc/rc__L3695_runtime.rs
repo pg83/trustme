@@ -4,12 +4,12 @@
 extern crate alloc;
 fn main() {
     use std::rc::{Rc, Weak, UniqueRc};
-    
+
     struct Gadget {
         #[allow(dead_code)]
         me: Weak<Gadget>,
     }
-    
+
     fn create_gadget() -> Option<Rc<Gadget>> {
         let mut rc = UniqueRc::new(Gadget {
             me: Weak::new(),
@@ -17,6 +17,6 @@ fn main() {
         rc.me = UniqueRc::downgrade(&rc);
         Some(UniqueRc::into_rc(rc))
     }
-    
+
     create_gadget().unwrap();
 }

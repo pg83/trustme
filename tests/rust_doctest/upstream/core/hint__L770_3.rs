@@ -3,7 +3,7 @@
 fn main() {
     use std::hash::BuildHasher;
     use std::hint;
-    
+
     fn append<H: BuildHasher>(hasher: &H, v: i32, bucket_one: &mut Vec<i32>, bucket_two: &mut Vec<i32>) {
         let hash = hasher.hash_one(&v);
         let bucket = hint::select_unpredictable(hash % 2 == 0, bucket_one, bucket_two);

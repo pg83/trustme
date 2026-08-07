@@ -8,7 +8,7 @@ fn main() {
     use std::os::unix::io::AsFd;
     use std::net::UdpSocket;
     use std::sync::Arc;
-    
+
     trait MyTrait: AsFd {}
     impl MyTrait for Arc<UdpSocket> {}
     impl MyTrait for Box<UdpSocket> {}

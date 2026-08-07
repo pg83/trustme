@@ -2,11 +2,11 @@
 
 ### P0 — сначала убрать ложные сигналы и зависания
 
-- Исправить doctest extractor и проверять каждый результат эталонным Rust 1.90 перед импортом. Сейчас среди 547 failures есть заведомо сломанные inputs:
-  - [prose и вложенный Markdown](/home/pg/monorepo/trustme/tests/rust_doctest/upstream/std/io/mod__L1613_runtime.rs:2);
-  - [два `Ok(())` подряд](/home/pg/monorepo/trustme/tests/rust_doctest/upstream/std/io/mod__L2379_runtime.rs:19);
-  - [потерянный hidden setup](/home/pg/monorepo/trustme/tests/rust_doctest/upstream/core/sync/atomic__L3500_50.rs:6).
-- Уже найдено минимум 15 очевидно испорченных файлов; реальный масштаб определяется reference-прогоном.
+- ~~Исправить doctest extractor и проверять каждый результат эталонным Rust 1.90 перед импортом.~~ Сделано: fence больше не пересекает границу непрерывного doc-comment блока, qualified `Result::Ok(())` не дублируется, каждый кандидат компилируется и запускается точным `rustc 1.90.0` с проверкой ожидаемого exit mode. Из 3 807 кандидатов приняты 3 492.
+  - ложный `std/io/mod__L1613_runtime.rs` с prose и вложенным Markdown удалён: это был closing fence предыдущего item, ошибочно принятый за новое начало;
+  - `std/io/mod__L2379_runtime.rs` исправлен и проходит targeted runtime;
+  - `core/sync/atomic__L3500_50.rs` честно восстановить статически нельзя: setup создаётся `#[doc = concat!(...)]` при macro expansion. Теперь такой разорванный doc-блок исключается, а не импортируется без setup.
+- ~~Уже найдено минимум 15 очевидно испорченных файлов; реальный масштаб определяется reference-прогоном.~~ Закрыто полным reference compile+runtime импорт-прогоном: 315 из 3 807 кандидатов отвергнуты до записи в corpus.
 - Разобрать hang `coretests/net`: подтверждён exit 124, блокирует 47 library tests.
 - Убрать compiler ICE/assert:
   - `hir_from_ast_expr.cpp:26` — пустой AST expression;

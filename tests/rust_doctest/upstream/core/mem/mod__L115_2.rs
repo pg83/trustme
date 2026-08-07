@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::mem::ManuallyDrop;
-    
+
     let v = vec![65, 122];
     // Before we disassemble `v` into its raw parts, make sure it
     // does not get dropped!

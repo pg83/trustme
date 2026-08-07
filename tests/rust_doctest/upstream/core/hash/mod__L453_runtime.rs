@@ -13,7 +13,7 @@ fn main() {
         type IntoIter = std::iter::Empty<T>;
         fn into_iter(self) -> Self::IntoIter { todo!() }
     }
-    
+
     use std::hash::{Hash, Hasher};
     impl<T: Hash> Hash for MyCollection<T> {
         fn hash<H: Hasher>(&self, state: &mut H) {

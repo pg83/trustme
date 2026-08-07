@@ -3,6 +3,6 @@
 fn main() {
     #[derive(Clone)]
     struct MyStruct<T>(T);
-    
+
     impl<T: Copy> Copy for MyStruct<T> { }
 }

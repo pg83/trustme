@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::collections::BTreeMap;
-    
+
     let solar_distance = BTreeMap::from([
         ("Mercury", 0.4),
         ("Venus", 0.7),

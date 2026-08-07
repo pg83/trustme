@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::io::{BufWriter, ErrorKind, Write};
-    
+
     let mut not_enough_space = [0u8; 10];
     let mut stream = BufWriter::new(not_enough_space.as_mut());
     write!(stream, "this cannot be actually written").unwrap();

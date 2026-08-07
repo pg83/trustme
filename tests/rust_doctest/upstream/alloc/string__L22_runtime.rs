@@ -3,6 +3,6 @@
 extern crate alloc;
 fn main() {
     let s = "Hello".to_string();
-    
+
     let message = s + " world!";
 }

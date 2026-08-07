@@ -3,7 +3,7 @@
 extern crate alloc;
 fn main() {
     use std::rc::Rc;
-    
+
     let rc = Rc::new(());
     // Method-call syntax
     let rc2 = rc.clone();

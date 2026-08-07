@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::net::Ipv6Addr;
-    
+
     let addr = Ipv6Addr::from_bits(0x102030405060708090A0B0C0D0E0F00D_u128);
     assert_eq!(
         Ipv6Addr::new(

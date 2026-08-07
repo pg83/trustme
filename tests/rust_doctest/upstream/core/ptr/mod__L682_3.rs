@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::ptr;
-    
+
     let mut vec = vec![0u32; 4];
     unsafe {
         let vec_ptr = vec.as_mut_ptr();

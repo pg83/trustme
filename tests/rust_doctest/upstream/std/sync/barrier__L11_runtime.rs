@@ -3,7 +3,7 @@
 fn main() {
     use std::sync::Barrier;
     use std::thread;
-    
+
     let n = 10;
     let barrier = Barrier::new(n);
     thread::scope(|s| {

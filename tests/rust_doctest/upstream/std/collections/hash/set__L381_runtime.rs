@@ -3,7 +3,7 @@
 fn main() {
     use std::collections::HashSet;
     use std::hash::RandomState;
-    
+
     let s = RandomState::new();
     let mut set = HashSet::with_hasher(s);
     set.insert(2);

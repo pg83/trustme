@@ -7,7 +7,7 @@ fn main() {
         None => {},
     }
     assert_eq!(x, Ok(40));
-    
+
     let mut x: Result<u32, &str> = Err("nothing!");
     assert_eq!(x.iter_mut().next(), None);
 }

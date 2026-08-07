@@ -315,7 +315,32 @@ resvg = command(
 
 # Unit regressions: one self-contained tests/unit/test_*.rs per compiler fix,
 # each its own node — compiled against the shared libstd and run (must exit 0).
-unit_tests = []
+unit_tests = [
+    command(
+        name="unit_doctest_import",
+        inputs=[
+            "$(S)/tests/rust_doctest/import.py",
+            "$(S)/tests/rust_doctest/test_import.py",
+        ],
+        outputs=["$(B)/tests/unit/doctest_import.stamp"],
+        cmd=[
+            [
+                *TEST_TIMEOUT,
+                "python3",
+                "$(S)/tests/rust_doctest/test_import.py",
+                "-v",
+            ],
+            [
+                *TEST_TIMEOUT,
+                "sh",
+                "-c",
+                "> $(B)/tests/unit/doctest_import.stamp",
+            ],
+        ],
+        descr="UT",
+        color="green",
+    )
+]
 for _src in build.glob("$(S)/tests/unit/test_*.rs"):
     _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
     unit_tests.append(command(

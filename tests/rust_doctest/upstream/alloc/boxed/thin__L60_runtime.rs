@@ -4,6 +4,6 @@
 extern crate alloc;
 fn main() {
     use std::boxed::ThinBox;
-    
+
     let five = ThinBox::new(5);
 }

@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::any::Any;
-    
+
     fn print_if_string(s: &(dyn Any + Send)) {
         if let Some(string) = s.downcast_ref::<String>() {
             println!("It's a string({}): '{}'", string.len(), string);
@@ -10,7 +10,7 @@ fn main() {
             println!("Not a string...");
         }
     }
-    
+
     print_if_string(&0);
     print_if_string(&"cookie monster".to_string());
 }

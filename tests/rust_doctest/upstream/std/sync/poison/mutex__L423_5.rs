@@ -3,10 +3,10 @@
 fn main() {
     use std::sync::{Arc, Mutex};
     use std::thread;
-    
+
     let mutex = Arc::new(Mutex::new(0));
     let c_mutex = Arc::clone(&mutex);
-    
+
     thread::spawn(move || {
         *c_mutex.lock().unwrap() = 10;
     }).join().expect("thread::spawn failed");

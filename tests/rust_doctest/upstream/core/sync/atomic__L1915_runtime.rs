@@ -2,9 +2,9 @@
 #![allow(unused)]
 fn main() {
     use std::sync::atomic::{AtomicPtr, Ordering};
-    
+
     let some_ptr = AtomicPtr::new(&mut 5);
-    
+
     let new = &mut 10;
     let mut old = some_ptr.load(Ordering::Relaxed);
     loop {

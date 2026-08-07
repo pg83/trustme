@@ -6,6 +6,6 @@ fn main() {
             assert!(module_path!().ends_with("test"));
         }
     }
-    
+
     test::foo();
 }

@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     use std::sync::Condvar;
-    
+
     let condvar = Condvar::new();
 }

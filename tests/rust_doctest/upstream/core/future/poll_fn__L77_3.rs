@@ -5,7 +5,7 @@ fn main() {
     use core::future::{self, Future};
     use core::pin::pin;
     use core::task::Poll;
-    
+
     /// Resolves to the first future that completes. In the event of a tie, `a` wins.
     fn naive_select<T>(
         a: impl Future<Output = T>,
@@ -25,7 +25,7 @@ fn main() {
             }).await
         }
     }
-    
+
     let a = async { 42 };
     let b = future::pending();
     let v = naive_select(a, b).await;

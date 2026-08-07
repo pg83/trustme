@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::ptr;
-    
+
     // create a slice pointer when starting out with a pointer to the first element
     let x = [5, 6, 7];
     let raw_pointer = x.as_ptr();

@@ -2,9 +2,9 @@
 #![allow(unused)]
 fn main() {
     use std::cell::RefCell;
-    
+
     let mut c = RefCell::new(5);
     *c.get_mut() += 1;
-    
+
     assert_eq!(c, RefCell::new(6));
 }

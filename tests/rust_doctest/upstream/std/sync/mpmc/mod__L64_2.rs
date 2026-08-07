@@ -2,10 +2,10 @@
 #![allow(unused)]
 #![feature(mpmc_channel)]
 fn main() {
-    
+
     use std::thread;
     use std::sync::mpmc::channel;
-    
+
     thread::scope(|s| {
         // Create a shared channel that can be sent along from many threads
         // where tx is the sending half (tx for transmission), and rx is the receiving
@@ -17,7 +17,7 @@ fn main() {
                 tx.send(i).unwrap();
             });
         }
-    
+
         for _ in 0..5 {
             let rx1 = rx.clone();
             let rx2 = rx.clone();

@@ -2,6 +2,6 @@
 #![allow(unused)]
 fn main() {
     let four: u32 = "4".parse().unwrap();
-    
+
     assert_eq!(4, four);
 }

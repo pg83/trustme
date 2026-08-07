@@ -2,9 +2,9 @@
 #![allow(unused)]
 fn main() {
     use std::sync::Once;
-    
+
     static INIT: Once = Once::new();
-    
+
     assert_eq!(INIT.is_completed(), false);
     INIT.call_once(|| {
         assert_eq!(INIT.is_completed(), false);

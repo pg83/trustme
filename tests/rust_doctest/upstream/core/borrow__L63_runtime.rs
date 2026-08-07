@@ -3,12 +3,12 @@
 fn main() {
     use std::borrow::Borrow;
     use std::hash::Hash;
-    
+
     pub struct HashMap<K, V> {
         marker: ::std::marker::PhantomData<(K, V)>,
         // fields omitted
     }
-    
+
     impl<K, V> HashMap<K, V> {
         pub fn insert(&self, key: K, value: V) -> Option<V>
         where K: Hash + Eq
@@ -16,7 +16,7 @@ fn main() {
             unimplemented!()
             // ...
         }
-    
+
         pub fn get<Q>(&self, k: &Q) -> Option<&V>
         where
             K: Borrow<Q>,

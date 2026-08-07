@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     let x = &mut [0, 1, 2];
-    
+
     if let Some((last, elements)) = x.split_last_mut() {
         *last = 3;
         elements[0] = 4;

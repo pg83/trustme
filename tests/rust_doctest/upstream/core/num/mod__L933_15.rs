@@ -10,7 +10,7 @@ fn main() {
     let space = b' ';
     let lf = b'\n';
     let esc = b'\x1b';
-    
+
     assert!(uppercase_a.is_ascii_graphic());
     assert!(uppercase_g.is_ascii_graphic());
     assert!(a.is_ascii_graphic());

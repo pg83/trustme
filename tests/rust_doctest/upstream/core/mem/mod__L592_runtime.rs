@@ -2,7 +2,7 @@
 #![allow(unused)]
 fn main() {
     use std::{mem, ptr};
-    
+
     pub struct MyCollection<T> {
       data: [T; 1],
         /* ... */
@@ -11,7 +11,7 @@ fn main() {
       fn iter_mut(&mut self) -> &mut [T] { &mut self.data }
       fn free_buffer(&mut self) {}
     }
-    
+
     impl<T> Drop for MyCollection<T> {
         fn drop(&mut self) {
             unsafe {
