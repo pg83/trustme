@@ -14,6 +14,7 @@
   - ~~`hir_typeck_expr_cs.cpp:8416` — spare rules;~~ Закрыто как ложный сигнал старого doctest extractor: оба trigger’а (`alloc/sync.rs:237` и `std/panic.rs:111`) содержали сгенерированный `Result<(), impl Debug> { Ok(()) }`, который эталонный Rust 1.90 сам отклоняет с E0282. После reference-validated reimport этих inputs в corpus нет;
   - ~~`hir_typeck_expr_cs.cpp:1704` — оставшийся infer;~~ Сделано: const generic matcher сохраняет более конкретное значение при повторном совпадении параметра, а выбранный exact trait impl теперь добавляет свои `where`-bounds так же, как единственный fuzzy impl. Красный `test_const_generic_method_inference.rs` и четыре `as_chunks`/`as_rchunks` doctest проходят compile+runtime; `{Infer(0)}` корректно связывается с `N = 2`;
   - MIR/const-eval asserts и TODO.
+    - ~~fixed-array `ref mut tail @ ..` строил недопустимый cast `&mut T` сразу в `*mut [T; N]`;~~ Сделано: lowering берёт raw pointer на первый элемент rest-подмассива и выполняет корректный thin pointer-to-pointer cast. Красный `test_array_rest_ref_mut.rs` и upstream `borrowck-closures-slice-patterns-ok.rs` проходят compile+runtime.
 
 ### P1 — максимальная отдача на одну починку
 
@@ -32,7 +33,7 @@
 Следующие harness blockers:
 
 - `<$T>::MAX...` внутри macro expansion: 147;
-- ~~rest-pattern lowering `ref mut sub @ ..`: 107;~~ HIR blocker снят вместе с `hir_from_ast.cpp:297`; fixed-array варианты упираются в отдельный MIR cast assert;
+- ~~rest-pattern lowering `ref mut sub @ ..`: 107;~~ HIR и fixed-array MIR blockers сняты; slice/array regression units и оба ближайших upstream borrowck-теста проходят compile+runtime;
 - macro parsing сложных attribute/token значений: 72;
 - полноценный `offset_of!`: 55, текущий TODO в [parse_expr.cpp](/home/pg/monorepo/trustme/rustc/parse_expr.cpp:1419).
 

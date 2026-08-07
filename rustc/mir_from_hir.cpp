@@ -288,9 +288,9 @@ namespace {
                         }
                         lval = m_builder.lvalue_or_temp(sp, mv$(ret_ty), ::MIR::RValue::make_Array({std::move(array_vals)}));
                     } else {
-                        // Create a pointer to this array, by casting the source
+                        // Create a pointer to this array, by casting a raw pointer to its first element
                         ::HIR::BorrowType bt = H::get_borrow_type(sp, *b.binding);
-                        ::MIR::LValue ptr_val = m_builder.lvalue_or_temp(sp, ::HIR::TypeRef::new_borrow(bt, std::move(inner_type)), ::MIR::RValue::make_Borrow({bt, false, ::MIR::LValue::new_Field(lval.clone(), static_cast<unsigned int>(b.split_slice.first))}));
+                        ::MIR::LValue ptr_val = m_builder.lvalue_or_temp(sp, ::HIR::TypeRef::new_pointer(bt, std::move(inner_type)), ::MIR::RValue::make_Borrow({bt, true, ::MIR::LValue::new_Field(lval.clone(), static_cast<unsigned int>(b.split_slice.first))}));
 
                         // 3. Create a slice pointer
                         auto ptr_ty = ::HIR::TypeRef::new_pointer(bt, std::move(ret_ty));
