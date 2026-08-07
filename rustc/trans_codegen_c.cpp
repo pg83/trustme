@@ -761,6 +761,7 @@ namespace {
                  << "static inline TRAITOBJ_PTR make_traitobjptr(void* ptr, void* vt) { TRAITOBJ_PTR rv = { ptr, vt }; return rv; }\n"
                  << "\n"
                  << "static inline size_t mrustc_max(size_t a, size_t b) { return a < b ? b : a; }\n"
+                 << "static inline size_t mrustc_min(size_t a, size_t b) { return a < b ? a : b; }\n"
                  << "static inline void noop_drop(tUNIT *p) { }\n"
                  << "\n"
                  // A linear (fast-fail) search of a list of strings
@@ -6455,18 +6456,7 @@ namespace {
                 }
                 // Trait object metadata.
                 else if (inner_ty.data().is_TraitObject()) {
-                    // TODO: Handle aligning the size if the wrapper's alignment is greater than the object
-                    // - Also, how is the final field aligned?
-                    if (!ty.data().is_TraitObject()) {
-                        const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
-                        m_of << repr->fields.back().offset << " + ";
-                    }
-                    //auto vtable_path = inner_ty.data().as_TraitObject().m_trait.m_path.clone();
-                    //vtable_path.m_path.m_components.back() += "#vtable";
-                    //auto vtable_ty = ::HIR::TypeRef
-                    m_of << "((VTABLE_HDR*)";
-                    emit_param(e.args.at(0));
-                    m_of << ".META)->size";
+                    emit_trait_object_dst_size(ty, e.args.at(0));
                 } else {
                     MIR_BUG(mir_res, "Unknown inner unsized type " << inner_ty << " for " << ty);
                 }
@@ -6498,17 +6488,7 @@ namespace {
                         m_of << "1";
                     }
                 } else if (inner_ty.data().is_TraitObject()) {
-                    if (!ty.data().is_TraitObject()) {
-                        m_of << "mrustc_max( ALIGNOF(";
-                        emit_ctype(ty);
-                        m_of << "), ";
-                    }
-                    m_of << "((VTABLE_HDR*)";
-                    emit_param(e.args.at(0));
-                    m_of << ".META)->align";
-                    if (!ty.data().is_TraitObject()) {
-                        m_of << " )";
-                    }
+                    emit_trait_object_dst_align(ty, e.args.at(0));
                 } else {
                     MIR_BUG(mir_res, "Unknown inner unsized type " << inner_ty << " for " << ty);
                 }
@@ -9242,6 +9222,67 @@ namespace {
             } else {
                 return ::HIR::TypeRef();
             }
+        }
+
+        unsigned get_packing_max_align(const ::HIR::TypeRef& ty) const {
+            if (ty.data().is_Path() && ty.data().as_Path().binding.is_Struct()) {
+                return ty.data().as_Path().binding.as_Struct()->m_max_field_alignment;
+            }
+            return 0;
+        }
+
+        void emit_trait_object_vtable_size(const ::MIR::Param& value) {
+            m_of << "((VTABLE_HDR*)";
+            emit_param(value);
+            m_of << ".META)->size";
+        }
+
+        void emit_trait_object_vtable_align(const ::MIR::Param& value) {
+            m_of << "((VTABLE_HDR*)";
+            emit_param(value);
+            m_of << ".META)->align";
+        }
+
+        void emit_trait_object_dst_tail_align(const ::HIR::TypeRef& outer_ty, const ::HIR::TypeRef& tail_ty, const ::MIR::Param& value) {
+            const auto max_align = get_packing_max_align(outer_ty);
+            if (max_align != 0) {
+                m_of << "mrustc_min(";
+            }
+            emit_trait_object_dst_align(tail_ty, value);
+            if (max_align != 0) {
+                m_of << ", " << max_align << ")";
+            }
+        }
+
+        void emit_trait_object_dst_align(const ::HIR::TypeRef& ty, const ::MIR::Param& value) {
+            if (ty.data().is_TraitObject()) {
+                emit_trait_object_vtable_align(value);
+                return;
+            }
+
+            const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+            MIR_ASSERT(*m_mir_res, repr && repr->size == SIZE_MAX && !repr->fields.empty(), "Expected a DST wrapper - " << ty);
+            m_of << "mrustc_max(" << repr->align << ", ";
+            emit_trait_object_dst_tail_align(ty, repr->fields.back().ty, value);
+            m_of << ")";
+        }
+
+        void emit_trait_object_dst_size(const ::HIR::TypeRef& ty, const ::MIR::Param& value) {
+            if (ty.data().is_TraitObject()) {
+                emit_trait_object_vtable_size(value);
+                return;
+            }
+
+            const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+            MIR_ASSERT(*m_mir_res, repr && repr->size == SIZE_MAX && !repr->fields.empty(), "Expected a DST wrapper - " << ty);
+            const auto& tail = repr->fields.back();
+            m_of << "ALIGN_TO(ALIGN_TO(" << tail.offset << ", ";
+            emit_trait_object_dst_tail_align(ty, tail.ty, value);
+            m_of << ") + ";
+            emit_trait_object_dst_size(tail.ty, value);
+            m_of << ", ";
+            emit_trait_object_dst_align(ty, value);
+            m_of << ")";
         }
 
         MetadataType metadata_type(const ::HIR::TypeRef& ty) const {
