@@ -118,7 +118,11 @@ namespace {
                         }
 
                         DEBUG("Ignore last");
-                        return ResolveModuleRef(&this->get_mod_by_true_path(base_nodes, base_nodes.size()));
+                        const auto& current_mod = this->get_mod_by_true_path(base_nodes, base_nodes.size());
+                        if (out_path) {
+                            *out_path = current_mod.path();
+                        }
+                        return ResolveModuleRef(&current_mod);
                     }
                     const auto& name = e.nodes.front().name();
                     // Look up in stack of anon modules
