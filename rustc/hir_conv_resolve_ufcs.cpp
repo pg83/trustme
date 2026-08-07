@@ -912,6 +912,37 @@ namespace resolve_ufcs {
                         this->visit_pattern_Value(sp, pat, *e.end);
                     }
                 }
+                TU_ARMA(PathValue, e) {
+                    this->resolve_pattern_binding(sp, e.path, e.binding);
+                }
+                TU_ARMA(PathTuple, e) {
+                    this->resolve_pattern_binding(sp, e.path, e.binding);
+                }
+                TU_ARMA(PathNamed, e) {
+                    this->resolve_pattern_binding(sp, e.path, e.binding);
+                }
+            }
+        }
+
+        void resolve_pattern_binding(const Span& sp, ::HIR::Path& path, ::HIR::Pattern::PathBinding& binding) {
+            if (!binding.is_Unbound()) {
+                return;
+            }
+
+            auto ty = ::HIR::TypeRef::new_path(path.clone(), {});
+            this->visit_type(ty);
+            ASSERT_BUG(sp, ty.data().is_Path(), "Pattern associated type didn't resolve to a path - " << ty);
+
+            const auto& te = ty.data().as_Path();
+            ASSERT_BUG(sp, te.path.m_data.is_Generic(), "Pattern associated type didn't resolve to a generic path - " << ty);
+            path = te.path.clone();
+
+            if (te.binding.is_Struct()) {
+                binding = ::HIR::Pattern::PathBinding::make_Struct(te.binding.as_Struct());
+            } else if (te.binding.is_Union()) {
+                binding = ::HIR::Pattern::PathBinding::make_Union(te.binding.as_Union());
+            } else {
+                ERROR(sp, E0000, "Pattern associated type didn't resolve to a struct or union - " << ty);
             }
         }
 

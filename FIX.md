@@ -92,6 +92,7 @@
 
 - dyn-trait canonicalization и auto-trait dedup;
 - HRTB/lifetimes;
+- ~~struct pattern через equality-bound associated type падал до UFCS resolution;~~ Сделано: ранний alias pass оставляет generic projection unbound, а UFCS pass после нормализации projection в concrete aggregate создаёт правильный struct/union pattern binding. Красный `test_associated_type_struct_pattern.rs` и полные upstream `struct-path-associated-type.rs`/`struct-path-self.rs` проходят compile+runtime;
 - associated types;
 - projection/normalization;
 - generic inference и const generics;

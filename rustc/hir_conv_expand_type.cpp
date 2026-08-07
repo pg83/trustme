@@ -267,6 +267,9 @@ public:
                 }
                 gp_p = &m_impl_type->data().as_Path().path.m_data.as_Generic();
             } else {
+                if (ty.data().is_Generic()) {
+                    return ::HIR::Pattern::PathBinding();
+                }
                 if (!ty.data().is_Path()) {
                     ERROR(sp, E0000, "Expeted path in pattern binding, got " << ty);
                 }
