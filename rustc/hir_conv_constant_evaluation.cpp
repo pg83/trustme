@@ -10,6 +10,7 @@
 #include "hir_expr.hpp"
 #include "hir_visitor.hpp"
 #include <algorithm>
+#include <cmath>
 #include "mir_mir.hpp"
 #include "hir_typeck_common.hpp" // Monomorph
 #include "mir_helpers.hpp"
@@ -1790,6 +1791,8 @@ namespace {
                         dst.write_float(state, ti.bits, l / r);
                         break;
                     case ::MIR::eBinOp::MOD:
+                        dst.write_float(state, ti.bits, std::fmod(l, r));
+                        break;
                     case ::MIR::eBinOp::ADD_OV:
                     case ::MIR::eBinOp::SUB_OV:
                     case ::MIR::eBinOp::MUL_OV:

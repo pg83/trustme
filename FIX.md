@@ -17,6 +17,7 @@
     - ~~fixed-array `ref mut tail @ ..` строил недопустимый cast `&mut T` сразу в `*mut [T; N]`;~~ Сделано: lowering берёт raw pointer на первый элемент rest-подмассива и выполняет корректный thin pointer-to-pointer cast. Красный `test_array_rest_ref_mut.rs` и upstream `borrowck-closures-slice-patterns-ok.rs` проходят compile+runtime.
     - ~~`coroutine/addassign-yield.rs` использовал non-valid `_6` после resume;~~ Сделано: call arguments остаются активными до завершения вычисления всего списка аргументов, поэтому временный `&mut String` сохраняется в coroutine state, если следующий аргумент делает `yield`. Красный `test_coroutine_addassign_yield.rs`, исходный тест и его drop-tracking вариант проходят compile+runtime.
     - ~~const-eval не умел читать `f16`, а внутренний `F16` неверно кодировал exponent/subnormal;~~ Сделано: 16-битное чтение симметрично записи, binary16↔binary32 conversion корректно обрабатывает normal, subnormal, infinity, NaN и round-to-nearest-even. Красный `test_f16_const_next_down.rs` проверяет локальный литерал и `f16::MIN_POSITIVE.next_down() == 0x03ff`; `libstd` полностью пересобран новым компилятором, `coretests/floats` доходит до следующего отдельного TODO на float remainder.
+    - ~~const-eval не реализовывал float remainder;~~ Сделано через `std::fmod`, сохраняющий Rust/IEEE знак остатка. Красный `test_const_float_remainder.rs` проверяет `10.0 % 2.0 == 0.0` и `-5.5 % 2.0 == -1.5`; `coretests/floats` доходит до следующего отдельного TODO на intrinsic `fabsf64`.
 
 ### P1 — максимальная отдача на одну починку
 
