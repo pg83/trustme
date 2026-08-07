@@ -2753,10 +2753,19 @@ namespace HIR {
                         dst.write_ptr(state, EncodedLiteral::PTR_BASE, val);
                         auto rv = ValueRef(val);
                         auto pb = Target_GetPointerBits() / 8;
-                        rv.slice(repr->fields[0].offset + 0, pb).write_ptr(state, EncodedLiteral::PTR_BASE, ConstantPtr::allocate(local_state.value_pool, "", 0)); // file.ptr
-                        rv.slice(repr->fields[0].offset + pb, pb).write_uint(state, Target_GetPointerBits(), 0);                                                   // file.len
-                        rv.slice(repr->fields[1].offset, 4).write_uint(state, 32, 0);                                                                              // line: u32
-                        rv.slice(repr->fields[2].offset, 4).write_uint(state, 32, 0);                                                                              // col: u32
+                        const SpanInner_Source* caller = nullptr;
+                        for (const Span* span = &state.sp; span->get(); span = &span->get()->parent_span) {
+                            caller = dynamic_cast<const SpanInner_Source*>(span->get());
+                            if (caller) {
+                                break;
+                            }
+                        }
+                        const auto* filename = caller ? caller->filename.c_str() : "";
+                        const auto filename_len = caller ? caller->filename.size() : 0;
+                        rv.slice(repr->fields[0].offset + 0, pb).write_ptr(state, EncodedLiteral::PTR_BASE, ConstantPtr::allocate(local_state.value_pool, filename, filename_len + 1)); // file.ptr, including trailing NUL
+                        rv.slice(repr->fields[0].offset + pb, pb).write_uint(state, Target_GetPointerBits(), filename_len);                                                             // file.len
+                        rv.slice(repr->fields[1].offset, 4).write_uint(state, 32, caller ? caller->start_line : 0);                                                                     // line: u32
+                        rv.slice(repr->fields[2].offset, 4).write_uint(state, 32, 0);                                                                                                   // col: u32 (expression AST stores only the end point)
                     }
                     // ---
                     else if (te->name == "ctpop") {
