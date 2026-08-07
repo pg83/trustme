@@ -526,6 +526,10 @@ public:
 
     // Calls `drop_value_from_state` on the value
     void drop_actve_local(const Span& sp, ::MIR::LValue lv, const SavedActiveLocal& loc);
+
+    /// Emits the drops needed when unwinding from the current point without
+    /// changing the state used by the normal path.
+    void emit_unwind_cleanup(const Span& sp);
 };
 
 template <typename T>

@@ -1581,15 +1581,10 @@ namespace {
                     ref.stmt_idx = 0;
                     ref.bb_idx = *te;
                 }
-                // If it's a call, check that the target block ends with Diverge, and iterate that in-place
-                // - Then follow the success path as usual
+                // A call's panic edge cannot reach `end`, so only follow the
+                // normal return edge while inspecting a path between two
+                // positions.
                 else if (const auto* te = bb.terminator.opt_Call()) {
-                    // Check the panic arm (should just be a list of destructor calls follwed by a Diverge terminator)
-                    const auto& panic_bb = fcn.blocks[te->panic_block];
-                    ASSERT_BUG(Span(), panic_bb.terminator.is_Diverge(), "Panic arm of call does not end with Diverge");
-                    if (!panic_bb.statements.empty()) {
-                        TODO(Span(), "Visit call panic block");
-                    }
                     // Possibly loop into the next block
                     if (!visted_bbs.insert(te->ret_block).second) {
                         DEBUG("> Loop abort");

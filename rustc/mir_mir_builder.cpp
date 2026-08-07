@@ -2122,6 +2122,17 @@ void MirBuilder::drop_actve_local(const Span& sp, ::MIR::LValue lv, const SavedA
     this->drop_value_from_state(sp, loc.state, mv$(lv));
 }
 
+void MirBuilder::emit_unwind_cleanup(const Span& sp) {
+    for (auto it = m_scope_stack.rbegin(); it != m_scope_stack.rend(); ++it) {
+        drop_scope_values(m_scopes.at(*it));
+    }
+
+    for (size_t i = 0; i < m_arg_states.size(); i++) {
+        const auto& state = get_slot_state(sp, i, SlotType::Argument);
+        drop_value_from_state(sp, state, ::MIR::LValue::new_Argument(static_cast<unsigned>(i)));
+    }
+}
+
 // --------------------------------------------------------------------
 
 ScopeHandle::~ScopeHandle() {

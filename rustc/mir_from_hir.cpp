@@ -362,7 +362,7 @@ namespace {
         }
 
         void emit_unwind(const Span& sp) {
-            // TODO: Emit the drop calls
+            m_builder.emit_unwind_cleanup(sp);
             m_builder.end_block(::MIR::Terminator::make_Diverge({}));
         }
 

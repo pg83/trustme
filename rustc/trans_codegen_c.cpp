@@ -224,6 +224,7 @@ namespace {
 
         ::std::ofstream m_of;
         const ::MIR::TypeResolve* m_mir_res = nullptr;
+        const ::std::set<unsigned>* m_unwind_cleanup_blocks = nullptr;
 
         Compiler m_compiler = Compiler::Gcc;
 
@@ -231,6 +232,31 @@ namespace {
             bool emulated_i128 = false;
             bool disallow_empty_structs = false;
         } m_options;
+
+        bool call_has_unwind_cleanup(const ::MIR::TypeResolve& mir_res, const ::MIR::Terminator::Data_Call& call) const {
+            if (m_compiler != Compiler::Gcc) {
+                return false;
+            }
+            if (const auto* intrinsic = call.fcn.opt_Intrinsic()) {
+                if (intrinsic->name != "drop_in_place") {
+                    return false;
+                }
+            }
+
+            const auto& cleanup = mir_res.m_fcn.blocks.at(call.panic_block);
+            return !cleanup.statements.empty() || !cleanup.terminator.is_Diverge();
+        }
+
+        bool is_unwind_cleanup_block(unsigned bb) const {
+            return m_unwind_cleanup_blocks && m_unwind_cleanup_blocks->count(bb) != 0;
+        }
+
+        void emit_unwind_resume(unsigned indent_level) {
+            auto indent = RepeatLitStr{"\t", static_cast<int>(indent_level)};
+            m_of << indent << "mrustc_panic_target = mrustc_call_old_target;\n";
+            m_of << indent << "if(!mrustc_panic_target) abort();\n";
+            m_of << indent << "longjmp(*mrustc_panic_target, 1);\n";
+        }
 
         ::std::set<::HIR::TypeRef> m_emitted_fn_types;
         ::std::set<const TypeRepr*> m_embedded_tags;
@@ -3006,19 +3032,45 @@ namespace {
                 m_of << "\tbool df" << i << " = " << code->drop_flags[i] << ";\n";
             }
 
+            ::std::set<unsigned> unwind_cleanup_blocks;
+            ::std::vector<unsigned> unwind_pending;
+            for (const auto& blk : code->blocks) {
+                if (const auto* call = blk.terminator.opt_Call()) {
+                    if (call_has_unwind_cleanup(mir_res, *call)) {
+                        unwind_pending.push_back(call->panic_block);
+                    }
+                }
+            }
+            while (!unwind_pending.empty()) {
+                const auto bb = unwind_pending.back();
+                unwind_pending.pop_back();
+                if (!unwind_cleanup_blocks.insert(bb).second) {
+                    continue;
+                }
+                MIR::visit::visit_terminator_target(code->blocks.at(bb).terminator, [&](const auto& target) {
+                    unwind_pending.push_back(target);
+                });
+            }
+            m_unwind_cleanup_blocks = &unwind_cleanup_blocks;
+            if (!unwind_cleanup_blocks.empty()) {
+                m_of << "\tjmp_buf mrustc_call_jmpbuf;\n";
+                m_of << "\tjmp_buf* mrustc_call_old_target = NULL;\n";
+            }
+
             ::std::vector<unsigned> bb_use_counts(code->blocks.size());
             for (const auto& blk : code->blocks) {
                 MIR::visit::visit_terminator_target(blk.terminator, [&](const auto& tgt) {
                     bb_use_counts[tgt]++;
                 });
-                // Ignore the panic arm. (TODO: is this correct?)
-                if (const auto* te = blk.terminator.opt_Call()) {
-                    bb_use_counts[te->panic_block]--;
+                if (const auto* call = blk.terminator.opt_Call()) {
+                    if (!call_has_unwind_cleanup(mir_res, *call)) {
+                        bb_use_counts[call->panic_block]--;
+                    }
                 }
             }
 
-            const bool EMIT_STRUCTURED = (nullptr != getenv("MRUSTC_STRUCTURED_C"));                          // Saves time.
-            const bool USE_STRUCTURED = EMIT_STRUCTURED && (0 == strcmp("1", getenv("MRUSTC_STRUCTURED_C"))); // Still not correct.
+            const bool EMIT_STRUCTURED = (nullptr != getenv("MRUSTC_STRUCTURED_C"));                                                           // Saves time.
+            const bool USE_STRUCTURED = EMIT_STRUCTURED && unwind_cleanup_blocks.empty() && (0 == strcmp("1", getenv("MRUSTC_STRUCTURED_C"))); // Still not correct.
             if (EMIT_STRUCTURED) {
                 m_of << "#if " << USE_STRUCTURED << "\n";
                 auto nodes = MIR_To_Structured(*code);
@@ -3155,7 +3207,12 @@ namespace {
                 // HACK: Ignore any blocks that only contain `diverge;`
                 if (code->blocks[i].statements.size() == 0 && code->blocks[i].terminator.is_Diverge()) {
                     DEBUG("- Diverge only, omitting");
-                    m_of << "bb" << i << ": _Unwind_Resume(); // Diverge\n";
+                    m_of << "bb" << i << ":\n";
+                    if (is_unwind_cleanup_block(i)) {
+                        emit_unwind_resume(1);
+                    } else {
+                        m_of << "\t_Unwind_Resume(); // Diverge\n";
+                    }
                     continue;
                 }
 
@@ -3199,7 +3256,11 @@ namespace {
                         }
                     }
                     TU_ARMA(Diverge, e) {
-                        m_of << "\t_Unwind_Resume();\n";
+                        if (is_unwind_cleanup_block(i)) {
+                            emit_unwind_resume(1);
+                        } else {
+                            m_of << "\t_Unwind_Resume();\n";
+                        }
                     }
                     TU_ARMA(Goto, e) {
                         if (e == i + 1) {
@@ -3278,6 +3339,7 @@ namespace {
             }
             m_of << "}\n";
             m_of.flush();
+            m_unwind_cleanup_blocks = nullptr;
             m_mir_res = nullptr;
         }
 
@@ -4922,6 +4984,19 @@ namespace {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indent_level)};
             m_of << indent;
 
+            const bool has_unwind_cleanup = call_has_unwind_cleanup(mir_res, e);
+            if (has_unwind_cleanup) {
+                m_of << "mrustc_call_old_target = mrustc_panic_target;\n";
+                m_of << indent << "mrustc_panic_target = &mrustc_call_jmpbuf;\n";
+                m_of << indent << "if(setjmp(mrustc_call_jmpbuf)) { mrustc_panic_target = NULL; goto bb" << e.panic_block << "; }\n";
+                m_of << indent;
+            }
+            auto finish_unwind_cleanup = [&]() {
+                if (has_unwind_cleanup) {
+                    m_of << indent << "mrustc_panic_target = mrustc_call_old_target;\n";
+                }
+            };
+
             bool has_zst = false;
             for (unsigned int j = 0; j < e.args.size(); j++) {
                 ::HIR::TypeRef tmp;
@@ -5049,6 +5124,7 @@ namespace {
                         indent.n--;
                         m_of << indent << "}\n";
                     }
+                    finish_unwind_cleanup();
                     return;
                 }
             }
@@ -5081,6 +5157,7 @@ namespace {
                 indent.n--;
                 m_of << indent << "}\n";
             }
+            finish_unwind_cleanup();
         }
 
         bool asm_matches_template(const ::MIR::Statement::Data_Asm& e, const char* tpl, ::std::initializer_list<const char*> inputs, ::std::initializer_list<const char*> outputs) {
