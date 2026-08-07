@@ -4767,10 +4767,17 @@ namespace {
                 m_of << "\n";
                 m_of << indent << "} }\n";
             } else if (const auto* ve = values.opt_Unsigned()) {
-                m_of << indent << "switch(";
+                const bool emulated_u128 = m_options.emulated_i128 && ty == ::HIR::CoreType::U128;
+                if (emulated_u128) {
+                    m_of << indent << "if(";
+                    emit_lvalue(val);
+                    m_of << ".hi != 0) { ";
+                    cb(SIZE_MAX);
+                    m_of << " }\n";
+                }
+                m_of << indent << (emulated_u128 ? "else " : "") << "switch(";
                 emit_lvalue(val);
-                // TODO: Ensure that .hi is zero
-                if (m_options.emulated_i128 && ty == ::HIR::CoreType::U128) {
+                if (emulated_u128) {
                     m_of << ".lo";
                 }
                 m_of << ") {\n";
@@ -4785,10 +4792,22 @@ namespace {
                 m_of << indent << "}\n";
             } else if (const auto* ve = values.opt_Signed()) {
                 //assert(ve->size() == e.targets.size());
-                m_of << indent << "switch(";
+                const bool emulated_i128 = m_options.emulated_i128 && ty == ::HIR::CoreType::I128;
+                if (emulated_i128) {
+                    m_of << indent << "if(";
+                    emit_lvalue(val);
+                    m_of << ".hi != ((int64_t)";
+                    emit_lvalue(val);
+                    m_of << ".lo < 0 ? UINT64_MAX : 0)) { ";
+                    cb(SIZE_MAX);
+                    m_of << " }\n";
+                }
+                m_of << indent << (emulated_i128 ? "else " : "") << "switch(";
+                if (emulated_i128) {
+                    m_of << "(int64_t)";
+                }
                 emit_lvalue(val);
-                // TODO: Ensure that .hi is zero
-                if (m_options.emulated_i128 && ty == ::HIR::CoreType::I128) {
+                if (emulated_i128) {
                     m_of << ".lo";
                 }
                 m_of << ") {\n";
