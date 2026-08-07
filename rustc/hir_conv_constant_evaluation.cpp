@@ -2944,6 +2944,14 @@ namespace HIR {
                         auto bits = local_state.read_param_uint(ti.bits, e.args.at(0));
                         bits &= ~(U128(1) << (ti.bits - 1));
                         dst.write_uint(state, ti.bits, bits);
+                    } else if (te->name == "copysignf16" || te->name == "copysignf32" || te->name == "copysignf64" || te->name == "copysignf128") {
+                        ::HIR::TypeRef tmp;
+                        auto ti = TypeInfo::for_type(state.get_param_type(tmp, e.args.at(0)));
+                        MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
+                        auto value = local_state.read_param_uint(ti.bits, e.args.at(0));
+                        auto sign = local_state.read_param_uint(ti.bits, e.args.at(1));
+                        auto sign_mask = U128(1) << (ti.bits - 1);
+                        dst.write_uint(state, ti.bits, (value & ~sign_mask) | (sign & sign_mask));
                     } else if (te->name == "minnumf16" || te->name == "minnumf32" || te->name == "minnumf64" || te->name == "minnumf128" || te->name == "maxnumf16" || te->name == "maxnumf32" || te->name == "maxnumf64" || te->name == "maxnumf128") {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::for_type(state.get_param_type(tmp, e.args.at(0)));
