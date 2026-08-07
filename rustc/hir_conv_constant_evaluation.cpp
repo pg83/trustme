@@ -2691,6 +2691,15 @@ namespace HIR {
                         } else {
                             throw Defer();
                         }
+                    } else if (te->name == "align_of_val" || te->name == "min_align_of_val") {
+                        auto ty = local_state.monomorph_expand(te->params.m_types.at(0));
+                        size_t size_val;
+                        size_t align_val;
+                        if (Target_GetSizeAndAlignOf(state.sp, this->resolve, ty, size_val, align_val) && align_val > 0) {
+                            dst.write_uint(state, Target_GetPointerBits(), U128(align_val));
+                        } else {
+                            throw Defer();
+                        }
                     } else if (te->name == "offset_of") {
                         auto ty = local_state.monomorph_expand(te->params.m_types.at(0));
                         size_t val = state.intrinsic_offset_of(ty, e.args);
