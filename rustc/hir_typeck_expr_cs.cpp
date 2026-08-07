@@ -5240,6 +5240,49 @@ namespace {
         throw "";
     }
 
+    void add_impl_bounds(Context& context, const Span& sp, const ImplRef& impl_ref) {
+        const auto* ep = impl_ref.m_data.opt_TraitImpl();
+        if (!ep) {
+            return;
+        }
+
+        const auto& e = *ep;
+        assert(e.impl);
+        for (const auto& bound : e.impl->m_params.m_bounds) {
+        TU_MATCH_HDRA((bound), {)
+        default:
+            break;
+                TU_ARMA(TraitBound, be) {
+                    DEBUG("New bound (pre-mono) " << bound);
+                    auto ms = impl_ref.get_cb_monomorph_traitimpl(sp, {});
+                    static const HIR::GenericParams empty_params;
+                    bool outer_present = be.hrtbs && !be.hrtbs->is_empty();
+                    auto _ = ms.push_hrb(outer_present ? *be.hrtbs : empty_params);
+                    auto b_ty_mono = ms.monomorph_type(sp, be.type);
+                    auto b_tp_mono = ms.monomorph_traitpath(sp, be.trait, true);
+                    DEBUG("- " << b_ty_mono << " : " << b_tp_mono);
+                    ASSERT_BUG(sp, !outer_present || !static_cast<bool>(b_tp_mono.m_hrtbs), "Two layers of HRTBs not allowed (should have been disallowed in HIR lower)");
+                    auto pp_hrl = outer_present ? be.hrtbs->make_empty_params(true) : (b_tp_mono.m_hrtbs ? b_tp_mono.m_hrtbs->make_empty_params(true) : HIR::PathParams());
+                    if (outer_present) {
+                        DEBUG("be.hrtbs = " << be.hrtbs->fmt_args());
+                    }
+                    if (b_tp_mono.m_hrtbs) {
+                        DEBUG("b_tp_mono.m_hrtbs = " << b_tp_mono.m_hrtbs->fmt_args());
+                    }
+                    DEBUG("pp_hrl = " << pp_hrl);
+                    auto ms_hrl = MonomorphHrlsOnly(pp_hrl);
+                    if (b_tp_mono.m_type_bounds.size() > 0) {
+                        for (const auto& aty_bound : b_tp_mono.m_type_bounds) {
+                            context.equate_types_assoc(sp, aty_bound.second.type, b_tp_mono.m_path.m_path, ms_hrl.monomorph_path_params(sp, b_tp_mono.m_path.m_params, true), ms_hrl.monomorph_type(sp, b_ty_mono, true), aty_bound.first.c_str(), aty_bound.second.aty_params, false);
+                        }
+                    } else {
+                        context.add_trait_bound(sp, ms_hrl.monomorph_type(sp, b_ty_mono, true), b_tp_mono.m_path.m_path, ms_hrl.monomorph_path_params(sp, b_tp_mono.m_path.m_params, true));
+                    }
+                }
+        }
+        }
+    }
+
     bool check_associated(Context& context, const Context::Associated& v) {
         const auto& sp = v.span;
         TRACE_FUNCTION_F(v);
@@ -5374,6 +5417,7 @@ namespace {
                 if (cmp == ::HIR::Compare::Equal) {
                     // NOTE: Sometimes equal can be returned when it's not 100% equal (TODO)
                     // - Equate the types
+                    context.equate_types(sp, v.impl_ty, impl.get_impl_type());
                     auto itp = impl.get_trait_params();
                     ASSERT_BUG(sp, v.params.m_types.size() == itp.m_types.size(), "Parameter count mismatch between impl and rule: r=" << v.params << " i=" << itp);
                     for (unsigned int i = 0; i < v.params.m_types.size(); i++) {
@@ -5382,6 +5426,7 @@ namespace {
                     for (unsigned int i = 0; i < v.params.m_values.size(); i++) {
                         context.equate_values(sp, v.params.m_values[i], itp.m_values[i]);
                     }
+                    add_impl_bounds(context, sp, impl);
                     return true;
                 } else {
                     count += 1;
@@ -5652,43 +5697,7 @@ namespace {
                     context.equate_values(sp, v.params.m_values[i], possible_params.m_values[i]);
                 }
                 // - Obtain the bounds required for this impl and add those as trait bounds to check/equate
-                if (const auto* ep = best_impl.m_data.opt_TraitImpl()) {
-                    const auto& e = *ep;
-                    assert(e.impl);
-                    for (const auto& bound : e.impl->m_params.m_bounds) {
-                    TU_MATCH_HDRA((bound), {)
-                    default:
-                        break;
-                            TU_ARMA(TraitBound, be) {
-                                DEBUG("New bound (pre-mono) " << bound);
-                                auto ms = best_impl.get_cb_monomorph_traitimpl(sp, {});
-                                static const HIR::GenericParams empty_params;
-                                bool outer_present = be.hrtbs && !be.hrtbs->is_empty();
-                                auto _ = ms.push_hrb(outer_present ? *be.hrtbs : empty_params);
-                                auto b_ty_mono = ms.monomorph_type(sp, be.type);
-                                auto b_tp_mono = ms.monomorph_traitpath(sp, be.trait, true);
-                                DEBUG("- " << b_ty_mono << " : " << b_tp_mono);
-                                ASSERT_BUG(sp, !outer_present || !static_cast<bool>(b_tp_mono.m_hrtbs), "Two layers of HRTBs not allowed (should have been disallowed in HIR lower)");
-                                auto pp_hrl = outer_present ? be.hrtbs->make_empty_params(true) : (b_tp_mono.m_hrtbs ? b_tp_mono.m_hrtbs->make_empty_params(true) : HIR::PathParams());
-                                if (outer_present) {
-                                    DEBUG("be.hrtbs = " << be.hrtbs->fmt_args());
-                                }
-                                if (b_tp_mono.m_hrtbs) {
-                                    DEBUG("b_tp_mono.m_hrtbs = " << b_tp_mono.m_hrtbs->fmt_args());
-                                }
-                                DEBUG("pp_hrl = " << pp_hrl);
-                                auto ms_hrl = MonomorphHrlsOnly(pp_hrl);
-                                if (b_tp_mono.m_type_bounds.size() > 0) {
-                                    for (const auto& aty_bound : b_tp_mono.m_type_bounds) {
-                                        context.equate_types_assoc(sp, aty_bound.second.type, b_tp_mono.m_path.m_path, ms_hrl.monomorph_path_params(sp, b_tp_mono.m_path.m_params, true), ms_hrl.monomorph_type(sp, b_ty_mono, true), aty_bound.first.c_str(), aty_bound.second.aty_params, false);
-                                    }
-                                } else {
-                                    context.add_trait_bound(sp, ms_hrl.monomorph_type(sp, b_ty_mono, true), b_tp_mono.m_path.m_path, ms_hrl.monomorph_path_params(sp, b_tp_mono.m_path.m_params, true));
-                                }
-                            }
-                    }
-                    }
-                }
+                add_impl_bounds(context, sp, best_impl);
                 return true;
             } else {
                 // Multiple possible impls, don't know yet

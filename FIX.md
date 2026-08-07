@@ -12,7 +12,7 @@
   - ~~`hir_from_ast_expr.cpp:26` — пустой AST expression;~~ Сделано: value-less `yield;` теперь lowering-ится в pool-allocated unit expression. Красный `test_yield_unit.rs` фиксирует compile+runtime, исходный `coroutine/borrow-in-tail-expr.rs` проходит. `coroutine/addassign-yield.rs` больше не падает здесь и доходит до отдельной MIR validity ошибки (`_6` non-valid), которая остаётся в MIR/const-eval пункте ниже;
   - ~~`hir_from_ast.cpp:297` — invalid pattern;~~ Сделано: slice parser теперь распознаёт `ref mut tail @ ..` как mutable-reference rest binding вместо range с двумя `Invalid` endpoints. Красный `test_slice_rest_ref_mut.rs` проходит compile+runtime, как и исходный `borrowck-slice-pattern-element-loan-rpass.rs`. Вариант на массиве фиксированной длины теперь проходит HIR и вскрывает отдельный MIR cast assert, оставленный в MIR-пункте ниже;
   - ~~`hir_typeck_expr_cs.cpp:8416` — spare rules;~~ Закрыто как ложный сигнал старого doctest extractor: оба trigger’а (`alloc/sync.rs:237` и `std/panic.rs:111`) содержали сгенерированный `Result<(), impl Debug> { Ok(()) }`, который эталонный Rust 1.90 сам отклоняет с E0282. После reference-validated reimport этих inputs в corpus нет;
-  - `hir_typeck_expr_cs.cpp:1704` — оставшийся infer;
+  - ~~`hir_typeck_expr_cs.cpp:1704` — оставшийся infer;~~ Сделано: const generic matcher сохраняет более конкретное значение при повторном совпадении параметра, а выбранный exact trait impl теперь добавляет свои `where`-bounds так же, как единственный fuzzy impl. Красный `test_const_generic_method_inference.rs` и четыре `as_chunks`/`as_rchunks` doctest проходят compile+runtime; `{Infer(0)}` корректно связывается с `N = 2`;
   - MIR/const-eval asserts и TODO.
 
 ### P1 — максимальная отдача на одну починку

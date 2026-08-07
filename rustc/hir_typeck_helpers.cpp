@@ -3391,6 +3391,10 @@ TU_ARMA(Alias, ee) {
                             return ::HIR::Compare::Equal;
                         }
                         if (out_impl_params.m_values[g.binding].is_Infer()) {
+                            if (!sz.is_Infer()) {
+                                DEBUG("[ftic_check_params] Value param " << g.binding << " fuzzy, use " << sz);
+                                out_impl_params.m_values[g.binding] = sz.clone();
+                            }
                             return ::HIR::Compare::Fuzzy;
                         }
                         if (sz.is_Infer()) {
