@@ -191,6 +191,9 @@ void init_debug_list() {
 int main(int argc, char* argv[]) {
     init_debug_list();
     ProgramParams params(argc, argv);
+    if (params.test_harness && params.codegen.panic_type.empty()) {
+        params.codegen.panic_type = "unwind";
+    }
 
     if (params.debug.pause) {
         char c;
@@ -201,6 +204,7 @@ int main(int argc, char* argv[]) {
     // Set up cfg values
     CompilePhaseV("Setup", [&]() {
         Cfg_SetValue("rust_compiler", "mrustc");
+        Cfg_SetValue("panic", params.codegen.panic_type.empty() ? "abort" : params.codegen.panic_type);
         Cfg_SetValueCb("feature", [&params](const ::std::string& s) {
             return params.features.count(s) != 0;
         });
@@ -352,9 +356,6 @@ int main(int argc, char* argv[]) {
         }
         if (params.test_harness) {
             crate_name += "$test";
-            if (params.codegen.panic_type == "") {
-                params.codegen.panic_type = "unwind";
-            }
         }
         crate.set_crate_name(crate_name);
 
