@@ -438,6 +438,15 @@ namespace {
                 TU_MATCH_HDRA( (src_ty.data()), {)
                 default:
                     bad_cast(sp, src_ty, tgt_ty, "fcn src");
+                        TU_ARMA(Infer, s_e) {
+                            if (s_e.ty_class != ::HIR::InferClass::None) {
+                                bad_cast(sp, src_ty, tgt_ty, "fcn src");
+                            }
+                            if (this->m_is_fallback) {
+                                this->context.equate_types(sp, src_ty, tgt_ty);
+                                this->m_completed = true;
+                            }
+                        }
                         TU_ARMA(NodeType, s_e) {
                             if (const auto* const* sn_pp = s_e.opt_Closure()) {
                                 auto pp = e.hrls.make_empty_params(true);
