@@ -949,6 +949,14 @@ namespace {
 
         const auto* ty = &r->fields[out_path.index].ty;
         for (const auto& f : out_path.sub_fields) {
+            if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
+                const auto* array = ty->data().opt_Array();
+                if (!array || !array->size.is_Known() || array->size.as_Known() == 0) {
+                    throw Defer();
+                }
+                ty = &array->inner;
+                continue;
+            }
             r = Target_GetTypeRepr(sp, resolve, *ty);
             if (!r) {
                 throw Defer();

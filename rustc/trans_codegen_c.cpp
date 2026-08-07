@@ -2044,6 +2044,13 @@ namespace {
             }
             const auto* ty = &repr->fields[path.index].ty;
             for (const auto& fld : path.sub_fields) {
+                if (fld == TypeRepr::FieldPath::ARRAY_ELEMENT) {
+                    const auto* array = ty->data().opt_Array();
+                    assert(array && array->size.is_Known() && array->size.as_Known() > 0);
+                    m_of << ".DATA[0]";
+                    ty = &array->inner;
+                    continue;
+                }
                 repr = Target_GetTypeRepr(sp, m_resolve, *ty);
                 if (is_enum_tag(repr, fld)) {
                     if (m_embedded_tags.count(repr)) {

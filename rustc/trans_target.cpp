@@ -956,6 +956,26 @@ namespace {
 
     bool get_nonzero_path(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty, TypeRepr::FieldPath& out_path) {
         switch (ty.data().tag()) {
+            TU_ARM(ty.data(), Tuple, te) {
+                const TypeRepr* repr = Target_GetTypeRepr(sp, resolve, ty);
+                if (!repr) {
+                    return false;
+                }
+                for (size_t i = 0; i < repr->fields.size(); i++) {
+                    if (get_nonzero_path(sp, resolve, repr->fields[i].ty, out_path)) {
+                        out_path.sub_fields.push_back(i);
+                        return true;
+                    }
+                }
+            }
+            break;
+            TU_ARM(ty.data(), Array, te) {
+                if (te.size.is_Known() && te.size.as_Known() > 0 && get_nonzero_path(sp, resolve, te.inner, out_path)) {
+                    out_path.sub_fields.push_back(TypeRepr::FieldPath::ARRAY_ELEMENT);
+                    return true;
+                }
+            }
+            break;
             TU_ARM(ty.data(), Path, te) {
                 if (te.binding.is_Struct()) {
                     const auto* str = te.binding.as_Struct();
@@ -1031,11 +1051,18 @@ namespace {
         assert(out_path.index < r->fields.size());
         size_t ofs = r->fields[out_path.index].offset;
 
-        r = Target_GetTypeRepr(sp, resolve, r->fields[out_path.index].ty);
+        const auto* ty = &r->fields[out_path.index].ty;
         for (const auto& f : out_path.sub_fields) {
+            if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
+                const auto* array = ty->data().opt_Array();
+                assert(array && array->size.is_Known() && array->size.as_Known() > 0);
+                ty = &array->inner;
+                continue;
+            }
+            r = Target_GetTypeRepr(sp, resolve, *ty);
             assert(f < r->fields.size());
             ofs += r->fields[f].offset;
-            r = Target_GetTypeRepr(sp, resolve, r->fields[f].ty);
+            ty = &r->fields[f].ty;
         }
 
         return ofs;
@@ -1973,13 +2000,20 @@ const TypeRepr* Target_GetTypeRepr(const Span& sp, const StaticTraitResolve& res
 }
 
 const ::HIR::TypeRef& Target_GetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& sub_fields, size_t ofs) {
-    const auto& ty = repr.fields.at(idx).ty;
-    if (sub_fields.size() == ofs) {
-        return ty;
+    const auto* ty = &repr.fields.at(idx).ty;
+    while (ofs < sub_fields.size()) {
+        const auto field = sub_fields[ofs++];
+        if (field == TypeRepr::FieldPath::ARRAY_ELEMENT) {
+            const auto* array = ty->data().opt_Array();
+            ASSERT_BUG(sp, array && array->size.is_Known() && array->size.as_Known() > 0, "Array field path on non-array " << *ty);
+            ty = &array->inner;
+        } else {
+            const auto* inner_repr = Target_GetTypeRepr(sp, resolve, *ty);
+            ASSERT_BUG(sp, inner_repr, "No inner repr for " << *ty);
+            ty = &inner_repr->fields.at(field).ty;
+        }
     }
-    const auto* inner_repr = Target_GetTypeRepr(sp, resolve, ty);
-    ASSERT_BUG(sp, inner_repr, "No inner repr for " << ty);
-    return Target_GetInnerType(sp, resolve, *inner_repr, sub_fields[ofs], sub_fields, ofs + 1);
+    return *ty;
 }
 
 size_t TypeRepr::get_offset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr::FieldPath& path) const {
@@ -1989,6 +2023,12 @@ size_t TypeRepr::get_offset(const Span& sp, const StaticTraitResolve& resolve, c
 
     const auto* ty = &r->fields[path.index].ty;
     for (const auto& f : path.sub_fields) {
+        if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
+            const auto* array = ty->data().opt_Array();
+            assert(array && array->size.is_Known() && array->size.as_Known() > 0);
+            ty = &array->inner;
+            continue;
+        }
         r = Target_GetTypeRepr(sp, resolve, *ty);
         assert(r); // We have an outer repr, so inner must exist
         assert(f < r->fields.size());

@@ -86,6 +86,8 @@ struct TypeRepr {
     bool user_align = false;
 
     struct FieldPath {
+        static constexpr size_t ARRAY_ELEMENT = static_cast<size_t>(-1);
+
         size_t index;
         size_t size;
         ::std::vector<size_t> sub_fields;
@@ -170,7 +172,11 @@ struct TypeRepr {
 static inline std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x) {
     os << x.size << "@" << x.index;
     for (auto idx : x.sub_fields) {
-        os << "." << idx;
+        if (idx == TypeRepr::FieldPath::ARRAY_ELEMENT) {
+            os << "[0]";
+        } else {
+            os << "." << idx;
+        }
     }
     return os;
 }
