@@ -655,9 +655,12 @@ namespace MIR {
             ValueRef(RelocPtr alloc, size_t ofs = 0)
                 : storage(alloc)
                 , ofs(ofs)
-                , len(alloc ? alloc.as_value().size() - ofs : 0)
+                , len(0)
             {
-                assert(ofs <= alloc.as_value().size());
+                if (alloc) {
+                    assert(ofs <= alloc.as_value().size());
+                    len = alloc.as_value().size() - ofs;
+                }
             }
 
             ValueRef slice(size_t ofs, size_t len) {

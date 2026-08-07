@@ -446,8 +446,41 @@ namespace {
             const auto* data_reloc = lit.get_reloc();
             const auto data_ptr = lit.read_uint(Target_GetPointerBits() / 8);
             MIR_ASSERT(state, data_ptr >= EncodedLiteral::PTR_BASE, "Bad pointer value - 0x" << std::hex << data_ptr);
-            const auto ofs = data_ptr - EncodedLiteral::PTR_BASE;
 
+            if (!data_reloc) {
+                ::HIR::TypeRef ptr_inner;
+                const auto metadata_type = state.m_resolve.metadata_type(state.sp, te.inner);
+                if (metadata_type == MetadataType::Slice) {
+                    if (const auto* slice = te.inner.data().opt_Slice()) {
+                        ptr_inner = slice->inner.clone();
+                    } else {
+                        MIR_ASSERT(state, te.inner == ::HIR::CoreType::Str, "Slice metadata on non-slice type " << te.inner);
+                        ptr_inner = ::HIR::CoreType::U8;
+                    }
+                } else {
+                    ptr_inner = te.inner.clone();
+                }
+
+                auto addr = mutator.in_temporary(::HIR::CoreType::Usize, ::MIR::Constant::make_Uint({data_ptr, ::HIR::CoreType::Usize}));
+                auto ptr_ty = ::HIR::TypeRef::new_pointer(te.type, mv$(ptr_inner));
+                auto ptr = mutator.in_temporary(ptr_ty.clone(), ::MIR::RValue::make_Cast({mv$(addr), mv$(ptr_ty)}));
+
+                switch (metadata_type) {
+                    case MetadataType::None:
+                        return ::MIR::RValue::make_Borrow({te.type, false, ::MIR::LValue::new_Deref(mv$(ptr))});
+                    case MetadataType::Slice: {
+                        const auto ptr_size = Target_GetPointerBits() / 8;
+                        auto size = ::MIR::Constant::make_Uint({lit.slice(ptr_size).read_uint(ptr_size), ::HIR::CoreType::Usize});
+                        return ::MIR::RValue::make_MakeDst({mv$(ptr), mv$(size)});
+                    }
+                    case MetadataType::TraitObject:
+                    case MetadataType::Unknown:
+                    case MetadataType::Zero:
+                        MIR_TODO(state, "Integer-address borrow with metadata " << metadata_type);
+                }
+            }
+
+            const auto ofs = data_ptr - EncodedLiteral::PTR_BASE;
             if (data_reloc->p) {
                 MIR_ASSERT(state, ofs == 0, "TODO: Support offset pointers in borrows - +0x" << std::hex << ofs);
                 const auto& path = *data_reloc->p;
