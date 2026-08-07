@@ -4186,7 +4186,7 @@ namespace {
                                     m_of << "(";
                                     emit_param(ve.ptr_val);
                                     m_of << ", ";
-                                    emit_param(ve.meta_val);
+                                    emit_trait_metadata_param(mir_res, ve.meta_val);
                                     m_of << ")";
                                     break;
                                 case MetadataType::Zero:
@@ -9035,6 +9035,17 @@ namespace {
                 }
                 TU_ARMA(Constant, e) {
                     emit_constant(e);
+                }
+            }
+        }
+
+        void emit_trait_metadata_param(const ::MIR::TypeResolve& mir_res, const ::MIR::Param& param) {
+            ::HIR::TypeRef tmp;
+            const auto& ty = mir_res.get_param_type(tmp, param);
+            emit_param(param);
+            if (const auto* te = ty.data().opt_Path()) {
+                if (te->path.m_data.is_Generic() && te->path.m_data.as_Generic().m_path == m_resolve.m_lang_DynMetadata) {
+                    m_of << "._0._0";
                 }
             }
         }

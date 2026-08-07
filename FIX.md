@@ -33,7 +33,7 @@
 
 ### P1 — максимальная отдача на одну починку
 
-~~Поддержать `#[should_panic = "message"]`.~~ Сделано: test expansion различает name-value `= "message"` и list `expected = "message"`, а harness больше не выкидывает все `should_panic` tests. Красный `test_should_panic_name_value.rs` запускает настоящий `--test` harness и показывает `1 passed`; upstream `lazy::reentrant_init` также появился в listing и проходит runtime. Пять крупных harness’ов с 875 leaf tests больше не блокируются на этом атрибуте, хотя у части остаются следующие независимые ошибки: `alloctests/rc` доходит до внешнего clang и падает на `DynMetadata` ABI, `coretests/slice` — до `Resolve Use`.
+~~Поддержать `#[should_panic = "message"]`.~~ Сделано: test expansion различает name-value `= "message"` и list `expected = "message"`, а harness больше не выкидывает все `should_panic` tests. Красный `test_should_panic_name_value.rs` запускает настоящий `--test` harness и показывает `1 passed`; upstream `lazy::reentrant_init` также появился в listing и проходит runtime. Пять крупных harness’ов с 875 leaf tests больше не блокируются на этом атрибуте; следующий `DynMetadata` ABI blocker у `alloctests/rc` закрыт ниже, `coretests/slice` доходит до `Resolve Use`.
 
 Затронутые harness’ы:
 
@@ -66,7 +66,8 @@
 - ~~half-open range pattern semantics: `match i16::MIN { i16::MIN.. => ... }` выбирал default arm;~~ Сделано: named signed pattern bounds теперь читаются из encoded constant через `read_sint` с фактической шириной значения, поэтому `i16::MIN` в MIR больше не превращается из `0x8000` в `+32768 i16`. Красный `test_half_open_range_pattern.rs` проходит compile+runtime; официальный `half-open-range-pats-semantics.rs` целиком зелёный.
 - ~~потерянный filename у const `Location::caller()`;~~ Сделано: CTFE берёт filename и line из ближайшего реального source span, хранит NUL-terminated filename в существующем evaluation pool и оставляет безопасный пустой fallback для synthetic span. Красный `test_caller_location_file.rs` и точный upstream `location_const_file` проходят compile+runtime. Runtime caller location остаётся отдельным TODO hidden caller ABI в C backend; точная const column тоже не заявлена исправленной, потому что expression AST пока хранит end-point span;
 - ~~ошибки integer intrinsics и signedness;~~ Сделано: CTFE `ctlz`/`cttz` принимают signed integers, `cttz_nonzero` больше не проваливается в MIR TODO, а zero-count evaluator маскирует sign-extended значения до фактической ширины типа (`ctpop(-1i8) == 8`, `ctlz(-1i8) == 0`). Красный `test_signed_integer_intrinsics.rs` покрывает signed zero/nonzero варианты; полный upstream `intrinsics-integer.rs` проходит compile+runtime для `i/u8..128`, `bswap` и `bitreverse`;
-- ABI/layout/packed/drop проблемы.
+- ~~trait-object `MakeDst` передавал `DynMetadata<dyn Trait>` как C struct в параметр `void*`;~~ Сделано: codegen распознаёт lang-item `DynMetadata` и передаёт содержащийся в нём raw vtable pointer, не меняя уже сырое metadata. Красный `test_dyn_metadata_trait_object.rs` воспроизводил точную ошибку внешнего clang и проходит compile+runtime; весь `alloctests/rc` harness собирается, точные `test_from_box_trait` и `test_from_box_trait_zero_sized` проходят runtime;
+- остальные ABI/layout/packed/drop проблемы.
 
 Хорошая стартовая выборка: 265 broken plain-stable `run-pass` и 116 library leaf tests, у которых harness уже собирается.
 
