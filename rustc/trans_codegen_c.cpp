@@ -3462,8 +3462,34 @@ namespace {
                             m_of << "make_traitobjptr";
                             break;
                     }
-                    m_of << "(&";
-                    emit_lvalue(val);
+                    if (meta_ty == MetadataType::TraitObject) {
+                        ::HIR::TypeRef base_tmp;
+                        const auto& base_ty = mir_res.get_lvalue_type(base_tmp, base_val.clone());
+                        const auto base_param = ::MIR::Param::make_LValue(base_ptr.clone());
+                        if (get_inner_unsized_type(base_ty).data().is_TraitObject()) {
+                            const auto* cur_ty = &base_ty;
+                            m_of << "((uint8_t*)";
+                            emit_lvalue(base_ptr);
+                            m_of << ".PTR + ";
+                            for (size_t i = base_val.wrapper_count(); i < val.m_wrappers.size(); i++) {
+                                const auto& wrapper = val.m_wrappers[i];
+                                MIR_ASSERT(mir_res, wrapper.is_Field(), "Unexpected DST lvalue wrapper - " << val);
+                                if (i != base_val.wrapper_count()) {
+                                    m_of << " + ";
+                                }
+                                emit_trait_object_dst_field_offset(*cur_ty, wrapper.as_Field(), base_param);
+                                const auto* repr = Target_GetTypeRepr(sp, m_resolve, *cur_ty);
+                                MIR_ASSERT(mir_res, repr && wrapper.as_Field() < repr->fields.size(), "Invalid DST field - " << val);
+                                cur_ty = &repr->fields[wrapper.as_Field()].ty;
+                            }
+                        } else {
+                            m_of << "&";
+                            emit_lvalue(val);
+                        }
+                    } else {
+                        m_of << "&";
+                        emit_lvalue(val);
+                    }
                     m_of << ", ";
                     emit_lvalue(base_ptr);
                     m_of << ".META)";
@@ -9282,6 +9308,17 @@ namespace {
             emit_trait_object_dst_size(tail.ty, value);
             m_of << ", ";
             emit_trait_object_dst_align(ty, value);
+            m_of << ")";
+        }
+
+        void emit_trait_object_dst_field_offset(const ::HIR::TypeRef& ty, size_t field_idx, const ::MIR::Param& value) {
+            const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+            MIR_ASSERT(*m_mir_res, repr && field_idx < repr->fields.size(), "Invalid DST field " << field_idx << " on " << ty);
+            const auto& field = repr->fields[field_idx];
+            auto inner_ty = get_inner_unsized_type(field.ty);
+            MIR_ASSERT(*m_mir_res, field_idx + 1 == repr->fields.size() && inner_ty.data().is_TraitObject(), "Expected final trait object field on " << ty);
+            m_of << "ALIGN_TO(" << field.offset << ", ";
+            emit_trait_object_dst_tail_align(ty, field.ty, value);
             m_of << ")";
         }
 
