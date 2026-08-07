@@ -1730,21 +1730,35 @@ namespace {
                 }
             }
 
-            // Range checking (DISABLED)
-            if( false )
-            {
+            if (TARGETVER_LEAST_1_74) {
                 auto limit_lval = m_builder.lvalue_or_temp(node.span(), ty_idx, mv$(limit_val));
 
                 auto cmp_res = m_builder.new_temporary(::HIR::CoreType::Bool);
-                m_builder.push_stmt_assign(node.span(), cmp_res.clone(), ::MIR::RValue::make_BinOp({index.clone(), ::MIR::eBinOp::GE, mv$(limit_lval)}));
+                m_builder.push_stmt_assign(node.span(), cmp_res.clone(), ::MIR::RValue::make_BinOp({index.clone(), ::MIR::eBinOp::GE, limit_lval.clone()}));
                 auto arm_panic = m_builder.new_bb_unlinked();
                 auto arm_continue = m_builder.new_bb_unlinked();
                 m_builder.end_block(::MIR::Terminator::make_If({mv$(cmp_res), arm_panic, arm_continue}));
 
                 m_builder.set_cur_block(arm_panic);
-                // TODO: Call an "index fail" method which always panics.
-                //m_builder.end_block( ::MIR::Terminator::make_Panic({}) );
+                const auto& panic_bounds_check = m_builder.crate().get_lang_item_path(node.span(), "panic_bounds_check");
+                auto panic_result = m_builder.new_temporary(::HIR::TypeRef::new_diverge());
+                auto panic_return = m_builder.new_bb_unlinked();
+                auto panic_unwind = m_builder.new_bb_unlinked();
+                m_builder.end_block(
+                    ::MIR::Terminator::make_Call({
+                        panic_return,
+                        panic_unwind,
+                        std::move(panic_result),
+                        ::HIR::Path(panic_bounds_check),
+                        make_vec2<::MIR::Param>(index.clone(), limit_lval.clone()),
+                    })
+                );
+
+                m_builder.set_cur_block(panic_return);
                 m_builder.end_block(::MIR::Terminator::make_Diverge({}));
+
+                m_builder.set_cur_block(panic_unwind);
+                emit_unwind(node.span());
 
                 m_builder.set_cur_block(arm_continue);
             }
