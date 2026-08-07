@@ -1738,38 +1738,37 @@ namespace {
                             if (enm.m_is_c_repr) {
                                 // No auto-sizing, just i32?
                                 rv.fields.push_back(TypeRepr::Field{0, ::HIR::CoreType::U32});
-                            } else {
-                                int pow8 = 0;
-                                for (const auto& v : e.variants) {
-                                    auto v2 = static_cast<int64_t>(v.val);
-                                    if (-0x80 <= v2 && v2 < 0x80) {
-                                        pow8 = ::std::max(pow8, 1);
-                                    } else if (-0x8000 <= v2 && v2 < 0x8000) {
-                                        pow8 = ::std::max(pow8, 2);
-                                    } else if (-0x80000000ll <= v2 && v2 < 0x80000000ll) {
-                                        pow8 = ::std::max(pow8, 3);
+                            } else if (!e.variants.empty()) {
+                                int64_t min_value = INT64_MAX;
+                                int64_t max_value = INT64_MIN;
+                                for (const auto& variant : e.variants) {
+                                    const auto value = static_cast<int64_t>(variant.val);
+                                    min_value = std::min(min_value, value);
+                                    max_value = std::max(max_value, value);
+                                }
+
+                                ::HIR::CoreType tag_type;
+                                if (min_value >= 0) {
+                                    const auto max_unsigned = static_cast<uint64_t>(max_value);
+                                    if (max_unsigned <= UINT8_MAX) {
+                                        tag_type = ::HIR::CoreType::U8;
+                                    } else if (max_unsigned <= UINT16_MAX) {
+                                        tag_type = ::HIR::CoreType::U16;
+                                    } else if (max_unsigned <= UINT32_MAX) {
+                                        tag_type = ::HIR::CoreType::U32;
                                     } else {
-                                        pow8 = 4;
+                                        tag_type = ::HIR::CoreType::U64;
                                     }
+                                } else if (min_value >= INT8_MIN && max_value <= INT8_MAX) {
+                                    tag_type = ::HIR::CoreType::I8;
+                                } else if (min_value >= INT16_MIN && max_value <= INT16_MAX) {
+                                    tag_type = ::HIR::CoreType::I16;
+                                } else if (min_value >= INT32_MIN && max_value <= INT32_MAX) {
+                                    tag_type = ::HIR::CoreType::I32;
+                                } else {
+                                    tag_type = ::HIR::CoreType::I64;
                                 }
-                                switch (pow8) {
-                                    case 0:
-                                        break;
-                                    case 1:
-                                        rv.fields.push_back(TypeRepr::Field{0, ::HIR::CoreType::I8});
-                                        break;
-                                    case 2:
-                                        rv.fields.push_back(TypeRepr::Field{0, ::HIR::CoreType::I16});
-                                        break;
-                                    case 3:
-                                        rv.fields.push_back(TypeRepr::Field{0, ::HIR::CoreType::I32});
-                                        break;
-                                    case 4:
-                                        rv.fields.push_back(TypeRepr::Field{0, ::HIR::CoreType::I64});
-                                        break;
-                                    default:
-                                        break;
-                                }
+                                rv.fields.push_back(TypeRepr::Field{0, tag_type});
                             }
                             break;
                         default:

@@ -58,7 +58,7 @@
 
 Это важнее добавления очередной принимаемой синтаксической формы:
 
-- неправильный размер enum discriminant: `2` вместо `1`;
+- ~~неправильный размер enum discriminant: `2` вместо `1`;~~ Сделано: auto repr теперь выбирает минимальный unsigned tag для неотрицательного диапазона и минимальный signed tag, если есть отрицательные значения; `0..=0xe8` занимает `u8`, а не `i16`. Красный `test_enum_discriminant_layout.rs` и полный `enum-discrim-width-stuff.rs` проходят compile+runtime. `nonzero-enum.rs` по-прежнему даёт отдельный `2 != 1` уже на niche layout `Option<E>`.
 - неправильные `f128` результаты;
 - неправильное форматирование отрицательных чисел;
 - half-open range pattern semantics;
