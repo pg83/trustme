@@ -7,7 +7,7 @@
   - `std/io/mod__L2379_runtime.rs` исправлен и проходит targeted runtime;
   - `core/sync/atomic__L3500_50.rs` честно восстановить статически нельзя: setup создаётся `#[doc = concat!(...)]` при macro expansion. Теперь такой разорванный doc-блок исключается, а не импортируется без setup.
 - ~~Уже найдено минимум 15 очевидно испорченных файлов; реальный масштаб определяется reference-прогоном.~~ Закрыто полным reference compile+runtime импорт-прогоном: 315 из 3 807 кандидатов отвергнуты до записи в corpus.
-- Разобрать hang `coretests/net`: подтверждён exit 124, блокирует 47 library tests.
+- ~~Разобрать hang `coretests/net`: подтверждён exit 124, блокирует 47 library tests.~~ Сделано: regression `test_typeck_large_macro.rs` до починки зависал в `Lower MIR` дольше 60s, после починки полный compile+runtime занимает около 8s. MIR value-state теперь хранится один раз на basic block и распространяется FIFO-worklist без path/state-копий; packed merge работает по байтам. Type inference заранее отбрасывает bounds, не содержащие целевой ivar. Квадратичные `UnifyBlocks` и `ReborrowOfUnused` заменены hash/indexed проходами, дублирующие защитные MIR-валидации убраны при сохранении проверки после реально меняющих MIR фаз. Монолитный `net` после этого проходил compiler pipeline, но один 15-МБ generated-C translation unit всё ещё не укладывался вместе с внешним clang в общий 60s timeout, поэтому импорт разбит по upstream-модулям и compile-shards; самый тяжёлый shard собирается за 41.41s, все 47/47 runtime leaf tests проходят.
 - Убрать compiler ICE/assert:
   - `hir_from_ast_expr.cpp:26` — пустой AST expression;
   - `hir_from_ast.cpp:297` — invalid pattern;

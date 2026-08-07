@@ -232,7 +232,7 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
         ValStates& operator=(const ValStates& v) = delete;
         ValStates& operator=(ValStates&& v) = default;
 
-        void fmt(::std::ostream& os) {
+        void fmt(::std::ostream& os) const {
             os << "ValStates { ";
             switch (ret_state.v) {
                 case State::Invalid:
@@ -279,17 +279,9 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
             return true;
         }
 
-        bool empty() const {
-            return locals.empty() && args.empty();
-        }
-
-        // NOTE: Moves if this state is empty
-        bool merge(unsigned bb_idx, ValStates& other) {
+        bool merge(unsigned bb_idx, const ValStates& other) {
             DEBUG("bb" << bb_idx << " this=" << FMT_CB(ss, this->fmt(ss);) << ", other=" << FMT_CB(ss, other.fmt(ss);));
-            if (this->empty()) {
-                *this = ValStates(other);
-                return true;
-            } else if (*this == other) {
+            if (*this == other) {
                 return false;
             } else {
                 bool rv = false;
@@ -370,7 +362,7 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
         }
 
     private:
-        static bool merge_state(State& a, State& b) {
+        static bool merge_state(State& a, const State& b) {
             bool rv = false;
             if (a != b) {
                 // NOTE: This is an attempted optimisation to avoid re-running a block when it's not a new state.
@@ -379,71 +371,61 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
                     rv = true;
                 }
                 a = State::Either;
-                b = State::Either;
             }
             return rv;
         }
 
-        static bool merge_lists(StateVec& a, StateVec& b) {
+        static bool merge_lists(StateVec& a, const StateVec& b) {
             bool rv = false;
             assert(a.size() == b.size());
-            // TODO: This is a really hot bit of code (according to valgrind), need to find a way of cooling it
-            for (unsigned int i = 0; i < a.size(); i++) {
-                rv |= merge_state(a[i].get(), b[i].get());
+            assert(a.v.size() == b.v.size());
+            for (size_t i = 0; i < a.v.size(); i++) {
+                const uint8_t av = a.v[i];
+                const uint8_t bv = b.v[i];
+                const uint8_t differingLowBits = ((av ^ bv) | ((av ^ bv) >> 1)) & 0x55;
+                const uint8_t differingMask = differingLowBits | (differingLowBits << 1);
+                const uint8_t merged = (av & ~differingMask) | (0x55 & differingMask);
+                rv |= merged != av;
+                a.v[i] = merged;
             }
             return rv;
         }
     };
 
     ::std::vector<ValStates> block_start_states(fcn.blocks.size());
-
-    struct ToVisit {
-        unsigned int bb;
-        ::std::vector<unsigned int> path;
-        ValStates state;
-    };
-
-    // TODO: Remove this? The path is useful, but the cloned states are really expensive
-    // - Option: Keep the paths, but only ever use the pre-set entry state?
-    ::std::vector<ToVisit> to_visit_blocks;
+    ::std::vector<bool> block_has_start_state(fcn.blocks.size());
+    ::std::vector<bool> block_is_queued(fcn.blocks.size());
+    ::std::vector<unsigned int> to_visit_blocks;
+    size_t next_block_to_visit = 0;
 
     // TODO: Check that all used locals are also set (anywhere at all)
 
-    auto add_to_visit = [&](unsigned int idx, ::std::vector<unsigned int> src_path, ValStates& vs, bool can_move) {
-        for (const auto& b : to_visit_blocks) {
-            if (b.bb == idx && b.state == vs) {
-                return;
-            }
+    auto add_to_visit = [&](unsigned int idx, const ValStates& incoming) {
+        auto& start_state = block_start_states.at(idx);
+        bool changed;
+        if (!block_has_start_state[idx]) {
+            start_state = ValStates(incoming);
+            block_has_start_state[idx] = true;
+            changed = true;
+        } else {
+            changed = start_state.merge(idx, incoming);
         }
-        if (block_start_states.at(idx) == vs) {
-            return;
+        if (changed && !block_is_queued[idx]) {
+            block_is_queued[idx] = true;
+            to_visit_blocks.push_back(idx);
         }
-        src_path.push_back(idx);
-        // TODO: Update the target block, and only visit if we've induced a change
-        to_visit_blocks.push_back(ToVisit{idx, mv$(src_path), (can_move ? mv$(vs) : ValStates(vs))});
     };
-    auto add_to_visit_move = [&](unsigned int idx, ::std::vector<unsigned int> src_path, ValStates vs) {
-        add_to_visit(idx, mv$(src_path), vs, true);
-    };
-    auto add_to_visit_copy = [&](unsigned int idx, ::std::vector<unsigned int> src_path, ValStates& vs) {
-        add_to_visit(idx, mv$(src_path), vs, false);
-    };
-    add_to_visit_move(0, {}, ValStates{state.m_args.size(), fcn.locals.size()});
-    while (to_visit_blocks.size() > 0) {
-        auto block = to_visit_blocks.back().bb;
-        auto path = mv$(to_visit_blocks.back().path);
-        auto val_state = mv$(to_visit_blocks.back().state);
-        to_visit_blocks.pop_back();
+    add_to_visit(0, ValStates{state.m_args.size(), fcn.locals.size()});
+    while (next_block_to_visit < to_visit_blocks.size()) {
+        auto block = to_visit_blocks[next_block_to_visit++];
+        block_is_queued[block] = false;
         assert(block < fcn.blocks.size());
 
-        // 1. Apply current state to `block_start_states` (merging if needed)
-        // - If no change happened, skip.
-        if (!block_start_states.at(block).merge(block, val_state)) {
-            DEBUG("BB" << block << " via [" << path << "] nochange " << FMT_CB(ss, val_state.fmt(ss);));
-            continue;
-        }
+        // 1. Copy the stable entry state. Incoming states are merged before a block is queued,
+        // so each block is visited only when its entry state changes.
+        auto val_state = ValStates(block_start_states.at(block));
         ASSERT_BUG(Span(), val_state.locals.size() == fcn.locals.size(), "");
-        DEBUG("BB" << block << " via [" << path << "] " << FMT_CB(ss, val_state.fmt(ss);));
+        DEBUG("BB" << block << " " << FMT_CB(ss, val_state.fmt(ss);));
 
         // 2. Using the newly merged state, iterate statements checking the usage and updating state.
         const auto& bb = fcn.blocks[block];
@@ -587,7 +569,7 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
             }
             TU_ARMA(Goto, e) {
                 // Push block with the new state
-                add_to_visit_move(e, mv$(path), mv$(val_state));
+                add_to_visit(e, val_state);
             }
             TU_ARMA(Panic, e) {
                 // What should be done here?
@@ -595,21 +577,21 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
             TU_ARMA(If, e) {
                 // Push blocks
                 val_state.ensure_valid(state, e.cond);
-                add_to_visit_copy(e.bb_true, path, val_state);
-                add_to_visit_move(e.bb_false, mv$(path), mv$(val_state));
+                add_to_visit(e.bb_true, val_state);
+                add_to_visit(e.bb_false, val_state);
             }
             TU_ARMA(Switch, e) {
                 val_state.ensure_valid(state, e.val);
                 for (const auto& tgt : e.targets) {
-                    add_to_visit(tgt, path, val_state, (&tgt == &e.targets.back()));
+                    add_to_visit(tgt, val_state);
                 }
             }
             TU_ARMA(SwitchValue, e) {
                 val_state.ensure_valid(state, e.val);
                 for (const auto& tgt : e.targets) {
-                    add_to_visit_copy(tgt, path, val_state);
+                    add_to_visit(tgt, val_state);
                 }
-                add_to_visit_move(e.def_target, path, mv$(val_state));
+                add_to_visit(e.def_target, val_state);
             }
             TU_ARMA(Call, e) {
                 if (e.fcn.is_Value()) {
@@ -619,11 +601,11 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
                     val_state.move_val(state, arg);
                 }
                 // Push blocks (with return valid only in one)
-                add_to_visit_copy(e.panic_block, path, val_state);
+                add_to_visit(e.panic_block, val_state);
 
                 // TODO: If the function returns !, don't follow the ret_block
                 val_state.mark_validity(state, e.ret_val, true);
-                add_to_visit_move(e.ret_block, mv$(path), mv$(val_state));
+                add_to_visit(e.ret_block, val_state);
             }
         }
     }

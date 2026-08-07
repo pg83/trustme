@@ -166,7 +166,6 @@ void init_debug_list() {
 
          "Dump HIR",
          "Lower MIR",
-         "MIR Validate",
          "MIR Validate Full Early",
          "Dump MIR",
          "Constant Evaluate Full",
@@ -669,10 +668,8 @@ int main(int argc, char* argv[]) {
         }
         memory_dump("MIR Gen");
 
-        // Validate the MIR
-        CompilePhaseV("MIR Validate", [&]() {
-            MIR_CheckCrate(*hir_crate);
-        });
+        // LowerMIR validates every function before returning. The next validation is
+        // performed after MIR_Cleanup has actually changed the crate.
 
         // - Expand constants in HIR and virtualise calls
         CompilePhaseV("MIR Cleanup", [&]() {

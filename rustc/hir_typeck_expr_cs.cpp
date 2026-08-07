@@ -5735,43 +5735,71 @@ namespace {
 namespace {
     bool check_ivar_poss__fails_bounds(const Span& sp, Context& context, const ::HIR::TypeRef& ty_l, const ::HIR::TypeRef& new_ty) {
         TRACE_FUNCTION_F(ty_l << " <- " << new_ty);
+        const auto ivar_idx = ty_l.data().as_Infer().index;
         bool used_ty;
 
         struct Cb {
             bool& used_ty;
             const Span& sp;
             const Context& context;
-            const HIR::TypeRef& ty_l;
+            unsigned int ivar_idx;
             const HIR::TypeRef& new_ty;
 
-            Cb(bool& used_ty, const Span& sp, const Context& context, const HIR::TypeRef& ty_l, const HIR::TypeRef& new_ty)
+            Cb(bool& used_ty, const Span& sp, const Context& context, unsigned int ivar_idx, const HIR::TypeRef& new_ty)
                 : used_ty(used_ty)
                 , sp(sp)
                 , context(context)
-                , ty_l(ty_l)
+                , ivar_idx(ivar_idx)
                 , new_ty(new_ty)
             {
             }
 
             bool operator()(const ::HIR::TypeRef& ty, ::HIR::TypeRef& out_ty) {
-                if (ty == ty_l) {
+                const auto* e = ty.data().opt_Infer();
+                if (!e) {
+                    return false;
+                }
+                if (e->index == ivar_idx) {
                     out_ty = new_ty.clone();
                     used_ty = true;
                     return true;
-                } else {
-                    const auto& rty = context.get_type(ty);
-                    if (rty != ty) {
-                        out_ty = clone_ty_with(sp, rty, *this);
-                        return true;
-                    } else {
+                }
+                const auto& rty = context.get_type(ty);
+                if (const auto* resolved = rty.data().opt_Infer(); resolved && resolved->index == e->index) {
+                    return false;
+                }
+                out_ty = clone_ty_with(sp, rty, *this);
+                return true;
+            }
+
+            bool uses_ivar(const ::HIR::TypeRef& root) const {
+                return visit_ty_with(root, [&](const ::HIR::TypeRef& ty) {
+                    const auto* e = ty.data().opt_Infer();
+                    if (!e) {
                         return false;
                     }
-                }
+                    if (e->index == ivar_idx) {
+                        return true;
+                    }
+                    const auto& rty = context.get_type(ty);
+                    if (const auto* resolved = rty.data().opt_Infer()) {
+                        if (resolved->index == ivar_idx) {
+                            return true;
+                        }
+                        if (resolved->index == e->index) {
+                            return false;
+                        }
+                    }
+                    return uses_ivar(rty);
+                });
             }
         };
 
-        Cb cb{used_ty, sp, context, ty_l, new_ty};
+        Cb cb{used_ty, sp, context, ivar_idx, new_ty};
         for (const auto& bound : context.link_coerce) {
+            if (!cb.uses_ivar(bound->left_ty) && !cb.uses_ivar((*bound->right_node_ptr)->m_res_type)) {
+                continue;
+            }
             used_ty = false;
             auto t_l = clone_ty_with(sp, bound->left_ty, cb);
             auto t_r = clone_ty_with(sp, (*bound->right_node_ptr)->m_res_type, cb);
@@ -5808,7 +5836,6 @@ namespace {
             }
         }
 
-        auto ivar_idx = ty_l.data().as_Infer().index;
         if (ivar_idx < context.m_ivars_sized.size() && context.m_ivars_sized[ivar_idx]) {
             if (context.m_resolve.type_is_sized(sp, new_ty) == ::HIR::Compare::Unequal) {
                 DEBUG("Unsized type not valid here");
@@ -5846,6 +5873,13 @@ namespace {
         }
 
         for (const auto& bound : context.link_assoc) {
+            bool uses_ivar = cb.uses_ivar(bound.impl_ty);
+            for (const auto& ty : bound.params.m_types) {
+                uses_ivar |= cb.uses_ivar(ty);
+            }
+            if (!uses_ivar) {
+                continue;
+            }
             used_ty = false;
             auto t = clone_ty_with(sp, bound.impl_ty, cb);
             auto p = clone_path_params_with(sp, bound.params, cb);
@@ -5898,10 +5932,13 @@ namespace {
             if (const auto* node_ptr = dynamic_cast<const ::HIR::ExprNode_CallMethod*>(node_ptr_dyn)) {
                 const auto& node = *node_ptr;
                 const auto& ty_tpl = context.get_type(node.m_value->m_res_type);
+                if (!cb.uses_ivar(ty_tpl)) {
+                    continue;
+                }
 
                 bool used_ty = false;
                 auto t = clone_ty_with(sp, ty_tpl, [&](const auto& ty, auto& out_ty) {
-                    if (ty == ty_l) {
+                    if (const auto* e = ty.data().opt_Infer(); e && e->index == ivar_idx) {
                         out_ty = new_ty.clone();
                         used_ty = true;
                         return true;

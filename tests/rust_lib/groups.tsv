@@ -53,7 +53,14 @@ coretests	lazy	module	coretests/tests/lazy.rs	2024
 coretests	macros	module	coretests/tests/macros.rs	2024
 coretests	manually_drop	module	coretests/tests/manually_drop.rs	2024
 coretests	mem	module	coretests/tests/mem.rs	2024
-coretests	net	module	coretests/tests/net/mod.rs	2024
+coretests	net_ip_0	module-shard	coretests/tests/net/ip_addr.rs|coretests_net_ip_addr.rs	2024
+coretests	net_ip_1	module-shard	coretests/tests/net/ip_addr.rs|coretests_net_ip_addr.rs	2024
+coretests	net_ip_2	module-shard	coretests/tests/net/ip_addr.rs|coretests_net_ip_addr.rs	2024
+coretests	net_ip_properties	module-shard	coretests/tests/net/ip_addr.rs|coretests_net_ip_addr.rs	2024
+coretests	net_ipv4_properties	module-shard	coretests/tests/net/ip_addr.rs|coretests_net_ip_addr.rs	2024
+coretests	net_ipv6_properties	module-shard	coretests/tests/net/ip_addr.rs|coretests_net_ip_addr.rs	2024
+coretests	net_parser	adapter-module	coretests_net_parser.rs	2024
+coretests	net_socket_addr	adapter-module	coretests_net_socket_addr.rs	2024
 coretests	nonzero	module	coretests/tests/nonzero.rs	2024
 coretests	num	module	coretests/tests/num/mod.rs	2024
 coretests	ops	module	coretests/tests/ops.rs	2024

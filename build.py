@@ -795,6 +795,12 @@ rust_lib_sources = [
     for _path in sorted((rust_lib_root / "upstream").rglob("*"))
     if _path.is_file()
 ]
+rust_lib_adapters = [
+    "$(S)/tests/rust_lib/adapter/"
+    + _path.relative_to(rust_lib_root / "adapter").as_posix()
+    for _path in sorted((rust_lib_root / "adapter").rglob("*"))
+    if _path.is_file()
+]
 
 rust_lib_harnesses = {}
 rust_lib_harness_outputs = {}
@@ -807,6 +813,7 @@ for _suite, _harness_group, _kind, _root, _edition in rust_lib_groups:
         name="rust_lib_harness_" + _digest,
         inputs=[
             *rust_lib_sources,
+            *rust_lib_adapters,
             "$(S)/tests/rust_lib/compile.py",
             "$(S)/tests/rust_lib/groups.tsv",
             *TESTS_LIB,

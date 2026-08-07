@@ -16,6 +16,8 @@
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
+#include <unordered_map>
+#include <unordered_set>
 #include "trans_target.hpp"
 #include "trans_trans_list.hpp" // Note: This is included for inlining after enumeration and monomorph
 
@@ -158,7 +160,7 @@ bool MIR_OptimiseInline(const StaticTraitResolve& resolve, const ::HIR::ItemPath
     return rv;
 }
 
-void MIR_Optimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type, bool do_inline /*=true*/) {
+void MIR_Optimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type, bool do_inline /*=true*/, bool validate /*=true*/) {
     static Span sp;
     TRACE_FUNCTION_F(path);
     ::MIR::TypeResolve state {
@@ -423,7 +425,7 @@ void MIR_Optimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
         MIR_Dump_Fcn(::std::cout, fcn);
     }
 #endif
-    if (check_mode() >= CHECKMODE_FINAL) {
+    if (validate && check_mode() >= CHECKMODE_FINAL) {
         // DEFENCE: Run validation _before_ GC (so validation errors refer to the pre-gc numbers)
         MIR_Validate(resolve, path, fcn, args, ret_type);
     }
@@ -434,7 +436,7 @@ void MIR_Optimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
     //MIR_Validate_Full(resolve, path, fcn, args, ret_type);
 
     MIR_SortBlocks(resolve, path, fcn);
-    if (check_mode() >= CHECKMODE_FINAL) {
+    if (validate && check_mode() >= CHECKMODE_FINAL) {
         MIR_Validate(resolve, path, fcn, args, ret_type);
     }
 }
@@ -2245,8 +2247,26 @@ bool MIR_Optimise_DeTemporary_ReborrowOfUnused(::MIR::TypeResolve& state, ::MIR:
     }
     // The borrow must not be within a loop
     {
-        std::vector<bool> visited(fcn.blocks.size());
-        std::vector<bool> loops(fcn.blocks.size());
+        std::vector<unsigned int> incoming_edges(fcn.blocks.size());
+        for (const auto& block : fcn.blocks) {
+            visit_terminator_target(block.terminator, [&](const auto& target) {
+                incoming_edges[target]++;
+            });
+        }
+        std::vector<unsigned int> acyclic_blocks;
+        acyclic_blocks.reserve(fcn.blocks.size());
+        for (unsigned int i = 0; i < incoming_edges.size(); i++) {
+            if (incoming_edges[i] == 0) {
+                acyclic_blocks.push_back(i);
+            }
+        }
+        for (size_t i = 0; i < acyclic_blocks.size(); i++) {
+            visit_terminator_target(fcn.blocks[acyclic_blocks[i]].terminator, [&](const auto& target) {
+                if (--incoming_edges[target] == 0) {
+                    acyclic_blocks.push_back(target);
+                }
+            });
+        }
 
         struct VisitState {
             const ::MIR::Function& fcn;
@@ -2286,44 +2306,65 @@ bool MIR_Optimise_DeTemporary_ReborrowOfUnused(::MIR::TypeResolve& state, ::MIR:
             }
         } vs{fcn};
 
-        for (auto& poss : possible) {
-            if (!visited[poss.pos.bb_idx]) {
-                visited[poss.pos.bb_idx] = true;
-                loops[poss.pos.bb_idx] = vs.does_block_loop(poss.pos.bb_idx);
+        if (acyclic_blocks.size() != fcn.blocks.size()) {
+            std::vector<bool> visited(fcn.blocks.size());
+            std::vector<bool> loops(fcn.blocks.size());
+            for (auto& poss : possible) {
+                if (!visited[poss.pos.bb_idx]) {
+                    visited[poss.pos.bb_idx] = true;
+                    loops[poss.pos.bb_idx] = vs.does_block_loop(poss.pos.bb_idx);
+                }
+                poss.used |= loops[poss.pos.bb_idx];
             }
-            poss.used |= loops[poss.pos.bb_idx];
         }
     }
 
     // Must be the only use (apart from dropping) of the source lvalue
+    ::std::unordered_map<uintptr_t, ::std::vector<size_t>> possible_by_source;
+    for (size_t i = 0; i < possible.size(); i++) {
+        possible_by_source[possible[i].slot.get_inner()].push_back(i);
+    }
     for (const auto& blk : fcn.blocks) {
         for (const auto& stmt : blk.statements) {
             state.set_cur_stmt(&blk - fcn.blocks.data(), &stmt - blk.statements.data());
             auto pos = StmtRef(state.get_cur_block(), state.get_cur_stmt_ofs());
-            for (auto& p : possible) {
-                if (pos == p.pos) {
-                    continue;
+            const ::MIR::LValue* dropped = stmt.is_Drop() ? &stmt.as_Drop().slot : nullptr;
+            visit_mir_lvalues(stmt, [&](const ::MIR::LValue& lv, ValUsage /*vu*/) {
+                if (!(lv.m_root.is_Local() || lv.m_root.is_Argument())) {
+                    return false;
                 }
-                if (stmt.is_Drop() && stmt.as_Drop().slot.m_root == p.slot && stmt.as_Drop().slot.m_wrappers.empty()) {
-                    DEBUG(state << p.slot << " Droped - " << stmt);
-                    continue;
+                auto it = possible_by_source.find(lv.m_root.get_inner());
+                if (it == possible_by_source.end()) {
+                    return false;
                 }
-                if (visit_mir_lvalues(stmt, [&](const ::MIR::LValue& lv, ValUsage /*vu*/) {
-                    return lv.m_root == p.slot;
-                })) {
-                    DEBUG(state << p.slot << " Used - " << stmt);
+                if (dropped && dropped->m_wrappers.empty() && dropped->m_root.get_inner() == lv.m_root.get_inner()) {
+                    DEBUG(state << lv.m_root << " Droped - " << stmt);
+                    return false;
+                }
+                for (auto possible_idx : it->second) {
+                    auto& p = possible[possible_idx];
+                    if (!(pos == p.pos)) {
+                        DEBUG(state << p.slot << " Used - " << stmt);
+                        p.used = true;
+                    }
+                }
+                return false;
+            });
+        }
+        visit_mir_lvalues(blk.terminator, [&](const ::MIR::LValue& lv, ValUsage /*vu*/) {
+            if (!(lv.m_root.is_Local() || lv.m_root.is_Argument())) {
+                return false;
+            }
+            auto it = possible_by_source.find(lv.m_root.get_inner());
+            if (it != possible_by_source.end()) {
+                for (auto possible_idx : it->second) {
+                    auto& p = possible[possible_idx];
+                    DEBUG(state << p.slot << " Used - " << blk.terminator);
                     p.used = true;
                 }
             }
-        }
-        for (auto& p : possible) {
-            if (visit_mir_lvalues(blk.terminator, [&](const ::MIR::LValue& lv, ValUsage /*vu*/) {
-                return lv.m_root == p.slot;
-            })) {
-                DEBUG(state << p.slot << " Used - " << blk.terminator);
-                p.used = true;
-            }
-        }
+            return false;
+        });
     }
 
     // Remove any marked with `used=true` from the list
@@ -2337,40 +2378,46 @@ bool MIR_Optimise_DeTemporary_ReborrowOfUnused(::MIR::TypeResolve& state, ::MIR:
         return false;
     }
     // Rewrite and erase
+    ::std::unordered_set<uintptr_t> source_slots;
+    ::std::unordered_map<uintptr_t, uintptr_t> replacements;
+    for (auto it = possible.rbegin(); it != possible.rend(); ++it) {
+        const auto source = it->slot.get_inner();
+        const auto destination = it->replace.get_inner();
+        source_slots.insert(source);
+        auto next = replacements.find(source);
+        replacements[destination] = next == replacements.end() ? source : next->second;
+        fcn.blocks[it->pos.bb_idx].statements[it->pos.stmt_idx] = ::MIR::Statement();
+    }
     for (auto& blk : fcn.blocks) {
         for (auto& stmt : blk.statements) {
             state.set_cur_stmt(&blk - fcn.blocks.data(), &stmt - blk.statements.data());
-            auto pos = StmtRef(state.get_cur_block(), state.get_cur_stmt_ofs());
-            for (const auto& p : possible) {
-                if (pos == p.pos) {
-                    DEBUG(state << p.slot << " Erase initial");
-                    stmt = ::MIR::Statement();
-                    continue;
-                }
-                if (stmt.is_Drop() && stmt.as_Drop().slot.m_root == p.slot && stmt.as_Drop().slot.m_wrappers.empty()) {
-                    DEBUG(state << p.slot << " Erase drop");
-                    stmt = ::MIR::Statement();
-                    continue;
-                }
-                visit_mir_lvalues_mut(stmt, [&](::MIR::LValue& lv, ValUsage /*vu*/) {
-                    if (lv.m_root == p.replace) {
-                        DEBUG(state << p.slot << " Replace " << p.replace);
-                        lv.m_root = p.slot.clone();
-                    }
-                    return false;
-                });
+            if (stmt.is_Drop() && stmt.as_Drop().slot.m_wrappers.empty() && (stmt.as_Drop().slot.m_root.is_Local() || stmt.as_Drop().slot.m_root.is_Argument()) && source_slots.count(stmt.as_Drop().slot.m_root.get_inner()) != 0) {
+                DEBUG(state << stmt.as_Drop().slot.m_root << " Erase drop");
+                stmt = ::MIR::Statement();
+                continue;
             }
-        }
-
-        for (const auto& p : possible) {
-            visit_mir_lvalues_mut(blk.terminator, [&](::MIR::LValue& lv, ValUsage /*vu*/) {
-                if (lv.m_root == p.replace) {
-                    DEBUG(state << p.slot << " Replace " << p.replace);
-                    lv.m_root = p.slot.clone();
+            visit_mir_lvalues_mut(stmt, [&](::MIR::LValue& lv, ValUsage /*vu*/) {
+                if (lv.m_root.is_Local()) {
+                    auto it = replacements.find(lv.m_root.get_inner());
+                    if (it != replacements.end()) {
+                        DEBUG(state << lv.m_root << " Replace");
+                        lv.m_root = ::MIR::LValue::Storage::from_inner(it->second);
+                    }
                 }
                 return false;
             });
         }
+
+        visit_mir_lvalues_mut(blk.terminator, [&](::MIR::LValue& lv, ValUsage /*vu*/) {
+            if (lv.m_root.is_Local()) {
+                auto it = replacements.find(lv.m_root.get_inner());
+                if (it != replacements.end()) {
+                    DEBUG(state << lv.m_root << " Replace");
+                    lv.m_root = ::MIR::LValue::Storage::from_inner(it->second);
+                }
+            }
+            return false;
+        });
     }
     changed = true;
     return changed;
@@ -2708,6 +2755,21 @@ bool MIR_Optimise_UnifyBlocks(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
     TRACE_FUNCTION_FR("", changed);
 
     struct H {
+        static size_t block_hash(const ::MIR::BasicBlock& block) {
+            size_t rv = block.statements.size();
+            auto add = [&](size_t v) {
+                rv ^= v + 0x9e3779b9 + (rv << 6) + (rv >> 2);
+            };
+            for (const auto& statement : block.statements) {
+                add(statement.tag());
+            }
+            add(block.terminator.tag());
+            visit_terminator_target(block.terminator, [&](const auto& target) {
+                add(target);
+            });
+            return rv;
+        }
+
         static bool blocks_equal(const ::MIR::BasicBlock& a, const ::MIR::BasicBlock& b) {
             if (a.statements.size() != b.statements.size()) {
                 return false;
@@ -2828,8 +2890,8 @@ bool MIR_Optimise_UnifyBlocks(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
     };
 
     // Locate duplicate blocks and replace
-    ::std::vector<bool> visited(fcn.blocks.size());
     ::std::map<unsigned int, unsigned int> replacements;
+    ::std::unordered_map<size_t, ::std::vector<unsigned int>> candidates;
     for (unsigned int bb_idx = 0; bb_idx < fcn.blocks.size(); bb_idx++) {
         if (fcn.blocks[bb_idx].terminator.tag() == ::MIR::Terminator::TAGDEAD) {
             continue;
@@ -2837,17 +2899,17 @@ bool MIR_Optimise_UnifyBlocks(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
         if (fcn.blocks[bb_idx].terminator.is_Incomplete() && fcn.blocks[bb_idx].statements.size() == 0) {
             continue;
         }
-        if (visited[bb_idx]) {
-            continue;
+        auto& bucket = candidates[H::block_hash(fcn.blocks[bb_idx])];
+        bool found = false;
+        for (auto candidate : bucket) {
+            if (H::blocks_equal(fcn.blocks[candidate], fcn.blocks[bb_idx])) {
+                replacements[bb_idx] = candidate;
+                found = true;
+                break;
+            }
         }
-        for (unsigned int i = bb_idx + 1; i < fcn.blocks.size(); i++) {
-            if (visited[i]) {
-                continue;
-            }
-            if (H::blocks_equal(fcn.blocks[bb_idx], fcn.blocks[i])) {
-                replacements[i] = bb_idx;
-                visited[i] = true;
-            }
+        if (!found) {
+            bucket.push_back(bb_idx);
         }
     }
 
@@ -5737,7 +5799,9 @@ void MIR_OptimiseCrate(::HIR::Crate& crate, bool do_minimal_optimisation) {
         if (do_minimal_optimisation) {
             MIR_OptimiseMin(res, p, mir, args, ty);
         } else {
-            MIR_Optimise(res, p, mir, args, ty);
+            // The crate driver validates after this optimisation and its final cleanup.
+            // Preserve explicitly requested diagnostic checks inside the optimiser.
+            MIR_Optimise(res, p, mir, args, ty, /*do_inline=*/true, /*validate=*/getenv("MRUSTC_MIR_CHECK") != nullptr);
         }
         // Run cleanup to handle now-monomoprhised inlined constants
         MIR_Cleanup(res, p, mir, args, ty);
