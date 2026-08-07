@@ -227,7 +227,9 @@ TOOLCHAIN_ENV = {
 
 # All node scripts are Python and share tests/lib.py.
 TESTS_LIB = ["$(S)/tests/lib.py"]
-TEST_TIMEOUT = ["timeout", "60s"]
+# Nix exposes timeout as a symlink to the coreutils multicall binary.  The
+# build engine canonicalises executable paths, so name the applet explicitly.
+TEST_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "60s"]
 
 # std_src: fetch + patch the rust-1.90 source, add the shim, pack it.
 std_src = command(
