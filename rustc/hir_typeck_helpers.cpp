@@ -1358,7 +1358,7 @@ TU_ARMA(Alias, ee) {
                     return callback(ImplRef(type.clone(), {}, std::move(assoc_list)), ::HIR::Compare::Equal);
                 } else {
                     ::HIR::TraitPath::assoc_list_t assoc_list;
-                    assoc_list.insert(std::make_pair(name_Discriminant, HIR::TraitPath::AtyEqual{trait, {}, HIR::TypeRef::new_unit()}));
+                    assoc_list.insert(std::make_pair(name_Discriminant, HIR::TraitPath::AtyEqual{trait, {}, HIR::CoreType::U8}));
                     return callback(ImplRef(type.clone(), {}, std::move(assoc_list)), ::HIR::Compare::Equal);
                 }
             }

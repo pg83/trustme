@@ -127,11 +127,11 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
                 }
             } else {
             }
-            static ::HIR::TraitPath::assoc_list_t assoc_unit;
-            if (assoc_unit.empty()) {
-                assoc_unit.insert(std::make_pair(RcString::new_interned("Discriminant"), HIR::TraitPath::AtyEqual{m_lang_DiscriminantKind, {}, HIR::TypeRef::new_unit()}));
+            static ::HIR::TraitPath::assoc_list_t assoc_u8;
+            if (assoc_u8.empty()) {
+                assoc_u8.insert(std::make_pair(RcString::new_interned("Discriminant"), HIR::TraitPath::AtyEqual{m_lang_DiscriminantKind, {}, HIR::CoreType::U8}));
             }
-            return found_cb(ImplRef(HIR::PathParams(), &type, trait_params, &assoc_unit), false);
+            return found_cb(ImplRef(HIR::PathParams(), &type, trait_params, &assoc_u8), false);
         } else if (TARGETVER_LEAST_1_54 && trait_path == m_lang_Pointee) {
             static ::HIR::TraitPath::assoc_list_t assoc_unit;
             static ::HIR::TraitPath::assoc_list_t assoc_slice;
