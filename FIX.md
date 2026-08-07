@@ -2,6 +2,7 @@
 
 ### P0 — сначала убрать ложные сигналы и зависания
 
+- ~~Ограничить все тестовые ноды целиком, включая выполняемую адаптером компиляцию.~~ Сделано: каждая test command-нода начинается с `timeout 60s`; это включает unit compile+runtime, compile-only shards, сборку library harness, отдельные library leaf tests и `resvg`. Production-ноды `rustc`, `libstd`, получение source и vendor в этот лимит не входят.
 - ~~Исправить doctest extractor и проверять каждый результат эталонным Rust 1.90 перед импортом.~~ Сделано: fence больше не пересекает границу непрерывного doc-comment блока, qualified `Result::Ok(())` не дублируется, каждый кандидат компилируется и запускается точным `rustc 1.90.0` с проверкой ожидаемого exit mode. Из 3 807 кандидатов приняты 3 492.
   - ложный `std/io/mod__L1613_runtime.rs` с prose и вложенным Markdown удалён: это был closing fence предыдущего item, ошибочно принятый за новое начало;
   - `std/io/mod__L2379_runtime.rs` исправлен и проходит targeted runtime;

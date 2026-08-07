@@ -227,8 +227,9 @@ TOOLCHAIN_ENV = {
 
 # All node scripts are Python and share tests/lib.py.
 TESTS_LIB = ["$(S)/tests/lib.py"]
-# Use this only for commands that execute tests directly.  Adapter nodes that
-# also compile apply the same limit to their runtime subprocess instead.
+# Bound the whole test node, including compilation performed by adapters.
+# The build engine resolves Nix's `timeout` symlink to the multicall binary,
+# so select its applet explicitly instead of relying on argv[0].
 TEST_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "60s"]
 
 # std_src: fetch + patch the rust-1.90 source, add the shim, pack it.
@@ -297,6 +298,7 @@ resvg = command(
     outputs=["$(B)/tests/resvg.stamp"],
     cmd=[
         [
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/build_project.py",
             "$(B)/tests/resvg-src.tar",
             "$(B)/tests/resvg-vendor.tar.zst",
@@ -304,7 +306,7 @@ resvg = command(
             "crates/resvg",
             "python3", "$(S)/tests/resvg/run.py", "@BIN@",
         ],
-        ["sh", "-c", "> $(B)/tests/resvg.stamp"],
+        [*TEST_TIMEOUT, "sh", "-c", "> $(B)/tests/resvg.stamp"],
     ],
     deps=[resvg_src, resvg_vendor, libstd, rustc, cargo],
     env=TOOLCHAIN_ENV,
@@ -330,6 +332,7 @@ unit_tests = [
                 "-v",
             ],
             [
+                *TEST_TIMEOUT,
                 "sh",
                 "-c",
                 "> $(B)/tests/unit/doctest_import.stamp",
@@ -354,6 +357,7 @@ unit_tests.append(command(
             "-v",
         ],
         [
+            *TEST_TIMEOUT,
             "sh",
             "-c",
             "> $(B)/tests/unit/rust_lib_import.stamp",
@@ -369,6 +373,7 @@ for _src in build.glob("$(S)/tests/unit/test_*.rs"):
         inputs=[_src, "$(S)/tests/unit/run_one.py"] + TESTS_LIB,
         outputs=["$(B)/tests/unit/" + _stem + ".stamp"],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/unit/run_one.py",
             _src, "$(B)/tests/libstd.tar",
             "$(B)/tests/unit/" + _stem + ".stamp",
@@ -405,6 +410,7 @@ for _case in rust_1_90_cases:
         ],
         outputs=["$(B)/tests/rust_1_90/" + _case + ".stamp"],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/rust_1_90/adapter.py",
             _case, _src, "$(B)/tests/libstd.tar",
             "$(B)/tests/rust_1_90/" + _case + ".stamp",
@@ -437,6 +443,7 @@ for _start in range(0, len(rust_ui_compile_cases), 10):
         ],
         outputs=[_stamp],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/rust_ui_compile/adapter.py",
             "$(S)/tests/rust_ui_compile/cases.json", str(_start), str(len(_shard)),
             "$(S)/tests/rust_ui_compile/upstream", "$(B)/tests/libstd.tar", _stamp,
@@ -473,6 +480,7 @@ for _case in gccrs_cases:
         ],
         outputs=["$(B)/tests/gccrs/" + _case + ".stamp"],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/gccrs/adapter.py",
             _case, _src, "$(B)/tests/gccrs/" + _case + ".stamp",
         ],
@@ -507,6 +515,7 @@ for _start in range(0, len(gccrs_compile_cases), 10):
         ],
         outputs=[_stamp],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/gccrs_compile/adapter.py",
             "$(S)/tests/gccrs_compile/cases.txt", str(_start), str(len(_shard)),
             "$(S)/tests/gccrs_compile/upstream", _stamp,
@@ -537,6 +546,7 @@ for _case in rust_quiz_cases:
         ],
         outputs=["$(B)/tests/rust_quiz/" + _case + ".stamp"],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/rust_quiz/adapter.py",
             _case, _src, _expected, "$(B)/tests/libstd.tar",
             "$(B)/tests/rust_quiz/" + _case + ".stamp",
@@ -570,6 +580,7 @@ for _start in range(0, len(rustlings_cases), 10):
         ],
         outputs=[_stamp],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/rustlings/adapter.py",
             "$(S)/tests/rustlings/cases.tsv", str(_start), str(len(_shard)),
             "$(S)/tests/rustlings/upstream", "$(B)/tests/libstd.tar", _stamp,
@@ -603,6 +614,7 @@ for _start in range(0, len(rust_by_example_cases), 10):
         ],
         outputs=[_stamp],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/rust_by_example/adapter.py",
             "$(S)/tests/rust_by_example/cases.tsv", str(_start), str(len(_shard)),
             "$(S)/tests/rust_by_example/upstream", "$(B)/tests/libstd.tar", _stamp,
@@ -641,6 +653,7 @@ for _start in range(0, len(rust_book_cases), 10):
         ],
         outputs=[_stamp],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/rust_book/adapter.py",
             "$(S)/tests/rust_book/cases.tsv", str(_start), str(len(_shard)),
             "$(S)/tests/rust_book/upstream", "$(B)/tests/libstd.tar", _stamp,
@@ -679,6 +692,7 @@ for _start in range(0, len(exercism_rust_cases), 10):
         ],
         outputs=[_stamp],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/exercism_rust/adapter.py",
             "$(S)/tests/exercism_rust/cases.tsv", str(_start), str(len(_shard)),
             "$(S)/tests/exercism_rust/upstream", "$(B)/tests/libstd.tar", _stamp,
@@ -712,6 +726,7 @@ for _start in range(0, len(rust_reference_cases), 10):
         ],
         outputs=[_stamp],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/rust_reference/adapter.py",
             "$(S)/tests/rust_reference/cases.tsv", str(_start), str(len(_shard)),
             "$(S)/tests/rust_reference/upstream", "$(B)/tests/libstd.tar", _stamp,
@@ -745,6 +760,7 @@ for _start in range(0, len(nomicon_cases), 10):
         ],
         outputs=[_stamp],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/nomicon/adapter.py",
             "$(S)/tests/nomicon/cases.tsv", str(_start), str(len(_shard)),
             "$(S)/tests/nomicon/upstream", "$(B)/tests/libstd.tar", _stamp,
@@ -778,6 +794,7 @@ for _start in range(0, len(async_book_cases), 10):
         ],
         outputs=[_stamp],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/async_book/adapter.py",
             "$(S)/tests/async_book/cases.tsv", str(_start), str(len(_shard)),
             "$(S)/tests/async_book/upstream", "$(B)/tests/libstd.tar", _stamp,
@@ -828,6 +845,7 @@ for _suite, _harness_group, _kind, _root, _edition in rust_lib_groups:
         ],
         outputs=[_output],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/rust_lib/compile.py",
             _suite, _harness_group, _kind, _root, _edition,
             "$(S)/tests/rust_lib/upstream", "$(B)/tests/libstd.tar", _output,
@@ -852,6 +870,7 @@ for _suite, _harness_group, _source, _function, _hint in rust_lib_cases:
         ],
         outputs=[_stamp],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/rust_lib/run.py",
             _case, _function, _hint, rust_lib_harness_outputs[_key], _stamp,
         ],
@@ -881,6 +900,7 @@ for _case, _origin, _edition, _mode in rust_doctest_cases:
         ],
         outputs=[_stamp],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/rust_doctest/adapter.py",
             _origin, _src, _edition, _mode, "$(B)/tests/libstd.tar", _stamp,
         ],
@@ -918,6 +938,7 @@ for _start in range(0, len(rustsmith_cases), 10):
         ],
         outputs=[_stamp],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/rustsmith/adapter.py",
             "$(S)/tests/rustsmith/cases.tsv", str(_start), str(len(_shard)),
             "$(S)/tests/rustsmith/upstream", "$(B)/tests/libstd.tar", _stamp,
@@ -947,6 +968,7 @@ for _start in range(0, len(miri_cases), 10):
         ],
         outputs=[_stamp],
         cmd=[
+            *TEST_TIMEOUT,
             "python3", "$(S)/tests/miri/adapter.py",
             "$(S)/tests/miri/cases.tsv", str(_start), str(len(_shard)),
             "$(S)/tests/miri/upstream", "$(B)/tests/libstd.tar", _stamp,
