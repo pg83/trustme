@@ -3160,6 +3160,58 @@ namespace HIR {
                         auto ptr_src = local_state.read_param_ptr(e.args.at(0));
                         auto vr_src = ValueRef(ptr_src.second, ptr_src.first - EncodedLiteral::PTR_BASE);
                         dst.copy_from(state, vr_src);
+                    } else if (te->name == "discriminant_value") {
+                        auto ty = local_state.monomorph_expand(te->params.m_types.at(0));
+                        if (!(ty.data().is_Path() && ty.data().as_Path().binding.is_Enum())) {
+                            dst.write_uint(state, dst.get_len() * 8, U128(0));
+                        } else {
+                            const auto* repr = Target_GetTypeRepr(state.sp, resolve, ty);
+                            if (!repr) {
+                                throw Defer();
+                            }
+
+                            ValueRef value;
+                            if (const auto* arg = e.args.at(0).opt_Borrow()) {
+                                value = local_state.get_lval(arg->val);
+                            } else {
+                                auto ptr = local_state.read_param_ptr(e.args.at(0));
+                                MIR_ASSERT(state, ptr.first >= EncodedLiteral::PTR_BASE, "Null pointer passed to `discriminant_value`");
+                                value = ValueRef(ptr.second, ptr.first - EncodedLiteral::PTR_BASE);
+                            }
+
+                        TU_MATCH_HDRA( (repr->variants), { )
+                        TU_ARMA(None, ve) {
+                                    dst.write_uint(state, dst.get_len() * 8, U128(0));
+                                }
+                                TU_ARMA(Linear, ve) {
+                                    const auto ofs = repr->get_offset(state.sp, resolve, ve.field);
+                                    auto tag = value.slice(ofs, ve.field.size).read_uint(state, ve.field.size * 8);
+                                    const auto variant = tag < U128(ve.offset) ? ve.field.index : (tag - U128(ve.offset)).truncate_u64();
+                                    dst.write_uint(state, dst.get_len() * 8, U128(variant));
+                                }
+                                TU_ARMA(Values, ve) {
+                                    const auto ofs = repr->get_offset(state.sp, resolve, ve.field);
+                                    const auto& tag_ty = Target_GetInnerType(state.sp, resolve, *repr, ve.field.index, ve.field.sub_fields);
+                                    const auto tag_info = TypeInfo::for_type(tag_ty);
+                                    MIR_ASSERT(state, tag_info.ty == TypeInfo::Signed || tag_info.ty == TypeInfo::Unsigned, "Non-integer enum tag " << tag_ty);
+                                    auto tag = value.slice(ofs, ve.field.size);
+                                    if (tag_info.ty == TypeInfo::Signed) {
+                                        dst.write_sint(state, dst.get_len() * 8, tag.read_sint(state, tag_info.bits));
+                                    } else {
+                                        dst.write_uint(state, dst.get_len() * 8, tag.read_uint(state, tag_info.bits));
+                                    }
+                                }
+                                TU_ARMA(NonZero, ve) {
+                                    const auto ofs = repr->get_offset(state.sp, resolve, ve.field);
+                                    bool is_nonzero = false;
+                                    for (size_t i = 0; i < ve.field.size; i++) {
+                                        is_nonzero |= value.slice(ofs + i, 1).read_uint(state, 8) != U128(0);
+                                    }
+                                    const auto variant = is_nonzero ? 1 - ve.zero_variant : ve.zero_variant;
+                                    dst.write_uint(state, dst.get_len() * 8, U128(variant));
+                                }
+                        }
+                        }
                     } else if (te->name == "variant_count") {
                         auto ty = local_state.monomorph_expand(te->params.m_types.at(0));
                         MIR_ASSERT(state, ty.data().is_Path(), "`variant_count` on non-enum - " << ty);
