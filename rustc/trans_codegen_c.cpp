@@ -3456,10 +3456,10 @@ namespace {
                         case MetadataType::Zero:
                             MIR_BUG(mir_res, "");
                         case MetadataType::Slice:
-                            m_of << "make_sliceptr";
+                            m_of << "make_sliceptr(";
                             break;
                         case MetadataType::TraitObject:
-                            m_of << "make_traitobjptr";
+                            m_of << "make_traitobjptr(";
                             break;
                     }
                     if (meta_ty == MetadataType::TraitObject) {
@@ -3468,7 +3468,7 @@ namespace {
                         const auto base_param = ::MIR::Param::make_LValue(base_ptr.clone());
                         if (get_inner_unsized_type(base_ty).data().is_TraitObject()) {
                             const auto* cur_ty = &base_ty;
-                            m_of << "((uint8_t*)";
+                            m_of << "(uint8_t*)";
                             emit_lvalue(base_ptr);
                             m_of << ".PTR + ";
                             for (size_t i = base_val.wrapper_count(); i < val.m_wrappers.size(); i++) {
