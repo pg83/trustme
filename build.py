@@ -461,24 +461,23 @@ rust_ui_compile_cases = json.loads(
     (rust_ui_compile_root / "cases.json").read_text()
 )
 rust_ui_compile_tests = []
-for _start in range(0, len(rust_ui_compile_cases), 10):
-    _shard = rust_ui_compile_cases[_start:_start + 10]
-    _paths = [_case["path"] for _case in _shard]
-    _digest = hashlib.sha256(("\0".join(_paths)).encode()).hexdigest()[:12]
+for _index, _case in enumerate(rust_ui_compile_cases):
+    _path = _case["path"]
+    _digest = hashlib.sha256(_path.encode()).hexdigest()[:12]
     _stamp = "$(B)/tests/rust_ui_compile/" + _digest + ".stamp"
     rust_ui_compile_tests.append(command(
         name="rust_ui_compile_" + _digest,
         inputs=[
             "$(S)/tests/rust_ui_compile/adapter.py",
             "$(S)/tests/rust_ui_compile/cases.json",
-            *("$(S)/tests/rust_ui_compile/upstream/" + _case for _case in _paths),
+            "$(S)/tests/rust_ui_compile/upstream/" + _path,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tests/rust_ui_compile/adapter.py",
-            "$(S)/tests/rust_ui_compile/cases.json", str(_start), str(len(_shard)),
+            "$(S)/tests/rust_ui_compile/cases.json", str(_index), "1",
             "$(S)/tests/rust_ui_compile/upstream", "$(B)/tests/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
@@ -523,8 +522,8 @@ for _case in gccrs_cases:
         color="green",
     ))
 
-# Positive gccrs compile-suite inputs have no runtime contract.  Compile ten
-# crate roots per node; all copied sources are inputs because a few use mod!.
+# Positive gccrs compile-suite inputs have no runtime contract.  Keep every
+# crate root in its own node; all copied sources are inputs because a few use mod!.
 gccrs_compile_root = Path(__file__).parent / "tests" / "gccrs_compile"
 gccrs_compile_cases = (gccrs_compile_root / "cases.txt").read_text().splitlines()
 gccrs_compile_sources = [
@@ -534,9 +533,8 @@ gccrs_compile_sources = [
     if _path.is_file()
 ]
 gccrs_compile_tests = []
-for _start in range(0, len(gccrs_compile_cases), 10):
-    _shard = gccrs_compile_cases[_start:_start + 10]
-    _digest = hashlib.sha256(("\0".join(_shard)).encode()).hexdigest()[:12]
+for _index, _case in enumerate(gccrs_compile_cases):
+    _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
     _stamp = "$(B)/tests/gccrs_compile/" + _digest + ".stamp"
     gccrs_compile_tests.append(command(
         name="gccrs_compile_" + _digest,
@@ -550,7 +548,7 @@ for _start in range(0, len(gccrs_compile_cases), 10):
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tests/gccrs_compile/adapter.py",
-            "$(S)/tests/gccrs_compile/cases.txt", str(_start), str(len(_shard)),
+            "$(S)/tests/gccrs_compile/cases.txt", str(_index), "1",
             "$(S)/tests/gccrs_compile/upstream", _stamp,
         ],
         deps=[rustc],
@@ -591,31 +589,29 @@ for _case in rust_quiz_cases:
     ))
 
 # Official solved Rustlings exercises retain the upstream distinction between
-# normal binaries and rustc test harnesses.  Run ten files per build node.
+# normal binaries and rustc test harnesses.  Each file is one build node.
 rustlings_root = Path(__file__).parent / "tests" / "rustlings"
 rustlings_cases = [
     _line.split("\t")
     for _line in (rustlings_root / "cases.tsv").read_text().splitlines()
 ]
 rustlings_tests = []
-for _start in range(0, len(rustlings_cases), 10):
-    _shard = rustlings_cases[_start:_start + 10]
-    _paths = [_case for _case, _mode in _shard]
-    _digest = hashlib.sha256(("\0".join(_paths)).encode()).hexdigest()[:12]
+for _index, (_case, _mode) in enumerate(rustlings_cases):
+    _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
     _stamp = "$(B)/tests/rustlings/" + _digest + ".stamp"
     rustlings_tests.append(command(
         name="rustlings_" + _digest,
         inputs=[
             "$(S)/tests/rustlings/adapter.py",
             "$(S)/tests/rustlings/cases.tsv",
-            *("$(S)/tests/rustlings/upstream/" + _case for _case in _paths),
+            "$(S)/tests/rustlings/upstream/" + _case,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tests/rustlings/adapter.py",
-            "$(S)/tests/rustlings/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/rustlings/cases.tsv", str(_index), "1",
             "$(S)/tests/rustlings/upstream", "$(B)/tests/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
@@ -625,31 +621,29 @@ for _start in range(0, len(rustlings_cases), 10):
     ))
 
 # Rust By Example Markdown fences that the reference Rust 1.90 compiler can
-# build and run as independent programs.  Preserve each fence, shard by ten.
+# build and run as independent programs.  Preserve each fence as one node.
 rust_by_example_root = Path(__file__).parent / "tests" / "rust_by_example"
 rust_by_example_cases = [
     _line.split("\t")
     for _line in (rust_by_example_root / "cases.tsv").read_text().splitlines()
 ]
 rust_by_example_tests = []
-for _start in range(0, len(rust_by_example_cases), 10):
-    _shard = rust_by_example_cases[_start:_start + 10]
-    _paths = [_case for _case, _origin, _edition in _shard]
-    _digest = hashlib.sha256(("\0".join(_paths)).encode()).hexdigest()[:12]
+for _index, (_case, _origin, _edition) in enumerate(rust_by_example_cases):
+    _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
     _stamp = "$(B)/tests/rust_by_example/" + _digest + ".stamp"
     rust_by_example_tests.append(command(
         name="rust_by_example_" + _digest,
         inputs=[
             "$(S)/tests/rust_by_example/adapter.py",
             "$(S)/tests/rust_by_example/cases.tsv",
-            *("$(S)/tests/rust_by_example/upstream/" + _case for _case in _paths),
+            "$(S)/tests/rust_by_example/upstream/" + _case,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tests/rust_by_example/adapter.py",
-            "$(S)/tests/rust_by_example/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/rust_by_example/cases.tsv", str(_index), "1",
             "$(S)/tests/rust_by_example/upstream", "$(B)/tests/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
@@ -666,16 +660,14 @@ rust_book_cases = [
     for _line in (rust_book_root / "cases.tsv").read_text().splitlines()
 ]
 rust_book_tests = []
-for _start in range(0, len(rust_book_cases), 10):
-    _shard = rust_book_cases[_start:_start + 10]
-    _case_ids = ["\t".join(_case) for _case in _shard]
-    _digest = hashlib.sha256(("\0".join(_case_ids)).encode()).hexdigest()[:12]
+for _index, (_case, _root, _mode, _edition) in enumerate(rust_book_cases):
+    _case_id = "\t".join((_case, _root, _mode, _edition))
+    _digest = hashlib.sha256(_case_id.encode()).hexdigest()[:12]
     _stamp = "$(B)/tests/rust_book/" + _digest + ".stamp"
     _sources = []
-    for _case, _root, _mode, _edition in _shard:
-        for _path in sorted((rust_book_root / "upstream" / _case).rglob("*.rs")):
-            _relative = _path.relative_to(rust_book_root / "upstream").as_posix()
-            _sources.append("$(S)/tests/rust_book/upstream/" + _relative)
+    for _path in sorted((rust_book_root / "upstream" / _case).rglob("*.rs")):
+        _relative = _path.relative_to(rust_book_root / "upstream").as_posix()
+        _sources.append("$(S)/tests/rust_book/upstream/" + _relative)
     rust_book_tests.append(command(
         name="rust_book_" + _digest,
         inputs=[
@@ -688,7 +680,7 @@ for _start in range(0, len(rust_book_cases), 10):
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tests/rust_book/adapter.py",
-            "$(S)/tests/rust_book/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/rust_book/cases.tsv", str(_index), "1",
             "$(S)/tests/rust_book/upstream", "$(B)/tests/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
@@ -705,16 +697,13 @@ exercism_rust_cases = [
     for _line in (exercism_rust_root / "cases.tsv").read_text().splitlines()
 ]
 exercism_rust_tests = []
-for _start in range(0, len(exercism_rust_cases), 10):
-    _shard = exercism_rust_cases[_start:_start + 10]
-    _slugs = [_slug for _slug, _crate, _edition, _count in _shard]
-    _digest = hashlib.sha256(("\0".join(_slugs)).encode()).hexdigest()[:12]
+for _index, (_slug, _crate, _edition, _count) in enumerate(exercism_rust_cases):
+    _digest = hashlib.sha256(_slug.encode()).hexdigest()[:12]
     _stamp = "$(B)/tests/exercism_rust/" + _digest + ".stamp"
     _sources = []
-    for _slug in _slugs:
-        for _path in sorted((exercism_rust_root / "upstream" / _slug).rglob("*.rs")):
-            _relative = _path.relative_to(exercism_rust_root / "upstream").as_posix()
-            _sources.append("$(S)/tests/exercism_rust/upstream/" + _relative)
+    for _path in sorted((exercism_rust_root / "upstream" / _slug).rglob("*.rs")):
+        _relative = _path.relative_to(exercism_rust_root / "upstream").as_posix()
+        _sources.append("$(S)/tests/exercism_rust/upstream/" + _relative)
     exercism_rust_tests.append(command(
         name="exercism_rust_" + _digest,
         inputs=[
@@ -727,7 +716,7 @@ for _start in range(0, len(exercism_rust_cases), 10):
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tests/exercism_rust/adapter.py",
-            "$(S)/tests/exercism_rust/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/exercism_rust/cases.tsv", str(_index), "1",
             "$(S)/tests/exercism_rust/upstream", "$(B)/tests/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
@@ -744,24 +733,22 @@ rust_reference_cases = [
     for _line in (rust_reference_root / "cases.tsv").read_text().splitlines()
 ]
 rust_reference_tests = []
-for _start in range(0, len(rust_reference_cases), 10):
-    _shard = rust_reference_cases[_start:_start + 10]
-    _paths = [_case for _case, _origin, _edition, _mode in _shard]
-    _digest = hashlib.sha256(("\0".join(_paths)).encode()).hexdigest()[:12]
+for _index, (_case, _origin, _edition, _mode) in enumerate(rust_reference_cases):
+    _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
     _stamp = "$(B)/tests/rust_reference/" + _digest + ".stamp"
     rust_reference_tests.append(command(
         name="rust_reference_" + _digest,
         inputs=[
             "$(S)/tests/rust_reference/adapter.py",
             "$(S)/tests/rust_reference/cases.tsv",
-            *("$(S)/tests/rust_reference/upstream/" + _case for _case in _paths),
+            "$(S)/tests/rust_reference/upstream/" + _case,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tests/rust_reference/adapter.py",
-            "$(S)/tests/rust_reference/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/rust_reference/cases.tsv", str(_index), "1",
             "$(S)/tests/rust_reference/upstream", "$(B)/tests/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
@@ -771,31 +758,29 @@ for _start in range(0, len(rust_reference_cases), 10):
     ))
 
 # Self-contained Rustonomicon code fences, reference-checked with the same
-# pass/compile/fail semantics as The Rust Reference.  Shard by ten.
+# pass/compile/fail semantics as The Rust Reference.  Each fence is one node.
 nomicon_root = Path(__file__).parent / "tests" / "nomicon"
 nomicon_cases = [
     _line.split("\t")
     for _line in (nomicon_root / "cases.tsv").read_text().splitlines()
 ]
 nomicon_tests = []
-for _start in range(0, len(nomicon_cases), 10):
-    _shard = nomicon_cases[_start:_start + 10]
-    _paths = [_case for _case, _origin, _edition, _mode in _shard]
-    _digest = hashlib.sha256(("\0".join(_paths)).encode()).hexdigest()[:12]
+for _index, (_case, _origin, _edition, _mode) in enumerate(nomicon_cases):
+    _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
     _stamp = "$(B)/tests/nomicon/" + _digest + ".stamp"
     nomicon_tests.append(command(
         name="nomicon_" + _digest,
         inputs=[
             "$(S)/tests/nomicon/adapter.py",
             "$(S)/tests/nomicon/cases.tsv",
-            *("$(S)/tests/nomicon/upstream/" + _case for _case in _paths),
+            "$(S)/tests/nomicon/upstream/" + _case,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tests/nomicon/adapter.py",
-            "$(S)/tests/nomicon/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/nomicon/cases.tsv", str(_index), "1",
             "$(S)/tests/nomicon/upstream", "$(B)/tests/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
@@ -812,24 +797,22 @@ async_book_cases = [
     for _line in (async_book_root / "cases.tsv").read_text().splitlines()
 ]
 async_book_tests = []
-for _start in range(0, len(async_book_cases), 10):
-    _shard = async_book_cases[_start:_start + 10]
-    _paths = [_case for _case, _origin, _edition, _mode in _shard]
-    _digest = hashlib.sha256(("\0".join(_paths)).encode()).hexdigest()[:12]
+for _index, (_case, _origin, _edition, _mode) in enumerate(async_book_cases):
+    _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
     _stamp = "$(B)/tests/async_book/" + _digest + ".stamp"
     async_book_tests.append(command(
         name="async_book_" + _digest,
         inputs=[
             "$(S)/tests/async_book/adapter.py",
             "$(S)/tests/async_book/cases.tsv",
-            *("$(S)/tests/async_book/upstream/" + _case for _case in _paths),
+            "$(S)/tests/async_book/upstream/" + _case,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tests/async_book/adapter.py",
-            "$(S)/tests/async_book/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/async_book/cases.tsv", str(_index), "1",
             "$(S)/tests/async_book/upstream", "$(B)/tests/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
@@ -943,26 +926,22 @@ for _case, _origin, _edition, _mode in rust_doctest_cases:
         color="green",
     ))
 
-# Fixed RustSmith programs and rustc 1.90 stdout oracles.  Keep sources and
-# oracles individual on disk, but run ten per node so the graph stays compact.
+# Fixed RustSmith programs and rustc 1.90 stdout oracles.  Keep each source and
+# its oracle in a separate node so failures cannot hide later cases.
 rustsmith_root = Path(__file__).parent / "tests" / "rustsmith"
 rustsmith_cases = [
     _line.split("\t")
     for _line in (rustsmith_root / "cases.tsv").read_text().splitlines()
 ]
 rustsmith_tests = []
-for _start in range(0, len(rustsmith_cases), 10):
-    _shard = rustsmith_cases[_start:_start + 10]
-    _first = _shard[0][0]
-    _last = _shard[-1][0]
-    _stamp = "$(B)/tests/rustsmith/" + _first + "-" + _last + ".stamp"
+for _index, (_stem, _seed) in enumerate(rustsmith_cases):
+    _stamp = "$(B)/tests/rustsmith/" + _stem + ".stamp"
     _inputs = [
         "$(S)/tests/rustsmith/upstream/" + _stem + _suffix
-        for _stem, _seed in _shard
         for _suffix in (".rs", ".args", ".stdout")
     ]
     rustsmith_tests.append(command(
-        name="rustsmith_" + _first + "_" + _last,
+        name="rustsmith_" + _stem,
         inputs=[
             "$(S)/tests/rustsmith/adapter.py",
             "$(S)/tests/rustsmith/cases.tsv",
@@ -973,7 +952,7 @@ for _start in range(0, len(rustsmith_cases), 10):
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tests/rustsmith/adapter.py",
-            "$(S)/tests/rustsmith/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/rustsmith/cases.tsv", str(_index), "1",
             "$(S)/tests/rustsmith/upstream", "$(B)/tests/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
@@ -982,28 +961,27 @@ for _start in range(0, len(rustsmith_cases), 10):
         color="green",
     ))
 
-# Self-contained native Miri pass programs from Rust 1.90.  Like the
-# RustSmith corpus, shard by ten while keeping every upstream source separate.
+# Self-contained native Miri pass programs from Rust 1.90.  Every upstream
+# source is a separate graph node.
 miri_root = Path(__file__).parent / "tests" / "miri"
 miri_cases = (miri_root / "cases.tsv").read_text().splitlines()
 miri_tests = []
-for _start in range(0, len(miri_cases), 10):
-    _shard = miri_cases[_start:_start + 10]
-    _digest = hashlib.sha256(("\0".join(_shard)).encode()).hexdigest()[:12]
+for _index, _case in enumerate(miri_cases):
+    _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
     _stamp = "$(B)/tests/miri/" + _digest + ".stamp"
     miri_tests.append(command(
         name="miri_" + _digest,
         inputs=[
             "$(S)/tests/miri/adapter.py",
             "$(S)/tests/miri/cases.tsv",
-            *("$(S)/tests/miri/upstream/" + _case for _case in _shard),
+            "$(S)/tests/miri/upstream/" + _case,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tests/miri/adapter.py",
-            "$(S)/tests/miri/cases.tsv", str(_start), str(len(_shard)),
+            "$(S)/tests/miri/cases.tsv", str(_index), "1",
             "$(S)/tests/miri/upstream", "$(B)/tests/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
