@@ -400,7 +400,7 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
             // - Check if the desired trait is a supertrait of this.
             // TODO: What if `trait_params` is nullptr?
             bool rv = false;
-            bool is_supertrait = trait_params && this->find_named_trait_in_trait(sp, trait_path, *trait_params, *e.m_trait.m_trait_ptr, e.m_trait.m_path.m_path, e.m_trait.m_path.m_params, type, [&](const HIR::PathParams& i_params, ::HIR::TraitPath::assoc_list_t i_assoc) -> bool {
+            bool is_supertrait = trait_params && e.m_trait.m_trait_ptr && this->find_named_trait_in_trait(sp, trait_path, *trait_params, *e.m_trait.m_trait_ptr, e.m_trait.m_path.m_path, e.m_trait.m_path.m_params, type, [&](const HIR::PathParams& i_params, ::HIR::TraitPath::assoc_list_t i_assoc) -> bool {
                 // Match the input trait params and the output trait params, to resolve HRLs
                 MatchHrls match_hrls{e.m_trait.m_hrtbs ? *e.m_trait.m_hrtbs : empty_params};
                 i_params.match_test_generics_fuzz(sp, *trait_params, HIR::ResolvePlaceholdersNop(), match_hrls);
