@@ -783,6 +783,8 @@ ExprNodeP Parse_Expr0(TokenStream& lex) {
 bool Parse_IsTokValue(eTokenType tok_type) {
     switch (tok_type) {
         case TOK_DOUBLE_COLON:
+        case TOK_DOUBLE_LT:
+        case TOK_LT:
         case TOK_IDENT:
         case TOK_INTEGER:
         case TOK_FLOAT:

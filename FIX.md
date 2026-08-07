@@ -31,7 +31,7 @@
 
 Следующие harness blockers:
 
-- `<$T>::MAX...` внутри macro expansion: 147;
+- ~~`<$T>::MAX...` внутри macro expansion: 147;~~ Сделано: range parser теперь считает `<` и `<<` допустимым началом правой границы, поэтому `0..<$T>::MAX.count_ones()` после macro substitution не обрывается как пустой range. Красный `test_macro_qualified_type_path.rs` проходит compile+runtime; `coretests/num` проходит весь Expand и доходит до отдельной ошибки `Resolve Use` в `flt2dec/random.rs`;
 - ~~rest-pattern lowering `ref mut sub @ ..`: 107;~~ HIR и fixed-array MIR blockers сняты; slice/array regression units и оба ближайших upstream borrowck-теста проходят compile+runtime;
 - macro parsing сложных attribute/token значений: 72;
 - полноценный `offset_of!`: 55, текущий TODO в [parse_expr.cpp](/home/pg/monorepo/trustme/rustc/parse_expr.cpp:1419).
