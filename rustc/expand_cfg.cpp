@@ -55,6 +55,12 @@ namespace {
             auto meta = std::move(lex.getTokenCheck(TOK_INTERPOLATED_META).frag_meta());
             auto ilex = TTStream(meta.span(), ParseState(), meta.data());
             return check_cfg_inner1(meta.name().as_trivial(), ilex);
+        } else if (lex.lookahead(0) == TOK_RWORD_TRUE) {
+            lex.getTokenCheck(TOK_RWORD_TRUE);
+            return true;
+        } else if (lex.lookahead(0) == TOK_RWORD_FALSE) {
+            lex.getTokenCheck(TOK_RWORD_FALSE);
+            return false;
         } else {
             auto name = lex.getTokenCheck(TOK_IDENT).ident().name;
             return check_cfg_inner1(name, lex);
