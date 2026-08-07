@@ -2428,7 +2428,7 @@ namespace {
         void visit(::HIR::ExprNode_PathValue& node) override {
             const auto& sp = node.span();
             TRACE_FUNCTION_F("_PathValue - " << node.m_path);
-            if (node.m_res_type.data().is_NamedFunction()) {
+            if (node.m_res_type.data().is_NamedFunction() && node.m_target != ::HIR::ExprNode_PathValue::STATIC && node.m_target != ::HIR::ExprNode_PathValue::CONSTANT) {
                 auto tmp = m_builder.new_temporary(node.m_res_type);
                 m_builder.push_stmt_assign(sp, tmp.clone(), ::MIR::Constant::make_Function({box$(node.m_path.clone())}));
                 //m_builder.push_stmt_assign( sp, tmp.clone(), ::MIR::Constant::make_ItemAddr({ box$(node.m_path.clone()) }) );
