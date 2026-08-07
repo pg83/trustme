@@ -355,10 +355,15 @@ AST::Pattern Parse_PatternReal_Slice(TokenStream& lex) {
     while (GET_TOK(tok, lex) != TOK_SQUARE_CLOSE) {
         bool has_binding = true;
         ::AST::PatternBinding binding;
-        // `ref foo ..` or `ref foo @ ..`
-        if (tok.type() == TOK_RWORD_REF && lex.lookahead(0) == TOK_IDENT && (lex.lookahead(1) == TOK_DOUBLE_DOT || (lex.lookahead(1) == TOK_AT && lex.lookahead(2) == TOK_DOUBLE_DOT))) {
-            GET_TOK(tok, lex);
-            binding = ::AST::PatternBinding(tok.ident(), ::AST::PatternBinding::Type::REF, false);
+        // `ref [mut] foo ..` or `ref [mut] foo @ ..`
+        if (tok.type() == TOK_RWORD_REF && ((lex.lookahead(0) == TOK_IDENT && (lex.lookahead(1) == TOK_DOUBLE_DOT || (lex.lookahead(1) == TOK_AT && lex.lookahead(2) == TOK_DOUBLE_DOT))) || (lex.lookahead(0) == TOK_RWORD_MUT && lex.lookahead(1) == TOK_IDENT && (lex.lookahead(2) == TOK_DOUBLE_DOT || (lex.lookahead(2) == TOK_AT && lex.lookahead(3) == TOK_DOUBLE_DOT))))) {
+            auto binding_type = ::AST::PatternBinding::Type::REF;
+            if (lex.lookahead(0) == TOK_RWORD_MUT) {
+                GET_CHECK_TOK(tok, lex, TOK_RWORD_MUT);
+                binding_type = ::AST::PatternBinding::Type::MUTREF;
+            }
+            GET_CHECK_TOK(tok, lex, TOK_IDENT);
+            binding = ::AST::PatternBinding(tok.ident(), binding_type, false);
         }
         // `foo ..` or `foo @ ..`
         else if (tok.type() == TOK_IDENT && (lex.lookahead(0) == TOK_DOUBLE_DOT || (lex.lookahead(0) == TOK_AT && lex.lookahead(1) == TOK_DOUBLE_DOT))) {

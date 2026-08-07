@@ -10,7 +10,7 @@
 - ~~Разобрать hang `coretests/net`: подтверждён exit 124, блокирует 47 library tests.~~ Сделано: regression `test_typeck_large_macro.rs` до починки зависал в `Lower MIR` дольше 60s, после починки полный compile+runtime занимает около 8s. MIR value-state теперь хранится один раз на basic block и распространяется FIFO-worklist без path/state-копий; packed merge работает по байтам. Type inference заранее отбрасывает bounds, не содержащие целевой ivar. Квадратичные `UnifyBlocks` и `ReborrowOfUnused` заменены hash/indexed проходами, дублирующие защитные MIR-валидации убраны при сохранении проверки после реально меняющих MIR фаз. Монолитный `net` после этого проходил compiler pipeline, но один 15-МБ generated-C translation unit всё ещё не укладывался вместе с внешним clang в общий 60s timeout, поэтому импорт разбит по upstream-модулям и compile-shards; самый тяжёлый shard собирается за 41.41s, все 47/47 runtime leaf tests проходят.
 - Убрать compiler ICE/assert:
   - ~~`hir_from_ast_expr.cpp:26` — пустой AST expression;~~ Сделано: value-less `yield;` теперь lowering-ится в pool-allocated unit expression. Красный `test_yield_unit.rs` фиксирует compile+runtime, исходный `coroutine/borrow-in-tail-expr.rs` проходит. `coroutine/addassign-yield.rs` больше не падает здесь и доходит до отдельной MIR validity ошибки (`_6` non-valid), которая остаётся в MIR/const-eval пункте ниже;
-  - `hir_from_ast.cpp:297` — invalid pattern;
+  - ~~`hir_from_ast.cpp:297` — invalid pattern;~~ Сделано: slice parser теперь распознаёт `ref mut tail @ ..` как mutable-reference rest binding вместо range с двумя `Invalid` endpoints. Красный `test_slice_rest_ref_mut.rs` проходит compile+runtime, как и исходный `borrowck-slice-pattern-element-loan-rpass.rs`. Вариант на массиве фиксированной длины теперь проходит HIR и вскрывает отдельный MIR cast assert, оставленный в MIR-пункте ниже;
   - `hir_typeck_expr_cs.cpp:8416` — spare rules;
   - `hir_typeck_expr_cs.cpp:1704` — оставшийся infer;
   - MIR/const-eval asserts и TODO.
@@ -32,7 +32,7 @@
 Следующие harness blockers:
 
 - `<$T>::MAX...` внутри macro expansion: 147;
-- rest-pattern lowering `ref mut sub @ ..`: 107;
+- ~~rest-pattern lowering `ref mut sub @ ..`: 107;~~ HIR blocker снят вместе с `hir_from_ast.cpp:297`; fixed-array варианты упираются в отдельный MIR cast assert;
 - macro parsing сложных attribute/token значений: 72;
 - полноценный `offset_of!`: 55, текущий TODO в [parse_expr.cpp](/home/pg/monorepo/trustme/rustc/parse_expr.cpp:1419).
 

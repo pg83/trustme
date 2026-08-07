@@ -88,7 +88,7 @@ void TokenStream::putback(Token tok) {
 }
 
 eTokenType TokenStream::lookahead(unsigned int i) {
-    const unsigned int MAX_LOOKAHEAD = 3;
+    const unsigned int MAX_LOOKAHEAD = 4;
 
     if (m_cache_valid) {
         if (i == 0) {
