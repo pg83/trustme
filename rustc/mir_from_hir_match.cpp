@@ -1384,6 +1384,11 @@ void PatternRulesetBuilder::append_from(const Span& sp, const ::HIR::Pattern& pa
             throw "";
         }
 
+        static S128 get_pattern_value_signed(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::Pattern::Value& val) {
+            TU_MATCH_DEF(::HIR::Pattern::Value, (val), (e), (BUG(sp, "Invalid signed Value type in " << pat);), (Integer, return S128(e.value);), (Named, assert(e.binding); return EncodedLiteralSlice(e.binding->m_value_res).read_sint();))
+            throw "";
+        }
+
         static FloatValue get_pattern_value_float(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::Pattern::Value& val) {
             TU_MATCH_DEF(::HIR::Pattern::Value, (val), (e), (BUG(sp, "Invalid Value type in " << pat);), (Float, return e.value;), (Named, assert(e.binding); return EncodedLiteralSlice(e.binding->m_value_res).read_float();))
             throw "";
@@ -1410,7 +1415,7 @@ void PatternRulesetBuilder::append_from(const Span& sp, const ::HIR::Pattern& pa
                 case ::HIR::CoreType::I64:
                 case ::HIR::CoreType::I128:
                 case ::HIR::CoreType::Isize:
-                    return ::MIR::Constant::make_Int({S128(H::get_pattern_value_int(sp, pat, val)), e});
+                    return ::MIR::Constant::make_Int({H::get_pattern_value_signed(sp, pat, val), e});
                 case ::HIR::CoreType::Bool:
                     BUG(sp, "Can't range match on Bool");
                     break;
