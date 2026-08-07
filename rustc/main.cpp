@@ -191,7 +191,7 @@ void init_debug_list() {
 int main(int argc, char* argv[]) {
     init_debug_list();
     ProgramParams params(argc, argv);
-    if (params.test_harness && params.codegen.panic_type.empty()) {
+    if (params.codegen.panic_type.empty()) {
         params.codegen.panic_type = "unwind";
     }
 
@@ -204,7 +204,7 @@ int main(int argc, char* argv[]) {
     // Set up cfg values
     CompilePhaseV("Setup", [&]() {
         Cfg_SetValue("rust_compiler", "mrustc");
-        Cfg_SetValue("panic", params.codegen.panic_type.empty() ? "abort" : params.codegen.panic_type);
+        Cfg_SetValue("panic", params.codegen.panic_type);
         Cfg_SetValueCb("feature", [&params](const ::std::string& s) {
             return params.features.count(s) != 0;
         });
@@ -436,9 +436,7 @@ int main(int argc, char* argv[]) {
                 }
 
                 if (panic_runtime_needed /*&& !panic_runtime_loaded*/) {
-                    // TODO: Get a panic method from the command line
-                    // - Fall back to abort by default, because mrustc doesn't do unwinding yet.
-                    auto panic_crate = params.codegen.panic_type == "" ? "panic_abort" : "panic_" + params.codegen.panic_type;
+                    auto panic_crate = "panic_" + params.codegen.panic_type;
                     crate.load_extern_crate(Span(), panic_crate.c_str());
                 }
 
@@ -725,7 +723,7 @@ int main(int argc, char* argv[]) {
         trans_opt.mode = params.codegen.codegen_type == "" ? "c" : params.codegen.codegen_type;
         trans_opt.build_command_file = params.codegen.emit_build_command;
         trans_opt.opt_level = params.opt_level;
-        trans_opt.panic_crate = params.codegen.panic_type == "" ? "panic_abort" : "panic_" + params.codegen.panic_type;
+        trans_opt.panic_crate = "panic_" + params.codegen.panic_type;
         for (const char* libdir : params.lib_search_dirs) {
             // Store these paths for use in final linking.
             hir_crate->m_link_paths.push_back(libdir);
