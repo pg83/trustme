@@ -1148,9 +1148,6 @@ coretests	slice	slice.rs	test_windows_zip	slice::test_windows_zip
 coretests	slice	slice.rs	test_iter_ref_consistency	slice::test_iter_ref_consistency
 coretests	slice	slice.rs	assert_range_eq_can_fail_by_panic	slice::slice_index::assert_range_eq_can_fail_by_panic
 coretests	slice	slice.rs	assert_range_eq_can_fail_by_inequality	slice::slice_index::assert_range_eq_can_fail_by_inequality
-coretests	slice	slice.rs	pass	slice::slice_index::pass
-coretests	slice	slice.rs	index_fail	slice::slice_index::index_fail
-coretests	slice	slice.rs	index_mut_fail	slice::slice_index::index_mut_fail
 coretests	slice	slice.rs	simple	slice::slice_index::simple
 coretests	slice	slice.rs	test_find_rfind	slice::test_find_rfind
 coretests	slice	slice.rs	test_iter_folds	slice::test_iter_folds

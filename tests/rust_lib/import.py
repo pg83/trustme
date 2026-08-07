@@ -15,6 +15,84 @@ HERE = Path(__file__).resolve().parent
 UPSTREAM = HERE / "upstream"
 
 
+def macro_definition_ranges(text: str) -> list[tuple[int, int]]:
+    """Return byte ranges occupied by `macro_rules!` definitions."""
+    macro = re.compile(
+        r"(?<![A-Za-z0-9_])macro_rules[ \t]*![ \t]*"
+        r"[A-Za-z_][A-Za-z0-9_]*[ \t]*([({[])"
+    )
+    ranges = []
+    position = 0
+
+    def skip_non_code(index: int) -> int | None:
+        if text.startswith("//", index):
+            end = text.find("\n", index + 2)
+            return len(text) if end < 0 else end + 1
+        if text.startswith("/*", index):
+            depth = 1
+            index += 2
+            while index < len(text) and depth:
+                if text.startswith("/*", index):
+                    depth += 1
+                    index += 2
+                elif text.startswith("*/", index):
+                    depth -= 1
+                    index += 2
+                else:
+                    index += 1
+            return index
+
+        raw = re.match(r"(?:br|cr|r)(?P<hashes>\#*)\"", text[index:])
+        if raw:
+            terminator = '"' + raw.group("hashes")
+            end = text.find(terminator, index + raw.end())
+            return len(text) if end < 0 else end + len(terminator)
+        if text[index] == '"':
+            index += 1
+            while index < len(text):
+                if text[index] == "\\":
+                    index += 2
+                elif text[index] == '"':
+                    return index + 1
+                else:
+                    index += 1
+            return index
+        character = re.match(r"'(?:\\.|[^\\'\n])'", text[index:])
+        if character:
+            return index + character.end()
+        return None
+
+    while position < len(text):
+        skipped = skip_non_code(position)
+        if skipped is not None:
+            position = skipped
+            continue
+        found = macro.match(text, position)
+        if not found:
+            position += 1
+            continue
+
+        opening = found.group(1)
+        closing = {"(": ")", "[": "]", "{": "}"}[opening]
+        depth = 1
+        end = found.end()
+        while end < len(text) and depth:
+            skipped = skip_non_code(end)
+            if skipped is not None:
+                end = skipped
+            elif text[end] == opening:
+                depth += 1
+                end += 1
+            elif text[end] == closing:
+                depth -= 1
+                end += 1
+            else:
+                end += 1
+        ranges.append((position, end))
+        position = end
+    return ranges
+
+
 def test_functions(text: str) -> list[tuple[str, tuple[str, ...]]]:
     """Return explicit `#[test] fn name` items, excluding macro templates."""
     lines = text.splitlines(keepends=True)
@@ -39,8 +117,11 @@ def test_functions(text: str) -> list[tuple[str, tuple[str, ...]]]:
         if module:
             stack.append((indentation, module.group(1)))
 
+    macro_ranges = macro_definition_ranges(text)
     result = []
     for marker in re.finditer(r"^[ \t]*#\s*\[\s*test\s*\][^\n]*", text, re.MULTILINE):
+        if any(start <= marker.start() < end for start, end in macro_ranges):
+            continue
         pos = marker.end()
         while True:
             whitespace = re.match(r"(?:[ \t\r\n]+|//[^\n]*(?:\n|$))*", text[pos:])

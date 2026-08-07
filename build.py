@@ -339,6 +339,29 @@ unit_tests = [
         color="green",
     )
 ]
+unit_tests.append(command(
+    name="unit_rust_lib_import",
+    inputs=[
+        "$(S)/tests/rust_lib/import.py",
+        "$(S)/tests/rust_lib/test_import.py",
+    ],
+    outputs=["$(B)/tests/unit/rust_lib_import.stamp"],
+    cmd=[
+        [
+            *TEST_TIMEOUT,
+            "python3",
+            "$(S)/tests/rust_lib/test_import.py",
+            "-v",
+        ],
+        [
+            "sh",
+            "-c",
+            "> $(B)/tests/unit/rust_lib_import.stamp",
+        ],
+    ],
+    descr="UT",
+    color="green",
+))
 for _src in build.glob("$(S)/tests/unit/test_*.rs"):
     _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
     unit_tests.append(command(
