@@ -1262,6 +1262,9 @@ namespace {
             assert(var.m_data.is_Unit());
         }
     }
+    if (ent.m_markings.align_value != 0) {
+        has_data = true;
+    }
 
     bool is_repr_c = ent.m_markings.is_repr_c;
     auto repr = ::HIR::Enum::Repr::Auto;
@@ -1318,12 +1321,14 @@ namespace {
         ::std::vector<::HIR::Enum::DataVariant> variants;
         const auto variant_repr = is_repr_c || repr != ::HIR::Enum::Repr::Auto ? ::HIR::Struct::Repr::C : ::HIR::Struct::Repr::Rust;
         for (const auto& var : ent.variants()) {
-            if (var.m_data.is_Unit()) {
+            if (var.m_data.is_Unit() && ent.m_markings.align_value == 0) {
                 // TODO: Should this make its own unit-like struct?
                 variants.push_back({var.m_name, false, ::HIR::TypeRef::new_unit()});
             } else {
                 ::HIR::Struct::Data data;
-                if (const auto* ve = var.m_data.opt_Tuple()) {
+                if (var.m_data.is_Unit()) {
+                    data = ::HIR::Struct::Data::make_Unit({});
+                } else if (const auto* ve = var.m_data.opt_Tuple()) {
                     ::HIR::Struct::Data::Data_Tuple fields;
                     for (const auto& field : ve->m_items) {
                         fields.push_back(new_visent(::HIR::Publicity::new_global(), LowerHIR_Type(field.m_type)));
@@ -1337,7 +1342,9 @@ namespace {
                 }
 
                 auto ty_name = RcString::new_interned(FMT(path.name << "#" << var.m_name));
-                push_struct(ty_name, ::HIR::Struct{LowerHIR_GenericParams(ent.params(), nullptr), variant_repr, mv$(data)});
+                auto variant_struct = ::HIR::Struct{LowerHIR_GenericParams(ent.params(), nullptr), variant_repr, mv$(data)};
+                variant_struct.m_forced_alignment = ent.m_markings.align_value;
+                push_struct(ty_name, mv$(variant_struct));
                 auto ty_ipath = path;
                 ty_ipath.name = ty_name.c_str();
                 auto ty_path = ty_ipath.get_full_path();

@@ -497,6 +497,7 @@ namespace AST {
                 Isize
             } repr = Repr::Rust;
             bool is_repr_c = false;
+            uint64_t align_value = 0;
         } m_markings;
 
         Enum() {

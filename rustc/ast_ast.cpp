@@ -330,7 +330,9 @@ namespace AST {
             TU_MATCHA((var.m_data), (e), (Unit, new_variants.push_back(EnumVariant(var.m_attrs.clone(), var.m_name));), (Tuple, decltype(e.m_items) new_st; for (const auto& f : e.m_items) new_st.push_back(f.clone()); new_variants.push_back(EnumVariant(var.m_attrs.clone(), var.m_name, mv$(new_st)));), (Struct, decltype(e.m_fields) new_fields; for (const auto& f : e.m_fields) new_fields.push_back(f.clone()); new_variants.push_back(EnumVariant(var.m_attrs.clone(), var.m_name, mv$(new_fields)));))
             new_variants.back().m_discriminant_value = var.m_discriminant_value.clone();
         }
-        return Enum(m_params.clone(), mv$(new_variants));
+        auto rv = Enum(m_params.clone(), mv$(new_variants));
+        rv.m_markings = m_markings;
+        return rv;
     }
 
     Struct Struct::clone() const {

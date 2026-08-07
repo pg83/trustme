@@ -167,8 +167,7 @@ class CHandler_Repr: public ExpandDecorator {
                     auto v = val->m_value;
                     ASSERT_BUG(lex.point_span(), v > U128(0), "#[repr(align(" << v << "))] - alignment must be non-zero");
                     ASSERT_BUG(lex.point_span(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
-                    ASSERT_BUG(lex.point_span(), s->m_markings.align_value == 0, "#[repr(align(" << v << "))] - conflicts with previous alignment");
-                    s->m_markings.align_value = v.truncate_u64();
+                    s->m_markings.align_value = std::max(s->m_markings.align_value, v.truncate_u64());
                     lex.getTokenCheck(TOK_PAREN_CLOSE);
                 } else if (repr_type == "no_niche") {
                     // TODO: rust-lang/rust#68303 happens with UnsafeCell and niche optionisations
@@ -215,6 +214,16 @@ class CHandler_Repr: public ExpandDecorator {
                     set_repr(::AST::Enum::Markings::Repr::I64);
                 } else if (repr_str == "isize") {
                     set_repr(::AST::Enum::Markings::Repr::Isize);
+                } else if (repr_str == "align") {
+                    lex.getTokenCheck(TOK_PAREN_OPEN);
+                    auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
+                    auto* val = dynamic_cast<AST::ExprNode_Integer*>(&*n);
+                    ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
+                    auto v = val->m_value;
+                    ASSERT_BUG(lex.point_span(), v > U128(0), "#[repr(align(" << v << "))] - alignment must be non-zero");
+                    ASSERT_BUG(lex.point_span(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
+                    e->m_markings.align_value = std::max(e->m_markings.align_value, v.truncate_u64());
+                    lex.getTokenCheck(TOK_PAREN_CLOSE);
                 } else {
                     ERROR(lex.point_span(), E0000, "Unknown enum repr '" << repr_str << "'");
                 }
