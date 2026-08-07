@@ -118,10 +118,12 @@ void Resolve_Use(::AST::Crate& crate) {
                 }
                 parent_mods.pop_back();
                 DEBUG("parent_mods.size() = " << parent_mods.size());
+                ASSERT_BUG(span, !parent_mods.empty(), "Anon module with no named parent");
+                const AST::Module* source_mod = parent_mods.front();
 
                 for (;;) {
                     DEBUG("Module " << cur_mod->path());
-                    if (Resolve_Use_GetBinding_Mod(span, crate, parent_mods[0]->path(), *cur_mod, e.nodes.front().name(), parent_mods, /*types_only*/ e.nodes.size() > 1).has_binding()) {
+                    if (Resolve_Use_GetBinding_Mod(span, crate, source_mod->path(), *cur_mod, e.nodes.front().name(), parent_mods, /*types_only*/ e.nodes.size() > 1).has_binding()) {
                         break;
                     }
                     if (parent_mods.empty()) {

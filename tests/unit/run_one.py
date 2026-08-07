@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/ usr / bin / env python3
 """Compile and run one tests/unit/test_*.rs against a prebuilt libstd, then write
 a stamp. Each unit test is its own graph node — a self-contained regression for
 one compiler fix that must compile and exit 0.
@@ -23,6 +23,9 @@ def main() -> int:
     rustc = lib.require_env("RUSTC")
     source_text = open(src, encoding="utf-8", errors="surrogateescape").read()
     test_harness = "//@ test-harness" in source_text
+    compile_fail_match = re.search(
+        r"^//@\s*compile-fail:\s*(.+)$", source_text, re.MULTILINE
+    )
     edition_match = re.search(r"^//@\s*edition:\s*(\d+)", source_text, re.MULTILINE)
     edition = edition_match.group(1) if edition_match else "2021"
 
@@ -34,8 +37,26 @@ def main() -> int:
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
         binary = os.path.join(work, "t")
         mode = ["--test"] if test_harness else ["--crate-type", "bin"]
-        lib.run([rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
-                 *mode, "--edition", edition], env=env)
+        command = [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
+                   *mode, "--edition", edition]
+        if compile_fail_match:
+            result = subprocess.run(command, env=env, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, check=False)
+            expected = compile_fail_match.group(1).encode()
+            if result.returncode == 0:
+                raise RuntimeError("compiler unexpectedly accepted compile-fail unit")
+            if expected not in result.stderr:
+                sys.stdout.buffer.write(result.stdout)
+                sys.stderr.buffer.write(result.stderr)
+                raise RuntimeError(
+                    f"compile-fail unit did not emit expected diagnostic: {expected!r}"
+                )
+        else:
+            lib.run(command, env=env)
+        if compile_fail_match:
+            os.makedirs(os.path.dirname(stamp), exist_ok=True)
+            open(stamp, "w").close()
+            return 0
         if test_harness:
             listing = subprocess.run([binary, "--list"], env=env,
                                      stdout=subprocess.PIPE, timeout=60,
