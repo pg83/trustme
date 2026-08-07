@@ -932,7 +932,7 @@ namespace {
                     }
                     break;
             }
-            if (max_alignment != 0) {
+            if (max_alignment == 1) {
                 sorting = StructSorting::None;
             }
         } else if (const auto* te = ty.data().opt_Tuple()) {
