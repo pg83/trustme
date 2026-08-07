@@ -2045,7 +2045,8 @@ bool MIR_Optimise_DeTemporary_Borrows(::MIR::TypeResolve& state, ::MIR::Function
             DEBUG(this_var << " - Source is not a borrow op");
             continue;
         }
-        const auto& src_lv = src_bb.statements[slot.set_loc.stmt_idx].as_Assign().src.as_Borrow().val;
+        const auto& src_borrow = src_bb.statements[slot.set_loc.stmt_idx].as_Assign().src.as_Borrow();
+        const auto& src_lv = src_borrow.val;
         // Check that the borrow isn't too complex (if it's used multiple times)
         if (slot.n_deref_read > 1 && src_lv.m_wrappers.size() >= 2) {
             DEBUG(this_var << " - Source is too complex - " << src_lv);
@@ -2059,7 +2060,7 @@ bool MIR_Optimise_DeTemporary_Borrows(::MIR::TypeResolve& state, ::MIR::Function
             continue;
         }
         // Keep the complexity down (when not used only once)
-        if (slot.n_deref_read + slot.n_other_read > 1 && fcn.locals[var_idx].data().as_Borrow().type != ::HIR::BorrowType::Shared) {
+        if (slot.n_deref_read + slot.n_other_read > 1 && src_borrow.type != ::HIR::BorrowType::Shared) {
             DEBUG(this_var << " - Multi-use non-shared borrow, too complex to do");
             continue;
         }

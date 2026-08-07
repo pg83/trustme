@@ -10,7 +10,7 @@
 
 Исполнять строго сверху вниз.
 
-- [ ] Исправить `raw-ref-op/raw-ref-op.rs`: сравнение `*const T` с `&T` приводит к assert в `HIR::TypeData::as_Borrow()`. Минимальный unit должен отдельно проверить `*const T == &T`, `*const T == *mut T` и dereference результата; upstream-файл должен пройти compile+runtime.
+- [x] ~~Исправить `raw-ref-op/raw-ref-op.rs`: сравнение `*const T` с `&T` приводит к assert в `HIR::TypeData::as_Borrow()`.~~ Исправлено: `MIR_Optimise_DeTemporary_Borrows` ошибочно читал borrow kind через тип local, хотя raw borrow создаёт local типа `Pointer`; теперь уже существующий `RValue::Borrow` является единым источником `BorrowType` и для reference, и для raw pointer. Красный `test_raw_pointer_reference_eq.rs` воспроизводил `SIGABRT` и теперь проверяет `*const T == &T`, `*const T == *mut T` и dereference compile+runtime; точный upstream `raw-ref-op.rs` зелёный. Новых аллокаций и копий типов нет.
 - [ ] Исправить `traits/inheritance/repeated-supertrait.rs`: method lookup теряет `same_as` у trait object с повторяющимся supertrait. Unit должен оставить только минимальный diamond/repeated-supertrait и динамический вызов; затем прогнать исходный stable `run-pass`.
 - [ ] Устранить семейство `hir_typeck_common.cpp:686` (`Value param ... out of range`). Сначала извлечь первый stable trigger из полного gate, зафиксировать конкретную generic substitution в unit и проверить отсутствие выхода за длину параметров, а не маскировать assert.
 - [ ] Устранить assert `visit_expr hit in OuterVisitor` на static-borrow/constant inputs. Unit должен содержать минимальный const/static initializer, который сейчас попадает в expression visitor после ожидаемой фазы.
