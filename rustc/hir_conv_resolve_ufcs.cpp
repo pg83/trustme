@@ -203,9 +203,17 @@ namespace resolve_ufcs {
             ::HIR::ItemPath p(impl.m_type, trait_path, impl.m_trait_args);
             TRACE_FUNCTION_F("impl" << impl.m_params.fmt_args() << " " << trait_path << impl.m_trait_args << " for " << impl.m_type << " (mod=" << impl.m_src_module << ")");
             auto _t = this->push_mod_traits(impl.m_src_module, this->m_crate.get_mod_by_path(Span(), impl.m_src_module));
-            auto _g = m_resolve.set_impl_generics(impl.m_type, impl.m_params);
+            auto _g = m_resolve.set_impl_generics(MetadataType::Unknown, impl.m_params);
 
             expand_trait_impl_type_defaults(m_crate, trait_path, impl);
+
+            m_current_type = &impl.m_type;
+            m_current_trait = &m_crate.get_trait_by_path(Span(), trait_path);
+            m_current_trait_path = &p;
+            m_traits.push_back(::std::make_pair(&trait_path, m_current_trait));
+
+            this->visit_type(impl.m_type);
+            m_resolve.update_impl_self_metadata(impl.m_type);
 
             // TODO: Handle resolution of all items in m_resolve.m_type_equalities
             // - params might reference each other, so `set_item_generics` has to have been called
@@ -214,13 +222,7 @@ namespace resolve_ufcs {
                 visit_type(e.second.ty);
             }
 
-            // TODO: Push a bound that `Self: ThisTrait`
-            m_current_type = &impl.m_type;
-            m_current_trait = &m_crate.get_trait_by_path(Span(), trait_path);
-            m_current_trait_path = &p;
-
             // The implemented trait is always in scope
-            m_traits.push_back(::std::make_pair(&trait_path, m_current_trait));
             ::HIR::Visitor::visit_trait_impl(trait_path, impl);
             m_traits.pop_back();
 

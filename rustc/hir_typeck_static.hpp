@@ -96,6 +96,11 @@ public:
         return NullOnDrop<const ::HIR::GenericParams>(m_impl_generics);
     }
 
+    void update_impl_self_metadata(const ::HIR::TypeRef& self_ty) {
+        assert(m_impl_generics);
+        m_self_metadata = metadata_type(Span(), self_ty);
+    }
+
     NullOnDrop<const ::HIR::GenericParams> set_item_generics(const ::HIR::GenericParams& gps) {
         set_item_generics_raw(gps);
         return NullOnDrop<const ::HIR::GenericParams>(m_item_generics);
