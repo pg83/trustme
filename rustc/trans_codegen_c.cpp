@@ -7000,10 +7000,11 @@ namespace {
                 const auto& ty = params.m_types.at(0);
                 emit_lvalue(e.ret_val);
                 m_of << " = ";
-                const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
-                if (!repr) {
+                if (!(ty.data().is_Path() && ty.data().as_Path().binding.is_Enum())) {
                     m_of << "0";
                 } else {
+                    const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+                    MIR_ASSERT(mir_res, repr, "No repr for enum " << ty);
                     switch (repr->variants.tag()) {
                         case TypeRepr::VariantMode::TAGDEAD:
                             throw "";
