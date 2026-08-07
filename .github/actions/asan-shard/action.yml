@@ -1,0 +1,40 @@
+name: Run ASan test shard
+description: Build with Clang and run one deterministic lite-test shard under ASan
+
+inputs:
+  shard:
+    description: Zero-based shard index
+    required: true
+  shard_count:
+    description: Total number of shards
+    required: true
+    default: "20"
+
+runs:
+  using: composite
+  steps:
+    - name: Test lite shard with Clang AddressSanitizer
+      shell: bash
+      env:
+        TEST_GROUP: ${{ inputs.shard }}
+        TEST_GROUP_COUNT: ${{ inputs.shard_count }}
+      run: |
+        nix --extra-experimental-features 'nix-command flakes' \
+          develop .#clang -c \
+          bash -euxo pipefail -c '
+            clang++ --version
+            ld.lld --version
+            export CC="$(command -v clang)"
+            export CXX="$(command -v clang++)"
+            export CFLAGS="-fsanitize=address -fno-sanitize-recover=all -fno-omit-frame-pointer -fPIE"
+            export CXXFLAGS="-fsanitize=address -fno-sanitize-recover=all -fno-omit-frame-pointer -fPIE"
+            export LDFLAGS="-fsanitize=address -fuse-ld=lld -pie"
+            export ASAN_OPTIONS="detect_leaks=1:abort_on_error=1"
+            ./build \
+              -B .build-ci \
+              -j "$(nproc)" \
+              -k \
+              -Dgroup="$TEST_GROUP" \
+              -Dgroup_count="$TEST_GROUP_COUNT" \
+              lite_tests
+          '

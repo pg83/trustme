@@ -8,6 +8,39 @@ import build
 # The compiler sources live flat under rustc/; C++26, links the vendored
 # platform library and zlib.
 
+build.flags.allow({
+    "group": {
+        "descr": "zero-based lite test partition to include",
+        "default": "",
+    },
+    "group_count": {
+        "descr": "total number of lite test partitions",
+        "default": "",
+    },
+})
+
+
+def parse_test_partition():
+    group_value = build.flags.group
+    group_count_value = build.flags.group_count
+    if bool(group_value) != bool(group_count_value):
+        raise RuntimeError("-Dgroup and -Dgroup_count must be specified together")
+    if not group_value:
+        return None
+    try:
+        group_index = int(group_value)
+        group_count = int(group_count_value)
+    except ValueError as error:
+        raise RuntimeError("-Dgroup and -Dgroup_count must be integers") from error
+    if group_count <= 0 or group_index < 0 or group_index >= group_count:
+        raise RuntimeError(
+            "test partition requires 0 <= group < group_count and group_count > 0"
+        )
+    return group_index, group_count
+
+
+test_partition = parse_test_partition()
+
 build.includes += ["$(S)/rustc"]
 
 # version.cpp expects these from the build system (Makefile filled them from
@@ -979,9 +1012,7 @@ for _start in range(0, len(miri_cases), 10):
         color="green",
     ))
 
-group(
-    "test",
-    resvg,
+lite_tests = [
     *unit_tests,
     *rust_1_90_tests,
     *rust_ui_compile_tests,
@@ -999,7 +1030,30 @@ group(
     *rust_doctests,
     *rustsmith_tests,
     *miri_tests,
-)
+]
+
+
+def partition_lite_tests(targets):
+    if test_partition is None:
+        return targets
+    group_index, group_count = test_partition
+    selected = []
+    test_ids = set()
+    for target in targets:
+        test_id = target.name or target.output or "\0".join(target.outputs)
+        if not test_id:
+            raise RuntimeError("lite test target has no deterministic identifier")
+        if test_id in test_ids:
+            raise RuntimeError(f"lite test target added twice: {test_id}")
+        test_ids.add(test_id)
+        digest = hashlib.sha256(test_id.encode()).digest()
+        if int.from_bytes(digest[:8], "big") % group_count == group_index:
+            selected.append(target)
+    return selected
+
+
+group("test", resvg, *lite_tests)
+group("lite_tests", *partition_lite_tests(lite_tests))
 group("unit", *unit_tests)
 group("rust_1_90", *rust_1_90_tests)
 group("rust_ui_compile", *rust_ui_compile_tests)

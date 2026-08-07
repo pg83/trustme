@@ -10,10 +10,6 @@ on:
 permissions:
   contents: read
 
-env:
-  UBUNTU_IMAGE: ubuntu:26.04
-  ALPINE_IMAGE: alpine:3.24.1
-
 jobs:
   build-linux:
     name: Build Linux
@@ -23,102 +19,313 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Build with Clang and glibc
-        run: |
-          docker run --rm \
-            --volume "$GITHUB_WORKSPACE:/workspace" \
-            --workdir /workspace \
-            "$UBUNTU_IMAGE" \
-            bash -euxo pipefail -c '
-              export DEBIAN_FRONTEND=noninteractive
-              apt-get update
-              apt-get install --yes --no-install-recommends clang golang-go lld python3 zlib1g-dev
-              clang++ --version
-              go version
-              export CC="$(command -v clang)"
-              export CXX="$(command -v clang++)"
-              export LDFLAGS=-fuse-ld=lld
-              ./build -B .build-ci -j "$(nproc)" rustc cargo
-            '
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
 
-  tests-musl:
-    name: Tests Musl
+      - name: Build with Clang and LLD
+        run: |
+          nix --extra-experimental-features 'nix-command flakes' \
+            develop .#clang -c \
+            ./build -B .build-ci -j "$(nproc)" rustc cargo
+
+  tests-asan-0:
+    name: Tests ASan 0/20
     needs: build-linux
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "0"
 
-      - name: Test with GCC and musl on Alpine
-        run: |
-          docker run --rm \
-            --volume "$GITHUB_WORKSPACE:/workspace" \
-            --workdir /workspace \
-            "$ALPINE_IMAGE" \
-            sh -eux -c '
-              apk add --no-cache build-base curl go patch python3 zlib-dev
-              g++ --version
-              go version
-              export CC="$(command -v gcc)"
-              export CXX="$(command -v g++)"
-              ./build -B .build-ci -j "$(nproc)" unit
-            '
-
-  tests-asan:
-    name: Tests ASan
+  tests-asan-1:
+    name: Tests ASan 1/20
     needs: build-linux
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "1"
 
-      - name: Test with AddressSanitizer
-        run: |
-          docker run --rm \
-            --volume "$GITHUB_WORKSPACE:/workspace" \
-            --workdir /workspace \
-            "$UBUNTU_IMAGE" \
-            bash -euxo pipefail -c '
-              export DEBIAN_FRONTEND=noninteractive
-              apt-get update
-              apt-get install --yes --no-install-recommends clang curl golang-go libclang-rt-dev lld llvm patch python3 zlib1g-dev
-              export CC="$(command -v clang)"
-              export CXX="$(command -v clang++)"
-              export CXXFLAGS="-fsanitize=address -fno-sanitize-recover=all -fno-omit-frame-pointer -fPIE"
-              export LDFLAGS="-fsanitize=address -fuse-ld=lld -pie"
-              export ASAN_OPTIONS="detect_leaks=1:abort_on_error=1"
-              clang++ --version
-              go version
-              ./build -B .build-ci -j "$(nproc)" unit
-            '
-
-  tests-ubsan:
-    name: Tests UBSan
+  tests-asan-2:
+    name: Tests ASan 2/20
     needs: build-linux
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "2"
 
-      - name: Test with UndefinedBehaviorSanitizer
-        run: |
-          docker run --rm \
-            --volume "$GITHUB_WORKSPACE:/workspace" \
-            --workdir /workspace \
-            "$UBUNTU_IMAGE" \
-            bash -euxo pipefail -c '
-              export DEBIAN_FRONTEND=noninteractive
-              apt-get update
-              apt-get install --yes --no-install-recommends clang curl golang-go libclang-rt-dev lld llvm patch python3 zlib1g-dev
-              export CC="$(command -v clang)"
-              export CXX="$(command -v clang++)"
-              export CXXFLAGS="-fsanitize=undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -fPIE"
-              export LDFLAGS="-fsanitize=undefined -fuse-ld=lld -pie"
-              export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
-              clang++ --version
-              go version
-              ./build -B .build-ci -j "$(nproc)" unit
-            '
+  tests-asan-3:
+    name: Tests ASan 3/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "3"
+
+  tests-asan-4:
+    name: Tests ASan 4/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "4"
+
+  tests-asan-5:
+    name: Tests ASan 5/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "5"
+
+  tests-asan-6:
+    name: Tests ASan 6/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "6"
+
+  tests-asan-7:
+    name: Tests ASan 7/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "7"
+
+  tests-asan-8:
+    name: Tests ASan 8/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "8"
+
+  tests-asan-9:
+    name: Tests ASan 9/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "9"
+
+  tests-asan-10:
+    name: Tests ASan 10/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "10"
+
+  tests-asan-11:
+    name: Tests ASan 11/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "11"
+
+  tests-asan-12:
+    name: Tests ASan 12/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "12"
+
+  tests-asan-13:
+    name: Tests ASan 13/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "13"
+
+  tests-asan-14:
+    name: Tests ASan 14/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "14"
+
+  tests-asan-15:
+    name: Tests ASan 15/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "15"
+
+  tests-asan-16:
+    name: Tests ASan 16/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "16"
+
+  tests-asan-17:
+    name: Tests ASan 17/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "17"
+
+  tests-asan-18:
+    name: Tests ASan 18/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "18"
+
+  tests-asan-19:
+    name: Tests ASan 19/20
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          enable_kvm: false
+      - uses: ./.github/actions/asan-shard
+        with:
+          shard: "19"
