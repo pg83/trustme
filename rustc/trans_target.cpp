@@ -932,6 +932,9 @@ namespace {
                     }
                     break;
             }
+            if (max_alignment != 0) {
+                sorting = StructSorting::None;
+            }
         } else if (const auto* te = ty.data().opt_Tuple()) {
             DEBUG("Tuple " << ty);
             unsigned int idx = 0;
