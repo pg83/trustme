@@ -876,6 +876,8 @@ namespace MIR {
          struct {
              LValue val;
              ::std::vector<BasicBlockId> targets;
+             unsigned int valid_flag = ~0u;
+             BasicBlockId invalid_target = ~0u;
          }),
         (SwitchValue,
          struct {

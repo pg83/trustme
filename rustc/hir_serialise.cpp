@@ -945,7 +945,7 @@ public:
             (Goto, m_out.write_count(e);),
             (Panic, m_out.write_count(e.dst);),
             (If, serialise(e.cond); m_out.write_count(e.bb_true); m_out.write_count(e.bb_false);),
-            (Switch, serialise(e.val); serialise_vec(e.targets);),
+            (Switch, serialise(e.val); serialise_vec(e.targets); m_out.write_count(e.valid_flag); m_out.write_count(e.invalid_target);),
             (SwitchValue, serialise(e.val); m_out.write_count(e.def_target); serialise_vec(e.targets); serialise(e.values);),
             (Call, m_out.write_count(e.ret_block); m_out.write_count(e.panic_block); serialise(e.ret_val); serialise(e.fcn); serialise_vec(e.args);)
         )

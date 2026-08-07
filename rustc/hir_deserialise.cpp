@@ -1453,9 +1453,13 @@ AsmCommon::RegisterSpec HirDeserialiser::deserialise_asm_spec() {
             _(Goto, static_cast<unsigned int>(m_in.read_count()))
             _(Panic, {static_cast<unsigned int>(m_in.read_count())})
             _(If, {deserialise_mir_lvalue(), static_cast<unsigned int>(m_in.read_count()), static_cast<unsigned int>(m_in.read_count())})
-            _(Switch, {deserialise_mir_lvalue(), deserialise_vec_c<unsigned int>([&]() {
+            _(Switch,
+              {deserialise_mir_lvalue(),
+               deserialise_vec_c<unsigned int>([&]() {
                 return static_cast<unsigned int>(m_in.read_count());
-            })})
+            }),
+               static_cast<unsigned int>(m_in.read_count()),
+               static_cast<unsigned int>(m_in.read_count())})
             _(SwitchValue,
               {deserialise_mir_lvalue(),
                static_cast<unsigned int>(m_in.read_count()),

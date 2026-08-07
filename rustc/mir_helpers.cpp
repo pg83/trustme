@@ -996,8 +996,10 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(
                 }
                 TU_ARMA(Switch, te) {
                     for (size_t i = 0; i < te.targets.size(); i++) {
-                        auto s = (i == te.targets.size() - 1) ? mv$(state) : state.clone();
-                        m_states_to_do.push_back(::std::make_pair(te.targets[i], mv$(s)));
+                        m_states_to_do.push_back(::std::make_pair(te.targets[i], state.clone()));
+                    }
+                    if (te.valid_flag != ~0u) {
+                        m_states_to_do.push_back(::std::make_pair(te.invalid_target, mv$(state)));
                     }
                 }
                 TU_ARMA(SwitchValue, te) {

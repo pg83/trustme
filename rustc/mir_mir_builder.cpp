@@ -945,6 +945,42 @@ void MirBuilder::terminate_scope_early(const Span& sp, const ScopeHandle& scope,
 }
 
 namespace {
+    static void merge_outer_validity(const Span& sp, MirBuilder& builder, unsigned int& old_flag, bool new_valid) {
+        if (old_flag == ~0u) {
+            if (!new_valid) {
+                old_flag = builder.new_drop_flag_and_set(sp, false);
+            }
+        } else {
+            builder.push_stmt_set_dropflag_val(sp, old_flag, new_valid);
+        }
+    }
+
+    static void merge_outer_validity(const Span& sp, MirBuilder& builder, unsigned int& old_flag, unsigned int new_flag) {
+        if (old_flag == new_flag) {
+            return;
+        }
+        if (old_flag == ~0u) {
+            if (builder.get_drop_flag_default(sp, new_flag)) {
+                old_flag = new_flag;
+            } else {
+                old_flag = builder.new_drop_flag(true);
+                builder.push_stmt_set_dropflag_other(sp, old_flag, new_flag);
+            }
+        } else {
+            builder.push_stmt_set_dropflag_other(sp, old_flag, new_flag);
+        }
+    }
+
+    static unsigned int merge_invalid_with_partial_outer(const Span& sp, MirBuilder& builder, unsigned int new_flag) {
+        const auto outer_flag = builder.new_drop_flag(false);
+        if (new_flag == ~0u) {
+            builder.push_stmt_set_dropflag_val(sp, outer_flag, true);
+        } else {
+            builder.push_stmt_set_dropflag_other(sp, outer_flag, new_flag);
+        }
+        return outer_flag;
+    }
+
     static void merge_state(const Span& sp, MirBuilder& builder, const ::MIR::LValue& lv, VarState& old_state, const VarState& new_state) {
         TRACE_FUNCTION_FR(lv << " : " << old_state << " <= " << new_state, lv << " : " << old_state);
         switch (old_state.tag()) {
@@ -1010,6 +1046,7 @@ namespace {
                         builder.with_val_type(sp, lv, [&](const auto& ty) {
                             is_enum = ty.data().is_Path() && ty.data().as_Path().binding.is_Enum();
                         });
+                        const auto outer_flag = is_enum ? merge_invalid_with_partial_outer(sp, builder, nse.outer_flag) : ~0u;
 
                         // Create a partial filled with Invalid
                         {
@@ -1018,7 +1055,7 @@ namespace {
                             for (size_t i = 0; i < nse.inner_states.size(); i++) {
                                 inner.push_back(old_state.clone());
                             }
-                            old_state = VarState::make_Partial({mv$(inner)});
+                            old_state = VarState::make_Partial({mv$(inner), outer_flag});
                         }
                         auto& ose = old_state.as_Partial();
                         if (is_enum) {
@@ -1098,6 +1135,10 @@ namespace {
                         builder.with_val_type(sp, lv, [&](const auto& ty) {
                             is_enum = ty.data().is_Path() && ty.data().as_Path().binding.is_Enum();
                         });
+                        unsigned int outer_flag = ~0u;
+                        if (is_enum && nse.outer_flag != ~0u) {
+                            merge_outer_validity(sp, builder, outer_flag, nse.outer_flag);
+                        }
 
                         // Create a partial filled with Valid
                         {
@@ -1106,7 +1147,7 @@ namespace {
                             for (size_t i = 0; i < nse.inner_states.size(); i++) {
                                 inner.push_back(VarState::make_Valid({}));
                             }
-                            old_state = VarState::make_Partial({mv$(inner)});
+                            old_state = VarState::make_Partial({mv$(inner), outer_flag});
                         }
                         auto& ose = old_state.as_Partial();
                         if (is_enum) {
@@ -1172,6 +1213,7 @@ namespace {
                             assert(!builder.is_type_owned_box(ty));
                             is_enum = ty.data().is_Path() && ty.data().as_Path().binding.is_Enum();
                         });
+                        const auto old_optional_flag = old_state.as_Optional();
 
                         // Create a Partial filled with copies of the Optional
                         // TODO: This can lead to contradictions when one field is moved and another not.
@@ -1188,9 +1230,16 @@ namespace {
                                 builder.drop_flag_alias(old_state.as_Optional(), new_flag);
                                 inner.push_back(VarState::make_Optional(new_flag));
                             }
-                            old_state = VarState::make_Partial({mv$(inner)});
+                            old_state = VarState::make_Partial({mv$(inner), is_enum ? old_optional_flag : ~0u});
                         }
                         auto& ose = old_state.as_Partial();
+                        if (is_enum) {
+                            if (nse.outer_flag == ~0u) {
+                                merge_outer_validity(sp, builder, ose.outer_flag, true);
+                            } else {
+                                merge_outer_validity(sp, builder, ose.outer_flag, nse.outer_flag);
+                            }
+                        }
                         // Propagate to inners
                         if (is_enum) {
                             for (size_t i = 0; i < ose.inner_states.size(); i++) {
@@ -1283,6 +1332,13 @@ namespace {
                     case VarState::TAG_Valid:
                     case VarState::TAG_Optional:
                         if (is_enum) {
+                            if (new_state.is_Invalid()) {
+                                merge_outer_validity(sp, builder, ose.outer_flag, false);
+                            } else if (new_state.is_Valid()) {
+                                merge_outer_validity(sp, builder, ose.outer_flag, true);
+                            } else {
+                                merge_outer_validity(sp, builder, ose.outer_flag, new_state.as_Optional());
+                            }
                             for (size_t i = 0; i < ose.inner_states.size(); i++) {
                                 merge_state(sp, builder, ::MIR::LValue::new_Downcast(lv.clone(), static_cast<unsigned int>(i)), ose.inner_states[i], new_state);
                             }
@@ -1298,6 +1354,11 @@ namespace {
                         const auto& nse = new_state.as_Partial();
                         ASSERT_BUG(sp, ose.inner_states.size() == nse.inner_states.size(), "Partial->Partial with mismatched sizes - " << old_state << " <= " << new_state);
                         if (is_enum) {
+                            if (nse.outer_flag == ~0u) {
+                                merge_outer_validity(sp, builder, ose.outer_flag, true);
+                            } else {
+                                merge_outer_validity(sp, builder, ose.outer_flag, nse.outer_flag);
+                            }
                             for (size_t i = 0; i < ose.inner_states.size(); i++) {
                                 merge_state(sp, builder, ::MIR::LValue::new_Downcast(lv.clone(), static_cast<unsigned int>(i)), ose.inner_states[i], nse.inner_states[i]);
                             }
@@ -1845,7 +1906,7 @@ VarState* MirBuilder::get_val_state_mut_p(const Span& sp, const ::MIR::LValue& l
                     for (size_t i = 0; i < n_flds; i++) {
                         inner_vs.push_back(tpl.clone());
                     }
-                    ivs = VarState::make_Partial({mv$(inner_vs)});
+                    ivs = VarState::make_Partial({mv$(inner_vs), ~0u});
                 }
                 vs = &ivs.as_Partial().inner_states.at(field_index);
             }
@@ -1896,12 +1957,13 @@ VarState* MirBuilder::get_val_state_mut_p(const Span& sp, const ::MIR::LValue& l
                         }
                     }, &w);
 
+                    const auto outer_flag = ivs.is_Optional() ? ivs.as_Optional() : ~0u;
                     ::std::vector<VarState> inner;
                     for (size_t i = 0; i < var_count; i++) {
                         inner.push_back(VarState::make_Invalid(InvalidType::Uninit));
                     }
                     inner[variant_index] = mv$(ivs);
-                    ivs = VarState::make_Partial({mv$(inner)});
+                    ivs = VarState::make_Partial({mv$(inner), outer_flag});
                 }
 
                 vs = &ivs.as_Partial().inner_states.at(variant_index);
@@ -1942,11 +2004,35 @@ void MirBuilder::drop_value_from_state(const Span& sp, const VarState& vs, ::MIR
     }
             );
             if (is_enum) {
-                DEBUG("TODO: Switch based on enum value");
-                //for(size_t i = 0; i < vse.inner_states.size(); i ++)
-                //{
-                //    drop_value_from_state(sp, vse.inner_states[i], ::MIR::LValue::new_Downcast(lv.clone(), static_cast<unsigned int>(i)));
-                //}
+                bool has_valid_variant = false;
+                for (const auto& state : vse.inner_states) {
+                    has_valid_variant |= !state.is_Invalid();
+                }
+                if (!has_valid_variant) {
+                    return;
+                }
+
+                const auto next_bb = new_bb_unlinked();
+                ::std::vector<::MIR::BasicBlockId> arms;
+                ::std::vector<::MIR::BasicBlockId> cleanup_blocks;
+                arms.reserve(vse.inner_states.size());
+                cleanup_blocks.reserve(vse.inner_states.size());
+                for (const auto& state : vse.inner_states) {
+                    const auto cleanup_bb = state.is_Invalid() ? next_bb : new_bb_unlinked();
+                    arms.push_back(cleanup_bb);
+                    cleanup_blocks.push_back(cleanup_bb);
+                }
+                end_block(::MIR::Terminator::make_Switch({lv.clone(), mv$(arms), vse.outer_flag, vse.outer_flag == ~0u ? ~0u : next_bb}));
+
+                for (size_t i = 0; i < vse.inner_states.size(); i++) {
+                    if (vse.inner_states[i].is_Invalid()) {
+                        continue;
+                    }
+                    set_cur_block(cleanup_blocks[i]);
+                    drop_value_from_state(sp, vse.inner_states[i], ::MIR::LValue::new_Downcast(lv.clone(), static_cast<unsigned int>(i)));
+                    end_block(::MIR::Terminator::make_Goto(next_bb));
+                }
+                set_cur_block(next_bb);
             } else if (is_union) {
                 // NOTE: Unions don't drop inner items.
             } else {
@@ -2050,7 +2136,7 @@ ScopeHandle::~ScopeHandle() {
 }
 
 VarState VarState::clone() const {
-    TU_MATCHA((*this), (e), (Invalid, return VarState(e);), (Valid, return VarState(e);), (Optional, return VarState(e);), (MovedOut, return VarState::make_MovedOut({box$(e.inner_state->clone()), e.outer_flag});), (Partial, ::std::vector<VarState> n; n.reserve(e.inner_states.size()); for (const auto& a : e.inner_states) n.push_back(a.clone()); return VarState::make_Partial({mv$(n)});))
+    TU_MATCHA((*this), (e), (Invalid, return VarState(e);), (Valid, return VarState(e);), (Optional, return VarState(e);), (MovedOut, return VarState::make_MovedOut({box$(e.inner_state->clone()), e.outer_flag});), (Partial, ::std::vector<VarState> n; n.reserve(e.inner_states.size()); for (const auto& a : e.inner_states) n.push_back(a.clone()); return VarState::make_Partial({mv$(n), e.outer_flag});))
     throw "";
 }
 
@@ -2058,7 +2144,7 @@ bool VarState::operator==(const VarState& x) const {
     if (this->tag() != x.tag()) {
         return false;
     }
-    TU_MATCHA((*this, x), (te, xe), (Invalid, return te == xe;), (Valid, return true;), (Optional, return te == xe;), (MovedOut, if (te.outer_flag != xe.outer_flag) return false; return *te.inner_state == *xe.inner_state;), (Partial, if (te.inner_states.size() != xe.inner_states.size()) return false; for (unsigned int i = 0; i < te.inner_states.size(); i++) {
+    TU_MATCHA((*this, x), (te, xe), (Invalid, return te == xe;), (Valid, return true;), (Optional, return te == xe;), (MovedOut, if (te.outer_flag != xe.outer_flag) return false; return *te.inner_state == *xe.inner_state;), (Partial, if (te.outer_flag != xe.outer_flag || te.inner_states.size() != xe.inner_states.size()) return false; for (unsigned int i = 0; i < te.inner_states.size(); i++) {
                   if (te.inner_states[i] != xe.inner_states[i]) {
                       return false;
                   }
@@ -2085,12 +2171,7 @@ bool VarState::operator==(const VarState& x) const {
         (Valid, os << "Valid";),
         (Optional, os << "Optional(df" << e << ")";),
         (MovedOut, os << "MovedOut("; if (e.outer_flag == ~0u) os << "-"; else os << "df" << e.outer_flag; os << " " << *e.inner_state << ")";),
-        (Partial, os << "Partial(";
-         //if( e.outer_flag == ~0u )
-         //    os << "-";
-         //else
-         //    os << "df" << e.outer_flag;
-         os << ", [" << e.inner_states << "])";)
+        (Partial, os << "Partial("; if (e.outer_flag == ~0u) os << "-"; else os << "df" << e.outer_flag; os << ", [" << e.inner_states << "])";)
     )
     return os;
 }
@@ -2109,8 +2190,12 @@ bool VarState::get_used_drop_flags(std::set<unsigned>* out) const {
         TU_ARMA(Valid, ve) {
         }
         TU_ARMA(Partial, ve) {
-            //if( ve.outer_flag != ~0u )
-            //    return true;
+            if (ve.outer_flag != ~0u) {
+                if (out) {
+                    out->insert(ve.outer_flag);
+                }
+                rv = true;
+            }
             for (const auto& vs : ve.inner_states) {
                 rv |= vs.get_used_drop_flags(out);
             }

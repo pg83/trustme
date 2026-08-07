@@ -2616,6 +2616,9 @@ namespace HIR {
                 return res ? e.bb_true : e.bb_false;
             }
             TU_ARMA(Switch, e) {
+                if (e.valid_flag != ~0u) {
+                    return e.invalid_target;
+                }
                 HIR::TypeRef tmp;
                 const auto& ty = state.get_lvalue_type(tmp, e.val);
                 auto* enm_repr = Target_GetTypeRepr(state.sp, resolve, ty);

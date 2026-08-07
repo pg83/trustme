@@ -840,7 +840,12 @@ void MIR_Validate_FullValState(::MIR::TypeResolve& mir_res, const ::MIR::Functio
              todo_queue.push_back(::std::make_pair(te, mv$(state)));),
             (Panic, todo_queue.push_back(::std::make_pair(te.dst, mv$(state)));),
             (If, state.ensure_lvalue_valid(mir_res, te.cond); todo_queue.push_back(::std::make_pair(te.bb_true, state.clone())); todo_queue.push_back(::std::make_pair(te.bb_false, mv$(state)));),
-            (Switch, state.ensure_lvalue_valid(mir_res, te.val); for (size_t i = 0; i < te.targets.size(); i++) { todo_queue.push_back(::std::make_pair(te.targets[i], i == te.targets.size() - 1 ? mv$(state) : state.clone())); }),
+            (Switch, if (te.valid_flag != ~0u && !state.drop_flags.at(te.valid_flag)) { todo_queue.push_back(::std::make_pair(te.invalid_target, mv$(state))); } else {
+                state.ensure_lvalue_valid(mir_res, te.val);
+                for (size_t i = 0; i < te.targets.size(); i++) {
+                    todo_queue.push_back(::std::make_pair(te.targets[i], i == te.targets.size() - 1 ? mv$(state) : state.clone()));
+                }
+            }),
             (SwitchValue, state.ensure_lvalue_valid(mir_res, te.val); for (size_t i = 0; i < te.targets.size(); i++) { todo_queue.push_back(::std::make_pair(te.targets[i], state.clone())); } todo_queue.push_back(::std::make_pair(te.def_target, mv$(state)));),
             (Call, if (const auto* e = te.fcn.opt_Value()) { state.ensure_lvalue_valid(mir_res, *e); } for (auto& arg : te.args) {
                 if (const auto* e = arg.opt_LValue()) {

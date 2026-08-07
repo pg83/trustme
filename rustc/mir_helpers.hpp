@@ -491,6 +491,9 @@ namespace MIR {
                         for (auto& target : e.targets) {
                             rv |= visit_block_id(target);
                         }
+                        if (e.valid_flag != ~0u) {
+                            rv |= visit_block_id(e.invalid_target);
+                        }
                     }
                     TU_ARMA(SwitchValue, e) {
                         rv |= visit_lvalue(e.val, ValUsage::Read);

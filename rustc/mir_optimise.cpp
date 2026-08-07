@@ -819,6 +819,9 @@ namespace {
                 for (auto& target : e.targets) {
                     cb(target);
                 }
+                if (e.valid_flag != ~0u) {
+                    cb(e.invalid_target);
+                }
             }
             TU_ARMA(SwitchValue, e) {
                 for (auto& target : e.targets) {
@@ -924,12 +927,15 @@ bool MIR_Optimise_BlockSimplify(::MIR::TypeResolve& state, ::MIR::Function& fcn)
         // Handle chained switches of the same value
         // - Happens in libcore's atomics
         if (auto* te = block.terminator.opt_Switch()) {
+            if (te->valid_flag != ~0u) {
+                continue;
+            }
             for (auto& t : te->targets) {
                 auto idx = &t - &te->targets.front();
                 // The block must be a terminator only, and be a switch over the same value.
                 if (fcn.blocks[t].statements.empty() && fcn.blocks[t].terminator.is_Switch()) {
                     const auto& n_te = fcn.blocks[t].terminator.as_Switch();
-                    if (n_te.val == te->val) {
+                    if (n_te.valid_flag == ~0u && n_te.val == te->val) {
                         // If that's the case, then update this target with the equivalent from the new switch.
                         DEBUG("BB" << &block - fcn.blocks.data() << "/TERM: Update switch from BB" << t << " to BB" << n_te.targets[idx]);
                         t = n_te.targets[idx];
@@ -4344,7 +4350,8 @@ bool MIR_Optimise_SplitAggregates(::MIR::TypeResolve& state, ::MIR::Function& fc
                 } else if (lv.m_wrappers.front().is_Downcast()) {
                     // Downcast to a variant other than the variant it was constructed as, don't do anything.
                     // - For enums, this is an error (but here we don't know for sure). For unions it's valid behaviour
-                    if (lv.m_wrappers.front().as_Downcast() != it->second.variant_idx) {
+                    // A bare downcast uses the complete variant payload, so it cannot be replaced with a field local.
+                    if (lv.m_wrappers.front().as_Downcast() != it->second.variant_idx || lv.m_wrappers.size() < 2 || !lv.m_wrappers[1].is_Field()) {
                         it->second.is_direct_used = true;
                     }
                 } else {
@@ -4975,6 +4982,12 @@ bool MIR_Optimise_DeadDropFlags(::MIR::TypeResolve& state, ::MIR::Function& fcn)
                     used_drop_flags[e->idx] = true;
                 }
             }
+            if (const auto* e = block.terminator.opt_Switch()) {
+                if (e->valid_flag != ~0u) {
+                    read_drop_flags[e->valid_flag] = true;
+                    used_drop_flags[e->valid_flag] = true;
+                }
+            }
         });
         DEBUG("Un-read drop flags:" << FMT_CB(ss, for (size_t i = 0; i < read_drop_flags.size(); i++) if (!read_drop_flags[i] && used_drop_flags[i]) ss << " " << i;));
         visit_blocks_mut(state, fcn, [&read_drop_flags, &removed_statement](auto _id, auto& block) {
@@ -5590,6 +5603,10 @@ bool MIR_Optimise_GarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn
 
         if (const auto* te = block.terminator.opt_Call()) {
             assigned_lval(te->ret_val);
+        } else if (const auto* te = block.terminator.opt_Switch()) {
+            if (te->valid_flag != ~0u) {
+                used_dfs.at(te->valid_flag) = true;
+            }
         }
     });
 
@@ -5713,7 +5730,24 @@ bool MIR_Optimise_GarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn
             state.set_cur_stmt_term(i);
             // Rewrite and advance
             visit_mir_lvalues_mut(it->terminator, lvalue_cb);
-            TU_MATCHA((it->terminator), (e), (Incomplete, ), (Return, ), (Diverge, ), (Goto, e = block_rewrite_table[e];), (Panic, ), (If, e.bb_true = block_rewrite_table[e.bb_true]; e.bb_false = block_rewrite_table[e.bb_false];), (Switch, for (auto& target : e.targets) target = block_rewrite_table[target];), (SwitchValue, for (auto& target : e.targets) target = block_rewrite_table[target]; e.def_target = block_rewrite_table[e.def_target];), (Call, e.ret_block = block_rewrite_table[e.ret_block]; e.panic_block = block_rewrite_table[e.panic_block];))
+            TU_MATCHA(
+                (it->terminator),
+                (e),
+                (Incomplete, ),
+                (Return, ),
+                (Diverge, ),
+                (Goto, e = block_rewrite_table[e];),
+                (Panic, ),
+                (If, e.bb_true = block_rewrite_table[e.bb_true]; e.bb_false = block_rewrite_table[e.bb_false];),
+                (
+                    Switch, for (auto& target : e.targets) target = block_rewrite_table[target]; if (e.valid_flag != ~0u) {
+                        e.valid_flag = df_rewrite_table[e.valid_flag];
+                        e.invalid_target = block_rewrite_table[e.invalid_target];
+                    }
+                ),
+                (SwitchValue, for (auto& target : e.targets) target = block_rewrite_table[target]; e.def_target = block_rewrite_table[e.def_target];),
+                (Call, e.ret_block = block_rewrite_table[e.ret_block]; e.panic_block = block_rewrite_table[e.panic_block];)
+            )
 
             // Delete all statements flagged in a bitmap for deletion
             assert(it->statements.size() == to_remove_statements.size());

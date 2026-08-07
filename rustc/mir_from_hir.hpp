@@ -63,7 +63,7 @@ TAGGED_UNION_EX(
         (Partial,
          struct {
              ::std::vector<VarState> inner_states;
-             //unsigned int outer_flag;   // If ~0u there's no condition on the outer
+             unsigned int outer_flag; // If ~0u, the outer discriminant is always valid.
          }),
         (MovedOut,
          struct {

@@ -3217,6 +3217,9 @@ namespace {
                         m_of << ") goto bb" << e.bb_true << "; else goto bb" << e.bb_false << ";\n";
                     }
                     TU_ARMA(Switch, e) {
+                        if (e.valid_flag != ~0u) {
+                            m_of << "\tif(!df" << e.valid_flag << ") goto bb" << e.invalid_target << ";\n";
+                        }
                         // If all arms except one are the same, then emit an `if` instead
                         size_t odd_arm = -1;
                         if (e.targets.size() >= 2) {

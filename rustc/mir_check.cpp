@@ -581,7 +581,13 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
                 add_to_visit(e.bb_false, val_state);
             }
             TU_ARMA(Switch, e) {
-                val_state.ensure_valid(state, e.val);
+                if (e.valid_flag == ~0u) {
+                    val_state.ensure_valid(state, e.val);
+                } else {
+                    MIR_ASSERT(state, e.valid_flag < fcn.drop_flags.size(), "df" << e.valid_flag << " out of range");
+                    MIR_ASSERT(state, e.invalid_target < fcn.blocks.size(), "Invalid conditional switch target");
+                    add_to_visit(e.invalid_target, val_state);
+                }
                 for (const auto& tgt : e.targets) {
                     add_to_visit(tgt, val_state);
                 }
@@ -1185,6 +1191,11 @@ void MIR_Validate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
                 }
                 TU_ARMA(Switch, e) {
                     // Check that the condition is an enum
+                    MIR_ASSERT(state, (e.valid_flag == ~0u) == (e.invalid_target == ~0u), "Conditional switch flag/target mismatch");
+                    if (e.valid_flag != ~0u) {
+                        MIR_ASSERT(state, e.valid_flag < fcn.drop_flags.size(), "Conditional switch flag out of range");
+                        MIR_ASSERT(state, e.invalid_target < fcn.blocks.size(), "Conditional switch target out of range");
+                    }
                 }
                 TU_ARMA(SwitchValue, e) {
                     // Check that the condition's type matches the values
