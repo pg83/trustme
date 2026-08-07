@@ -19,6 +19,7 @@
 // 0xFF indicates end of an object
 
 #include "int128.h"
+#include "floats.hpp"
 #include <vector>
 #include <string>
 #include <map>
@@ -116,6 +117,12 @@ namespace HIR {
             void write_double(double v) {
                 // - Just raw-writes the double
                 this->write(&v, sizeof v);
+            }
+
+            void write_float_value(FloatValue value) {
+                auto encoded = F128(value);
+                write_u64(encoded.lo);
+                write_u64(encoded.hi);
             }
 
             void write_tag(unsigned int t) {
@@ -351,6 +358,13 @@ namespace HIR {
                 double v;
                 read(reinterpret_cast<char*>(&v), sizeof v);
                 return v;
+            }
+
+            FloatValue read_float_value() {
+                F128 encoded;
+                encoded.lo = read_u64();
+                encoded.hi = read_u64();
+                return encoded;
             }
 
             unsigned int read_tag() {

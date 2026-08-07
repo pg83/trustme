@@ -13,6 +13,7 @@
 #include "hir_type.hpp"
 #include "hir_asm.hpp"
 #include "int128.h"
+#include "floats.hpp"
 #include <cstdint>
 
 struct MonomorphState;
@@ -724,7 +725,7 @@ namespace MIR {
           }),
          (Float,
           struct {
-              double v;
+              FloatValue v;
               ::HIR::CoreType t;
           }),
          (Bool,

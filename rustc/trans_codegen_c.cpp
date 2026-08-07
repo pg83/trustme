@@ -2517,14 +2517,14 @@ namespace {
             m_mir_res = nullptr;
         }
 
-        void emit_float(double v, HIR::CoreType ty) {
+        void emit_float(FloatValue v, HIR::CoreType ty) {
             if (ty == HIR::CoreType::F16) {
                 m_of << "f16_disabled()";
             } else if (ty == HIR::CoreType::F128) {
                 m_of << "f128_disabled()";
-            } else if (::std::isnan(v)) {
+            } else if (float_value_is_nan(v)) {
                 m_of << "NAN";
-            } else if (::std::isinf(v)) {
+            } else if (float_value_is_infinite(v)) {
                 m_of << (v < 0 ? "-" : "") << "INFINITY";
             } else {
                 // HACK: Always emit float literals as `double` for MSVC, it fails hard with "error C2177: constant too big" otherwise

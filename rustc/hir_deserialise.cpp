@@ -523,7 +523,7 @@ public:
             }
             case ::Token::Data::TAG_Float: {
                 auto dty = static_cast<eCoreType>(m_in.read_tag());
-                return ::Token::Data::make_Float({dty, m_in.read_double()});
+                return ::Token::Data::make_Float({dty, m_in.read_float_value()});
             }
             default:
                 BUG(Span(), "Bad tag for Token::Data - " << static_cast<int>(tag));
@@ -625,7 +625,7 @@ public:
         return ::MIR::Constant::make_##x(__VA_ARGS__);
             _(Int, {m_in.read_i128(), static_cast<::HIR::CoreType>(m_in.read_tag())})
             _(Uint, {m_in.read_u128(), static_cast<::HIR::CoreType>(m_in.read_tag())})
-            _(Float, {m_in.read_double(), static_cast<::HIR::CoreType>(m_in.read_tag())})
+            _(Float, {m_in.read_float_value(), static_cast<::HIR::CoreType>(m_in.read_tag())})
             _(Bool, {m_in.read_bool()})
             case ::MIR::Constant::TAG_Bytes: {
                 ::std::vector<unsigned char> bytes;

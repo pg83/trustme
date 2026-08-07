@@ -70,7 +70,7 @@ Token::Token(U128 val, enum eCoreType datatype)
 {
 }
 
-Token Token::make_float(double val, enum eCoreType datatype) {
+Token Token::make_float(FloatValue val, enum eCoreType datatype) {
     auto rv = Token(TOK_FLOAT);
     rv.m_data = Data::make_Float({datatype, val});
     switch (datatype) {

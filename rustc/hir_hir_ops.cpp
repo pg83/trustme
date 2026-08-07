@@ -1349,7 +1349,7 @@ S128 EncodedLiteralSlice::read_sint(size_t size /*=0*/) const {
     return S128(v);
 }
 
-double EncodedLiteralSlice::read_float(size_t size /*=0*/) const {
+FloatValue EncodedLiteralSlice::read_float(size_t size /*=0*/) const {
     if (size == 0) {
         size = m_size;
     }
@@ -1358,7 +1358,7 @@ double EncodedLiteralSlice::read_float(size_t size /*=0*/) const {
         case 2: {
             F16 v;
             memcpy(&v, &m_base.bytes[m_ofs], 2);
-            return v;
+            return FloatValue(static_cast<_Float128>(static_cast<float>(v)));
         }
         case 4: {
             float v;

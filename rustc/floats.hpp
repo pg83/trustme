@@ -1,6 +1,55 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <ostream>
+#include <sstream>
+
+class FloatValue {
+    _Float128 m_value;
+
+public:
+    FloatValue()
+        : m_value(0)
+    {
+    }
+
+    FloatValue(_Float128 value)
+        : m_value(value)
+    {
+    }
+
+    operator _Float128() const {
+        return m_value;
+    }
+};
+
+inline FloatValue parse_float_value(const char* text) {
+    return ::strtof128(text, nullptr);
+}
+
+inline bool float_value_is_nan(FloatValue value) {
+    return __builtin_isnan(static_cast<_Float128>(value));
+}
+
+inline bool float_value_is_infinite(FloatValue value) {
+    return __builtin_isinf(static_cast<_Float128>(value));
+}
+
+inline FloatValue float_value_remainder(FloatValue lhs, FloatValue rhs) {
+    return ::fmodf128(lhs, rhs);
+}
+
+inline std::ostream& operator<<(std::ostream& os, const FloatValue& value) {
+    return os << static_cast<long double>(static_cast<_Float128>(value));
+}
+
+inline std::ostringstream&& operator<<(std::ostringstream&& os, const FloatValue& value) {
+    static_cast<std::ostream&>(os) << value;
+    return std::move(os);
+}
 
 struct F16 {
     // 1.5.10
@@ -101,40 +150,23 @@ struct F128 {
     {
     }
 
-    F128(double v) {
-        typedef union {
-            double f;
-            // 1.11.52
-            uint64_t i;
-        } double_cast;
-
-        double_cast dc;
-        dc.f = v;
-        auto exp_sign_d = dc.i >> 52;
-        // Trailing extend the exponent, so max stays max and min stays min
-        auto exp_sign_q = exp_sign_d << (15 - 11) | ((exp_sign_d & 1) == 1 ? 0xF : 0);
-        auto mantissa_d = dc.i & ((1LL << 52) - 1);
-        auto mantissa_qh = mantissa_d >> 4;          // 4 bits of extra exponent
-        auto mantissa_ql = (mantissa_d & 0xF) << 60; // Those lost 4 bits
-        // Fill the tail of the mantissa with the final bit (so INF stays INF, and doesn't become a NaN)
-        if (mantissa_d & 1) {
-            mantissa_ql |= (1LL << 60) - 1;
-        }
-        this->lo = mantissa_ql;
-        this->hi = (exp_sign_q << (112 - 64)) | mantissa_qh;
+    F128(FloatValue value) {
+        auto native = static_cast<_Float128>(value);
+        static_assert(sizeof(native) == sizeof(*this));
+        std::memcpy(this, &native, sizeof(native));
     }
 
-    operator double() const {
-        auto exp_sign_q = hi >> (112 - 64);
-        auto mantissa_d = (hi & ((1LL << (112 - 64)) - 1)) | (lo >> 60);
-        auto exp_sign_d = exp_sign_q >> 4;
-
-        union {
-            double f;
-            uint64_t i;
-        } dc;
-
-        dc.i = (exp_sign_d << 52) | mantissa_d;
-        return dc.f;
+    operator FloatValue() const {
+        _Float128 native;
+        static_assert(sizeof(native) == sizeof(*this));
+        std::memcpy(&native, this, sizeof(native));
+        return FloatValue(native);
     }
 };
+
+inline FloatValue positive_nan_float_value() {
+    F128 value;
+    value.lo = 0;
+    value.hi = 0x7fff800000000000;
+    return value;
+}

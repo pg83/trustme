@@ -377,7 +377,7 @@ public:
         this->send_v128u(v);
     }
 
-    void send_float(eCoreType ct, double v) {
+    void send_float(eCoreType ct, FloatValue v) {
         this->send_u8(static_cast<uint8_t>(TokenClass::Float));
         switch (ct) {
             case CORETYPE_ANY:
@@ -392,7 +392,8 @@ public:
             default:
                 BUG(m_parent_span, "Unknown float type");
         }
-        this->send_bytes_raw(&v, sizeof(v));
+        double wire_value = static_cast<double>(v);
+        this->send_bytes_raw(&wire_value, sizeof(wire_value));
     }
 
     void send_span_def(size_t index, const Span& sp) {

@@ -3109,9 +3109,9 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
 #endif
     bool changed = false;
     TRACE_FUNCTION_FR("", changed);
-    auto make_float_arithmetic_result = [](double value, ::HIR::CoreType type) {
-        if (std::isnan(value)) {
-            value = std::fabs(value);
+    auto make_float_arithmetic_result = [](FloatValue value, ::HIR::CoreType type) {
+        if (float_value_is_nan(value)) {
+            value = positive_nan_float_value();
         }
         return ::MIR::Constant::make_Float({value, type});
     };
@@ -3981,7 +3981,7 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                                 replace = true;
                                 ),
                             (Float,
-                                if( !::std::isnan(ve.v) ) {
+                                if (!float_value_is_nan(ve.v)) {
                                         new_value = ::MIR::Constant::make_Float({-ve.v, ve.t});
                                         replace = true;
                                 }

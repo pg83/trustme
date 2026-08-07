@@ -738,18 +738,18 @@ namespace MIR {
                 write_bytes(state, &v, 1);
             }
 
-            void write_float(const MIR::TypeResolve& state, unsigned bits, double v) {
+            void write_float(const MIR::TypeResolve& state, unsigned bits, FloatValue v) {
                 switch (bits) {
                     case 16: {
-                        F16 v_f = v;
+                        F16 v_f = static_cast<float>(v);
                         write_bytes(state, &v_f, sizeof(v_f));
                     } break;
                     case 32: {
-                        float v_f32 = v;
+                        float v_f32 = static_cast<float>(v);
                         write_bytes(state, &v_f32, sizeof(v_f32));
                     } break;
                     case 64: {
-                        double v_f64 = v;
+                        double v_f64 = static_cast<double>(v);
                         write_bytes(state, &v_f64, sizeof(v_f64));
                     } break;
                     case 128: {
@@ -807,12 +807,12 @@ namespace MIR {
                 memcpy(data, src, len);
             }
 
-            double read_float(const ::MIR::TypeResolve& state, unsigned bits) const {
+            FloatValue read_float(const ::MIR::TypeResolve& state, unsigned bits) const {
                 switch (bits) {
                     case 16: {
                         F16 v_f16;
                         read_bytes(state, &v_f16, sizeof(v_f16));
-                        return v_f16;
+                        return FloatValue(static_cast<_Float128>(static_cast<float>(v_f16)));
                     } break;
                     case 32: {
                         float v_f32 = 0;
@@ -1586,7 +1586,7 @@ namespace MIR {
             }
 
             /// Read a floating point value from a MIR::Param
-            double read_param_float(unsigned bits, const ::MIR::Param& p) const {
+            FloatValue read_param_float(unsigned bits, const ::MIR::Param& p) const {
             TU_MATCH_HDRA( (p), {)
             TU_ARMA(LValue, e)
                 return const_cast<CallStackEntry*>(this)->get_lval(e).read_float(state, bits);
@@ -1777,8 +1777,8 @@ namespace {
             case TypeInfo::Float: {
                 auto l = local_state.read_param_float(ti.bits, val_l);
                 auto r = local_state.read_param_float(ti.bits, val_r);
-                auto write_result = [&](double value) {
-                    if (!std::isnan(value)) {
+                auto write_result = [&](FloatValue value) {
+                    if (!float_value_is_nan(value)) {
                         dst.write_float(state, ti.bits, value);
                         return;
                     }
@@ -1814,7 +1814,7 @@ namespace {
                         write_result(l / r);
                         break;
                     case ::MIR::eBinOp::MOD:
-                        write_result(std::fmod(l, r));
+                        write_result(float_value_remainder(l, r));
                         break;
                     case ::MIR::eBinOp::ADD_OV:
                     case ::MIR::eBinOp::SUB_OV:

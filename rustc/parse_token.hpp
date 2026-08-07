@@ -13,6 +13,7 @@
 #include "ident.hpp"
 #include <memory>
 #include "int128.h"
+#include "floats.hpp"
 #include "span.hpp"
 
 enum eTokenType {
@@ -88,7 +89,7 @@ class Token {
         (Float,
          struct {
              enum eCoreType m_datatype;
-             double m_floatval;
+             FloatValue m_floatval;
          }),
         (Fragment, void*)
     );
@@ -140,7 +141,7 @@ public:
     Token(enum eTokenType type, ::std::string str, Ident::Hygiene h);
     Token(enum eTokenType type, Ident i);
     Token(U128 val, enum eCoreType datatype);
-    static Token make_float(double val, enum eCoreType datatype);
+    static Token make_float(FloatValue val, enum eCoreType datatype);
     Token(const InterpolatedFragment&);
 
     struct TagTakeIP {};
@@ -179,7 +180,7 @@ public:
         return m_data.as_Integer().m_intval;
     }
 
-    double floatval() const {
+    FloatValue floatval() const {
         return m_data.as_Float().m_floatval;
     }
 

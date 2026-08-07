@@ -49,7 +49,7 @@ namespace MIR {
         if (this->tag() != b.tag()) {
             return ::ord(static_cast<unsigned int>(this->tag()), static_cast<unsigned int>(b.tag()));
         }
-        TU_MATCHA((*this, b), (ae, be), (Int, if (ae.v != be.v) return ::ord(ae.v, be.v); return ::ord((unsigned)ae.t, (unsigned)be.t);), (Uint, if (ae.v != be.v) return ::ord(ae.v, be.v); return ::ord((unsigned)ae.t, (unsigned)be.t);), (Float, if (ae.v != be.v) return ::ord(ae.v, be.v); return ::ord((unsigned)ae.t, (unsigned)be.t);), (Bool, return ::ord(ae.v, be.v);), (Bytes, return ::ord(ae, be);), (StaticString, return ::ord(ae, be);), (Const, return ::ord(*ae.p, *be.p);), (Generic, return ::ord(ae.binding, be.binding);), (Function, return ::ord(*ae.p, *be.p);), (ItemAddr, ORD(static_cast<bool>(ae), static_cast<bool>(be)); if (ae) ORD(*ae, *be); return OrdEqual;))
+        TU_MATCHA((*this, b), (ae, be), (Int, if (ae.v != be.v) return ::ord(ae.v, be.v); return ::ord((unsigned)ae.t, (unsigned)be.t);), (Uint, if (ae.v != be.v) return ::ord(ae.v, be.v); return ::ord((unsigned)ae.t, (unsigned)be.t);), (Float, if (ae.v != be.v) return ae.v > be.v ? OrdGreater : OrdLess; return ::ord((unsigned)ae.t, (unsigned)be.t);), (Bool, return ::ord(ae.v, be.v);), (Bytes, return ::ord(ae, be);), (StaticString, return ::ord(ae, be);), (Const, return ::ord(*ae.p, *be.p);), (Generic, return ::ord(ae.binding, be.binding);), (Function, return ::ord(*ae.p, *be.p);), (ItemAddr, ORD(static_cast<bool>(ae), static_cast<bool>(be)); if (ae) ORD(*ae, *be); return OrdEqual;))
         throw "";
     }
 

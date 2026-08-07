@@ -423,7 +423,7 @@ Token Lexer::getTokenInt() {
                                 this->m_next_tokens.push_back(TOK_DOT);
                                 return Token(val, CORETYPE_ANY);
                             } else {
-                                double fval = val.to_double();
+                                FloatValue fval = val.to_double();
                                 return Token::make_float(fval, CORETYPE_ANY);
                             }
                         } else {
@@ -437,7 +437,7 @@ Token Lexer::getTokenInt() {
                     }
 
                     this->ungetc();
-                    double fval = this->parseFloat(val);
+                    FloatValue fval = this->parseFloat(val);
                     if (fval != fval) {
                         assert(!this->m_next_tokens.empty());
                         auto t = std::move(this->m_next_tokens.back());
@@ -932,7 +932,7 @@ U128 Lexer::parseInt(NumMode* num_mode_out) {
 }
 
 // Takes the VERY lazy way of reading the float into a string then passing to strtod
-double Lexer::parseFloat(U128 whole) {
+FloatValue Lexer::parseFloat(U128 whole) {
     std::string sbuf = FMT(whole << ".");
     //const int MAX_LEN = 63;
     //const int MAX_SIG = MAX_LEN - 1 - 4;
@@ -970,7 +970,7 @@ double Lexer::parseFloat(U128 whole) {
             }
             //buf[ofs] = 0;
             //m_next_tokens.push_back(Token::make_float(::std::strtod(buf, NULL), CORETYPE_ANY));
-            m_next_tokens.push_back(Token::make_float(::std::strtod(sbuf.c_str(), NULL), CORETYPE_ANY));
+            m_next_tokens.push_back(Token::make_float(parse_float_value(sbuf.c_str()), CORETYPE_ANY));
 
             return std::numeric_limits<double>::quiet_NaN();
         } else {
@@ -1016,7 +1016,7 @@ double Lexer::parseFloat(U128 whole) {
         DEBUG("buf = " << sbuf << ", ch = '" << ch << "'");
 
         //return ::std::strtod(buf, NULL);
-        return ::std::strtod(sbuf.c_str(), NULL);
+        return parse_float_value(sbuf.c_str());
     }
 }
 

@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 #include "int128.h"
+#include "floats.hpp"
 #include "tagged_union.hpp"
 #include "hir_path.hpp"
 #include "hir_type.hpp"
@@ -71,7 +72,7 @@ namespace HIR {
             (Float,
              struct {
                  ::HIR::CoreType type; // Str == _
-                 double value;
+                 FloatValue value;
              }),
             (String, ::std::string),
             (ByteString, struct { ::std::string v; }),

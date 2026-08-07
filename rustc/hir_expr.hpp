@@ -732,7 +732,7 @@ namespace HIR {
             (Float,
              struct {
                  ::HIR::CoreType m_type; // If not a float type, it's unknown
-                 double m_value;
+                 FloatValue m_value;
              }),
             (Boolean, bool),
             (String, ::std::string),

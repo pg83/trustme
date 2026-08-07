@@ -470,9 +470,9 @@ namespace AST {
     // Literal float
     struct ExprNode_Float: public ExprNode {
         enum eCoreType m_datatype;
-        double m_value;
+        FloatValue m_value;
 
-        ExprNode_Float(double value, enum eCoreType datatype)
+        ExprNode_Float(FloatValue value, enum eCoreType datatype)
             : m_datatype(datatype)
             , m_value(value)
         {

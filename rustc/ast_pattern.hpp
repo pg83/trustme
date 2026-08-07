@@ -16,6 +16,7 @@
 #include "ident.hpp"
 #include "ast_path.hpp"
 #include "ast_macro.hpp"
+#include "floats.hpp"
 
 namespace AST {
 
@@ -76,7 +77,7 @@ namespace AST {
             (Float,
              struct {
                  enum eCoreType type;
-                 double value;
+                 FloatValue value;
              }),
             (String, ::std::string),
             (ByteString, struct { ::std::string v; }),
