@@ -2505,8 +2505,10 @@ namespace HIR {
                     size_t sz = local_state.size_of_or_bug(ity);
 
                     local_state.write_param(dst.slice(0, sz), e.val);
-                    for (unsigned int i = 1; i < count; i++) {
-                        dst.slice(sz * i, sz).copy_from(state, dst.slice(0, sz));
+                    if (sz > 0) {
+                        for (size_t i = 1; i < count; i++) {
+                            dst.slice(sz * i, sz).copy_from(state, dst.slice(0, sz));
+                        }
                     }
             }
             }
