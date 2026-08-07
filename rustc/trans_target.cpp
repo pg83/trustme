@@ -954,6 +954,37 @@ namespace {
         return make_type_repr_struct__inner(sp, ty, ents, sorting, forced_alignment, max_alignment);
     }
 
+    bool bounded_max_is_full_range(const ::HIR::TypeRef& ty, U128 bounded_max) {
+        if (const auto* primitive = ty.data().opt_Primitive()) {
+            switch (*primitive) {
+                case ::HIR::CoreType::U8:
+                case ::HIR::CoreType::I8:
+                    return bounded_max == U128(UINT8_MAX);
+                case ::HIR::CoreType::U16:
+                case ::HIR::CoreType::I16:
+                    return bounded_max == U128(UINT16_MAX);
+                case ::HIR::CoreType::U32:
+                case ::HIR::CoreType::I32:
+                    return bounded_max == U128(UINT32_MAX);
+                case ::HIR::CoreType::U64:
+                case ::HIR::CoreType::I64:
+                    return bounded_max == U128(UINT64_MAX);
+                case ::HIR::CoreType::U128:
+                case ::HIR::CoreType::I128:
+                    return bounded_max == U128(UINT64_MAX, UINT64_MAX);
+                case ::HIR::CoreType::Usize:
+                case ::HIR::CoreType::Isize:
+                    return bounded_max == (Target_GetPointerBits() == 64 ? U128(UINT64_MAX) : U128(UINT32_MAX));
+                default:
+                    return false;
+            }
+        }
+        if (ty.data().is_Pointer()) {
+            return bounded_max == (Target_GetPointerBits() == 64 ? U128(UINT64_MAX) : U128(UINT32_MAX));
+        }
+        return false;
+    }
+
     bool get_nonzero_path(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty, TypeRepr::FieldPath& out_path) {
         switch (ty.data().tag()) {
             TU_ARM(ty.data(), Tuple, te) {
@@ -985,7 +1016,7 @@ namespace {
                     }
                     // Preserve the full invalid range for the general niche
                     // layout instead of collapsing it to the zero value.
-                    if (str->m_struct_markings.bounded_max) {
+                    if (str->m_struct_markings.bounded_max && (r->fields.size() != 1 || !bounded_max_is_full_range(r->fields[0].ty, str->m_struct_markings.bounded_max_value))) {
                         return false;
                     }
                     for (size_t i = 0; i < r->fields.size(); i++) {
