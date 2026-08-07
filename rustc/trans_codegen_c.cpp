@@ -4750,9 +4750,9 @@ namespace {
                     for (size_t j = 0; j < n_arms; j++) {
                         // Handle signed values
                         if (is_signed) {
-                            m_of << indent << "case " << static_cast<int64_t>(e.values[j]) << "ll: ";
+                            m_of << indent << "case " << S128(e.values[j]).truncate_i64() << "ll: ";
                         } else {
-                            m_of << indent << "case " << e.values[j] << "ull: ";
+                            m_of << indent << "case " << e.values[j].truncate_u64() << "ull: ";
                         }
                         cb(j);
                         m_of << "break;\n";
@@ -8771,7 +8771,7 @@ namespace {
                 case ::HIR::CoreType::I32:
                 case ::HIR::CoreType::I64:
                 case ::HIR::CoreType::Isize:
-                    m_of << static_cast<int64_t>(ve.values[idx]) << "ll";
+                    m_of << S128(ve.values[idx]).truncate_i64() << "ll";
                     break;
                 case ::HIR::CoreType::Bool:
                 case ::HIR::CoreType::U8:
@@ -8780,20 +8780,20 @@ namespace {
                 case ::HIR::CoreType::U64:
                 case ::HIR::CoreType::Usize:
                 case ::HIR::CoreType::Char:
-                    m_of << ve.values[idx] << "ull";
+                    m_of << ve.values[idx].truncate_u64() << "ull";
                     break;
                 case ::HIR::CoreType::I128:
                     if (m_options.emulated_i128) {
-                        m_of << "make128s_raw(" << (static_cast<int64_t>(ve.values[idx]) < 0 ? UINT64_MAX : 0) << "ull, " << ve.values[idx] << "ull)";
+                        m_of << "make128s_raw(" << ve.values[idx].get_hi() << "ull, " << ve.values[idx].get_lo() << "ull)";
                     } else {
-                        m_of << "((int128_t)(int64_t)" << ve.values[idx] << "ull)";
+                        m_of << "((int128_t)(((uint128_t)" << ve.values[idx].get_hi() << "ull << 64) | (uint128_t)" << ve.values[idx].get_lo() << "ull))";
                     }
                     break;
                 case ::HIR::CoreType::U128:
                     if (m_options.emulated_i128) {
-                        m_of << "make128_raw(0ull, " << ve.values[idx] << "ull)";
+                        m_of << "make128_raw(" << ve.values[idx].get_hi() << "ull, " << ve.values[idx].get_lo() << "ull)";
                     } else {
-                        m_of << "((uint128_t)" << ve.values[idx] << "ull)";
+                        m_of << "(((uint128_t)" << ve.values[idx].get_hi() << "ull << 64) | (uint128_t)" << ve.values[idx].get_lo() << "ull)";
                     }
                     break;
                 case ::HIR::CoreType::F16:

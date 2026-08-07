@@ -578,10 +578,10 @@ namespace {
                 m_of << "\t" << e.offset << " = " << fmt(e.ty) << ";\n";
             }
 
-            auto emit_value = [&](const TypeRepr::FieldPath& path, uint64_t v) {
+            auto emit_value = [&](const TypeRepr::FieldPath& path, U128 v) {
                 m_of << "\"";
                 for (size_t i = 0; i < path.size; i++) {
-                    int val = (v >> (i * 8)) & 0xFF;
+                    int val = ((v >> (i * 8)) & U128(0xFF)).truncate_u64();
                     if (val < 16) {
                         m_of << ::std::hex << "\\x0" << val << ::std::dec;
                     } else {
@@ -604,7 +604,7 @@ namespace {
                             if (e.is_niche(i)) {
                                 m_of << "*";
                             } else {
-                                emit_value(e.field, e.offset + i);
+                                emit_value(e.field, U128(e.offset + i));
                             }
                             // - Data field number (optional)
                             if (!item.is_value()) {

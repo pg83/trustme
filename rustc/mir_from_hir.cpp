@@ -126,7 +126,7 @@ namespace {
                 m_builder.push_stmt_assign(sp, generator_state_lv(), ::MIR::RValue::make_EnumVariant({m_generator_state.state_idx_enm_path, static_cast<unsigned>(m_generator_state.states.size()), {}}));
                 m_builder.end_block(::MIR::Terminator::make_Goto(s.entrypoint));
 
-                enum_variants.push_back(HIR::Enum::ValueVariant{RcString(), ::HIR::ExprPtr(), arm_targets.size() - 1});
+                enum_variants.push_back(HIR::Enum::ValueVariant{RcString(), ::HIR::ExprPtr(), U128(arm_targets.size() - 1)});
                 for (const auto& e : s.saved) {
                     used_vars.insert(e.first);
                 }
@@ -136,7 +136,7 @@ namespace {
             m_builder.set_cur_block(arm_targets.back());
             m_builder.end_block(::MIR::Terminator::make_Diverge({}));
 
-            enum_variants.push_back(HIR::Enum::ValueVariant{RcString::new_interned("END"), ::HIR::ExprPtr(), arm_targets.size() - 1});
+            enum_variants.push_back(HIR::Enum::ValueVariant{RcString::new_interned("END"), ::HIR::ExprPtr(), U128(arm_targets.size() - 1)});
             state_enm.m_data = ::HIR::Enum::Class::make_Value({mv$(enum_variants)});
 
             m_builder.set_cur_block(m_generator_state.bb_open);

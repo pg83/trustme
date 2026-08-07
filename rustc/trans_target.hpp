@@ -123,7 +123,7 @@ struct TypeRepr {
          struct {
              // NOTE: `field.sub_path` should always be empty?
              FieldPath field;
-             ::std::vector<uint64_t> values;
+             ::std::vector<U128> values;
              bool is_tag(unsigned var_idx) const {
                  return var_idx == field.index;
              }

@@ -338,7 +338,7 @@ namespace HIR {
             /// Optional explicit descriminant value, only valid when repr isn't Repr::Auto
             ::HIR::ExprPtr discriminant_expr;
             // Constant-evaluated descriminant value
-            uint64_t discriminant_value;
+            U128 discriminant_value = U128(0);
         };
         enum class Repr {
             Auto,
@@ -360,7 +360,7 @@ namespace HIR {
             RcString name;
             ::HIR::ExprPtr expr;
             // TODO: Signed.
-            uint64_t val;
+            U128 val = U128(0);
         };
 
         TAGGED_UNION(Class, Data, (Data, ::std::vector<DataVariant>), (Value, struct { ::std::vector<ValueVariant> variants; }));
@@ -384,7 +384,7 @@ namespace HIR {
         /// Returns true if this enum is a C-like enum (has values only)
         bool is_value() const;
         /// Returns the value for the given variant (onlu for value enums)
-        uint64_t get_value(size_t variant) const;
+        U128 get_value(size_t variant) const;
 
         /// Get a type for the given repr value
         static ::HIR::CoreType get_repr_type(Repr r);

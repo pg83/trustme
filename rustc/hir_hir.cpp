@@ -286,7 +286,7 @@ bool HIR::Enum::is_value() const {
     return this->m_data.is_Value();
 }
 
-uint64_t HIR::Enum::get_value(size_t idx) const {
+U128 HIR::Enum::get_value(size_t idx) const {
     if (m_data.is_Value()) {
         const auto& e = m_data.as_Value();
         assert(idx < e.variants.size());

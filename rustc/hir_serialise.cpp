@@ -1135,14 +1135,14 @@ public:
     void serialise(const ::HIR::Enum::ValueVariant& v) {
         m_out.write_string(v.name);
         // NOTE: No expr, no longer needed
-        m_out.write_u64(v.val);
+        m_out.write_u64(v.val.truncate_u64());
     }
 
     void serialise(const ::HIR::Enum::DataVariant& v) {
         m_out.write_string(v.name);
         m_out.write_bool(v.is_struct);
         serialise(v.type);
-        m_out.write_u64(v.discriminant_value);
+        m_out.write_u64(v.discriminant_value.truncate_u64());
     }
 
     void serialise(const ::HIR::TraitMarkings& m) {

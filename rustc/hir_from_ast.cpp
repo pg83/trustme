@@ -1317,7 +1317,7 @@ namespace {
         ::std::vector<::HIR::Enum::ValueVariant> variants;
         for (const auto& var : ent.variants()) {
             // TODO: Quick consteval on the expression?
-            variants.push_back({var.m_name, LowerHIR_Expr(var.m_discriminant_value), 0});
+            variants.push_back({var.m_name, LowerHIR_Expr(var.m_discriminant_value), U128(0)});
         }
 
         data = ::HIR::Enum::Class::make_Value({mv$(variants)});

@@ -1181,7 +1181,7 @@ namespace {
                                     out_path.sub_fields.clear();
                                     out_path.sub_fields.insert(out_path.sub_fields.begin(), ve.field.sub_fields.rbegin(), ve.field.sub_fields.rend());
                                     out_path.sub_fields.push_back(ve.field.index);
-                                    return last_value + 1;
+                                    return last_value.truncate_u64() + 1;
                                 }
                             }
                             return 0;
@@ -1766,7 +1766,7 @@ namespace {
                             rv.align = max_align;
 
                             if (has_explcit_value) {
-                                ::std::vector<uint64_t> vals;
+                                ::std::vector<U128> vals;
                                 for (const auto& v : e) {
                                     vals.push_back(v.discriminant_value);
                                 }
@@ -1790,7 +1790,7 @@ namespace {
                                 int64_t min_value = INT64_MAX;
                                 int64_t max_value = INT64_MIN;
                                 for (const auto& variant : e.variants) {
-                                    const auto value = static_cast<int64_t>(variant.val);
+                                    const auto value = S128(variant.val).truncate_i64();
                                     min_value = std::min(min_value, value);
                                     max_value = std::max(max_value, value);
                                 }
@@ -1827,7 +1827,7 @@ namespace {
                         // Can't return false or unsized
                         Target_GetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, rv.size, rv.align);
 
-                        ::std::vector<uint64_t> vals;
+                        ::std::vector<U128> vals;
                         for (const auto& v : e.variants) {
                             vals.push_back(v.val);
                         }
@@ -2059,7 +2059,7 @@ std::pair<unsigned, bool> TypeRepr::get_enum_variant(const Span& sp, const Stati
         }
         TU_ARMA(Values, ve) {
             auto v = lit.slice(this->get_offset(sp, resolve, ve.field), ve.field.size).read_uint(ve.field.size);
-            auto it = std::find(ve.values.begin(), ve.values.end(), v.truncate_u64());
+            auto it = std::find(ve.values.begin(), ve.values.end(), v);
             ASSERT_BUG(sp, it != ve.values.end(), "Invalid enum tag: " << v);
             var_idx = it - ve.values.begin();
             DEBUG("VariantMode::Values - #" << var_idx);

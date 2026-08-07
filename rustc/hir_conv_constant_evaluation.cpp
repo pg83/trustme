@@ -2583,9 +2583,9 @@ namespace HIR {
                         MIR_ASSERT(state, ti.ty == TypeInfo::Signed || ti.ty == TypeInfo::Unsigned, "EnumVariant: Values not integer - " << fld.ty);
                         auto tag_dst = dst.slice(fld.offset, (ti.bits + 7) / 8);
                         if (ti.ty == TypeInfo::Signed) {
-                            tag_dst.write_sint(state, ti.bits, S128(static_cast<int64_t>(ve.values.at(e.index))));
+                            tag_dst.write_sint(state, ti.bits, S128(ve.values.at(e.index)));
                         } else {
-                            tag_dst.write_uint(state, ti.bits, U128(ve.values.at(e.index)));
+                            tag_dst.write_uint(state, ti.bits, ve.values.at(e.index));
                         }
                     }
             }
@@ -2625,12 +2625,12 @@ namespace HIR {
             TU_ARMA(None, e) {
                     }
                     TU_ARMA(Linear, ve) {
-                        auto v = lit.slice(enm_repr->get_offset(state.sp, resolve, ve.field), ve.field.size).read_uint(state, 8 * ve.field.size).truncate_u64();
+                        auto v = lit.slice(enm_repr->get_offset(state.sp, resolve, ve.field), ve.field.size).read_uint(state, 8 * ve.field.size);
                         if (v < ve.offset) {
                             var_idx = ve.field.index;
                             DEBUG("VariantMode::Linear - Niche #" << var_idx);
                         } else {
-                            var_idx = v - ve.offset;
+                            var_idx = (v - ve.offset).truncate_u64();
                             DEBUG("VariantMode::Linear - Other #" << var_idx);
                         }
                     }
@@ -3939,7 +3939,7 @@ namespace {
             }
             TU_MATCH_HDRA((item.m_data), {)
             TU_ARMA(Value, e) {
-                    uint64_t i = 0;
+                    U128 i(0);
                     for (auto& var : e.variants) {
                         if (var.expr) {
                             auto nvs = NewvalState{mod, mod_path, FMT(name << "#" << var.name << "_")};
@@ -3949,9 +3949,9 @@ namespace {
                                 auto val = eval.evaluate_constant(p, var.expr, ty);
                                 DEBUG("enum variant: " << p << "::" << var.name << " = " << val);
                                 if (is_signed) {
-                                    i = EncodedLiteralSlice(val).read_sint().truncate_i64();
+                                    i = EncodedLiteralSlice(val).read_sint().get_inner();
                                 } else {
-                                    i = EncodedLiteralSlice(val).read_uint().truncate_u64();
+                                    i = EncodedLiteralSlice(val).read_uint();
                                 }
                             } catch (const Defer&) {
                                 BUG(var.expr->span(), "`Defer` thrown during evaluation of enum discriminant");
@@ -3961,11 +3961,11 @@ namespace {
                         if (!var.expr) {
                             DEBUG("enum variant: " << p << "::" << var.name << " = " << var.val << " (auto)");
                         }
-                        i++;
+                        i += 1;
                     }
                 }
                 TU_ARMA(Data, e) {
-                    uint64_t i = 0;
+                    U128 i(0);
                     for (auto& var : e) {
                         if (var.discriminant_expr) {
                             auto nvs = NewvalState{mod, mod_path, FMT(name << "#" << var.name << "_")};
@@ -3975,16 +3975,16 @@ namespace {
                                 auto val = eval.evaluate_constant(p, var.discriminant_expr, ty);
                                 DEBUG("enum variant: " << p << "::" << var.name << " = " << val);
                                 if (is_signed) {
-                                    i = EncodedLiteralSlice(val).read_sint().truncate_i64();
+                                    i = EncodedLiteralSlice(val).read_sint().get_inner();
                                 } else {
-                                    i = EncodedLiteralSlice(val).read_uint().truncate_u64();
+                                    i = EncodedLiteralSlice(val).read_uint();
                                 }
                             } catch (const Defer&) {
                                 BUG(var.discriminant_expr->span(), "`Defer` thrown during evaluation of enum discriminant");
                             }
                         }
                         var.discriminant_value = i;
-                        i++;
+                        i += 1;
                     }
                 }
             }

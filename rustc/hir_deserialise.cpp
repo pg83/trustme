@@ -1192,13 +1192,13 @@ DEF_D(::HIR::ExternLibrary, return d.deserialise_extlib();)
 ::HIR::Enum::DataVariant HirDeserialiser::deserialise_enumdatavariant() {
     auto name = m_in.read_istring();
     DEBUG("Enum::DataVariant " << name);
-    return ::HIR::Enum::DataVariant{mv$(name), m_in.read_bool(), deserialise_type(), ::HIR::ExprPtr{}, m_in.read_u64()};
+    return ::HIR::Enum::DataVariant{mv$(name), m_in.read_bool(), deserialise_type(), ::HIR::ExprPtr{}, U128(m_in.read_u64())};
 }
 
 ::HIR::Enum::ValueVariant HirDeserialiser::deserialise_enumvaluevariant() {
     auto name = m_in.read_istring();
     DEBUG("Enum::ValueVariant " << name);
-    return ::HIR::Enum::ValueVariant{mv$(name), ::HIR::ExprPtr{}, m_in.read_u64()};
+    return ::HIR::Enum::ValueVariant{mv$(name), ::HIR::ExprPtr{}, U128(m_in.read_u64())};
 }
 
 ::HIR::Union HirDeserialiser::deserialise_union() {
