@@ -3516,6 +3516,27 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                             MIR_ASSERT(state, enm.is_value(), "Casting non-value enum to value");
                             auto v = enm.get_value(variant_idx);
 
+                            const auto* repr = Target_GetTypeRepr(state.sp, state.m_resolve, src_ty);
+                            MIR_ASSERT(state, repr && repr->variants.is_Values(), "Value enum without values repr - " << src_ty);
+                            const auto& values = repr->variants.as_Values();
+                            const auto& tag_ty = Target_GetInnerType(state.sp, state.m_resolve, *repr, values.field.index, values.field.sub_fields);
+                            MIR_ASSERT(state, tag_ty.data().is_Primitive(), "Value enum with non-primitive tag - " << src_ty);
+
+                            auto value = S128(U128(v));
+                            switch (tag_ty.data().as_Primitive()) {
+                                case ::HIR::CoreType::I8:
+                                case ::HIR::CoreType::I16:
+                                case ::HIR::CoreType::I32:
+                                case ::HIR::CoreType::I64:
+                                case ::HIR::CoreType::I128:
+                                case ::HIR::CoreType::Isize:
+                                    value = H::truncate_s(tag_ty.data().as_Primitive(), value);
+                                    break;
+                                default:
+                                    value = S128(H::truncate_u(tag_ty.data().as_Primitive(), value.get_inner()));
+                                    break;
+                            }
+
                             auto ct = se.type.data().as_Primitive();
                             switch (ct) {
                                 case ::HIR::CoreType::U8:
@@ -3524,7 +3545,7 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                                 case ::HIR::CoreType::U64:
                                 case ::HIR::CoreType::U128:
                                 case ::HIR::CoreType::Usize:
-                                    new_value = ::MIR::Constant::make_Uint({U128(v), ct});
+                                    new_value = ::MIR::Constant::make_Uint({H::truncate_u(ct, value.get_inner()), ct});
                                     break;
                                 case ::HIR::CoreType::I8:
                                 case ::HIR::CoreType::I16:
@@ -3532,7 +3553,7 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                                 case ::HIR::CoreType::I64:
                                 case ::HIR::CoreType::I128:
                                 case ::HIR::CoreType::Isize:
-                                    new_value = ::MIR::Constant::make_Int({S128(U128(v)), ct});
+                                    new_value = ::MIR::Constant::make_Int({H::truncate_s(ct, value), ct});
                                     break;
                                 case ::HIR::CoreType::F16:
                                 case ::HIR::CoreType::F32:

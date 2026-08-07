@@ -382,7 +382,7 @@ namespace HIR {
         /// Returns true if this enum is a C-like enum (has values only)
         bool is_value() const;
         /// Returns the value for the given variant (onlu for value enums)
-        uint32_t get_value(size_t variant) const;
+        uint64_t get_value(size_t variant) const;
 
         /// Get a type for the given repr value
         static ::HIR::CoreType get_repr_type(Repr r);
