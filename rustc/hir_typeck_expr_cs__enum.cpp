@@ -1192,7 +1192,37 @@ namespace typecheck {
 
             node.m_value->visit(*this);
 
-            this->context.add_revisit(node);
+            // Resolve native dereference versus an overloaded Deref before
+            // the enclosing expression's coercion is considered.  A trait
+            // target is an output constraint, not an expected result type.
+            const auto& ty = this->context.get_type(node.m_value->m_res_type);
+            const auto& op_trait = this->context.m_crate.get_lang_item_path_opt("deref");
+            const ::HIR::TypeRef* inner = nullptr;
+            if (const auto* e = ty.data().opt_Borrow()) {
+                inner = &e->inner;
+            } else if (const auto* e = ty.data().opt_Pointer()) {
+                inner = &e->inner;
+            }
+            if (!inner) {
+                this->context.add_revisit(node);
+                return;
+            }
+
+            const bool has_visible_impl = !op_trait.components().empty()
+                && !this->context.is_current_native_deref_receiver(op_trait, ty)
+                && this->context.m_resolve.find_trait_impls(node.span(), op_trait, {}, ty, [&](ImplRef impl, HIR::Compare) {
+                    return !this->context.is_current_operator_impl(impl);
+                });
+            if (has_visible_impl) {
+                node.m_trait_used = ::HIR::ExprNode_Deref::TraitUsed::Trait;
+                this->context.equate_types_assoc(
+                    node.span(), node.m_res_type, op_trait, {}, node.m_value->m_res_type.clone(),
+                    "Target", {}, true, typeck::PrimitiveOperator::Deref
+                );
+            } else {
+                node.m_trait_used = ::HIR::ExprNode_Deref::TraitUsed::Builtin;
+                this->context.equate_types(node.span(), node.m_res_type, *inner);
+            }
         }
 
         void visit(::HIR::ExprNode_Emplace& node) override {

@@ -5388,6 +5388,23 @@ namespace {
         const auto& ty_src = context.m_ivars.get_type(node_ptr->m_res_type);
         TRACE_FUNCTION_FR(v << " - " << context.m_ivars.fmt_type(ty_dst) << " := " << context.m_ivars.fmt_type(ty_src), v << " - " << context.m_ivars.fmt_type(v.left_ty) << " := " << context.m_ivars.fmt_type(node_ptr->m_res_type));
 
+        // A dereference with a visible trait implementation has a pending
+        // `Deref::Target` equation.  Its output must be selected before an
+        // outer coercion fixes an otherwise unbound result ivar to the
+        // expected type.  This lets a selected `!` target use the ordinary
+        // `! -> T` coercion afterwards.
+        const bool has_pending_deref_target = ::std::any_of(
+            context.link_assoc.begin(), context.link_assoc.end(),
+            [&](const Context::Associated& rule) {
+                return rule.operator_kind == typeck::PrimitiveOperator::Deref
+                    && context.m_ivars.types_equal(rule.left_ty, ty_src);
+            }
+        );
+        if (has_pending_deref_target) {
+            DEBUG("Deref target is pending - keep coercion");
+            return false;
+        }
+
         // NOTE: Coercions can happen on comparisons, which means that checking for Sized isn't valid (because you can compare unsized types)
 
         switch (check_coerce_tys(context, sp, ty_dst, ty_src, &context, &node_ptr)) {
