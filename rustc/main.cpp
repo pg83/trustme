@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <string>
 #include <set>
+#include <climits>
 #include "version.hpp"
 #include "string_view.hpp"
 #include "parse_lex.hpp"
@@ -69,6 +70,11 @@ struct ProgramParams {
     ::std::string crate_name_suffix;
 
     unsigned opt_level = 0;
+    // rustc defaults MIR optimisation to 1 at -O0 and to 2 otherwise.
+    // Keep the explicit bit separate so `-Zmir-opt-level=0` is distinguishable
+    // from the implicit default.
+    unsigned mir_opt_level = 0;
+    bool mir_opt_level_explicit = false;
     bool emit_debug_info = false;
 
     bool test_harness = false;
@@ -91,7 +97,6 @@ struct ProgramParams {
         /// Testing hack: Pause just after startup (to allow a debugger to attach)
         bool pause = false;
 
-        bool disable_mir_optimisations = false;
         bool full_validate = false;
         bool full_validate_early = false;
 
@@ -107,6 +112,14 @@ struct ProgramParams {
     } codegen;
 
     ProgramParams(int argc, char* argv[]);
+
+    unsigned effective_mir_opt_level() const {
+        return mir_opt_level_explicit ? mir_opt_level : (opt_level == 0 ? 1 : 2);
+    }
+    bool enable_mir_inlining() const {
+        const auto level = effective_mir_opt_level();
+        return level >= 3 || (level == 2 && opt_level >= 2);
+    }
 
     void show_help() const;
 };
@@ -191,6 +204,8 @@ void init_debug_list() {
 int main(int argc, char* argv[]) {
     init_debug_list();
     ProgramParams params(argc, argv);
+    const auto mir_opt_level = params.effective_mir_opt_level();
+    const auto enable_mir_inlining = params.enable_mir_inlining();
     if (params.codegen.panic_type.empty()) {
         params.codegen.panic_type = "unwind";
     }
@@ -689,7 +704,7 @@ int main(int argc, char* argv[]) {
 
         // Optimise the MIR
         CompilePhaseV("MIR Optimise", [&]() {
-            MIR_OptimiseCrate(*hir_crate, params.debug.disable_mir_optimisations);
+            MIR_OptimiseCrate(*hir_crate, mir_opt_level, enable_mir_inlining);
         });
 
         if (params.debug.dump_mir) {
@@ -781,11 +796,11 @@ int main(int argc, char* argv[]) {
         });
         // - Generate monomorphised versions of all functions
         CompilePhaseV("Trans Monomorph", [&]() {
-            Trans_Monomorphise_List(*hir_crate, items);
+            Trans_Monomorphise_List(*hir_crate, items, mir_opt_level);
         });
         // - Do post-monomorph inlining
         CompilePhaseV("MIR Optimise Inline", [&]() {
-            MIR_OptimiseCrate_Inlining(*hir_crate, items, false);
+            MIR_OptimiseCrate_Inlining(*hir_crate, items, false, mir_opt_level, enable_mir_inlining);
         });
 
         // - Expand constants in HIR (using ones that were monomorphised above)
@@ -819,7 +834,7 @@ int main(int argc, char* argv[]) {
 
         // - Do post-monomorph inlining
         CompilePhaseV("MIR Optimise Inline PostSave", [&]() {
-            MIR_OptimiseCrate_Inlining(*hir_crate, items, true);
+            MIR_OptimiseCrate_Inlining(*hir_crate, items, true, mir_opt_level, enable_mir_inlining);
         });
         // - Clean up ununused functions
         CompilePhaseV("Trans Enumerate Cleanup", [&]() {
@@ -1054,7 +1069,29 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
 
                     if (optname == "disable-mir-opt") {
                         no_optval();
-                        this->debug.disable_mir_optimisations = true;
+                        this->mir_opt_level = 0;
+                        this->mir_opt_level_explicit = true;
+                    } else if (optname == "mir-opt-level") {
+                        get_optval();
+                        if (optval.empty()) {
+                            ::std::cerr << "Invalid number for -Z mir-opt-level: '" << optval << "'" << ::std::endl;
+                            exit(1);
+                        }
+                        unsigned value = 0;
+                        for (const char c : optval) {
+                            if (c < '0' || c > '9') {
+                                ::std::cerr << "Invalid number for -Z mir-opt-level: '" << optval << "'" << ::std::endl;
+                                exit(1);
+                            }
+                            const unsigned digit = c - '0';
+                            if (value > (UINT_MAX - digit) / 10) {
+                                ::std::cerr << "Number for -Z mir-opt-level is too large: '" << optval << "'" << ::std::endl;
+                                exit(1);
+                            }
+                            value = value * 10 + digit;
+                        }
+                        this->mir_opt_level = value;
+                        this->mir_opt_level_explicit = true;
                     } else if (optname == "full-validate") {
                         no_optval();
                         this->debug.full_validate = true;

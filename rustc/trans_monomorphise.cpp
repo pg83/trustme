@@ -97,7 +97,7 @@ namespace {
 }
 
 /// Monomorphise all functions in a TransList
-void Trans_Monomorphise_List(const ::HIR::Crate& crate, TransList& list) {
+void Trans_Monomorphise_List(const ::HIR::Crate& crate, TransList& list, unsigned mir_opt_level) {
     ::StaticTraitResolve resolve{crate};
 
     struct Nvs: public ::HIR::Evaluator::Newval {
@@ -232,7 +232,11 @@ void Trans_Monomorphise_List(const ::HIR::Crate& crate, TransList& list) {
             ::HIR::ItemPath ip(path);
             MIR_Validate(resolve, ip, *mir, args, ret_type);
             MIR_Cleanup(resolve, ip, *mir, args, ret_type);
-            MIR_Optimise(resolve, ip, *mir, args, ret_type, /*do_inline*/ false);
+            if (mir_opt_level == 0) {
+                MIR_OptimiseMin(resolve, ip, *mir, args, ret_type);
+            } else {
+                MIR_Optimise(resolve, ip, *mir, args, ret_type, mir_opt_level, /*do_inline*/ false);
+            }
             MIR_Validate(resolve, ip, *mir, args, ret_type);
 
             fcn_ent.second->monomorphised.ret_ty = ::std::move(ret_type);

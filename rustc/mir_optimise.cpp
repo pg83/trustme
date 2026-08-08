@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
+#include <limits>
 #include <unordered_map>
 #include <unordered_set>
 #include "trans_target.hpp"
@@ -95,7 +96,7 @@ static bool check_after_all() {
 }
 
 /// A minimum set of optimisations:
-/// - Inlines `#[inline(always)]` functions
+/// - Runs only the mandatory-inlining hook, not normal cost-based inlining
 /// - Simplifies the call graph (by removing chained gotos)
 /// - Sorts blocks into a rough flow order
 void MIR_OptimiseMin(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type) {
@@ -137,7 +138,7 @@ void MIR_OptimiseMin(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
 /// Perfom inlining only, using a list of monomorphised functions, then cleans up the flow graph
 ///
 /// Returns true if any optimisation was performed
-bool MIR_OptimiseInline(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type, const TransList& list) {
+bool MIR_OptimiseInline(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type, const TransList& list, unsigned opt_level) {
     static Span sp;
     bool rv = false;
     TRACE_FUNCTION_FR(path, rv);
@@ -154,14 +155,15 @@ bool MIR_OptimiseInline(const StaticTraitResolve& resolve, const ::HIR::ItemPath
     }
 
     if (rv) {
-        MIR_Optimise(resolve, path, fcn, args, ret_type, /*do_inline=*/false);
+        MIR_Optimise(resolve, path, fcn, args, ret_type, opt_level, /*do_inline=*/false);
     }
 
     return rv;
 }
 
-void MIR_Optimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type, bool do_inline /*=true*/, bool validate /*=true*/) {
+void MIR_Optimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type, unsigned opt_level, bool do_inline /*=true*/, bool validate /*=true*/) {
     static Span sp;
+    assert(opt_level > 0);
     TRACE_FUNCTION_F(path);
     ::MIR::TypeResolve state {
         sp, resolve, FMT_CB(ss, ss << path;), ret_type, args, fcn
@@ -222,8 +224,10 @@ void MIR_Optimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
         }
         //else { MIR_Validate(resolve, path, fcn, args, ret_type); }
 
+        // Level 2 adds the more expensive whole-local/dataflow transformations,
+        // matching rustc's split between basic level-1 cleanup and its SROA/GVN/DSE tier.
         // >> Split apart aggregates that are never used such (Written once, never used directly)
-        if (MIR_Optimise_SplitAggregates(state, fcn)) {
+        if (opt_level >= 2 && MIR_Optimise_SplitAggregates(state, fcn)) {
 #if DUMP_AFTER_ALL
             if (debug_enabled()) {
                 MIR_Dump_Fcn(::std::cout, fcn);
@@ -238,7 +242,7 @@ void MIR_Optimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
 
         // >> Replace values from composites if they're known
         //   - Undoes the inefficiencies from the `match (a, b) { ... }` pattern
-        if (MIR_Optimise_PropagateKnownValues(state, fcn)) {
+        if (opt_level >= 2 && MIR_Optimise_PropagateKnownValues(state, fcn)) {
 #if DUMP_AFTER_ALL
             if (debug_enabled()) {
                 MIR_Dump_Fcn(::std::cout, fcn);
@@ -304,7 +308,7 @@ void MIR_Optimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
             change_happened = true;
         }
         // >> Remove assignments that are never read
-        if (MIR_Optimise_DeadAssignments(state, fcn)) {
+        if (opt_level >= 2 && MIR_Optimise_DeadAssignments(state, fcn)) {
 #if DUMP_AFTER_ALL
             if (debug_enabled()) {
                 MIR_Dump_Fcn(::std::cout, fcn);
@@ -5860,18 +5864,18 @@ void MIR_SortBlocks(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
     fcn.blocks = mv$(new_block_list);
 }
 
-void MIR_OptimiseCrate(::HIR::Crate& crate, bool do_minimal_optimisation) {
-    ::MIR::OuterVisitor ov{crate, [do_minimal_optimisation](const auto& res, const auto& p, auto& expr, const auto& args, const auto& ty) {
+void MIR_OptimiseCrate(::HIR::Crate& crate, unsigned opt_level, bool enable_inlining) {
+    ::MIR::OuterVisitor ov{crate, [opt_level, enable_inlining](const auto& res, const auto& p, auto& expr, const auto& args, const auto& ty) {
         //if( ! dynamic_cast<::HIR::ExprNode_Block*>(expr.get()) ) {
         //    return ;
         //}
         auto& mir = expr.get_mir_or_error_mut(Span());
-        if (do_minimal_optimisation) {
+        if (opt_level == 0) {
             MIR_OptimiseMin(res, p, mir, args, ty);
         } else {
             // The crate driver validates after this optimisation and its final cleanup.
             // Preserve explicitly requested diagnostic checks inside the optimiser.
-            MIR_Optimise(res, p, mir, args, ty, /*do_inline=*/true, /*validate=*/getenv("MRUSTC_MIR_CHECK") != nullptr);
+            MIR_Optimise(res, p, mir, args, ty, opt_level, enable_inlining, /*validate=*/getenv("MRUSTC_MIR_CHECK") != nullptr);
         }
         // Run cleanup to handle now-monomoprhised inlined constants
         MIR_Cleanup(res, p, mir, args, ty);
@@ -5879,7 +5883,7 @@ void MIR_OptimiseCrate(::HIR::Crate& crate, bool do_minimal_optimisation) {
     ov.visit_crate(crate);
 }
 
-void MIR_OptimiseCrate_Inlining(const ::HIR::Crate& crate, TransList& list, bool post_save) {
+void MIR_OptimiseCrate_Inlining(const ::HIR::Crate& crate, TransList& list, bool post_save, unsigned opt_level, bool enable_inlining) {
     TRACE_FUNCTION;
 
     ::StaticTraitResolve resolve{crate};
@@ -5929,7 +5933,15 @@ void MIR_OptimiseCrate_Inlining(const ::HIR::Crate& crate, TransList& list, bool
         }
     }
 
-    const size_t MAX_ITERATIONS = 5; // TODO: Tune this.
+    if (!enable_inlining) {
+        return;
+    }
+
+    // rustc level 4 removes analysis limits. Preserve a finite cap for normal
+    // level-3 inlining, while level 4+ runs this monotonic pass to its fixed point.
+    const size_t max_iterations = opt_level >= 4
+        ? ::std::numeric_limits<size_t>::max()
+        : 5;
     size_t num_iterations = 0;
     bool did_inline_on_pass;
     do {
@@ -5945,12 +5957,12 @@ void MIR_OptimiseCrate_Inlining(const ::HIR::Crate& crate, TransList& list, bool
             ::HIR::ItemPath ip(s);
 
             if (mono_fcn.code) {
-                did_inline_on_pass |= MIR_OptimiseInline(resolve, ip, *mono_fcn.code, mono_fcn.arg_tys, mono_fcn.ret_ty, list);
+                did_inline_on_pass |= MIR_OptimiseInline(resolve, ip, *mono_fcn.code, mono_fcn.arg_tys, mono_fcn.ret_ty, list, opt_level);
 
                 MIR_Cleanup(resolve, ip, *mono_fcn.code, mono_fcn.arg_tys, mono_fcn.ret_ty);
             } else if (hir_fcn.m_code) {
                 auto& mir = hir_fcn.m_code.get_mir_or_error_mut(Span());
-                bool did_opt = MIR_OptimiseInline(resolve, ip, mir, hir_fcn.m_args, hir_fcn.m_return, list);
+                bool did_opt = MIR_OptimiseInline(resolve, ip, mir, hir_fcn.m_args, hir_fcn.m_return, list, opt_level);
                 mir.trans_enum_state = ::MIR::EnumCachePtr(); // Clear MIR enum cache
                 did_inline_on_pass |= did_opt;
 
@@ -5959,9 +5971,10 @@ void MIR_OptimiseCrate_Inlining(const ::HIR::Crate& crate, TransList& list, bool
                 // Extern, no optimisations
             }
         }
-    } while (did_inline_on_pass && num_iterations < MAX_ITERATIONS);
+        num_iterations += 1;
+    } while (did_inline_on_pass && num_iterations < max_iterations);
 
     if (did_inline_on_pass) {
-        DEBUG("Ran inlining optimise pass to exhaustion (maximum of " << MAX_ITERATIONS << " hit");
+        DEBUG("Stopped inlining after the level-specific maximum of " << max_iterations << " passes");
     }
 }

@@ -41,6 +41,6 @@ extern void Trans_Enumerate_Cleanup(const ::HIR::Crate& crate, TransList& list);
 
 extern void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list);
 
-extern void Trans_Monomorphise_List(const ::HIR::Crate& crate, TransList& list);
+extern void Trans_Monomorphise_List(const ::HIR::Crate& crate, TransList& list, unsigned mir_opt_level);
 
 extern void Trans_Codegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* crate, TransList list, const ::std::string& hir_file);

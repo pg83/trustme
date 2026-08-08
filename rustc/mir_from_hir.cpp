@@ -3050,9 +3050,10 @@ void HIR_GenerateMIR_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& path
         // Run cleanup to simplify consteval?
         // - This ends up running before things like vtable generation, so parts of cleanup won't work.
         //MIR_Cleanup(resolve, path, *expr_ptr.m_mir, args, res_ty);
-        // Run minimal optimisation
-        //MIR_OptimiseMin(resolve, path, *expr_ptr.m_mir, args, res_ty);
-        MIR_Optimise(resolve, path, *expr_ptr.m_mir, args, res_ty, /*do_inline=*/false);
+        // This path prepares an on-demand body for the constant evaluator, not
+        // the runtime MIR selected by the driver. Keep normal inlining disabled,
+        // but retain the local simplification that CTFE historically required.
+        MIR_Optimise(resolve, path, *expr_ptr.m_mir, args, res_ty, /*opt_level=*/2, /*do_inline=*/false);
     }
 }
 

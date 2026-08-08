@@ -10,7 +10,7 @@
 
 Исполнять строго сверху вниз.
 
-- [ ] Подключить `-Z mir-opt-level` к реальному уровню MIR optimisations; сейчас unknown flag сразу блокирует 38 nodes. `next-solver` (21 nodes) не подменять no-op: отложить до отдельной реализации solver semantics.
+- [ ] Реализовать solver semantics для `-Z next-solver` (21 node); не принимать флаг как no-op и не подменять новый solver текущим выбором impl.
 
 ## P1 — ICE, assert и зависания
 
@@ -75,6 +75,7 @@
 - [ ] Реализовать настоящий check-only/metadata stop после typecheck для `check-pass`; такой тест считается зелёным без C generation/link/runtime.
 - [ ] Принимать и применять diagnostic-only options `--check-cfg`, `-A` и `-D`, чтобы они не завершали компилятор как unknown option.
 - [ ] Реализовать требуемые output/debug modes вроде `-Z unpretty`; не игнорировать их молча, если тест проверяет output.
+- [ ] Реализовать управляемые MIR passes для `-Z mir-enable-passes`, `-Z inline-mir`/`inline_mir` и `-Z validate-mir`; каждый флаг должен менять соответствующий pass/validation pipeline, а не только приниматься CLI.
 - [ ] Семантически поддержать используемые `-C overflow-checks`, `-C panic`, target features и остальные codegen flags. Игнорирование допустимо только после доказательства, что flag не влияет на проверяемый invariant.
 
 ## P7 — отдельные платформенные наборы

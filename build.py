@@ -413,6 +413,24 @@ unit_tests.append(command(
     descr="UT",
     color="green",
 ))
+unit_tests.append(command(
+    name="unit_mir_opt_level",
+    inputs=[
+        "$(S)/tests/unit/test_mir_opt_level.py",
+        "$(S)/tests/unit/mir_opt_level_input.rs",
+    ],
+    outputs=["$(B)/tests/unit/mir_opt_level.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tests/unit/test_mir_opt_level.py",
+        "$(B)/rustc/rustc",
+        "$(S)/tests/unit/mir_opt_level_input.rs",
+        "$(B)/tests/unit/mir_opt_level.stamp",
+    ],
+    deps=[rustc],
+    descr="UT",
+    color="green",
+))
 for _src in build.glob("$(S)/tests/unit/test_*.rs"):
     _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
     unit_tests.append(command(
