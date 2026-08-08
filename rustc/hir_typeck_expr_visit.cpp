@@ -145,6 +145,7 @@ namespace {
         void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
             TRACE_FUNCTION_F("impl " << trait_path << impl.m_trait_args << " for " << impl.m_type);
             auto trait_gpath = ::HIR::GenericPath(trait_path, impl.m_trait_args.clone());
+            auto _0 = this->m_ms.set_current_trait_impl(impl);
             auto _1 = this->m_ms.set_current_trait(trait_gpath);
             auto _ = this->m_ms.set_impl_generics(impl.m_params);
 

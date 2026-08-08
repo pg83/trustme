@@ -905,38 +905,49 @@ namespace typecheck {
                 // Type inferrence using the +=
                 // - "" as type name to indicate that it's just using the trait magic?
                 const char* lang_item = nullptr;
+                auto operator_kind = typeck::PrimitiveOperator::None;
                 switch (node.m_op) {
                     case ::HIR::ExprNode_Assign::Op::None:
                         throw "";
                     case ::HIR::ExprNode_Assign::Op::Add:
                         lang_item = "add_assign";
+                        operator_kind = typeck::PrimitiveOperator::AddAssign;
                         break;
                     case ::HIR::ExprNode_Assign::Op::Sub:
                         lang_item = "sub_assign";
+                        operator_kind = typeck::PrimitiveOperator::SubAssign;
                         break;
                     case ::HIR::ExprNode_Assign::Op::Mul:
                         lang_item = "mul_assign";
+                        operator_kind = typeck::PrimitiveOperator::MulAssign;
                         break;
                     case ::HIR::ExprNode_Assign::Op::Div:
                         lang_item = "div_assign";
+                        operator_kind = typeck::PrimitiveOperator::DivAssign;
                         break;
                     case ::HIR::ExprNode_Assign::Op::Mod:
                         lang_item = "rem_assign";
+                        operator_kind = typeck::PrimitiveOperator::RemAssign;
                         break;
                     case ::HIR::ExprNode_Assign::Op::And:
                         lang_item = "bitand_assign";
+                        operator_kind = typeck::PrimitiveOperator::BitAndAssign;
                         break;
                     case ::HIR::ExprNode_Assign::Op::Or:
                         lang_item = "bitor_assign";
+                        operator_kind = typeck::PrimitiveOperator::BitOrAssign;
                         break;
                     case ::HIR::ExprNode_Assign::Op::Xor:
                         lang_item = "bitxor_assign";
+                        operator_kind = typeck::PrimitiveOperator::BitXorAssign;
                         break;
                     case ::HIR::ExprNode_Assign::Op::Shr:
                         lang_item = "shr_assign";
+                        operator_kind = typeck::PrimitiveOperator::ShrAssign;
                         break;
                     case ::HIR::ExprNode_Assign::Op::Shl:
                         lang_item = "shl_assign";
+                        operator_kind = typeck::PrimitiveOperator::ShlAssign;
                         break;
                 }
                 assert(lang_item);
@@ -944,7 +955,7 @@ namespace typecheck {
 
                 auto ty = this->context.m_ivars.new_ivar_tr();
                 this->context.equate_types_coerce(node.span(), ty, node.m_value);
-                this->context.equate_types_assoc(node.span(), ::HIR::TypeRef(), trait_path, HIR::PathParams(mv$(ty)), node.m_slot->m_res_type.clone(), "", {});
+                this->context.equate_types_assoc(node.span(), ::HIR::TypeRef(), trait_path, HIR::PathParams(mv$(ty)), node.m_slot->m_res_type.clone(), "", {}, true, operator_kind);
             }
 
             node.m_slot->visit(*this);
@@ -1004,7 +1015,10 @@ namespace typecheck {
                     assert(item_name);
                     const auto& op_trait = this->context.m_crate.get_lang_item_path(node.span(), item_name);
 
-                    this->context.equate_types_assoc(node.span(), ::HIR::TypeRef(), op_trait, HIR::PathParams(right_ty.clone()), left_ty.clone(), "", {});
+                    auto operator_kind = node.m_op == ::HIR::ExprNode_BinOp::Op::CmpEqu || node.m_op == ::HIR::ExprNode_BinOp::Op::CmpNEqu
+                        ? typeck::PrimitiveOperator::Equal
+                        : typeck::PrimitiveOperator::Order;
+                    this->context.equate_types_assoc(node.span(), ::HIR::TypeRef(), op_trait, HIR::PathParams(right_ty.clone()), left_ty.clone(), "", {}, true, operator_kind);
                     break;
                 }
 
@@ -1016,6 +1030,7 @@ namespace typecheck {
                     break;
                 default: {
                     const char* item_name = nullptr;
+                    auto operator_kind = typeck::PrimitiveOperator::None;
                     switch (node.m_op) {
                         case ::HIR::ExprNode_BinOp::Op::CmpEqu:
                             throw "";
@@ -1036,42 +1051,52 @@ namespace typecheck {
 
                         case ::HIR::ExprNode_BinOp::Op::Add:
                             item_name = "add";
+                            operator_kind = typeck::PrimitiveOperator::Add;
                             break;
                         case ::HIR::ExprNode_BinOp::Op::Sub:
                             item_name = "sub";
+                            operator_kind = typeck::PrimitiveOperator::Sub;
                             break;
                         case ::HIR::ExprNode_BinOp::Op::Mul:
                             item_name = "mul";
+                            operator_kind = typeck::PrimitiveOperator::Mul;
                             break;
                         case ::HIR::ExprNode_BinOp::Op::Div:
                             item_name = "div";
+                            operator_kind = typeck::PrimitiveOperator::Div;
                             break;
                         case ::HIR::ExprNode_BinOp::Op::Mod:
                             item_name = "rem";
+                            operator_kind = typeck::PrimitiveOperator::Rem;
                             break;
 
                         case ::HIR::ExprNode_BinOp::Op::And:
                             item_name = "bitand";
+                            operator_kind = typeck::PrimitiveOperator::BitAnd;
                             break;
                         case ::HIR::ExprNode_BinOp::Op::Or:
                             item_name = "bitor";
+                            operator_kind = typeck::PrimitiveOperator::BitOr;
                             break;
                         case ::HIR::ExprNode_BinOp::Op::Xor:
                             item_name = "bitxor";
+                            operator_kind = typeck::PrimitiveOperator::BitXor;
                             break;
 
                         case ::HIR::ExprNode_BinOp::Op::Shr:
                             item_name = "shr";
+                            operator_kind = typeck::PrimitiveOperator::Shr;
                             break;
                         case ::HIR::ExprNode_BinOp::Op::Shl:
                             item_name = "shl";
+                            operator_kind = typeck::PrimitiveOperator::Shl;
                             break;
                     }
                     assert(item_name);
                     const auto& op_trait = this->context.m_crate.get_lang_item_path(node.span(), item_name);
 
                     // NOTE: `true` marks the association as coming from a binary operation, which changes integer handling
-                    this->context.equate_types_assoc(node.span(), node.m_res_type, op_trait, HIR::PathParams(right_ty.clone()), left_ty.clone(), "Output", {}, true);
+                    this->context.equate_types_assoc(node.span(), node.m_res_type, op_trait, HIR::PathParams(right_ty.clone()), left_ty.clone(), "Output", {}, true, operator_kind);
                     break;
                 }
             }
@@ -1086,17 +1111,20 @@ namespace typecheck {
             TRACE_FUNCTION_F(&node << " " << ::HIR::ExprNode_UniOp::opname(node.m_op) << "...");
             this->context.add_ivars(node.m_value->m_res_type);
             const char* item_name = nullptr;
+            auto operator_kind = typeck::PrimitiveOperator::None;
             switch (node.m_op) {
                 case ::HIR::ExprNode_UniOp::Op::Invert:
                     item_name = "not";
+                    operator_kind = typeck::PrimitiveOperator::Not;
                     break;
                 case ::HIR::ExprNode_UniOp::Op::Negate:
                     item_name = "neg";
+                    operator_kind = typeck::PrimitiveOperator::Neg;
                     break;
             }
             assert(item_name);
             const auto& op_trait = this->context.m_crate.get_lang_item_path(node.span(), item_name);
-            this->context.equate_types_assoc(node.span(), node.m_res_type, op_trait, ::HIR::PathParams{}, node.m_value->m_res_type.clone(), "Output", {}, true);
+            this->context.equate_types_assoc(node.span(), node.m_res_type, op_trait, ::HIR::PathParams{}, node.m_value->m_res_type.clone(), "Output", {}, true, operator_kind);
             node.m_value->visit(*this);
         }
 

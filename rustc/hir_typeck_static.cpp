@@ -2972,6 +2972,13 @@ MetadataType StaticTraitResolve::metadata_type(const Span& sp, const ::HIR::Type
 }
 
 bool StaticTraitResolve::type_needs_drop_glue(const Span& sp, const ::HIR::TypeRef& ty) const {
+    // A crate without the Drop lang item cannot define a destructor.  In that
+    // language mode no type can require compiler-generated drop glue, and in
+    // particular the resolver must not try to look up an empty trait path.
+    if (m_lang_Drop.components().empty()) {
+        return false;
+    }
+
     // If `T: Copy`, then it can't need drop glue
     if (type_is_copy(sp, ty)) {
         return false;

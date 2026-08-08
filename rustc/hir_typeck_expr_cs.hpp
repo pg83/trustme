@@ -54,6 +54,7 @@ struct Context {
 
         // HACK: operators are special - the result when both types are primitives is ALWAYS the lefthand side
         bool is_operator;
+        typeck::PrimitiveOperator operator_kind;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const Associated& v) {
             os << "R" << v.rule_idx << " ";
@@ -146,6 +147,7 @@ struct Context {
     };
 
     const ::HIR::Crate& m_crate;
+    const ::HIR::TraitImpl* m_current_trait_impl;
 
     ::std::vector<Binding> m_bindings;
     HMTypeInferrence m_ivars;
@@ -180,8 +182,9 @@ struct Context {
 
     const ::HIR::SimplePath m_lang_Box;
 
-    Context(const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params, const ::HIR::SimplePath& mod_path, const ::HIR::GenericPath* current_trait)
+    Context(const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params, const ::HIR::SimplePath& mod_path, const ::HIR::GenericPath* current_trait, const ::HIR::TraitImpl* current_trait_impl)
         : m_crate(crate)
+        , m_current_trait_impl(current_trait_impl)
         , m_resolve(m_ivars, crate, impl_params, item_params, mod_path, current_trait)
         , next_rule_idx(0)
         , m_lang_Box(crate.get_lang_item_path_opt("owned_box"))
@@ -210,7 +213,27 @@ struct Context {
     // - Equate two types, allowing inferrence
     void equate_types_coerce(const Span& sp, const ::HIR::TypeRef& l, ::HIR::ExprNodeP& node_ptr);
     // - Equate a type to an associated type (if name == "", no equation is done, but trait is searched)
-    void equate_types_assoc(const Span& sp, const ::HIR::TypeRef& l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeRef& impl_ty, const char* name, const ::HIR::PathParams& aty_pp, bool is_op = false);
+    void equate_types_assoc(const Span& sp, const ::HIR::TypeRef& l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeRef& impl_ty, const char* name, const ::HIR::PathParams& aty_pp, bool is_op = false, typeck::PrimitiveOperator operator_kind = typeck::PrimitiveOperator::None);
+
+    bool is_current_operator_impl(const ImplRef& impl) const {
+        const auto* trait_impl = impl.m_data.opt_TraitImpl();
+        return m_current_trait_impl && trait_impl && trait_impl->impl == m_current_trait_impl;
+    }
+
+    // A Deref implementation for a native pointer/reference receives `&Self`.
+    // Dereferencing that receiver is the native step needed to recover `Self`,
+    // not another dispatch through a potentially overlapping Deref impl.
+    bool is_current_native_deref_receiver(const ::HIR::SimplePath& deref_trait, const ::HIR::TypeRef& operand) const {
+        const auto* current_trait = m_resolve.current_trait_path();
+        const auto& ty = m_ivars.get_type(operand);
+        const auto* borrow = ty.data().opt_Borrow();
+        return m_current_trait_impl
+            && current_trait
+            && current_trait->m_path == deref_trait
+            && borrow
+            && typeck::primitive_operator_has_builtin(typeck::PrimitiveOperator::Deref, borrow->inner)
+            && m_current_trait_impl->matches_type(borrow->inner, m_ivars.callback_resolve_infer());
+    }
 
     // Equate const generics (values)
     void equate_values(const Span& sp, const ::HIR::ConstGeneric& rl, const ::HIR::ConstGeneric& rr);

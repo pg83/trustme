@@ -558,11 +558,22 @@ namespace HIR {
 
     // unary `*`
     struct ExprNode_Deref: public ExprNode {
+        enum class TraitUsed {
+            // Nodes created after type checking can retain the historical
+            // structural behaviour. Source dereferences are resolved to one
+            // of the two explicit choices below.
+            Unknown,
+            Builtin,
+            Trait,
+        };
+
         ::HIR::ExprNodeP m_value;
+        TraitUsed m_trait_used;
 
         ExprNode_Deref(Span sp, ::HIR::ExprNodeP val)
             : ExprNode(mv$(sp))
             , m_value(mv$(val))
+            , m_trait_used(TraitUsed::Unknown)
         {
         }
 

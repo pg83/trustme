@@ -32,5 +32,137 @@ extern ::HIR::PathParams clone_path_params_with(const Span& sp, const ::HIR::Pat
 
 extern void check_type_class_primitive(const Span& sp, const ::HIR::TypeRef& type, ::HIR::InferClass ic, ::HIR::CoreType ct);
 
+namespace typeck {
+    // The primitive operation is a language candidate, separate from an
+    // implementation of the operator trait.  Keeping this classification in
+    // one place makes type checking, UFCS expansion, and validation agree on
+    // which expressions may remain as MIR primitive operations.
+    enum class PrimitiveOperator {
+        None,
+
+        Add,
+        Sub,
+        Mul,
+        Div,
+        Rem,
+        BitAnd,
+        BitOr,
+        BitXor,
+        Shl,
+        Shr,
+        Equal,
+        Order,
+        Not,
+        Neg,
+        Deref,
+
+        AddAssign,
+        SubAssign,
+        MulAssign,
+        DivAssign,
+        RemAssign,
+        BitAndAssign,
+        BitOrAssign,
+        BitXorAssign,
+        ShlAssign,
+        ShrAssign,
+    };
+
+    inline bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeRef& left, const ::HIR::TypeRef& right) {
+        const auto* left_primitive = left.data().opt_Primitive();
+        const auto* right_primitive = right.data().opt_Primitive();
+
+        const auto same_numeric = [&]() {
+            return left == right && left_primitive && (::HIR::is_integer(*left_primitive) || ::HIR::is_float(*left_primitive));
+        };
+        const auto same_bitwise = [&]() {
+            return left == right && left_primitive && (::HIR::is_integer(*left_primitive) || *left_primitive == ::HIR::CoreType::Bool);
+        };
+        const auto shift = [&]() {
+            return left_primitive && right_primitive && ::HIR::is_integer(*left_primitive) && ::HIR::is_integer(*right_primitive);
+        };
+        const auto comparison = [&]() {
+            if (left != right) {
+                return false;
+            }
+            return left.data().is_Pointer() || (left_primitive && *left_primitive != ::HIR::CoreType::Str);
+        };
+
+        switch (op) {
+            case PrimitiveOperator::Add:
+            case PrimitiveOperator::Sub:
+            case PrimitiveOperator::Mul:
+            case PrimitiveOperator::Div:
+            case PrimitiveOperator::Rem:
+            case PrimitiveOperator::AddAssign:
+            case PrimitiveOperator::SubAssign:
+            case PrimitiveOperator::MulAssign:
+            case PrimitiveOperator::DivAssign:
+            case PrimitiveOperator::RemAssign:
+                return same_numeric();
+
+            case PrimitiveOperator::BitAnd:
+            case PrimitiveOperator::BitOr:
+            case PrimitiveOperator::BitXor:
+            case PrimitiveOperator::BitAndAssign:
+            case PrimitiveOperator::BitOrAssign:
+            case PrimitiveOperator::BitXorAssign:
+                return same_bitwise();
+
+            case PrimitiveOperator::Shl:
+            case PrimitiveOperator::Shr:
+            case PrimitiveOperator::ShlAssign:
+            case PrimitiveOperator::ShrAssign:
+                return shift();
+
+            case PrimitiveOperator::Equal:
+            case PrimitiveOperator::Order:
+                return comparison();
+
+            case PrimitiveOperator::None:
+            case PrimitiveOperator::Not:
+            case PrimitiveOperator::Neg:
+            case PrimitiveOperator::Deref:
+                return false;
+        }
+        throw "";
+    }
+
+    inline bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeRef& value) {
+        if (op == PrimitiveOperator::Deref) {
+            return value.data().is_Borrow() || value.data().is_Pointer();
+        }
+
+        const auto* primitive = value.data().opt_Primitive();
+        if (!primitive) {
+            return false;
+        }
+
+        switch (op) {
+            case PrimitiveOperator::Not:
+                return *primitive == ::HIR::CoreType::Bool || ::HIR::is_integer(*primitive);
+            case PrimitiveOperator::Neg:
+                if (::HIR::is_float(*primitive)) {
+                    return true;
+                }
+                switch (*primitive) {
+                    case ::HIR::CoreType::Isize:
+                    case ::HIR::CoreType::I8:
+                    case ::HIR::CoreType::I16:
+                    case ::HIR::CoreType::I32:
+                    case ::HIR::CoreType::I64:
+                    case ::HIR::CoreType::I128:
+                        return true;
+                    default:
+                        return false;
+                }
+            case PrimitiveOperator::Deref:
+                return false;
+            default:
+                return false;
+        }
+    }
+}
+
 class StaticTraitResolve;
 extern void Typecheck_Expressions_ValidateOne(const StaticTraitResolve& resolve, const ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args, const ::HIR::TypeRef& ret_ty, const ::HIR::ExprPtr& code);

@@ -581,10 +581,20 @@ namespace {
             const auto& ty = this->context.get_type(node.m_value->m_res_type);
             TRACE_FUNCTION_F("Deref: ty=" << ty);
 
+            const auto& op_trait = this->context.m_crate.get_lang_item_path_opt("deref");
+            auto use_builtin = [&](const ::HIR::TypeRef& inner) {
+                node.m_trait_used = ::HIR::ExprNode_Deref::TraitUsed::Builtin;
+                this->context.equate_types(node.span(), node.m_res_type, inner);
+            };
+            auto use_trait = [&]() {
+                node.m_trait_used = ::HIR::ExprNode_Deref::TraitUsed::Trait;
+                this->context.equate_types_assoc(node.span(), node.m_res_type, op_trait, {}, node.m_value->m_res_type.clone(), "Target", {}, true, typeck::PrimitiveOperator::Deref);
+            };
+
             TU_MATCH_HDRA( (ty.data()), {)
             default: {
-                    const auto& op_trait = this->context.m_crate.get_lang_item_path(node.span(), "deref");
-                    this->context.equate_types_assoc(node.span(), node.m_res_type, op_trait, {}, node.m_value->m_res_type.clone(), "Target", {});
+                    ASSERT_BUG(node.span(), !op_trait.components().empty(), "Deref trait missing for non-builtin dereference of " << ty);
+                    use_trait();
                 }
                 TU_ARMA(Infer, e) {
                     // Keep trying
@@ -592,12 +602,33 @@ namespace {
                     return;
                 }
                 TU_ARMA(Borrow, e) {
-                    // - Not really needed, but this is cheaper.
-                    this->context.equate_types(node.span(), node.m_res_type, e.inner);
+                    if (op_trait.components().empty() || this->context.is_current_native_deref_receiver(op_trait, ty)) {
+                        use_builtin(e.inner);
+                    } else {
+                        bool has_visible_impl = this->context.m_resolve.find_trait_impls(node.span(), op_trait, {}, ty, [&](ImplRef impl, HIR::Compare) {
+                            return !this->context.is_current_operator_impl(impl);
+                        });
+                        if (has_visible_impl) {
+                            use_trait();
+                        } else {
+                            use_builtin(e.inner);
+                        }
+                    }
                 }
                 TU_ARMA(Pointer, e) {
-                    // TODO: Figure out if this node is in an unsafe block.
-                    this->context.equate_types(node.span(), node.m_res_type, e.inner);
+                    if (op_trait.components().empty()) {
+                        use_builtin(e.inner);
+                    } else {
+                        bool has_visible_impl = this->context.m_resolve.find_trait_impls(node.span(), op_trait, {}, ty, [&](ImplRef impl, HIR::Compare) {
+                            return !this->context.is_current_operator_impl(impl);
+                        });
+                        if (has_visible_impl) {
+                            use_trait();
+                        } else {
+                            // TODO: Figure out if this node is in an unsafe block.
+                            use_builtin(e.inner);
+                        }
+                    }
                 }
             }
             this->m_completed = true;
@@ -3932,7 +3963,7 @@ void Context::possible_equate_type_unknown(const Span& sp, const ::HIR::TypeRef&
     }
 }
 
-void Context::equate_types_assoc(const Span& sp, const ::HIR::TypeRef& l, const ::HIR::SimplePath& trait, ::HIR::PathParams pp, const ::HIR::TypeRef& impl_ty, const char* name, const ::HIR::PathParams& aty_pp, bool is_op) {
+void Context::equate_types_assoc(const Span& sp, const ::HIR::TypeRef& l, const ::HIR::SimplePath& trait, ::HIR::PathParams pp, const ::HIR::TypeRef& impl_ty, const char* name, const ::HIR::PathParams& aty_pp, bool is_op, typeck::PrimitiveOperator operator_kind) {
     for (const auto& a : this->link_assoc) {
         if (a.left_ty != l) {
             continue;
@@ -3955,6 +3986,9 @@ void Context::equate_types_assoc(const Span& sp, const ::HIR::TypeRef& l, const 
         if (a.is_operator != is_op) {
             continue;
         }
+        if (a.operator_kind != operator_kind) {
+            continue;
+        }
 
         DEBUG("(DUPLICATE " << a << ")");
         return;
@@ -3974,7 +4008,8 @@ void Context::equate_types_assoc(const Span& sp, const ::HIR::TypeRef& l, const 
             MonomorphEraseHrls().monomorph_type(sp, impl_ty, true),
             name,
             MonomorphEraseHrls().monomorph_path_params(sp, aty_pp, true),
-            is_op
+            is_op,
+            operator_kind
         }
     );
     DEBUG("++ " << this->link_assoc.back());
@@ -5446,10 +5481,26 @@ namespace {
                 }
                 throw "unreachable";
             }
+
         };
 
+        bool has_visible_operator_impl = false;
+        if (v.operator_kind != typeck::PrimitiveOperator::None) {
+            context.m_resolve.find_trait_impls(sp, v.trait, v.params, v.impl_ty, [&](ImplRef impl, HIR::Compare) {
+                if (context.is_current_operator_impl(impl)) {
+                    return false;
+                }
+                has_visible_operator_impl = true;
+                return true;
+            });
+        }
+
         // MAGIC! Have special handling for operator overloads
-        if (v.is_operator) {
+        // These constraints describe the primitive candidate.  A concrete
+        // trait implementation is allowed to determine its own result type
+        // instead, so don't install primitive equations when that candidate
+        // is visible.
+        if (v.is_operator && !has_visible_operator_impl) {
             if (v.params.m_types.size() == 0) {
                 // Uni ops = If the value is a primitive, the output is the same type
                 const auto& ty = context.get_type(v.impl_ty);
@@ -5529,6 +5580,10 @@ namespace {
         try {
             bool found = context.m_resolve.find_trait_impls(sp, v.trait, v.params, v.impl_ty, [&](ImplRef impl, HIR::Compare cmp) {
                 DEBUG("[check_associated] Found cmp=" << cmp << " " << impl);
+                if (v.operator_kind != typeck::PrimitiveOperator::None && context.is_current_operator_impl(impl)) {
+                    DEBUG("[check_associated] - current trait impl is not an operator candidate");
+                    return false;
+                }
                 if (v.name != "") {
                     // TODO: Are params needed for these ATY bounds?
                     auto out_ty_o = impl.get_type(v.name.c_str(), {});
@@ -5695,6 +5750,14 @@ namespace {
                     const auto& dst_ty = context.get_type(v.params.m_types[0]);
 
                     context.equate_types(sp, dst_ty, src_ty);
+                    return true;
+                } else if (v.operator_kind != typeck::PrimitiveOperator::None
+                           && (v.params.m_types.size() == 0
+                               ? typeck::primitive_operator_has_builtin(v.operator_kind, context.get_type(v.impl_ty))
+                               : v.params.m_types.size() == 1
+                                   && typeck::primitive_operator_has_builtin(v.operator_kind, context.get_type(v.impl_ty), context.get_type(v.params.m_types.at(0))))) {
+                    // No trait implementation matched this expression.  The
+                    // language-defined primitive candidate therefore wins.
                     return true;
                 } else {
                     if (v.name == "") {
@@ -7648,7 +7711,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
 
     auto root_ptr = expr.take_node();
     assert(!ms.m_mod_paths.empty());
-    Context context{ms.m_crate, ms.m_impl_generics, ms.m_item_generics, ms.m_mod_paths.back(), ms.m_current_trait};
+    Context context{ms.m_crate, ms.m_impl_generics, ms.m_item_generics, ms.m_mod_paths.back(), ms.m_current_trait, ms.m_current_trait_impl};
 
     // - Build up ruleset from node tree
     Typecheck_Code_CS__EnumerateRules(context, ms, args, result_type, expr, root_ptr);

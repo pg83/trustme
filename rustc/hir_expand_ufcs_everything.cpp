@@ -26,12 +26,16 @@ namespace {
 
     class ExprVisitor_Mutate: public ::HIR::ExprVisitorDef {
         const ::HIR::Crate& m_crate;
+        const ::HIR::TraitImpl* m_current_trait_impl;
+        StaticTraitResolve m_resolve;
         ::HIR::ExprNodeP m_replacement;
         ::HIR::SimplePath m_lang_Box;
 
     public:
-        ExprVisitor_Mutate(const ::HIR::Crate& crate)
+        ExprVisitor_Mutate(const ::HIR::Crate& crate, const ::HIR::TraitImpl* current_trait_impl = nullptr)
             : m_crate(crate)
+            , m_current_trait_impl(current_trait_impl)
+            , m_resolve(crate)
         {
             if (crate.m_lang_items.count("owned_box") > 0) {
                 m_lang_Box = crate.m_lang_items.at("owned_box");
@@ -180,67 +184,29 @@ namespace {
             dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache = mv$(node.m_cache);
         }
 
-        static bool is_op_valid_shift(const ::HIR::TypeRef& ty_l, const ::HIR::TypeRef& ty_r) {
-            // Integer with any other integer is valid, others go to overload resolution
-            if (ty_l.data().is_Primitive() && ty_r.data().is_Primitive()) {
-                switch (ty_l.data().as_Primitive()) {
-                    case ::HIR::CoreType::Char:
-                    case ::HIR::CoreType::Str:
-                    case ::HIR::CoreType::Bool:
-                    case ::HIR::CoreType::F32:
-                    case ::HIR::CoreType::F64:
-                        break;
-                    default:
-                        switch (ty_r.data().as_Primitive()) {
-                            case ::HIR::CoreType::Char:
-                            case ::HIR::CoreType::Str:
-                            case ::HIR::CoreType::Bool:
-                            case ::HIR::CoreType::F32:
-                            case ::HIR::CoreType::F64:
-                                break;
-                            default:
-                                // RETURN early
-                                return true;
-                        }
-                        break;
-                }
+        bool is_builtin_operator(const Span& sp, typeck::PrimitiveOperator op, const char* langitem, const ::HIR::TypeRef& ty_l, const ::HIR::TypeRef& ty_r) const {
+            if (!typeck::primitive_operator_has_builtin(op, ty_l, ty_r)) {
+                return false;
             }
-            return false;
+
+            ::HIR::PathParams trait_params(ty_r.clone());
+            const auto& trait_path = m_crate.get_lang_item_path(sp, langitem);
+            return !m_resolve.find_impl(sp, trait_path, trait_params, ty_l, [&](ImplRef impl, bool) {
+                const auto* trait_impl = impl.m_data.opt_TraitImpl();
+                return !(m_current_trait_impl && trait_impl && trait_impl->impl == m_current_trait_impl);
+            });
         }
 
-        static bool is_op_valid_bitmask(const ::HIR::TypeRef& ty_l, const ::HIR::TypeRef& ty_r) {
-            // Equal integers and bool are valid
-            if (ty_l == ty_r) {
-                if (const auto* e = ty_l.data().opt_Primitive()) {
-                    switch (*e) {
-                        case ::HIR::CoreType::Char:
-                        case ::HIR::CoreType::Str:
-                            break;
-                        default:
-                            // RETURN early
-                            return true;
-                    }
-                }
+        bool is_builtin_operator(const Span& sp, typeck::PrimitiveOperator op, const char* langitem, const ::HIR::TypeRef& ty) const {
+            if (!typeck::primitive_operator_has_builtin(op, ty)) {
+                return false;
             }
-            return false;
-        }
 
-        static bool is_op_valid_arith(const ::HIR::TypeRef& ty_l, const ::HIR::TypeRef& ty_r) {
-            // Equal floats/integers are valid, others go to overload
-            if (ty_l == ty_r) {
-                if (const auto* e = ty_l.data().opt_Primitive()) {
-                    switch (*e) {
-                        case ::HIR::CoreType::Char:
-                        case ::HIR::CoreType::Str:
-                        case ::HIR::CoreType::Bool:
-                            break;
-                        default:
-                            // RETURN early
-                            return true;
-                    }
-                }
-            }
-            return false;
+            const auto& trait_path = m_crate.get_lang_item_path(sp, langitem);
+            return !m_resolve.find_impl(sp, trait_path, ::HIR::PathParams(), ty, [&](ImplRef impl, bool) {
+                const auto* trait_impl = impl.m_data.opt_TraitImpl();
+                return !(m_current_trait_impl && trait_impl && trait_impl->impl == m_current_trait_impl);
+            });
         }
 
         // -------
@@ -256,6 +222,7 @@ namespace {
 
             const char* langitem = nullptr;
             const char* opname = nullptr;
+            auto operator_kind = typeck::PrimitiveOperator::None;
 #define _(opname) case ::HIR::ExprNode_Assign::Op::opname
             switch (node.m_op) {
                 _(None)
@@ -265,6 +232,7 @@ namespace {
                     : {
                     langitem = "shr_assign";
                     opname = "shr_assign";
+                    operator_kind = typeck::PrimitiveOperator::ShrAssign;
                 }
                 if (0)
                 {
@@ -272,9 +240,10 @@ namespace {
                         : {
                         langitem = "shl_assign";
                         opname = "shl_assign";
+                        operator_kind = typeck::PrimitiveOperator::ShlAssign;
                     }
                 }
-                if (is_op_valid_shift(ty_slot, ty_val)) {
+                if (is_builtin_operator(sp, operator_kind, langitem, ty_slot, ty_val)) {
                     return;
                 }
                 break;
@@ -283,12 +252,14 @@ namespace {
                     : {
                     langitem = "bitand_assign";
                     opname = "bitand_assign";
+                    operator_kind = typeck::PrimitiveOperator::BitAndAssign;
                 }
                 if (0) {
                     _(Or)
                         : {
                         langitem = "bitor_assign";
                         opname = "bitor_assign";
+                        operator_kind = typeck::PrimitiveOperator::BitOrAssign;
                     }
                 }
                 if (0) {
@@ -296,9 +267,10 @@ namespace {
                         : {
                         langitem = "bitxor_assign";
                         opname = "bitxor_assign";
+                        operator_kind = typeck::PrimitiveOperator::BitXorAssign;
                     }
                 }
-                if (is_op_valid_bitmask(ty_slot, ty_val)) {
+                if (is_builtin_operator(sp, operator_kind, langitem, ty_slot, ty_val)) {
                     return;
                 }
                 break;
@@ -307,12 +279,14 @@ namespace {
                     : {
                     langitem = "add_assign";
                     opname = "add_assign";
+                    operator_kind = typeck::PrimitiveOperator::AddAssign;
                 }
                 if (0) {
                     _(Sub)
                         : {
                         langitem = "sub_assign";
                         opname = "sub_assign";
+                        operator_kind = typeck::PrimitiveOperator::SubAssign;
                     }
                 }
                 if (0) {
@@ -320,6 +294,7 @@ namespace {
                         : {
                         langitem = "mul_assign";
                         opname = "mul_assign";
+                        operator_kind = typeck::PrimitiveOperator::MulAssign;
                     }
                 }
                 if (0) {
@@ -327,6 +302,7 @@ namespace {
                         : {
                         langitem = "div_assign";
                         opname = "div_assign";
+                        operator_kind = typeck::PrimitiveOperator::DivAssign;
                     }
                 }
                 if (0) {
@@ -334,9 +310,10 @@ namespace {
                         : {
                         langitem = "rem_assign";
                         opname = "rem_assign";
+                        operator_kind = typeck::PrimitiveOperator::RemAssign;
                     }
                 }
-                if (is_op_valid_arith(ty_slot, ty_val)) {
+                if (is_builtin_operator(sp, operator_kind, langitem, ty_slot, ty_val)) {
                     return;
                 }
                 // - Fall down to overload replacement
@@ -372,84 +349,92 @@ namespace {
             const char* langitem = nullptr;
             const char* method = nullptr;
             bool is_comparison = false;
+            auto operator_kind = typeck::PrimitiveOperator::None;
             switch (node.m_op) {
                 case ::HIR::ExprNode_BinOp::Op::CmpEqu:
                     langitem = "eq";
                     method = "eq";
                     is_comparison = true;
+                    operator_kind = typeck::PrimitiveOperator::Equal;
                     break;
                 case ::HIR::ExprNode_BinOp::Op::CmpNEqu:
                     langitem = "eq";
                     method = "ne";
                     is_comparison = true;
+                    operator_kind = typeck::PrimitiveOperator::Equal;
                     break;
                 case ::HIR::ExprNode_BinOp::Op::CmpLt:
                     langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
                     method = "lt";
                     is_comparison = true;
+                    operator_kind = typeck::PrimitiveOperator::Order;
                     break;
                 case ::HIR::ExprNode_BinOp::Op::CmpLtE:
                     langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
                     method = "le";
                     is_comparison = true;
+                    operator_kind = typeck::PrimitiveOperator::Order;
                     break;
                 case ::HIR::ExprNode_BinOp::Op::CmpGt:
                     langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
                     method = "gt";
                     is_comparison = true;
+                    operator_kind = typeck::PrimitiveOperator::Order;
                     break;
                 case ::HIR::ExprNode_BinOp::Op::CmpGtE:
                     langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
                     method = "ge";
                     is_comparison = true;
+                    operator_kind = typeck::PrimitiveOperator::Order;
                     break;
 
                 case ::HIR::ExprNode_BinOp::Op::Xor:
                     langitem = method = "bitxor";
+                    operator_kind = typeck::PrimitiveOperator::BitXor;
                     if (0) {
                         case ::HIR::ExprNode_BinOp::Op::Or:
                             langitem = method = "bitor";
+                            operator_kind = typeck::PrimitiveOperator::BitOr;
                     }
                     if (0) {
                         case ::HIR::ExprNode_BinOp::Op::And:
                             langitem = method = "bitand";
-                    }
-                    if (is_op_valid_bitmask(ty_l, ty_r)) {
-                        return;
+                            operator_kind = typeck::PrimitiveOperator::BitAnd;
                     }
                     break;
 
                 case ::HIR::ExprNode_BinOp::Op::Shr:
                     langitem = method = "shr";
+                    operator_kind = typeck::PrimitiveOperator::Shr;
                     if (0) {
                         case ::HIR::ExprNode_BinOp::Op::Shl:
                             langitem = method = "shl";
-                    }
-                    if (is_op_valid_shift(ty_l, ty_r)) {
-                        return;
+                            operator_kind = typeck::PrimitiveOperator::Shl;
                     }
                     break;
 
                 case ::HIR::ExprNode_BinOp::Op::Add:
                     langitem = method = "add";
+                    operator_kind = typeck::PrimitiveOperator::Add;
                     if (0) {
                         case ::HIR::ExprNode_BinOp::Op::Sub:
                             langitem = method = "sub";
+                            operator_kind = typeck::PrimitiveOperator::Sub;
                     }
                     if (0) {
                         case ::HIR::ExprNode_BinOp::Op::Mul:
                             langitem = method = "mul";
+                            operator_kind = typeck::PrimitiveOperator::Mul;
                     }
                     if (0) {
                         case ::HIR::ExprNode_BinOp::Op::Div:
                             langitem = method = "div";
+                            operator_kind = typeck::PrimitiveOperator::Div;
                     }
                     if (0) {
                         case ::HIR::ExprNode_BinOp::Op::Mod:
                             langitem = method = "rem";
-                    }
-                    if (is_op_valid_arith(ty_l, ty_r)) {
-                        return;
+                            operator_kind = typeck::PrimitiveOperator::Rem;
                     }
                     break;
 
@@ -460,24 +445,13 @@ namespace {
                     return;
             }
 
+            if (is_builtin_operator(sp, operator_kind, langitem, ty_l, ty_r)) {
+                return;
+            }
+
             if (is_comparison) {
-                // 1. Check if the types are valid for primitive comparison
-                if (ty_l == ty_r) {
-                    TU_MATCH_DEF(
-                        ::HIR::TypeData,
-                        (ty_l.data()),
-                        (e),
-                        (
-                            // Unknown - Overload
-                        ),
-                        (Pointer,
-                         // Raw pointer, valid.
-                         return;),
-                        // TODO: Should comparing &str be handled by the overload, or MIR?
-                        (Primitive, if (e != ::HIR::CoreType::Str) { return; })
-                    )
-                }
-                // 2. If not, emit a call with params borrowed
+                // The primitive candidate did not win, so emit a call with
+                // borrowed operands to the selected trait implementation.
                 ::HIR::PathParams trait_params;
                 trait_params.m_types.push_back(ty_r.clone());
                 ::HIR::GenericPath trait{m_crate.get_lang_item_path(node.span(), langitem), mv$(trait_params)};
@@ -533,51 +507,23 @@ namespace {
 
             const char* langitem = nullptr;
             const char* method = nullptr;
+            auto operator_kind = typeck::PrimitiveOperator::None;
             switch (node.m_op) {
                 case ::HIR::ExprNode_UniOp::Op::Invert:
-                    // Check if the operation is valid in the MIR.
-                    if (ty_val.data().is_Primitive()) {
-                        switch (ty_val.data().as_Primitive())
-                    {
-                            case ::HIR::CoreType::Str:
-                            case ::HIR::CoreType::Char:
-                            case ::HIR::CoreType::F32:
-                            case ::HIR::CoreType::F64:
-                                break;
-                            default:
-                                return;
-                        }
-                    } else {
-                        // Not valid, replace with call
-                    }
                     langitem = method = "not";
+                    operator_kind = typeck::PrimitiveOperator::Not;
                     break;
                 case ::HIR::ExprNode_UniOp::Op::Negate:
-                    if (ty_val.data().is_Primitive()) {
-                        switch (ty_val.data().as_Primitive()) {
-                            case ::HIR::CoreType::Str:
-                            case ::HIR::CoreType::Char:
-                            case ::HIR::CoreType::Bool:
-                                break;
-                            case ::HIR::CoreType::U8:
-                            case ::HIR::CoreType::U16:
-                            case ::HIR::CoreType::U32:
-                            case ::HIR::CoreType::U64:
-                            case ::HIR::CoreType::Usize:
-                                ERROR(node.span(), E0000, "`-` operator on unsigned integer - " << ty_val);
-                                break;
-                            default:
-                                // Valid, keep.
-                                return;
-                        }
-                    } else {
-                        // Replace with call
-                    }
                     langitem = method = "neg";
+                    operator_kind = typeck::PrimitiveOperator::Neg;
                     break;
             }
             assert(langitem);
             assert(method);
+
+            if (is_builtin_operator(sp, operator_kind, langitem, ty_val)) {
+                return;
+            }
 
             // Needs replacement, continue
             ::HIR::GenericPath trait{m_crate.get_lang_item_path(node.span(), langitem), {}};
@@ -796,6 +742,7 @@ namespace {
 
     class OuterVisitor: public ::HIR::Visitor {
         const ::HIR::Crate& m_crate;
+        const ::HIR::TraitImpl* m_current_trait_impl = nullptr;
 
     public:
         OuterVisitor(const ::HIR::Crate& crate)
@@ -810,9 +757,16 @@ namespace {
 
         void visit_constgeneric(::HIR::ConstGeneric& c) override {
             if (auto* e = c.opt_Unevaluated()) {
-                ExprVisitor_Mutate ev(m_crate);
+                ExprVisitor_Mutate ev(m_crate, m_current_trait_impl);
                 ev.visit_node_ptr(*(*e)->expr);
             }
+        }
+
+        void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
+            const auto* previous_impl = m_current_trait_impl;
+            m_current_trait_impl = &impl;
+            ::HIR::Visitor::visit_trait_impl(trait_path, impl);
+            m_current_trait_impl = previous_impl;
         }
 
         // ------
@@ -822,7 +776,7 @@ namespace {
             //auto _ = this->m_ms.set_item_generics(item.m_params);
             if (item.m_code) {
                 DEBUG("Function code " << p);
-                ExprVisitor_Mutate ev(m_crate);
+                ExprVisitor_Mutate ev(m_crate, m_current_trait_impl);
                 ev.visit_node_ptr(item.m_code);
             } else {
                 DEBUG("Function code " << p << " (none)");
@@ -831,14 +785,14 @@ namespace {
 
         void visit_static(::HIR::ItemPath p, ::HIR::Static& item) override {
             if (item.m_value) {
-                ExprVisitor_Mutate ev(m_crate);
+                ExprVisitor_Mutate ev(m_crate, m_current_trait_impl);
                 ev.visit_node_ptr(item.m_value);
             }
         }
 
         void visit_constant(::HIR::ItemPath p, ::HIR::Constant& item) override {
             if (item.m_value) {
-                ExprVisitor_Mutate ev(m_crate);
+                ExprVisitor_Mutate ev(m_crate, m_current_trait_impl);
                 ev.visit_node_ptr(item.m_value);
             }
         }
@@ -849,7 +803,7 @@ namespace {
                     DEBUG("Enum value " << p << " - " << var.name);
 
                     if (var.expr) {
-                        ExprVisitor_Mutate ev(m_crate);
+                        ExprVisitor_Mutate ev(m_crate, m_current_trait_impl);
                         ev.visit_node_ptr(var.expr);
                     }
                 }

@@ -1780,66 +1780,56 @@ namespace {
             this->visit_node_ptr(node.m_value);
             auto val = m_builder.get_result_in_lvalue(node.m_value->span(), ty_val);
 
-            TU_MATCH_HDRA( (ty_val.data()), {)
-            default: {
-                    if (m_builder.is_type_owned_box(ty_val)) {
-                        // Box magically derefs.
-                    } else {
-                        // NOTE: Do operator replacement here after handling scope-raising for _Borrow
-                        if (m_borrow_raise_target && m_in_borrow) {
-                            DEBUG("- Raising deref in borrow to scope " << *m_borrow_raise_target);
-                            m_builder.raise_temporaries(node.span(), val, *m_borrow_raise_target);
-                        }
+            bool use_trait = node.m_trait_used == ::HIR::ExprNode_Deref::TraitUsed::Trait;
+            if (node.m_trait_used == ::HIR::ExprNode_Deref::TraitUsed::Unknown) {
+                use_trait = !ty_val.data().is_Pointer() && !ty_val.data().is_Borrow() && !m_builder.is_type_owned_box(ty_val);
+            }
 
-                        const char* langitem = nullptr;
-                        const char* method = nullptr;
-                        ::HIR::BorrowType bt;
-                        // - Uses the value's usage beacuse for T: Copy node.m_value->m_usage is Borrow, but node.m_usage is Move
-                        switch (node.m_value->m_usage) {
-                            case ::HIR::ValueUsage::Unknown:
-                                BUG(sp, "Unknown usage type of deref value - " << ty_val);
-                                break;
-                            case ::HIR::ValueUsage::Borrow:
-                                bt = ::HIR::BorrowType::Shared;
-                                langitem = method = "deref";
-                                break;
-                            case ::HIR::ValueUsage::Mutate:
-                                bt = ::HIR::BorrowType::Unique;
-                                langitem = method = "deref_mut";
-                                break;
-                            case ::HIR::ValueUsage::Move:
-                                TODO(sp, "ValueUsage::Move for desugared Deref of " << node.m_value->m_res_type);
-                                break;
-                        }
-                        // Needs replacement, continue
-                        assert(langitem);
-                        assert(method);
-
-                        // - Construct trait path - Index*<IdxTy>
-                        auto method_path = ::HIR::Path(ty_val.clone(), ::HIR::GenericPath(m_builder.resolve().m_crate.get_lang_item_path(node.span(), langitem), {}), method, HIR::PathParams(HIR::LifetimeRef()));
-
-                        // Store a borrow of the input value
-                        ::std::vector<::MIR::Param> args;
-                        args.push_back(m_builder.lvalue_or_temp(sp, ::HIR::TypeRef::new_borrow(bt, node.m_value->m_res_type.clone()), ::MIR::RValue::make_Borrow({bt, false, mv$(val)})));
-                        m_builder.moved_lvalue(node.span(), args[0].as_LValue());
-                        val = m_builder.new_temporary(::HIR::TypeRef::new_borrow(bt, node.m_res_type.clone()));
-                        // Call the above trait method
-                        // Store result of that call in `val` (which will be derefed below)
-                        auto ok_block = m_builder.new_bb_unlinked();
-                        auto panic_block = m_builder.new_bb_unlinked();
-                        m_builder.end_block(::MIR::Terminator::make_Call({ok_block, panic_block, val.clone(), mv$(method_path), mv$(args)}));
-                        m_builder.set_cur_block(panic_block);
-                        emit_unwind(sp);
-
-                        m_builder.set_cur_block(ok_block);
-                    }
+            if (use_trait) {
+                // Do operator replacement here after handling scope-raising
+                // for _Borrow.  The type checker recorded this choice, so a
+                // primitive reference can still dispatch to a user impl.
+                if (m_borrow_raise_target && m_in_borrow) {
+                    DEBUG("- Raising deref in borrow to scope " << *m_borrow_raise_target);
+                    m_builder.raise_temporaries(node.span(), val, *m_borrow_raise_target);
                 }
-                TU_ARMA(Pointer, te) {
-                    // Deref on a pointer - TODO: Requires unsafe
+
+                const char* langitem = nullptr;
+                const char* method = nullptr;
+                ::HIR::BorrowType bt;
+                // - Uses the value's usage beacuse for T: Copy node.m_value->m_usage is Borrow, but node.m_usage is Move
+                switch (node.m_value->m_usage) {
+                    case ::HIR::ValueUsage::Unknown:
+                        BUG(sp, "Unknown usage type of deref value - " << ty_val);
+                        break;
+                    case ::HIR::ValueUsage::Borrow:
+                        bt = ::HIR::BorrowType::Shared;
+                        langitem = method = "deref";
+                        break;
+                    case ::HIR::ValueUsage::Mutate:
+                        bt = ::HIR::BorrowType::Unique;
+                        langitem = method = "deref_mut";
+                        break;
+                    case ::HIR::ValueUsage::Move:
+                        TODO(sp, "ValueUsage::Move for desugared Deref of " << node.m_value->m_res_type);
+                        break;
                 }
-                TU_ARMA(Borrow, te) {
-                    // Deref on a borrow - Always valid... assuming borrowck is there :)
-                }
+                assert(langitem);
+                assert(method);
+
+                auto method_path = ::HIR::Path(ty_val.clone(), ::HIR::GenericPath(m_builder.resolve().m_crate.get_lang_item_path(node.span(), langitem), {}), method, HIR::PathParams(HIR::LifetimeRef()));
+
+                ::std::vector<::MIR::Param> args;
+                args.push_back(m_builder.lvalue_or_temp(sp, ::HIR::TypeRef::new_borrow(bt, node.m_value->m_res_type.clone()), ::MIR::RValue::make_Borrow({bt, false, mv$(val)})));
+                m_builder.moved_lvalue(node.span(), args[0].as_LValue());
+                val = m_builder.new_temporary(::HIR::TypeRef::new_borrow(bt, node.m_res_type.clone()));
+                auto ok_block = m_builder.new_bb_unlinked();
+                auto panic_block = m_builder.new_bb_unlinked();
+                m_builder.end_block(::MIR::Terminator::make_Call({ok_block, panic_block, val.clone(), mv$(method_path), mv$(args)}));
+                m_builder.set_cur_block(panic_block);
+                emit_unwind(sp);
+
+                m_builder.set_cur_block(ok_block);
             }
 
             m_builder.set_result( node.span(), ::MIR::LValue::new_Deref( mv$(val) ) );
