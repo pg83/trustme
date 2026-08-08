@@ -5585,8 +5585,20 @@ namespace {
                 const auto& left = v.impl_ty; // yes, impl = LHS of binop
                 const auto& right = v.params.m_types.at(0);
                 const auto& res = v.left_ty;
-                if (H::type_is_num(context.get_type(left)) && H::type_is_num(context.get_type(right))) {
-                    DEBUG("- Magic inferrence link for binops on numerics");
+                const auto& left_ty = context.get_type(left);
+                const auto& right_ty = context.get_type(right);
+                const bool is_pointer_comparison =
+                    (v.operator_kind == typeck::PrimitiveOperator::Equal
+                        || v.operator_kind == typeck::PrimitiveOperator::Order)
+                    && left_ty.data().is_Pointer()
+                    // The RHS starts as an inference variable so that its
+                    // expression can coerce to the trait's Rhs.  For a
+                    // language raw-pointer comparison, it must be tied to
+                    // the pointer LHS before impl selection (including while
+                    // typechecking that very impl).
+                    && (right_ty.data().is_Pointer() || right_ty.data().is_Infer());
+                if ((H::type_is_num(left_ty) && H::type_is_num(right_ty)) || is_pointer_comparison) {
+                    DEBUG("- Magic inferrence link for primitive binops");
                     if (v.name == "") {
                         // Comparison op, output already known to be `bool`
                     } else {

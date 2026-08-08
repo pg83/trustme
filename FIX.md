@@ -2,7 +2,7 @@
 
 В этом файле остаётся только незакрытая работа. История уже сделанных исправлений находится в git, а не в плане.
 
-Текущий baseline полного plain-clang/lld прогона: 11 658 failed nodes, 14 009 broken requested targets. Команда: `nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC=clang CXX=clang++ LDFLAGS='-fuse-ld=lld' ./build -B .build-clang -j 4 -k test`. Полный лог сохранён в `/tmp/trustme-full-gate-20260808-zst-codegen.log`. Первое падение `libcore` в `ptr::alignment::AlignmentEnum` устранено; текущая точка сборки дошла до `ptr::const_ptr` из P1 ниже.
+Текущий baseline полного plain-clang/lld прогона: 11 658 failed nodes, 14 009 broken requested targets. Команда: `nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC=clang CXX=clang++ LDFLAGS='-fuse-ld=lld' ./build -B .build-clang -j 4 -k test`. Полный лог сохранён в `/tmp/trustme-full-gate-20260808-zst-codegen.log`. Первые падения `libcore` в `ptr::alignment` и `ptr::const_ptr` устранены; текущая точка сборки дошла до never-type impl в `cmp.rs` из P1 ниже.
 
 Для каждого compiler fix порядок один: минимальный красный `tests/unit/test_*.rs` → исправление общего пути → зелёный unit → точный upstream trigger → сборка `rustc` под clang/lld → отдельный commit и push. Полный gate запускается после серии точечных исправлений, а не после каждого файла.
 
@@ -17,7 +17,7 @@
 
 - [ ] Устранить trait-alias assert в `hir_from_ast.cpp:963`. Сначала минимальный alias с теми bounds, на которых падает lowering; после фикса проверить исходный UI/run-pass trigger.
 - [ ] Устранить `mir_mir_builder.cpp:217: No value available`. Разделить triggers по конструкции, найти первый общий случай отсутствующего result value и не подставлять фиктивный unit для выражений с не-unit типом.
-- [ ] Исправить выбор primitive-кандидата при рекурсивном `PartialEq` для generic raw pointer: при сборке libcore `ptr::const_ptr.rs:1596` не находится `PartialEq<_>` для `*const T`. Нужен отдельный минимальный trigger без внешнего impl, затем общее различение текущего trait impl и language primitive operation.
+- [ ] Исправить divergence coercion при `*self` для `self: &!`: сборка libcore в `cmp.rs:1998` ошибочно требует `Deref<Target = bool>` у `&!`, вместо принятия diverging expression как `bool`/`Ordering`. Нужен unit на оба return type и общее исправление deref/coercion, не special-case never impl.
 - [ ] Исправить slice-pattern lowering в `mir_from_hir_match.cpp:1944` (`too many leading rules`) и отдельный overlap byte-array patterns. Нужны units на leading/rest/trailing patterns и runtime-проверка выбранной match arm.
 - [ ] Исправить validation `ItemAddr` для inline const. Unit должен вычислять адрес допустимого inline-const item и доходить до runtime без ослабления общей MIR validation.
 - [ ] Разобрать timeout `coretests/net_ipv6_properties`: определить, 60 секунд съедает rustc, внешний clang или runtime. Compiler hang свести к unit; слишком крупный независимый harness разбить на compile shards без изменения тестового содержания.
