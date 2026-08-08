@@ -1075,6 +1075,22 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
 
             auto& ep_mut = const_cast<::HIR::ExprPtr&>(ep);
 
+            ::HIR::GenericPath current_trait;
+            if (ep.m_state->m_current_trait_impl) {
+                current_trait.m_path = ep.m_state->m_current_trait_path;
+                current_trait.m_params = ep.m_state->m_current_trait_impl->m_trait_args.clone();
+                // Lazy processing can be requested from Resolve UFCS Outer,
+                // before the whole-crate Self-expansion pass has run.  Give
+                // this body and its signature the same owner substitution.
+                ConvertHIR_ExpandAliases_Self_Expr(
+                    *this,
+                    ep.m_state->m_current_trait_impl->m_type,
+                    const_cast<::HIR::Function::args_t&>(args),
+                    ret_ty,
+                    ep_mut
+                    );
+            }
+
             // TODO: Ensure that all referenced items have constants evaluated
             if (ep.m_state->stage < ::HIR::ExprState::Stage::ConstEval) {
                 if (ep.m_state->stage == ::HIR::ExprState::Stage::ConstEvalRequest) {
@@ -1100,6 +1116,8 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
                 //ms.prepare_from_path( ip );   // <- Ideally would use this, but it's a lot of code for one usage
                 ms.m_impl_generics = ep.m_state->m_impl_generics;
                 ms.m_item_generics = ep.m_state->m_item_generics;
+                ms.m_current_trait = ep.m_state->m_current_trait_impl ? &current_trait : nullptr;
+                ms.m_current_trait_impl = ep.m_state->m_current_trait_impl;
                 ms.m_traits = ep.m_state->m_traits;
                 ms.m_mod_paths.push_back(ep.m_state->m_mod_path);
                 Typecheck_Code(ms, const_cast<::HIR::Function::args_t&>(args), ret_ty, ep_mut);
@@ -1133,7 +1151,7 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
                 }
                 ep.m_state->stage = ::HIR::ExprState::Stage::ExpandRequest;
                 //Debug_SetStagePre("Expand HIR Calls");
-                HIR_Expand_UfcsEverything_Expr(*this, ep_mut);
+                HIR_Expand_UfcsEverything_Expr(*this, ep_mut, ep.m_state->m_current_trait_impl);
                 //Debug_SetStagePre("Expand HIR Reborrows");
                 HIR_Expand_Reborrows_Expr(*this, ep_mut);
                 //Debug_SetStagePre("Expand HIR ErasedType");

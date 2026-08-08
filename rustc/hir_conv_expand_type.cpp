@@ -500,8 +500,9 @@ class Expander_Self: public ::HIR::Visitor {
     bool m_in_expr = false;
 
 public:
-    Expander_Self(const ::HIR::Crate& crate)
+    Expander_Self(const ::HIR::Crate& crate, const ::HIR::TypeRef* impl_type = nullptr)
         : m_crate(crate)
+        , m_impl_type(impl_type)
     {
     }
 
@@ -614,4 +615,21 @@ void ConvertHIR_ExpandAliases(::HIR::Crate& crate) {
 void ConvertHIR_ExpandAliases_Self(::HIR::Crate& crate) {
     Expander_Self exp{crate};
     exp.visit_crate(crate);
+}
+
+void ConvertHIR_ExpandAliases_Self_Expr(
+    const ::HIR::Crate& crate,
+    const ::HIR::TypeRef& impl_type,
+    ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args,
+    ::HIR::TypeRef& ret_ty,
+    ::HIR::ExprPtr& expr
+    )
+{
+    Expander_Self exp{crate, &impl_type};
+    for (auto& arg : args) {
+        exp.visit_pattern(arg.first);
+        exp.visit_type(arg.second);
+    }
+    exp.visit_type(ret_ty);
+    exp.visit_expr(expr);
 }

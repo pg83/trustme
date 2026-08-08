@@ -37,6 +37,8 @@
     rv->m_traits = (*this)->m_traits;
     rv->m_impl_generics = (*this)->m_impl_generics;
     rv->m_item_generics = (*this)->m_item_generics;
+    rv->m_current_trait_path = (*this)->m_current_trait_path;
+    rv->m_current_trait_impl = (*this)->m_current_trait_impl;
     rv->stage = (*this)->stage;
     return rv;
 }

@@ -13,6 +13,7 @@ namespace HIR {
     class Crate;
     class ExprPtr;
     class TypeRef;
+    class TraitImpl;
     struct Pattern;
     class ItemPath;
 };
@@ -28,7 +29,7 @@ extern void HIR_Expand_StaticBorrowConstants(::HIR::Crate& crate);
 
 extern void HIR_Expand_AnnotateUsage_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp);
 extern void HIR_Expand_Closures_Expr(const ::HIR::Crate& crate, ::HIR::TypeRef& exp_ty, ::HIR::ExprPtr& exp);
-extern void HIR_Expand_UfcsEverything_Expr(const ::HIR::Crate& crate, ::HIR::ExprPtr& exp);
+extern void HIR_Expand_UfcsEverything_Expr(const ::HIR::Crate& crate, ::HIR::ExprPtr& exp, const ::HIR::TraitImpl* current_trait_impl = nullptr);
 extern void HIR_Expand_Reborrows_Expr(const ::HIR::Crate& crate, ::HIR::ExprPtr& exp);
 extern void HIR_Expand_StaticBorrowConstants_Mark_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp);
 extern void HIR_Expand_StaticBorrowConstants_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp);

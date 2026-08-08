@@ -18,6 +18,13 @@ namespace HIR {
         const ::HIR::GenericParams* m_impl_generics;
         const ::HIR::GenericParams* m_item_generics;
 
+        // The owner trait implementation is needed when this expression is
+        // typechecked or expanded lazily (e.g. while evaluating a const
+        // generic).  The normal whole-crate visitors keep this on their
+        // traversal stack, but that stack is absent for lazy processing.
+        ::HIR::SimplePath m_current_trait_path;
+        const ::HIR::TraitImpl* m_current_trait_impl;
+
         ::std::vector<::std::pair<const ::HIR::SimplePath*, const ::HIR::Trait*>> m_traits;
 
         enum class Stage {
@@ -42,6 +49,7 @@ namespace HIR {
             , m_module(mod_ptr)
             , m_impl_generics(nullptr)
             , m_item_generics(nullptr)
+            , m_current_trait_impl(nullptr)
             , stage(Stage::Created)
         {
         }

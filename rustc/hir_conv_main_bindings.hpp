@@ -7,12 +7,16 @@
  */
 #pragma once
 
+#include <utility>
+#include <vector>
+
 struct Span;
 
 namespace HIR {
     class Crate;
     class ItemPath;
     class ExprPtr;
+    struct Pattern;
     class Enum;
     class Constant;
     class TypeRef;
@@ -26,6 +30,13 @@ namespace HIR {
 extern void ConvertHIR_LifetimeElision(::HIR::Crate& crate);
 extern void ConvertHIR_ExpandAliases(::HIR::Crate& crate);
 extern void ConvertHIR_ExpandAliases_Self(::HIR::Crate& crate);
+extern void ConvertHIR_ExpandAliases_Self_Expr(
+    const ::HIR::Crate& crate,
+    const ::HIR::TypeRef& impl_type,
+    ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args,
+    ::HIR::TypeRef& ret_ty,
+    ::HIR::ExprPtr& expr
+    );
 extern void ConvertHIR_Bind(::HIR::Crate& crate);
 extern void ConvertHIR_ResolveUFCS_SortImpls(::HIR::Crate& crate);
 extern void ConvertHIR_ResolveUFCS_Outer(::HIR::Crate& crate);

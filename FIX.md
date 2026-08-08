@@ -18,6 +18,7 @@
 
 - [ ] Устранить trait-alias assert в `hir_from_ast.cpp:963`. Сначала минимальный alias с теми bounds, на которых падает lowering; после фикса проверить исходный UI/run-pass trigger.
 - [ ] Устранить `mir_mir_builder.cpp:217: No value available`. Разделить triggers по конструкции, найти первый общий случай отсутствующего result value и не подставлять фиктивный unit для выражений с не-unit типом.
+- [ ] Исправить MIR return-type mismatch, впервые достигаемый при сборке libcore в `ptr::alignment::AlignmentEnum` (`u64` slot вместо ожидаемого `i32`). Сначала минимизировать до общей ошибки выбора типа return place; не ослаблять MIR validation ради прохождения library build.
 - [ ] Исправить slice-pattern lowering в `mir_from_hir_match.cpp:1944` (`too many leading rules`) и отдельный overlap byte-array patterns. Нужны units на leading/rest/trailing patterns и runtime-проверка выбранной match arm.
 - [ ] Исправить validation `ItemAddr` для inline const. Unit должен вычислять адрес допустимого inline-const item и доходить до runtime без ослабления общей MIR validation.
 - [ ] Разобрать timeout `coretests/net_ipv6_properties`: определить, 60 секунд съедает rustc, внешний clang или runtime. Compiler hang свести к unit; слишком крупный независимый harness разбить на compile shards без изменения тестового содержания.

@@ -502,6 +502,9 @@ namespace {
 
         void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
             TRACE_FUNCTION_F("impl " << trait_path << " for " << impl.m_type);
+            auto trait_gpath = ::HIR::GenericPath(trait_path, impl.m_trait_args.clone());
+            auto _0 = this->m_ms.set_current_trait_impl(impl);
+            auto _1 = this->m_ms.set_current_trait(trait_gpath);
             auto _ = this->m_ms.set_impl_generics(impl.m_params);
 
             auto mod_ip = ::HIR::ItemPath(impl.m_src_module);
@@ -715,6 +718,10 @@ namespace {
                 expr.m_state->m_traits = m_ms.m_traits; // TODO: Only obtain the current module's set
                 expr.m_state->m_impl_generics = m_ms.m_impl_generics;
                 expr.m_state->m_item_generics = m_ms.m_item_generics;
+                expr.m_state->m_current_trait_impl = m_ms.m_current_trait_impl;
+                if (m_ms.m_current_trait) {
+                    expr.m_state->m_current_trait_path = m_ms.m_current_trait->m_path;
+                }
             }
 
             // Local expression

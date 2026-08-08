@@ -812,9 +812,9 @@ namespace {
     };
 } // namespace
 
-void HIR_Expand_UfcsEverything_Expr(const ::HIR::Crate& crate, ::HIR::ExprPtr& exp) {
+void HIR_Expand_UfcsEverything_Expr(const ::HIR::Crate& crate, ::HIR::ExprPtr& exp, const ::HIR::TraitImpl* current_trait_impl) {
     TRACE_FUNCTION;
-    ExprVisitor_Mutate ev{crate};
+    ExprVisitor_Mutate ev{crate, current_trait_impl};
     ev.visit_node_ptr(exp);
 }
 
