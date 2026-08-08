@@ -1298,7 +1298,9 @@ TU_ARMA(Alias, ee) {
             static ::HIR::PathParams null_params;
             static ::HIR::TraitPath::assoc_list_t null_assoc;
 
-            const auto& lang_CoerceUnsized = this->m_crate.get_lang_item_path(sp, "coerce_unsized");
+            const auto lang_CoerceUnsized = this->m_crate.get_lang_item_path_opt("coerce_unsized");
+            const auto lang_FnPtr = this->m_crate.get_lang_item_path_opt("fn_ptr_trait");
+            const auto lang_Tuple = this->m_crate.get_lang_item_path_opt("tuple_trait");
 
             const auto& type = this->m_ivars.get_type(ty);
             TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
@@ -1322,7 +1324,7 @@ TU_ARMA(Alias, ee) {
             }
 
             // 1.74: Magic impls of `fn_ptr_trait` for function pointers
-            if (TARGETVER_LEAST_1_74 && trait == this->m_crate.get_lang_item_path(sp, "fn_ptr_trait")) {
+            if (TARGETVER_LEAST_1_74 && !lang_FnPtr.components().empty() && trait == lang_FnPtr) {
                 if (type.data().is_Function()) {
                     return callback(ImplRef(&type, &null_params, &null_assoc), HIR::Compare::Equal);
                 }
@@ -1338,7 +1340,7 @@ TU_ARMA(Alias, ee) {
             }
 
             // - `DiscriminantKind`
-            if (TARGETVER_LEAST_1_54 && trait == this->m_crate.get_lang_item_path(sp, "discriminant_kind")) {
+            if (TARGETVER_LEAST_1_54 && !m_lang_DiscriminantKind.components().empty() && trait == m_lang_DiscriminantKind) {
                 static auto name_Discriminant = RcString::new_interned("Discriminant");
                 // TODO: This logic is near identical to the logic in `static.cpp` - can it be de-duplicated?
 
@@ -1362,7 +1364,7 @@ TU_ARMA(Alias, ee) {
                     return callback(ImplRef(type.clone(), {}, std::move(assoc_list)), ::HIR::Compare::Equal);
                 }
             }
-            if (TARGETVER_LEAST_1_54 && trait == this->m_crate.get_lang_item_path(sp, "pointee_trait")) {
+            if (TARGETVER_LEAST_1_54 && !m_lang_Pointee.components().empty() && trait == m_lang_Pointee) {
                 static auto name_Metadata = RcString::new_interned("Metadata");
                 // TODO: This logic is near identical to the logic in `static.cpp` - can it be de-duplicated?
 
@@ -1415,7 +1417,7 @@ TU_ARMA(Alias, ee) {
                 return callback(ImplRef(type.clone(), {}, std::move(assoc_list)), ::HIR::Compare::Equal);
             }
             // - `Tuple`
-            if (TARGETVER_LEAST_1_74 && trait == this->m_crate.get_lang_item_path(sp, "tuple_trait")) {
+            if (TARGETVER_LEAST_1_74 && !lang_Tuple.components().empty() && trait == lang_Tuple) {
                 // Fuzzy impl for `_` and unbound ATYs
                 if (type.data().is_Infer() || (type.data().is_Path() && type.data().as_Path().binding.is_Unbound())) {
                     return callback(ImplRef(type.clone(), HIR::PathParams(), ::HIR::TraitPath::assoc_list_t()), ::HIR::Compare::Fuzzy);
@@ -1456,7 +1458,7 @@ TU_ARMA(Alias, ee) {
             }
 
             // Magical CoerceUnsized impls for various types
-            if (trait == lang_CoerceUnsized) {
+            if (!lang_CoerceUnsized.components().empty() && trait == lang_CoerceUnsized) {
                 if (find_trait_impls_bound(sp, trait, params, type, callback)) {
                     return true;
                 }
