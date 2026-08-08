@@ -5472,7 +5472,7 @@ namespace {
         }
     }
 
-    bool check_associated(Context& context, const Context::Associated& v) {
+    bool check_associated(Context& context, Context::Associated& v) {
         const auto& sp = v.span;
         TRACE_FUNCTION_F(v);
 
@@ -5507,7 +5507,7 @@ namespace {
         // the same inputs and output as the primitive operation; they must
         // still let an expected output type constrain an untyped lhs literal.
         // A custom impl with a different rhs or Output remains an overload.
-        auto impl_has_builtin_operator_signature = [&](ImplRef impl) {
+        auto impl_has_builtin_operator_signature = [&](const ImplRef& impl) {
             auto impl_ty = impl.get_impl_type();
             auto impl_params = impl.get_trait_params();
             // Impl probing can expose inference placeholders that belong to
@@ -5561,17 +5561,39 @@ namespace {
         };
 
         bool has_semantic_operator_impl = false;
+        bool saw_current_operator_impl = false;
+        bool current_operator_impl_has_builtin_signature = false;
         if (v.operator_kind != typeck::PrimitiveOperator::None) {
             context.m_resolve.find_trait_impls(sp, v.trait, v.params, v.impl_ty, [&](ImplRef impl, HIR::Compare) {
                 if (context.is_current_operator_impl(impl)) {
+                    saw_current_operator_impl = true;
+                    current_operator_impl_has_builtin_signature = impl_has_builtin_operator_signature(impl);
                     return false;
                 }
-                if (!impl_has_builtin_operator_signature(mv$(impl))) {
+                if (!impl_has_builtin_operator_signature(impl)) {
                     has_semantic_operator_impl = true;
                     return true;
                 }
                 return false;
             });
+        }
+
+        // A raw inference placeholder can be the result of a lazy expression
+        // (for example, a generic call), rather than an impl candidate.  A
+        // language primitive whose known lhs determines the rhs type gives
+        // that expression its missing context.  Keep unknown and semantic
+        // overloads untouched: those must select an implementation first.
+        const bool can_contextualise_primitive_rhs =
+            v.is_operator
+            && !has_semantic_operator_impl
+            && (!saw_current_operator_impl || current_operator_impl_has_builtin_signature)
+            && v.params.m_types.size() == 1
+            && !context.m_ivars.type_contains_ivars(v.impl_ty, /*only_unbound=*/true)
+            && typeck::primitive_operator_lhs_determines_rhs(v.operator_kind, context.get_type(v.impl_ty))
+            && v.params.m_types.front().data().is_Infer()
+            && v.params.m_types.front().data().as_Infer().index == ~0u;
+        if (can_contextualise_primitive_rhs) {
+            context.add_ivars(v.params.m_types.front());
         }
 
         // A lazily generated expression can still contain a raw inference
@@ -5597,24 +5619,20 @@ namespace {
                     context.equate_types(sp, res, ty);
                 }
             } else if (v.params.m_types.size() == 1) {
-                // Binary operations - If both types are primitives, the output is the lefthand side
-                // NOTE: Comparison ops don't (currently) see this
+                // Binary primitive operations use the lhs as their result
+                // (except comparisons), and a known builtin lhs also gives a
+                // raw rhs inference variable a concrete type.
                 const auto& left = v.impl_ty; // yes, impl = LHS of binop
                 const auto& right = v.params.m_types.at(0);
                 const auto& res = v.left_ty;
                 const auto& left_ty = context.get_type(left);
                 const auto& right_ty = context.get_type(right);
-                const bool is_pointer_comparison =
-                    (v.operator_kind == typeck::PrimitiveOperator::Equal
-                        || v.operator_kind == typeck::PrimitiveOperator::Order)
-                    && left_ty.data().is_Pointer()
-                    // The RHS starts as an inference variable so that its
-                    // expression can coerce to the trait's Rhs.  For a
-                    // language raw-pointer comparison, it must be tied to
-                    // the pointer LHS before impl selection (including while
-                    // typechecking that very impl).
-                    && (right_ty.data().is_Pointer() || right_ty.data().is_Infer());
-                if ((H::type_is_num(left_ty) && H::type_is_num(right_ty)) || is_pointer_comparison) {
+                const bool primitive_or_literal_pair = H::type_is_num(left_ty) && H::type_is_num(right_ty);
+                const bool builtin_pair = typeck::primitive_operator_has_builtin(v.operator_kind, left_ty, right_ty);
+                const bool builtin_lhs_with_inferred_rhs =
+                    right_ty.data().is_Infer()
+                    && typeck::primitive_operator_lhs_determines_rhs(v.operator_kind, left_ty);
+                if (primitive_or_literal_pair || builtin_pair || builtin_lhs_with_inferred_rhs) {
                     DEBUG("- Magic inferrence link for primitive binops");
                     if (v.name == "") {
                         // Comparison op, output already known to be `bool`

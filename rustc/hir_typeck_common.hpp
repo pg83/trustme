@@ -128,6 +128,54 @@ namespace typeck {
         throw "";
     }
 
+    // For these binary language operations, once the left-hand type is known
+    // it also fixes an otherwise untyped right-hand operand. Shifts are
+    // deliberately excluded: their right-hand side need only be an integer
+    // and may have a different type.
+    inline bool primitive_operator_lhs_determines_rhs(PrimitiveOperator op, const ::HIR::TypeRef& left) {
+        const auto* primitive = left.data().opt_Primitive();
+        const auto numeric = primitive && (::HIR::is_integer(*primitive) || ::HIR::is_float(*primitive));
+        const auto bitwise = primitive && (::HIR::is_integer(*primitive) || *primitive == ::HIR::CoreType::Bool);
+        const auto comparison = left.data().is_Pointer() || (primitive && *primitive != ::HIR::CoreType::Str);
+
+        switch (op) {
+            case PrimitiveOperator::Add:
+            case PrimitiveOperator::Sub:
+            case PrimitiveOperator::Mul:
+            case PrimitiveOperator::Div:
+            case PrimitiveOperator::Rem:
+            case PrimitiveOperator::AddAssign:
+            case PrimitiveOperator::SubAssign:
+            case PrimitiveOperator::MulAssign:
+            case PrimitiveOperator::DivAssign:
+            case PrimitiveOperator::RemAssign:
+                return numeric;
+
+            case PrimitiveOperator::BitAnd:
+            case PrimitiveOperator::BitOr:
+            case PrimitiveOperator::BitXor:
+            case PrimitiveOperator::BitAndAssign:
+            case PrimitiveOperator::BitOrAssign:
+            case PrimitiveOperator::BitXorAssign:
+                return bitwise;
+
+            case PrimitiveOperator::Equal:
+            case PrimitiveOperator::Order:
+                return comparison;
+
+            case PrimitiveOperator::Shl:
+            case PrimitiveOperator::Shr:
+            case PrimitiveOperator::ShlAssign:
+            case PrimitiveOperator::ShrAssign:
+            case PrimitiveOperator::None:
+            case PrimitiveOperator::Not:
+            case PrimitiveOperator::Neg:
+            case PrimitiveOperator::Deref:
+                return false;
+        }
+        throw "";
+    }
+
     inline bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeRef& value) {
         if (op == PrimitiveOperator::Deref) {
             return value.data().is_Borrow() || value.data().is_Pointer();
