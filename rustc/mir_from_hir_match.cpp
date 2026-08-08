@@ -477,6 +477,7 @@ void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode
             // Start saving code (the copyable part of the guard, after the assignment of the binding temporaries)
             auto cs_h = builder.code_save_start();
             MIR::BasicBlockId cond_false_block_pat0 = ~0u;
+            bool guard_diverged = false;
             // Emit the condtion using the first set of bindings
             if (!arm.m_guards.empty()) {
                 auto _dbe = conv.disable_borrow_extension();
@@ -495,6 +496,10 @@ void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode
                     // Make a temp scope and push
                     scopes.push_back({builder.new_scope_temp(c.val->span()), false});
                     conv.visit_node_ptr(c.val);
+                    if (!builder.block_active()) {
+                        guard_diverged = true;
+                        break;
+                    }
                     MIR::LValue match_cond_val = builder.get_result_in_lvalue(c.val->span(), c.val->m_res_type);
                     DEBUG("GUARD " << c.pat << " = " << match_cond_val);
 
@@ -566,6 +571,70 @@ void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode
                     ASSERT_BUG(node.span(), !builder.block_active(), "Block still active?");
                     builder.set_cur_block(destructure);
                 }
+            }
+            if (guard_diverged) {
+                if (should_freeze) {
+                    builder.unfreeze_scope(sp, scopes.front().handle);
+                }
+                builder.restore_aliases(std::move(aliases));
+                auto guard_code = builder.code_save_end(std::move(cs_h));
+
+                while (!scopes.empty()) {
+                    builder.terminate_scope(arm.m_code->span(), std::move(scopes.back().handle), false);
+                    scopes.pop_back();
+                }
+                builder.end_split_arm(arm.m_code->span(), pat_scope, /*reachable=*/false);
+                builder.terminate_scope(sp, std::move(pat_scope), false);
+                builder.terminate_scope_early(sp, match_scope);
+
+                ac.rules.push_back(ArmCode::Pattern{entry_block_pat0, ~0u});
+                for (size_t i = first_arm_rule_idx + 1; i < arm_rules.size(); i++) {
+                    struct DivergingGuardMapper: public MirBuilder::CloneMapper {
+                        MIR::BasicBlockId block0;
+
+                        DivergingGuardMapper(MIR::BasicBlockId block0)
+                            : block0(block0)
+                        {
+                        }
+
+                        MIR::BasicBlockId update_bb_ref(MIR::BasicBlockId bb_idx) override {
+                            if (bb_idx < block0) {
+                                return bb_idx;
+                            }
+                            BUG(Span(), "Diverging guard referenced unsaved block bb" << bb_idx << " after bb" << block0);
+                        }
+                    } mapper(block0);
+
+                    auto entry_block = builder.new_bb_unlinked();
+                    builder.set_cur_block(entry_block);
+                    ASSERT_BUG(sp, binding_temps.size() == arm_rules[i].m_bindings.size(), "Mismatched guard bindings");
+                    for (size_t j = 0; j < binding_temps.size(); j++) {
+                        const auto& b = arm_rules[i].m_bindings[j];
+                        auto val = conv.get_value_for_binding_path(sp, match_ty, match_val, b);
+                        if (b.binding->m_type != ::HIR::PatternBinding::Type::Move) {
+                            MIR::LValue tmp2;
+                            if (binding_temps_alt[j] == ~0u) {
+                                auto final_ty = conv.get_binding_type(sp, b.binding->m_slot).clone();
+                                final_ty.get_unique().as_Borrow().type = ::HIR::BorrowType::Shared;
+                                tmp2 = builder.new_temporary(final_ty);
+                                binding_temps_alt[j] = tmp2.as_Local();
+                            } else {
+                                tmp2 = ::MIR::LValue::new_Local(binding_temps_alt[j]);
+                            }
+                            builder.push_stmt_assign(sp, tmp2.clone(), ::MIR::RValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
+                            val = std::move(tmp2);
+                        }
+                        builder.push_stmt_assign(sp, ::MIR::LValue::new_Local(binding_temps[j]), ::MIR::RValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
+                    }
+                    builder.insert_cloned(sp, guard_code, mapper);
+                    ASSERT_BUG(sp, !builder.block_active(), "Diverging guard clone remained reachable");
+                    ac.rules.push_back(ArmCode::Pattern{entry_block, ~0u});
+                }
+
+                ac.has_condition = false;
+                fall_back_on_simple = true;
+                arm_code.push_back(std::move(ac));
+                continue;
             }
             // Release the freezing of outer states
             if (should_freeze) {

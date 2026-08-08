@@ -897,6 +897,9 @@ namespace {
                 //auto stmt_scope = m_builder.new_scope_temp(node.span());
                 this->visit_node_ptr(node.m_value);
             }
+            if (!m_builder.block_active()) {
+                return;
+            }
             auto match_val = m_builder.get_result_in_lvalue(node.m_value->span(), node.m_value->m_res_type);
 
             if (node.m_arms.size() == 0) {
@@ -1198,6 +1201,9 @@ namespace {
             if (node.m_op == ::HIR::ExprNode_BinOp::Op::BoolAnd || node.m_op == ::HIR::ExprNode_BinOp::Op::BoolOr) {
                 DEBUG("- ShortCircuit Left");
                 this->visit_node_ptr(node.m_left);
+                if (!m_builder.block_active()) {
+                    return;
+                }
                 auto left = m_builder.get_result_in_lvalue(node.m_left->span(), ty_l);
 
                 auto bb_next = m_builder.new_bb_unlinked();
@@ -1233,6 +1239,14 @@ namespace {
                 DEBUG("- ShortCircuit Right");
                 auto tmp_scope = m_builder.new_scope_temp(node.m_right->span());
                 this->visit_node_ptr(node.m_right);
+                if (!m_builder.block_active()) {
+                    m_builder.terminate_scope(node.m_right->span(), mv$(tmp_scope), false);
+                    m_builder.end_split_arm(node.m_right->span(), split_scope, /*reachable=*/false);
+                    m_builder.set_cur_block(bb_next);
+                    m_builder.terminate_scope(node.span(), mv$(split_scope));
+                    m_builder.set_result(node.span(), mv$(res));
+                    return;
+                }
                 m_builder.push_stmt_assign(node.span(), res.clone(), m_builder.get_result(node.m_right->span()));
                 m_builder.terminate_scope(node.m_right->span(), mv$(tmp_scope));
 
@@ -1247,8 +1261,14 @@ namespace {
             }
 
             this->visit_node_ptr(node.m_left);
+            if (!m_builder.block_active()) {
+                return;
+            }
             auto left = m_builder.get_result_in_param(node.m_left->span(), ty_l);
             this->visit_node_ptr(node.m_right);
+            if (!m_builder.block_active()) {
+                return;
+            }
             auto right = m_builder.get_result_in_param(node.m_right->span(), ty_r);
 
             ::MIR::eBinOp op;
@@ -2032,6 +2052,9 @@ namespace {
             values.reserve(node.m_args.size());
             for (auto& arg : node.m_args) {
                 this->visit_node_ptr(arg);
+                if (!m_builder.block_active()) {
+                    return;
+                }
                 values.push_back(m_builder.get_result_in_param(arg->span(), arg->m_res_type));
             }
 
@@ -2070,8 +2093,7 @@ namespace {
             for (auto& arg : args) {
                 this->visit_node_ptr(arg);
                 if (!m_builder.block_active()) {
-                    auto tmp = m_builder.new_temporary(arg->m_res_type);
-                    values.push_back(mv$(tmp));
+                    return {};
                 } else if (args.size() == 1) {
                     values.push_back(m_builder.get_result_in_param(arg->span(), arg->m_res_type, /*allow_missing_value=*/true));
                 } else {
@@ -2118,6 +2140,9 @@ namespace {
             } else {
                 auto _ = save_and_edit(m_borrow_raise_target, nullptr);
                 values = get_args(node.m_args);
+            }
+            if (!m_builder.block_active()) {
+                return;
             }
 
             auto panic_block = m_builder.new_bb_unlinked();
@@ -2280,12 +2305,18 @@ namespace {
             // _CallValue is ONLY valid on function pointers (all others must be desugared)
             ASSERT_BUG(node.span(), node.m_value->m_res_type.data().is_Function(), "Leftover _CallValue on a non-fn()");
             this->visit_node_ptr(node.m_value);
+            if (!m_builder.block_active()) {
+                return;
+            }
 
             // Get the function pointer in a temporary BEFORE getting arguments
             auto fcn_val = m_builder.new_temporary(node.m_value->m_res_type);
             m_builder.push_stmt_assign(node.m_value->span(), fcn_val.clone(), m_builder.get_result(node.m_value->span()));
 
             auto values = get_args(node.m_args);
+            if (!m_builder.block_active()) {
+                return;
+            }
 
             auto panic_block = m_builder.new_bb_unlinked();
             auto next_block = m_builder.new_bb_unlinked();
@@ -2559,6 +2590,9 @@ namespace {
                 values_set[idx] = true;
                 DEBUG("_StructLiteral - fld '" << ent.first << "' (idx " << idx << ")");
                 this->visit_node_ptr(valnode);
+                if (!m_builder.block_active()) {
+                    return;
+                }
 
                 auto res = m_builder.get_result(valnode->span());
                 if (auto* e = res.opt_Constant()) {
@@ -2575,6 +2609,9 @@ namespace {
             if (node.m_base_value) {
                 DEBUG("_StructLiteral - base");
                 this->visit_node_ptr(node.m_base_value);
+                if (!m_builder.block_active()) {
+                    return;
+                }
                 base_val = m_builder.get_result_in_lvalue(node.m_base_value->span(), node.m_base_value->m_res_type);
             }
             for (unsigned int i = 0; i < values.size(); i++) {
@@ -2622,6 +2659,9 @@ namespace {
                     struct_path.m_path = var_ty.data().as_Path().path.m_data.as_Generic().m_path;
 
                     this->visit_sl_inner(node, str, struct_path);
+                    if (!m_builder.block_active()) {
+                        return;
+                    }
                     auto vals = std::move(m_builder.get_result(node.span()).as_Struct().vals);
 
                     // And create Variant
@@ -2631,6 +2671,9 @@ namespace {
                     const auto& variant_name = node.m_values.front().first;
                     auto& value_node = node.m_values.front().second;
                     this->visit_node_ptr(value_node);
+                    if (!m_builder.block_active()) {
+                        return;
+                    }
                     auto val = m_builder.get_result_in_lvalue(value_node->span(), value_node->m_res_type);
 
                     const auto& unm = *e;
@@ -2659,6 +2702,9 @@ namespace {
         void visit(::HIR::ExprNode_Tuple& node) override {
             TRACE_FUNCTION_F("_Tuple");
             auto values = get_args(node.m_vals);
+            if (!m_builder.block_active()) {
+                return;
+            }
 
             m_builder.set_result(node.span(), ::MIR::RValue::make_Tuple({mv$(values)}));
         }
@@ -2666,6 +2712,9 @@ namespace {
         void visit(::HIR::ExprNode_ArrayList& node) override {
             TRACE_FUNCTION_F("_ArrayList");
             auto values = get_args(node.m_vals);
+            if (!m_builder.block_active()) {
+                return;
+            }
 
             m_builder.set_result(node.span(), ::MIR::RValue::make_Array({mv$(values)}));
         }
@@ -2673,6 +2722,9 @@ namespace {
         void visit(::HIR::ExprNode_ArraySized& node) override {
             TRACE_FUNCTION_F("_ArraySized");
             this->visit_node_ptr(node.m_val);
+            if (!m_builder.block_active()) {
+                return;
+            }
             auto value = m_builder.get_result_in_param(node.span(), node.m_val->m_res_type);
 
             m_builder.set_result(node.span(), ::MIR::RValue::make_SizedArray({mv$(value), std::move(node.m_size)}));

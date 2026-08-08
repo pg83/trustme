@@ -8,7 +8,6 @@
 
 ## P1 — ICE, assert и зависания
 
-- [ ] Устранить `mir_mir_builder.cpp:217: No value available`. Разделить triggers по конструкции, найти первый общий случай отсутствующего result value и не подставлять фиктивный unit для выражений с не-unit типом.
 - [ ] Исправить slice-pattern lowering в `mir_from_hir_match.cpp:1944` (`too many leading rules`) и отдельный overlap byte-array patterns. Нужны units на leading/rest/trailing patterns и runtime-проверка выбранной match arm.
 - [ ] Исправить validation `ItemAddr` для inline const. Unit должен вычислять адрес допустимого inline-const item и доходить до runtime без ослабления общей MIR validation.
 - [ ] Разобрать timeout `coretests/net_ipv6_properties`: определить, 60 секунд съедает rustc, внешний clang или runtime. Compiler hang свести к unit; слишком крупный независимый harness разбить на compile shards без изменения тестового содержания.
@@ -42,6 +41,7 @@
 
 ## P4 — stable parser, expansion и resolver
 
+- [ ] `rust_quiz/020-break-return-in-condition.rs`: исправить разбор неоднозначного `if break { ... }`. После устранения MIR `No value available` тест компилируется, но печатает `1212` вместо upstream `121`; различить grammar для `return`/`break` с block expression и формы в скобках.
 - [ ] `parser/fn-header-syntactic-pass.rs`: поддержать все допустимые комбинации `const`/`async`/`unsafe`/`extern` перед `fn`, сохранив rejection недопустимого порядка.
 - [ ] `or-patterns/or-patterns-syntactic-pass.rs`: поддержать вложенные or-patterns в tuple/slice/struct contexts; runtime unit должен различать arms.
 - [ ] `imports/issue-62767.rs`: исправить разрешение re-export/use chain `crate::bar::bar`, затем проверить соседние import tests того же shard.
