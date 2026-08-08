@@ -399,6 +399,20 @@ unit_tests.append(command(
     descr="UT",
     color="green",
 ))
+unit_tests.append(command(
+    name="unit_target_version_default",
+    inputs=["$(S)/tests/unit/test_target_version_default.py"],
+    outputs=["$(B)/tests/unit/target_version_default.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tests/unit/test_target_version_default.py",
+        "$(B)/rustc/rustc",
+        "$(B)/tests/unit/target_version_default.stamp",
+    ],
+    deps=[rustc],
+    descr="UT",
+    color="green",
+))
 for _src in build.glob("$(S)/tests/unit/test_*.rs"):
     _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
     unit_tests.append(command(

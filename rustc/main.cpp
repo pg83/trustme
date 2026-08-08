@@ -43,7 +43,7 @@
     #define MRUSTC_SANITIZER_BUILD 0
 #endif
 
-TargetVersion gTargetVersion = TargetVersion::Rustc1_29;
+TargetVersion gTargetVersion = TargetVersion::Rustc1_90;
 
 struct ProgramParams {
     enum eLastStage {
@@ -915,8 +915,6 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
             ::std::cerr << "$MRUSTC_TARGET_VER set to an unknown value\n";
             exit(1);
         }
-    } else {
-        ::std::cerr << "WARNING: $MRUSTC_TARGET_VER not set, defaulting to 1.29 mode (likely not intended)\n";
     }
 
     if (const auto* a = getenv("MRUSTC_LIBDIR")) {
