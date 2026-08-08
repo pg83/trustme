@@ -2586,9 +2586,13 @@ public:
                         if (new_toks.out.size() == 0) {
                             it = rule_contents.erase(it);
                         } else {
+                            const auto replacement_count = new_toks.out.size();
                             *it = std::move(new_toks.out.front());
-                            it = rule_contents.insert(it + 1, std::move_iterator<decltype(new_toks.out.begin())>(new_toks.out.begin() + 1), std::move_iterator<decltype(new_toks.out.begin())>(new_toks.out.end()));
-                            it += new_toks.out.size();
+                            it += 1;
+                            if (replacement_count > 1) {
+                                it = rule_contents.insert(it, std::move_iterator<decltype(new_toks.out.begin())>(new_toks.out.begin() + 1), std::move_iterator<decltype(new_toks.out.begin())>(new_toks.out.end()));
+                                it += replacement_count - 1;
+                            }
                         }
                     } else {
                         ++it;
