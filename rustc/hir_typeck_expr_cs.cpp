@@ -5484,23 +5484,93 @@ namespace {
 
         };
 
-        bool has_visible_operator_impl = false;
+        // A trait implementation only suppresses the language primitive
+        // candidate when its signature changes the operation's semantics.
+        // Standard-library implementations such as `Shl<i32> for u64` have
+        // the same inputs and output as the primitive operation; they must
+        // still let an expected output type constrain an untyped lhs literal.
+        // A custom impl with a different rhs or Output remains an overload.
+        auto impl_has_builtin_operator_signature = [&](ImplRef impl) {
+            auto impl_ty = impl.get_impl_type();
+            auto impl_params = impl.get_trait_params();
+            // Impl probing can expose inference placeholders that belong to
+            // the candidate, not this expression.  They have no Context
+            // slot, so do not feed them to expansion/comparison below.
+            // Conservatively retain such a candidate as a semantic overload.
+            if (context.m_ivars.type_contains_ivars(impl_ty, /*only_unbound=*/true)
+                || context.m_ivars.pathparams_contain_ivars(impl_params, /*only_unbound=*/true)) {
+                return false;
+            }
+            impl_ty = context.m_resolve.expand_associated_types(sp, mv$(impl_ty));
+            for (auto& ty : impl_params.m_types) {
+                ty = context.m_resolve.expand_associated_types(sp, mv$(ty));
+            }
+
+            const bool has_builtin_inputs = impl_params.m_types.size() == 0
+                ? typeck::primitive_operator_has_builtin(v.operator_kind, impl_ty)
+                : impl_params.m_types.size() == 1
+                    && typeck::primitive_operator_has_builtin(
+                        v.operator_kind, impl_ty, impl_params.m_types.front()
+                    );
+            if (!has_builtin_inputs) {
+                return false;
+            }
+            if (v.name == "") {
+                return true;
+            }
+
+            auto output = impl.get_type(v.name.c_str(), {});
+            if (output == ::HIR::TypeRef()) {
+                return false;
+            }
+            if (context.m_ivars.type_contains_ivars(output, /*only_unbound=*/true)) {
+                return false;
+            }
+            output = context.m_resolve.expand_associated_types(sp, mv$(output));
+
+            auto builtin_output = impl_ty.clone();
+            if (v.operator_kind == typeck::PrimitiveOperator::Deref) {
+                if (const auto* e = impl_ty.data().opt_Pointer()) {
+                    builtin_output = e->inner.clone();
+                } else if (const auto* e = impl_ty.data().opt_Borrow()) {
+                    builtin_output = e->inner.clone();
+                } else {
+                    return false;
+                }
+            }
+            return output.compare_with_placeholders(
+                sp, builtin_output, context.m_ivars.callback_resolve_infer()
+            ) == ::HIR::Compare::Equal;
+        };
+
+        bool has_semantic_operator_impl = false;
         if (v.operator_kind != typeck::PrimitiveOperator::None) {
             context.m_resolve.find_trait_impls(sp, v.trait, v.params, v.impl_ty, [&](ImplRef impl, HIR::Compare) {
                 if (context.is_current_operator_impl(impl)) {
                     return false;
                 }
-                has_visible_operator_impl = true;
-                return true;
+                if (!impl_has_builtin_operator_signature(mv$(impl))) {
+                    has_semantic_operator_impl = true;
+                    return true;
+                }
+                return false;
             });
         }
 
+        // A lazily generated expression can still contain a raw inference
+        // placeholder from an impl candidate. Such a placeholder has no slot
+        // in this Context, so primitive equations must wait for it to be
+        // contextualised rather than asking HMTypeInferrence to resolve it.
+        const bool primitive_types_are_contextual =
+            !context.m_ivars.type_contains_ivars(v.impl_ty, /*only_unbound=*/true)
+            && !context.m_ivars.pathparams_contain_ivars(v.params, /*only_unbound=*/true)
+            && (v.left_ty == ::HIR::TypeRef()
+                || !context.m_ivars.type_contains_ivars(v.left_ty, /*only_unbound=*/true));
+
         // MAGIC! Have special handling for operator overloads
-        // These constraints describe the primitive candidate.  A concrete
-        // trait implementation is allowed to determine its own result type
-        // instead, so don't install primitive equations when that candidate
-        // is visible.
-        if (v.is_operator && !has_visible_operator_impl) {
+        // A semantic overload is allowed to determine its result type
+        // instead, so don't install primitive equations in that case.
+        if (v.is_operator && !has_semantic_operator_impl && primitive_types_are_contextual) {
             if (v.params.m_types.size() == 0) {
                 // Uni ops = If the value is a primitive, the output is the same type
                 const auto& ty = context.get_type(v.impl_ty);
@@ -5522,13 +5592,23 @@ namespace {
                     } else {
                         context.equate_types(sp, res, left);
                     }
-                    if (v.trait == context.m_crate.get_lang_item_path_opt("shl") || v.trait == context.m_crate.get_lang_item_path_opt("shr")) {
+                    const bool is_shift = v.operator_kind == typeck::PrimitiveOperator::Shl
+                        || v.operator_kind == typeck::PrimitiveOperator::Shr
+                        || v.operator_kind == typeck::PrimitiveOperator::ShlAssign
+                        || v.operator_kind == typeck::PrimitiveOperator::ShrAssign;
+                    if (is_shift) {
                         // Shifts can have mismatched types on each side.
                     } else {
                         // NOTE: This only holds if not a shift
                         context.equate_types(sp, left, right);
                     }
-                    if (context.get_type(left).data().is_Infer() && context.get_type(right).data().is_Infer() && context.get_type(res).data().is_Infer()) {
+                    // Assignment and comparison trait constraints have no
+                    // associated output (`name == ""`), so `res` is an
+                    // absent placeholder rather than a Context ivar.
+                    if (v.name != ""
+                        && context.get_type(left).data().is_Infer()
+                        && context.get_type(right).data().is_Infer()
+                        && context.get_type(res).data().is_Infer()) {
                         context.possible_equate_type_unknown(sp, right, Context::IvarUnknownType::To);
                         DEBUG("> All are infer, skip");
                         return false;

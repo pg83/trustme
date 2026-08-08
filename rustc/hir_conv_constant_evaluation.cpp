@@ -8,6 +8,7 @@
 #include "hir_conv_main_bindings.hpp"
 #include "hir_hir.hpp"
 #include "hir_expr.hpp"
+#include "hir_typeck_expr_visit.hpp"
 #include "hir_visitor.hpp"
 #include <algorithm>
 #include <cmath>
@@ -4058,11 +4059,13 @@ namespace {
     // an early module can cast a variant of an enum that the main pass visits later.
     struct EnumValueExpander: public ::HIR::Visitor {
         const ::HIR::Crate& m_crate;
+        ::typeck::ModuleState m_typeck;
         const ::HIR::Module* m_mod;
         const ::HIR::ItemPath* m_mod_path;
 
         EnumValueExpander(const ::HIR::Crate& crate)
             : m_crate(crate)
+            , m_typeck(crate)
             , m_mod(nullptr)
             , m_mod_path(nullptr)
         {
@@ -4073,12 +4076,28 @@ namespace {
             auto saved_m = m_mod;
             m_mod = &mod;
             m_mod_path = &p;
+            m_typeck.push_traits(p, mod);
             ::HIR::Visitor::visit_module(p, mod);
+            m_typeck.pop_traits(mod);
             m_mod = saved_m;
             m_mod_path = saved_mp;
         }
 
         void visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) override {
+            // Enum discriminants are evaluated before the regular expression
+            // typecheck pass. Give their literals and primitive operators the
+            // enum repr type now, so CTFE/MIR never sees a defaulted i32 where
+            // it was asked to produce (for example) a u64.
+            auto _ = m_typeck.set_impl_generics(item.m_params);
+            if (auto* e = item.m_data.opt_Value()) {
+                auto enum_type = ::HIR::TypeRef(::HIR::Enum::get_repr_type(item.m_tag_repr));
+                for (auto& var : e->variants) {
+                    if (var.expr) {
+                        t_args args;
+                        Typecheck_Code(m_typeck, args, enum_type, var.expr);
+                    }
+                }
+            }
             Expander::visit_enum_inner(m_crate, p, *m_mod, *m_mod_path, p.get_name(), item);
         }
     };

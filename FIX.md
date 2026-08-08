@@ -2,7 +2,7 @@
 
 В этом файле остаётся только незакрытая работа. История уже сделанных исправлений находится в git, а не в плане.
 
-Текущий baseline полного plain-clang/lld прогона: граф из 9 951 тестовых узлов, 2 905 failed nodes, 2 870 broken requested targets. Команда: `nix develop .#clang -c ./build -B .build-clang -k test`. Полный лог этого baseline сохранён в `/tmp/trustme-full-gate-20260807.log`; предыдущий сопоставимый baseline был 2 916/2 881 при 9 942 узлах.
+Текущий baseline полного plain-clang/lld прогона: 11 658 failed nodes, 14 009 broken requested targets. Команда: `nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC=clang CXX=clang++ LDFLAGS='-fuse-ld=lld' ./build -B .build-clang -j 4 -k test`. Полный лог сохранён в `/tmp/trustme-full-gate-20260808-zst-codegen.log`. Первое падение `libcore` в `ptr::alignment::AlignmentEnum` устранено; текущая точка сборки дошла до `ptr::const_ptr` из P1 ниже.
 
 Для каждого compiler fix порядок один: минимальный красный `tests/unit/test_*.rs` → исправление общего пути → зелёный unit → точный upstream trigger → сборка `rustc` под clang/lld → отдельный commit и push. Полный gate запускается после серии точечных исправлений, а не после каждого файла.
 
@@ -10,7 +10,6 @@
 
 Исполнять строго сверху вниз.
 
-- [ ] Разделить 50 C-compiler failures на общие codegen-причины: потерянные temporaries (`varN`, 13 diagnostics), неверные aggregate projections (`DATA`/`_N`, 10 diagnostics) и pointer/integer ABI (25 diagnostics). На каждый различный C fragment — свой red Rust unit и runtime invariant.
 - [ ] Свести 40 `Macro_InvokeRules_MatchPattern: No arm matched` nodes к минимальному набору matcher defects. Группировать по fragment kind и repetition shape, а не по исходному тесту; каждую форму фиксировать отдельным unit.
 - [ ] Подключить `-Z mir-opt-level` к реальному уровню MIR optimisations; сейчас unknown flag сразу блокирует 38 nodes. `next-solver` (21 nodes) не подменять no-op: отложить до отдельной реализации solver semantics.
 
@@ -18,7 +17,7 @@
 
 - [ ] Устранить trait-alias assert в `hir_from_ast.cpp:963`. Сначала минимальный alias с теми bounds, на которых падает lowering; после фикса проверить исходный UI/run-pass trigger.
 - [ ] Устранить `mir_mir_builder.cpp:217: No value available`. Разделить triggers по конструкции, найти первый общий случай отсутствующего result value и не подставлять фиктивный unit для выражений с не-unit типом.
-- [ ] Исправить MIR return-type mismatch, впервые достигаемый при сборке libcore в `ptr::alignment::AlignmentEnum` (`u64` slot вместо ожидаемого `i32`). Сначала минимизировать до общей ошибки выбора типа return place; не ослаблять MIR validation ради прохождения library build.
+- [ ] Исправить выбор primitive-кандидата при рекурсивном `PartialEq` для generic raw pointer: при сборке libcore `ptr::const_ptr.rs:1596` не находится `PartialEq<_>` для `*const T`. Нужен отдельный минимальный trigger без внешнего impl, затем общее различение текущего trait impl и language primitive operation.
 - [ ] Исправить slice-pattern lowering в `mir_from_hir_match.cpp:1944` (`too many leading rules`) и отдельный overlap byte-array patterns. Нужны units на leading/rest/trailing patterns и runtime-проверка выбранной match arm.
 - [ ] Исправить validation `ItemAddr` для inline const. Unit должен вычислять адрес допустимого inline-const item и доходить до runtime без ослабления общей MIR validation.
 - [ ] Разобрать timeout `coretests/net_ipv6_properties`: определить, 60 секунд съедает rustc, внешний clang или runtime. Compiler hang свести к unit; слишком крупный независимый harness разбить на compile shards без изменения тестового содержания.
