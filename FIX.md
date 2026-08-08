@@ -8,7 +8,6 @@
 
 ## P1 — ICE, assert и зависания
 
-- [ ] Исправить overlap byte-array patterns в `mir_from_hir_match.cpp::rules_overlap`: сравнивать точную длину byte-string с длиновой областью `Slice`/`SplitSlice` и сохранять порядок действительно пересекающихся match arms. Нужен runtime-unit на выбор arm в обоих порядках.
 - [ ] Исправить validation `ItemAddr` для inline const. Unit должен вычислять адрес допустимого inline-const item и доходить до runtime без ослабления общей MIR validation.
 - [ ] Разобрать timeout `coretests/net_ipv6_properties`: определить, 60 секунд съедает rustc, внешний clang или runtime. Compiler hang свести к unit; слишком крупный независимый harness разбить на compile shards без изменения тестового содержания.
 - [ ] Разобрать все timeout RustSmith shards. Сначала определить конкретный input внутри каждого shard; одинаковые compiler hangs объединить по stack/phase, каждый новый общий hang фиксировать одним минимальным unit.

@@ -2251,6 +2251,27 @@ namespace {
             }
         }
 
+        // A byte-string literal denotes a slice with one exact length.  For
+        // reordering purposes, sequence patterns can only be proven disjoint
+        // from it when their accepted length domains do not contain that
+        // length; their element rules may otherwise accept the literal.
+        if (const auto* ae = a.opt_Value(); ae && ae->is_Bytes()) {
+            if (const auto* be = b.opt_Slice()) {
+                return ae->as_Bytes().size() == be->len;
+            }
+            if (const auto* be = b.opt_SplitSlice()) {
+                return ae->as_Bytes().size() >= be->min_len;
+            }
+        }
+        if (const auto* be = b.opt_Value(); be && be->is_Bytes()) {
+            if (const auto* ae = a.opt_Slice()) {
+                return be->as_Bytes().size() == ae->len;
+            }
+            if (const auto* ae = a.opt_SplitSlice()) {
+                return be->as_Bytes().size() >= ae->min_len;
+            }
+        }
+
         // Checks if the value is within the righthand edge of the range
         auto is_within_right = [](const MIR::Constant& c, const PatternRule::Data_ValueRange& e) -> bool {
             return (e.is_inclusive ? c <= e.last : c < e.last);
@@ -3338,6 +3359,7 @@ void MatchGenGrouped::gen_for_slice(t_rules_subset arm_rules, size_t ofs, ::MIR:
 
         // - Value arms
         auto start = idx;
+        bool stopped_at_overlap = false;
         for (; idx < arm_rules.size(); idx++) {
             if (arm_rules[idx].size() <= ofs) {
                 break;
@@ -3350,6 +3372,21 @@ void MatchGenGrouped::gen_for_slice(t_rules_subset arm_rules, size_t ofs, ::MIR:
             }
             // TODO: It would be nice if ValueRange could be combined with Value (if there's no overlap)
             if (arm_rules[idx][ofs].is_ValueRange()) {
+                break;
+            }
+
+            // The dispatch below sorts selector groups.  Keep an ordering
+            // boundary before a selector that overlaps an incompatible
+            // earlier selector, otherwise e.g. a byte literal can move past
+            // an equal-length slice pattern and change the selected arm.
+            for (size_t prev = start; prev < idx; prev++) {
+                if (!rule_compatible(arm_rules[prev][ofs], arm_rules[idx][ofs])
+                    && rules_overlap(arm_rules[prev][ofs], arm_rules[idx][ofs])) {
+                    stopped_at_overlap = true;
+                    break;
+                }
+            }
+            if (stopped_at_overlap) {
                 break;
             }
         }
@@ -3415,6 +3452,10 @@ void MatchGenGrouped::gen_for_slice(t_rules_subset arm_rules, size_t ofs, ::MIR:
             if (has_default) {
                 m_builder.set_cur_block(next);
             }
+        }
+
+        if (stopped_at_overlap) {
+            continue;
         }
 
         // Collate matching blocks at `first_any`
