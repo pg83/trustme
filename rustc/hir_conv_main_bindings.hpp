@@ -21,6 +21,7 @@ namespace HIR {
     class Constant;
     class TypeRef;
     struct SimplePath;
+    struct GenericPath;
     class GenericParams;
     struct PathParams;
     class ConstGeneric;
@@ -28,6 +29,7 @@ namespace HIR {
 };
 
 extern void ConvertHIR_LifetimeElision(::HIR::Crate& crate);
+extern ::HIR::PathParams ConvertHIR_CompleteAliasParams(const Span& sp, const ::HIR::GenericParams& params_def, const ::HIR::GenericPath& path, bool is_expr);
 extern void ConvertHIR_ExpandAliases(::HIR::Crate& crate);
 extern void ConvertHIR_ExpandAliases_Self(::HIR::Crate& crate);
 extern void ConvertHIR_ExpandAliases_Self_Expr(

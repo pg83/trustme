@@ -11,44 +11,45 @@
 #include "hir_visitor.hpp"
 #include "hir_typeck_common.hpp" // monomorphise_type_with
 
-namespace {
-    HIR::PathParams get_path_params(const Span& sp, const ::HIR::GenericParams& params_def, const ::HIR::GenericPath& path, bool is_expr) {
-        auto pp = path.m_params.clone();
+HIR::PathParams ConvertHIR_CompleteAliasParams(const Span& sp, const ::HIR::GenericParams& params_def, const ::HIR::GenericPath& path, bool is_expr) {
+    auto pp = path.m_params.clone();
 
-        // Empty list, fill with ivars
-        if (is_expr && pp.m_types.empty()) {
-            pp.m_types.resize(params_def.m_types.size());
-        }
-        if (is_expr && pp.m_values.empty()) {
-            pp.m_values.resize(params_def.m_values.size());
-        }
-
-        // Shouldn't this error out if not in an expression?
-        if (pp.m_lifetimes.empty()) {
-            pp.m_lifetimes.resize(params_def.m_lifetimes.size());
-        }
-
-        auto ms_o = MonomorphStatePtr(nullptr, &path.m_params, nullptr);
-
-        pp.m_types.reserve(params_def.m_types.size());
-        while (pp.m_types.size() < params_def.m_types.size() && params_def.m_types[pp.m_types.size()].m_default != ::HIR::TypeRef()) {
-            pp.m_types.push_back(ms_o.monomorph_type(sp, params_def.m_types[pp.m_types.size()].m_default));
-        }
-        if (pp.m_types.size() != params_def.m_types.size()) {
-            ERROR(sp, E0000, "Mismatched type-generic count in " << path << ", expected " << params_def.m_types.size() << " got " << pp.m_types.size());
-        }
-
-        pp.m_values.reserve(params_def.m_values.size());
-        while (pp.m_values.size() < params_def.m_values.size() && !params_def.m_values[pp.m_values.size()].m_default.is_Infer()) {
-            //pp.m_values.push_back( ms_o.monomorph_va(sp, params_def.m_values[pp.m_values.size()].m_default) );
-            TODO(sp, "Populate default value params");
-        }
-        if (pp.m_values.size() != params_def.m_values.size()) {
-            ERROR(sp, E0000, "Mismatched const-generic count in " << path << ", expected " << params_def.m_values.size() << " got " << pp.m_values.size());
-        }
-
-        return pp;
+    // Empty list, fill with ivars
+    if (is_expr && pp.m_types.empty()) {
+        pp.m_types.resize(params_def.m_types.size());
     }
+    if (is_expr && pp.m_values.empty()) {
+        pp.m_values.resize(params_def.m_values.size());
+    }
+
+    // Shouldn't this error out if not in an expression?
+    if (pp.m_lifetimes.empty()) {
+        pp.m_lifetimes.resize(params_def.m_lifetimes.size());
+    }
+    if (pp.m_lifetimes.size() != params_def.m_lifetimes.size()) {
+        ERROR(sp, E0000, "Mismatched lifetime-generic count in " << path
+            << ", expected " << params_def.m_lifetimes.size() << " got " << pp.m_lifetimes.size());
+    }
+
+    pp.m_types.reserve(params_def.m_types.size());
+    while (pp.m_types.size() < params_def.m_types.size() && params_def.m_types[pp.m_types.size()].m_default != ::HIR::TypeRef()) {
+        auto monomorph = MonomorphStatePtr(nullptr, &pp, nullptr);
+        pp.m_types.push_back(monomorph.monomorph_type(sp, params_def.m_types[pp.m_types.size()].m_default));
+    }
+    if (pp.m_types.size() != params_def.m_types.size()) {
+        ERROR(sp, E0000, "Mismatched type-generic count in " << path << ", expected " << params_def.m_types.size() << " got " << pp.m_types.size());
+    }
+
+    pp.m_values.reserve(params_def.m_values.size());
+    while (pp.m_values.size() < params_def.m_values.size() && !params_def.m_values[pp.m_values.size()].m_default.is_Infer()) {
+        auto monomorph = MonomorphStatePtr(nullptr, &pp, nullptr);
+        pp.m_values.push_back(monomorph.monomorph_constgeneric(sp, params_def.m_values[pp.m_values.size()].m_default, false));
+    }
+    if (pp.m_values.size() != params_def.m_values.size()) {
+        ERROR(sp, E0000, "Mismatched const-generic count in " << path << ", expected " << params_def.m_values.size() << " got " << pp.m_values.size());
+    }
+
+    return pp;
 }
 
 ::HIR::TypeRef ConvertHIR_ExpandAliases_GetExpansion_GP(const Span& sp, const ::HIR::Crate& crate, const ::HIR::GenericPath& path, bool is_expr) {
@@ -56,7 +57,7 @@ namespace {
     if (const auto* ep = ti.opt_TypeAlias()) {
         const auto& ta = *ep;
         DEBUG(path << " -> type " << ta.m_params.fmt_args() << " = " << ta.m_type);
-        auto pp = get_path_params(sp, ta.m_params, path, is_expr);
+        auto pp = ConvertHIR_CompleteAliasParams(sp, ta.m_params, path, is_expr);
         // Monomorphise the exapnded type using the created params
         auto ms = MonomorphStatePtr(nullptr, &pp, nullptr);
         HIR::TypeRef rv = ms.monomorph_type(sp, ta.m_type);
@@ -76,7 +77,7 @@ std::vector<HIR::TraitPath> ConvertHIR_ExpandAliases_GetTraitExpansion_GP(const 
     const auto& ti = crate.get_typeitem_by_path(sp, path.m_path);
     if (const auto* ep = ti.opt_TraitAlias()) {
         const auto& ta = *ep;
-        auto pp = get_path_params(sp, ta.m_params, path, is_expr);
+        auto pp = ConvertHIR_CompleteAliasParams(sp, ta.m_params, path, is_expr);
         auto ms = MonomorphStatePtr(nullptr, &pp, nullptr);
         std::vector<HIR::TraitPath> rv;
         rv.reserve(ta.m_traits.size());

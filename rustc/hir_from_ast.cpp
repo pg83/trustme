@@ -8,6 +8,7 @@
 #include "common.hpp"
 #include "hir_hir.hpp"
 #include "hir_main_bindings.hpp"
+#include "hir_conv_main_bindings.hpp"
 #include "ast_ast.hpp"
 #include "ast_expr.hpp" // For shortcut in array size handling
 #include "ast_crate.hpp"
@@ -19,6 +20,7 @@
 #include <limits.h>
 #include "hir_typeck_helpers.hpp" // monomorph
 #include "trans_target.hpp"
+#include <unordered_set>
 
 ::HIR::ExprPtr LowerHIR_Expr(const ::AST::Expr& e);
 ::HIR::Module LowerHIR_Module(const ::AST::Module& module, ::HIR::ItemPath path, ::std::vector<::HIR::SimplePath> traits = {});
@@ -821,6 +823,205 @@ namespace {
         {
         }
     } g_impl_trait_source;
+
+    class TraitObjectLowering {
+        const Span& m_span;
+        ::HIR::TypeData::Data_TraitObject& m_out;
+        ::std::unordered_set<const void*> m_active_aliases;
+        ::std::vector<::HIR::LifetimeDef> m_active_hrtbs;
+
+        ::HIR::TraitPath rebase_bound_hrtbs(::HIR::TraitPath trait) const {
+            if (m_active_hrtbs.empty() || !trait.m_hrtbs) {
+                return trait;
+            }
+
+            ::HIR::PathParams shifted;
+            shifted.m_lifetimes.reserve(trait.m_hrtbs->m_lifetimes.size());
+            for (size_t i = 0; i < trait.m_hrtbs->m_lifetimes.size(); i++) {
+                const auto binding = ::HIR::GenericRef(
+                    RcString(),
+                    ::HIR::GENERIC_Hrtb,
+                    static_cast<uint16_t>(m_active_hrtbs.size() + i)).binding;
+                shifted.m_lifetimes.push_back(::HIR::LifetimeRef(binding));
+            }
+            return MonomorphHrlsOnly(shifted).monomorph_traitpath(m_span, trait, false, true);
+        }
+
+        void attach_active_hrtbs(::HIR::TraitPath& trait) const {
+            if (m_active_hrtbs.empty()) {
+                return;
+            }
+
+            ::HIR::GenericParams merged;
+            merged.m_lifetimes.reserve(m_active_hrtbs.size()
+                + (trait.m_hrtbs ? trait.m_hrtbs->m_lifetimes.size() : 0));
+            for (const auto& lifetime : m_active_hrtbs) {
+                merged.m_lifetimes.push_back(lifetime);
+            }
+            if (trait.m_hrtbs) {
+                ASSERT_BUG(m_span,
+                    trait.m_hrtbs->m_types.empty() && trait.m_hrtbs->m_values.empty() && trait.m_hrtbs->m_bounds.empty(),
+                    "Non-lifetime parameters in higher-ranked trait bound");
+                for (const auto& lifetime : trait.m_hrtbs->m_lifetimes) {
+                    merged.m_lifetimes.push_back(lifetime);
+                }
+            }
+            trait.m_hrtbs = box$(mv$(merged));
+        }
+
+        bool has_principal() const {
+            return !m_out.m_trait.m_path.m_path.components().empty();
+        }
+
+        void add_trait(::HIR::TraitPath trait, bool is_marker) {
+            if (is_marker) {
+                if (!trait.m_type_bounds.empty() || !trait.m_trait_bounds.empty()) {
+                    ERROR(m_span, E0000, "Associated type bounds on auto trait " << trait.m_path);
+                }
+                m_out.m_markers.push_back(mv$(trait.m_path));
+                return;
+            }
+
+            attach_active_hrtbs(trait);
+            if (has_principal()) {
+                ERROR(m_span, E0000, "Multiple data traits in trait object: "
+                    << m_out.m_trait.m_path << " and " << trait.m_path);
+            }
+            m_out.m_trait = mv$(trait);
+        }
+
+        void apply_alias_bounds(::HIR::TraitPath& alias_path, bool had_principal) {
+            const bool added_principal = !had_principal && has_principal();
+            if ((!alias_path.m_type_bounds.empty() || !alias_path.m_trait_bounds.empty()) && !added_principal) {
+                ERROR(m_span, E0000, "Associated type bounds on trait alias without a data trait: " << alias_path.m_path);
+            }
+            if (added_principal) {
+                for (auto& bound : alias_path.m_type_bounds) {
+                    m_out.m_trait.m_type_bounds.insert(::std::make_pair(bound.first, mv$(bound.second)));
+                }
+                for (auto& bound : alias_path.m_trait_bounds) {
+                    m_out.m_trait.m_trait_bounds.insert(::std::make_pair(bound.first, mv$(bound.second)));
+                }
+            }
+        }
+
+        struct ActiveAlias {
+            ::std::unordered_set<const void*>& aliases;
+            const void* key;
+
+            ~ActiveAlias() {
+                aliases.erase(key);
+            }
+        };
+
+        ActiveAlias enter_alias(const void* key, const ::HIR::GenericPath& path) {
+            if (!m_active_aliases.insert(key).second) {
+                ERROR(m_span, E0000, "Recursive trait alias in trait object: " << path);
+            }
+            return ActiveAlias{m_active_aliases, key};
+        }
+
+        struct ActiveHrtbs {
+            ::std::vector<::HIR::LifetimeDef>& lifetimes;
+            size_t old_size;
+
+            ~ActiveHrtbs() {
+                lifetimes.resize(old_size);
+            }
+        };
+
+        ActiveHrtbs enter_hrtbs(::HIR::TraitPath& path) {
+            const size_t old_size = m_active_hrtbs.size();
+            if (path.m_hrtbs) {
+                ASSERT_BUG(m_span,
+                    path.m_hrtbs->m_types.empty() && path.m_hrtbs->m_values.empty() && path.m_hrtbs->m_bounds.empty(),
+                    "Non-lifetime parameters in higher-ranked trait alias");
+                m_active_hrtbs.reserve(old_size + path.m_hrtbs->m_lifetimes.size());
+                for (const auto& lifetime : path.m_hrtbs->m_lifetimes) {
+                    m_active_hrtbs.push_back(lifetime);
+                }
+                path.m_hrtbs.reset();
+            }
+            return ActiveHrtbs{m_active_hrtbs, old_size};
+        }
+
+        void add_ast_path(::HIR::TraitPath path, const ::AST::PathBinding_Type& binding) {
+            if (const auto* trait = binding.opt_Trait()) {
+                ASSERT_BUG(m_span, trait->trait_ || trait->hir, "Null trait binding for " << path.m_path);
+                add_trait(mv$(path), trait->trait_ ? trait->trait_->is_marker() : trait->hir->m_is_marker);
+            } else if (const auto* alias = binding.opt_TraitAlias()) {
+                expand_ast_alias(mv$(path), *alias);
+            } else {
+                BUG(m_span, "Not a trait or trait alias: " << path.m_path << " (" << binding.tag_str() << ")");
+            }
+        }
+
+        void add_hir_path(::HIR::TraitPath path) {
+            const auto& item = g_crate_ptr->get_typeitem_by_path(m_span, path.m_path.m_path);
+            if (const auto* trait = item.opt_Trait()) {
+                add_trait(mv$(path), trait->m_is_marker);
+            } else if (const auto* alias = item.opt_TraitAlias()) {
+                expand_hir_alias(mv$(path), *alias);
+            } else {
+                BUG(m_span, "Trait alias expanded to non-trait path " << path.m_path << " (" << item.tag_str() << ")");
+            }
+        }
+
+        void expand_ast_alias(::HIR::TraitPath alias_path, const ::AST::PathBinding_Type::Data_TraitAlias& binding) {
+            const void* key = binding.trait_ ? static_cast<const void*>(binding.trait_) : static_cast<const void*>(binding.hir);
+            ASSERT_BUG(m_span, key, "Null trait alias binding for " << alias_path.m_path);
+            auto active = enter_alias(key, alias_path.m_path);
+            auto active_hrtbs = enter_hrtbs(alias_path);
+            const bool had_principal = has_principal();
+
+            if (binding.trait_) {
+                bool trait_requires_sized = false;
+                auto params_def = LowerHIR_GenericParams(binding.trait_->params, &trait_requires_sized);
+                auto params = ConvertHIR_CompleteAliasParams(m_span, params_def, alias_path.m_path, false);
+                auto monomorph = MonomorphStatePtr(nullptr, &params, nullptr);
+                for (const auto& bound : binding.trait_->traits) {
+                    auto trait = rebase_bound_hrtbs(LowerHIR_TraitPath(bound.sp, *bound.ent.path, bound.ent.hrbs));
+                    add_ast_path(
+                        monomorph.monomorph_traitpath(m_span, trait, false),
+                        bound.ent.path->m_bindings.type.binding);
+                }
+            } else {
+                ASSERT_BUG(m_span, binding.hir, "Null trait alias binding for " << alias_path.m_path);
+                expand_hir_alias_contents(alias_path, *binding.hir);
+            }
+
+            apply_alias_bounds(alias_path, had_principal);
+        }
+
+        void expand_hir_alias_contents(const ::HIR::TraitPath& alias_path, const ::HIR::TraitAlias& alias) {
+            auto params = ConvertHIR_CompleteAliasParams(m_span, alias.m_params, alias_path.m_path, false);
+            auto monomorph = MonomorphStatePtr(nullptr, &params, nullptr);
+            for (const auto& bound : alias.m_traits) {
+                auto trait = rebase_bound_hrtbs(bound.clone());
+                add_hir_path(monomorph.monomorph_traitpath(m_span, trait, false));
+            }
+        }
+
+        void expand_hir_alias(::HIR::TraitPath alias_path, const ::HIR::TraitAlias& alias) {
+            auto active = enter_alias(&alias, alias_path.m_path);
+            auto active_hrtbs = enter_hrtbs(alias_path);
+            const bool had_principal = has_principal();
+            expand_hir_alias_contents(alias_path, alias);
+            apply_alias_bounds(alias_path, had_principal);
+        }
+
+    public:
+        TraitObjectLowering(const Span& span, ::HIR::TypeData::Data_TraitObject& out)
+            : m_span(span)
+            , m_out(out)
+        {
+        }
+
+        void add(const ::Type_TraitPath& bound) {
+            auto path = LowerHIR_TraitPath(m_span, *bound.path, bound.hrbs);
+            add_ast_path(mv$(path), bound.path->m_bindings.type.binding);
+        }
+    };
 }
 
 ::HIR::TypeRef LowerHIR_Type(const ::TypeRef& ty) {
@@ -958,27 +1159,14 @@ namespace {
             } else {
                 BUG(ty.span(), "Handle multiple lifetimes on a trait object - " << ty);
             }
+            TraitObjectLowering lowering(ty.span(), v);
             for (const auto& t : e.traits) {
                 DEBUG("t = " << *t.path);
-                ASSERT_BUG(ty.span(), t.path->m_bindings.type.binding.is_Trait(), "Not a trait: " << *t.path);
-                const auto& tb = t.path->m_bindings.type.binding.as_Trait();
-                ASSERT_BUG(ty.span(), tb.trait_ || tb.hir, "Null bindings?: " << *t.path);
-                if ((tb.trait_ ? tb.trait_->is_marker() : tb.hir->m_is_marker)) {
-                    if (tb.hir) {
-                        DEBUG(tb.hir->m_values.size());
-                    }
-                    // TODO: If this has HRBs, what?
-                    v.m_markers.push_back(LowerHIR_GenericPath(ty.span(), *t.path, FromAST_PathClass::Type));
-                } else {
-                    // TraitPath -> GenericPath -> SimplePath
-                    if (!v.m_trait.m_path.m_path.components().empty()) {
-                        ERROR(ty.span(), E0000, "Multiple data traits in trait object - " << ty);
-                    }
-                    v.m_trait = LowerHIR_TraitPath(ty.span(), *t.path, t.hrbs);
-                }
+                lowering.add(t);
             }
             // Sort markers so downstream can compare properly
             ::std::sort(v.m_markers.begin(), v.m_markers.end());
+            v.m_markers.erase(::std::unique(v.m_markers.begin(), v.m_markers.end()), v.m_markers.end());
             return ::HIR::TypeRef(::HIR::TypeData::make_TraitObject(mv$(v)));
         }
         TU_ARMA(ErasedType, e) {

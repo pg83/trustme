@@ -8,7 +8,6 @@
 
 ## P1 — ICE, assert и зависания
 
-- [ ] Устранить trait-alias assert в `hir_from_ast.cpp:963`. Сначала минимальный alias с теми bounds, на которых падает lowering; после фикса проверить исходный UI/run-pass trigger.
 - [ ] Устранить `mir_mir_builder.cpp:217: No value available`. Разделить triggers по конструкции, найти первый общий случай отсутствующего result value и не подставлять фиктивный unit для выражений с не-unit типом.
 - [ ] Исправить slice-pattern lowering в `mir_from_hir_match.cpp:1944` (`too many leading rules`) и отдельный overlap byte-array patterns. Нужны units на leading/rest/trailing patterns и runtime-проверка выбранной match arm.
 - [ ] Исправить validation `ItemAddr` для inline const. Unit должен вычислять адрес допустимого inline-const item и доходить до runtime без ослабления общей MIR validation.
@@ -58,7 +57,7 @@
 
 ## P5 — type system
 
-- [ ] Canonicalization trait objects: deduplicate auto traits и стабилизировать principal/supertrait lookup. Начать с failures, которые не требуют borrow checker.
+- [ ] Canonicalization trait objects: стабилизировать principal/supertrait lookup. Начать с failures, которые не требуют borrow checker.
 - [ ] HRTB и двухслойные binder substitutions: минимизировать каждый failure до конкретного misplaced/de-Bruijn lifetime.
 - [ ] Associated types и projection normalization: сначала concrete equality-bound cases, затем generic projections; не подменять unresolved projection первым найденным impl.
 - [ ] Generic inference и const generics: группировать по месту потери constraints, отдельно exact impl selection и fallback.
