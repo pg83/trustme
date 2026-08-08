@@ -527,9 +527,13 @@ namespace {
                 const auto& src_ty = se.inner;
                 const auto& dst_ty = de.inner;
 
-                const auto& lang_Unsize = this->get_lang_item_path(node.span(), "unsize");
-                // _ == < `src_ty` as Unsize< `dst_ty` >::""
-                check_associated_type(sp, ::HIR::TypeRef(), lang_Unsize, {dst_ty.clone()}, src_ty, "");
+                const auto& lang_Unsize = m_resolve.m_crate.get_lang_item_path_opt("unsize");
+                if (!lang_Unsize.components().empty()) {
+                    // _ == < `src_ty` as Unsize< `dst_ty` >::""
+                    check_associated_type(sp, ::HIR::TypeRef(), lang_Unsize, {dst_ty.clone()}, src_ty, "");
+                } else if (!m_resolve.can_unsize(sp, dst_ty, src_ty)) {
+                    ERROR(sp, E0000, "Invalid unsizing operation to " << dst_ty << " from " << src_ty);
+                }
             } else if (src_ty.data().is_Borrow() || dst_ty.data().is_Borrow()) {
                 ERROR(sp, E0000, "Invalid unsizing operation to " << dst_ty << " from " << src_ty);
             } else {
