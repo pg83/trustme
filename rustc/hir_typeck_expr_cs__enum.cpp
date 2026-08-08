@@ -1198,17 +1198,22 @@ namespace typecheck {
             const auto& ty = this->context.get_type(node.m_value->m_res_type);
             const auto& op_trait = this->context.m_crate.get_lang_item_path_opt("deref");
             const ::HIR::TypeRef* inner = nullptr;
+            bool is_owned_box = false;
             if (const auto* e = ty.data().opt_Borrow()) {
                 inner = &e->inner;
             } else if (const auto* e = ty.data().opt_Pointer()) {
                 inner = &e->inner;
+            } else if (const auto* e = this->context.m_resolve.type_is_owned_box(node.span(), ty)) {
+                inner = e;
+                is_owned_box = true;
             }
             if (!inner) {
                 this->context.add_revisit(node);
                 return;
             }
 
-            const bool has_visible_impl = !op_trait.components().empty()
+            const bool has_visible_impl = !is_owned_box
+                && !op_trait.components().empty()
                 && !this->context.is_current_native_deref_receiver(op_trait, ty)
                 && this->context.m_resolve.find_trait_impls(node.span(), op_trait, {}, ty, [&](ImplRef impl, HIR::Compare) {
                     return !this->context.is_current_operator_impl(impl);

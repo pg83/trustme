@@ -593,8 +593,12 @@ namespace {
 
             TU_MATCH_HDRA( (ty.data()), {)
             default: {
-                    ASSERT_BUG(node.span(), !op_trait.components().empty(), "Deref trait missing for non-builtin dereference of " << ty);
-                    use_trait();
+                    if (const auto* inner = this->context.m_resolve.type_is_owned_box(node.span(), ty)) {
+                        use_builtin(*inner);
+                    } else {
+                        ASSERT_BUG(node.span(), !op_trait.components().empty(), "Deref trait missing for non-builtin dereference of " << ty);
+                        use_trait();
+                    }
                 }
                 TU_ARMA(Infer, e) {
                     // Keep trying
