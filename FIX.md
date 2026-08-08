@@ -10,7 +10,7 @@
 
 Исполнять строго сверху вниз.
 
-- [ ] Свести 40 `Macro_InvokeRules_MatchPattern: No arm matched` nodes к минимальному набору matcher defects. Группировать по fragment kind и repetition shape, а не по исходному тесту; каждую форму фиксировать отдельным unit.
+- [ ] Исправить единственный оставшийся настоящий `Macro_InvokeRules_MatchPattern` defect в `gccrs_compile/torture/macro-issue1403.rs`: повторение `$stmt` с разделителем.
 - [ ] Подключить `-Z mir-opt-level` к реальному уровню MIR optimisations; сейчас unknown flag сразу блокирует 38 nodes. `next-solver` (21 nodes) не подменять no-op: отложить до отдельной реализации solver semantics.
 
 ## P1 — ICE, assert и зависания

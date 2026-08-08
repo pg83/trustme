@@ -2504,6 +2504,13 @@ void Expand_Mod_Early(::AST::Crate& crate, ::AST::Module& mod, std::vector<std::
         if (auto* mi = i.data.opt_MacroInv()) {
             // 1.74 HACK - Parse `macro_rules` during the first pass, so they're present for `use` to refer to
             if (mi->path().is_trivial() && mi->path().as_trivial() == "macro_rules") {
+                // A #[rustc_builtin_macro] declaration only supplies the
+                // public signature of a compiler-provided macro.  Its
+                // macro_rules body is a placeholder and must never enter the
+                // ordinary macro namespace or shadow the builtin expander.
+                if (i.attrs.get("rustc_builtin_macro")) {
+                    continue;
+                }
                 auto mi_owned = mv$(*mi);
 
                 TRACE_FUNCTION_F("Macro invoke " << mi_owned.path());
