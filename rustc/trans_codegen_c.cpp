@@ -8140,27 +8140,36 @@ namespace {
             }
             // --- Volatile Load/Store
             else if (name == "volatile_load") {
-                emit_lvalue(e.ret_val);
-                m_of << " = *(volatile ";
-                emit_ctype(params.m_types.at(0));
-                m_of << "*)";
-                emit_param(e.args.at(0));
+                // A ZST has no bytes to access.  In particular, Rust permits
+                // these operations with a dangling ZST pointer, so emitting a
+                // C volatile dereference would invent an observable access.
+                if (!this->type_is_bad_zst(params.m_types.at(0))) {
+                    emit_lvalue(e.ret_val);
+                    m_of << " = *(volatile ";
+                    emit_ctype(params.m_types.at(0));
+                    m_of << "*)";
+                    emit_param(e.args.at(0));
+                }
             } else if (name == "volatile_store") {
-                m_of << "*(volatile ";
-                emit_ctype(params.m_types.at(0));
-                m_of << "*)";
-                emit_param(e.args.at(0));
-                m_of << " = ";
-                emit_param(e.args.at(1));
+                if (!this->type_is_bad_zst(params.m_types.at(0))) {
+                    m_of << "*(volatile ";
+                    emit_ctype(params.m_types.at(0));
+                    m_of << "*)";
+                    emit_param(e.args.at(0));
+                    m_of << " = ";
+                    emit_param(e.args.at(1));
+                }
             } else if (name == "nontemporal_store") {
                 // TODO: Actually do a non-temporal store
                 // GCC: _mm_stream_* (depending on input type, which must be `repr(simd)`)
-                m_of << "*(volatile ";
-                emit_ctype(params.m_types.at(0));
-                m_of << "*)";
-                emit_param(e.args.at(0));
-                m_of << " = ";
-                emit_param(e.args.at(1));
+                if (!this->type_is_bad_zst(params.m_types.at(0))) {
+                    m_of << "*(volatile ";
+                    emit_ctype(params.m_types.at(0));
+                    m_of << "*)";
+                    emit_param(e.args.at(0));
+                    m_of << " = ";
+                    emit_param(e.args.at(1));
+                }
             }
             // --- Atomics!
             else if (name.compare(0, 7, "atomic_") == 0) {
