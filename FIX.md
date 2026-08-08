@@ -10,7 +10,6 @@
 
 Исполнять строго сверху вниз.
 
-- [ ] Исправить единственный оставшийся настоящий `Macro_InvokeRules_MatchPattern` defect в `gccrs_compile/torture/macro-issue1403.rs`: повторение `$stmt` с разделителем.
 - [ ] Подключить `-Z mir-opt-level` к реальному уровню MIR optimisations; сейчас unknown flag сразу блокирует 38 nodes. `next-solver` (21 nodes) не подменять no-op: отложить до отдельной реализации solver semantics.
 
 ## P1 — ICE, assert и зависания

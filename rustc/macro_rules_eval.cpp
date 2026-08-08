@@ -501,7 +501,7 @@ unsigned MacroExpander::s_next_log_index = 0;
 void Macro_InitDefaults() {
 }
 
-InterpolatedFragment Macro_HandlePatternCap(TokenStream& lex, MacroPatEnt::Type type) {
+InterpolatedFragment Macro_HandlePatternCap(TokenStream& lex, MacroPatEnt::Type type, bool stmt_is_item) {
     Token tok;
     switch (type) {
         case MacroPatEnt::PAT_TOKEN:
@@ -525,6 +525,15 @@ InterpolatedFragment Macro_HandlePatternCap(TokenStream& lex, MacroPatEnt::Type 
         case MacroPatEnt::PAT_EXPR:
             return InterpolatedFragment(InterpolatedFragment::EXPR, Parse_Expr0(lex).release());
         case MacroPatEnt::PAT_STMT:
+            if (stmt_is_item) {
+                if (lex.lookahead(0) == TOK_INTERPOLATED_STMT_ITEM) {
+                    tok = lex.getToken();
+                    return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, tok.take_frag_stmt_item());
+                }
+                assert(lex.parse_state().module);
+                const auto& cur_mod = *lex.parse_state().module;
+                return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, Parse_Mod_Item_S(lex, cur_mod.m_file_info, cur_mod.path(), AST::AttributeList{}));
+            }
             return InterpolatedFragment(InterpolatedFragment::STMT, Parse_Stmt(lex).release());
         case MacroPatEnt::PAT_PATH:
             // HACK for `rustc-1.90.0-src/vendor/icu_locid_transform_data-1.5.0/data/macros.rs::23`
@@ -738,6 +747,11 @@ namespace {
     };
 
     bool consume_type(TokenStreamRO& lex);
+    enum class ItemConsumeMode {
+        ItemFragment,
+        StatementFragment,
+    };
+    bool consume_item(TokenStreamRO& lex, ItemConsumeMode mode = ItemConsumeMode::ItemFragment);
 
     // Consume an entire TT
     bool consume_tt(TokenStreamRO& lex) {
@@ -1462,11 +1476,36 @@ namespace {
         return true;
     }
 
-    bool consume_stmt(TokenStreamRO& lex) {
+    bool consume_stmt(TokenStreamRO& lex, bool* out_is_item = nullptr) {
         TRACE_FUNCTION;
+        if (out_is_item) {
+            *out_is_item = false;
+        }
         if (lex.consume_if(TOK_INTERPOLATED_STMT)) {
             return true;
         }
+        if (lex.consume_if(TOK_INTERPOLATED_STMT_ITEM)) {
+            if (out_is_item) {
+                *out_is_item = true;
+            }
+            return true;
+        }
+
+        // A statement fragment includes item declarations.  Try the item
+        // grammar on a checkpoint first; only advance the real stream when
+        // the complete item matched, so expression statements retain their
+        // normal interpretation.
+        auto item_lex = lex.clone();
+        if (consume_item(item_lex, ItemConsumeMode::StatementFragment)) {
+            while (lex.position() < item_lex.position()) {
+                lex.consume();
+            }
+            if (out_is_item) {
+                *out_is_item = true;
+            }
+            return true;
+        }
+
         if (lex.consume_if(TOK_RWORD_LET)) {
             if (!consume_pat(lex)) {
                 return false;
@@ -1510,7 +1549,7 @@ namespace {
         }
     }
 
-    bool consume_item(TokenStreamRO& lex) {
+    bool consume_item(TokenStreamRO& lex, ItemConsumeMode mode) {
         TRACE_FUNCTION;
 
         struct H {
@@ -1566,12 +1605,16 @@ namespace {
             consume_tt(lex);
         }
         // Interpolated items
-        if (lex.consume_if(TOK_INTERPOLATED_ITEM)) {
+        if (lex.next() == TOK_INTERPOLATED_ITEM) {
+            if (mode != ItemConsumeMode::ItemFragment) {
+                return false;
+            }
+            lex.consume();
             return true;
         }
         // Macro invocation
         // TODO: What about `union!` as a macro? Needs to be handled below
-        if ((lex.next() == TOK_IDENT && lex.next_tok().ident().name != "union") || lex.next() == TOK_RWORD_SELF || lex.next() == TOK_RWORD_SUPER || lex.next() == TOK_DOUBLE_COLON) {
+        if (mode == ItemConsumeMode::ItemFragment && ((lex.next() == TOK_IDENT && lex.next_tok().ident().name != "union") || lex.next() == TOK_RWORD_SELF || lex.next() == TOK_RWORD_SUPER || lex.next() == TOK_DOUBLE_COLON)) {
             if (!consume_path(lex)) {
                 return false;
             }
@@ -1730,6 +1773,9 @@ namespace {
                 if (lex.next_tok().ident().name == "union") {
                     lex.consume();
                     if (lex.next() == TOK_EXCLAM) {
+                        if (mode != ItemConsumeMode::ItemFragment) {
+                            return false;
+                        }
                         bool need_semicolon = (lex.next() != TOK_BRACE_OPEN);
                         consume_tt(lex);
                         if (need_semicolon) {
@@ -1889,7 +1935,7 @@ namespace {
         return true;
     }
 
-    bool consume_from_frag(TokenStreamRO& lex, MacroPatEnt::Type type) {
+    bool consume_from_frag(TokenStreamRO& lex, MacroPatEnt::Type type, bool* out_stmt_is_item = nullptr) {
         TRACE_FUNCTION_F(type);
         switch (type) {
             case MacroPatEnt::PAT_TOKEN:
@@ -1921,7 +1967,7 @@ namespace {
             case MacroPatEnt::PAT_EXPR:
                 return consume_expr(lex);
             case MacroPatEnt::PAT_STMT:
-                return consume_stmt(lex);
+                return consume_stmt(lex, out_stmt_is_item);
             case MacroPatEnt::PAT_PAT:
                 //return consume_pat(lex, lex.edition_after(AST::Edition::Rust2021));
                 return consume_pat(lex, true);
@@ -1984,11 +2030,17 @@ unsigned int Macro_InvokeRules_MatchPattern(const Span& sp, const MacroRules& ru
     TRACE_FUNCTION_F(rules.m_rules.size() << " options");
     ASSERT_BUG(sp, rules.m_rules.size() > 0, "Empty macro_rules set");
 
-    ::std::vector<::std::pair<size_t, ::std::vector<bool>>> matches;
+    struct Match {
+        size_t arm_index;
+        ::std::vector<bool> condition_history;
+        ::std::vector<bool> stmt_is_item_history;
+    };
+    ::std::vector<Match> matches;
     ::std::vector<std::pair<size_t, eTokenType>> fail_pos;
     for (size_t i = 0; i < rules.m_rules.size(); i++) {
         auto lex = TokenStreamRO(input);
         auto arm_stream = MacroPatternStream(rules.m_rules[i].m_pattern);
+        ::std::vector<bool> stmt_is_item_history;
 
         bool fail = false;
         for (;;) {
@@ -2035,9 +2087,13 @@ unsigned int Macro_InvokeRules_MatchPattern(const Span& sp, const MacroRules& ru
                 lex.consume();
             } else if (const auto* e = pat.opt_ExpectPat()) {
                 DEBUG("Arm " << i << " @" << pos << " ExpectPat(" << e->type << " => $" << e->idx << ")");
-                if (!consume_from_frag(lex, e->type)) {
+                bool stmt_is_item = false;
+                if (!consume_from_frag(lex, e->type, &stmt_is_item)) {
                     fail = true;
                     break;
+                }
+                if (e->type == MacroPatEnt::PAT_STMT) {
+                    stmt_is_item_history.push_back(stmt_is_item);
                 }
             } else {
                 // Unreachable.
@@ -2045,7 +2101,7 @@ unsigned int Macro_InvokeRules_MatchPattern(const Span& sp, const MacroRules& ru
         }
 
         if (!fail) {
-            matches.push_back(::std::make_pair(i, arm_stream.take_history()));
+            matches.push_back(Match{i, arm_stream.take_history(), mv$(stmt_is_item_history)});
             DEBUG(i << " MATCHED");
         } else {
             DEBUG(i << " FAILED");
@@ -2061,8 +2117,9 @@ unsigned int Macro_InvokeRules_MatchPattern(const Span& sp, const MacroRules& ru
         // yay!
 
         // NOTE: There can be multiple arms active, take the first.
-        auto i = matches[0].first;
-        const auto& history = matches[0].second;
+        auto i = matches[0].arm_index;
+        const auto& history = matches[0].condition_history;
+        const auto& stmt_is_item_history = matches[0].stmt_is_item_history;
         DEBUG("Evalulating arm " << i);
 
         auto lex = TTStreamO(sp, ParseState(), mv$(input));
@@ -2078,6 +2135,7 @@ unsigned int Macro_InvokeRules_MatchPattern(const Span& sp, const MacroRules& ru
 
         ::std::vector<InterpolatedFragment> captures;
         ::std::vector<Capture> capture_info;
+        size_t stmt_capture_index = 0;
 
         for (;;) {
             const auto& pat = arm_stream.next();
@@ -2096,7 +2154,12 @@ unsigned int Macro_InvokeRules_MatchPattern(const Span& sp, const MacroRules& ru
             } else if (const auto* e = pat.opt_ExpectPat()) {
                 DEBUG(i << " ExpectPat(" << e->type << " => $" << e->idx << ")");
 
-                auto cap = Macro_HandlePatternCap(lex, e->type);
+                bool stmt_is_item = false;
+                if (e->type == MacroPatEnt::PAT_STMT) {
+                    ASSERT_BUG(sp, stmt_capture_index < stmt_is_item_history.size(), "Missing statement fragment classification");
+                    stmt_is_item = stmt_is_item_history[stmt_capture_index++];
+                }
+                auto cap = Macro_HandlePatternCap(lex, e->type, stmt_is_item);
 
                 unsigned int cap_idx = captures.size();
                 captures.push_back(mv$(cap));
@@ -2105,6 +2168,7 @@ unsigned int Macro_InvokeRules_MatchPattern(const Span& sp, const MacroRules& ru
                 // Unreachable.
             }
         }
+        ASSERT_BUG(sp, stmt_capture_index == stmt_is_item_history.size(), "Unused statement fragment classification");
 
         for (const auto& cap : capture_info) {
             bound_tts.insert(cap.binding_idx, cap.iterations, mv$(captures[cap.cap_idx]));

@@ -209,6 +209,7 @@ public:
 
     ::std::unique_ptr<AST::ExprNode> take_frag_node();
     ::AST::Named<AST::Item> take_frag_item();
+    ::AST::Named<AST::Item> take_frag_stmt_item();
     ::AST::Visibility take_frag_vis();
 
     bool operator==(eTokenType tty) const {
@@ -243,7 +244,7 @@ public:
     }
 
     static bool type_is_rword(enum eTokenType type) {
-        return type >= TOK_RWORD_PUB;
+        return type >= TOK_RWORD_PUB && type <= TOK_RWORD_TRY;
     }
 
     static const char* typestr(enum eTokenType type);

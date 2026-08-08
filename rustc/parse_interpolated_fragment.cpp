@@ -33,6 +33,7 @@ InterpolatedFragment::~InterpolatedFragment() {
             case InterpolatedFragment::META:
                 delete reinterpret_cast<AST::Attribute*>(m_ptr);
                 break;
+            case InterpolatedFragment::STMT_ITEM:
             case InterpolatedFragment::ITEM:
                 delete reinterpret_cast<AST::Named<AST::Item>*>(m_ptr);
                 break;
@@ -71,6 +72,13 @@ InterpolatedFragment::InterpolatedFragment(::AST::Named<::AST::Item> v)
     : m_type(InterpolatedFragment::ITEM)
     , m_ptr(new ::AST::Named<::AST::Item>(mv$(v)))
 {
+}
+
+InterpolatedFragment::InterpolatedFragment(InterpolatedFragment::Type type, ::AST::Named<::AST::Item> v)
+    : m_type(type)
+    , m_ptr(new ::AST::Named<::AST::Item>(mv$(v)))
+{
+    assert(type == InterpolatedFragment::STMT_ITEM || type == InterpolatedFragment::ITEM);
 }
 
 InterpolatedFragment::InterpolatedFragment(TokenTree v)
@@ -124,6 +132,10 @@ InterpolatedFragment::InterpolatedFragment(AST::Visibility v)
         case InterpolatedFragment::STMT:
             os << "stmt[" << *reinterpret_cast<const AST::ExprNode*>(x.m_ptr) << "]";
             break;
+        case InterpolatedFragment::STMT_ITEM: {
+            const auto& named_item = *reinterpret_cast<const AST::Named<AST::Item>*>(x.m_ptr);
+            os << "stmt-item[" << named_item.data.tag_str() << "(" << named_item.name << ")]";
+        } break;
         case InterpolatedFragment::BLOCK:
             os << "block[" << *reinterpret_cast<const AST::ExprNode*>(x.m_ptr) << "]";
             break;

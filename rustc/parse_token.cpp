@@ -27,6 +27,10 @@ Token::~Token() {
         case TOK_INTERPOLATED_STMT:
             delete reinterpret_cast<AST::ExprNode*>(m_data.as_Fragment());
             break;
+        case TOK_INTERPOLATED_STMT_ITEM:
+        case TOK_INTERPOLATED_ITEM:
+            delete reinterpret_cast<AST::Named<AST::Item>*>(m_data.as_Fragment());
+            break;
         case TOK_INTERPOLATED_BLOCK:
             delete reinterpret_cast<AST::ExprNode*>(m_data.as_Fragment());
             break;
@@ -123,8 +127,9 @@ Token::Token(const InterpolatedFragment& frag) {
             m_type = TOK_INTERPOLATED_META;
             m_data = new AST::Attribute(reinterpret_cast<const AST::Attribute*>(frag.m_ptr)->clone());
             break;
+        case InterpolatedFragment::STMT_ITEM:
         case InterpolatedFragment::ITEM: {
-            m_type = TOK_INTERPOLATED_ITEM;
+            m_type = frag.m_type == InterpolatedFragment::STMT_ITEM ? TOK_INTERPOLATED_STMT_ITEM : TOK_INTERPOLATED_ITEM;
             const auto& named = *reinterpret_cast<const AST::Named<AST::Item>*>(frag.m_ptr);
             auto item = named.data.clone();
             m_data = new AST::Named<AST::Item>(named.span, named.attrs.clone(), named.vis, named.name, mv$(item));
@@ -171,8 +176,9 @@ Token::Token(TagTakeIP, InterpolatedFragment frag) {
             m_data = reinterpret_cast<AST::ExprNode*>(frag.m_ptr);
             frag.m_ptr = nullptr;
             break;
+        case InterpolatedFragment::STMT_ITEM:
         case InterpolatedFragment::ITEM:
-            m_type = TOK_INTERPOLATED_ITEM;
+            m_type = frag.m_type == InterpolatedFragment::STMT_ITEM ? TOK_INTERPOLATED_STMT_ITEM : TOK_INTERPOLATED_ITEM;
             m_data = frag.m_ptr;
             frag.m_ptr = nullptr;
             break;
@@ -240,10 +246,13 @@ Token Token::clone() const {
                  case TOK_INTERPOLATED_META:
                      rv.m_data = new AST::Attribute(reinterpret_cast<AST::Attribute*>(e)->clone());
                      break;
-                 case TOK_INTERPOLATED_ITEM:
-                     TODO(Span(Span(), m_pos), "clone interpolated item");
-                     //rv.m_data = new AST::Named( AST::Item( reinterpret_cast<AST::Attribute*>(e)->clone() ) );
+                 case TOK_INTERPOLATED_STMT_ITEM:
+                 case TOK_INTERPOLATED_ITEM: {
+                     const auto& named = *reinterpret_cast<AST::Named<AST::Item>*>(e);
+                     auto item = named.data.clone();
+                     rv.m_data = new AST::Named<AST::Item>(named.span, named.attrs.clone(), named.vis, named.name, mv$(item));
                      break;
+                 }
                  default:
                      BUG(Span(Span(), m_pos), "Fragment with invalid token type (" << *this << ")");
                      break;
@@ -266,6 +275,15 @@ AST::ExprNode& Token::frag_node() {
 
 ::AST::Named<AST::Item> Token::take_frag_item() {
     assert(m_type == TOK_INTERPOLATED_ITEM);
+    auto ptr = reinterpret_cast<AST::Named<AST::Item>*>(m_data.as_Fragment());
+    m_data.as_Fragment() = nullptr;
+    auto rv = mv$(*ptr);
+    delete ptr;
+    return mv$(rv);
+}
+
+::AST::Named<AST::Item> Token::take_frag_stmt_item() {
+    assert(m_type == TOK_INTERPOLATED_STMT_ITEM);
     auto ptr = reinterpret_cast<AST::Named<AST::Item>*>(m_data.as_Fragment());
     m_data.as_Fragment() = nullptr;
     auto rv = mv$(*ptr);
@@ -370,6 +388,8 @@ struct EscapedString {
         }
         case TOK_INTERPOLATED_META:
             return "/*:meta*/";
+        case TOK_INTERPOLATED_STMT_ITEM:
+            return "/*:stmt-item*/";
         case TOK_INTERPOLATED_ITEM:
             return "/*:item*/";
         case TOK_INTERPOLATED_VIS: {
@@ -698,6 +718,10 @@ struct EscapedString {
         case TOK_INTERPOLATED_STMT:
             os << ":" << *reinterpret_cast<const AST::ExprNode*>(tok.m_data.as_Fragment());
             break;
+        case TOK_INTERPOLATED_STMT_ITEM: {
+            const auto& named_item = *reinterpret_cast<const AST::Named<AST::Item>*>(tok.m_data.as_Fragment());
+            os << ":" << named_item.data.tag_str() << "(" << named_item.name << ")";
+        } break;
         case TOK_INTERPOLATED_BLOCK:
             os << ":" << *reinterpret_cast<const AST::ExprNode*>(tok.m_data.as_Fragment());
             break;

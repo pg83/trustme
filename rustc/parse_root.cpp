@@ -1002,7 +1002,7 @@ namespace {
         if (tok.type() == TOK_IDENT) {
             return tok.ident().name;
         }
-        if (tok.type() >= TOK_RWORD_PUB) {
+        if (Token::type_is_rword(tok.type())) {
             return tok.to_str().c_str();
         }
         throw ParseError::Unexpected(lex, tok, TOK_IDENT);
@@ -1023,7 +1023,7 @@ AST::Attribute Parse_MetaItem(TokenStream& lex) {
 
     AST::AttributeName name;
     // NOTE: After 1.19 mode, values can be present with no name
-    if (TARGETVER_LEAST_1_29 && lex.lookahead(0) != TOK_IDENT && lex.lookahead(0) != TOK_DOUBLE_COLON && lex.lookahead(0) < TOK_RWORD_PUB) {
+    if (TARGETVER_LEAST_1_29 && lex.lookahead(0) != TOK_IDENT && lex.lookahead(0) != TOK_DOUBLE_COLON && !Token::type_is_rword(lex.lookahead(0))) {
         // Put a fake equals token in the queue
         tok = Token(TOK_EQUAL);
     } else {

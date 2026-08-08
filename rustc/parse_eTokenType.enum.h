@@ -94,7 +94,7 @@ _(TOK_CARET_EQUAL)
 _(TOK_BACKTICK)
 
 // Reserved Words
-// NOTE: ORDERING MATTERS! _PUB must be the first, and no non-rword tokens should follow
+// NOTE: ORDERING MATTERS! _PUB must be first and keywords stay contiguous through _TRY.
 _(TOK_RWORD_PUB)
 _(TOK_RWORD_PRIV)
 _(TOK_RWORD_MUT)
@@ -156,3 +156,7 @@ _(TOK_RWORD_ASYNC)
 _(TOK_RWORD_AWAIT)
 _(TOK_RWORD_DYN)
 _(TOK_RWORD_TRY)
+
+// Internal opaque fragment kinds are append-only: token values are present in
+// serialized crate metadata and existing values must not move.
+_(TOK_INTERPOLATED_STMT_ITEM)

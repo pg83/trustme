@@ -128,6 +128,7 @@ bool is_token_stmt(eTokenType tt) {
         case TOK_BRACE_OPEN:
         case TOK_RWORD_LET:
         case TOK_INTERPOLATED_STMT:
+        case TOK_INTERPOLATED_STMT_ITEM:
             return true;
         default:
             return false;

@@ -2533,6 +2533,7 @@ public:
                                     case TOK_INTERPOLATED_PATH:
                                     case TOK_INTERPOLATED_PATTERN:
                                     case TOK_INTERPOLATED_STMT:
+                                    case TOK_INTERPOLATED_STMT_ITEM:
                                     case TOK_INTERPOLATED_BLOCK:
                                     case TOK_INTERPOLATED_ITEM:
                                     case TOK_INTERPOLATED_VIS:
@@ -2573,6 +2574,7 @@ public:
                             case TOK_INTERPOLATED_TYPE:
                             case TOK_INTERPOLATED_PATTERN:
                             case TOK_INTERPOLATED_STMT:
+                            case TOK_INTERPOLATED_STMT_ITEM:
                             case TOK_INTERPOLATED_BLOCK:
                             case TOK_INTERPOLATED_ITEM:
                             case TOK_INTERPOLATED_VIS:

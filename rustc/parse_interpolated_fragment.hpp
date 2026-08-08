@@ -34,6 +34,7 @@ public:
 
         EXPR,
         STMT,
+        STMT_ITEM,
         BLOCK,
 
         META,
@@ -54,6 +55,7 @@ public:
     InterpolatedFragment(::TypeRef);
     InterpolatedFragment(::AST::Attribute);
     InterpolatedFragment(::AST::Named<AST::Item>);
+    InterpolatedFragment(Type, ::AST::Named<AST::Item>);
     ~InterpolatedFragment();
     InterpolatedFragment(Type, ::AST::ExprNode*);
     InterpolatedFragment(AST::Visibility); // :vis

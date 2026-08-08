@@ -114,6 +114,23 @@ ExprNodeP Parse_ExprBlockLine_WithItems(TokenStream& lex, ::std::shared_ptr<AST:
     auto item_attrs = Parse_ItemAttrs(lex);
     GET_TOK(tok, lex);
 
+    // An item statement remains an opaque `stmt` fragment while it is
+    // forwarded through macro matchers.  Materialise the contained item only
+    // when the fragment is parsed in statement position.
+    if (tok.type() == TOK_INTERPOLATED_STMT_ITEM) {
+        if (!local_mod) {
+            local_mod = lex.parse_state().get_current_mod().add_anon();
+            DEBUG("Set module from " << lex.parse_state().module->path() << " to " << local_mod->path());
+            lex.parse_state().module = local_mod.get();
+        }
+        auto item = tok.take_frag_stmt_item();
+        for (auto& attr : item_attrs.m_items) {
+            item.attrs.m_items.push_back(mv$(attr));
+        }
+        local_mod->add_item(mv$(item));
+        return ExprNodeP();
+    }
+
     // `union Ident` - contextual keyword
     if (tok.type() == TOK_IDENT && tok.ident().name == "union" && lex.lookahead(0) == TOK_IDENT) {
         PUTBACK(tok, lex);

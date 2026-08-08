@@ -536,6 +536,7 @@ namespace {
                     visit_node(const_cast<::Token&>(tok).frag_node());
                     break;
                 case TOK_INTERPOLATED_META:
+                case TOK_INTERPOLATED_STMT_ITEM:
                 case TOK_INTERPOLATED_ITEM:
                 case TOK_INTERPOLATED_VIS:
                     TODO(sp, "TOK_INTERPOLATED_...");

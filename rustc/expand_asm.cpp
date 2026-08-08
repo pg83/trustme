@@ -38,7 +38,7 @@ namespace {
         if (tok.type() == TOK_IDENT) {
             return tok.ident().name;
         }
-        if (tok.type() >= TOK_RWORD_PUB) {
+        if (Token::type_is_rword(tok.type())) {
             return tok.to_str().c_str();
         }
         throw ParseError::Unexpected(lex, tok, TOK_IDENT);
