@@ -9,6 +9,7 @@ Environment: RUSTC, CC.
 """
 import os
 import re
+import shlex
 import subprocess
 import sys
 
@@ -28,6 +29,12 @@ def main() -> int:
     )
     edition_match = re.search(r"^//@\s*edition:\s*(\d+)", source_text, re.MULTILINE)
     edition = edition_match.group(1) if edition_match else "2021"
+    compile_flags_match = re.search(
+        r"^//@\s*compile-flags:\s*(.*)$", source_text, re.MULTILINE
+    )
+    compile_flags = (
+        shlex.split(compile_flags_match.group(1)) if compile_flags_match else []
+    )
 
     with lib.workdir() as work:
         env = dict(os.environ)
@@ -38,7 +45,7 @@ def main() -> int:
         binary = os.path.join(work, "t")
         mode = ["--test"] if test_harness else ["--crate-type", "bin"]
         command = [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
-                   *mode, "--edition", edition]
+                   *mode, "--edition", edition, *compile_flags]
         if compile_fail_match:
             result = subprocess.run(command, env=env, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, check=False)

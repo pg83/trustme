@@ -43,6 +43,7 @@ struct ImplRef {
     );
 
     Data m_data;
+    bool m_is_ambiguous_identity = false;
 
     ImplRef()
         : m_data(Data::make_TraitImpl({{}, nullptr, nullptr, nullptr}))
@@ -77,6 +78,14 @@ struct ImplRef {
 
     bool is_valid() const {
         return !(m_data.is_TraitImpl() && m_data.as_TraitImpl().impl == nullptr);
+    }
+
+    bool is_ambiguous_identity() const {
+        return m_is_ambiguous_identity;
+    }
+
+    void mark_ambiguous_identity() {
+        m_is_ambiguous_identity = true;
     }
 
     bool more_specific_than(const ImplRef& other) const;

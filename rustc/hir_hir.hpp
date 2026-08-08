@@ -289,6 +289,10 @@ namespace HIR {
 
     // Trait implementations relevant only to structs
     struct StructMarkings {
+        /// `#[fundamental]`: orphan checking may look through this type's
+        /// generic arguments when searching for a local key parameter.
+        bool is_fundamental = false;
+
         /// This type has a <T: ?Sized> parameter that is used directly
         bool can_unsize = false;
         /// Index of the parameter that is ?Sized
@@ -477,6 +481,9 @@ namespace HIR {
         ::std::vector<::HIR::TraitPath> m_parent_traits;
 
         bool m_is_marker; // aka OIBIT
+        /// `#[fundamental]`: absence of an impl for this trait can be used by
+        /// coherence once downstream impls have been excluded.
+        bool m_is_fundamental;
 
         ::std::unordered_map<RcString, AssociatedType> m_types;
         ::std::unordered_map<RcString, TraitValueItem> m_values;
@@ -499,6 +506,7 @@ namespace HIR {
             , m_lifetime(mv$(lifetime))
             , m_parent_traits(mv$(parents))
             , m_is_marker(false)
+            , m_is_fundamental(false)
             , m_vtable_parent_traits_start(0)
         {
         }

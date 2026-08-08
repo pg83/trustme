@@ -1167,6 +1167,7 @@ public:
         BIT(0, m.can_unsize)
         BIT(1, m.is_nonzero)
         BIT(2, m.bounded_max)
+        BIT(3, m.is_fundamental)
 #undef BIT
         m_out.write_u8(bitflag_1);
 
@@ -1230,7 +1231,12 @@ public:
 
         serialise_generics(item.m_params);
         serialise(item.m_lifetime);
-        m_out.write_bool(item.m_is_marker);
+        // Kept as one byte for compatibility with metadata written before
+        // the fundamental bit was represented in HIR.
+        m_out.write_u8(
+            (item.m_is_marker ? 1u : 0u)
+            | (item.m_is_fundamental ? 2u : 0u)
+        );
         serialise_strmap(item.m_types);
         serialise_strmap(item.m_values);
         serialise_strmap(item.m_value_indexes);

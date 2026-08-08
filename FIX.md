@@ -6,12 +6,6 @@
 
 Для каждого compiler fix порядок один: минимальный красный `tests/unit/test_*.rs` → исправление общего пути → зелёный unit → точный upstream trigger → сборка `rustc` под clang/lld → отдельный commit и push. Полный gate запускается после серии точечных исправлений, а не после каждого файла.
 
-## P0 — массовые блокеры
-
-Исполнять строго сверху вниз.
-
-- [ ] Реализовать solver semantics для `-Z next-solver` (21 node); не принимать флаг как no-op и не подменять новый solver текущим выбором impl.
-
 ## P1 — ICE, assert и зависания
 
 - [ ] Устранить trait-alias assert в `hir_from_ast.cpp:963`. Сначала минимальный alias с теми bounds, на которых падает lowering; после фикса проверить исходный UI/run-pass trigger.

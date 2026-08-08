@@ -16,6 +16,7 @@
 #include "hir_typeck_expr_visit.hpp"
 #include "hir_typeck_expr_cs.hpp"
 #include "hir_conv_main_bindings.hpp"
+#include "trait_solver_mode.hpp"
 #include <std/mem/obj_pool.h>
 
 namespace {
@@ -2061,10 +2062,28 @@ void Context::equate_types_inner(const Span& sp, const ::HIR::TypeRef& li, const
         return;
     }
 
+    auto bind_infer_to_alias = [&](const ::HIR::TypeRef& infer, const ::HIR::TypeRef& alias) {
+        if (!infer.data().is_Infer()
+            || visit_ty_with(alias, [&](const ::HIR::TypeRef& inner) {
+                return inner == infer;
+            })) {
+            return false;
+        }
+        const auto ivar_idx = infer.data().as_Infer().index;
+        if (ivar_idx < m_ivars_sized.size() && m_ivars_sized.at(ivar_idx)) {
+            this->require_sized(sp, alias);
+        }
+        this->m_ivars.set_ivar_to(ivar_idx, alias.clone());
+        return true;
+    };
+
     // If either side is still a UfcsKnown after `expand_associated_types`, then emit an assoc bound instead of damaging ivars
     if (const auto* r_e = r_t.data().opt_Path()) {
         if (const auto* rpe = r_e->path.m_data.opt_UfcsKnown()) {
             if (r_e->binding.is_Unbound()) {
+                if (bind_infer_to_alias(l_t, r_t)) {
+                    return;
+                }
                 this->equate_types_assoc(sp, l_t, rpe->trait.m_path, rpe->trait.m_params.clone(), rpe->type, rpe->item.c_str(), rpe->params, false);
                 return;
             }
@@ -2073,6 +2092,9 @@ void Context::equate_types_inner(const Span& sp, const ::HIR::TypeRef& li, const
     if (const auto* l_e = l_t.data().opt_Path()) {
         if (const auto* lpe = l_e->path.m_data.opt_UfcsKnown()) {
             if (l_e->binding.is_Unbound()) {
+                if (bind_infer_to_alias(r_t, l_t)) {
+                    return;
+                }
                 this->equate_types_assoc(sp, r_t, lpe->trait.m_path, lpe->trait.m_params.clone(), lpe->type, lpe->item.c_str(), lpe->params, false);
                 return;
             }
@@ -4664,9 +4686,9 @@ namespace {
             unsigned int count = 0;
 
             ::HIR::PathParams pp{dst.clone()};
-            bool found = context.m_resolve.find_trait_impls(sp, context.m_resolve.m_lang_Unsize, pp, src, [&best_impl, &count, &context](auto impl, auto cmp) {
+            bool found = context.m_resolve.find_trait_impls(sp, context.m_resolve.m_lang_Unsize, pp, src, [&best_impl, &count, &context, &sp](auto impl, auto cmp) {
                 DEBUG("[check_unsize_tys] Found impl " << impl << (cmp == ::HIR::Compare::Fuzzy ? " (fuzzy)" : ""));
-                if (!impl.overlaps_with(context.m_crate, best_impl)) {
+                if (!context.m_resolve.impls_overlap(sp, impl, best_impl)) {
                     // No overlap, count it as a new possibility
                     if (count == 0) {
                         best_impl = mv$(impl);
@@ -5729,9 +5751,19 @@ namespace {
         };
 
         ::std::vector<Possibility> possible_impls;
+        bool saw_ambiguous_identity = false;
         try {
-            bool found = context.m_resolve.find_trait_impls(sp, v.trait, v.params, v.impl_ty, [&](ImplRef impl, HIR::Compare cmp) {
+            auto candidate_callback = [&](ImplRef impl, HIR::Compare cmp) {
                 DEBUG("[check_associated] Found cmp=" << cmp << " " << impl);
+                if (impl.is_ambiguous_identity()) {
+                    ASSERT_BUG(
+                        sp,
+                        cmp == ::HIR::Compare::Fuzzy,
+                        "Definite solver response marked as ambiguous identity"
+                    );
+                    saw_ambiguous_identity = true;
+                    return false;
+                }
                 if (v.operator_kind != typeck::PrimitiveOperator::None && context.is_current_operator_impl(impl)) {
                     if (current_operator_uses_language_primitive()) {
                         DEBUG("[check_associated] - language primitive wins over current trait impl");
@@ -5799,7 +5831,7 @@ namespace {
                         for (auto& possible_impl : possible_impls) {
                             const auto& best_impl = possible_impl.impl_ref;
                             // TODO: Handle duplicates (from overlapping bounds)
-                            if (impl.overlaps_with(context.m_crate, best_impl)) {
+                            if (context.m_resolve.impls_overlap(sp, impl, best_impl)) {
                                 DEBUG("[check_associated] - Overlaps with existing - " << best_impl);
                                 // if not more specific than the existing best, ignore.
                                 if (!impl.more_specific_than(best_impl)) {
@@ -5856,7 +5888,21 @@ namespace {
 
                     return false;
                 }
-            });
+            };
+            const bool found = gTraitSolverConfig.globally
+                ? context.m_resolve.find_trait_impls_next(
+                    sp,
+                    v.trait,
+                    v.params,
+                    v.impl_ty,
+                    candidate_callback,
+                    v.name.c_str(),
+                    v.name == "" ? nullptr : &v.left_ty,
+                    v.name == "" ? nullptr : &v.aty_pp
+                )
+                : context.m_resolve.find_trait_impls(
+                    sp, v.trait, v.params, v.impl_ty, candidate_callback
+                );
             if (found) {
                 // Fully-known impl
                 DEBUG("Fully-known impl located");
@@ -5881,6 +5927,9 @@ namespace {
                 // TODO: Any equating of type params?
                 return true;
             } else if (count == 0) {
+                if (saw_ambiguous_identity) {
+                    return false;
+                }
                 // No applicable impl
                 // - TODO: This should really only fire when there isn't an impl. But it currently fires when _
                 if (v.name == "") {

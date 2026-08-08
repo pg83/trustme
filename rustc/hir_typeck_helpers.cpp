@@ -7,7 +7,11 @@
  */
 #include "hir_typeck_helpers.hpp"
 #include "hir_conv_main_bindings.hpp"
+#include "trait_solver_mode.hpp"
 #include <algorithm>
+#include <unordered_map>
+#include <std/mem/obj_pool.h>
+#include <std/mem/obj_list.h>
 
 namespace {
     // TODO: De-duplicate this with `static.cpp`
@@ -1716,13 +1720,14 @@ TU_ARMA(Alias, ee) {
     return false;
         }
 
-        bool TraitResolution::find_trait_impls(
+        bool TraitResolution::find_trait_impls_legacy(
             const Span& sp,
             const ::HIR::SimplePath& trait,
             const ::HIR::PathParams& params,
             const ::HIR::TypeRef& ty,
             t_cb_trait_impl_r callback,
-            bool magic_trait_impls /*=true*/
+            bool magic_trait_impls /*=true*/,
+            bool search_crate /*=true*/
         ) const {
             static ::HIR::PathParams null_params;
             static ::HIR::TraitPath::assoc_list_t null_assoc;
@@ -1793,6 +1798,19 @@ TU_ARMA(Alias, ee) {
                         for (const auto& e : i_tp.m_type_bounds) {
                             assoc_clone.insert(::std::make_pair(e.first, e.second.clone()));
                         }
+                        for (const auto& bound : e.m_trait.m_type_bounds) {
+                            if (bound.second.source_trait.m_path == trait
+                                && compare_pp(
+                                    sp,
+                                    bound.second.source_trait.m_params,
+                                    i_tp.m_path.m_params
+                                ) != ::HIR::Compare::Unequal) {
+                                assoc_clone.erase(bound.first);
+                                assoc_clone.insert(::std::make_pair(
+                                    bound.first, bound.second.clone()
+                                ));
+                            }
+                        }
                         ASSERT_BUG(sp, !e.m_trait.m_hrtbs || !i_tp.m_hrtbs, "TODO: Handle two layers of HRTBs - " << e.m_trait << " and " << i_tp);
                         auto hrls = get_hrls(sp, e.m_trait.m_hrtbs, i_tp.m_path.m_params, params);
                         auto ir = ImplRef(std::move(hrls), type.clone(), i_tp.m_path.m_params.clone(), mv$(assoc_clone));
@@ -1831,6 +1849,24 @@ TU_ARMA(Alias, ee) {
                         ::HIR::TraitPath::assoc_list_t assoc_clone;
                         for (const auto& e : i_tp.m_type_bounds) {
                             assoc_clone.insert(::std::make_pair(e.first, e.second.clone()));
+                        }
+                        // Existential equalities are stored on the principal
+                        // bound even when the associated item is declared by
+                        // a supertrait (e.g. `FnMut` carries `FnOnce::Output`).
+                        // Project those equalities together with the
+                        // supertrait candidate.
+                        for (const auto& e : trait_path.m_type_bounds) {
+                            if (e.second.source_trait.m_path == trait
+                                && compare_pp(
+                                    sp,
+                                    e.second.source_trait.m_params,
+                                    i_tp.m_path.m_params
+                                ) != ::HIR::Compare::Unequal) {
+                                assoc_clone.erase(e.first);
+                                assoc_clone.insert(::std::make_pair(
+                                    e.first, e.second.clone()
+                                ));
+                            }
                         }
                         ASSERT_BUG(sp, !trait_path.m_hrtbs || !i_tp.m_hrtbs, "TODO: Handle two layers of HRTBs - " << trait_path << " and " << i_tp);
                         auto hrls = trait_path.m_hrtbs ? get_hrls(sp, trait_path.m_hrtbs, i_tp.m_path.m_params, params) : get_hrls(sp, i_tp.m_hrtbs, i_tp.m_path.m_params, params);
@@ -1932,8 +1968,2249 @@ TU_ARMA(Alias, ee) {
     if( find_trait_impls_bound(sp, trait, params, type, callback) )
         return true;
     // 2. Search crate-level impls
+    if( !search_crate )
+        return false;
     return find_trait_impls_crate(sp, trait, params, type,  callback);
         }
+
+class NextTraitGoalEvaluator {
+        enum class Certainty {
+            NoSolution,
+            Ambiguous,
+            Proven,
+        };
+
+        enum class OrphanPerspective {
+            Local,
+            Remote,
+        };
+
+        enum class OrphanVisit {
+            NonLocal,
+            LocalKey,
+            Uncovered,
+        };
+
+        struct Candidate {
+            ImplRef impl;
+            ::HIR::Compare head_match;
+            Certainty certainty;
+            const ::HIR::MarkerImpl* marker_impl;
+            ::HIR::PathParams marker_impl_params;
+            bool auto_builtin;
+            bool ambiguity_beyond_head = false;
+            bool discarded = false;
+
+            Candidate(
+                ImplRef impl,
+                ::HIR::Compare head_match,
+                const ::HIR::MarkerImpl* marker_impl,
+                ::HIR::PathParams marker_impl_params,
+                bool auto_builtin
+            )
+                : impl(::std::move(impl))
+                , head_match(head_match)
+                , certainty(Certainty::Ambiguous)
+                , marker_impl(marker_impl)
+                , marker_impl_params(::std::move(marker_impl_params))
+                , auto_builtin(auto_builtin)
+            {
+            }
+
+            bool is_negative() const {
+                return marker_impl && !marker_impl->is_positive;
+            }
+
+            bool is_positive_marker_impl() const {
+                return marker_impl && marker_impl->is_positive;
+            }
+        };
+
+        struct CandidateFrame {
+            ::std::vector<Candidate*> candidates;
+            ::std::vector<Candidate*> viable;
+
+            CandidateFrame() {
+                candidates.reserve(32);
+                viable.reserve(32);
+            }
+
+            void clear(stl::ObjList<Candidate>& nodes) {
+                for (auto* candidate : candidates) {
+                    nodes.release(candidate);
+                }
+                candidates.clear();
+                viable.clear();
+            }
+        };
+
+        struct GoalKey {
+            size_t hash;
+            ::HIR::SimplePath trait;
+            ::HIR::PathParams params;
+            ::HIR::TypeRef type;
+            ::HIR::TraitPath::assoc_list_t associated;
+
+            GoalKey(
+                size_t hash,
+                const ::HIR::SimplePath& trait,
+                const ::HIR::PathParams& params,
+                const ::HIR::TypeRef& type,
+                const ::HIR::TraitPath::assoc_list_t* associated
+            )
+                : hash(hash)
+                , trait(trait)
+                , params(params.clone())
+                , type(type.clone())
+                , associated(clone_associated(associated))
+            {
+            }
+        };
+
+        struct CachedGoal {
+            GoalKey goal;
+            Certainty certainty;
+
+            CachedGoal(
+                size_t hash,
+                const ::HIR::SimplePath& trait,
+                const ::HIR::PathParams& params,
+                const ::HIR::TypeRef& type,
+                const ::HIR::TraitPath::assoc_list_t* associated,
+                Certainty certainty
+            )
+                : goal(hash, trait, params, type, associated)
+                , certainty(certainty)
+            {
+            }
+        };
+
+        const TraitResolution& m_resolve;
+        const ::HIR::Crate& m_crate;
+        const Span* m_span = nullptr;
+        bool m_coherence_mode = false;
+
+        // Frames and candidates have stable pool-backed addresses.  Vectors
+        // are pointer indexes only, so recursive growth never moves an ImplRef
+        // or invalidates a parent candidate.
+        stl::ObjList<Candidate> m_candidate_nodes;
+        ::std::vector<CandidateFrame*> m_frames;
+        size_t m_frame_depth = 0;
+        stl::ObjList<GoalKey> m_active_goal_nodes;
+        stl::ObjList<CachedGoal> m_cached_goal_nodes;
+        ::std::vector<GoalKey*> m_goal_stack;
+        ::std::vector<CachedGoal*> m_goal_cache;
+        ::std::unordered_multimap<size_t, GoalKey*> m_active_goal_index;
+        ::std::unordered_multimap<size_t, CachedGoal*> m_goal_cache_index;
+
+        const Span& span() const {
+            ASSERT_BUG(Span(), m_span, "next-solver session used outside an evaluation");
+            return *m_span;
+        }
+
+        static bool is_environment_or_builtin(const ImplRef& impl) {
+            return !impl.m_data.is_TraitImpl();
+        }
+
+        bool params_have_unknown_types(const ::HIR::PathParams& params) const {
+            for (const auto& type : params.m_types) {
+                if (type_has_unknown(type)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        bool path_has_unknown_types(const ::HIR::Path& path) const {
+            if (const auto* pe = path.m_data.opt_Generic()) {
+                return params_have_unknown_types(pe->m_params);
+            }
+            if (const auto* pe = path.m_data.opt_UfcsInherent()) {
+                return type_has_unknown(pe->type)
+                    || params_have_unknown_types(pe->params)
+                    || params_have_unknown_types(pe->impl_params);
+            }
+            if (const auto* pe = path.m_data.opt_UfcsKnown()) {
+                return type_has_unknown(pe->type)
+                    || params_have_unknown_types(pe->trait.m_params)
+                    || params_have_unknown_types(pe->params);
+            }
+            const auto& pe = path.m_data.as_UfcsUnknown();
+            return type_has_unknown(pe.type)
+                || params_have_unknown_types(pe.params);
+        }
+
+        bool trait_path_has_unknown_types(const ::HIR::TraitPath& trait) const {
+            if (params_have_unknown_types(trait.m_path.m_params)) {
+                return true;
+            }
+            for (const auto& assoc : trait.m_type_bounds) {
+                if (params_have_unknown_types(assoc.second.source_trait.m_params)
+                    || params_have_unknown_types(assoc.second.aty_params)
+                    || type_has_unknown(assoc.second.type)) {
+                    return true;
+                }
+            }
+            for (const auto& assoc : trait.m_trait_bounds) {
+                if (params_have_unknown_types(assoc.second.source_trait.m_params)
+                    || params_have_unknown_types(assoc.second.aty_params)) {
+                    return true;
+                }
+                for (const auto& bound : assoc.second.traits) {
+                    if (trait_path_has_unknown_types(bound)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        bool type_has_unknown(const ::HIR::TypeRef& input) const {
+            const auto& type = m_resolve.resolve_type(input);
+            if (type.data().is_Infer() || type.data().is_Generic()) {
+                return true;
+            }
+            if (const auto* path = type.data().opt_Path()) {
+                return path_has_unknown_types(path->path);
+            }
+            if (const auto* object = type.data().opt_TraitObject()) {
+                if (trait_path_has_unknown_types(object->m_trait)) {
+                    return true;
+                }
+                for (const auto& marker : object->m_markers) {
+                    if (params_have_unknown_types(marker.m_params)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            if (const auto* erased = type.data().opt_ErasedType()) {
+                for (const auto& trait : erased->m_traits) {
+                    if (trait_path_has_unknown_types(trait)) {
+                        return true;
+                    }
+                }
+                if (const auto* known = erased->m_inner.opt_Known()) {
+                    return type_has_unknown(*known);
+                }
+                if (const auto* alias = erased->m_inner.opt_Alias()) {
+                    return params_have_unknown_types(alias->params);
+                }
+                if (const auto* fcn = erased->m_inner.opt_Fcn()) {
+                    return path_has_unknown_types(fcn->m_origin);
+                }
+                return false;
+            }
+            if (const auto* array = type.data().opt_Array()) {
+                return type_has_unknown(array->inner);
+            }
+            if (const auto* slice = type.data().opt_Slice()) {
+                return type_has_unknown(slice->inner);
+            }
+            if (const auto* tuple = type.data().opt_Tuple()) {
+                for (const auto& field : *tuple) {
+                    if (type_has_unknown(field)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            if (const auto* borrow = type.data().opt_Borrow()) {
+                return type_has_unknown(borrow->inner);
+            }
+            if (const auto* pointer = type.data().opt_Pointer()) {
+                return type_has_unknown(pointer->inner);
+            }
+            if (const auto* named = type.data().opt_NamedFunction()) {
+                return path_has_unknown_types(named->path);
+            }
+            if (const auto* fcn = type.data().opt_Function()) {
+                for (const auto& arg : fcn->m_arg_types) {
+                    if (type_has_unknown(arg)) {
+                        return true;
+                    }
+                }
+                return type_has_unknown(fcn->m_rettype);
+            }
+            return false;
+        }
+
+        static bool type_has_candidate_placeholder(
+            const ::HIR::TypeRef& type
+        ) {
+            bool found = false;
+            visit_ty_with(type, [&](const ::HIR::TypeRef& inner) {
+                if (const auto* generic = inner.data().opt_Generic()) {
+                    found |= generic->group() == ::HIR::GENERIC_Placeholder;
+                }
+                return found;
+            });
+            return found;
+        }
+
+        static bool params_have_candidate_placeholders(
+            const ::HIR::PathParams& params
+        ) {
+            for (const auto& type : params.m_types) {
+                if (type_has_candidate_placeholder(type)) {
+                    return true;
+                }
+            }
+            for (const auto& value : params.m_values) {
+                if (value.is_Generic()
+                    && value.as_Generic().group() == ::HIR::GENERIC_Placeholder) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        bool candidate_has_placeholders(const Candidate& candidate) const {
+            if (type_has_candidate_placeholder(candidate.impl.get_impl_type())
+                || params_have_candidate_placeholders(
+                    candidate.impl.get_trait_params()
+                )) {
+                return true;
+            }
+            if (const auto* trait_impl = candidate.impl.m_data.opt_TraitImpl()) {
+                if (params_have_candidate_placeholders(trait_impl->impl_params)) {
+                    return true;
+                }
+            }
+            return params_have_candidate_placeholders(
+                candidate.marker_impl_params
+            );
+        }
+
+        OrphanVisit orphan_visit_resolved_type(
+            const ::HIR::TypeRef& type,
+            OrphanPerspective perspective
+        ) const {
+            if (type.data().is_Infer() || type.data().is_Generic()) {
+                return perspective == OrphanPerspective::Remote
+                    ? OrphanVisit::LocalKey
+                    : OrphanVisit::Uncovered;
+            }
+
+            if (const auto* path = type.data().opt_Path()) {
+                const auto* generic = path->path.m_data.opt_Generic();
+                const bool concrete_adt = generic
+                    && (path->binding.is_Struct()
+                        || path->binding.is_Enum()
+                        || path->binding.is_Union()
+                        || path->binding.is_ExternType());
+                if (!concrete_adt) {
+                    if (type_has_unknown(type)) {
+                        return perspective == OrphanPerspective::Remote
+                            ? OrphanVisit::LocalKey
+                            : OrphanVisit::Uncovered;
+                    }
+                    return OrphanVisit::NonLocal;
+                }
+
+                const bool local = perspective == OrphanPerspective::Local
+                    && generic->m_path.crate_name() == m_crate.m_crate_name;
+                if (local) {
+                    return OrphanVisit::LocalKey;
+                }
+
+                const auto* str_ptr = path->binding.opt_Struct();
+                if (str_ptr && (*str_ptr)->m_struct_markings.is_fundamental) {
+                    for (const auto& param : generic->m_params.m_types) {
+                        const auto result = orphan_visit_type(param, perspective);
+                        if (result != OrphanVisit::NonLocal) {
+                            return result;
+                        }
+                    }
+                }
+                return OrphanVisit::NonLocal;
+            }
+
+            if (const auto* borrow = type.data().opt_Borrow()) {
+                // References are fundamental even though raw pointers are not.
+                return orphan_visit_type(borrow->inner, perspective);
+            }
+
+            if (const auto* object = type.data().opt_TraitObject()) {
+                const auto& principal = object->m_trait.m_path.m_path;
+                if (perspective == OrphanPerspective::Local
+                    && principal != ::HIR::SimplePath()
+                    && principal.crate_name() == m_crate.m_crate_name) {
+                    return OrphanVisit::LocalKey;
+                }
+                return OrphanVisit::NonLocal;
+            }
+
+            if (type.data().is_NodeType()) {
+                return perspective == OrphanPerspective::Local
+                    ? OrphanVisit::LocalKey
+                    : OrphanVisit::NonLocal;
+            }
+
+            if (type.data().is_ErasedType() && type_has_unknown(type)) {
+                return perspective == OrphanPerspective::Remote
+                    ? OrphanVisit::LocalKey
+                    : OrphanVisit::Uncovered;
+            }
+
+            // Primitive, tuple, array, slice, raw-pointer, function, opaque,
+            // and foreign rigid types are non-local and cover their contents.
+            return OrphanVisit::NonLocal;
+        }
+
+        OrphanVisit orphan_visit_type(
+            const ::HIR::TypeRef& input,
+            OrphanPerspective perspective
+        ) const {
+            const auto& resolved = m_resolve.resolve_type(input);
+            const auto* path = resolved.data().opt_Path();
+            const bool is_alias = path
+                && (!path->path.m_data.is_Generic()
+                    || path->binding.is_Unbound()
+                    || path->binding.is_Opaque());
+            if (is_alias) {
+                // rustc's orphan checker normalizes aliases lazily.  Keep a
+                // rigid alias if normalization only produces a fresh type
+                // variable; such an alias still carries coverage information.
+                auto normalized = m_resolve.expand_associated_types(
+                    span(), resolved.clone_shallow()
+                );
+                if (!(normalized.data().is_Infer() && !resolved.data().is_Infer())) {
+                    return orphan_visit_resolved_type(normalized, perspective);
+                }
+            }
+            return orphan_visit_resolved_type(resolved, perspective);
+        }
+
+        bool orphan_check_trait_ref(
+            const ::HIR::PathParams& params,
+            const ::HIR::TypeRef& type,
+            OrphanPerspective perspective
+        ) const {
+            const auto self_result = orphan_visit_type(type, perspective);
+            if (self_result != OrphanVisit::NonLocal) {
+                return self_result == OrphanVisit::LocalKey;
+            }
+            for (const auto& param : params.m_types) {
+                const auto result = orphan_visit_type(param, perspective);
+                if (result != OrphanVisit::NonLocal) {
+                    return result == OrphanVisit::LocalKey;
+                }
+            }
+            return false;
+        }
+
+        bool trait_ref_is_knowable(
+            const ::HIR::SimplePath& trait,
+            const ::HIR::PathParams& params,
+            const ::HIR::TypeRef& type
+        ) const {
+            if (orphan_check_trait_ref(
+                    params, type, OrphanPerspective::Remote
+                )) {
+                return false;
+            }
+
+            const auto& trait_def = m_crate.get_trait_by_path(span(), trait);
+            if (trait.crate_name() == m_crate.m_crate_name
+                || trait_def.m_is_fundamental) {
+                return true;
+            }
+
+            return orphan_check_trait_ref(
+                params, type, OrphanPerspective::Local
+            );
+        }
+
+        static size_t hash_mix(size_t state, size_t value) {
+            // boost::hash_combine's avalanche step.  Equality never relies on
+            // this fingerprint: hash collisions are resolved by goal_matches.
+            return state ^ (value + 0x9e3779b97f4a7c15ULL + (state << 6) + (state >> 2));
+        }
+
+        static size_t hash_simple_path(const ::HIR::SimplePath& path) {
+            size_t result = ::std::hash<RcString>()(path.crate_name());
+            for (const auto& component : path.components()) {
+                result = hash_mix(result, ::std::hash<RcString>()(component));
+            }
+            return result;
+        }
+
+        static size_t hash_type(const ::HIR::TypeRef& type) {
+            if (const auto* path = type.get_sort_path()) {
+                return hash_mix(0x10, hash_simple_path(*path));
+            }
+            if (const auto* primitive = type.data().opt_Primitive()) {
+                return hash_mix(0x20, static_cast<size_t>(*primitive));
+            }
+            if (const auto* generic = type.data().opt_Generic()) {
+                return hash_mix(0x30, generic->binding);
+            }
+            if (const auto* infer = type.data().opt_Infer()) {
+                return hash_mix(0x40, infer->index);
+            }
+            if (const auto* tuple = type.data().opt_Tuple()) {
+                size_t result = hash_mix(0x50, tuple->size());
+                for (const auto& field : *tuple) {
+                    result = hash_mix(result, hash_type(field));
+                }
+                return result;
+            }
+            if (const auto* array = type.data().opt_Array()) {
+                return hash_mix(0x60, hash_type(array->inner));
+            }
+            if (const auto* slice = type.data().opt_Slice()) {
+                return hash_mix(0x70, hash_type(slice->inner));
+            }
+            if (const auto* borrow = type.data().opt_Borrow()) {
+                return hash_mix(hash_mix(0x80, static_cast<size_t>(borrow->type)), hash_type(borrow->inner));
+            }
+            if (const auto* pointer = type.data().opt_Pointer()) {
+                return hash_mix(hash_mix(0x90, static_cast<size_t>(pointer->type)), hash_type(pointer->inner));
+            }
+            if (const auto* trait_object = type.data().opt_TraitObject()) {
+                return hash_mix(0xa0, hash_simple_path(trait_object->m_trait.m_path.m_path));
+            }
+            if (type.data().is_Diverge()) {
+                return 0xb0;
+            }
+            // Function, erased, and compiler-generated node types are rare in
+            // recursive solver tables.  A stable tag is sufficient; full
+            // equality below still resolves every collision correctly.
+            return 0xc0;
+        }
+
+        static size_t goal_hash(
+            const ::HIR::SimplePath& trait,
+            const ::HIR::PathParams& params,
+            const ::HIR::TypeRef& type,
+            const ::HIR::TraitPath::assoc_list_t* associated
+        ) {
+            size_t result = hash_simple_path(trait);
+            result = hash_mix(result, params.m_types.size());
+            for (const auto& param : params.m_types) {
+                result = hash_mix(result, hash_type(param));
+            }
+            result = hash_mix(result, params.m_values.size());
+            result = hash_mix(result, hash_type(type));
+            if (associated && !associated->empty()) {
+                result = hash_mix(result, associated->size());
+                for (const auto& entry : *associated) {
+                    result = hash_mix(result, ::std::hash<RcString>()(entry.first));
+                    result = hash_mix(result, hash_simple_path(entry.second.source_trait.m_path));
+                    result = hash_mix(result, hash_type(entry.second.type));
+                }
+            }
+            return result;
+        }
+
+        static ::HIR::TraitPath::assoc_list_t clone_associated(
+            const ::HIR::TraitPath::assoc_list_t* associated
+        ) {
+            ::HIR::TraitPath::assoc_list_t result;
+            if (associated) {
+                for (const auto& entry : *associated) {
+                    result.insert({entry.first, entry.second.clone()});
+                }
+            }
+            return result;
+        }
+
+        static bool goal_matches(
+            const GoalKey& goal,
+            const ::HIR::SimplePath& trait,
+            const ::HIR::PathParams& params,
+            const ::HIR::TypeRef& type,
+            const ::HIR::TraitPath::assoc_list_t* associated
+        ) {
+            if (goal.trait != trait || goal.params != params || goal.type != type) {
+                return false;
+            }
+            if (!associated || associated->empty()) {
+                return goal.associated.empty();
+            }
+            if (goal.associated.size() != associated->size()) {
+                return false;
+            }
+            auto left = goal.associated.begin();
+            auto right = associated->begin();
+            for (; left != goal.associated.end(); ++left, ++right) {
+                if (left->first != right->first
+                    || left->second.source_trait != right->second.source_trait
+                    || left->second.aty_params != right->second.aty_params
+                    || left->second.type != right->second.type) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        CachedGoal* find_cached_goal(
+            size_t hash,
+            const ::HIR::SimplePath& trait,
+            const ::HIR::PathParams& params,
+            const ::HIR::TypeRef& type,
+            const ::HIR::TraitPath::assoc_list_t* associated
+        ) const {
+            const auto range = m_goal_cache_index.equal_range(hash);
+            for (auto it = range.first; it != range.second; ++it) {
+                if (goal_matches(it->second->goal, trait, params, type, associated)) {
+                    return it->second;
+                }
+            }
+            return nullptr;
+        }
+
+        GoalKey* find_active_goal(
+            size_t hash,
+            const ::HIR::SimplePath& trait,
+            const ::HIR::PathParams& params,
+            const ::HIR::TypeRef& type,
+            const ::HIR::TraitPath::assoc_list_t* associated
+        ) const {
+            const auto range = m_active_goal_index.equal_range(hash);
+            for (auto it = range.first; it != range.second; ++it) {
+                if (goal_matches(*it->second, trait, params, type, associated)) {
+                    return it->second;
+                }
+            }
+            return nullptr;
+        }
+
+        GoalKey* push_active_goal(
+            size_t hash,
+            const ::HIR::SimplePath& trait,
+            const ::HIR::PathParams& params,
+            const ::HIR::TypeRef& type,
+            const ::HIR::TraitPath::assoc_list_t* associated
+        ) {
+            auto* goal = m_active_goal_nodes.make(hash, trait, params, type, associated);
+            m_goal_stack.push_back(goal);
+            m_active_goal_index.emplace(hash, goal);
+            return goal;
+        }
+
+        void pop_active_goal(GoalKey* goal) {
+            assert(!m_goal_stack.empty() && m_goal_stack.back() == goal);
+            const auto range = m_active_goal_index.equal_range(goal->hash);
+            for (auto it = range.first; it != range.second; ++it) {
+                if (it->second == goal) {
+                    m_active_goal_index.erase(it);
+                    m_goal_stack.pop_back();
+                    m_active_goal_nodes.release(goal);
+                    return;
+                }
+            }
+            assert(!"next-solver active goal missing from hash index");
+            ::std::abort();
+        }
+
+        Certainty cache_goal(
+            size_t hash,
+            const ::HIR::SimplePath& trait,
+            const ::HIR::PathParams& params,
+            const ::HIR::TypeRef& type,
+            const ::HIR::TraitPath::assoc_list_t* associated,
+            Certainty certainty
+        ) {
+            auto* goal = m_cached_goal_nodes.make(
+                hash, trait, params, type, associated, certainty
+            );
+            m_goal_cache.push_back(goal);
+            m_goal_cache_index.emplace(hash, goal);
+            return certainty;
+        }
+
+        void clear_goal_cache() {
+            m_goal_cache_index.clear();
+            for (auto* goal : m_goal_cache) {
+                m_cached_goal_nodes.release(goal);
+            }
+            m_goal_cache.clear();
+        }
+
+        static bool is_same_impl(const ImplRef& left, const ImplRef& right) {
+            const auto* li = left.m_data.opt_TraitImpl();
+            const auto* ri = right.m_data.opt_TraitImpl();
+            if (li || ri) {
+                return li && ri && li->impl == ri->impl && li->impl_params == ri->impl_params;
+            }
+            return left.get_impl_type() == right.get_impl_type()
+                && left.get_trait_params() == right.get_trait_params();
+        }
+
+        void push_candidate(
+            size_t frame_index,
+            ImplRef impl,
+            ::HIR::Compare match,
+            const ::HIR::MarkerImpl* marker_impl = nullptr,
+            ::HIR::PathParams marker_impl_params = {},
+            bool auto_builtin = false
+        ) {
+            if (match == ::HIR::Compare::Unequal) {
+                return;
+            }
+            auto& candidates = m_frames[frame_index]->candidates;
+            for (size_t i = 0; i < candidates.size(); i++) {
+                const bool same_source = candidates[i]->marker_impl == marker_impl
+                    && candidates[i]->auto_builtin == auto_builtin;
+                const bool same = marker_impl
+                    ? same_source
+                        && candidates[i]->marker_impl_params == marker_impl_params
+                    : same_source && is_same_impl(candidates[i]->impl, impl);
+                if (same) {
+                    candidates[i]->head_match &= match;
+                    return;
+                }
+            }
+            candidates.push_back(m_candidate_nodes.make(
+                ::std::move(impl),
+                match,
+                marker_impl,
+                ::std::move(marker_impl_params),
+                auto_builtin
+            ));
+        }
+
+        void assemble_candidates(
+            size_t frame_index,
+            const ::HIR::SimplePath& trait,
+            const ::HIR::PathParams& params,
+            const ::HIR::TypeRef& type
+        ) {
+            auto collect = [&](ImplRef impl, ::HIR::Compare match) {
+                push_candidate(
+                    frame_index, ::std::move(impl), match,
+                    nullptr, {}, false
+                );
+                return false;
+            };
+
+            // Builtin, type-derived, and ParamEnv candidates do not have impl
+            // where-clauses.  Keep their established construction logic, but
+            // never enter the crate impl selector from this assembly pass.
+            m_resolve.find_trait_impls_legacy(
+                span(), trait, params, type, collect, true, false
+            );
+
+            // The old lookup intentionally stops at a trait-object/erased
+            // builtin candidate.  Candidate assembly in the next solver must
+            // still include environment candidates, notably the
+            // blanket `Any` impl that overlaps the builtin dyn-object proof.
+            const auto& resolved_type = m_resolve.resolve_type(type);
+            if (resolved_type.data().is_TraitObject() || resolved_type.data().is_ErasedType()) {
+                m_resolve.find_trait_impls_bound(span(), trait, params, resolved_type, collect);
+            }
+
+            const auto& trait_def = m_crate.get_trait_by_path(span(), trait);
+            if (!trait_def.m_is_marker) {
+                // Assemble impl heads without evaluating their where-clauses.
+                // Those nested goals belong exclusively to evaluate_candidate.
+                m_crate.find_trait_impls(
+                    trait,
+                    resolved_type,
+                    m_resolve.m_ivars.callback_resolve_infer(),
+                    [&](const ::HIR::TraitImpl& impl) {
+                        ::HIR::PathParams impl_params;
+                        const auto match = m_resolve.ftic_check_params(
+                            span(),
+                            trait,
+                            &params,
+                            resolved_type,
+                            impl.m_params,
+                            impl.m_trait_args,
+                            impl.m_type,
+                            impl_params,
+                            false
+                        );
+                        if (match != ::HIR::Compare::Unequal) {
+                            push_candidate(
+                                frame_index,
+                                ImplRef(
+                                    ::std::move(impl_params),
+                                    trait_def,
+                                    trait,
+                                    impl
+                                ),
+                                match,
+                                nullptr,
+                                {},
+                                false
+                            );
+                        }
+                        return false;
+                    }
+                );
+            } else {
+                // Explicit positive and negative auto-trait impls are
+                // candidates with polarity.  Only their heads are matched
+                // here; their bounds are nested goals evaluated below.
+                m_crate.find_auto_trait_impls(
+                    trait,
+                    resolved_type,
+                    m_resolve.m_ivars.callback_resolve_infer(),
+                    [&](const ::HIR::MarkerImpl& impl) {
+                        ::HIR::PathParams impl_params;
+                        const auto match = m_resolve.ftic_check_params(
+                            span(),
+                            trait,
+                            &params,
+                            resolved_type,
+                            impl.m_params,
+                            impl.m_trait_args,
+                            impl.m_type,
+                            impl_params,
+                            false
+                        );
+                        if (match != ::HIR::Compare::Unequal) {
+                            auto monomorph = MonomorphStatePtr(
+                                nullptr, &impl_params, nullptr
+                            );
+                            auto response_type = monomorph.monomorph_type(
+                                span(), impl.m_type, false
+                            );
+                            auto response_params = monomorph.monomorph_path_params(
+                                span(), impl.m_trait_args, false
+                            );
+                            push_candidate(
+                                frame_index,
+                                ImplRef(
+                                    ::std::move(response_type),
+                                    ::std::move(response_params),
+                                    ::HIR::TraitPath::assoc_list_t()
+                                ),
+                                match,
+                                &impl,
+                                ::std::move(impl_params),
+                                false
+                            );
+                        }
+                        return false;
+                    }
+                );
+
+                // The structural auto candidate is evaluated recursively in
+                // evaluate_candidate, after explicit polarity is known.
+                push_candidate(
+                    frame_index,
+                    ImplRef(
+                        resolved_type.clone(),
+                        params.clone(),
+                        ::HIR::TraitPath::assoc_list_t()
+                    ),
+                    m_resolve.type_contains_ivars(resolved_type)
+                        || m_resolve.params_contain_ivars(params)
+                        ? ::HIR::Compare::Fuzzy
+                        : ::HIR::Compare::Equal,
+                    nullptr,
+                    {},
+                    true
+                );
+            }
+        }
+
+        static ::HIR::TypeRef make_associated_projection(
+            const ::HIR::TypeRef& type,
+            const ::HIR::GenericPath& source_trait,
+            const RcString& name,
+            const ::HIR::PathParams& associated_params
+        ) {
+            return ::HIR::TypeRef::new_path(
+                ::HIR::Path(
+                    type.clone(),
+                    source_trait.clone(),
+                    name,
+                    associated_params.clone()
+                ),
+                ::HIR::TypePathBinding::make_Opaque({})
+            );
+        }
+
+        static ::HIR::TypeRef make_associated_projection(
+            const ImplRef& impl,
+            const ::HIR::GenericPath& source_trait,
+            const RcString& name,
+            const ::HIR::PathParams& associated_params
+        ) {
+            return make_associated_projection(
+                impl.get_impl_type(), source_trait, name, associated_params
+            );
+        }
+
+        bool bind_candidate_placeholders(
+            Candidate& candidate,
+            const ::HIR::TypeRef& nested_type,
+            const ::HIR::TraitPath::assoc_list_t& associated,
+            bool use_candidate_response = false
+        ) {
+            ::HIR::PathParams* candidate_params = nullptr;
+            if (auto* trait_impl = candidate.impl.m_data.opt_TraitImpl()) {
+                candidate_params = &trait_impl->impl_params;
+            } else if (candidate.marker_impl) {
+                candidate_params = &candidate.marker_impl_params;
+            }
+            if (!candidate_params || associated.empty()) {
+                return false;
+            }
+
+            class BindPlaceholders final: public ::HIR::MatchGenerics {
+                const Span& m_span;
+                ::HIR::PathParams& m_params;
+
+            public:
+                bool changed = false;
+
+                BindPlaceholders(
+                    const Span& span,
+                    ::HIR::PathParams& params
+                )
+                    : m_span(span)
+                    , m_params(params)
+                {
+                }
+
+                ::HIR::Compare match_ty(
+                    const ::HIR::GenericRef& generic,
+                    const ::HIR::TypeRef& type,
+                    ::HIR::t_cb_resolve_type resolve
+                ) override {
+                    if (const auto* other = type.data().opt_Generic()) {
+                        if (*other == generic) {
+                            return ::HIR::Compare::Equal;
+                        }
+                    }
+                    if (generic.group() == ::HIR::GENERIC_Placeholder) {
+                        for (auto& parameter : m_params.m_types) {
+                            const auto* current = parameter.data().opt_Generic();
+                            if (current && *current == generic) {
+                                parameter = type.clone();
+                                changed = true;
+                                return ::HIR::Compare::Equal;
+                            }
+                        }
+                    }
+                    return ::HIR::TypeRef(generic).compare_with_placeholders(
+                        m_span, type, resolve
+                    );
+                }
+
+                ::HIR::Compare match_val(
+                    const ::HIR::GenericRef& generic,
+                    const ::HIR::ConstGeneric& value
+                ) override {
+                    if (value.is_Generic() && value.as_Generic() == generic) {
+                        return ::HIR::Compare::Equal;
+                    }
+                    if (generic.group() == ::HIR::GENERIC_Placeholder) {
+                        for (auto& parameter : m_params.m_values) {
+                            if (parameter.is_Generic()
+                                && parameter.as_Generic() == generic) {
+                                parameter = value.clone();
+                                changed = true;
+                                return ::HIR::Compare::Equal;
+                            }
+                        }
+                    }
+                    return ::HIR::Compare::Fuzzy;
+                }
+            } binder{span(), *candidate_params};
+
+            for (const auto& requirement : associated) {
+                const auto saved = candidate_params->clone();
+                auto candidate_output = use_candidate_response
+                    ? candidate.impl.get_type(
+                        requirement.first.c_str(), requirement.second.aty_params
+                    )
+                    : ::HIR::TypeRef();
+                if (!use_candidate_response) {
+                    // An impl parameter can occur only in a nested projection
+                    // equality (for example `I: Iterator<Item = &'a T>`).
+                    // Ask the solver for that projection's actual response so
+                    // `T` is bound to the response, not to the alias syntax.
+                    evaluate(
+                        span(),
+                        requirement.second.source_trait.m_path,
+                        requirement.second.source_trait.m_params,
+                        nested_type,
+                        [&](ImplRef impl, ::HIR::Compare certainty) {
+                            if (certainty != ::HIR::Compare::Equal
+                                || impl.is_ambiguous_identity()) {
+                                return false;
+                            }
+                            auto output = impl.get_type(
+                                requirement.first.c_str(),
+                                requirement.second.aty_params
+                            );
+                            if (output == ::HIR::TypeRef()) {
+                                return false;
+                            }
+                            candidate_output = ::std::move(output);
+                            return true;
+                        },
+                        requirement.first.c_str(),
+                        nullptr,
+                        &requirement.second.aty_params
+                    );
+                }
+                if (candidate_output == ::HIR::TypeRef()) {
+                    candidate_output = make_associated_projection(
+                        nested_type,
+                        requirement.second.source_trait,
+                        requirement.first,
+                        requirement.second.aty_params
+                    );
+                }
+                const auto match = (use_candidate_response
+                    ? candidate_output
+                    : requirement.second.type).match_test_generics_fuzz(
+                    span(),
+                    use_candidate_response
+                        ? requirement.second.type
+                        : candidate_output,
+                    m_resolve.m_ivars.callback_resolve_infer(),
+                    binder
+                );
+                if (match == ::HIR::Compare::Unequal) {
+                    *candidate_params = saved.clone();
+                }
+            }
+
+            if (binder.changed && candidate.marker_impl) {
+                auto monomorph = MonomorphStatePtr(
+                    nullptr, &candidate.marker_impl_params, nullptr
+                );
+                auto& response = candidate.impl.m_data.as_Bounded();
+                response.type = monomorph.monomorph_type(
+                    span(), candidate.marker_impl->m_type, false
+                );
+                response.trait_args = monomorph.monomorph_path_params(
+                    span(), candidate.marker_impl->m_trait_args, false
+                );
+            }
+            return binder.changed;
+        }
+
+        Certainty match_associated_types(
+            const ::HIR::SimplePath& trait,
+            const ImplRef& impl,
+            const ::HIR::TraitPath::assoc_list_t* associated
+        ) {
+            if (!associated || associated->empty()) {
+                return Certainty::Proven;
+            }
+
+            Certainty result = Certainty::Proven;
+            for (const auto& requirement : *associated) {
+                const auto& aty = requirement.second;
+                if (!impl.m_data.is_TraitImpl() && aty.aty_params.has_params()) {
+                    // Bounded candidates currently store non-GAT projections.
+                    // They remain a valid but non-guiding response instead of
+                    // being rejected or calling ImplRef's non-GAT assertion.
+                    result = Certainty::Ambiguous;
+                    continue;
+                }
+                auto output = impl.get_type(requirement.first.c_str(), aty.aty_params);
+                if (output == ::HIR::TypeRef()) {
+                    if (aty.source_trait.m_path != trait) {
+                        ::HIR::TraitPath::assoc_list_t source_associated;
+                        source_associated.insert({
+                            requirement.first,
+                            requirement.second.clone()
+                        });
+                        const auto source_result = solve_goal(
+                            aty.source_trait.m_path,
+                            aty.source_trait.m_params,
+                            impl.get_impl_type(),
+                            &source_associated
+                        );
+                        if (source_result == Certainty::NoSolution) {
+                            return Certainty::NoSolution;
+                        }
+                        if (source_result == Certainty::Ambiguous) {
+                            result = Certainty::Ambiguous;
+                        }
+                        continue;
+                    }
+                    if (impl.m_data.is_TraitImpl()) {
+                        result = Certainty::Ambiguous;
+                        continue;
+                    }
+                    // A ParamEnv predicate without an explicit equality still
+                    // has a canonical projection response.  This is what lets
+                    // `T: Trait` prove a nested `T: Trait<Assoc = U>` while
+                    // constraining U to `<T as Trait>::Assoc`.
+                    output = make_associated_projection(
+                        impl,
+                        aty.source_trait,
+                        requirement.first,
+                        aty.aty_params
+                    );
+                }
+                const auto cmp = m_resolve.compare_ty(span(), output, aty.type);
+                if (cmp == ::HIR::Compare::Unequal) {
+                    return Certainty::NoSolution;
+                }
+                if (cmp == ::HIR::Compare::Fuzzy) {
+                    result = Certainty::Ambiguous;
+                }
+            }
+            return result;
+        }
+
+        Certainty evaluate_auto_builtin(
+            const ::HIR::SimplePath& trait,
+            const ::HIR::PathParams& params,
+            const ::HIR::TypeRef& type
+        ) {
+            auto combine = [](Certainty& result, Certainty nested) {
+                if (nested == Certainty::NoSolution) {
+                    result = Certainty::NoSolution;
+                } else if (nested == Certainty::Ambiguous
+                           && result == Certainty::Proven) {
+                    result = Certainty::Ambiguous;
+                }
+            };
+            auto evaluate_inner = [&](const ::HIR::TypeRef& inner) {
+                return solve_goal(trait, params, inner, nullptr);
+            };
+
+            TU_MATCH_HDRA((type.data()), {)
+            default:
+                return Certainty::Proven;
+            TU_ARMA(Path, e) {
+                if (const auto* pe = e.path.m_data.opt_Generic()) {
+                    ::HIR::TypeRef tmp;
+                    auto monomorph = MonomorphStatePtr(
+                        nullptr, &pe->m_params, nullptr
+                    );
+                    auto evaluate_field = [&](const ::HIR::TypeRef& field) {
+                        const auto& field_type = monomorphise_type_needed(field)
+                            ? (tmp = m_resolve.expand_associated_types(
+                                span(), monomorph.monomorph_type(span(), field)
+                            ))
+                            : field;
+                        return evaluate_inner(field_type);
+                    };
+
+                    if (e.binding.is_Unbound() || e.binding.is_Opaque()) {
+                        return Certainty::Ambiguous;
+                    }
+                    Certainty result = Certainty::Proven;
+                    if (const auto* str_ptr = e.binding.opt_Struct()) {
+                        const auto& str = **str_ptr;
+                        TU_MATCH(
+                            ::HIR::Struct::Data,
+                            (str.m_data),
+                            (se),
+                            (Unit, ),
+                            (Tuple,
+                             for (const auto& field : se) {
+                                 combine(result, evaluate_field(field.ent));
+                                 if (result == Certainty::NoSolution) {
+                                     return result;
+                                 }
+                             }),
+                            (Named,
+                             for (const auto& field : se) {
+                                 combine(result, evaluate_field(field.ty));
+                                 if (result == Certainty::NoSolution) {
+                                     return result;
+                                 }
+                             })
+                        )
+                    } else if (const auto* enm_ptr = e.binding.opt_Enum()) {
+                        const auto& enm = **enm_ptr;
+                        if (const auto* variants = enm.m_data.opt_Data()) {
+                            for (const auto& variant : *variants) {
+                                combine(result, evaluate_field(variant.type));
+                                if (result == Certainty::NoSolution) {
+                                    return result;
+                                }
+                            }
+                        }
+                    } else if (const auto* unn_ptr = e.binding.opt_Union()) {
+                        const auto& unn = **unn_ptr;
+                        for (const auto& field : unn.m_variants) {
+                            combine(result, evaluate_field(field.ty));
+                            if (result == Certainty::NoSolution) {
+                                return result;
+                            }
+                        }
+                    } else if (e.binding.is_ExternType()) {
+                        return Certainty::NoSolution;
+                    }
+                    return result;
+                }
+                if (e.path.m_data.is_UfcsKnown()
+                    && (e.binding.is_Unbound() || e.binding.is_Opaque())) {
+                    return Certainty::Ambiguous;
+                }
+                return Certainty::Ambiguous;
+            }
+            TU_ARMA(Generic, e) {
+                return evaluate_inner(type);
+            }
+            TU_ARMA(Tuple, e) {
+                Certainty result = Certainty::Proven;
+                for (const auto& field : e) {
+                    combine(result, evaluate_inner(field));
+                    if (result == Certainty::NoSolution) {
+                        return result;
+                    }
+                }
+                return result;
+            }
+            TU_ARMA(Array, e) {
+                return evaluate_inner(e.inner);
+            }
+            }
+            throw "";
+        }
+
+        Certainty evaluate_candidate(
+            size_t frame_index,
+            size_t candidate_index,
+            const ::HIR::SimplePath& trait,
+            const ::HIR::TraitPath::assoc_list_t* associated
+        ) {
+            auto* candidate = m_frames[frame_index]->candidates[candidate_index];
+            candidate->ambiguity_beyond_head = false;
+            if (associated) {
+                bind_candidate_placeholders(
+                    *candidate,
+                    candidate->impl.get_impl_type(),
+                    *associated,
+                    true
+                );
+            }
+            const bool environment_response_constraint =
+                candidate->head_match == ::HIR::Compare::Fuzzy
+                && is_environment_or_builtin(candidate->impl)
+                && !candidate_has_placeholders(*candidate);
+            auto result = candidate->head_match == ::HIR::Compare::Equal
+                    || environment_response_constraint
+                ? Certainty::Proven : Certainty::Ambiguous;
+
+            const bool auto_builtin = candidate->auto_builtin;
+            const auto* marker_impl = candidate->marker_impl;
+            if (auto_builtin) {
+                const auto& response = candidate->impl.m_data.as_Bounded();
+                const auto structural = evaluate_auto_builtin(
+                    trait, response.trait_args, response.type
+                );
+                if (structural == Certainty::NoSolution) {
+                    return Certainty::NoSolution;
+                }
+                if (structural == Certainty::Ambiguous) {
+                    candidate->ambiguity_beyond_head = true;
+                    result = Certainty::Ambiguous;
+                }
+            }
+
+            const auto assoc_result = match_associated_types(
+                trait, candidate->impl, associated
+            );
+            if (assoc_result == Certainty::NoSolution) {
+                return Certainty::NoSolution;
+            }
+            if (assoc_result == Certainty::Ambiguous) {
+                candidate->ambiguity_beyond_head = true;
+                result = Certainty::Ambiguous;
+            }
+
+            const auto* trait_impl = candidate->impl.m_data.opt_TraitImpl();
+            const ::HIR::GenericParams* impl_params_def = marker_impl
+                ? &marker_impl->m_params
+                : (trait_impl && trait_impl->impl
+                    ? &trait_impl->impl->m_params
+                    : nullptr);
+            if (!impl_params_def) {
+                return result;
+            }
+
+            for (const auto& bound : impl_params_def->m_bounds) {
+                if (const auto* be = bound.opt_TraitBound()) {
+                    ::HIR::TypeRef nested_type;
+                    ::HIR::SimplePath nested_trait;
+                    ::HIR::PathParams nested_params;
+                    ::HIR::TraitPath::assoc_list_t nested_associated;
+
+                    // Candidate and response storage is pool-backed, so nested
+                    // goals cannot relocate this parent slot.
+                    auto monomorph_bound = [&](auto& ms) {
+                        static const ::HIR::GenericParams no_hrbs;
+                        const bool outer_present = be->hrtbs && !be->hrtbs->is_empty();
+                        auto hrb_guard = ms.push_hrb(outer_present ? *be->hrtbs : no_hrbs);
+                        auto bound_type = ms.monomorph_type(span(), be->type);
+                        auto bound_trait = ms.monomorph_traitpath(span(), be->trait, true);
+
+                        const auto hrl_params = outer_present
+                            ? be->hrtbs->make_empty_params(true)
+                            : (bound_trait.m_hrtbs
+                                ? bound_trait.m_hrtbs->make_empty_params(true)
+                                : ::HIR::PathParams());
+                        auto hrl_monomorph = MonomorphHrlsOnly(hrl_params);
+                        nested_type = hrl_monomorph.monomorph_type(span(), bound_type, true);
+                        nested_trait = bound_trait.m_path.m_path;
+                        nested_params = hrl_monomorph.monomorph_path_params(
+                            span(), bound_trait.m_path.m_params, true
+                        );
+                        for (const auto& aty : bound_trait.m_type_bounds) {
+                            auto value = aty.second.clone();
+                            value.type = hrl_monomorph.monomorph_type(span(), value.type, true);
+                            value.aty_params = hrl_monomorph.monomorph_path_params(
+                                span(), value.aty_params, true
+                            );
+                            nested_associated.insert({aty.first, ::std::move(value)});
+                        }
+                    };
+                    if (marker_impl) {
+                        auto ms = MonomorphStatePtr(
+                            nullptr,
+                            &candidate->marker_impl_params,
+                            nullptr
+                        );
+                        monomorph_bound(ms);
+                    } else {
+                        auto ms = candidate->impl.get_cb_monomorph_traitimpl(span(), {});
+                        monomorph_bound(ms);
+                    }
+
+                    // An impl parameter may occur only in an associated-type
+                    // equality of a nested goal.  Canonical solvers infer that
+                    // parameter from the projection response of the nested
+                    // goal; preserve the same response in our impl parameters
+                    // before evaluating the goal itself.
+                    if (bind_candidate_placeholders(
+                            *candidate, nested_type, nested_associated
+                        )) {
+                        nested_associated.clear();
+                        if (marker_impl) {
+                            auto ms = MonomorphStatePtr(
+                                nullptr,
+                                &candidate->marker_impl_params,
+                                nullptr
+                            );
+                            monomorph_bound(ms);
+                        } else {
+                            auto ms = candidate->impl.get_cb_monomorph_traitimpl(
+                                span(), {}
+                            );
+                            monomorph_bound(ms);
+                        }
+                    }
+
+                    const auto nested = solve_goal(
+                        nested_trait, nested_params, nested_type, &nested_associated
+                    );
+                    if (nested == Certainty::NoSolution) {
+                        return Certainty::NoSolution;
+                    }
+                    if (nested == Certainty::Ambiguous) {
+                        candidate->ambiguity_beyond_head = true;
+                        result = Certainty::Ambiguous;
+                    }
+                } else if (const auto* equality = bound.opt_TypeEquality()) {
+                    ::HIR::TypeRef left;
+                    ::HIR::TypeRef right;
+                    if (marker_impl) {
+                        auto ms = MonomorphStatePtr(
+                            nullptr,
+                            &candidate->marker_impl_params,
+                            nullptr
+                        );
+                        left = ms.monomorph_type(span(), equality->type);
+                        right = ms.monomorph_type(span(), equality->other_type);
+                    } else {
+                        auto ms = candidate->impl.get_cb_monomorph_traitimpl(span(), {});
+                        left = ms.monomorph_type(span(), equality->type);
+                        right = ms.monomorph_type(span(), equality->other_type);
+                    }
+                    const auto cmp = m_resolve.compare_ty(span(), left, right);
+                    if (cmp == ::HIR::Compare::Unequal) {
+                        return Certainty::NoSolution;
+                    }
+                    if (cmp == ::HIR::Compare::Fuzzy) {
+                        candidate->ambiguity_beyond_head = true;
+                        result = Certainty::Ambiguous;
+                    }
+                }
+                // Region/outlives bounds are external constraints.  They do
+                // not choose a trait candidate and are intentionally retained
+                // for the later lifetime phase rather than approximated here.
+            }
+            return result;
+        }
+
+        Certainty solve_goal(
+            const ::HIR::SimplePath& trait,
+            const ::HIR::PathParams& params,
+            const ::HIR::TypeRef& type,
+            const ::HIR::TraitPath::assoc_list_t* associated
+        ) {
+            auto goal_type = type.clone();
+            auto goal_params = params.clone();
+            for (auto& param : goal_params.m_types) {
+                param = m_resolve.expand_associated_types(
+                    span(), ::std::move(param)
+                );
+            }
+            const auto& resolved_type = m_resolve.resolve_type(goal_type);
+            // Candidate assembly must not use an unconstrained `Self` type to
+            // guide inference.  rustc's next solver forces ambiguity here,
+            // before it assembles any candidates.
+            if (const auto* infer = resolved_type.data().opt_Infer()) {
+                if (!infer->is_lit()) {
+                    return Certainty::Ambiguous;
+                }
+            }
+            const auto hash = goal_hash(trait, goal_params, resolved_type, associated);
+            if (const auto* cached = find_cached_goal(
+                    hash, trait, goal_params, resolved_type, associated
+                )) {
+                return cached->certainty;
+            }
+            if (find_active_goal(hash, trait, goal_params, resolved_type, associated)) {
+                // Auto traits are coinductive; ordinary trait cycles do not
+                // prove the goal but remain a possible fixed point.
+                return m_crate.get_trait_by_path(span(), trait).m_is_marker
+                    ? Certainty::Proven
+                    : Certainty::Ambiguous;
+            }
+
+            auto* active_goal = push_active_goal(
+                hash, trait, goal_params, resolved_type, associated
+            );
+            struct StackGuard {
+                NextTraitGoalEvaluator& self;
+                GoalKey* goal;
+                ~StackGuard() { self.pop_active_goal(goal); }
+            } guard{*this, active_goal};
+            auto cache_result = [&](Certainty certainty) {
+                return cache_goal(
+                    hash, trait, goal_params, resolved_type, associated, certainty
+                );
+            };
+
+            const size_t frame_index = m_frame_depth++;
+            if (frame_index == m_frames.size()) {
+                m_frames.push_back(m_crate.m_pool->make<CandidateFrame>());
+            }
+            m_frames[frame_index]->clear(m_candidate_nodes);
+            struct FrameGuard {
+                NextTraitGoalEvaluator& self;
+                size_t index;
+                ~FrameGuard() {
+                    self.m_frames[index]->clear(self.m_candidate_nodes);
+                    assert(self.m_frame_depth == index + 1);
+                    self.m_frame_depth--;
+                }
+            } frame_guard{*this, frame_index};
+
+            try {
+                assemble_candidates(frame_index, trait, goal_params, resolved_type);
+            } catch (const TraitResolution::RecursionDetected&) {
+                return cache_result(Certainty::Ambiguous);
+            }
+
+            bool saw_ambiguous = false;
+            bool suppress_auto_builtin = false;
+            bool negative_proven = false;
+            bool negative_ambiguous = false;
+            Certainty auto_builtin_result = Certainty::NoSolution;
+            const size_t candidate_count = m_frames[frame_index]->candidates.size();
+            for (size_t i = 0; i < candidate_count; i++) {
+                const auto result = evaluate_candidate(frame_index, i, trait, associated);
+                auto* candidate = m_frames[frame_index]->candidates[i];
+                candidate->certainty = result;
+                if (candidate->is_negative()) {
+                    negative_proven |= result == Certainty::Proven;
+                    negative_ambiguous |= result == Certainty::Ambiguous;
+                    continue;
+                }
+                if (candidate->auto_builtin) {
+                    auto_builtin_result = result;
+                    continue;
+                }
+                suppress_auto_builtin |= candidate->is_positive_marker_impl()
+                    && result != Certainty::NoSolution;
+                if (result == Certainty::Proven) {
+                    return cache_result(Certainty::Proven);
+                }
+                saw_ambiguous |= result == Certainty::Ambiguous;
+            }
+            if (!suppress_auto_builtin && !negative_proven) {
+                if (negative_ambiguous && auto_builtin_result == Certainty::Proven) {
+                    auto_builtin_result = Certainty::Ambiguous;
+                }
+                if (auto_builtin_result == Certainty::Proven) {
+                    return cache_result(Certainty::Proven);
+                }
+                saw_ambiguous |= auto_builtin_result == Certainty::Ambiguous;
+            }
+            if (saw_ambiguous
+                || m_resolve.type_contains_ivars(resolved_type)
+                || m_resolve.params_contain_ivars(goal_params)
+                || (m_coherence_mode
+                    && !trait_ref_is_knowable(trait, goal_params, resolved_type))) {
+                return cache_result(Certainty::Ambiguous);
+            }
+            return cache_result(Certainty::NoSolution);
+        }
+
+        Certainty match_root_associated(
+            const ::HIR::SimplePath& trait,
+            const ImplRef& impl,
+            const char* assoc_name,
+            const ::HIR::TypeRef* assoc_type,
+            const ::HIR::PathParams* assoc_params
+        ) const {
+            if (!assoc_name || !assoc_name[0]) {
+                return Certainty::Proven;
+            }
+            const static ::HIR::PathParams no_params;
+            const auto& params = assoc_params ? *assoc_params : no_params;
+            if (!impl.m_data.is_TraitImpl() && params.has_params()) {
+                return Certainty::Ambiguous;
+            }
+            auto output = impl.get_type(assoc_name, params);
+            if (output == ::HIR::TypeRef()) {
+                if (impl.m_data.is_TraitImpl()) {
+                    return Certainty::Ambiguous;
+                }
+                if (!assoc_type) {
+                    // A bare ParamEnv trait predicate does not normalize its
+                    // associated type.  It only proves that the projection is
+                    // well-formed, so the normalizes-to response is ambiguous.
+                    return Certainty::Ambiguous;
+                }
+                output = make_associated_projection(
+                    impl,
+                    ::HIR::GenericPath(trait, impl.get_trait_params()),
+                    RcString::new_interned(assoc_name),
+                    params
+                );
+            }
+            if (!assoc_type) {
+                return Certainty::Proven;
+            }
+            const auto cmp = m_resolve.compare_ty(span(), *assoc_type, output);
+            if (cmp == ::HIR::Compare::Unequal) {
+                return Certainty::NoSolution;
+            }
+            return cmp == ::HIR::Compare::Equal
+                ? Certainty::Proven
+                : Certainty::Ambiguous;
+        }
+
+        static ImplRef materialize_root_associated(
+            ImplRef impl,
+            const ::HIR::SimplePath& trait,
+            const char* assoc_name,
+            const ::HIR::PathParams* assoc_params
+        ) {
+            if (!assoc_name || !assoc_name[0] || impl.m_data.is_TraitImpl()) {
+                return impl;
+            }
+            const static ::HIR::PathParams no_params;
+            const auto& item_params = assoc_params ? *assoc_params : no_params;
+            if (impl.get_type(assoc_name, item_params) != ::HIR::TypeRef()) {
+                return impl;
+            }
+
+            auto type = impl.get_impl_type();
+            auto params = impl.get_trait_params();
+            ::HIR::TraitPath::assoc_list_t associated;
+            if (const auto* bounded = impl.m_data.opt_BoundedPtr()) {
+                for (const auto& entry : *bounded->assoc) {
+                    associated.insert({entry.first, entry.second.clone()});
+                }
+            } else if (const auto* bounded = impl.m_data.opt_Bounded()) {
+                for (const auto& entry : bounded->assoc) {
+                    associated.insert({entry.first, entry.second.clone()});
+                }
+            }
+
+            const auto name = RcString::new_interned(assoc_name);
+            auto source_trait = ::HIR::GenericPath(trait, params.clone());
+            auto projection = make_associated_projection(
+                type, source_trait, name, item_params
+            );
+            associated.erase(name);
+            associated.insert({
+                name,
+                ::HIR::TraitPath::AtyEqual{
+                    ::std::move(source_trait),
+                    item_params.clone(),
+                    ::std::move(projection)
+                }
+            });
+            const bool ambiguous_identity = impl.is_ambiguous_identity();
+            auto result = ImplRef(
+                ::std::move(type),
+                ::std::move(params),
+                ::std::move(associated)
+            );
+            if (ambiguous_identity) {
+                result.mark_ambiguous_identity();
+            }
+            return result;
+        }
+
+        bool responses_equal(
+            const ImplRef& left,
+            const ImplRef& right,
+            const char* assoc_name,
+            const ::HIR::PathParams* assoc_params
+        ) const {
+            auto types_equal_after_normalization = [&](const ::HIR::TypeRef& lhs,
+                                                       const ::HIR::TypeRef& rhs) {
+                if (lhs == ::HIR::TypeRef() || rhs == ::HIR::TypeRef()) {
+                    return lhs == rhs;
+                }
+                auto normalized_lhs = m_resolve.expand_associated_types(
+                    span(), lhs.clone()
+                );
+                auto normalized_rhs = m_resolve.expand_associated_types(
+                    span(), rhs.clone()
+                );
+                if (normalized_lhs == ::HIR::TypeRef()
+                    || normalized_rhs == ::HIR::TypeRef()) {
+                    return normalized_lhs == normalized_rhs;
+                }
+                return m_resolve.resolve_type(normalized_lhs)
+                    == m_resolve.resolve_type(normalized_rhs);
+            };
+            auto params_equal_after_normalization = [&](const ::HIR::PathParams& lhs,
+                                                        const ::HIR::PathParams& rhs) {
+                if (lhs.m_lifetimes.size() != rhs.m_lifetimes.size()
+                    || lhs.m_types.size() != rhs.m_types.size()
+                    || lhs.m_values.size() != rhs.m_values.size()) {
+                    return false;
+                }
+                for (size_t i = 0; i < lhs.m_lifetimes.size(); i++) {
+                    if (lhs.m_lifetimes[i] != rhs.m_lifetimes[i]) {
+                        return false;
+                    }
+                }
+                for (size_t i = 0; i < lhs.m_types.size(); i++) {
+                    if (!types_equal_after_normalization(
+                            lhs.m_types[i], rhs.m_types[i]
+                        )) {
+                        return false;
+                    }
+                }
+                for (size_t i = 0; i < lhs.m_values.size(); i++) {
+                    if (lhs.m_values[i] != rhs.m_values[i]) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+
+            if (!types_equal_after_normalization(
+                    left.get_impl_type(), right.get_impl_type()
+                )
+                || !params_equal_after_normalization(
+                    left.get_trait_params(), right.get_trait_params()
+                )) {
+                return false;
+            }
+            if (!assoc_name || !assoc_name[0]) {
+                return true;
+            }
+            const static ::HIR::PathParams no_params;
+            const auto& params = assoc_params ? *assoc_params : no_params;
+            if ((!left.m_data.is_TraitImpl() || !right.m_data.is_TraitImpl())
+                && params.has_params()) {
+                return false;
+            }
+            return types_equal_after_normalization(
+                left.get_type(assoc_name, params),
+                right.get_type(assoc_name, params)
+            );
+        }
+
+    public:
+        NextTraitGoalEvaluator(
+            const TraitResolution& resolve,
+            const ::HIR::Crate& crate
+        )
+            : m_resolve(resolve)
+            , m_crate(crate)
+            , m_candidate_nodes(crate.m_pool)
+            , m_active_goal_nodes(crate.m_pool)
+            , m_cached_goal_nodes(crate.m_pool)
+        {
+            m_frames.reserve(16);
+            m_goal_stack.reserve(16);
+            m_goal_cache.reserve(64);
+            m_active_goal_index.reserve(32);
+            m_goal_cache_index.reserve(128);
+        }
+
+        bool evaluate_overlap(
+            const Span& call_span,
+            const ::HIR::SimplePath& trait,
+            const ::HIR::TraitImpl& left,
+            const ::HIR::TraitImpl& right
+        ) {
+            ASSERT_BUG(call_span, !m_span, "nested coherence overlap session");
+            ASSERT_BUG(call_span, !m_coherence_mode, "coherence mode leaked before overlap probe");
+            ASSERT_BUG(call_span, m_goal_stack.empty(), "next-solver goal stack leaked before coherence probe");
+            ASSERT_BUG(call_span, m_active_goal_index.empty(), "next-solver active goal index leaked before coherence probe");
+            ASSERT_BUG(call_span, m_frame_depth == 0, "next-solver candidate frames leaked before coherence probe");
+            clear_goal_cache();
+            m_span = &call_span;
+            m_coherence_mode = true;
+            struct SessionGuard {
+                NextTraitGoalEvaluator& self;
+                ~SessionGuard() {
+                    assert(self.m_goal_stack.empty());
+                    assert(self.m_active_goal_index.empty());
+                    self.clear_goal_cache();
+                    self.m_frame_depth = 0;
+                    self.m_coherence_mode = false;
+                    self.m_span = nullptr;
+                }
+            } session_guard{*this};
+
+            // Instantiate the first header with fresh inference variables, then
+            // match the second header against it.  This is a unification of two
+            // independently generic impls, not a one-way syntactic ordering.
+            auto left_params = m_resolve.make_fresh_impl_params(left.m_params);
+            auto left_monomorph = MonomorphStatePtr(nullptr, &left_params, nullptr);
+            auto goal_type = left_monomorph.monomorph_type(call_span, left.m_type, true);
+            auto goal_params = left_monomorph.monomorph_path_params(
+                call_span, left.m_trait_args, true
+            );
+
+            ::HIR::PathParams right_params;
+            const auto right_match = m_resolve.ftic_check_params(
+                call_span,
+                trait,
+                &goal_params,
+                goal_type,
+                right.m_params,
+                right.m_trait_args,
+                right.m_type,
+                right_params,
+                false
+            );
+            if (right_match == ::HIR::Compare::Unequal) {
+                return false;
+            }
+
+            const size_t frame_index = m_frame_depth++;
+            if (frame_index == m_frames.size()) {
+                m_frames.push_back(m_crate.m_pool->make<CandidateFrame>());
+            }
+            m_frames[frame_index]->clear(m_candidate_nodes);
+            struct FrameGuard {
+                NextTraitGoalEvaluator& self;
+                size_t index;
+                ~FrameGuard() {
+                    self.m_frames[index]->clear(self.m_candidate_nodes);
+                    assert(self.m_frame_depth == index + 1);
+                    self.m_frame_depth--;
+                }
+            } frame_guard{*this, frame_index};
+
+            const auto& trait_def = m_crate.get_trait_by_path(call_span, trait);
+            push_candidate(
+                frame_index,
+                ImplRef(::std::move(left_params), trait_def, trait, left),
+                ::HIR::Compare::Equal
+            );
+            push_candidate(
+                frame_index,
+                ImplRef(::std::move(right_params), trait_def, trait, right),
+                right_match
+            );
+
+            const auto& candidates = m_frames[frame_index]->candidates;
+            ASSERT_BUG(call_span, candidates.size() == 2, "coherence probe lost an impl candidate");
+            const auto left_result = evaluate_candidate(frame_index, 0, trait, nullptr);
+            if (left_result == Certainty::NoSolution) {
+                return false;
+            }
+            const auto right_result = evaluate_candidate(frame_index, 1, trait, nullptr);
+            return right_result != Certainty::NoSolution;
+        }
+
+        bool evaluate(
+            const Span& call_span,
+            const ::HIR::SimplePath& trait,
+            const ::HIR::PathParams& params,
+            const ::HIR::TypeRef& type,
+            TraitResolution::t_cb_trait_impl_r callback,
+            const char* assoc_name,
+            const ::HIR::TypeRef* assoc_type,
+            const ::HIR::PathParams* assoc_params
+        ) {
+            const bool outermost = m_span == nullptr;
+            if (outermost) {
+                ASSERT_BUG(call_span, m_goal_stack.empty(), "next-solver goal stack leaked between evaluations");
+                ASSERT_BUG(call_span, m_active_goal_index.empty(), "next-solver active goal index leaked between evaluations");
+                ASSERT_BUG(call_span, m_frame_depth == 0, "next-solver candidate frames leaked between evaluations");
+                clear_goal_cache();
+                m_span = &call_span;
+            }
+            struct SessionGuard {
+                NextTraitGoalEvaluator& self;
+                bool outermost;
+                ~SessionGuard() {
+                    if (outermost) {
+                        assert(self.m_goal_stack.empty());
+                        assert(self.m_active_goal_index.empty());
+                        self.clear_goal_cache();
+                        self.m_frame_depth = 0;
+                        self.m_span = nullptr;
+                    }
+                }
+            } session_guard{*this, outermost};
+
+            auto goal_type = type.clone();
+            auto goal_params = params.clone();
+            for (auto& param : goal_params.m_types) {
+                param = m_resolve.expand_associated_types(
+                    span(), ::std::move(param)
+                );
+            }
+            const auto& resolved_type = m_resolve.resolve_type(goal_type);
+            // Match rustc's forced-ambiguity response for an unconstrained
+            // `Self` type.  Returning the identity response is important: no
+            // particular impl is allowed to constrain the caller here.
+            if (const auto* infer = resolved_type.data().opt_Infer()) {
+                if (!infer->is_lit()) {
+                    // The legacy lookup callback has no representation for a
+                    // canonical identity response and would treat it as a
+                    // concrete impl.  Extended solver callers pass a non-null
+                    // assoc_name (possibly empty) and understand the marker;
+                    // ordinary lookup observes ambiguity as no selection.
+                    if (!assoc_name) {
+                        return false;
+                    }
+                    auto ambiguous = ImplRef(
+                        resolved_type.clone(),
+                        goal_params.clone(),
+                        ::HIR::TraitPath::assoc_list_t()
+                    );
+                    ambiguous.mark_ambiguous_identity();
+                    return callback(
+                        materialize_root_associated(
+                            ::std::move(ambiguous),
+                            trait,
+                            assoc_name,
+                            assoc_params
+                        ),
+                        ::HIR::Compare::Fuzzy
+                    );
+                }
+            }
+            const auto root_hash = goal_hash(trait, goal_params, resolved_type, nullptr);
+            if (find_active_goal(root_hash, trait, goal_params, resolved_type, nullptr)) {
+                static const ::HIR::TraitPath::assoc_list_t no_associated;
+                const bool coinductive = m_crate.get_trait_by_path(
+                    span(), trait
+                ).m_is_marker;
+                return callback(
+                    ImplRef(&resolved_type, &goal_params, &no_associated),
+                    coinductive
+                        ? ::HIR::Compare::Equal
+                        : ::HIR::Compare::Fuzzy
+                );
+            }
+            auto* root_goal = push_active_goal(
+                root_hash, trait, goal_params, resolved_type, nullptr
+            );
+            struct RootStackGuard {
+                NextTraitGoalEvaluator& self;
+                GoalKey* goal;
+                ~RootStackGuard() { self.pop_active_goal(goal); }
+            } root_guard{*this, root_goal};
+
+            const size_t frame_index = m_frame_depth++;
+            if (frame_index == m_frames.size()) {
+                m_frames.push_back(m_crate.m_pool->make<CandidateFrame>());
+            }
+            m_frames[frame_index]->clear(m_candidate_nodes);
+            struct FrameGuard {
+                NextTraitGoalEvaluator& self;
+                size_t index;
+                ~FrameGuard() {
+                    self.m_frames[index]->clear(self.m_candidate_nodes);
+                    assert(self.m_frame_depth == index + 1);
+                    self.m_frame_depth--;
+                }
+            } frame_guard{*this, frame_index};
+
+            try {
+                assemble_candidates(
+                    frame_index, trait, goal_params, resolved_type
+                );
+            } catch (const TraitResolution::RecursionDetected&) {
+                return false;
+            }
+            auto& frame = *m_frames[frame_index];
+            const size_t candidate_count = frame.candidates.size();
+            DEBUG("next-solver assembled " << candidate_count
+                  << " candidate(s) for " << type << ": " << trait << params);
+
+            bool suppress_auto_builtin = false;
+            bool negative_proven = false;
+            bool negative_ambiguous = false;
+            ::HIR::TraitPath::assoc_list_t root_associated;
+            if (assoc_name && assoc_name[0] && assoc_type) {
+                const static ::HIR::PathParams no_assoc_params;
+                root_associated.insert({
+                    RcString::new_interned(assoc_name),
+                    ::HIR::TraitPath::AtyEqual{
+                        ::HIR::GenericPath(trait, goal_params.clone()),
+                        assoc_params ? assoc_params->clone() : no_assoc_params.clone(),
+                        assoc_type->clone()
+                    }
+                });
+            }
+            for (size_t i = 0; i < candidate_count; i++) {
+                auto certainty = evaluate_candidate(
+                    frame_index,
+                    i,
+                    trait,
+                    root_associated.empty() ? nullptr : &root_associated
+                );
+                auto* candidate = frame.candidates[i];
+                if (!candidate->is_negative()) {
+                    const auto assoc_certainty = match_root_associated(
+                        trait,
+                        candidate->impl,
+                        assoc_name,
+                        assoc_type,
+                        assoc_params
+                    );
+                    if (assoc_certainty == Certainty::NoSolution) {
+                        certainty = Certainty::NoSolution;
+                    } else if (assoc_certainty == Certainty::Ambiguous
+                               && certainty == Certainty::Proven) {
+                        certainty = Certainty::Ambiguous;
+                    }
+                }
+                candidate->certainty = certainty;
+                DEBUG("next-solver candidate " << candidate->impl
+                      << " => " << static_cast<unsigned>(certainty));
+                if (candidate->is_negative()) {
+                    negative_proven |= certainty == Certainty::Proven;
+                    negative_ambiguous |= certainty == Certainty::Ambiguous;
+                    continue;
+                }
+                suppress_auto_builtin |= candidate->is_positive_marker_impl()
+                    && certainty != Certainty::NoSolution;
+                if (certainty != Certainty::NoSolution) {
+                    frame.viable.push_back(candidate);
+                }
+            }
+
+            if (suppress_auto_builtin || negative_proven) {
+                auto& viable = frame.viable;
+                viable.erase(
+                    ::std::remove_if(
+                        viable.begin(), viable.end(),
+                        [&](Candidate* candidate) {
+                            return candidate->auto_builtin;
+                        }
+                    ),
+                    viable.end()
+                );
+            } else if (negative_ambiguous) {
+                for (auto* candidate : frame.viable) {
+                    if (candidate->auto_builtin
+                        && candidate->certainty == Certainty::Proven) {
+                        candidate->certainty = Certainty::Ambiguous;
+                    }
+                }
+            }
+
+            if (frame.viable.empty()) {
+                DEBUG("next-solver: no viable response");
+                return false;
+            }
+
+            // A proven ParamEnv or builtin candidate shadows impl candidates.
+            // This is the central next-solver candidate preference used for
+            // projection normalization and dyn-object builtins.
+            bool has_preferred_non_impl = false;
+            for (const auto* candidate : frame.viable) {
+                has_preferred_non_impl |= is_environment_or_builtin(candidate->impl)
+                    && candidate->certainty == Certainty::Proven;
+            }
+            if (has_preferred_non_impl) {
+                auto& viable = frame.viable;
+                viable.erase(
+                    ::std::remove_if(
+                        viable.begin(), viable.end(),
+                        [&](Candidate* candidate) {
+                            return !is_environment_or_builtin(candidate->impl);
+                        }
+                    ),
+                    viable.end()
+                );
+            }
+
+            // Apply specialization only after nested goals have been probed.
+            for (auto* candidate : frame.viable) {
+                candidate->discarded = false;
+            }
+            for (size_t i = 0; i < frame.viable.size(); i++) {
+                if (frame.viable[i]->discarded) {
+                    continue;
+                }
+                for (size_t j = i + 1; j < frame.viable.size(); j++) {
+                    if (frame.viable[j]->discarded) {
+                        continue;
+                    }
+                    auto& left = frame.viable[i]->impl;
+                    auto& right = frame.viable[j]->impl;
+                    // Specialization only distinguishes different canonical
+                    // responses.  If both candidates constrain the caller in
+                    // exactly the same way, merge their certainties instead;
+                    // a proven route must not be discarded behind an
+                    // ambiguous, cyclic route to the same response.
+                    if (responses_equal(left, right, assoc_name, assoc_params)) {
+                        continue;
+                    }
+                    if (!left.m_data.is_TraitImpl() || !right.m_data.is_TraitImpl()
+                        || !m_resolve.impls_overlap(span(), left, right)) {
+                        continue;
+                    }
+                    // A more-specific impl with an ambiguous where-clause
+                    // cannot shadow the fallback: that nested goal may still
+                    // fail.  Head ambiguity alone is inference guidance and
+                    // remains eligible for specialization.
+                    if (left.more_specific_than(right)
+                        && !frame.viable[i]->ambiguity_beyond_head) {
+                        frame.viable[j]->discarded = true;
+                    } else if (right.more_specific_than(left)
+                               && !frame.viable[j]->ambiguity_beyond_head) {
+                        frame.viable[i]->discarded = true;
+                        break;
+                    }
+                }
+            }
+            frame.viable.erase(
+                ::std::remove_if(
+                    frame.viable.begin(), frame.viable.end(),
+                    [](const Candidate* candidate) { return candidate->discarded; }
+                ),
+                frame.viable.end()
+            );
+
+            bool one_response = true;
+            for (size_t i = 1; i < frame.viable.size(); i++) {
+                if (!responses_equal(
+                        frame.viable.front()->impl,
+                        frame.viable[i]->impl,
+                        assoc_name,
+                        assoc_params
+                    )) {
+                    one_response = false;
+                    break;
+                }
+            }
+
+            if (one_response) {
+                Candidate* selected = frame.viable.front();
+                for (auto* candidate : frame.viable) {
+                    if (candidate->certainty == Certainty::Proven) {
+                        selected = candidate;
+                        break;
+                    }
+                }
+                const auto certainty = selected->certainty;
+                DEBUG("next-solver: applying merged response "
+                      << selected->impl << " certainty="
+                      << static_cast<unsigned>(certainty));
+                if (certainty != Certainty::Proven) {
+                    return callback(
+                        ::std::move(selected->impl),
+                        ::HIR::Compare::Fuzzy
+                    );
+                }
+                return callback(
+                    materialize_root_associated(
+                        ::std::move(selected->impl),
+                        trait,
+                        assoc_name,
+                        assoc_params
+                    ),
+                    ::HIR::Compare::Equal
+                );
+            }
+
+            // Distinct canonical responses cannot guide inference.  Return a
+            // single identity response for the original goal: exposing any
+            // concrete candidate here lets a callback accidentally commit the
+            // first candidate's substitutions despite the ambiguity.
+            auto ambiguous = ImplRef(
+                resolved_type.clone(),
+                goal_params.clone(),
+                ::HIR::TraitPath::assoc_list_t()
+            );
+            ambiguous.mark_ambiguous_identity();
+            return callback(
+                materialize_root_associated(
+                    ::std::move(ambiguous),
+                    trait,
+                    assoc_name,
+                    assoc_params
+                ),
+                ::HIR::Compare::Fuzzy
+            );
+        }
+    };
+
+TraitResolution::TraitResolution(
+    const HMTypeInferrence& ivars,
+    const ::HIR::Crate& crate,
+    const ::HIR::GenericParams* impl_params,
+    const ::HIR::GenericParams* item_params,
+    const ::HIR::SimplePath& vis_path,
+    const ::HIR::GenericPath* current_trait
+)
+    : TraitResolveCommon(crate)
+    , m_lang_Deref(crate.get_lang_item_path_opt("deref"))
+    , m_ivars(ivars)
+    , m_vis_path(vis_path)
+    , m_current_trait_path(current_trait)
+    , m_current_trait_ptr(current_trait ? &crate.get_trait_by_path(Span(), current_trait->m_path) : nullptr)
+{
+    m_impl_generics = impl_params;
+    m_item_generics = item_params;
+    prep_indexes(Span());
+}
+
+TraitResolution::~TraitResolution() = default;
+
+void TraitResolution::set_generic_context(
+    const ::HIR::GenericParams* impl_params,
+    const ::HIR::GenericParams* item_params
+) {
+    if (m_impl_generics == impl_params && m_item_generics == item_params) {
+        return;
+    }
+    ASSERT_BUG(Span(), m_eat_active_stack.empty(), "changing trait environment during associated-type expansion");
+    m_impl_generics = impl_params;
+    m_item_generics = item_params;
+    m_eat_cache.clear();
+    prep_indexes(Span());
+}
+
+::HIR::PathParams TraitResolution::make_fresh_impl_params(
+    const ::HIR::GenericParams& params
+) const {
+    auto& ivars = const_cast<HMTypeInferrence&>(m_ivars);
+    ::HIR::PathParams result;
+    result.m_lifetimes = ThinVector<::HIR::LifetimeRef>(params.m_lifetimes.size());
+    result.m_types.reserve(params.m_types.size());
+    for (size_t i = 0; i < params.m_types.size(); i++) {
+        result.m_types.push_back(ivars.new_ivar_tr());
+    }
+    result.m_values.reserve(params.m_values.size());
+    for (size_t i = 0; i < params.m_values.size(); i++) {
+        result.m_values.push_back(
+            ::HIR::ConstGeneric::make_Infer({ivars.new_ivar_val()})
+        );
+    }
+    return result;
+}
+
+bool TraitResolution::impls_overlap(
+    const Span& sp,
+    const ImplRef& left,
+    const ImplRef& right
+) const {
+    const auto* left_impl = left.m_data.opt_TraitImpl();
+    const auto* right_impl = right.m_data.opt_TraitImpl();
+    if (!gTraitSolverConfig.coherence
+        || !left_impl || !right_impl
+        || !left_impl->impl || !right_impl->impl) {
+        return left.overlaps_with(m_crate, right);
+    }
+    if (!left_impl->trait_path || !right_impl->trait_path
+        || *left_impl->trait_path != *right_impl->trait_path) {
+        return false;
+    }
+    if (left_impl->impl == right_impl->impl) {
+        return true;
+    }
+
+    // The probe resolver is pool-owned and reused, while its inference table
+    // is reset per overlap query.  No probe variable can escape into m_ivars.
+    m_coherence_ivars.m_ivars.clear();
+    m_coherence_ivars.m_values.clear();
+    m_coherence_ivars.m_has_changed = false;
+    if (!m_coherence_resolve) {
+        ASSERT_BUG(sp, m_crate.m_pool, "next-solver coherence requires the crate object pool");
+        m_coherence_resolve = m_crate.m_pool->make<TraitResolution>(
+            m_coherence_ivars,
+            m_crate,
+            m_impl_generics,
+            m_item_generics,
+            m_vis_path,
+            m_current_trait_path
+        );
+    } else {
+        m_coherence_resolve->set_generic_context(m_impl_generics, m_item_generics);
+    }
+    if (!m_coherence_resolve->m_next_solver) {
+        m_coherence_resolve->m_next_solver = m_crate.m_pool->make<NextTraitGoalEvaluator>(
+            *m_coherence_resolve, m_crate
+        );
+    }
+    return m_coherence_resolve->m_next_solver->evaluate_overlap(
+        sp,
+        *left_impl->trait_path,
+        *left_impl->impl,
+        *right_impl->impl
+    );
+}
+
+bool TraitResolution::find_trait_impls_next(
+    const Span& sp,
+    const ::HIR::SimplePath& trait,
+    const ::HIR::PathParams& params,
+    const ::HIR::TypeRef& type,
+    t_cb_trait_impl_r callback,
+    const char* assoc_name,
+    const ::HIR::TypeRef* assoc_type,
+    const ::HIR::PathParams* assoc_params
+) const {
+    TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
+    if (!m_next_solver) {
+        ASSERT_BUG(sp, m_crate.m_pool, "next-solver requires the crate object pool");
+        m_next_solver = m_crate.m_pool->make<NextTraitGoalEvaluator>(*this, m_crate);
+    }
+    return m_next_solver->evaluate(
+        sp, trait, params, type, ::std::move(callback), assoc_name, assoc_type, assoc_params
+    );
+}
+
+bool TraitResolution::find_trait_impls(
+    const Span& sp,
+    const ::HIR::SimplePath& trait,
+    const ::HIR::PathParams& params,
+    const ::HIR::TypeRef& type,
+    t_cb_trait_impl_r callback,
+    bool magic_trait_impls
+) const {
+    if (gTraitSolverConfig.globally && magic_trait_impls) {
+        return find_trait_impls_next(
+            sp, trait, params, type, ::std::move(callback)
+        );
+    }
+    return find_trait_impls_legacy(
+        sp, trait, params, type, ::std::move(callback), magic_trait_impls
+    );
+}
 
         // -------------------------------------------------------------------------------------------------------------------
         //
@@ -2601,6 +4878,50 @@ TU_ARMA(Alias, ee) {
                 }
             }
             DEBUG("pe = " << pe.type << ", input = " << input);
+        }
+    }
+
+    if (gTraitSolverConfig.globally) {
+        bool normalized = false;
+        bool ambiguous = false;
+        this->find_trait_impls_next(
+            sp,
+            trait_path.m_path,
+            trait_path.m_params,
+            pe.type,
+            [&](ImplRef impl, ::HIR::Compare certainty) {
+                if (impl.is_ambiguous_identity()
+                    || certainty == ::HIR::Compare::Fuzzy) {
+                    ambiguous = true;
+                    return true;
+                }
+
+                auto output = impl.get_type(pe.item.c_str(), pe.params);
+                if (output == ::HIR::TypeRef() || output == input) {
+                    ambiguous = true;
+                    return true;
+                }
+                input = ::std::move(output);
+                normalized = true;
+                return true;
+            },
+            pe.item.c_str(),
+            nullptr,
+            &pe.params
+        );
+        if (normalized) {
+            this->expand_associated_types_inplace(sp, input, stack);
+            return;
+        }
+        if (ambiguous) {
+            // A rigid unresolved projection is still a usable alias: method
+            // lookup and associated-type bounds must be allowed to inspect it.
+            // Only projections containing inference variables stay unbound,
+            // because those are obligations the constraint loop must retry.
+            if (!this->m_ivars.type_contains_ivars(input, false)) {
+                e.binding = ::HIR::TypePathBinding::make_Opaque({});
+            }
+            return;
         }
     }
 
@@ -3345,7 +5666,8 @@ TU_ARMA(Alias, ee) {
             const ::HIR::GenericParams& impl_params_def,
             const ::HIR::PathParams& impl_trait_args,
             const ::HIR::TypeRef& impl_ty,
-            /*Out->*/ HIR::PathParams& out_impl_params
+            /*Out->*/ HIR::PathParams& out_impl_params,
+            bool evaluate_bounds /*=true*/
         ) const {
             TRACE_FUNCTION_FR("impl" << impl_params_def.fmt_args() << " " << trait << impl_trait_args << " for " << impl_ty, out_impl_params);
 
@@ -3478,6 +5800,20 @@ TU_ARMA(Alias, ee) {
                 DEBUG("Placeholders (" << placeholder_name << "): " << placeholders);
             } else {
                 DEBUG("Placeholders not needed");
+            }
+
+            if (!evaluate_bounds) {
+                for (size_t i = 0; i < out_impl_params.m_types.size(); i++) {
+                    if (out_impl_params.m_types[i] == HIR::TypeRef()) {
+                        out_impl_params.m_types[i] = ::std::move(placeholders.m_types[i]);
+                    }
+                }
+                for (size_t i = 0; i < out_impl_params.m_values.size(); i++) {
+                    if (out_impl_params.m_values[i] == HIR::ConstGeneric()) {
+                        out_impl_params.m_values[i] = ::std::move(placeholders.m_values[i]);
+                    }
+                }
+                return match;
             }
             auto cb_infer = m_ivars.callback_resolve_infer();
 
@@ -4288,9 +6624,65 @@ TU_ARMA(Alias, ee) {
                 // (Trait) <- (Trait+Foo)
                 if (const auto* se = src_ty.data().opt_TraitObject()) {
                     auto rv = ::HIR::Compare::Equal;
-                    // 1. Data trait must be the same (TODO: Fuzzy)
-                    if (de->m_trait != se->m_trait) {
+
+                    // Project the source principal to the requested
+                    // supertrait.  A trait may contain the same supertrait
+                    // with different substitutions, so compare the fully
+                    // monomorphised parameters instead of only its path.
+                    const ::HIR::TraitPath* projected = nullptr;
+                    ::HIR::TraitPath projected_storage;
+                    if (de->m_trait.m_path.m_path == se->m_trait.m_path.m_path) {
+                        rv &= compare_pp(
+                            sp,
+                            se->m_trait.m_path.m_params,
+                            de->m_trait.m_path.m_params
+                        );
+                        projected = &se->m_trait;
+                    } else if (se->m_trait.m_path.m_path != ::HIR::SimplePath()) {
+                        find_named_trait_in_trait(
+                            sp,
+                            de->m_trait.m_path.m_path,
+                            de->m_trait.m_path.m_params,
+                            *se->m_trait.m_trait_ptr,
+                            se->m_trait.m_path.m_path,
+                            se->m_trait.m_path.m_params,
+                            src_ty,
+                            [&](const ::HIR::TraitPath& parent) {
+                                const auto cmp = compare_pp(
+                                    sp,
+                                    parent.m_path.m_params,
+                                    de->m_trait.m_path.m_params
+                                );
+                                if (cmp == ::HIR::Compare::Unequal) {
+                                    return false;
+                                }
+                                rv &= cmp;
+                                projected_storage = parent.clone();
+                                projected = &projected_storage;
+                                return cmp == ::HIR::Compare::Equal;
+                            }
+                        );
+                    }
+                    if (!projected || rv == ::HIR::Compare::Unequal) {
                         return ::HIR::Compare::Unequal;
+                    }
+
+                    // Every associated-type equality required by the
+                    // destination object must also hold on the projected
+                    // source supertrait.
+                    for (const auto& required : de->m_trait.m_type_bounds) {
+                        const auto source = projected->m_type_bounds.find(required.first);
+                        if (source == projected->m_type_bounds.end()) {
+                            return ::HIR::Compare::Unequal;
+                        }
+                        rv &= source->second.type.compare_with_placeholders(
+                            sp,
+                            required.second.type,
+                            m_ivars.callback_resolve_infer()
+                        );
+                        if (rv == ::HIR::Compare::Unequal) {
+                            return rv;
+                        }
                     }
 
                     // 2. Destination markers must be a strict subset
@@ -4312,7 +6704,7 @@ TU_ARMA(Alias, ee) {
                     if (rv == ::HIR::Compare::Fuzzy && new_type_callback) {
                         // TODO: Inner type
                     }
-                    return ::HIR::Compare::Equal;
+                    return rv;
                 }
 
                 bool good;
@@ -4330,24 +6722,108 @@ TU_ARMA(Alias, ee) {
                         if (cmp == ::HIR::Compare::Unequal) {
                             return false;
                         }
-                        total_cmp &= cmp;
-                        tmp_e.m_trait.m_path.m_params = impl.get_trait_params();
+
+                        auto candidate_cmp = cmp;
+                        ::HIR::TypeData::Data_TraitObject candidate_e;
+                        candidate_e.m_trait.m_path = de->m_trait.m_path.m_path;
+                        candidate_e.m_trait.m_path.m_params = impl.get_trait_params();
+
+                        // Associated types declared by a supertrait carry the
+                        // declaring trait path.  Rebuild that path with the
+                        // selected principal-trait response instead of mixing
+                        // response parameters with the original goal.
+                        auto remap_source_trait = [&](const ::HIR::GenericPath& source_trait) {
+                            if (source_trait.m_path == de->m_trait.m_path.m_path) {
+                                return ::HIR::GenericPath(
+                                    source_trait.m_path,
+                                    candidate_e.m_trait.m_path.m_params.clone()
+                                );
+                            }
+
+                            ::HIR::GenericPath result = source_trait.clone();
+                            if (!de->m_trait.m_trait_ptr) {
+                                candidate_cmp = ::HIR::Compare::Fuzzy;
+                                return result;
+                            }
+
+                            auto goal_monomorph = MonomorphStatePtr(
+                                &src_ty, &de->m_trait.m_path.m_params, nullptr
+                            );
+                            auto response_monomorph = MonomorphStatePtr(
+                                &src_ty,
+                                &candidate_e.m_trait.m_path.m_params,
+                                nullptr
+                            );
+                            bool found = false;
+                            bool found_equal = false;
+                            for (const auto& parent : de->m_trait.m_trait_ptr->m_all_parent_traits) {
+                                if (parent.m_path.m_path != source_trait.m_path) {
+                                    continue;
+                                }
+                                auto goal_parent = goal_monomorph.monomorph_genericpath(
+                                    sp, parent.m_path, false
+                                );
+                                const auto parent_cmp = compare_pp(
+                                    sp, goal_parent.m_params, source_trait.m_params
+                                );
+                                if (parent_cmp == ::HIR::Compare::Unequal
+                                    || (found_equal && parent_cmp != ::HIR::Compare::Equal)) {
+                                    continue;
+                                }
+
+                                auto response_parent = response_monomorph.monomorph_genericpath(
+                                    sp, parent.m_path, false
+                                );
+                                if (!found || parent_cmp == ::HIR::Compare::Equal) {
+                                    result = ::std::move(response_parent);
+                                    found = true;
+                                    found_equal = parent_cmp == ::HIR::Compare::Equal;
+                                } else if (result != response_parent) {
+                                    // Multiple fuzzy supertrait projections
+                                    // are a legitimate ambiguous response.
+                                    candidate_cmp = ::HIR::Compare::Fuzzy;
+                                }
+                            }
+                            if (!found) {
+                                candidate_cmp = ::HIR::Compare::Fuzzy;
+                            } else if (!found_equal) {
+                                candidate_cmp = ::HIR::Compare::Fuzzy;
+                            }
+                            return result;
+                        };
+
                         for (const auto& aty : de->m_trait.m_type_bounds) {
                             auto atyv = impl.get_type(aty.first.c_str(), aty.second.aty_params);
                             if (atyv == ::HIR::TypeRef()) {
                                 // Get the trait from which this associated type comes.
                                 // Insert a UfcsKnown path for that
-                                auto p = ::HIR::Path(src_ty.clone(), de->m_trait.m_path.clone(), aty.first);
+                                auto p = ::HIR::Path(
+                                    src_ty.clone(),
+                                    aty.second.source_trait.clone(),
+                                    aty.first,
+                                    aty.second.aty_params.clone()
+                                );
                                 // Run EAT
                                 atyv = this->expand_associated_types(sp, ::HIR::TypeRef::new_path(mv$(p), {}));
                             }
-                            TODO(sp, "Monomorph " << aty.second.source_trait << " from " << de->m_trait.m_path.m_params << " to " << tmp_e.m_trait.m_path.m_params);
-                            tmp_e.m_trait.m_type_bounds[aty.first] = ::HIR::TraitPath::AtyEqual{
-                                aty.second.source_trait.clone(), // TODO: Monomorph from `de->m_trait.m_path.m_params` to `tmp_e.m_trait.m_path.m_params`
-                                {},
+
+                            auto desired = this->expand_associated_types(
+                                sp, aty.second.type.clone()
+                            );
+                            const auto aty_cmp = compare_ty(sp, atyv, desired);
+                            if (aty_cmp == ::HIR::Compare::Unequal) {
+                                return false;
+                            }
+                            candidate_cmp &= aty_cmp;
+                            candidate_e.m_trait.m_type_bounds[aty.first] = ::HIR::TraitPath::AtyEqual{
+                                remap_source_trait(aty.second.source_trait),
+                                aty.second.aty_params.clone(),
                                 mv$(atyv)
                             };
                         }
+
+                        total_cmp &= candidate_cmp;
+                        tmp_e = ::std::move(candidate_e);
                         return true;
                     });
                 }

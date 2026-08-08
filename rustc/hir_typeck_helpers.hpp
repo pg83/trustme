@@ -211,6 +211,8 @@ private:
     IVar& get_pointed_ivar(unsigned int slot) const;
 };
 
+class NextTraitGoalEvaluator;
+
 class TraitResolution: public TraitResolveCommon {
     const HIR::SimplePath& m_lang_Deref;
     const HMTypeInferrence& m_ivars;
@@ -224,26 +226,41 @@ private:
 
     mutable ::std::map<std::string, HIR::TypeRef> m_eat_cache;
     mutable ::std::vector<std::unique_ptr<::HIR::TypeRef>> m_eat_active_stack;
+    // Owned by the crate ObjPool.  TraitResolution only keeps a stable
+    // pointer into the compiler-lifetime arena.
+    mutable NextTraitGoalEvaluator* m_next_solver = nullptr;
+    // Coherence probes use an isolated inference table, so overlap checks
+    // cannot bind or append variables in the caller's type-checking context.
+    mutable HMTypeInferrence m_coherence_ivars;
+    mutable TraitResolution* m_coherence_resolve = nullptr;
 
 public:
-    TraitResolution(const HMTypeInferrence& ivars, const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params, const ::HIR::SimplePath& vis_path, const ::HIR::GenericPath* current_trait)
-        : TraitResolveCommon(crate)
-        , m_lang_Deref(crate.get_lang_item_path_opt("deref"))
-        , m_ivars(ivars)
-        , m_vis_path(vis_path)
-        , m_current_trait_path(current_trait)
-        , m_current_trait_ptr(current_trait ? &crate.get_trait_by_path(Span(), current_trait->m_path) : nullptr)
-    {
-        m_impl_generics = impl_params;
-        m_item_generics = item_params;
-        prep_indexes(Span());
-    }
+    TraitResolution(const HMTypeInferrence& ivars, const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params, const ::HIR::SimplePath& vis_path, const ::HIR::GenericPath* current_trait);
+    ~TraitResolution();
+
+    void set_generic_context(const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params);
 
     const ::HIR::GenericPath* current_trait_path() const {
         return m_current_trait_path;
     }
 
     ::HIR::Compare compare_pp(const Span& sp, const ::HIR::PathParams& left, const ::HIR::PathParams& right) const;
+
+    const ::HIR::TypeRef& resolve_type(const ::HIR::TypeRef& type) const {
+        return m_ivars.get_type(type);
+    }
+
+    ::HIR::Compare compare_ty(const Span& sp, const ::HIR::TypeRef& left, const ::HIR::TypeRef& right) const {
+        return left.compare_with_placeholders(sp, right, m_ivars.callback_resolve_infer());
+    }
+
+    bool type_contains_ivars(const ::HIR::TypeRef& type) const {
+        return m_ivars.type_contains_ivars(type, false);
+    }
+
+    bool params_contain_ivars(const ::HIR::PathParams& params) const {
+        return m_ivars.pathparams_contain_ivars(params, false);
+    }
 
     void compact_ivars(HMTypeInferrence& m_ivars);
 
@@ -272,8 +289,33 @@ public:
     typedef ::std::function<bool(const ::HIR::TypeRef&, const ::HIR::PathParams&, const ::HIR::TraitPath::assoc_list_t&)> t_cb_trait_impl;
     typedef ::std::function<bool(ImplRef, ::HIR::Compare)> t_cb_trait_impl_r;
 
-    /// Searches for a trait impl that matches the provided trait name and type
+    /// Searches for a trait impl using the solver selected for this session.
     bool find_trait_impls(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams& params, const ::HIR::TypeRef& type, t_cb_trait_impl_r callback, bool magic_trait_impls = true) const;
+
+    /// Candidate lookup used by the legacy selector and by next-solver
+    /// candidate assembly.  Callers performing trait selection must use
+    /// `find_trait_impls`, not this assembly primitive.
+    bool find_trait_impls_legacy(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams& params, const ::HIR::TypeRef& type, t_cb_trait_impl_r callback, bool magic_trait_impls = true, bool search_crate = true) const;
+
+    /// Evaluate a trait goal using the next-solver candidate model.  Candidate
+    /// assembly is exhaustive, impl where-clauses are evaluated recursively,
+    /// and only a merged response is exposed to the caller.  `assoc_name` and
+    /// `assoc_type` add an associated-type equality to the goal.
+    bool find_trait_impls_next(
+        const Span& sp,
+        const ::HIR::SimplePath& trait,
+        const ::HIR::PathParams& params,
+        const ::HIR::TypeRef& type,
+        t_cb_trait_impl_r callback,
+        const char* assoc_name = nullptr,
+        const ::HIR::TypeRef* assoc_type = nullptr,
+        const ::HIR::PathParams* assoc_params = nullptr
+    ) const;
+
+    /// Whether two concrete impl candidates may apply to one canonical goal.
+    /// With next-solver coherence enabled this unifies both headers and proves
+    /// both sets of where-clauses in an isolated inference context.
+    bool impls_overlap(const Span& sp, const ImplRef& left, const ImplRef& right) const;
 
     typedef ::std::function<bool(const ::HIR::TraitPath&)> t_cb_find_trait;
     /// Locate a named trait in the provied trait (either itself or as a parent trait)
@@ -296,6 +338,10 @@ public:
     struct RecursionDetected {};
 
 private:
+    friend class NextTraitGoalEvaluator;
+
+    ::HIR::PathParams make_fresh_impl_params(const ::HIR::GenericParams& params) const;
+
     ::HIR::Compare check_auto_trait_impl_destructure(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* params_ptr, const ::HIR::TypeRef& type) const;
     ::HIR::Compare ftic_check_params(
         const Span& sp,
@@ -305,7 +351,8 @@ private:
         const ::HIR::GenericParams& impl_params_def,
         const ::HIR::PathParams& impl_trait_args,
         const ::HIR::TypeRef& impl_ty,
-        /*Out->*/ HIR::PathParams& out_impl_params
+        /*Out->*/ HIR::PathParams& out_impl_params,
+        bool evaluate_bounds = true
     ) const;
 
 public:

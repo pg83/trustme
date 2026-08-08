@@ -831,6 +831,7 @@ public:
         BIT(0, m.can_unsize)
         BIT(1, m.is_nonzero)
         BIT(2, m.bounded_max)
+        BIT(3, m.is_fundamental)
 #undef BIT
         m.dst_type = static_cast<::HIR::StructMarkings::DstType>(m_in.read_tag());
         m.coerce_unsized = static_cast<::HIR::StructMarkings::Coerce>(m_in.read_tag());
@@ -1260,7 +1261,9 @@ DEF_D(::HIR::ExternLibrary, return d.deserialise_extlib();)
         {}
     };
     rv.m_lifetime = deserialise_lifetimeref();
-    rv.m_is_marker = m_in.read_bool();
+    const auto trait_flags = m_in.read_u8();
+    rv.m_is_marker = trait_flags & 1;
+    rv.m_is_fundamental = trait_flags & 2;
     rv.m_types = deserialise_istrumap<::HIR::AssociatedType>();
     rv.m_values = deserialise_istrumap<::HIR::TraitValueItem>();
     rv.m_value_indexes = deserialise_istrummap<::std::pair<unsigned int, ::HIR::GenericPath>>();

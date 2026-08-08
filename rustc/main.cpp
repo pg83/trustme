@@ -27,6 +27,7 @@
 #include "mir_main_bindings.hpp"
 #include "trans_main_bindings.hpp"
 #include "trans_target.hpp"
+#include "trait_solver_mode.hpp"
 
 #include "expand_cfg.hpp"
 #include "target_detect.h" // tools/common/target_detect.h
@@ -45,6 +46,7 @@
 #endif
 
 TargetVersion gTargetVersion = TargetVersion::Rustc1_90;
+TraitSolverConfig gTraitSolverConfig;
 
 struct ProgramParams {
     enum eLastStage {
@@ -86,6 +88,8 @@ struct ProgramParams {
 
     //
     bool run_borrowcheck = false;
+
+    TraitSolverConfig trait_solver;
 
     ::std::vector<const char*> lib_search_dirs;
     ::std::vector<const char*> libraries;
@@ -204,6 +208,7 @@ void init_debug_list() {
 int main(int argc, char* argv[]) {
     init_debug_list();
     ProgramParams params(argc, argv);
+    gTraitSolverConfig = params.trait_solver;
     const auto mir_opt_level = params.effective_mir_opt_level();
     const auto enable_mir_inlining = params.enable_mir_inlining();
     if (params.codegen.panic_type.empty()) {
@@ -1092,6 +1097,22 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         }
                         this->mir_opt_level = value;
                         this->mir_opt_level_explicit = true;
+                    } else if (optname == "next-solver") {
+                        if (eq_pos == ::std::string::npos || optval == "globally") {
+                            this->trait_solver.coherence = true;
+                            this->trait_solver.globally = true;
+                        } else if (optval == "coherence") {
+                            this->trait_solver.coherence = true;
+                            this->trait_solver.globally = false;
+                        } else if (optval == "no") {
+                            this->trait_solver.coherence = false;
+                            this->trait_solver.globally = false;
+                        } else {
+                            ::std::cerr << "Invalid value for -Z next-solver: '" << optval
+                                       << "' (expected 'no', 'coherence', or 'globally')"
+                                       << ::std::endl;
+                            exit(1);
+                        }
                     } else if (optname == "full-validate") {
                         no_optval();
                         this->debug.full_validate = true;

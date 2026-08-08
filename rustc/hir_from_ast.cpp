@@ -1148,6 +1148,7 @@ namespace {
             rv.m_struct_markings.is_nonzero = true;
         }
     }
+    rv.m_struct_markings.is_fundamental = attrs.has("fundamental");
     if(ent.m_markings.scalar_valid_start_set)
     {
         if (ent.m_markings.scalar_valid_start == U128(1)) {
@@ -1416,7 +1417,11 @@ namespace {
     return ::HIR::Union{LowerHIR_GenericParams(f.m_params, nullptr), repr, mv$(variants)};
 }
 
-::HIR::Trait LowerHIR_Trait(::HIR::SimplePath trait_path, const ::AST::Trait& f) {
+::HIR::Trait LowerHIR_Trait(
+    ::HIR::SimplePath trait_path,
+    const ::AST::Trait& f,
+    const ::AST::AttributeList& attrs
+) {
     TRACE_FUNCTION_F(trait_path);
     trait_path.update_crate_name(g_crate_name);
 
@@ -1500,6 +1505,7 @@ namespace {
     }
 
     rv.m_is_marker = f.is_marker();
+    rv.m_is_fundamental = attrs.has("fundamental");
 
     return rv;
 }
@@ -1932,7 +1938,7 @@ void _add_mod_mac_item(::HIR::Module& mod, RcString name, ::HIR::Publicity is_pu
                 _add_mod_ns_item(mod, item.name, get_vis(item.vis), LowerHIR_Union(item_path, e, item.attrs));
             }
             TU_ARMA(Trait, e) {
-                _add_mod_ns_item(mod, item.name, get_vis(item.vis), LowerHIR_Trait(item_path.get_simple_path(), e));
+                _add_mod_ns_item(mod, item.name, get_vis(item.vis), LowerHIR_Trait(item_path.get_simple_path(), e, item.attrs));
             }
             TU_ARMA(TraitAlias, e) {
                 _add_mod_ns_item(mod, item.name, get_vis(item.vis), LowerHIR_TraitAlias(sp, item_path, e));

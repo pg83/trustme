@@ -6,7 +6,10 @@
  * - Non-inferred type checking
  */
 #include "hir_typeck_static.hpp"
+#include "hir_typeck_helpers.hpp"
+#include "trait_solver_mode.hpp"
 #include <algorithm>
+#include <std/mem/obj_pool.h>
 #include "hir_expr.hpp"
 #include "hir_conv_main_bindings.hpp"
 
@@ -79,9 +82,78 @@ namespace {
     }
 }
 
+class StaticTraitResolve::NextSolverBridge {
+    HMTypeInferrence m_ivars;
+    ::HIR::SimplePath m_visibility;
+    TraitResolution m_resolve;
+
+public:
+    explicit NextSolverBridge(const ::HIR::Crate& crate)
+        : m_resolve(m_ivars, crate, nullptr, nullptr, m_visibility, nullptr)
+    {
+    }
+
+    bool find_impl(
+        const Span& sp,
+        const ::HIR::GenericParams* impl_generics,
+        const ::HIR::GenericParams* item_generics,
+        const ::HIR::SimplePath& trait,
+        const ::HIR::PathParams* params,
+        const ::HIR::TypeRef& type,
+        StaticTraitResolve::t_cb_find_impl callback
+    ) {
+        m_resolve.set_generic_context(impl_generics, item_generics);
+
+        ::HIR::PathParams inferred_params;
+        if (!params) {
+            const auto& trait_def = m_resolve.m_crate.get_trait_by_path(sp, trait);
+            inferred_params.m_lifetimes = ThinVector<::HIR::LifetimeRef>(
+                trait_def.m_params.m_lifetimes.size()
+            );
+            inferred_params.m_types.reserve(trait_def.m_params.m_types.size());
+            for (size_t i = 0; i < trait_def.m_params.m_types.size(); i++) {
+                inferred_params.m_types.push_back(m_ivars.new_ivar_tr());
+            }
+            inferred_params.m_values.reserve(trait_def.m_params.m_values.size());
+            for (size_t i = 0; i < trait_def.m_params.m_values.size(); i++) {
+                inferred_params.m_values.push_back(
+                    ::HIR::ConstGeneric::make_Infer({m_ivars.new_ivar_val()})
+                );
+            }
+            params = &inferred_params;
+        }
+
+        return m_resolve.find_trait_impls_next(
+            sp,
+            trait,
+            *params,
+            type,
+            [&](ImplRef impl, ::HIR::Compare match) {
+                return callback(::std::move(impl), match != ::HIR::Compare::Equal);
+            }
+        );
+    }
+};
+
 bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeRef& type, t_cb_find_impl found_cb, bool dont_handoff_to_specialised) const {
     TRACE_FUNCTION_F(trait_path << FMT_CB(os, if (trait_params) { os << *trait_params; } else { os << "<?>"; }) << " for " << type);
     auto cb_ident = HIR::ResolvePlaceholdersNop();
+
+    if (gTraitSolverConfig.globally && !dont_handoff_to_specialised) {
+        if (!m_next_solver) {
+            ASSERT_BUG(sp, m_crate.m_pool, "next-solver requires the crate object pool");
+            m_next_solver = m_crate.m_pool->make<NextSolverBridge>(m_crate);
+        }
+        return m_next_solver->find_impl(
+            sp,
+            m_impl_generics,
+            m_item_generics,
+            trait_path,
+            trait_params,
+            type,
+            ::std::move(found_cb)
+        );
+    }
 
     static ::HIR::GenericParams null_hrls;
     static ::HIR::PathParams null_params;
@@ -687,25 +759,26 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
         if (ret)
             return rv;
 
-        // Detect recursion and return true if detected
-        static ::std::vector<::std::tuple<const ::HIR::SimplePath*, const ::HIR::PathParams*, const ::HIR::TypeRef*>> stack;
-        for (const auto& ent : stack) {
+        // Legacy static lookup is recursive too.  Keep its active goals on
+        // this resolver instance instead of in process-global state.
+        for (const auto& ent : m_find_impl_stack) {
             if (*::std::get<0>(ent) != trait_path)
                 continue;
-            if (::std::get<1>(ent) && trait_params && *::std::get<1>(ent) != *trait_params)
+            if (::std::get<1>(ent) && trait_params
+                && *::std::get<1>(ent) != *trait_params)
                 continue;
             if (*::std::get<2>(ent) != type)
                 continue;
 
             return found_cb(ImplRef(&type, trait_params, &null_assoc), false);
         }
-        stack.push_back(::std::make_tuple(&trait_path, trait_params, &type));
-        struct Guard {
-            ~Guard() {
-                stack.pop_back();
-            }
-        };
-        Guard _;
+        m_find_impl_stack.push_back(
+            ::std::make_tuple(&trait_path, trait_params, &type)
+        );
+        struct FindImplStackGuard {
+            decltype(m_find_impl_stack)& stack;
+            ~FindImplStackGuard() { stack.pop_back(); }
+        } stack_guard{m_find_impl_stack};
 
         auto cmp = this->check_auto_trait_impl_destructure(sp, trait_path, trait_params, type);
         if (cmp != ::HIR::Compare::Unequal)
