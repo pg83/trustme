@@ -2,7 +2,7 @@
 
 В этом файле остаётся только незакрытая работа. История уже сделанных исправлений находится в git, а не в плане.
 
-Текущий baseline полного plain-clang/lld прогона: 11 658 failed nodes, 14 009 broken requested targets. Команда: `nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC=clang CXX=clang++ LDFLAGS='-fuse-ld=lld' ./build -B .build-clang -j 4 -k test`. Полный лог сохранён в `/tmp/trustme-full-gate-20260808-zst-codegen.log`. Падения `libcore` в `ptr::alignment`, `ptr::const_ptr`, never-type impl и `partial_ord_impl!(f16 ...)` устранены; точная сборка дошла до `alloc::boxed::Deref` из P1 ниже.
+Текущий baseline полного plain-clang/lld прогона: 11 658 failed nodes, 14 009 broken requested targets. Команда: `nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC=clang CXX=clang++ LDFLAGS='-fuse-ld=lld' ./build -B .build-clang -j 4 -k test`. Полный лог сохранён в `/tmp/trustme-full-gate-20260808-zst-codegen.log`. Падения `libcore` в `ptr::alignment`, `ptr::const_ptr`, never-type impl и `partial_ord_impl!(f16 ...)`, а также typecheck `alloc::boxed::Deref` устранены; точная сборка теперь доходит до lowering `Box::into_inner` из P1 ниже.
 
 Для каждого compiler fix порядок один: минимальный красный `tests/unit/test_*.rs` → исправление общего пути → зелёный unit → точный upstream trigger → сборка `rustc` под clang/lld → отдельный commit и push. Полный gate запускается после серии точечных исправлений, а не после каждого файла.
 
@@ -17,7 +17,7 @@
 
 - [ ] Устранить trait-alias assert в `hir_from_ast.cpp:963`. Сначала минимальный alias с теми bounds, на которых падает lowering; после фикса проверить исходный UI/run-pass trigger.
 - [ ] Устранить `mir_mir_builder.cpp:217: No value available`. Разделить triggers по конструкции, найти первый общий случай отсутствующего result value и не подставлять фиктивный unit для выражений с не-unit типом.
-- [ ] Исправить typecheck текущего `Deref for Box<T, A>`: в `alloc/src/boxed.rs:1951` выражение `&**self` не выбирает `Deref::Target` для `Box<T, A>`. Нужен минимальный unit на generic smart pointer и вложенный deref; сохранить dispatch настоящего overload, не подставлять Target по имени crate/типа.
+- [ ] Исправить lowering move через overload `Deref`: в `alloc/src/boxed.rs:628` тело `Box::into_inner(boxed) { *boxed }` доходит до `mir_from_hir.cpp:1814`, где `ValueUsage::Move` для desugared deref оставлен как `TODO`. Нужен минимальный runtime unit с owned smart pointer и извлечением `T`; lowering должен сохранить Rust move/drop semantics без требования borrow checker и без специального случая для `Box`.
 - [ ] Исправить slice-pattern lowering в `mir_from_hir_match.cpp:1944` (`too many leading rules`) и отдельный overlap byte-array patterns. Нужны units на leading/rest/trailing patterns и runtime-проверка выбранной match arm.
 - [ ] Исправить validation `ItemAddr` для inline const. Unit должен вычислять адрес допустимого inline-const item и доходить до runtime без ослабления общей MIR validation.
 - [ ] Разобрать timeout `coretests/net_ipv6_properties`: определить, 60 секунд съедает rustc, внешний clang или runtime. Compiler hang свести к unit; слишком крупный независимый harness разбить на compile shards без изменения тестового содержания.

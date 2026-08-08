@@ -176,6 +176,14 @@ namespace typeck {
         throw "";
     }
 
+    // A binary language candidate is available either when both operands are
+    // already known to be valid primitive inputs, or when the known lhs
+    // determines the still-inferred rhs.
+    inline bool primitive_operator_has_language_candidate(PrimitiveOperator op, const ::HIR::TypeRef& left, const ::HIR::TypeRef& right) {
+        return primitive_operator_has_builtin(op, left, right)
+            || (right.data().is_Infer() && primitive_operator_lhs_determines_rhs(op, left));
+    }
+
     inline bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeRef& value) {
         if (op == PrimitiveOperator::Deref) {
             return value.data().is_Borrow() || value.data().is_Pointer();

@@ -5628,11 +5628,8 @@ namespace {
                 const auto& left_ty = context.get_type(left);
                 const auto& right_ty = context.get_type(right);
                 const bool primitive_or_literal_pair = H::type_is_num(left_ty) && H::type_is_num(right_ty);
-                const bool builtin_pair = typeck::primitive_operator_has_builtin(v.operator_kind, left_ty, right_ty);
-                const bool builtin_lhs_with_inferred_rhs =
-                    right_ty.data().is_Infer()
-                    && typeck::primitive_operator_lhs_determines_rhs(v.operator_kind, left_ty);
-                if (primitive_or_literal_pair || builtin_pair || builtin_lhs_with_inferred_rhs) {
+                const bool language_primitive_candidate = typeck::primitive_operator_has_language_candidate(v.operator_kind, left_ty, right_ty);
+                if (primitive_or_literal_pair || language_primitive_candidate) {
                     DEBUG("- Magic inferrence link for primitive binops");
                     if (v.name == "") {
                         // Comparison op, output already known to be `bool`
@@ -5693,6 +5690,30 @@ namespace {
             }
         }
 
+        // While typechecking an operator implementation, its own associated
+        // type remains a valid assumption for a genuine overload.  Exclude
+        // it only when the expression itself has the language primitive
+        // semantics; otherwise a generic smart pointer cannot establish the
+        // Target used by its own `deref` body.
+        const auto current_operator_uses_language_primitive = [&]() {
+            if (!v.is_operator
+                || v.operator_kind == typeck::PrimitiveOperator::None
+                || (saw_current_operator_impl && !current_operator_impl_has_builtin_signature)) {
+                return false;
+            }
+
+            const auto& impl_ty = context.get_type(v.impl_ty);
+            if (v.params.m_types.size() == 0) {
+                return typeck::primitive_operator_has_builtin(v.operator_kind, impl_ty);
+            }
+            if (v.params.m_types.size() == 1) {
+                return typeck::primitive_operator_has_language_candidate(
+                    v.operator_kind, impl_ty, context.get_type(v.params.m_types.front())
+                );
+            }
+            return false;
+        };
+
         // Locate applicable trait impl
         unsigned int count = 0;
         DEBUG("Searching for impl " << v.trait << v.params << " for " << context.m_ivars.fmt_type(v.impl_ty));
@@ -5708,8 +5729,11 @@ namespace {
             bool found = context.m_resolve.find_trait_impls(sp, v.trait, v.params, v.impl_ty, [&](ImplRef impl, HIR::Compare cmp) {
                 DEBUG("[check_associated] Found cmp=" << cmp << " " << impl);
                 if (v.operator_kind != typeck::PrimitiveOperator::None && context.is_current_operator_impl(impl)) {
-                    DEBUG("[check_associated] - current trait impl is not an operator candidate");
-                    return false;
+                    if (current_operator_uses_language_primitive()) {
+                        DEBUG("[check_associated] - language primitive wins over current trait impl");
+                        return false;
+                    }
+                    DEBUG("[check_associated] - use current trait impl as overload assumption");
                 }
                 if (v.name != "") {
                     // TODO: Are params needed for these ATY bounds?
