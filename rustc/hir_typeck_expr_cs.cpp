@@ -378,9 +378,10 @@ namespace {
                                     node.m_value = NEWNODE(ty.clone(), sp, _Cast, mv$(node.m_value), ty.clone());
                                     this->m_completed = true;
                                 } else {
-                                    bool found = this->context.m_resolve.find_trait_impls(sp, this->context.m_resolve.m_lang_Unsize, ::HIR::PathParams(e.inner.clone()), s_e.inner, [](auto, auto) {
-                                        return true;
-                                    });
+                                    bool found = !this->context.m_resolve.m_lang_Unsize.components().empty()
+                                                 && this->context.m_resolve.find_trait_impls(sp, this->context.m_resolve.m_lang_Unsize, ::HIR::PathParams(e.inner.clone()), s_e.inner, [](auto, auto) {
+                                                        return true;
+                                                    });
                                     if (found) {
                                         auto ty = ::HIR::TypeRef::new_borrow(e.type, e.inner.clone());
                                         node.m_value = NEWNODE(ty.clone(), sp, _Unsize, mv$(node.m_value), ty.clone());
