@@ -162,8 +162,8 @@ TransList Trans_Enumerate_Main(const ::HIR::Crate& crate) {
 
         // "start" language item
         // - Takes main, and argc/argv as arguments
-        {
-            auto start_path = crate.get_lang_item_path(sp, "start");
+        const auto& start_path = crate.get_lang_item_path_opt("start");
+        if (start_path != ::HIR::SimplePath()) {
             const auto& fcn = crate.get_function_by_path(sp, start_path);
 
             Trans_Params lang_start_pp;
@@ -175,6 +175,10 @@ TransList Trans_Enumerate_Main(const ::HIR::Crate& crate) {
             state.rv.m_roots.push_back(p.clone());
             //state.enum_fcn( start_path, fcn, mv$(lang_start_pp) );
             state.enum_fcn(std::move(p), fcn, mv$(lang_start_pp));
+        } else if (!crate.m_is_no_core) {
+            // Preserve the usual diagnostic for crates that rely on the
+            // standard entrypoint protocol.
+            crate.get_lang_item_path(sp, "start");
         }
     } else {
         const auto& fcn = crate.get_function_by_path(sp, c_start_path);

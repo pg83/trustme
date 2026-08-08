@@ -2242,6 +2242,7 @@ public:
         rv.m_crate_name = "bin#";
     }
     rv.m_edition = crate.m_edition;
+    rv.m_is_no_core = crate.m_load_std == ::AST::Crate::LOAD_NONE;
 
     g_crate_ptr = &rv;
     g_ast_crate_ptr = &crate;

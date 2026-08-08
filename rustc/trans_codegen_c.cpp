@@ -855,17 +855,26 @@ namespace {
                     auto main_path = m_crate.get_lang_item_path(Span(), "mrustc-main");
                     const auto& main_fcn = m_crate.get_function_by_path(sp, main_path);
 
-                    auto start_gpath = ::HIR::GenericPath(m_resolve.m_crate.get_lang_item_path(Span(), "start"));
-                    if (TARGETVER_LEAST_1_29) {
-                        // With 1.29, this now takes main's return type as a type parameter
-                        start_gpath.m_params.m_types.push_back(main_fcn.m_return.clone());
+                    const auto& start_path = m_resolve.m_crate.get_lang_item_path_opt("start");
+                    if (m_crate.m_is_no_core && start_path == ::HIR::SimplePath()) {
+                        // A no_core binary has no standard entrypoint protocol.
+                        // Call its ordinary main directly instead of inventing a
+                        // `start` language item.
+                        m_of << "\t" << Trans_Mangle(::HIR::GenericPath(main_path)) << "();\n";
+                        m_of << "\treturn 0;\n";
+                    } else {
+                        auto start_gpath = ::HIR::GenericPath(m_resolve.m_crate.get_lang_item_path(Span(), "start"));
+                        if (TARGETVER_LEAST_1_29) {
+                            // With 1.29, this now takes main's return type as a type parameter
+                            start_gpath.m_params.m_types.push_back(main_fcn.m_return.clone());
+                        }
+                        m_of << "\treturn " << Trans_Mangle(start_gpath) << "(" << Trans_Mangle(::HIR::GenericPath(main_path)) << ", argc, (uint8_t**)argv";
+                        if (TARGETVER_LEAST_1_74) {
+                            m_of << ", 0"; // `sigpipe` setting
+                            // 0: Default, 1: Inherit, 2: SIG_IGN, 3: SIG_DFL
+                        }
+                        m_of << ");\n";
                     }
-                    m_of << "\treturn " << Trans_Mangle(start_gpath) << "(" << Trans_Mangle(::HIR::GenericPath(main_path)) << ", argc, (uint8_t**)argv";
-                    if (TARGETVER_LEAST_1_74) {
-                        m_of << ", 0"; // `sigpipe` setting
-                        // 0: Default, 1: Inherit, 2: SIG_IGN, 3: SIG_DFL
-                    }
-                    m_of << ");\n";
                 } else {
                     m_of << "\treturn " << Trans_Mangle(::HIR::GenericPath(c_start_path)) << "(argc, argv);\n";
                 }

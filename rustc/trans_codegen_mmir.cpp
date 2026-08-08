@@ -279,10 +279,19 @@ namespace {
                 m_of << "fn main#(isize, *const *const i8): isize {\n";
                 auto c_start_path = m_resolve.m_crate.get_lang_item_path_opt("mrustc-start");
                 if (c_start_path == ::HIR::SimplePath()) {
-                    m_of << "\tlet m: fn();\n";
-                    m_of << "\t0: {\n";
-                    m_of << "\t\tASSIGN m = ADDROF " << fmt(::HIR::GenericPath(m_resolve.m_crate.get_lang_item_path(Span(), "mrustc-main"))) << ";\n";
-                    m_of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(m_resolve.m_crate.get_lang_item_path(Span(), "start"))) << "(m, arg0, arg1) goto 1 else 1\n";
+                    auto main_path = m_resolve.m_crate.get_lang_item_path(Span(), "mrustc-main");
+                    const auto& start_path = m_resolve.m_crate.get_lang_item_path_opt("start");
+                    if (m_crate.m_is_no_core && start_path == ::HIR::SimplePath()) {
+                        const auto& main_fcn = m_crate.get_function_by_path(Span(), main_path);
+                        m_of << "\tlet direct_main_result: " << fmt(main_fcn.m_return) << ";\n";
+                        m_of << "\t0: {\n";
+                        m_of << "\t\tCALL direct_main_result = " << fmt(::HIR::GenericPath(main_path)) << "() goto 1 else 1\n";
+                    } else {
+                        m_of << "\tlet m: fn();\n";
+                        m_of << "\t0: {\n";
+                        m_of << "\t\tASSIGN m = ADDROF " << fmt(::HIR::GenericPath(main_path)) << ";\n";
+                        m_of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(m_resolve.m_crate.get_lang_item_path(Span(), "start"))) << "(m, arg0, arg1) goto 1 else 1\n";
+                    }
                 } else {
                     m_of << "\t0: {\n";
                     m_of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(c_start_path)) << "(arg0, arg1) goto 1 else 1;\n";

@@ -683,6 +683,9 @@ namespace HIR {
         stl::ObjPool* m_pool;
         RcString m_crate_name;
         AST::Edition m_edition;
+        // Compile-local crate configuration. This is not serialised because an
+        // external crate can never provide this crate's executable entrypoint.
+        bool m_is_no_core = false;
 
         Module m_root_module;
 
