@@ -3522,6 +3522,23 @@ namespace {
             }
         }
 
+        // An index into a zero-sized array is represented by the array's
+        // address, never by a C `DATA` field (such fields are omitted).  Peel
+        // nested zero-sized array projections to their materialized backing
+        // lvalue before taking that address.
+        ::MIR::LValue lvalue_zst_index_backing(const ::MIR::LValue& lv) const {
+            auto rv = lv.clone();
+            while (::MIR::LValue::CRef(rv).is_Index()) {
+                auto inner = ::MIR::LValue::CRef(rv).inner_ref();
+                HIR::TypeRef tmp;
+                if (!this->type_is_bad_zst(m_mir_res->get_lvalue_type(tmp, inner))) {
+                    break;
+                }
+                rv.m_wrappers.pop_back();
+            }
+            return rv;
+        }
+
         bool type_is_high_align(const ::HIR::TypeRef& ty) const {
             // Only applicable to MSVC (which doesn't like unaligned arguments)
             if (m_compiler != Compiler::Msvc) {
@@ -3536,6 +3553,15 @@ namespace {
         void emit_borrow(const ::MIR::TypeResolve& mir_res, HIR::BorrowType bt, const MIR::LValue& val) {
             ::HIR::TypeRef tmp;
             const auto& ty = mir_res.get_lvalue_type(tmp, val);
+
+            if (this->type_is_bad_zst(ty) && !this->lvalue_root_is_bad_zst(val)) {
+                auto backing = this->lvalue_zst_index_backing(val);
+                if (backing.m_wrappers.size() != val.m_wrappers.size()) {
+                    emit_borrow(mir_res, bt, backing);
+                    return;
+                }
+            }
+
             bool special = false;
             // If the inner value was a deref, just copy the pointer verbatim
             if (val.is_Deref()) {
@@ -8845,6 +8871,12 @@ namespace {
                                 m_of << indent << Trans_Mangle(p) << "(&(";
                                 emit_ctype(ty);
                                 m_of << "){0});\n";
+                            } else if (this->type_is_bad_zst(ty) && ::MIR::LValue::CRef(slot).is_Index()) {
+                                m_of << indent << Trans_Mangle(p) << "((";
+                                emit_ctype(ty);
+                                m_of << "*)";
+                                emit_borrow(*m_mir_res, ::HIR::BorrowType::Unique, slot);
+                                m_of << ");\n";
                             } else if (this->type_is_bad_zst(ty) && (slot.is_Field() || slot.is_Downcast())) {
                                 // May need to back the slot out too, as we might be dropping a ZST tuple
                                 auto v = ::MIR::LValue::CRef(slot).inner_ref();
