@@ -565,6 +565,13 @@ namespace {
                 }
             }
         }
+        TU_ARMA(NamedFunction, te) {
+            // Function items are zero-sized: their identity is carried by
+            // the NamedFunction type, not by bytes or a relocation in the
+            // evaluated literal.  Reconstruct the ZST function value instead
+            // of treating the lifted inline constant itself as addressable.
+            return ::MIR::Constant::make_Function({box$(te.path.clone())});
+        }
         TU_ARMA(Function, te) {
             const auto* data_reloc = lit.get_reloc();
             MIR_ASSERT(state, data_reloc, "Function with no relocation?!");
