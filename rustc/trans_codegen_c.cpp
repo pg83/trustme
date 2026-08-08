@@ -6499,6 +6499,25 @@ namespace {
                 emit_ctype(params.m_types.at(0));
                 m_of << "_Atomic *)";
             };
+            // Rust's pointer atomic RMW intrinsics carry their delta in the
+            // pointer value itself.  Represent them as integer atomics in C:
+            // C pointer fetch_add takes an element count and would both reject
+            // the operand type and scale a byte offset.
+            const bool atomic_type_is_pointer = params.m_types.size() > 0
+                && params.m_types.at(0).data().is_Pointer();
+            auto emit_atomic_rmw_cast = [&]() {
+                if (atomic_type_is_pointer) {
+                    m_of << "(";
+                    emit_ctype(params.m_types.at(0));
+                    m_of << ")";
+                }
+            };
+            auto emit_atomic_rmw_operand = [&](const ::MIR::Param& param) {
+                if (atomic_type_is_pointer) {
+                    m_of << "(uintptr_t)";
+                }
+                emit_param(param);
+            };
             auto emit_atomic_cxchg = [&](const auto& e, Ordering o_succ, Ordering o_fail, bool is_weak) {
                 switch (m_compiler) {
                     case Compiler::Gcc:
@@ -6581,6 +6600,7 @@ namespace {
                 m_of << " = ";
                 switch (m_compiler) {
                     case Compiler::Gcc:
+                        emit_atomic_rmw_cast();
                         switch (op) {
                             case AtomicOp::Add:
                                 m_of << "atomic_fetch_add_explicit";
@@ -6599,10 +6619,14 @@ namespace {
                                 break;
                         }
                         m_of << "(";
-                        emit_atomic_cast();
+                        if (atomic_type_is_pointer) {
+                            m_of << "(uintptr_t _Atomic *)";
+                        } else {
+                            emit_atomic_cast();
+                        }
                         emit_param(e.args.at(0));
                         m_of << ", ";
-                        emit_param(e.args.at(1));
+                        emit_atomic_rmw_operand(e.args.at(1));
                         m_of << ", " << get_atomic_ty_gcc(ordering) << ")";
                         break;
                     case Compiler::Msvc:
@@ -6614,7 +6638,7 @@ namespace {
                                 emit_msvc_atomic_op("InterlockedExchangeAdd", ordering);
                                 emit_param(e.args.at(0));
                                 m_of << ", ~(";
-                                emit_param(e.args.at(1));
+                                emit_atomic_rmw_operand(e.args.at(1));
                                 m_of << ")+1)";
                                 return;
                             case AtomicOp::And:
@@ -6629,7 +6653,7 @@ namespace {
                         }
                         emit_param(e.args.at(0));
                         m_of << ", ";
-                        emit_param(e.args.at(1));
+                        emit_atomic_rmw_operand(e.args.at(1));
                         m_of << ")";
                         break;
                 }
@@ -8213,11 +8237,13 @@ namespace {
                     auto ordering = get_atomic_ordering(name, 7 + 4 + 1);
                     const auto& ty = params.m_types.at(0);
                     emit_lvalue(e.ret_val);
-                    m_of << " = __mrustc_atomicloop" << get_prim_size(ty) << "(";
+                    m_of << " = ";
+                    emit_atomic_rmw_cast();
+                    m_of << "__mrustc_atomicloop" << get_prim_size(ty) << "(";
                     m_of << "(volatile uint" << get_prim_size(ty) << "_t*)";
                     emit_param(e.args.at(0));
                     m_of << ", ";
-                    emit_param(e.args.at(1));
+                    emit_atomic_rmw_operand(e.args.at(1));
                     if (m_compiler == Compiler::Gcc) {
                         m_of << ", " << get_atomic_ty_gcc(ordering);
                     }
@@ -8234,11 +8260,13 @@ namespace {
                     const auto& ty = params.m_types.at(0);
                     const char* op = (name.c_str()[7 + 1] == 'a' ? "imax" : "imin"); // m'a'x vs m'i'n
                     emit_lvalue(e.ret_val);
-                    m_of << " = __mrustc_atomicloop" << get_prim_size(ty) << "(";
+                    m_of << " = ";
+                    emit_atomic_rmw_cast();
+                    m_of << "__mrustc_atomicloop" << get_prim_size(ty) << "(";
                     m_of << "(volatile uint" << get_prim_size(ty) << "_t*)";
                     emit_param(e.args.at(0));
                     m_of << ", ";
-                    emit_param(e.args.at(1));
+                    emit_atomic_rmw_operand(e.args.at(1));
                     if (m_compiler == Compiler::Gcc) {
                         m_of << ", " << get_atomic_ty_gcc(ordering);
                     }
@@ -8249,11 +8277,13 @@ namespace {
                     const auto& ty = params.m_types.at(0);
                     const char* op = (name.c_str()[7 + 2] == 'a' ? "umax" : "umin"); // m'a'x vs m'i'n
                     emit_lvalue(e.ret_val);
-                    m_of << " = __mrustc_atomicloop" << get_prim_size(ty) << "(";
+                    m_of << " = ";
+                    emit_atomic_rmw_cast();
+                    m_of << "__mrustc_atomicloop" << get_prim_size(ty) << "(";
                     m_of << "(volatile uint" << get_prim_size(ty) << "_t*)";
                     emit_param(e.args.at(0));
                     m_of << ", ";
-                    emit_param(e.args.at(1));
+                    emit_atomic_rmw_operand(e.args.at(1));
                     if (m_compiler == Compiler::Gcc) {
                         m_of << ", " << get_atomic_ty_gcc(ordering);
                     }
