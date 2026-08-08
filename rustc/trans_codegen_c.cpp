@@ -3511,6 +3511,17 @@ namespace {
             }
         }
 
+        // Locals whose complete Rust type is a ZST aren't emitted in C.  A
+        // projection from such a local has no C lvalue to take the address of.
+        bool lvalue_root_is_bad_zst(const ::MIR::LValue& lv) const {
+            if (m_options.disallow_empty_structs) {
+                HIR::TypeRef tmp;
+                return type_is_bad_zst(m_mir_res->get_lvalue_type(tmp, lv, lv.m_wrappers.size()));
+            } else {
+                return false;
+            }
+        }
+
         bool type_is_high_align(const ::HIR::TypeRef& ty) const {
             // Only applicable to MSVC (which doesn't like unaligned arguments)
             if (m_compiler != Compiler::Msvc) {
@@ -8817,7 +8828,15 @@ namespace {
                             MIR_BUG(*m_mir_res, ty << " unknown metadata");
                         case MetadataType::None:
                         case MetadataType::Zero:
-                            if (this->type_is_bad_zst(ty) && (slot.is_Field() || slot.is_Downcast())) {
+                            if (this->type_is_bad_zst(ty) && this->lvalue_root_is_bad_zst(slot)) {
+                                // The C backend omits zero-sized locals, but Rust still
+                                // runs Drop for every logical ZST value.  Give Drop an
+                                // address with the ZST's own alignment instead of naming
+                                // an elided local (which can be behind Field/Index/etc.).
+                                m_of << indent << Trans_Mangle(p) << "(&(";
+                                emit_ctype(ty);
+                                m_of << "){0});\n";
+                            } else if (this->type_is_bad_zst(ty) && (slot.is_Field() || slot.is_Downcast())) {
                                 // May need to back the slot out too, as we might be dropping a ZST tuple
                                 auto v = ::MIR::LValue::CRef(slot).inner_ref();
                                 ::HIR::TypeRef tmp;
