@@ -1017,12 +1017,18 @@ namespace {
                 }
 
                 if (TARGETVER_LEAST_1_29) {
-                    // Bind `panic_impl` lang item to the item tagged with `panic_implementation`
-                    m_of << "uint32_t panic_impl(uintptr_t payload) {";
-                    const auto& panic_impl_path = m_crate.get_lang_item_path(Span(), "mrustc-panic_implementation");
-                    m_of << "extern uint32_t " << Trans_Mangle(panic_impl_path) << "(uintptr_t payload);";
-                    m_of << "return " << Trans_Mangle(panic_impl_path) << "(payload);";
-                    m_of << "}\n";
+                    // Bind `panic_impl` only when this crate actually provides
+                    // a panic implementation. A no_core binary without one can
+                    // still be valid when no generated code uses it.
+                    const auto& panic_impl_path = m_crate.get_lang_item_path_opt("mrustc-panic_implementation");
+                    if (panic_impl_path != ::HIR::SimplePath()) {
+                        m_of << "uint32_t panic_impl(uintptr_t payload) {";
+                        m_of << "extern uint32_t " << Trans_Mangle(panic_impl_path) << "(uintptr_t payload);";
+                        m_of << "return " << Trans_Mangle(panic_impl_path) << "(payload);";
+                        m_of << "}\n";
+                    } else if (!m_crate.m_is_no_core) {
+                        m_crate.get_lang_item_path(Span(), "mrustc-panic_implementation");
+                    }
                 }
             }
 
