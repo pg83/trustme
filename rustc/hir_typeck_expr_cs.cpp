@@ -6291,13 +6291,84 @@ namespace {
     };
 
     struct IvarBoundRefs {
-        bool populated = false;
         ::std::vector<const Context::Coercion*> coercions;
         ::std::vector<const Context::Associated*> associated;
         ::std::vector<const ::HIR::ExprNode_CallMethod*> methods;
     };
 
-    bool check_ivar_poss__fails_bounds(const Span& sp, Context& context, IvarBoundRefs& bound_refs, const ::HIR::TypeRef& ty_l, const ::HIR::TypeRef& new_ty) {
+    struct IvarBoundIndex {
+        const Context& context;
+        ::std::vector<IvarBoundRefs> refs;
+
+        void collect_ivars(const ::HIR::TypeRef& root, ::std::vector<unsigned int>& out) const {
+            ::std::vector<::HIR::TypeRef> pending{root};
+            ::std::vector<::HIR::TypeRef> visited;
+            while (!pending.empty()) {
+                const auto type = pending.back();
+                pending.pop_back();
+                if (::std::find(visited.begin(), visited.end(), type) != visited.end()) {
+                    continue;
+                }
+                visited.push_back(type);
+                visit_ty_with(type, [&](const ::HIR::TypeRef& inner) {
+                    if (const auto* infer = inner->opt_Infer()) {
+                        out.push_back(infer->index);
+                        const auto& resolved = context.get_type(inner);
+                        if (resolved != inner) {
+                            pending.push_back(resolved);
+                        }
+                    }
+                    return false;
+                });
+            }
+        }
+
+        template<typename T>
+        void add_refs(const ::std::vector<unsigned int>& dependencies, ::std::vector<T> IvarBoundRefs::*member, T value) {
+            for (const auto index : dependencies) {
+                if (index < refs.size()) {
+                    (refs[index].*member).push_back(value);
+                }
+            }
+        }
+
+        explicit IvarBoundIndex(const Context& context)
+            : context(context)
+            , refs(context.possible_ivar_vals.size())
+        {
+            ::std::vector<unsigned int> dependencies;
+            for (const auto& bound : context.link_coerce) {
+                dependencies.clear();
+                collect_ivars(bound->left_ty, dependencies);
+                collect_ivars((*bound->right_node_ptr)->m_res_type, dependencies);
+                IvarDependencyIndex::deduplicate(dependencies);
+                add_refs(dependencies, &IvarBoundRefs::coercions, static_cast<const Context::Coercion*>(bound.get()));
+            }
+            for (const auto& bound : context.link_assoc) {
+                dependencies.clear();
+                collect_ivars(bound.impl_ty, dependencies);
+                for (const auto& type : bound.params.m_types) {
+                    collect_ivars(type, dependencies);
+                }
+                IvarDependencyIndex::deduplicate(dependencies);
+                add_refs(dependencies, &IvarBoundRefs::associated, &bound);
+            }
+            for (const auto* node_ptr_dyn : context.to_visit) {
+                if (const auto* node_ptr = dynamic_cast<const ::HIR::ExprNode_CallMethod*>(node_ptr_dyn)) {
+                    dependencies.clear();
+                    collect_ivars(context.get_type(node_ptr->m_value->m_res_type), dependencies);
+                    IvarDependencyIndex::deduplicate(dependencies);
+                    add_refs(dependencies, &IvarBoundRefs::methods, node_ptr);
+                }
+            }
+        }
+
+        const IvarBoundRefs& operator[](unsigned int index) const {
+            return refs.at(index);
+        }
+    };
+
+    bool check_ivar_poss__fails_bounds(const Span& sp, Context& context, const IvarBoundRefs& bound_refs, const ::HIR::TypeRef& ty_l, const ::HIR::TypeRef& new_ty) {
         TRACE_FUNCTION_F(ty_l << " <- " << new_ty);
         const auto ivar_idx = ty_l->as_Infer().index;
         bool used_ty = false;
@@ -6336,55 +6407,9 @@ namespace {
                 return true;
             }
 
-            bool uses_ivar(const ::HIR::TypeRef& root) const {
-                return visit_ty_with(root, [&](const ::HIR::TypeRef& ty) {
-                    const auto* e = ty->opt_Infer();
-                    if (!e) {
-                        return false;
-                    }
-                    if (e->index == ivar_idx) {
-                        return true;
-                    }
-                    const auto& rty = context.get_type(ty);
-                    if (const auto* resolved = rty->opt_Infer()) {
-                        if (resolved->index == ivar_idx) {
-                            return true;
-                        }
-                        if (resolved->index == e->index) {
-                            return false;
-                        }
-                    }
-                    return uses_ivar(rty);
-                });
-            }
         };
 
         Cb cb{used_ty, sp, context, ivar_idx, new_ty};
-        if (!bound_refs.populated) {
-            for (const auto& bound : context.link_coerce) {
-                if (cb.uses_ivar(bound->left_ty) || cb.uses_ivar((*bound->right_node_ptr)->m_res_type)) {
-                    bound_refs.coercions.push_back(bound.get());
-                }
-            }
-            for (const auto& bound : context.link_assoc) {
-                bool uses_ivar = cb.uses_ivar(bound.impl_ty);
-                for (const auto& ty : bound.params.m_types) {
-                    uses_ivar |= cb.uses_ivar(ty);
-                }
-                if (uses_ivar) {
-                    bound_refs.associated.push_back(&bound);
-                }
-            }
-            for (const auto* node_ptr_dyn : context.to_visit) {
-                if (const auto* node_ptr = dynamic_cast<const ::HIR::ExprNode_CallMethod*>(node_ptr_dyn)) {
-                    if (cb.uses_ivar(context.get_type(node_ptr->m_value->m_res_type))) {
-                        bound_refs.methods.push_back(node_ptr);
-                    }
-                }
-            }
-            bound_refs.populated = true;
-        }
-
         for (const auto* bound : bound_refs.coercions) {
             used_ty = false;
             auto t_l = clone_ty_with(context.m_crate.m_types, sp, bound->left_ty, cb);
@@ -7066,13 +7091,13 @@ namespace {
     // TODO: Split the below into a common portion, and a "run" portion (which uses the fallback)
 
     /// Check IVar possibilities, from both coercion/unsizing (which have well-encoded rules) and from trait impls
-    bool check_ivar_poss(Context& context, unsigned int i, Context::IVarPossible& ivar_ent, IvarPossFallbackType fallback_ty = IvarPossFallbackType::None) {
+    bool check_ivar_poss(Context& context, const IvarBoundIndex& bound_index, unsigned int i, Context::IVarPossible& ivar_ent, IvarPossFallbackType fallback_ty = IvarPossFallbackType::None) {
         static Span _span;
         const auto& sp = _span;
         const bool honour_disable = (fallback_ty != IvarPossFallbackType::IgnoreWeakDisable);
 
         const auto& ty_l = context.m_ivars.get_type(i);
-        IvarBoundRefs bound_refs;
+        const auto& bound_refs = bound_index[i];
 
         if (!TU_TEST1(*ty_l, Infer, .index == i)) {
             if (ivar_ent.has_rules()) {
@@ -8211,6 +8236,11 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
             }
         }
 
+        ::std::unique_ptr<IvarBoundIndex> ivar_bound_index;
+        if (!context.m_ivars.peek_changed()) {
+            ivar_bound_index = ::std::make_unique<IvarBoundIndex>(context);
+        }
+
         // If nothing changed this pass, apply ivar possibilities
         // - This essentially forces coercions not to happen.
         if (!context.m_ivars.peek_changed()) {
@@ -8220,7 +8250,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
             //for(unsigned int i = context.possible_ivar_vals.size(); i --; ) // NOTE: Ordering is a hack for libgit2
             ::std::unique_ptr<IvarDependencyIndex> dependency_index;
             for (unsigned int i = 0; i < context.possible_ivar_vals.size(); i++) {
-                if (check_ivar_poss(context, i, context.possible_ivar_vals[i])) {
+                if (check_ivar_poss(context, *ivar_bound_index, i, context.possible_ivar_vals[i])) {
                     // Look at all other ivar possibility sets, and disable processing if they depend on this ivar (prevents races)
                     if (!dependency_index) {
                         dependency_index = ::std::make_unique<IvarDependencyIndex>(context);
@@ -8237,7 +8267,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
             // Check the possible equations
             DEBUG("--- IVar possibilities (fallback 0)");
             for (unsigned int i = 0; i < context.possible_ivar_vals.size(); i++) {
-                if (check_ivar_poss(context, i, context.possible_ivar_vals[i], IvarPossFallbackType::Backwards)) {
+                if (check_ivar_poss(context, *ivar_bound_index, i, context.possible_ivar_vals[i], IvarPossFallbackType::Backwards)) {
                     break;
                 }
             }
@@ -8249,7 +8279,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
             DEBUG("--- IVar possibilities (fallback 1)");
             //for(unsigned int i = context.possible_ivar_vals.size(); i --; ) // NOTE: Ordering is a hack for libgit2
             for (unsigned int i = 0; i < context.possible_ivar_vals.size(); i++) {
-                if (check_ivar_poss(context, i, context.possible_ivar_vals[i], IvarPossFallbackType::Assume)) {
+                if (check_ivar_poss(context, *ivar_bound_index, i, context.possible_ivar_vals[i], IvarPossFallbackType::Assume)) {
                     break;
                 }
             }
@@ -8262,7 +8292,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
             DEBUG("--- IVar possibilities (fallback)");
             //for(unsigned int i = context.possible_ivar_vals.size(); i --; ) // NOTE: Ordering is a hack for libgit2
             for (unsigned int i = 0; i < context.possible_ivar_vals.size(); i++) {
-                if (check_ivar_poss(context, i, context.possible_ivar_vals[i], IvarPossFallbackType::IgnoreWeakDisable)) {
+                if (check_ivar_poss(context, *ivar_bound_index, i, context.possible_ivar_vals[i], IvarPossFallbackType::IgnoreWeakDisable)) {
                     break;
                 } else {
                     //assert( !context.m_ivars.peek_changed() );
@@ -8307,7 +8337,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
             // Check the possible equations
             DEBUG("--- IVar possibilities (just pick a bound)");
             for (unsigned int i = 0; i < context.possible_ivar_vals.size(); i++) {
-                if (check_ivar_poss(context, i, context.possible_ivar_vals[i], IvarPossFallbackType::PickFirstBound)) {
+                if (check_ivar_poss(context, *ivar_bound_index, i, context.possible_ivar_vals[i], IvarPossFallbackType::PickFirstBound)) {
                     break;
                 }
             }
@@ -8317,7 +8347,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
             DEBUG("--- IVar possibilities (final fallback)");
             //for(unsigned int i = context.possible_ivar_vals.size(); i --; ) // NOTE: Ordering is a hack for libgit2
             for (unsigned int i = 0; i < context.possible_ivar_vals.size(); i++) {
-                if (check_ivar_poss(context, i, context.possible_ivar_vals[i], IvarPossFallbackType::FinalOption)) {
+                if (check_ivar_poss(context, *ivar_bound_index, i, context.possible_ivar_vals[i], IvarPossFallbackType::FinalOption)) {
                     break;
                 }
             }
