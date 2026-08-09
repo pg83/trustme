@@ -20,9 +20,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ## P1 — 25–99 targets одним общим исправлением
 
-1. [ ] **CTFE panic в const initializer: 94 library cases.** `coretests/cell` — 39 и `coretests/mem` — 55 доходят до `panic_fmt` во время constant evaluation. Найти общий неверно выбранный branch/overflow/layout input; не подавлять CTFE panic и не заменять значение заглушкой.
-
-2. [ ] **Неверно выбранные library cases: 84 прямых ложных падения.** Manifest включает `f16/f128` tests, которых host harness не экспортирует, а также Windows/ARM/PowerPC и другие cfg-отключённые tests. Генерировать cases из target-applicable upstream cfg/фактического harness list; не удалять валидные x86_64 tests и не менять их ожидания.
+1. [ ] **Неверно выбранные library cases: 84 прямых ложных падения.** Manifest включает `f16/f128` tests, которых host harness не экспортирует, а также Windows/ARM/PowerPC и другие cfg-отключённые tests. Генерировать cases из target-applicable upstream cfg/фактического harness list; не удалять валидные x86_64 tests и не менять их ожидания.
 
 3. [ ] **Driver compatibility для lint/cfg options: до 79 прямых отказов.** Общий parser должен принимать rustc-формы `--check-cfg`, `-A/-D/-W/-F`, `--force-warn`, `--cap-lints` и `--cfg=...`. Diagnostic-only option не должен запускать несуществующий codegen feature; option с проверяемой семантикой нельзя молча игнорировать.
 
@@ -76,6 +74,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 ## P5 — единичные regressions и независимые failures
 
 - [ ] Семь красных unit — это три причины, а не семь приоритетов: два lifetime-elision SIGSEGV на yield/coroutine, два const-relation mismatch и три empty-path asserts в Trans Enumerate. Они закрываются вместе с соответствующим общим кластером выше.
+- [ ] Три независимых library CTFE panic: `cell::refcell_borrow`, `cell::refcell_borrow_mut` и `mem::test_transmute_copy`. Старый monolithic fan-out 94 не подтверждён: при раздельной сборке остальные 91 нода либо зелёные, либо относятся к cfg-selection/runtime failure. Каждый panic сначала минимизировать до неверного branch или CTFE значения.
 - [ ] `resvg`: `AsRef` selection для `Option<HuffmanTable>`; после минимального trait-solver unit вернуть весь standing integration в gate.
 - [ ] Три SIGILL: `const-generics/issues/issue-74906.rs`, `layout/invalid-unsized-const-prop.rs`, `const_prop/issue-86351.rs`.
 - [ ] Оставшиеся timeout после `coretests/iter`: два UI, три Rust 1.90, один Exercism, три RustSmith и один runtime `select_nth_unstable`. Каждый сначала привязать к stack/phase; лимит не увеличивать.
