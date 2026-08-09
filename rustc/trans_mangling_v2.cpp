@@ -229,7 +229,7 @@ public:
     //   - str  : 'C' 'y'
     // - Diverge: 'C' 'z'
     void fmt_type(const ::HIR::TypeRef& ty) {
-        TU_MATCH_HDRA( (ty.data()), { )
+        TU_MATCH_HDRA( ((*ty)), { )
         case ::HIR::TypeData::TAG_Infer:
         case ::HIR::TypeData::TAG_Generic:
         case ::HIR::TypeData::TAG_ErasedType:

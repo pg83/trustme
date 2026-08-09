@@ -42,10 +42,12 @@ class HirDeserialiser {
     RcString m_crate_name;
     ::std::vector<HIR::TypeRef> m_types;
     ::HIR::serialise::Reader& m_in;
+    ::HIR::TypeInterner& m_type_interner;
 
 public:
-    HirDeserialiser(::HIR::serialise::Reader& in)
+    HirDeserialiser(::HIR::serialise::Reader& in, ::HIR::TypeInterner& type_interner)
         : m_in(in)
+        , m_type_interner(type_interner)
     {
     }
 
@@ -733,7 +735,10 @@ public:
         rv.m_save_code = false;
         rv.m_linkage = deserialise_linkage();
         rv.m_receiver = static_cast<::HIR::Function::Receiver>(m_in.read_tag());
-        rv.m_receiver_type = deserialise_type();
+        auto receiver_type = deserialise_type();
+        if (rv.m_receiver == ::HIR::Function::Receiver::Custom) {
+            rv.m_receiver_type = receiver_type;
+        }
         rv.m_abi = m_in.read_istring();
         rv.m_unsafe = m_in.read_bool();
         rv.m_const = m_in.read_bool();
@@ -1027,7 +1032,7 @@ DEF_D(::HIR::ExternLibrary, return d.deserialise_extlib();)
     auto idx = m_in.read_count();
     if (idx != ~0u) {
         DEBUG("#" << idx << "");
-        rv = m_types.at(idx).clone();
+        rv = m_types.at(idx);
         return rv;
     } else {
         DEBUG("Fresh (=" << m_types.size() << ")");
@@ -1035,10 +1040,10 @@ DEF_D(::HIR::ExternLibrary, return d.deserialise_extlib();)
     auto _ = m_in.open_object("HIR::TypeData");
 
     switch (auto tag = m_in.read_tag()) {
-#define _(x, ...)                                                    \
-    case ::HIR::TypeData::TAG_##x:                                   \
-        DEBUG("- " #x);                                              \
-        rv = ::HIR::TypeRef(::HIR::TypeData::make_##x(__VA_ARGS__)); \
+#define _(x, ...)                                                      \
+    case ::HIR::TypeData::TAG_##x:                                     \
+        DEBUG("- " #x);                                                \
+        rv = m_type_interner.intern(::HIR::TypeData::make_##x(__VA_ARGS__)); \
         break;
         _(Infer, {~0u, HIR::InferClass::None})
         _(Diverge, {})
@@ -1065,7 +1070,7 @@ DEF_D(::HIR::ExternLibrary, return d.deserialise_extlib();)
         default:
             BUG(Span(), "Bad tag for HIR::TypeRef - " << tag);
     }
-    m_types.push_back(rv.clone());
+    m_types.push_back(rv);
     return rv;
 }
 
@@ -1567,12 +1572,12 @@ void HirDeserialiser::deserialise_crate(::HIR::Crate& rv) {
 
 //}
 
-::HIR::Crate* HIR_Deserialise(stl::ObjPool* pool, const ::std::string& filename) {
+::HIR::Crate* HIR_Deserialise(stl::ObjPool* pool, ::HIR::TypeInterner& types, const ::std::string& filename) {
     try {
         ::HIR::serialise::Reader in{filename + ".hir"}; // HACK!
-        HirDeserialiser s{in};
+        HirDeserialiser s{in, types};
 
-        auto* rv = pool->make<::HIR::Crate>(pool);
+        auto* rv = pool->make<::HIR::Crate>(pool, types);
         s.deserialise_crate(*rv);
         return rv;
     } catch (int) {

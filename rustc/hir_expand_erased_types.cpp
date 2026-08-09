@@ -16,8 +16,9 @@ namespace {
     struct MonomorphCheckLft: public MonomorphiserNop {
         const HIR::TypeRef& tpl;
 
-        MonomorphCheckLft(const HIR::TypeRef& tpl)
-            : tpl(tpl)
+        MonomorphCheckLft(HIR::TypeInterner& types, const HIR::TypeRef& tpl)
+            : MonomorphiserNop(types)
+            , tpl(tpl)
         {
         }
 
@@ -28,17 +29,17 @@ namespace {
     };
 
     void expand_erased_type(const Span& sp, const StaticTraitResolve& m_resolve, HIR::TypeRef& ty) {
-        const auto& e = ty.data().as_ErasedType();
+        const auto& e = ty->as_ErasedType();
 
         HIR::TypeRef new_ty;
         TU_MATCH_HDRA( (e.m_inner), { )
         TU_ARMA(Fcn, ee) {
-                MonomorphState monomorph_cb;
+                MonomorphState monomorph_cb(m_resolve.m_crate.m_types);
                 auto val = m_resolve.get_value(sp, ee.m_origin, monomorph_cb);
                 if (val.is_NotYetKnown() && ee.m_origin.m_data.is_UfcsKnown()) {
                     const auto& v = ee.m_origin.m_data.as_UfcsKnown();
                     auto name = RcString::new_interned(FMT(ATY_PREFIX_ERASED << v.item << "_" << ee.m_index));
-                    new_ty = ::HIR::TypeRef::new_path(::HIR::Path(v.type.clone(), v.trait.clone(), name, v.params.clone()), {});
+                    new_ty = m_resolve.m_crate.m_types.path(::HIR::Path(v.type, v.trait.clone(), name, v.params.clone()), {});
                 } else {
                     ASSERT_BUG(sp, val.is_Function(), "ErasedType with Fcn type doesn't point at a function: " << ee.m_origin << ": " << val.tag_str());
                     const auto& fcn = *val.as_Function();
@@ -47,7 +48,7 @@ namespace {
                     ASSERT_BUG(sp, ee.m_index < erased_types.size(), "Erased type index out of range for " << ee.m_origin << " - " << ee.m_index << " >= " << erased_types.size());
                     const auto& tpl = erased_types[ee.m_index];
 
-                    MonomorphCheckLft(tpl).monomorph_type(sp, tpl);
+                    MonomorphCheckLft(m_resolve.m_crate.m_types, tpl).monomorph_type(sp, tpl);
 
                     new_ty = monomorph_cb.monomorph_type(sp, tpl);
                 }
@@ -57,12 +58,12 @@ namespace {
                 if (ee.inner->type == HIR::TypeRef()) {
                     ERROR(Span(), E0000, "Erased type alias " << ee.inner->type << " never set?");
                 }
-                MonomorphCheckLft(ee.inner->type).monomorph_type(sp, ee.inner->type);
-                new_ty = MonomorphStatePtr(nullptr, &ee.params, nullptr).monomorph_type(sp, ee.inner->type);
+                MonomorphCheckLft(m_resolve.m_crate.m_types, ee.inner->type).monomorph_type(sp, ee.inner->type);
+                new_ty = MonomorphStatePtr(m_resolve.m_crate.m_types, nullptr, &ee.params, nullptr).monomorph_type(sp, ee.inner->type);
                 m_resolve.expand_associated_types(sp, new_ty);
             }
             TU_ARMA(Known, ee) {
-                new_ty = ee.clone();
+                new_ty = ee;
             }
         }
         DEBUG("> " << ty << " => " << new_ty);
@@ -79,7 +80,8 @@ namespace {
 
         public:
             V(const Span& sp, const StaticTraitResolve& resolve)
-                : sp(sp)
+                : ::HIR::Visitor(nullptr, resolve.m_crate.m_types)
+                , sp(sp)
                 , m_resolve(resolve)
                 , clear_opaque(false)
             {
@@ -89,7 +91,7 @@ namespace {
                 static const Span sp;
                 auto saved_clear_opaque = this->clear_opaque;
                 this->clear_opaque = false;
-                if (ty.data().is_ErasedType()) {
+                if (ty->is_ErasedType()) {
                     TRACE_FUNCTION_FR(ty, ty);
 
                     expand_erased_type(sp, m_resolve, ty);
@@ -100,11 +102,13 @@ namespace {
                 } else {
                     ::HIR::Visitor::visit_type(ty);
                     // If there was an erased type anywhere within this type, then clear an Opaque binding so EAT runs again
-                    if (auto* p = ty.data_mut().opt_Path()) {
+                    if (ty->is_Path()) {
                         // NOTE: This is both an optimisation, and avoids issues (if all types are cleared, the alias list in
                         // `StaticTraitResolve` ends up with un-expanded ATYs which leads to expansion not happening when it shoud.
-                        if (this->clear_opaque && p->binding.is_Opaque()) {
-                            p->binding = HIR::TypePathBinding::make_Unbound({});
+                        if (this->clear_opaque && ty->as_Path().binding.is_Opaque()) {
+                            auto data = ty->clone_data();
+                            data.as_Path().binding = HIR::TypePathBinding::make_Unbound({});
+                            ty = m_resolve.m_crate.m_types.intern(std::move(data));
                         }
                     }
                 }
@@ -122,7 +126,8 @@ namespace {
 
     public:
         ExprVisitor_Extract(const StaticTraitResolve& resolve)
-            : m_resolve(resolve)
+            : ::HIR::ExprVisitorDef(resolve.m_crate.m_types)
+            , m_resolve(resolve)
         {
         }
 
@@ -154,7 +159,7 @@ namespace {
 
     public:
         OuterVisitor(const ::HIR::Crate& crate)
-            : ::HIR::Visitor(&m_resolve)
+            : ::HIR::Visitor(&m_resolve, crate.m_types)
             , m_resolve(crate)
         {
         }
@@ -172,7 +177,7 @@ namespace {
 
     public:
         OuterVisitor_Fixup(const ::HIR::Crate& crate)
-            : ::HIR::Visitor(&m_resolve)
+            : ::HIR::Visitor(&m_resolve, crate.m_types)
             , m_resolve(crate)
         {
         }

@@ -105,7 +105,11 @@ namespace HIR {
     }
 
     ConstGeneric_Unevaluated ConstGeneric_Unevaluated::clone() const {
-        return monomorph(Span(), MonomorphiserNop());
+        ConstGeneric_Unevaluated rv;
+        rv.params_impl = params_impl.clone();
+        rv.params_item = params_item.clone();
+        rv.expr = expr;
+        return rv;
     }
 
     ConstGeneric_Unevaluated ConstGeneric_Unevaluated::monomorph(const Span& sp, const Monomorphiser& ms, bool allow_infer /*=true*/) const {
@@ -328,7 +332,7 @@ bool HIR::Publicity::is_visible(const ::HIR::SimplePath& p) const {
     for (const auto& arg : this->m_args) {
         ft.m_arg_types.push_back(ms.monomorph_type(sp, arg.second));
     }
-    return HIR::TypeRef(std::move(ft));
+    return ms.type_interner().function(std::move(ft));
 }
 
 ::HIR::TypeRef HIR::fn_ptr_tuple_constructor(const Span& sp, const Monomorphiser& ms, HIR::TypeRef ret_ty, const t_tuple_fields& fields) {
@@ -341,7 +345,7 @@ bool HIR::Publicity::is_visible(const ::HIR::SimplePath& p) const {
     for (const auto& fld : fields) {
         ft.m_arg_types.push_back(ms.monomorph_type(sp, fld.ent));
     }
-    return HIR::TypeRef(std::move(ft));
+    return ms.type_interner().function(std::move(ft));
 }
 
 size_t HIR::Enum::find_variant(const RcString& name) const {
@@ -553,20 +557,16 @@ const ::HIR::Enum& ::HIR::Crate::get_enum_by_path(const Span& sp, const ::HIR::S
     }
 }
 
-namespace {
-    ::HIR::ValueItem g_val_item_intrnsic_offsetof{::HIR::Function{::HIR::Function::Receiver::Free, ::HIR::GenericParams{}, {}, HIR::TypeRef(HIR::CoreType::Usize), {}}};
-}
-
 const ::HIR::ValueItem& ::HIR::Crate::get_valitem_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name) const {
     if (path.crate_name() == "#intrinsics") {
         ASSERT_BUG(sp, path.components().size() == 1, "");
         if (path.components().back() == "offset_of") {
-            if (!g_val_item_intrnsic_offsetof.as_Function().m_variadic) {
-                auto& v = g_val_item_intrnsic_offsetof.as_Function();
+            if (!m_intrinsic_offsetof.as_Function().m_variadic) {
+                auto& v = m_intrinsic_offsetof.as_Function();
                 v.m_variadic = true;
-                v.m_params.m_types.push_back(HIR::TypeParamDef{RcString::new_interned("T"), {}, false});
+                v.m_params.m_types.push_back(HIR::TypeParamDef{RcString::new_interned("T"), m_types.infer(), false});
             }
-            return g_val_item_intrnsic_offsetof;
+            return m_intrinsic_offsetof;
         }
         TODO(sp, "Get intrinsic " << path.components().back());
     }

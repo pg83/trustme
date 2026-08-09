@@ -21,8 +21,12 @@ namespace stl {
     class ObjPool;
 }
 
+namespace HIR {
+    class TypeInterner;
+}
+
 /// Parse a crate from the given file
-extern AST::Crate* Parse_Crate(stl::ObjPool* pool, ::std::string mainfile, AST::Edition edition);
+extern AST::Crate* Parse_Crate(stl::ObjPool* pool, HIR::TypeInterner& types, ::std::string mainfile, AST::Edition edition);
 
 extern void Expand_Init();
 extern void Expand(::AST::Crate& crate);

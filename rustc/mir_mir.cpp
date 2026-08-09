@@ -434,7 +434,7 @@ namespace MIR {
         (Constant, return e.clone();),
         (SizedArray, return ::MIR::RValue::make_SizedArray({e.val.clone(), e.count.clone()});),
         (Borrow, return ::MIR::RValue::make_Borrow({e.type, e.is_raw, e.val.clone()});),
-        (Cast, return ::MIR::RValue::make_Cast({e.val.clone(), e.type.clone()});),
+        (Cast, return ::MIR::RValue::make_Cast({e.val.clone(), e.type});),
         (BinOp, return ::MIR::RValue::make_BinOp({e.val_l.clone(), e.op, e.val_r.clone()});),
         (UniOp, return ::MIR::RValue::make_UniOp({e.val.clone(), e.op});),
         (DstMeta, return ::MIR::RValue::make_DstMeta({e.val.clone()});),
@@ -471,9 +471,16 @@ const HIR::TypeRef& MIR::Cloner::value_generic_type(HIR::GenericRef ce) const {
     TODO(sp, "`value_generic_type` not implemented, shouldn't be called unless `monomorpiser` has been overridden");
 }
 
+MIR::Cloner::Cloner(const Span& sp, HIR::TypeInterner& types)
+    : m_nop(new MonomorphiserNop(types))
+    , sp(sp)
+{
+}
+
+MIR::Cloner::~Cloner() = default;
+
 const Monomorphiser& MIR::Cloner::monomorphiser() const {
-    static MonomorphiserNop nop;
-    return nop;
+    return *m_nop;
 }
 
 ::HIR::TypeRef MIR::Cloner::monomorph(const ::HIR::TypeRef& ty) const {
@@ -699,9 +706,9 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
                 TU_ARMA(Evaluated, ve) {
                     const auto& ty = this->value_generic_type(ce);
                     auto v = EncodedLiteralSlice(*ve);
-                    ASSERT_BUG(sp, ty.data().is_Primitive(), "Handle non-primitive const generic: " << ty);
+                    ASSERT_BUG(sp, ty->is_Primitive(), "Handle non-primitive const generic: " << ty);
                     // TODO: This is duplicated in `mir/from_hir_match.cpp` - De-duplicate?
-                    switch (ty.data().as_Primitive()) {
+                    switch (ty->as_Primitive()) {
                         case ::HIR::CoreType::Bool:
                             return ::MIR::Constant::make_Bool({v.read_uint(1) != 0});
                         case ::HIR::CoreType::U8:
@@ -709,24 +716,24 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
                         case ::HIR::CoreType::U32:
                         case ::HIR::CoreType::U64:
                         case ::HIR::CoreType::U128:
-                            return ::MIR::Constant::make_Uint({v.read_uint(ve->bytes.size()), ty.data().as_Primitive()});
+                            return ::MIR::Constant::make_Uint({v.read_uint(ve->bytes.size()), ty->as_Primitive()});
                         case ::HIR::CoreType::Usize:
-                            return ::MIR::Constant::make_Uint({v.read_uint(Target_GetPointerBits() / 8), ty.data().as_Primitive()});
+                            return ::MIR::Constant::make_Uint({v.read_uint(Target_GetPointerBits() / 8), ty->as_Primitive()});
                         case ::HIR::CoreType::I8:
                         case ::HIR::CoreType::I16:
                         case ::HIR::CoreType::I32:
                         case ::HIR::CoreType::I64:
                         case ::HIR::CoreType::I128:
-                            return ::MIR::Constant::make_Int({v.read_sint(ve->bytes.size()), ty.data().as_Primitive()});
+                            return ::MIR::Constant::make_Int({v.read_sint(ve->bytes.size()), ty->as_Primitive()});
                         case ::HIR::CoreType::Isize:
-                            return ::MIR::Constant::make_Int({v.read_sint(Target_GetPointerBits() / 8), ty.data().as_Primitive()});
+                            return ::MIR::Constant::make_Int({v.read_sint(Target_GetPointerBits() / 8), ty->as_Primitive()});
                         case ::HIR::CoreType::F16:
                         case ::HIR::CoreType::F32:
                         case ::HIR::CoreType::F64:
                         case ::HIR::CoreType::F128:
-                            return ::MIR::Constant::make_Float({v.read_float(ve->bytes.size()), ty.data().as_Primitive()});
+                            return ::MIR::Constant::make_Float({v.read_float(ve->bytes.size()), ty->as_Primitive()});
                         case ::HIR::CoreType::Char:
-                            return ::MIR::Constant::make_Uint({v.read_uint(4), ty.data().as_Primitive()});
+                            return ::MIR::Constant::make_Uint({v.read_uint(4), ty->as_Primitive()});
                         case ::HIR::CoreType::Str:
                             BUG(sp, "`str` const generic");
                     }

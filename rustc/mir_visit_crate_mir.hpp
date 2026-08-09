@@ -21,7 +21,8 @@ namespace MIR {
 
     public:
         OuterVisitor(const ::HIR::Crate& crate, cb_t cb)
-            : m_resolve(crate)
+            : HIR::Visitor(nullptr, crate.m_types)
+            , m_resolve(crate)
             , m_cb(cb)
         {
         }

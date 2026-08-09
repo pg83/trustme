@@ -34,7 +34,7 @@ void Trans_Codegen(const ::std::string& outfile, CodegenOutput out_ty, const Tra
         if (ty.second) {
             codegen->emit_type_proto(ty.first);
         } else {
-            if (const auto* te = ty.first.data().opt_Path()) {
+            if (const auto* te = ty.first->opt_Path()) {
                 TU_MATCHA(
                     (te->binding),
                     (tpb),
@@ -52,7 +52,7 @@ void Trans_Codegen(const ::std::string& outfile, CodegenOutput out_ty, const Tra
             codegen->emit_type(ty.first);
         }
     }
-    list.m_types.clear();
+    list.clear_types();
     for (const auto& ty : list.m_typeids) {
         codegen->emit_type_id(ty);
     }
@@ -151,7 +151,7 @@ void Trans_Codegen(const ::std::string& outfile, CodegenOutput out_ty, const Tra
             bool is_extern = !static_cast<bool>(fcn.m_code);
             // If this is a provided trait method, it needs to be monomorphised too.
             bool is_method = (fcn.m_args.size() > 0 && visit_ty_with(fcn.m_args[0].second, [&](const auto& x) {
-                return x == ::HIR::TypeRef::new_self();
+                return x == crate_ptr->m_types.self();
             }));
 
             bool is_monomorph = pp.has_types() || is_method;

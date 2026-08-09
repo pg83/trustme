@@ -14,14 +14,17 @@ void MIR::OuterVisitor::visit_expr(::HIR::ExprPtr& exp) {
 }
 
 void MIR::OuterVisitor::visit_type(::HIR::TypeRef& ty) {
-    if (auto* e = ty.data_mut().opt_Array()) {
+    if (ty->is_Array()) {
+        auto data = ty->clone_data();
+        auto* e = data.opt_Array();
         this->visit_type(e->inner);
         DEBUG("Array size " << ty);
         if (auto* se1 = e->size.opt_Unevaluated()) {
             if (auto* se = se1->opt_Unevaluated()) {
-                m_cb(m_resolve, ::HIR::ItemPath(""), *(*se)->expr, {}, ::HIR::TypeRef(::HIR::CoreType::Usize));
+                m_cb(m_resolve, ::HIR::ItemPath(""), *(*se)->expr, {}, m_resolve.m_crate.m_types.primitive(::HIR::CoreType::Usize));
             }
         }
+        ty = m_resolve.m_crate.m_types.intern(mv$(data));
     } else {
         ::HIR::Visitor::visit_type(ty);
     }
@@ -59,7 +62,7 @@ void MIR::OuterVisitor::visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) {
     auto _ = this->m_resolve.set_impl_generics(MetadataType::None, item.m_params);
 
     if (auto* e = item.m_data.opt_Value()) {
-        auto enum_type = ::HIR::Enum::get_repr_type(item.m_tag_repr);
+        auto enum_type = m_resolve.m_crate.m_types.primitive(::HIR::Enum::get_repr_type(item.m_tag_repr));
 
         for (auto& var : e->variants) {
             if (var.expr) {

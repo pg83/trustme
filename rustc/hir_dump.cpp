@@ -8,6 +8,7 @@
 #include "hir_main_bindings.hpp"
 #include "hir_visitor.hpp"
 #include "hir_expr.hpp"
+#include "hir_expr_state.hpp"
 
 #define NODE_IS(valptr, tysuf) (dynamic_cast<const ::HIR::ExprNode##tysuf*>(&*valptr) != nullptr)
 
@@ -18,8 +19,9 @@ namespace {
         unsigned int m_indent_level;
 
     public:
-        TreeVisitor(::std::ostream& os)
-            : m_os(os)
+        TreeVisitor(::HIR::TypeInterner& types, ::std::ostream& os)
+            : ::HIR::Visitor(nullptr, types)
+            , m_os(os)
             , m_indent_level(0)
         {
         }
@@ -194,7 +196,7 @@ namespace {
             } else {
                 for (const auto& var : item.m_data.as_Data()) {
                     m_os << indent() << var.name;
-                    if (var.type == ::HIR::TypeRef::new_unit()) {
+                    if (var.type == type_interner().unit()) {
                     } else {
                         m_os << " " << var.type << (var.is_struct ? "/*struct*/" : "");
                     }
@@ -841,7 +843,7 @@ namespace {
 }
 
 void HIR_Dump(::std::ostream& sink, const ::HIR::Crate& crate) {
-    TreeVisitor tv{sink};
+    TreeVisitor tv{crate.m_types, sink};
 
     tv.visit_crate(const_cast<::HIR::Crate&>(crate));
 }
@@ -852,7 +854,8 @@ void HIR_DumpExpr(::std::ostream& sink, const ::HIR::ExprPtr& expr) {
         return;
     }
 
-    TreeVisitor tv{sink};
+    assert(expr.m_state);
+    TreeVisitor tv{expr.m_state->m_types, sink};
 
     const_cast<HIR::ExprPtr&>(expr)->visit(tv);
 }

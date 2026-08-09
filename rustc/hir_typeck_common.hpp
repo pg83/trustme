@@ -19,16 +19,16 @@ extern bool visit_ty_with(const ::HIR::TypeRef&, t_cb_visit_ty callback);
 extern bool visit_trait_path_tys_with(const ::HIR::TraitPath&, t_cb_visit_ty callback);
 extern bool visit_path_tys_with(const ::HIR::Path&, t_cb_visit_ty callback);
 
-typedef ::std::function<bool(::HIR::TypeRef&)> t_cb_visit_ty_mut;
-extern bool visit_ty_with_mut(::HIR::TypeRef& ty, t_cb_visit_ty_mut callback);
-extern bool visit_path_tys_with_mut(::HIR::Path& ty, t_cb_visit_ty_mut callback);
+typedef ::std::function<bool(::HIR::TypeRef& rewritten, ::HIR::TypeData& data)> t_cb_rewrite_ty;
+extern bool rewrite_ty_with(::HIR::TypeInterner& types, ::HIR::TypeRef& ty, t_cb_rewrite_ty callback);
+extern bool rewrite_path_tys_with(::HIR::TypeInterner& types, ::HIR::Path& path, t_cb_rewrite_ty callback);
 
 typedef ::std::function<bool(const ::HIR::TypeRef&, ::HIR::TypeRef&)> t_cb_clone_ty;
 /// Clones a type, calling the provided callback on every type (optionally providing a replacement)
 ///
 /// Closure should return `true` if the passed output slot was populated.
-extern ::HIR::TypeRef clone_ty_with(const Span& sp, const ::HIR::TypeRef& tpl, t_cb_clone_ty callback);
-extern ::HIR::PathParams clone_path_params_with(const Span& sp, const ::HIR::PathParams& tpl, t_cb_clone_ty callback);
+extern ::HIR::TypeRef clone_ty_with(::HIR::TypeInterner& types, const Span& sp, const ::HIR::TypeRef& tpl, t_cb_clone_ty callback);
+extern ::HIR::PathParams clone_path_params_with(::HIR::TypeInterner& types, const Span& sp, const ::HIR::PathParams& tpl, t_cb_clone_ty callback);
 
 extern void check_type_class_primitive(const Span& sp, const ::HIR::TypeRef& type, ::HIR::InferClass ic, ::HIR::CoreType ct);
 
@@ -69,8 +69,8 @@ namespace typeck {
     };
 
     inline bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeRef& left, const ::HIR::TypeRef& right) {
-        const auto* left_primitive = left.data().opt_Primitive();
-        const auto* right_primitive = right.data().opt_Primitive();
+        const auto* left_primitive = left->opt_Primitive();
+        const auto* right_primitive = right->opt_Primitive();
 
         const auto same_numeric = [&]() {
             return left == right && left_primitive && (::HIR::is_integer(*left_primitive) || ::HIR::is_float(*left_primitive));
@@ -85,7 +85,7 @@ namespace typeck {
             if (left != right) {
                 return false;
             }
-            return left.data().is_Pointer() || (left_primitive && *left_primitive != ::HIR::CoreType::Str);
+            return left->is_Pointer() || (left_primitive && *left_primitive != ::HIR::CoreType::Str);
         };
 
         switch (op) {
@@ -133,10 +133,10 @@ namespace typeck {
     // deliberately excluded: their right-hand side need only be an integer
     // and may have a different type.
     inline bool primitive_operator_lhs_determines_rhs(PrimitiveOperator op, const ::HIR::TypeRef& left) {
-        const auto* primitive = left.data().opt_Primitive();
+        const auto* primitive = left->opt_Primitive();
         const auto numeric = primitive && (::HIR::is_integer(*primitive) || ::HIR::is_float(*primitive));
         const auto bitwise = primitive && (::HIR::is_integer(*primitive) || *primitive == ::HIR::CoreType::Bool);
-        const auto comparison = left.data().is_Pointer() || (primitive && *primitive != ::HIR::CoreType::Str);
+        const auto comparison = left->is_Pointer() || (primitive && *primitive != ::HIR::CoreType::Str);
 
         switch (op) {
             case PrimitiveOperator::Add:
@@ -181,15 +181,15 @@ namespace typeck {
     // determines the still-inferred rhs.
     inline bool primitive_operator_has_language_candidate(PrimitiveOperator op, const ::HIR::TypeRef& left, const ::HIR::TypeRef& right) {
         return primitive_operator_has_builtin(op, left, right)
-            || (right.data().is_Infer() && primitive_operator_lhs_determines_rhs(op, left));
+            || (right->is_Infer() && primitive_operator_lhs_determines_rhs(op, left));
     }
 
     inline bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeRef& value) {
         if (op == PrimitiveOperator::Deref) {
-            return value.data().is_Borrow() || value.data().is_Pointer();
+            return value->is_Borrow() || value->is_Pointer();
         }
 
-        const auto* primitive = value.data().opt_Primitive();
+        const auto* primitive = value->opt_Primitive();
         if (!primitive) {
             return false;
         }

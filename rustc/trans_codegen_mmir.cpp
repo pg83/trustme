@@ -46,7 +46,7 @@ namespace {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<::HIR::TypeRef>& x) {
-        TU_MATCH_HDRA( (x.e.data()), {)
+        TU_MATCH_HDRA( (*x.e), {)
         TU_ARMA(Infer, te)  BUG(Span(), "" << x.e);
             TU_ARMA(Diverge, te) {
                 os << "!";
@@ -341,13 +341,13 @@ namespace {
             };
             m_mir_res = &top_mir_res;
 
-            if (const auto* te = ty.data().opt_Tuple()) {
+            if (const auto* te = ty->opt_Tuple()) {
                 if (te->size() > 0) {
                     const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
                     MIR_ASSERT(*m_mir_res, repr, "No repr for tuple " << ty);
 
                     bool has_drop_glue = m_resolve.type_needs_drop_glue(sp, ty);
-                    auto drop_glue_path = ::HIR::Path(ty.clone(), "#drop_glue");
+                    auto drop_glue_path = ::HIR::Path(ty, "#drop_glue");
 
                     m_of << "type " << fmt(ty) << " {\n";
                     m_of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
@@ -367,12 +367,12 @@ namespace {
 
         // TODO: Move this to a more common location
         MetadataType metadata_type(const ::HIR::TypeRef& ty) const {
-            if (ty == ::HIR::CoreType::Str || ty.data().is_Slice()) {
+            if ((ty->is_Primitive() && ty->as_Primitive() == ::HIR::CoreType::Str) || ty->is_Slice()) {
                 return MetadataType::Slice;
-            } else if (ty.data().is_TraitObject()) {
+            } else if (ty->is_TraitObject()) {
                 return MetadataType::TraitObject;
-            } else if (ty.data().is_Path()) {
-                const auto& te = ty.data().as_Path();
+            } else if (ty->is_Path()) {
+                const auto& te = ty->as_Path();
                 switch (te.binding.tag()) {
                     TU_ARM(te.binding, Struct, tpb) {
                         switch (tpb->m_struct_markings.dst_type) {
@@ -380,10 +380,10 @@ namespace {
                                 return MetadataType::None;
                             case ::HIR::StructMarkings::DstType::Possible: {
                                 // TODO: How to figure out? Lazy way is to check the monomorpised type of the last field (structs only)
-                                const auto& path = ty.data().as_Path().path.m_data.as_Generic();
-                                const auto& str = *ty.data().as_Path().binding.as_Struct();
+                                const auto& path = ty->as_Path().path.m_data.as_Generic();
+                                const auto& str = *ty->as_Path().binding.as_Struct();
                                 auto monomorph = [&](const auto& tpl) {
-                                    return m_resolve.monomorph_expand(sp, tpl, MonomorphStatePtr(nullptr, &path.m_params, nullptr));
+                                    return m_resolve.monomorph_expand(sp, tpl, MonomorphStatePtr(m_crate.m_types, nullptr, &path.m_params, nullptr));
                                 };
                                 TU_MATCHA((str.m_data), (se), (Unit, MIR_BUG(*m_mir_res, "Unit-like struct with DstType::Possible");), (Tuple, return metadata_type(monomorph(se.back().ent));), (Named, return metadata_type(monomorph(se.back().ty));))
                                 //MIR_TODO(*m_mir_res, "Determine DST type when ::Possible - " << ty);
@@ -417,29 +417,29 @@ namespace {
             };
             m_mir_res = &top_mir_res;
 
-            auto drop_glue_path = ::HIR::Path(::HIR::TypeRef::new_path(p.clone(), &item), "#drop_glue");
+            auto drop_glue_path = ::HIR::Path(m_crate.m_types.path(p.clone(), &item), "#drop_glue");
 
             TRACE_FUNCTION_F(p);
-            ::HIR::TypeRef ty = ::HIR::TypeRef::new_path(p.clone(), &item);
+            ::HIR::TypeRef ty = m_crate.m_types.path(p.clone(), &item);
 
             struct H {
                 static ::HIR::TypeRef get_metadata_type(const Span& sp, const ::StaticTraitResolve& resolve, const TypeRepr& r) {
                     ASSERT_BUG(sp, r.fields.size() > 0, "");
                     auto& t = r.fields.back().ty;
-                    if (t == ::HIR::CoreType::Str) {
-                        return ::HIR::CoreType::Usize;
-                    } else if (t.data().is_Slice()) {
-                        return ::HIR::CoreType::Usize;
-                    } else if (t.data().is_TraitObject()) {
-                        const auto& te = t.data().as_TraitObject();
+                    if (t->is_Primitive() && t->as_Primitive() == ::HIR::CoreType::Str) {
+                        return resolve.m_crate.m_types.primitive(::HIR::CoreType::Usize);
+                    } else if (t->is_Slice()) {
+                        return resolve.m_crate.m_types.primitive(::HIR::CoreType::Usize);
+                    } else if (t->is_TraitObject()) {
+                        const auto& te = t->as_TraitObject();
                         //auto vtp = t.m_data.as_TraitObject().m_trait.m_path;
 
                         const auto& trait = resolve.m_crate.get_trait_by_path(sp, te.m_trait.m_path.m_path);
                         auto vtable_ty = trait.get_vtable_type(sp, resolve.m_crate, te);
-                        return ::HIR::TypeRef::new_pointer(::HIR::BorrowType::Shared, std::move(vtable_ty));
-                    } else if (t.data().is_Path() && t.data().as_Path().binding.is_ExternType()) {
-                        return HIR::TypeRef::new_unit();
-                    } else if (t.data().is_Path()) {
+                        return resolve.m_crate.m_types.pointer(::HIR::BorrowType::Shared, vtable_ty);
+                    } else if (t->is_Path() && t->as_Path().binding.is_ExternType()) {
+                        return resolve.m_crate.m_types.unit();
+                    } else if (t->is_Path()) {
                         auto* repr = Target_GetTypeRepr(sp, resolve, t);
                         ASSERT_BUG(sp, repr, "No repr for " << t);
                         return get_metadata_type(sp, resolve, *repr);
@@ -474,7 +474,7 @@ namespace {
             TRACE_FUNCTION_F(var_path);
 
             ::HIR::TypeRef tmp;
-            MonomorphStatePtr ms(nullptr, &var_path.m_params, nullptr);
+            MonomorphStatePtr ms(m_crate.m_types, nullptr, &var_path.m_params, nullptr);
             auto monomorph = [&](const auto& x) -> const auto& {
                 return m_resolve.monomorph_expand_opt(sp, tmp, x, ms);
             };
@@ -484,7 +484,7 @@ namespace {
 
             // Create constructor function
             const auto& var_ty = item.m_data.as_Data().at(var_idx).type;
-            const auto& e = var_ty.data().as_Path().binding.as_Struct()->m_data.as_Tuple();
+            const auto& e = var_ty->as_Path().binding.as_Struct()->m_data.as_Tuple();
             m_of << "/* " << var_path << " */\n";
             m_of << "fn " << fmt(var_path) << "(";
             for (unsigned int i = 0; i < e.size(); i++) {
@@ -511,7 +511,7 @@ namespace {
         void emit_constructor_struct(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Struct& item) override {
             TRACE_FUNCTION_F(p);
             ::HIR::TypeRef tmp;
-            MonomorphStatePtr ms(nullptr, &p.m_params, nullptr);
+            MonomorphStatePtr ms(m_crate.m_types, nullptr, &p.m_params, nullptr);
             auto monomorph = [&](const auto& x) -> const auto& {
                 return m_resolve.monomorph_expand_opt(sp, tmp, x, ms);
             };
@@ -548,10 +548,10 @@ namespace {
             m_mir_res = &top_mir_res;
 
             TRACE_FUNCTION_F(p);
-            ::HIR::TypeRef ty = ::HIR::TypeRef::new_path(p.clone(), &item);
+            ::HIR::TypeRef ty = m_crate.m_types.path(p.clone(), &item);
 
             bool has_drop_glue = m_resolve.type_needs_drop_glue(sp, ty);
-            auto drop_glue_path = ::HIR::Path(ty.clone(), "#drop_glue");
+            auto drop_glue_path = ::HIR::Path(ty, "#drop_glue");
 
             const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
             MIR_ASSERT(*m_mir_res, repr, "No repr for union " << ty);
@@ -574,11 +574,11 @@ namespace {
             m_mir_res = &top_mir_res;
 
             TRACE_FUNCTION_F(p);
-            ::HIR::TypeRef ty = ::HIR::TypeRef::new_path(p.clone(), &item);
+            ::HIR::TypeRef ty = m_crate.m_types.path(p.clone(), &item);
 
             // Generate the drop glue (and determine if there is any)
             bool has_drop_glue = m_resolve.type_needs_drop_glue(sp, ty);
-            auto drop_glue_path = ::HIR::Path(ty.clone(), "#drop_glue");
+            auto drop_glue_path = ::HIR::Path(ty, "#drop_glue");
 
             const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
             MIR_ASSERT(*m_mir_res, repr, "No repr for enum " << ty);
@@ -1181,24 +1181,24 @@ namespace {
     private:
         const ::HIR::TypeRef& monomorphise_fcn_return(::HIR::TypeRef& tmp, const ::HIR::Function& item, const Trans_Params& params) {
             bool has_erased = visit_ty_with(item.m_return, [&](const auto& x) {
-                return x.data().is_ErasedType();
+                return x->is_ErasedType();
             });
 
             if (has_erased || monomorphise_type_needed(item.m_return)) {
                 // If there's an erased type, make a copy with the erased type expanded
                 if (has_erased) {
-                    tmp = clone_ty_with(sp, item.m_return, [&](const auto& x, auto& out) {
-                        if (const auto* te = x.data().opt_ErasedType()) {
+                    tmp = clone_ty_with(m_crate.m_types, sp, item.m_return, [&](const auto& x, auto& out) {
+                        if (const auto* te = x->opt_ErasedType()) {
                             if (const auto* e = te->m_inner.opt_Fcn()) {
-                                out = item.m_code.m_erased_types.at(e->m_index).clone();
+                                out = item.m_code.m_erased_types.at(e->m_index);
                                 return true;
                             }
                         }
                         return false;
                     });
-                    tmp = params.monomorph_type(Span(), tmp).clone();
+                    tmp = params.monomorph_type(Span(), tmp);
                 } else {
-                    tmp = params.monomorph_type(Span(), item.m_return).clone();
+                    tmp = params.monomorph_type(Span(), item.m_return);
                 }
                 m_resolve.expand_associated_types(Span(), tmp);
                 return tmp;

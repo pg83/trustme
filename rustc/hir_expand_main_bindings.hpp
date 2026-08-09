@@ -12,7 +12,8 @@
 namespace HIR {
     class Crate;
     class ExprPtr;
-    class TypeRef;
+    class TypeData;
+    using TypeRef = const TypeData*;
     class TraitImpl;
     struct Pattern;
     class ItemPath;

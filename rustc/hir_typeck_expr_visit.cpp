@@ -99,7 +99,8 @@ namespace {
 
     public:
         OuterVisitor(::HIR::Crate& crate)
-            : m_ms(crate)
+            : ::HIR::Visitor(nullptr, crate.m_types)
+            , m_ms(crate)
         {
         }
 
@@ -122,7 +123,7 @@ namespace {
             HIR::GenericPath trait_gpath;
             trait_gpath.m_path = p.get_simple_path();
             for (size_t i = 0; i < item.m_params.m_types.size(); i++) {
-                trait_gpath.m_params.m_types.push_back(HIR::TypeRef(item.m_params.m_types[i].m_name, i));
+                trait_gpath.m_params.m_types.push_back(m_ms.m_crate.m_types.generic(item.m_params.m_types[i].m_name, i));
             }
             for (size_t i = 0; i < item.m_params.m_values.size(); i++) {
                 trait_gpath.m_params.m_values.push_back(HIR::GenericRef(item.m_params.m_values[i].m_name, i));
@@ -168,15 +169,18 @@ namespace {
         }
 
         void visit_type(::HIR::TypeRef& ty) override {
-            if (auto* e = ty.data_mut().opt_Array()) {
-                this->visit_type(e->inner);
+            if (ty->is_Array()) {
+                auto data = ty->clone_data();
+                auto& e = data.as_Array();
+                this->visit_type(e.inner);
                 DEBUG("Array size " << ty);
                 t_args tmp;
-                if (auto* se = e->size.opt_Unevaluated()) {
+                if (auto* se = e.size.opt_Unevaluated()) {
                     if (se->is_Unevaluated()) {
-                        Typecheck_Code(m_ms, tmp, ::HIR::TypeRef(::HIR::CoreType::Usize), *se->as_Unevaluated()->expr);
+                        Typecheck_Code(m_ms, tmp, m_ms.m_crate.m_types.primitive(::HIR::CoreType::Usize), *se->as_Unevaluated()->expr);
                     }
                 }
+                ty = m_ms.m_crate.m_types.intern(std::move(data));
             } else {
                 ::HIR::Visitor::visit_type(ty);
             }
@@ -223,7 +227,7 @@ namespace {
                     DEBUG("Enum value " << p << " - " << var.name);
                     if (var.expr) {
                         t_args tmp;
-                        Typecheck_Code(m_ms, tmp, enum_type, var.expr);
+                        Typecheck_Code(m_ms, tmp, m_ms.m_crate.m_types.primitive(enum_type), var.expr);
                     }
                 }
             }

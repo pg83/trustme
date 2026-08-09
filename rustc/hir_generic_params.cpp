@@ -25,7 +25,7 @@ namespace HIR {
                 if (!typ.m_is_sized) {
                     os << ": ?Sized";
                 }
-                if (!typ.m_default.data().is_Infer()) {
+                if (typ.m_default && !typ.m_default->is_Infer()) {
                     os << " = " << typ.m_default;
                 }
                 os << ",";
@@ -64,11 +64,11 @@ Ordering HIR::GenericBound::ord(const HIR::GenericBound& b) const {
     if (this->tag() != b.tag()) {
         return this->tag() < b.tag() ? OrdLess : OrdGreater;
     }
-    TU_MATCHA((*this, b), (ae, be), (Lifetime, auto cmp = ::ord(ae.test, be.test); if (cmp != OrdEqual) return cmp; cmp = ::ord(ae.valid_for, be.valid_for); if (cmp != OrdEqual) return cmp;), (TypeLifetime, auto cmp = ae.type.ord(be.type); if (cmp != OrdEqual) return cmp; cmp = ::ord(ae.valid_for, be.valid_for); if (cmp != OrdEqual) return cmp;), (TraitBound, auto cmp = ae.type.ord(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.trait.ord(be.trait); if (cmp != OrdEqual) return cmp;), (TypeEquality, auto cmp = ae.type.ord(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.other_type.ord(be.other_type); if (cmp != OrdEqual) return cmp;))
+    TU_MATCHA((*this, b), (ae, be), (Lifetime, auto cmp = ::ord(ae.test, be.test); if (cmp != OrdEqual) return cmp; cmp = ::ord(ae.valid_for, be.valid_for); if (cmp != OrdEqual) return cmp;), (TypeLifetime, auto cmp = ae.type->ord_ignoring_regions(be.type); if (cmp != OrdEqual) return cmp; cmp = ::ord(ae.valid_for, be.valid_for); if (cmp != OrdEqual) return cmp;), (TraitBound, auto cmp = ae.type->ord_ignoring_regions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.trait.ord(be.trait); if (cmp != OrdEqual) return cmp;), (TypeEquality, auto cmp = ae.type->ord_ignoring_regions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.other_type->ord_ignoring_regions(be.other_type); if (cmp != OrdEqual) return cmp;))
     return OrdEqual;
 }
 
-HIR::PathParams HIR::GenericParams::make_nop_params(unsigned level, bool lifetimes_only /*=false*/) const {
+HIR::PathParams HIR::GenericParams::make_nop_params(TypeInterner& types, unsigned level, bool lifetimes_only /*=false*/) const {
     assert(!lifetimes_only || this->m_types.empty());
     assert(!lifetimes_only || this->m_values.empty());
 
@@ -80,7 +80,7 @@ HIR::PathParams HIR::GenericParams::make_nop_params(unsigned level, bool lifetim
         rv.m_lifetimes[i] = HIR::LifetimeRef(256 * level + i);
     }
     for (size_t i = 0; i < this->m_types.size(); i++) {
-        rv.m_types[i] = HIR::TypeRef(this->m_types[i].m_name, 256 * level + i);
+        rv.m_types[i] = types.generic(this->m_types[i].m_name, 256 * level + i);
     }
     for (size_t i = 0; i < this->m_values.size(); i++) {
         rv.m_values[i] = HIR::GenericRef(this->m_values[i].m_name, 256 * level + i);
@@ -92,11 +92,11 @@ HIR::PathParams HIR::GenericParams::make_nop_params(unsigned level, bool lifetim
     ::HIR::GenericParams rv;
     rv.m_types.reserve(m_types.size());
     for (const auto& type : m_types) {
-        rv.m_types.push_back(::HIR::TypeParamDef{type.m_name, type.m_default.clone(), type.m_is_sized});
+        rv.m_types.push_back(::HIR::TypeParamDef{type.m_name, type.m_default, type.m_is_sized});
     }
     rv.m_values.reserve(m_values.size());
     for (const auto& type : m_values) {
-        rv.m_values.push_back(::HIR::ValueParamDef{type.m_name, type.m_type.clone()});
+        rv.m_values.push_back(::HIR::ValueParamDef{type.m_name, type.m_type, type.m_default.clone()});
     }
     rv.m_lifetimes = m_lifetimes;
     rv.m_bounds.reserve(m_bounds.size());
@@ -112,10 +112,10 @@ HIR::PathParams HIR::GenericParams::make_nop_params(unsigned level, bool lifetim
             return ::HIR::GenericBound::make_Lifetime(e);
         }
         TU_ARMA(TypeLifetime, e) {
-            return ::HIR::GenericBound::make_TypeLifetime({e.type.clone(), e.valid_for});
+            return ::HIR::GenericBound::make_TypeLifetime({e.type, e.valid_for});
         }
         TU_ARMA(TraitBound, e) {
-            return ::HIR::GenericBound::make_TraitBound({e.hrtbs ? box$(e.hrtbs->clone()) : nullptr, e.type.clone(), e.trait.clone()});
+            return ::HIR::GenericBound::make_TraitBound({e.hrtbs ? box$(e.hrtbs->clone()) : nullptr, e.type, e.trait.clone()});
         } /*
     TU_ARMA(NotTrait, e) {
         return ::HIR::GenericBound::make_NotTrait({
@@ -124,7 +124,7 @@ HIR::PathParams HIR::GenericParams::make_nop_params(unsigned level, bool lifetim
             });
         }*/
         TU_ARMA(TypeEquality, e) {
-            return ::HIR::GenericBound::make_TypeEquality({e.type.clone(), e.other_type.clone()});
+            return ::HIR::GenericBound::make_TypeEquality({e.type, e.other_type});
         }
     }
     throw "Unreachable";

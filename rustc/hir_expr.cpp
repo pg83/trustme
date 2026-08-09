@@ -418,7 +418,8 @@ void ::HIR::ExprVisitorDef::visit_pattern(const Span& sp, ::HIR::Pattern& pat) {
 }
 
 void ::HIR::ExprVisitorDef::visit_type(::HIR::TypeRef& ty) {
-    TU_MATCH(::HIR::TypeData, (ty.data_mut()), (e),
+    auto data = ty->clone_data();
+    TU_MATCH(::HIR::TypeData, (data), (e),
     (Infer,
         ),
     (Diverge,
@@ -482,6 +483,7 @@ TU_ARMA(Alias, ee) {
     (NodeType,
         )
     )
+    ty = m_types.intern(std::move(data));
         }
 
         void ::HIR::ExprVisitorDef::visit_path_params(::HIR::PathParams& pp) {

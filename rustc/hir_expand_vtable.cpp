@@ -26,7 +26,9 @@ namespace {
         ::std::vector<HIR::TypeRef> m_tys;
 
     public:
-        Visitor_ImplTrait() {
+        explicit Visitor_ImplTrait(HIR::TypeInterner& types)
+            : ::HIR::Visitor(nullptr, types)
+        {
         }
 
     private:
@@ -34,7 +36,7 @@ namespace {
             if (m_method_name) {
                 ::HIR::Visitor::visit_type(ty);
 
-                if (const auto* e = ty.data().opt_ErasedType()) {
+                if (const auto* e = ty->opt_ErasedType()) {
                     if (!e->m_inner.is_Fcn()) {
                         return;
                     }
@@ -69,7 +71,7 @@ namespace {
                                     e->m_is_sized,
                                     {}, // TODO: Lifetime
                                     std::move(traits),
-                                    {} //std::move(ty)
+                                    type_interner().infer()
                                 }
                             )
                         );
@@ -78,7 +80,7 @@ namespace {
                         const auto& fcn = m_target_trait->m_values.at(f.m_origin.m_data.as_UfcsKnown().item);
                         if (fcn.as_Function().m_code) {
                             const auto& t = fcn.as_Function().m_code.m_erased_types.at(f.m_index);
-                            m_tys.push_back(t.clone());
+                            m_tys.push_back(t);
                         } else {
                             m_tys.push_back(std::move(ty));
                         }
@@ -87,7 +89,7 @@ namespace {
                         BUG(Span(), "Neither target impl nor target trait set");
                     }
 
-                    ty = HIR::TypeRef::new_path(HIR::Path(m_self_ty ? m_self_ty->clone() : HIR::TypeRef::new_self(), HIR::GenericPath(m_trait_path->clone(), m_trait_args->clone()), ty_name, m_method_params->make_nop_params(1)), {});
+                    ty = type_interner().path(HIR::Path(m_self_ty ? *m_self_ty : type_interner().self(), HIR::GenericPath(m_trait_path->clone(), m_trait_args->clone()), ty_name, m_method_params->make_nop_params(type_interner(), 1)), {});
                 }
             }
         }
@@ -109,6 +111,7 @@ namespace {
                     auto ty_name = RcString::new_interned(FMT(ATY_PREFIX_ERASED << m_method_name << "_" << i));
                     auto& ty = m_target_trait->m_types.at(ty_name);
                     ty.m_default = std::move(m_tys.at(i));
+                    ty.m_has_default = true;
                 }
             }
 
@@ -118,9 +121,9 @@ namespace {
 
     public:
         void visit_trait(::HIR::ItemPath p, ::HIR::Trait& tr) override {
-            auto self = HIR::TypeRef::new_self();
+            auto self = type_interner().self();
             auto path = p.get_simple_path();
-            auto params = tr.m_params.make_nop_params(0);
+            auto params = tr.m_params.make_nop_params(type_interner(), 0);
             m_target_trait = &tr;
             for (auto& v : tr.m_values) {
                 if (auto* f = v.second.opt_Function()) {
@@ -147,7 +150,8 @@ namespace {
 
     public:
         OuterVisitor(const ::HIR::Crate& crate)
-            : m_crate(crate)
+            : ::HIR::Visitor(nullptr, crate.m_types)
+            , m_crate(crate)
         {
             m_lang_Sized = crate.get_lang_item_path_opt("sized");
         }
@@ -177,18 +181,20 @@ namespace {
 
             StaticTraitResolve resolve{m_crate};
             resolve.set_impl_generics_raw(MetadataType::Unknown, tr.m_params);
-            ::HIR::GenericPath trait_path(p.get_simple_path(), tr.m_params.make_nop_params(0));
+            ::HIR::GenericPath trait_path(p.get_simple_path(), tr.m_params.make_nop_params(m_crate.m_types, 0));
 
             ::std::unordered_map<::std::string, unsigned int> assoc_type_indexes;
 
             struct Foo {
+                ::HIR::TypeInterner& types;
                 ::HIR::Trait* trait_ptr;
                 ::HIR::GenericParams params_def;
                 ::HIR::PathParams params_use;
                 bool has_conflict = false;
 
-                Foo(HIR::Trait& root_trait)
-                    : trait_ptr(&root_trait)
+                Foo(HIR::TypeInterner& types, HIR::Trait& root_trait)
+                    : types(types)
+                    , trait_ptr(&root_trait)
                 {
                 }
 
@@ -213,7 +219,7 @@ namespace {
                                 rv.first->second = UINT_MAX;
                                 this->has_conflict = true;
                             } else {
-                                params_def.m_types.push_back(::HIR::TypeParamDef{RcString::new_interned(FMT("a#" << ty.first)), {}, ty.second.is_sized});
+                                params_def.m_types.push_back(::HIR::TypeParamDef{RcString::new_interned(FMT("a#" << ty.first)), types.infer(), ty.second.is_sized});
                                 //params_use.m_types.push_back( ::HIR::TypeRef(tp.m_name, &tp - tr.m_params.m_types.data()) );
                             }
                         }
@@ -221,10 +227,10 @@ namespace {
                 }
             };
 
-            Foo visitor{tr};
+            Foo visitor{m_crate.m_types, tr};
             for (const auto& tp : tr.m_params.m_types) {
-                visitor.params_def.m_types.push_back(::HIR::TypeParamDef{tp.m_name, {}, tp.m_is_sized});
-                visitor.params_use.m_types.push_back(::HIR::TypeRef(tp.m_name, &tp - tr.m_params.m_types.data()));
+                visitor.params_def.m_types.push_back(::HIR::TypeParamDef{tp.m_name, m_crate.m_types.infer(), tp.m_is_sized});
+                visitor.params_use.m_types.push_back(m_crate.m_types.generic(tp.m_name, &tp - tr.m_params.m_types.data()));
             }
             visitor.add_types_from_trait(trait_path, tr, {});
             for (const auto& st : tr.m_all_parent_traits) {
@@ -235,6 +241,7 @@ namespace {
             auto args = std::move(visitor.params_def);
 
             struct VtableConstruct {
+                HIR::TypeInterner& types;
                 const OuterVisitor* m_outer;
                 const StaticTraitResolve* m_resolve_ptr;
                 ::HIR::Trait* trait_ptr;
@@ -247,11 +254,13 @@ namespace {
                         ::HIR::Trait* trait_ptr;
                         const ::HIR::PathParams* trait_params;
 
+                        explicit M(HIR::TypeInterner& types): Monomorphiser(types) {}
+
                         ::HIR::TypeRef get_type(const Span& sp, const ::HIR::GenericRef& g) const override {
                             if (g.group() == 0 && g.idx() < trait_params->m_types.size()) {
-                                return trait_params->m_types[g.idx()].clone();
+                                return trait_params->m_types[g.idx()];
                             }
-                            return HIR::TypeRef(g.name, g.binding);
+                            return m_types.generic(g.name, g.binding);
                         }
 
                         ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& g) const override {
@@ -273,29 +282,29 @@ namespace {
                         }
 
                         HIR::TypeRef monomorph_type(const Span& sp, const HIR::TypeRef& t, bool allow_infer = true) const override {
-                            if (t.data().is_Path() && t.data().as_Path().path.m_data.is_UfcsKnown()) {
-                                const auto& pe = t.data().as_Path().path.m_data.as_UfcsKnown();
-                                bool is_self = (pe.type == ::HIR::TypeRef::new_self());
+                            if (t->is_Path() && t->as_Path().path.m_data.is_UfcsKnown()) {
+                                const auto& pe = t->as_Path().path.m_data.as_UfcsKnown();
+                                bool is_self = (pe.type == m_types.self());
                                 auto it = trait_ptr->m_type_indexes.find(pe.item);
                                 bool has_item = (it != trait_ptr->m_type_indexes.end());
                                 // TODO: Check the trait against m_type_indexes
                                 if (is_self /*&& pe.trait == trait_path*/ && has_item) {
                                     DEBUG("[clone_cb] t=" << t << " -> " << it->second);
                                     // Replace with a new type param, need to know the index of it
-                                    return ::HIR::TypeRef(RcString::new_interned(FMT("a#" << pe.item)), it->second);
+                                    return m_types.generic(RcString::new_interned(FMT("a#" << pe.item)), it->second);
                                 } else {
                                     DEBUG("[clone_cb] t=" << t << "(" << is_self << has_item << ")");
                                 }
                             }
                             return Monomorphiser::monomorph_type(sp, t, allow_infer);
                         }
-                    } m;
+                    } m(types);
 
                     m.trait_ptr = trait_ptr;
                     m.trait_params = &trait_path.m_params;
-                    auto clone_self_cb = [](const auto& t, auto& o) {
-                        if (t == ::HIR::TypeRef::new_self()) {
-                            o = ::HIR::TypeRef::new_unit();
+                    auto clone_self_cb = [this](const auto& t, auto& o) {
+                        if (t == types.self()) {
+                            o = types.unit();
                             return true;
                         }
                         return false;
@@ -308,7 +317,7 @@ namespace {
                                     continue;
                                 }
                                 if (::std::any_of(ve.m_params.m_bounds.begin(), ve.m_params.m_bounds.end(), [&](const auto& b) {
-                                    return b.is_TraitBound() && b.as_TraitBound().type == ::HIR::TypeRef::new_self() && b.as_TraitBound().trait.m_path.m_path == m_outer->m_lang_Sized;
+                                    return b.is_TraitBound() && b.as_TraitBound().type == types.self() && b.as_TraitBound().trait.m_path.m_path == m_outer->m_lang_Sized;
                                 })) {
                                     DEBUG("- '" << vi.first << "' Skip where `Self: Sized`");
                                     continue;
@@ -334,20 +343,20 @@ namespace {
                                 ft.m_abi = ve.m_abi;
                                 ft.m_rettype = m_resolve_ptr->monomorph_expand(sp, ve.m_return, m);
                                 ft.m_arg_types.reserve(ve.m_args.size());
-                                ft.m_arg_types.push_back(clone_ty_with(sp, m_resolve_ptr->monomorph_expand_opt(sp, tmp, ve.m_args[0].second, m), clone_self_cb));
+                                ft.m_arg_types.push_back(clone_ty_with(types, sp, m_resolve_ptr->monomorph_expand_opt(sp, tmp, ve.m_args[0].second, m), clone_self_cb));
                                 if (ve.m_receiver == ::HIR::Function::Receiver::Value) {
-                                    ft.m_arg_types[0] = HIR::TypeRef::new_borrow(HIR::BorrowType::Owned, mv$(ft.m_arg_types[0]));
+                                    ft.m_arg_types[0] = types.borrow(HIR::BorrowType::Owned, ft.m_arg_types[0]);
                                 }
                                 for (unsigned int i = 1; i < ve.m_args.size(); i++) {
                                     ft.m_arg_types.push_back(m_resolve_ptr->monomorph_expand(sp, ve.m_args[i].second, m));
                                 }
                                 // Clear the first argument (the receiver)
-                                ::HIR::TypeRef fcn_type(mv$(ft));
+                                ::HIR::TypeRef fcn_type = types.function(mv$(ft));
 
                                 // Detect use of `Self` and don't create the vtable if there is.
                                 // NOTE: Associated types where replaced by clone_ty_with
                                 if (visit_ty_with(fcn_type, [&](const auto& t) {
-                                    return (t == ::HIR::TypeRef::new_self());
+                                    return (t == types.self());
                                 })) {
                                     DEBUG("- '" << vi.first << "' NOT object safe (uses Self), not creating vtable - " << fcn_type);
                                     return false;
@@ -370,8 +379,8 @@ namespace {
                     if (supertrait_flags) {
                         supertrait_flags->reserve(tr.m_all_parent_traits.size());
                         for (const auto& st : tr.m_all_parent_traits) {
-                            auto self = ::HIR::TypeRef::new_self();
-                            auto st_mono = MonomorphStatePtr(&self, &trait_path.m_params, nullptr).monomorph_traitpath(sp, st, false);
+                            auto self = types.self();
+                            auto st_mono = MonomorphStatePtr(types, &self, &trait_path.m_params, nullptr).monomorph_traitpath(sp, st, false);
                             // NOTE: Doesn't trigger non-object-safe
                             supertrait_flags->push_back(add_ents_from_trait(*st.m_trait_ptr, st_mono.m_path, nullptr));
                         }
@@ -380,19 +389,19 @@ namespace {
                 }
             };
 
-            VtableConstruct vtc{this, &resolve, &tr, {}};
+            VtableConstruct vtc{m_crate.m_types, this, &resolve, &tr, {}};
             // - Drop glue pointer
             ::HIR::TypeData_FunctionPointer ft;
             ft.is_unsafe = false;
             ft.is_variadic = false;
             ft.m_abi = RcString::new_interned(ABI_RUST);
-            ft.m_rettype = ::HIR::TypeRef::new_unit();
-            ft.m_arg_types.push_back(::HIR::TypeRef::new_pointer(::HIR::BorrowType::Owned, ::HIR::TypeRef::new_unit()));
-            vtc.fields.push_back({RcString::new_interned("#drop_glue"), ::HIR::Publicity::new_none(), ::HIR::TypeRef(mv$(ft)), {}});
+            ft.m_rettype = m_crate.m_types.unit();
+            ft.m_arg_types.push_back(m_crate.m_types.pointer(::HIR::BorrowType::Owned, m_crate.m_types.unit()));
+            vtc.fields.push_back({RcString::new_interned("#drop_glue"), ::HIR::Publicity::new_none(), m_crate.m_types.function(mv$(ft)), {}});
             // - Size of data
-            vtc.fields.push_back({RcString::new_interned("#size"), ::HIR::Publicity::new_none(), ::HIR::CoreType::Usize, {}});
+            vtc.fields.push_back({RcString::new_interned("#size"), ::HIR::Publicity::new_none(), m_crate.m_types.primitive(::HIR::CoreType::Usize), {}});
             // - Alignment of data
-            vtc.fields.push_back({RcString::new_interned("#align"), ::HIR::Publicity::new_none(), ::HIR::CoreType::Usize, {}});
+            vtc.fields.push_back({RcString::new_interned("#align"), ::HIR::Publicity::new_none(), m_crate.m_types.primitive(::HIR::CoreType::Usize), {}});
             // - Add methods
             ::std::vector<bool> supertrait_flags;
             if (!vtc.add_ents_from_trait(tr, trait_path, &supertrait_flags) || has_conflicting_aty_name) {
@@ -407,7 +416,9 @@ namespace {
                 auto parent_vtable_spath = pt.m_path.m_path;
                 parent_vtable_spath.update_last_component(RcString::new_interned(FMT(parent_vtable_spath.components().back().c_str() << "#vtable")));
                 auto parent_vtable_path = ::HIR::GenericPath(mv$(parent_vtable_spath), pt.m_path.m_params.clone());
-                auto ty = true || supertrait_flags[i] ? ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, ::HIR::TypeRef::new_path(mv$(parent_vtable_path), {})) : ::HIR::TypeRef::new_unit();
+                auto ty = true || supertrait_flags[i]
+                    ? m_crate.m_types.borrow(::HIR::BorrowType::Shared, m_crate.m_types.path(mv$(parent_vtable_path), {}))
+                    : m_crate.m_types.unit();
                 vtc.fields.push_back({RcString::new_interned(FMT("#parent_" << i)), ::HIR::Publicity::new_none(), mv$(ty), {}});
             }
             auto fields = mv$(vtc.fields);
@@ -416,16 +427,16 @@ namespace {
             {
                 unsigned int i = 0;
                 for (const auto& tp : tr.m_params.m_types) {
-                    params.m_types.push_back(::HIR::TypeRef(tp.m_name, i));
+                    params.m_types.push_back(m_crate.m_types.generic(tp.m_name, i));
                     i++;
                 }
                 for (const auto& ty : tr.m_type_indexes) {
                     DEBUG("ATY " << ty.first << " : " << ty.second);
                     auto ty_def = tr.get_aty_def(ty.first);
                     ASSERT_BUG(sp, ty_def.first, "Unable to find ATY defintiion");
-                    auto aty_params = ty_def.first->m_generics.make_nop_params(1);
-                    ::HIR::Path path(::HIR::TypeRef::new_self(), trait_path.clone(), ty.first, std::move(aty_params));
-                    params.m_types.push_back(::HIR::TypeRef::new_path(mv$(path), {}));
+                    auto aty_params = ty_def.first->m_generics.make_nop_params(m_crate.m_types, 1);
+                    ::HIR::Path path(m_crate.m_types.self(), trait_path.clone(), ty.first, std::move(aty_params));
+                    params.m_types.push_back(m_crate.m_types.path(mv$(path), {}));
                 }
             }
             ASSERT_BUG(sp, true && args.m_types.size() == params.m_types.size() && args.m_values.size() == params.m_values.size(), "Count mismatch args=" << args.fmt_args() << " params=" << params);
@@ -435,7 +446,7 @@ namespace {
             DEBUG("Vtable structure created - " << item_path);
             ::HIR::GenericPath path(mv$(item_path), std::move(params));
 
-            tr.m_values.insert(::std::make_pair(RcString::new_interned("vtable#"), ::HIR::TraitValueItem(::HIR::Static(::HIR::Linkage(), false, ::HIR::TypeRef::new_path(mv$(path), {}), {}))));
+            tr.m_values.insert(::std::make_pair(RcString::new_interned("vtable#"), ::HIR::TraitValueItem(::HIR::Static(::HIR::Linkage(), false, m_crate.m_types.path(mv$(path), {}), {}))));
         }
 
         void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
@@ -489,7 +500,8 @@ namespace {
 
     public:
         FixupVisitor(const ::HIR::Crate& crate)
-            : m_crate(crate)
+            : ::HIR::Visitor(nullptr, crate.m_types)
+            , m_crate(crate)
         {
         }
 
@@ -510,9 +522,12 @@ namespace {
 
                     if (parent_trait.m_vtable_path == HIR::SimplePath()) {
                         // Not object safe, so clear this entry
-                        fld_ty = ::HIR::TypeRef::new_unit();
+                        fld_ty = m_crate.m_types.unit();
                     } else {
-                        auto& te = fld_ty.data_mut().as_Borrow().inner.data_mut().as_Path();
+                        auto borrow_data = fld_ty->clone_data();
+                        auto& borrow = borrow_data.as_Borrow();
+                        auto path_data = borrow.inner->clone_data();
+                        auto& te = path_data.as_Path();
                         auto& vtable_gpath = te.path.m_data.as_Generic();
                         te.binding = &m_crate.get_struct_by_path(sp, vtable_gpath.m_path);
 
@@ -524,11 +539,11 @@ namespace {
                             // If this associated type is in the trait path `pt`
                             auto it = pt.m_type_bounds.find(aty_idx.first);
                             if (it != pt.m_type_bounds.end()) {
-                                slot = it->second.type.clone();
+                                slot = it->second.type;
                             }
                             // If this type is not in the trait path, then check if it has a defined generic
                             else if (trait.m_type_indexes.count(aty_idx.first) != 0) {
-                                slot = HIR::TypeRef(RcString(), trait.m_type_indexes.at(aty_idx.first));
+                                slot = m_crate.m_types.generic(RcString(), trait.m_type_indexes.at(aty_idx.first));
                             } else {
                                 // Otherwise, it has to have been defined in another parent trait
                                 const HIR::GenericPath* gp = nullptr;
@@ -542,7 +557,7 @@ namespace {
                                 ASSERT_BUG(sp, gp, "Failed to a find trait that defined " << aty_idx.first << " in " << pt.m_path.m_path);
 
                                 // Monomorph into the top trait
-                                auto gp_mono = MonomorphStatePtr(nullptr, &pt.m_path.m_params, nullptr).monomorph_genericpath(sp, *gp);
+                                auto gp_mono = MonomorphStatePtr(m_crate.m_types, nullptr, &pt.m_path.m_params, nullptr).monomorph_genericpath(sp, *gp);
                                 // Search the parent list
                                 const HIR::TraitPath* p = nullptr;
                                 for (const auto& pt : trait.m_all_parent_traits) {
@@ -553,9 +568,11 @@ namespace {
                                 ASSERT_BUG(sp, p, "Failed to find " << gp_mono << " in parent trait list for " << trait_path);
                                 auto it = p->m_type_bounds.find(aty_idx.first);
                                 ASSERT_BUG(sp, it != p->m_type_bounds.end(), "Failed to find " << aty_idx.first << " in " << *p);
-                                slot = it->second.type.clone();
+                                slot = it->second.type;
                             }
                         }
+                        borrow.inner = m_crate.m_types.intern(std::move(path_data));
+                        fld_ty = m_crate.m_types.intern(std::move(borrow_data));
                     }
                 }
             }
@@ -565,7 +582,7 @@ namespace {
 
 void HIR_Expand_VTables(::HIR::Crate& crate) {
     {
-        Visitor_ImplTrait v; //(crate);
+        Visitor_ImplTrait v(crate.m_types);
         v.visit_crate(crate);
     }
 

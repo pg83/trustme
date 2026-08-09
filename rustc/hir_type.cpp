@@ -8,12 +8,17 @@
 #include "hir_type.hpp"
 #include "span.hpp"
 #include "hir_expr.hpp" // Hack for cloning array types
+#include <std/mem/obj_pool.h>
 #include <cstdint>
 
 namespace HIR {
 
     ::std::ostream& operator<<(::std::ostream& os, const ::HIR::TypeRef& ty) {
-        ty.fmt(os);
+        if (ty) {
+            ty->fmt(os);
+        } else {
+            os << "NULL";
+        }
         return os;
     }
 
@@ -149,7 +154,7 @@ bool ::HIR::TypeData_ErasedType_AliasInner::is_public_to(const HIR::SimplePath& 
     return p.starts_with(this->path, /*skip_last=*/true);
 }
 
-::HIR::TypeData_FunctionPointer HIR::TypeData::Data_NamedFunction::decay(const Span& sp) const {
+::HIR::TypeData_FunctionPointer HIR::TypeData::Data_NamedFunction::decay(TypeInterner& types, const Span& sp) const {
     const ::HIR::TypeRef* ty_self = nullptr;
     const ::HIR::PathParams* pp_impl = nullptr;
     const ::HIR::PathParams* pp_method = nullptr;
@@ -175,7 +180,7 @@ bool ::HIR::TypeData_ErasedType_AliasInner::is_public_to(const HIR::SimplePath& 
                     BUG(sp, "UfcsUnknown seen");
                 }
         }
-        MonomorphStatePtr   ms { ty_self, pp_impl, pp_method };
+        MonomorphStatePtr   ms { types, ty_self, pp_impl, pp_method };
         const auto& f = *fp;
         ::HIR::TypeData_FunctionPointer ft {
             HIR::GenericParams(),   // TODO: Get HRLs
@@ -190,23 +195,23 @@ bool ::HIR::TypeData_ErasedType_AliasInner::is_public_to(const HIR::SimplePath& 
         {
                 ft.hrls.m_lifetimes = f.m_params.m_lifetimes;
                 method_pp_trimmed = ms.pp_method->clone();
-                method_pp_trimmed.m_lifetimes = std::move(ft.hrls.make_nop_params(3, /*lifetimes_only*/ true).m_lifetimes);
+                method_pp_trimmed.m_lifetimes = std::move(ft.hrls.make_nop_params(types, 3, /*lifetimes_only*/ true).m_lifetimes);
                 ms.pp_method = &method_pp_trimmed;
         }
         for( const auto& arg : f.m_args )
         {
                 ft.m_arg_types.push_back(ms.monomorph_type(sp, arg.second));
         }
-        return ft;
+        return mv$(ft);
         }
         TU_ARMA(EnumConstructor, ec) {
             const auto& e = this->path.m_data.as_Generic();
-            MonomorphStatePtr ms{nullptr, &e.m_params, nullptr};
+            MonomorphStatePtr ms{types, nullptr, &e.m_params, nullptr};
             auto enum_path = e.m_path.parent();
             const auto& enm = *ec.e;
             ASSERT_BUG(sp, enm.m_data.is_Data(), "Enum " << enum_path << " isn't a data-holding enum");
             const auto& var_ty = enm.m_data.as_Data()[ec.v].type;
-            const auto& str = *var_ty.data().as_Path().binding.as_Struct();
+            const auto& str = *var_ty->as_Path().binding.as_Struct();
             const auto& var_data = str.m_data.as_Tuple();
 
             ::HIR::TypeData_FunctionPointer ft{
@@ -214,7 +219,7 @@ bool ::HIR::TypeData_ErasedType_AliasInner::is_public_to(const HIR::SimplePath& 
                 false,
                 false,
                 RcString::new_interned(ABI_RUST),
-                ::HIR::TypeRef::new_path(::HIR::GenericPath(mv$(enum_path), e.m_params.clone()), ::HIR::TypePathBinding::make_Enum(&enm)),
+                types.path(::HIR::Path(::HIR::GenericPath(mv$(enum_path), e.m_params.clone())), ::HIR::TypePathBinding::make_Enum(&enm)),
                 {}
             };
             for (const auto& arg : var_data) {
@@ -224,13 +229,13 @@ bool ::HIR::TypeData_ErasedType_AliasInner::is_public_to(const HIR::SimplePath& 
         }
         TU_ARMA(StructConstructor, p) {
             const auto& e = this->path.m_data.as_Generic();
-            MonomorphStatePtr ms{nullptr, &e.m_params, nullptr};
+            MonomorphStatePtr ms{types, nullptr, &e.m_params, nullptr};
             ::HIR::TypeData_FunctionPointer ft{
                 HIR::GenericParams(), // TODO: Get HRLs
                 false,
                 false,
                 RcString::new_interned(ABI_RUST),
-                ::HIR::TypeRef::new_path(this->path.clone(), ::HIR::TypePathBinding::make_Struct(p)),
+                types.path(this->path.clone(), ::HIR::TypePathBinding::make_Struct(p)),
                 {}
             };
             for (const auto& arg : p->m_data.as_Tuple()) {
@@ -242,32 +247,26 @@ bool ::HIR::TypeData_ErasedType_AliasInner::is_public_to(const HIR::SimplePath& 
     BUG(sp, "Unreachable code?");
 }
 
-void ::HIR::TypeRef::fmt(::std::ostream& os) const {
-    if (!m_ptr) {
-        os << "NULL";
-        return;
-    }
-
-    thread_local static std::vector<const HIR::TypeInner*> s_recurse_stack;
+void ::HIR::TypeData::fmt(::std::ostream& os) const {
+    thread_local static std::vector<const HIR::TypeData*> s_recurse_stack;
     for (const auto* p : s_recurse_stack) {
-        if (p == m_ptr) {
+        if (p == this) {
             os << "RECURSE";
             return;
         }
     }
 
     struct _ {
-        _(const HIR::TypeInner* ptr) {
+        _(const HIR::TypeData* ptr) {
             s_recurse_stack.push_back(ptr);
         }
 
         ~_() {
             s_recurse_stack.pop_back();
         }
-    } h(m_ptr);
+    } h(this);
 
-    //os << "{" << m_ptr << "}";
-    TU_MATCH_HDRA( (data()), { )
+    TU_MATCH_HDRA( (*this), { )
     TU_ARMA(Infer, e) {
             os << "_";
             if (e.index != ~0u || e.ty_class != ::HIR::InferClass::None) {
@@ -462,23 +461,505 @@ void ::HIR::TypeData_NodeType::fmt(::std::ostream& os) const {
     throw "";
 }
 
-bool ::HIR::TypeRef::operator==(const ::HIR::CoreType & x) const {
-    return data().is_Primitive() && data().as_Primitive() == x;
-}
+namespace {
+    using namespace HIR;
 
-bool ::HIR::TypeRef::operator==(const ::HIR::TypeRef & x) const {
-    if (m_ptr == x.m_ptr) {
+    bool exact_path_params_equal(const PathParams& a, const PathParams& b);
+    bool exact_generic_params_equal(const GenericParams& a, const GenericParams& b);
+    bool exact_trait_path_equal(const TraitPath& a, const TraitPath& b);
+
+    bool exact_generic_ref_equal(const GenericRef& a, const GenericRef& b) {
+        return a == b;
+    }
+
+    bool exact_const_generic_equal(const ConstGeneric& a, const ConstGeneric& b) {
+        if (a.tag() != b.tag()) {
+            return false;
+        }
+        TU_MATCH_HDRA((a, b), {)
+        TU_ARMA(Infer, ae, be) return ae.index == be.index;
+        TU_ARMA(Generic, ae, be) return exact_generic_ref_equal(ae, be);
+        TU_ARMA(Evaluated, ae, be) return *ae == *be;
+        TU_ARMA(Unevaluated, ae, be) {
+            return ae->expr.get() == be->expr.get()
+                && exact_path_params_equal(ae->params_impl, be->params_impl)
+                && exact_path_params_equal(ae->params_item, be->params_item);
+        }
+        }
+        throw "";
+    }
+
+    bool exact_path_params_equal(const PathParams& a, const PathParams& b) {
+        if (a.m_lifetimes.size() != b.m_lifetimes.size()
+            || a.m_types.size() != b.m_types.size()
+            || a.m_values.size() != b.m_values.size()) {
+            return false;
+        }
+        for (size_t i = 0; i < a.m_lifetimes.size(); i++) {
+            if (a.m_lifetimes[i] != b.m_lifetimes[i]) return false;
+        }
+        for (size_t i = 0; i < a.m_types.size(); i++) {
+            if (a.m_types[i] != b.m_types[i]) return false;
+        }
+        for (size_t i = 0; i < a.m_values.size(); i++) {
+            if (!exact_const_generic_equal(a.m_values[i], b.m_values[i])) return false;
+        }
         return true;
     }
 
-    if (!m_ptr || !x.m_ptr) {
-        return false;
+    bool exact_generic_path_equal(const GenericPath& a, const GenericPath& b) {
+        return a.m_path == b.m_path && exact_path_params_equal(a.m_params, b.m_params);
     }
-    if (data().tag() != x.data().tag()) {
+
+    bool exact_optional_generic_params_equal(const ::std::unique_ptr<GenericParams>& a, const ::std::unique_ptr<GenericParams>& b) {
+        return (!a && !b) || (a && b && exact_generic_params_equal(*a, *b));
+    }
+
+    bool exact_path_equal(const Path& a, const Path& b) {
+        if (a.m_data.tag() != b.m_data.tag()) return false;
+        TU_MATCH_HDRA((a.m_data, b.m_data), {)
+        TU_ARMA(Generic, ae, be) return exact_generic_path_equal(ae, be);
+        TU_ARMA(UfcsInherent, ae, be) {
+            return ae.type == be.type && ae.item == be.item
+                && exact_path_params_equal(ae.params, be.params)
+                && exact_path_params_equal(ae.impl_params, be.impl_params);
+        }
+        TU_ARMA(UfcsKnown, ae, be) {
+            return ae.type == be.type && exact_generic_path_equal(ae.trait, be.trait)
+                && ae.item == be.item && exact_path_params_equal(ae.params, be.params)
+                && exact_optional_generic_params_equal(ae.hrtbs, be.hrtbs);
+        }
+        TU_ARMA(UfcsUnknown, ae, be) {
+            return ae.type == be.type && ae.item == be.item
+                && exact_path_params_equal(ae.params, be.params);
+        }
+        }
+        throw "";
+    }
+
+    bool exact_trait_path_equal(const TraitPath& a, const TraitPath& b) {
+        if (!exact_optional_generic_params_equal(a.m_hrtbs, b.m_hrtbs)
+            || !exact_generic_path_equal(a.m_path, b.m_path)
+            || a.m_trait_ptr != b.m_trait_ptr
+            || a.m_type_bounds.size() != b.m_type_bounds.size()
+            || a.m_trait_bounds.size() != b.m_trait_bounds.size()) {
+            return false;
+        }
+        auto ai = a.m_type_bounds.begin();
+        auto bi = b.m_type_bounds.begin();
+        for (; ai != a.m_type_bounds.end(); ++ai, ++bi) {
+            if (ai->first != bi->first
+                || !exact_generic_path_equal(ai->second.source_trait, bi->second.source_trait)
+                || !exact_path_params_equal(ai->second.aty_params, bi->second.aty_params)
+                || ai->second.type != bi->second.type) return false;
+        }
+        auto ati = a.m_trait_bounds.begin();
+        auto bti = b.m_trait_bounds.begin();
+        for (; ati != a.m_trait_bounds.end(); ++ati, ++bti) {
+            if (ati->first != bti->first
+                || !exact_generic_path_equal(ati->second.source_trait, bti->second.source_trait)
+                || !exact_path_params_equal(ati->second.aty_params, bti->second.aty_params)
+                || ati->second.traits.size() != bti->second.traits.size()) return false;
+            for (size_t i = 0; i < ati->second.traits.size(); i++) {
+                if (!exact_trait_path_equal(ati->second.traits[i], bti->second.traits[i])) return false;
+            }
+        }
+        return true;
+    }
+
+    bool exact_generic_bound_equal(const GenericBound& a, const GenericBound& b) {
+        if (a.tag() != b.tag()) return false;
+        TU_MATCH_HDRA((a, b), {)
+        TU_ARMA(Lifetime, ae, be) return ae.test == be.test && ae.valid_for == be.valid_for;
+        TU_ARMA(TypeLifetime, ae, be) return ae.type == be.type && ae.valid_for == be.valid_for;
+        TU_ARMA(TraitBound, ae, be) {
+            return exact_optional_generic_params_equal(ae.hrtbs, be.hrtbs)
+                && ae.type == be.type && exact_trait_path_equal(ae.trait, be.trait);
+        }
+        TU_ARMA(TypeEquality, ae, be) return ae.type == be.type && ae.other_type == be.other_type;
+        }
+        throw "";
+    }
+
+    bool exact_generic_params_equal(const GenericParams& a, const GenericParams& b) {
+        if (a.m_types.size() != b.m_types.size()
+            || a.m_lifetimes.size() != b.m_lifetimes.size()
+            || a.m_values.size() != b.m_values.size()
+            || a.m_bounds.size() != b.m_bounds.size()) return false;
+        for (size_t i = 0; i < a.m_types.size(); i++) {
+            if (a.m_types[i].m_name != b.m_types[i].m_name
+                || a.m_types[i].m_default != b.m_types[i].m_default
+                || a.m_types[i].m_is_sized != b.m_types[i].m_is_sized) return false;
+        }
+        for (size_t i = 0; i < a.m_lifetimes.size(); i++) {
+            if (a.m_lifetimes[i].m_name != b.m_lifetimes[i].m_name) return false;
+        }
+        for (size_t i = 0; i < a.m_values.size(); i++) {
+            if (a.m_values[i].m_name != b.m_values[i].m_name
+                || a.m_values[i].m_type != b.m_values[i].m_type
+                || !exact_const_generic_equal(a.m_values[i].m_default, b.m_values[i].m_default)) return false;
+        }
+        for (size_t i = 0; i < a.m_bounds.size(); i++) {
+            if (!exact_generic_bound_equal(a.m_bounds[i], b.m_bounds[i])) return false;
+        }
+        return true;
+    }
+
+    bool exact_binding_equal(const TypePathBinding& a, const TypePathBinding& b) {
+        if (a.tag() != b.tag()) return false;
+        TU_MATCH_HDRA((a, b), {)
+        TU_ARMA(Unbound, ae, be) return true;
+        TU_ARMA(Opaque, ae, be) return true;
+        TU_ARMA(ExternType, ae, be) return ae == be;
+        TU_ARMA(Struct, ae, be) return ae == be;
+        TU_ARMA(Union, ae, be) return ae == be;
+        TU_ARMA(Enum, ae, be) return ae == be;
+        }
+        throw "";
+    }
+
+    bool exact_erased_inner_equal(const TypeData_ErasedType_Inner& a, const TypeData_ErasedType_Inner& b) {
+        if (a.tag() != b.tag()) return false;
+        TU_MATCH_HDRA((a, b), {)
+        TU_ARMA(Fcn, ae, be) return ae.m_index == be.m_index && exact_path_equal(ae.m_origin, be.m_origin);
+        TU_ARMA(Known, ae, be) return ae == be;
+        TU_ARMA(Alias, ae, be) return ae.inner.get() == be.inner.get() && exact_path_params_equal(ae.params, be.params);
+        }
+        throw "";
+    }
+
+    bool exact_array_size_equal(const ArraySize& a, const ArraySize& b) {
+        if (a.tag() != b.tag()) return false;
+        TU_MATCH_HDRA((a, b), {)
+        TU_ARMA(Known, ae, be) return ae == be;
+        TU_ARMA(Unevaluated, ae, be) return exact_const_generic_equal(ae, be);
+        }
+        throw "";
+    }
+
+    bool exact_type_data_equal(const TypeData& a, const TypeData& b) {
+        if (a.tag() != b.tag()) return false;
+        TU_MATCH_HDRA((a, b), {)
+        TU_ARMA(Infer, ae, be) return ae.index == be.index && ae.ty_class == be.ty_class;
+        TU_ARMA(Diverge, ae, be) return true;
+        TU_ARMA(Primitive, ae, be) return ae == be;
+        TU_ARMA(Path, ae, be) {
+            return exact_path_equal(ae.path, be.path) && exact_binding_equal(ae.binding, be.binding)
+                && exact_optional_generic_params_equal(ae.hrtbs, be.hrtbs);
+        }
+        TU_ARMA(Generic, ae, be) return exact_generic_ref_equal(ae, be);
+        TU_ARMA(TraitObject, ae, be) {
+            if (!exact_trait_path_equal(ae.m_trait, be.m_trait)
+                || ae.m_lifetime != be.m_lifetime || ae.m_markers.size() != be.m_markers.size()) return false;
+            for (size_t i = 0; i < ae.m_markers.size(); i++) {
+                if (!exact_generic_path_equal(ae.m_markers[i], be.m_markers[i])) return false;
+            }
+            return true;
+        }
+        TU_ARMA(ErasedType, ae, be) {
+            if (ae.m_is_sized != be.m_is_sized || ae.m_use_present != be.m_use_present
+                || ae.m_traits.size() != be.m_traits.size()
+                || ae.m_lifetime_bounds != be.m_lifetime_bounds
+                || !exact_erased_inner_equal(ae.m_inner, be.m_inner)
+                || !exact_path_params_equal(ae.m_use, be.m_use)) return false;
+            for (size_t i = 0; i < ae.m_traits.size(); i++) {
+                if (!exact_trait_path_equal(ae.m_traits[i], be.m_traits[i])) return false;
+            }
+            return true;
+        }
+        TU_ARMA(Array, ae, be) return ae.inner == be.inner && exact_array_size_equal(ae.size, be.size);
+        TU_ARMA(Slice, ae, be) return ae.inner == be.inner;
+        TU_ARMA(Tuple, ae, be) return ae == be;
+        TU_ARMA(Borrow, ae, be) return ae.lifetime == be.lifetime && ae.type == be.type && ae.inner == be.inner;
+        TU_ARMA(Pointer, ae, be) return ae.type == be.type && ae.inner == be.inner;
+        TU_ARMA(NamedFunction, ae, be) {
+            if (!exact_path_equal(ae.path, be.path) || ae.def.tag() != be.def.tag()) return false;
+            TU_MATCH_HDRA((ae.def, be.def), {)
+            TU_ARMA(Function, ad, bd) return ad == bd;
+            TU_ARMA(EnumConstructor, ad, bd) return ad.e == bd.e && ad.v == bd.v;
+            TU_ARMA(StructConstructor, ad, bd) return ad == bd;
+            }
+            throw "";
+        }
+        TU_ARMA(Function, ae, be) {
+            return exact_generic_params_equal(ae.hrls, be.hrls)
+                && ae.is_unsafe == be.is_unsafe && ae.is_variadic == be.is_variadic
+                && ae.m_abi == be.m_abi && ae.m_rettype == be.m_rettype
+                && ae.m_arg_types == be.m_arg_types;
+        }
+        TU_ARMA(NodeType, ae, be) return ae == be;
+        }
+        throw "";
+    }
+
+    size_t hash_mix(size_t state, size_t value) {
+        return state ^ (value + 0x9e3779b97f4a7c15ULL + (state << 6) + (state >> 2));
+    }
+
+    size_t hash_simple_path(const SimplePath& path) {
+        size_t h = ::std::hash<RcString>()(path.crate_name());
+        for (const auto& component : path.components()) h = hash_mix(h, ::std::hash<RcString>()(component));
+        return h;
+    }
+
+    size_t hash_type_ref(TypeRef type) {
+        return ::std::hash<const void*>()(type);
+    }
+
+    size_t hash_path_params(const PathParams& params);
+
+    size_t hash_generic_ref(const GenericRef& generic) {
+        size_t h = generic.binding;
+        if (generic.group() == GENERIC_Placeholder) {
+            h = hash_mix(h, ::std::hash<RcString>()(generic.name));
+        }
+        return h;
+    }
+
+    size_t hash_const_generic(const ConstGeneric& value) {
+        size_t h = static_cast<size_t>(value.tag());
+        TU_MATCH_HDRA((value), {)
+        TU_ARMA(Infer, e) {
+            h = hash_mix(h, e.index);
+        }
+        TU_ARMA(Generic, e) {
+            h = hash_mix(h, hash_generic_ref(e));
+        }
+        TU_ARMA(Evaluated, e) {
+            // The evaluated value does not expose a cheap scalar hash for
+            // every representation.  Its tag still separates it from the
+            // overwhelmingly more common generic and inferred constants.
+        }
+        TU_ARMA(Unevaluated, e) {
+            h = hash_mix(h, reinterpret_cast<uintptr_t>(e->expr.get()));
+            h = hash_mix(h, hash_path_params(e->params_impl));
+            h = hash_mix(h, hash_path_params(e->params_item));
+        }
+        }
+        return h;
+    }
+
+    size_t hash_path_params(const PathParams& params) {
+        size_t h = params.m_lifetimes.size();
+        h = hash_mix(h, params.m_types.size());
+        h = hash_mix(h, params.m_values.size());
+        for (const auto& lifetime : params.m_lifetimes) {
+            h = hash_mix(h, lifetime.binding);
+        }
+        for (const auto type : params.m_types) {
+            h = hash_mix(h, hash_type_ref(type));
+        }
+        for (const auto& value : params.m_values) {
+            h = hash_mix(h, hash_const_generic(value));
+        }
+        return h;
+    }
+
+    size_t hash_generic_path(const GenericPath& path) {
+        return hash_mix(hash_simple_path(path.m_path), hash_path_params(path.m_params));
+    }
+
+    size_t hash_path(const Path& path) {
+        size_t h = static_cast<size_t>(path.m_data.tag());
+        TU_MATCH_HDRA((path.m_data), {)
+        TU_ARMA(Generic, e) {
+            h = hash_mix(h, hash_generic_path(e));
+        }
+        TU_ARMA(UfcsInherent, e) {
+            h = hash_mix(h, hash_type_ref(e.type));
+            h = hash_mix(h, ::std::hash<RcString>()(e.item));
+            h = hash_mix(h, hash_path_params(e.params));
+            h = hash_mix(h, hash_path_params(e.impl_params));
+        }
+        TU_ARMA(UfcsKnown, e) {
+            h = hash_mix(h, hash_type_ref(e.type));
+            h = hash_mix(h, hash_generic_path(e.trait));
+            h = hash_mix(h, ::std::hash<RcString>()(e.item));
+            h = hash_mix(h, hash_path_params(e.params));
+            h = hash_mix(h, static_cast<bool>(e.hrtbs));
+        }
+        TU_ARMA(UfcsUnknown, e) {
+            h = hash_mix(h, hash_type_ref(e.type));
+            h = hash_mix(h, ::std::hash<RcString>()(e.item));
+            h = hash_mix(h, hash_path_params(e.params));
+        }
+        }
+        return h;
+    }
+
+    size_t hash_binding(const TypePathBinding& binding) {
+        size_t h = static_cast<size_t>(binding.tag());
+        TU_MATCH_HDRA((binding), {)
+        TU_ARMA(Unbound, e) {}
+        TU_ARMA(Opaque, e) {}
+        TU_ARMA(ExternType, e) { h = hash_mix(h, reinterpret_cast<uintptr_t>(e)); }
+        TU_ARMA(Struct, e) { h = hash_mix(h, reinterpret_cast<uintptr_t>(e)); }
+        TU_ARMA(Union, e) { h = hash_mix(h, reinterpret_cast<uintptr_t>(e)); }
+        TU_ARMA(Enum, e) { h = hash_mix(h, reinterpret_cast<uintptr_t>(e)); }
+        }
+        return h;
+    }
+
+    size_t hash_type_data(const TypeData& type) {
+        size_t h = static_cast<size_t>(type.tag());
+        TU_MATCH_HDRA((type), {)
+        TU_ARMA(Infer, e) { h = hash_mix(h, e.index); h = hash_mix(h, static_cast<size_t>(e.ty_class)); }
+        TU_ARMA(Diverge, e) {}
+        TU_ARMA(Primitive, e) h = hash_mix(h, static_cast<size_t>(e));
+        TU_ARMA(Path, e) {
+            h = hash_mix(h, hash_path(e.path));
+            h = hash_mix(h, hash_binding(e.binding));
+            h = hash_mix(h, static_cast<bool>(e.hrtbs));
+        }
+        TU_ARMA(Generic, e) {
+            h = hash_mix(h, hash_generic_ref(e));
+        }
+        TU_ARMA(TraitObject, e) {
+            h = hash_mix(h, hash_generic_path(e.m_trait.m_path));
+            h = hash_mix(h, reinterpret_cast<uintptr_t>(e.m_trait.m_trait_ptr));
+            h = hash_mix(h, e.m_lifetime.binding);
+            for (const auto& marker : e.m_markers) {
+                h = hash_mix(h, hash_generic_path(marker));
+            }
+            for (const auto& bound : e.m_trait.m_type_bounds) {
+                h = hash_mix(h, ::std::hash<RcString>()(bound.first));
+                h = hash_mix(h, hash_generic_path(bound.second.source_trait));
+                h = hash_mix(h, hash_path_params(bound.second.aty_params));
+                h = hash_mix(h, hash_type_ref(bound.second.type));
+            }
+        }
+        TU_ARMA(ErasedType, e) { h = hash_mix(h, static_cast<size_t>(e.m_inner.tag())); h = hash_mix(h, e.m_traits.size()); }
+        TU_ARMA(Array, e) {
+            h = hash_mix(h, hash_type_ref(e.inner));
+            h = hash_mix(h, static_cast<size_t>(e.size.tag()));
+            TU_MATCH_HDRA((e.size), {)
+            TU_ARMA(Known, size) { h = hash_mix(h, size); }
+            TU_ARMA(Unevaluated, size) { h = hash_mix(h, hash_const_generic(size)); }
+            }
+        }
+        TU_ARMA(Slice, e) h = hash_mix(h, hash_type_ref(e.inner));
+        TU_ARMA(Tuple, e) { for (auto t : e) h = hash_mix(h, hash_type_ref(t)); }
+        TU_ARMA(Borrow, e) { h = hash_mix(h, e.lifetime.binding); h = hash_mix(h, static_cast<size_t>(e.type)); h = hash_mix(h, hash_type_ref(e.inner)); }
+        TU_ARMA(Pointer, e) { h = hash_mix(h, static_cast<size_t>(e.type)); h = hash_mix(h, hash_type_ref(e.inner)); }
+        TU_ARMA(NamedFunction, e) {
+            h = hash_mix(h, hash_path(e.path));
+            h = hash_mix(h, static_cast<size_t>(e.def.tag()));
+        }
+        TU_ARMA(Function, e) { h = hash_mix(h, ::std::hash<RcString>()(e.m_abi)); h = hash_mix(h, e.is_unsafe); h = hash_mix(h, e.is_variadic); h = hash_mix(h, hash_type_ref(e.m_rettype)); for (auto t : e.m_arg_types) h = hash_mix(h, hash_type_ref(t)); }
+        TU_ARMA(NodeType, e) { TU_MATCH_HDRA((e), {) TU_ARMA(Closure, p) h = hash_mix(h, reinterpret_cast<uintptr_t>(p)); TU_ARMA(Generator, p) h = hash_mix(h, reinterpret_cast<uintptr_t>(p)); TU_ARMA(Async, p) h = hash_mix(h, reinterpret_cast<uintptr_t>(p)); }
+        }
+        }
+        return h;
+    }
+}
+
+::HIR::TypeRef HIR::TypeInterner::intern(TypeData data) {
+    const auto hash = hash_type_data(data);
+    const auto range = m_nodes.equal_range(hash);
+    for (auto it = range.first; it != range.second; ++it) {
+        if (exact_type_data_equal(*it->second, data)) {
+            return it->second;
+        }
+    }
+    const auto* node = m_pool.make<TypeData>(mv$(data));
+    m_nodes.emplace(hash, node);
+    return node;
+}
+
+::HIR::TypeRef HIR::TypeInterner::infer(unsigned int idx, InferClass ty_class) {
+    return intern(TypeData::make_Infer({idx, ty_class}));
+}
+
+::HIR::TypeRef HIR::TypeInterner::primitive(CoreType ct) {
+    return intern(TypeData::make_Primitive(ct));
+}
+
+::HIR::TypeRef HIR::TypeInterner::generic(RcString name, unsigned int slot) {
+    return intern(TypeData::make_Generic({mv$(name), slot}));
+}
+
+::HIR::TypeRef HIR::TypeInterner::self() {
+    return generic(RcString::new_interned("Self"), GENERIC_Self);
+}
+
+::HIR::TypeRef HIR::TypeInterner::unit() {
+    return intern(TypeData::make_Tuple({}));
+}
+
+::HIR::TypeRef HIR::TypeInterner::diverge() {
+    return intern(TypeData::make_Diverge({}));
+}
+
+::HIR::TypeRef HIR::TypeInterner::borrow(BorrowType bt, TypeRef inner, LifetimeRef lft) {
+    return intern(TypeData::make_Borrow({lft, bt, inner}));
+}
+
+::HIR::TypeRef HIR::TypeInterner::pointer(BorrowType bt, TypeRef inner) {
+    return intern(TypeData::make_Pointer({bt, inner}));
+}
+
+::HIR::TypeRef HIR::TypeInterner::tuple(::std::vector<TypeRef> types) {
+    return intern(TypeData::make_Tuple(mv$(types)));
+}
+
+::HIR::TypeRef HIR::TypeInterner::slice(TypeRef inner) {
+    return intern(TypeData::make_Slice({inner}));
+}
+
+::HIR::TypeRef HIR::TypeInterner::array(TypeRef inner, ArraySize size) {
+    return intern(TypeData::make_Array({inner, mv$(size)}));
+}
+
+::HIR::TypeRef HIR::TypeInterner::array(TypeRef inner, uint64_t size) {
+    assert(size != ~0u);
+    return intern(TypeData::make_Array({inner, size}));
+}
+
+::HIR::TypeRef HIR::TypeInterner::array(TypeRef inner, ConstGeneric size) {
+    return intern(TypeData::make_Array({inner, mv$(size)}));
+}
+
+::HIR::TypeRef HIR::TypeInterner::path(Path path, TypePathBinding binding, ::std::unique_ptr<GenericParams> hrtbs) {
+    return intern(TypeData::make_Path({mv$(path), mv$(binding), mv$(hrtbs)}));
+}
+
+::HIR::TypeRef HIR::TypeInterner::function(TypeData_FunctionPointer ft) {
+    return intern(TypeData::make_Function(mv$(ft)));
+}
+
+::HIR::TypeRef HIR::TypeInterner::closure(ExprNode_Closure* node) {
+    return intern(TypeData::make_NodeType(TypeData_NodeType::make_Closure(node)));
+}
+
+::HIR::TypeRef HIR::TypeInterner::generator(ExprNode_Generator* node) {
+    return intern(TypeData::make_NodeType(TypeData_NodeType::make_Generator(node)));
+}
+
+::HIR::TypeRef HIR::TypeInterner::async_block(ExprNode_AsyncBlock* node) {
+    return intern(TypeData::make_NodeType(TypeData_NodeType::make_Async(node)));
+}
+
+const ::HIR::SimplePath* HIR::TypeData::get_sort_path() const {
+    if (TU_TEST1(*this, Path, .path.m_data.is_Generic())) {
+        return &as_Path().path.m_data.as_Generic().m_path;
+    }
+    if (is_TraitObject()) {
+        return &as_TraitObject().m_trait.m_path.m_path;
+    }
+    return nullptr;
+}
+
+Ordering ord(const HIR::TypeData_ErasedType_Inner& l, const HIR::TypeData_ErasedType_Inner& r);
+
+bool ::HIR::TypeData::equals_ignoring_regions(::HIR::TypeRef x) const {
+    if (this == x) {
+        return true;
+    }
+    if (tag() != x->tag()) {
         return false;
     }
 
-    TU_MATCH_HDRA( (data(), x.data()), {)
+    TU_MATCH_HDRA( (*this, *x), {)
     TU_ARMA(Infer, te, xe) {
             // TODO: Should comparing inferrence vars be an error?
             return te.index == xe.index;
@@ -490,20 +971,20 @@ bool ::HIR::TypeRef::operator==(const ::HIR::TypeRef & x) const {
             return te == xe;
         }
         TU_ARMA(Path, te, xe) {
-            return te.path == xe.path;
+            return te.path.equals_ignoring_regions(xe.path);
         }
         TU_ARMA(Generic, te, xe) {
             return /*te.name == xe.name &&*/ te.binding == xe.binding;
         }
         TU_ARMA(TraitObject, te, xe) {
-            if (te.m_trait != xe.m_trait) {
+            if (!te.m_trait.equals_ignoring_regions(xe.m_trait)) {
                 return false;
             }
             if (te.m_markers.size() != xe.m_markers.size()) {
                 return false;
             }
             for (unsigned int i = 0; i < te.m_markers.size(); i++) {
-                if (te.m_markers[i] != xe.m_markers[i]) {
+                if (!te.m_markers[i].equals_ignoring_regions(xe.m_markers[i])) {
                     return false;
                 }
             }
@@ -511,10 +992,10 @@ bool ::HIR::TypeRef::operator==(const ::HIR::TypeRef & x) const {
             return true;
         }
         TU_ARMA(ErasedType, te, xe) {
-            return te.m_inner == xe.m_inner;
+            return ord(te.m_inner, xe.m_inner) == OrdEqual;
         }
         TU_ARMA(Array, te, xe) {
-            if (te.inner != xe.inner) {
+            if (!te.inner->equals_ignoring_regions(xe.inner)) {
                 return false;
             }
             if (xe.size != te.size) {
@@ -523,14 +1004,14 @@ bool ::HIR::TypeRef::operator==(const ::HIR::TypeRef & x) const {
             return true;
         }
         TU_ARMA(Slice, te, xe) {
-            return te.inner == xe.inner;
+            return te.inner->equals_ignoring_regions(xe.inner);
         }
         TU_ARMA(Tuple, te, xe) {
             if (te.size() != xe.size()) {
                 return false;
             }
             for (unsigned int i = 0; i < te.size(); i++) {
-                if (te[i] != xe[i]) {
+                if (!te[i]->equals_ignoring_regions(xe[i])) {
                     return false;
                 }
             }
@@ -542,16 +1023,16 @@ bool ::HIR::TypeRef::operator==(const ::HIR::TypeRef & x) const {
             }
             //if( te.lifetime != xe.lifetime )
             //    return false;
-            return te.inner == xe.inner;
+            return te.inner->equals_ignoring_regions(xe.inner);
         }
         TU_ARMA(Pointer, te, xe) {
             if (te.type != xe.type) {
                 return false;
             }
-            return te.inner == xe.inner;
+            return te.inner->equals_ignoring_regions(xe.inner);
         }
         TU_ARMA(NamedFunction, te, xe) {
-            return te.path == xe.path;
+            return te.path.equals_ignoring_regions(xe.path);
         }
         TU_ARMA(Function, te, xe) {
             if (te.is_unsafe != xe.is_unsafe) {
@@ -564,11 +1045,11 @@ bool ::HIR::TypeRef::operator==(const ::HIR::TypeRef & x) const {
                 return false;
             }
             for (unsigned int i = 0; i < te.m_arg_types.size(); i++) {
-                if (te.m_arg_types[i] != xe.m_arg_types[i]) {
+                if (!te.m_arg_types[i]->equals_ignoring_regions(xe.m_arg_types[i])) {
                     return false;
                 }
             }
-            return te.m_rettype == xe.m_rettype;
+            return te.m_rettype->equals_ignoring_regions(xe.m_rettype);
         }
         TU_ARMA(NodeType, te, xe) {
             return te == xe;
@@ -581,7 +1062,7 @@ Ordering ord(const HIR::TypeData_ErasedType_Inner& l, const HIR::TypeData_Erased
     ORD(static_cast<unsigned int>(l.tag()), static_cast<unsigned int>(r.tag()));
     TU_MATCH_HDRA( (l, r), {)
     TU_ARMA(Known, le, re) {
-            return le.ord(re);
+            return le->ord_ignoring_regions(re);
         }
         TU_ARMA(Alias, le, re) {
             if (le.inner.get() != re.inner.get()) {
@@ -601,18 +1082,17 @@ Ordering ord(const HIR::TypeData_ErasedType_Inner& l, const HIR::TypeData_Erased
     return OrdEqual;
 }
 
-Ordering HIR::TypeRef::ord(const ::HIR::TypeRef& x) const {
+Ordering HIR::TypeData::ord_ignoring_regions(::HIR::TypeRef x) const {
     Ordering rv;
 
-    if (&data() == &x.data()) {
+    if (this == x) {
         return OrdEqual;
     }
-
-    ORD(static_cast<unsigned int>(data().tag()), static_cast<unsigned int>(x.data().tag()));
+    ORD(static_cast<unsigned int>(tag()), static_cast<unsigned int>(x->tag()));
 
     TU_MATCH(
         ::HIR::TypeData,
-        (data(), x.data()),
+        (*this, *x),
         (te, xe),
         (Infer,
          // TODO: Should comparing inferrence vars be an error?
@@ -760,12 +1240,13 @@ namespace {
     }
 }
 
-bool ::HIR::TypeRef::match_test_generics(const Span& sp, const ::HIR::TypeRef& x_in, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& callback) const {
+bool ::HIR::TypeData::match_test_generics(const Span& sp, ::HIR::TypeRef x_in, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& callback) const {
     return this->match_test_generics_fuzz(sp, x_in, resolve_placeholder, callback) == ::HIR::Compare::Equal;
 }
 
-::HIR::Compare HIR::TypeRef::match_test_generics_fuzz(const Span& sp, const ::HIR::TypeRef& x_in, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& callback) const {
-    return callback.cmp_type(sp, *this, x_in, resolve_placeholder);
+::HIR::Compare HIR::TypeData::match_test_generics_fuzz(const Span& sp, ::HIR::TypeRef x_in, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& callback) const {
+    const TypeRef self = this;
+    return callback.cmp_type(sp, self, x_in, resolve_placeholder);
 }
 
 HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr<HIR::GenericParams>& params) const {
@@ -818,17 +1299,17 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
 }
 
 ::HIR::Compare HIR::MatchGenerics::cmp_type(const Span& sp, const ::HIR::TypeRef& ty_l, const ::HIR::TypeRef& ty_r, t_cb_resolve_type resolve_placeholder) {
-    if (const auto* e = ty_l.data().opt_Generic()) {
+    if (const auto* e = ty_l->opt_Generic()) {
         return this->match_ty(*e, ty_r, resolve_placeholder);
     }
-    const auto& v = (ty_l.data().is_Infer() ? resolve_placeholder.get_type(sp, ty_l) : ty_l);
-    const auto& x = (ty_r.data().is_Infer() || ty_r.data().is_Generic() ? resolve_placeholder.get_type(sp, ty_r) : ty_r);
+    const auto& v = (ty_l->is_Infer() ? resolve_placeholder.get_type(sp, ty_l) : ty_l);
+    const auto& x = (ty_r->is_Infer() || ty_r->is_Generic() ? resolve_placeholder.get_type(sp, ty_r) : ty_r);
     TRACE_FUNCTION_F(ty_l << ", " << ty_r << " -- " << v << ", " << x);
     // If `x` is an ivar - This can be a fuzzy match.
-    if (const auto* xep = x.data().opt_Infer()) {
+    if (const auto* xep = x->opt_Infer()) {
         const auto& xe = *xep;
         // - If type inferrence is active (i.e. this ivar has an index), AND both `v` and `x` refer to the same ivar slot
-        if (xe.index != ~0u && v.data().is_Infer() && v.data().as_Infer().index == xe.index) {
+        if (xe.index != ~0u && v->is_Infer() && v->as_Infer().index == xe.index) {
             // - They're equal (no fuzzyness about it)
             return Compare::Equal;
         }
@@ -838,7 +1319,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
                 // - Very niche?
                 return Compare::Fuzzy;
             case ::HIR::InferClass::Integer:
-                if (const auto* te = v.data().opt_Primitive()) {
+                if (const auto* te = v->opt_Primitive()) {
                     switch (*te) {
                         case ::HIR::CoreType::I8:
                         case ::HIR::CoreType::U8:
@@ -861,7 +1342,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
                 }
                 break;
             case ::HIR::InferClass::Float:
-                if (const auto* te = v.data().opt_Primitive()) {
+                if (const auto* te = v->opt_Primitive()) {
                     switch (*te) {
                         case ::HIR::CoreType::F16:
                         case ::HIR::CoreType::F32:
@@ -878,7 +1359,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
         }
     }
 
-    if (const auto* tep = v.data().opt_Infer()) {
+    if (const auto* tep = v->opt_Infer()) {
         const auto& te = *tep;
         // TODO: Restrict this block with a flag so it panics if an ivar is seen when not expected
         ASSERT_BUG(sp, te.index != ~0u, "Encountered ivar for `this` - " << v);
@@ -889,7 +1370,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
                 // - Very niche?
                 return Compare::Fuzzy;
             case ::HIR::InferClass::Integer:
-                if (const auto* xe = x.data().opt_Primitive()) {
+                if (const auto* xe = x->opt_Primitive()) {
                     switch (*xe) {
                         case ::HIR::CoreType::I8:
                         case ::HIR::CoreType::U8:
@@ -911,7 +1392,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
                 }
                 break;
             case ::HIR::InferClass::Float:
-                if (const auto* xe = x.data().opt_Primitive()) {
+                if (const auto* xe = x->opt_Primitive()) {
                     switch (*xe) {
                         case ::HIR::CoreType::F16:
                         case ::HIR::CoreType::F32:
@@ -929,7 +1410,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
 #if 1
     thread_local static std::vector<const HIR::TypeData*> s_recurse_stack;
     for (const auto* p : s_recurse_stack) {
-        if (p == &ty_l.data()) {
+        if (p == ty_l) {
             DEBUG("Recursion");
             ASSERT_BUG(sp, &v == &x, "Recursion with unequal type pointers");
             return HIR::Compare::Equal;
@@ -944,7 +1425,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
         ~_() {
             s_recurse_stack.pop_back();
         }
-    } h(&ty_l.data());
+    } h(ty_l);
 #else
     // NOTE: This doesn't allow matching identical types (which can be desirable)
     if (&v == &x) {
@@ -953,31 +1434,31 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
     }
 #endif
 
-    if (v.data().tag() != x.data().tag()) {
+    if (v->tag() != x->tag()) {
         // HACK: If the path is Opaque, return a fuzzy match.
         // - This works around an impl selection bug.
-        if (v.data().is_Path() && v.data().as_Path().binding.is_Opaque()) {
+        if (v->is_Path() && v->as_Path().binding.is_Opaque()) {
             DEBUG("- Fuzzy match due to opaque - " << v << " = " << x);
             return Compare::Fuzzy;
         }
         // HACK: If RHS is unbound, fuzz it
-        if (x.data().is_Path() && x.data().as_Path().binding.is_Unbound()) {
+        if (x->is_Path() && x->as_Path().binding.is_Unbound()) {
             DEBUG("- Fuzzy match due to unbound - " << v << " = " << x);
             return Compare::Fuzzy;
         }
-        if (v.data().is_Path() && v.data().as_Path().binding.is_Unbound()) {
+        if (v->is_Path() && v->as_Path().binding.is_Unbound()) {
             DEBUG("- Fuzzy match due to unbound - " << v << " = " << x);
             return Compare::Fuzzy;
         }
         // HACK: If the RHS is a placeholder generic, allow it.
-        if (x.data().is_Generic() && (x.data().as_Generic().binding >> 8) == 2) {
+        if (x->is_Generic() && (x->as_Generic().binding >> 8) == 2) {
             DEBUG("- Fuzzy match due to placeholder - " << v << " = " << x);
             return Compare::Fuzzy;
         }
         DEBUG("- Tag mismatch " << v << " and " << x);
         return Compare::Unequal;
     }
-    TU_MATCH_HDRA( (v.data(), x.data()), { )
+    TU_MATCH_HDRA( (*v, *x), { )
     TU_ARMA(Infer, te, xe) {
             // Both sides are infer
             switch (te.ty_class) {
@@ -1039,7 +1520,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
                 if (it_l->first != it_r->first) {
                     return Compare::Unequal;
                 }
-                cmp &= it_l->second.type.match_test_generics_fuzz(sp, it_r->second.type, resolve_placeholder, *this);
+                cmp &= it_l->second.type->match_test_generics_fuzz(sp, it_r->second.type, resolve_placeholder, *this);
                 ++it_l;
                 ++it_r;
             }
@@ -1055,10 +1536,23 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
             return cmp;
         }
         TU_ARMA(ErasedType, te, xe) {
-            if (te.m_inner != xe.m_inner) {
+            if (te.m_inner.tag() != xe.m_inner.tag()) {
                 return Compare::Unequal;
             }
-            return Compare::Equal;
+            TU_MATCH_HDRA((te.m_inner, xe.m_inner), {)
+            TU_ARMA(Known, l, r) return l->match_test_generics_fuzz(sp, r, resolve_placeholder, *this);
+            TU_ARMA(Alias, l, r) {
+                return l.inner == r.inner
+                    ? l.params.match_test_generics_fuzz(sp, r.params, resolve_placeholder, *this)
+                    : Compare::Unequal;
+            }
+            TU_ARMA(Fcn, l, r) {
+                return l.m_index == r.m_index
+                    ? this->cmp_path(sp, l.m_origin, r.m_origin, resolve_placeholder)
+                    : Compare::Unequal;
+            }
+            }
+            throw "";
         }
         TU_ARMA(Array, te, xe) {
             auto rv = Compare::Equal;
@@ -1197,26 +1691,22 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
     throw "";
 }
 
-::HIR::TypeRef HIR::TypeRef::clone() const {
-    return HIR::TypeRef(*this);
-}
-
-::HIR::TypeRef HIR::TypeRef::clone_shallow() const {
-    TU_MATCH_HDRA( (data()), {)
+::HIR::TypeData HIR::TypeData::clone_data() const {
+    TU_MATCH_HDRA( (*this), {)
     TU_ARMA(Infer, e) {
-            return ::HIR::TypeRef(TypeData::make_Infer(e));
+            return TypeData::make_Infer(e);
         }
         TU_ARMA(Diverge, e) {
-            return ::HIR::TypeRef(TypeData::make_Diverge({}));
+            return TypeData::make_Diverge({});
         }
         TU_ARMA(Primitive, e) {
-            return ::HIR::TypeRef(TypeData::make_Primitive(e));
+            return TypeData::make_Primitive(e);
         }
         TU_ARMA(Path, e) {
-            return ::HIR::TypeRef(TypeData::make_Path({e.path.clone(), e.binding.clone()}));
+            return TypeData::make_Path({e.path.clone(), e.binding.clone(), e.hrtbs ? ::std::make_unique<GenericParams>(e.hrtbs->clone()) : nullptr});
         }
         TU_ARMA(Generic, e) {
-            return ::HIR::TypeRef(TypeData::make_Generic(e));
+            return TypeData::make_Generic(e);
         }
         TU_ARMA(TraitObject, e) {
             TypeData::Data_TraitObject rv;
@@ -1225,7 +1715,7 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
                 rv.m_markers.push_back(trait.clone());
             }
             rv.m_lifetime = e.m_lifetime;
-            return ::HIR::TypeRef(TypeData::make_TraitObject(mv$(rv)));
+            return TypeData::make_TraitObject(mv$(rv));
         }
         TU_ARMA(ErasedType, e) {
             ::std::vector<::HIR::TraitPath> traits;
@@ -1239,90 +1729,91 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
         TU_ARMA(Fcn, ee) {
                     inner = HIR::TypeData_ErasedType_Inner::Data_Fcn{ee.m_origin.clone(), ee.m_index};
                 }
-                TU_ARMA(Known, ee) inner = ee.clone();
+                TU_ARMA(Known, ee) inner = ee;
                 TU_ARMA(Alias, ee) {
                     inner = HIR::TypeData_ErasedType_Inner::Data_Alias{ee.params.clone(), ee.inner};
                 }
         }
-        return ::HIR::TypeRef( TypeData::make_ErasedType({
+        return TypeData::make_ErasedType({
             e.m_is_sized,
             mv$(traits),
             e.m_lifetime_bounds,
             mv$(inner),
             e.m_use.clone(),
             e.m_use_present
-            }) );
+            });
         }
         TU_ARMA(Array, e) {
-            return ::HIR::TypeRef(TypeData::make_Array({e.inner.clone(), e.size.clone()}));
+            return TypeData::make_Array({e.inner, e.size.clone()});
         }
         TU_ARMA(Slice, e) {
-            return ::HIR::TypeRef(TypeData::make_Slice({e.inner.clone()}));
+            return TypeData::make_Slice({e.inner});
         }
         TU_ARMA(Tuple, e) {
             ::std::vector<::HIR::TypeRef> types;
             for (const auto& t : e) {
-                types.push_back(t.clone());
+                types.push_back(t);
             }
-            return ::HIR::TypeRef(TypeData::make_Tuple(mv$(types)));
+            return TypeData::make_Tuple(mv$(types));
         }
         TU_ARMA(Borrow, e) {
-            return ::HIR::TypeRef(TypeData::make_Borrow({e.lifetime, e.type, e.inner.clone()}));
+            return TypeData::make_Borrow({e.lifetime, e.type, e.inner});
         }
         TU_ARMA(Pointer, e) {
-            return ::HIR::TypeRef(TypeData::make_Pointer({e.type, e.inner.clone()}));
+            return TypeData::make_Pointer({e.type, e.inner});
         }
         TU_ARMA(NamedFunction, e) {
-            return ::HIR::TypeRef(TypeData::make_NamedFunction({e.path.clone(), e.def.clone()}));
+            return TypeData::make_NamedFunction({e.path.clone(), e.def.clone()});
         }
         TU_ARMA(Function, e) {
-            TypeData_FunctionPointer ft{e.hrls.clone(), e.is_unsafe, e.is_variadic, e.m_abi, e.m_rettype.clone(), {}};
+            TypeData_FunctionPointer ft{e.hrls.clone(), e.is_unsafe, e.is_variadic, e.m_abi, e.m_rettype, {}};
             for (const auto& a : e.m_arg_types) {
-                ft.m_arg_types.push_back(a.clone());
+                ft.m_arg_types.push_back(a);
             }
-            return ::HIR::TypeRef(TypeData::make_Function(mv$(ft)));
+            return TypeData::make_Function(mv$(ft));
         }
         TU_ARMA(NodeType, e) {
-            return ::HIR::TypeRef(e.clone());
+            return TypeData::make_NodeType(e.clone());
         }
     }
     throw "";
 }
 
-::HIR::Compare HIR::TypeRef::compare_with_placeholders(const Span& sp, const ::HIR::TypeRef& x, t_cb_resolve_type resolve_placeholder) const {
+::HIR::Compare HIR::TypeData::compare_with_placeholders(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder) const {
     //TRACE_FUNCTION_F(*this << " ?= " << x);
-    const auto& left = resolve_placeholder.get_type(sp, *this);
+    const TypeRef self = this;
+    const auto& left = resolve_placeholder.get_type(sp, self);
     //const auto& left = *this;
     const auto& right = resolve_placeholder.get_type(sp, x);
 
     // If the two types are the same ivar, return equal
-    if (left.data().is_Infer() && left == right) {
+    if (left->is_Infer() && left == right) {
         return Compare::Equal;
     }
 
     // Unbound paths and placeholder generics
-    if (left.data().tag() != right.data().tag()) {
-        if (left.data().is_Path() && left.data().as_Path().binding.is_Unbound()) {
+    if (left->tag() != right->tag()) {
+        if (left->is_Path() && left->as_Path().binding.is_Unbound()) {
             return Compare::Fuzzy;
         }
-        if (right.data().is_Path() && right.data().as_Path().binding.is_Unbound()) {
+        if (right->is_Path() && right->as_Path().binding.is_Unbound()) {
             return Compare::Fuzzy;
         }
-        if (left.data().is_Generic() && (left.data().as_Generic().binding >> 8) == 2) {
+        if (left->is_Generic() && (left->as_Generic().binding >> 8) == 2) {
             return Compare::Fuzzy;
         }
-        if (right.data().is_Generic() && (right.data().as_Generic().binding >> 8) == 2) {
+        if (right->is_Generic() && (right->as_Generic().binding >> 8) == 2) {
             return Compare::Fuzzy;
         }
     }
 
     // If left is infer
-    if (const auto* e = left.data().opt_Infer()) {
+    if (const auto* e = left->opt_Infer()) {
         switch (e->ty_class) {
             case ::HIR::InferClass::None:
                 return Compare::Fuzzy;
             case ::HIR::InferClass::Integer:
-            TU_MATCH_HDRA( (right.data()), {)
+            TU_MATCH_HDRA( (*right), {)
             default:
                 return Compare::Unequal;
                     TU_ARMA(Primitive, re) {
@@ -1358,7 +1849,7 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
                     }
             }
         case ::HIR::InferClass::Float:
-            TU_MATCH_HDRA( (right.data()), {)
+            TU_MATCH_HDRA( (*right), {)
             default:
                 return Compare::Unequal;
                     TU_ARMA(Primitive, re) {
@@ -1390,12 +1881,12 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
     }
 
     // If righthand side is infer, it's a fuzzy match (or not a match)
-    if (const auto* re = right.data().opt_Infer()) {
+    if (const auto* re = right->opt_Infer()) {
         switch (re->ty_class) {
             case ::HIR::InferClass::None:
                 return Compare::Fuzzy;
             case ::HIR::InferClass::Integer:
-            TU_MATCH_HDRA( (left.data()), {)
+            TU_MATCH_HDRA( (*left), {)
             default:
                 return Compare::Unequal;
                     TU_ARMA(Primitive, le) {
@@ -1422,7 +1913,7 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
                     }
             }
         case ::HIR::InferClass::Float:
-            TU_MATCH_HDRA( (left.data()), {)
+            TU_MATCH_HDRA( (*left), {)
             default:
                 return Compare::Unequal;
                     TU_ARMA(Primitive, le) {
@@ -1447,10 +1938,10 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
     // If righthand is a type parameter, it can only match another type parameter
     // - See `(Generic,` below
 
-    if (left.data().tag() != right.data().tag()) {
+    if (left->tag() != right->tag()) {
         return Compare::Unequal;
     }
-    TU_MATCH_HDRA( (left.data(), right.data()), {)
+    TU_MATCH_HDRA( (*left, *right), {)
     TU_ARMA(Infer, le, re) {
             assert(!"infer");
         }
@@ -1506,7 +1997,7 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
             }
         TU_MATCH_HDRA( (le.m_inner, re.m_inner), {)
         TU_ARMA(Known, l,r) {
-                    return l.compare_with_placeholders(sp, r, resolve_placeholder);
+                    return l->compare_with_placeholders(sp, r, resolve_placeholder);
                 }
                 TU_ARMA(Alias, l, r) {
                     if (l.inner != r.inner) {
@@ -1534,11 +2025,11 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
             } else {
                 // Sizes equal
             }
-            rv &= le.inner.compare_with_placeholders(sp, re.inner, resolve_placeholder);
+            rv &= le.inner->compare_with_placeholders(sp, re.inner, resolve_placeholder);
             return rv;
         }
         TU_ARMA(Slice, le, re) {
-            return le.inner.compare_with_placeholders(sp, re.inner, resolve_placeholder);
+            return le.inner->compare_with_placeholders(sp, re.inner, resolve_placeholder);
         }
         TU_ARMA(Tuple, le, re) {
             if (le.size() != re.size()) {
@@ -1546,7 +2037,7 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
             }
             auto rv = Compare::Equal;
             for (unsigned int i = 0; i < le.size(); i++) {
-                auto rv2 = le[i].compare_with_placeholders(sp, re[i], resolve_placeholder);
+                auto rv2 = le[i]->compare_with_placeholders(sp, re[i], resolve_placeholder);
                 if (rv2 == Compare::Unequal) {
                     return Compare::Unequal;
                 }
@@ -1560,13 +2051,13 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
             if (le.type != re.type) {
                 return Compare::Unequal;
             }
-            return le.inner.compare_with_placeholders(sp, re.inner, resolve_placeholder);
+            return le.inner->compare_with_placeholders(sp, re.inner, resolve_placeholder);
         }
         TU_ARMA(Pointer, le, re) {
             if (le.type != re.type) {
                 return Compare::Unequal;
             }
-            return le.inner.compare_with_placeholders(sp, re.inner, resolve_placeholder);
+            return le.inner->compare_with_placeholders(sp, re.inner, resolve_placeholder);
         }
         TU_ARMA(NamedFunction, le, re) {
             return le.path.compare_with_placeholders(sp, re.path, resolve_placeholder);
@@ -1580,12 +2071,12 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
             }
             auto rv = Compare::Equal;
             for (unsigned int i = 0; i < le.m_arg_types.size(); i++) {
-                rv &= le.m_arg_types[i].compare_with_placeholders(sp, re.m_arg_types[i], resolve_placeholder);
+                rv &= le.m_arg_types[i]->compare_with_placeholders(sp, re.m_arg_types[i], resolve_placeholder);
                 if (rv == Compare::Unequal) {
                     return Compare::Unequal;
                 }
             }
-            rv &= le.m_rettype.compare_with_placeholders(sp, re.m_rettype, resolve_placeholder);
+            rv &= le.m_rettype->compare_with_placeholders(sp, re.m_rettype, resolve_placeholder);
             return rv;
         }
         TU_ARMA(NodeType, le, re) {

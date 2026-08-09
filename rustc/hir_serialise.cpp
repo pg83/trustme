@@ -16,10 +16,12 @@
 class HirSerialiser {
     ::std::map<std::string, size_t> m_types;
     ::HIR::serialise::Writer& m_out;
+    ::HIR::TypeInterner& m_type_interner;
 
 public:
-    HirSerialiser(::HIR::serialise::Writer& out)
+    HirSerialiser(::HIR::serialise::Writer& out, ::HIR::TypeInterner& type_interner)
         : m_out(out)
+        , m_type_interner(type_interner)
     {
     }
 
@@ -231,8 +233,8 @@ public:
         DEBUG("Fresh " << m_types.size());
 
         auto _ = m_out.open_object("HIR::TypeData");
-        m_out.write_tag(ty.data().tag());
-            TU_MATCH_HDRA( (ty.data()), {)
+        m_out.write_tag(ty->tag());
+            TU_MATCH_HDRA( (*ty), {)
             TU_ARMA(Infer, e) {
                 // BAAD
             }
@@ -1043,7 +1045,7 @@ public:
         serialise(fcn.m_linkage);
 
         m_out.write_tag(static_cast<int>(fcn.m_receiver));
-        serialise(fcn.m_receiver_type);
+        serialise(fcn.m_receiver_type.value_or(m_type_interner.infer()));
         m_out.write_string(fcn.m_abi);
         m_out.write_bool(fcn.m_unsafe);
         m_out.write_bool(fcn.m_const);
@@ -1264,7 +1266,7 @@ public:
 
 void HIR_Serialise(const ::std::string& filename, const ::HIR::Crate& crate) {
     ::HIR::serialise::Writer out;
-    HirSerialiser s{out};
+    HirSerialiser s{out, crate.m_types};
     s.serialise_crate(crate);
     s.clear();
     out.open(filename);

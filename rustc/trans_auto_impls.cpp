@@ -39,8 +39,8 @@ namespace {
 
         void enqueue_type(const ::HIR::TypeRef& ty) {
             if (this->trans_list.auto_clone_impls.count(ty) == 0 && this->done_list.count(ty) == 0) {
-                this->done_list.insert(ty.clone());
-                this->todo_list.push_back(ty.clone());
+                this->done_list.insert(ty);
+                this->todo_list.push_back(ty);
             }
         }
     };
@@ -59,9 +59,9 @@ namespace {
             const auto& lang_Clone = state.resolve.m_crate.get_lang_item_path(sp, "clone");
             // Allocate to locals (one for the `&T`, the other for the cloned `T`)
             auto borrow_lv = ::MIR::LValue::new_Local(mir_fcn.locals.size());
-            mir_fcn.locals.push_back(::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, subty.clone()));
+            mir_fcn.locals.push_back(state.crate.m_types.borrow(::HIR::BorrowType::Shared, subty));
             auto res_lv = ::MIR::LValue::new_Local(mir_fcn.locals.size());
-            mir_fcn.locals.push_back(subty.clone());
+            mir_fcn.locals.push_back(subty);
 
             // Call `<T as Clone>::clone`, passing a borrow of the field
             ::MIR::BasicBlock bb;
@@ -72,7 +72,7 @@ namespace {
                 {static_cast<unsigned>(mir_fcn.blocks.size() + 2), // return block (after the panic block below)
                  static_cast<unsigned>(mir_fcn.blocks.size() + 1), // panic block (next block)
                  res_lv.clone(),
-                 ::MIR::CallTarget(::HIR::Path(subty.clone(), lang_Clone, rcstring_clone, std::move(pp))),
+                 ::MIR::CallTarget(::HIR::Path(subty, lang_Clone, rcstring_clone, std::move(pp))),
                  ::make_vec1<::MIR::Param>(::std::move(borrow_lv))}
             );
             mir_fcn.blocks.push_back(::std::move(bb));
@@ -100,14 +100,14 @@ void Trans_AutoImpl_Clone(State& state, ::HIR::TypeRef ty) {
         bb.terminator = ::MIR::Terminator::make_Return({});
         mir_fcn.blocks.push_back(::std::move(bb));
     } else {
-        TU_MATCH_HDRA( (ty.data()), {)
+        TU_MATCH_HDRA( ((*ty)), {)
         default:
             TODO(sp, "auto Clone for " << ty << " - Unknown and not Copy");
             TU_ARMA(Path, te) {
                 if (te.is_closure()) {
                     const auto& gp = te.path.m_data.as_Generic();
                     const auto& str = state.resolve.m_crate.get_struct_by_path(sp, gp.m_path);
-                    auto p = Trans_Params::new_impl(sp, ty.clone(), gp.m_params.clone());
+                    auto p = Trans_Params::new_impl(state.crate.m_types, sp, ty, gp.m_params.clone());
                     ::std::vector<::MIR::Param> values;
                     values.reserve(str.m_data.as_Tuple().size());
                     for (const auto& fld : str.m_data.as_Tuple()) {
@@ -163,8 +163,8 @@ void Trans_AutoImpl_Clone(State& state, ::HIR::TypeRef ty) {
     ::HIR::Function fcn{
         ::HIR::Function::Receiver::BorrowShared,
         ::HIR::GenericParams{},
-        /*m_args=*/::make_vec1(::std::make_pair(::HIR::Pattern(::HIR::PatternBinding(false, ::HIR::PatternBinding::Type::Move, rcstring_self, 0), ::HIR::Pattern::Data::make_Any({})), ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, ty.clone()))),
-        /*m_return=*/ty.clone(),
+        /*m_args=*/::make_vec1(::std::make_pair(::HIR::Pattern(::HIR::PatternBinding(false, ::HIR::PatternBinding::Type::Move, rcstring_self, 0), ::HIR::Pattern::Data::make_Any({})), state.crate.m_types.borrow(::HIR::BorrowType::Shared, ty))),
+        /*m_return=*/ty,
         ::HIR::ExprPtr{}
     };
     fcn.m_params.m_lifetimes.push_back(HIR::LifetimeDef()); // 'M:0 - for the `&self` argument
@@ -238,12 +238,12 @@ namespace {
 
         void push_CallDrop(const HIR::TypeRef& ty) {
             // Get a `&mut *self`
-            auto borrow_lv = this->add_local(HIR::TypeRef::new_borrow(HIR::BorrowType::Unique, ty.clone()));
+            auto borrow_lv = this->add_local(state.crate.m_types.borrow(HIR::BorrowType::Unique, ty));
             this->push_stmt_assign(borrow_lv.clone(), MIR::RValue::make_Borrow({HIR::BorrowType::Unique, false, ::MIR::LValue::new_Deref(this->self.clone())}));
 
             this->terminate_Call(
                 MIR::LValue::new_Return(),
-                ::HIR::Path(ty.clone(), state.resolve.m_lang_Drop, rcstring_drop),
+                ::HIR::Path(ty, state.resolve.m_lang_Drop, rcstring_drop),
                 make_vec1<MIR::Param>(mv$(borrow_lv)),
                 /*bb_ret=*/mir.blocks.size() + 1,
                 /*bb_panic=*/mir.blocks.size()
@@ -265,14 +265,14 @@ namespace {
     }
 
     ::MIR::LValue get_unit_ptr(const Span& sp, Builder& mutator, ::HIR::TypeRef ty, ::MIR::LValue lv, ::MIR::LValue& out_inner_ptr) {
-        if (ty.data().is_Path()) {
-            const auto& te = ty.data().as_Path();
+        if (ty->is_Path()) {
+            const auto& te = ty->as_Path();
             ASSERT_BUG(sp, te.binding.is_Struct(), "");
             const auto& ty_path = te.path.m_data.as_Generic();
             const auto& str = *te.binding.as_Struct();
             ::HIR::TypeRef tmp;
             auto monomorph = [&](const auto& t) {
-                return MonomorphStatePtr(nullptr, &ty_path.m_params, nullptr).monomorph_type(sp, t);
+                return MonomorphStatePtr(mutator.state.crate.m_types, nullptr, &ty_path.m_params, nullptr).monomorph_type(sp, t);
             };
             ::std::vector<::MIR::Param> vals;
             TU_MATCH_HDRA( (str.m_data), {)
@@ -302,9 +302,9 @@ namespace {
 
             auto new_path = ty_path.clone();
             return mutator.in_temporary( mv$(ty), ::MIR::RValue::make_Struct({ mv$(new_path), mv$(vals) }) );
-        } else if (ty.data().is_Borrow() || ty.data().is_Pointer()) {
+        } else if (ty->is_Borrow() || ty->is_Pointer()) {
             out_inner_ptr = lv.clone();
-            return mutator.in_temporary(::HIR::TypeRef::new_pointer(::HIR::BorrowType::Shared, ::HIR::TypeRef::new_unit()), ::MIR::RValue::make_DstPtr({mv$(lv)}));
+            return mutator.in_temporary(mutator.state.crate.m_types.pointer(::HIR::BorrowType::Shared, mutator.state.crate.m_types.unit()), ::MIR::RValue::make_DstPtr({mv$(lv)}));
         } else {
             BUG(sp, "Unexpected type coerce_unsize in receiver - " << ty);
         }
@@ -317,8 +317,8 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
     if (TARGETVER_LEAST_1_29) {
         // Generate for all
         for (const auto& ty : trans_list.auto_clone_impls) {
-            state.done_list.insert(ty.clone());
-            Trans_AutoImpl_Clone(state, ty.clone());
+            state.done_list.insert(ty);
+            Trans_AutoImpl_Clone(state, ty);
         }
 
         while (!state.todo_list.empty()) {
@@ -333,9 +333,9 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
             assert(impl_list_it != crate.m_trait_impls.end());
             // TODO: Find a way of turning a set into a vector so items can be erased.
 
-            auto p = ::HIR::Path(ty.clone(), ::HIR::GenericPath(state.lang_Clone), "clone");
+            auto p = ::HIR::Path(ty, ::HIR::GenericPath(state.lang_Clone), "clone");
             //DEBUG("add_function(" << p << ")");
-            auto e = trans_list.add_function(::std::move(p));
+            auto e = trans_list.add_function(crate.m_types, ::std::move(p));
 
             const auto* impl_list = impl_list_it->second.get_list_for_type(ty);
             ASSERT_BUG(Span(), impl_list, "No impl list of Clone for " << ty);
@@ -350,11 +350,11 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
     if (!trans_list.auto_fnptr_impls.empty()) {
         const auto& lang_FnPtr = crate.get_lang_item_path(Span(), "fn_ptr_trait");
         for (const auto& ty : trans_list.auto_fnptr_impls) {
-            auto out_ty = HIR::TypeRef::new_pointer(HIR::BorrowType::Shared, HIR::TypeRef::new_unit());
+            auto out_ty = state.crate.m_types.pointer(HIR::BorrowType::Shared, state.crate.m_types.unit());
             ::MIR::Function mir_fcn;
 
             ::MIR::BasicBlock bb;
-            bb.statements.push_back(::MIR::Statement::make_Assign({::MIR::LValue::new_Return(), ::MIR::RValue::make_Cast({::MIR::LValue::new_Argument(0), out_ty.clone()})}));
+            bb.statements.push_back(::MIR::Statement::make_Assign({::MIR::LValue::new_Return(), ::MIR::RValue::make_Cast({::MIR::LValue::new_Argument(0), out_ty})}));
             bb.terminator = ::MIR::Terminator::make_Return({});
             mir_fcn.blocks.push_back(::std::move(bb));
 
@@ -363,7 +363,7 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
             ::HIR::Function fcn{
                 ::HIR::Function::Receiver::Value,
                 ::HIR::GenericParams{},
-                /*m_args=*/::make_vec1(::std::make_pair(::HIR::Pattern(::HIR::PatternBinding(false, ::HIR::PatternBinding::Type::Move, rcstring_self, 0), ::HIR::Pattern::Data::make_Any({})), ty.clone())),
+                /*m_args=*/::make_vec1(::std::make_pair(::HIR::Pattern(::HIR::PatternBinding(false, ::HIR::PatternBinding::Type::Move, rcstring_self, 0), ::HIR::Pattern::Data::make_Any({})), ty)),
                 /*m_return=*/std::move(out_ty),
                 ::HIR::ExprPtr{}
             };
@@ -371,7 +371,7 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
 
             // Impl
             ::HIR::TraitImpl impl;
-            impl.m_type = ty.clone();
+            impl.m_type = ty;
             impl.m_methods.insert(::std::make_pair(RcString::new_interned("addr"), ::HIR::TraitImpl::ImplEnt<::HIR::Function>{false, ::std::move(fcn)}));
 
             // Add impl to the crate
@@ -382,8 +382,8 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
             // - Add this function to the TransList
 
             {
-                auto p = ::HIR::Path(ty.clone(), ::HIR::GenericPath(lang_FnPtr), "addr");
-                auto e = trans_list.add_function(::std::move(p));
+                auto p = ::HIR::Path(ty, ::HIR::GenericPath(lang_FnPtr), "addr");
+                auto e = trans_list.add_function(crate.m_types, ::std::move(p));
 
                 auto& impl = *list.back();
                 assert(impl.m_methods.size() == 1);
@@ -402,7 +402,7 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
             const auto& pe = path.m_data.as_UfcsKnown();
             const auto& trait_path = pe.trait;
             const auto& name = pe.item;
-            const auto& ty_dyn = pe.type.data().as_TraitObject();
+            const auto& ty_dyn = pe.type->as_TraitObject();
 
             const auto& trait = crate.get_trait_by_path(sp, trait_path.m_path);
             const auto& fcn_def = trait.m_values.at(name).as_Function();
@@ -411,8 +411,8 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
             unsigned vtable_idx = ty_dyn.m_trait.m_trait_ptr->get_vtable_value_index(trait_path, name);
             ASSERT_BUG(sp, vtable_idx > 0, "Calling method '" << name << "' from " << trait_path << " through " << pe.type << " which isn't in the vtable");
 
-            auto pp = fcn_def.m_params.make_nop_params(1, true);
-            MonomorphStatePtr ms(&pe.type, &trait_path.m_params, &pp);
+            auto pp = fcn_def.m_params.make_nop_params(crate.m_types, 1, true);
+            MonomorphStatePtr ms(crate.m_types, &pe.type, &trait_path.m_params, &pp);
 
             HIR::Function new_fcn;
             new_fcn.m_return = ms.monomorph_type(sp, fcn_def.m_return);
@@ -437,18 +437,18 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                     // - Receiver should be a `&move` (BUT, does the caller know this?)
                     // - MIR Cleanup should fix that (after monomoprh)
                     auto& self_ty = new_fcn.m_args.front().second;
-                    self_ty = ::HIR::TypeRef::new_borrow(HIR::BorrowType::Owned, mv$(self_ty));
-                    lv_ptr = builder.add_local(::HIR::TypeRef::new_borrow(HIR::BorrowType::Owned, ::HIR::TypeRef::new_unit()));
+                    self_ty = crate.m_types.borrow(HIR::BorrowType::Owned, self_ty);
+                    lv_ptr = builder.add_local(crate.m_types.borrow(HIR::BorrowType::Owned, crate.m_types.unit()));
                     builder.push_stmt_assign(lv_ptr.clone(), MIR::RValue::make_DstPtr({lv_self.clone()}));
                     DEBUG("<dyn " << trait_path << ">::" << name << " - By-Value");
                 } break;
                 case HIR::Function::Receiver::BorrowOwned:
                 case HIR::Function::Receiver::BorrowUnique:
                 case HIR::Function::Receiver::BorrowShared: {
-                    ASSERT_BUG(sp, new_fcn.m_args.front().second.data().is_Borrow(), new_fcn.m_args.front().second);
-                    auto bt = new_fcn.m_args.front().second.data().as_Borrow().type;
+                    ASSERT_BUG(sp, new_fcn.m_args.front().second->is_Borrow(), new_fcn.m_args.front().second);
+                    auto bt = new_fcn.m_args.front().second->as_Borrow().type;
                     DEBUG("<dyn " << trait_path << ">::" << name << " - By-borrow");
-                    lv_ptr = builder.add_local(::HIR::TypeRef::new_borrow(bt, ::HIR::TypeRef::new_unit()));
+                    lv_ptr = builder.add_local(crate.m_types.borrow(bt, crate.m_types.unit()));
                     builder.push_stmt_assign(lv_ptr.clone(), MIR::RValue::make_DstPtr({lv_self.clone()}));
                 } break;
                 case HIR::Function::Receiver::Box: {
@@ -456,9 +456,9 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                     // - the `self` type is `Box<dyn ThisTrait>`, so need to deref through that to the right type
                     DEBUG("<dyn " << trait_path << ">::" << name << " - Boxed");
                     // - Need to make a new receiver (convert `Box<dyn ThisTrait>` into `Box<()>`)
-                    auto gpath = new_fcn.m_args.front().second.data().as_Path().path.m_data.as_Generic().clone();
-                    gpath.m_params.m_types.at(0) = ::HIR::TypeRef::new_unit();
-                    auto ty = HIR::TypeRef::new_path(mv$(gpath), new_fcn.m_args.front().second.data().as_Path().binding.clone());
+                    auto gpath = new_fcn.m_args.front().second->as_Path().path.m_data.as_Generic().clone();
+                    gpath.m_params.m_types.at(0) = crate.m_types.unit();
+                    auto ty = crate.m_types.path(mv$(gpath), new_fcn.m_args.front().second->as_Path().binding.clone());
                     lv_ptr = get_unit_ptr(sp, builder, mv$(ty), MIR::LValue::new_Argument(0), lv_self);
                 } break;
                 default:
@@ -466,7 +466,7 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
             }
 
             //   _2 = DstMeta a1
-            auto lv_vtable = builder.add_local(::HIR::TypeRef::new_borrow(HIR::BorrowType::Shared, ty_dyn.m_trait.m_trait_ptr->get_vtable_type(sp, crate, ty_dyn)));
+            auto lv_vtable = builder.add_local(crate.m_types.borrow(HIR::BorrowType::Shared, ty_dyn.m_trait.m_trait_ptr->get_vtable_type(sp, crate, ty_dyn)));
             builder.push_stmt_assign(lv_vtable.clone(), MIR::RValue::make_DstMeta({mv$(lv_self)}));
             //   rv = _2*.{idx}(a2, ...) goto bb2 else bb3
             std::vector<MIR::Param> call_args;
@@ -487,8 +487,12 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
 
             MIR_Validate(state.resolve, HIR::ItemPath(path), *new_fcn.m_code.m_mir, new_fcn.m_args, new_fcn.m_return);
             trans_list.m_auto_functions.push_back(box$(new_fcn));
-            auto* e = trans_list.add_function(path.clone());
-            e->ptr = trans_list.m_auto_functions.back().get();
+            auto* e = trans_list.add_function(crate.m_types, path.clone());
+            if (e) {
+                e->ptr = trans_list.m_auto_functions.back().get();
+            } else {
+                trans_list.m_auto_functions.pop_back();
+            }
         }
     }
 
@@ -519,7 +523,7 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                 offset = 3; // Wait, is this reachable?
             }
 
-            if (const auto* te = type.data().opt_NamedFunction()) {
+            if (const auto* te = type->opt_NamedFunction()) {
                 for (; offset < sizeof(entries) / sizeof(entries[0]); offset++) {
                     bool is_by_value = (offset == 2);
                     const auto& ent = entries[offset];
@@ -528,21 +532,21 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                     fcn_p.m_data.as_UfcsKnown().item = ent.fcn_name;
                     fcn_p.m_data.as_UfcsKnown().trait.m_path = ent.trait_path->clone();
 
-                    auto* e = trans_list.add_function(mv$(fcn_p));
+                    auto* e = trans_list.add_function(crate.m_types, mv$(fcn_p));
                     if (e) {
-                        auto ft = te->decay(sp);
+                        auto ft = te->decay(crate.m_types, sp);
 
                         ::std::vector<HIR::TypeRef> arg_tys;
                         for (auto& ty : ft.m_arg_types) {
-                            arg_tys.push_back(ty.clone());
+                            arg_tys.push_back(ty);
                         }
-                        auto arg_ty = ::HIR::TypeRef(mv$(arg_tys));
+                        auto arg_ty = crate.m_types.tuple(mv$(arg_tys));
                         state.resolve.expand_associated_types(sp, arg_ty);
 
                         HIR::Function fcn;
-                        fcn.m_return = ft.m_rettype.clone();
+                        fcn.m_return = ft.m_rettype;
                         state.resolve.expand_associated_types(sp, arg_ty);
-                        fcn.m_args.push_back(std::make_pair(HIR::Pattern(), !is_by_value ? HIR::TypeRef::new_borrow(ent.bt, type.clone()) : type.clone()));
+                        fcn.m_args.push_back(std::make_pair(HIR::Pattern(), !is_by_value ? crate.m_types.borrow(ent.bt, type) : type));
                         fcn.m_args.push_back(std::make_pair(HIR::Pattern(), mv$(arg_ty)));
 
                         fcn.m_code.m_mir = MIR::FunctionPointer(new MIR::Function());
@@ -565,7 +569,7 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                         e->ptr = trans_list.m_auto_functions.back().get();
                     }
                 }
-            } else if (const auto* te = type.data().opt_Function()) {
+            } else if (const auto* te = type->opt_Function()) {
                 for (; offset < sizeof(entries) / sizeof(entries[0]); offset++) {
                     bool is_by_value = (offset == 2);
                     const auto& ent = entries[offset];
@@ -574,17 +578,17 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                     fcn_p.m_data.as_UfcsKnown().item = ent.fcn_name;
                     fcn_p.m_data.as_UfcsKnown().trait.m_path = ent.trait_path->clone();
 
-                    auto* e = trans_list.add_function(mv$(fcn_p));
+                    auto* e = trans_list.add_function(crate.m_types, mv$(fcn_p));
                     if (e) {
                         ::std::vector<HIR::TypeRef> arg_tys;
                         for (const auto& ty : te->m_arg_types) {
-                            arg_tys.push_back(ty.clone());
+                            arg_tys.push_back(ty);
                         }
-                        auto arg_ty = ::HIR::TypeRef(mv$(arg_tys));
+                        auto arg_ty = crate.m_types.tuple(mv$(arg_tys));
 
                         HIR::Function fcn;
-                        fcn.m_return = te->m_rettype.clone();
-                        fcn.m_args.push_back(std::make_pair(HIR::Pattern(), !is_by_value ? HIR::TypeRef::new_borrow(ent.bt, type.clone()) : type.clone()));
+                        fcn.m_return = te->m_rettype;
+                        fcn.m_args.push_back(std::make_pair(HIR::Pattern(), !is_by_value ? crate.m_types.borrow(ent.bt, type) : type));
                         fcn.m_args.push_back(std::make_pair(HIR::Pattern(), mv$(arg_ty)));
 
                         fcn.m_code.m_mir = MIR::FunctionPointer(new MIR::Function());
@@ -619,10 +623,10 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
             DEBUG("VTABLE <empty> for " << type);
 
             ::std::vector<HIR::TypeRef> tuple_tys;
-            tuple_tys.push_back(::HIR::CoreType::Usize);
-            tuple_tys.push_back(::HIR::CoreType::Usize);
-            tuple_tys.push_back(::HIR::CoreType::Usize); // fn
-            auto vtable_ty = ::HIR::TypeRef(std::move(tuple_tys));
+            tuple_tys.push_back(crate.m_types.primitive(::HIR::CoreType::Usize));
+            tuple_tys.push_back(crate.m_types.primitive(::HIR::CoreType::Usize));
+            tuple_tys.push_back(crate.m_types.primitive(::HIR::CoreType::Usize)); // fn
+            auto vtable_ty = crate.m_types.tuple(std::move(tuple_tys));
 
             // Look up the size of the VTable, so we can allocate the right buffer size
             const auto* repr = Target_GetTypeRepr(sp, state.resolve, vtable_ty);
@@ -644,8 +648,8 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                 assert(ofs <= vtable_data.bytes.size());
             };
             // Drop glue
-            trans_list.m_drop_glue.insert(type.clone());
-            push_ptr(::HIR::Path(type.clone(), rcstring_drop_glue));
+            trans_list.m_drop_glue.insert(type);
+            push_ptr(::HIR::Path(type, rcstring_drop_glue));
             // Size & align
             {
                 size_t size, align;
@@ -661,8 +665,12 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
 
             // Add to list
             trans_list.m_auto_statics.push_back(box$(vtable_static));
-            auto* e = trans_list.add_static(ent.first.clone());
-            e->ptr = trans_list.m_auto_statics.back().get();
+            auto* e = trans_list.add_static(crate.m_types, ent.first.clone());
+            if (e) {
+                e->ptr = trans_list.m_auto_statics.back().get();
+            } else {
+                trans_list.m_auto_statics.pop_back();
+            }
         }
         for (const auto& ent : trans_list.m_vtables) {
             Span sp;
@@ -680,26 +688,22 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
             ASSERT_BUG(sp, vtable_sp != HIR::SimplePath(), "Trait " << trait_path.m_path << " doesn't have a vtable");
             auto vtable_params = trait_path.m_params.clone();
             for (const auto& ty : trait.m_type_indexes) {
-                auto aty = ::HIR::TypeRef::new_path(::HIR::Path(type.clone(), trait_path.clone(), ty.first), {});
+                auto aty = crate.m_types.path(::HIR::Path(type, trait_path.clone(), ty.first), {});
                 state.resolve.expand_associated_types(sp, aty);
                 vtable_params.m_types.push_back(mv$(aty));
             }
             const auto& vtable_ref = crate.get_struct_by_path(sp, vtable_sp);
-            auto vtable_ty = ::HIR::TypeRef::new_path(::HIR::GenericPath(mv$(vtable_sp), mv$(vtable_params)), &vtable_ref);
+            auto vtable_ty = crate.m_types.path(::HIR::GenericPath(mv$(vtable_sp), mv$(vtable_params)), &vtable_ref);
 
             // Ensure that the type is defined/populated
-            if (!std::any_of(trans_list.m_types.begin(), trans_list.m_types.end(), [&](const ::std::pair<HIR::TypeRef, bool>& v) {
-                return v.first == vtable_ty && v.second == false;
-            })) {
-                trans_list.m_types.push_back(std::make_pair(vtable_ty.clone(), false));
-            }
+            trans_list.add_type(vtable_ty, false);
 
             // Look up the size of the VTable, so we can allocate the right buffer size
             const auto* repr = Target_GetTypeRepr(sp, state.resolve, vtable_ty);
             assert(repr);
 
             // Create vtable contents
-            auto monomorph_cb_trait = MonomorphStatePtr(&type, &trait_path.m_params, nullptr);
+            auto monomorph_cb_trait = MonomorphStatePtr(crate.m_types, &type, &trait_path.m_params, nullptr);
 
             HIR::Linkage linkage;
             linkage.type = HIR::Linkage::Type::Weak;
@@ -717,8 +721,8 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                 assert(ofs <= vtable_data.bytes.size());
             };
             // Drop glue
-            trans_list.m_drop_glue.insert(type.clone());
-            push_ptr(::HIR::Path(type.clone(), rcstring_drop_glue));
+            trans_list.m_drop_glue.insert(type);
+            push_ptr(::HIR::Path(type, rcstring_drop_glue));
             // Size & align
             {
                 size_t size, align;
@@ -744,9 +748,9 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                     DEBUG("- " << m.second.first << " = " << m.second.second << " :: " << m.first);
 
                     auto trait_gpath = monomorph_cb_trait.monomorph_genericpath(sp, m.second.second, false);
-                    auto item_path = ::HIR::Path(type.clone(), mv$(trait_gpath), m.first);
+                    auto item_path = ::HIR::Path(type, mv$(trait_gpath), m.first);
 
-                    auto src_trait_ms = MonomorphStatePtr(&type, &item_path.m_data.as_UfcsKnown().trait.m_params, nullptr);
+                    auto src_trait_ms = MonomorphStatePtr(crate.m_types, &type, &item_path.m_data.as_UfcsKnown().trait.m_params, nullptr);
                     const auto& src_trait = state.resolve.m_crate.get_trait_by_path(sp, m.second.second.m_path);
                     const auto& item = src_trait.m_values.at(m.first);
                     // If the entry is a by-value function, then emit a reference to a shim
@@ -755,13 +759,13 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                         if (tpl_fcn.m_receiver == HIR::Function::Receiver::Value) {
                             auto call_path = item_path.clone();
                             item_path.m_data.as_UfcsKnown().item = RcString::new_interned(FMT(m.first << "#ptr"));
-                            auto* e = trans_list.add_function(item_path.clone());
+                            auto* e = trans_list.add_function(crate.m_types, item_path.clone());
                             if (e) {
                                 // Create the shim (forward to the true call, dereferencing the first argument)
                                 HIR::Function new_fcn;
                                 new_fcn.m_return = src_trait_ms.monomorph_type(sp, tpl_fcn.m_return);
                                 state.resolve.expand_associated_types(sp, new_fcn.m_return);
-                                new_fcn.m_args.push_back(std::make_pair(HIR::Pattern(), HIR::TypeRef::new_borrow(HIR::BorrowType::Owned, type.clone())));
+                                new_fcn.m_args.push_back(std::make_pair(HIR::Pattern(), crate.m_types.borrow(HIR::BorrowType::Owned, type)));
                                 for (size_t i = 1; i < tpl_fcn.m_args.size(); i++) {
                                     new_fcn.m_args.push_back(std::make_pair(HIR::Pattern(), src_trait_ms.monomorph_type(sp, tpl_fcn.m_args[i].second)));
                                 }
@@ -807,9 +811,9 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                 const auto& pt = trait.m_all_parent_traits[i];
                 const auto& fld = repr->fields.at(trait.m_vtable_parent_traits_start + i);
                 ASSERT_BUG(sp, fld.offset == ofs, "");
-                if (!fld.ty.data().is_Tuple()) {
-                    auto pt_mono = MonomorphStatePtr(nullptr, &trait_path.m_params, nullptr).monomorph_genericpath(sp, pt.m_path);
-                    auto pt_vtable_path = ::HIR::Path(type.clone(), mv$(pt_mono), ent.first.m_data.as_UfcsKnown().item);
+                if (!fld.ty->is_Tuple()) {
+                    auto pt_mono = MonomorphStatePtr(crate.m_types, nullptr, &trait_path.m_params, nullptr).monomorph_genericpath(sp, pt.m_path);
+                    auto pt_vtable_path = ::HIR::Path(type, mv$(pt_mono), ent.first.m_data.as_UfcsKnown().item);
                     push_ptr(mv$(pt_vtable_path));
                 }
             }
@@ -818,8 +822,12 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
 
             // Add to list
             trans_list.m_auto_statics.push_back(box$(vtable_static));
-            auto* e = trans_list.add_static(ent.first.clone());
-            e->ptr = trans_list.m_auto_statics.back().get();
+            auto* e = trans_list.add_static(crate.m_types, ent.first.clone());
+            if (e) {
+                e->ptr = trans_list.m_auto_statics.back().get();
+            } else {
+                trans_list.m_auto_statics.pop_back();
+            }
         }
         trans_list.m_vtables.clear();
     }
@@ -836,22 +844,22 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                 continue;
             }
 
-            if (ty.first.data().is_TraitObject()) {
+            if (ty.first->is_TraitObject()) {
                 continue;
             }
-            if (ty.first.data().is_Slice()) {
+            if (ty.first->is_Slice()) {
                 continue;
             }
-            trans_list.m_drop_glue.insert(ty.first.clone());
+            trans_list.m_drop_glue.insert(ty.first);
         }
 
         for (const auto& ty : trans_list.m_drop_glue) {
             Span sp;
-            auto path = ::HIR::Path(ty.clone(), rcstring_drop_glue);
+            auto path = ::HIR::Path(ty, rcstring_drop_glue);
 
             HIR::Function fcn;
-            fcn.m_return = HIR::TypeRef::new_unit();
-            fcn.m_args.push_back(std::make_pair(HIR::Pattern(), HIR::TypeRef::new_borrow(HIR::BorrowType::Owned, ty.clone())));
+            fcn.m_return = crate.m_types.unit();
+            fcn.m_args.push_back(std::make_pair(HIR::Pattern(), crate.m_types.borrow(HIR::BorrowType::Owned, ty)));
 
             fcn.m_code.m_mir = MIR::FunctionPointer(new MIR::Function());
             ::MIR::TypeResolve mir_res{sp, state.resolve, FMT_CB(ss, ss << path), fcn.m_return, fcn.m_args, *fcn.m_code.m_mir};
@@ -870,7 +878,7 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                 // - If this is 1.74+, emit a standard Drop::drop call that will handle the dealloc
                 builder.push_stmt(MIR::Statement::make_Drop({MIR::eDropKind::SHALLOW, ::MIR::LValue::new_Deref(builder.self.clone()), ~0u}));
             } else if (state.resolve.type_needs_drop_glue(sp, ty)) {
-                TU_MATCH_HDRA( (ty.data()), {)
+                TU_MATCH_HDRA( ((*ty)), {)
                 TU_ARMA(Infer, _te)
                     throw "";
                     TU_ARMA(Generic, _te)
@@ -926,9 +934,9 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                                     fld_lv.inc_Field();
                                 }
                             } else {
-                                auto idx = builder.add_local(HIR::CoreType::Usize);
+                                auto idx = builder.add_local(crate.m_types.primitive(HIR::CoreType::Usize));
                                 auto fld_lv = ::MIR::LValue::new_Index(mv$(self), idx.as_Local());
-                                auto cmp = builder.add_local(HIR::CoreType::Bool);
+                                auto cmp = builder.add_local(crate.m_types.primitive(HIR::CoreType::Bool));
                                 builder.push_stmt_assign(idx.clone(), MIR::Constant::make_Uint({U128(0), HIR::CoreType::Usize}));
                                 builder.terminate_block(MIR::Terminator::make_Goto(1));
                                 builder.push_stmt_drop(fld_lv.clone());
@@ -954,7 +962,7 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                                     has_drop = true;
                                 }
 
-                                if (ty.data().is_Path() && ty.data().as_Path().is_generator()) {
+                                if (ty->is_Path() && ty->as_Path().is_generator()) {
                                     ASSERT_BUG(sp, has_drop, "");
                                     // Generators use a custom Drop impl that handles dropping values
                                 } else {
@@ -1014,9 +1022,9 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                             }
                     }
                     if( has_drop ) {
-                            if (auto* e = trans_list.add_function(::HIR::Path(ty.clone(), state.resolve.m_lang_Drop, rcstring_drop))) {
-                                MonomorphState params;
-                                auto p = ::HIR::Path(ty.clone(), state.resolve.m_lang_Drop, rcstring_drop);
+                            if (auto* e = trans_list.add_function(crate.m_types, ::HIR::Path(ty, state.resolve.m_lang_Drop, rcstring_drop))) {
+                                MonomorphState params(crate.m_types);
+                                auto p = ::HIR::Path(ty, state.resolve.m_lang_Drop, rcstring_drop);
                                 auto fcn_e = state.resolve.get_value(sp, p, /*out*/ params, /*signature_only=*/false);
                                 ASSERT_BUG(sp, fcn_e.is_Function(), "Drop didn't point to a function! " << fcn_e.tag_str() << " " << p);
                                 ASSERT_BUG(sp, !params.has_types(), "Generic drop impl encountered during auto_impls (should have been populated during enum)");
@@ -1034,8 +1042,12 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
 
             MIR_Validate(state.resolve, HIR::ItemPath(path), *fcn.m_code.m_mir, fcn.m_args, fcn.m_return);
             trans_list.m_auto_functions.push_back(box$(fcn));
-            auto* e = trans_list.add_function(mv$(path));
-            e->ptr = trans_list.m_auto_functions.back().get();
+            auto* e = trans_list.add_function(crate.m_types, mv$(path));
+            if (e) {
+                e->ptr = trans_list.m_auto_functions.back().get();
+            } else {
+                trans_list.m_auto_functions.pop_back();
+            }
         }
     }
 }

@@ -120,11 +120,13 @@ namespace {
             // - Closures are marked as Copy until this pass, where they need to default to not-Copy so usage defaults to the most restrictive
             {
                 struct IV: public ::HIR::ExprVisitorDef {
+                    explicit IV(HIR::TypeInterner& types): ::HIR::ExprVisitorDef(types) {}
+
                     void visit(::HIR::ExprNode_Closure& node) override {
                         node.m_is_copy = false;
                         ::HIR::ExprVisitorDef::visit(node);
                     }
-                } iv;
+                } iv(m_resolve.m_crate.m_types);
 
                 root_ptr->visit(iv);
             }
@@ -267,6 +269,8 @@ namespace {
                 struct InnerVisitor: public ::HIR::ExprVisitorDef {
                     bool m_has_yield = false;
 
+                    explicit InnerVisitor(HIR::TypeInterner& types): ::HIR::ExprVisitorDef(types) {}
+
                     void visit(::HIR::ExprNode_Closure&) override {
                         // Ignore inner closures (yields can't pass them)
                     }
@@ -283,7 +287,7 @@ namespace {
                         m_has_yield = true;
                         // Don't bother recursing, we've found a yield
                     }
-                } v;
+                } v(m_resolve.m_crate.m_types);
 
                 v.visit_node_ptr(node.m_code);
 
@@ -453,7 +457,7 @@ namespace {
                 this->visit_node_ptr(node.m_value);
             }
             // Pointers only need a borrow to be derefernced.
-            else if (node.m_value->m_res_type.data().is_Pointer()) {
+            else if (node.m_value->m_res_type->is_Pointer()) {
                 auto _ = push_usage(::HIR::ValueUsage::Borrow);
                 this->visit_node_ptr(node.m_value);
             } else {
@@ -495,7 +499,7 @@ namespace {
                         inner = inner_field->m_value.get();
                     }
                     if (auto* inner_deref = dynamic_cast<::HIR::ExprNode_Deref*>(inner)) {
-                        if (inner_deref->m_value->m_res_type.data().is_Borrow()) {
+                        if (inner_deref->m_value->m_res_type->is_Borrow()) {
                             fields.push_back(RcString());
                             inner = inner_deref->m_value.get();
                         }
@@ -542,7 +546,7 @@ namespace {
             // TODO: Different usage based on trait.
             ::HIR::ValueUsage vu = ::HIR::ValueUsage::Borrow;
 
-            if (const auto* node_pp = TU_OPT1(node.m_value->m_res_type.data(), NodeType, .opt_Closure())) {
+            if (const auto* node_pp = TU_OPT1(*node.m_value->m_res_type, NodeType, .opt_Closure())) {
                 assert(*node_pp);
                 if ((*node_pp)->m_class == ::HIR::ExprNode_Closure::Class::Unknown) {
                     auto _ = push_usage(::HIR::ValueUsage::Move);
@@ -645,14 +649,14 @@ namespace {
             const auto& ty_path = node.m_real_path;
             if (node.m_base_value) {
                 bool is_moved = false;
-                const auto& tpb = node.m_base_value->m_res_type.data().as_Path().binding;
+                const auto& tpb = node.m_base_value->m_res_type->as_Path().binding;
                 const ::HIR::t_struct_fields* fields_ptr;
                 if (tpb.is_Enum()) {
                     const auto& enm = *tpb.as_Enum();
                     auto idx = enm.find_variant(ty_path.m_path.components().back());
                     ASSERT_BUG(sp, idx != SIZE_MAX, "");
                     const auto& var_ty = enm.m_data.as_Data()[idx].type;
-                    const auto& str = *var_ty.data().as_Path().binding.as_Struct();
+                    const auto& str = *var_ty->as_Path().binding.as_Struct();
                     ASSERT_BUG(sp, str.m_data.is_Named(), "");
                     fields_ptr = &str.m_data.as_Named();
                 } else if (tpb.is_Union()) {
@@ -672,7 +676,7 @@ namespace {
                     provided_mask[idx] = true;
                 }
 
-                const auto monomorph_cb = MonomorphStatePtr(nullptr, &ty_path.m_params, nullptr);
+                const auto monomorph_cb = MonomorphStatePtr(m_resolve.m_crate.m_types, nullptr, &ty_path.m_params, nullptr);
                 for (unsigned int i = 0; i < fields.size(); i++) {
                     if (!provided_mask[i]) {
                         const auto& ty_o = fields[i].ty;
@@ -763,7 +767,7 @@ namespace {
                             m_resolve.expand_associated_types(node.span(), tmp_ty);
                             cap_ty_p = &tmp_ty;
                         }
-                        if (cap_ty_p->data().is_Borrow() && cap_ty_p->data().as_Borrow().type == ::HIR::BorrowType::Shared) {
+                        if ((*cap_ty_p)->is_Borrow() && (*cap_ty_p)->as_Borrow().type == ::HIR::BorrowType::Shared) {
                             DEBUG("> Upgrade capture " << cap.root_slot << cap.fields << " to Move, as it's a shared borrow");
                             cap.usage = ::HIR::ValueUsage::Move;
                         }
@@ -983,7 +987,7 @@ namespace {
             // Implicit derefs
             const ::HIR::TypeRef* typ = &outer_ty;
             for (size_t i = 0; i < pat.m_implicit_deref_count; i++) {
-                typ = &typ->data().as_Borrow().inner;
+                typ = &(*typ)->as_Borrow().inner;
             }
             const ::HIR::TypeRef& ty = *typ;
 
@@ -993,15 +997,15 @@ namespace {
                 }
                 TU_ARMA(Box, pe) {
                     // NOTE: Specific to `owned_box`
-                    const auto& sty = ty.data().as_Path().path.m_data.as_Generic().m_params.m_types.at(0);
+                    const auto& sty = ty->as_Path().path.m_data.as_Generic().m_params.m_types.at(0);
                     return get_usage_for_pattern(sp, *pe.sub, sty);
                 }
                 TU_ARMA(Ref, pe) {
-                    return get_usage_for_pattern(sp, *pe.sub, ty.data().as_Borrow().inner);
+                    return get_usage_for_pattern(sp, *pe.sub, ty->as_Borrow().inner);
                 }
                 TU_ARMA(Tuple, pe) {
-                    ASSERT_BUG(sp, ty.data().is_Tuple(), "Tuple pattern with non-tuple type - " << ty);
-                    const auto& subtys = ty.data().as_Tuple();
+                    ASSERT_BUG(sp, ty->is_Tuple(), "Tuple pattern with non-tuple type - " << ty);
+                    const auto& subtys = ty->as_Tuple();
                     assert(pe.sub_patterns.size() == subtys.size());
                     auto rv = ::HIR::ValueUsage::Borrow;
                     for (unsigned int i = 0; i < subtys.size(); i++) {
@@ -1010,8 +1014,8 @@ namespace {
                     return rv;
                 }
                 TU_ARMA(SplitTuple, pe) {
-                    ASSERT_BUG(sp, ty.data().is_Tuple(), "SplitTuple pattern with non-tuple type - " << ty);
-                    const auto& subtys = ty.data().as_Tuple();
+                    ASSERT_BUG(sp, ty->is_Tuple(), "SplitTuple pattern with non-tuple type - " << ty);
+                    const auto& subtys = ty->as_Tuple();
                     assert(pe.leading.size() + pe.trailing.size() <= subtys.size());
                     auto rv = ::HIR::ValueUsage::Borrow;
                     for (unsigned int i = 0; i < pe.leading.size(); i++) {
@@ -1038,7 +1042,7 @@ namespace {
 
                     // TODO: Is it possible to avoid monomorphising here?
                     assert(pe.path.m_data.is_Generic());
-                    auto monomorph_state = MonomorphStatePtr(nullptr, &pe.path.m_data.as_Generic().m_params, nullptr);
+                    auto monomorph_state = MonomorphStatePtr(m_resolve.m_crate.m_types, nullptr, &pe.path.m_data.as_Generic().m_params, nullptr);
 
                     auto rv = ::HIR::ValueUsage::Borrow;
                     for (unsigned int i = 0; i < pe.leading.size(); i++) {
@@ -1062,7 +1066,7 @@ namespace {
                     }
 
                     const auto& flds = ::HIR::pattern_get_named(sp, pe.path, pe.binding);
-                    auto monomorph_state = MonomorphStatePtr(nullptr, &pe.path.m_data.as_Generic().m_params, nullptr);
+                    auto monomorph_state = MonomorphStatePtr(m_resolve.m_crate.m_types, nullptr, &pe.path.m_data.as_Generic().m_params, nullptr);
 
                     auto rv = ::HIR::ValueUsage::Borrow;
                     for (const auto& fld_pat : pe.sub_patterns) {
@@ -1083,7 +1087,7 @@ namespace {
                     return ::HIR::ValueUsage::Borrow;
                 }
                 TU_ARMA(Slice, pe) {
-                    const auto& inner_ty = (ty.data().is_Array() ? ty.data().as_Array().inner : ty.data().as_Slice().inner);
+                    const auto& inner_ty = (ty->is_Array() ? ty->as_Array().inner : ty->as_Slice().inner);
                     auto rv = ::HIR::ValueUsage::Borrow;
                     for (const auto& pat : pe.sub_patterns) {
                         rv = ::std::max(rv, get_usage_for_pattern(sp, pat, inner_ty));
@@ -1091,7 +1095,7 @@ namespace {
                     return rv;
                 }
                 TU_ARMA(SplitSlice, pe) {
-                    const auto& inner_ty = (ty.data().is_Array() ? ty.data().as_Array().inner : ty.data().as_Slice().inner);
+                    const auto& inner_ty = (ty->is_Array() ? ty->as_Array().inner : ty->as_Slice().inner);
                     auto rv = ::HIR::ValueUsage::Borrow;
                     for (const auto& pat : pe.leading) {
                         rv = ::std::max(rv, get_usage_for_pattern(sp, pat, inner_ty));
@@ -1133,7 +1137,7 @@ namespace {
                 }
                 // `&mut` types get re-borrowed
                 // - The reborrow pass is AFTER this pass
-                else if (ty->data().is_Borrow() && ty->data().as_Borrow().type == ::HIR::BorrowType::Unique) {
+                else if ((*ty)->is_Borrow() && (*ty)->as_Borrow().type == ::HIR::BorrowType::Unique) {
                     usage = ::HIR::ValueUsage::Mutate;
                 } else {
                 }
@@ -1279,7 +1283,7 @@ namespace {
                         //    m_resolve.expand_associated_types(node.span(), tmp_ty);
                         //    cap_ty_p = &tmp_ty;
                         //}
-                        if (cap_ty_p->data().is_Borrow() && cap_ty_p->data().as_Borrow().type == ::HIR::BorrowType::Shared) {
+                        if ((*cap_ty_p)->is_Borrow() && (*cap_ty_p)->as_Borrow().type == ::HIR::BorrowType::Shared) {
                             DEBUG("> Upgrade capture #" << cap.first << " to Move, as it's a shared borrow");
                             cap.second.usage = ::HIR::ValueUsage::Move;
                         }
@@ -1329,7 +1333,8 @@ namespace {
 
     public:
         OuterVisitor(const ::HIR::Crate& crate)
-            : m_resolve(crate)
+            : ::HIR::Visitor(nullptr, crate.m_types)
+            , m_resolve(crate)
         {
         }
 

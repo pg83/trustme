@@ -18,11 +18,14 @@
 #include "hir_generic_ref.hpp"
 #include "hir_generic_params.hpp"
 #include <memory>
+#include <unordered_map>
 
 constexpr const char* CLOSURE_PATH_PREFIX = "closure#";
 constexpr const char* GENERATOR_PATH_PREFIX = "generator#";
 constexpr const char* PATH_PREFIX_FUTURE = "future#";
 constexpr const char* ATY_PREFIX_ERASED = "erased#";
+
+namespace stl { class ObjPool; }
 
 namespace HIR {
 
@@ -35,8 +38,6 @@ namespace HIR {
     class ItemPath;
     struct ExprNode_Closure;
     struct ExprNode_Generator;
-
-    class TypeRef;
 
     enum class CoreType {
         Usize,
@@ -257,10 +258,11 @@ namespace HIR {
         (bool operator==(const TypeData_NodeType& x) const; bool operator!=(const TypeData_NodeType& x) const { return !(*this == x); } Ordering ord(const ::HIR::TypeData_NodeType& x) const; TypeData_NodeType clone() const; void fmt(::std::ostream& os) const;)
     );
 
-    TAGGED_UNION(
+    TAGGED_UNION_EX(
         TypeData,
+        (),
         Diverge,
-        (Infer,
+        ((Infer,
          struct {
              unsigned int index;
              InferClass ty_class;
@@ -306,273 +308,58 @@ namespace HIR {
              ::HIR::Path path;
              TypeData_NamedFunction_Ty def;
 
-             TypeData_FunctionPointer decay(const Span& sp) const;
+             TypeData_FunctionPointer decay(TypeInterner& types, const Span& sp) const;
          }),
         (Function, TypeData_FunctionPointer), // TODO: Pointer wrap, this is quite large
-        (NodeType, TypeData_NodeType)
+        (NodeType, TypeData_NodeType)),
+        (),
+        (),
+        (
+            TypeData clone_data() const;
+            void fmt(::std::ostream& os) const;
+
+            // Deliberately semantic relations. Plain TypeRef equality is pointer identity.
+            bool equals_ignoring_regions(::HIR::TypeRef x) const;
+            Ordering ord_ignoring_regions(::HIR::TypeRef x) const;
+            bool match_test_generics(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder, MatchGenerics& callback) const;
+            ::HIR::Compare match_test_generics_fuzz(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder, MatchGenerics& callback) const;
+            Compare compare_with_placeholders(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder) const;
+            const ::HIR::SimplePath* get_sort_path() const;
+        )
     );
 
-    class TypeInner {
-        friend class TypeRef;
+    class TypeInterner {
+        stl::ObjPool& m_pool;
+        ::std::unordered_multimap<size_t, TypeRef> m_nodes;
 
     public:
-        // Existing TypeRef
+        explicit TypeInterner(stl::ObjPool& pool): m_pool(pool) {}
 
-    private:
-        unsigned m_refcount;
-
-    public:
-        TypeData m_data;
-
-    private:
-        TypeInner(TypeData d)
-            : m_refcount(1)
-            , m_data(mv$(d))
-        {
-        }
+        TypeRef intern(TypeData data);
+        TypeRef infer(unsigned int idx = ~0u, InferClass ty_class = InferClass::None);
+        TypeRef primitive(CoreType ct);
+        TypeRef generic(RcString name, unsigned int slot);
+        TypeRef self();
+        TypeRef unit();
+        TypeRef diverge();
+        TypeRef borrow(BorrowType bt, TypeRef inner, LifetimeRef lft = LifetimeRef());
+        TypeRef pointer(BorrowType bt, TypeRef inner);
+        TypeRef tuple(::std::vector<TypeRef> types);
+        TypeRef slice(TypeRef inner);
+        TypeRef array(TypeRef inner, ArraySize size);
+        TypeRef array(TypeRef inner, uint64_t size);
+        TypeRef array(TypeRef inner, ConstGeneric size);
+        TypeRef path(Path path, TypePathBinding binding, ::std::unique_ptr<GenericParams> hrtbs = {});
+        TypeRef function(TypeData_FunctionPointer ft);
+        TypeRef closure(ExprNode_Closure* node);
+        TypeRef generator(ExprNode_Generator* node);
+        TypeRef async_block(ExprNode_AsyncBlock* node);
     };
 
-    inline TypeRef::TypeRef()
-        : TypeRef(TypeData::make_Infer({~0u, InferClass::None}))
-    {
+    inline bool operator==(TypeRef ty, CoreType ct) {
+        return ty && ty->is_Primitive() && ty->as_Primitive() == ct;
     }
-
-    inline TypeRef::TypeRef(TypeData d)
-        : m_ptr(new TypeInner(mv$(d)))
-    {
-    }
-
-    inline TypeRef::TypeRef(const TypeRef& x)
-        : m_ptr(x.m_ptr)
-    {
-        x.m_ptr->m_refcount += 1;
-    }
-
-    inline TypeRef::~TypeRef() {
-        if (m_ptr) {
-            m_ptr->m_refcount -= 1;
-            if (m_ptr->m_refcount == 0) {
-                delete m_ptr;
-                m_ptr = nullptr;
-            }
-        }
-    }
-
-    inline const TypeData& TypeRef::data() const {
-        assert(m_ptr);
-        return m_ptr->m_data;
-    }
-
-    inline TypeData& TypeRef::data_mut() {
-        assert(m_ptr);
-        return m_ptr->m_data;
-    }
-
-    inline TypeData& TypeRef::get_unique() {
-        assert(m_ptr);
-        if (m_ptr->m_refcount != 1) {
-            *this = this->clone_shallow();
-        }
-        return m_ptr->m_data;
-    }
-
-    inline TypeRef::TypeRef(::HIR::CoreType ct)
-        : TypeRef(TypeData::make_Primitive(mv$(ct)))
-    {
-    }
-
-    inline TypeRef::TypeRef(RcString name, unsigned int slot)
-        : TypeRef(TypeData::make_Generic({mv$(name), slot}))
-    {
-    }
-
-    inline TypeRef::TypeRef(::std::vector<::HIR::TypeRef> sts)
-        : TypeRef(TypeData::make_Tuple(mv$(sts)))
-    {
-    }
-
-    inline TypeRef::TypeRef(TypeData_FunctionPointer ft)
-        : TypeRef(TypeData::make_Function(mv$(ft)))
-    {
-    }
-
-    inline TypeRef TypeRef::new_self() {
-        static const TypeRef rv = TypeRef(RcString::new_interned("Self"), GENERIC_Self);
-        return rv.clone();
-    }
-
-    inline TypeRef TypeRef::new_unit() {
-        static const TypeRef rv = TypeRef(TypeData::make_Tuple({}));
-        return rv.clone();
-    }
-
-    inline TypeRef TypeRef::new_diverge() {
-        static const TypeRef rv = TypeRef(TypeData::make_Diverge({}));
-        return rv.clone();
-    }
-
-    inline TypeRef TypeRef::new_infer(unsigned int idx /*= ~0u*/, InferClass ty_class /*= InferClass::None*/) {
-        return TypeRef(TypeData::make_Infer({idx, ty_class}));
-    }
-
-    inline TypeRef TypeRef::new_borrow(BorrowType bt, TypeRef inner) {
-        return TypeRef(TypeData::make_Borrow({::HIR::LifetimeRef(), bt, mv$(inner)}));
-    }
-
-    inline TypeRef TypeRef::new_borrow(BorrowType bt, TypeRef inner, HIR::LifetimeRef lft) {
-        return TypeRef(TypeData::make_Borrow({lft, bt, mv$(inner)}));
-    }
-
-    inline TypeRef TypeRef::new_pointer(BorrowType bt, TypeRef inner) {
-        return TypeRef(TypeData::make_Pointer({bt, mv$(inner)}));
-    }
-
-    inline TypeRef TypeRef::new_slice(TypeRef inner) {
-        return TypeRef(TypeData::make_Slice({mv$(inner)}));
-    }
-
-    inline TypeRef TypeRef::new_array(TypeRef inner, uint64_t size) {
-        assert(size != ~0u);
-        return TypeRef(TypeData::make_Array({mv$(inner), size}));
-    }
-
-    inline TypeRef TypeRef::new_array(TypeRef inner, ::HIR::ConstGeneric size_gen) {
-        return TypeRef(TypeData::make_Array({mv$(inner), mv$(size_gen)}));
-    }
-
-    inline TypeRef TypeRef::new_path(::HIR::Path path, TypePathBinding binding) {
-        return TypeRef(TypeData::make_Path({mv$(path), mv$(binding)}));
-    }
-
-    inline TypeRef TypeRef::new_closure(::HIR::ExprNode_Closure* node_ptr) {
-        return TypeRef(TypeData::make_NodeType({node_ptr}));
-    }
-
-    inline TypeRef TypeRef::new_generator(::HIR::ExprNode_Generator* node_ptr) {
-        return TypeRef(TypeData::make_NodeType({node_ptr}));
-    }
-
-    inline TypeRef TypeRef::new_async(::HIR::ExprNode_AsyncBlock* node_ptr) {
-        return TypeRef(TypeData::make_NodeType({node_ptr}));
-    }
-
-    inline const ::HIR::SimplePath* TypeRef::get_sort_path() const {
-        // - Generic paths get sorted
-        if (TU_TEST1(this->data(), Path, .path.m_data.is_Generic())) {
-            return &this->data().as_Path().path.m_data.as_Generic().m_path;
-        }
-        // - So do trait objects
-        else if (this->data().is_TraitObject()) {
-            return &this->data().as_TraitObject().m_trait.m_path.m_path;
-        } else {
-            // Keep as nullptr, will search primitive list
-            return nullptr;
-        }
-    }
-
-#if 0
-// TODO: Convert to a shared_ptr (or interior RC)
-// - How to handle resolution actions? (Replacing generics)
-class TypeRef {
-public:
-    TypeData   m_data;
-
-    TypeRef():
-        m_data(TypeData::make_Infer({ ~0u, InferClass::None }))
-    {}
-    TypeRef(TypeRef&& ) = default;
-    TypeRef(const TypeRef& ) = delete;
-    TypeRef& operator=(TypeRef&& ) = default;
-    TypeRef& operator=(const TypeRef&) = delete;
-
-    TypeRef(::HIR::TypeData x):
-        m_data( mv$(x) )
-    {}
-
-    TypeRef(::std::vector< ::HIR::TypeRef> sts):
-        m_data( TypeData::make_Tuple(mv$(sts)) )
-    {}
-    TypeRef(RcString name, unsigned int slot):
-        m_data( TypeData::make_Generic({ mv$(name), slot }) )
-    {}
-    TypeRef(::HIR::CoreType ct):
-        m_data( TypeData::make_Primitive(mv$(ct)) )
-    {}
-
-    static TypeRef new_unit() {
-        return TypeRef(TypeData::make_Tuple({}));
-    }
-    static TypeRef new_diverge() {
-        return TypeRef(TypeData::make_Diverge({}));
-    }
-    static TypeRef new_infer(unsigned int idx = ~0u, InferClass ty_class = InferClass::None) {
-        return TypeRef(TypeData::make_Infer({idx, ty_class}));
-    }
-    static TypeRef new_borrow(BorrowType bt, TypeRef inner) {
-        return TypeRef(TypeData::make_Borrow({ ::HIR::LifetimeRef(), bt, box$(mv$(inner)) }));
-    }
-    static TypeRef new_pointer(BorrowType bt, TypeRef inner) {
-        return TypeRef(TypeData::make_Pointer({bt, box$(mv$(inner))}));
-    }
-    static TypeRef new_slice(TypeRef inner) {
-        return TypeRef(TypeData::make_Slice({box$(mv$(inner))}));
-    }
-    static TypeRef new_array(TypeRef inner, uint64_t size) {
-        assert(size != ~0u);
-        return TypeRef(TypeData::make_Array({box$(mv$(inner)), size}));
-    }
-    static TypeRef new_array(TypeRef inner, ::HIR::ExprPtr size_expr) {
-        return TypeRef(TypeData::make_Array({box$(mv$(inner)), std::make_shared<HIR::ExprPtr>(mv$(size_expr)) }));
-    }
-    static TypeRef new_path(::HIR::Path path, TypePathBinding binding) {
-        return TypeRef(TypeData::make_Path({ mv$(path), mv$(binding) }));
-    }
-    static TypeRef new_closure(::HIR::ExprNode_Closure* node_ptr, ::std::vector< ::HIR::TypeRef> args, ::HIR::TypeRef rv) {
-        return TypeRef(TypeData::make_Closure({ node_ptr, box$(mv$(rv)), mv$(args) }));
-    }
-
-    TypeRef clone() const;
-
-    void fmt(::std::ostream& os) const;
-
-    bool operator==(const ::HIR::TypeRef& x) const;
-    bool operator!=(const ::HIR::TypeRef& x) const { return !(*this == x); }
-    bool operator<(const ::HIR::TypeRef& x) const { return ord(x) == OrdLess; }
-    Ordering ord(const ::HIR::TypeRef& x) const;
-
-    bool contains_generics() const;
-
-    // Match generics in `this` with types from `x`
-    // Raises a bug against `sp` if there is a form mismatch or `this` has an infer
-    void match_generics(const Span& sp, const ::HIR::TypeRef& x, t_cb_resolve_type resolve_placeholder, t_cb_match_generics) const;
-
-    bool match_test_generics(const Span& sp, const ::HIR::TypeRef& x, t_cb_resolve_type resolve_placeholder, t_cb_match_generics) const;
-
-    // Compares this type with another, calling the first callback to resolve placeholders in the other type, and the second callback for generics in this type
-    ::HIR::Compare match_test_generics_fuzz(const Span& sp, const ::HIR::TypeRef& x_in, t_cb_resolve_type resolve_placeholder, t_cb_match_generics callback) const;
-
-    // Compares this type with another, using `resolve_placeholder` to get replacements for generics/infers in `x`
-    Compare compare_with_placeholders(const Span& sp, const ::HIR::TypeRef& x, t_cb_resolve_type resolve_placeholder) const;
-
-    const ::HIR::SimplePath* get_sort_path() const {
-        // - Generic paths get sorted
-        if( TU_TEST1(this->m_data, Path, .path.m_data.is_Generic()) )
-        {
-            return &this->m_data.as_Path().path.m_data.as_Generic().m_path;
-        }
-        // - So do trait objects
-        else if( this->m_data.is_TraitObject() )
-        {
-            return &this->m_data.as_TraitObject().m_trait.m_path.m_path;
-        }
-        else
-        {
-            // Keep as nullptr, will search primitive list
-            return nullptr;
-        }
-    }
-};
-#endif
+    inline bool operator!=(TypeRef ty, CoreType ct) { return !(ty == ct); }
 
     extern ::std::ostream& operator<<(::std::ostream& os, const ::HIR::TypeRef& ty);
 

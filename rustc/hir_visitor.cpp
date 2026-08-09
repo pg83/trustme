@@ -216,8 +216,8 @@ void ::HIR::Visitor::visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) {
         m_resolve->set_impl_generics_raw(MetadataType::Unknown, item.m_params);
     }
     auto trait_sp = p.get_simple_path();
-    auto trait_pp = item.m_params.make_nop_params(0);
-    static const HIR::TypeRef ty_Self = ::HIR::TypeRef::new_self();
+    auto trait_pp = item.m_params.make_nop_params(type_interner(), 0);
+    const HIR::TypeRef ty_Self = type_interner().self();
     ItemPath trait_ip(ty_Self, trait_sp, trait_pp);
     TRACE_FUNCTION;
 
@@ -402,7 +402,14 @@ void ::HIR::Visitor::visit_generic_bound(::HIR::GenericBound& bound) {
 }
 
 void ::HIR::Visitor::visit_type(::HIR::TypeRef& ty) {
-    TU_MATCH_HDRA( (ty.data_mut()), {)
+    assert(ty);
+    auto data = ty->clone_data();
+    visit_type_data(data);
+    ty = type_interner().intern(mv$(data));
+}
+
+void ::HIR::Visitor::visit_type_data(::HIR::TypeData& data) {
+    TU_MATCH_HDRA( (data), {)
     TU_ARMA(Infer, e) {
         }
         TU_ARMA(Diverge, e) {

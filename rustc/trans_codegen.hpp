@@ -11,7 +11,8 @@
 #include "trans_main_bindings.hpp" // TransOptions
 
 namespace HIR {
-    class TypeRef;
+    class TypeData;
+    using TypeRef = const TypeData*;
     class Path;
     class GenericPath;
 

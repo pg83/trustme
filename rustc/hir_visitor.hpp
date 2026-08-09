@@ -20,15 +20,22 @@ namespace HIR {
     // TODO: Split into Visitor and ItemVisitor
     class Visitor {
         StaticTraitResolve* m_resolve;
+        TypeInterner& m_types;
 
     public:
-        Visitor(::StaticTraitResolve* resolve = nullptr)
+        Visitor(::StaticTraitResolve* resolve, TypeInterner& types)
             : m_resolve(resolve)
+            , m_types(types)
         {
         }
 
         virtual ~Visitor();
 
+    protected:
+        TypeInterner& type_interner() const { return m_types; }
+        void visit_type_data(TypeData& data);
+
+    public:
         virtual void visit_crate(::HIR::Crate& crate);
 
         virtual void visit_module(ItemPath p, ::HIR::Module& mod);

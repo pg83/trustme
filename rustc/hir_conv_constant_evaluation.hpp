@@ -87,7 +87,8 @@ namespace HIR {
         Evaluator(Evaluator&&) = default;
         Evaluator(const Evaluator&) = delete;
 
-        EncodedLiteral evaluate_constant(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& expr, ::HIR::TypeRef exp, MonomorphState ms = {});
+        EncodedLiteral evaluate_constant(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& expr, ::HIR::TypeRef exp);
+        EncodedLiteral evaluate_constant(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& expr, ::HIR::TypeRef exp, MonomorphState ms);
 
         StaticTraitResolve& get_resolve() {
             return this->resolve;

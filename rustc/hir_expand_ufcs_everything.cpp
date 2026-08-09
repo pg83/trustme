@@ -33,7 +33,8 @@ namespace {
 
     public:
         ExprVisitor_Mutate(const ::HIR::Crate& crate, const ::HIR::TraitImpl* current_trait_impl = nullptr)
-            : m_crate(crate)
+            : ::HIR::ExprVisitorDef(crate.m_types)
+            , m_crate(crate)
             , m_current_trait_impl(current_trait_impl)
             , m_resolve(crate)
         {
@@ -82,7 +83,7 @@ namespace {
             const auto& ty_val = node.m_value->m_res_type;
 
             // Calling a `fn` type should be kept as a _CallValue
-            if (ty_val.data().is_Function()) {
+            if (ty_val->is_Function()) {
                 return;
             }
 
@@ -91,17 +92,17 @@ namespace {
             {
                 ::std::vector<::HIR::TypeRef> arg_types;
                 for (unsigned int i = 0; i < node.m_args.size(); i++) {
-                    arg_types.push_back(node.m_args[i]->m_res_type.clone());
+                    arg_types.push_back(node.m_args[i]->m_res_type);
                 }
-                arg_tup_type = ::HIR::TypeRef::new_tuple(mv$(arg_types));
+                arg_tup_type = m_crate.m_types.tuple(mv$(arg_types));
             }
             // - Make the trait arguments.
             ::HIR::PathParams trait_args;
-            trait_args.m_types.push_back(arg_tup_type.clone());
+            trait_args.m_types.push_back(arg_tup_type);
 
             // - If the called value is a local closure, figure out how it's being used.
             // TODO: You can call via &-ptrs, but that currently isn't handled in typeck
-            if (const auto* node_pp = TU_OPT1(node.m_value->m_res_type.data(), NodeType, .opt_Closure())) {
+            if (const auto* node_pp = TU_OPT1((*node.m_value->m_res_type), NodeType, .opt_Closure())) {
                 if (node.m_trait_used == ::HIR::ExprNode_CallValue::TraitUsed::Unknown) {
                     // NOTE: Closure node still exists, and will do until MIR construction deletes the HIR
                     switch ((*node_pp)->m_class) {
@@ -127,18 +128,18 @@ namespace {
             switch (node.m_trait_used) {
                 case ::HIR::ExprNode_CallValue::TraitUsed::Fn:
                     // Insert a borrow op.
-                    self_arg_type = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, ty_val.clone());
-                    node.m_value = NEWNODE(self_arg_type.clone(), Borrow, sp, ::HIR::BorrowType::Shared, mv$(node.m_value));
-                    method_path = ::HIR::Path(ty_val.clone(), ::HIR::GenericPath(m_crate.get_lang_item_path(sp, "fn"), mv$(trait_args)), RcString::new_interned("call"), HIR::PathParams(HIR::LifetimeRef()));
+                    self_arg_type = m_crate.m_types.borrow(::HIR::BorrowType::Shared, ty_val);
+                    node.m_value = NEWNODE(self_arg_type, Borrow, sp, ::HIR::BorrowType::Shared, mv$(node.m_value));
+                    method_path = ::HIR::Path(ty_val, ::HIR::GenericPath(m_crate.get_lang_item_path(sp, "fn"), mv$(trait_args)), RcString::new_interned("call"), HIR::PathParams(HIR::LifetimeRef()));
                     break;
                 case ::HIR::ExprNode_CallValue::TraitUsed::FnMut:
-                    self_arg_type = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, ty_val.clone());
-                    node.m_value = NEWNODE(self_arg_type.clone(), Borrow, sp, ::HIR::BorrowType::Unique, mv$(node.m_value));
-                    method_path = ::HIR::Path(ty_val.clone(), ::HIR::GenericPath(m_crate.get_lang_item_path(sp, "fn_mut"), mv$(trait_args)), RcString::new_interned("call_mut"), HIR::PathParams(HIR::LifetimeRef()));
+                    self_arg_type = m_crate.m_types.borrow(::HIR::BorrowType::Unique, ty_val);
+                    node.m_value = NEWNODE(self_arg_type, Borrow, sp, ::HIR::BorrowType::Unique, mv$(node.m_value));
+                    method_path = ::HIR::Path(ty_val, ::HIR::GenericPath(m_crate.get_lang_item_path(sp, "fn_mut"), mv$(trait_args)), RcString::new_interned("call_mut"), HIR::PathParams(HIR::LifetimeRef()));
                     break;
                 case ::HIR::ExprNode_CallValue::TraitUsed::FnOnce:
-                    self_arg_type = ty_val.clone();
-                    method_path = ::HIR::Path(ty_val.clone(), ::HIR::GenericPath(m_crate.get_lang_item_path(sp, "fn_once"), mv$(trait_args)), RcString::new_interned("call_once"));
+                    self_arg_type = ty_val;
+                    method_path = ::HIR::Path(ty_val, ::HIR::GenericPath(m_crate.get_lang_item_path(sp, "fn_once"), mv$(trait_args)), RcString::new_interned("call_once"));
                     break;
 
                 //case ::HIR::ExprNode_CallValue::TraitUsed::Unknown:
@@ -151,7 +152,7 @@ namespace {
             ::std::vector<::HIR::ExprNodeP> args;
             args.reserve(2);
             args.push_back(mv$(node.m_value));
-            args.push_back(NEWNODE(arg_tup_type.clone(), Tuple, sp, mv$(node.m_args)));
+            args.push_back(NEWNODE(arg_tup_type, Tuple, sp, mv$(node.m_args)));
 
             m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, mv$(method_path), mv$(args));
 
@@ -159,7 +160,7 @@ namespace {
             auto& arg_types = dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache.m_arg_types;
             arg_types.push_back(mv$(self_arg_type));
             arg_types.push_back(mv$(arg_tup_type));
-            arg_types.push_back(m_replacement->m_res_type.clone());
+            arg_types.push_back(m_replacement->m_res_type);
         }
 
         // ----------
@@ -189,7 +190,7 @@ namespace {
                 return false;
             }
 
-            ::HIR::PathParams trait_params(ty_r.clone());
+            ::HIR::PathParams trait_params(ty_r);
             const auto& trait_path = m_crate.get_lang_item_path(sp, langitem);
             return !m_resolve.find_impl(sp, trait_path, trait_params, ty_l, [&](ImplRef impl, bool) {
                 const auto* trait_impl = impl.m_data.opt_TraitImpl();
@@ -226,7 +227,7 @@ namespace {
 #define _(opname) case ::HIR::ExprNode_Assign::Op::opname
             switch (node.m_op) {
                 _(None)
-                    : ASSERT_BUG(sp, ty_slot == ty_val, "Types must equal for non-operator assignment, " << ty_slot << " != " << ty_val);
+                    : ASSERT_BUG(sp, ty_slot == ty_val || ty_slot->equals_ignoring_regions(ty_val), "Types must equal for non-operator assignment, " << ty_slot << " != " << ty_val);
                 return;
                 _(Shr)
                     : {
@@ -324,19 +325,19 @@ namespace {
             assert(opname);
 
             // Needs replacement, continue
-            ::HIR::GenericPath trait{m_crate.get_lang_item_path(node.span(), langitem), ::HIR::PathParams(ty_val.clone())};
+            ::HIR::GenericPath trait{m_crate.get_lang_item_path(node.span(), langitem), ::HIR::PathParams(ty_val)};
 
-            auto slot_type_refmut = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, ty_slot.clone());
+            auto slot_type_refmut = m_crate.m_types.borrow(::HIR::BorrowType::Unique, ty_slot);
             ::std::vector<::HIR::ExprNodeP> args;
-            args.push_back(NEWNODE(slot_type_refmut.clone(), Borrow, sp, ::HIR::BorrowType::Unique, mv$(node.m_slot)));
+            args.push_back(NEWNODE(slot_type_refmut, Borrow, sp, ::HIR::BorrowType::Unique, mv$(node.m_slot)));
             args.push_back(mv$(node.m_value));
-            m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, ::HIR::Path(ty_slot.clone(), mv$(trait), RcString::new_interned(opname), HIR::PathParams(HIR::LifetimeRef())), mv$(args));
+            m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, ::HIR::Path(ty_slot, mv$(trait), RcString::new_interned(opname), HIR::PathParams(HIR::LifetimeRef())), mv$(args));
 
             // Populate the cache for later passes
             auto& arg_types = dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache.m_arg_types;
             arg_types.push_back(mv$(slot_type_refmut));
-            arg_types.push_back(ty_val.clone());
-            arg_types.push_back(::HIR::TypeRef::new_unit());
+            arg_types.push_back(ty_val);
+            arg_types.push_back(m_crate.m_types.unit());
         }
 
         void visit(::HIR::ExprNode_BinOp& node) override {
@@ -440,8 +441,8 @@ namespace {
 
                 case ::HIR::ExprNode_BinOp::Op::BoolAnd:
                 case ::HIR::ExprNode_BinOp::Op::BoolOr:
-                    ASSERT_BUG(sp, ty_l == ::HIR::TypeRef(::HIR::CoreType::Bool), "&& operator requires bool");
-                    ASSERT_BUG(sp, ty_r == ::HIR::TypeRef(::HIR::CoreType::Bool), "&& operator requires bool");
+                    ASSERT_BUG(sp, ty_l == m_crate.m_types.primitive(::HIR::CoreType::Bool), "&& operator requires bool");
+                    ASSERT_BUG(sp, ty_r == m_crate.m_types.primitive(::HIR::CoreType::Bool), "&& operator requires bool");
                     return;
             }
 
@@ -453,28 +454,28 @@ namespace {
                 // The primitive candidate did not win, so emit a call with
                 // borrowed operands to the selected trait implementation.
                 ::HIR::PathParams trait_params;
-                trait_params.m_types.push_back(ty_r.clone());
+                trait_params.m_types.push_back(ty_r);
                 ::HIR::GenericPath trait{m_crate.get_lang_item_path(node.span(), langitem), mv$(trait_params)};
                 ::HIR::PathParams fcn_params;
                 fcn_params.m_lifetimes.push_back(HIR::LifetimeRef());
                 fcn_params.m_lifetimes.push_back(HIR::LifetimeRef());
 
-                auto ty_l_ref = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, ty_l.clone());
-                auto ty_r_ref = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, ty_r.clone());
+                auto ty_l_ref = m_crate.m_types.borrow(::HIR::BorrowType::Shared, ty_l);
+                auto ty_r_ref = m_crate.m_types.borrow(::HIR::BorrowType::Shared, ty_r);
 
                 ::std::vector<::HIR::ExprNodeP> args;
                 auto sp_left = node.m_left->span();
                 auto sp_right = node.m_right->span();
-                args.push_back(NEWNODE(ty_l_ref.clone(), Borrow, sp_left, ::HIR::BorrowType::Shared, mv$(node.m_left)));
-                args.push_back(NEWNODE(ty_r_ref.clone(), Borrow, sp_right, ::HIR::BorrowType::Shared, mv$(node.m_right)));
+                args.push_back(NEWNODE(ty_l_ref, Borrow, sp_left, ::HIR::BorrowType::Shared, mv$(node.m_left)));
+                args.push_back(NEWNODE(ty_r_ref, Borrow, sp_right, ::HIR::BorrowType::Shared, mv$(node.m_right)));
 
-                m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, ::HIR::Path(ty_l.clone(), mv$(trait), RcString::new_interned(method), mv$(fcn_params)), mv$(args));
+                m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, ::HIR::Path(ty_l, mv$(trait), RcString::new_interned(method), mv$(fcn_params)), mv$(args));
 
                 // Populate the cache for later passes
                 auto& arg_types = dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache.m_arg_types;
                 arg_types.push_back(mv$(ty_l_ref));
                 arg_types.push_back(mv$(ty_r_ref));
-                arg_types.push_back(::HIR::TypeRef(::HIR::CoreType::Bool));
+                arg_types.push_back(m_crate.m_types.primitive(::HIR::CoreType::Bool));
                 return;
             }
 
@@ -483,20 +484,20 @@ namespace {
 
             // Needs replacement, continue
             ::HIR::PathParams trait_params;
-            trait_params.m_types.push_back(ty_r.clone());
+            trait_params.m_types.push_back(ty_r);
             ::HIR::GenericPath trait{m_crate.get_lang_item_path(node.span(), langitem), mv$(trait_params)};
 
             ::std::vector<::HIR::ExprNodeP> args;
             args.push_back(mv$(node.m_left));
             args.push_back(mv$(node.m_right));
 
-            m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, ::HIR::Path(ty_l.clone(), mv$(trait), RcString::new_interned(method)), mv$(args));
+            m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, ::HIR::Path(ty_l, mv$(trait), RcString::new_interned(method)), mv$(args));
 
             // Populate the cache for later passes
             auto& arg_types = dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache.m_arg_types;
-            arg_types.push_back(ty_l.clone());
-            arg_types.push_back(ty_r.clone());
-            arg_types.push_back(m_replacement->m_res_type.clone());
+            arg_types.push_back(ty_l);
+            arg_types.push_back(ty_r);
+            arg_types.push_back(m_replacement->m_res_type);
         }
 
         void visit(::HIR::ExprNode_UniOp& node) override {
@@ -531,12 +532,12 @@ namespace {
             ::std::vector<::HIR::ExprNodeP> args;
             args.push_back(mv$(node.m_value));
 
-            m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, ::HIR::Path(ty_val.clone(), mv$(trait), RcString::new_interned(method)), mv$(args));
+            m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, ::HIR::Path(ty_val, mv$(trait), RcString::new_interned(method)), mv$(args));
 
             // Populate the cache for later passes
             auto& arg_types = dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache.m_arg_types;
-            arg_types.push_back(ty_val.clone());
-            arg_types.push_back(m_replacement->m_res_type.clone());
+            arg_types.push_back(ty_val);
+            arg_types.push_back(m_replacement->m_res_type);
         }
 
         // NOTE: These are now in MIR generation, to handle temporary raising
@@ -708,7 +709,7 @@ namespace {
 
             // HACK: The autoderef code has to run before usage information is avaliable, so emits "invalid" _Unsize nodes
             // - Fix that.
-            if (node.m_value->m_res_type.data().is_Array()) {
+            if (node.m_value->m_res_type->is_Array()) {
                 const Span& sp = node.span();
 
                 ::HIR::BorrowType bt = ::HIR::BorrowType::Shared;
@@ -727,9 +728,9 @@ namespace {
                         break;
                 }
 
-                auto ty_src = ::HIR::TypeRef::new_borrow(bt, node.m_value->m_res_type.clone());
-                auto ty_dst = ::HIR::TypeRef::new_borrow(bt, node.m_res_type.clone());
-                auto ty_dst2 = ty_dst.clone();
+                auto ty_src = m_crate.m_types.borrow(bt, node.m_value->m_res_type);
+                auto ty_dst = m_crate.m_types.borrow(bt, node.m_res_type);
+                auto ty_dst2 = ty_dst;
                 // Borrow
                 node.m_value = NEWNODE(mv$(ty_src), Borrow, sp, bt, mv$(node.m_value));
                 // Unsize borrow
@@ -746,7 +747,8 @@ namespace {
 
     public:
         OuterVisitor(const ::HIR::Crate& crate)
-            : m_crate(crate)
+            : ::HIR::Visitor(nullptr, crate.m_types)
+            , m_crate(crate)
         {
         }
 

@@ -503,12 +503,12 @@ namespace {
                             ::HIR::TypeRef tmp;
                             const auto& ty = mir_res.get_lvalue_type(tmp, lv, /*wrapper_skip_count=*/(1 + &lv.m_wrappers.back() - &w));
                             unsigned int n_fields = 0;
-                            if (const auto* e = ty.data().opt_Tuple()) {
+                            if (const auto* e = ty->opt_Tuple()) {
                                 n_fields = e->size();
                             }
                             // TODO: Fixed-size arrays
-                            else if (ty.data().is_Path() && ty.data().as_Path().binding.is_Struct()) {
-                                const auto& e = ty.data().as_Path().binding.as_Struct();
+                            else if (ty->is_Path() && ty->as_Path().binding.is_Struct()) {
+                                const auto& e = ty->as_Path().binding.as_Struct();
                                 TU_MATCHA((e->m_data), (se), (Unit, n_fields = 0;), (Tuple, n_fields = se.size();), (Named, n_fields = se.size();))
                             } else {
                                 MIR_BUG(mir_res, "Unknown type being accessed with Field " << lv << ": " << ty);

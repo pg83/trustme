@@ -185,6 +185,7 @@ struct Context {
     Context(const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params, const ::HIR::SimplePath& mod_path, const ::HIR::GenericPath* current_trait, const ::HIR::TraitImpl* current_trait_impl)
         : m_crate(crate)
         , m_current_trait_impl(current_trait_impl)
+        , m_ivars(crate.m_types)
         , m_resolve(m_ivars, crate, impl_params, item_params, mod_path, current_trait)
         , next_rule_idx(0)
         , m_lang_Box(crate.get_lang_item_path_opt("owned_box"))
@@ -226,7 +227,7 @@ struct Context {
     bool is_current_native_deref_receiver(const ::HIR::SimplePath& deref_trait, const ::HIR::TypeRef& operand) const {
         const auto* current_trait = m_resolve.current_trait_path();
         const auto& ty = m_ivars.get_type(operand);
-        const auto* borrow = ty.data().opt_Borrow();
+        const auto* borrow = ty->opt_Borrow();
         return m_current_trait_impl
             && current_trait
             && current_trait->m_path == deref_trait
@@ -243,7 +244,7 @@ struct Context {
 
     // - Add a trait bound (gets encoded as an associated type bound)
     void add_trait_bound(const Span& sp, const ::HIR::TypeRef& impl_ty, const ::HIR::SimplePath& trait, ::HIR::PathParams params) {
-        equate_types_assoc(sp, ::HIR::TypeRef(), trait, mv$(params), impl_ty, "", {}, false);
+        equate_types_assoc(sp, m_crate.m_types.infer(), trait, mv$(params), impl_ty, "", {}, false);
     }
 
     /// Get the `possible_ivar_vals` entry for the given ivar index

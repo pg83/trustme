@@ -144,6 +144,11 @@ static inline Ordering ord(const ::std::string& l, const ::std::string& r) {
 }
 
 template <typename T>
+Ordering ord(T* const& l, T* const& r) {
+    return l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess);
+}
+
+template <typename T>
 Ordering ord(const T& l, const T& r) {
     return l.ord(r);
 }

@@ -18,6 +18,7 @@
 
 struct MonomorphState;
 class StaticTraitResolve;
+class MonomorphiserNop;
 
 namespace MIR {
 
@@ -1038,13 +1039,13 @@ namespace MIR {
     };
 
     class Cloner {
+        ::std::unique_ptr<MonomorphiserNop> m_nop;
+
     public:
         const Span& sp;
 
-        Cloner(const Span& sp)
-            : sp(sp)
-        {
-        }
+        Cloner(const Span& sp, HIR::TypeInterner& types);
+        virtual ~Cloner();
 
         virtual ::MIR::BasicBlockId map_bb_idx(::MIR::BasicBlockId idx) const {
             return idx;

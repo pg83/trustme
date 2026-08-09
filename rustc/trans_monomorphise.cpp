@@ -19,7 +19,7 @@ namespace {
 
     public:
         Cloner(const Span& sp, const ::StaticTraitResolve& resolve, const Trans_Params& params)
-            : ::MIR::Cloner(sp)
+            : ::MIR::Cloner(sp, resolve.m_crate.m_types)
             , m_resolve(resolve)
             , params(params)
         {
@@ -115,18 +115,7 @@ void Trans_Monomorphise_List(const ::HIR::Crate& crate, TransList& list, unsigne
 
         ::HIR::Path new_static(::HIR::TypeRef type, EncodedLiteral value) override {
             // Ensure that the type is in enumeration (it should have been, but maybe not?)
-            {
-                bool found = false;
-                for (const auto& v : out.m_types) {
-                    if (v.first == type && !v.second) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    out.m_types.push_back(::std::make_pair(type.clone(), false));
-                }
-            }
+            out.add_type(type, false);
             auto name = RcString::new_interned(FMT("ConstEvalMonomorph#" << count));
             count++;
             auto p = ::HIR::SimplePath(crate.m_crate_name, {name});
@@ -155,8 +144,8 @@ void Trans_Monomorphise_List(const ::HIR::Crate& crate, TransList& list, unsigne
         // 1. Evaluate the constant
         auto eval = ::HIR::Evaluator{pp.sp, crate, nvs};
         eval.resolve.set_both_generics_raw(pp.gdef_impl, &c.m_params);
-        MonomorphState ms;
-        ms.self_ty = pp.self_type.clone();
+        MonomorphState ms(crate.m_types);
+        ms.self_ty = pp.self_type;
         ms.pp_impl = &pp.pp_impl;
         ms.pp_method = &pp.pp_method;
         DEBUG("ms = " << ms);
@@ -184,8 +173,8 @@ void Trans_Monomorphise_List(const ::HIR::Crate& crate, TransList& list, unsigne
         // 1. Evaluate the constant
         auto eval = ::HIR::Evaluator{pp.sp, crate, nvs};
         eval.resolve.set_both_generics_raw(pp.gdef_impl, &s.m_params);
-        MonomorphState ms;
-        ms.self_ty = pp.self_type.clone();
+        MonomorphState ms(crate.m_types);
+        ms.self_ty = pp.self_type;
         ms.pp_impl = &pp.pp_impl;
         ms.pp_method = &pp.pp_method;
         DEBUG("ms = " << ms);
@@ -203,7 +192,7 @@ void Trans_Monomorphise_List(const ::HIR::Crate& crate, TransList& list, unsigne
         const auto& fcn = *fcn_ent.second->ptr;
         // Trait methods (which are the only case where `Self` can exist in the argument list at this stage) always need to be monomorphised.
         bool is_method = (fcn.m_args.size() > 0 && visit_ty_with(fcn.m_args[0].second, [&](const auto& x) {
-            return x == ::HIR::TypeRef::new_self();
+            return x == crate.m_types.self();
         }));
         bool monomorph_needed = fcn_ent.second->pp.has_types() || is_method;
 
@@ -249,7 +238,7 @@ void Trans_Monomorphise_List(const ::HIR::Crate& crate, TransList& list, unsigne
     }
 
     for (auto& v : nvs.added) {
-        auto* o = list.add_static(HIR::Path(v.first));
+        auto* o = list.add_static(crate.m_types, HIR::Path(v.first));
         ASSERT_BUG(Span(), o, "Generated static " << v.first << " already in TransList?");
         o->ptr = v.second;
     }

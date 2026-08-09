@@ -70,7 +70,8 @@ namespace {
 
     public:
         Visitor(::HIR::Crate& crate)
-            : crate(crate)
+            : ::HIR::Visitor(nullptr, crate.m_types)
+            , crate(crate)
             , m_resolve(crate)
         {
         }
@@ -180,7 +181,7 @@ namespace {
         }
 #endif
         void check_parameters(const Span& sp, const ::HIR::GenericParams& param_def, ::HIR::PathParams& param_vals) {
-            MonomorphStatePtr ms(m_self_types.empty() ? nullptr : m_self_types.back(), &param_vals, nullptr);
+            MonomorphStatePtr ms(crate.m_types, m_self_types.empty() ? nullptr : m_self_types.back(), &param_vals, nullptr);
 
             if (param_vals.m_lifetimes.size() == 0) {
                 param_vals.m_lifetimes.resize(param_def.m_lifetimes.size());
@@ -192,7 +193,7 @@ namespace {
             while (param_vals.m_types.size() < param_def.m_types.size()) {
                 unsigned int i = param_vals.m_types.size();
                 const auto& ty_def = param_def.m_types[i];
-                if (ty_def.m_default.data().is_Infer()) {
+                if (ty_def.m_default->is_Infer()) {
                     ERROR(sp, E0000, "Unspecified parameter with no default - " << param_def.fmt_args() << " with " << param_vals);
                 }
 
@@ -283,33 +284,63 @@ namespace {
             static Span _sp;
             const Span& sp = _sp;
 
+            assert(ty);
+            auto data = ty->clone_data();
+
             // Lifetime elision logic!
-            if (auto* e = ty.data_mut().opt_Borrow()) {
+            if (auto* e = data.opt_Borrow()) {
                 visit_lifetime(sp, e->lifetime);
                 m_current_lifetime.push_back(&e->lifetime);
             }
 
-            auto self = ::HIR::TypeRef::new_self();
-            if (ty.data().is_ErasedType()) {
+            auto self = crate.m_types.self();
+            if (data.is_ErasedType()) {
                 m_self_types.push_back(&self);
             }
 
             auto saved_params = std::make_pair(m_cur_params, m_cur_params_level);
-            if (auto* e = ty.data_mut().opt_Function()) {
+            if (auto* e = data.opt_Function()) {
                 m_cur_params = &e->hrls;
                 m_cur_params_level = 3;
             }
 
-            ::HIR::Visitor::visit_type(ty);
+            TU_MATCH_HDRA((data), {)
+            TU_ARMA(Infer, e) {}
+            TU_ARMA(Diverge, e) {}
+            TU_ARMA(Primitive, e) {}
+            TU_ARMA(Generic, e) {}
+            TU_ARMA(Path, e) this->visit_path(e.path, ::HIR::Visitor::PathContext::TYPE);
+            TU_ARMA(TraitObject, e) {
+                if (e.m_trait.m_path != ::HIR::SimplePath()) this->visit_trait_path(e.m_trait);
+                for (auto& marker : e.m_markers) this->visit_generic_path(marker, ::HIR::Visitor::PathContext::TYPE);
+            }
+            TU_ARMA(ErasedType, e) {
+                TU_MATCH_HDRA((e.m_inner), {)
+                TU_ARMA(Known, inner) this->visit_type(inner);
+                TU_ARMA(Alias, inner) this->visit_path_params(inner.params);
+                TU_ARMA(Fcn, inner) if (inner.m_origin != ::HIR::SimplePath()) this->visit_path(inner.m_origin, ::HIR::Visitor::PathContext::VALUE);
+                }
+                this->visit_path_params(e.m_use);
+                for (auto& trait : e.m_traits) this->visit_trait_path(trait);
+            }
+            TU_ARMA(Array, e) { this->visit_type(e.inner); if (auto* size = e.size.opt_Unevaluated()) this->visit_constgeneric(*size); }
+            TU_ARMA(Slice, e) this->visit_type(e.inner);
+            TU_ARMA(Tuple, e) for (auto& inner : e) this->visit_type(inner);
+            TU_ARMA(Borrow, e) this->visit_type(e.inner);
+            TU_ARMA(Pointer, e) this->visit_type(e.inner);
+            TU_ARMA(NamedFunction, e) this->visit_path(e.path, ::HIR::Visitor::PathContext::VALUE);
+            TU_ARMA(Function, e) { for (auto& arg : e.m_arg_types) this->visit_type(arg); this->visit_type(e.m_rettype); }
+            TU_ARMA(NodeType, e) {}
+            }
 
             m_cur_params = saved_params.first;
             m_cur_params_level = saved_params.second;
 
-            if (ty.data().is_ErasedType()) {
+            if (data.is_ErasedType()) {
                 m_self_types.pop_back();
             }
 
-            if (/*const auto* e =*/ty.data().opt_Borrow()) {
+            if (data.is_Borrow()) {
                 m_current_lifetime.pop_back();
             }
 
@@ -326,19 +357,18 @@ namespace {
             }
 #endif
 
-            if (auto* e = ty.data().opt_Path()) {
-                TU_MATCH(::HIR::Path::Data, (e->path.m_data), (pe), (Generic, ), (UfcsUnknown, TODO(sp, "Should UfcsKnown be encountered here?");), (UfcsInherent, TODO(sp, "Locate impl block for UFCS Inherent");), (UfcsKnown, TRACE_FUNCTION_FR("UfcsKnown - " << ty, ty); m_resolve.expand_associated_types(sp, ty);))
-            }
-
-            if (auto* e = ty.data_mut().opt_TraitObject()) {
+            if (auto* e = data.opt_TraitObject()) {
                 visit_lifetime(sp, e->m_lifetime);
             }
 
-            // If an ErasedType is encountered, check if it has an origin set.
-            if (auto* e = ty.data_mut().opt_ErasedType()) {
-                for (auto& lft : e->m_lifetime_bounds) {
-                    visit_lifetime(sp, lft);
-                }
+            if (auto* e = data.opt_ErasedType()) {
+                for (auto& lft : e->m_lifetime_bounds) visit_lifetime(sp, lft);
+            }
+
+            ty = crate.m_types.intern(mv$(data));
+
+            if (const auto* e = ty->opt_Path()) {
+                TU_MATCH(::HIR::Path::Data, (e->path.m_data), (pe), (Generic, ), (UfcsUnknown, TODO(sp, "Should UfcsKnown be encountered here?");), (UfcsInherent, TODO(sp, "Locate impl block for UFCS Inherent");), (UfcsKnown, TRACE_FUNCTION_FR("UfcsKnown - " << ty, ty); m_resolve.expand_associated_types(sp, ty);))
             }
         }
 
@@ -442,10 +472,10 @@ namespace {
             return false;
         }
 
-        static ::HIR::GenericPath make_generic_path(::HIR::SimplePath sp, const ::HIR::Trait& trait) {
+        ::HIR::GenericPath make_generic_path(::HIR::SimplePath sp, const ::HIR::Trait& trait) {
             auto trait_path_g = ::HIR::GenericPath(mv$(sp));
             for (unsigned int i = 0; i < trait.m_params.m_types.size(); i++) {
-                trait_path_g.m_params.m_types.push_back(::HIR::TypeRef(trait.m_params.m_types[i].m_name, i));
+                trait_path_g.m_params.m_types.push_back(crate.m_types.generic(trait.m_params.m_types[i].m_name, i));
             }
             return trait_path_g;
         }
@@ -455,7 +485,7 @@ namespace {
             assert(m_current_trait);
             auto trait_path = ::HIR::GenericPath(m_current_trait_path->get_simple_path());
             for (unsigned int i = 0; i < m_current_trait->m_params.m_types.size(); i++) {
-                trait_path.m_params.m_types.push_back(::HIR::TypeRef(m_current_trait->m_params.m_types[i].m_name, i));
+                trait_path.m_params.m_types.push_back(crate.m_types.generic(m_current_trait->m_params.m_types[i].m_name, i));
             }
             return trait_path;
         }
@@ -475,7 +505,7 @@ namespace {
                 return;
             }
 
-            if (const auto* te = e.type.data().opt_Generic()) {
+            if (const auto* te = e.type->opt_Generic()) {
                 // If processing a trait, and the type is 'Self', search for the type/method on the trait
                 // - TODO: This could be encoded by a `Self: Trait` bound in the generics, but that may have knock-on issues?
                 if (te->name == "Self" && m_current_trait) {
@@ -532,7 +562,7 @@ namespace {
 
                     auto trait_path = ::HIR::GenericPath(*trait_info.first);
                     for (unsigned int i = 0; i < trait.m_params.m_types.size(); i++) {
-                        trait_path.m_params.m_types.push_back(::HIR::TypeRef());
+                        trait_path.m_params.m_types.push_back(crate.m_types.infer());
                     }
 
                     // TODO: Search supertraits
@@ -613,7 +643,7 @@ namespace {
             m_current_trait_path = &p;
 
             auto _ = m_resolve.set_impl_generics(MetadataType::TraitObject, item.m_params);
-            auto self = ::HIR::TypeRef::new_self();
+            auto self = crate.m_types.self();
             m_self_types.push_back(&self);
             ::HIR::Visitor::visit_trait(p, item);
             m_self_types.pop_back();
@@ -638,8 +668,8 @@ namespace {
 
         void visit_associatedtype(::HIR::ItemPath p, ::HIR::AssociatedType& item) override {
             // Push `Self = <Self as CurTrait>::Type` for processing defaults in the bounds.
-            auto path_aty = ::HIR::Path(::HIR::TypeRef::new_self(), this->get_current_trait_gp(), p.get_name());
-            auto ty_aty = ::HIR::TypeRef::new_path(mv$(path_aty), ::HIR::TypePathBinding::make_Opaque({}));
+            auto path_aty = ::HIR::Path(crate.m_types.self(), this->get_current_trait_gp(), p.get_name());
+            auto ty_aty = crate.m_types.path(mv$(path_aty), ::HIR::TypePathBinding::make_Opaque({}));
             m_self_types.push_back(&ty_aty);
 
             ::HIR::Visitor::visit_associatedtype(p, item);
@@ -656,8 +686,8 @@ namespace {
 
             // https://rust-lang.github.io/rfcs/2089-implied-bounds.html ?
             // HACK: Just grab the lifetime bounds from a path type
-            if (ty.data().is_Path() && ty.data().as_Path().path.m_data.is_Generic()) {
-                const auto& gp = ty.data().as_Path().path.m_data.as_Generic();
+            if (ty->is_Path() && ty->as_Path().path.m_data.is_Generic()) {
+                const auto& gp = ty->as_Path().path.m_data.as_Generic();
                 const auto& ti = m_resolve.m_crate.get_typeitem_by_path(sp, gp.m_path);
 
                 const HIR::GenericParams* params = nullptr;
@@ -672,7 +702,7 @@ namespace {
                 }
 
                 if (params) {
-                    MonomorphStatePtr ms(nullptr, &gp.m_params, nullptr);
+                    MonomorphStatePtr ms(crate.m_types, nullptr, &gp.m_params, nullptr);
                     for (const auto& b : params->m_bounds) {
                         if (const auto* be = b.opt_Lifetime()) {
                             dst.m_bounds.push_back(HIR::GenericBound::make_Lifetime({ms.monomorph_lifetime(sp, be->test), ms.monomorph_lifetime(sp, be->valid_for)}));
@@ -739,8 +769,8 @@ namespace {
                     auto& impl_fcn = e.second.data;
                     const auto& trait_fcn = v_it->second.as_Function();
 
-                    auto fcn_params = trait_fcn.m_params.make_nop_params(1);
-                    MonomorphStatePtr ms{&impl.m_type, &impl.m_trait_args, &fcn_params};
+                    auto fcn_params = trait_fcn.m_params.make_nop_params(crate.m_types, 1);
+                    MonomorphStatePtr ms{crate.m_types, &impl.m_type, &impl.m_trait_args, &fcn_params};
                     HIR::TypeRef tmp;
                     auto maybe_monomorph = [&](const HIR::TypeRef& ty) -> const HIR::TypeRef& {
                         if (monomorphise_type_needed(ty)) {
@@ -798,7 +828,7 @@ namespace {
                             const auto& exp_ty = maybe_monomorph(trait_fcn.m_args[i].second);
                             /*const*/ auto& has_ty = impl_fcn.m_args[i].second;
 
-                            if (exp_ty != has_ty) {
+                            if (exp_ty != has_ty && !exp_ty->equals_ignoring_regions(has_ty)) {
                                 failures.push_back(FMT("Argument " << 1 + i << " mismatch - expected " << exp_ty << ", got " << has_ty));
                             }
                         }
@@ -813,7 +843,7 @@ namespace {
                         ::HIR::Compare cmp_type(const Span& sp, const ::HIR::TypeRef& ty_l, const ::HIR::TypeRef& ty_r, HIR::t_cb_resolve_type resolve_cb) override {
                             // If the LHS is an ATY that starts with `erased#` then just accept it?
                             // - Also record the mapping
-                            if (const auto* ty_p = ty_l.data().opt_Path()) {
+                            if (const auto* ty_p = ty_l->opt_Path()) {
                                 if (const auto* path_p = ty_p->path.m_data.opt_UfcsKnown()) {
                                     if (path_p->item.compare(0, strlen(ATY_PREFIX_ERASED), ATY_PREFIX_ERASED) == 0) {
                                         mapping.insert(std::make_pair(path_p->item, &ty_r));
@@ -825,7 +855,7 @@ namespace {
                         }
 
                         ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeRef& ty, HIR::t_cb_resolve_type resolve_cb) override {
-                            return (!ty.data().is_Generic() || ty.data().as_Generic() != g) ? ::HIR::Compare::Unequal : ::HIR::Compare::Equal;
+                            return (!ty->is_Generic() || ty->as_Generic() != g) ? ::HIR::Compare::Unequal : ::HIR::Compare::Equal;
                         }
 
                         ::HIR::Compare match_val(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) override {
@@ -834,7 +864,7 @@ namespace {
                     } match_cb;
 
                     const auto& exp_ret_ty1 = maybe_monomorph(trait_fcn.m_return);
-                    if (!exp_ret_ty1.match_test_generics(sp, impl_fcn.m_return, HIR::ResolvePlaceholdersNop(), match_cb)) {
+                    if (!exp_ret_ty1->match_test_generics(sp, impl_fcn.m_return, HIR::ResolvePlaceholdersNop(), match_cb)) {
                         failures.push_back(
                             FMT("Mismatched return type:\n"
                                 << "  Expected " << exp_ret_ty1 << "\n"
@@ -842,12 +872,12 @@ namespace {
                         );
                     }
                     HIR::TypeRef exp_ret_ty_real;
-                    const auto& exp_ret_ty = match_cb.mapping.empty() ? exp_ret_ty1 : (exp_ret_ty_real = clone_ty_with(sp, exp_ret_ty1, [&](const ::HIR::TypeRef& ref, ::HIR::TypeRef& out) -> bool {
-                        if (const auto* ty_p = ref.data().opt_Path()) {
+                    const auto& exp_ret_ty = match_cb.mapping.empty() ? exp_ret_ty1 : (exp_ret_ty_real = clone_ty_with(crate.m_types, sp, exp_ret_ty1, [&](const ::HIR::TypeRef& ref, ::HIR::TypeRef& out) -> bool {
+                        if (const auto* ty_p = ref->opt_Path()) {
                             if (const auto* path_p = ty_p->path.m_data.opt_UfcsKnown()) {
                                 auto it = match_cb.mapping.find(path_p->item);
                                 if (it != match_cb.mapping.end()) {
-                                    out = it->second->clone();
+                                    out = *it->second;
                                     return true;
                                 }
                             }
@@ -931,7 +961,7 @@ namespace {
 
                     // HACK: Clone the expected type, so the lifetimes match.
                     DEBUG("Updating < " << impl.m_type << " as " << trait_path << impl.m_trait_args << " >::" << e.first);
-                    impl_fcn.m_return = exp_ret_ty.clone();
+                    impl_fcn.m_return = exp_ret_ty;
                     for (size_t i = 0; i < std::min(impl_fcn.m_args.size(), trait_fcn.m_args.size()); i++) {
                         DEBUG("ARG" << i << "> " << trait_fcn.m_args[i].second);
                         impl_fcn.m_args[i].second = m_resolve.monomorph_expand(sp, trait_fcn.m_args[i].second, ms);
@@ -1024,7 +1054,7 @@ namespace {
             // - Try `&self`'s lifetime (if it was an elided lifetime)
             HIR::LifetimeRef elided_output_lifetime;
             if (item.m_receiver != HIR::Function::Receiver::Free) {
-                if (const auto* b = item.m_args[0].second.data().opt_Borrow()) {
+                if (const auto* b = item.m_args[0].second->opt_Borrow()) {
                     // If this was an elided lifetime.
                     if (b->lifetime.is_param() && (b->lifetime.binding >> 8) == 1 && (b->lifetime.binding & 0xFF) > first_elided_lifetime_idx) {
                         elided_output_lifetime = b->lifetime;
@@ -1059,7 +1089,8 @@ namespace {
             assert(m_current_lifetime.empty());
 
             if (item.m_receiver == HIR::Function::Receiver::Custom) {
-                this->visit_type(item.m_receiver_type);
+                ASSERT_BUG(Span(), item.m_receiver_type, "Custom receiver without a receiver type");
+                this->visit_type(*item.m_receiver_type);
             }
             ::HIR::Visitor::visit_function(p, item);
         }

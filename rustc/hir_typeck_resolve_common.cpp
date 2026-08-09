@@ -26,11 +26,11 @@ void TraitResolveCommon::prep_indexes(const Span& sp) {
         default:
             break;
             TU_ARMA(TraitBound, be) {
-                this->prep_indexes__add_trait_bound(sp, be.hrtbs.get(), be.type.clone(), be.trait.clone());
+                this->prep_indexes__add_trait_bound(sp, be.hrtbs.get(), be.type, be.trait.clone());
             }
             TU_ARMA(TypeEquality, be) {
                 DEBUG("Equality - " << be.type << " = " << be.other_type);
-                this->prep_indexes__add_equality(sp, nullptr, be.type.clone(), be.other_type.clone());
+                this->prep_indexes__add_equality(sp, nullptr, be.type, be.other_type);
             }
         }
         return false;
@@ -55,13 +55,18 @@ void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::H
     TRACE_FUNCTION_F(FMT_CB(os, if (outer_hrtbs) os << "for" << outer_hrtbs->fmt_args() << " ";) << type << " : " << trait_path);
 
     auto get_or_add_trait_bound = [&](const HIR::GenericParams* hrbs, const HIR::GenericPath& trait_path) -> CachedBound& {
-        auto it = m_trait_bounds.find(std::make_pair(std::ref(type), std::ref(trait_path)));
+        auto it = ::std::find_if(m_trait_bounds.begin(), m_trait_bounds.end(), [&](const auto& entry) {
+            const auto& bound_type = entry.first.first;
+            const auto& bound_trait = entry.first.second;
+            return (bound_type == type || bound_type->equals_ignoring_regions(type))
+                && bound_trait.equals_ignoring_regions(trait_path);
+        });
         if (it != m_trait_bounds.end()) {
             DEBUG("[get_or_add_trait_bound] Existing " << FMT_CB(os, if (hrbs) os << "for" << hrbs->fmt_args() << " ";) << trait_path);
             return it->second;
         }
         DEBUG("[get_or_add_trait_bound] Add " << FMT_CB(os, if (outer_hrtbs) os << "for" << outer_hrtbs->fmt_args() << " ";) << " ?: " << FMT_CB(os, if (hrbs) os << "for" << hrbs->fmt_args() << " ";) << trait_path);
-        auto& rv = m_trait_bounds[std::make_pair(type.clone(), trait_path.clone())];
+        auto& rv = m_trait_bounds[std::make_pair(type, trait_path.clone())];
         if (outer_hrtbs && !outer_hrtbs->is_empty()) {
             rv.hrbs = outer_hrtbs->clone();
         }
@@ -77,7 +82,7 @@ void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::H
     };
 
     auto& trait_params = trait_path.m_path.m_params;
-    auto monomorph = MonomorphStatePtr(&type, &trait_params, nullptr);
+    auto monomorph = MonomorphStatePtr(m_crate.m_types, &type, &trait_params, nullptr);
 
     const auto& trait = m_crate.get_trait_by_path(sp, trait_path.m_path.m_path);
 #if 1
@@ -92,8 +97,8 @@ void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::H
         DEBUG("Equality (TB) - <" << type << " as " << tb.second.source_trait << ">::" << tb.first << " = " << tb.second);
         push_type(tb.first, trait_path.m_hrtbs.get(), tb.second);
 
-        auto ty_l = ::HIR::TypeRef::new_path(::HIR::Path(type.clone(), tb.second.source_trait.clone(), tb.first), ::HIR::TypePathBinding::make_Opaque({}));
-        prep_indexes__add_equality(sp, trait_path.m_hrtbs.get(), mv$(ty_l), tb.second.type.clone());
+        auto ty_l = m_crate.m_types.path(::HIR::Path(type, tb.second.source_trait.clone(), tb.first), ::HIR::TypePathBinding::make_Opaque({}));
+        prep_indexes__add_equality(sp, trait_path.m_hrtbs.get(), ty_l, tb.second.type);
     }
 
     if (trait_path.m_hrtbs && !trait_path.m_hrtbs->is_empty()) {
@@ -106,7 +111,7 @@ void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::H
     // ATY Trait bounds
     for (const auto& tb : trait_path.m_trait_bounds) {
         for (const auto& trait : tb.second.traits) {
-            auto ty_l = ::HIR::TypeRef::new_path(::HIR::Path(type.clone(), tb.second.source_trait.clone(), tb.first), ::HIR::TypePathBinding::make_Opaque({}));
+            auto ty_l = m_crate.m_types.path(::HIR::Path(type, tb.second.source_trait.clone(), tb.first), ::HIR::TypePathBinding::make_Opaque({}));
             DEBUG("Bound (TB) - <" << type << " as " << tb.second.source_trait << ">::" << tb.first << " : " << trait);
             prep_indexes__add_trait_bound(sp, outer_hrtbs, std::move(ty_l), trait.clone());
         }
@@ -122,12 +127,12 @@ void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::H
             continue;
         }
         ASSERT_BUG(sp, !a_ty.second.m_generics.is_generic(), "prep_indexes__add_trait_bound: Handle type generic ATYs - " << a_ty.first << a_ty.second.m_generics.fmt_args() << " in " << trait_path);
-        auto ty_a = ::HIR::TypeRef::new_path(
+        auto ty_a = m_crate.m_types.path(
             // TODO: Empty params works for now, as there's no type generics (yet)
-            ::HIR::Path(type.clone(), trait_path.m_path.clone(), a_ty.first, a_ty.second.m_generics.make_empty_params(true)),
+            ::HIR::Path(type, trait_path.m_path.clone(), a_ty.first, a_ty.second.m_generics.make_empty_params(true)),
             ::HIR::TypePathBinding::make_Opaque({})
         );
-        monomorph.pp_method = &ty_a.data().as_Path().path.m_data.as_UfcsKnown().params;
+        monomorph.pp_method = &ty_a->as_Path().path.m_data.as_UfcsKnown().params;
 
         for (const auto& a_ty_b : a_ty.second.m_trait_bounds) {
             DEBUG("(Assoc) " << a_ty_b);
@@ -135,7 +140,7 @@ void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::H
             for (auto& tb : trait_mono.m_type_bounds) {
                 DEBUG("Equality (ATB) - <" << ty_a << " as " << tb.second.source_trait << ">::" << tb.first << " = " << tb.second);
 
-                auto ty_l = ::HIR::TypeRef::new_path(::HIR::Path(ty_a.clone(), tb.second.source_trait.clone(), tb.first, tb.second.aty_params.clone()), ::HIR::TypePathBinding::make_Opaque({}));
+                auto ty_l = m_crate.m_types.path(::HIR::Path(ty_a, tb.second.source_trait.clone(), tb.first, tb.second.aty_params.clone()), ::HIR::TypePathBinding::make_Opaque({}));
 
                 if (outer_hrtbs && outer_hrtbs->is_empty()) {
                     outer_hrtbs = nullptr;
@@ -155,7 +160,7 @@ void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::H
 
     for (const auto& st : trait.m_all_parent_traits) {
         DEBUG("(Parent) " << st);
-        prep_indexes__add_trait_bound(sp, outer_hrtbs, type.clone(), monomorph.monomorph_traitpath(sp, st, false), /*add_parents*/ false);
+        prep_indexes__add_trait_bound(sp, outer_hrtbs, type, monomorph.monomorph_traitpath(sp, st, false), /*add_parents*/ false);
     }
 }
 

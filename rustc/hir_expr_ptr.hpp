@@ -19,7 +19,8 @@ namespace stl {
 
 namespace HIR {
 
-    class TypeRef;
+    class TypeData;
+    using TypeRef = const TypeData*;
     class ExprNode;
     class Crate;
     class ExprState;

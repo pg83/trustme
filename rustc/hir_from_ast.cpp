@@ -39,10 +39,6 @@ RcString g_crate_name;
 ::HIR::Crate* g_crate_ptr = nullptr;
 const ::AST::Crate* g_ast_crate_ptr;
 
-namespace {
-    const ::HIR::TypeRef ty_Self = HIR::TypeRef::new_self();
-}
-
 // --------------------------------------------------------------------
 HIR::LifetimeRef LowerHIR_LifetimeRef(const ::AST::LifetimeRef& r) {
     assert(r.binding() >= 0xFFF0 || r.binding() < 1024);
@@ -106,7 +102,7 @@ HIR::LifetimeRef LowerHIR_LifetimeRef(const ::AST::LifetimeRef& r) {
 
                 // 1.90 added some traits that imply ?Sized
                 if (bound_trait_path.m_path.m_path == path_PointeeSized || bound_trait_path.m_path.m_path == path_MetadataSized) {
-                    if (const auto* ge = type.data().opt_Generic()) {
+                    if (const auto* ge = type->opt_Generic()) {
                         if (ge->binding == GENERIC_Self) {
                             *self_is_sized = false;
                         } else {
@@ -117,7 +113,7 @@ HIR::LifetimeRef LowerHIR_LifetimeRef(const ::AST::LifetimeRef& r) {
                     }
                 }
 
-                rv.m_bounds.push_back(::HIR::GenericBound::make_TraitBound({box$(LowerHIR_HigherRankedBounds(e.outer_hrbs)), type.clone(), mv$(bound_trait_path)}));
+                rv.m_bounds.push_back(::HIR::GenericBound::make_TraitBound({box$(LowerHIR_HigherRankedBounds(e.outer_hrbs)), type, mv$(bound_trait_path)}));
 
                 for (auto& bound : tp_bounds) {
                     const auto& name = bound.first;
@@ -131,18 +127,17 @@ HIR::LifetimeRef LowerHIR_LifetimeRef(const ::AST::LifetimeRef& r) {
                         if (!e.inner_hrbs.empty()) {
                             hrls = box$(LowerHIR_HigherRankedBounds(e.inner_hrbs));
                         }
-                        rv.m_bounds.push_back(::HIR::GenericBound::make_TraitBound({std::move(hrls), ::HIR::TypeRef::new_path(::HIR::Path(type.clone(), src_trait.clone(), name, params.clone()), {}), std::move(trait)}));
+                        rv.m_bounds.push_back(::HIR::GenericBound::make_TraitBound({std::move(hrls), g_crate_ptr->m_types.path(::HIR::Path(type, src_trait.clone(), name, params.clone()), {}), std::move(trait)}));
                     }
                     bound.second.traits.clear();
                 }
             }
             TU_ARMA(MaybeTrait, e) {
                 auto type = LowerHIR_Type(e.type);
-                if (!type.data().is_Generic()) {
+                if (!type->is_Generic()) {
                     BUG(bound.span, "MaybeTrait on non-param - " << type);
                 }
-                const auto& ge = type.data().as_Generic();
-                const auto& param_name = ge.name;
+                const auto& ge = type->as_Generic();
                 unsigned param_idx;
                 if (ge.binding == 0xFFFF) {
                     if (!self_is_sized) {
@@ -150,11 +145,9 @@ HIR::LifetimeRef LowerHIR_LifetimeRef(const ::AST::LifetimeRef& r) {
                     }
                     param_idx = 0xFFFF;
                 } else {
-                    param_idx = ::std::find_if(rv.m_types.begin(), rv.m_types.end(), [&](const auto& x) {
-                        return x.m_name == param_name;
-                    }) - rv.m_types.begin();
+                    param_idx = ge.idx();
                     if (param_idx >= rv.m_types.size()) {
-                        BUG(bound.span, "MaybeTrait on parameter not in parameter list (#" << ge.binding << " " << param_name << ")");
+                        BUG(bound.span, "MaybeTrait on parameter not in parameter list (#" << ge.binding << ")");
                     }
                 }
 
@@ -188,7 +181,7 @@ HIR::LifetimeRef LowerHIR_LifetimeRef(const ::AST::LifetimeRef& r) {
     if (const auto* be = path.m_bindings.type.binding.opt_TypeParameter()) {
         if (be->slot == GENERIC_Self) {
             // HACK: Return `<Self>::` (to be expanded later on)
-            return ::HIR::Path(HIR::TypeRef::new_self(), "");
+            return ::HIR::Path(g_crate_ptr->m_types.self(), "");
         }
     }
     return LowerHIR_Path(sp, path, pc);
@@ -622,7 +615,8 @@ namespace {
             if (it != trait.m_types.end()) {
                 return ms.monomorph_genericpath(sp, path, /*allow_infer=*/false);
             }
-            auto cb = MonomorphStatePtr(&ty_Self, &path.m_params, nullptr);
+            auto self_ty = g_crate_ptr->m_types.self();
+            auto cb = MonomorphStatePtr(g_crate_ptr->m_types, &self_ty, &path.m_params, nullptr);
             for (const auto& st : trait.m_all_parent_traits) {
                 // NOTE: st.m_trait_ptr isn't populated yet
                 const auto& t = g_crate_ptr->get_trait_by_path(sp, st.m_path.m_path);
@@ -645,7 +639,8 @@ namespace {
                 }
             }
 
-            auto cb = MonomorphStatePtr(&ty_Self, &path.m_params, nullptr);
+            auto self_ty = g_crate_ptr->m_types.self();
+            auto cb = MonomorphStatePtr(g_crate_ptr->m_types, &self_ty, &path.m_params, nullptr);
             for (const auto& st : trait.supertraits()) {
                 auto b = LowerHIR_TraitPath(sp, *st.ent.path, st.ent.hrbs, true);
                 ASSERT_BUG(sp, st.ent.path->m_bindings.type.binding.is_Trait(), "Not a trait: " << *st.ent.path);
@@ -676,14 +671,16 @@ namespace {
                     for (const auto& sub_trait : pbe.hir->m_traits) {
                         auto p = ms.monomorph_genericpath(sp, sub_trait.m_path);
                         const auto& t = g_crate_ptr->get_trait_by_path(sp, p.m_path);
-                        auto rv = find_source_trait_hir(sp, p, t, name, MonomorphStatePtr(&ty_Self, &p.m_params, nullptr));
+                        auto self_ty = g_crate_ptr->m_types.self();
+                        auto rv = find_source_trait_hir(sp, p, t, name, MonomorphStatePtr(g_crate_ptr->m_types, &self_ty, &p.m_params, nullptr));
                         if (rv != HIR::GenericPath()) {
                             return rv;
                         }
                     }
                     return HIR::GenericPath();
                 } else if (pbe.trait_) {
-                    auto cb = MonomorphStatePtr(&ty_Self, &path.m_params, nullptr);
+                    auto self_ty = g_crate_ptr->m_types.self();
+                    auto cb = MonomorphStatePtr(g_crate_ptr->m_types, &self_ty, &path.m_params, nullptr);
                     for (const auto& st : pbe.trait_->traits) {
                         auto b = LowerHIR_TraitPath(sp, *st.ent.path, st.ent.hrbs, true);
                         auto rv = H::find_source_trait(sp, b.m_path, st.ent.path->m_bindings.type.binding, name, cb);
@@ -722,7 +719,7 @@ namespace {
             }
             TU_ARMA(AssociatedTyEqual, assoc) {
                 auto name_args = H::get_aty_node(sp, assoc.first);
-                auto src_trait = H::find_source_trait(sp, rv.m_path, path.m_bindings.type.binding, name_args.first, MonomorphiserNop());
+                auto src_trait = H::find_source_trait(sp, rv.m_path, path.m_bindings.type.binding, name_args.first, MonomorphiserNop(g_crate_ptr->m_types));
                 DEBUG("src_trait = " << src_trait << " for " << assoc.first);
                 rv.m_type_bounds.insert(::std::make_pair(name_args.first, ::HIR::TraitPath::AtyEqual{std::move(src_trait), std::move(name_args.second), LowerHIR_Type(assoc.second)}));
             }
@@ -731,7 +728,7 @@ namespace {
                     ERROR(sp, E0000, "Associated type trait bounds not allowed here - " << path);
                 } else {
                     auto name_args = H::get_aty_node(sp, assoc.first);
-                    auto src_trait = H::find_source_trait(sp, rv.m_path, path.m_bindings.type.binding, name_args.first, MonomorphiserNop());
+                    auto src_trait = H::find_source_trait(sp, rv.m_path, path.m_bindings.type.binding, name_args.first, MonomorphiserNop(g_crate_ptr->m_types));
                     DEBUG("src_trait = " << src_trait << " for " << assoc.first);
                     //if(src_trait == ::HIR::GenericPath())
                     //    ERROR(sp, E0000, "Unable to find source trait for " << b->first << " in " << bound_trait_path.m_path);
@@ -773,8 +770,8 @@ namespace {
                     TODO(sp, "Handle UFCS w/ trait and no nodes - " << path);
                 }
                 auto type = LowerHIR_Type(*e.type);
-                ASSERT_BUG(sp, type.data().is_Path(), "No nodes and non-Path type - " << path);
-                return mv$(type.get_unique().as_Path().path);
+                ASSERT_BUG(sp, type->is_Path(), "No nodes and non-Path type - " << path);
+                return type->as_Path().path.clone();
             }
             if (e.nodes.size() > 1) {
                 TODO(sp, "Handle UFCS with multiple nodes - " << path);
@@ -784,7 +781,7 @@ namespace {
             /*if( ! e.trait )
         {
             auto type = LowerHIR_Type(*e.type);
-            if( type.data().is_Generic() ) {
+            if( type->is_Generic() ) {
                 BUG(sp, "Generics can't be used with UfcsInherent - " << path);
             }
             return ::HIR::Path(::HIR::Path::Data::make_UfcsInherent({
@@ -844,7 +841,7 @@ namespace {
                     static_cast<uint16_t>(m_active_hrtbs.size() + i)).binding;
                 shifted.m_lifetimes.push_back(::HIR::LifetimeRef(binding));
             }
-            return MonomorphHrlsOnly(shifted).monomorph_traitpath(m_span, trait, false, true);
+            return MonomorphHrlsOnly(g_crate_ptr->m_types, shifted).monomorph_traitpath(m_span, trait, false, true);
         }
 
         void attach_active_hrtbs(::HIR::TraitPath& trait) const {
@@ -977,8 +974,8 @@ namespace {
             if (binding.trait_) {
                 bool trait_requires_sized = false;
                 auto params_def = LowerHIR_GenericParams(binding.trait_->params, &trait_requires_sized);
-                auto params = ConvertHIR_CompleteAliasParams(m_span, params_def, alias_path.m_path, false);
-                auto monomorph = MonomorphStatePtr(nullptr, &params, nullptr);
+                auto params = ConvertHIR_CompleteAliasParams(g_crate_ptr->m_types, m_span, params_def, alias_path.m_path, false);
+                auto monomorph = MonomorphStatePtr(g_crate_ptr->m_types, nullptr, &params, nullptr);
                 for (const auto& bound : binding.trait_->traits) {
                     auto trait = rebase_bound_hrtbs(LowerHIR_TraitPath(bound.sp, *bound.ent.path, bound.ent.hrbs));
                     add_ast_path(
@@ -994,8 +991,8 @@ namespace {
         }
 
         void expand_hir_alias_contents(const ::HIR::TraitPath& alias_path, const ::HIR::TraitAlias& alias) {
-            auto params = ConvertHIR_CompleteAliasParams(m_span, alias.m_params, alias_path.m_path, false);
-            auto monomorph = MonomorphStatePtr(nullptr, &params, nullptr);
+            auto params = ConvertHIR_CompleteAliasParams(g_crate_ptr->m_types, m_span, alias.m_params, alias_path.m_path, false);
+            auto monomorph = MonomorphStatePtr(g_crate_ptr->m_types, nullptr, &params, nullptr);
             for (const auto& bound : alias.m_traits) {
                 auto trait = rebase_bound_hrtbs(bound.clone());
                 add_hir_path(monomorph.monomorph_traitpath(m_span, trait, false));
@@ -1030,13 +1027,13 @@ namespace {
             BUG(ty.span(), "TypeData::None");
         }
         TU_ARMA(Bang, e) {
-            return ::HIR::TypeRef::new_diverge();
+            return g_crate_ptr->m_types.diverge();
         }
         TU_ARMA(Any, e) {
-            return ::HIR::TypeRef();
+            return g_crate_ptr->m_types.infer();
         }
         TU_ARMA(Unit, e) {
-            return ::HIR::TypeRef::new_unit();
+            return g_crate_ptr->m_types.unit();
         }
         TU_ARMA(Macro, e) {
             BUG(ty.span(), "TypeData::Macro");
@@ -1044,46 +1041,46 @@ namespace {
         TU_ARMA(Primitive, e) {
             switch (e.core_type) {
                 case CORETYPE_BOOL:
-                    return ::HIR::TypeRef(::HIR::CoreType::Bool);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::Bool);
                 case CORETYPE_CHAR:
-                    return ::HIR::TypeRef(::HIR::CoreType::Char);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::Char);
                 case CORETYPE_STR:
-                    return ::HIR::TypeRef(::HIR::CoreType::Str);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::Str);
                 case CORETYPE_F16:
-                    return ::HIR::TypeRef(::HIR::CoreType::F16);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::F16);
                 case CORETYPE_F32:
-                    return ::HIR::TypeRef(::HIR::CoreType::F32);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::F32);
                 case CORETYPE_F64:
-                    return ::HIR::TypeRef(::HIR::CoreType::F64);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::F64);
                 case CORETYPE_F128:
-                    return ::HIR::TypeRef(::HIR::CoreType::F128);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::F128);
 
                 case CORETYPE_I8:
-                    return ::HIR::TypeRef(::HIR::CoreType::I8);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::I8);
                 case CORETYPE_U8:
-                    return ::HIR::TypeRef(::HIR::CoreType::U8);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::U8);
                 case CORETYPE_I16:
-                    return ::HIR::TypeRef(::HIR::CoreType::I16);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::I16);
                 case CORETYPE_U16:
-                    return ::HIR::TypeRef(::HIR::CoreType::U16);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::U16);
                 case CORETYPE_I32:
-                    return ::HIR::TypeRef(::HIR::CoreType::I32);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::I32);
                 case CORETYPE_U32:
-                    return ::HIR::TypeRef(::HIR::CoreType::U32);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::U32);
                 case CORETYPE_I64:
-                    return ::HIR::TypeRef(::HIR::CoreType::I64);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::I64);
                 case CORETYPE_U64:
-                    return ::HIR::TypeRef(::HIR::CoreType::U64);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::U64);
 
                 case CORETYPE_I128:
-                    return ::HIR::TypeRef(::HIR::CoreType::I128);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::I128);
                 case CORETYPE_U128:
-                    return ::HIR::TypeRef(::HIR::CoreType::U128);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::U128);
 
                 case CORETYPE_INT:
-                    return ::HIR::TypeRef(::HIR::CoreType::Isize);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::Isize);
                 case CORETYPE_UINT:
-                    return ::HIR::TypeRef(::HIR::CoreType::Usize);
+                    return g_crate_ptr->m_types.primitive(::HIR::CoreType::Usize);
                 case CORETYPE_ANY:
                     TODO(ty.span(), "TypeData::Primitive - CORETYPE_ANY");
                 case CORETYPE_INVAL:
@@ -1095,15 +1092,15 @@ namespace {
             for (const auto& st : e.inner_types) {
                 v.push_back(LowerHIR_Type(st));
             }
-            return ::HIR::TypeRef::new_tuple(mv$(v));
+            return g_crate_ptr->m_types.tuple(mv$(v));
         }
         TU_ARMA(Borrow, e) {
             auto cl = (e.is_mut ? ::HIR::BorrowType::Unique : ::HIR::BorrowType::Shared);
-            return ::HIR::TypeRef::new_borrow(cl, LowerHIR_Type(*e.inner), LowerHIR_LifetimeRef(e.lifetime));
+            return g_crate_ptr->m_types.borrow(cl, LowerHIR_Type(*e.inner), LowerHIR_LifetimeRef(e.lifetime));
         }
         TU_ARMA(Pointer, e) {
             auto cl = (e.is_mut ? ::HIR::BorrowType::Unique : ::HIR::BorrowType::Shared);
-            return ::HIR::TypeRef::new_pointer(cl, LowerHIR_Type(*e.inner));
+            return g_crate_ptr->m_types.pointer(cl, LowerHIR_Type(*e.inner));
         }
         TU_ARMA(Array, e) {
             auto inner = LowerHIR_Type(*e.inner);
@@ -1115,24 +1112,24 @@ namespace {
                         if (ptr->m_value >= U128(UINT64_MAX)) {
                             ERROR(ty.span(), E0000, "Array size out of bounds - 0x" << ::std::hex << ptr->m_value << " > 0x" << UINT64_MAX << " in " << ::std::dec << ty);
                         }
-                        return ::HIR::TypeRef::new_array(mv$(inner), ptr->m_value.truncate_u64());
+                        return g_crate_ptr->m_types.array(inner, ptr->m_value.truncate_u64());
                     }
                 }
                 if (const auto* ptr = dynamic_cast<const ::AST::ExprNode_NamedValue*>(&*e.size)) {
                     if (ptr->m_path.is_trivial()) {
                         auto gr = HIR::GenericRef(ptr->m_path.as_trivial(), ptr->m_path.m_bindings.value.binding.as_Generic().index);
-                        return ::HIR::TypeRef::new_array(mv$(inner), HIR::ConstGeneric(mv$(gr)));
+                        return g_crate_ptr->m_types.array(inner, HIR::ConstGeneric(mv$(gr)));
                     }
                 }
 
-                return ::HIR::TypeRef::new_array(mv$(inner), HIR::ConstGeneric::make_Unevaluated(std::make_unique<HIR::ConstGeneric_Unevaluated>(LowerHIR_Expr(e.size))));
+                return g_crate_ptr->m_types.array(inner, HIR::ConstGeneric::make_Unevaluated(std::make_unique<HIR::ConstGeneric_Unevaluated>(LowerHIR_Expr(e.size))));
             } else {
-                return ::HIR::TypeRef::new_array(mv$(inner), HIR::ConstGeneric::make_Infer({}));
+                return g_crate_ptr->m_types.array(inner, HIR::ConstGeneric::make_Infer({}));
             }
         }
         TU_ARMA(Slice, e) {
             auto inner = LowerHIR_Type(*e.inner);
-            return ::HIR::TypeRef::new_slice(mv$(inner));
+            return g_crate_ptr->m_types.slice(inner);
         }
         TU_ARMA(Path, e) {
             if (const auto* l = e->m_class.opt_Local()) {
@@ -1143,11 +1140,11 @@ namespace {
                 } else {
                     BUG(ty.span(), "Unbound local encountered in " << *e);
                 }
-                return ::HIR::TypeRef(l->name, slot);
+                return g_crate_ptr->m_types.generic(l->name, slot);
             } else if (e->m_bindings.type.path.crate == CRATE_BUILTINS) {
                 return LowerHIR_Type(TypeRef(ty.span(), coretype_fromstring(e->m_bindings.type.path.nodes.back().c_str())));
             } else {
-                return ::HIR::TypeRef::new_path(LowerHIR_Path(ty.span(), *e, FromAST_PathClass::Type), {});
+                return g_crate_ptr->m_types.path(LowerHIR_Path(ty.span(), *e, FromAST_PathClass::Type), {});
             }
         }
         TU_ARMA(TraitObject, e) {
@@ -1167,7 +1164,7 @@ namespace {
             // Sort markers so downstream can compare properly
             ::std::sort(v.m_markers.begin(), v.m_markers.end());
             v.m_markers.erase(::std::unique(v.m_markers.begin(), v.m_markers.end()), v.m_markers.end());
-            return ::HIR::TypeRef(::HIR::TypeData::make_TraitObject(mv$(v)));
+            return g_crate_ptr->m_types.intern(::HIR::TypeData::make_TraitObject(mv$(v)));
         }
         TU_ARMA(ErasedType, e) {
             ASSERT_BUG(ty.span(), e->traits.size() > 0, "ErasedType with no traits");
@@ -1198,11 +1195,11 @@ namespace {
                 if (g_impl_trait_source.params_inner && g_impl_trait_source.params_inner->is_generic()) {
                     TODO(ty.span(), "Handle multi-layered generic erased type (used in a GAT)");
                 }
-                inner = ::HIR::TypeData_ErasedType_Inner(::HIR::TypeData_ErasedType_Inner::Data_Alias{g_impl_trait_source.params_outer->make_nop_params(0), std::make_shared<HIR::TypeData_ErasedType_AliasInner>(*g_impl_trait_source.path, *g_impl_trait_source.params_outer)});
+                inner = ::HIR::TypeData_ErasedType_Inner(::HIR::TypeData_ErasedType_Inner::Data_Alias{g_impl_trait_source.params_outer->make_nop_params(g_crate_ptr->m_types, 0), std::make_shared<HIR::TypeData_ErasedType_AliasInner>(*g_impl_trait_source.path, *g_impl_trait_source.params_outer)});
             } else {
                 inner = ::HIR::TypeData_ErasedType_Inner::Data_Fcn{::HIR::Path(::HIR::SimplePath()), 0}; // Populated in bind, could be populated now?
             }
-            return ::HIR::TypeRef(::HIR::TypeData::Data_ErasedType{is_sized, mv$(traits), mv$(lfts), mv$(inner), e->use ? LowerHIR_PathParams(ty.span(), *e->use, false) : HIR::PathParams(), e->use ? ::HIR::TypeData_ErasedType::Use::Present : (e->is_edition_2024_or_later ? ::HIR::TypeData_ErasedType::Use::Omitted2024 : ::HIR::TypeData_ErasedType::Use::OmittedOld)});
+            return g_crate_ptr->m_types.intern(::HIR::TypeData::make_ErasedType({is_sized, mv$(traits), mv$(lfts), mv$(inner), e->use ? LowerHIR_PathParams(ty.span(), *e->use, false) : HIR::PathParams(), e->use ? ::HIR::TypeData_ErasedType::Use::Present : (e->is_edition_2024_or_later ? ::HIR::TypeData_ErasedType::Use::Omitted2024 : ::HIR::TypeData_ErasedType::Use::OmittedOld)}));
         }
         TU_ARMA(Function, e) {
             HIR::GenericParams params;
@@ -1217,11 +1214,11 @@ namespace {
             if (f.m_abi == "") {
                 f.m_abi = RcString::new_interned(ABI_RUST);
             }
-            return ::HIR::TypeRef(mv$(f));
+            return g_crate_ptr->m_types.function(mv$(f));
         }
         TU_ARMA(Generic, e) {
             assert(e.index < 0x10000);
-            return ::HIR::TypeRef(e.name, e.index);
+            return g_crate_ptr->m_types.generic(e.name, e.index);
         }
     }
     throw "BUGCHECK: Reached end of LowerHIR_Type";
@@ -1266,8 +1263,8 @@ namespace {
             // NOTE: I'd love to have this be a `Constant`, but that would require duplicating the type and the params
             // meh. Lazy option is to just duplicate
             auto name = RcString::new_interned(FMT(path.get_name() << "#default_" << field.m_name));
-            out_mod.m_value_items.insert(std::make_pair(name, ::std::make_unique<HIR::VisEnt<HIR::ValueItem>>(HIR::VisEnt<HIR::ValueItem>{HIR::Publicity::new_global(), HIR::ValueItem(HIR::Constant(params.clone(), type.clone(), LowerHIR_Expr(field.m_default)))})));
-            field_default = std::make_unique<HIR::GenericPath>((*path.parent + name).get_simple_path(), params.make_nop_params(0));
+            out_mod.m_value_items.insert(std::make_pair(name, ::std::make_unique<HIR::VisEnt<HIR::ValueItem>>(HIR::VisEnt<HIR::ValueItem>{HIR::Publicity::new_global(), HIR::ValueItem(HIR::Constant(params.clone(), type, LowerHIR_Expr(field.m_default)))})));
+            field_default = std::make_unique<HIR::GenericPath>((*path.parent + name).get_simple_path(), params.make_nop_params(g_crate_ptr->m_types, 0));
         }
         fields.push_back(HIR::StructField{field.m_name, LowerHIR_Vis(get_parent_module(path), field.m_vis), std::move(type), std::move(field_default)});
     }
@@ -1376,14 +1373,14 @@ namespace {
         uint64_t TGT_PTR_MAX = Target_GetPointerBits() == 64 ? UINT64_MAX : UINT32_MAX;
         U128 min = U128(0), max = U128(UINT64_MAX, UINT64_MAX);
         bool ignore = false;
-        if (ty->data().is_Pointer()) {
+        if ((*ty)->is_Pointer()) {
             min = U128(0);
             max = U128(TGT_PTR_MAX);
         } else {
             // Check the type
             ::HIR::CoreType ct = HIR::CoreType::Str;
-            if (ty->data().is_Primitive()) {
-                ct = ty->data().as_Primitive();
+            if ((*ty)->is_Primitive()) {
+                ct = (*ty)->as_Primitive();
             }
             switch (ct) {
                 case ::HIR::CoreType::U8:
@@ -1518,7 +1515,7 @@ namespace {
         for (const auto& var : ent.variants()) {
             if (var.m_data.is_Unit() && ent.m_markings.align_value == 0) {
                 // TODO: Should this make its own unit-like struct?
-                variants.push_back({var.m_name, false, ::HIR::TypeRef::new_unit()});
+                variants.push_back({var.m_name, false, g_crate_ptr->m_types.unit()});
             } else {
                 ::HIR::Struct::Data data;
                 if (var.m_data.is_Unit()) {
@@ -1544,8 +1541,8 @@ namespace {
                 ty_ipath.name = ty_name.c_str();
                 auto ty_path = ty_ipath.get_full_path();
                 // Add type params
-                ty_path.m_data.as_Generic().m_params = params.make_nop_params(0);
-                variants.push_back({var.m_name, var.m_data.is_Struct(), ::HIR::TypeRef::new_path(mv$(ty_path), {})});
+                ty_path.m_data.as_Generic().m_params = params.make_nop_params(g_crate_ptr->m_types, 0);
+                variants.push_back({var.m_name, var.m_data.is_Struct(), g_crate_ptr->m_types.path(mv$(ty_path), {})});
             }
 
             if (var.m_discriminant_value) {
@@ -1632,8 +1629,8 @@ namespace {
     // HACK: Add a bound of Self: ThisTrait for parts of typeck (TODO: Remove this, it's evil)
     {
         auto this_trait = ::HIR::GenericPath(trait_path);
-        this_trait.m_params = rv.m_params.make_nop_params(0);
-        rv.m_params.m_bounds.push_back(::HIR::GenericBound::make_TraitBound({{}, ty_Self.clone(), {{}, mv$(this_trait)}}));
+        this_trait.m_params = rv.m_params.make_nop_params(g_crate_ptr->m_types, 0);
+        rv.m_params.m_bounds.push_back(::HIR::GenericBound::make_TraitBound({{}, g_crate_ptr->m_types.self(), {{}, mv$(this_trait)}}));
     }
 
     for (const auto& item : f.items()) {
@@ -1659,11 +1656,11 @@ namespace {
                 for (auto& b : self_bounds.m_bounds) {
                 TU_MATCH_HDRA( (b), {)
                 TU_ARMA(TypeLifetime, be) {
-                            ASSERT_BUG(item.span, be.type.data().as_Generic().binding == GENERIC_Self, be.type);
+                            ASSERT_BUG(item.span, be.type->as_Generic().binding == GENERIC_Self, be.type);
                             lifetime_bound = mv$(be.valid_for);
                         }
                         TU_ARMA(TraitBound, be) {
-                            ASSERT_BUG(item.span, be.type.data().as_Generic().binding == GENERIC_Self, be.type);
+                            ASSERT_BUG(item.span, be.type->as_Generic().binding == GENERIC_Self, be.type);
                             trait_bounds.push_back(mv$(be.trait));
                         }
                         TU_ARMA(Lifetime, be) {
@@ -1677,7 +1674,7 @@ namespace {
                 rv.m_types.insert(::std::make_pair(item.name, ::HIR::AssociatedType{mv$(gps), is_sized, mv$(lifetime_bound), mv$(trait_bounds), LowerHIR_Type(i.type())}));
             }
             TU_ARMA(Function, i) {
-                auto fcn = LowerHIR_Function(item_path, item.attrs, i, ty_Self);
+                auto fcn = LowerHIR_Function(item_path, item.attrs, i, g_crate_ptr->m_types.self());
                 fcn.m_save_code = true;
                 rv.m_values.insert(::std::make_pair(item.name, ::HIR::TraitValueItem::make_Function(mv$(fcn))));
             }
@@ -1738,13 +1735,15 @@ namespace {
 
             bool is_valid_custom_receiver(::HIR::TypeRef& ty) const {
                 // - The path must include Self as a (the only?) type param.
-                if (ty == ty_Self) {
+                if (ty == g_crate_ptr->m_types.self()) {
                     return true;
                 } else if (ty == real_self_type) {
-                    ty = ty_Self.clone();
+                    ty = g_crate_ptr->m_types.self();
                     return true;
-                } else if (auto* e = ty.data_mut().opt_Path()) {
-                    if (auto* pe = e->path.m_data.opt_Generic()) {
+                } else if (ty->is_Path()) {
+                    auto data = ty->clone_data();
+                    auto& e = data.as_Path();
+                    if (auto* pe = e.path.m_data.opt_Generic()) {
                         if (pe->m_params.m_types.size() == 0) {
                             ERROR(sp, E0000, "Receiver type should have one type param - " << ty);
                         }
@@ -1754,23 +1753,41 @@ namespace {
 
                         // TODO: Allow if the type parm is a valid receiver it type too
                         // - In general, it's valid if there's a deref chain from this type to `self` (maybe could check that in a later pass, instead of erroring here)
-                        return is_valid_custom_receiver(pe->m_params.m_types[0]);
+                        if (is_valid_custom_receiver(pe->m_params.m_types[0])) {
+                            ty = g_crate_ptr->m_types.intern(mv$(data));
+                            return true;
+                        }
                     }
                     return false;
-                } else if (ty.data().is_Borrow()) {
-                    return is_valid_custom_receiver(ty.data_mut().as_Borrow().inner);
-                } else if (ty.data().is_Pointer()) {
-                    return is_valid_custom_receiver(ty.data_mut().as_Pointer().inner);
+                } else if (ty->is_Borrow()) {
+                    const auto& e = ty->as_Borrow();
+                    auto inner = e.inner;
+                    if (!is_valid_custom_receiver(inner)) {
+                        return false;
+                    }
+                    ty = g_crate_ptr->m_types.borrow(e.type, inner, e.lifetime);
+                    return true;
+                } else if (ty->is_Pointer()) {
+                    const auto& e = ty->as_Pointer();
+                    auto inner = e.inner;
+                    if (!is_valid_custom_receiver(inner)) {
+                        return false;
+                    }
+                    ty = g_crate_ptr->m_types.pointer(e.type, inner);
+                    return true;
                 } else {
                     return false;
                 }
             }
         } ivcr(sp, real_self_type);
 
-        if (arg_self_ty == ty_Self || arg_self_ty == real_self_type) {
+        if (arg_self_ty == g_crate_ptr->m_types.self() || arg_self_ty == real_self_type) {
             receiver = ::HIR::Function::Receiver::Value;
-        } else if (auto* e = arg_self_ty.data_mut().opt_Borrow()) {
-            if (e->inner == ty_Self || e->inner == real_self_type) {
+        } else if (const auto* e = arg_self_ty->opt_Borrow()) {
+            if (e->inner == g_crate_ptr->m_types.self() || e->inner == real_self_type) {
+                if (e->inner == real_self_type) {
+                    arg_self_ty = g_crate_ptr->m_types.borrow(e->type, g_crate_ptr->m_types.self(), e->lifetime);
+                }
                 switch (e->type) {
                     case ::HIR::BorrowType::Owned:
                         receiver = ::HIR::Function::Receiver::BorrowOwned;
@@ -1783,17 +1800,23 @@ namespace {
                         break;
                 }
             } else {
-                if (ivcr.is_valid_custom_receiver(e->inner)) {
+                auto inner = e->inner;
+                if (ivcr.is_valid_custom_receiver(inner)) {
+                    arg_self_ty = g_crate_ptr->m_types.borrow(e->type, inner, e->lifetime);
                     receiver = ::HIR::Function::Receiver::Custom;
                 }
             }
-        } else if (auto* e = arg_self_ty.data_mut().opt_Path()) {
+        } else if (const auto* e = arg_self_ty->opt_Path()) {
             // Box - Compare with `owned_box` lang item
-            if (auto* pe = e->path.m_data.opt_Generic()) {
+            if (const auto* pe = e->path.m_data.opt_Generic()) {
                 auto p = g_crate_ptr->get_lang_item_path_opt("owned_box");
                 if (pe->m_path == p) {
-                    if (pe->m_params.m_types.size() >= 1 && (pe->m_params.m_types[0] == ty_Self || pe->m_params.m_types[0] == real_self_type)) {
-                        pe->m_params.m_types[0] = ty_Self.clone();
+                    if (pe->m_params.m_types.size() >= 1 && (pe->m_params.m_types[0] == g_crate_ptr->m_types.self() || pe->m_params.m_types[0] == real_self_type)) {
+                        if (pe->m_params.m_types[0] == real_self_type) {
+                            auto data = arg_self_ty->clone_data();
+                            data.as_Path().path.m_data.as_Generic().m_params.m_types[0] = g_crate_ptr->m_types.self();
+                            arg_self_ty = g_crate_ptr->m_types.intern(mv$(data));
+                        }
                         receiver = ::HIR::Function::Receiver::Box;
                     }
                 }
@@ -1881,17 +1904,17 @@ namespace {
     rv.m_linkage = mv$(linkage);
     rv.m_receiver = receiver;
     if (receiver == HIR::Function::Receiver::Custom) {
-        rv.m_receiver_type = MonomorphiserNop().monomorph_type(f.args()[0].ty.span(), args.front().second, false);
+        rv.m_receiver_type = MonomorphiserNop(g_crate_ptr->m_types).monomorph_type(f.args()[0].ty.span(), args.front().second, false);
         // Ensure that the reciever references `Self`
         ASSERT_BUG(
             f.args()[0].ty.span(),
             visit_ty_with(
-                rv.m_receiver_type,
+                *rv.m_receiver_type,
                 [](const HIR::TypeRef& v) {
-            return v.data().is_Generic() && v.data().as_Generic().is_self();
+            return v->is_Generic() && v->as_Generic().is_self();
         }
             ),
-            rv.m_receiver_type
+            *rv.m_receiver_type
         );
     }
     rv.m_abi = RcString::new_interned(f.abi());
@@ -1908,13 +1931,15 @@ namespace {
         //rv.m_markings.is_async = true;
         // Wrap the code in an async block
         if (rv.m_code) {
-            rv.m_code = HIR::ExprPtr(::HIR::ExprNodeP(g_crate_ptr->m_pool->make<::HIR::ExprNode_AsyncBlock>(sp, rv.m_code.take_node(), true)));
+            auto* async_node = g_crate_ptr->m_pool->make<::HIR::ExprNode_AsyncBlock>(sp, rv.m_code.take_node(), true);
+            async_node->m_res_type = g_crate_ptr->m_types.infer();
+            rv.m_code = HIR::ExprPtr(::HIR::ExprNodeP(async_node));
         }
         // Make the return type be `impl Future<Output=Ret>`
         HIR::TraitPath future_path;
         future_path.m_path.m_path = g_crate_ptr->get_lang_item_path(sp, "future_trait");
         future_path.m_type_bounds.insert(std::make_pair(RcString::new_interned("Output"), ::HIR::TraitPath::AtyEqual{future_path.m_path.clone(), {}, std::move(rv.m_return)}));
-        rv.m_return = ::HIR::TypeRef(::HIR::TypeData::make_ErasedType(::HIR::TypeData_ErasedType{true, ::make_vec1(std::move(future_path)), {}, ::HIR::TypeData_ErasedType_Inner::Data_Fcn{::HIR::Path(::HIR::SimplePath()), 0}}));
+        rv.m_return = g_crate_ptr->m_types.intern(::HIR::TypeData::make_ErasedType(::HIR::TypeData_ErasedType{true, ::make_vec1(std::move(future_path)), {}, ::HIR::TypeData_ErasedType_Inner::Data_Fcn{::HIR::Path(::HIR::SimplePath()), 0}}));
     }
 
     return rv;
@@ -2409,7 +2434,8 @@ class IndexVisitor: public ::HIR::Visitor {
 
 public:
     IndexVisitor(const ::HIR::Crate& crate)
-        : crate(crate)
+        : ::HIR::Visitor(nullptr, crate.m_types)
+        , crate(crate)
     {
     }
 
@@ -2427,7 +2453,7 @@ public:
 /// - Removes all possibility for unexpanded macros
 /// - Performs desugaring of for/if-let/while-let/...
 ::HIR::Crate* LowerHIR_FromAST(stl::ObjPool* pool, ::AST::Crate& crate) {
-    auto& rv = *pool->make<::HIR::Crate>(pool);
+    auto& rv = *pool->make<::HIR::Crate>(pool, crate.m_types);
 
     if (crate.m_crate_type != ::AST::Crate::Type::Executable) {
         rv.m_crate_name = crate.m_crate_name_real;

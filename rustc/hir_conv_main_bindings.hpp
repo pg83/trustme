@@ -19,7 +19,9 @@ namespace HIR {
     struct Pattern;
     class Enum;
     class Constant;
-    class TypeRef;
+    class TypeData;
+    using TypeRef = const TypeData*;
+    class TypeInterner;
     struct SimplePath;
     struct GenericPath;
     class GenericParams;
@@ -29,7 +31,7 @@ namespace HIR {
 };
 
 extern void ConvertHIR_LifetimeElision(::HIR::Crate& crate);
-extern ::HIR::PathParams ConvertHIR_CompleteAliasParams(const Span& sp, const ::HIR::GenericParams& params_def, const ::HIR::GenericPath& path, bool is_expr);
+extern ::HIR::PathParams ConvertHIR_CompleteAliasParams(::HIR::TypeInterner& types, const Span& sp, const ::HIR::GenericParams& params_def, const ::HIR::GenericPath& path, bool is_expr);
 extern void ConvertHIR_ExpandAliases(::HIR::Crate& crate);
 extern void ConvertHIR_ExpandAliases_Self(::HIR::Crate& crate);
 extern void ConvertHIR_ExpandAliases_Self_Expr(

@@ -99,10 +99,10 @@ namespace HIR {
             } else if (parent->trait) {
                 assert(parent->ty);
                 assert(parent->trait_params);
-                return ::HIR::Path(parent->ty->clone(), ::HIR::GenericPath(parent->trait->clone(), parent->trait_params->clone()), RcString::new_interned(name));
+                return ::HIR::Path(*parent->ty, ::HIR::GenericPath(parent->trait->clone(), parent->trait_params->clone()), RcString::new_interned(name));
             } else {
                 assert(parent->ty);
-                return ::HIR::Path(parent->ty->clone(), RcString::new_interned(name));
+                return ::HIR::Path(*parent->ty, RcString::new_interned(name));
             }
         }
 

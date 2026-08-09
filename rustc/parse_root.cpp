@@ -2307,7 +2307,7 @@ void Parse_ModRoot(TokenStream& lex, AST::Module& mod, AST::AttributeList& mod_a
     lex.parse_state().module = prev_mod;
 }
 
-AST::Crate* Parse_Crate(stl::ObjPool* pool, ::std::string mainfile, AST::Edition edition) {
+AST::Crate* Parse_Crate(stl::ObjPool* pool, HIR::TypeInterner& types, ::std::string mainfile, AST::Edition edition) {
     Token tok;
 
     Lexer lex(mainfile, edition, ParseState());
@@ -2316,7 +2316,7 @@ AST::Crate* Parse_Crate(stl::ObjPool* pool, ::std::string mainfile, AST::Edition
     p = (p == ::std::string::npos ? mainfile.find_last_of('\\') : p);
     ::std::string mainpath = mainfile == "-" ? "-" : (p != ::std::string::npos ? ::std::string(mainfile.begin(), mainfile.begin() + p + 1) : "./");
 
-    auto* crate = pool->make<AST::Crate>(pool);
+    auto* crate = pool->make<AST::Crate>(pool, types);
     crate->m_edition = edition;
 
     //crate.root_module().m_file_info.file_path = mainfile;

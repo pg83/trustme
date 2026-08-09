@@ -13,6 +13,7 @@
 
 namespace HIR {
     class Crate;
+    class TypeInterner;
 }
 
 namespace stl {
@@ -57,6 +58,7 @@ namespace AST {
     class Crate {
     public:
         stl::ObjPool* m_pool;
+        HIR::TypeInterner& m_types;
         ::AST::AttributeList m_attrs;
 
         ::std::map<::std::string, ::AST::AbsolutePath> m_lang_items;
@@ -106,7 +108,7 @@ namespace AST {
         RcString m_crate_name_real;        // user name '-' suffix
         AST::Path m_prelude_path;
 
-        explicit Crate(stl::ObjPool* pool = nullptr);
+        Crate(stl::ObjPool* pool, HIR::TypeInterner& types);
 
         const Module& root_module() const {
             return m_root_module;
@@ -141,7 +143,7 @@ namespace AST {
         ::std::string m_filename;
         ::HIR::Crate* m_hir = nullptr;
 
-        ExternCrate(stl::ObjPool* pool, const RcString& name, const ::std::string& path);
+        ExternCrate(stl::ObjPool* pool, HIR::TypeInterner& types, const RcString& name, const ::std::string& path);
 
         ExternCrate(ExternCrate&&) = default;
         ExternCrate& operator=(ExternCrate&&) = default;

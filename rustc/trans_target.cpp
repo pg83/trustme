@@ -12,8 +12,11 @@
 #include <map>
 #include "hir_hir.hpp"
 #include "hir_typeck_helpers.hpp"
+#include "hir_typeck_monomorph.hpp"
 #include "hir_conv_main_bindings.hpp" // ConvertHIR_ConstantEvaluate_Enum
+#include "trans_mangling.hpp"
 #include <climits>                    // UINT_MAX
+#include <unordered_map>
 #include "toml.h"                     // tools/common
 
 const TargetArch ARCH_X86_64 = {
@@ -503,7 +506,7 @@ void Target_SetCfg(const ::std::string& target_name) {
 
 bool Target_GetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty, size_t& out_size, size_t& out_align) {
     //TRACE_FUNCTION_FR(ty, "size=" << out_size << ", align=" << out_align);
-    TU_MATCH_HDRA( (ty.data()), {)
+    TU_MATCH_HDRA( (*ty), {)
     TU_ARMA(Infer, te) {
             BUG(sp, "sizeof on _ type");
         }
@@ -751,10 +754,10 @@ namespace {
     }
 
     bool struct_enumerate_fields(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty, ::std::vector<Ent>& ents) {
-        const auto& te = ty.data().as_Path();
+        const auto& te = ty->as_Path();
         const auto& str = *te.binding.as_Struct();
         // TODO: Wipe lifetimes?
-        auto monomorph_cb = MonomorphStatePtr(nullptr, &te.path.m_data.as_Generic().m_params, nullptr);
+        auto monomorph_cb = MonomorphStatePtr(resolve.m_crate.m_types, nullptr, &te.path.m_data.as_Generic().m_params, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorph_expand(sp, tpl, monomorph_cb);
         };
@@ -865,7 +868,7 @@ namespace {
                 ASSERT_BUG(sp, e.field < fields.size(), "Field index out of range");
                 ASSERT_BUG(sp, fields[e.field].ty == HIR::TypeRef(), "Dupliate field index");
                 fields[e.field].offset = cur_ofs;
-                fields[e.field].ty = e.ty.clone();
+                fields[e.field].ty = e.ty;
             }
             DEBUG("#" << e.field << " @" << cur_ofs << "+" << e.size << " : " << e.ty);
             if (e.size == SIZE_MAX) {
@@ -906,8 +909,8 @@ namespace {
         StructSorting sorting;
         unsigned forced_alignment = 0;
         unsigned max_alignment = 0;
-        if (ty.data().is_Path() && ty.data().as_Path().binding.is_Struct()) {
-            const auto& te = ty.data().as_Path();
+        if (ty->is_Path() && ty->as_Path().binding.is_Struct()) {
+            const auto& te = ty->as_Path();
             const auto& str = *te.binding.as_Struct();
 
             if (!struct_enumerate_fields(sp, resolve, ty, ents)) {
@@ -935,12 +938,12 @@ namespace {
             if (max_alignment == 1) {
                 sorting = StructSorting::None;
             }
-        } else if (const auto* te = ty.data().opt_Tuple()) {
+        } else if (const auto* te = ty->opt_Tuple()) {
             DEBUG("Tuple " << ty);
             unsigned int idx = 0;
             for (const auto& t : *te) {
                 Ent ent;
-                if (!make_field_ent(sp, resolve, idx, t.clone(), ent)) {
+                if (!make_field_ent(sp, resolve, idx, t, ent)) {
                     return nullptr;
                 }
                 idx++;
@@ -955,7 +958,7 @@ namespace {
     }
 
     bool bounded_max_is_full_range(const ::HIR::TypeRef& ty, U128 bounded_max) {
-        if (const auto* primitive = ty.data().opt_Primitive()) {
+        if (const auto* primitive = ty->opt_Primitive()) {
             switch (*primitive) {
                 case ::HIR::CoreType::U8:
                 case ::HIR::CoreType::I8:
@@ -979,15 +982,15 @@ namespace {
                     return false;
             }
         }
-        if (ty.data().is_Pointer()) {
+        if (ty->is_Pointer()) {
             return bounded_max == (Target_GetPointerBits() == 64 ? U128(UINT64_MAX) : U128(UINT32_MAX));
         }
         return false;
     }
 
     bool get_nonzero_path(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty, TypeRepr::FieldPath& out_path) {
-        switch (ty.data().tag()) {
-            TU_ARM(ty.data(), Tuple, te) {
+        switch (ty->tag()) {
+            TU_ARM(*ty, Tuple, te) {
                 const TypeRepr* repr = Target_GetTypeRepr(sp, resolve, ty);
                 if (!repr) {
                     return false;
@@ -1000,14 +1003,14 @@ namespace {
                 }
             }
             break;
-            TU_ARM(ty.data(), Array, te) {
+            TU_ARM(*ty, Array, te) {
                 if (te.size.is_Known() && te.size.as_Known() > 0 && get_nonzero_path(sp, resolve, te.inner, out_path)) {
                     out_path.sub_fields.push_back(TypeRepr::FieldPath::ARRAY_ELEMENT);
                     return true;
                 }
             }
             break;
-            TU_ARM(ty.data(), Path, te) {
+            TU_ARM(*ty, Path, te) {
                 if (te.binding.is_Struct()) {
                     const auto* str = te.binding.as_Struct();
                     const TypeRepr* r = Target_GetTypeRepr(sp, resolve, ty);
@@ -1058,7 +1061,7 @@ namespace {
                 }
             }
             break;
-            TU_ARM(ty.data(), Borrow, _te) {
+            TU_ARM(*ty, Borrow, _te) {
                 (void)_te;
                 //out_path.sub_fields.push_back(0);
                 // TODO: Only return a single-pointer size
@@ -1067,7 +1070,7 @@ namespace {
                 return true;
             }
             break;
-            TU_ARM(ty.data(), Function, _te)(void) _te;
+            TU_ARM(*ty, Function, _te)(void) _te;
             //out_path.sub_fields.push_back(0);
             Target_GetSizeOf(sp, resolve, ty, out_path.size);
             return true;
@@ -1090,7 +1093,7 @@ namespace {
         const auto* ty = &r->fields[out_path.index].ty;
         for (const auto& f : out_path.sub_fields) {
             if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
-                const auto* array = ty->data().opt_Array();
+                const auto* array = (*ty)->opt_Array();
                 assert(array && array->size.is_Known() && array->size.as_Known() > 0);
                 ty = &array->inner;
                 continue;
@@ -1114,8 +1117,8 @@ namespace {
     /// <returns>zero for no niche found, or the number of entries already used in the niche</returns>
     unsigned get_variant_niche_path(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty, size_t min_offset, size_t max_offset, TypeRepr::FieldPath& out_path) {
         TRACE_FUNCTION_F(ty << " min_offset=" << min_offset << " max_offset=" << max_offset);
-        switch (ty.data().tag()) {
-            TU_ARM(ty.data(), Tuple, te) {
+        switch (ty->tag()) {
+            TU_ARM(*ty, Tuple, te) {
                 const TypeRepr* r = Target_GetTypeRepr(sp, resolve, ty);
                 if (!r) {
                     return 0;
@@ -1135,7 +1138,7 @@ namespace {
                     }
                 }
             }
-            TU_ARM(ty.data(), Path, te) {
+            TU_ARM(*ty, Path, te) {
                 if (te.binding.is_Struct()) {
                     const auto* str = te.binding.as_Struct();
                     const TypeRepr* r = Target_GetTypeRepr(sp, resolve, ty);
@@ -1230,7 +1233,7 @@ namespace {
                 }
             }
             break;
-            TU_ARM(ty.data(), Primitive, te) {
+            TU_ARM(*ty, Primitive, te) {
                 switch (te) {
                     case ::HIR::CoreType::Char:
                         // Only valid if the min offset is zero
@@ -1257,10 +1260,10 @@ namespace {
 
     ::std::unique_ptr<TypeRepr> make_type_repr_enum(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty) {
         TRACE_FUNCTION_F(ty);
-        const auto& te = ty.data().as_Path();
+        const auto& te = ty->as_Path();
         const auto& enm = *te.binding.as_Enum();
 
-        auto monomorph_cb = MonomorphStatePtr(nullptr, &te.path.m_data.as_Generic().m_params, nullptr);
+        auto monomorph_cb = MonomorphStatePtr(resolve.m_crate.m_types, nullptr, &te.path.m_data.as_Generic().m_params, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorph_expand(sp, tpl, monomorph_cb);
         };
@@ -1299,7 +1302,7 @@ namespace {
                         DEBUG("max_size = " << max_size << ", max_align = " << max_align);
 
                         auto tag_ty = enm.m_tag_repr == ::HIR::Enum::Repr::Auto ? ::HIR::CoreType::U32 : enm.get_repr_type(enm.m_tag_repr);
-                        rv.fields.push_back(TypeRepr::Field{0, tag_ty});
+                        rv.fields.push_back(TypeRepr::Field{0, resolve.m_crate.m_types.primitive(tag_ty)});
                         size_t tag_size, tag_align;
                         Target_GetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, tag_size, tag_align);
                         size_t data_ofs = tag_size;
@@ -1355,10 +1358,10 @@ namespace {
                             }
 
                             auto variant_type = monomorph(var.type);
-                            auto forced_alignment = variant_type.data().is_Path() && variant_type.data().as_Path().binding.is_Struct() ? variant_type.data().as_Path().binding.as_Struct()->m_forced_alignment : 0;
+                            auto forced_alignment = variant_type->is_Path() && variant_type->as_Path().binding.is_Struct() ? variant_type->as_Path().binding.as_Struct()->m_forced_alignment : 0;
                             variants.push_back({mv$(variant_type), {}, forced_alignment});
                             TRACE_FUNCTION_F("Variant #" << (&var - e.data()));
-                            if (var.type == ::HIR::TypeRef::new_unit()) {
+                            if (var.type == resolve.m_crate.m_types.unit()) {
                                 continue;
                             }
                             if (!struct_enumerate_fields(sp, resolve, variants.back().type, variants.back().ents)) {
@@ -1613,16 +1616,16 @@ namespace {
                                     ::HIR::TypeRef niche_ty;
                                     switch (niche_path.size) {
                                         case 1:
-                                            niche_ty = ::HIR::CoreType::U8;
+                                            niche_ty = resolve.m_crate.m_types.primitive(::HIR::CoreType::U8);
                                             break;
                                         case 2:
-                                            niche_ty = ::HIR::CoreType::U16;
+                                            niche_ty = resolve.m_crate.m_types.primitive(::HIR::CoreType::U16);
                                             break;
                                         case 4:
-                                            niche_ty = ::HIR::CoreType::U32;
+                                            niche_ty = resolve.m_crate.m_types.primitive(::HIR::CoreType::U32);
                                             break;
                                         case 8:
-                                            niche_ty = ::HIR::CoreType::U64;
+                                            niche_ty = resolve.m_crate.m_types.primitive(::HIR::CoreType::U64);
                                             break;
                                         default:
                                             BUG(sp, "Unknown niche size: " << niche_path);
@@ -1634,7 +1637,7 @@ namespace {
                                     size_t final_size = 0;
                                     size_t final_align = 1;
                                     for (size_t i = 0; i < reprs.size(); i++) {
-                                        if (e[i].type != HIR::TypeRef::new_unit()) {
+                                        if (e[i].type != resolve.m_crate.m_types.unit()) {
                                             // If the tag is leading, then add to all other variants and update reprs
                                             if (i == biggest_var) {
                                             } else if (niche_before_data) {
@@ -1652,7 +1655,7 @@ namespace {
                                                 variants[i].ents[0].align = niche_path.size;
                                                 variants[i].ents[0].size = niche_path.size;
                                                 variants[i].ents[0].field = variants[i].ents.size() - 1;
-                                                variants[i].ents[0].ty = niche_ty.clone();
+                                                variants[i].ents[0].ty = niche_ty;
                                                 // Create the new repr
                                                 reprs[i] = make_type_repr_struct__inner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forced_alignment, 0);
                                                 // Make sure that the newly calculated repr doesn't change the size/alignment
@@ -1682,7 +1685,7 @@ namespace {
                                                 variants[i].ents.back().align = niche_path.size;
                                                 variants[i].ents.back().size = niche_path.size;
                                                 variants[i].ents.back().field = tag_fld_idx;
-                                                variants[i].ents.back().ty = niche_ty.clone();
+                                                variants[i].ents.back().ty = niche_ty;
                                                 // Create the new repr
                                                 reprs[i] = make_type_repr_struct__inner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forced_alignment, 0);
                                                 // Make sure that the newly calculated repr doesn't change the size/alignment
@@ -1743,20 +1746,20 @@ namespace {
                             ::HIR::TypeRef tag_ty;
                             // If the tag size is specified, then force that
                             if (enm.m_tag_repr != HIR::Enum::Repr::Auto) {
-                                tag_ty = enm.get_repr_type(enm.m_tag_repr);
+                                tag_ty = resolve.m_crate.m_types.primitive(enm.get_repr_type(enm.m_tag_repr));
                             } else {
                                 ASSERT_BUG(sp, !has_explcit_value, "Explicit tag without a repr");
                                 if (e.size() <= 1) {
                                     // Unreachable
                                     BUG(sp, "Reached auto tag type logic with zero/one-sized enum");
                                 } else if (e.size() <= 255) {
-                                    tag_ty = ::HIR::CoreType::U8;
+                                    tag_ty = resolve.m_crate.m_types.primitive(::HIR::CoreType::U8);
                                     DEBUG("u8 data tag");
                                 } else if (e.size() <= UINT16_MAX) {
-                                    tag_ty = ::HIR::CoreType::U16;
+                                    tag_ty = resolve.m_crate.m_types.primitive(::HIR::CoreType::U16);
                                 } else {
                                     ASSERT_BUG(sp, e.size() <= UINT32_MAX, "");
-                                    tag_ty = ::HIR::CoreType::U32;
+                                    tag_ty = resolve.m_crate.m_types.primitive(::HIR::CoreType::U32);
                                 }
                             }
 
@@ -1771,7 +1774,7 @@ namespace {
                             for (size_t var_i = 0; var_i < variants.size(); var_i++) {
                                 auto& ents = variants[var_i].ents;
                                 auto& var_ty = variants[var_i].type;
-                                if (e[var_i].type != HIR::TypeRef::new_unit()) {
+                                if (e[var_i].type != resolve.m_crate.m_types.unit()) {
                                     if (enm.m_tag_repr == HIR::Enum::Repr::Auto) {
                                         ::std::sort(ents.begin(), ents.end(), sortfn_struct_fields);
                                     }
@@ -1780,7 +1783,7 @@ namespace {
                                     ents[0].align = tag_align;
                                     ents[0].size = tag_size;
                                     ents[0].field = ents.size() - 1;
-                                    ents[0].ty = tag_ty.clone();
+                                    ents[0].ty = tag_ty;
 
                                     // - Create repr and assign
                                     auto repr = make_type_repr_struct__inner(sp, var_ty, ents, StructSorting::None, variants[var_i].forced_alignment, 0);
@@ -1821,7 +1824,7 @@ namespace {
                         case ::HIR::Enum::Repr::Auto:
                             if (enm.m_is_c_repr) {
                                 // No auto-sizing, just i32?
-                                rv.fields.push_back(TypeRepr::Field{0, ::HIR::CoreType::U32});
+                                rv.fields.push_back(TypeRepr::Field{0, resolve.m_crate.m_types.primitive(::HIR::CoreType::U32)});
                             } else if (!e.variants.empty()) {
                                 int64_t min_value = INT64_MAX;
                                 int64_t max_value = INT64_MIN;
@@ -1852,11 +1855,11 @@ namespace {
                                 } else {
                                     tag_type = ::HIR::CoreType::I64;
                                 }
-                                rv.fields.push_back(TypeRepr::Field{0, tag_type});
+                                rv.fields.push_back(TypeRepr::Field{0, resolve.m_crate.m_types.primitive(tag_type)});
                             }
                             break;
                         default:
-                            rv.fields.push_back(TypeRepr::Field{0, enm.get_repr_type(enm.m_tag_repr)});
+                            rv.fields.push_back(TypeRepr::Field{0, resolve.m_crate.m_types.primitive(enm.get_repr_type(enm.m_tag_repr))});
                             break;
                     }
                     if (rv.fields.size() > 0) {
@@ -1900,10 +1903,10 @@ namespace {
     }
 
     ::std::unique_ptr<TypeRepr> make_type_repr_union(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty) {
-        const auto& te = ty.data().as_Path();
+        const auto& te = ty->as_Path();
         const auto& unn = *te.binding.as_Union();
 
-        auto monomorph_cb = MonomorphStatePtr(nullptr, &te.path.m_data.as_Generic().m_params, nullptr);
+        auto monomorph_cb = MonomorphStatePtr(resolve.m_crate.m_types, nullptr, &te.path.m_data.as_Generic().m_params, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorph_expand(sp, tpl, monomorph_cb);
         };
@@ -1937,13 +1940,13 @@ namespace {
     }
 
     ::std::unique_ptr<TypeRepr> make_type_repr_(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty) {
-        switch (ty.data().tag()) {
+        switch (ty->tag()) {
             case ::HIR::TypeData::TAGDEAD:
                 abort();
             case ::HIR::TypeData::TAG_Tuple:
                 return make_type_repr_struct(sp, resolve, ty);
             case ::HIR::TypeData::TAG_Path:
-                switch (ty.data().as_Path().binding.tag()) {
+                switch (ty->as_Path().binding.tag()) {
                     case ::HIR::TypePathBinding::TAGDEAD:
                         abort();
                     case ::HIR::TypePathBinding::TAG_Struct:
@@ -1977,13 +1980,39 @@ namespace {
         return rv;
     }
 
-    // TODO: Thread safety on this cache?
-    static ::std::map<::HIR::TypeRef, ::std::unique_ptr<TypeRepr>> s_cache;
+    struct CachedTypeRepr {
+        ::HIR::TypeRef canonical;
+        ::std::unique_ptr<TypeRepr> repr;
+    };
+
+    // Layout is a codegen property: regions are erased before rustc asks its
+    // layout engine too. Keep one representation per emitted type, with an
+    // exact-pointer alias so repeated queries stay O(1).
+    static ::std::unordered_map<::std::string, CachedTypeRepr> s_cache;
+    static ::std::unordered_map<::HIR::TypeRef, ::std::unique_ptr<TypeRepr>> s_unencoded_cache;
+    static ::std::unordered_map<::HIR::TypeRef, const TypeRepr*> s_cache_exact;
+
+    bool has_abi_identity(::HIR::TypeRef ty) {
+        return !monomorphise_type_needed(ty, /*ignore_lifetimes=*/true)
+            && !ty->is_Infer()
+            && !ty->is_ErasedType()
+            && !ty->is_NodeType();
+    }
 
     void set_type_repr(const Span& sp, const ::HIR::TypeRef& ty, ::std::unique_ptr<TypeRepr> repr) {
-        auto ires = s_cache.insert(::std::make_pair(ty.clone(), mv$(repr)));
+        if (!has_abi_identity(ty)) {
+            const auto* repr_ptr = repr.get();
+            auto ires = s_unencoded_cache.emplace(ty, mv$(repr));
+            ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
+            s_cache_exact.emplace(ty, repr_ptr);
+            DEBUG("Set temporary repr for " << ty);
+            return;
+        }
+        auto symbol = FMT(Trans_Mangle(ty));
+        auto ires = s_cache.emplace(mv$(symbol), CachedTypeRepr{ty, mv$(repr)});
         ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
-        DEBUG("Set repr for " << ires.first->first);
+        s_cache_exact.emplace(ty, ires.first->second.repr.get());
+        DEBUG("Set repr for " << ty);
     }
 }
 
@@ -1997,14 +2026,14 @@ bool Target_CapsMemberAlignment() {
 
 bool Target_TypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty) {
     // Arrays and slices inherit it from the element type, as in gcc's `layout_type`
-    if (const auto* te = ty.data().opt_Array()) {
+    if (const auto* te = ty->opt_Array()) {
         return Target_TypeHasUserAlignment(sp, resolve, te->inner);
     }
-    if (const auto* te = ty.data().opt_Slice()) {
+    if (const auto* te = ty->opt_Slice()) {
         return Target_TypeHasUserAlignment(sp, resolve, te->inner);
     }
     // Aggregates cache it on their repr; everything else is naturally aligned by definition
-    if (ty.data().is_Tuple() || (ty.data().is_Path() && (ty.data().as_Path().binding.is_Struct() || ty.data().as_Path().binding.is_Union() || ty.data().as_Path().binding.is_Enum()))) {
+    if (ty->is_Tuple() || (ty->is_Path() && (ty->as_Path().binding.is_Struct() || ty->as_Path().binding.is_Union() || ty->as_Path().binding.is_Enum()))) {
         const auto* repr = Target_GetTypeRepr(sp, resolve, ty);
         return repr && repr->user_align;
     }
@@ -2013,7 +2042,7 @@ bool Target_TypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resol
 
 const TypeRepr* Target_GetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty) {
 #if 0
-    if( const auto* e = ty.data().opt_Closure() ) {
+    if( const auto* e = ty->opt_Closure() ) {
         if( e->node->m_obj_path_base == HIR::GenericPath() ) {
             return nullptr;
         }
@@ -2023,16 +2052,38 @@ const TypeRepr* Target_GetTypeRepr(const Span& sp, const StaticTraitResolve& res
         return Target_GetTypeRepr(sp, resolve, ::HIR::TypeRef::new_path( mv$(path), ::HIR::TypePathBinding::make_Struct(&str) ));
     }
 #endif
-    auto it = s_cache.find(ty);
-    if (it != s_cache.end()) {
-        return it->second.get();
+    auto exact = s_cache_exact.find(ty);
+    if (exact != s_cache_exact.end()) {
+        return exact->second;
     }
 
-    auto ires = s_cache.insert(::std::make_pair(ty.clone(), make_type_repr(sp, resolve, ty)));
-    if (ires.second) {
-        DEBUG("Created repr for " << ires.first->first);
+    if (!has_abi_identity(ty)) {
+        auto repr = make_type_repr(sp, resolve, ty);
+        const auto* rv = repr.get();
+        auto ires = s_unencoded_cache.emplace(ty, mv$(repr));
+        ASSERT_BUG(sp, ires.second, "Type representation was created recursively for " << ty);
+        s_cache_exact.emplace(ty, rv);
+        DEBUG("Created temporary repr for " << ty);
+        return rv;
     }
-    return ires.first->second.get();
+
+    auto symbol = FMT(Trans_Mangle(ty));
+    auto existing = s_cache.find(symbol);
+    if (existing != s_cache.end()) {
+        ASSERT_BUG(sp, existing->second.canonical == ty || existing->second.canonical->equals_ignoring_regions(ty),
+            "Distinct types have the same mangled name: " << existing->second.canonical << " and " << ty);
+        const auto* repr = existing->second.repr.get();
+        s_cache_exact.emplace(ty, repr);
+        return repr;
+    }
+
+    auto repr = make_type_repr(sp, resolve, ty);
+    const auto* rv = repr.get();
+    auto ires = s_cache.emplace(mv$(symbol), CachedTypeRepr{ty, mv$(repr)});
+    ASSERT_BUG(sp, ires.second, "Type representation was created recursively for " << ty);
+    s_cache_exact.emplace(ty, rv);
+    DEBUG("Created repr for " << ty);
+    return rv;
 }
 
 const ::HIR::TypeRef& Target_GetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& sub_fields, size_t ofs) {
@@ -2040,7 +2091,7 @@ const ::HIR::TypeRef& Target_GetInnerType(const Span& sp, const StaticTraitResol
     while (ofs < sub_fields.size()) {
         const auto field = sub_fields[ofs++];
         if (field == TypeRepr::FieldPath::ARRAY_ELEMENT) {
-            const auto* array = ty->data().opt_Array();
+            const auto* array = (*ty)->opt_Array();
             ASSERT_BUG(sp, array && array->size.is_Known() && array->size.as_Known() > 0, "Array field path on non-array " << *ty);
             ty = &array->inner;
         } else {
@@ -2060,7 +2111,7 @@ size_t TypeRepr::get_offset(const Span& sp, const StaticTraitResolve& resolve, c
     const auto* ty = &r->fields[path.index].ty;
     for (const auto& f : path.sub_fields) {
         if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
-            const auto* array = ty->data().opt_Array();
+            const auto* array = (*ty)->opt_Array();
             assert(array && array->size.is_Known() && array->size.as_Known() > 0);
             ty = &array->inner;
             continue;

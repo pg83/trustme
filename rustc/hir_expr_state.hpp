@@ -12,6 +12,7 @@ namespace HIR {
 
     class ExprState {
     public:
+        ::HIR::TypeInterner& m_types;
         ::HIR::SimplePath m_mod_path;
         const ::HIR::Module& m_module;
 
@@ -44,8 +45,9 @@ namespace HIR {
         };
         mutable Stage stage;
 
-        ExprState(const ::HIR::Module& mod_ptr, ::HIR::SimplePath mod_path)
-            : m_mod_path(::std::move(mod_path))
+        ExprState(::HIR::TypeInterner& types, const ::HIR::Module& mod_ptr, ::HIR::SimplePath mod_path)
+            : m_types(types)
+            , m_mod_path(::std::move(mod_path))
             , m_module(mod_ptr)
             , m_impl_generics(nullptr)
             , m_item_generics(nullptr)

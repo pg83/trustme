@@ -88,7 +88,7 @@ struct ImplRef {
         m_is_ambiguous_identity = true;
     }
 
-    bool more_specific_than(const ImplRef& other) const;
+    bool more_specific_than(HIR::TypeInterner& types, const ImplRef& other) const;
     bool overlaps_with(const ::HIR::Crate& crate, const ImplRef& other) const;
 
     bool has_magic_params() const;
@@ -99,8 +99,9 @@ struct ImplRef {
         const ImplRef::Data::Data_TraitImpl& ti;
         const ::HIR::PathParams& params;
 
-        Monomorph(const ImplRef::Data::Data_TraitImpl& ti, const ::HIR::PathParams& params)
-            : ti(ti)
+        Monomorph(HIR::TypeInterner& types, const ImplRef::Data::Data_TraitImpl& ti, const ::HIR::PathParams& params)
+            : Monomorphiser(types)
+            , ti(ti)
             , params(params)
         {
         }
@@ -110,15 +111,15 @@ struct ImplRef {
         ::HIR::LifetimeRef get_lifetime(const Span& sp, const ::HIR::GenericRef& val) const override;
     };
 
-    Monomorph get_cb_monomorph_traitimpl(const Span& sp, const ::HIR::PathParams& params) const;
+    Monomorph get_cb_monomorph_traitimpl(HIR::TypeInterner& types, const Span& sp, const ::HIR::PathParams& params) const;
 
-    ::HIR::TypeRef get_impl_type() const;
-    ::HIR::PathParams get_trait_params() const;
+    ::HIR::TypeRef get_impl_type(HIR::TypeInterner& types) const;
+    ::HIR::PathParams get_trait_params(HIR::TypeInterner& types) const;
 
-    ::HIR::TypeRef get_trait_ty_param(unsigned int) const;
+    ::HIR::TypeRef get_trait_ty_param(HIR::TypeInterner& types, unsigned int) const;
 
     bool type_is_specialisable(const char* name) const;
-    ::HIR::TypeRef get_type(const char* name, const HIR::PathParams& params) const;
+    ::HIR::TypeRef get_type(HIR::TypeInterner& types, const char* name, const HIR::PathParams& params) const;
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ImplRef& x);
 };

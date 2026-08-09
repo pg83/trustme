@@ -24,6 +24,7 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
         assert(ep);
         ep->visit(*this);
         ASSERT_BUG(ep->span(), m_rv, ep.type_name() << " - Yielded a nullptr HIR node");
+        m_rv->m_res_type = g_crate_ptr->m_types.infer();
         return std::move(m_rv);
     }
 
@@ -94,7 +95,7 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
     virtual void visit(::AST::ExprNode_GeneratorBlock& v) override {
         // TODO: Wrap with something that provides an impl of Iterator
         // - `::core::iter::from_coroutine`
-        m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Generator>(v.span(), HIR::TypeRef(), lower(v.m_inner), v.m_is_move, false));
+        m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Generator>(v.span(), g_crate_ptr->m_types.infer(), lower(v.m_inner), v.m_is_move, false));
         m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_CallPath>(v.span(), HIR::SimplePath(g_core_crate, {"iter", "sources", "from_coroutine", "from_coroutine"}), make_vec1(mv$(m_rv))));
     }
 
@@ -194,8 +195,9 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
                 std::vector<HIR::PatternBinding> bindings;
                 std::map<unsigned, unsigned> mapping;
 
-                V(unsigned base, unsigned count)
-                    : base(base)
+                V(HIR::TypeInterner& types, unsigned base, unsigned count)
+                    : HIR::Visitor(nullptr, types)
+                    , base(base)
                     , count(count)
                 {
                 }
@@ -232,7 +234,7 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
                     pb.m_mutable = false;
                     pb.m_slot = it->second;
                 }
-            } visitor(base, count);
+            } visitor(g_crate_ptr->m_types, base, count);
 
             visitor.visit_pattern(pat);
             /* 
@@ -257,18 +259,18 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
             match_arms[0].m_code.reset(g_crate_ptr->m_pool->make<HIR::ExprNode_Tuple>(v.span(), std::move(tuple_vals)));
             match_arms[1].m_patterns.push_back(HIR::Pattern());
             // `_ => loop { let _: ! = $else; },
-            match_arms[1].m_code.reset(g_crate_ptr->m_pool->make<HIR::ExprNode_Let>(v.span(), HIR::Pattern(), HIR::TypeRef::new_diverge(), std::move(node_else)));
+            match_arms[1].m_code.reset(g_crate_ptr->m_pool->make<HIR::ExprNode_Let>(v.span(), HIR::Pattern(), g_crate_ptr->m_types.diverge(), std::move(node_else)));
             match_arms[1].m_code.reset(g_crate_ptr->m_pool->make<HIR::ExprNode_Loop>(v.span(), "", std::move(match_arms[1].m_code), /*require_label*/ true));
             // HACK: Just use the code as-is.
             //match_arms[1].m_code = std::move(node_else);
             // `match $value: $ty {`
-            auto match_value = type.data().is_Infer() // Only emit the `: $ty` part if the type was specified (not a `_`)
+            auto match_value = type->is_Infer() // Only emit the `: $ty` part if the type was specified (not a `_`)
                                    ? std::move(node_value)
                                    : HIR::ExprNodeP(g_crate_ptr->m_pool->make<HIR::ExprNode_Unsize>(v.span(), std::move(node_value), std::move(type)));
             auto match = HIR::ExprNodeP(g_crate_ptr->m_pool->make<HIR::ExprNode_Match>(v.span(), std::move(match_value), std::move(match_arms)));
 
             // `let (a,b,c,...) = ...`
-            m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Let>(v.span(), HIR::Pattern(::std::vector<HIR::PatternBinding>(), HIR::Pattern::Data::make_Tuple({std::move(new_pats)})), HIR::TypeRef(), std::move(match)));
+            m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Let>(v.span(), HIR::Pattern(::std::vector<HIR::PatternBinding>(), HIR::Pattern::Data::make_Tuple({std::move(new_pats)})), g_crate_ptr->m_types.infer(), std::move(match)));
         } else {
             m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Let>(v.span(), LowerHIR_Pattern(v.m_pat), LowerHIR_Type(v.m_type), lower_opt(v.m_value)));
         }
@@ -700,10 +702,12 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
         }
         auto ty = LowerHIR_Type(::TypeRef(v.span(), v.m_path));
         if (v.m_path.m_bindings.type.binding.is_EnumVar()) {
-            ASSERT_BUG(v.span(), TU_TEST1(ty.data(), Path, .path.m_data.is_Generic()), "Enum variant path not GenericPath: " << ty);
-            auto& gp = ty.get_unique().as_Path().path.m_data.as_Generic();
+            ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.m_data.is_Generic()), "Enum variant path not GenericPath: " << ty);
+            auto data = ty->clone_data();
+            auto& gp = data.as_Path().path.m_data.as_Generic();
             auto var_name = gp.m_path.pop_component();
-            ty = ::HIR::TypeRef::new_path(::HIR::Path(mv$(ty), mv$(var_name)), {});
+            auto enum_ty = g_crate_ptr->m_types.intern(mv$(data));
+            ty = g_crate_ptr->m_types.path(::HIR::Path(enum_ty, mv$(var_name)), {});
         }
         m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_StructLiteral>(v.span(), mv$(ty), !v.m_path.m_bindings.type.binding.is_EnumVar(), lower_opt(v.m_base_value), mv$(values)));
     }
@@ -721,10 +725,12 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
         }
         auto ty = LowerHIR_Type(::TypeRef(v.span(), v.m_path));
         if (v.m_path.m_bindings.type.binding.is_EnumVar()) {
-            ASSERT_BUG(v.span(), TU_TEST1(ty.data(), Path, .path.m_data.is_Generic()), "Enum variant path not GenericPath: " << ty);
-            auto& gp = ty.get_unique().as_Path().path.m_data.as_Generic();
+            ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.m_data.is_Generic()), "Enum variant path not GenericPath: " << ty);
+            auto data = ty->clone_data();
+            auto& gp = data.as_Path().path.m_data.as_Generic();
             auto var_name = gp.m_path.pop_component();
-            ty = ::HIR::TypeRef::new_path(::HIR::Path(mv$(ty), mv$(var_name)), {});
+            auto enum_ty = g_crate_ptr->m_types.intern(mv$(data));
+            ty = g_crate_ptr->m_types.path(::HIR::Path(enum_ty, mv$(var_name)), {});
         }
         m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_StructLiteral>(v.span(), mv$(ty), !v.m_path.m_bindings.type.binding.is_EnumVar(), true, mv$(values)));
     }
@@ -817,7 +823,7 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
 
                         var_idx = idx;
                         if (const auto* ee = enm.m_data.opt_Data()) {
-                            if (ee->at(idx).type == ::HIR::TypeRef::new_unit()) {
+                            if (ee->at(idx).type == g_crate_ptr->m_types.unit()) {
                             }
                             // TODO: Assert that it's not a struct-like
                             else {
@@ -880,6 +886,22 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
     if (!v.m_rv) {
         BUG(e.span(), typeid(e).name() << " - Yielded a nullptr HIR node");
     }
+
+    struct InitialiseResultTypes final: ::HIR::ExprVisitorDef {
+        explicit InitialiseResultTypes(::HIR::TypeInterner& types)
+            : ::HIR::ExprVisitorDef(types)
+        {
+        }
+
+        void visit_node_ptr(::HIR::ExprNodeP& node) override {
+            node->m_res_type = type_interner().infer();
+            node->visit(*this);
+        }
+
+        void visit_type(::HIR::TypeRef&) override {
+        }
+    } initialise(g_crate_ptr->m_types);
+    initialise.visit_node_ptr(v.m_rv);
 
     return ::HIR::ExprPtr(mv$(v.m_rv));
 }

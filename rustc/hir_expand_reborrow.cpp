@@ -28,7 +28,8 @@ namespace {
 
     public:
         ExprVisitor_Mutate(const ::HIR::Crate& crate)
-            : m_crate(crate)
+            : HIR::ExprVisitorDef(crate.m_types)
+            , m_crate(crate)
         {
         }
 
@@ -57,7 +58,7 @@ namespace {
 
         ::HIR::ExprNodeP do_reborrow(::HIR::ExprNodeP node_ptr) {
             assert(node_ptr);
-            if (const auto* e = node_ptr->m_res_type.data().opt_Borrow()) {
+            if (const auto* e = node_ptr->m_res_type->opt_Borrow()) {
                 if (e->type == ::HIR::BorrowType::Unique) {
                     if (dynamic_cast<::HIR::ExprNode_Index*>(node_ptr.get()) || dynamic_cast<::HIR::ExprNode_Variable*>(node_ptr.get()) || dynamic_cast<::HIR::ExprNode_Field*>(node_ptr.get()) || dynamic_cast<::HIR::ExprNode_Deref*>(node_ptr.get())) {
                         if (auto* inner = dynamic_cast<::HIR::ExprNode_Deref*>(node_ptr.get())) {
@@ -65,8 +66,8 @@ namespace {
                         }
                         DEBUG("Insert reborrow - " << node_ptr->span() << " - type=" << node_ptr->m_res_type);
                         auto sp = node_ptr->span();
-                        auto ty_mut = node_ptr->m_res_type.clone();
-                        auto ty = e->inner.clone();
+                        auto ty_mut = node_ptr->m_res_type;
+                        auto ty = e->inner;
                         node_ptr = NEWNODE(mv$(ty_mut), Borrow, sp, ::HIR::BorrowType::Unique, NEWNODE(mv$(ty), Deref, sp, mv$(node_ptr)));
                     }
                     // Recurse into blocks - Neater this way
@@ -176,7 +177,8 @@ namespace {
 
     public:
         OuterVisitor(const ::HIR::Crate& crate)
-            : m_crate(crate)
+            : ::HIR::Visitor(nullptr, crate.m_types)
+            , m_crate(crate)
         {
         }
 

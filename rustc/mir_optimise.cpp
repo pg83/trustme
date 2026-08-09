@@ -705,8 +705,9 @@ namespace {
 
         ::HIR::PathParams fcn_params_tmp;
 
-        ParamsSet()
-            : fcn_params(nullptr)
+        explicit ParamsSet(HIR::TypeInterner& types)
+            : MonomorphiserPP(types)
+            , fcn_params(nullptr)
             , self_ty(nullptr)
             , impl_params_def(nullptr)
             , fcn_params_def(nullptr)
@@ -740,7 +741,7 @@ namespace {
     };
 
     const ::MIR::Function* get_called_mir(const ::MIR::TypeResolve& state, const TransList* list, const ::HIR::Path& path, ParamsSet& params) {
-        MonomorphState out_params;
+        MonomorphState out_params(state.m_resolve.m_crate.m_types);
         auto e = state.m_resolve.get_value(state.sp, path, out_params, /*sig_only*/ false, &params.impl_params_def);
         DEBUG(e.tag_str() << " " << out_params);
         params.fcn_params = out_params.get_method_params();
@@ -748,8 +749,8 @@ namespace {
 
         // If a TransList is avaliable, then all referenced functions must be in it.
         if (list) {
-            auto it = list->m_functions.find(path);
-            if (it == list->m_functions.end()) {
+            const auto* trans_fcn = list->find_function(path);
+            if (!trans_fcn) {
                 MIR_BUG(state, "Enumeration failure - Function " << path << " not in TransList");
             }
             // TODO: Need identity params for most, but lifetime params need to be from the input.
@@ -757,14 +758,14 @@ namespace {
             //params.impl_params.m_lifetimes    = it->second->pp.pp_impl.m_lifetimes;
             //params.fcn_params_tmp.m_lifetimes = it->second->pp.pp_method.m_lifetimes;
             //params.fcn_params = &params.fcn_params_tmp;
-            DEBUG("Found TransList " << it->first);
+            DEBUG("Found TransList " << path);
             DEBUG("impl_params = " << params.impl_params);
             DEBUG("fcn_params = " << *params.fcn_params);
 
-            const auto& hir_fcn = *it->second->ptr;
-            if (it->second->monomorphised.code) {
+            const auto& hir_fcn = *trans_fcn->ptr;
+            if (trans_fcn->monomorphised.code) {
                 //DEBUG("Found monomorphised - PP=" << params.impl_params << "," << *params.fcn_params);
-                return &*it->second->monomorphised.code;
+                return &*trans_fcn->monomorphised.code;
             } else if (const auto* mir = hir_fcn.m_code.get_mir_opt()) {
                 //DEBUG("Found concrete - PP=" << params.impl_params << "," << *params.fcn_params);
                 MIR_ASSERT(state, hir_fcn.m_params.m_types.empty(), "Enumeration failure - Function had params, but wasn't monomorphised - " << path);
@@ -1317,9 +1318,10 @@ bool MIR_Optimise_Inlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool
         ::MIR::LValue retval;
 
         Cloner(const Span& sp, const ::StaticTraitResolve& resolve, ::MIR::Terminator::Data_Call& te)
-            : ::MIR::Cloner(sp)
+            : ::MIR::Cloner(sp, resolve.m_crate.m_types)
             , m_resolve(resolve)
             , te(te)
+            , params(resolve.m_crate.m_types)
             , copy_args(te.args.size(), ~0u)
         {
         }
@@ -1452,7 +1454,7 @@ bool MIR_Optimise_Inlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool
                 cloner.retval = ::MIR::LValue::new_Local(fcn.locals.size());
                 DEBUG("- Storing return value in " << cloner.retval);
                 ::HIR::TypeRef tmp_ty;
-                fcn.locals.push_back(state.get_lvalue_type(tmp_ty, te->ret_val).clone());
+                fcn.locals.push_back(state.get_lvalue_type(tmp_ty, te->ret_val));
                 //fcn.local_names.push_back( "" );
             }
 
@@ -1489,7 +1491,7 @@ bool MIR_Optimise_Inlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool
             DEBUG("- Insert argument lval assignments");
             for (auto& val : cloner.const_assignments) {
                 ::HIR::TypeRef tmp;
-                auto ty = val.is_Constant() ? state.get_const_type(val.as_Constant()) : state.get_lvalue_type(tmp, val.as_LValue()).clone();
+                auto ty = val.is_Constant() ? state.get_const_type(val.as_Constant()) : state.get_lvalue_type(tmp, val.as_LValue());
                 auto lv = ::MIR::LValue::new_Local(static_cast<unsigned>(fcn.locals.size()));
                 fcn.locals.push_back(mv$(ty));
                 auto rval = val.is_Constant() ? ::MIR::RValue(mv$(val.as_Constant())) : ::MIR::RValue(mv$(val.as_LValue()));
@@ -2002,7 +2004,7 @@ bool MIR_Optimise_DeTemporary_Borrows(::MIR::TypeResolve& state, ::MIR::Function
                 // > Inner-most wrapper is Deref - it's a deref of this variable
                 if (!lv.m_wrappers.empty() && lv.m_wrappers.front().is_Deref()) {
                     slot.n_deref_read++;
-                    if (fcn.locals[lv.m_root.as_Local()].data().is_Borrow()) {
+                    if (fcn.locals[lv.m_root.as_Local()]->is_Borrow()) {
                         DEBUG(lv << " deref use " << cur_loc);
                     }
                 }
@@ -3209,7 +3211,7 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
             const auto& ty = tef.params.m_types.at(0);
             // - Only expand at this stage if there's no generics, and no unbound paths
             if (!visit_ty_with(ty, [](const ::HIR::TypeRef& ty) -> bool {
-                return ty.data().is_Generic() || TU_TEST1(ty.data(), Path, .binding.is_Unbound());
+                return ty->is_Generic() || TU_TEST1(*ty, Path, .binding.is_Unbound());
             })) {
                 bool needs_drop = state.m_resolve.type_needs_drop_glue(state.sp, ty);
                 bb.statements.push_back(::MIR::Statement::make_Assign({mv$(te.ret_val), ::MIR::RValue::make_Constant(::MIR::Constant::make_Bool({needs_drop}))}));
@@ -3262,7 +3264,7 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                 DEBUG("Read of a static - " << lv.m_root.as_Static());
                 // Look up this static, and see if it's not mutable, and a primitive
                 // - If the static is an immutable primitive: read and save
-                MonomorphState ms;
+                MonomorphState ms(state.m_resolve.m_crate.m_types);
                 auto v = state.m_resolve.get_value(state.sp, lv.m_root.as_Static(), ms);
                 if (v.is_Static()) {
                     const auto& stat = *v.as_Static();
@@ -3271,8 +3273,8 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                         const auto el = EncodedLiteralSlice(stat.m_value_res);
                         // Check the type
                         // - Primitives
-                        if (stat.m_type.data().is_Primitive()) {
-                            auto ty = stat.m_type.data().as_Primitive();
+                        if (stat.m_type->is_Primitive()) {
+                            auto ty = stat.m_type->as_Primitive();
                             switch (ty) {
                                 case HIR::CoreType::Char:
                                 case HIR::CoreType::Usize:
@@ -3301,7 +3303,7 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                             }
                         }
                         // - Pointers
-                        if (stat.m_type.data().is_Borrow()) {
+                        if (stat.m_type->is_Borrow()) {
                             // TODO: Read the borrow, and store
                         }
                         // - Could traverse the static via the wrappers too?
@@ -3472,7 +3474,7 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                         // If casting a number to a number, do the cast and
                         auto nv = check_lv(se.val);
                         if (!nv.is_ItemAddr()) {
-                            if (const auto* te = se.type.data().opt_Primitive()) {
+                            if (const auto* te = se.type->opt_Primitive()) {
                                 switch (*te) {
                                     case ::HIR::CoreType::U8:
                                     case ::HIR::CoreType::U16:
@@ -3527,11 +3529,11 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                             }
                         } else if (known_values_var.count(se.val)) {
                             auto variant_idx = known_values_var.at(se.val);
-                            MIR_ASSERT(state, se.type.data().is_Primitive(), "Casting enum to non-primitive - " << se.type);
+                            MIR_ASSERT(state, se.type->is_Primitive(), "Casting enum to non-primitive - " << se.type);
 
                             HIR::TypeRef tmp;
                             const auto& src_ty = state.get_lvalue_type(tmp, se.val);
-                            const HIR::Enum& enm = *src_ty.data().as_Path().binding.as_Enum();
+                            const HIR::Enum& enm = *src_ty->as_Path().binding.as_Enum();
                             MIR_ASSERT(state, enm.is_value(), "Casting non-value enum to value");
                             auto v = enm.get_value(variant_idx);
 
@@ -3539,24 +3541,24 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                             MIR_ASSERT(state, repr && repr->variants.is_Values(), "Value enum without values repr - " << src_ty);
                             const auto& values = repr->variants.as_Values();
                             const auto& tag_ty = Target_GetInnerType(state.sp, state.m_resolve, *repr, values.field.index, values.field.sub_fields);
-                            MIR_ASSERT(state, tag_ty.data().is_Primitive(), "Value enum with non-primitive tag - " << src_ty);
+                            MIR_ASSERT(state, tag_ty->is_Primitive(), "Value enum with non-primitive tag - " << src_ty);
 
                             auto value = S128(U128(v));
-                            switch (tag_ty.data().as_Primitive()) {
+                            switch (tag_ty->as_Primitive()) {
                                 case ::HIR::CoreType::I8:
                                 case ::HIR::CoreType::I16:
                                 case ::HIR::CoreType::I32:
                                 case ::HIR::CoreType::I64:
                                 case ::HIR::CoreType::I128:
                                 case ::HIR::CoreType::Isize:
-                                    value = H::truncate_s(tag_ty.data().as_Primitive(), value);
+                                    value = H::truncate_s(tag_ty->as_Primitive(), value);
                                     break;
                                 default:
-                                    value = S128(H::truncate_u(tag_ty.data().as_Primitive(), value.get_inner()));
+                                    value = S128(H::truncate_u(tag_ty->as_Primitive(), value.get_inner()));
                                     break;
                             }
 
-                            auto ct = se.type.data().as_Primitive();
+                            auto ct = se.type->as_Primitive();
                             switch (ct) {
                                 case ::HIR::CoreType::U8:
                                 case ::HIR::CoreType::U16:
@@ -4436,7 +4438,7 @@ bool MIR_Optimise_SplitAggregates(::MIR::TypeResolve& state, ::MIR::Function& fc
             // Allocate a new local
             auto new_local = static_cast<unsigned>(new_local_base + i);
             ::HIR::TypeRef tmp;
-            fcn.locals[new_local] = state.get_param_type(tmp, vals[i]).clone();
+            fcn.locals[new_local] = state.get_param_type(tmp, vals[i]);
             p.second.replacements[i] = new_local;
             // Set the relevant statement to be an assignment to that new local
             block.statements[stmt_idx + i] = MIR::Statement::make_Assign({MIR::LValue::new_Local(new_local), param_to_rvalue(mv$(vals[i]))});
@@ -5106,7 +5108,7 @@ bool MIR_Optimise_DeadAssignments(::MIR::TypeResolve& state, ::MIR::Function& fc
             // Remove drops of assigned values that will be removed
             if (it->is_Drop() && it->as_Drop().slot.is_Local()) {
                 auto idx = it->as_Drop().slot.as_Local();
-                if (!read_locals[idx] && fcn.locals[idx].data().is_Borrow()) {
+                if (!read_locals[idx] && fcn.locals[idx]->is_Borrow()) {
                     DEBUG(state << "Drop of unread value, remove - " << *it);
                     it = bb.statements.erase(it);
                     continue;
@@ -5125,7 +5127,7 @@ bool MIR_Optimise_DeadAssignments(::MIR::TypeResolve& state, ::MIR::Function& fc
                 continue;
             }
             // If the local was dropped, then ignore IF it's not a borrow (TODO: Only if there's drop glue?)
-            if (dropped_locals[idx] && !fcn.locals[idx].data().is_Borrow()) {
+            if (dropped_locals[idx] && !fcn.locals[idx]->is_Borrow()) {
                 ++it;
                 continue;
             }
@@ -5179,7 +5181,7 @@ bool MIR_Optimise_NoopRemoval(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
 
             // `_0 = foo as *const T; _1 = _0 as *mut T` where `foo: *mut T`
             // - Note: Accepts `_0 = foo as *const T; _1 = _0 as U` where `foo: U`
-            if (it->is_Assign() && it->as_Assign().dst.is_Local() && it->as_Assign().src.is_Cast() && it->as_Assign().src.as_Cast().type.data().is_Pointer()) {
+            if (it->is_Assign() && it->as_Assign().dst.is_Local() && it->as_Assign().src.is_Cast() && it->as_Assign().src.as_Cast().type->is_Pointer()) {
                 const auto& dst_lv = it->as_Assign().dst;
                 const auto& src_lv = it->as_Assign().src.as_Cast().val;
                 // Find the next use of this target lvalue
@@ -5911,7 +5913,7 @@ void MIR_OptimiseCrate_Inlining(const ::HIR::Crate& crate, TransList& list, bool
             for (auto& block : fcn.blocks) {
                 if (auto* te = block.terminator.opt_Call()) {
                     if (te->fcn.is_Intrinsic() && te->fcn.as_Intrinsic().name == "const_eval_select") {
-                        size_t n_args = te->fcn.as_Intrinsic().params.m_types.at(0).data().as_Tuple().size();
+                        size_t n_args = te->fcn.as_Intrinsic().params.m_types.at(0)->as_Tuple().size();
                         const MIR::LValue arg = te->args.at(0).as_LValue().clone();
                         // Note: arg 1 is the constant function
                         const HIR::Path& fcn_path = *te->args.at(2).as_Constant().as_Function().p;

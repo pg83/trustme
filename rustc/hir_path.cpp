@@ -214,7 +214,7 @@ HIR::PathParams::PathParams(::HIR::LifetimeRef lft) {
     rv.m_lifetimes = this->m_lifetimes;
     rv.m_types.reserve(m_types.size());
     for (const auto& t : m_types) {
-        rv.m_types.push_back(t.clone());
+        rv.m_types.push_back(t);
     }
     rv.m_values.reserve(m_values.size());
     for (const auto& t : m_values) {
@@ -247,6 +247,27 @@ HIR::PathParams::PathParams(::HIR::LifetimeRef lft) {
     return GenericPath(m_path.clone(), m_params.clone());
 }
 
+bool HIR::PathParams::equals_ignoring_regions(const HIR::PathParams& x) const {
+    if (m_types.size() != x.m_types.size() || m_values.size() != x.m_values.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < m_types.size(); i++) {
+        if (m_types[i] != x.m_types[i] && !m_types[i]->equals_ignoring_regions(x.m_types[i])) {
+            return false;
+        }
+    }
+    for (size_t i = 0; i < m_values.size(); i++) {
+        if (m_values[i] != x.m_values[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool HIR::GenericPath::equals_ignoring_regions(const HIR::GenericPath& x) const {
+    return m_path == x.m_path && m_params.equals_ignoring_regions(x.m_params);
+}
+
 Ordering HIR::GenericPath::ord(const HIR::GenericPath& x) const {
     ORD(m_path, x.m_path);
     //DEBUG("\n  " << *this << "\n  " << x);
@@ -266,6 +287,46 @@ Ordering HIR::GenericPath::ord(const HIR::GenericPath& x) const {
     }
 
     return rv;
+}
+
+bool HIR::TraitPath::equals_ignoring_regions(const TraitPath& x) const {
+    if (!m_path.equals_ignoring_regions(x.m_path)
+        || m_type_bounds.size() != x.m_type_bounds.size()
+        || m_trait_bounds.size() != x.m_trait_bounds.size()) {
+        return false;
+    }
+
+    auto lhs_type = m_type_bounds.begin();
+    auto rhs_type = x.m_type_bounds.begin();
+    for (; lhs_type != m_type_bounds.end(); ++lhs_type, ++rhs_type) {
+        const auto& lhs = lhs_type->second;
+        const auto& rhs = rhs_type->second;
+        if (lhs_type->first != rhs_type->first
+            || !lhs.source_trait.equals_ignoring_regions(rhs.source_trait)
+            || !lhs.aty_params.equals_ignoring_regions(rhs.aty_params)
+            || (lhs.type != rhs.type && !lhs.type->equals_ignoring_regions(rhs.type))) {
+            return false;
+        }
+    }
+
+    auto lhs_bound = m_trait_bounds.begin();
+    auto rhs_bound = x.m_trait_bounds.begin();
+    for (; lhs_bound != m_trait_bounds.end(); ++lhs_bound, ++rhs_bound) {
+        const auto& lhs = lhs_bound->second;
+        const auto& rhs = rhs_bound->second;
+        if (lhs_bound->first != rhs_bound->first
+            || !lhs.source_trait.equals_ignoring_regions(rhs.source_trait)
+            || !lhs.aty_params.equals_ignoring_regions(rhs.aty_params)
+            || lhs.traits.size() != rhs.traits.size()) {
+            return false;
+        }
+        for (size_t i = 0; i < lhs.traits.size(); i++) {
+            if (!lhs.traits[i].equals_ignoring_regions(rhs.traits[i])) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 Ordering HIR::TraitPath::ord(const TraitPath& x) const {
@@ -324,12 +385,12 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
             return Path(Data::make_Generic(e.clone()));
         }
         TU_ARMA(UfcsInherent, e) {
-            return Path(Data::make_UfcsInherent({e.type.clone(), e.item, e.params.clone(), e.impl_params.clone()}));
+            return Path(Data::make_UfcsInherent({e.type, e.item, e.params.clone(), e.impl_params.clone()}));
         }
         TU_ARMA(UfcsKnown, e) {
             return Path(
                 Data::make_UfcsKnown({
-                    e.type.clone(),
+                    e.type,
                     e.trait.clone(),
                     e.item,
                     e.params.clone(),
@@ -338,7 +399,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
             );
         }
         TU_ARMA(UfcsUnknown, e) {
-            return Path(Data::make_UfcsUnknown({e.type.clone(), e.item, e.params.clone()}));
+            return Path(Data::make_UfcsUnknown({e.type, e.item, e.params.clone()}));
         }
     }
     throw "";
@@ -348,8 +409,8 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
 #if 0
     struct NopMatch: public MatchGenerics {
         ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeRef& ty, t_cb_resolve_type resolve_cb) override {
-            if( ty.data().is_Generic() ) {
-                return ty.data().as_Generic().binding == g.binding ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal;
+            if( ty->is_Generic() ) {
+                return ty->as_Generic().binding == g.binding ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal;
             }
             return ::HIR::Compare::Unequal;
         }
@@ -370,7 +431,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
             return Compare::Unequal;
         }
         for (unsigned int i = 0; i < x.m_types.size(); i++) {
-            auto rv2 = this->m_types[i].compare_with_placeholders(sp, x.m_types[i], resolve_placeholder);
+            auto rv2 = this->m_types[i]->compare_with_placeholders(sp, x.m_types[i], resolve_placeholder);
             if (rv2 == Compare::Unequal) {
                 return Compare::Unequal;
             }
@@ -422,7 +483,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
         return Compare::Unequal;
     }
     for (unsigned int i = 0; i < x.m_types.size(); i++) {
-        rv &= this->m_types[i].match_test_generics_fuzz(sp, x.m_types[i], resolve_placeholder, match);
+        rv &= this->m_types[i]->match_test_generics_fuzz(sp, x.m_types[i], resolve_placeholder, match);
         if (rv == Compare::Unequal) {
             return Compare::Unequal;
         }
@@ -568,7 +629,7 @@ namespace {
         if (it_l->first != it_r->first) {
             return Compare::Unequal;
         }
-        CMP(rv, it_l->second.type.compare_with_placeholders(sp, it_r->second.type, resolve_placeholder));
+        CMP(rv, it_l->second.type->compare_with_placeholders(sp, it_r->second.type, resolve_placeholder));
         ++it_l;
         ++it_r;
     }
@@ -600,7 +661,7 @@ namespace {
                 return Compare::Unequal;
             }
             ::HIR::Compare rv = ::HIR::Compare::Equal;
-            CMP(rv, ple.type.compare_with_placeholders(sp, pre.type, resolve_placeholder));
+            CMP(rv, ple.type->compare_with_placeholders(sp, pre.type, resolve_placeholder));
             CMP(rv, ::compare_with_placeholders(sp, ple.params, pre.params, resolve_placeholder));
             return rv;
         }
@@ -610,7 +671,7 @@ namespace {
             }
 
             ::HIR::Compare rv = ::HIR::Compare::Equal;
-            CMP(rv, ple.type.compare_with_placeholders(sp, pre.type, resolve_placeholder));
+            CMP(rv, ple.type->compare_with_placeholders(sp, pre.type, resolve_placeholder));
             CMP(rv, ::compare_with_placeholders(sp, ple.trait, pre.trait, resolve_placeholder));
             CMP(rv, ::compare_with_placeholders(sp, ple.params, pre.params, resolve_placeholder));
             return rv;
@@ -622,6 +683,35 @@ namespace {
 Ordering HIR::Path::ord(const ::HIR::Path& x) const {
     ORD((unsigned)m_data.tag(), (unsigned)x.m_data.tag());
     TU_MATCH(::HIR::Path::Data, (this->m_data, x.m_data), (tpe, xpe), (Generic, return ::ord(tpe, xpe);), (UfcsInherent, ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);), (UfcsKnown, ORD(tpe.type, xpe.type); ORD(tpe.trait, xpe.trait); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);), (UfcsUnknown, ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);))
+    throw "";
+}
+
+bool HIR::Path::equals_ignoring_regions(const Path& x) const {
+    if (m_data.tag() != x.m_data.tag()) {
+        return false;
+    }
+    TU_MATCH_HDRA((m_data, x.m_data), {)
+    TU_ARMA(Generic, lhs, rhs) {
+        return lhs.equals_ignoring_regions(rhs);
+    }
+    TU_ARMA(UfcsInherent, lhs, rhs) {
+        return lhs.item == rhs.item
+            && (lhs.type == rhs.type || lhs.type->equals_ignoring_regions(rhs.type))
+            && lhs.params.equals_ignoring_regions(rhs.params)
+            && lhs.impl_params.equals_ignoring_regions(rhs.impl_params);
+    }
+    TU_ARMA(UfcsKnown, lhs, rhs) {
+        return lhs.item == rhs.item
+            && (lhs.type == rhs.type || lhs.type->equals_ignoring_regions(rhs.type))
+            && lhs.trait.equals_ignoring_regions(rhs.trait)
+            && lhs.params.equals_ignoring_regions(rhs.params);
+    }
+    TU_ARMA(UfcsUnknown, lhs, rhs) {
+        return lhs.item == rhs.item
+            && (lhs.type == rhs.type || lhs.type->equals_ignoring_regions(rhs.type))
+            && lhs.params.equals_ignoring_regions(rhs.params);
+    }
+    }
     throw "";
 }
 

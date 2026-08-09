@@ -1020,12 +1020,17 @@ namespace HIR {
 
         ::std::vector<HIR::ValueUsage> m_capture_usages;
 
-        ExprNode_GeneratorWrapper(Span sp, /*ExprNode_Closure::args_t args,*/ ::HIR::TypeRef rv, ::HIR::ExprNodeP code, bool is_move, bool is_pinned, bool is_future)
+        ExprNode_GeneratorWrapper(
+            Span sp,
+            ::HIR::TypeRef rv,
+            ::HIR::TypeRef yield_ty,
+            ::HIR::ExprNodeP code,
+            bool is_future
+        )
             : ExprNode(mv$(sp))
             , m_is_future(is_future)
-            ,
-            //m_args( ::std::move(args) ),
-            m_return(::std::move(rv))
+            , m_return(rv)
+            , m_yield_ty(yield_ty)
             , m_code(::std::move(code))
         {
         }
@@ -1116,7 +1121,12 @@ namespace HIR {
     };
 
     class ExprVisitorDef: public ExprVisitor {
+        TypeInterner& m_types;
+
     public:
+        explicit ExprVisitorDef(TypeInterner& types): m_types(types) {}
+        TypeInterner& type_interner() const { return m_types; }
+
 #define NV(nt) virtual void visit(nt& n) override;
 
         virtual void visit_node_ptr(::HIR::ExprNodeP& node_ptr) override;

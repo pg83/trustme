@@ -7,37 +7,113 @@
  */
 #include "trans_trans_list.hpp"
 #include "hir_typeck_static.hpp" // StaticTraitResolve
+#include "trans_mangling.hpp"
 
-TransList_Function* TransList::add_function(::HIR::Path p) {
+TransList_Function* TransList::add_function(HIR::TypeInterner& types, ::HIR::Path p) {
+    auto symbol = FMT(Trans_Mangle(p));
+    auto existing = m_function_symbols.find(symbol);
+    if (existing != m_function_symbols.end()) {
+        ASSERT_BUG(Span(), existing->second.equals_ignoring_regions(p),
+            "Distinct function paths have the same mangled name: " << existing->second << " and " << p);
+        return nullptr;
+    }
+
     auto rv = m_functions.insert(::std::make_pair(mv$(p), nullptr));
     if (rv.second) {
+        m_function_symbols.emplace(mv$(symbol), rv.first->first.clone());
         DEBUG("Function " << rv.first->first);
         assert(!rv.first->second);
-        rv.first->second.reset(new TransList_Function(rv.first->first));
+        rv.first->second.reset(new TransList_Function(types, rv.first->first));
         return &*rv.first->second;
     } else {
         return nullptr;
     }
 }
 
-TransList_Static* TransList::add_static(::HIR::Path p) {
+const TransList_Function* TransList::find_function(const ::HIR::Path& p) const {
+    auto exact = m_functions.find(p);
+    if (exact != m_functions.end()) {
+        return exact->second.get();
+    }
+
+    const auto symbol = FMT(Trans_Mangle(p));
+    auto canonical = m_function_symbols.find(symbol);
+    if (canonical == m_function_symbols.end()) {
+        return nullptr;
+    }
+    ASSERT_BUG(Span(), canonical->second.equals_ignoring_regions(p),
+        "Distinct function paths have the same mangled name: " << canonical->second << " and " << p);
+    exact = m_functions.find(canonical->second);
+    ASSERT_BUG(Span(), exact != m_functions.end(), "Function symbol index is stale for " << p);
+    return exact->second.get();
+}
+
+TransList_Function* TransList::find_function(const ::HIR::Path& p) {
+    return const_cast<TransList_Function*>(static_cast<const TransList&>(*this).find_function(p));
+}
+
+bool TransList::has_type(::HIR::TypeRef type, bool shallow) const {
+    const auto symbol = FMT(Trans_Mangle(type));
+    const auto existing = m_type_symbols.find(symbol);
+    if (existing == m_type_symbols.end()) {
+        return false;
+    }
+    ASSERT_BUG(Span(), existing->second.canonical == type || existing->second.canonical->equals_ignoring_regions(type),
+        "Distinct types have the same mangled name: " << existing->second.canonical << " and " << type);
+    return existing->second.has_definition || (shallow && existing->second.has_prototype);
+}
+
+bool TransList::add_type(::HIR::TypeRef type, bool shallow) {
+    auto symbol = FMT(Trans_Mangle(type));
+    auto existing = m_type_symbols.find(symbol);
+    if (existing == m_type_symbols.end()) {
+        m_type_symbols.emplace(mv$(symbol), TypeEmissionState{type, shallow, !shallow});
+    } else {
+        auto& state = existing->second;
+        ASSERT_BUG(Span(), state.canonical == type || state.canonical->equals_ignoring_regions(type),
+            "Distinct types have the same mangled name: " << state.canonical << " and " << type);
+        auto& already_emitted = shallow ? state.has_prototype : state.has_definition;
+        if (already_emitted || (shallow && state.has_definition)) {
+            return false;
+        }
+        already_emitted = true;
+    }
+    m_types.push_back(::std::make_pair(type, shallow));
+    return true;
+}
+
+void TransList::clear_types() {
+    m_types.clear();
+    m_type_symbols.clear();
+}
+
+TransList_Static* TransList::add_static(HIR::TypeInterner& types, ::HIR::Path p) {
+    auto symbol = FMT(Trans_Mangle(p));
+    auto existing = m_static_symbols.find(symbol);
+    if (existing != m_static_symbols.end()) {
+        ASSERT_BUG(Span(), existing->second.equals_ignoring_regions(p),
+            "Distinct static paths have the same mangled name: " << existing->second << " and " << p);
+        return nullptr;
+    }
+
     auto rv = m_statics.insert(::std::make_pair(mv$(p), nullptr));
     if (rv.second) {
+        m_static_symbols.emplace(mv$(symbol), rv.first->first.clone());
         DEBUG("Static " << rv.first->first);
         assert(!rv.first->second);
-        rv.first->second.reset(new TransList_Static{});
+        rv.first->second.reset(new TransList_Static(types));
         return &*rv.first->second;
     } else {
         return nullptr;
     }
 }
 
-TransList_Const* TransList::add_const(::HIR::Path p) {
+TransList_Const* TransList::add_const(HIR::TypeInterner& types, ::HIR::Path p) {
     auto rv = m_constants.insert(::std::make_pair(mv$(p), nullptr));
     if (rv.second) {
         DEBUG("Const " << rv.first->first);
         assert(!rv.first->second);
-        rv.first->second.reset(new TransList_Const{});
+        rv.first->second.reset(new TransList_Const(types));
         return &*rv.first->second;
     } else {
         return nullptr;

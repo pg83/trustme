@@ -269,11 +269,12 @@ int main(int argc, char* argv[]) {
 #else
     auto* pool = stl::ObjPool::fromMemoryRaw();
 #endif
+    auto* types = pool->make<HIR::TypeInterner>(*pool);
 
     try {
         // Parse the crate into AST
         AST::Crate* crate_ptr = CompilePhase<AST::Crate*>("Parse", [&]() {
-            return Parse_Crate(pool, params.infile, params.edition);
+            return Parse_Crate(pool, *types, params.infile, params.edition);
         });
         AST::Crate& crate = *crate_ptr;
         crate.m_test_harness = params.test_harness;
@@ -763,7 +764,7 @@ int main(int argc, char* argv[]) {
         if (crate_type == ::AST::Crate::Type::ProcMacro) {
             // - Save a very basic HIR dump, making sure that there's no lang items in it (e.g. `mrustc-main`)
             CompilePhaseV("HIR Serialise", [&]() {
-                HIR::Crate crate_for_ser;
+                HIR::Crate crate_for_ser(pool, *types);
                 crate_for_ser.m_crate_name = hir_crate->m_crate_name;
                 crate_for_ser.m_edition = hir_crate->m_edition;
                 for (const auto& i : hir_crate->m_root_module.m_macro_items) {

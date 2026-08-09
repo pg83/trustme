@@ -49,7 +49,8 @@ namespace static_borrow_constants {
 
     public:
         ExprVisitor_Mark(const StaticTraitResolve& resolve, const ::HIR::TypeRef* self_type, const ::HIR::ExprPtr& expr_ptr)
-            : m_resolve(resolve)
+            : HIR::ExprVisitorDef(resolve.m_crate.m_types)
+            , m_resolve(resolve)
             , m_self_type(self_type)
             , m_expr_ptr(expr_ptr)
             , m_is_constant(false)
@@ -111,7 +112,7 @@ namespace static_borrow_constants {
                 const auto* inode = dynamic_cast<::HIR::ExprNode_PathValue*>(node.m_value.get())
                 //&& node.m_value->m_usage == HIR::ValueUsage::Borrow
             ) {
-                MonomorphState ms;
+                MonomorphState ms(m_resolve.m_crate.m_types);
                 auto v = m_resolve.get_value(node.span(), inode->m_path, ms, /*signature_only*/ true);
                 if (v.is_Static()) {
                     m_all_constant = saved_all_constant;
@@ -155,7 +156,7 @@ namespace static_borrow_constants {
                 bool is_unsized = false;
                 bool is_zst = ([&]() -> bool {
                     // HACK: `Target_GetSizeOf` calls `Target_GetSizeAndAlignOf` which doesn't work on generic arrays (needs alignment)
-                    if (const auto* te = value_ptr->m_res_type.data().opt_Array()) {
+                    if (const auto* te = value_ptr->m_res_type->opt_Array()) {
                         if (te->size.is_Known() && te->size.as_Known() == 0) {
                             return true;
                         }
@@ -251,7 +252,7 @@ namespace static_borrow_constants {
             m_all_constant = true;
             ::HIR::ExprVisitorDef::visit(node);
             if (m_all_constant) {
-                MonomorphState ms_unused;
+                MonomorphState ms_unused(m_resolve.m_crate.m_types);
                 auto v = m_resolve.get_value(node.span(), node.m_method_path, ms_unused, true);
                 DEBUG(node.m_method_path << " is " << (v.as_Function()->m_const ? "" : "NOT ") << "constant");
                 if (v.as_Function()->m_const) {
@@ -266,7 +267,7 @@ namespace static_borrow_constants {
             m_all_constant = true;
             ::HIR::ExprVisitorDef::visit(node);
             if (m_all_constant) {
-                MonomorphState ms_unused;
+                MonomorphState ms_unused(m_resolve.m_crate.m_types);
                 auto v = m_resolve.get_value(node.span(), node.m_path, ms_unused, true);
                 DEBUG(node.m_path << " is " << (v.as_Function()->m_const ? "" : "NOT ") << "constant");
                 if (v.as_Function()->m_const) {
@@ -279,7 +280,7 @@ namespace static_borrow_constants {
         // - Accessors (constant if the inner is constant)
         void visit(::HIR::ExprNode_Deref& node) override {
             ::HIR::ExprVisitorDef::visit(node);
-            if (node.m_value->m_res_type.data().is_Borrow()) {
+            if (node.m_value->m_res_type->is_Borrow()) {
                 m_is_constant = m_all_constant;
             }
         }
@@ -297,10 +298,10 @@ namespace static_borrow_constants {
             if (m_all_constant) {
                 const auto& ty = node.m_index->m_res_type;
                 DEBUG("_Index: ty = " << ty);
-                if (node.m_value->m_res_type.data().is_Array() && node.m_value->m_res_type.data().as_Array().size == 0) {
+                if (node.m_value->m_res_type->is_Array() && node.m_value->m_res_type->as_Array().size == 0) {
                     m_is_constant = true;
                 } else {
-                    if (ty.data().is_Path() && ty.data().as_Path().path.m_data.is_Generic() && ty.data().as_Path().path.m_data.as_Generic().m_path == m_lang_RangeFull) {
+                    if (ty->is_Path() && ty->as_Path().path.m_data.is_Generic() && ty->as_Path().path.m_data.as_Generic().m_path == m_lang_RangeFull) {
                         DEBUG("_Index: RangeFull - can be constant");
                         m_is_constant = !is_maybe_interior_mut(node);
                     } else {
@@ -338,7 +339,7 @@ namespace static_borrow_constants {
                 // Only allow operations between matching primitives
                 // - Which can only be integer/float ops
                 if (node.m_left->m_res_type == node.m_right->m_res_type) {
-                    if (node.m_left->m_res_type.data().is_Primitive()) {
+                    if (node.m_left->m_res_type->is_Primitive()) {
                         m_is_constant = true;
                     }
                 }
@@ -353,7 +354,7 @@ namespace static_borrow_constants {
             if (m_all_constant) {
                 // Only allow operations on primitives
                 // - Which can only be integer/float ops
-                if (node.m_value->m_res_type.data().is_Primitive()) {
+                if (node.m_value->m_res_type->is_Primitive()) {
                     m_is_constant = true;
                 }
             }
@@ -396,7 +397,7 @@ namespace static_borrow_constants {
 
         void visit(::HIR::ExprNode_PathValue& node) override {
             ::HIR::ExprVisitorDef::visit(node);
-            MonomorphState ms;
+            MonomorphState ms(m_resolve.m_crate.m_types);
             // If the target is a constant, set `m_is_constant`
             auto v = m_resolve.get_value(node.span(), node.m_path, ms, /*signature_only*/ true);
             switch (v.tag()) {
@@ -476,7 +477,8 @@ namespace static_borrow_constants {
 
     public:
         OuterVisitor_Mark(const ::HIR::Crate& crate)
-            : m_crate(crate)
+            : HIR::Visitor(nullptr, crate.m_types)
+            , m_crate(crate)
             , m_resolve(m_crate)
             , m_current_module(nullptr)
         {
@@ -495,7 +497,7 @@ namespace static_borrow_constants {
         }
 
         void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
-            auto self = ::HIR::TypeRef::new_self();
+            auto self = m_crate.m_types.self();
             m_self_type = &self;
             auto _ = m_resolve.set_impl_generics(MetadataType::TraitObject, item.m_params);
             ::HIR::Visitor::visit_trait(p, item);
@@ -617,7 +619,8 @@ namespace static_borrow_constants {
 
     public:
         ExprVisitor_Mutate(const StaticTraitResolve& resolve, const ::HIR::TypeRef* self_type, t_new_static_cb new_static_cb, const ::HIR::ExprPtr& expr_ptr)
-            : m_resolve(resolve)
+            : HIR::ExprVisitorDef(resolve.m_crate.m_types)
+            , m_resolve(resolve)
             , m_self_type(self_type)
             , m_new_static_cb(mv$(new_static_cb))
             , m_expr_ptr(expr_ptr)
@@ -652,8 +655,9 @@ namespace static_borrow_constants {
             unsigned ofs_impl_v;
             unsigned ofs_item_v;
 
-            Monomorph(const ::HIR::GenericParams& params, unsigned ofs_impl_t, unsigned ofs_item_t, unsigned ofs_impl_v, unsigned ofs_item_v, unsigned ofs_impl_l, unsigned ofs_item_l)
-                : params(params)
+            Monomorph(HIR::TypeInterner& types, const ::HIR::GenericParams& params, unsigned ofs_impl_t, unsigned ofs_item_t, unsigned ofs_impl_v, unsigned ofs_item_v, unsigned ofs_impl_l, unsigned ofs_item_l)
+                : Monomorphiser(types)
+                , params(params)
                 , ofs_impl_l(ofs_impl_l)
                 , ofs_item_l(ofs_item_l)
                 , ofs_impl_t(ofs_impl_t)
@@ -675,7 +679,7 @@ namespace static_borrow_constants {
                     BUG(sp, "Generic type " << ge << " unknown");
                 }
                 ASSERT_BUG(sp, i < params.m_types.size(), "Item generic type binding OOR - " << ge << " (" << i << " !< " << params.m_types.size() << ")");
-                return ::HIR::TypeRef(params.m_types[i].m_name, 256 + i);
+                return m_types.generic(params.m_types[i].m_name, 256 + i);
             }
 
             ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& ge) const {
@@ -718,8 +722,8 @@ namespace static_borrow_constants {
             // - Needed for some constant evalulated values
             if (m_resolve.has_self() && m_self_type) {
                 ASSERT_BUG(sp, m_self_type, "Missing self type (disagreement between m_resolve and ExprVisitor_Mutate)");
-                constructor_path_params.m_types.push_back(m_self_type->clone());
-                params.m_types.push_back(::HIR::TypeParamDef{RcString::new_interned("Super"), {}, false}); // TODO: Determine if parent Self is Sized
+                constructor_path_params.m_types.push_back(*m_self_type);
+                params.m_types.push_back(::HIR::TypeParamDef{RcString::new_interned("Super"), m_resolve.m_crate.m_types.infer(), false}); // TODO: Determine if parent Self is Sized
             }
             // - Top-level params come first
             unsigned ofs_impl_l = params.m_lifetimes.size();
@@ -731,14 +735,14 @@ namespace static_borrow_constants {
             unsigned ofs_impl_t = params.m_types.size();
             for (const auto& ty_def : m_resolve.impl_generics().m_types) {
                 unsigned i = &ty_def - &m_resolve.impl_generics().m_types.front();
-                constructor_path_params.m_types.push_back(::HIR::TypeRef(ty_def.m_name, 0 * 256 + i));
-                params.m_types.push_back(::HIR::TypeParamDef{ty_def.m_name, {}, ty_def.m_is_sized});
+                constructor_path_params.m_types.push_back(m_resolve.m_crate.m_types.generic(ty_def.m_name, 0 * 256 + i));
+                params.m_types.push_back(::HIR::TypeParamDef{ty_def.m_name, m_resolve.m_crate.m_types.infer(), ty_def.m_is_sized});
             }
             unsigned ofs_impl_v = params.m_values.size();
             for (const auto& v_def : m_resolve.impl_generics().m_values) {
                 unsigned i = &v_def - &m_resolve.impl_generics().m_values.front();
                 constructor_path_params.m_values.push_back(::HIR::GenericRef(v_def.m_name, 0 * 256 + i));
-                params.m_values.push_back(::HIR::ValueParamDef{v_def.m_name, v_def.m_type.clone()});
+                params.m_values.push_back(::HIR::ValueParamDef{v_def.m_name, v_def.m_type});
             }
             // - Item-level params come second
             unsigned ofs_item_l = params.m_lifetimes.size();
@@ -750,20 +754,20 @@ namespace static_borrow_constants {
             unsigned ofs_item_t = params.m_types.size();
             for (const auto& ty_def : m_resolve.item_generics().m_types) {
                 unsigned i = &ty_def - &m_resolve.item_generics().m_types.front();
-                constructor_path_params.m_types.push_back(::HIR::TypeRef(ty_def.m_name, 1 * 256 + i));
-                params.m_types.push_back(::HIR::TypeParamDef{ty_def.m_name, {}, ty_def.m_is_sized});
+                constructor_path_params.m_types.push_back(m_resolve.m_crate.m_types.generic(ty_def.m_name, 1 * 256 + i));
+                params.m_types.push_back(::HIR::TypeParamDef{ty_def.m_name, m_resolve.m_crate.m_types.infer(), ty_def.m_is_sized});
             }
             unsigned ofs_item_v = params.m_values.size();
             for (const auto& v_def : m_resolve.item_generics().m_values) {
                 unsigned i = &v_def - &m_resolve.item_generics().m_values.front();
                 constructor_path_params.m_values.push_back(::HIR::GenericRef(v_def.m_name, 1 * 256 + i));
-                params.m_values.push_back(::HIR::ValueParamDef{v_def.m_name, v_def.m_type.clone()});
+                params.m_values.push_back(::HIR::ValueParamDef{v_def.m_name, v_def.m_type});
             }
 
             // Create the params used for the type on the impl block
-            DEBUG("impl_path_params = " << params.make_nop_params(0) << " ofs_*_t=" << ofs_item_t << "," << ofs_impl_t << "," << params.m_types.size() << " ofs_*_v=" << ofs_item_v << "," << ofs_impl_v << "," << params.m_values.size() << " ofs_*_l=" << ofs_item_l << "," << ofs_impl_l << "," << params.m_lifetimes.size());
+            DEBUG("impl_path_params = " << params.make_nop_params(m_resolve.m_crate.m_types, 0) << " ofs_*_t=" << ofs_item_t << "," << ofs_impl_t << "," << params.m_types.size() << " ofs_*_v=" << ofs_item_v << "," << ofs_impl_v << "," << params.m_values.size() << " ofs_*_l=" << ofs_item_l << "," << ofs_impl_l << "," << params.m_lifetimes.size());
 
-            Monomorph monomorph_cb(params, ofs_impl_t, ofs_item_t, ofs_impl_v, ofs_item_v, ofs_impl_l, ofs_item_l);
+            Monomorph monomorph_cb(m_resolve.m_crate.m_types, params, ofs_impl_t, ofs_item_t, ofs_impl_v, ofs_item_v, ofs_impl_l, ofs_item_l);
 
             // - Clone the bounds (from both levels)
             auto monomorph_bound = [&](const ::HIR::GenericBound& b) -> ::HIR::GenericBound {
@@ -810,7 +814,8 @@ namespace static_borrow_constants {
                 std::map<unsigned, unsigned> binding_mapping;
 
                 V(const StaticTraitResolve& resolve, const Monomorph& monomorph)
-                    : resolve(resolve)
+                    : HIR::ExprVisitorDef(resolve.m_crate.m_types)
+                    , resolve(resolve)
                     , monomorph(monomorph)
                     , is_generic(false)
                 {
@@ -910,8 +915,13 @@ namespace static_borrow_constants {
         }
 
         struct MonomorphLifetimesStatic: public Monomorphiser {
+            explicit MonomorphLifetimesStatic(HIR::TypeInterner& types)
+                : Monomorphiser(types)
+            {
+            }
+
             ::HIR::TypeRef get_type(const Span& sp, const ::HIR::GenericRef& g) const override {
-                return HIR::TypeRef(g.name, g.binding);
+                return m_types.generic(g.name, g.binding);
             }
 
             ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& g) const override {
@@ -960,7 +970,7 @@ namespace static_borrow_constants {
                 }
                 auto usage = value_ptr->m_usage;
 
-                auto new_res_ty = value_ptr->m_res_type.clone();
+                auto new_res_ty = value_ptr->m_res_type;
                 DEBUG("-- Creating static");
                 // Clone the in-scope generics (same as done in closure generation)
                 // - Would be picky, but hard to get the bounds right.
@@ -974,7 +984,7 @@ namespace static_borrow_constants {
 
                 // Replace all unknown lifetimes with `'static`
                 // - (Currently) there shouldn't be any generics, need to solve that later on?
-                auto static_ty = MonomorphLifetimesStatic().monomorph_type(sp, val_expr->m_res_type, /*allow_infer=*/false);
+                auto static_ty = MonomorphLifetimesStatic(m_resolve.m_crate.m_types).monomorph_type(sp, val_expr->m_res_type, /*allow_infer=*/false);
                 resolve.expand_associated_types(sp, static_ty);
 
                 //auto m2 = MonomorphStatePtr(nullptr, nullptr, &constr_params);
@@ -1007,11 +1017,11 @@ namespace static_borrow_constants {
 
                 // Replace all unknown lifetimes with `'static`
                 // - (Currently) there shouldn't be any generics, need to solve that later on?
-                auto static_ty = MonomorphLifetimesStatic().monomorph_type(sp, val_expr->m_res_type, /*allow_infer=*/false);
+                auto static_ty = MonomorphLifetimesStatic(m_resolve.m_crate.m_types).monomorph_type(sp, val_expr->m_res_type, /*allow_infer=*/false);
                 resolve.expand_associated_types(sp, static_ty);
                 DEBUG("ConstBlock: static_ty = " << static_ty);
 
-                auto m2 = MonomorphStatePtr(nullptr, nullptr, &constr_params);
+                auto m2 = MonomorphStatePtr(m_resolve.m_crate.m_types, nullptr, nullptr, &constr_params);
                 auto new_res_ty = m2.monomorph_type(sp, static_ty, false);
                 DEBUG("ConstBlock: new_res_ty = " << new_res_ty);
 
@@ -1045,7 +1055,8 @@ namespace static_borrow_constants {
 
     public:
         OuterVisitor(const ::HIR::Crate& crate)
-            : m_crate(crate)
+            : HIR::Visitor(nullptr, crate.m_types)
+            , m_crate(crate)
             , m_resolve(m_crate)
             , m_current_module(nullptr)
         {
@@ -1135,7 +1146,7 @@ namespace static_borrow_constants {
 
                     if (!new_static.m_params.is_generic()) {
                         new_static.m_value.m_state->stage = ::HIR::ExprState::Stage::Sbc;
-                        new_static.m_value_res = ::HIR::Evaluator(sp, m_crate, nvs).evaluate_constant(new_static_pair.path, new_static.m_value, new_static.m_type.clone());
+                        new_static.m_value_res = ::HIR::Evaluator(sp, m_crate, nvs).evaluate_constant(new_static_pair.path, new_static.m_value, new_static.m_type);
                         new_static.m_value_generated = true;
                     }
 
@@ -1181,7 +1192,7 @@ namespace static_borrow_constants {
         }
 
         void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
-            auto self = ::HIR::TypeRef::new_self();
+            auto self = m_crate.m_types.self();
             m_self_type = &self;
             auto _ = m_resolve.set_impl_generics(MetadataType::TraitObject, item.m_params);
             ::HIR::Visitor::visit_trait(p, item);
@@ -1369,7 +1380,7 @@ void HIR_Expand_StaticBorrowConstants_Expr(const ::HIR::Crate& crate, const ::HI
 
                 auto& s = crate.m_new_values.back().second->ent.as_Static();
                 ASSERT_BUG(Span(), !s.m_value.m_state, "ExprState set already");
-                s.m_value.m_state = ::HIR::ExprStatePtr(crate.m_pool, ::HIR::ExprState(crate.m_root_module, ::HIR::SimplePath(crate.m_crate_name)));
+                s.m_value.m_state = ::HIR::ExprStatePtr(crate.m_pool, ::HIR::ExprState(crate.m_types, crate.m_root_module, ::HIR::SimplePath(crate.m_crate_name)));
                 s.m_value.m_state->stage = ::HIR::ExprState::Stage::Sbc;
                 s.m_value.m_state->m_impl_generics = nullptr;
                 s.m_value.m_state->m_item_generics = &s.m_params;
@@ -1379,7 +1390,7 @@ void HIR_Expand_StaticBorrowConstants_Expr(const ::HIR::Crate& crate, const ::HI
 
         if (!new_static.m_params.is_generic()) {
             new_static.m_value.m_state->stage = ::HIR::ExprState::Stage::Sbc;
-            new_static.m_value_res = ::HIR::Evaluator(sp, crate, nvs).evaluate_constant(path, new_static.m_value, new_static.m_type.clone());
+            new_static.m_value_res = ::HIR::Evaluator(sp, crate, nvs).evaluate_constant(path, new_static.m_value, new_static.m_type);
             new_static.m_value_generated = true;
         }
 

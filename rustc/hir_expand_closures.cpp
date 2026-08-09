@@ -139,7 +139,7 @@ namespace {
         }
         for (auto& ptr : this->impls_type) {
             // NOTE: This should always have a name
-            const auto& path = ptr->m_type.data().as_Path().path.m_data.as_Generic().m_path;
+            const auto& path = ptr->m_type->as_Path().path.m_data.as_Generic().m_path;
             DEBUG("Adding type impl" << ptr->m_params.fmt_args() << " " << ptr->m_type);
             crate.m_all_type_impls.named[path].push_back(ptr.get());
             crate.m_type_impls.named[path].push_back(mv$(ptr));
@@ -165,7 +165,8 @@ namespace {
 
     public:
         ExprVisitor_Mutate(stl::ObjPool* pool, const ::HIR::TypeRef& closure_type, const ::std::vector<unsigned int>& local_vars, const ::std::vector<::HIR::ExprNode_Closure::AvuCache::Capture>& captures, const Monomorphiser& mcb)
-            : m_closure_type(closure_type)
+            : HIR::ExprVisitorDef(mcb.type_interner())
+            , m_closure_type(closure_type)
             , m_local_vars(local_vars)
             , m_captures(captures)
             , m_monomorphiser(mcb)
@@ -260,13 +261,13 @@ namespace {
                 });
                 if (binding_it != m_captures.end()) {
                     ASSERT_BUG(node.span(), binding_it->fields.empty(), "Reached _Variable for a field capture");
-                    m_replacement = NEWNODE(node.m_res_type.clone(), Field, node.span(), get_self(node.span()), RcString::new_interned(FMT(binding_it - m_captures.begin())));
+                    m_replacement = NEWNODE(node.m_res_type, Field, node.span(), get_self(node.span()), RcString::new_interned(FMT(binding_it - m_captures.begin())));
                     if (binding_it->usage != ::HIR::ValueUsage::Move) {
                         auto bt = (binding_it->usage == ::HIR::ValueUsage::Mutate ? ::HIR::BorrowType::Unique : ::HIR::BorrowType::Shared);
 
                         visit_type(m_replacement->m_res_type);
-                        m_replacement->m_res_type = ::HIR::TypeRef::new_borrow(bt, mv$(m_replacement->m_res_type));
-                        m_replacement = NEWNODE(node.m_res_type.clone(), Deref, node.span(), mv$(m_replacement));
+                        m_replacement->m_res_type = m_monomorphiser.type_interner().borrow(bt, m_replacement->m_res_type);
+                        m_replacement = NEWNODE(node.m_res_type, Deref, node.span(), mv$(m_replacement));
                     }
                     m_replacement->m_usage = node.m_usage;
                     DEBUG("_Variable: #" << node.m_slot << " -> capture");
@@ -300,13 +301,13 @@ namespace {
                     return x.root_slot == inner_var->m_slot && x.fields == fields;
                 });
                 if (binding_it != m_captures.end()) {
-                    m_replacement = NEWNODE(node.m_res_type.clone(), Field, node.span(), get_self(node.span()), RcString::new_interned(FMT(binding_it - m_captures.begin())));
+                    m_replacement = NEWNODE(node.m_res_type, Field, node.span(), get_self(node.span()), RcString::new_interned(FMT(binding_it - m_captures.begin())));
                     if (binding_it->usage != ::HIR::ValueUsage::Move) {
                         auto bt = (binding_it->usage == ::HIR::ValueUsage::Mutate ? ::HIR::BorrowType::Unique : ::HIR::BorrowType::Shared);
 
                         visit_type(m_replacement->m_res_type);
-                        m_replacement->m_res_type = ::HIR::TypeRef::new_borrow(bt, mv$(m_replacement->m_res_type));
-                        m_replacement = NEWNODE(node.m_res_type.clone(), Deref, node.span(), mv$(m_replacement));
+                        m_replacement->m_res_type = m_monomorphiser.type_interner().borrow(bt, m_replacement->m_res_type);
+                        m_replacement = NEWNODE(node.m_res_type, Deref, node.span(), mv$(m_replacement));
                     }
                     m_replacement->m_usage = node.m_usage;
                     DEBUG("_Field: #" << inner_var->m_slot << fields << " -> capture");
@@ -323,18 +324,18 @@ namespace {
 
         ::HIR::ExprNodeP get_self(const Span& sp) const {
             ::HIR::ExprNodeP self;
-            switch (m_closure_type.data().as_NodeType().as_Closure()->m_class) {
+            switch (m_closure_type->as_NodeType().as_Closure()->m_class) {
                 case ::HIR::ExprNode_Closure::Class::Unknown:
                     // Assume it's NoCapture
                 case ::HIR::ExprNode_Closure::Class::NoCapture:
                 case ::HIR::ExprNode_Closure::Class::Shared:
-                    self = NEWNODE(m_closure_type.clone(), Deref, sp, NEWNODE(::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, m_closure_type.clone()), Variable, sp, rcstring_self, 0));
+                    self = NEWNODE(m_closure_type, Deref, sp, NEWNODE(m_monomorphiser.type_interner().borrow(::HIR::BorrowType::Shared, m_closure_type), Variable, sp, rcstring_self, 0));
                     break;
                 case ::HIR::ExprNode_Closure::Class::Mut:
-                    self = NEWNODE(m_closure_type.clone(), Deref, sp, NEWNODE(::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, m_closure_type.clone()), Variable, sp, rcstring_self, 0));
+                    self = NEWNODE(m_closure_type, Deref, sp, NEWNODE(m_monomorphiser.type_interner().borrow(::HIR::BorrowType::Unique, m_closure_type), Variable, sp, rcstring_self, 0));
                     break;
                 case ::HIR::ExprNode_Closure::Class::Once:
-                    self = NEWNODE(m_closure_type.clone(), Variable, sp, rcstring_self, 0);
+                    self = NEWNODE(m_closure_type, Variable, sp, rcstring_self, 0);
                     break;
             }
             return self;
@@ -353,7 +354,8 @@ namespace {
 
     public:
         ExprVisitor_Fixup(const ::HIR::Crate& crate, const ::HIR::GenericParams* params, const Monomorphiser& monomorphiser, const OutState* out)
-            : m_crate(crate)
+            : HIR::ExprVisitorDef(crate.m_types)
+            , m_crate(crate)
             , m_resolve(crate)
             , m_pool(crate.m_pool)
             , m_monomorphiser(monomorphiser)
@@ -391,13 +393,13 @@ namespace {
         void visit(::HIR::ExprNode_Cast& node) override {
             const Span& sp = node.span();
             // Handle casts from closures to function pointers
-            if (TU_TEST1(node.m_value->m_res_type.data(), NodeType, .is_Closure())) {
+            if (TU_TEST1((*node.m_value->m_res_type), NodeType, .is_Closure())) {
                 TRACE_FUNCTION_FR("_Cast: " << &node << " " << node.m_value->m_res_type, node.m_value->m_res_type);
 
-                const auto* src_nodep = node.m_value->m_res_type.data().as_NodeType().as_Closure();
+                const auto* src_nodep = node.m_value->m_res_type->as_NodeType().as_Closure();
                 ASSERT_BUG(sp, src_nodep, "");
                 const auto& src_node = *src_nodep;
-                ASSERT_BUG(sp, node.m_res_type.data().is_Function(), "Cannot convert closure to non-fn type");
+                ASSERT_BUG(sp, node.m_res_type->is_Function(), "Cannot convert closure to non-fn type");
                 //const auto& dte = node.m_res_type.m_data.as_Function();
                 if (src_node.m_class != ::HIR::ExprNode_Closure::Class::NoCapture) {
                     ERROR(sp, E0000, "Cannot cast a closure with captures to a fn() type");
@@ -410,14 +412,14 @@ namespace {
 
                 // - Get the new PathValue
                 const auto& str = *src_node.m_obj_ptr;
-                auto closure_type = ::HIR::TypeRef::new_path(src_node.m_obj_path.clone(), &str);
+                auto closure_type = m_crate.m_types.path(src_node.m_obj_path.clone(), &str);
                 auto fn_path = ::HIR::Path(mv$(closure_type), rcstring_call_free);
                 fn_path.m_data.as_UfcsInherent().impl_params = src_node.m_obj_path.m_params.clone();
 
                 const ::HIR::Function* fcn_ptr = nullptr;
                 if (m_out) {
                     for (const auto& impl : m_out->impls_type) {
-                        const auto& path = impl->m_type.data().as_Path().path.m_data.as_Generic().m_path;
+                        const auto& path = impl->m_type->as_Path().path.m_data.as_Generic().m_path;
                         if (src_node.m_obj_path.m_path == path) {
                             fcn_ptr = &impl->m_methods.begin()->second.data;
                         }
@@ -427,7 +429,7 @@ namespace {
                 }
                 ASSERT_BUG(node.span(), fcn_ptr, "No function found?");
 
-                auto res_ty = ::HIR::TypeRef(::HIR::TypeData::make_NamedFunction({fn_path.clone(), fcn_ptr}));
+                auto res_ty = m_crate.m_types.intern(::HIR::TypeData::make_NamedFunction({fn_path.clone(), fcn_ptr}));
 
                 DEBUG("PathValue " << fn_path);
                 node.m_value = NEWNODE(mv$(res_ty), PathValue, sp, mv$(fn_path), ::HIR::ExprNode_PathValue::FUNCTION);
@@ -436,7 +438,7 @@ namespace {
         }
 
         void visit(::HIR::ExprNode_CallValue& node) override {
-            if (const auto* node_pp = TU_OPT1(node.m_value->m_res_type.data(), NodeType, .opt_Closure())) {
+            if (const auto* node_pp = TU_OPT1((*node.m_value->m_res_type), NodeType, .opt_Closure())) {
                 switch ((*node_pp)->m_class) {
                     case ::HIR::ExprNode_Closure::Class::Unknown:
                         BUG(node.span(), "References an ::Unknown closure");
@@ -461,41 +463,44 @@ namespace {
                 const Monomorphiser& monomorphiser;
 
                 M(const Monomorphiser& monomorphiser)
-                    : monomorphiser(monomorphiser)
+                    : MonomorphiserNop(monomorphiser.type_interner())
+                    , monomorphiser(monomorphiser)
                 {
                 }
 
                 ::HIR::TypeRef monomorph_type(const Span& sp, const ::HIR::TypeRef& ty, bool allow_infer) const override {
-                    if (const auto* e = ty.data().opt_NodeType()) {
+                    if (const auto* e = ty->opt_NodeType()) {
                         TU_MATCH_HDRA((*e), {)
                         TU_ARMA(Closure, node_p) {
                                 DEBUG("Closure: " << node_p->m_obj_path_base); // TODO: Why does this use the `_base`
                                 auto path = monomorphiser.monomorph_genericpath(sp, node_p->m_obj_path_base, false);
                                 const auto& str = *node_p->m_obj_ptr;
                                 DEBUG(ty << " -> " << path);
-                                return ::HIR::TypeRef::new_path(mv$(path), ::HIR::TypePathBinding::make_Struct(&str));
+                                return m_types.path(mv$(path), ::HIR::TypePathBinding::make_Struct(&str));
                             }
                             TU_ARMA(Generator, node_p) {
                                 DEBUG("Generator: " << node_p->m_obj_path);
                                 auto path = monomorphiser.monomorph_genericpath(sp, node_p->m_obj_path, false);
                                 const auto& str = *node_p->m_obj_ptr;
                                 DEBUG(ty << " -> " << path);
-                                return ::HIR::TypeRef::new_path(mv$(path), ::HIR::TypePathBinding::make_Struct(&str));
+                                return m_types.path(mv$(path), ::HIR::TypePathBinding::make_Struct(&str));
                             }
                             TU_ARMA(Async, node_p) {
                                 DEBUG("Async: " << node_p->m_obj_path);
                                 auto path = monomorphiser.monomorph_genericpath(sp, node_p->m_obj_path, false);
                                 const auto& str = *node_p->m_obj_ptr;
                                 DEBUG(ty << " -> " << path);
-                                return ::HIR::TypeRef::new_path(mv$(path), ::HIR::TypePathBinding::make_Struct(&str));
+                                return m_types.path(mv$(path), ::HIR::TypePathBinding::make_Struct(&str));
                             }
                         }
                     }
 
                     auto rv = MonomorphiserNop::monomorph_type(sp, ty, allow_infer);
-                    if (auto* e = rv.data_mut().opt_Path()) {
+                    if (const auto* e = rv->opt_Path()) {
                         if (e->binding.is_Unbound() && e->path.m_data.is_UfcsKnown()) {
-                            e->binding = ::HIR::TypePathBinding::make_Opaque({});
+                            auto data = rv->clone_data();
+                            data.as_Path().binding = ::HIR::TypePathBinding::make_Opaque({});
+                            rv = m_types.intern(mv$(data));
                         }
                     }
                     return rv;
@@ -512,42 +517,42 @@ namespace {
             if (code.m_bindings.size() == 0) {
                 // No bindings - Wrapper function
                 // Insert 0 = Self, 1 = Args
-                code.m_bindings.push_back(self_ty.clone());
-                code.m_bindings.push_back(args_ty.clone());
+                code.m_bindings.push_back(self_ty);
+                code.m_bindings.push_back(args_ty);
             } else {
                 // Bindings present - Actual code (which destructures `args`)
                 assert(code.m_bindings.size() >= 1);
-                assert(code.m_bindings[0] == ::HIR::TypeRef());
-                code.m_bindings[0] = self_ty.clone();
+                assert(code.m_bindings[0]->is_Infer() && code.m_bindings[0]->as_Infer().index == ~0u);
+                code.m_bindings[0] = self_ty;
             }
         }
 
-        static ::HIR::TypeImpl make_fnfree(::HIR::GenericParams params, ::HIR::TypeRef closure_type, ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> args, ::HIR::TypeRef ret_ty, ::HIR::ExprPtr code) {
+        static ::HIR::TypeImpl make_fnfree(HIR::TypeInterner& types, ::HIR::GenericParams params, ::HIR::TypeRef closure_type, ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> args, ::HIR::TypeRef ret_ty, ::HIR::ExprPtr code) {
             // NOTE: Fixup isn't needed, there's no self
             //fix_fn_params(code, closure_type, args_argent.second);
             assert(code.m_bindings.size() > 0);
-            code.m_bindings[0] = ::HIR::TypeRef::new_unit();
-            return ::HIR::TypeImpl{std::move(params), std::move(closure_type), make_map1(rcstring_call_free, ::HIR::TypeImpl::VisImplEnt<::HIR::Function>{::HIR::Publicity::new_global(), false, ::HIR::Function(::HIR::Function::Receiver::Free, ::HIR::GenericParams{}, mv$(args), ret_ty.clone(), mv$(code))}), {}, ::HIR::SimplePath()};
+            code.m_bindings[0] = types.unit();
+            return ::HIR::TypeImpl{std::move(params), std::move(closure_type), make_map1(rcstring_call_free, ::HIR::TypeImpl::VisImplEnt<::HIR::Function>{::HIR::Publicity::new_global(), false, ::HIR::Function(::HIR::Function::Receiver::Free, ::HIR::GenericParams{}, mv$(args), ret_ty, mv$(code))}), {}, ::HIR::SimplePath()};
         }
 
         static ::HIR::TraitImpl make_fnonce(::HIR::GenericParams params, ::HIR::PathParams trait_params, ::HIR::TypeRef closure_type, ::std::pair<::HIR::Pattern, ::HIR::TypeRef> args_argent, ::HIR::TypeRef ret_ty, ::HIR::ExprPtr code) {
-            auto ty_of_self = closure_type.clone();
+            auto ty_of_self = closure_type;
             fix_fn_params(code, ty_of_self, args_argent.second);
-            return ::HIR::TraitImpl{mv$(params), mv$(trait_params), mv$(closure_type), make_map1(rcstring_call_once, ::HIR::TraitImpl::ImplEnt<::HIR::Function>{false, ::HIR::Function{::HIR::Function::Receiver::Value, ::HIR::GenericParams{}, make_vec2(::std::make_pair(::HIR::Pattern{HIR::PatternBinding{false, ::HIR::PatternBinding::Type::Move, rcstring_self, 0}, {}}, mv$(ty_of_self)), mv$(args_argent)), ret_ty.clone(), mv$(code)}}), {}, {}, make_map1(RcString::new_interned("Output"), ::HIR::TraitImpl::ImplEnt<::HIR::TypeRef>{false, mv$(ret_ty)}), ::HIR::SimplePath()};
+            return ::HIR::TraitImpl{mv$(params), mv$(trait_params), mv$(closure_type), make_map1(rcstring_call_once, ::HIR::TraitImpl::ImplEnt<::HIR::Function>{false, ::HIR::Function{::HIR::Function::Receiver::Value, ::HIR::GenericParams{}, make_vec2(::std::make_pair(::HIR::Pattern{HIR::PatternBinding{false, ::HIR::PatternBinding::Type::Move, rcstring_self, 0}, {}}, mv$(ty_of_self)), mv$(args_argent)), ret_ty, mv$(code)}}), {}, {}, make_map1(RcString::new_interned("Output"), ::HIR::TraitImpl::ImplEnt<::HIR::TypeRef>{false, mv$(ret_ty)}), ::HIR::SimplePath()};
         }
 
-        static ::HIR::TraitImpl make_fnmut(::HIR::GenericParams params, ::HIR::PathParams trait_params, ::HIR::TypeRef closure_type, ::std::pair<::HIR::Pattern, ::HIR::TypeRef> args_argent, ::HIR::TypeRef ret_ty, ::HIR::ExprPtr code) {
+        static ::HIR::TraitImpl make_fnmut(HIR::TypeInterner& types, ::HIR::GenericParams params, ::HIR::PathParams trait_params, ::HIR::TypeRef closure_type, ::std::pair<::HIR::Pattern, ::HIR::TypeRef> args_argent, ::HIR::TypeRef ret_ty, ::HIR::ExprPtr code) {
             ::HIR::GenericParams fcn_params;
             fcn_params.m_lifetimes.push_back(HIR::LifetimeDef());
-            auto ty_of_self = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, closure_type.clone(), HIR::LifetimeRef(256 + 0));
+            auto ty_of_self = types.borrow(::HIR::BorrowType::Unique, closure_type, HIR::LifetimeRef(256 + 0));
             fix_fn_params(code, ty_of_self, args_argent.second);
-            return ::HIR::TraitImpl{mv$(params), mv$(trait_params), mv$(closure_type), make_map1(rcstring_call_mut, ::HIR::TraitImpl::ImplEnt<::HIR::Function>{false, ::HIR::Function{::HIR::Function::Receiver::BorrowUnique, mv$(fcn_params), make_vec2(::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_self, 0}, {}}, mv$(ty_of_self)), mv$(args_argent)), ret_ty.clone(), mv$(code)}}), {}, {}, {}, ::HIR::SimplePath()};
+            return ::HIR::TraitImpl{mv$(params), mv$(trait_params), mv$(closure_type), make_map1(rcstring_call_mut, ::HIR::TraitImpl::ImplEnt<::HIR::Function>{false, ::HIR::Function{::HIR::Function::Receiver::BorrowUnique, mv$(fcn_params), make_vec2(::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_self, 0}, {}}, mv$(ty_of_self)), mv$(args_argent)), ret_ty, mv$(code)}}), {}, {}, {}, ::HIR::SimplePath()};
         }
 
-        static ::HIR::TraitImpl make_fn(::HIR::GenericParams params, ::HIR::PathParams trait_params, ::HIR::TypeRef closure_type, ::std::pair<::HIR::Pattern, ::HIR::TypeRef> args_argent, ::HIR::TypeRef ret_ty, ::HIR::ExprPtr code) {
-            auto ty_of_self = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, closure_type.clone());
+        static ::HIR::TraitImpl make_fn(HIR::TypeInterner& types, ::HIR::GenericParams params, ::HIR::PathParams trait_params, ::HIR::TypeRef closure_type, ::std::pair<::HIR::Pattern, ::HIR::TypeRef> args_argent, ::HIR::TypeRef ret_ty, ::HIR::ExprPtr code) {
+            auto ty_of_self = types.borrow(::HIR::BorrowType::Shared, closure_type);
             fix_fn_params(code, ty_of_self, args_argent.second);
-            return ::HIR::TraitImpl{mv$(params), mv$(trait_params), mv$(closure_type), make_map1(rcstring_call, ::HIR::TraitImpl::ImplEnt<::HIR::Function>{false, ::HIR::Function{::HIR::Function::Receiver::BorrowShared, ::HIR::GenericParams{}, make_vec2(::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_self, 0}, {}}, mv$(ty_of_self)), mv$(args_argent)), ret_ty.clone(), mv$(code)}}), {}, {}, {}, ::HIR::SimplePath()};
+            return ::HIR::TraitImpl{mv$(params), mv$(trait_params), mv$(closure_type), make_map1(rcstring_call, ::HIR::TraitImpl::ImplEnt<::HIR::Function>{false, ::HIR::Function{::HIR::Function::Receiver::BorrowShared, ::HIR::GenericParams{}, make_vec2(::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_self, 0}, {}}, mv$(ty_of_self)), mv$(args_argent)), ret_ty, mv$(code)}}), {}, {}, {}, ::HIR::SimplePath()};
         }
     };
 
@@ -565,7 +570,8 @@ namespace {
 
     public:
         ExprVisitor_Extract(const StaticTraitResolve& resolve, const ::HIR::TypeRef* self_type, const ::std::vector<::HIR::TypeRef>& var_types, const ::HIR::ExprPtr& expr_ptr, OutState& out, const char* new_type_suffix)
-            : m_resolve(resolve)
+            : HIR::ExprVisitorDef(resolve.m_crate.m_types)
+            , m_resolve(resolve)
             , m_pool(resolve.m_crate.m_pool)
             , m_self_type(self_type)
             , m_variable_types(var_types)
@@ -595,7 +601,8 @@ namespace {
             std::set<const HIR::GenericBound*> m_added_bounds;
 
             Monomorph(const StaticTraitResolve& resolve, ::HIR::GenericParams& params, ::HIR::PathParams& constructor_path_params)
-                : resolve(resolve)
+                : Monomorphiser(resolve.m_crate.m_types)
+                , resolve(resolve)
                 , params(params)
                 , constructor_path_params(constructor_path_params)
             {
@@ -611,27 +618,28 @@ namespace {
                 ASSERT_BUG(sp, constructor_path_params.m_types.size() == params.m_types.size(), "");
                 for (size_t i = 0; i < constructor_path_params.m_types.size(); i++) {
                     const auto& t = constructor_path_params.m_types[i];
-                    if (t.data().is_Generic() && t.data().as_Generic() == ge) {
+                    if (t->is_Generic() && t->as_Generic() == ge) {
                         rv = i;
-                        DEBUG("Use param: " << ::HIR::TypeRef(params.m_types[rv].m_name, rv));
+                        DEBUG("Use param: " << m_types.generic(params.m_types[rv].m_name, rv));
                         break;
                     }
                 }
                 if (rv == SIZE_MAX) {
                     ASSERT_BUG(sp, !m_frozen, "get_type would add a new param after freeze - " << ge);
                     rv = constructor_path_params.m_types.size();
-                    DEBUG("Add param: " << ::HIR::TypeRef(ge.name, rv) << " <- " << ge);
-                    constructor_path_params.m_types.push_back(HIR::TypeRef(ge.name, ge.binding));
-                    params.m_types.push_back(::HIR::TypeParamDef());
-                    //params.m_types.back().m_is_sized = true;
-                    params.m_types.back().m_is_sized = resolve.type_is_sized(sp, constructor_path_params.m_types.back());
-                    params.m_types.back().m_name = ge.name;
+                    DEBUG("Add param: " << m_types.generic(ge.name, rv) << " <- " << ge);
+                    constructor_path_params.m_types.push_back(m_types.generic(ge.name, ge.binding));
+                    params.m_types.push_back(::HIR::TypeParamDef{
+                        ge.name,
+                        m_types.infer(),
+                        resolve.type_is_sized(sp, constructor_path_params.m_types.back()),
+                    });
                 }
                 ASSERT_BUG(sp, rv < params.m_types.size(), ge << " -> " << rv << " < " << params.m_types.size());
-                return ::HIR::TypeRef(params.m_types[rv].m_name, rv);
+                return m_types.generic(params.m_types[rv].m_name, rv);
             }
 
-            ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& ge) const {
+            ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& ge) const override {
                 size_t rv = SIZE_MAX;
                 for (size_t i = 0; i < constructor_path_params.m_values.size(); i++) {
                     const auto& v = constructor_path_params.m_values[i];
@@ -678,7 +686,7 @@ namespace {
             }
 
             ::HIR::TypeRef monomorph_type(const Span& sp, const ::HIR::TypeRef& tpl, bool allow_infer = true) const override {
-                //if( const auto* te = tpl.data().opt_Closure() ) {
+                //if( const auto* te = tpl->opt_Closure() ) {
                 //    this->monomorph_genericpath(sp, te->node->m_obj_path, allow_infer);
                 //}
                 return Monomorphiser::monomorph_type(sp, tpl, allow_infer);
@@ -761,7 +769,7 @@ namespace {
                 }
                 for (size_t i = 0; i < constructor_path_params.m_values.size(); i++) {
                     DEBUG("-- constructor_path_params Value: " << constructor_path_params.m_values[i]);
-                    params.m_values[i].m_type = resolve.get_const_param_type(sp, constructor_path_params.m_values[i].as_Generic().binding).clone();
+                    params.m_values[i].m_type = resolve.get_const_param_type(sp, constructor_path_params.m_values[i].as_Generic().binding);
                 }
                 DEBUG("params = " << params.fmt_args());
             }
@@ -789,7 +797,7 @@ namespace {
                 // Only include if a used generic is present AND there are no unused generics
                 // - Visit the type, if there's a generic then determine if the
                 return [this, &rv](const ::HIR::TypeRef& t) -> bool {
-                    if (t.data().is_Generic()) {
+                    if (t->is_Generic()) {
                         if (contains(constructor_path_params.m_types, t)) {
                             if (rv == TypeNeed::NoGenerics) {
                                 rv = TypeNeed::Required;
@@ -936,7 +944,7 @@ namespace {
                 args_ty_inner.push_back(monomorph_cb.monomorph_type(sp, arg.second));
             }
             monomorph_cb.mode = Monomorph::Mode::Return;
-            ::HIR::TypeRef args_ty{mv$(args_ty_inner)};
+            ::HIR::TypeRef args_ty = m_resolve.m_crate.m_types.tuple(mv$(args_ty_inner));
             DEBUG("> Return type: " << node.m_return);
             ::HIR::TypeRef ret_type = monomorph_cb.monomorph_type(sp, node.m_return);
             DEBUG("args_ty = " << args_ty << ", ret_type = " << ret_type);
@@ -953,9 +961,9 @@ namespace {
             // - Types of local variables
             DEBUG("--- Build locals and captures");
             ::std::vector<::HIR::TypeRef> local_types;
-            local_types.push_back(::HIR::TypeRef()); // self - filled by make_fn*
+            local_types.push_back(m_resolve.m_crate.m_types.infer()); // self - filled by make_fn*
             for (const auto binding_idx : node.m_avu_cache.local_vars) {
-                local_types.push_back(monomorph_cb.monomorph_type(sp, m_variable_types.at(binding_idx).clone()));
+                local_types.push_back(monomorph_cb.monomorph_type(sp, m_variable_types.at(binding_idx)));
             }
             // - Generate types of captures, and construct the actual capture values
             //  > Capture types (with borrows and using closure's type params)
@@ -970,15 +978,15 @@ namespace {
 
                 HIR::TypeRef tmp_ty;
                 const auto* cap_ty_p = &m_variable_types.at(binding.root_slot);
-                auto val_node = NEWNODE(cap_ty_p->clone(), Variable, sp, "", binding.root_slot);
+                auto val_node = NEWNODE(*cap_ty_p, Variable, sp, "", binding.root_slot);
                 for (const auto& n : binding.fields) {
                     tmp_ty = m_resolve.get_field_type(sp, *cap_ty_p, n);
                     m_resolve.expand_associated_types(sp, tmp_ty);
                     cap_ty_p = &tmp_ty;
                     if (n == "") {
-                        val_node = NEWNODE(cap_ty_p->clone(), Deref, sp, std::move(val_node));
+                        val_node = NEWNODE(*cap_ty_p, Deref, sp, std::move(val_node));
                     } else {
-                        val_node = NEWNODE(cap_ty_p->clone(), Field, sp, std::move(val_node), n);
+                        val_node = NEWNODE(*cap_ty_p, Field, sp, std::move(val_node), n);
                     }
                 }
 
@@ -993,13 +1001,13 @@ namespace {
                         BUG(sp, "ValueUsage::Unkown on " << binding.root_slot);
                     case ::HIR::ValueUsage::Borrow:
                         bt = ::HIR::BorrowType::Shared;
-                        capture_nodes.push_back(NEWNODE(::HIR::TypeRef::new_borrow(bt, cap_ty.clone(), HIR::LifetimeRef(HIR::LifetimeRef::MAX_LOCAL + 1)), Borrow, sp, bt, mv$(val_node)));
-                        ty_mono = ::HIR::TypeRef::new_borrow(bt, mv$(ty_mono));
+                        capture_nodes.push_back(NEWNODE(m_resolve.m_crate.m_types.borrow(bt, cap_ty, HIR::LifetimeRef(HIR::LifetimeRef::MAX_LOCAL + 1)), Borrow, sp, bt, mv$(val_node)));
+                        ty_mono = m_resolve.m_crate.m_types.borrow(bt, ty_mono);
                         break;
                     case ::HIR::ValueUsage::Mutate:
                         bt = ::HIR::BorrowType::Unique;
-                        capture_nodes.push_back(NEWNODE(::HIR::TypeRef::new_borrow(bt, cap_ty.clone(), HIR::LifetimeRef(HIR::LifetimeRef::MAX_LOCAL + 1)), Borrow, sp, bt, mv$(val_node)));
-                        ty_mono = ::HIR::TypeRef::new_borrow(bt, mv$(ty_mono));
+                        capture_nodes.push_back(NEWNODE(m_resolve.m_crate.m_types.borrow(bt, cap_ty, HIR::LifetimeRef(HIR::LifetimeRef::MAX_LOCAL + 1)), Borrow, sp, bt, mv$(val_node)));
+                        ty_mono = m_resolve.m_crate.m_types.borrow(bt, ty_mono);
                         break;
                     case ::HIR::ValueUsage::Move:
                         capture_nodes.push_back(mv$(val_node));
@@ -1015,7 +1023,8 @@ namespace {
                 auto binding_type = node.m_avu_cache.captured_vars[i].usage;
                 auto& ty_mono = capture_types[i].ent;
                 if (binding_type != ::HIR::ValueUsage::Move) {
-                    ty_mono.data_mut().as_Borrow().lifetime = HIR::LifetimeRef(ref_capture_lft_idx);
+                    const auto& borrow = ty_mono->as_Borrow();
+                    ty_mono = m_resolve.m_crate.m_types.borrow(borrow.type, borrow.inner, HIR::LifetimeRef(ref_capture_lft_idx));
                     lifetime_needed = true;
                 }
             }
@@ -1064,7 +1073,7 @@ namespace {
                 }
             }
 
-            auto impl_path_params = params.make_nop_params(0);
+            auto impl_path_params = params.make_nop_params(m_resolve.m_crate.m_types, 0);
             auto str = ::HIR::Struct{params.clone(), ::HIR::Struct::Repr::Rust, ::HIR::Struct::Data::make_Tuple(mv$(capture_types))};
             str.m_markings.is_copy = node.m_is_copy;
             ::HIR::SimplePath closure_struct_path;
@@ -1079,7 +1088,7 @@ namespace {
             node.m_captures = mv$(capture_nodes);
             //node.m_res_type = ::HIR::TypeRef( node.m_obj_path.clone() );
             DEBUG("-- Object name: " << node.m_obj_path);
-            ::HIR::TypeRef closure_type = ::HIR::TypeRef::new_path(::HIR::GenericPath(node.m_obj_path.m_path.clone(), mv$(impl_path_params)), ::HIR::TypePathBinding::make_Struct(&closure_struct_ref));
+            ::HIR::TypeRef closure_type = m_resolve.m_crate.m_types.path(::HIR::GenericPath(node.m_obj_path.m_path.clone(), mv$(impl_path_params)), ::HIR::TypePathBinding::make_Struct(&closure_struct_ref));
             ::std::vector<::HIR::Pattern> args_pat_inner;
             for (const auto& arg : node.m_args) {
                 args_pat_inner.push_back(arg.first.clone());
@@ -1109,7 +1118,7 @@ namespace {
                     ::HIR::TraitImpl{
                         params.clone(),
                         {},
-                        closure_type.clone(),
+                        closure_type,
                         {},
                         {},
                         {},
@@ -1124,7 +1133,7 @@ namespace {
             // 3. Create trait impls
             // ---
             ::HIR::PathParams trait_params;
-            trait_params.m_types.push_back(args_ty.clone());
+            trait_params.m_types.push_back(args_ty);
             switch (node.m_class) {
                 case ::HIR::ExprNode_Closure::Class::Unknown:
                     node.m_class = ::HIR::ExprNode_Closure::Class::NoCapture;
@@ -1132,8 +1141,8 @@ namespace {
                     DEBUG("class=NoCapture");
 
                     struct H2 {
-                        static ::std::pair<::HIR::ExprNode_Closure::Class, HIR::TraitImpl> make_dispatch(stl::ObjPool* m_pool, const Span& sp, ::HIR::ExprNode_Closure::Class c, ::HIR::GenericParams params, ::HIR::PathParams trait_params, const ::HIR::TypeRef& closure_type, const ::HIR::TypeRef& args_ty, const ::HIR::TypeRef& ret_type) {
-                            const auto& args_tup_inner = args_ty.data().as_Tuple();
+                        static ::std::pair<::HIR::ExprNode_Closure::Class, HIR::TraitImpl> make_dispatch(HIR::TypeInterner& types, stl::ObjPool* m_pool, const Span& sp, ::HIR::ExprNode_Closure::Class c, ::HIR::GenericParams params, ::HIR::PathParams trait_params, const ::HIR::TypeRef& closure_type, const ::HIR::TypeRef& args_ty, const ::HIR::TypeRef& ret_type) {
+                            const auto& args_tup_inner = args_ty->as_Tuple();
                             // 1. Create a list of `arg.0, arg.1, arg.2, ...` for the dispatch methods
                             ::std::vector<HIR::ExprNodeP> dispatch_args;
                             ::std::vector<HIR::TypeRef> dispatch_node_args_cache;
@@ -1141,26 +1150,26 @@ namespace {
                             dispatch_node_args_cache.reserve(args_tup_inner.size() + 1);
                             for (size_t i = 0; i < args_tup_inner.size(); i++) {
                                 const auto& ty = args_tup_inner[i];
-                                dispatch_args.push_back(NEWNODE(ty.clone(), Field, sp, NEWNODE(args_ty.clone(), Variable, sp, rcstring_arg, 1), RcString::new_interned(FMT(i))));
-                                dispatch_node_args_cache.push_back(ty.clone());
+                                dispatch_args.push_back(NEWNODE(ty, Field, sp, NEWNODE(args_ty, Variable, sp, rcstring_arg, 1), RcString::new_interned(FMT(i))));
+                                dispatch_node_args_cache.push_back(ty);
                             }
-                            dispatch_node_args_cache.push_back(ret_type.clone());
-                            auto path = ::HIR::Path(closure_type.clone(), rcstring_call_free);
-                            path.m_data.as_UfcsInherent().impl_params = closure_type.data().as_Path().path.m_data.as_Generic().m_params.clone();
-                            HIR::ExprNodeP dispatch_node = NEWNODE(ret_type.clone(), CallPath, sp, mv$(path), mv$(dispatch_args));
+                            dispatch_node_args_cache.push_back(ret_type);
+                            auto path = ::HIR::Path(closure_type, rcstring_call_free);
+                            path.m_data.as_UfcsInherent().impl_params = closure_type->as_Path().path.m_data.as_Generic().m_params.clone();
+                            HIR::ExprNodeP dispatch_node = NEWNODE(ret_type, CallPath, sp, mv$(path), mv$(dispatch_args));
                             dynamic_cast<::HIR::ExprNode_CallPath&>(*dispatch_node).m_cache.m_arg_types = mv$(dispatch_node_args_cache);
 
-                            auto args_arg = ::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_args, 1}, {}}, args_ty.clone());
+                            auto args_arg = ::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_args, 1}, {}}, args_ty);
                             HIR::TraitImpl fcn;
                             switch (c) {
                                 case ::HIR::ExprNode_Closure::Class::Once:
-                                    fcn = H::make_fnonce(mv$(params), mv$(trait_params), closure_type.clone(), mv$(args_arg), ret_type.clone(), mv$(dispatch_node));
+                                    fcn = H::make_fnonce(mv$(params), mv$(trait_params), closure_type, mv$(args_arg), ret_type, mv$(dispatch_node));
                                     break;
                                 case ::HIR::ExprNode_Closure::Class::Mut:
-                                    fcn = H::make_fnmut(mv$(params), mv$(trait_params), closure_type.clone(), mv$(args_arg), ret_type.clone(), mv$(dispatch_node));
+                                    fcn = H::make_fnmut(types, mv$(params), mv$(trait_params), closure_type, mv$(args_arg), ret_type, mv$(dispatch_node));
                                     break;
                                 case ::HIR::ExprNode_Closure::Class::Shared:
-                                    fcn = H::make_fn(mv$(params), mv$(trait_params), closure_type.clone(), mv$(args_arg), ret_type.clone(), mv$(dispatch_node));
+                                    fcn = H::make_fn(types, mv$(params), mv$(trait_params), closure_type, mv$(args_arg), ret_type, mv$(dispatch_node));
                                     break;
                                 default:
                                     throw "";
@@ -1169,59 +1178,59 @@ namespace {
                         }
                     };
 
-                    m_out.impls_closure.push_back(H2::make_dispatch(m_pool, sp, ::HIR::ExprNode_Closure::Class::Once, params.clone(), trait_params.clone(), closure_type, args_ty, ret_type));
-                    m_out.impls_closure.push_back(H2::make_dispatch(m_pool, sp, ::HIR::ExprNode_Closure::Class::Mut, params.clone(), trait_params.clone(), closure_type, args_ty, ret_type));
-                    m_out.impls_closure.push_back(H2::make_dispatch(m_pool, sp, ::HIR::ExprNode_Closure::Class::Shared, params.clone(), mv$(trait_params), closure_type, args_ty, ret_type));
+                    m_out.impls_closure.push_back(H2::make_dispatch(m_resolve.m_crate.m_types, m_pool, sp, ::HIR::ExprNode_Closure::Class::Once, params.clone(), trait_params.clone(), closure_type, args_ty, ret_type));
+                    m_out.impls_closure.push_back(H2::make_dispatch(m_resolve.m_crate.m_types, m_pool, sp, ::HIR::ExprNode_Closure::Class::Mut, params.clone(), trait_params.clone(), closure_type, args_ty, ret_type));
+                    m_out.impls_closure.push_back(H2::make_dispatch(m_resolve.m_crate.m_types, m_pool, sp, ::HIR::ExprNode_Closure::Class::Shared, params.clone(), mv$(trait_params), closure_type, args_ty, ret_type));
 
                     // 2. Split args_pat/args_ty into separate arguments
                     ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> args_split;
                     args_split.reserve(node.m_args.size());
                     for (size_t i = 0; i < node.m_args.size(); i++) {
-                        args_split.push_back(::std::make_pair(mv$(args_pat.m_data.as_Tuple().sub_patterns[i]), mv$(args_ty.data().as_Tuple()[i])));
+                        args_split.push_back(::std::make_pair(mv$(args_pat.m_data.as_Tuple().sub_patterns[i]), mv$(args_ty->as_Tuple()[i])));
                     }
                     // - Create fn_free free method
-                    m_out.impls_type.push_back(box$(H::make_fnfree(mv$(params), mv$(closure_type), mv$(args_split), mv$(ret_type), std::move(body_code))));
+                    m_out.impls_type.push_back(box$(H::make_fnfree(m_resolve.m_crate.m_types, mv$(params), mv$(closure_type), mv$(args_split), mv$(ret_type), std::move(body_code))));
 
                 } break;
                 case ::HIR::ExprNode_Closure::Class::Shared: {
                     DEBUG("class=Shared");
                     const auto& lang_Fn = m_resolve.m_crate.get_lang_item_path(node.span(), "fn");
-                    const auto method_self_ty = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, closure_type.clone());
+                    const auto method_self_ty = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Shared, closure_type);
 
                     // - FnOnce
                     {
-                        auto dispatch_node = NEWNODE(ret_type.clone(), CallPath, sp, ::HIR::Path(closure_type.clone(), ::HIR::GenericPath(lang_Fn, trait_params.clone()), rcstring_call, HIR::PathParams(HIR::LifetimeRef())), make_vec2(NEWNODE(method_self_ty.clone(), Borrow, sp, ::HIR::BorrowType::Shared, NEWNODE(closure_type.clone(), Variable, sp, rcstring_self, 0)), NEWNODE(args_ty.clone(), Variable, sp, rcstring_arg, 1)));
-                        dynamic_cast<::HIR::ExprNode_CallPath&>(*dispatch_node).m_cache.m_arg_types = make_vec3(method_self_ty.clone(), args_ty.clone(), ret_type.clone());
-                        auto args_arg = ::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_args, 1}, {}}, args_ty.clone());
-                        m_out.impls_closure.push_back(::std::make_pair(::HIR::ExprNode_Closure::Class::Once, H::make_fnonce(params.clone(), trait_params.clone(), closure_type.clone(), mv$(args_arg), ret_type.clone(), mv$(dispatch_node))));
+                        auto dispatch_node = NEWNODE(ret_type, CallPath, sp, ::HIR::Path(closure_type, ::HIR::GenericPath(lang_Fn, trait_params.clone()), rcstring_call, HIR::PathParams(HIR::LifetimeRef())), make_vec2(NEWNODE(method_self_ty, Borrow, sp, ::HIR::BorrowType::Shared, NEWNODE(closure_type, Variable, sp, rcstring_self, 0)), NEWNODE(args_ty, Variable, sp, rcstring_arg, 1)));
+                        dynamic_cast<::HIR::ExprNode_CallPath&>(*dispatch_node).m_cache.m_arg_types = make_vec3(method_self_ty, args_ty, ret_type);
+                        auto args_arg = ::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_args, 1}, {}}, args_ty);
+                        m_out.impls_closure.push_back(::std::make_pair(::HIR::ExprNode_Closure::Class::Once, H::make_fnonce(params.clone(), trait_params.clone(), closure_type, mv$(args_arg), ret_type, mv$(dispatch_node))));
                     }
                     // - FnMut
                     {
-                        auto self_ty = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, closure_type.clone());
-                        auto dispatch_node = NEWNODE(ret_type.clone(), CallPath, sp, ::HIR::Path(closure_type.clone(), ::HIR::GenericPath(lang_Fn, trait_params.clone()), rcstring_call, HIR::PathParams(HIR::LifetimeRef())), make_vec2(NEWNODE(method_self_ty.clone(), Borrow, sp, ::HIR::BorrowType::Shared, NEWNODE(closure_type.clone(), Deref, sp, NEWNODE(mv$(self_ty), Variable, sp, rcstring_self, 0))), NEWNODE(args_ty.clone(), Variable, sp, rcstring_arg, 1)));
-                        dynamic_cast<::HIR::ExprNode_CallPath&>(*dispatch_node).m_cache.m_arg_types = make_vec3(method_self_ty.clone(), args_ty.clone(), ret_type.clone());
-                        auto args_arg = ::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_args, 1}, {}}, args_ty.clone());
-                        m_out.impls_closure.push_back(::std::make_pair(::HIR::ExprNode_Closure::Class::Mut, H::make_fnmut(params.clone(), trait_params.clone(), closure_type.clone(), mv$(args_arg), ret_type.clone(), mv$(dispatch_node))));
+                        auto self_ty = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, closure_type);
+                        auto dispatch_node = NEWNODE(ret_type, CallPath, sp, ::HIR::Path(closure_type, ::HIR::GenericPath(lang_Fn, trait_params.clone()), rcstring_call, HIR::PathParams(HIR::LifetimeRef())), make_vec2(NEWNODE(method_self_ty, Borrow, sp, ::HIR::BorrowType::Shared, NEWNODE(closure_type, Deref, sp, NEWNODE(mv$(self_ty), Variable, sp, rcstring_self, 0))), NEWNODE(args_ty, Variable, sp, rcstring_arg, 1)));
+                        dynamic_cast<::HIR::ExprNode_CallPath&>(*dispatch_node).m_cache.m_arg_types = make_vec3(method_self_ty, args_ty, ret_type);
+                        auto args_arg = ::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_args, 1}, {}}, args_ty);
+                        m_out.impls_closure.push_back(::std::make_pair(::HIR::ExprNode_Closure::Class::Mut, H::make_fnmut(m_resolve.m_crate.m_types, params.clone(), trait_params.clone(), closure_type, mv$(args_arg), ret_type, mv$(dispatch_node))));
                     }
 
                     // - Fn
-                    m_out.impls_closure.push_back(::std::make_pair(::HIR::ExprNode_Closure::Class::Shared, H::make_fn(mv$(params), mv$(trait_params), mv$(closure_type), ::std::make_pair(mv$(args_pat), mv$(args_ty)), mv$(ret_type), mv$(body_code))));
+                    m_out.impls_closure.push_back(::std::make_pair(::HIR::ExprNode_Closure::Class::Shared, H::make_fn(m_resolve.m_crate.m_types, mv$(params), mv$(trait_params), mv$(closure_type), ::std::make_pair(mv$(args_pat), mv$(args_ty)), mv$(ret_type), mv$(body_code))));
                 } break;
                 case ::HIR::ExprNode_Closure::Class::Mut: {
                     DEBUG("class=Mut");
                     const auto& lang_FnMut = m_resolve.m_crate.get_lang_item_path(node.span(), "fn_mut");
-                    const auto method_self_ty = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, closure_type.clone());
+                    const auto method_self_ty = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, closure_type);
 
                     // - FnOnce
                     {
-                        auto dispatch_node = NEWNODE(ret_type.clone(), CallPath, sp, ::HIR::Path(closure_type.clone(), ::HIR::GenericPath(lang_FnMut, trait_params.clone()), rcstring_call_mut, HIR::PathParams(HIR::LifetimeRef())), make_vec2(NEWNODE(method_self_ty.clone(), Borrow, sp, ::HIR::BorrowType::Unique, NEWNODE(closure_type.clone(), Variable, sp, rcstring_self, 0)), NEWNODE(args_ty.clone(), Variable, sp, rcstring_arg, 1)));
-                        dynamic_cast<::HIR::ExprNode_CallPath&>(*dispatch_node).m_cache.m_arg_types = make_vec3(method_self_ty.clone(), args_ty.clone(), ret_type.clone());
-                        auto args_arg = ::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_args, 1}, {}}, args_ty.clone());
-                        m_out.impls_closure.push_back(::std::make_pair(::HIR::ExprNode_Closure::Class::Once, H::make_fnonce(params.clone(), trait_params.clone(), closure_type.clone(), mv$(args_arg), ret_type.clone(), mv$(dispatch_node))));
+                        auto dispatch_node = NEWNODE(ret_type, CallPath, sp, ::HIR::Path(closure_type, ::HIR::GenericPath(lang_FnMut, trait_params.clone()), rcstring_call_mut, HIR::PathParams(HIR::LifetimeRef())), make_vec2(NEWNODE(method_self_ty, Borrow, sp, ::HIR::BorrowType::Unique, NEWNODE(closure_type, Variable, sp, rcstring_self, 0)), NEWNODE(args_ty, Variable, sp, rcstring_arg, 1)));
+                        dynamic_cast<::HIR::ExprNode_CallPath&>(*dispatch_node).m_cache.m_arg_types = make_vec3(method_self_ty, args_ty, ret_type);
+                        auto args_arg = ::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_args, 1}, {}}, args_ty);
+                        m_out.impls_closure.push_back(::std::make_pair(::HIR::ExprNode_Closure::Class::Once, H::make_fnonce(params.clone(), trait_params.clone(), closure_type, mv$(args_arg), ret_type, mv$(dispatch_node))));
                     }
 
                     // - FnMut (code)
-                    m_out.impls_closure.push_back(::std::make_pair(::HIR::ExprNode_Closure::Class::Mut, H::make_fnmut(mv$(params), mv$(trait_params), mv$(closure_type), ::std::make_pair(mv$(args_pat), mv$(args_ty)), mv$(ret_type), mv$(body_code))));
+                    m_out.impls_closure.push_back(::std::make_pair(::HIR::ExprNode_Closure::Class::Mut, H::make_fnmut(m_resolve.m_crate.m_types, mv$(params), mv$(trait_params), mv$(closure_type), ::std::make_pair(mv$(args_pat), mv$(args_ty)), mv$(ret_type), mv$(body_code))));
                 } break;
                 case ::HIR::ExprNode_Closure::Class::Once:
                     DEBUG("class=Once");
@@ -1255,7 +1264,8 @@ namespace {
 
         public:
             ExprVisitor_GeneratorRewrite(const Monomorph& monomorph, const std::map<unsigned, unsigned>& rewrites)
-                : m_monomorph(monomorph)
+                : ::HIR::ExprVisitorDef(monomorph.type_interner())
+                , m_monomorph(monomorph)
                 , m_variable_rewrites(rewrites)
             {
             }
@@ -1329,8 +1339,10 @@ namespace {
             ::std::vector<::HIR::VisEnt<::HIR::TypeRef>> struct_ents;
             ::std::vector<HIR::ExprNodeP> capture_nodes;
 
-            void set_state_type(HIR::TypeRef ty) {
-                this->struct_ents.at(0).ent.data_mut().as_Path().path.m_data.as_Generic().m_params.m_types.at(0) = std::move(ty);
+            void set_state_type(HIR::TypeInterner& types, HIR::TypeRef ty) {
+                auto data = this->struct_ents.at(0).ent->clone_data();
+                data.as_Path().path.m_data.as_Generic().m_params.m_types.at(0) = ty;
+                this->struct_ents.at(0).ent = types.intern(std::move(data));
             }
         };
 
@@ -1355,7 +1367,7 @@ namespace {
             const auto& lang_MaybeUninit = m_resolve.m_crate.get_lang_item_path(sp, "maybe_uninit");
             const auto& unm_MaybeUninit = m_resolve.m_crate.get_union_by_path(sp, lang_MaybeUninit);
             // Wrap the state in MaybeUninit to prevent any attempt at using niche optimisations
-            rv.struct_ents.push_back(HIR::VisEnt<HIR::TypeRef>{HIR::Publicity::new_none(), ::HIR::TypeRef::new_path(::HIR::GenericPath(lang_MaybeUninit, ::HIR::PathParams(::HIR::TypeRef())), &unm_MaybeUninit)});
+            rv.struct_ents.push_back(HIR::VisEnt<HIR::TypeRef>{HIR::Publicity::new_none(), m_resolve.m_crate.m_types.path(::HIR::GenericPath(lang_MaybeUninit, ::HIR::PathParams(::HIR::TypeRef())), &unm_MaybeUninit)});
 
             // Add captures to the locals list first
             for (const auto& cap : avu_cache.captured_vars) {
@@ -1365,7 +1377,7 @@ namespace {
 
                 rv.capture_usages.push_back(cap.second);
                 auto cap_ty = monomorph_cb.monomorph_type(sp, m_variable_types.at(cap.first));
-                rv.struct_ents.push_back(HIR::VisEnt<HIR::TypeRef>{HIR::Publicity::new_none(), cap_ty.clone()});
+                rv.struct_ents.push_back(HIR::VisEnt<HIR::TypeRef>{HIR::Publicity::new_none(), cap_ty});
                 rv.capture_nodes.push_back(HIR::ExprNodeP(m_pool->make<::HIR::ExprNode_Variable>(sp, "", cap.first)));
                 switch (cap.second) {
                     case ::HIR::ValueUsage::Unknown:
@@ -1374,15 +1386,15 @@ namespace {
                         // No wrapping needed (drop handled by custom drop glue)
                     } break;
                     case ::HIR::ValueUsage::Borrow:
-                        rv.capture_nodes.back()->m_res_type = cap_ty.clone();
-                        cap_ty = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, std::move(cap_ty));
-                        rv.struct_ents.back().ent = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, std::move(rv.struct_ents.back().ent));
+                        rv.capture_nodes.back()->m_res_type = cap_ty;
+                        cap_ty = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Shared, cap_ty);
+                        rv.struct_ents.back().ent = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Shared, rv.struct_ents.back().ent);
                         rv.capture_nodes.back() = HIR::ExprNodeP(m_pool->make<::HIR::ExprNode_Borrow>(sp, ::HIR::BorrowType::Shared, std::move(rv.capture_nodes.back())));
                         break;
                     case ::HIR::ValueUsage::Mutate:
-                        rv.capture_nodes.back()->m_res_type = cap_ty.clone();
-                        cap_ty = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, std::move(cap_ty));
-                        rv.struct_ents.back().ent = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, std::move(rv.struct_ents.back().ent));
+                        rv.capture_nodes.back()->m_res_type = cap_ty;
+                        cap_ty = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, cap_ty);
+                        rv.struct_ents.back().ent = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, rv.struct_ents.back().ent);
                         rv.capture_nodes.back() = HIR::ExprNodeP(m_pool->make<::HIR::ExprNode_Borrow>(sp, ::HIR::BorrowType::Unique, std::move(rv.capture_nodes.back())));
                         break;
                 }
@@ -1430,7 +1442,7 @@ namespace {
 
             // Create state index enum
             auto state_idx_type = m_out.new_type("gen_state_idx#", m_new_type_suffix, ::HIR::Enum{::HIR::GenericParams(), false, ::HIR::Enum::Repr(), ::HIR::Enum::Class::make_Value({})});
-            auto state_idx_ty = ::HIR::TypeRef::new_path(state_idx_type.first, &state_idx_type.second->as_Enum());
+            auto state_idx_ty = m_resolve.m_crate.m_types.path(state_idx_type.first, &state_idx_type.second->as_Enum());
 
             // Create the captures structure here, and update it afterwards with the state
             // - The final entry in captures is the state, and is pre-filled with zeroes by the creator's MIR lower
@@ -1439,13 +1451,13 @@ namespace {
                 ::HIR::Struct::Repr::Rust,
                 ::HIR::Struct::Data::make_Tuple({}) // Will be filled in the MIR pass
             };
-            state_str.m_data.as_Tuple().push_back(HIR::VisEnt<HIR::TypeRef>{HIR::Publicity::new_none(), state_idx_ty.clone()});
+            state_str.m_data.as_Tuple().push_back(HIR::VisEnt<HIR::TypeRef>{HIR::Publicity::new_none(), state_idx_ty});
             ::HIR::SimplePath state_struct_path;
             const ::HIR::TypeItem* state_struct_ptr;
             ::std::tie(state_struct_path, state_struct_ptr) = m_out.new_type("gen_state#", m_new_type_suffix, std::move(state_str));
-            auto state_type = ::HIR::TypeRef::new_path(::HIR::GenericPath(state_struct_path, params.make_nop_params(0)), &state_struct_ptr->as_Struct());
+            auto state_type = m_resolve.m_crate.m_types.path(::HIR::GenericPath(state_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &state_struct_ptr->as_Struct());
             DEBUG("state_type = " << state_type);
-            cr_vars.set_state_type(state_type.clone());
+            cr_vars.set_state_type(m_resolve.m_crate.m_types, state_type);
 
             auto gen_str = ::HIR::Struct{params.clone(), ::HIR::Struct::Repr::Rust, ::HIR::Struct::Data::make_Tuple(mv$(cr_vars.struct_ents))};
             gen_str.m_markings.has_drop_impl = true;
@@ -1459,7 +1471,7 @@ namespace {
             node.m_obj_ptr = &gen_struct_ref;
             node.m_obj_path = ::HIR::GenericPath(gen_struct_path, monomorph_cb.freeze());
             node.m_captures = std::move(cr_vars.capture_nodes);
-            node.m_state_data_type = ::HIR::TypeRef::new_path(::HIR::GenericPath(state_struct_path, node.m_obj_path.m_params.clone()), &state_struct_ptr->as_Struct());
+            node.m_state_data_type = m_resolve.m_crate.m_types.path(::HIR::GenericPath(state_struct_path, node.m_obj_path.m_params.clone()), &state_struct_ptr->as_Struct());
 
             auto lang_Pin = m_resolve.m_crate.get_lang_item_path(sp, "pin");
             // Return wrapper: Renamed in 1.90
@@ -1467,14 +1479,14 @@ namespace {
 
             ::HIR::TypeRef& self_arg_ty = cr_vars.new_locals[0];
             // `::path::to::struct`
-            self_arg_ty = ::HIR::TypeRef::new_path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(0)), &gen_struct_ref);
+            self_arg_ty = m_resolve.m_crate.m_types.path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &gen_struct_ref);
             // `&mut Self`
-            self_arg_ty = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, std::move(self_arg_ty));
+            self_arg_ty = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, self_arg_ty);
             if (TARGETVER_LEAST_1_74) {
-                cr_vars.new_locals[1] = node.m_resume_ty.clone();
+                cr_vars.new_locals[1] = node.m_resume_ty;
             }
             // `Pin<&mut Self>`
-            self_arg_ty = ::HIR::TypeRef::new_path(::HIR::GenericPath(lang_Pin, ::HIR::PathParams(std::move(self_arg_ty))), &m_resolve.m_crate.get_struct_by_path(sp, lang_Pin));
+            self_arg_ty = m_resolve.m_crate.m_types.path(::HIR::GenericPath(lang_Pin, ::HIR::PathParams(self_arg_ty)), &m_resolve.m_crate.get_struct_by_path(sp, lang_Pin));
 
             auto body_node = std::move(node.m_code);
             {
@@ -1488,16 +1500,16 @@ namespace {
             {
                 ::HIR::Function fcn_drop;
                 fcn_drop.m_receiver = HIR::Function::Receiver::BorrowUnique;
-                auto drop_self_arg_ty = ::HIR::TypeRef::new_path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(0)), &gen_struct_ref);
-                drop_self_arg_ty = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, std::move(drop_self_arg_ty));
+                auto drop_self_arg_ty = m_resolve.m_crate.m_types.path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &gen_struct_ref);
+                drop_self_arg_ty = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, drop_self_arg_ty);
                 fcn_drop.m_args.push_back(std::make_pair(HIR::Pattern(), mv$(drop_self_arg_ty)));
-                fcn_drop.m_return = ::HIR::TypeRef::new_unit();
+                fcn_drop.m_return = m_resolve.m_crate.m_types.unit();
                 fcn_drop.m_code.reset(m_pool->make<::HIR::ExprNode_Tuple>(sp, ::std::vector<HIR::ExprNodeP>{}));
-                fcn_drop.m_code->m_res_type = ::HIR::TypeRef::new_unit();
+                fcn_drop.m_code->m_res_type = m_resolve.m_crate.m_types.unit();
                 fcn_drop.m_code.m_state = m_expr_ptr.m_state.clone(m_pool);
                 ::HIR::TraitImpl drop_impl;
                 drop_impl.m_params = params.clone();
-                drop_impl.m_type = ::HIR::TypeRef::new_path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(0)), &gen_struct_ref);
+                drop_impl.m_type = m_resolve.m_crate.m_types.path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &gen_struct_ref);
                 drop_impl.m_methods.insert(std::make_pair(RcString::new_interned("drop"), ::HIR::TraitImpl::ImplEnt<HIR::Function>{false, std::move(fcn_drop)}));
                 fcn_drop_ptr = &drop_impl.m_methods.at("drop").data;
                 m_out.trait_impls.push_back(std::make_pair("drop", std::move(drop_impl)));
@@ -1506,7 +1518,7 @@ namespace {
             // -- Create function
             ::HIR::Function fcn_resume;
             // - `self: Pin<&mut {Self}>`
-            fcn_resume.m_args.push_back(std::make_pair(HIR::Pattern(), self_arg_ty.clone()));
+            fcn_resume.m_args.push_back(std::make_pair(HIR::Pattern(), self_arg_ty));
             if (TARGETVER_LEAST_1_74) {
                 fcn_resume.m_args.push_back(std::make_pair(HIR::Pattern(), monomorph_cb.monomorph_type(sp, node.m_resume_ty)));
             }
@@ -1514,15 +1526,19 @@ namespace {
             ::HIR::PathParams ret_params;
             ret_params.m_types.push_back(monomorph_cb.monomorph_type(sp, node.m_yield_ty));
             ret_params.m_types.push_back(monomorph_cb.monomorph_type(sp, node.m_return));
-            fcn_resume.m_return = ::HIR::TypeRef::new_path(::HIR::GenericPath(lang_GeneratorState, std::move(ret_params)), &m_resolve.m_crate.get_enum_by_path(sp, lang_GeneratorState));
+            fcn_resume.m_return = m_resolve.m_crate.m_types.path(::HIR::GenericPath(lang_GeneratorState, std::move(ret_params)), &m_resolve.m_crate.get_enum_by_path(sp, lang_GeneratorState));
             // - ` { ... }`
             // Emit as a top-level generator
             // - It has a populated body, non-zero `m_obj_ptr`, and unset `m_obj_path`
-            auto* v = m_pool->make<::HIR::ExprNode_GeneratorWrapper>(sp, HIR::TypeRef(), mv$(body_node), /*move*/ false, /*pinned*/ false, /*future*/ false);
-            v->m_yield_ty = monomorph_cb.monomorph_type(sp, node.m_yield_ty);
-            v->m_return = monomorph_cb.monomorph_type(sp, node.m_return);
+            auto* v = m_pool->make<::HIR::ExprNode_GeneratorWrapper>(
+                sp,
+                monomorph_cb.monomorph_type(sp, node.m_return),
+                monomorph_cb.monomorph_type(sp, node.m_yield_ty),
+                mv$(body_node),
+                false
+            );
             v->m_capture_usages = std::move(cr_vars.capture_usages);
-            v->m_res_type = fcn_resume.m_return.clone();
+            v->m_res_type = fcn_resume.m_return;
             v->m_obj_ptr = node.m_obj_ptr;
             v->m_state_data_type = mv$(state_type);
             v->m_state_idx_enum = mv$(state_idx_type.first);
@@ -1537,7 +1553,7 @@ namespace {
             if (TARGETVER_LEAST_1_74) {
                 impl.m_trait_args.m_types.push_back(monomorph_cb.monomorph_type(sp, node.m_resume_ty));
             }
-            impl.m_type = ::HIR::TypeRef::new_path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(0)), &gen_struct_ref);
+            impl.m_type = m_resolve.m_crate.m_types.path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &gen_struct_ref);
             impl.m_types.insert(std::make_pair(RcString::new_interned("Yield"), ::HIR::TraitImpl::ImplEnt<HIR::TypeRef>{false, monomorph_cb.monomorph_type(sp, node.m_yield_ty)}));
             impl.m_types.insert(std::make_pair(RcString::new_interned("Return"), ::HIR::TraitImpl::ImplEnt<HIR::TypeRef>{false, monomorph_cb.monomorph_type(sp, node.m_return)}));
             impl.m_methods.insert(std::make_pair(RcString::new_interned("resume"), ::HIR::TraitImpl::ImplEnt<HIR::Function>{false, std::move(fcn_resume)}));
@@ -1569,7 +1585,7 @@ namespace {
 
             // Create state index enum
             auto state_idx_type = m_out.new_type("async_state_idx#", m_new_type_suffix, ::HIR::Enum{::HIR::GenericParams(), false, ::HIR::Enum::Repr(), ::HIR::Enum::Class::make_Value({})});
-            auto state_idx_ty = ::HIR::TypeRef::new_path(state_idx_type.first, &state_idx_type.second->as_Enum());
+            auto state_idx_ty = m_resolve.m_crate.m_types.path(state_idx_type.first, &state_idx_type.second->as_Enum());
 
             // Create the captures structure here, and update it afterwards with the state
             // - The final entry in captures is the state, and is pre-filled with zeroes by the creator's MIR lower
@@ -1578,14 +1594,14 @@ namespace {
                 ::HIR::Struct::Repr::Rust,
                 ::HIR::Struct::Data::make_Tuple({}) // Will be filled in the MIR pass
             };
-            state_str.m_data.as_Tuple().push_back(HIR::VisEnt<HIR::TypeRef>{HIR::Publicity::new_none(), state_idx_ty.clone()});
+            state_str.m_data.as_Tuple().push_back(HIR::VisEnt<HIR::TypeRef>{HIR::Publicity::new_none(), state_idx_ty});
             ::HIR::SimplePath state_struct_path;
             const ::HIR::TypeItem* state_struct_ptr;
             ::std::tie(state_struct_path, state_struct_ptr) = m_out.new_type("async_state#", m_new_type_suffix, std::move(state_str));
-            auto state_type = ::HIR::TypeRef::new_path(::HIR::GenericPath(state_struct_path, params.make_nop_params(0)), &state_struct_ptr->as_Struct());
+            auto state_type = m_resolve.m_crate.m_types.path(::HIR::GenericPath(state_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &state_struct_ptr->as_Struct());
 
             // Update the state type entry, now that it's known
-            cr_vars.set_state_type(state_type.clone());
+            cr_vars.set_state_type(m_resolve.m_crate.m_types, state_type);
 
             // NOTE: Most of async lowering is done in MIR lowering
             // - This is because it needs to rewrite the flow quite severely.
@@ -1604,22 +1620,22 @@ namespace {
             node.m_obj_ptr = &gen_struct_ref;
             node.m_obj_path = ::HIR::GenericPath(gen_struct_path, monomorph_cb.freeze());
             node.m_captures = std::move(cr_vars.capture_nodes);
-            node.m_state_data_type = ::HIR::TypeRef::new_path(::HIR::GenericPath(state_struct_path, node.m_obj_path.m_params.clone()), &state_struct_ptr->as_Struct());
+            node.m_state_data_type = m_resolve.m_crate.m_types.path(::HIR::GenericPath(state_struct_path, node.m_obj_path.m_params.clone()), &state_struct_ptr->as_Struct());
 
             ::HIR::TypeRef& self_arg_ty = cr_vars.new_locals[0];
             // `::path::to::struct`
-            self_arg_ty = ::HIR::TypeRef::new_path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(0)), &gen_struct_ref);
+            self_arg_ty = m_resolve.m_crate.m_types.path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &gen_struct_ref);
             // `&mut Self`
-            self_arg_ty = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, std::move(self_arg_ty));
+            self_arg_ty = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, self_arg_ty);
             auto lang_Pin = m_resolve.m_crate.get_lang_item_path(sp, "pin");
             // `Pin<&mut Self>`
-            self_arg_ty = ::HIR::TypeRef::new_path(::HIR::GenericPath(lang_Pin, ::HIR::PathParams(std::move(self_arg_ty))), &m_resolve.m_crate.get_struct_by_path(sp, lang_Pin));
+            self_arg_ty = m_resolve.m_crate.m_types.path(::HIR::GenericPath(lang_Pin, ::HIR::PathParams(self_arg_ty)), &m_resolve.m_crate.get_struct_by_path(sp, lang_Pin));
 
             // `context: &mut Context`
             auto lang_Context = m_resolve.m_crate.get_lang_item_path(sp, "Context");
-            cr_vars.new_locals[1] = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, ::HIR::TypeRef::new_path(::HIR::GenericPath(lang_Context, ::HIR::PathParams(::HIR::LifetimeRef())), &m_resolve.m_crate.get_struct_by_path(sp, lang_Context)));
+            cr_vars.new_locals[1] = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, m_resolve.m_crate.m_types.path(::HIR::GenericPath(lang_Context, ::HIR::PathParams(::HIR::LifetimeRef())), &m_resolve.m_crate.get_struct_by_path(sp, lang_Context)));
 
-            auto return_ty = node.m_code->m_res_type.clone();
+            auto return_ty = node.m_code->m_res_type;
             auto body_node = std::move(node.m_code);
             {
                 DEBUG("-- Fixing types in body code");
@@ -1632,16 +1648,16 @@ namespace {
             {
                 ::HIR::Function fcn_drop;
                 fcn_drop.m_receiver = HIR::Function::Receiver::BorrowUnique;
-                auto drop_self_arg_ty = ::HIR::TypeRef::new_path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(0)), &gen_struct_ref);
-                drop_self_arg_ty = ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Unique, std::move(drop_self_arg_ty));
+                auto drop_self_arg_ty = m_resolve.m_crate.m_types.path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &gen_struct_ref);
+                drop_self_arg_ty = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, drop_self_arg_ty);
                 fcn_drop.m_args.push_back(std::make_pair(HIR::Pattern(), mv$(drop_self_arg_ty)));
-                fcn_drop.m_return = ::HIR::TypeRef::new_unit();
+                fcn_drop.m_return = m_resolve.m_crate.m_types.unit();
                 fcn_drop.m_code.reset(m_pool->make<::HIR::ExprNode_Tuple>(sp, ::std::vector<HIR::ExprNodeP>{}));
-                fcn_drop.m_code->m_res_type = ::HIR::TypeRef::new_unit();
+                fcn_drop.m_code->m_res_type = m_resolve.m_crate.m_types.unit();
                 fcn_drop.m_code.m_state = m_expr_ptr.m_state.clone(m_pool);
                 ::HIR::TraitImpl drop_impl;
                 drop_impl.m_params = params.clone();
-                drop_impl.m_type = ::HIR::TypeRef::new_path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(0)), &gen_struct_ref);
+                drop_impl.m_type = m_resolve.m_crate.m_types.path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &gen_struct_ref);
                 drop_impl.m_methods.insert(std::make_pair(RcString::new_interned("drop"), ::HIR::TraitImpl::ImplEnt<HIR::Function>{false, std::move(fcn_drop)}));
                 fcn_drop_ptr = &drop_impl.m_methods.at("drop").data;
                 m_out.trait_impls.push_back(std::make_pair("drop", std::move(drop_impl)));
@@ -1650,21 +1666,26 @@ namespace {
             // -- Create function
             ::HIR::Function fcn_resume;
             // - `self: Pin<&mut {Self}>`
-            fcn_resume.m_args.push_back(std::make_pair(HIR::Pattern(), self_arg_ty.clone()));
+            fcn_resume.m_args.push_back(std::make_pair(HIR::Pattern(), self_arg_ty));
             // - `context: &mut Context<'_>`
-            fcn_resume.m_args.push_back(std::make_pair(HIR::Pattern(), cr_vars.new_locals[1].clone()));
+            fcn_resume.m_args.push_back(std::make_pair(HIR::Pattern(), cr_vars.new_locals[1]));
             // - `-> Poll<{Return}>`
             ::HIR::PathParams ret_params;
             ret_params.m_types.push_back(monomorph_cb.monomorph_type(sp, return_ty));
             auto lang_Poll = m_resolve.m_crate.get_lang_item_path(sp, "Poll");
-            fcn_resume.m_return = ::HIR::TypeRef::new_path(::HIR::GenericPath(lang_Poll, std::move(ret_params)), &m_resolve.m_crate.get_enum_by_path(sp, lang_Poll));
+            fcn_resume.m_return = m_resolve.m_crate.m_types.path(::HIR::GenericPath(lang_Poll, std::move(ret_params)), &m_resolve.m_crate.get_enum_by_path(sp, lang_Poll));
             // - ` { ... }`
             // Emit as a top-level generator
             // - It has a populated body, non-zero `m_obj_ptr`, and unset `m_obj_path`
-            auto* v = m_pool->make<::HIR::ExprNode_GeneratorWrapper>(sp, HIR::TypeRef(), std::move(body_node), false, false, /*future*/ true);
-            v->m_return = monomorph_cb.monomorph_type(sp, return_ty);
+            auto* v = m_pool->make<::HIR::ExprNode_GeneratorWrapper>(
+                sp,
+                monomorph_cb.monomorph_type(sp, return_ty),
+                m_resolve.m_crate.m_types.unit(),
+                std::move(body_node),
+                true
+            );
             v->m_capture_usages = std::move(cr_vars.capture_usages);
-            v->m_res_type = fcn_resume.m_return.clone();
+            v->m_res_type = fcn_resume.m_return;
             v->m_obj_ptr = node.m_obj_ptr;
             v->m_state_data_type = mv$(state_type);
             v->m_state_idx_enum = mv$(state_idx_type.first);
@@ -1676,7 +1697,7 @@ namespace {
             // -- Create impl
             ::HIR::TraitImpl impl;
             impl.m_params = std::move(params);
-            impl.m_type = ::HIR::TypeRef::new_path(::HIR::GenericPath(gen_struct_path, impl.m_params.make_nop_params(0)), &gen_struct_ref);
+            impl.m_type = m_resolve.m_crate.m_types.path(::HIR::GenericPath(gen_struct_path, impl.m_params.make_nop_params(m_resolve.m_crate.m_types, 0)), &gen_struct_ref);
             impl.m_types.insert(std::make_pair(RcString::new_interned("Output"), ::HIR::TraitImpl::ImplEnt<HIR::TypeRef>{false, monomorph_cb.monomorph_type(sp, return_ty)}));
             impl.m_methods.insert(std::make_pair(RcString::new_interned("poll"), ::HIR::TraitImpl::ImplEnt<HIR::Function>{false, std::move(fcn_resume)}));
             m_out.trait_impls.push_back(std::make_pair("future_trait", std::move(impl)));
@@ -1710,7 +1731,8 @@ namespace {
 
     public:
         OuterVisitor(const ::HIR::Crate& crate)
-            : m_resolve(crate)
+            : ::HIR::Visitor(nullptr, crate.m_types)
+            , m_resolve(crate)
             , m_cur_mod_path(nullptr)
         {
         }
@@ -1783,14 +1805,17 @@ namespace {
         }
 
         void visit_type(::HIR::TypeRef& ty) override {
-            if (auto* e = ty.data_mut().opt_Array()) {
-                this->visit_type(e->inner);
+            if (ty->is_Array()) {
+                auto data = ty->clone_data();
+                auto& e = data.as_Array();
+                this->visit_type(e.inner);
                 DEBUG("Array size " << ty);
-                if (e->size.is_Unevaluated()) {
+                if (e.size.is_Unevaluated()) {
                     //::std::vector< ::HIR::TypeRef>  tmp;
                     //ExprVisitor_Extract    ev(m_resolve, tmp, m_new_trait_impls);
                     //ev.visit_root( *e.size );
                 }
+                ty = m_resolve.m_crate.m_types.intern(std::move(data));
             } else {
                 ::HIR::Visitor::visit_type(ty);
             }
@@ -1811,7 +1836,7 @@ namespace {
                 }
 
                 {
-                    MonomorphiserNop mm;
+                    MonomorphiserNop mm(m_resolve.m_crate.m_types);
                     ExprVisitor_Fixup fixup{m_resolve.m_crate, nullptr, mm, &m_out};
                     fixup.visit_root(item.m_code);
                 }
@@ -1827,7 +1852,7 @@ namespace {
                 ev.visit_root(*item.m_value);
 
                 {
-                    MonomorphiserNop mm;
+                    MonomorphiserNop mm(m_resolve.m_crate.m_types);
                     ExprVisitor_Fixup fixup{m_resolve.m_crate, nullptr, mm, &m_out};
                     fixup.visit_root(item.m_value);
                     fixup.visit_type(item.m_type);
@@ -1863,7 +1888,7 @@ namespace {
 
         void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
             auto _ = this->m_resolve.set_impl_generics(MetadataType::TraitObject, item.m_params);
-            ::HIR::TypeRef self(rcstring_Self, 0xFFFF);
+            ::HIR::TypeRef self = m_resolve.m_crate.m_types.generic(rcstring_Self, 0xFFFF);
             m_self_type = &self;
             ::HIR::Visitor::visit_trait(p, item);
             m_self_type = nullptr;
@@ -1929,7 +1954,7 @@ void HIR_Expand_Closures_Expr(const ::HIR::Crate& crate_ro, ::HIR::TypeRef& exp_
     }
 
     {
-        MonomorphiserNop mm;
+        MonomorphiserNop mm(crate.m_types);
         ExprVisitor_Fixup fixup{crate, nullptr, mm, &out};
         fixup.visit_root(exp);
         fixup.visit_type(exp_ty);
@@ -1968,15 +1993,16 @@ void HIR_Expand_Closures(::HIR::Crate& crate) {
 
     public:
         OuterVisitorPass2(const ::HIR::Crate& crate)
-            : m_resolve(crate)
+            : HIR::Visitor(nullptr, crate.m_types)
+            , m_resolve(crate)
         {
         }
 
         void fix_type(HIR::TypeRef& ty) const {
-            MonomorphiserNop mm;
+            MonomorphiserNop mm(m_resolve.m_crate.m_types);
             ExprVisitor_Fixup fixup{m_resolve.m_crate, nullptr, mm, nullptr};
             visit_ty_with(ty, [&fixup](const HIR::TypeRef& ty) -> bool {
-                if (const auto* e = ty.data().opt_ErasedType()) {
+                if (const auto* e = ty->opt_ErasedType()) {
                     if (const auto* ee = e->m_inner.opt_Alias()) {
                         fixup.visit_type(ee->inner->type);
                     }

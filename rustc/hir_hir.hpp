@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <vector>
 #include <memory>
+#include <optional>
 
 #include "tagged_union.hpp"
 
@@ -195,7 +196,7 @@ namespace HIR {
         Linkage m_linkage;
 
         Receiver m_receiver = Receiver::Free;
-        HIR::TypeRef m_receiver_type; // Receiver type for when a custom
+        ::std::optional<HIR::TypeRef> m_receiver_type; // Present only for a custom receiver
         RcString m_abi = RcString::new_interned(ABI_RUST);
         bool m_unsafe = false;
         bool m_const = false;
@@ -468,7 +469,25 @@ namespace HIR {
         bool is_sized;
         LifetimeRef m_lifetime_bound;
         ::std::vector<::HIR::TraitPath> m_trait_bounds;
+        bool m_has_default;
         ::HIR::TypeRef m_default;
+
+        AssociatedType(
+            ::HIR::GenericParams generics,
+            bool is_sized,
+            LifetimeRef lifetime_bound,
+            ::std::vector<::HIR::TraitPath> trait_bounds,
+            ::HIR::TypeRef default_type
+        )
+            : m_generics(::std::move(generics))
+            , is_sized(is_sized)
+            , m_lifetime_bound(lifetime_bound)
+            , m_trait_bounds(::std::move(trait_bounds))
+            , m_has_default(default_type && !default_type->is_Infer())
+            , m_default(default_type)
+        {
+            assert(default_type);
+        }
     };
 
     TAGGED_UNION(TraitValueItem, Constant, (Constant, Constant), (Static, Static), (Function, Function));
@@ -513,7 +532,7 @@ namespace HIR {
 
         ::HIR::TypeRef get_vtable_type(const Span& sp, const ::HIR::Crate& crate, const ::HIR::TypeData::Data_TraitObject& te) const;
         unsigned get_vtable_value_index(const HIR::GenericPath& trait_path, const RcString& name) const;
-        unsigned get_vtable_parent_index(const Span& sp, const HIR::PathParams& this_params, const HIR::GenericPath& trait_path) const;
+        unsigned get_vtable_parent_index(TypeInterner& types, const Span& sp, const HIR::PathParams& this_params, const HIR::GenericPath& trait_path) const;
         ::std::pair<const ::HIR::AssociatedType*, const ::HIR::PathParams*> get_aty_def(const RcString& name) const;
     };
 
@@ -647,7 +666,7 @@ namespace HIR {
             return matches_type(tr, ResolvePlaceholdersNop());
         }
 
-        bool more_specific_than(const TraitImpl& x) const;
+        bool more_specific_than(TypeInterner& types, const TraitImpl& x) const;
         bool overlaps_with(const Crate& crate, const TraitImpl& other) const;
     };
 
@@ -689,6 +708,10 @@ namespace HIR {
     class Crate {
     public:
         stl::ObjPool* m_pool;
+        TypeInterner& m_types;
+        // Synthetic compiler item. Its signature uses this crate's interned
+        // types, so it must not live in process-global storage.
+        mutable ValueItem m_intrinsic_offsetof;
         RcString m_crate_name;
         AST::Edition m_edition;
         // Compile-local crate configuration. This is not serialised because an
@@ -710,7 +733,7 @@ namespace HIR {
 
             const list_t* get_list_for_type(const ::HIR::TypeRef& ty) const {
                 static list_t empty;
-                if (const auto* p = ty.get_sort_path()) {
+                if (const auto* p = ty->get_sort_path()) {
                     auto it = named.find(*p);
                     if (it != named.end()) {
                         return &it->second;
@@ -724,7 +747,7 @@ namespace HIR {
             }
 
             list_t& get_list_for_type_mut(const ::HIR::TypeRef& ty) {
-                if (const auto* p = ty.get_sort_path()) {
+                if (const auto* p = ty->get_sort_path()) {
                     return named[*p];
                 } else {
                     // TODO: Ivars match with core types
@@ -770,8 +793,10 @@ namespace HIR {
         /// Extra paths for the linker
         ::std::vector<::std::string> m_link_paths;
 
-        explicit Crate(stl::ObjPool* pool = nullptr)
+        Crate(stl::ObjPool* pool, TypeInterner& types)
             : m_pool(pool)
+            , m_types(types)
+            , m_intrinsic_offsetof(Function{Function::Receiver::Free, GenericParams{}, {}, types.primitive(CoreType::Usize), {}})
         {
         }
 
@@ -812,7 +837,7 @@ namespace HIR {
         const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::args_t& args, ::HIR::TypeRef& ret_ty) const;
 
         const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const {
-            auto ty = fcn.m_return.clone_shallow();
+            auto ty = fcn.m_return;
             return get_or_gen_mir(ip, fcn.m_code, fcn.m_args, ty);
         }
 

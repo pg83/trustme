@@ -14,7 +14,7 @@
 #include "hir_typeck_resolve_common.hpp"
 
 static inline bool type_is_unbounded_infer(const ::HIR::TypeRef& ty) {
-    if (const auto* te = ty.data().opt_Infer()) {
+    if (const auto* te = ty->opt_Infer()) {
         switch (te->ty_class) {
             case ::HIR::InferClass::Integer:
                 return false;
@@ -63,13 +63,12 @@ public:
 
 public: // ?? - Needed once, anymore?
     struct IVar {
-        //bool could_be_diverge;
-        unsigned int alias;                     // If not ~0, this points to another ivar
-        ::std::unique_ptr<::HIR::TypeRef> type; // Type (only nullptr if alias!=0)
+        unsigned int alias; // If not ~0, this points to another ivar
+        ::HIR::TypeRef type; // Null only when alias != ~0
 
-        IVar()
+        explicit IVar(::HIR::TypeRef type)
             : alias(~0u)
-            , type(new ::HIR::TypeRef())
+            , type(type)
         {
         }
 
@@ -97,11 +96,14 @@ public: // ?? - Needed once, anymore?
 
     ::std::vector<IVarValue> m_values;
 
+    HIR::TypeInterner& m_types;
     bool m_has_changed;
+    ::std::vector<::HIR::TypeRef> m_expand_stack;
 
 public:
-    HMTypeInferrence()
-        : m_has_changed(false)
+    explicit HMTypeInferrence(HIR::TypeInterner& types)
+        : m_types(types)
+        , m_has_changed(false)
     {
     }
 
@@ -154,7 +156,7 @@ public:
         }
 
         const ::HIR::TypeRef& get_type(const Span& sp, const HIR::TypeRef& ty) const override {
-            if (ty.data().is_Infer()) {
+            if (ty->is_Infer()) {
                 return m_parent.get_type(ty);
             } else {
                 return ty;
@@ -251,7 +253,7 @@ public:
     }
 
     ::HIR::Compare compare_ty(const Span& sp, const ::HIR::TypeRef& left, const ::HIR::TypeRef& right) const {
-        return left.compare_with_placeholders(sp, right, m_ivars.callback_resolve_infer());
+        return left->compare_with_placeholders(sp, right, m_ivars.callback_resolve_infer());
     }
 
     bool type_contains_ivars(const ::HIR::TypeRef& type) const {
@@ -274,7 +276,7 @@ public:
 
     const ::HIR::TypeRef& expand_associated_types(const Span& sp, const ::HIR::TypeRef& input, ::HIR::TypeRef& tmp) const {
         if (this->has_associated_type(input)) {
-            return (tmp = this->expand_associated_types(sp, input.clone()));
+            return (tmp = this->expand_associated_types(sp, input));
         } else {
             return input;
         }
@@ -390,7 +392,7 @@ public:
     };
 
 private:
-    const ::HIR::TypeRef* check_method_receiver(const Span& sp, const ::HIR::Function& fcn, const ::HIR::TypeRef& ty, TraitResolution::MethodAccess access) const;
+    ::std::optional<::HIR::TypeRef> check_method_receiver(const Span& sp, const ::HIR::Function& fcn, const ::HIR::TypeRef& ty, TraitResolution::MethodAccess access) const;
 
 public:
     enum class AllowedReceivers {

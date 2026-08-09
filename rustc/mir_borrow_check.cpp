@@ -344,8 +344,8 @@ namespace {
         }
 
         void type_assign(const HIR::TypeRef& dst_ty, const HIR::TypeRef& src_ty) {
-            MIR_ASSERT(state, dst_ty.data().tag() == src_ty.data().tag(), dst_ty << " != " << src_ty);
-            TU_MATCH_HDRA( (dst_ty.data(), src_ty.data()),  { )
+            MIR_ASSERT(state, dst_ty->tag() == src_ty->tag(), dst_ty << " != " << src_ty);
+            TU_MATCH_HDRA( ((*dst_ty), (*src_ty)),  { )
             TU_ARMA(Infer, de, se) MIR_BUG(state, "Unexpected infer - " << dst_ty << ", " << src_ty);
                 TU_ARMA(Generic, de, se) {
                 }
@@ -415,9 +415,9 @@ namespace {
         void handle_param(const HIR::TypeRef& target, const MIR::Param& param, size_t ofs) {
             if (const auto* b = param.opt_Borrow()) {
                 HIR::TypeRef tmp;
-                auto src_ty = state.get_lvalue_type(tmp, b->val).clone_shallow();
+                auto src_ty = state.get_lvalue_type(tmp, b->val);
                 auto lft = borrow_lvalue(ofs, b->type, b->val);
-                type_assign(target, ::HIR::TypeRef::new_borrow(b->type, mv$(src_ty), lft));
+                type_assign(target, state.m_crate.m_types.borrow(b->type, src_ty, lft));
             } else {
                 HIR::TypeRef tmp;
                 type_assign(target, state.get_param_type(tmp, param));
@@ -450,9 +450,9 @@ namespace {
                 TU_ARMA(Deref, _) {
                     HIR::TypeRef tmp;
                     const auto& inner_ty = state.get_lvalue_type(tmp, lvr.inner_ref());
-                    if (const auto* tep = inner_ty.data().opt_Borrow()) {
+                    if (const auto* tep = inner_ty->opt_Borrow()) {
                         return tep->lifetime;
-                    } else if (inner_ty.data().is_Pointer()) {
+                    } else if (inner_ty->is_Pointer()) {
                         // TODO: Return an unbound lifetime
                         return HIR::LifetimeRef::new_static();
                     } else {
@@ -518,12 +518,13 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
     {
         TRACE_FUNCTION_FR("Fill", "Fill");
 
-        struct V: public MIR::visit::VisitorMut {
+        struct LifetimeVisitor: public HIR::Visitor {
             const ::MIR::TypeResolve& state;
             BorrowState& borrow_state;
 
-            V(const ::MIR::TypeResolve& state, BorrowState& borrow_state)
-                : state(state)
+            LifetimeVisitor(const ::MIR::TypeResolve& state, BorrowState& borrow_state)
+                : HIR::Visitor(nullptr, state.m_crate.m_types)
+                , state(state)
                 , borrow_state(borrow_state)
             {
             }
@@ -534,46 +535,38 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
                 }
             }
 
-            void visit_pathparams(::HIR::PathParams& pp) {
+            void visit_path_params(::HIR::PathParams& pp) override {
                 for (auto& lr : pp.m_lifetimes) {
                     visit_lifetime_ref(lr);
                 }
+                HIR::Visitor::visit_path_params(pp);
             }
 
             void visit_type(::HIR::TypeRef& t) override {
-                // Visit inner types, allocating lifetimes
-                visit_ty_with_mut(t, [&](HIR::TypeRef& ty) -> bool {
-                    TU_MATCH_HDRA( (ty.data_mut()), { )
-                    default:
-                        // No referenced lifetimes
-                        break;
-                        TU_ARMA(Path, te) {
-                            // Visit path params
-                        TU_MATCH_HDRA( (te.path.m_data), {)
-                        TU_ARMA(Generic, pe) {
-                                    this->visit_pathparams(pe.m_params);
-                                }
-                                TU_ARMA(UfcsKnown, pe) {
-                                    this->visit_pathparams(pe.trait.m_params);
-                                    this->visit_pathparams(pe.params);
-                                }
-                                TU_ARMA(UfcsInherent, pe) {
-                                    this->visit_pathparams(pe.params);
-                                }
-                                TU_ARMA(UfcsUnknown, pe) MIR_BUG(state, "Unexpected UfcsUnknown - " << ty);
-                        }
-                        }
-                        TU_ARMA(Borrow, te) {
-                            visit_lifetime_ref(te.lifetime);
-                        }
-                        TU_ARMA(TraitObject, te) {
-                            visit_lifetime_ref(te.m_lifetime);
-                        }
-                        TU_ARMA(ErasedType, te) MIR_BUG(state, "Unexpected " << ty);
-                    }
-                    return false;
-                });
+                auto data = t->clone_data();
+                if (auto* te = data.opt_Borrow()) {
+                    visit_lifetime_ref(te->lifetime);
+                } else if (auto* te = data.opt_TraitObject()) {
+                    visit_lifetime_ref(te->m_lifetime);
+                } else if (data.is_ErasedType()) {
+                    MIR_BUG(state, "Unexpected " << t);
+                }
+                HIR::Visitor::visit_type_data(data);
+                t = state.m_crate.m_types.intern(mv$(data));
             };
+        };
+
+        struct V: public MIR::visit::VisitorMut {
+            LifetimeVisitor lifetimes;
+
+            V(const ::MIR::TypeResolve& state, BorrowState& borrow_state)
+                : lifetimes(state, borrow_state)
+            {
+            }
+
+            void visit_type(::HIR::TypeRef& t) override {
+                lifetimes.visit_type(t);
+            }
         } v{state, borrow_state};
 
         v.visit_function(state, fcn);
@@ -594,25 +587,25 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
                             }
                             TU_ARMA(Borrow, rse) {
                                 HIR::TypeRef tmp;
-                                auto src_ty = state.get_lvalue_type(tmp, rse.val).clone_shallow();
+                                auto src_ty = state.get_lvalue_type(tmp, rse.val);
                                 auto lft = borrow_state.borrow_lvalue(0, rse.type, rse.val);
-                                borrow_state.do_assign(se.dst, HIR::TypeRef::new_borrow(rse.type, mv$(src_ty), lft));
+                                borrow_state.do_assign(se.dst, state.m_crate.m_types.borrow(rse.type, src_ty, lft));
                             }
                             TU_ARMA(Array, rse) {
                                 HIR::TypeRef tmp;
-                                const auto& dst_ty = state.get_lvalue_type(tmp, se.dst).data().as_Array().inner;
+                                const auto& dst_ty = state.get_lvalue_type(tmp, se.dst)->as_Array().inner;
                                 for (size_t i = 0; i < rse.vals.size(); i++) {
                                     borrow_state.handle_param(dst_ty, rse.vals[i], i);
                                 }
                             }
                             TU_ARMA(SizedArray, rse) {
                                 HIR::TypeRef tmp;
-                                const auto& dst_ty = state.get_lvalue_type(tmp, se.dst).data().as_Array().inner;
+                                const auto& dst_ty = state.get_lvalue_type(tmp, se.dst)->as_Array().inner;
                                 borrow_state.handle_param(dst_ty, rse.val, 0);
                             }
                             TU_ARMA(Struct, rse) {
                                 const auto& str = resolve.m_crate.get_struct_by_path(state.sp, rse.path.m_path);
-                                MonomorphStatePtr ms(nullptr, &rse.path.m_params, nullptr);
+                                MonomorphStatePtr ms(state.m_crate.m_types, nullptr, &rse.path.m_params, nullptr);
                                 HIR::TypeRef tmp;
                                 auto maybe_monomorph = [&](const auto& ty) -> const HIR::TypeRef& {
                                     return resolve.monomorph_expand_opt(sp, tmp, ty, ms);
@@ -639,7 +632,7 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
                             }
                             TU_ARMA(EnumVariant, rse) {
                                 const auto& enm = resolve.m_crate.get_enum_by_path(state.sp, rse.path.m_path);
-                                MonomorphStatePtr ms(nullptr, &rse.path.m_params, nullptr);
+                                MonomorphStatePtr ms(state.m_crate.m_types, nullptr, &rse.path.m_params, nullptr);
                                 HIR::TypeRef tmp;
                                 //auto maybe_monomorph = [&](const auto& ty)->const HIR::TypeRef& {
                                 //    return resolve.monomorph_expand_opt(sp, tmp, ty, ms);
@@ -650,11 +643,11 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
                                     MIR_ASSERT(state, rse.index < variants.size(), "Variant index out of range for " << rse.path);
                                     const auto& variant = variants[rse.index];
 
-                                    const auto& var_ty = resolve.monomorph_expand_opt(sp, tmp, variant.type, MonomorphStatePtr(nullptr, &rse.path.m_params, nullptr));
-                                    const auto& str = *var_ty.data().as_Path().binding.as_Struct();
-                                    const auto& s_path = var_ty.data().as_Path().path.m_data.as_Generic();
+                                    const auto& var_ty = resolve.monomorph_expand_opt(sp, tmp, variant.type, MonomorphStatePtr(state.m_crate.m_types, nullptr, &rse.path.m_params, nullptr));
+                                    const auto& str = *var_ty->as_Path().binding.as_Struct();
+                                    const auto& s_path = var_ty->as_Path().path.m_data.as_Generic();
                                     auto maybe_monomorph = [&](const HIR::TypeRef& ty) -> const HIR::TypeRef& {
-                                        return resolve.monomorph_expand_opt(sp, tmp, ty, MonomorphStatePtr(nullptr, &s_path.m_params, nullptr));
+                                        return resolve.monomorph_expand_opt(sp, tmp, ty, MonomorphStatePtr(state.m_crate.m_types, nullptr, &s_path.m_params, nullptr));
                                     };
                             TU_MATCH_HDRA( (str.m_data), {)
                             TU_ARMA(Unit, se) {
@@ -680,7 +673,7 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
                             TU_ARMA(Tuple, rse) {
                                 HIR::TypeRef tmp;
                                 const auto& dst_ty = state.get_lvalue_type(tmp, se.dst);
-                                const auto& de = dst_ty.data().as_Tuple();
+                                const auto& de = dst_ty->as_Tuple();
                                 MIR_ASSERT(state, de.size() == rse.vals.size(), "Tuple size and rvalue mismatch");
                                 for (size_t i = 0; i < rse.vals.size(); i++) {
                                     borrow_state.handle_param(de[i], rse.vals[i], i);
@@ -694,13 +687,13 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
                             TU_ARMA(MakeDst, rse) {
                                 HIR::TypeRef tmp;
                                 const auto& dst_ty = state.get_lvalue_type(tmp, se.dst);
-                                if (dst_ty.data().is_Borrow()) {
+                                if (dst_ty->is_Borrow()) {
                                     if (rse.ptr_val.is_Borrow()) {
                                         // TODO: Make the borrow?
                                     } else {
                                         HIR::TypeRef tmp2;
                                         const auto& src_ty = state.get_param_type(tmp2, rse.ptr_val);
-                                        borrow_state.lifetime_assign(dst_ty.data().as_Borrow().lifetime, src_ty.data().as_Borrow().lifetime);
+                                        borrow_state.lifetime_assign(dst_ty->as_Borrow().lifetime, src_ty->as_Borrow().lifetime);
                                     }
                                 }
                             }
@@ -717,8 +710,8 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
                                 HIR::TypeRef tmp2;
                                 const auto& src_ty = state.get_lvalue_type(tmp2, rse.val);
                                 // Handle both being borrows
-                                if (dst_ty.data().is_Borrow() && src_ty.data().is_Borrow()) {
-                                    borrow_state.lifetime_assign(dst_ty.data().as_Borrow().lifetime, src_ty.data().as_Borrow().lifetime);
+                                if (dst_ty->is_Borrow() && src_ty->is_Borrow()) {
+                                    borrow_state.lifetime_assign(dst_ty->as_Borrow().lifetime, src_ty->as_Borrow().lifetime);
                                 }
                             }
                     }
@@ -754,7 +747,7 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
                         TU_ARMA(Value, fe) {
                             HIR::TypeRef tmp;
                             const auto& ty = state.get_lvalue_type(tmp, fe);
-                            const auto& fcn = ty.data().as_Function();
+                            const auto& fcn = ty->as_Function();
                             // TODO: HKTs
                             MIR_ASSERT(state, fcn.m_arg_types.size() == e.args.size(), "");
                             for (size_t i = 0; i < fcn.m_arg_types.size(); i++) {
@@ -765,7 +758,7 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
                         TU_ARMA(Path, fe) {
                             HIR::TypeRef tmp;
 
-                            MonomorphState ms;
+                            MonomorphState ms(state.m_crate.m_types);
                             auto v = resolve.get_value(state.sp, fe, ms, true);
                             auto maybe_monomorph = [&](const ::HIR::TypeRef& ty) -> const HIR::TypeRef& {
                                 return resolve.monomorph_expand_opt(state.sp, tmp, ty, ms);

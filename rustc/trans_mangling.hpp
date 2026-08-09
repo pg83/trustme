@@ -13,7 +13,8 @@ namespace HIR {
     struct SimplePath;
     class GenericPath;
     class Path;
-    class TypeRef;
+    class TypeData;
+    using TypeRef = const TypeData*;
 }
 
 extern ::FmtLambda Trans_Mangle(const ::HIR::SimplePath& path);

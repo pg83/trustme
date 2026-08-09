@@ -11,10 +11,10 @@
 
 void HIR::InherentCache::Lowest::insert(const Span& sp, const HIR::TypeImpl& impl) {
     const auto& type = impl.m_type;
-    if (const auto* path = type.get_sort_path()) {
+    if (const auto* path = type->get_sort_path()) {
         //DEBUG(this->name << " named[" << *path << "] += impl" << impl.m_params.fmt_args() << " " << impl.m_type);
         this->named[*path].push_back(&impl);
-    } else if (type.data().is_Path() || type.data().is_Generic()) {
+    } else if (type->is_Path() || type->is_Generic()) {
         //DEBUG(this->name << " generic += impl" << impl.m_params.fmt_args() << " " << impl.m_type);
         this->generic.push_back(&impl);
     } else {
@@ -32,12 +32,12 @@ void HIR::InherentCache::Lowest::iterate(const HIR::TypeRef& type, InherentCache
 
     visit(this->generic);
 
-    if (const auto* path = type.get_sort_path()) {
+    if (const auto* path = type->get_sort_path()) {
         auto it = this->named.find(*path);
         if (it != this->named.end()) {
             visit(it->second);
         }
-    } else if (type.data().is_Path() || type.data().is_Generic()) {
+    } else if (type->is_Path() || type->is_Generic()) {
         // Already handled by the unconditional generic
     } else {
         visit(this->non_named);
@@ -54,7 +54,7 @@ void HIR::InherentCache::Inner::insert(const Span& sp, const HIR::TypeRef& cur_t
         }
     };
 
-    TU_MATCH_HDRA( (cur_ty.data()), { )
+    TU_MATCH_HDRA( ((*cur_ty)), { )
     default:
         BUG(sp, "Unknown receiver type - " << cur_ty);
         TU_ARMA(Generic, te) {
@@ -107,7 +107,7 @@ void HIR::InherentCache::Inner::find(const Span& sp, const HIR::TypeRef& cur_ty_
 
     const Inner* inner = nullptr;
     const HIR::TypeRef* inner_ty = nullptr;
-    TU_MATCH_HDRA( (cur_ty.data()), { )
+    TU_MATCH_HDRA( ((*cur_ty)), { )
     default:
         // No recursion possible
         break;
@@ -167,7 +167,11 @@ void HIR::InherentCache::insert_all(const Span& sp, const HIR::TypeImpl& impl, c
     for (const auto& m : impl.m_methods) {
         const auto& name = m.first;
         const auto& fcn = m.second.data;
-        DEBUG(name << " " << fcn.m_receiver_type);
+        if (fcn.m_receiver_type) {
+            DEBUG(name << " " << *fcn.m_receiver_type);
+        } else {
+            DEBUG(name);
+        }
 
         struct H {
             static Inner& g(std::unique_ptr<Inner>& slot) {
@@ -182,7 +186,8 @@ void HIR::InherentCache::insert_all(const Span& sp, const HIR::TypeImpl& impl, c
             case HIR::Function::Receiver::Free:
                 break;
             case HIR::Function::Receiver::Custom:
-                items[name].insert(sp, fcn.m_receiver_type, impl);
+                ASSERT_BUG(sp, fcn.m_receiver_type, "Custom receiver without a receiver type");
+                items[name].insert(sp, *fcn.m_receiver_type, impl);
                 break;
             case HIR::Function::Receiver::Box:
                 // TODO: 1.54+ has an allocator param here.
@@ -211,10 +216,10 @@ void HIR::InherentCache::find(const Span& sp, const RcString& name, const HIR::T
         DEBUG("- " << rough_self_ty);
         const HIR::Function& fcn = impl.m_methods.at(name).data;
         struct GetSelf: public ::HIR::MatchGenerics {
-            const ::HIR::TypeRef* detected_self_ty = nullptr;
+            ::std::optional<::HIR::TypeRef> detected_self_ty;
             ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeRef& ty, ::HIR::t_cb_resolve_type _resolve_cb) override {
                 if (g.is_self()) {
-                    detected_self_ty = &ty;
+                    detected_self_ty = ty;
                 }
                 return ::HIR::Compare::Equal;
             }
@@ -224,8 +229,9 @@ void HIR::InherentCache::find(const Span& sp, const RcString& name, const HIR::T
         } getself;
 
         if (fcn.m_receiver == HIR::Function::Receiver::Custom) {
-            if (fcn.m_receiver_type.match_test_generics(sp, ty, ResolvePlaceholdersNop(), getself)) {
-                ASSERT_BUG(sp, getself.detected_self_ty, "Unable to determine receiver type when matching " << fcn.m_receiver_type << " and " << ty);
+            ASSERT_BUG(sp, fcn.m_receiver_type, "Custom receiver without a receiver type");
+            if ((*fcn.m_receiver_type)->match_test_generics(sp, ty, ResolvePlaceholdersNop(), getself)) {
+                ASSERT_BUG(sp, getself.detected_self_ty, "Unable to determine receiver type when matching " << *fcn.m_receiver_type << " and " << ty);
                 cb(*getself.detected_self_ty, impl);
             }
         } else {

@@ -392,8 +392,9 @@ namespace {
         bool m_short_item_name = false;
 
     public:
-        TreeVisitor(::std::ostream& os)
-            : m_os(os)
+        TreeVisitor(::HIR::TypeInterner& types, ::std::ostream& os)
+            : ::HIR::Visitor(nullptr, types)
+            , m_os(os)
             , m_indent_level(0)
         {
         }
@@ -559,7 +560,7 @@ namespace {
 }
 
 void MIR_Dump(::std::ostream& sink, const ::HIR::Crate& crate) {
-    TreeVisitor tv{sink};
+    TreeVisitor tv{crate.m_types, sink};
 
     tv.visit_crate(const_cast<::HIR::Crate&>(crate));
 }

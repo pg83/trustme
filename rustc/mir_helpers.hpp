@@ -13,7 +13,8 @@
 
 namespace HIR {
     class Crate;
-    class TypeRef;
+    class TypeData;
+    using TypeRef = const TypeData*;
     struct Pattern;
     struct SimplePath;
 }

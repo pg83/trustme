@@ -33,7 +33,7 @@
 ::HIR::ExprStatePtr::~ExprStatePtr() = default;
 
 ::HIR::ExprStatePtr HIR::ExprStatePtr::clone(stl::ObjPool* pool) const {
-    auto rv = ::HIR::ExprStatePtr(pool, ::HIR::ExprState((*this)->m_module, (*this)->m_mod_path));
+    auto rv = ::HIR::ExprStatePtr(pool, ::HIR::ExprState((*this)->m_types, (*this)->m_module, (*this)->m_mod_path));
     rv->m_traits = (*this)->m_traits;
     rv->m_impl_generics = (*this)->m_impl_generics;
     rv->m_item_generics = (*this)->m_item_generics;
