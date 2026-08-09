@@ -289,7 +289,13 @@ namespace {
                     bad_cast(sp, src_ty, tgt_ty, "dst");
                 }
                 TU_ARMA(Array, e) {
-                    bad_cast(sp, src_ty, tgt_ty, "dst");
+                    // A cast is a coercion site.  In particular, its target
+                    // supplies the otherwise unconstrained element type of
+                    // an empty array literal and the element coercion for a
+                    // non-empty literal.
+                    this->context.equate_types_coerce(sp, tgt_ty, node.m_value);
+                    this->m_completed = true;
+                    return;
                 }
                 TU_ARMA(Slice, e) {
                     bad_cast(sp, src_ty, tgt_ty, "dst");

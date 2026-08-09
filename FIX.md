@@ -18,10 +18,6 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 Для compiler fix порядок остаётся строгим: минимальный красный `tests/unit/test_*.rs` → исправление общего пути → зелёный unit → исходный upstream trigger → соседние triggers той же сигнатуры → clang/lld build → commit и push. Unit подтверждает причину, но сам по себе не повышает приоритет.
 
-## P0 — больше 100 targets одним общим исправлением
-
-1. [ ] **Нулевая generic array и cast/unification: 163 library cases.** Один путь отвергает cast `[Infer; 0]` в конкретный `[T; 0]` и ломает `alloctests/slice` — 107, `coretests/array` — 36, `alloctests/c_str2` — 20. Исправить вывод element type даже при нулевой длине и проверить ненулевую длину, чтобы не разрешить произвольный cast.
-
 ## P1 — 25–99 targets одним общим исправлением
 
 1. [ ] **CTFE panic в const initializer: 94 library cases.** `coretests/cell` — 39 и `coretests/mem` — 55 доходят до `panic_fmt` во время constant evaluation. Найти общий неверно выбранный branch/overflow/layout input; не подавлять CTFE panic и не заменять значение заглушкой.
