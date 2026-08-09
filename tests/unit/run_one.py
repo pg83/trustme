@@ -35,6 +35,7 @@ def main() -> int:
     compile_flags = (
         shlex.split(compile_flags_match.group(1)) if compile_flags_match else []
     )
+    rust_lib_dependencies = "//@ rust-lib-dev-dependencies" in source_text
 
     with lib.workdir() as work:
         env = dict(os.environ)
@@ -42,10 +43,20 @@ def main() -> int:
         env.setdefault("CC", "cc")
 
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
+        dependency_args = []
+        if rust_lib_dependencies:
+            dependencies = lib.untar(
+                lib.require_env("RUST_LIB_DEPENDENCIES"),
+                os.path.join(work, "rust-lib-dependencies"),
+            )
+            dependency_args = lib.extern_rlib_args(
+                dependencies,
+                ["rand", "rand_xorshift"],
+            )
         binary = os.path.join(work, "t")
         mode = ["--test"] if test_harness else ["--crate-type", "bin"]
         command = [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
-                   *mode, "--edition", edition, *compile_flags]
+                   *mode, "--edition", edition, *dependency_args, *compile_flags]
         if compile_fail_match:
             result = subprocess.run(command, env=env, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, check=False)

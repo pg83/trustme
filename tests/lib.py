@@ -1,6 +1,7 @@
 """Shared helpers for the test-graph node scripts."""
 
 import os
+from pathlib import Path
 import subprocess
 import sys
 import tempfile
@@ -50,6 +51,20 @@ def tar_dir(src: str, out: str, *, zstd: bool = False) -> None:
         argv.append("--zstd")
     argv += ["-f", out, "."]
     run(argv)
+
+
+def extern_rlib_args(root: str, crates: list[str]) -> list[str]:
+    """Return `-L`/`--extern` arguments for uniquely built Cargo rlibs."""
+    release = Path(root) / "release"
+    arguments = ["-L", str(release)]
+    for crate in crates:
+        matches = sorted(release.glob(f"lib{crate}-*.rlib"))
+        if len(matches) != 1:
+            raise RuntimeError(
+                f"expected one {crate} rlib under {release}, got {matches}"
+            )
+        arguments.extend(("--extern", f"{crate}={matches[0]}"))
+    return arguments
 
 
 def workdir():

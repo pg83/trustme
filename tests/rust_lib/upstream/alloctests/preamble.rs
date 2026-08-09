@@ -85,6 +85,18 @@ fn hash<T: Hash>(t: &T) -> u64 {
     s.finish()
 }
 
+/// Copied from `std::test_helpers::test_rng`, since these tests rely on the
+/// seed not being the same for every RNG invocation too.
+fn test_rng() -> rand_xorshift::XorShiftRng {
+    use std::hash::{BuildHasher, Hash, Hasher};
+    let mut hasher = std::hash::RandomState::new().build_hasher();
+    std::panic::Location::caller().hash(&mut hasher);
+    let hc64 = hasher.finish();
+    let seed_vec = hc64.to_le_bytes().into_iter().chain(0u8..8).collect::<Vec<u8>>();
+    let seed: [u8; 16] = seed_vec.as_slice().try_into().unwrap();
+    rand::SeedableRng::from_seed(seed)
+}
+
 
 
 #[test]

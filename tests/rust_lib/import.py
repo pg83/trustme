@@ -202,31 +202,8 @@ def filter_test_source(
     return text
 
 
-def without_function(text: str, name: str) -> str:
-    match = re.search(rf"^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?fn[ \t]+{name}\b", text, re.MULTILINE)
-    if not match:
-        return text
-    start = text.rfind("\n\n", 0, match.start()) + 2
-    brace = text.find("{", match.end())
-    if brace < 0:
-        return text
-    depth = 0
-    pos = brace
-    while pos < len(text):
-        if text[pos] == "{":
-            depth += 1
-        elif text[pos] == "}":
-            depth -= 1
-            if depth == 0:
-                pos += 1
-                break
-        pos += 1
-    return text[:start] + text[pos:]
-
-
 def preamble(root: Path) -> str:
     text = root.read_text(errors="surrogateescape")
-    text = without_function(text, "test_rng")
     return re.sub(
         r"^[ \t]*(?:pub[ \t]+)?mod[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*;[^\n]*$",
         "",

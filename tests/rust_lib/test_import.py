@@ -17,6 +17,27 @@ CASE_SPEC.loader.exec_module(CASE)
 
 
 class ImportTest(unittest.TestCase):
+    def test_preamble_preserves_non_test_helpers(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "lib.rs"
+            root.write_text(
+                textwrap.dedent(
+                    """\
+                    mod selected;
+
+                    fn test_rng() -> u32 {
+                        42
+                    }
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            preamble = IMPORTER.preamble(root)
+
+            self.assertNotIn("mod selected;", preamble)
+            self.assertIn("fn test_rng() -> u32", preamble)
+
     def test_module_harness_preserves_nested_module_lookup(self):
         with tempfile.TemporaryDirectory() as temporary:
             source = CASE.prepare_source(

@@ -293,6 +293,30 @@ libstd = command(
     color="cyan",
 )
 
+rust_lib_dependencies = command(
+    name="rust_lib_dependencies",
+    inputs=(
+        [
+            "$(S)/tests/rust_lib/build_dependencies.py",
+            "$(S)/tests/rust_lib/dependencies/Cargo.toml",
+        ]
+        + build.glob("$(S)/tests/rust_lib/dependencies/src/**/*.rs")
+        + TESTS_LIB
+    ),
+    outputs=["$(B)/tests/rust-lib-dependencies.tar"],
+    cmd=[
+        "python3",
+        "$(S)/tests/rust_lib/build_dependencies.py",
+        "$(B)/tests/rust-src.tar",
+        "$(B)/tests/libstd.tar",
+        "$(B)/tests/rust-lib-dependencies.tar",
+    ],
+    deps=[std_src, libstd, rustc, cargo],
+    env=TOOLCHAIN_ENV,
+    descr="LD",
+    color="cyan",
+)
+
 # resvg_src: the project source at a pinned revision.
 resvg_src = command(
     name="resvg_src",
@@ -437,6 +461,7 @@ unit_tests.append(command(
 ))
 for _src in build.glob("$(S)/tests/unit/test_*.rs"):
     _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
+    _uses_rust_lib_dependencies = _stem == "rust_lib_dev_dependencies"
     unit_tests.append(command(
         name="unit_" + _stem,
         inputs=[_src, "$(S)/tests/unit/run_one.py"] + TESTS_LIB,
@@ -447,8 +472,12 @@ for _src in build.glob("$(S)/tests/unit/test_*.rs"):
             _src, "$(B)/tests/libstd.tar",
             "$(B)/tests/unit/" + _stem + ".stamp",
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        deps=[libstd, rustc] + ([rust_lib_dependencies] if _uses_rust_lib_dependencies else []),
+        env={
+            "RUSTC": "$(B)/rustc/rustc",
+            **({"RUST_LIB_DEPENDENCIES": "$(B)/tests/rust-lib-dependencies.tar"}
+               if _uses_rust_lib_dependencies else {}),
+        },
         descr="UT",
         color="green",
     ))
@@ -934,9 +963,10 @@ for _suite, _harness_group, _source, _function, _hint in rust_lib_cases:
             "python3", "$(S)/tests/rust_lib/case.py",
             _suite, _harness_group, _kind, _root, _edition,
             _source, _function, _hint,
-            "$(S)/tests/rust_lib/upstream", "$(B)/tests/libstd.tar", _stamp,
+            "$(S)/tests/rust_lib/upstream", "$(B)/tests/libstd.tar",
+            "$(B)/tests/rust-lib-dependencies.tar", _stamp,
         ],
-        deps=[libstd, rustc],
+        deps=[libstd, rust_lib_dependencies, rustc],
         env={"RUSTC": "$(B)/rustc/rustc"},
         descr="LT",
         color="green",

@@ -20,9 +20,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ## P0 — больше 100 targets одним общим исправлением
 
-1. [ ] **Зависимости library harness: не менее 220 заблокированных cases.** Сделать явную модель support modules/dev-dependencies для harness compiler вместо точечных копий исходников: `coretests/num` — 147 (`rand::distr`), `alloctests/collections` — 33 (`rand`), std common/rand groups — 13, `coretests/ops` — 17 (`control_flow`), `coretests/panic` — 7 (`location`), `coretests/ffi` — 3 (`cstr`). Валидные upstream dependencies должны собираться тем же compiler graph; нельзя скрывать сами тесты.
-
-2. [ ] **Нулевая generic array и cast/unification: 163 library cases.** Один путь отвергает cast `[Infer; 0]` в конкретный `[T; 0]` и ломает `alloctests/slice` — 107, `coretests/array` — 36, `alloctests/c_str2` — 20. Исправить вывод element type даже при нулевой длине и проверить ненулевую длину, чтобы не разрешить произвольный cast.
+1. [ ] **Нулевая generic array и cast/unification: 163 library cases.** Один путь отвергает cast `[Infer; 0]` в конкретный `[T; 0]` и ломает `alloctests/slice` — 107, `coretests/array` — 36, `alloctests/c_str2` — 20. Исправить вывод element type даже при нулевой длине и проверить ненулевую длину, чтобы не разрешить произвольный cast.
 
 ## P1 — 25–99 targets одним общим исправлением
 

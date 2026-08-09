@@ -156,10 +156,10 @@ def select_harness_test(listing: bytes, function: str, hint: str) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) != 12:
+    if len(sys.argv) != 13:
         raise SystemExit(
             "usage: case.py SUITE GROUP KIND ROOT EDITION SOURCE FUNCTION HINT "
-            "UPSTREAM LIBSTD_TAR STAMP"
+            "UPSTREAM LIBSTD_TAR DEPENDENCIES_TAR STAMP"
         )
     (
         suite,
@@ -172,10 +172,12 @@ def main() -> int:
         hint,
         upstream_text,
         libstd_tar_text,
+        dependencies_tar_text,
         stamp_text,
     ) = sys.argv[1:]
     upstream = Path(upstream_text).resolve()
     libstd_tar = Path(libstd_tar_text).resolve()
+    dependencies_tar = Path(dependencies_tar_text).resolve()
     stamp = Path(stamp_text).resolve()
     rustc = lib.require_env("RUSTC")
     case = f"{suite}/{source}::{hint}"
@@ -187,6 +189,10 @@ def main() -> int:
     with lib.workdir() as work_text:
         work = Path(work_text)
         libstd = Path(lib.untar(str(libstd_tar), str(work / "libstd")))
+        dependencies = lib.untar(
+            str(dependencies_tar),
+            str(work / "rust-lib-dependencies"),
+        )
         source_path = prepare_source(
             work,
             upstream,
@@ -207,6 +213,10 @@ def main() -> int:
                 "-o", str(binary),
                 "--test",
                 "--edition", edition,
+                *lib.extern_rlib_args(
+                    dependencies,
+                    ["rand", "rand_xorshift"],
+                ),
                 "--crate-name", re.sub(
                     r"[^A-Za-z0-9_]",
                     "_",
