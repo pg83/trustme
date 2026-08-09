@@ -11,8 +11,11 @@
 #include <sstream>
 #include <cassert>
 #include <functional>
+#include <type_traits>
+#include <utility>
 
 extern int g_debug_indent_level;
+extern bool g_debug_enabled;
 
 #ifndef DEBUG_EXTRA_ENABLE
     #define DEBUG_EXTRA_ENABLE // Files can override this with their own flag if needed (e.g. `&& g_my_debug_on`)
@@ -42,12 +45,10 @@ extern int g_debug_indent_level;
         TraceLog _tf_(DEBUG_ENABLED ? __func__ : nullptr, [&](::std::ostream& __os) { \
             __os << ss;                                                               \
         })
-    #define TRACE_FUNCTION_FR(ss, ss2)                                                \
-        TraceLog _tf_(DEBUG_ENABLED ? __func__ : nullptr, [&](::std::ostream& __os) { \
-            __os << ss;                                                               \
-        }, [&](::std::ostream& __os) {                                                \
-            __os << ss2;                                                              \
-        })
+    #define TRACE_FUNCTION_FR(ss, ss2)                                                        \
+        auto _tf_ = make_trace_log_ret(DEBUG_ENABLED ? __func__ : nullptr,                    \
+            [&](::std::ostream& __os) { __os << ss; },                                        \
+            [&](::std::ostream& __os) { __os << ss2; })
 #else
     #define INDENT() \
         do {         \
@@ -77,7 +78,9 @@ extern int g_debug_indent_level;
         } while (0)
 #endif
 
-extern bool debug_enabled();
+inline bool debug_enabled() {
+    return g_debug_enabled;
+}
 extern ::std::ostream& debug_output(int indent, const char* function);
 
 struct RepeatLitStr {
@@ -105,14 +108,79 @@ public:
 
 class TraceLog {
     const char* m_tag;
-    ::std::function<void(::std::ostream&)> m_ret;
 
 public:
-    TraceLog(const char* tag, ::std::function<void(::std::ostream&)> info_cb, ::std::function<void(::std::ostream&)> ret);
-    TraceLog(const char* tag, ::std::function<void(::std::ostream&)> info_cb);
-    TraceLog(const char* tag);
-    ~TraceLog();
+    template<typename Info>
+    TraceLog(const char* tag, Info&& info_cb)
+        : m_tag(tag)
+    {
+        if (m_tag) {
+            auto& os = debug_output(g_debug_indent_level, m_tag);
+            os << ">> (";
+            info_cb(os);
+            os << ")" << ::std::endl;
+            INDENT();
+        }
+    }
+
+    TraceLog(const char* tag)
+        : m_tag(tag)
+    {
+        if (m_tag) {
+            auto& os = debug_output(g_debug_indent_level, m_tag);
+            os << ">>" << ::std::endl;
+            INDENT();
+        }
+    }
+
+    ~TraceLog() {
+        if (m_tag) {
+            UNINDENT();
+            auto& os = debug_output(g_debug_indent_level, m_tag);
+            os << "<< ()" << ::std::endl;
+        }
+    }
 };
+
+template<typename Ret>
+class TraceLogRet {
+    const char* m_tag;
+    Ret m_ret;
+
+public:
+    template<typename Info>
+    TraceLogRet(const char* tag, Info&& info_cb, Ret&& ret)
+        : m_tag(tag)
+        , m_ret(::std::forward<Ret>(ret))
+    {
+        if (m_tag) {
+            auto& os = debug_output(g_debug_indent_level, m_tag);
+            os << ">> (";
+            info_cb(os);
+            os << ")" << ::std::endl;
+            INDENT();
+        }
+    }
+
+    ~TraceLogRet() {
+        if (m_tag) {
+            UNINDENT();
+            auto& os = debug_output(g_debug_indent_level, m_tag);
+            os << "<< (";
+            m_ret(os);
+            os << ")" << ::std::endl;
+        }
+    }
+};
+
+template<typename Info, typename Ret>
+auto make_trace_log_ret(const char* tag, Info&& info_cb, Ret&& ret) {
+    return TraceLogRet<::std::decay_t<Ret>>(
+        tag,
+        ::std::forward<Info>(info_cb),
+        ::std::forward<Ret>(ret)
+    );
+}
 
 struct FmtLambda {
     ::std::function<void(::std::ostream&)> m_cb;
