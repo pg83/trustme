@@ -692,6 +692,143 @@ namespace {
         throw "";
     }
 
+    void add_type_flags(uint32_t& flags, TypeRef type) {
+        flags |= type->m_flags;
+    }
+
+    void add_lifetime_flags(uint32_t& flags, LifetimeRef lifetime) {
+        if (lifetime.is_param() && lifetime.as_param().group() != GENERIC_Hrtb) {
+            flags |= TypeData::HAS_LIFETIME_PARAM;
+        }
+    }
+
+    uint32_t type_flags(const PathParams& params);
+
+    uint32_t type_flags(const GenericPath& path) {
+        return type_flags(path.m_params);
+    }
+
+    uint32_t type_flags(const TraitPath& trait) {
+        auto flags = type_flags(trait.m_path);
+        for (const auto& bound : trait.m_type_bounds) {
+            flags |= type_flags(bound.second.source_trait);
+            flags |= type_flags(bound.second.aty_params);
+            add_type_flags(flags, bound.second.type);
+        }
+        for (const auto& bound : trait.m_trait_bounds) {
+            flags |= type_flags(bound.second.source_trait);
+            flags |= type_flags(bound.second.aty_params);
+            for (const auto& nested : bound.second.traits) {
+                flags |= type_flags(nested);
+            }
+        }
+        return flags;
+    }
+
+    uint32_t type_flags(const PathParams& params) {
+        uint32_t flags = 0;
+        for (const auto lifetime : params.m_lifetimes) {
+            add_lifetime_flags(flags, lifetime);
+        }
+        for (const auto type : params.m_types) {
+            add_type_flags(flags, type);
+        }
+        for (const auto& value : params.m_values) {
+            if (value.is_Generic()) {
+                flags |= TypeData::HAS_TYPE_PARAM;
+            }
+        }
+        return flags;
+    }
+
+    uint32_t type_flags(const Path& path) {
+        uint32_t flags = 0;
+        TU_MATCH_HDRA((path.m_data), {)
+        TU_ARMA(Generic, e) {
+            flags |= type_flags(e.m_params);
+        }
+        TU_ARMA(UfcsInherent, e) {
+            add_type_flags(flags, e.type);
+            flags |= type_flags(e.params);
+            flags |= type_flags(e.impl_params);
+        }
+        TU_ARMA(UfcsKnown, e) {
+            add_type_flags(flags, e.type);
+            flags |= type_flags(e.trait);
+            flags |= type_flags(e.params);
+        }
+        TU_ARMA(UfcsUnknown, e) {
+            add_type_flags(flags, e.type);
+            flags |= type_flags(e.params);
+        }
+        }
+        return flags;
+    }
+
+    uint32_t type_flags(const TypeData& type) {
+        uint32_t flags = 0;
+        TU_MATCH_HDRA((type), {)
+        TU_ARMA(Infer, e) {
+            flags |= TypeData::HAS_TYPE_INFER;
+        }
+        TU_ARMA(Diverge, e) {}
+        TU_ARMA(Primitive, e) {}
+        TU_ARMA(Path, e) {
+            flags |= type_flags(e.path);
+            if (e.path.m_data.is_UfcsKnown()
+                && (e.binding.is_Unbound() || e.binding.is_Opaque())) {
+                flags |= TypeData::HAS_ASSOCIATED_TYPE;
+            }
+        }
+        TU_ARMA(Generic, e) {
+            flags |= TypeData::HAS_TYPE_PARAM;
+        }
+        TU_ARMA(TraitObject, e) {
+            flags |= type_flags(e.m_trait);
+            for (const auto& marker : e.m_markers) {
+                flags |= type_flags(marker);
+            }
+            add_lifetime_flags(flags, e.m_lifetime);
+        }
+        TU_ARMA(ErasedType, e) {
+            for (const auto& trait : e.m_traits) {
+                flags |= type_flags(trait);
+            }
+            flags |= type_flags(e.m_use);
+            for (const auto lifetime : e.m_lifetime_bounds) {
+                add_lifetime_flags(flags, lifetime);
+            }
+            TU_MATCH_HDRA((e.m_inner), {)
+            TU_ARMA(Fcn, inner) flags |= type_flags(inner.m_origin);
+            TU_ARMA(Known, inner) add_type_flags(flags, inner);
+            TU_ARMA(Alias, inner) flags |= type_flags(inner.params);
+            }
+        }
+        TU_ARMA(Array, e) {
+            add_type_flags(flags, e.inner);
+            if (e.size.is_Unevaluated()) {
+                flags |= TypeData::HAS_UNEVALUATED_CONST;
+            }
+        }
+        TU_ARMA(Slice, e) add_type_flags(flags, e.inner);
+        TU_ARMA(Tuple, e) for (const auto inner : e) add_type_flags(flags, inner);
+        TU_ARMA(Borrow, e) {
+            add_type_flags(flags, e.inner);
+            add_lifetime_flags(flags, e.lifetime);
+        }
+        TU_ARMA(Pointer, e) add_type_flags(flags, e.inner);
+        TU_ARMA(NamedFunction, e) flags |= type_flags(e.path);
+        TU_ARMA(Function, e) {
+            add_type_flags(flags, e.m_rettype);
+            for (const auto argument : e.m_arg_types) {
+                add_type_flags(flags, argument);
+            }
+        }
+        TU_ARMA(NodeType, e) {}
+        }
+        return flags;
+    }
+
     size_t hash_mix(size_t state, size_t value) {
         return state ^ (value + 0x9e3779b97f4a7c15ULL + (state << 6) + (state >> 2));
     }
@@ -854,6 +991,7 @@ namespace {
 }
 
 ::HIR::TypeRef HIR::TypeInterner::intern(TypeData data) {
+    data.m_flags = type_flags(data);
     const auto hash = hash_type_data(data);
     const auto range = m_nodes.equal_range(hash);
     for (auto it = range.first; it != range.second; ++it) {
@@ -1407,33 +1545,10 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
                 break;
         }
     }
-#if 1
-    thread_local static std::vector<const HIR::TypeData*> s_recurse_stack;
-    for (const auto* p : s_recurse_stack) {
-        if (p == ty_l) {
-            DEBUG("Recursion");
-            ASSERT_BUG(sp, &v == &x, "Recursion with unequal type pointers");
-            return HIR::Compare::Equal;
-        }
-    }
 
-    struct _ {
-        _(const HIR::TypeData* ptr) {
-            s_recurse_stack.push_back(ptr);
-        }
-
-        ~_() {
-            s_recurse_stack.pop_back();
-        }
-    } h(ty_l);
-#else
-    // NOTE: This doesn't allow matching identical types (which can be desirable)
-    if (&v == &x) {
-        DEBUG("Pointer equality");
-        return HIR::Compare::Equal;
-    }
-#endif
-
+    // MatchGenerics is a relation, not plain type equality.  Its callbacks can
+    // bind lifetimes and generic parameters while walking two identical
+    // interned types, so pointer identity must not bypass the structural walk.
     if (v->tag() != x->tag()) {
         // HACK: If the path is Opaque, return a fuzzy match.
         // - This works around an impl selection bug.

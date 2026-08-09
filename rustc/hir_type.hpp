@@ -312,9 +312,29 @@ namespace HIR {
          }),
         (Function, TypeData_FunctionPointer), // TODO: Pointer wrap, this is quite large
         (NodeType, TypeData_NodeType)),
-        (),
-        (),
+        (, m_flags(x.m_flags)),
+        (m_flags = x.m_flags;),
         (
+            enum TypeFlags : uint32_t {
+                HAS_TYPE_INFER = 1u << 0,
+                HAS_TYPE_PARAM = 1u << 1,
+                HAS_LIFETIME_PARAM = 1u << 2,
+                HAS_UNEVALUATED_CONST = 1u << 3,
+                HAS_ASSOCIATED_TYPE = 1u << 4,
+            };
+
+            uint32_t m_flags = 0;
+
+            bool has_type_infer() const { return m_flags & HAS_TYPE_INFER; }
+            bool needs_monomorphisation(bool ignore_lifetimes = false) const {
+                const auto mask = HAS_TYPE_PARAM | HAS_UNEVALUATED_CONST
+                    | (ignore_lifetimes ? 0u : HAS_LIFETIME_PARAM);
+                return m_flags & mask;
+            }
+            bool may_have_associated_type() const {
+                return m_flags & (HAS_ASSOCIATED_TYPE | HAS_TYPE_INFER);
+            }
+
             TypeData clone_data() const;
             void fmt(::std::ostream& os) const;
 

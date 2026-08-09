@@ -1005,6 +1005,9 @@ bool HMTypeInferrence::pathparams_contain_ivars(const ::HIR::PathParams& pps, bo
 }
 
 bool HMTypeInferrence::type_contains_ivars(const ::HIR::TypeRef& ty, bool only_unbound) const {
+    if (!ty->has_type_infer()) {
+        return false;
+    }
     TRACE_FUNCTION_F("ty = " << ty);
     auto path_contains_ivars = [this](const HIR::Path& path, bool only_unbound) {
         TU_MATCH(::HIR::Path::Data, (path.m_data), (pe), (Generic, return this->pathparams_contain_ivars(pe.m_params, only_unbound);), (UfcsKnown, if (this->type_contains_ivars(pe.type, only_unbound)) return true; if (this->pathparams_contain_ivars(pe.trait.m_params, only_unbound)) return true; return this->pathparams_contain_ivars(pe.params, only_unbound);), (UfcsInherent, if (this->type_contains_ivars(pe.type, only_unbound)) return true; return this->pathparams_contain_ivars(pe.params, only_unbound);), (UfcsUnknown, BUG(Span(), "UfcsUnknown");))
@@ -4489,6 +4492,9 @@ bool TraitResolution::find_trait_impls(
         }
 
         bool TraitResolution::has_associated_type(const ::HIR::TypeRef& input) const {
+            if (!input->may_have_associated_type()) {
+                return false;
+            }
             struct H {
                 static bool check_pathparams(const TraitResolution& r, const ::HIR::PathParams& pp) {
                     for (const auto& arg : pp.m_types) {

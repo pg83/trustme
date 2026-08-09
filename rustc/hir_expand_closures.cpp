@@ -1332,19 +1332,31 @@ namespace {
         };
 
         struct CrVars {
+            unsigned n_args;
             ::std::map<unsigned, unsigned> variable_rewrites;
             ::std::vector<HIR::ValueUsage> capture_usages;
             ::std::vector<HIR::TypeRef> new_locals;
-            // NOTE: The first entry in this is the state, but that isn't know yet - so is just `MaybeUninit<_>`
             ::std::vector<::HIR::VisEnt<::HIR::TypeRef>> struct_ents;
             ::std::vector<HIR::ExprNodeP> capture_nodes;
 
-            void set_state_type(HIR::TypeInterner& types, HIR::TypeRef ty) {
-                auto data = this->struct_ents.at(0).ent->clone_data();
-                data.as_Path().path.m_data.as_Generic().m_params.m_types.at(0) = ty;
-                this->struct_ents.at(0).ent = types.intern(std::move(data));
+            void set_arguments(const Span& sp, ::std::vector<HIR::TypeRef> args) {
+                ASSERT_BUG(sp, args.size() == n_args, "Expected " << n_args << " coroutine arguments, got " << args.size());
+                new_locals.insert(new_locals.begin(), args.begin(), args.end());
             }
         };
+
+        void set_state_type(const Span& sp, CrVars& vars, HIR::TypeRef state_type) const {
+            const auto& lang_MaybeUninit = m_resolve.m_crate.get_lang_item_path(sp, "maybe_uninit");
+            const auto& unm_MaybeUninit = m_resolve.m_crate.get_union_by_path(sp, lang_MaybeUninit);
+            auto wrapped = m_resolve.m_crate.m_types.path(
+                ::HIR::GenericPath(lang_MaybeUninit, ::HIR::PathParams(state_type)),
+                &unm_MaybeUninit
+            );
+            vars.struct_ents.insert(
+                vars.struct_ents.begin(),
+                HIR::VisEnt<HIR::TypeRef>{HIR::Publicity::new_none(), wrapped}
+            );
+        }
 
         CrVars coroutine_vars(const Span& sp, const ::HIR::ExprNode_Generator::AvuCache& avu_cache, unsigned n_args, const Monomorph& monomorph_cb) const {
             CrVars rv;
@@ -1354,24 +1366,15 @@ namespace {
             // - Local: defined and used between two yields
             size_t n_caps = avu_cache.captured_vars.size();
             size_t n_locals = avu_cache.local_vars.size();
+            rv.n_args = n_args;
             rv.capture_usages.reserve(n_caps);
-            rv.new_locals.reserve(1 + n_caps + n_locals);
+            rv.new_locals.reserve(n_args + n_caps + n_locals);
             rv.struct_ents.reserve(1 + n_caps);
             rv.capture_nodes.reserve(n_caps);
-            // First new local is always the invocation `self`
-            for (unsigned i = 0; i < n_args; i++) {
-                rv.new_locals.push_back(HIR::TypeRef()); // `self: &mut NewStruct`
-            }
-            // First ent is the runtime state (first is zeroed, the second is set to uninit)
-
-            const auto& lang_MaybeUninit = m_resolve.m_crate.get_lang_item_path(sp, "maybe_uninit");
-            const auto& unm_MaybeUninit = m_resolve.m_crate.get_union_by_path(sp, lang_MaybeUninit);
-            // Wrap the state in MaybeUninit to prevent any attempt at using niche optimisations
-            rv.struct_ents.push_back(HIR::VisEnt<HIR::TypeRef>{HIR::Publicity::new_none(), m_resolve.m_crate.m_types.path(::HIR::GenericPath(lang_MaybeUninit, ::HIR::PathParams(::HIR::TypeRef())), &unm_MaybeUninit)});
 
             // Add captures to the locals list first
             for (const auto& cap : avu_cache.captured_vars) {
-                unsigned index = rv.new_locals.size();
+                unsigned index = n_args + rv.new_locals.size();
                 rv.variable_rewrites.insert(std::make_pair(cap.first, index));
                 rv.new_locals.push_back(monomorph_cb.monomorph_type(sp, m_variable_types.at(cap.first)));
 
@@ -1401,7 +1404,7 @@ namespace {
                 rv.capture_nodes.back()->m_res_type = mv$(cap_ty);
             }
             for (const auto& slot : avu_cache.local_vars) {
-                unsigned index = rv.new_locals.size();
+                unsigned index = n_args + rv.new_locals.size();
                 rv.variable_rewrites.insert(std::make_pair(slot, index));
                 rv.new_locals.push_back(monomorph_cb.monomorph_type(sp, m_variable_types.at(slot)));
             }
@@ -1457,7 +1460,7 @@ namespace {
             ::std::tie(state_struct_path, state_struct_ptr) = m_out.new_type("gen_state#", m_new_type_suffix, std::move(state_str));
             auto state_type = m_resolve.m_crate.m_types.path(::HIR::GenericPath(state_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &state_struct_ptr->as_Struct());
             DEBUG("state_type = " << state_type);
-            cr_vars.set_state_type(m_resolve.m_crate.m_types, state_type);
+            set_state_type(sp, cr_vars, state_type);
 
             auto gen_str = ::HIR::Struct{params.clone(), ::HIR::Struct::Repr::Rust, ::HIR::Struct::Data::make_Tuple(mv$(cr_vars.struct_ents))};
             gen_str.m_markings.has_drop_impl = true;
@@ -1477,16 +1480,19 @@ namespace {
             // Return wrapper: Renamed in 1.90
             auto lang_GeneratorState = m_resolve.m_crate.get_lang_item_path(sp, TARGETVER_LEAST_1_90 ? "coroutine_state" : "generator_state");
 
-            ::HIR::TypeRef& self_arg_ty = cr_vars.new_locals[0];
             // `::path::to::struct`
-            self_arg_ty = m_resolve.m_crate.m_types.path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &gen_struct_ref);
+            auto self_arg_ty = m_resolve.m_crate.m_types.path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &gen_struct_ref);
             // `&mut Self`
             self_arg_ty = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, self_arg_ty);
+            ::std::vector<HIR::TypeRef> resume_args;
+            resume_args.push_back(self_arg_ty);
             if (TARGETVER_LEAST_1_74) {
-                cr_vars.new_locals[1] = node.m_resume_ty;
+                resume_args.push_back(node.m_resume_ty);
             }
             // `Pin<&mut Self>`
             self_arg_ty = m_resolve.m_crate.m_types.path(::HIR::GenericPath(lang_Pin, ::HIR::PathParams(self_arg_ty)), &m_resolve.m_crate.get_struct_by_path(sp, lang_Pin));
+            resume_args[0] = self_arg_ty;
+            cr_vars.set_arguments(sp, std::move(resume_args));
 
             auto body_node = std::move(node.m_code);
             {
@@ -1601,7 +1607,7 @@ namespace {
             auto state_type = m_resolve.m_crate.m_types.path(::HIR::GenericPath(state_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &state_struct_ptr->as_Struct());
 
             // Update the state type entry, now that it's known
-            cr_vars.set_state_type(m_resolve.m_crate.m_types, state_type);
+            set_state_type(sp, cr_vars, state_type);
 
             // NOTE: Most of async lowering is done in MIR lowering
             // - This is because it needs to rewrite the flow quite severely.
@@ -1622,9 +1628,8 @@ namespace {
             node.m_captures = std::move(cr_vars.capture_nodes);
             node.m_state_data_type = m_resolve.m_crate.m_types.path(::HIR::GenericPath(state_struct_path, node.m_obj_path.m_params.clone()), &state_struct_ptr->as_Struct());
 
-            ::HIR::TypeRef& self_arg_ty = cr_vars.new_locals[0];
             // `::path::to::struct`
-            self_arg_ty = m_resolve.m_crate.m_types.path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &gen_struct_ref);
+            auto self_arg_ty = m_resolve.m_crate.m_types.path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &gen_struct_ref);
             // `&mut Self`
             self_arg_ty = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, self_arg_ty);
             auto lang_Pin = m_resolve.m_crate.get_lang_item_path(sp, "pin");
@@ -1633,7 +1638,8 @@ namespace {
 
             // `context: &mut Context`
             auto lang_Context = m_resolve.m_crate.get_lang_item_path(sp, "Context");
-            cr_vars.new_locals[1] = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, m_resolve.m_crate.m_types.path(::HIR::GenericPath(lang_Context, ::HIR::PathParams(::HIR::LifetimeRef())), &m_resolve.m_crate.get_struct_by_path(sp, lang_Context)));
+            auto context_arg_ty = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, m_resolve.m_crate.m_types.path(::HIR::GenericPath(lang_Context, ::HIR::PathParams(::HIR::LifetimeRef())), &m_resolve.m_crate.get_struct_by_path(sp, lang_Context)));
+            cr_vars.set_arguments(sp, {self_arg_ty, context_arg_ty});
 
             auto return_ty = node.m_code->m_res_type;
             auto body_node = std::move(node.m_code);
@@ -1668,7 +1674,7 @@ namespace {
             // - `self: Pin<&mut {Self}>`
             fcn_resume.m_args.push_back(std::make_pair(HIR::Pattern(), self_arg_ty));
             // - `context: &mut Context<'_>`
-            fcn_resume.m_args.push_back(std::make_pair(HIR::Pattern(), cr_vars.new_locals[1]));
+            fcn_resume.m_args.push_back(std::make_pair(HIR::Pattern(), context_arg_ty));
             // - `-> Poll<{Return}>`
             ::HIR::PathParams ret_params;
             ret_params.m_types.push_back(monomorph_cb.monomorph_type(sp, return_ty));

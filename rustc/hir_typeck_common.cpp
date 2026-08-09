@@ -396,8 +396,7 @@ bool monomorphise_path_needed(const ::HIR::Path& tpl, bool ignore_lifetimes /*=f
 }
 
 bool monomorphise_type_needed(const ::HIR::TypeRef& tpl, bool ignore_lifetimes /*=false*/) {
-    TyVisitorMonomorphNeeded v{ignore_lifetimes};
-    return v.visit_type(tpl);
+    return tpl->needs_monomorphisation(ignore_lifetimes);
 }
 
 ::HIR::TypeRef Monomorphiser::monomorph_type(const Span& sp, const ::HIR::TypeRef& tpl, bool allow_infer /*=true*/) const {
