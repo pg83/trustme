@@ -1964,24 +1964,42 @@ TU_ARMA(Alias, ee) {
                     monomorph_cb.pp_hrb = &pp_hrb;
                     const auto& b_params = bound.m_path.m_params;
                     ::HIR::PathParams params_mono_o;
-                    const auto& b_params_mono = (monomorphise_pathparams_needed(b_params) ? params_mono_o = monomorph_cb.monomorph_path_params(sp, b_params, false) : b_params);
-                    // TODO: Monormophise and EAT associated types
+                    const ::HIR::PathParams* b_params_mono = &b_params;
+                    if (monomorphise_pathparams_needed(b_params)) {
+                        params_mono_o = monomorph_cb.monomorph_path_params(sp, b_params, false);
+                        b_params_mono = &params_mono_o;
+                    }
+                    const bool params_need_normalisation = ::std::any_of(
+                        b_params_mono->m_types.begin(), b_params_mono->m_types.end(),
+                        [&](const auto& ty) { return this->has_associated_type(ty); }
+                    );
+                    if (params_need_normalisation) {
+                        if (b_params_mono != &params_mono_o) {
+                            params_mono_o = b_params.clone();
+                            b_params_mono = &params_mono_o;
+                        }
+                        this->expand_associated_types_params(sp, params_mono_o);
+                    }
+
                     ::HIR::TraitPath::assoc_list_t b_atys;
                     for (const auto& aty : bound.m_type_bounds) {
                         b_atys.insert(::std::make_pair(aty.first, ::HIR::TraitPath::AtyEqual{monomorph_cb.monomorph_genericpath(sp, aty.second.source_trait, false), {}, monomorph_cb.monomorph_type(sp, aty.second.type)}));
                     }
 
                     if (bound.m_path.m_path == trait) {
-                        auto cmp = this->compare_pp(sp, b_params_mono, params);
+                        auto cmp = this->compare_pp(sp, *b_params_mono, params);
                         if (cmp != ::HIR::Compare::Unequal) {
-                            if (&b_params_mono == &params_mono_o) {
+                            if (b_params_mono == &params_mono_o) {
                                 // TODO: assoc bounds
                                 if (callback(ImplRef(type, mv$(params_mono_o), mv$(b_atys)), cmp)) {
                                     return true;
                                 }
                                 params_mono_o = monomorph_cb.monomorph_path_params(sp, b_params, false);
+                                if (params_need_normalisation) {
+                                    this->expand_associated_types_params(sp, params_mono_o);
+                                }
                             } else if (!b_atys.empty()) {
-                                if (callback(ImplRef(type, b_params_mono.clone(), mv$(b_atys)), cmp)) {
+                                if (callback(ImplRef(type, b_params_mono->clone(), mv$(b_atys)), cmp)) {
                                     return true;
                                 }
                             } else {
@@ -1996,7 +2014,7 @@ TU_ARMA(Alias, ee) {
 
                     bool rv = false;
                     bool ret = false;
-                    this->find_named_trait_in_trait(sp, trait, params, *bound.m_trait_ptr, bound.m_path.m_path, b_params_mono, type, [&](const HIR::TraitPath& i_tp) {
+                    this->find_named_trait_in_trait(sp, trait, params, *bound.m_trait_ptr, bound.m_path.m_path, *b_params_mono, type, [&](const HIR::TraitPath& i_tp) {
                         auto cmp = this->compare_pp(sp, i_tp.m_path.m_params, params);
                         DEBUG("Opaque Path: cmp=" << cmp << ", impl " << i_tp.m_path << " for " << type << " -- desired " << trait << params);
                         ASSERT_BUG(sp, !bound.m_hrtbs || !i_tp.m_hrtbs, "TODO: Handle two layers of HRTBs - " << bound.m_path << " and " << i_tp);
@@ -5472,14 +5490,24 @@ bool TraitResolution::find_trait_impls(
             // > Would maybe want a list of all explicit and implied bounds instead.
             {
                 bool rv = this->iterate_bounds_traits(sp, type, trait, [&](HIR::Compare cmp, const HIR::TypeRef& bound_ty, const ::HIR::GenericPath& bound_trait, const CachedBound& bound_info) -> bool {
-                    const auto& b_params = bound_trait.m_params;
+                    const auto& stored_params = bound_trait.m_params;
+                    ::HIR::PathParams normalised_params;
+                    const ::HIR::PathParams* b_params = &stored_params;
+                    if (::std::any_of(
+                            stored_params.m_types.begin(), stored_params.m_types.end(),
+                            [&](const auto& ty) { return this->has_associated_type(ty); }
+                        )) {
+                        normalised_params = stored_params.clone();
+                        this->expand_associated_types_params(sp, normalised_params);
+                        b_params = &normalised_params;
+                    }
 
                     DEBUG("[find_trait_impls_bound] " << bound_trait << " for " << bound_ty << " cmp = " << cmp);
 
                     // Check against `params`
-                    DEBUG("[find_trait_impls_bound] Checking params " << params << " vs " << b_params);
+                    DEBUG("[find_trait_impls_bound] Checking params " << params << " vs " << *b_params);
                     auto ord = cmp;
-                    ord &= this->compare_pp(sp, b_params, params);
+                    ord &= this->compare_pp(sp, *b_params, params);
                     if (ord == ::HIR::Compare::Unequal) {
                         DEBUG("[find_trait_impls_bound] - Mismatch");
                         return false;
@@ -5490,7 +5518,7 @@ bool TraitResolution::find_trait_impls(
                     DEBUG("[find_trait_impls_bound] Match for" << bound_info.hrbs.fmt_args() << " " << bound_ty << " : " << bound_trait);
                     // Hand off to the closure, and return true if it does
                     // TODO: The type bounds are only the types that are specified.
-                    auto hrls = get_hrls(m_crate.m_types, sp, bound_info.hrbs, bound_trait.m_params, params);
+                    auto hrls = get_hrls(m_crate.m_types, sp, bound_info.hrbs, *b_params, params);
                     if (callback(ImplRef(std::move(hrls), &bound_ty, &bound_trait.m_params, &bound_info.assoc), ord)) {
                         return true;
                     }
@@ -5524,6 +5552,7 @@ bool TraitResolution::find_trait_impls(
                             if (monomorphise_pathparams_needed(bound.m_path.m_params)) {
                                 // TODO: Use a compare+callback method instead
                                 auto b_params_mono = monomorph_cb.monomorph_path_params(sp, bound.m_path.m_params, false);
+                                this->expand_associated_types_params(sp, b_params_mono);
                                 ord &= this->compare_pp(sp, b_params_mono, params);
                             } else {
                                 ord &= this->compare_pp(sp, bound.m_path.m_params, params);
@@ -5541,6 +5570,7 @@ bool TraitResolution::find_trait_impls(
                                 tp_mono = MonomorphHrlsOnly(m_crate.m_types, p).monomorph_traitpath(sp, tp_mono, true, true);
                             }
                             // - Expand associated types
+                            this->expand_associated_types_params(sp, tp_mono.m_path.m_params);
                             for (auto& ty : tp_mono.m_type_bounds) {
                                 ty.second.type = this->expand_associated_types(sp, mv$(ty.second.type));
                             }

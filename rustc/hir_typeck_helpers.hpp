@@ -282,6 +282,14 @@ public:
         }
     }
 
+    void expand_associated_types_params(const Span& sp, ::HIR::PathParams& params) const {
+        for (auto& type : params.m_types) {
+            if (this->has_associated_type(type)) {
+                type = this->expand_associated_types(sp, type);
+            }
+        }
+    }
+
     typedef ::std::function<bool(HIR::Compare cmp, const ::HIR::TypeRef&, const ::HIR::GenericPath& trait_path, const CachedBound& info)> t_cb_bound;
     bool iterate_bounds_traits(const Span& sp, const HIR::TypeRef& type, const HIR::SimplePath& trait, t_cb_bound cb) const;
     bool iterate_bounds_traits(const Span& sp, const HIR::TypeRef& type, t_cb_bound cb) const;
