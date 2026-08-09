@@ -6146,10 +6146,108 @@ namespace {
 
 // check_ivar_poss (and helpers)
 namespace {
-    bool check_ivar_poss__fails_bounds(const Span& sp, Context& context, const ::HIR::TypeRef& ty_l, const ::HIR::TypeRef& new_ty) {
+    struct IvarDependencyIndex {
+        Context& context;
+        ::std::vector<::std::vector<unsigned int>> associated_targets;
+        ::std::vector<::std::vector<unsigned int>> possibility_targets;
+
+        static void collect_direct_ivars(const ::HIR::TypeRef& type, ::std::vector<unsigned int>& out) {
+            visit_ty_with(type, [&](const ::HIR::TypeRef& inner) {
+                if (const auto* infer = inner.data().opt_Infer()) {
+                    out.push_back(infer->index);
+                }
+                return false;
+            });
+        }
+
+        static void deduplicate(::std::vector<unsigned int>& values) {
+            ::std::sort(values.begin(), values.end());
+            values.erase(::std::unique(values.begin(), values.end()), values.end());
+        }
+
+        IvarDependencyIndex(Context& context)
+            : context(context)
+            , associated_targets(context.possible_ivar_vals.size())
+            , possibility_targets(context.possible_ivar_vals.size())
+        {
+            for (const auto& rule : context.link_assoc) {
+                ::std::vector<unsigned int> sources;
+                ::std::vector<unsigned int> targets;
+                collect_direct_ivars(rule.impl_ty, sources);
+                collect_direct_ivars(rule.left_ty, sources);
+                collect_direct_ivars(rule.impl_ty, targets);
+                for (const auto& type : rule.params.m_types) {
+                    collect_direct_ivars(type, sources);
+                    collect_direct_ivars(type, targets);
+                }
+                deduplicate(sources);
+                deduplicate(targets);
+                for (const auto source : sources) {
+                    if (source < associated_targets.size()) {
+                        associated_targets[source].insert(associated_targets[source].end(), targets.begin(), targets.end());
+                    }
+                }
+            }
+
+            for (size_t target = 0; target < context.possible_ivar_vals.size(); target++) {
+                const auto& possible = context.possible_ivar_vals[target];
+                ::std::vector<unsigned int> sources;
+                for (const auto& type : possible.types_coerce_from) {
+                    collect_direct_ivars(type.ty, sources);
+                }
+                for (const auto& type : possible.types_coerce_to) {
+                    collect_direct_ivars(type.ty, sources);
+                }
+                for (const auto& type : possible.bounded) {
+                    collect_direct_ivars(type, sources);
+                }
+                deduplicate(sources);
+                for (const auto source : sources) {
+                    if (source < possibility_targets.size()) {
+                        possibility_targets[source].push_back(target);
+                    }
+                }
+            }
+
+            for (auto& targets : associated_targets) {
+                deduplicate(targets);
+            }
+            for (auto& targets : possibility_targets) {
+                deduplicate(targets);
+            }
+        }
+
+        void disable_dependents(unsigned int source) {
+            if (source >= associated_targets.size()) {
+                return;
+            }
+            for (const auto raw_target : associated_targets[source]) {
+                const auto& target = context.m_ivars.get_type(raw_target);
+                if (const auto* infer = target.data().opt_Infer()) {
+                    DEBUG("Disable IVar " << infer->index);
+                    if (infer->index < context.possible_ivar_vals.size()) {
+                        context.possible_ivar_vals[infer->index].force_disable = true;
+                    }
+                }
+            }
+            for (const auto target : possibility_targets[source]) {
+                DEBUG("Block IVar " << target);
+                context.possible_ivar_vals[target].force_disable = true;
+            }
+        }
+    };
+
+    struct IvarBoundRefs {
+        bool populated = false;
+        ::std::vector<const Context::Coercion*> coercions;
+        ::std::vector<const Context::Associated*> associated;
+        ::std::vector<const ::HIR::ExprNode_CallMethod*> methods;
+    };
+
+    bool check_ivar_poss__fails_bounds(const Span& sp, Context& context, IvarBoundRefs& bound_refs, const ::HIR::TypeRef& ty_l, const ::HIR::TypeRef& new_ty) {
         TRACE_FUNCTION_F(ty_l << " <- " << new_ty);
         const auto ivar_idx = ty_l.data().as_Infer().index;
-        bool used_ty;
+        bool used_ty = false;
 
         struct Cb {
             bool& used_ty;
@@ -6209,10 +6307,32 @@ namespace {
         };
 
         Cb cb{used_ty, sp, context, ivar_idx, new_ty};
-        for (const auto& bound : context.link_coerce) {
-            if (!cb.uses_ivar(bound->left_ty) && !cb.uses_ivar((*bound->right_node_ptr)->m_res_type)) {
-                continue;
+        if (!bound_refs.populated) {
+            for (const auto& bound : context.link_coerce) {
+                if (cb.uses_ivar(bound->left_ty) || cb.uses_ivar((*bound->right_node_ptr)->m_res_type)) {
+                    bound_refs.coercions.push_back(bound.get());
+                }
             }
+            for (const auto& bound : context.link_assoc) {
+                bool uses_ivar = cb.uses_ivar(bound.impl_ty);
+                for (const auto& ty : bound.params.m_types) {
+                    uses_ivar |= cb.uses_ivar(ty);
+                }
+                if (uses_ivar) {
+                    bound_refs.associated.push_back(&bound);
+                }
+            }
+            for (const auto* node_ptr_dyn : context.to_visit) {
+                if (const auto* node_ptr = dynamic_cast<const ::HIR::ExprNode_CallMethod*>(node_ptr_dyn)) {
+                    if (cb.uses_ivar(context.get_type(node_ptr->m_value->m_res_type))) {
+                        bound_refs.methods.push_back(node_ptr);
+                    }
+                }
+            }
+            bound_refs.populated = true;
+        }
+
+        for (const auto* bound : bound_refs.coercions) {
             used_ty = false;
             auto t_l = clone_ty_with(sp, bound->left_ty, cb);
             auto t_r = clone_ty_with(sp, (*bound->right_node_ptr)->m_res_type, cb);
@@ -6285,17 +6405,10 @@ namespace {
             }
         }
 
-        for (const auto& bound : context.link_assoc) {
-            bool uses_ivar = cb.uses_ivar(bound.impl_ty);
-            for (const auto& ty : bound.params.m_types) {
-                uses_ivar |= cb.uses_ivar(ty);
-            }
-            if (!uses_ivar) {
-                continue;
-            }
+        for (const auto* bound : bound_refs.associated) {
             used_ty = false;
-            auto t = clone_ty_with(sp, bound.impl_ty, cb);
-            auto p = clone_path_params_with(sp, bound.params, cb);
+            auto t = clone_ty_with(sp, bound->impl_ty, cb);
+            auto p = clone_path_params_with(sp, bound->params, cb);
             if (!used_ty) {
                 //DEBUG("[" << ty_l << "] Skip Assoc R" << bound.rule_idx << " - " << bound.impl_ty << " : " << bound.trait << bound.params);
                 continue;
@@ -6303,24 +6416,24 @@ namespace {
             // - Run EAT on t and p
             t = context.m_resolve.expand_associated_types(sp, mv$(t));
             // TODO: Run EAT on `p`?
-            DEBUG("Check Assoc R" << bound.rule_idx << " - " << bound.impl_ty << " : " << bound.trait << bound.params);
-            DEBUG("-> " << t << " : " << bound.trait << p);
+            DEBUG("Check Assoc R" << bound->rule_idx << " - " << bound->impl_ty << " : " << bound->trait << bound->params);
+            DEBUG("-> " << t << " : " << bound->trait << p);
 
             // Search for any trait impl that could match this,
             bool bound_failed = true;
-            context.m_resolve.find_trait_impls(sp, bound.trait, p, t, [&](const auto impl, auto cmp) {
+            context.m_resolve.find_trait_impls(sp, bound->trait, p, t, [&](const auto impl, auto cmp) {
                 // If this bound specifies an associated type, then check that that type could match
-                if (bound.name != "") {
-                    auto aty = impl.get_type(bound.name.c_str(), {});
+                if (bound->name != "") {
+                    auto aty = impl.get_type(bound->name.c_str(), {});
                     // The associated type is not present, what does that mean?
                     if (aty == ::HIR::TypeRef()) {
-                        DEBUG("[check_ivar_poss__fails_bounds] No ATY for " << bound.name << " in impl");
+                        DEBUG("[check_ivar_poss__fails_bounds] No ATY for " << bound->name << " in impl");
                         // A possible match was found, so don't delete just yet
                         bound_failed = false;
                         // - Return false to keep searching
                         return false;
-                    } else if (aty.compare_with_placeholders(sp, bound.left_ty, context.m_ivars.callback_resolve_infer()) == HIR::Compare::Unequal) {
-                        DEBUG("[check_ivar_poss__fails_bounds] ATY " << context.m_ivars.fmt_type(aty) << " != left " << context.m_ivars.fmt_type(bound.left_ty));
+                    } else if (aty.compare_with_placeholders(sp, bound->left_ty, context.m_ivars.callback_resolve_infer()) == HIR::Compare::Unequal) {
+                        DEBUG("[check_ivar_poss__fails_bounds] ATY " << context.m_ivars.fmt_type(aty) << " != left " << context.m_ivars.fmt_type(bound->left_ty));
                         bound_failed = true;
                         // - Bail instantly
                         return true;
@@ -6337,44 +6450,37 @@ namespace {
             }
 
             // TODO: Check for the resultant associated type
-            DEBUG("Acceptable (Assoc R" << bound.rule_idx << ")");
+            DEBUG("Acceptable (Assoc R" << bound->rule_idx << ")");
         }
 
         // Handle methods
-        for (const auto* node_ptr_dyn : context.to_visit) {
-            if (const auto* node_ptr = dynamic_cast<const ::HIR::ExprNode_CallMethod*>(node_ptr_dyn)) {
-                const auto& node = *node_ptr;
-                const auto& ty_tpl = context.get_type(node.m_value->m_res_type);
-                if (!cb.uses_ivar(ty_tpl)) {
-                    continue;
-                }
+        for (const auto* node_ptr : bound_refs.methods) {
+            const auto& node = *node_ptr;
+            const auto& ty_tpl = context.get_type(node.m_value->m_res_type);
 
-                bool used_ty = false;
-                auto t = clone_ty_with(sp, ty_tpl, [&](const auto& ty, auto& out_ty) {
-                    if (const auto* e = ty.data().opt_Infer(); e && e->index == ivar_idx) {
-                        out_ty = new_ty.clone();
-                        used_ty = true;
-                        return true;
-                    } else {
-                        return false;
-                    }
-                });
-                if (!used_ty) {
-                    continue;
-                }
-
-                DEBUG("Check <" << t << ">::" << node.m_method);
-                ::std::vector<::std::pair<TraitResolution::AutoderefBorrow, ::HIR::Path>> possible_methods;
-                unsigned int deref_count = context.m_resolve.autoderef_find_method(node.span(), node.m_traits, node.m_trait_param_ivars, node.m_trait_param_type_ivars, t, node.m_method, possible_methods);
-                DEBUG("> deref_count = " << deref_count << ", possible_methods={" << possible_methods << "}");
-                // TODO: Detect the above hitting an ivar, and use that instead of this hacky check of if it's `_` or `&_`
-                if (!(t.data().is_Infer() || TU_TEST1(t.data(), Borrow, .inner.data().is_Infer())) && possible_methods.empty()) {
-                    // No method found, which would be an error
-                    DEBUG("Remove possibility " << new_ty << " because it didn't have a method");
+            bool used_ty = false;
+            auto t = clone_ty_with(sp, ty_tpl, [&](const auto& ty, auto& out_ty) {
+                if (const auto* e = ty.data().opt_Infer(); e && e->index == ivar_idx) {
+                    out_ty = new_ty.clone();
+                    used_ty = true;
                     return true;
+                } else {
+                    return false;
                 }
-            } else {
-                // TODO: Other methods?
+            });
+            if (!used_ty) {
+                continue;
+            }
+
+            DEBUG("Check <" << t << ">::" << node.m_method);
+            ::std::vector<::std::pair<TraitResolution::AutoderefBorrow, ::HIR::Path>> possible_methods;
+            unsigned int deref_count = context.m_resolve.autoderef_find_method(node.span(), node.m_traits, node.m_trait_param_ivars, node.m_trait_param_type_ivars, t, node.m_method, possible_methods);
+            DEBUG("> deref_count = " << deref_count << ", possible_methods={" << possible_methods << "}");
+            // TODO: Detect the above hitting an ivar, and use that instead of this hacky check of if it's `_` or `&_`
+            if (!(t.data().is_Infer() || TU_TEST1(t.data(), Borrow, .inner.data().is_Infer())) && possible_methods.empty()) {
+                // No method found, which would be an error
+                DEBUG("Remove possibility " << new_ty << " because it didn't have a method");
+                return true;
             }
         }
 
@@ -6884,6 +6990,7 @@ namespace {
         const bool honour_disable = (fallback_ty != IvarPossFallbackType::IgnoreWeakDisable);
 
         const auto& ty_l = context.m_ivars.get_type(i);
+        IvarBoundRefs bound_refs;
 
         if (!TU_TEST1(ty_l.data(), Infer, .index == i)) {
             if (ivar_ent.has_rules()) {
@@ -7023,7 +7130,7 @@ namespace {
                 bool found_two = false;
                 for (const auto& b_ty : ivar_ent.bounded) {
                     // Check bound against bounds
-                    if (!check_ivar_poss__fails_bounds(sp, context, ty_l, b_ty)) {
+                    if (!check_ivar_poss__fails_bounds(sp, context, bound_refs, ty_l, b_ty)) {
                         if (best_ty) {
                             DEBUG(b_ty << " passed bounds (second)");
                             found_two = true;
@@ -7131,7 +7238,7 @@ namespace {
                 const auto& ent = *::std::find_if(possible_tys.begin(), possible_tys.end(), PossibleType::is_source_s);
                 // - Only if there's no ivars
                 if (!context.m_ivars.type_contains_ivars(*ent.ty) && !ent.ty->data().is_Diverge()) {
-                    if (!check_ivar_poss__fails_bounds(sp, context, ty_l, *ent.ty)) {
+                    if (!check_ivar_poss__fails_bounds(sp, context, bound_refs, ty_l, *ent.ty)) {
                         DEBUG("Single concrete source, " << *ent.ty);
                         context.equate_types(sp, ty_l, *ent.ty);
                         return true;
@@ -7140,7 +7247,7 @@ namespace {
             }
             if (fallback_ty == IvarPossFallbackType::IgnoreWeakDisable && possible_tys.size() == 1) {
                 auto ent = possible_tys[0];
-                if (!check_ivar_poss__fails_bounds(sp, context, ty_l, *ent.ty)) {
+                if (!check_ivar_poss__fails_bounds(sp, context, bound_refs, ty_l, *ent.ty)) {
                     DEBUG("Single option (and in final), " << *ent.ty);
                     context.equate_types(sp, ty_l, *ent.ty);
                     return true;
@@ -7157,8 +7264,8 @@ namespace {
                 if (ent_s.is_coerce() && ent_d.is_coerce()) {
                     bool src_noivars = !context.m_ivars.type_contains_ivars(*ent_s.ty);
                     bool dst_noivars = !context.m_ivars.type_contains_ivars(*ent_d.ty);
-                    bool src_valid = !check_ivar_poss__fails_bounds(sp, context, ty_l, *ent_s.ty);
-                    bool dst_valid = !check_ivar_poss__fails_bounds(sp, context, ty_l, *ent_d.ty);
+                    bool src_valid = !check_ivar_poss__fails_bounds(sp, context, bound_refs, ty_l, *ent_s.ty);
+                    bool dst_valid = !check_ivar_poss__fails_bounds(sp, context, bound_refs, ty_l, *ent_d.ty);
 
                     if (src_valid) {
                         if (src_noivars) {
@@ -7197,7 +7304,7 @@ namespace {
                     HIR::TypeRef tmp_ty;
 
                     do {
-                        if (!check_ivar_poss__fails_bounds(sp, context, ty_l, *ty_p)) {
+                        if (!check_ivar_poss__fails_bounds(sp, context, bound_refs, ty_l, *ty_p)) {
                             DEBUG("Single possibility failed bounds, trying deref - " << *ty_p);
                             break;
                         }
@@ -7711,7 +7818,7 @@ namespace {
                         }
                     }
                 }
-                if (!remove_option && !it->ty->data().is_Infer() && check_ivar_poss__fails_bounds(sp, context, ty_l, *it->ty)) {
+                if (!remove_option && !it->ty->data().is_Infer() && check_ivar_poss__fails_bounds(sp, context, bound_refs, ty_l, *it->ty)) {
                     remove_option = true;
                     DEBUG("- Remove " << *it << " due to bounds");
                 }
@@ -7721,7 +7828,7 @@ namespace {
 
             if (n_src_ivars == 0 && /*n_dst_ivars == 0 &&*/ possible_tys.empty() && possibly_diverge && fallback_ty == IvarPossFallbackType::IgnoreWeakDisable) {
                 auto t = ::HIR::TypeRef::new_diverge();
-                if (!check_ivar_poss__fails_bounds(sp, context, ty_l, t)) {
+                if (!check_ivar_poss__fails_bounds(sp, context, bound_refs, ty_l, t)) {
                     DEBUG("Possibly `!` and no other options - setting");
                     context.equate_types(sp, ty_l, ::HIR::TypeRef::new_diverge());
                     return true;
@@ -7870,7 +7977,7 @@ namespace {
             good_types.reserve(ivar_ent.bounded.size());
             for (const auto& new_ty : ivar_ent.bounded) {
                 DEBUG("- Test " << new_ty << " against current rules");
-                if (check_ivar_poss__fails_bounds(sp, context, ty_l, new_ty)) {
+                if (check_ivar_poss__fails_bounds(sp, context, bound_refs, ty_l, new_ty)) {
                 } else {
                     good_types.push_back(&new_ty);
 
@@ -8023,54 +8130,14 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
             DEBUG("--- IVar possibilities");
             // TODO: De-duplicate this with the block ~80 lines below
             //for(unsigned int i = context.possible_ivar_vals.size(); i --; ) // NOTE: Ordering is a hack for libgit2
+            ::std::unique_ptr<IvarDependencyIndex> dependency_index;
             for (unsigned int i = 0; i < context.possible_ivar_vals.size(); i++) {
                 if (check_ivar_poss(context, i, context.possible_ivar_vals[i])) {
                     // Look at all other ivar possibility sets, and disable processing if they depend on this ivar (prevents races)
-                    auto contains_ty = [&i](const HIR::TypeRef& t) {
-                        auto cb = [&](const HIR::TypeRef& t) {
-                            // TODO: Resolve ivars
-                            return TU_TEST1(t.data(), Infer, .index == i);
-                        };
-                        return visit_ty_with(t, cb);
-                    };
-                    auto disable_in = [&context](const HIR::TypeRef& t) -> bool {
-                        auto cb = [&](const HIR::TypeRef& tr) {
-                            const auto& t = context.m_ivars.get_type(tr);
-                            if (const auto* te = t.data().opt_Infer()) {
-                                DEBUG("Disable IVar " << te->index);
-                                // NOTE: if this ivar hasn't had possibilties applied, then it might not have a slot in the list yet.
-                                if (te->index < context.possible_ivar_vals.size()) {
-                                    context.possible_ivar_vals.at(te->index).force_disable = true;
-                                }
-                            }
-                            return false;
-                        };
-                        return visit_ty_with(t, cb);
-                    };
-                    for (const auto& r : context.link_assoc) {
-                        if (contains_ty(r.impl_ty) || contains_ty(r.left_ty) || ::std::any_of(r.params.m_types.begin(), r.params.m_types.end(), contains_ty)) {
-                            disable_in(r.impl_ty);
-                            for (const auto& t : r.params.m_types) {
-                                disable_in(t);
-                            }
-                        }
+                    if (!dependency_index) {
+                        dependency_index = ::std::make_unique<IvarDependencyIndex>(context);
                     }
-                    for (auto& e : context.possible_ivar_vals) {
-                        bool references_this = false;
-                        for (const auto& t : e.types_coerce_from) {
-                            references_this |= contains_ty(t.ty);
-                        }
-                        for (const auto& t : e.types_coerce_to) {
-                            references_this |= contains_ty(t.ty);
-                        }
-                        for (const auto& t : e.bounded) {
-                            references_this |= contains_ty(t);
-                        }
-                        if (references_this) {
-                            DEBUG("Block IVar " << (&e - context.possible_ivar_vals.data()));
-                            e.force_disable = true;
-                        }
-                    }
+                    dependency_index->disable_dependents(i);
                 } else {
                     //assert( !context.m_ivars.peek_changed() );
                 }
