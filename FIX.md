@@ -14,8 +14,6 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 Из 2384 целых записей о прямом падении: 1571 compiler abort/rejection, 627 обычных compile/adapter failures, 97 runtime failures, 75 SIGSEGV, 11 timeout и 3 SIGILL. Ещё две строки были повреждены параллельным выводом. Основные прямые источники: `rust_ui_compile` — 963, `rust_1_90` — 534, GCCRS — 412, `rust_lib` — 149, reference и doctest — по 127.
 
-После исправления primitive operators и выбора closure call trait повторный полный прогон `gccrs` + `gccrs_compile` оставляет 226 из 883 красных нод. Все отсутствующие primitive operator lang items и `fn_mut` из сигнатур исчезли; оставшиеся lang-item сигнатуры: `coerce_unsized` — 37, `index` — 12, `unsafe_cell` — 5, `eq` — 2 и `tuple_trait` — 1. `index` и два `eq` относятся к операциям, для которых upstream также требует trait, поэтому их нельзя делать lang-free compiler builtin.
-
 Приоритет определяется не краснотой отдельного unit и не размером каталога, а числом targets, которые снимает одно общее исправление. Число рядом с задачей — измеренный fan-out этого gate. Если минимизация показывает разные причины, задача делится, а части реклассифицируются ниже.
 
 Для compiler fix порядок остаётся строгим: минимальный красный `tests/unit/test_*.rs` → исправление общего пути → зелёный unit → исходный upstream trigger → соседние triggers той же сигнатуры → clang/lld build → commit и push. Unit подтверждает причину, но сам по себе не повышает приоритет.
