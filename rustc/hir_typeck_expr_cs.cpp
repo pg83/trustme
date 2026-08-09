@@ -4173,10 +4173,24 @@ Context::IVarPossible* Context::get_ivar_possibilities(const Span& sp, unsigned 
         }
     }
 
-    if (ivar_index >= possible_ivar_vals.size()) {
-        possible_ivar_vals.resize(ivar_index + 1);
+    return get_possible_ivar_sink(ivar_index);
+}
+
+Context::IVarPossible* Context::get_possible_ivar_sink(unsigned index) {
+    if (m_possible_ivar_sink) {
+        for (auto& captured : *m_possible_ivar_sink) {
+            if (captured.index == index) {
+                return &captured.possibilities;
+            }
+        }
+        m_possible_ivar_sink->push_back(Associated::CapturedIvarPossible{index, {}});
+        return &m_possible_ivar_sink->back().possibilities;
     }
-    return &possible_ivar_vals[ivar_index];
+
+    if (index >= possible_ivar_vals.size()) {
+        possible_ivar_vals.resize(index + 1);
+    }
+    return &possible_ivar_vals[index];
 }
 
 void Context::possible_equate_ivar(const Span& sp, unsigned int ivar_index, const ::HIR::TypeRef& raw_t, PossibleTypeSource src) {
@@ -4291,10 +4305,7 @@ void Context::possible_equate_ivar_unknown(const Span& sp, unsigned int ivar_ind
     DEBUG(ivar_index << " = ?? (" << src << ")");
     ASSERT_BUG(sp, m_ivars.get_type(ivar_index)->is_Infer(), "possible_equate_ivar_unknown on known ivar");
 
-    if (ivar_index >= possible_ivar_vals.size()) {
-        possible_ivar_vals.resize(ivar_index + 1);
-    }
-    auto& ent = possible_ivar_vals[ivar_index];
+    auto& ent = *get_possible_ivar_sink(ivar_index);
     switch (src) {
         case IvarUnknownType::To:
             ent.force_no_to = true;
@@ -5544,7 +5555,13 @@ namespace {
         }
     }
 
-    bool check_associated(Context& context, Context::Associated& v) {
+    enum class AssociatedCheckResult {
+        Complete,
+        Retry,
+        Stalled,
+    };
+
+    AssociatedCheckResult check_associated(Context& context, Context::Associated& v) {
         const auto& sp = v.span;
         TRACE_FUNCTION_F(v);
 
@@ -5727,7 +5744,7 @@ namespace {
                         && context.get_type(res)->is_Infer()) {
                         context.possible_equate_type_unknown(sp, right, Context::IvarUnknownType::To);
                         DEBUG("> All are infer, skip");
-                        return false;
+                        return AssociatedCheckResult::Stalled;
                     }
                 }
 
@@ -5748,7 +5765,7 @@ namespace {
         if (const auto* e = context.m_ivars.get_type(v.impl_ty)->opt_Infer()) {
             // TODO: ?
             if (!e->is_lit() && v.params.m_types.empty()) {
-                return false;
+                return AssociatedCheckResult::Stalled;
             }
 
             // If the type is completely unbounded, then any lookup will fail.
@@ -5758,7 +5775,7 @@ namespace {
                     //context.equate_types_bounded(sp, t, {});
                     context.possible_equate_type_unknown(sp, t, Context::IvarUnknownType::To);
                 }
-                return false;
+                return AssociatedCheckResult::Stalled;
             }
         }
 
@@ -5969,10 +5986,10 @@ namespace {
                     context.equate_types(sp, v.left_ty, *output_type);
                 }
                 // TODO: Any equating of type params?
-                return true;
+                return AssociatedCheckResult::Complete;
             } else if (count == 0) {
                 if (saw_ambiguous_identity) {
-                    return false;
+                    return AssociatedCheckResult::Stalled;
                 }
                 // No applicable impl
                 // - TODO: This should really only fire when there isn't an impl. But it currently fires when _
@@ -5989,7 +6006,7 @@ namespace {
                 //    is_known &= !context.m_ivars.type_contains_ivars(t);
                 if (!is_known) {
                     // There's still an ivar (or an unbound UFCS), keep trying
-                    return false;
+                    return AssociatedCheckResult::Stalled;
                 } else if (v.trait == context.m_resolve.m_lang_Unsize) {
                     // TODO: Detect if this was a compiler-generated bound, or was actually in the code.
 
@@ -5998,7 +6015,7 @@ namespace {
                     const auto& dst_ty = context.get_type(v.params.m_types[0]);
 
                     context.equate_types(sp, dst_ty, src_ty);
-                    return true;
+                    return AssociatedCheckResult::Complete;
                 } else if (v.operator_kind != typeck::PrimitiveOperator::None
                            && (v.params.m_types.size() == 0
                                ? typeck::primitive_operator_has_builtin(v.operator_kind, context.get_type(v.impl_ty))
@@ -6006,7 +6023,7 @@ namespace {
                                    && typeck::primitive_operator_has_builtin(v.operator_kind, context.get_type(v.impl_ty), context.get_type(v.params.m_types.at(0))))) {
                     // No trait implementation matched this expression.  The
                     // language-defined primitive candidate therefore wins.
-                    return true;
+                    return AssociatedCheckResult::Complete;
                 } else {
                     if (v.name == "") {
                         ERROR(sp, E0000, "Failed to find an impl of " << v.trait << context.m_ivars.fmt(v.params) << " for " << context.m_ivars.fmt_type(v.impl_ty));
@@ -6109,17 +6126,17 @@ namespace {
                         m.cmp_type(sp, v.params.m_types[i], possible_params.m_types[i], context.m_ivars.callback_resolve_infer());
                     }
                     DEBUG("> Magic params present, wait");
-                    return false;
+                    return AssociatedCheckResult::Retry;
                 }
                 const auto& impl_ty = context.m_ivars.get_type(v.impl_ty);
                 if (TU_TEST1(*impl_ty, Path, .binding.is_Unbound())) {
                     DEBUG("Unbound UfcsKnown, waiting");
-                    return false;
+                    return AssociatedCheckResult::Stalled;
                 }
                 if (TU_TEST1(*impl_ty, Infer, .is_lit() == false)) {
                     DEBUG("Unbounded ivar, waiting - TODO: Add possibility " << impl_ty << " == " << possible_impl_ty);
                     //context.possible_equate_type_bound(sp, impl_ty->as_Infer().index, possible_impl_ty);
-                    return false;
+                    return AssociatedCheckResult::Stalled;
                 }
                 assert(possible_impl_ty != ::HIR::TypeRef());
                 context.equate_types(sp, v.impl_ty, possible_impl_ty);
@@ -6145,7 +6162,7 @@ namespace {
                                 output_type = context.m_crate.m_types.intern(std::move(data));
                             } else {
                                 DEBUG("- Attempted recursion, stopping it");
-                                return false;
+                                return AssociatedCheckResult::Retry;
                             }
                         }
                     }
@@ -6153,7 +6170,7 @@ namespace {
                 }
                 // - Obtain the bounds required for this impl and add those as trait bounds to check/equate
                 add_impl_bounds(context, sp, best_impl);
-                return true;
+                return AssociatedCheckResult::Complete;
             } else {
                 // Multiple possible impls, don't know yet
                 DEBUG("Multiple impls");
@@ -6185,11 +6202,11 @@ namespace {
                     DEBUG("IVar _/*" << e.first << "*/ ?= [" << e.second << "]");
                     context.possible_equate_ivar_bounds(sp, e.first, std::move(e.second));
                 }
-                return false;
+                return AssociatedCheckResult::Stalled;
             }
         } catch (const TraitResolution::RecursionDetected&) {
             DEBUG("Recursion detected, deferring");
-            return false;
+            return AssociatedCheckResult::Retry;
         }
     }
 
@@ -6197,6 +6214,146 @@ namespace {
 
 // check_ivar_poss (and helpers)
 namespace {
+    bool path_params_have_untracked_const(const ::HIR::PathParams& params) {
+        return ::std::any_of(params.m_values.begin(), params.m_values.end(), [](const auto& value) {
+            return value.is_Infer() || value.is_Unevaluated();
+        });
+    }
+
+    struct AssociatedStallCollector {
+        Context& context;
+        ::std::vector<Context::Associated::StallDependency>& dependencies;
+        ::std::vector<::HIR::TypeRef> pending;
+        ::std::vector<::HIR::TypeRef> visited;
+        bool has_raw_infer = false;
+
+        void add_type(::HIR::TypeRef type) {
+            if (type->has_type_infer()) {
+                pending.push_back(type);
+            }
+        }
+
+        void collect() {
+            while (!pending.empty() && !has_raw_infer) {
+                const auto type = pending.back();
+                pending.pop_back();
+                if (::std::find(visited.begin(), visited.end(), type) != visited.end()) {
+                    continue;
+                }
+                visited.push_back(type);
+
+                visit_ty_with(type, [&](const ::HIR::TypeRef& inner) {
+                    const auto* infer = inner->opt_Infer();
+                    if (!infer) {
+                        return false;
+                    }
+                    if (infer->index == ~0u) {
+                        has_raw_infer = true;
+                        return true;
+                    }
+
+                    const auto resolved = context.m_ivars.get_type(infer->index);
+                    if (const auto* resolved_infer = resolved->opt_Infer()) {
+                        if (resolved_infer->index == ~0u) {
+                            has_raw_infer = true;
+                            return true;
+                        }
+                        const auto existing = ::std::find_if(dependencies.begin(), dependencies.end(), [&](const auto& dependency) {
+                            return dependency.index == resolved_infer->index;
+                        });
+                        if (existing == dependencies.end()) {
+                            dependencies.push_back({resolved_infer->index, resolved});
+                        }
+                    } else if (resolved->has_type_infer()) {
+                        pending.push_back(resolved);
+                    }
+                    return false;
+                });
+            }
+        }
+    };
+
+    bool set_associated_stall(Context& context, Context::Associated& rule) {
+        rule.stalled_on.clear();
+
+        const auto type_can_stall = [](const ::HIR::TypeRef type) {
+            return (type->m_flags & (::HIR::TypeData::HAS_UNEVALUATED_CONST | ::HIR::TypeData::HAS_DEFERRED_CONST)) == 0;
+        };
+        if (!type_can_stall(rule.impl_ty)
+            || (rule.name != "" && !type_can_stall(rule.left_ty))
+            || path_params_have_untracked_const(rule.params)
+            || path_params_have_untracked_const(rule.aty_pp)) {
+            return false;
+        }
+        for (const auto type : rule.params.m_types) {
+            if (!type_can_stall(type)) {
+                return false;
+            }
+        }
+        for (const auto type : rule.aty_pp.m_types) {
+            if (!type_can_stall(type)) {
+                return false;
+            }
+        }
+
+        AssociatedStallCollector collector{context, rule.stalled_on};
+        collector.add_type(rule.impl_ty);
+        if (rule.name != "") {
+            collector.add_type(rule.left_ty);
+        }
+        for (const auto type : rule.params.m_types) {
+            collector.add_type(type);
+        }
+        for (const auto type : rule.aty_pp.m_types) {
+            collector.add_type(type);
+        }
+        collector.collect();
+
+        if (collector.has_raw_infer || rule.stalled_on.empty()) {
+            rule.stalled_on.clear();
+            return false;
+        }
+        return true;
+    }
+
+    bool associated_still_stalled(const Context& context, const Context::Associated& rule) {
+        if (rule.stalled_on.empty()) {
+            return false;
+        }
+        return ::std::all_of(rule.stalled_on.begin(), rule.stalled_on.end(), [&](const auto& dependency) {
+            return context.m_ivars.get_type(dependency.index) == dependency.resolved;
+        });
+    }
+
+    void merge_associated_possibilities(Context& context, const ::std::vector<Context::Associated::CapturedIvarPossible>& captured) {
+        for (const auto& value : captured) {
+            const auto resolved = context.m_ivars.get_type(value.index);
+            if (!resolved->is_Infer() || resolved->as_Infer().index != value.index) {
+                continue;
+            }
+            if (value.index >= context.possible_ivar_vals.size()) {
+                context.possible_ivar_vals.resize(value.index + 1);
+            }
+            context.possible_ivar_vals[value.index].merge_from(value.possibilities);
+        }
+    }
+
+    struct AssociatedPossibilityCapture {
+        Context& context;
+        ::std::vector<Context::Associated::CapturedIvarPossible>* previous;
+
+        AssociatedPossibilityCapture(Context& context, ::std::vector<Context::Associated::CapturedIvarPossible>& destination)
+            : context(context)
+            , previous(context.m_possible_ivar_sink)
+        {
+            context.m_possible_ivar_sink = &destination;
+        }
+
+        ~AssociatedPossibilityCapture() {
+            context.m_possible_ivar_sink = previous;
+        }
+    };
+
     struct IvarDependencyIndex {
         Context& context;
         ::std::vector<::std::vector<unsigned int>> associated_targets;
@@ -8174,6 +8331,17 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
                 auto rule = mv$(context.link_assoc[i]);
 
                 DEBUG("- " << rule);
+                if (associated_still_stalled(context, rule)) {
+                    merge_associated_possibilities(context, rule.stalled_possibilities);
+                    context.link_assoc[i] = mv$(rule);
+                    i++;
+                    if (link_assoc_iter_limit-- == 0) {
+                        DEBUG("link_assoc iteration limit exceeded");
+                        break;
+                    }
+                    continue;
+                }
+
                 for (auto& ty : rule.params.m_types) {
                     ty = context.m_resolve.expand_associated_types(rule.span, mv$(ty));
                 }
@@ -8186,7 +8354,15 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
                 }
                 rule.impl_ty = context.m_resolve.expand_associated_types(rule.span, mv$(rule.impl_ty));
 
-                if (check_associated(context, rule)) {
+                ::std::vector<Context::Associated::CapturedIvarPossible> captured_possibilities;
+                AssociatedCheckResult result;
+                {
+                    AssociatedPossibilityCapture capture(context, captured_possibilities);
+                    result = check_associated(context, rule);
+                }
+                merge_associated_possibilities(context, captured_possibilities);
+
+                if (result == AssociatedCheckResult::Complete) {
                     DEBUG("- Consumed associated type rule " << i << "/" << context.link_assoc.size() << " - " << rule);
                     if (i != context.link_assoc.size() - 1) {
                         //assert( context.link_assoc[i] != context.link_assoc.back() );
@@ -8194,6 +8370,12 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
                     }
                     context.link_assoc.pop_back();
                 } else {
+                    if (result == AssociatedCheckResult::Stalled && set_associated_stall(context, rule)) {
+                        rule.stalled_possibilities = mv$(captured_possibilities);
+                    } else {
+                        rule.stalled_on.clear();
+                        rule.stalled_possibilities.clear();
+                    }
                     context.link_assoc[i] = mv$(rule);
                     i++;
                 }

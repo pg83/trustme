@@ -736,6 +736,8 @@ namespace {
         for (const auto& value : params.m_values) {
             if (value.is_Generic()) {
                 flags |= TypeData::HAS_TYPE_PARAM;
+            } else if (value.is_Infer() || value.is_Unevaluated()) {
+                flags |= TypeData::HAS_DEFERRED_CONST;
             }
         }
         return flags;

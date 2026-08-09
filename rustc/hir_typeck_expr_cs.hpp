@@ -6,6 +6,7 @@
  * - "Constraint Solver" type inferrence
  */
 #pragma once
+#include <algorithm>
 #include "hir_type_ref.hpp"
 #include "hir_expr_ptr.hpp"
 #include "hir_expr.hpp"
@@ -37,35 +38,6 @@ struct Context {
 
         friend ::std::ostream& operator<<(::std::ostream& os, const Coercion& v) {
             os << "R" << v.rule_idx << " " << v.left_ty << " := " << v.right_node_ptr << " " << &**v.right_node_ptr << " (" << (*v.right_node_ptr)->m_res_type << ")";
-            return os;
-        }
-    };
-
-    struct Associated {
-        unsigned rule_idx;
-        Span span;
-        ::HIR::TypeRef left_ty;
-
-        ::HIR::SimplePath trait;
-        ::HIR::PathParams params;
-        ::HIR::TypeRef impl_ty;
-        RcString name; // if "", no type is used (and left is ignored) - Just does trait selection
-        ::HIR::PathParams aty_pp;
-
-        // HACK: operators are special - the result when both types are primitives is ALWAYS the lefthand side
-        bool is_operator;
-        typeck::PrimitiveOperator operator_kind;
-
-        friend ::std::ostream& operator<<(::std::ostream& os, const Associated& v) {
-            os << "R" << v.rule_idx << " ";
-            if (v.name == "") {
-                os << "req ty " << v.impl_ty << " impl " << v.trait << v.params;
-            } else {
-                os << v.left_ty << " = " << "< `" << v.impl_ty << "` as `" << v.trait << v.params << "` >::" << v.name << v.aty_pp;
-            }
-            if (v.is_operator) {
-                os << " - op";
-            }
             return os;
         }
     };
@@ -144,6 +116,94 @@ struct Context {
             }
             return false;
         }
+
+        void merge_from(const IVarPossible& source) {
+            force_disable |= source.force_disable;
+            force_no_to |= source.force_no_to;
+            force_no_from |= source.force_no_from;
+
+            auto merge_coercions = [](auto& destination, const auto& values) {
+                for (const auto& value : values) {
+                    const auto found = ::std::find_if(destination.begin(), destination.end(), [&](const auto& existing) {
+                        return existing.op == value.op && existing.ty == value.ty;
+                    });
+                    if (found == destination.end()) {
+                        destination.push_back(value);
+                    }
+                }
+            };
+            merge_coercions(types_coerce_to, source.types_coerce_to);
+            merge_coercions(types_coerce_from, source.types_coerce_from);
+            types_default.insert(source.types_default.begin(), source.types_default.end());
+
+            if (!source.has_bounded) {
+                return;
+            }
+            if (!has_bounded) {
+                has_bounded = true;
+                bounds_include_self = source.bounds_include_self;
+                bounded = source.bounded;
+                return;
+            }
+
+            bounds_include_self |= source.bounds_include_self;
+            if (bounds_include_self) {
+                for (const auto type : source.bounded) {
+                    if (::std::find(bounded.begin(), bounded.end(), type) == bounded.end()) {
+                        bounded.push_back(type);
+                    }
+                }
+            } else {
+                bounded.erase(
+                    ::std::remove_if(bounded.begin(), bounded.end(), [&](const auto type) {
+                        return ::std::find(source.bounded.begin(), source.bounded.end(), type) == source.bounded.end();
+                    }),
+                    bounded.end()
+                );
+            }
+        }
+    };
+
+    struct Associated {
+        struct StallDependency {
+            unsigned index;
+            ::HIR::TypeRef resolved;
+        };
+
+        struct CapturedIvarPossible {
+            unsigned index;
+            IVarPossible possibilities;
+        };
+
+        unsigned rule_idx;
+        Span span;
+        ::HIR::TypeRef left_ty;
+
+        ::HIR::SimplePath trait;
+        ::HIR::PathParams params;
+        ::HIR::TypeRef impl_ty;
+        RcString name; // if "", no type is used (and left is ignored) - Just does trait selection
+        ::HIR::PathParams aty_pp;
+
+        // HACK: operators are special - the result when both types are primitives is ALWAYS the lefthand side
+        bool is_operator;
+        typeck::PrimitiveOperator operator_kind;
+
+        ::std::vector<StallDependency> stalled_on;
+        ::std::vector<CapturedIvarPossible> stalled_possibilities;
+
+        friend ::std::ostream& operator<<(::std::ostream& os, const Associated& v) {
+            os << "R" << v.rule_idx << " ";
+            if (v.name == "") {
+                os << "req ty " << v.impl_ty << " impl " << v.trait << v.params;
+            } else {
+                os << v.left_ty << " = " << "< `" << v.impl_ty << "` as `" << v.trait << v.params << "` >::" << v.name << v.aty_pp;
+            }
+            if (v.is_operator) {
+                os << " - op";
+            }
+            return os;
+        }
     };
 
     const ::HIR::Crate& m_crate;
@@ -166,6 +226,9 @@ struct Context {
     // - If it is, then we can discount any unsized possibilities
     ::std::vector<bool> m_ivars_sized;
     ::std::vector<IVarPossible> possible_ivar_vals;
+    ::std::vector<Associated::CapturedIvarPossible>* m_possible_ivar_sink = nullptr;
+
+    IVarPossible* get_possible_ivar_sink(unsigned index);
 
     struct TaitEntry {
         HIR::PathParams params;
