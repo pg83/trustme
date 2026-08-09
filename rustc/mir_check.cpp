@@ -121,34 +121,25 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
 
         /// Collection of `State`s
         struct StateVec {
-            std::vector<uint8_t> v;
+            size_t m_size;
+            std::vector<uint64_t> v;
 
             StateVec(size_t n = 0, State init = {})
-                : v((n + 3) / 4, init.v | (init.v << 2) | (init.v << 4) | (init.v << 6))
+                : m_size(n)
+                , v((n + 31) / 32, uint64_t(init.v) * 0x5555555555555555ULL)
             {
-                if (v.size() > 0) { // Avoids a GCC warning
-                    switch (n % 4) {
-                        case 0:
-                            break;
-                        case 1:
-                            v.back() |= 0xFC;
-                            break;
-                        case 2:
-                            v.back() |= 0xF0;
-                            break;
-                        case 3:
-                            v.back() |= 0xC0;
-                            break;
-                    }
+                const auto used = n % 32;
+                if (used != 0) {
+                    v.back() |= ~((uint64_t(1) << (used * 2)) - 1);
                 }
             }
 
             bool operator==(const StateVec& x) const {
-                return v == x.v;
+                return m_size == x.m_size && v == x.v;
             }
 
             bool operator!=(const StateVec& x) const {
-                return v != x.v;
+                return !(*this == x);
             }
 
             bool empty() const {
@@ -156,22 +147,17 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
             }
 
             size_t size() const {
-                if (v.empty()) {
-                    return 0;
-                } else {
-                    size_t extra = v.back() >= 0xFC ? 1 : v.back() >= 0xF0 ? 2 : v.back() >= 0xC0 ? 3 : 4;
-                    return (v.size() - 1) * 4 + extra;
-                }
+                return m_size;
             }
 
             class reference {
-                uint8_t& slot;
+                uint64_t& slot;
                 uint8_t bit_ofs;
                 State v;
 
                 friend StateVec;
 
-                reference(uint8_t& slot, uint8_t bit_ofs)
+                reference(uint64_t& slot, uint8_t bit_ofs)
                     : slot(slot)
                     , bit_ofs(bit_ofs)
                     , v((slot >> bit_ofs) & 3)
@@ -180,7 +166,7 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
 
             public:
                 ~reference() {
-                    slot = (slot & ~(3 << bit_ofs)) | (v.v << bit_ofs);
+                    slot = (slot & ~(uint64_t(3) << bit_ofs)) | (uint64_t(v.v) << bit_ofs);
                 }
 
                 State& get() {
@@ -206,11 +192,11 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
             };
 
             State operator[](size_t idx) const {
-                return (v[idx / 4] >> (idx % 4 * 2)) & 3;
+                return (v[idx / 32] >> (idx % 32 * 2)) & 3;
             }
 
             reference operator[](size_t idx) {
-                return reference(v[idx / 4], idx % 4 * 2);
+                return reference(v[idx / 32], idx % 32 * 2);
             }
         };
 
@@ -380,11 +366,11 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
             assert(a.size() == b.size());
             assert(a.v.size() == b.v.size());
             for (size_t i = 0; i < a.v.size(); i++) {
-                const uint8_t av = a.v[i];
-                const uint8_t bv = b.v[i];
-                const uint8_t differingLowBits = ((av ^ bv) | ((av ^ bv) >> 1)) & 0x55;
-                const uint8_t differingMask = differingLowBits | (differingLowBits << 1);
-                const uint8_t merged = (av & ~differingMask) | (0x55 & differingMask);
+                const uint64_t av = a.v[i];
+                const uint64_t bv = b.v[i];
+                const uint64_t differingLowBits = ((av ^ bv) | ((av ^ bv) >> 1)) & 0x5555555555555555ULL;
+                const uint64_t differingMask = differingLowBits | (differingLowBits << 1);
+                const uint64_t merged = (av & ~differingMask) | (0x5555555555555555ULL & differingMask);
                 rv |= merged != av;
                 a.v[i] = merged;
             }
