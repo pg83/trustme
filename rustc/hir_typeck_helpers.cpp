@@ -511,6 +511,9 @@ void HMTypeInferrence::print_pathparams(::std::ostream& os, const ::HIR::PathPar
 }
 
 void HMTypeInferrence::expand_ivars(::HIR::TypeRef& type) {
+    if (!type->has_type_infer()) {
+        return;
+    }
     if (::std::find(m_expand_stack.begin(), m_expand_stack.end(), type) != m_expand_stack.end()) return;
     m_expand_stack.push_back(type);
     struct Guard {
