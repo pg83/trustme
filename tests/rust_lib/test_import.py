@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import importlib.util
+import tempfile
 import textwrap
 import unittest
 from pathlib import Path
@@ -10,9 +11,35 @@ HERE = Path(__file__).resolve().parent
 SPEC = importlib.util.spec_from_file_location("rust_lib_import", HERE / "import.py")
 IMPORTER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(IMPORTER)
+CASE_SPEC = importlib.util.spec_from_file_location("rust_lib_case", HERE / "case.py")
+CASE = importlib.util.module_from_spec(CASE_SPEC)
+CASE_SPEC.loader.exec_module(CASE)
 
 
 class ImportTest(unittest.TestCase):
+    def test_module_harness_preserves_nested_module_lookup(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = CASE.prepare_source(
+                Path(temporary),
+                HERE / "upstream",
+                "coretests",
+                "ops",
+                "module",
+                "coretests/tests/ops.rs",
+                "ops/control_flow.rs",
+                "control_flow_discriminants_match_result",
+                "ops::control_flow::control_flow_discriminants_match_result",
+            )
+
+            self.assertEqual(
+                source,
+                Path(temporary) / "source/upstream/coretests/tests/lib.rs",
+            )
+            wrapper = source.read_text(encoding="utf-8")
+            self.assertIn("\nmod ops;\n", wrapper)
+            self.assertNotIn("#[path =", wrapper)
+            self.assertTrue(source.parent.joinpath("ops/control_flow.rs").is_file())
+
     def test_macro_template_tests_are_not_imported(self):
         source = textwrap.dedent(
             """\

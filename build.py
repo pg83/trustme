@@ -379,7 +379,11 @@ unit_tests.append(command(
     name="unit_rust_lib_import",
     inputs=[
         "$(S)/tests/rust_lib/import.py",
+        "$(S)/tests/rust_lib/case.py",
         "$(S)/tests/rust_lib/test_import.py",
+        "$(S)/tests/rust_lib/upstream/coretests/preamble.rs",
+        "$(S)/tests/rust_lib/upstream/coretests/tests/ops.rs",
+        "$(S)/tests/rust_lib/upstream/coretests/tests/ops/control_flow.rs",
     ],
     outputs=["$(B)/tests/unit/rust_lib_import.stamp"],
     cmd=[

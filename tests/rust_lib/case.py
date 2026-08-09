@@ -107,10 +107,9 @@ def prepare_source(
         function,
         hint,
     )
+    wrapper_path = overlay_suite / "tests" / "lib.rs"
     if suite == "alloctests":
-        testing = overlay_suite / "tests" / "testing" / "mod.rs"
-        testing = testing.relative_to(source_root).as_posix()
-        wrapper += f"\n#[path = {json.dumps(testing)}]\nmod testing;\n"
+        wrapper += "\nmod testing;\n"
 
     if root != "-":
         support = None
@@ -125,10 +124,14 @@ def prepare_source(
             module = overlay_adapter / root
         else:
             module = overlay_upstream / root
-        module = module.relative_to(source_root).as_posix()
-        wrapper += f"\n#[path = {json.dumps(module)}]\nmod {group};\n"
+        default_file = wrapper_path.parent / f"{group}.rs"
+        default_module = wrapper_path.parent / group / "mod.rs"
+        if module == default_file or module == default_module:
+            wrapper += f"\nmod {group};\n"
+        else:
+            module_path = Path(os.path.relpath(module, wrapper_path.parent)).as_posix()
+            wrapper += f"\n#[path = {json.dumps(module_path)}]\nmod {group};\n"
 
-    wrapper_path = source_root / "wrapper.rs"
     wrapper_path.write_text(wrapper, encoding="utf-8", errors="surrogateescape")
     return wrapper_path
 
