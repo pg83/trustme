@@ -97,8 +97,6 @@ fn test_rng() -> rand_xorshift::XorShiftRng {
     rand::SeedableRng::from_seed(seed)
 }
 
-
-
 #[test]
 fn test_boxed_hasher() {
     let ordinary_hash = hash(&5u32);

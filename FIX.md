@@ -20,25 +20,23 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ## P1 — 25–99 targets одним общим исправлением
 
-1. [ ] **Неверно выбранные library cases: 84 прямых ложных падения.** Manifest включает `f16/f128` tests, которых host harness не экспортирует, а также Windows/ARM/PowerPC и другие cfg-отключённые tests. Генерировать cases из target-applicable upstream cfg/фактического harness list; не удалять валидные x86_64 tests и не менять их ожидания.
+1. [ ] **Driver compatibility для lint/cfg options: до 79 прямых отказов.** Общий parser должен принимать rustc-формы `--check-cfg`, `-A/-D/-W/-F`, `--force-warn`, `--cap-lints` и `--cfg=...`. Diagnostic-only option не должен запускать несуществующий codegen feature; option с проверяемой семантикой нельзя молча игнорировать.
 
-3. [ ] **Driver compatibility для lint/cfg options: до 79 прямых отказов.** Общий parser должен принимать rustc-формы `--check-cfg`, `-A/-D/-W/-F`, `--force-warn`, `--cap-lints` и `--cfg=...`. Diagnostic-only option не должен запускать несуществующий codegen feature; option с проверяемой семантикой нельзя молча игнорировать.
+2. [ ] **`-C` mapping: 65 прямых отказов только на `opt-level` и `debug-assertions`.** Связать `-C opt-level` с существующим optimization level, а обе формы `debug-assertions` — с cfg/codegen поведением. Затем разбирать оставшиеся 55 `-C` failures (`debuginfo`, `codegen-units`, target features, LTO и прочие) по фактической семантике.
 
-4. [ ] **`-C` mapping: 65 прямых отказов только на `opt-level` и `debug-assertions`.** Связать `-C opt-level` с существующим optimization level, а обе формы `debug-assertions` — с cfg/codegen поведением. Затем разбирать оставшиеся 55 `-C` failures (`debuginfo`, `codegen-units`, target features, LTO и прочие) по фактической семантике.
+3. [ ] **Offset pointer в const borrow: 62 library cases.** Один assert `mir_cleanup.cpp:487: ofs == 0` блокирует `coretests/option` — 33 и `coretests/result` — 29. Сохранять relocation base плюс offset через MIR cleanup и CTFE, проверив field borrow и enum payload.
 
-5. [ ] **Offset pointer в const borrow: 62 library cases.** Один assert `mir_cleanup.cpp:487: ofs == 0` блокирует `coretests/option` — 33 и `coretests/result` — 29. Сохранять relocation base плюс offset через MIR cleanup и CTFE, проверив field borrow и enum payload.
+4. [ ] **Настоящий check-only: 49 измеренных failures.** Из 815 текущих красных `check-pass` только 49 проходят `-Z stop-after=typeck`; это реальный, а не верхний fan-out. Реализовать `--emit=metadata`/check stop в driver и включать его в adapter только для `check-pass`; `build-pass` обязан оставаться на полном pipeline.
 
-6. [ ] **Настоящий check-only: 49 измеренных failures.** Из 815 текущих красных `check-pass` только 49 проходят `-Z stop-after=typeck`; это реальный, а не верхний fan-out. Реализовать `--emit=metadata`/check stop в driver и включать его в adapter только для `check-pass`; `build-pass` обязан оставаться на полном pipeline.
+5. [ ] **MIR control flags: 37 прямых отказов.** Связать `-Z validate-mir` — 20 с validator pipeline, `mir-enable-passes` — 9 и `inline-mir`/`inline_mir` — 8 с реальным pass selection. Не считать зелёным простое принятие option.
 
-7. [ ] **MIR control flags: 37 прямых отказов.** Связать `-Z validate-mir` — 20 с validator pipeline, `mir-enable-passes` — 9 и `inline-mir`/`inline_mir` — 8 с реальным pass selection. Не считать зелёным простое принятие option.
+6. [ ] **`Pointee`/metadata solver: 34 library cases.** `coretests/ptr` падает в `find_trait_impls_magic` на generic unsized tail. Реализовать общий metadata type для sized, slice/str, dyn и struct tail, затем проверить pointer metadata/codegen.
 
-8. [ ] **`Pointee`/metadata solver: 34 library cases.** `coretests/ptr` падает в `find_trait_impls_magic` на generic unsized tail. Реализовать общий metadata type для sized, slice/str, dyn и struct tail, затем проверить pointer metadata/codegen.
+7. [ ] **Оставшиеся `no_core` lang-item paths: 43 прямых отказа.** `coerce_unsized` — 37, `unsafe_cell` — 5 и `tuple_trait` — 1. Для каждого сначала сверить upstream semantics и отделить настоящий lang-free builtin от неполного GCCRS fixture; отсутствие trait нельзя обходить, если upstream требует trait для самой операции.
 
-9. [ ] **Оставшиеся `no_core` lang-item paths: 43 прямых отказа.** `coerce_unsized` — 37, `unsafe_cell` — 5 и `tuple_trait` — 1. Для каждого сначала сверить upstream semantics и отделить настоящий lang-free builtin от неполного GCCRS fixture; отсутствие trait нельзя обходить, если upstream требует trait для самой операции.
+8. [ ] **`pin!` expansion/parser: не менее 28 targets.** 21 compile failure видит `let` после path separator, ещё 7 cases заблокированы harness `coretests/pin_macro`. Исправить statement macro expansion в block context, затем проверить `pin!` с expression, `let` и function item.
 
-10. [ ] **`pin!` expansion/parser: не менее 28 targets.** 21 compile failure видит `let` после path separator, ещё 7 cases заблокированы harness `coretests/pin_macro`. Исправить statement macro expansion в block context, затем проверить `pin!` с expression, `let` и function item.
-
-11. [ ] **Повторяющиеся compiler crash signatures.** Сначала символизировать и группировать 75 SIGSEGV по stack/phase. Уже видны TAIT/impl-trait, coroutine/generator drop, projection cycles, const generics и HRTB; повышать отдельную группу выше можно только с измеренным общим fan-out. Отдельно устранить 28 `Invalid path (no nodes)` asserts, 26 `Spare rules left after typecheck stabilised` и 24 `Unexpected item type in inherent impl - Type`.
+9. [ ] **Повторяющиеся compiler crash signatures.** Сначала символизировать и группировать 75 SIGSEGV по stack/phase. Уже видны TAIT/impl-trait, coroutine/generator drop, projection cycles, const generics и HRTB; повышать отдельную группу выше можно только с измеренным общим fan-out. Отдельно устранить 28 `Invalid path (no nodes)` asserts, 26 `Spare rules left after typecheck stabilised` и 24 `Unexpected item type in inherent impl - Type`.
 
 ## P2 — runtime correctness и общие codegen/CTFE причины
 

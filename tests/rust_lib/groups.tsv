@@ -38,8 +38,6 @@ coretests	char	module	coretests/tests/char.rs	2024
 coretests	clone	module	coretests/tests/clone.rs	2024
 coretests	cmp	module	coretests/tests/cmp.rs	2024
 coretests	const_ptr	module	coretests/tests/const_ptr.rs	2024
-coretests	convert	module	coretests/tests/convert.rs	2024
-coretests	error	module	coretests/tests/error.rs	2024
 coretests	ffi	module	coretests/tests/ffi.rs	2024
 coretests	floats	module	coretests/tests/floats/mod.rs	2024
 coretests	fmt	module	coretests/tests/fmt/mod.rs	2024
@@ -103,5 +101,3 @@ std	thread_local	crate	std/tests/thread_local/lib.rs	2024
 std	time	crate	std/tests/time.rs	2024
 std	type-name-unsized	crate	std/tests/type-name-unsized.rs	2024
 std	volatile-fat-ptr	crate	std/tests/volatile-fat-ptr.rs	2024
-std	win_delete_self	crate	std/tests/win_delete_self.rs	2024
-std	windows	crate	std/tests/windows.rs	2024
