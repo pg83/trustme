@@ -1,76 +1,94 @@
 # План исправлений
 
-В этом файле остаётся только незакрытая работа. История уже сделанных исправлений находится в git, а не в плане.
+В этом файле остаётся только незакрытая функциональная работа. История исправлений находится в git.
 
-Текущий baseline полного plain-clang/lld прогона: 11 658 failed nodes, 14 009 broken requested targets. Команда: `nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC=clang CXX=clang++ LDFLAGS='-fuse-ld=lld' ./build -B .build-clang -j 4 -k test`. Полный лог сохранён в `/tmp/trustme-full-gate-20260808-zst-codegen.log`. Падения `libcore` в `ptr::alignment`, `ptr::const_ptr`, never-type impl и `partial_ord_impl!(f16 ...)`, typecheck `alloc::boxed::Deref` и move из `Box::into_inner` устранены; точный Rust 1.90 standard-library cargo graph теперь полностью проходит compile и C codegen.
+## Текущий baseline
 
-Для каждого compiler fix порядок один: минимальный красный `tests/unit/test_*.rs` → исправление общего пути → зелёный unit → точный upstream trigger → сборка `rustc` под clang/lld → отдельный commit и push. Полный gate запускается после серии точечных исправлений, а не после каждого файла.
+Полный gate на commit `22eccad8` запускался на всех доступных ядрах:
 
-## P1 — ICE, assert и зависания
+```sh
+nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC=clang CXX=clang++ LDFLAGS='-fuse-ld=lld' ./build -B .build-clang -j "$(nproc)" -k test
+```
 
-- [ ] Разобрать все timeout RustSmith shards. Сначала определить конкретный input внутри каждого shard; одинаковые compiler hangs объединить по stack/phase, каждый новый общий hang фиксировать одним минимальным unit.
+Результат: `3289 failed nodes`, `3260 broken requested targets`. Лог: `/tmp/trustme-full-gate-20260809-all-cores.log`.
 
-## P2 — runtime miscompile и ABI
+Из 2384 целых записей о прямом падении: 1571 compiler abort/rejection, 627 обычных compile/adapter failures, 97 runtime failures, 75 SIGSEGV, 11 timeout и 3 SIGILL. Ещё две строки были повреждены параллельным выводом. Основные прямые источники: `rust_ui_compile` — 963, `rust_1_90` — 534, GCCRS — 412, `rust_lib` — 149, reference и doctest — по 127.
 
-- [ ] Разделить `i128/u128` runtime failures по операции: arithmetic, comparison, cast, shift и ABI передачи/возврата. На каждую реально отличающуюся причина — маленький unit с точным ожидаемым значением; сначала чинить причину, разблокирующую больше upstream-тестов.
-- [ ] Исправить float runtime methods, где фактический результат `0` вместо `1`. Отделить ошибку C codegen от libstd/CTFE, проверить signed zero, NaN и оба `f32/f64` там, где используется общий emitter.
-- [ ] Исправить drop ordering. Unit должен записывать порядок destructor calls в массив/счётчик и покрывать normal scope exit, early return и partial initialization; не завязывать решение на borrow checker.
-- [ ] Исправить runtime для derived `Copy`/`Clone`, не смешивая derive expansion с последующим move/drop lowering. Проверить aggregate с scalar и nested aggregate fields.
-- [ ] Исправить process environment runtime failures: минимально проверить set/get/remove и различить ошибку платформенного `libstd` от ABI/codegen ошибки компилятора.
-- [ ] Реализовать runtime hidden-caller ABI для `Location::caller()` и проверить filename/line через `#[track_caller]`; const-вариант не считать покрытием runtime-варианта.
-- [ ] Довести runtime `f128` arithmetic/comparison/casts, которые сейчас уходят в `abort()`. Проверять точные binary128 bits, не пропускать значения через host `double`.
-- [ ] Добавить metadata encoding для cross-crate enum discriminants шире 64 бит и проверить отдельными producer/consumer crates.
-- [ ] Исправить оставшиеся formatting miscompile: exponent precision и debug-hex parser. На каждый формат — точная строка как runtime invariant.
-- [ ] Разобрать `packed-struct-drop-aligned.rs`: сначала починить `Pin<&mut generator>.resume`, затем проверить фактические layout/drop invariants исходного теста.
+Приоритет определяется не краснотой отдельного unit и не размером каталога, а числом targets, которые снимает одно общее исправление. Число рядом с задачей — измеренный fan-out этого gate. Если минимизация показывает разные причины, задача делится, а части реклассифицируются ниже.
 
-## P3 — CTFE и MIR semantics
+Для compiler fix порядок остаётся строгим: минимальный красный `tests/unit/test_*.rs` → исправление общего пути → зелёный unit → исходный upstream trigger → соседние triggers той же сигнатуры → clang/lld build → commit и push. Unit подтверждает причину, но сам по себе не повышает приоритет.
 
-- [ ] Исправить `Encountered Infer value in constant` после подстановки вложенных const expressions. Сначала один минимальный красный unit из общей части `interior-with-const-generic-expr.rs`, `infer-too-generic.rs` и `nested_uneval_unification-1.rs`; определить, где concrete outer argument превращается в `Infer`, и сохранить его до CTFE вместо подстановки фиктивного значения.
-- [ ] Устранить рекурсивный Typecheck/CTFE вход в `subexprs_are_const_evalutable.rs`, который заканчивается assert `debug.cpp:49: g_debug_indent_level < MAX_INDENT_LEVEL`. Сначала минимальный red unit на `N * 2` внутри generic `foo`; по backtrace определить цикл между const evaluation и type expansion. После фикса выражение должно оставаться параметризованным при проверке `foo`, вычисляться после `foo::<10>` и дать runtime-длину `21`.
-- [ ] Исправить `Handle expanded generic: Infer(0)` в `nested_uneval_unification-2.rs`. Unit должен отдельно покрыть передачу identity const argument `{{ L }}` через две generic функции и получить массив длины `2`; перед исправлением проверить, является ли это тем же местом потери аргумента, что и предыдущий пункт, и объединить fixes только при общей причине.
-- [ ] Реализовать float `signum` в CTFE: текущий путь ожидает integer, но получает `Float`. Проверить `±1`, `±0`, infinity и NaN для поддержанных float widths.
-- [ ] Исправить rotate intrinsics и их проверку count: нормализовать count по ширине типа и покрыть `0`, `BITS`, `BITS + 1` и signed operand.
-- [ ] Реализовать/исправить CTFE `simd_extract`, сохранив lane type и bounds; invalid lane должен диагностироваться, valid lane — давать точное значение.
-- [ ] Реализовать CTFE `three_way_compare` с корректной signedness и шириной операндов.
-- [ ] Реализовать CTFE `black_box` как identity с сохранением значения/relocations, не как потерю evaluation state.
-- [ ] Исправить invalid enum tag `255`: определить layout, из которого CTFE читает неверный discriminant, и проверить valid/invalid niche cases отдельно.
-- [ ] Проверить MIR value propagation на новых failures после P0: не возвращать path-copy алгоритмы и не ослаблять validation ради прохождения теста.
+## P0 — больше 100 targets одним общим исправлением
 
-## P4 — stable parser, expansion и resolver
+1. [ ] **`coretests/iter`: 262 library cases заблокированы одним compile timeout.** Найти фазу и общий solver/normalization cycle в harness `coretests/iter`; минимальный trigger обязан воспроизводить тот же stack. После исправления весь harness должен собраться за лимит, а не получить увеличенный timeout.
 
-- [ ] `rust_quiz/020-break-return-in-condition.rs`: исправить разбор неоднозначного `if break { ... }`. После устранения MIR `No value available` тест компилируется, но печатает `1212` вместо upstream `121`; различить grammar для `return`/`break` с block expression и формы в скобках.
-- [ ] `parser/fn-header-syntactic-pass.rs`: поддержать все допустимые комбинации `const`/`async`/`unsafe`/`extern` перед `fn`, сохранив rejection недопустимого порядка.
-- [ ] `or-patterns/or-patterns-syntactic-pass.rs`: поддержать вложенные or-patterns в tuple/slice/struct contexts; runtime unit должен различать arms.
-- [ ] `imports/issue-62767.rs`: исправить разрешение re-export/use chain `crate::bar::bar`, затем проверить соседние import tests того же shard.
-- [ ] `liveness/liveness-upvars.rs`: перестать классифицировать обычную closure как generator только из-за захваченных переменных/синтаксиса тела.
-- [ ] Поддержать raw identifiers Rust 2024 без смешения `r#name` с зарезервированным token.
-- [ ] Исправить `pin!` macro input, где parser видит `let` после path separator; проверить statement macro expansion в block context.
-- [ ] Поддержать unsafe attributes вида `#[unsafe(export_name = "...")]` и соседние `no_mangle`/`link_section` формы.
-- [ ] Добавить derive handler `CoercePointee` либо корректный общий builtin-derive path; проверить generated impl, а не только принятие атрибута.
-- [ ] Довести async fn/async trait parser/lowering triggers из stable corpus до HIR; generator/borrow-check diagnostics вне этой задачи.
-- [ ] Исправить `nll/extra-unused-mut.rs` как type-inference failure, если минимизация подтвердит, что причина не требует NLL borrow checking.
-- [ ] Исправить `nll/issue-54943-3.rs` (`!` против `()`) на уровне divergence/coercion, если trigger воспроизводится без borrow-check semantics.
-- [ ] Исправить lifetime временного значения в `offset-of/offset-of-temporaries.rs`, не вводя полноценный borrow checker; сначала доказать минимальным unit, что это lowering/lifetime-elision bug.
+2. [ ] **Primitive operators в `no_core`: 244 прямых отказа.** Все 884 GCCRS input работают с `#![no_core]`; 244 падения заканчиваются отсутствующим operator lang item: `sub` — 62, `eq` — 48, `add` — 45, `neg` — 29, `partial_ord` — 21 и остальные operators. Primitive candidate должен существовать без operator trait; trait path нужен только для настоящего overload. Довести общий `PrimitiveOperator` path через enumeration, solver, UFCS lowering, validation и MIR, а не добавлять отдельные исключения для `Add` или crate `core`.
 
-## P5 — type system
+3. [ ] **Зависимости library harness: не менее 220 заблокированных cases.** Сделать явную модель support modules/dev-dependencies для harness compiler вместо точечных копий исходников: `coretests/num` — 147 (`rand::distr`), `alloctests/collections` — 33 (`rand`), std common/rand groups — 13, `coretests/ops` — 17 (`control_flow`), `coretests/panic` — 7 (`location`), `coretests/ffi` — 3 (`cstr`). Валидные upstream dependencies должны собираться тем же compiler graph; нельзя скрывать сами тесты.
 
-- [ ] Canonicalization trait objects: стабилизировать principal/supertrait lookup. Начать с failures, которые не требуют borrow checker.
-- [ ] HRTB и двухслойные binder substitutions: минимизировать каждый failure до конкретного misplaced/de-Bruijn lifetime.
-- [ ] Associated types и projection normalization: сначала concrete equality-bound cases, затем generic projections; не подменять unresolved projection первым найденным impl.
-- [ ] Generic inference и const generics: группировать по месту потери constraints, отдельно exact impl selection и fallback.
+4. [ ] **Нулевая generic array и cast/unification: 163 library cases.** Один путь отвергает cast `[Infer; 0]` в конкретный `[T; 0]` и ломает `alloctests/slice` — 107, `coretests/array` — 36, `alloctests/c_str2` — 20. Исправить вывод element type даже при нулевой длине и проверить ненулевую длину, чтобы не разрешить произвольный cast.
+
+## P1 — 25–99 targets одним общим исправлением
+
+1. [ ] **CTFE panic в const initializer: 94 library cases.** `coretests/cell` — 39 и `coretests/mem` — 55 доходят до `panic_fmt` во время constant evaluation. Найти общий неверно выбранный branch/overflow/layout input; не подавлять CTFE panic и не заменять значение заглушкой.
+
+2. [ ] **Неверно выбранные library cases: 84 прямых ложных падения.** Manifest включает `f16/f128` tests, которых host harness не экспортирует, а также Windows/ARM/PowerPC и другие cfg-отключённые tests. Генерировать cases из target-applicable upstream cfg/фактического harness list; не удалять валидные x86_64 tests и не менять их ожидания.
+
+3. [ ] **Driver compatibility для lint/cfg options: до 79 прямых отказов.** Общий parser должен принимать rustc-формы `--check-cfg`, `-A/-D/-W/-F`, `--force-warn`, `--cap-lints` и `--cfg=...`. Diagnostic-only option не должен запускать несуществующий codegen feature; option с проверяемой семантикой нельзя молча игнорировать.
+
+4. [ ] **`-C` mapping: 65 прямых отказов только на `opt-level` и `debug-assertions`.** Связать `-C opt-level` с существующим optimization level, а обе формы `debug-assertions` — с cfg/codegen поведением. Затем разбирать оставшиеся 55 `-C` failures (`debuginfo`, `codegen-units`, target features, LTO и прочие) по фактической семантике.
+
+5. [ ] **Offset pointer в const borrow: 62 library cases.** Один assert `mir_cleanup.cpp:487: ofs == 0` блокирует `coretests/option` — 33 и `coretests/result` — 29. Сохранять relocation base плюс offset через MIR cleanup и CTFE, проверив field borrow и enum payload.
+
+6. [ ] **Настоящий check-only: 49 измеренных failures.** Из 815 текущих красных `check-pass` только 49 проходят `-Z stop-after=typeck`; это реальный, а не верхний fan-out. Реализовать `--emit=metadata`/check stop в driver и включать его в adapter только для `check-pass`; `build-pass` обязан оставаться на полном pipeline.
+
+7. [ ] **MIR control flags: 37 прямых отказов.** Связать `-Z validate-mir` — 20 с validator pipeline, `mir-enable-passes` — 9 и `inline-mir`/`inline_mir` — 8 с реальным pass selection. Не считать зелёным простое принятие option.
+
+8. [ ] **`Pointee`/metadata solver: 34 library cases.** `coretests/ptr` падает в `find_trait_impls_magic` на generic unsized tail. Реализовать общий metadata type для sized, slice/str, dyn и struct tail, затем проверить pointer metadata/codegen.
+
+9. [ ] **Остальные lang-free `no_core` paths: 32 прямых отказа.** `coerce_unsized` — 26, `unsafe_cell` — 4, `tuple_trait` и `start` — по одному. Не объединять их с primitive operators: для каждого сначала определить отдельную language semantics при отсутствии lang item.
+
+10. [ ] **`pin!` expansion/parser: не менее 28 targets.** 21 compile failure видит `let` после path separator, ещё 7 cases заблокированы harness `coretests/pin_macro`. Исправить statement macro expansion в block context, затем проверить `pin!` с expression, `let` и function item.
+
+11. [ ] **Повторяющиеся compiler crash signatures.** Сначала символизировать и группировать 75 SIGSEGV по stack/phase. Уже видны TAIT/impl-trait, coroutine/generator drop, projection cycles, const generics и HRTB; повышать отдельную группу выше можно только с измеренным общим fan-out. Отдельно устранить 28 `Invalid path (no nodes)` asserts, 26 `Spare rules left after typecheck stabilised` и 24 `Unexpected item type in inherent impl - Type`.
+
+## P2 — runtime correctness и общие codegen/CTFE причины
+
+97 targets компилируются, но падают при исполнении. Их нельзя объединять в одну задачу: порядок внутри раздела пересчитывается по числу triggers одной минимальной причины.
+
+- [ ] `i128/u128`: разделить arithmetic, comparison, cast, shift и ABI передачи/возврата; начинать с общей операции, встречающейся в максимуме runtime failures.
+- [ ] Drop/unwind/leak: общий unit должен записывать destructor order и покрывать normal exit, early return, partial initialization, destructuring assignment и panic path. Не ослаблять тесты утечек.
+- [ ] Or-pattern/match lowering: runtime arm selection должен совпадать для nested tuple/slice/struct patterns.
+- [ ] Float runtime и formatting: отдельно signed zero/NaN, arithmetic, exponent precision и debug-hex; ожидаемая строка или bits являются invariant.
+- [ ] Derived `Copy`/`Clone`/`Debug`/`Hash`: отделить ошибку expansion от move/drop/codegen aggregate.
+- [ ] `track_caller`, `type_name`/`TypeId`/`Any`, process environment, SIMD и nonzero arithmetic: группировать только по общему lowered ABI или intrinsic.
+- [ ] Довести `f128` runtime без пропускания binary128 через host `double`; проверить точные bits.
+- [ ] Добавить metadata encoding для cross-crate enum discriminants шире 64 бит и проверить producer/consumer crates.
+- [ ] `packed-struct-drop-aligned.rs`: сначала исправить `Pin<&mut generator>.resume`, затем layout/drop invariant.
+
+## P3 — оставшиеся CTFE, MIR и const generics
+
+- [ ] Объединить только после доказательства общей причины: `Encountered Infer value in constant`, потерю outer argument в nested unevaluated const, identity const argument `{{ L }}` и рекурсивный вход Typecheck/CTFE для `N * 2`.
+- [ ] Обычное pointer equality интернированных типов не заменять semantic comparison. Два красных unit на unevaluated const, различающихся lifetime metadata (`'M0` против `'#omitted`), должны использовать явную const relation.
+- [ ] Реализовать CTFE float `signum`, rotate normalization, `simd_extract`, `three_way_compare`, `black_box` с relocations и корректную обработку invalid enum tag `255`.
+- [ ] Исправить 12 `Null (<PTR_BASE) pointer deref` и 7 `sizeof on an erased type` по месту потери relocation/type, не по месту assert.
+- [ ] Не возвращать path-copy алгоритмы и не ослаблять MIR validation ради зелёного теста.
+
+## P4 — parser, macros, resolver и type system без доказанного крупного fan-out
+
+- [ ] Macro matcher: сгруппировать `No arm matched` по одной matcher state transition; отдельно interpolated block/type/visibility/meta fragments и statement boundaries.
+- [ ] Associated inherent types: после общего HIR lowering fix для 24 текущих asserts проверить lookup/normalization и visibility, а не просто принимать item.
+- [ ] Trait objects, HRTB/binders, associated projections, generic/const inference и TAIT: минимизировать до конкретного misplaced binder, потерянного constraint или normalization cycle. Не подменять unresolved projection первым impl.
+- [ ] Stable syntax: function header modifiers, raw identifiers 2024, unsafe attributes, postfix match, nested or-patterns, range precedence и `if break {}`.
+- [ ] Resolver: re-export/use chains, `CoercePointee`, async fn/async trait lowering и builtin macros `concat_bytes`, `offset_of`, `type_ascribe`.
 - [ ] Pattern usefulness/exhaustiveness: сначала runtime-correct arm selection, затем diagnostics compile-fail.
 
-## P6 — compiler modes и CLI
+## P5 — единичные regressions и независимые failures
 
-- [ ] Реализовать настоящий check-only/metadata stop после typecheck для `check-pass`; такой тест считается зелёным без C generation/link/runtime.
-- [ ] Принимать и применять diagnostic-only options `--check-cfg`, `-A` и `-D`, чтобы они не завершали компилятор как unknown option.
-- [ ] Реализовать требуемые output/debug modes вроде `-Z unpretty`; не игнорировать их молча, если тест проверяет output.
-- [ ] Реализовать управляемые MIR passes для `-Z mir-enable-passes`, `-Z inline-mir`/`inline_mir` и `-Z validate-mir`; каждый флаг должен менять соответствующий pass/validation pipeline, а не только приниматься CLI.
-- [ ] Семантически поддержать используемые `-C overflow-checks`, `-C panic`, target features и остальные codegen flags. Игнорирование допустимо только после доказательства, что flag не влияет на проверяемый invariant.
+- [ ] Семь красных unit — это три причины, а не семь приоритетов: два lifetime-elision SIGSEGV на yield/coroutine, два const-relation mismatch и три empty-path asserts в Trans Enumerate. Они закрываются вместе с соответствующим общим кластером выше.
+- [ ] `resvg`: `AsRef` selection для `Option<HuffmanTable>`; после минимального trait-solver unit вернуть весь standing integration в gate.
+- [ ] Три SIGILL: `const-generics/issues/issue-74906.rs`, `layout/invalid-unsized-const-prop.rs`, `const_prop/issue-86351.rs`.
+- [ ] Оставшиеся timeout после `coretests/iter`: два UI, три Rust 1.90, один Exercism, три RustSmith и один runtime `select_nth_unstable`. Каждый сначала привязать к stack/phase; лимит не увеличивать.
+- [ ] Reference, doctest, book и vendor failures поднимать выше только когда одна минимальная причина подтверждённо снимает больше targets, чем текущий P0/P1.
 
-## P7 — отдельные платформенные наборы
-
-- [ ] RustSmith: после устранения timeout из P1 разделить настоящие compile/runtime miscompile по общей compiler signature.
-- [ ] Остальные vendor/book/reference shards чинить после stable run-pass и library tests, кроме случаев, когда один небольшой общий fix разблокирует сразу несколько семейств.
-
-Не брать в ближайшую очередь compile-fail tests, единственный ожидаемый эффект которых требует полноценного borrow checker. Они остаются красными до отдельного проекта по borrow checking и не должны вытеснять ICE, runtime correctness и stable compile+run.
+Compile-fail tests, единственный ожидаемый эффект которых требует полноценного borrow checker, не должны вытеснять перечисленные compile-pass, runtime и crash clusters. После каждого общего fix пересчитать fan-out затронутой группы; полный gate запускать после серии fixes на всех доступных ядрах.
