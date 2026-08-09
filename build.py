@@ -875,21 +875,27 @@ for _index, (_case, _origin, _edition, _mode) in enumerate(async_book_cases):
         color="green",
     ))
 
-# Rust's library unit tests are grouped only at compilation.  Each explicit
-# #[test] function is still a separate runtime node selected from its harness.
+# Every explicit Rust library #[test] is an independent compile-and-run node.
+# The case adapter disables all other tests in a temporary source overlay.
 rust_lib_root = Path(__file__).parent / "tests" / "rust_lib"
-rust_lib_groups = []
+rust_lib_group_specs = {}
 for _line in (rust_lib_root / "groups.tsv").read_text().splitlines():
-    rust_lib_groups.append(_line.split("\t"))
+    _suite, _harness_group, _kind, _root, _edition = _line.split("\t")
+    _key = (_suite, _harness_group)
+    if _key in rust_lib_group_specs:
+        raise RuntimeError(f"duplicate rust_lib group: {_key}")
+    rust_lib_group_specs[_key] = (_kind, _root, _edition)
 rust_lib_cases = []
 for _line in (rust_lib_root / "cases.tsv").read_text().splitlines():
     rust_lib_cases.append(_line.split("\t"))
-rust_lib_sources = [
-    "$(S)/tests/rust_lib/upstream/"
-    + _path.relative_to(rust_lib_root / "upstream").as_posix()
-    for _path in sorted((rust_lib_root / "upstream").rglob("*"))
-    if _path.is_file()
-]
+rust_lib_sources_by_suite = {}
+for _path in sorted((rust_lib_root / "upstream").rglob("*")):
+    if not _path.is_file():
+        continue
+    _relative = _path.relative_to(rust_lib_root / "upstream")
+    rust_lib_sources_by_suite.setdefault(_relative.parts[0], []).append(
+        "$(S)/tests/rust_lib/upstream/" + _relative.as_posix()
+    )
 rust_lib_adapters = [
     "$(S)/tests/rust_lib/adapter/"
     + _path.relative_to(rust_lib_root / "adapter").as_posix()
@@ -897,57 +903,42 @@ rust_lib_adapters = [
     if _path.is_file()
 ]
 
-rust_lib_harnesses = {}
-rust_lib_harness_outputs = {}
-for _suite, _harness_group, _kind, _root, _edition in rust_lib_groups:
-    _key = (_suite, _harness_group)
-    _digest = hashlib.sha256(("/".join(_key)).encode()).hexdigest()[:12]
-    _output = "$(B)/tests/rust_lib/harness/" + _suite + "/" + _harness_group
-    rust_lib_harness_outputs[_key] = _output
-    rust_lib_harnesses[_key] = command(
-        name="rust_lib_harness_" + _digest,
-        inputs=[
-            *rust_lib_sources,
-            *rust_lib_adapters,
-            "$(S)/tests/rust_lib/compile.py",
-            "$(S)/tests/rust_lib/groups.tsv",
-            *TESTS_LIB,
-        ],
-        outputs=[_output],
-        cmd=[
-            *TEST_TIMEOUT,
-            "python3", "$(S)/tests/rust_lib/compile.py",
-            _suite, _harness_group, _kind, _root, _edition,
-            "$(S)/tests/rust_lib/upstream", "$(B)/tests/libstd.tar", _output,
-        ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
-        descr="LH",
-        color="green",
-    )
-
 rust_lib_tests = []
+rust_lib_tests_by_group = {}
 for _suite, _harness_group, _source, _function, _hint in rust_lib_cases:
     _case = _suite + "/" + _source + "::" + _hint
     _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
     _key = (_suite, _harness_group)
+    if _key not in rust_lib_group_specs:
+        raise RuntimeError(f"unknown rust_lib group for {_case}: {_key}")
+    _kind, _root, _edition = rust_lib_group_specs[_key]
     _stamp = "$(B)/tests/rust_lib/cases/" + _digest + ".stamp"
-    rust_lib_tests.append(command(
+    _target = command(
         name="rust_lib_" + _digest,
         inputs=[
-            "$(S)/tests/rust_lib/run.py",
+            *rust_lib_sources_by_suite[_suite],
+            *rust_lib_adapters,
+            "$(S)/tests/rust_lib/case.py",
+            "$(S)/tests/rust_lib/import.py",
             "$(S)/tests/rust_lib/cases.tsv",
+            "$(S)/tests/rust_lib/groups.tsv",
+            *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/rust_lib/run.py",
-            _case, _function, _hint, rust_lib_harness_outputs[_key], _stamp,
+            "python3", "$(S)/tests/rust_lib/case.py",
+            _suite, _harness_group, _kind, _root, _edition,
+            _source, _function, _hint,
+            "$(S)/tests/rust_lib/upstream", "$(B)/tests/libstd.tar", _stamp,
         ],
-        deps=[rust_lib_harnesses[_key]],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
         descr="LT",
         color="green",
-    ))
+    )
+    rust_lib_tests.append(_target)
+    rust_lib_tests_by_group.setdefault(_key, []).append(_target)
 
 # Runnable library documentation examples, extracted into standalone
 # programs so each fence remains an independent compile-and-run node.
@@ -1101,6 +1092,10 @@ group("rust_reference", *rust_reference_tests)
 group("nomicon", *nomicon_tests)
 group("async_book", *async_book_tests)
 group("rust_lib", *rust_lib_tests)
+for (_suite, _harness_group), _tests in rust_lib_tests_by_group.items():
+    _name = "rust_lib_" + _suite + "_" + _harness_group
+    _name = "".join(_char if _char.isalnum() else "_" for _char in _name)
+    group(_name, *_tests)
 group("rust_doctest", *rust_doctests)
 group("rustsmith", *rustsmith_tests)
 group("miri", *miri_tests)

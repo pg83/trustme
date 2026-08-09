@@ -93,8 +93,13 @@ def macro_definition_ranges(text: str) -> list[tuple[int, int]]:
     return ranges
 
 
-def test_functions(text: str) -> list[tuple[str, tuple[str, ...]]]:
-    """Return explicit `#[test] fn name` items, excluding macro templates."""
+def test_function_items(text: str) -> list[tuple[str, tuple[str, ...], int]]:
+    """Return explicit test names, inline scopes, and marker offsets.
+
+    Tests written inside macro templates are deliberately excluded: they are
+    not independently selectable source items.  Their markers are still
+    disabled by ``filter_test_source`` when a single explicit test is built.
+    """
     lines = text.splitlines(keepends=True)
     offsets = []
     offset = 0
@@ -146,8 +151,55 @@ def test_functions(text: str) -> list[tuple[str, tuple[str, ...]]]:
         )
         if function:
             line = bisect_right(offsets, marker.start()) - 1
-            result.append((function.group(1), scopes[line]))
+            result.append((function.group(1), scopes[line], marker.start()))
     return result
+
+
+def test_functions(text: str) -> list[tuple[str, tuple[str, ...]]]:
+    """Return explicit `#[test] fn name` items, excluding macro templates."""
+    return [(name, scope) for name, scope, _ in test_function_items(text)]
+
+
+def filter_test_source(
+    text: str,
+    *,
+    function: str | None = None,
+    hint: str = "",
+) -> str:
+    """Disable every test item except one explicitly selected function.
+
+    The source remains otherwise byte-for-byte unchanged.  This is applied to
+    a temporary overlay, never to the imported upstream corpus.  Disabling at
+    the attribute level keeps unrelated test bodies out of expansion and
+    type checking, so every graph node is an actual single-test compile.
+    """
+    selected_offset = None
+    if function is not None:
+        hint_parts = tuple(part for part in hint.split("::") if part)
+        candidates = []
+        for name, scope, offset in test_function_items(text):
+            if name != function:
+                continue
+            suffix = (*scope, name)
+            if len(suffix) <= len(hint_parts) and hint_parts[-len(suffix):] == suffix:
+                candidates.append(offset)
+        if len(candidates) != 1:
+            raise ValueError(
+                f"expected one explicit test {hint or function}, got {len(candidates)}"
+            )
+        selected_offset = candidates[0]
+
+    insertions = []
+    for marker in re.finditer(r"^[ \t]*#\s*\[\s*test\s*\][^\n]*", text, re.MULTILINE):
+        if marker.start() == selected_offset:
+            continue
+        line = marker.group(0)
+        indentation = line[: len(line) - len(line.lstrip(" \t"))]
+        insertions.append((marker.start(), indentation + "#[cfg(any())]\n"))
+
+    for offset, insertion in reversed(insertions):
+        text = text[:offset] + insertion + text[offset:]
+    return text
 
 
 def without_function(text: str, name: str) -> str:

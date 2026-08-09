@@ -20,13 +20,11 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ## P0 — больше 100 targets одним общим исправлением
 
-1. [ ] **`coretests/iter`: 262 library cases заблокированы одним compile timeout.** Найти фазу и общий solver/normalization cycle в harness `coretests/iter`; минимальный trigger обязан воспроизводить тот же stack. После исправления весь harness должен собраться за лимит, а не получить увеличенный timeout.
+1. [ ] **Primitive operators в `no_core`: 244 прямых отказа.** Все 884 GCCRS input работают с `#![no_core]`; 244 падения заканчиваются отсутствующим operator lang item: `sub` — 62, `eq` — 48, `add` — 45, `neg` — 29, `partial_ord` — 21 и остальные operators. Primitive candidate должен существовать без operator trait; trait path нужен только для настоящего overload. Довести общий `PrimitiveOperator` path через enumeration, solver, UFCS lowering, validation и MIR, а не добавлять отдельные исключения для `Add` или crate `core`.
 
-2. [ ] **Primitive operators в `no_core`: 244 прямых отказа.** Все 884 GCCRS input работают с `#![no_core]`; 244 падения заканчиваются отсутствующим operator lang item: `sub` — 62, `eq` — 48, `add` — 45, `neg` — 29, `partial_ord` — 21 и остальные operators. Primitive candidate должен существовать без operator trait; trait path нужен только для настоящего overload. Довести общий `PrimitiveOperator` path через enumeration, solver, UFCS lowering, validation и MIR, а не добавлять отдельные исключения для `Add` или crate `core`.
+2. [ ] **Зависимости library harness: не менее 220 заблокированных cases.** Сделать явную модель support modules/dev-dependencies для harness compiler вместо точечных копий исходников: `coretests/num` — 147 (`rand::distr`), `alloctests/collections` — 33 (`rand`), std common/rand groups — 13, `coretests/ops` — 17 (`control_flow`), `coretests/panic` — 7 (`location`), `coretests/ffi` — 3 (`cstr`). Валидные upstream dependencies должны собираться тем же compiler graph; нельзя скрывать сами тесты.
 
-3. [ ] **Зависимости library harness: не менее 220 заблокированных cases.** Сделать явную модель support modules/dev-dependencies для harness compiler вместо точечных копий исходников: `coretests/num` — 147 (`rand::distr`), `alloctests/collections` — 33 (`rand`), std common/rand groups — 13, `coretests/ops` — 17 (`control_flow`), `coretests/panic` — 7 (`location`), `coretests/ffi` — 3 (`cstr`). Валидные upstream dependencies должны собираться тем же compiler graph; нельзя скрывать сами тесты.
-
-4. [ ] **Нулевая generic array и cast/unification: 163 library cases.** Один путь отвергает cast `[Infer; 0]` в конкретный `[T; 0]` и ломает `alloctests/slice` — 107, `coretests/array` — 36, `alloctests/c_str2` — 20. Исправить вывод element type даже при нулевой длине и проверить ненулевую длину, чтобы не разрешить произвольный cast.
+3. [ ] **Нулевая generic array и cast/unification: 163 library cases.** Один путь отвергает cast `[Infer; 0]` в конкретный `[T; 0]` и ломает `alloctests/slice` — 107, `coretests/array` — 36, `alloctests/c_str2` — 20. Исправить вывод element type даже при нулевой длине и проверить ненулевую длину, чтобы не разрешить произвольный cast.
 
 ## P1 — 25–99 targets одним общим исправлением
 
