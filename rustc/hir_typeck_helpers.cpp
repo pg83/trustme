@@ -18,6 +18,61 @@ namespace {
     // TODO: De-duplicate this with `static.cpp`
     const HIR::GenericParams empty_params;
 
+    // Give every fresh placeholder in one active trait goal the same stable
+    // spelling.  This makes a recurrence through independently-instantiated
+    // blanket impls visible to the solver without changing the goal's actual
+    // type data or inference state.
+    class CanonicalizeTraitGoal final: public Monomorphiser {
+        mutable ::std::vector<::std::pair<RcString, RcString>> m_placeholder_names;
+
+        RcString canonical_placeholder_name(const RcString& name) const {
+            for (const auto& entry : m_placeholder_names) {
+                if (entry.first == name) {
+                    return entry.second;
+                }
+            }
+            auto canonical = RcString::new_interned(
+                FMT("#solver-placeholder-" << m_placeholder_names.size())
+            );
+            m_placeholder_names.push_back({name, canonical});
+            return canonical;
+        }
+
+    public:
+        explicit CanonicalizeTraitGoal(::HIR::TypeInterner& types)
+            : Monomorphiser(types)
+        {
+        }
+
+        ::HIR::TypeRef get_type(
+            const Span&, const ::HIR::GenericRef& generic
+        ) const override {
+            return generic.is_placeholder()
+                ? m_types.generic(
+                    canonical_placeholder_name(generic.name), generic.binding
+                )
+                : m_types.generic(generic.name, generic.binding);
+        }
+
+        ::HIR::ConstGeneric get_value(
+            const Span&, const ::HIR::GenericRef& generic
+        ) const override {
+            return ::HIR::ConstGeneric(
+                generic.is_placeholder()
+                    ? ::HIR::GenericRef(
+                        canonical_placeholder_name(generic.name), generic.binding
+                    )
+                    : generic
+            );
+        }
+
+        ::HIR::LifetimeRef get_lifetime(
+            const Span&, const ::HIR::GenericRef& generic
+        ) const override {
+            return ::HIR::LifetimeRef(generic.binding);
+        }
+    };
+
     struct MatchHrls: public HIR::MatchGenerics, public Monomorphiser {
         ::HIR::PathParams hrls;
 
@@ -2196,57 +2251,6 @@ class NextTraitGoalEvaluator {
             }
         };
 
-        class CanonicalizeGoal final: public Monomorphiser {
-            mutable ::std::vector<::std::pair<RcString, RcString>> m_placeholder_names;
-
-            RcString canonical_placeholder_name(const RcString& name) const {
-                for (const auto& entry : m_placeholder_names) {
-                    if (entry.first == name) {
-                        return entry.second;
-                    }
-                }
-                auto canonical = RcString::new_interned(
-                    FMT("#solver-placeholder-" << m_placeholder_names.size())
-                );
-                m_placeholder_names.push_back({name, canonical});
-                return canonical;
-            }
-
-        public:
-            explicit CanonicalizeGoal(::HIR::TypeInterner& types)
-                : Monomorphiser(types)
-            {
-            }
-
-            ::HIR::TypeRef get_type(
-                const Span&, const ::HIR::GenericRef& generic
-            ) const override {
-                return generic.is_placeholder()
-                    ? m_types.generic(
-                        canonical_placeholder_name(generic.name), generic.binding
-                    )
-                    : m_types.generic(generic.name, generic.binding);
-            }
-
-            ::HIR::ConstGeneric get_value(
-                const Span&, const ::HIR::GenericRef& generic
-            ) const override {
-                return ::HIR::ConstGeneric(
-                    generic.is_placeholder()
-                        ? ::HIR::GenericRef(
-                            canonical_placeholder_name(generic.name), generic.binding
-                        )
-                        : generic
-                );
-            }
-
-            ::HIR::LifetimeRef get_lifetime(
-                const Span&, const ::HIR::GenericRef& generic
-            ) const override {
-                return ::HIR::LifetimeRef(generic.binding);
-            }
-        };
-
         const Span& span() const {
             ASSERT_BUG(Span(), m_span, "next-solver session used outside an evaluation");
             return *m_span;
@@ -2257,7 +2261,7 @@ class NextTraitGoalEvaluator {
             const ::HIR::TypeRef& type,
             const ::HIR::TraitPath::assoc_list_t* associated
         ) const {
-            CanonicalizeGoal canonicalizer(m_crate.m_types);
+            CanonicalizeTraitGoal canonicalizer(m_crate.m_types);
             auto canonical_params = canonicalizer.monomorph_path_params(
                 span(), params, true
             );
@@ -5596,108 +5600,106 @@ bool TraitResolution::find_trait_impls(
             static ::HIR::TraitPath::assoc_list_t null_assoc;
             TRACE_FUNCTION_F(trait << FMT_CB(ss, if (params_ptr) { ss << *params_ptr; } else { ss << "<?>"; }) << " for " << type);
 
-            struct StackEnt {
-                const ::HIR::SimplePath* trait;
-                const ::HIR::PathParams* params_ptr;
-                const ::HIR::TypeRef* type;
+            CanonicalizeTraitGoal canonicalizer(m_crate.m_types);
+            const auto canonical_type = canonicalizer.monomorph_type(sp, type, true);
+            ::HIR::PathParams canonical_params;
+            const bool has_params = params_ptr != nullptr;
+            if (has_params) {
+                canonical_params = canonicalizer.monomorph_path_params(
+                    sp, *params_ptr, true
+                );
+            }
 
-                StackEnt(const ::HIR::SimplePath& trait, const ::HIR::PathParams* params_ptr, const ::HIR::TypeRef& type)
-                    : trait(&trait)
-                    , params_ptr(params_ptr)
-                    , type(&type)
-                {
+            for (const auto& active_goal : m_legacy_trait_goal_stack) {
+                if (!active_goal.matches(
+                        trait, canonical_params, has_params, canonical_type
+                    )) {
+                    continue;
                 }
 
-                bool operator==(const StackEnt& e) const {
-                    if (*e.trait != *trait) {
-                        return false;
-                    }
-                    if (!!e.params_ptr != !!params_ptr) {
-                        return false;
-                    }
-                    if (params_ptr && *e.params_ptr != *params_ptr) {
-                        return false;
-                    }
-                    if (*e.type != *type) {
-                        return false;
-                    }
+                // rustc treats an inductive recursive trait predicate as
+                // ambiguous, not proven.  Auto traits remain coinductive.
+                const auto cmp = m_crate.get_trait_by_path(sp, trait).m_is_marker
+                    ? ::HIR::Compare::Equal
+                    : ::HIR::Compare::Fuzzy;
+                DEBUG("Legacy trait goal recurred: " << trait
+                    << FMT_CB(ss, if (params_ptr) { ss << *params_ptr; } else { ss << "<?>"; })
+                    << " for " << type << ", result=" << cmp);
+                return callback(ImplRef(&type, params_ptr, &null_assoc), cmp);
+            }
+
+            // rustc's legacy solver has a second cycle check for fresh input
+            // types.  Exact goal equality is not sufficient here: a blanket
+            // candidate can replace one unknown with a newly-created unknown
+            // on every step (for example, tuple Distribution impls).  If the
+            // current fresh goal is compatible with an older goal for the
+            // same trait, further candidate search is ambiguous.
+            const auto type_is_fresh = [&](const ::HIR::TypeRef& ty) {
+                if (m_ivars.type_contains_ivars(ty, false)) {
                     return true;
                 }
+                return visit_ty_with(ty, [](const ::HIR::TypeRef& inner) {
+                    return inner->is_Generic()
+                        && inner->as_Generic().is_placeholder();
+                });
             };
-
-            struct StackHandle {
-                std::vector<StackEnt>* stack;
-
-                StackHandle()
-                    : stack(nullptr)
-                {
+            bool has_fresh_inputs = !has_params || type_is_fresh(type);
+            if (has_params && !has_fresh_inputs) {
+                has_fresh_inputs = m_ivars.pathparams_contain_ivars(
+                    *params_ptr, false
+                );
+                for (const auto& param : params_ptr->m_types) {
+                    has_fresh_inputs = has_fresh_inputs || type_is_fresh(param);
                 }
-
-                StackHandle(std::vector<StackEnt>& stack)
-                    : stack(&stack)
-                {
+                for (const auto& param : params_ptr->m_values) {
+                    has_fresh_inputs = has_fresh_inputs
+                        || param.is_Infer()
+                        || (param.is_Generic()
+                            && param.as_Generic().is_placeholder());
                 }
-
-                StackHandle(StackHandle&& x)
-                    : stack(x.stack)
-                {
-                    x.stack = nullptr;
-                }
-
-                StackHandle& operator=(StackHandle&& x) {
-                    this->~StackHandle();
-                    stack = x.stack;
-                    x.stack = nullptr;
-                    return *this;
-                }
-
-                StackHandle(const StackHandle&) = delete;
-                StackHandle& operator=(const StackHandle&) = delete;
-
-                ~StackHandle() {
-                    if (stack) {
-                        stack->pop_back();
-                    }
-                    stack = nullptr;
-                }
-            };
-
-            static std::vector<StackEnt> s_recurse_stack;
-            auto se = StackEnt(trait, params_ptr, type);
-            // NOTE: Allow 1 level of recursion (EAT being run)
-            if (std::count(s_recurse_stack.begin(), s_recurse_stack.end(), se) > 1) {
-                DEBUG("Recursion detected in `find_trait_impls_crate`");
-                throw TraitResolution::RecursionDetected();
             }
-            s_recurse_stack.push_back(se);
-            StackHandle sh{s_recurse_stack};
+
+            if (has_fresh_inputs) {
+                const auto resolve = m_ivars.callback_resolve_infer();
+                for (const auto& active_goal : m_legacy_trait_goal_stack) {
+                    if (active_goal.trait != trait) {
+                        continue;
+                    }
+                    if (canonical_type->compare_with_placeholders(
+                            sp, active_goal.type, resolve
+                        ) == ::HIR::Compare::Unequal) {
+                        continue;
+                    }
+                    if (has_params && active_goal.has_params
+                        && canonical_params.compare_with_placeholders(
+                            sp, active_goal.params, resolve
+                        ) == ::HIR::Compare::Unequal) {
+                        continue;
+                    }
+
+                    DEBUG("Fresh legacy trait goal matched an active goal: "
+                        << trait
+                        << FMT_CB(ss, if (params_ptr) { ss << *params_ptr; } else { ss << "<?>"; })
+                        << " for " << type << ", result=Fuzzy");
+                    return callback(
+                        ImplRef(&type, params_ptr, &null_assoc),
+                        ::HIR::Compare::Fuzzy
+                    );
+                }
+            }
+
+            m_legacy_trait_goal_stack.emplace_back(
+                trait, canonical_params, has_params, canonical_type
+            );
+            struct StackGuard {
+                ::std::vector<LegacyTraitGoal>& stack;
+                ~StackGuard() {
+                    stack.pop_back();
+                }
+            } guard{m_legacy_trait_goal_stack};
 
             // Handle auto traits (aka OIBITs)
             if (m_crate.get_trait_by_path(sp, trait).m_is_marker) {
-                // Detect recursion and return true if detected
-                static ::std::vector<::std::tuple<const ::HIR::SimplePath*, const ::HIR::PathParams*, const ::HIR::TypeRef*>> stack;
-                for (const auto& ent : stack) {
-                    if (*::std::get<0>(ent) != trait) {
-                        continue;
-                    }
-                    if (::std::get<1>(ent) && params_ptr && *::std::get<1>(ent) != *params_ptr) {
-                        continue;
-                    }
-                    if (*::std::get<2>(ent) != type) {
-                        continue;
-                    }
-
-                    return callback(ImplRef(&type, params_ptr, &null_assoc), ::HIR::Compare::Equal);
-                }
-                stack.push_back(::std::make_tuple(&trait, params_ptr, &type));
-
-                struct Guard {
-                    ~Guard() {
-                        stack.pop_back();
-                    }
-                };
-
-                Guard _;
 
                 // NOTE: Expected behavior is for Ivars to return false
                 // TODO: Should they return Compare::Fuzzy instead?
@@ -6121,11 +6123,12 @@ bool TraitResolution::find_trait_impls(
                 }
             }
             if (placeholders_needed) {
-                static uint64_t s_ph_counter = 0;
                 // NOTE: Not using interning, because these are short-lived
                 // - Also, adding an interned string is quite expensive
-                placeholder_name = RcString(FMT("ph_" << &impl_params_def << "_" << s_ph_counter));
-                s_ph_counter += 1;
+                placeholder_name = RcString(FMT(
+                    "ph_" << &impl_params_def << "_"
+                    << m_fresh_impl_placeholder_counter++
+                ));
                 for (unsigned int i = 0; i < out_impl_params.m_types.size(); i++) {
                     if (out_impl_params.m_types[i] == HIR::TypeRef()) {
                         if (placeholders.m_types.size() == 0) {

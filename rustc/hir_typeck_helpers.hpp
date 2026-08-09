@@ -226,6 +226,43 @@ private:
     const ::HIR::GenericPath* m_current_trait_path;
     const ::HIR::Trait* m_current_trait_ptr;
 
+    // A legacy solver invocation only needs this stack while it is actively
+    // resolving nested trait bounds.  The goal is canonicalised before it is
+    // stored, so fresh implementation placeholders do not hide a cycle.
+    struct LegacyTraitGoal {
+        ::HIR::SimplePath trait;
+        ::HIR::PathParams params;
+        ::HIR::TypeRef type;
+        bool has_params;
+
+        LegacyTraitGoal(
+            const ::HIR::SimplePath& trait,
+            const ::HIR::PathParams& params,
+            bool has_params,
+            const ::HIR::TypeRef& type
+        )
+            : trait(trait.clone())
+            , params(params.clone())
+            , type(type)
+            , has_params(has_params)
+        {
+        }
+
+        bool matches(
+            const ::HIR::SimplePath& other_trait,
+            const ::HIR::PathParams& other_params,
+            bool other_has_params,
+            const ::HIR::TypeRef& other_type
+        ) const {
+            return trait == other_trait
+                && has_params == other_has_params
+                && (!has_params || params == other_params)
+                && type == other_type;
+        }
+    };
+
+    mutable ::std::vector<LegacyTraitGoal> m_legacy_trait_goal_stack;
+    mutable uint64_t m_fresh_impl_placeholder_counter = 0;
     mutable ::std::map<std::string, HIR::TypeRef> m_eat_cache;
     mutable ::std::vector<std::unique_ptr<::HIR::TypeRef>> m_eat_active_stack;
     // Owned by the crate ObjPool.  TraitResolution only keeps a stable
