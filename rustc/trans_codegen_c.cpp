@@ -1304,6 +1304,11 @@ namespace {
                     }
                     switch (opt.opt_level) {
                         case 0:
+                            // Do not inherit an optimisation level from the C compiler's
+                            // environment (e.g. Nix's cc-wrapper adds -O2). rustc's
+                            // default is opt-level=0, so the C backend must request that
+                            // level explicitly too.
+                            args.push_back("-O0");
                             break;
                         case 1:
                             args.push_back("-O1");
