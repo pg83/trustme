@@ -49,11 +49,19 @@ resvg integration instead: forwarding a `#[repr(C)]` above a `#[derive]` to a
 proc-macro derive (harfrust/bytemuck `Pod`), and Cargo's `src/main.rs`
 binary-target discovery (resvg's CLI binary).
 
+## performance regressions
+
+`tests/perf/test_*.rs` contains self-contained programs whose compile time is
+the regression. They use the same compiler-and-runner setup as unit tests, but
+are excluded from the normal `unit`, `lite_tests`, and `test` groups. Run one as
+`./build perf_<name>` or the complete performance corpus as `./build perf`.
+
 ## running
 
 ```
 ./build libstd            # just the shared standard library
 ./build unit              # every one-file compiler regression
+./build perf              # compile-time performance regressions
 ./build resvg             # the whole resvg chain (build + test)
 ./build test              # everything under test (unit + projects)
 ```

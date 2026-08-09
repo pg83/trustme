@@ -449,6 +449,28 @@ for _src in build.glob("$(S)/tests/unit/test_*.rs"):
         color="green",
     ))
 
+# Compile-time performance regressions are deliberately separate from the
+# normal test groups: they are valid programs, but expensive enough to run only
+# when performance is being measured.
+perf_tests = []
+for _src in build.glob("$(S)/tests/perf/test_*.rs"):
+    _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
+    perf_tests.append(command(
+        name="perf_" + _stem,
+        inputs=[_src, "$(S)/tests/unit/run_one.py"] + TESTS_LIB,
+        outputs=["$(B)/tests/perf/" + _stem + ".stamp"],
+        cmd=[
+            *TEST_TIMEOUT,
+            "python3", "$(S)/tests/unit/run_one.py",
+            _src, "$(B)/tests/libstd.tar",
+            "$(B)/tests/perf/" + _stem + ".stamp",
+        ],
+        deps=[libstd, rustc],
+        env={"RUSTC": "$(B)/rustc/rustc"},
+        descr="PF",
+        color="cyan",
+    ))
+
 # Vendored Rust 1.90 run-pass tests. Keep one source file per graph node for
 # now; sharding can be added later without changing the checked-in corpus.
 rust_1_90_root = Path(__file__).parent / "tests" / "rust_1_90"
@@ -1065,6 +1087,7 @@ def partition_lite_tests(targets):
 group("test", resvg, *lite_tests)
 group("lite_tests", *partition_lite_tests(lite_tests))
 group("unit", *unit_tests)
+group("perf", *perf_tests)
 group("rust_1_90", *rust_1_90_tests)
 group("rust_ui_compile", *rust_ui_compile_tests)
 group("gccrs", *gccrs_tests)
