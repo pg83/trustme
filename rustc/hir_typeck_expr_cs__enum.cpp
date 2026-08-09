@@ -955,11 +955,15 @@ namespace typecheck {
                         break;
                 }
                 assert(lang_item);
-                const auto& trait_path = this->context.m_crate.get_lang_item_path(node.span(), lang_item);
+                const auto& trait_path = this->context.m_crate.get_lang_item_path_opt(lang_item);
 
                 auto ty = this->context.m_ivars.new_ivar_tr();
                 this->context.equate_types_coerce(node.span(), ty, node.m_value);
-                this->context.equate_types_assoc(node.span(), this->context.m_crate.m_types.infer(), trait_path, HIR::PathParams(mv$(ty)), node.m_slot->m_res_type, "", {}, true, operator_kind);
+                if (!trait_path.components().empty()) {
+                    this->context.equate_types_assoc(node.span(), this->context.m_crate.m_types.infer(), trait_path, HIR::PathParams(mv$(ty)), node.m_slot->m_res_type, "", {}, true, operator_kind);
+                } else if (operator_kind != typeck::PrimitiveOperator::ShlAssign && operator_kind != typeck::PrimitiveOperator::ShrAssign) {
+                    this->context.equate_types(node.span(), node.m_slot->m_res_type, ty);
+                }
             }
 
             node.m_slot->visit(*this);
@@ -1017,12 +1021,16 @@ namespace typecheck {
                             break;
                     }
                     assert(item_name);
-                    const auto& op_trait = this->context.m_crate.get_lang_item_path(node.span(), item_name);
+                    const auto& op_trait = this->context.m_crate.get_lang_item_path_opt(item_name);
 
                     auto operator_kind = node.m_op == ::HIR::ExprNode_BinOp::Op::CmpEqu || node.m_op == ::HIR::ExprNode_BinOp::Op::CmpNEqu
                         ? typeck::PrimitiveOperator::Equal
                         : typeck::PrimitiveOperator::Order;
-                    this->context.equate_types_assoc(node.span(), this->context.m_crate.m_types.infer(), op_trait, HIR::PathParams(right_ty), left_ty, "", {}, true, operator_kind);
+                    if (!op_trait.components().empty()) {
+                        this->context.equate_types_assoc(node.span(), this->context.m_crate.m_types.infer(), op_trait, HIR::PathParams(right_ty), left_ty, "", {}, true, operator_kind);
+                    } else {
+                        this->context.equate_types(node.span(), left_ty, right_ty);
+                    }
                     break;
                 }
 
@@ -1097,10 +1105,17 @@ namespace typecheck {
                             break;
                     }
                     assert(item_name);
-                    const auto& op_trait = this->context.m_crate.get_lang_item_path(node.span(), item_name);
+                    const auto& op_trait = this->context.m_crate.get_lang_item_path_opt(item_name);
 
                     // NOTE: `true` marks the association as coming from a binary operation, which changes integer handling
-                    this->context.equate_types_assoc(node.span(), node.m_res_type, op_trait, HIR::PathParams(right_ty), left_ty, "Output", {}, true, operator_kind);
+                    if (!op_trait.components().empty()) {
+                        this->context.equate_types_assoc(node.span(), node.m_res_type, op_trait, HIR::PathParams(right_ty), left_ty, "Output", {}, true, operator_kind);
+                    } else {
+                        this->context.equate_types(node.span(), node.m_res_type, left_ty);
+                        if (operator_kind != typeck::PrimitiveOperator::Shl && operator_kind != typeck::PrimitiveOperator::Shr) {
+                            this->context.equate_types(node.span(), left_ty, right_ty);
+                        }
+                    }
                     break;
                 }
             }
@@ -1127,8 +1142,12 @@ namespace typecheck {
                     break;
             }
             assert(item_name);
-            const auto& op_trait = this->context.m_crate.get_lang_item_path(node.span(), item_name);
-            this->context.equate_types_assoc(node.span(), node.m_res_type, op_trait, ::HIR::PathParams{}, node.m_value->m_res_type, "Output", {}, true, operator_kind);
+            const auto& op_trait = this->context.m_crate.get_lang_item_path_opt(item_name);
+            if (!op_trait.components().empty()) {
+                this->context.equate_types_assoc(node.span(), node.m_res_type, op_trait, ::HIR::PathParams{}, node.m_value->m_res_type, "Output", {}, true, operator_kind);
+            } else {
+                this->context.equate_types(node.span(), node.m_res_type, node.m_value->m_res_type);
+            }
             node.m_value->visit(*this);
         }
 

@@ -258,9 +258,8 @@ namespace {
                         break;
                 }
                 assert(lang_item);
-                const auto& trait_path = this->get_lang_item_path(node.span(), lang_item);
-
                 if (!typeck::primitive_operator_has_builtin(operator_kind, node.m_slot->m_res_type, node.m_value->m_res_type)) {
+                    const auto& trait_path = this->get_lang_item_path(node.span(), lang_item);
                     check_trait_bound(node.span(), trait_path, {node.m_value->m_res_type}, node.m_slot->m_res_type);
                 }
             }
@@ -305,12 +304,11 @@ namespace {
                             break;
                     }
                     assert(item_name);
-                    const auto& op_trait = this->get_lang_item_path(node.span(), item_name);
-
                     auto operator_kind = node.m_op == ::HIR::ExprNode_BinOp::Op::CmpEqu || node.m_op == ::HIR::ExprNode_BinOp::Op::CmpNEqu
                         ? typeck::PrimitiveOperator::Equal
                         : typeck::PrimitiveOperator::Order;
                     if (!typeck::primitive_operator_has_builtin(operator_kind, node.m_left->m_res_type, node.m_right->m_res_type)) {
+                        const auto& op_trait = this->get_lang_item_path(node.span(), item_name);
                         check_trait_bound(node.span(), op_trait, {node.m_right->m_res_type}, node.m_left->m_res_type);
                     }
                     break;
@@ -385,9 +383,8 @@ namespace {
                             break;
                     }
                     assert(item_name);
-                    const auto& op_trait = this->get_lang_item_path(node.span(), item_name);
-
                     if (!typeck::primitive_operator_has_builtin(operator_kind, node.m_left->m_res_type, node.m_right->m_res_type)) {
+                        const auto& op_trait = this->get_lang_item_path(node.span(), item_name);
                         check_associated_type(node.span(), node.m_res_type, op_trait, {node.m_right->m_res_type}, node.m_left->m_res_type, "Output");
                     }
                     break;

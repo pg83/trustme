@@ -444,10 +444,18 @@ namespace {
                         BUG(node.span(), "References an ::Unknown closure");
                     case ::HIR::ExprNode_Closure::Class::NoCapture:
                     case ::HIR::ExprNode_Closure::Class::Shared:
-                        node.m_trait_used = ::HIR::ExprNode_CallValue::TraitUsed::Fn;
+                        if (!m_resolve.m_crate.get_lang_item_path_opt("fn").components().empty()) {
+                            node.m_trait_used = ::HIR::ExprNode_CallValue::TraitUsed::Fn;
+                        } else if (!m_resolve.m_crate.get_lang_item_path_opt("fn_mut").components().empty()) {
+                            node.m_trait_used = ::HIR::ExprNode_CallValue::TraitUsed::FnMut;
+                        } else {
+                            node.m_trait_used = ::HIR::ExprNode_CallValue::TraitUsed::FnOnce;
+                        }
                         break;
                     case ::HIR::ExprNode_Closure::Class::Mut:
-                        node.m_trait_used = ::HIR::ExprNode_CallValue::TraitUsed::FnMut;
+                        node.m_trait_used = !m_resolve.m_crate.get_lang_item_path_opt("fn_mut").components().empty()
+                            ? ::HIR::ExprNode_CallValue::TraitUsed::FnMut
+                            : ::HIR::ExprNode_CallValue::TraitUsed::FnOnce;
                         break;
                     case ::HIR::ExprNode_Closure::Class::Once:
                         node.m_trait_used = ::HIR::ExprNode_CallValue::TraitUsed::FnOnce;
@@ -923,6 +931,19 @@ namespace {
 
             ::HIR::ExprVisitorDef::visit(node);
 
+            // A closure can only expose call traits that exist in a no_core
+            // crate. Preserve the strongest available receiver class and
+            // fall back towards FnOnce when Fn or FnMut is absent.
+            if (node.m_class == ::HIR::ExprNode_Closure::Class::Shared
+                && m_resolve.m_crate.get_lang_item_path_opt("fn").components().empty()) {
+                node.m_class = m_resolve.m_crate.get_lang_item_path_opt("fn_mut").components().empty()
+                    ? ::HIR::ExprNode_Closure::Class::Once
+                    : ::HIR::ExprNode_Closure::Class::Mut;
+            } else if (node.m_class == ::HIR::ExprNode_Closure::Class::Mut
+                && m_resolve.m_crate.get_lang_item_path_opt("fn_mut").components().empty()) {
+                node.m_class = ::HIR::ExprNode_Closure::Class::Once;
+            }
+
             // --- Extract and mutate code into a trait impl on the closure type ---
 
             // TODO: Fix up lifetimes somehow
@@ -1111,8 +1132,8 @@ namespace {
             }
             DEBUG("args_ty = " << args_ty << ", ret_type = " << ret_type);
 
-            if (node.m_is_copy) {
-                const auto& lang_Copy = m_resolve.m_crate.get_lang_item_path(sp, "copy");
+            const auto& lang_Copy = m_resolve.m_crate.get_lang_item_path_opt("copy");
+            if (node.m_is_copy && !lang_Copy.components().empty()) {
                 auto& v = const_cast<::HIR::Crate&>(m_resolve.m_crate).m_trait_impls[lang_Copy].get_list_for_type_mut(closure_type);
                 v.push_back(box$(
                     ::HIR::TraitImpl{
@@ -1178,9 +1199,15 @@ namespace {
                         }
                     };
 
-                    m_out.impls_closure.push_back(H2::make_dispatch(m_resolve.m_crate.m_types, m_pool, sp, ::HIR::ExprNode_Closure::Class::Once, params.clone(), trait_params.clone(), closure_type, args_ty, ret_type));
-                    m_out.impls_closure.push_back(H2::make_dispatch(m_resolve.m_crate.m_types, m_pool, sp, ::HIR::ExprNode_Closure::Class::Mut, params.clone(), trait_params.clone(), closure_type, args_ty, ret_type));
-                    m_out.impls_closure.push_back(H2::make_dispatch(m_resolve.m_crate.m_types, m_pool, sp, ::HIR::ExprNode_Closure::Class::Shared, params.clone(), mv$(trait_params), closure_type, args_ty, ret_type));
+                    if (!m_resolve.m_crate.get_lang_item_path_opt("fn_once").components().empty()) {
+                        m_out.impls_closure.push_back(H2::make_dispatch(m_resolve.m_crate.m_types, m_pool, sp, ::HIR::ExprNode_Closure::Class::Once, params.clone(), trait_params.clone(), closure_type, args_ty, ret_type));
+                    }
+                    if (!m_resolve.m_crate.get_lang_item_path_opt("fn_mut").components().empty()) {
+                        m_out.impls_closure.push_back(H2::make_dispatch(m_resolve.m_crate.m_types, m_pool, sp, ::HIR::ExprNode_Closure::Class::Mut, params.clone(), trait_params.clone(), closure_type, args_ty, ret_type));
+                    }
+                    if (!m_resolve.m_crate.get_lang_item_path_opt("fn").components().empty()) {
+                        m_out.impls_closure.push_back(H2::make_dispatch(m_resolve.m_crate.m_types, m_pool, sp, ::HIR::ExprNode_Closure::Class::Shared, params.clone(), trait_params.clone(), closure_type, args_ty, ret_type));
+                    }
 
                     // 2. Split args_pat/args_ty into separate arguments
                     ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> args_split;

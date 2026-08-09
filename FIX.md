@@ -14,17 +14,17 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 Из 2384 целых записей о прямом падении: 1571 compiler abort/rejection, 627 обычных compile/adapter failures, 97 runtime failures, 75 SIGSEGV, 11 timeout и 3 SIGILL. Ещё две строки были повреждены параллельным выводом. Основные прямые источники: `rust_ui_compile` — 963, `rust_1_90` — 534, GCCRS — 412, `rust_lib` — 149, reference и doctest — по 127.
 
+После исправления primitive operators и выбора closure call trait повторный полный прогон `gccrs` + `gccrs_compile` оставляет 226 из 883 красных нод. Все отсутствующие primitive operator lang items и `fn_mut` из сигнатур исчезли; оставшиеся lang-item сигнатуры: `coerce_unsized` — 37, `index` — 12, `unsafe_cell` — 5, `eq` — 2 и `tuple_trait` — 1. `index` и два `eq` относятся к операциям, для которых upstream также требует trait, поэтому их нельзя делать lang-free compiler builtin.
+
 Приоритет определяется не краснотой отдельного unit и не размером каталога, а числом targets, которые снимает одно общее исправление. Число рядом с задачей — измеренный fan-out этого gate. Если минимизация показывает разные причины, задача делится, а части реклассифицируются ниже.
 
 Для compiler fix порядок остаётся строгим: минимальный красный `tests/unit/test_*.rs` → исправление общего пути → зелёный unit → исходный upstream trigger → соседние triggers той же сигнатуры → clang/lld build → commit и push. Unit подтверждает причину, но сам по себе не повышает приоритет.
 
 ## P0 — больше 100 targets одним общим исправлением
 
-1. [ ] **Primitive operators в `no_core`: 244 прямых отказа.** Все 884 GCCRS input работают с `#![no_core]`; 244 падения заканчиваются отсутствующим operator lang item: `sub` — 62, `eq` — 48, `add` — 45, `neg` — 29, `partial_ord` — 21 и остальные operators. Primitive candidate должен существовать без operator trait; trait path нужен только для настоящего overload. Довести общий `PrimitiveOperator` path через enumeration, solver, UFCS lowering, validation и MIR, а не добавлять отдельные исключения для `Add` или crate `core`.
+1. [ ] **Зависимости library harness: не менее 220 заблокированных cases.** Сделать явную модель support modules/dev-dependencies для harness compiler вместо точечных копий исходников: `coretests/num` — 147 (`rand::distr`), `alloctests/collections` — 33 (`rand`), std common/rand groups — 13, `coretests/ops` — 17 (`control_flow`), `coretests/panic` — 7 (`location`), `coretests/ffi` — 3 (`cstr`). Валидные upstream dependencies должны собираться тем же compiler graph; нельзя скрывать сами тесты.
 
-2. [ ] **Зависимости library harness: не менее 220 заблокированных cases.** Сделать явную модель support modules/dev-dependencies для harness compiler вместо точечных копий исходников: `coretests/num` — 147 (`rand::distr`), `alloctests/collections` — 33 (`rand`), std common/rand groups — 13, `coretests/ops` — 17 (`control_flow`), `coretests/panic` — 7 (`location`), `coretests/ffi` — 3 (`cstr`). Валидные upstream dependencies должны собираться тем же compiler graph; нельзя скрывать сами тесты.
-
-3. [ ] **Нулевая generic array и cast/unification: 163 library cases.** Один путь отвергает cast `[Infer; 0]` в конкретный `[T; 0]` и ломает `alloctests/slice` — 107, `coretests/array` — 36, `alloctests/c_str2` — 20. Исправить вывод element type даже при нулевой длине и проверить ненулевую длину, чтобы не разрешить произвольный cast.
+2. [ ] **Нулевая generic array и cast/unification: 163 library cases.** Один путь отвергает cast `[Infer; 0]` в конкретный `[T; 0]` и ломает `alloctests/slice` — 107, `coretests/array` — 36, `alloctests/c_str2` — 20. Исправить вывод element type даже при нулевой длине и проверить ненулевую длину, чтобы не разрешить произвольный cast.
 
 ## P1 — 25–99 targets одним общим исправлением
 
@@ -44,7 +44,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 8. [ ] **`Pointee`/metadata solver: 34 library cases.** `coretests/ptr` падает в `find_trait_impls_magic` на generic unsized tail. Реализовать общий metadata type для sized, slice/str, dyn и struct tail, затем проверить pointer metadata/codegen.
 
-9. [ ] **Остальные lang-free `no_core` paths: 32 прямых отказа.** `coerce_unsized` — 26, `unsafe_cell` — 4, `tuple_trait` и `start` — по одному. Не объединять их с primitive operators: для каждого сначала определить отдельную language semantics при отсутствии lang item.
+9. [ ] **Оставшиеся `no_core` lang-item paths: 43 прямых отказа.** `coerce_unsized` — 37, `unsafe_cell` — 5 и `tuple_trait` — 1. Для каждого сначала сверить upstream semantics и отделить настоящий lang-free builtin от неполного GCCRS fixture; отсутствие trait нельзя обходить, если upstream требует trait для самой операции.
 
 10. [ ] **`pin!` expansion/parser: не менее 28 targets.** 21 compile failure видит `let` после path separator, ещё 7 cases заблокированы harness `coretests/pin_macro`. Исправить statement macro expansion в block context, затем проверить `pin!` с expression, `let` и function item.
 

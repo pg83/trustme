@@ -110,10 +110,18 @@ namespace {
                             BUG(sp, "References an ::Unknown closure");
                         case ::HIR::ExprNode_Closure::Class::NoCapture:
                         case ::HIR::ExprNode_Closure::Class::Shared:
-                            node.m_trait_used = ::HIR::ExprNode_CallValue::TraitUsed::Fn;
+                            if (!m_crate.get_lang_item_path_opt("fn").components().empty()) {
+                                node.m_trait_used = ::HIR::ExprNode_CallValue::TraitUsed::Fn;
+                            } else if (!m_crate.get_lang_item_path_opt("fn_mut").components().empty()) {
+                                node.m_trait_used = ::HIR::ExprNode_CallValue::TraitUsed::FnMut;
+                            } else {
+                                node.m_trait_used = ::HIR::ExprNode_CallValue::TraitUsed::FnOnce;
+                            }
                             break;
                         case ::HIR::ExprNode_Closure::Class::Mut:
-                            node.m_trait_used = ::HIR::ExprNode_CallValue::TraitUsed::FnMut;
+                            node.m_trait_used = !m_crate.get_lang_item_path_opt("fn_mut").components().empty()
+                                ? ::HIR::ExprNode_CallValue::TraitUsed::FnMut
+                                : ::HIR::ExprNode_CallValue::TraitUsed::FnOnce;
                             break;
                         case ::HIR::ExprNode_Closure::Class::Once:
                             node.m_trait_used = ::HIR::ExprNode_CallValue::TraitUsed::FnOnce;
@@ -191,7 +199,10 @@ namespace {
             }
 
             ::HIR::PathParams trait_params(ty_r);
-            const auto& trait_path = m_crate.get_lang_item_path(sp, langitem);
+            const auto& trait_path = m_crate.get_lang_item_path_opt(langitem);
+            if (trait_path.components().empty()) {
+                return true;
+            }
             return !m_resolve.find_impl(sp, trait_path, trait_params, ty_l, [&](ImplRef impl, bool) {
                 const auto* trait_impl = impl.m_data.opt_TraitImpl();
                 return !(m_current_trait_impl && trait_impl && trait_impl->impl == m_current_trait_impl);
@@ -203,7 +214,10 @@ namespace {
                 return false;
             }
 
-            const auto& trait_path = m_crate.get_lang_item_path(sp, langitem);
+            const auto& trait_path = m_crate.get_lang_item_path_opt(langitem);
+            if (trait_path.components().empty()) {
+                return true;
+            }
             return !m_resolve.find_impl(sp, trait_path, ::HIR::PathParams(), ty, [&](ImplRef impl, bool) {
                 const auto* trait_impl = impl.m_data.opt_TraitImpl();
                 return !(m_current_trait_impl && trait_impl && trait_impl->impl == m_current_trait_impl);
