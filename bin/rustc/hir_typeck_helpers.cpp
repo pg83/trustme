@@ -7920,7 +7920,7 @@ bool TraitResolution::find_trait_impls(
                 // Has fields!
                 const auto& str = *be;
                 const auto& params = e->path.m_data.as_Generic().m_params;
-                auto monomorph = MonomorphStatePtr(m_crate.m_types, nullptr, &params, nullptr);
+                auto monomorph = MonomorphStatePtr(m_crate.m_types, &ty, &params, nullptr);
             TU_MATCH_HDRA( (str.m_data), {)
             TU_ARMA(Unit, se) {
                         // No fields on a unit struct
@@ -7954,7 +7954,7 @@ bool TraitResolution::find_trait_impls(
             TU_ARMA(Union, be) {
                 const auto& unm = *be;
                 const auto& params = e->path.m_data.as_Generic().m_params;
-                auto monomorph = MonomorphStatePtr(m_crate.m_types, nullptr, &params, nullptr);
+                auto monomorph = MonomorphStatePtr(m_crate.m_types, &ty, &params, nullptr);
 
                 for (const auto& fld : unm.m_variants) {
                     if (fld.vis.is_visible(this->m_vis_path) && fld.name == name) {

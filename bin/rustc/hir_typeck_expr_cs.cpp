@@ -5786,7 +5786,12 @@ namespace {
                                 } else {
                                     DEBUG("[check_associated] > Overlapping impls have equal or incomparable specificity");
                                 }
-                                was_used = true;
+                                // Both matches are fuzzy, so overlap only orders the
+                                // candidates after their predicates are known.  Keep
+                                // this candidate in the possibility set: collapsing
+                                // it here makes `count` and `possible_impls` disagree
+                                // and can incorrectly close an ivar's bounded set over
+                                // just the first, ultimately inapplicable impl.
                                 break;
                             } else {
                                 // Disjoint impls.

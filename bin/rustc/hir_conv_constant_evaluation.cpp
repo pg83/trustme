@@ -2585,7 +2585,7 @@ namespace HIR {
                             // No need to write tag, as this variant is the niche
                         } else {
                             auto ofs = get_offset(state.sp, resolve, enm_repr, ve.field);
-                            MIR_ASSERT(state, ve.field.size < 64 / 8, "");
+                            MIR_ASSERT(state, ve.field.size <= 64 / 8, "");
                             dst.slice(ofs, ve.field.size).write_uint(state, ve.field.size * 8, ve.offset + e.index);
                         }
                     }

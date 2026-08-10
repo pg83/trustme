@@ -2473,8 +2473,8 @@ bool StaticTraitResolve::type_is_impossible(const Span& sp, const ::HIR::TypeRef
                             TU_ARMA(Tuple, e) {
                                 for (const auto& fld : e) {
                                     ::HIR::TypeRef tmp;
-                                    const auto& ty = this->monomorph_expand_opt(sp, tmp, fld.ent, MonomorphStatePtr(m_crate.m_types, nullptr, &params, nullptr));
-                                    if (type_is_impossible(sp, ty)) {
+                                    const auto& field_ty = this->monomorph_expand_opt(sp, tmp, fld.ent, MonomorphStatePtr(m_crate.m_types, &ty, &params, nullptr));
+                                    if (type_is_impossible(sp, field_ty)) {
                                         return true;
                                     }
                                 }
@@ -2483,8 +2483,8 @@ bool StaticTraitResolve::type_is_impossible(const Span& sp, const ::HIR::TypeRef
                             TU_ARMA(Named, e) {
                                 for (const auto& fld : e) {
                                     ::HIR::TypeRef tmp;
-                                    const auto& ty = this->monomorph_expand_opt(sp, tmp, fld.ty, MonomorphStatePtr(m_crate.m_types, nullptr, &params, nullptr));
-                                    if (type_is_impossible(sp, ty)) {
+                                    const auto& field_ty = this->monomorph_expand_opt(sp, tmp, fld.ty, MonomorphStatePtr(m_crate.m_types, &ty, &params, nullptr));
+                                    if (type_is_impossible(sp, field_ty)) {
                                         return true;
                                     }
                                 }
@@ -2503,9 +2503,9 @@ bool StaticTraitResolve::type_is_impossible(const Span& sp, const ::HIR::TypeRef
                                 for (const auto& fld : e) {
                                     const auto& tpl = fld.type;
                                     ::HIR::TypeRef tmp;
-                                    const auto& ty = this->monomorph_expand_opt(sp, tmp, tpl, MonomorphStatePtr(m_crate.m_types, nullptr, &params, nullptr));
+                                    const auto& field_ty = this->monomorph_expand_opt(sp, tmp, tpl, MonomorphStatePtr(m_crate.m_types, &ty, &params, nullptr));
                                     // Not impossible, ergo the enum is possible
-                                    if (!type_is_impossible(sp, ty)) {
+                                    if (!type_is_impossible(sp, field_ty)) {
                                         return false;
                                     }
                                 }
@@ -2990,7 +2990,7 @@ MetadataType StaticTraitResolve::metadata_type(const Span& sp, const ::HIR::Type
                         case ::HIR::StructMarkings::DstType::Possible: {
                             const auto& params = e.path.m_data.as_Generic().m_params;
                             auto monomorph = [&](const auto& tpl) {
-                                return this->monomorph_expand(sp, tpl, MonomorphStatePtr(m_crate.m_types, nullptr, &params, nullptr));
+                                return this->monomorph_expand(sp, tpl, MonomorphStatePtr(m_crate.m_types, &ty, &params, nullptr));
                             };
                             TU_MATCHA((pbe->m_data), (se), (Unit, return MetadataType::None;), (Tuple, return se.empty() ? MetadataType::None : this->metadata_type(sp, monomorph(se.back().ent));), (Named, return se.empty() ? MetadataType::None : this->metadata_type(sp, monomorph(se.back().ty));))
                             throw "";
