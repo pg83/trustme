@@ -3627,14 +3627,8 @@ bool MIR_Cleanup_Unsize_GetMetadata(const ::MIR::TypeResolve& state, MirMutator&
                 out_meta_val = ::MIR::Constant::make_Uint({U128(in_array.size.as_Known()), ::HIR::CoreType::Usize});
                 return true;
             } else if (src_ty->is_Generic() || (src_ty->is_Path() && src_ty->as_Path().binding.is_Opaque())) {
-                // HACK: FixedSizeArray uses `A: Unsize<[T]>` which will lead to the above code not working (as the size isn't known).
-                // - Maybe _Meta on the `&A` would work as a stopgap (since A: Sized, it won't collide with &[T] or similar)
-
+                // Defer until monomorphisation supplies the concrete source array.
                 return false;
-
-                //out_meta_ty = ::HIR::CoreType::Usize;
-                //out_meta_val = ::MIR::RValue::make_DstMeta({ ptr_value.clone() });
-                //return true;
             } else {
                 MIR_BUG(state, "Unsize to slice from non-array - " << src_ty);
             }

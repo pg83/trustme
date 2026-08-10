@@ -2,10 +2,10 @@
 
 Найдено:
 
-- 131 строка с `hack/HACK/hacky/hackery/hackiness` в 31 файле.
-- 99 точных употреблений слова `HACK`.
-- 125 комментариев и 6 диагностических `DEBUG`-строк.
-- По подсистемам: frontend — 42, HIR/typeck — 54, MIR — 16, backend — 17, инфраструктура — 2.
+- 129 строк с `hack/HACK/hacky/hackery/hackiness` в 31 файле.
+- 97 точных употреблений слова `HACK`.
+- 123 комментария и 6 диагностических `DEBUG`-строк.
+- По подсистемам: frontend — 42, HIR/typeck — 54, MIR — 14, backend — 17, инфраструктура — 2.
 
 Главный вывод: массово удалять эти комментарии нельзя. Под одной меткой смешаны реальные ошибки модели, допустимые lowerings, устаревший код и просто плохо названные инварианты.
 
@@ -27,13 +27,7 @@
 
    Это может не только задерживать решение, но и оставлять неверные impl-кандидаты. Правильная модель upstream — отдельный goal с результатом `Yes/Ambiguous/No`, а не ослабление отношения типов.
 
-4. Generic `Unsize<[T]>` оставляет metadata pseudo-op до MIR cleanup.
-
-   Array→slice method/index adjustment уже следует модели upstream: типизированная цепочка borrow → pointer unsize → deref создаётся до MIR, а отдельный adjustment-kind позволяет поздно выбрать place mutability, не затрагивая обычные coercions. Прямой `_Unsize([T; N] → [T])` больше не принимается HIR validator.
-
-   Остаётся [mir_from_hir.cpp](/home/pg/monorepo/trustme/bin/rustc/mir_from_hir.cpp:1621) и [mir_operations.cpp](/home/pg/monorepo/trustme/bin/rustc/mir_operations.cpp:3630): bounded generic source для slice metadata либо читает `DstMeta`, либо оставляет пустой `ItemAddr` pseudo-op. Metadata должна получаться из доказанного `Unsize` goal, а не угадываться по форме source type.
-
-5. Drop/move/match содержат реальные семантические обходы.
+4. Drop/move/match содержат реальные семантические обходы.
 
    - CTFE игнорирует все `Drop`: [hir_conv_constant_evaluation.cpp](/home/pg/monorepo/trustme/bin/rustc/hir_conv_constant_evaluation.cpp:2198).
    - Grouped match сначала полностью flatten’ится: [mir_from_hir.cpp](/home/pg/monorepo/trustme/bin/rustc/mir_from_hir.cpp:6225).
@@ -43,13 +37,13 @@
 
    Это подтверждает текущие P2-группы drop/unwind и or-pattern runtime.
 
-6. Backend местами генерирует программу, которая просто вызывает `abort()`.
+5. Backend местами генерирует программу, которая просто вызывает `abort()`.
 
    [trans_codegen_c.cpp](/home/pg/monorepo/trustme/bin/rustc/trans_codegen_c.cpp:2893) заменяет большой класс MSVC AVX-функций на `abort`, причём условие содержит `true ||`. Аналогично `vmov/vexpand/vpexpand` для GCC-like backend.
 
    Там же workaround GCC bug определяется по компилятору, которым собран trustme, а не по C-компилятору, запускаемому backend. При clang-сборке trustme и runtime `CC=gcc` workaround не включится.
 
-7. Mangling допускает потенциальные коллизии.
+6. Mangling допускает потенциальные коллизии.
 
    [trans_mangling.cpp](/home/pg/monorepo/trustme/bin/rustc/trans_mangling.cpp:254) кодирует значения associated types trait object, но не их имена, предполагая одинаковый набор. `-` и `#` также сознательно сводятся к одному представлению.
 
@@ -85,11 +79,11 @@
 | Typeck impls | `hir_typeck_main_bindings.cpp:2121,2349,2383` | Lifetime bounds копируются/заменяются для совпадения представления. |
 | Static solver | `hir_typeck_static.cpp:478,508,1241,2085` | Associated bounds дописываются, `_` автоматически проходит bound, opaque equality обходится локально. |
 | Const eval | `hir_conv_constant_evaluation.cpp:1326,2198,3448,3463` | One-past-end допустим; ignore Drop и «roughly-correct» monomorph state — реальные пробелы. |
-| MIR lowering | `mir_from_hir.cpp:203,1109,1594,1621,6225,6258,8888`; header `:41` | Drop flags, unsize metadata, match flattening и hardcoded Box move. |
+| MIR lowering | `mir_from_hir.cpp:203,1109,1594,6225,6258,8888`; header `:41` | Drop flags, virtual unsize cast, match flattening и hardcoded Box move. Generic slice metadata теперь откладывается до concrete monomorphization без чтения thin-pointer metadata. |
 | MIR validation | `mir_helpers.cpp:626` | Validator скрывает отсутствие корректного validity analysis. |
-| MIR passes | `mir_operations.cpp:2804,3630,3943,4011,4037,4748,9847` | Target-width constants, complete-type include, conservative intrinsic-wrapper inlining и drop-flag compaction документированы как invariants. Остались Box layout coupling, generic metadata, usage downgrade и опасное drop removal. |
+| MIR passes | `mir_operations.cpp:2804,3937,4005,4031,4742,9841` | Target-width constants, complete-type include, conservative intrinsic-wrapper inlining и drop-flag compaction документированы как invariants. Остались Box layout coupling, usage downgrade и опасное drop removal. |
 | C backend | `trans_codegen_c.cpp:1280,1291,1903,2089,2526,2887,2893,3154,5291,5930` | CAS helpers, `.rlib`/object protocol, `const_eval_select` call adapter и overflow intrinsics документированы как backend conventions. Остались принудительный `-O1`, platform workarounds, incomplete asm translation и runtime `abort`. |
 | Enumeration | `trans_main_bindings.cpp:1349,2204,2487,2872` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующая последовательность: ложные markers в parser/lexer, infrastructure, driver, общих HIR definitions, metadata, безопасных MIR invariants и backend conventions переименованы. Общая `Pointee::Metadata` relation, layout always-unsized struct и invalid array→slice HIR закрыты; следующий функциональный пункт опасного пункта 4 — убрать MIR-угадывание metadata для bounded generic `Unsize<[T]>`, строго unit-first. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.
+Следующая последовательность: ложные markers в parser/lexer, infrastructure, driver, общих HIR definitions, metadata, безопасных MIR invariants и backend conventions переименованы. `Pointee::Metadata`, always-unsized layout, array→slice HIR и generic array metadata закрыты. Следующий функциональный пункт — drop/move/match из опасного пункта 4, начиная с максимального измеренного fan-out и строго unit-first. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.

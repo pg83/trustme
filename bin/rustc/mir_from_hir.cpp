@@ -1618,10 +1618,10 @@ namespace {
                         }
                         m_builder.set_result( node.span(), ::MIR::RValue::make_MakeDst({ mv$(ptr_lval), mv$(size_val) }) );
                         } else if (ty_in->is_Generic() || (ty_in->is_Path() && ty_in->as_Path().binding.is_Opaque())) {
-                            // HACK: FixedSizeArray uses `A: Unsize<[T]>` which will lead to the above code not working (as the size isn't known).
-                            // - Maybe _Meta on the `&A` would work as a stopgap (since A: Sized, it won't collide with &[T] or similar)
-                            auto size_lval = m_builder.lvalue_or_temp(node.span(), m_builder.resolve().m_crate.m_types.primitive(::HIR::CoreType::Usize), ::MIR::RValue::make_DstMeta({ptr_lval.clone()}));
-                            m_builder.set_result(node.span(), ::MIR::RValue::make_MakeDst({mv$(ptr_lval), mv$(size_lval)}));
+                            // The source is thin here: its concrete array length becomes
+                            // available only after monomorphisation. Preserve the unsize
+                            // sentinel for MIR cleanup instead of reading nonexistent metadata.
+                            m_builder.set_result(node.span(), ::MIR::RValue::make_MakeDst({mv$(ptr_lval), ::MIR::Constant::make_ItemAddr({})}));
                         } else {
                             ASSERT_BUG(node.span(), ty_in->is_Array(), "Unsize to slice from non-array - " << ty_in);
                         }
