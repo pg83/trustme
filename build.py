@@ -133,6 +133,9 @@ TESTS_LIB = ["$(S)/tst/lib.py"]
 # The build engine resolves Nix's `timeout` symlink to the multicall binary,
 # so select its applet explicitly instead of relying on argv[0].
 TEST_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "60s"]
+# A from-scratch standard-library build is intentionally much heavier than a
+# single test, but it must not leave the graph occupied indefinitely.
+LIBSTD_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "10m"]
 
 # std_src: fetch + adjust the rust-1.90 source, add the shim, pack it.
 std_src = command(
@@ -158,6 +161,7 @@ libstd = command(
     ),
     outputs=["$(B)/tst/libstd.tar"],
     cmd=[
+        *LIBSTD_TIMEOUT,
         "python3", "$(S)/tst/std/build.py",
         "$(B)/tst/rust-src.tar", "$(B)/tst/libstd.tar",
         "$(S)/lib/proc_macro/Cargo.toml",
@@ -477,6 +481,21 @@ unit_tests.append(command(
         "$(B)/tst/unit/driver_lint_cfg_options.stamp",
     ],
     deps=[rustc],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
+    name="unit_libstd_timeout",
+    inputs=[
+        "$(S)/tst/unit/test_libstd_timeout.py",
+        "$(S)/build.py",
+    ],
+    outputs=["$(B)/tst/unit/libstd_timeout.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_libstd_timeout.py",
+        "$(S)/build.py", "$(B)/tst/unit/libstd_timeout.stamp",
+    ],
     descr="UT",
     color="green",
 ))
