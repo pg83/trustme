@@ -20,7 +20,7 @@ whole project as a standing test. The suite grows in two directions at once:
 
 - **breadth** — more real binaries that build from source and pass their own
   tests (`resvg` is the first; more follow);
-- **depth** — a one-file regression under `tests/unit/` for every compiler bug
+- **depth** — a one-file regression under `tst/unit/` for every compiler bug
   we fix along the way.
 
 The compiler gets more correct exactly as fast as the set of programs it can
@@ -30,10 +30,12 @@ binaries, fixing mrustc as we go.
 ## layout
 
 ```
-rustc/      the compiler sources (flat), and mrustc's original README
-cargo/      our cargo, rewritten in Go — vendors dependencies by lockfile
-third_party/libstd/  the vendored C++ platform library in the rustc graph
-tests/      the test graph: build a real project, run its tests
+bin/rustc/  the compiler sources (flat), and mrustc's original README
+bin/cargo/  our cargo, rewritten in Go — vendors dependencies by lockfile
+lib/        Rust libraries built with the toolchain
+ext/libstd/ the external C++ platform library in the rustc graph
+tst/        the test graph: build a real project, run its tests
+dev/        plans and development utilities
 build       the build engine (shared across the monorepo)
 build.py    the build graph for everything above
 ```
@@ -54,12 +56,12 @@ hermetic vendor tree between isolated nodes.
 ./build test            # everything under test
 ```
 
-See [`tests/README.md`](tests/README.md) for how a project test is wired as a
+See [`tst/README.md`](tst/README.md) for how a project test is wired as a
 graph of nodes (fetch → vendor → build against a from-source libstd → run).
 
 ## license
 
-mrustc is MIT licensed; see [`rustc/LICENCE-MIT`](rustc/LICENCE-MIT). The
-vendored platform library is MIT licensed; see
-[`third_party/libstd/LICENSE`](third_party/libstd/LICENSE). Our changes carry
+mrustc is MIT licensed; see [`bin/rustc/LICENCE-MIT`](bin/rustc/LICENCE-MIT).
+The platform library is MIT licensed; see
+[`ext/libstd/LICENSE`](ext/libstd/LICENSE). Our changes carry
 the same license.

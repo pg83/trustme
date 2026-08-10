@@ -170,6 +170,6 @@ functionCall(
 - Keep at most one empty line between logical blocks and no empty line at the
   start of a block.
 
-Run `./style.py` to format all tracked C++ and Objective-C++ sources. Set
+Run `./dev/style.py` to format all tracked C++ and Objective-C++ sources. Set
 `CLANG_FORMAT` when the binary is not named `clang-format` on `PATH`.
 Generated files and `render.comp` are intentionally excluded.

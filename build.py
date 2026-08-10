@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import json
 from pathlib import Path
@@ -5,7 +6,7 @@ from pathlib import Path
 import build
 
 # Build description for rustc (the mrustc-derived Rust compiler).
-# The compiler sources live flat under rustc/; C++26, links the vendored
+# The compiler sources live flat under bin/rustc/; C++26, links the external
 # platform library and zlib.
 
 build.flags.allow({
@@ -41,7 +42,31 @@ def parse_test_partition():
 
 test_partition = parse_test_partition()
 
-build.includes += ["$(S)/rustc"]
+SOURCE_ROOT = Path(__file__).parent
+OVERRIDE_ROOT = SOURCE_ROOT / "bin" / "rustc" / "overrides"
+
+
+def encode_build_data(data):
+    return base64.b64encode(data).decode("ascii")
+
+
+manifest_overrides = encode_build_data(
+    (OVERRIDE_ROOT / "rustc-1.90.0-overrides.toml").read_bytes()
+)
+script_overrides = encode_build_data(json.dumps(
+    {
+        path.stem.removeprefix("build_"): path.read_text()
+        for path in sorted(OVERRIDE_ROOT.glob("build_*.txt"))
+    },
+    sort_keys=True,
+    separators=(",", ":"),
+).encode())
+cargo_ldflags = " ".join([
+    "-X=main.embeddedManifestOverridesBase64=" + manifest_overrides,
+    "-X=main.embeddedScriptOverridesBase64=" + script_overrides,
+])
+
+build.includes += ["$(S)/bin/rustc"]
 
 # version.cpp expects these from the build system (Makefile filled them from
 # git); pin static values so the build stays hermetic.
@@ -63,7 +88,7 @@ build.cxxflags += [
 # This mirrors shitty: libstd owns its source discovery and compile flags, while
 # the parent graph supplies reproducible paths and links the resulting archive.
 platform_libstd = import_build(
-    "third_party/libstd/build.py",
+    "ext/libstd/build.py",
     "libstd.a",
     extra_cflags=[
         "-Wno-error",
@@ -76,161 +101,166 @@ platform_libstd = import_build(
 platform_libstd.name = "platform_libstd"
 
 SRC = [
-    "$(S)/rustc/ast_ast.cpp",
-    "$(S)/rustc/ast_crate.cpp",
-    "$(S)/rustc/ast_dump.cpp",
-    "$(S)/rustc/ast_expr.cpp",
-    "$(S)/rustc/ast_path.cpp",
-    "$(S)/rustc/ast_pattern.cpp",
-    "$(S)/rustc/ast_types.cpp",
-    "$(S)/rustc/common_debug.cpp",
-    "$(S)/rustc/debug.cpp",
-    "$(S)/rustc/expand_asm.cpp",
-    "$(S)/rustc/expand_assert.cpp",
-    "$(S)/rustc/expand_cfg.cpp",
-    "$(S)/rustc/expand_codegen.cpp",
-    "$(S)/rustc/expand_compile_error.cpp",
-    "$(S)/rustc/expand_concat.cpp",
-    "$(S)/rustc/expand_crate_tags.cpp",
-    "$(S)/rustc/expand_derive.cpp",
-    "$(S)/rustc/expand_doc.cpp",
-    "$(S)/rustc/expand_env.cpp",
-    "$(S)/rustc/expand_file_line.cpp",
-    "$(S)/rustc/expand_format_args.cpp",
-    "$(S)/rustc/expand_include.cpp",
-    "$(S)/rustc/expand_lang_item.cpp",
-    "$(S)/rustc/expand_lints.cpp",
-    "$(S)/rustc/expand_macro_rules.cpp",
-    "$(S)/rustc/expand_misc_attrs.cpp",
-    "$(S)/rustc/expand_mod.cpp",
-    "$(S)/rustc/expand_panic.cpp",
-    "$(S)/rustc/expand_proc_macro.cpp",
-    "$(S)/rustc/expand_rustc_box.cpp",
-    "$(S)/rustc/expand_rustc_diagnostics.cpp",
-    "$(S)/rustc/expand_stability.cpp",
-    "$(S)/rustc/expand_std_prelude.cpp",
-    "$(S)/rustc/expand_stringify.cpp",
-    "$(S)/rustc/expand_test.cpp",
-    "$(S)/rustc/expand_test_harness.cpp",
-    "$(S)/rustc/hir_conv_bind.cpp",
-    "$(S)/rustc/hir_conv_constant_evaluation.cpp",
-    "$(S)/rustc/hir_conv_expand_type.cpp",
-    "$(S)/rustc/hir_conv_lifetime_elision.cpp",
-    "$(S)/rustc/hir_conv_markings.cpp",
-    "$(S)/rustc/hir_conv_resolve_ufcs.cpp",
-    "$(S)/rustc/hir_crate_post_load.cpp",
-    "$(S)/rustc/hir_deserialise.cpp",
-    "$(S)/rustc/hir_dump.cpp",
-    "$(S)/rustc/hir_expand_annotate_value_usage.cpp",
-    "$(S)/rustc/hir_expand_closures.cpp",
-    "$(S)/rustc/hir_expand_erased_types.cpp",
-    "$(S)/rustc/hir_expand_lifetime_infer.cpp",
-    "$(S)/rustc/hir_expand_reborrow.cpp",
-    "$(S)/rustc/hir_expand_static_borrow_constants.cpp",
-    "$(S)/rustc/hir_expand_ufcs_everything.cpp",
-    "$(S)/rustc/hir_expand_vtable.cpp",
-    "$(S)/rustc/hir_expr.cpp",
-    "$(S)/rustc/hir_expr_ptr.cpp",
-    "$(S)/rustc/hir_from_ast.cpp",
-    "$(S)/rustc/hir_from_ast_expr.cpp",
-    "$(S)/rustc/hir_generic_params.cpp",
-    "$(S)/rustc/hir_hir.cpp",
-    "$(S)/rustc/hir_hir_ops.cpp",
-    "$(S)/rustc/hir_inherent_cache.cpp",
-    "$(S)/rustc/hir_path.cpp",
-    "$(S)/rustc/hir_pattern.cpp",
-    "$(S)/rustc/hir_serialise.cpp",
-    "$(S)/rustc/hir_serialise_lowlevel.cpp",
-    "$(S)/rustc/hir_type.cpp",
-    "$(S)/rustc/hir_typeck_common.cpp",
-    "$(S)/rustc/hir_typeck_expr_check.cpp",
-    "$(S)/rustc/hir_typeck_expr_cs.cpp",
-    "$(S)/rustc/hir_typeck_expr_cs__enum.cpp",
-    "$(S)/rustc/hir_typeck_expr_visit.cpp",
-    "$(S)/rustc/hir_typeck_helpers.cpp",
-    "$(S)/rustc/hir_typeck_impl_ref.cpp",
-    "$(S)/rustc/hir_typeck_outer.cpp",
-    "$(S)/rustc/hir_typeck_resolve_common.cpp",
-    "$(S)/rustc/hir_typeck_static.cpp",
-    "$(S)/rustc/hir_visitor.cpp",
-    "$(S)/rustc/ident.cpp",
-    "$(S)/rustc/jobserver.cpp",
-    "$(S)/rustc/macro_rules_eval.cpp",
-    "$(S)/rustc/macro_rules_mod.cpp",
-    "$(S)/rustc/macro_rules_parse.cpp",
-    "$(S)/rustc/main.cpp",
-    "$(S)/rustc/memory_dump.cpp",
-    "$(S)/rustc/mir_borrow_check.cpp",
-    "$(S)/rustc/mir_check.cpp",
-    "$(S)/rustc/mir_check_full.cpp",
-    "$(S)/rustc/mir_cleanup.cpp",
-    "$(S)/rustc/mir_dump.cpp",
-    "$(S)/rustc/mir_from_hir.cpp",
-    "$(S)/rustc/mir_from_hir_match.cpp",
-    "$(S)/rustc/mir_helpers.cpp",
-    "$(S)/rustc/mir_mir.cpp",
-    "$(S)/rustc/mir_mir_builder.cpp",
-    "$(S)/rustc/mir_mir_ptr.cpp",
-    "$(S)/rustc/mir_optimise.cpp",
-    "$(S)/rustc/mir_visit_crate_mir.cpp",
-    "$(S)/rustc/parse_expr.cpp",
-    "$(S)/rustc/parse_interpolated_fragment.cpp",
-    "$(S)/rustc/parse_lex.cpp",
-    "$(S)/rustc/parse_parseerror.cpp",
-    "$(S)/rustc/parse_paths.cpp",
-    "$(S)/rustc/parse_pattern.cpp",
-    "$(S)/rustc/parse_root.cpp",
-    "$(S)/rustc/parse_token.cpp",
-    "$(S)/rustc/parse_tokenstream.cpp",
-    "$(S)/rustc/parse_tokentree.cpp",
-    "$(S)/rustc/parse_ttstream.cpp",
-    "$(S)/rustc/parse_types.cpp",
-    "$(S)/rustc/path.cpp",
-    "$(S)/rustc/rc_string.cpp",
-    "$(S)/rustc/resolve_absolute.cpp",
-    "$(S)/rustc/resolve_common.cpp",
-    "$(S)/rustc/resolve_index.cpp",
-    "$(S)/rustc/resolve_use.cpp",
-    "$(S)/rustc/span.cpp",
-    "$(S)/rustc/toml.cpp",
-    "$(S)/rustc/trans_allocator.cpp",
-    "$(S)/rustc/trans_auto_impls.cpp",
-    "$(S)/rustc/trans_codegen.cpp",
-    "$(S)/rustc/trans_codegen_c.cpp",
-    "$(S)/rustc/trans_codegen_c_structured.cpp",
-    "$(S)/rustc/trans_codegen_mmir.cpp",
-    "$(S)/rustc/trans_enumerate.cpp",
-    "$(S)/rustc/trans_mangling_v2.cpp",
-    "$(S)/rustc/trans_monomorphise.cpp",
-    "$(S)/rustc/trans_target.cpp",
-    "$(S)/rustc/trans_trans_list.cpp",
-    "$(S)/rustc/version.cpp",
+    "$(S)/bin/rustc/ast_ast.cpp",
+    "$(S)/bin/rustc/ast_crate.cpp",
+    "$(S)/bin/rustc/ast_dump.cpp",
+    "$(S)/bin/rustc/ast_expr.cpp",
+    "$(S)/bin/rustc/ast_path.cpp",
+    "$(S)/bin/rustc/ast_pattern.cpp",
+    "$(S)/bin/rustc/ast_types.cpp",
+    "$(S)/bin/rustc/common_debug.cpp",
+    "$(S)/bin/rustc/debug.cpp",
+    "$(S)/bin/rustc/expand_asm.cpp",
+    "$(S)/bin/rustc/expand_assert.cpp",
+    "$(S)/bin/rustc/expand_cfg.cpp",
+    "$(S)/bin/rustc/expand_codegen.cpp",
+    "$(S)/bin/rustc/expand_compile_error.cpp",
+    "$(S)/bin/rustc/expand_concat.cpp",
+    "$(S)/bin/rustc/expand_crate_tags.cpp",
+    "$(S)/bin/rustc/expand_derive.cpp",
+    "$(S)/bin/rustc/expand_doc.cpp",
+    "$(S)/bin/rustc/expand_env.cpp",
+    "$(S)/bin/rustc/expand_file_line.cpp",
+    "$(S)/bin/rustc/expand_format_args.cpp",
+    "$(S)/bin/rustc/expand_include.cpp",
+    "$(S)/bin/rustc/expand_lang_item.cpp",
+    "$(S)/bin/rustc/expand_lints.cpp",
+    "$(S)/bin/rustc/expand_macro_rules.cpp",
+    "$(S)/bin/rustc/expand_misc_attrs.cpp",
+    "$(S)/bin/rustc/expand_mod.cpp",
+    "$(S)/bin/rustc/expand_panic.cpp",
+    "$(S)/bin/rustc/expand_proc_macro.cpp",
+    "$(S)/bin/rustc/expand_rustc_box.cpp",
+    "$(S)/bin/rustc/expand_rustc_diagnostics.cpp",
+    "$(S)/bin/rustc/expand_stability.cpp",
+    "$(S)/bin/rustc/expand_std_prelude.cpp",
+    "$(S)/bin/rustc/expand_stringify.cpp",
+    "$(S)/bin/rustc/expand_test.cpp",
+    "$(S)/bin/rustc/expand_test_harness.cpp",
+    "$(S)/bin/rustc/hir_conv_bind.cpp",
+    "$(S)/bin/rustc/hir_conv_constant_evaluation.cpp",
+    "$(S)/bin/rustc/hir_conv_expand_type.cpp",
+    "$(S)/bin/rustc/hir_conv_lifetime_elision.cpp",
+    "$(S)/bin/rustc/hir_conv_markings.cpp",
+    "$(S)/bin/rustc/hir_conv_resolve_ufcs.cpp",
+    "$(S)/bin/rustc/hir_crate_post_load.cpp",
+    "$(S)/bin/rustc/hir_deserialise.cpp",
+    "$(S)/bin/rustc/hir_dump.cpp",
+    "$(S)/bin/rustc/hir_expand_annotate_value_usage.cpp",
+    "$(S)/bin/rustc/hir_expand_closures.cpp",
+    "$(S)/bin/rustc/hir_expand_erased_types.cpp",
+    "$(S)/bin/rustc/hir_expand_lifetime_infer.cpp",
+    "$(S)/bin/rustc/hir_expand_reborrow.cpp",
+    "$(S)/bin/rustc/hir_expand_static_borrow_constants.cpp",
+    "$(S)/bin/rustc/hir_expand_ufcs_everything.cpp",
+    "$(S)/bin/rustc/hir_expand_vtable.cpp",
+    "$(S)/bin/rustc/hir_expr.cpp",
+    "$(S)/bin/rustc/hir_expr_ptr.cpp",
+    "$(S)/bin/rustc/hir_from_ast.cpp",
+    "$(S)/bin/rustc/hir_from_ast_expr.cpp",
+    "$(S)/bin/rustc/hir_generic_params.cpp",
+    "$(S)/bin/rustc/hir_hir.cpp",
+    "$(S)/bin/rustc/hir_hir_ops.cpp",
+    "$(S)/bin/rustc/hir_inherent_cache.cpp",
+    "$(S)/bin/rustc/hir_path.cpp",
+    "$(S)/bin/rustc/hir_pattern.cpp",
+    "$(S)/bin/rustc/hir_serialise.cpp",
+    "$(S)/bin/rustc/hir_serialise_lowlevel.cpp",
+    "$(S)/bin/rustc/hir_type.cpp",
+    "$(S)/bin/rustc/hir_typeck_common.cpp",
+    "$(S)/bin/rustc/hir_typeck_expr_check.cpp",
+    "$(S)/bin/rustc/hir_typeck_expr_cs.cpp",
+    "$(S)/bin/rustc/hir_typeck_expr_cs__enum.cpp",
+    "$(S)/bin/rustc/hir_typeck_expr_visit.cpp",
+    "$(S)/bin/rustc/hir_typeck_helpers.cpp",
+    "$(S)/bin/rustc/hir_typeck_impl_ref.cpp",
+    "$(S)/bin/rustc/hir_typeck_outer.cpp",
+    "$(S)/bin/rustc/hir_typeck_resolve_common.cpp",
+    "$(S)/bin/rustc/hir_typeck_static.cpp",
+    "$(S)/bin/rustc/hir_visitor.cpp",
+    "$(S)/bin/rustc/ident.cpp",
+    "$(S)/bin/rustc/jobserver.cpp",
+    "$(S)/bin/rustc/macro_rules_eval.cpp",
+    "$(S)/bin/rustc/macro_rules_mod.cpp",
+    "$(S)/bin/rustc/macro_rules_parse.cpp",
+    "$(S)/bin/rustc/main.cpp",
+    "$(S)/bin/rustc/memory_dump.cpp",
+    "$(S)/bin/rustc/mir_borrow_check.cpp",
+    "$(S)/bin/rustc/mir_check.cpp",
+    "$(S)/bin/rustc/mir_check_full.cpp",
+    "$(S)/bin/rustc/mir_cleanup.cpp",
+    "$(S)/bin/rustc/mir_dump.cpp",
+    "$(S)/bin/rustc/mir_from_hir.cpp",
+    "$(S)/bin/rustc/mir_from_hir_match.cpp",
+    "$(S)/bin/rustc/mir_helpers.cpp",
+    "$(S)/bin/rustc/mir_mir.cpp",
+    "$(S)/bin/rustc/mir_mir_builder.cpp",
+    "$(S)/bin/rustc/mir_mir_ptr.cpp",
+    "$(S)/bin/rustc/mir_optimise.cpp",
+    "$(S)/bin/rustc/mir_visit_crate_mir.cpp",
+    "$(S)/bin/rustc/parse_expr.cpp",
+    "$(S)/bin/rustc/parse_interpolated_fragment.cpp",
+    "$(S)/bin/rustc/parse_lex.cpp",
+    "$(S)/bin/rustc/parse_parseerror.cpp",
+    "$(S)/bin/rustc/parse_paths.cpp",
+    "$(S)/bin/rustc/parse_pattern.cpp",
+    "$(S)/bin/rustc/parse_root.cpp",
+    "$(S)/bin/rustc/parse_token.cpp",
+    "$(S)/bin/rustc/parse_tokenstream.cpp",
+    "$(S)/bin/rustc/parse_tokentree.cpp",
+    "$(S)/bin/rustc/parse_ttstream.cpp",
+    "$(S)/bin/rustc/parse_types.cpp",
+    "$(S)/bin/rustc/path.cpp",
+    "$(S)/bin/rustc/rc_string.cpp",
+    "$(S)/bin/rustc/resolve_absolute.cpp",
+    "$(S)/bin/rustc/resolve_common.cpp",
+    "$(S)/bin/rustc/resolve_index.cpp",
+    "$(S)/bin/rustc/resolve_use.cpp",
+    "$(S)/bin/rustc/span.cpp",
+    "$(S)/bin/rustc/toml.cpp",
+    "$(S)/bin/rustc/trans_allocator.cpp",
+    "$(S)/bin/rustc/trans_auto_impls.cpp",
+    "$(S)/bin/rustc/trans_codegen.cpp",
+    "$(S)/bin/rustc/trans_codegen_c.cpp",
+    "$(S)/bin/rustc/trans_codegen_c_structured.cpp",
+    "$(S)/bin/rustc/trans_codegen_mmir.cpp",
+    "$(S)/bin/rustc/trans_enumerate.cpp",
+    "$(S)/bin/rustc/trans_mangling_v2.cpp",
+    "$(S)/bin/rustc/trans_monomorphise.cpp",
+    "$(S)/bin/rustc/trans_target.cpp",
+    "$(S)/bin/rustc/trans_trans_list.cpp",
+    "$(S)/bin/rustc/version.cpp",
 ]
 
 rustc = program(
     srcs=SRC,
     name="rustc",
-    output="$(B)/rustc/rustc",
+    output="$(B)/bin/rustc",
     deps=[platform_libstd],
     ldflags=["-lz"],
 )
 
 # cargo: Cargo-compatible package resolver and mrustc build driver, written in
-# Go. Dependencies are checked in under cargo/vendor, so this node is offline.
+# Go. Dependencies are checked in under bin/cargo/vendor, so this node is
+# offline. Rust 1.90 overrides are link-time data; the resulting binary never
+# opens the source override files.
 cargo = command(
     name="cargo",
     inputs=(
-        build.glob("$(S)/cargo/**/*.go")
-        + ["$(S)/cargo/go.mod", "$(S)/cargo/go.sum", "$(S)/cargo/vendor/modules.txt"]
+        build.glob("$(S)/bin/cargo/**/*.go")
+        + ["$(S)/bin/cargo/go.mod", "$(S)/bin/cargo/go.sum", "$(S)/bin/cargo/vendor/modules.txt"]
+        + build.glob("$(S)/bin/rustc/overrides/build_*.txt")
+        + ["$(S)/bin/rustc/overrides/rustc-1.90.0-overrides.toml"]
     ),
-    outputs=["$(B)/cargo/cargo"],
+    outputs=["$(B)/bin/cargo"],
     cmd=[
-        "go", "build",
-        "-o", "$(B)/cargo/cargo",
+        "go", "build", "-ldflags", cargo_ldflags,
+        "-o", "$(B)/bin/cargo",
         ".",
     ],
-    cwd="$(S)/cargo",
+    cwd="$(S)/bin/cargo",
     env={
+        "CGO_ENABLED": "0",
         "GOCACHE": "$(B)/gocache",
         "GOFLAGS": "-mod=vendor",
         "GOTOOLCHAIN": "local",
@@ -238,28 +268,24 @@ cargo = command(
     descr="GO",
 )
 
-# rustc and cargo are intentionally not install()ed: their convenience root
-# symlinks would collide with the rustc/ and cargo/ source directories. They
-# are built as $(B)/rustc and $(B)/cargo and referenced from there (e.g. by the
-# test graph).
 # --- tests -----------------------------------------------------------------
 # A test is one real project, built by our toolchain and exercised. The graph
 # is tar-based: each node produces a single archive, and downstream nodes
 # unpack what they need (the build engine only promotes declared file outputs).
 #
 # The standard library is a *shared* pair of nodes — fetched and built once,
-# then depended on by every project. See tests/README.md.
+# then depended on by every project. See tst/README.md.
 #
 # These are heavy (a from-scratch libstd plus a full project build) and only
 # run on request: `./build test`, or a single artifact like `./build resvg`.
 
 TOOLCHAIN_ENV = {
-    "RUSTC": "$(B)/rustc/rustc",
-    "CARGO": "$(B)/cargo/cargo",
+    "RUSTC": "$(B)/bin/rustc",
+    "CARGO": "$(B)/bin/cargo",
 }
 
-# All node scripts are Python and share tests/lib.py.
-TESTS_LIB = ["$(S)/tests/lib.py"]
+# All node scripts are Python and share tst/lib.py.
+TESTS_LIB = ["$(S)/tst/lib.py"]
 # Bound the whole test node, including compilation performed by adapters.
 # The build engine resolves Nix's `timeout` symlink to the multicall binary,
 # so select its applet explicitly instead of relying on argv[0].
@@ -268,9 +294,16 @@ TEST_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "60s"]
 # std_src: fetch + patch the rust-1.90 source, add the shim, pack it.
 std_src = command(
     name="std_src",
-    inputs=["$(S)/tests/std/fetch.py", "$(S)/tests/std/rustc-1.90.0-src.patch"] + TESTS_LIB,
-    outputs=["$(B)/tests/rust-src.tar"],
-    cmd=["python3", "$(S)/tests/std/fetch.py", "$(B)/tests/rust-src.tar"],
+    inputs=[
+        "$(S)/tst/std/fetch.py",
+        "$(S)/bin/rustc/overrides/rustc-1.90.0-src.patch",
+    ] + TESTS_LIB,
+    outputs=["$(B)/tst/rust-src.tar"],
+    cmd=[
+        "python3", "$(S)/tst/std/fetch.py",
+        "$(B)/tst/rust-src.tar",
+        "$(S)/bin/rustc/overrides/rustc-1.90.0-src.patch",
+    ],
     descr="RS",
     color="cyan",
 )
@@ -279,14 +312,17 @@ std_src = command(
 libstd = command(
     name="libstd",
     inputs=(
-        ["$(S)/tests/std/build.py", "$(S)/tests/std/rustc-1.90.0-overrides.toml"]
-        + build.glob("$(S)/tests/std/script-overrides/stable-1.90.0-linux/*.txt")
-        + build.glob("$(S)/tests/std/libproc_macro/**/*.rs")
-        + build.glob("$(S)/tests/std/libproc_macro/Cargo.toml")
+        ["$(S)/tst/std/build.py"]
+        + build.glob("$(S)/lib/proc_macro/**/*.rs")
+        + build.glob("$(S)/lib/proc_macro/Cargo.toml")
         + TESTS_LIB
     ),
-    outputs=["$(B)/tests/libstd.tar"],
-    cmd=["python3", "$(S)/tests/std/build.py", "$(B)/tests/rust-src.tar", "$(B)/tests/libstd.tar"],
+    outputs=["$(B)/tst/libstd.tar"],
+    cmd=[
+        "python3", "$(S)/tst/std/build.py",
+        "$(B)/tst/rust-src.tar", "$(B)/tst/libstd.tar",
+        "$(S)/lib/proc_macro/Cargo.toml",
+    ],
     deps=[std_src, rustc, cargo],
     env=TOOLCHAIN_ENV,
     descr="LS",
@@ -297,19 +333,19 @@ rust_lib_dependencies = command(
     name="rust_lib_dependencies",
     inputs=(
         [
-            "$(S)/tests/rust_lib/build_dependencies.py",
-            "$(S)/tests/rust_lib/dependencies/Cargo.toml",
+            "$(S)/tst/rust_lib/build_dependencies.py",
+            "$(S)/tst/rust_lib/dependencies/Cargo.toml",
         ]
-        + build.glob("$(S)/tests/rust_lib/dependencies/src/**/*.rs")
+        + build.glob("$(S)/tst/rust_lib/dependencies/src/**/*.rs")
         + TESTS_LIB
     ),
-    outputs=["$(B)/tests/rust-lib-dependencies.tar"],
+    outputs=["$(B)/tst/rust-lib-dependencies.tar"],
     cmd=[
         "python3",
-        "$(S)/tests/rust_lib/build_dependencies.py",
-        "$(B)/tests/rust-src.tar",
-        "$(B)/tests/libstd.tar",
-        "$(B)/tests/rust-lib-dependencies.tar",
+        "$(S)/tst/rust_lib/build_dependencies.py",
+        "$(B)/tst/rust-src.tar",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/rust-lib-dependencies.tar",
     ],
     deps=[std_src, libstd, rustc, cargo],
     env=TOOLCHAIN_ENV,
@@ -320,13 +356,13 @@ rust_lib_dependencies = command(
 # resvg_src: the project source at a pinned revision.
 resvg_src = command(
     name="resvg_src",
-    inputs=["$(S)/tests/git_src.py"] + TESTS_LIB,
-    outputs=["$(B)/tests/resvg-src.tar"],
+    inputs=["$(S)/tst/git_src.py"] + TESTS_LIB,
+    outputs=["$(B)/tst/resvg-src.tar"],
     cmd=[
-        "python3", "$(S)/tests/git_src.py",
+        "python3", "$(S)/tst/git_src.py",
         "https://github.com/linebender/resvg.git",
         "08c79a3148df4ce8ab08fca72204b142b95423dd",
-        "$(B)/tests/resvg-src.tar",
+        "$(B)/tst/resvg-src.tar",
     ],
     descr="RS",
     color="magenta",
@@ -335,15 +371,15 @@ resvg_src = command(
 # resvg_vendor: vendor resvg's locked dependencies with the Go cargo.
 resvg_vendor = command(
     name="resvg_vendor",
-    inputs=["$(S)/tests/vendor.py"] + TESTS_LIB,
-    outputs=["$(B)/tests/resvg-vendor.tar.zst"],
+    inputs=["$(S)/tst/vendor.py"] + TESTS_LIB,
+    outputs=["$(B)/tst/resvg-vendor.tar.zst"],
     cmd=[
-        "python3", "$(S)/tests/vendor.py",
-        "$(B)/tests/resvg-src.tar", ".",
-        "$(B)/tests/resvg-vendor.tar.zst",
+        "python3", "$(S)/tst/vendor.py",
+        "$(B)/tst/resvg-src.tar", ".",
+        "$(B)/tst/resvg-vendor.tar.zst",
     ],
     deps=[resvg_src, cargo],
-    env={"CARGO": "$(B)/cargo/cargo"},
+    env={"CARGO": "$(B)/bin/cargo"},
     descr="VN",
     color="magenta",
 )
@@ -351,19 +387,19 @@ resvg_vendor = command(
 # resvg: build resvg offline against the shared libstd, then render-test it.
 resvg = command(
     name="resvg",
-    inputs=["$(S)/tests/build_project.py", "$(S)/tests/resvg/run.py"] + TESTS_LIB,
-    outputs=["$(B)/tests/resvg.stamp"],
+    inputs=["$(S)/tst/build_project.py", "$(S)/tst/resvg/run.py"] + TESTS_LIB,
+    outputs=["$(B)/tst/resvg.stamp"],
     cmd=[
         [
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/build_project.py",
-            "$(B)/tests/resvg-src.tar",
-            "$(B)/tests/resvg-vendor.tar.zst",
-            "$(B)/tests/libstd.tar",
+            "python3", "$(S)/tst/build_project.py",
+            "$(B)/tst/resvg-src.tar",
+            "$(B)/tst/resvg-vendor.tar.zst",
+            "$(B)/tst/libstd.tar",
             "crates/resvg",
-            "python3", "$(S)/tests/resvg/run.py", "@BIN@",
+            "python3", "$(S)/tst/resvg/run.py", "@BIN@",
         ],
-        [*TEST_TIMEOUT, "sh", "-c", "> $(B)/tests/resvg.stamp"],
+        [*TEST_TIMEOUT, "sh", "-c", "> $(B)/tst/resvg.stamp"],
     ],
     deps=[resvg_src, resvg_vendor, libstd, rustc, cargo],
     env=TOOLCHAIN_ENV,
@@ -371,28 +407,28 @@ resvg = command(
     color="magenta",
 )
 
-# Unit regressions: one self-contained tests/unit/test_*.rs per compiler fix,
+# Unit regressions: one self-contained tst/unit/test_*.rs per compiler fix,
 # each its own node — compiled against the shared libstd and run (must exit 0).
 unit_tests = [
     command(
         name="unit_doctest_import",
         inputs=[
-            "$(S)/tests/rust_doctest/import.py",
-            "$(S)/tests/rust_doctest/test_import.py",
+            "$(S)/tst/rust_doctest/import.py",
+            "$(S)/tst/rust_doctest/test_import.py",
         ],
-        outputs=["$(B)/tests/unit/doctest_import.stamp"],
+        outputs=["$(B)/tst/unit/doctest_import.stamp"],
         cmd=[
             [
                 *TEST_TIMEOUT,
                 "python3",
-                "$(S)/tests/rust_doctest/test_import.py",
+                "$(S)/tst/rust_doctest/test_import.py",
                 "-v",
             ],
             [
                 *TEST_TIMEOUT,
                 "sh",
                 "-c",
-                "> $(B)/tests/unit/doctest_import.stamp",
+                "> $(B)/tst/unit/doctest_import.stamp",
             ],
         ],
         descr="UT",
@@ -402,29 +438,29 @@ unit_tests = [
 unit_tests.append(command(
     name="unit_rust_lib_import",
     inputs=[
-        "$(S)/tests/rust_lib/import.py",
-        "$(S)/tests/rust_lib/case.py",
-        "$(S)/tests/rust_lib/test_import.py",
-        "$(S)/tests/rust_lib/cases.tsv",
-        "$(S)/tests/rust_lib/excluded_cases.tsv",
-        "$(S)/tests/rust_lib/groups.tsv",
-        "$(S)/tests/rust_lib/upstream/coretests/preamble.rs",
-        "$(S)/tests/rust_lib/upstream/coretests/tests/ops.rs",
-        "$(S)/tests/rust_lib/upstream/coretests/tests/ops/control_flow.rs",
+        "$(S)/tst/rust_lib/import.py",
+        "$(S)/tst/rust_lib/case.py",
+        "$(S)/tst/rust_lib/test_import.py",
+        "$(S)/tst/rust_lib/cases.tsv",
+        "$(S)/tst/rust_lib/excluded_cases.tsv",
+        "$(S)/tst/rust_lib/groups.tsv",
+        "$(S)/tst/rust_lib/upstream/coretests/preamble.rs",
+        "$(S)/tst/rust_lib/upstream/coretests/tests/ops.rs",
+        "$(S)/tst/rust_lib/upstream/coretests/tests/ops/control_flow.rs",
     ],
-    outputs=["$(B)/tests/unit/rust_lib_import.stamp"],
+    outputs=["$(B)/tst/unit/rust_lib_import.stamp"],
     cmd=[
         [
             *TEST_TIMEOUT,
             "python3",
-            "$(S)/tests/rust_lib/test_import.py",
+            "$(S)/tst/rust_lib/test_import.py",
             "-v",
         ],
         [
             *TEST_TIMEOUT,
             "sh",
             "-c",
-            "> $(B)/tests/unit/rust_lib_import.stamp",
+            "> $(B)/tst/unit/rust_lib_import.stamp",
         ],
     ],
     descr="UT",
@@ -432,13 +468,13 @@ unit_tests.append(command(
 ))
 unit_tests.append(command(
     name="unit_target_version_default",
-    inputs=["$(S)/tests/unit/test_target_version_default.py"],
-    outputs=["$(B)/tests/unit/target_version_default.stamp"],
+    inputs=["$(S)/tst/unit/test_target_version_default.py"],
+    outputs=["$(B)/tst/unit/target_version_default.stamp"],
     cmd=[
         *TEST_TIMEOUT,
-        "python3", "$(S)/tests/unit/test_target_version_default.py",
-        "$(B)/rustc/rustc",
-        "$(B)/tests/unit/target_version_default.stamp",
+        "python3", "$(S)/tst/unit/test_target_version_default.py",
+        "$(B)/bin/rustc",
+        "$(B)/tst/unit/target_version_default.stamp",
     ],
     deps=[rustc],
     descr="UT",
@@ -447,16 +483,16 @@ unit_tests.append(command(
 unit_tests.append(command(
     name="unit_mir_opt_level",
     inputs=[
-        "$(S)/tests/unit/test_mir_opt_level.py",
-        "$(S)/tests/unit/mir_opt_level_input.rs",
+        "$(S)/tst/unit/test_mir_opt_level.py",
+        "$(S)/tst/unit/mir_opt_level_input.rs",
     ],
-    outputs=["$(B)/tests/unit/mir_opt_level.stamp"],
+    outputs=["$(B)/tst/unit/mir_opt_level.stamp"],
     cmd=[
         *TEST_TIMEOUT,
-        "python3", "$(S)/tests/unit/test_mir_opt_level.py",
-        "$(B)/rustc/rustc",
-        "$(S)/tests/unit/mir_opt_level_input.rs",
-        "$(B)/tests/unit/mir_opt_level.stamp",
+        "python3", "$(S)/tst/unit/test_mir_opt_level.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/mir_opt_level_input.rs",
+        "$(B)/tst/unit/mir_opt_level.stamp",
     ],
     deps=[rustc],
     descr="UT",
@@ -465,16 +501,16 @@ unit_tests.append(command(
 unit_tests.append(command(
     name="unit_driver_lint_cfg_options",
     inputs=[
-        "$(S)/tests/unit/test_driver_lint_cfg_options.py",
-        "$(S)/tests/unit/driver_lint_cfg_input.rs",
+        "$(S)/tst/unit/test_driver_lint_cfg_options.py",
+        "$(S)/tst/unit/driver_lint_cfg_input.rs",
     ],
-    outputs=["$(B)/tests/unit/driver_lint_cfg_options.stamp"],
+    outputs=["$(B)/tst/unit/driver_lint_cfg_options.stamp"],
     cmd=[
         *TEST_TIMEOUT,
-        "python3", "$(S)/tests/unit/test_driver_lint_cfg_options.py",
-        "$(B)/rustc/rustc",
-        "$(S)/tests/unit/driver_lint_cfg_input.rs",
-        "$(B)/tests/unit/driver_lint_cfg_options.stamp",
+        "python3", "$(S)/tst/unit/test_driver_lint_cfg_options.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/driver_lint_cfg_input.rs",
+        "$(B)/tst/unit/driver_lint_cfg_options.stamp",
     ],
     deps=[rustc],
     descr="UT",
@@ -483,37 +519,37 @@ unit_tests.append(command(
 unit_tests.append(command(
     name="unit_compiletest_flags",
     inputs=[
-        "$(S)/tests/unit/test_compiletest_flags.py",
-        "$(S)/tests/lib.py",
-        "$(S)/tests/rust_1_90/adapter.py",
-        "$(S)/tests/rust_ui_compile/import.py",
+        "$(S)/tst/unit/test_compiletest_flags.py",
+        "$(S)/tst/lib.py",
+        "$(S)/tst/rust_1_90/adapter.py",
+        "$(S)/tst/rust_ui_compile/import.py",
     ],
-    outputs=["$(B)/tests/unit/compiletest_flags.stamp"],
+    outputs=["$(B)/tst/unit/compiletest_flags.stamp"],
     cmd=[
         *TEST_TIMEOUT,
-        "python3", "$(S)/tests/unit/test_compiletest_flags.py",
-        "$(B)/tests/unit/compiletest_flags.stamp",
+        "python3", "$(S)/tst/unit/test_compiletest_flags.py",
+        "$(B)/tst/unit/compiletest_flags.stamp",
     ],
     descr="UT",
     color="green",
 ))
-for _src in build.glob("$(S)/tests/unit/test_*.rs"):
+for _src in build.glob("$(S)/tst/unit/test_*.rs"):
     _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
     _uses_rust_lib_dependencies = _stem == "rust_lib_dev_dependencies"
     unit_tests.append(command(
         name="unit_" + _stem,
-        inputs=[_src, "$(S)/tests/unit/run_one.py"] + TESTS_LIB,
-        outputs=["$(B)/tests/unit/" + _stem + ".stamp"],
+        inputs=[_src, "$(S)/tst/unit/run_one.py"] + TESTS_LIB,
+        outputs=["$(B)/tst/unit/" + _stem + ".stamp"],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/unit/run_one.py",
-            _src, "$(B)/tests/libstd.tar",
-            "$(B)/tests/unit/" + _stem + ".stamp",
+            "python3", "$(S)/tst/unit/run_one.py",
+            _src, "$(B)/tst/libstd.tar",
+            "$(B)/tst/unit/" + _stem + ".stamp",
         ],
         deps=[libstd, rustc] + ([rust_lib_dependencies] if _uses_rust_lib_dependencies else []),
         env={
-            "RUSTC": "$(B)/rustc/rustc",
-            **({"RUST_LIB_DEPENDENCIES": "$(B)/tests/rust-lib-dependencies.tar"}
+            "RUSTC": "$(B)/bin/rustc",
+            **({"RUST_LIB_DEPENDENCIES": "$(B)/tst/rust-lib-dependencies.tar"}
                if _uses_rust_lib_dependencies else {}),
         },
         descr="UT",
@@ -524,64 +560,64 @@ for _src in build.glob("$(S)/tests/unit/test_*.rs"):
 # normal test groups: they are valid programs, but expensive enough to run only
 # when performance is being measured.
 perf_tests = []
-for _src in build.glob("$(S)/tests/perf/test_*.rs"):
+for _src in build.glob("$(S)/tst/perf/test_*.rs"):
     _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
     perf_tests.append(command(
         name="perf_" + _stem,
-        inputs=[_src, "$(S)/tests/unit/run_one.py"] + TESTS_LIB,
-        outputs=["$(B)/tests/perf/" + _stem + ".stamp"],
+        inputs=[_src, "$(S)/tst/unit/run_one.py"] + TESTS_LIB,
+        outputs=["$(B)/tst/perf/" + _stem + ".stamp"],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/unit/run_one.py",
-            _src, "$(B)/tests/libstd.tar",
-            "$(B)/tests/perf/" + _stem + ".stamp",
+            "python3", "$(S)/tst/unit/run_one.py",
+            _src, "$(B)/tst/libstd.tar",
+            "$(B)/tst/perf/" + _stem + ".stamp",
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="PF",
         color="cyan",
     ))
 
 # Vendored Rust 1.90 run-pass tests. Keep one source file per graph node for
 # now; sharding can be added later without changing the checked-in corpus.
-rust_1_90_root = Path(__file__).parent / "tests" / "rust_1_90"
+rust_1_90_root = Path(__file__).parent / "tst" / "rust_1_90"
 rust_1_90_cases = (rust_1_90_root / "cases.txt").read_text().splitlines()
 rust_1_90_tests = []
 for _case in rust_1_90_cases:
     _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
-    _src = "$(S)/tests/rust_1_90/upstream/" + _case
+    _src = "$(S)/tst/rust_1_90/upstream/" + _case
     _sidecars = []
     _source_base = rust_1_90_root / "upstream" / _case[:-len(".rs")]
     for _suffix in (".run.stdout", ".run.stderr"):
         if Path(str(_source_base) + _suffix).exists():
             _sidecars.append(
-                "$(S)/tests/rust_1_90/upstream/" + _case[:-len(".rs")] + _suffix
+                "$(S)/tst/rust_1_90/upstream/" + _case[:-len(".rs")] + _suffix
             )
     rust_1_90_tests.append(command(
         name="rust_1_90_" + _digest,
         inputs=[
             _src,
             *_sidecars,
-            "$(S)/tests/rust_1_90/adapter.py",
-            "$(S)/tests/rust_1_90/cases.txt",
+            "$(S)/tst/rust_1_90/adapter.py",
+            "$(S)/tst/rust_1_90/cases.txt",
             *TESTS_LIB,
         ],
-        outputs=["$(B)/tests/rust_1_90/" + _case + ".stamp"],
+        outputs=["$(B)/tst/rust_1_90/" + _case + ".stamp"],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/rust_1_90/adapter.py",
-            _case, _src, "$(B)/tests/libstd.tar",
-            "$(B)/tests/rust_1_90/" + _case + ".stamp",
+            "python3", "$(S)/tst/rust_1_90/adapter.py",
+            _case, _src, "$(B)/tst/libstd.tar",
+            "$(B)/tst/rust_1_90/" + _case + ".stamp",
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="RP",
         color="green",
     ))
 
 # Positive check-pass/build-pass cases from Rust 1.90.  check-pass is compiled
 # as a library through the available full pipeline; failures stay observable.
-rust_ui_compile_root = Path(__file__).parent / "tests" / "rust_ui_compile"
+rust_ui_compile_root = Path(__file__).parent / "tst" / "rust_ui_compile"
 rust_ui_compile_cases = json.loads(
     (rust_ui_compile_root / "cases.json").read_text()
 )
@@ -589,70 +625,70 @@ rust_ui_compile_tests = []
 for _index, _case in enumerate(rust_ui_compile_cases):
     _path = _case["path"]
     _digest = hashlib.sha256(_path.encode()).hexdigest()[:12]
-    _stamp = "$(B)/tests/rust_ui_compile/" + _digest + ".stamp"
+    _stamp = "$(B)/tst/rust_ui_compile/" + _digest + ".stamp"
     rust_ui_compile_tests.append(command(
         name="rust_ui_compile_" + _digest,
         inputs=[
-            "$(S)/tests/rust_ui_compile/adapter.py",
-            "$(S)/tests/rust_ui_compile/cases.json",
-            "$(S)/tests/rust_ui_compile/upstream/" + _path,
+            "$(S)/tst/rust_ui_compile/adapter.py",
+            "$(S)/tst/rust_ui_compile/cases.json",
+            "$(S)/tst/rust_ui_compile/upstream/" + _path,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/rust_ui_compile/adapter.py",
-            "$(S)/tests/rust_ui_compile/cases.json", str(_index), "1",
-            "$(S)/tests/rust_ui_compile/upstream", "$(B)/tests/libstd.tar", _stamp,
+            "python3", "$(S)/tst/rust_ui_compile/adapter.py",
+            "$(S)/tst/rust_ui_compile/cases.json", str(_index), "1",
+            "$(S)/tst/rust_ui_compile/upstream", "$(B)/tst/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="UC",
         color="green",
     ))
 
 # gccrs' no_core execute tests need no Rust standard library.  Preserve the
 # upstream file boundary and let the adapter interpret its dg-* invariants.
-gccrs_root = Path(__file__).parent / "tests" / "gccrs"
+gccrs_root = Path(__file__).parent / "tst" / "gccrs"
 gccrs_cases = (gccrs_root / "cases.txt").read_text().splitlines()
 gccrs_case_set = set(gccrs_cases)
 gccrs_support = []
 for _path in sorted((gccrs_root / "upstream").rglob("*")):
     _relative = _path.relative_to(gccrs_root / "upstream").as_posix()
     if _path.is_file() and _relative not in gccrs_case_set:
-        gccrs_support.append("$(S)/tests/gccrs/upstream/" + _relative)
+        gccrs_support.append("$(S)/tst/gccrs/upstream/" + _relative)
 
 gccrs_tests = []
 for _case in gccrs_cases:
     _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
-    _src = "$(S)/tests/gccrs/upstream/" + _case
+    _src = "$(S)/tst/gccrs/upstream/" + _case
     gccrs_tests.append(command(
         name="gccrs_" + _digest,
         inputs=[
             _src,
             *gccrs_support,
-            "$(S)/tests/gccrs/adapter.py",
-            "$(S)/tests/gccrs/cases.txt",
+            "$(S)/tst/gccrs/adapter.py",
+            "$(S)/tst/gccrs/cases.txt",
             *TESTS_LIB,
         ],
-        outputs=["$(B)/tests/gccrs/" + _case + ".stamp"],
+        outputs=["$(B)/tst/gccrs/" + _case + ".stamp"],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/gccrs/adapter.py",
-            _case, _src, "$(B)/tests/gccrs/" + _case + ".stamp",
+            "python3", "$(S)/tst/gccrs/adapter.py",
+            _case, _src, "$(B)/tst/gccrs/" + _case + ".stamp",
         ],
         deps=[rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="GX",
         color="green",
     ))
 
 # Positive gccrs compile-suite inputs have no runtime contract.  Keep every
 # crate root in its own node; all copied sources are inputs because a few use mod!.
-gccrs_compile_root = Path(__file__).parent / "tests" / "gccrs_compile"
+gccrs_compile_root = Path(__file__).parent / "tst" / "gccrs_compile"
 gccrs_compile_cases = (gccrs_compile_root / "cases.txt").read_text().splitlines()
 gccrs_compile_sources = [
-    "$(S)/tests/gccrs_compile/upstream/"
+    "$(S)/tst/gccrs_compile/upstream/"
     + _path.relative_to(gccrs_compile_root / "upstream").as_posix()
     for _path in sorted((gccrs_compile_root / "upstream").rglob("*"))
     if _path.is_file()
@@ -660,62 +696,62 @@ gccrs_compile_sources = [
 gccrs_compile_tests = []
 for _index, _case in enumerate(gccrs_compile_cases):
     _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
-    _stamp = "$(B)/tests/gccrs_compile/" + _digest + ".stamp"
+    _stamp = "$(B)/tst/gccrs_compile/" + _digest + ".stamp"
     gccrs_compile_tests.append(command(
         name="gccrs_compile_" + _digest,
         inputs=[
-            "$(S)/tests/gccrs_compile/adapter.py",
-            "$(S)/tests/gccrs_compile/cases.txt",
+            "$(S)/tst/gccrs_compile/adapter.py",
+            "$(S)/tst/gccrs_compile/cases.txt",
             *gccrs_compile_sources,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/gccrs_compile/adapter.py",
-            "$(S)/tests/gccrs_compile/cases.txt", str(_index), "1",
-            "$(S)/tests/gccrs_compile/upstream", _stamp,
+            "python3", "$(S)/tst/gccrs_compile/adapter.py",
+            "$(S)/tst/gccrs_compile/cases.txt", str(_index), "1",
+            "$(S)/tst/gccrs_compile/upstream", _stamp,
         ],
         deps=[rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="GC",
         color="green",
     ))
 
 # Rust Quiz programs each print one documented answer.  Store the answer as a
 # tiny sidecar instead of vendoring the prose explanations or upstream crate.
-rust_quiz_root = Path(__file__).parent / "tests" / "rust_quiz"
+rust_quiz_root = Path(__file__).parent / "tst" / "rust_quiz"
 rust_quiz_cases = (rust_quiz_root / "cases.txt").read_text().splitlines()
 rust_quiz_tests = []
 for _case in rust_quiz_cases:
     _number = _case.split("-", 1)[0]
-    _src = "$(S)/tests/rust_quiz/upstream/" + _case
+    _src = "$(S)/tst/rust_quiz/upstream/" + _case
     _expected = _src[:-len(".rs")] + ".stdout"
     rust_quiz_tests.append(command(
         name="rust_quiz_" + _number,
         inputs=[
             _src,
             _expected,
-            "$(S)/tests/rust_quiz/adapter.py",
-            "$(S)/tests/rust_quiz/cases.txt",
+            "$(S)/tst/rust_quiz/adapter.py",
+            "$(S)/tst/rust_quiz/cases.txt",
             *TESTS_LIB,
         ],
-        outputs=["$(B)/tests/rust_quiz/" + _case + ".stamp"],
+        outputs=["$(B)/tst/rust_quiz/" + _case + ".stamp"],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/rust_quiz/adapter.py",
-            _case, _src, _expected, "$(B)/tests/libstd.tar",
-            "$(B)/tests/rust_quiz/" + _case + ".stamp",
+            "python3", "$(S)/tst/rust_quiz/adapter.py",
+            _case, _src, _expected, "$(B)/tst/libstd.tar",
+            "$(B)/tst/rust_quiz/" + _case + ".stamp",
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="RQ",
         color="green",
     ))
 
 # Official solved Rustlings exercises retain the upstream distinction between
 # normal binaries and rustc test harnesses.  Each file is one build node.
-rustlings_root = Path(__file__).parent / "tests" / "rustlings"
+rustlings_root = Path(__file__).parent / "tst" / "rustlings"
 rustlings_cases = [
     _line.split("\t")
     for _line in (rustlings_root / "cases.tsv").read_text().splitlines()
@@ -723,31 +759,31 @@ rustlings_cases = [
 rustlings_tests = []
 for _index, (_case, _mode) in enumerate(rustlings_cases):
     _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
-    _stamp = "$(B)/tests/rustlings/" + _digest + ".stamp"
+    _stamp = "$(B)/tst/rustlings/" + _digest + ".stamp"
     rustlings_tests.append(command(
         name="rustlings_" + _digest,
         inputs=[
-            "$(S)/tests/rustlings/adapter.py",
-            "$(S)/tests/rustlings/cases.tsv",
-            "$(S)/tests/rustlings/upstream/" + _case,
+            "$(S)/tst/rustlings/adapter.py",
+            "$(S)/tst/rustlings/cases.tsv",
+            "$(S)/tst/rustlings/upstream/" + _case,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/rustlings/adapter.py",
-            "$(S)/tests/rustlings/cases.tsv", str(_index), "1",
-            "$(S)/tests/rustlings/upstream", "$(B)/tests/libstd.tar", _stamp,
+            "python3", "$(S)/tst/rustlings/adapter.py",
+            "$(S)/tst/rustlings/cases.tsv", str(_index), "1",
+            "$(S)/tst/rustlings/upstream", "$(B)/tst/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="RL",
         color="green",
     ))
 
 # Rust By Example Markdown fences that the reference Rust 1.90 compiler can
 # build and run as independent programs.  Preserve each fence as one node.
-rust_by_example_root = Path(__file__).parent / "tests" / "rust_by_example"
+rust_by_example_root = Path(__file__).parent / "tst" / "rust_by_example"
 rust_by_example_cases = [
     _line.split("\t")
     for _line in (rust_by_example_root / "cases.tsv").read_text().splitlines()
@@ -755,31 +791,31 @@ rust_by_example_cases = [
 rust_by_example_tests = []
 for _index, (_case, _origin, _edition) in enumerate(rust_by_example_cases):
     _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
-    _stamp = "$(B)/tests/rust_by_example/" + _digest + ".stamp"
+    _stamp = "$(B)/tst/rust_by_example/" + _digest + ".stamp"
     rust_by_example_tests.append(command(
         name="rust_by_example_" + _digest,
         inputs=[
-            "$(S)/tests/rust_by_example/adapter.py",
-            "$(S)/tests/rust_by_example/cases.tsv",
-            "$(S)/tests/rust_by_example/upstream/" + _case,
+            "$(S)/tst/rust_by_example/adapter.py",
+            "$(S)/tst/rust_by_example/cases.tsv",
+            "$(S)/tst/rust_by_example/upstream/" + _case,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/rust_by_example/adapter.py",
-            "$(S)/tests/rust_by_example/cases.tsv", str(_index), "1",
-            "$(S)/tests/rust_by_example/upstream", "$(B)/tests/libstd.tar", _stamp,
+            "python3", "$(S)/tst/rust_by_example/adapter.py",
+            "$(S)/tst/rust_by_example/cases.tsv", str(_index), "1",
+            "$(S)/tst/rust_by_example/upstream", "$(B)/tst/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="BE",
         color="green",
     ))
 
 # Source-only targets from the official Rust Book listings, reference-checked
 # with Rust 1.90.  Copying each tiny source tree preserves module resolution.
-rust_book_root = Path(__file__).parent / "tests" / "rust_book"
+rust_book_root = Path(__file__).parent / "tst" / "rust_book"
 rust_book_cases = [
     _line.split("\t")
     for _line in (rust_book_root / "cases.tsv").read_text().splitlines()
@@ -788,35 +824,35 @@ rust_book_tests = []
 for _index, (_case, _root, _mode, _edition) in enumerate(rust_book_cases):
     _case_id = "\t".join((_case, _root, _mode, _edition))
     _digest = hashlib.sha256(_case_id.encode()).hexdigest()[:12]
-    _stamp = "$(B)/tests/rust_book/" + _digest + ".stamp"
+    _stamp = "$(B)/tst/rust_book/" + _digest + ".stamp"
     _sources = []
     for _path in sorted((rust_book_root / "upstream" / _case).rglob("*.rs")):
         _relative = _path.relative_to(rust_book_root / "upstream").as_posix()
-        _sources.append("$(S)/tests/rust_book/upstream/" + _relative)
+        _sources.append("$(S)/tst/rust_book/upstream/" + _relative)
     rust_book_tests.append(command(
         name="rust_book_" + _digest,
         inputs=[
-            "$(S)/tests/rust_book/adapter.py",
-            "$(S)/tests/rust_book/cases.tsv",
+            "$(S)/tst/rust_book/adapter.py",
+            "$(S)/tst/rust_book/cases.tsv",
             *_sources,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/rust_book/adapter.py",
-            "$(S)/tests/rust_book/cases.tsv", str(_index), "1",
-            "$(S)/tests/rust_book/upstream", "$(B)/tests/libstd.tar", _stamp,
+            "python3", "$(S)/tst/rust_book/adapter.py",
+            "$(S)/tst/rust_book/cases.tsv", str(_index), "1",
+            "$(S)/tst/rust_book/upstream", "$(B)/tst/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="BK",
         color="green",
     ))
 
 # Official Exercism solutions linked to their dependency-free integration
 # tests.  The adapter runs ignored tests too; they are only progression gates.
-exercism_rust_root = Path(__file__).parent / "tests" / "exercism_rust"
+exercism_rust_root = Path(__file__).parent / "tst" / "exercism_rust"
 exercism_rust_cases = [
     _line.split("\t")
     for _line in (exercism_rust_root / "cases.tsv").read_text().splitlines()
@@ -824,35 +860,35 @@ exercism_rust_cases = [
 exercism_rust_tests = []
 for _index, (_slug, _crate, _edition, _count) in enumerate(exercism_rust_cases):
     _digest = hashlib.sha256(_slug.encode()).hexdigest()[:12]
-    _stamp = "$(B)/tests/exercism_rust/" + _digest + ".stamp"
+    _stamp = "$(B)/tst/exercism_rust/" + _digest + ".stamp"
     _sources = []
     for _path in sorted((exercism_rust_root / "upstream" / _slug).rglob("*.rs")):
         _relative = _path.relative_to(exercism_rust_root / "upstream").as_posix()
-        _sources.append("$(S)/tests/exercism_rust/upstream/" + _relative)
+        _sources.append("$(S)/tst/exercism_rust/upstream/" + _relative)
     exercism_rust_tests.append(command(
         name="exercism_rust_" + _digest,
         inputs=[
-            "$(S)/tests/exercism_rust/adapter.py",
-            "$(S)/tests/exercism_rust/cases.tsv",
+            "$(S)/tst/exercism_rust/adapter.py",
+            "$(S)/tst/exercism_rust/cases.tsv",
             *_sources,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/exercism_rust/adapter.py",
-            "$(S)/tests/exercism_rust/cases.tsv", str(_index), "1",
-            "$(S)/tests/exercism_rust/upstream", "$(B)/tests/libstd.tar", _stamp,
+            "python3", "$(S)/tst/exercism_rust/adapter.py",
+            "$(S)/tst/exercism_rust/cases.tsv", str(_index), "1",
+            "$(S)/tst/exercism_rust/upstream", "$(B)/tst/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="EX",
         color="green",
     ))
 
 # Code fences from The Rust Reference, including its documented pass, panic,
 # no-run, and compile-fail modes.  The importer reference-checks every fence.
-rust_reference_root = Path(__file__).parent / "tests" / "rust_reference"
+rust_reference_root = Path(__file__).parent / "tst" / "rust_reference"
 rust_reference_cases = [
     _line.split("\t")
     for _line in (rust_reference_root / "cases.tsv").read_text().splitlines()
@@ -860,31 +896,31 @@ rust_reference_cases = [
 rust_reference_tests = []
 for _index, (_case, _origin, _edition, _mode) in enumerate(rust_reference_cases):
     _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
-    _stamp = "$(B)/tests/rust_reference/" + _digest + ".stamp"
+    _stamp = "$(B)/tst/rust_reference/" + _digest + ".stamp"
     rust_reference_tests.append(command(
         name="rust_reference_" + _digest,
         inputs=[
-            "$(S)/tests/rust_reference/adapter.py",
-            "$(S)/tests/rust_reference/cases.tsv",
-            "$(S)/tests/rust_reference/upstream/" + _case,
+            "$(S)/tst/rust_reference/adapter.py",
+            "$(S)/tst/rust_reference/cases.tsv",
+            "$(S)/tst/rust_reference/upstream/" + _case,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/rust_reference/adapter.py",
-            "$(S)/tests/rust_reference/cases.tsv", str(_index), "1",
-            "$(S)/tests/rust_reference/upstream", "$(B)/tests/libstd.tar", _stamp,
+            "python3", "$(S)/tst/rust_reference/adapter.py",
+            "$(S)/tst/rust_reference/cases.tsv", str(_index), "1",
+            "$(S)/tst/rust_reference/upstream", "$(B)/tst/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="RF",
         color="green",
     ))
 
 # Self-contained Rustonomicon code fences, reference-checked with the same
 # pass/compile/fail semantics as The Rust Reference.  Each fence is one node.
-nomicon_root = Path(__file__).parent / "tests" / "nomicon"
+nomicon_root = Path(__file__).parent / "tst" / "nomicon"
 nomicon_cases = [
     _line.split("\t")
     for _line in (nomicon_root / "cases.tsv").read_text().splitlines()
@@ -892,31 +928,31 @@ nomicon_cases = [
 nomicon_tests = []
 for _index, (_case, _origin, _edition, _mode) in enumerate(nomicon_cases):
     _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
-    _stamp = "$(B)/tests/nomicon/" + _digest + ".stamp"
+    _stamp = "$(B)/tst/nomicon/" + _digest + ".stamp"
     nomicon_tests.append(command(
         name="nomicon_" + _digest,
         inputs=[
-            "$(S)/tests/nomicon/adapter.py",
-            "$(S)/tests/nomicon/cases.tsv",
-            "$(S)/tests/nomicon/upstream/" + _case,
+            "$(S)/tst/nomicon/adapter.py",
+            "$(S)/tst/nomicon/cases.tsv",
+            "$(S)/tst/nomicon/upstream/" + _case,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/nomicon/adapter.py",
-            "$(S)/tests/nomicon/cases.tsv", str(_index), "1",
-            "$(S)/tests/nomicon/upstream", "$(B)/tests/libstd.tar", _stamp,
+            "python3", "$(S)/tst/nomicon/adapter.py",
+            "$(S)/tst/nomicon/cases.tsv", str(_index), "1",
+            "$(S)/tst/nomicon/upstream", "$(B)/tst/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="NM",
         color="green",
     ))
 
 # The std-only, standalone subset of the official Async Book.  Most of that
 # book requires external executor crates; these four fences do not.
-async_book_root = Path(__file__).parent / "tests" / "async_book"
+async_book_root = Path(__file__).parent / "tst" / "async_book"
 async_book_cases = [
     _line.split("\t")
     for _line in (async_book_root / "cases.tsv").read_text().splitlines()
@@ -924,31 +960,31 @@ async_book_cases = [
 async_book_tests = []
 for _index, (_case, _origin, _edition, _mode) in enumerate(async_book_cases):
     _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
-    _stamp = "$(B)/tests/async_book/" + _digest + ".stamp"
+    _stamp = "$(B)/tst/async_book/" + _digest + ".stamp"
     async_book_tests.append(command(
         name="async_book_" + _digest,
         inputs=[
-            "$(S)/tests/async_book/adapter.py",
-            "$(S)/tests/async_book/cases.tsv",
-            "$(S)/tests/async_book/upstream/" + _case,
+            "$(S)/tst/async_book/adapter.py",
+            "$(S)/tst/async_book/cases.tsv",
+            "$(S)/tst/async_book/upstream/" + _case,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/async_book/adapter.py",
-            "$(S)/tests/async_book/cases.tsv", str(_index), "1",
-            "$(S)/tests/async_book/upstream", "$(B)/tests/libstd.tar", _stamp,
+            "python3", "$(S)/tst/async_book/adapter.py",
+            "$(S)/tst/async_book/cases.tsv", str(_index), "1",
+            "$(S)/tst/async_book/upstream", "$(B)/tst/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="AB",
         color="green",
     ))
 
 # Every explicit Rust library #[test] is an independent compile-and-run node.
 # The case adapter disables all other tests in a temporary source overlay.
-rust_lib_root = Path(__file__).parent / "tests" / "rust_lib"
+rust_lib_root = Path(__file__).parent / "tst" / "rust_lib"
 rust_lib_group_specs = {}
 for _line in (rust_lib_root / "groups.tsv").read_text().splitlines():
     _suite, _harness_group, _kind, _root, _edition = _line.split("\t")
@@ -965,10 +1001,10 @@ for _path in sorted((rust_lib_root / "upstream").rglob("*")):
         continue
     _relative = _path.relative_to(rust_lib_root / "upstream")
     rust_lib_sources_by_suite.setdefault(_relative.parts[0], []).append(
-        "$(S)/tests/rust_lib/upstream/" + _relative.as_posix()
+        "$(S)/tst/rust_lib/upstream/" + _relative.as_posix()
     )
 rust_lib_adapters = [
-    "$(S)/tests/rust_lib/adapter/"
+    "$(S)/tst/rust_lib/adapter/"
     + _path.relative_to(rust_lib_root / "adapter").as_posix()
     for _path in sorted((rust_lib_root / "adapter").rglob("*"))
     if _path.is_file()
@@ -983,29 +1019,29 @@ for _suite, _harness_group, _source, _function, _hint in rust_lib_cases:
     if _key not in rust_lib_group_specs:
         raise RuntimeError(f"unknown rust_lib group for {_case}: {_key}")
     _kind, _root, _edition = rust_lib_group_specs[_key]
-    _stamp = "$(B)/tests/rust_lib/cases/" + _digest + ".stamp"
+    _stamp = "$(B)/tst/rust_lib/cases/" + _digest + ".stamp"
     _target = command(
         name="rust_lib_" + _digest,
         inputs=[
             *rust_lib_sources_by_suite[_suite],
             *rust_lib_adapters,
-            "$(S)/tests/rust_lib/case.py",
-            "$(S)/tests/rust_lib/import.py",
-            "$(S)/tests/rust_lib/cases.tsv",
-            "$(S)/tests/rust_lib/groups.tsv",
+            "$(S)/tst/rust_lib/case.py",
+            "$(S)/tst/rust_lib/import.py",
+            "$(S)/tst/rust_lib/cases.tsv",
+            "$(S)/tst/rust_lib/groups.tsv",
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/rust_lib/case.py",
+            "python3", "$(S)/tst/rust_lib/case.py",
             _suite, _harness_group, _kind, _root, _edition,
             _source, _function, _hint,
-            "$(S)/tests/rust_lib/upstream", "$(B)/tests/libstd.tar",
-            "$(B)/tests/rust-lib-dependencies.tar", _stamp,
+            "$(S)/tst/rust_lib/upstream", "$(B)/tst/libstd.tar",
+            "$(B)/tst/rust-lib-dependencies.tar", _stamp,
         ],
         deps=[libstd, rust_lib_dependencies, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="LT",
         color="green",
     )
@@ -1014,95 +1050,95 @@ for _suite, _harness_group, _source, _function, _hint in rust_lib_cases:
 
 # Runnable library documentation examples, extracted into standalone
 # programs so each fence remains an independent compile-and-run node.
-rust_doctest_root = Path(__file__).parent / "tests" / "rust_doctest"
+rust_doctest_root = Path(__file__).parent / "tst" / "rust_doctest"
 rust_doctest_cases = []
 for _line in (rust_doctest_root / "cases.tsv").read_text().splitlines():
     rust_doctest_cases.append(_line.split("\t"))
 rust_doctests = []
 for _case, _origin, _edition, _mode in rust_doctest_cases:
     _digest = hashlib.sha256((_case + "\t" + _origin).encode()).hexdigest()[:12]
-    _src = "$(S)/tests/rust_doctest/upstream/" + _case
-    _stamp = "$(B)/tests/rust_doctest/" + _digest + ".stamp"
+    _src = "$(S)/tst/rust_doctest/upstream/" + _case
+    _stamp = "$(B)/tst/rust_doctest/" + _digest + ".stamp"
     rust_doctests.append(command(
         name="rust_doctest_" + _digest,
         inputs=[
             _src,
-            "$(S)/tests/rust_doctest/adapter.py",
-            "$(S)/tests/rust_doctest/cases.tsv",
+            "$(S)/tst/rust_doctest/adapter.py",
+            "$(S)/tst/rust_doctest/cases.tsv",
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/rust_doctest/adapter.py",
-            _origin, _src, _edition, _mode, "$(B)/tests/libstd.tar", _stamp,
+            "python3", "$(S)/tst/rust_doctest/adapter.py",
+            _origin, _src, _edition, _mode, "$(B)/tst/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="DT",
         color="green",
     ))
 
 # Fixed RustSmith programs and rustc 1.90 stdout oracles.  Keep each source and
 # its oracle in a separate node so failures cannot hide later cases.
-rustsmith_root = Path(__file__).parent / "tests" / "rustsmith"
+rustsmith_root = Path(__file__).parent / "tst" / "rustsmith"
 rustsmith_cases = [
     _line.split("\t")
     for _line in (rustsmith_root / "cases.tsv").read_text().splitlines()
 ]
 rustsmith_tests = []
 for _index, (_stem, _seed) in enumerate(rustsmith_cases):
-    _stamp = "$(B)/tests/rustsmith/" + _stem + ".stamp"
+    _stamp = "$(B)/tst/rustsmith/" + _stem + ".stamp"
     _inputs = [
-        "$(S)/tests/rustsmith/upstream/" + _stem + _suffix
+        "$(S)/tst/rustsmith/upstream/" + _stem + _suffix
         for _suffix in (".rs", ".args", ".stdout")
     ]
     rustsmith_tests.append(command(
         name="rustsmith_" + _stem,
         inputs=[
-            "$(S)/tests/rustsmith/adapter.py",
-            "$(S)/tests/rustsmith/cases.tsv",
+            "$(S)/tst/rustsmith/adapter.py",
+            "$(S)/tst/rustsmith/cases.tsv",
             *_inputs,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/rustsmith/adapter.py",
-            "$(S)/tests/rustsmith/cases.tsv", str(_index), "1",
-            "$(S)/tests/rustsmith/upstream", "$(B)/tests/libstd.tar", _stamp,
+            "python3", "$(S)/tst/rustsmith/adapter.py",
+            "$(S)/tst/rustsmith/cases.tsv", str(_index), "1",
+            "$(S)/tst/rustsmith/upstream", "$(B)/tst/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="RS",
         color="green",
     ))
 
 # Self-contained native Miri pass programs from Rust 1.90.  Every upstream
 # source is a separate graph node.
-miri_root = Path(__file__).parent / "tests" / "miri"
+miri_root = Path(__file__).parent / "tst" / "miri"
 miri_cases = (miri_root / "cases.tsv").read_text().splitlines()
 miri_tests = []
 for _index, _case in enumerate(miri_cases):
     _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
-    _stamp = "$(B)/tests/miri/" + _digest + ".stamp"
+    _stamp = "$(B)/tst/miri/" + _digest + ".stamp"
     miri_tests.append(command(
         name="miri_" + _digest,
         inputs=[
-            "$(S)/tests/miri/adapter.py",
-            "$(S)/tests/miri/cases.tsv",
-            "$(S)/tests/miri/upstream/" + _case,
+            "$(S)/tst/miri/adapter.py",
+            "$(S)/tst/miri/cases.tsv",
+            "$(S)/tst/miri/upstream/" + _case,
             *TESTS_LIB,
         ],
         outputs=[_stamp],
         cmd=[
             *TEST_TIMEOUT,
-            "python3", "$(S)/tests/miri/adapter.py",
-            "$(S)/tests/miri/cases.tsv", str(_index), "1",
-            "$(S)/tests/miri/upstream", "$(B)/tests/libstd.tar", _stamp,
+            "python3", "$(S)/tst/miri/adapter.py",
+            "$(S)/tst/miri/cases.tsv", str(_index), "1",
+            "$(S)/tst/miri/upstream", "$(B)/tst/libstd.tar", _stamp,
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/rustc/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc"},
         descr="MI",
         color="green",
     ))
