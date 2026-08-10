@@ -1270,25 +1270,32 @@ namespace {
                         args.push_back(a.c_str());
                     }
                     switch (opt.opt_level) {
-                        case 0:
+                        case OptimizationLevel::None:
                             // Do not inherit an optimisation level from the C compiler's
                             // environment (e.g. Nix's cc-wrapper adds -O2). rustc's
                             // default is opt-level=0, so the C backend must request that
                             // level explicitly too.
                             args.push_back("-O0");
                             break;
-                        case 1:
+                        case OptimizationLevel::Less:
                             args.push_back("-O1");
                             break;
-                        case 2:
+                        case OptimizationLevel::More:
+                        case OptimizationLevel::Aggressive:
                             //args.push_back("-O2");
                             args.push_back("-O1"); // HACK: Work around mrustc #347 by reducing the optimisation level
+                            break;
+                        case OptimizationLevel::Size:
+                            args.push_back("-Os");
+                            break;
+                        case OptimizationLevel::SizeMin:
+                            args.push_back("-Oz");
                             break;
                     }
 #if defined(__GNUC__) && !defined(__clang__)
     #if __GNUC__ < 16 && !(__GNUC__ == 15 && __GNUC_MINOR__ > 1)
                     // HACK: Work around [https://gcc.gnu.org/bugzilla/show_bug.cgi?id=117423] by disabling an optimisation stage
-                    if (opt.opt_level > 0) {
+                    if (opt.opt_level != OptimizationLevel::None) {
                         args.push_back("-fno-tree-sra");
                     }
     #endif
@@ -1368,12 +1375,15 @@ namespace {
                     args.push_back("/wd4700");   // Ignore C4700 ("uninitialized local variable 'var14' used")
                     args.push_back("/F8388608"); // Set max stack size to 8 MB.
                     switch (opt.opt_level) {
-                        case 0:
+                        case OptimizationLevel::None:
                             break;
-                        case 1:
+                        case OptimizationLevel::Less:
+                        case OptimizationLevel::Size:
+                        case OptimizationLevel::SizeMin:
                             args.push_back("/O1");
                             break;
-                        case 2:
+                        case OptimizationLevel::More:
+                        case OptimizationLevel::Aggressive:
                             //args.push_back("/O2");
                             break;
                     }

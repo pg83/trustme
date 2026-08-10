@@ -394,6 +394,26 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_codegen_options",
+    inputs=[
+        "$(S)/tst/unit/test_codegen_options.py",
+        "$(S)/tst/unit/mir_opt_level_input.rs",
+        "$(S)/tst/unit/codegen_options_cfg.rs",
+    ],
+    outputs=["$(B)/tst/unit/codegen_options.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_codegen_options.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/mir_opt_level_input.rs",
+        "$(S)/tst/unit/codegen_options_cfg.rs",
+        "$(B)/tst/unit/codegen_options.stamp",
+    ],
+    deps=[rustc],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_driver_lint_cfg_options",
     inputs=[
         "$(S)/tst/unit/test_driver_lint_cfg_options.py",

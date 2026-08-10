@@ -6,9 +6,18 @@ namespace HIR {
     class Crate;
 }
 
+enum class OptimizationLevel : unsigned {
+    None,
+    Less,
+    More,
+    Aggressive,
+    Size,
+    SizeMin,
+};
+
 struct TransOptions {
     ::std::string mode = "c";
-    unsigned int opt_level = 0;
+    OptimizationLevel opt_level = OptimizationLevel::None;
     bool emit_debug_info = false;
     ::std::string build_command_file;
 

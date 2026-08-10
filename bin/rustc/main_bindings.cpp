@@ -1665,7 +1665,9 @@ struct ProgramParams {
     ::std::string crate_name;
     ::std::string crate_name_suffix;
 
-    unsigned opt_level = 0;
+    OptimizationLevel opt_level = OptimizationLevel::None;
+    bool debug_assertions = false;
+    bool debug_assertions_explicit = false;
     // rustc defaults MIR optimisation to 1 at -O0 and to 2 otherwise.
     // Keep the explicit bit separate so `-Zmir-opt-level=0` is distinguishable
     // from the implicit default.
@@ -1712,11 +1714,14 @@ struct ProgramParams {
     ProgramParams(int argc, char* argv[]);
 
     unsigned effective_mir_opt_level() const {
-        return mir_opt_level_explicit ? mir_opt_level : (opt_level == 0 ? 1 : 2);
+        return mir_opt_level_explicit ? mir_opt_level : (opt_level == OptimizationLevel::None ? 1 : 2);
     }
     bool enable_mir_inlining() const {
         const auto level = effective_mir_opt_level();
-        return level >= 3 || (level == 2 && opt_level >= 2);
+        return level >= 3 || (level == 2 && opt_level != OptimizationLevel::None && opt_level != OptimizationLevel::Less);
+    }
+    bool debug_assertions_enabled() const {
+        return debug_assertions_explicit ? debug_assertions : opt_level == OptimizationLevel::None;
     }
 
     void show_help() const;
@@ -1819,6 +1824,9 @@ int main(int argc, char* argv[]) {
     CompilePhaseV("Setup", [&]() {
         Cfg_SetValue("rust_compiler", "mrustc");
         Cfg_SetValue("panic", params.codegen.panic_type);
+        if (params.debug_assertions_enabled()) {
+            Cfg_SetFlag("debug_assertions");
+        }
         Cfg_SetValueCb("feature", [&params](const ::std::string& s) {
             return params.features.count(s) != 0;
         });
@@ -2616,6 +2624,34 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     } else if (optname == "panic") {
                         get_optval();
                         this->codegen.panic_type = optval;
+                    } else if (optname == "opt-level") {
+                        get_optval();
+                        if (optval == "0") {
+                            this->opt_level = OptimizationLevel::None;
+                        } else if (optval == "1") {
+                            this->opt_level = OptimizationLevel::Less;
+                        } else if (optval == "2") {
+                            this->opt_level = OptimizationLevel::More;
+                        } else if (optval == "3") {
+                            this->opt_level = OptimizationLevel::Aggressive;
+                        } else if (optval == "s") {
+                            this->opt_level = OptimizationLevel::Size;
+                        } else if (optval == "z") {
+                            this->opt_level = OptimizationLevel::SizeMin;
+                        } else {
+                            ::std::cerr << "optimization level needs to be between 0-3, s or z (instead was '" << optval << "')" << ::std::endl;
+                            exit(1);
+                        }
+                    } else if (optname == "debug-assertions") {
+                        if (eq_pos == ::std::string::npos || optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
+                            this->debug_assertions = true;
+                        } else if (optval == "n" || optval == "no" || optval == "off" || optval == "false") {
+                            this->debug_assertions = false;
+                        } else {
+                            ::std::cerr << "invalid value for -C debug-assertions: '" << optval << "'" << ::std::endl;
+                            exit(1);
+                        }
+                        this->debug_assertions_explicit = true;
                     } else {
                         ::std::cerr << "Unknown codegen option: '" << optname << "'" << ::std::endl;
                         exit(1);
@@ -2760,7 +2796,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         this->outfile = argv[++i];
                         break;
                     case 'O':
-                        this->opt_level = 2;
+                        this->opt_level = OptimizationLevel::Aggressive;
                         break;
                     case 'g':
                         this->emit_debug_info = true;
