@@ -279,11 +279,13 @@ namespace HIR {
 
         ::HIR::ExprNodeP m_value;
         ::std::vector<Arm> m_arms;
+        bool m_is_let_else;
 
-        ExprNode_Match(Span sp, ::HIR::ExprNodeP val, ::std::vector<Arm> arms)
+        ExprNode_Match(Span sp, ::HIR::ExprNodeP val, ::std::vector<Arm> arms, bool is_let_else = false)
             : ExprNode(mv$(sp))
             , m_value(mv$(val))
             , m_arms(mv$(arms))
+            , m_is_let_else(is_let_else)
         {
         }
 

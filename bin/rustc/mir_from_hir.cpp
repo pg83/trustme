@@ -216,35 +216,25 @@ namespace {
             out_builder.end_block(::MIR::Terminator::make_Switch({mv$(stmt_idx_lv), mv$(arms)}));
         }
 
-        // Brings variables defined in `pat` into scope
-        void define_vars_from(const Span& sp, const ::HIR::Pattern& pat) override {
-            for (const auto& pb : pat.m_bindings) {
-                m_builder.define_variable(pb.m_slot);
+        void visit_pattern_slots(const ::HIR::Pattern& pat, PatternDropOrder order, const std::function<void(unsigned)>& visit_slot) {
+            for (const auto slot : ::HIR::pattern_binding_slots(pat, order)) {
+                visit_slot(slot);
             }
+        }
 
-            TU_MATCHA(
-                (pat.m_data),
-                (e),
-                (Any, ),
-                (Box, define_vars_from(sp, *e.sub);),
-                (Ref, define_vars_from(sp, *e.sub);),
-                (Tuple, for (unsigned int i = 0; i < e.sub_patterns.size(); i++) { define_vars_from(sp, e.sub_patterns[i]); }),
-                (SplitTuple, for (unsigned int i = 0; i < e.leading.size(); i++) define_vars_from(sp, e.leading[i]); for (unsigned int i = 0; i < e.trailing.size(); i++) define_vars_from(sp, e.trailing[i]);),
-                (
-                    PathValue,
-                    // Nothing.
-                ),
-                (PathTuple, for (unsigned int i = 0; i < e.leading.size(); i++) define_vars_from(sp, e.leading[i]); for (unsigned int i = 0; i < e.trailing.size(); i++) define_vars_from(sp, e.trailing[i]);),
-                (PathNamed, for (const auto& fld_pat : e.sub_patterns) { define_vars_from(sp, fld_pat.second); }),
-                // Refutable
-                (Value, ),
-                (Range, ),
-                (Slice, for (const auto& subpat : e.sub_patterns) { define_vars_from(sp, subpat); }),
-                (SplitSlice, for (const auto& subpat : e.leading) { define_vars_from(sp, subpat); } if (e.extra_bind.is_valid()) { m_builder.define_variable(e.extra_bind.m_slot); } for (const auto& subpat : e.trailing) { define_vars_from(sp, subpat); }),
-                (Or, assert(e.size() > 0);
-                 // TODO: Save variable state, visit in order (resetting/checking after each)
-                 define_vars_from(sp, e[0]);)
-            )
+        void schedule_pattern_drops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) override {
+            (void)sp;
+            visit_pattern_slots(pat, order, [&](unsigned slot) { m_builder.schedule_variable_drop(slot); });
+        }
+
+        void register_pattern_variables(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) override {
+            (void)sp;
+            visit_pattern_slots(pat, order, [&](unsigned slot) { m_builder.register_variable_state(slot); });
+        }
+
+        void schedule_registered_pattern_drops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) override {
+            (void)sp;
+            visit_pattern_slots(pat, order, [&](unsigned slot) { m_builder.schedule_registered_variable_drop(slot); });
         }
 
         MIR::LValue get_value_for_binding_path(const Span& sp, const ::HIR::TypeRef& outer_ty, const ::MIR::LValue& outer_lval, const PatternBinding& b) {
@@ -373,6 +363,9 @@ namespace {
             bool diverged = false;
 
             auto res_val = (node.m_value_node ? m_builder.new_temporary(node.m_res_type) : ::MIR::LValue());
+            // Tail-expression temporaries outlive the block's locals. This is
+            // a distinct scope from the one used for extended let initializers.
+            auto tail_tmp_scope = m_builder.new_scope_temp(node.span());
             auto scope = m_builder.new_scope_var(node.span());
             auto tmp_scope = m_builder.new_scope_temp(node.span());
             auto _block_tmp_scope = save_and_edit(m_block_tmp_scope, &tmp_scope);
@@ -417,9 +410,8 @@ namespace {
                     // If this block is part of a statement, raise all temporaries from this final scope to the enclosing scope
                     if (m_stmt_scope) {
                         m_builder.raise_all(sp, mv$(stmt_scope), *m_stmt_scope);
-                        //m_builder.terminate_scope(sp, mv$(stmt_scope));
                     } else {
-                        m_builder.terminate_scope(sp, mv$(stmt_scope));
+                        m_builder.raise_all(sp, mv$(stmt_scope), tail_tmp_scope);
                     }
                     m_builder.set_result(node.span(), mv$(res_val));
                 } else {
@@ -428,15 +420,18 @@ namespace {
                 }
                 m_builder.terminate_scope(node.span(), mv$(tmp_scope), m_builder.block_active());
                 m_builder.terminate_scope(node.span(), mv$(scope), m_builder.block_active());
+                m_builder.terminate_scope(node.span(), mv$(tail_tmp_scope), m_builder.block_active());
             } else {
                 if (diverged) {
                     m_builder.terminate_scope(node.span(), mv$(tmp_scope), false);
                     m_builder.terminate_scope(node.span(), mv$(scope), false);
+                    m_builder.terminate_scope(node.span(), mv$(tail_tmp_scope), false);
                     m_builder.end_block(::MIR::Terminator::make_Diverge({}));
                     // Don't set a result if there's no block.
                 } else {
                     m_builder.terminate_scope(node.span(), mv$(tmp_scope));
                     m_builder.terminate_scope(node.span(), mv$(scope));
+                    m_builder.terminate_scope(node.span(), mv$(tail_tmp_scope));
                     m_builder.set_result(node.span(), ::MIR::RValue::make_Tuple({}));
                 }
             }
@@ -745,7 +740,6 @@ namespace {
 
         void visit(::HIR::ExprNode_Let& node) override {
             TRACE_FUNCTION_F("_Let " << node.m_pattern);
-            this->define_vars_from(node.span(), node.m_pattern);
             if (node.m_value) {
                 auto _ = save_and_edit(m_borrow_raise_target, m_block_tmp_scope);
                 this->visit_node_ptr(node.m_value);
@@ -759,12 +753,22 @@ namespace {
                 if (node.m_pattern.m_data.is_Any() && !node.m_pattern.m_bindings.empty() && std::all_of(node.m_pattern.m_bindings.begin(), node.m_pattern.m_bindings.end(), [](const HIR::PatternBinding& pb) {
                     return pb.m_type == ::HIR::PatternBinding::Type::Move;
                 })) {
+                    this->schedule_pattern_drops(node.span(), node.m_pattern, PatternDropOrder::FirstCandidate);
                     for (const auto& pb : node.m_pattern.m_bindings) {
                         m_builder.push_stmt_assign(node.span(), m_builder.get_variable(node.span(), pb.m_slot), mv$(res));
                     }
                 } else {
-                    MIR_LowerHIR_Let(m_builder, *this, node.span(), node.m_pattern, m_builder.lvalue_or_temp(node.m_value->span(), node.m_type, mv$(res)), nullptr);
+                    auto pattern_value = m_builder.lvalue_or_temp(node.m_value->span(), node.m_type, mv$(res));
+                    auto drop_value = pattern_value.clone();
+                    this->register_pattern_variables(node.span(), node.m_pattern, PatternDropOrder::FirstCandidate);
+                    MIR_LowerHIR_Let(m_builder, *this, node.span(), node.m_pattern, mv$(pattern_value), nullptr);
+                    if (m_block_tmp_scope) {
+                        m_builder.move_temporary_drop_to_variable_scope(node.span(), drop_value, *m_block_tmp_scope);
+                    }
+                    this->schedule_registered_pattern_drops(node.span(), node.m_pattern, PatternDropOrder::FirstCandidate);
                 }
+            } else {
+                this->schedule_pattern_drops(node.span(), node.m_pattern, PatternDropOrder::Declaration);
             }
             m_builder.set_result(node.span(), ::MIR::RValue::make_Tuple({}));
         }
@@ -888,15 +892,27 @@ namespace {
 
         void visit(::HIR::ExprNode_Match& node) override {
             TRACE_FUNCTION_FR("_Match", "_Match");
-            {
+            std::vector<unsigned> let_else_initializer_temps;
+            size_t let_else_first_temporary = 0;
+            if (node.m_is_let_else) {
+                ASSERT_BUG(node.span(), m_borrow_raise_target, "let-else match has no remainder temporary scope");
+                let_else_first_temporary = m_builder.local_count();
+                this->visit_node_ptr(node.m_value);
+            } else {
                 auto _ = save_and_edit(m_borrow_raise_target, nullptr);
-                //auto stmt_scope = m_builder.new_scope_temp(node.span());
                 this->visit_node_ptr(node.m_value);
             }
             if (!m_builder.block_active()) {
                 return;
             }
             auto match_val = m_builder.get_result_in_lvalue(node.m_value->span(), node.m_value->m_res_type);
+            if (node.m_is_let_else) {
+                const auto end_temporary = m_builder.local_count();
+                let_else_initializer_temps.reserve(end_temporary - let_else_first_temporary);
+                for (auto temporary = let_else_first_temporary; temporary < end_temporary; ++temporary) {
+                    let_else_initializer_temps.push_back(temporary);
+                }
+            }
 
             if (node.m_arms.size() == 0) {
                 // Nothing
@@ -908,7 +924,7 @@ namespace {
                 //m_builder.set_cur_block( m_builder.new_bb_unlinked() );
                 //m_builder.set_result(node.span(), ::MIR::LValue::make_Invalid({}) );
             } else {
-                MIR_LowerHIR_Match(m_builder, *this, node, mv$(match_val));
+                MIR_LowerHIR_Match(m_builder, *this, node, mv$(match_val), let_else_initializer_temps);
             }
 
             if (m_builder.block_active()) {
@@ -2701,12 +2717,13 @@ namespace {
         unsigned int i = 0;
         for (const auto& arg : args) {
             const auto& pat = arg.first;
+            builder.schedule_argument_drop(i);
             // If the binding is set (i.e. this isn't destructuring) then the table populated by `MirBuilder::MirBuilder(...)` will be used
             if (pat.m_bindings.size() == 1 && pat.m_bindings[0].m_type == ::HIR::PatternBinding::Type::Move && pat.m_data.is_Any()) {
                 // Simple `var: Type` arguments are handled by `MirBuilder.m_var_arg_mappings`
             } else {
                 DEBUG("Argument a" << i << " - " << pat);
-                ev.define_vars_from(ptr->span(), arg.first);
+                ev.schedule_pattern_drops(ptr->span(), arg.first, PatternDropOrder::FirstCandidate);
                 MIR_LowerHIR_Let(builder, ev, ptr->span(), arg.first, ::MIR::LValue::new_Argument(i), /*else_node=*/nullptr);
             }
             i++;
@@ -2718,7 +2735,7 @@ namespace {
             ::std::map<unsigned, std::vector<MIR::LValue::Wrapper>> mappings;
             for (size_t i = 0; i < gen_node->m_capture_usages.size(); i++) {
                 unsigned idx = args.size() + i;
-                builder.define_variable(idx);
+                builder.schedule_variable_drop(idx);
                 switch (gen_node->m_capture_usages[i]) {
                     case ::HIR::ValueUsage::Borrow:
                     case ::HIR::ValueUsage::Mutate: {
@@ -3000,7 +3017,7 @@ void HIR_GenerateMIR(::HIR::Crate& crate) {
 #include "trans_target.h"
 #include "hir_conv_main_bindings.h" // For consteval
 
-void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val);
+void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps);
 
 namespace {
     void get_ty_and_val(
@@ -3319,7 +3336,7 @@ void MIR_LowerHIR_Let(MirBuilder& builder, MirConverter& conv, const Span& sp, c
 // Handles lowering non-trivial matches to MIR
 // - Non-trivial means that there's more than one pattern
 // - Trivial matches are handled using `MIR_LowerHIR_Let`
-void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val) {
+void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps) {
     TRACE_FUNCTION;
     // NOTE: Lowers to the following pattern:
     // ```
@@ -3549,9 +3566,7 @@ void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode
 
                     // Introduce a local variable scope for the new bindings
                     scopes.push_back({builder.new_scope_var(c.val->span()), false});
-                    for (const auto& b : ends.front().second->m_bindings) {
-                        builder.define_variable(b.binding->m_slot);
-                    }
+                    conv.schedule_pattern_drops(c.val->span(), c.pat, PatternDropOrder::FirstCandidate);
 
                     // Only introduce the new bindings (with `destructure_from_list`) after handling the early-exit case
                     // - This stops the `terminate_scope_early` from dropping too eagerly
@@ -3644,7 +3659,7 @@ void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode
             // Emit actual bindings
             DEBUG("Arm " << arm_idx << " rule " << 0 << ":  Destructure");
             scopes.push_back({builder.new_scope_var(arm.m_code->span()), false});
-            conv.define_vars_from(node.span(), arm.m_patterns.front());
+            conv.schedule_pattern_drops(node.span(), arm.m_patterns.back(), PatternDropOrder::LastCandidate);
             conv.destructure_from_list(arm.m_code->span(), match_ty, match_val.clone(), bindings0);
             builder.end_block(::MIR::Terminator::make_Goto(arm_body_block));
             // Emit body code
@@ -3652,6 +3667,12 @@ void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode
 
             scopes.push_back({builder.new_scope_temp(arm.m_code->span()), false});
             builder.set_cur_block(arm_body_block);
+
+            if (node.m_is_let_else && arm_idx + 1 == node.m_arms.size()) {
+                for (const auto temporary : ::reverse(let_else_initializer_temps)) {
+                    builder.drop_lvalue(node.span(), ::MIR::LValue::new_Local(temporary));
+                }
+            }
 
             // Push the MovedOut state up into the split's m_cond_state, so that values moved
             // in the pattern are recognized as moved in following branches.
@@ -7034,10 +7055,10 @@ MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const 
     }
 
     set_cur_block(new_bb_unlinked());
-    m_scopes.push_back(ScopeDef{sp, ScopeType::make_Owning({false, {}})});
+    m_scopes.push_back(ScopeDef{sp, ScopeType::make_Owning({false, {}, {}})});
     m_scope_stack.push_back(0);
 
-    m_scopes.push_back(ScopeDef{sp, ScopeType::make_Owning({true, {}})});
+    m_scopes.push_back(ScopeDef{sp, ScopeType::make_Owning({true, {}, {}})});
     m_scope_stack.push_back(1);
 
     m_arg_states.reserve(args.size());
@@ -7152,8 +7173,13 @@ const ::HIR::TypeRef* MirBuilder::is_type_owned_box(const ::HIR::TypeRef& ty) co
     }
 }
 
-void MirBuilder::define_variable(unsigned int idx) {
-    DEBUG("DEFINE (var) _" << idx << ": " << m_output.locals.at(idx));
+void MirBuilder::schedule_variable_drop(unsigned int idx) {
+    register_variable_state(idx);
+    schedule_registered_variable_drop(idx);
+}
+
+void MirBuilder::register_variable_state(unsigned int idx) {
+    DEBUG("REGISTER STATE (var) _" << idx << ": " << m_output.locals.at(idx));
     for (auto scope_idx : ::reverse(m_scope_stack)) {
         auto& scope_def = m_scopes.at(scope_idx);
         TU_MATCH_DEF(
@@ -7172,6 +7198,112 @@ void MirBuilder::define_variable(unsigned int idx) {
         )
     }
     BUG(Span(), "Variable " << idx << " introduced with no Variable scope");
+}
+
+void MirBuilder::schedule_registered_variable_drop(unsigned int idx) {
+    DEBUG("SCHEDULE DROP (var) _" << idx << ": " << m_output.locals.at(idx));
+    for (auto scope_idx : ::reverse(m_scope_stack)) {
+        auto& scope_def = m_scopes.at(scope_idx);
+        TU_MATCH_DEF(
+            ScopeType,
+            (scope_def.data),
+            (e),
+            (),
+            (Owning,
+             if (!e.is_temporary) {
+                 auto state_it = ::std::find(e.slots.begin(), e.slots.end(), idx);
+                 assert(state_it != e.slots.end());
+                 auto drop_it = ::std::find_if(e.drop_slots.begin(), e.drop_slots.end(), [&](const ScopeDropSlot& slot) {
+                     return !slot.is_argument && slot.index == idx;
+                 });
+                 assert(drop_it == e.drop_slots.end());
+                 e.drop_slots.push_back(ScopeDropSlot{false, idx});
+                 return;
+             }),
+            (Split, BUG(Span(), "Variable " << idx << " scheduled within a Split");)
+        )
+    }
+    BUG(Span(), "Variable " << idx << " scheduled with no Variable scope");
+}
+
+void MirBuilder::schedule_argument_drop(unsigned int idx) {
+    DEBUG("SCHEDULE DROP (arg) a" << idx << ": " << m_args.at(idx).second);
+    for (auto scope_idx : ::reverse(m_scope_stack)) {
+        auto& scope_def = m_scopes.at(scope_idx);
+        TU_MATCH_DEF(
+            ScopeType,
+            (scope_def.data),
+            (e),
+            (),
+            (Owning,
+             if (!e.is_temporary) {
+                 auto it = ::std::find_if(e.drop_slots.begin(), e.drop_slots.end(), [&](const ScopeDropSlot& slot) {
+                     return slot.is_argument && slot.index == idx;
+                 });
+                 assert(it == e.drop_slots.end());
+                 e.drop_slots.push_back(ScopeDropSlot{true, idx});
+                 return;
+             }),
+            (Split, BUG(Span(), "Argument " << idx << " introduced within a Split");)
+        )
+    }
+    BUG(Span(), "Argument " << idx << " introduced with no Variable scope");
+}
+
+void MirBuilder::move_temporary_drop_to_variable_scope(const Span& sp, const ::MIR::LValue& value, const ScopeHandle& source) {
+    if (!value.m_root.is_Local() || !value.m_wrappers.empty()) {
+        return;
+    }
+    const auto idx = value.m_root.as_Local();
+    if (idx < m_first_temp_idx) {
+        return;
+    }
+
+    ASSERT_BUG(sp, source.idx < m_scopes.size(), "Invalid temporary scope " << source);
+    auto& source_scope = m_scopes.at(source.idx);
+    ASSERT_BUG(sp, source_scope.data.is_Owning() && source_scope.data.as_Owning().is_temporary, "Drop source is not a temporary scope: " << source);
+    auto& source_owning = source_scope.data.as_Owning();
+    auto& source_drops = source_owning.drop_slots;
+    auto source_it = ::std::find_if(source_drops.begin(), source_drops.end(), [&](const ScopeDropSlot& slot) {
+        return !slot.is_argument && slot.index == idx;
+    });
+    if (source_it == source_drops.end()) {
+        return;
+    }
+    auto source_state_it = ::std::find(source_owning.slots.begin(), source_owning.slots.end(), idx);
+    ASSERT_BUG(sp, source_state_it != source_owning.slots.end(), "Missing state owner for " << value);
+
+    bool source_seen = false;
+    for (auto scope_idx : ::reverse(m_scope_stack)) {
+        if (scope_idx == source.idx) {
+            source_seen = true;
+            continue;
+        }
+        if (!source_seen) {
+            continue;
+        }
+        auto& scope = m_scopes.at(scope_idx);
+        if (auto* owning = scope.data.opt_Owning()) {
+            if (!owning->is_temporary) {
+                auto target_state_it = ::std::find(owning->slots.begin(), owning->slots.end(), idx);
+                ASSERT_BUG(sp, target_state_it == owning->slots.end(), "Duplicate state owner for " << value);
+                source_owning.slots.erase(source_state_it);
+                source_drops.erase(source_it);
+                owning->slots.push_back(idx);
+                owning->drop_slots.push_back(ScopeDropSlot{false, idx});
+                DEBUG("MOVE DROP " << value << " from scope " << source.idx << " to scope " << scope_idx);
+                return;
+            }
+        }
+    }
+    BUG(sp, "No variable scope outside temporary scope " << source);
+}
+
+void MirBuilder::drop_lvalue(const Span& sp, const ::MIR::LValue& value) {
+    auto* state = get_val_state_mut_p(sp, value);
+    ASSERT_BUG(sp, state, "Dropping invalid value " << value);
+    drop_value_from_state(sp, *state, value.clone());
+    *state = VarState::make_Invalid(InvalidType::Moved);
 }
 
 ::MIR::LValue MirBuilder::new_temporary(const ::HIR::TypeRef& ty) {
@@ -7207,6 +7339,7 @@ void MirBuilder::define_variable(unsigned int idx) {
     auto& tmp_scope = top_scope->data.as_Owning();
     assert(tmp_scope.is_temporary);
     tmp_scope.slots.push_back(rv);
+    tmp_scope.drop_slots.push_back(ScopeDropSlot{false, rv});
     return ::MIR::LValue::new_Local(rv);
 }
 
@@ -7449,6 +7582,11 @@ void MirBuilder::raise_temporaries(const Span& sp, const ::MIR::LValue& val, con
                 auto tmp_it = ::std::find(e.slots.begin(), e.slots.end(), idx);
                 if (tmp_it != e.slots.end()) {
                     e.slots.erase(tmp_it);
+                    auto drop_it = ::std::find_if(e.drop_slots.begin(), e.drop_slots.end(), [&](const ScopeDropSlot& slot) {
+                        return !slot.is_argument && slot.index == idx;
+                    });
+                    ASSERT_BUG(sp, drop_it != e.drop_slots.end(), "Missing drop schedule for " << val);
+                    e.drop_slots.erase(drop_it);
                     DEBUG("Raise slot " << idx << " from " << *scope_it);
                     break;
                 }
@@ -7504,6 +7642,7 @@ void MirBuilder::raise_temporaries(const Span& sp, const ::MIR::LValue& val, con
         TU_ARMA(Owning, e) {
                 if (target_seen && e.is_temporary == is_temp) {
                     e.slots.push_back(idx);
+                    e.drop_slots.push_back(ScopeDropSlot{false, idx});
                     DEBUG("- to " << *scope_it);
                     return;
                 }
@@ -7731,7 +7870,7 @@ void MirBuilder::drop_flag_alias(unsigned int old_idx, unsigned int new_idx) {
 
 ScopeHandle MirBuilder::new_scope_var(const Span& sp) {
     unsigned int idx = m_scopes.size();
-    m_scopes.push_back(ScopeDef{sp, ScopeType::make_Owning({false, {}})});
+    m_scopes.push_back(ScopeDef{sp, ScopeType::make_Owning({false, {}, {}})});
     m_scope_stack.push_back(idx);
     DEBUG("START (var) scope " << idx);
     return ScopeHandle{*this, idx};
@@ -7740,7 +7879,7 @@ ScopeHandle MirBuilder::new_scope_var(const Span& sp) {
 ScopeHandle MirBuilder::new_scope_temp(const Span& sp) {
     unsigned int idx = m_scopes.size();
 
-    m_scopes.push_back(ScopeDef{sp, ScopeType::make_Owning({true, {}})});
+    m_scopes.push_back(ScopeDef{sp, ScopeType::make_Owning({true, {}, {}})});
     m_scope_stack.push_back(idx);
     DEBUG("START (temp) scope " << idx);
     return ScopeHandle{*this, idx};
@@ -7878,6 +8017,9 @@ void MirBuilder::raise_all(const Span& sp, ScopeHandle source, const ScopeHandle
     // Move all defined variables from one to the other
     auto& tgt_list = tgt_scope_def.data.as_Owning().slots;
     tgt_list.insert(tgt_list.end(), src_list.begin(), src_list.end());
+    auto& src_drop_list = src_scope_def.data.as_Owning().drop_slots;
+    auto& tgt_drop_list = tgt_scope_def.data.as_Owning().drop_slots;
+    tgt_drop_list.insert(tgt_drop_list.end(), src_drop_list.begin(), src_drop_list.end());
 
     // Scope completed
     m_scope_stack.pop_back();
@@ -7926,14 +8068,6 @@ void MirBuilder::terminate_scope_early(const Span& sp, const ScopeHandle& scope,
         }
     }
 
-    // Index 0 is the function scope, this only happens when about to return/panic
-    if (scope.idx == 0) {
-        // Ensure that all arguments are dropped if they were not moved
-        for (size_t i = 0; i < m_arg_states.size(); i++) {
-            const auto& state = get_slot_state(sp, i, SlotType::Argument);
-            this->drop_value_from_state(sp, state, ::MIR::LValue::new_Argument(static_cast<unsigned>(i)));
-        }
-    }
 }
 
 namespace {
@@ -9042,10 +9176,14 @@ void MirBuilder::drop_scope_values(const ScopeDef& sd) {
         (sd.data),
         (e),
         (Owning,
-         for (auto idx : ::reverse(e.slots)) {
-             const auto& vs = get_slot_state(sd.span, idx, SlotType::Local);
-             DEBUG("_" << idx << " - " << vs);
-             drop_value_from_state(sd.span, vs, ::MIR::LValue::new_Local(idx));
+         for (const auto& slot : ::reverse(e.drop_slots)) {
+             const auto slot_type = slot.is_argument ? SlotType::Argument : SlotType::Local;
+             const auto& vs = get_slot_state(sd.span, slot.index, slot_type);
+             auto lvalue = slot.is_argument
+                 ? ::MIR::LValue::new_Argument(slot.index)
+                 : ::MIR::LValue::new_Local(slot.index);
+             DEBUG(lvalue << " - " << vs);
+             drop_value_from_state(sd.span, vs, mv$(lvalue));
          }),
         (
             Split,
@@ -9117,11 +9255,6 @@ void MirBuilder::drop_actve_local(const Span& sp, ::MIR::LValue lv, const SavedA
 void MirBuilder::emit_unwind_cleanup(const Span& sp) {
     for (auto it = m_scope_stack.rbegin(); it != m_scope_stack.rend(); ++it) {
         drop_scope_values(m_scopes.at(*it));
-    }
-
-    for (size_t i = 0; i < m_arg_states.size(); i++) {
-        const auto& state = get_slot_state(sp, i, SlotType::Argument);
-        drop_value_from_state(sp, state, ::MIR::LValue::new_Argument(static_cast<unsigned>(i)));
     }
 }
 

@@ -54,6 +54,12 @@ namespace HIR {
         friend ::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x);
     };
 
+    enum class PatternBindingOrder {
+        Declaration,
+        FirstCandidate,
+        LastCandidate,
+    };
+
     struct Pattern {
         TAGGED_UNION(
             Value,
@@ -205,5 +211,7 @@ namespace HIR {
 
         friend ::std::ostream& operator<<(::std::ostream& os, const Pattern& x);
     };
+
+    std::vector<unsigned> pattern_binding_slots(const Pattern& pattern, PatternBindingOrder order);
 
 }

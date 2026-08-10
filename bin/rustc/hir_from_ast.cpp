@@ -3024,9 +3024,12 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
              */
             std::vector<HIR::Pattern> new_pats;
             std::vector<HIR::ExprNodeP> tuple_vals;
-            for (size_t i = 0; i < visitor.bindings.size(); i++) {
-                auto& binding = visitor.bindings[i];
-                tuple_vals.push_back(HIR::ExprNodeP(g_crate_ptr->m_pool->make<HIR::ExprNode_Variable>(v.span(), binding.m_name, base + i)));
+            const auto binding_slots = HIR::pattern_binding_slots(pat, HIR::PatternBindingOrder::FirstCandidate);
+            ASSERT_BUG(v.span(), binding_slots.size() == visitor.bindings.size(), "let-else candidate omitted bindings");
+            for (const auto slot : binding_slots) {
+                ASSERT_BUG(v.span(), base <= slot && slot - base < visitor.bindings.size(), "Invalid temporary let-else binding " << slot);
+                auto& binding = visitor.bindings[slot - base];
+                tuple_vals.push_back(HIR::ExprNodeP(g_crate_ptr->m_pool->make<HIR::ExprNode_Variable>(v.span(), binding.m_name, slot)));
                 new_pats.push_back(HIR::Pattern(std::move(binding), HIR::Pattern::Data{}));
             }
 
@@ -3044,7 +3047,7 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
             auto match_value = type->is_Infer() // Only emit the `: $ty` part if the type was specified (not a `_`)
                                    ? std::move(node_value)
                                    : HIR::ExprNodeP(g_crate_ptr->m_pool->make<HIR::ExprNode_Unsize>(v.span(), std::move(node_value), std::move(type)));
-            auto match = HIR::ExprNodeP(g_crate_ptr->m_pool->make<HIR::ExprNode_Match>(v.span(), std::move(match_value), std::move(match_arms)));
+            auto match = HIR::ExprNodeP(g_crate_ptr->m_pool->make<HIR::ExprNode_Match>(v.span(), std::move(match_value), std::move(match_arms), true));
 
             // `let (a,b,c,...) = ...`
             m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Let>(v.span(), HIR::Pattern(::std::vector<HIR::PatternBinding>(), HIR::Pattern::Data::make_Tuple({std::move(new_pats)})), g_crate_ptr->m_types.infer(), std::move(match)));

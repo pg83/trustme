@@ -89,13 +89,19 @@ struct SplitEnd {
     ::std::map<unsigned int, VarState> arg_states;
 };
 
+struct ScopeDropSlot {
+    bool is_argument;
+    unsigned int index;
+};
+
 TAGGED_UNION(
     ScopeType,
     Owning,
     (Owning,
      struct {
          bool is_temporary;
-         ::std::vector<unsigned int> slots; // List of owned variables
+         ::std::vector<unsigned int> slots; // Locals whose state is owned by this scope
+         ::std::vector<ScopeDropSlot> drop_slots; // Locals and arguments in scheduled drop order
      }),
     (Split,
      struct {
@@ -330,6 +336,9 @@ public:
 
     ::MIR::LValue new_temporary(const ::HIR::TypeRef& ty);
     ::MIR::LValue lvalue_or_temp(const Span& sp, const ::HIR::TypeRef& ty, ::MIR::RValue val);
+    size_t local_count() const {
+        return m_output.locals.size();
+    }
 
     bool has_result() const {
         return m_result_valid;
@@ -466,8 +475,18 @@ public:
         return m_fcn_scope;
     }
 
-    /// Introduce a new variable within the current scope
-    void define_variable(unsigned int idx);
+    /// Schedule a local's value drop in the current variable scope.
+    void schedule_variable_drop(unsigned int idx);
+    /// Register a local's state in the current variable scope without scheduling its drop.
+    void register_variable_state(unsigned int idx);
+    /// Schedule the drop of a local whose state is already registered.
+    void schedule_registered_variable_drop(unsigned int idx);
+    /// Schedule an argument's value drop in the current variable scope.
+    void schedule_argument_drop(unsigned int idx);
+    /// Move a temporary's drop entry from `source` into the nearest variable scope.
+    void move_temporary_drop_to_variable_scope(const Span& sp, const ::MIR::LValue& value, const ScopeHandle& source);
+    /// Drop a live value on the current control-flow path and mark it invalid.
+    void drop_lvalue(const Span& sp, const ::MIR::LValue& value);
     // Helper - Marks a variable/... as moved (and checks if the move is valid)
     void moved_lvalue(const Span& sp, const ::MIR::LValue& lv);
 
@@ -547,11 +566,15 @@ SaveAndEditVal<T> save_and_edit(T& dst, typename ::std::remove_reference<T&>::ty
     return SaveAndEditVal<T>{dst, mv$(newval)};
 }
 
+using PatternDropOrder = ::HIR::PatternBindingOrder;
+
 /// Wrapper interfae
 class MirConverter: public ::HIR::ExprVisitor {
 public:
     //virtual void destructure_from(const Span& sp, const ::HIR::Pattern& pat, ::MIR::LValue lval, bool allow_refutable=false) = 0;
-    virtual void define_vars_from(const Span& sp, const ::HIR::Pattern& pat) = 0;
+    virtual void schedule_pattern_drops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
+    virtual void register_pattern_variables(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
+    virtual void schedule_registered_pattern_drops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
 
     virtual void destructure_from_list(const Span& sp, const ::HIR::TypeRef& ty, ::MIR::LValue lval, const ::std::vector<PatternBinding>& bindings, bool update_states = true) = 0;
     virtual MIR::LValue get_value_for_binding_path(const Span& sp, const ::HIR::TypeRef& outer_ty, const ::MIR::LValue& outer_lval, const PatternBinding& b) = 0;
@@ -560,7 +583,7 @@ public:
     virtual SaveAndEditVal<const ScopeHandle*> disable_borrow_extension() = 0;
 };
 
-extern void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val);
+extern void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps);
 extern void MIR_LowerHIR_Let(MirBuilder& builder, MirConverter& conv, const Span& sp, const ::HIR::Pattern& pat, ::MIR::LValue val, const ::HIR::ExprNode* else_node);
 
 extern void MIR_LowerHIR_GetTypeValueForPath(
