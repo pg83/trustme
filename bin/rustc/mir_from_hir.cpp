@@ -3135,6 +3135,10 @@ struct PatternRulesetBuilder {
         bool m_is_impossible;
         ::std::vector<PatternRule> m_rules;
         ::std::vector<PatternBinding> m_bindings;
+        // Source-order path through nested or-pattern alternatives.  The
+        // matching semantics are depth-first and left-to-right, so this path
+        // orders the cartesian product after each expansion.
+        ::std::vector<unsigned> m_or_path;
 
         Ruleset()
             : m_is_impossible(false)
@@ -3148,6 +3152,7 @@ struct PatternRulesetBuilder {
                 rv.m_rules.push_back(e.clone());
             }
             rv.m_bindings = m_bindings;
+            rv.m_or_path = m_or_path;
             return rv;
         }
     };
@@ -4153,6 +4158,9 @@ void PatternRulesetBuilder::multiply_rulesets(size_t n, std::function<void(size_
         auto orig_start = this->subset_start;
         this->subset_end += subset_size;
         DEBUG("++ " << i << " " << this->subset_start << " - " << this->subset_end);
+        for (size_t j = this->subset_start; j < this->subset_end; j++) {
+            m_rulesets[j].m_or_path.push_back(static_cast<unsigned>(i));
+        }
         cb(i);
         DEBUG("-- " << i);
         assert(this->subset_start == orig_start);                     // This should always be unchanged (even if the callback splits again). The end can change though.
@@ -4161,6 +4169,12 @@ void PatternRulesetBuilder::multiply_rulesets(size_t n, std::function<void(size_
     }
     // Update the subset again to cover everything
     this->subset_start = saved_start;
+    ::std::stable_sort(
+        m_rulesets.begin() + this->subset_start,
+        m_rulesets.begin() + this->subset_end,
+        [](const Ruleset& a, const Ruleset& b) {
+            return a.m_or_path < b.m_or_path;
+        });
     // NOTE: Can't asser that the end is as-expected, as there might be inner subsets created that makes this assumption no longer valid
     //ASSERT_BUG(Span(), this->subset_end == new_subset_end, this->subset_end << " == " << new_subset_end);
     for (size_t i = this->subset_start; i < this->subset_end; i += 1) {
@@ -5614,7 +5628,11 @@ void MIR_LowerHIR_Match_Simple(MirBuilder& builder, MirConverter& conv, ::HIR::E
         // - Update the condition's failure target
         if (arms_code[pat_rule.arm_idx].has_condition && (pat_rule.arm_rule_idx == 0 || rc.cond_false != arms_code[pat_rule.arm_idx].rules[0].cond_false)) {
             builder.set_cur_block(rc.cond_false);
-            builder.end_block(::MIR::Terminator::make_Goto(next_arm_bb));
+            // A guard belongs to this expanded pattern candidate, not to the
+            // arm as a whole.  If it fails, another or-pattern candidate from
+            // the same arm must still be tested before advancing to the next
+            // arm.
+            builder.end_block(::MIR::Terminator::make_Goto(next_pattern_bb));
         }
 
         builder.set_cur_block(next_pattern_bb);

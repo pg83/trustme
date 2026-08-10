@@ -35,7 +35,7 @@
    - MIR validator помечает значение валидным просто потому, что встретил `Drop`.
    - DCE удаляет drop неиспользуемого local с незакрытым вопросом о conditional drop.
 
-   Это подтверждает текущие P2-группы drop/unwind и or-pattern runtime.
+   Guard-failure для раскрытых or-pattern теперь переходит к следующему кандидату того же arm, а декартово произведение альтернатив сохраняет левосторонний depth-first порядок. Три измеренных runtime failure закрыты; grouped flattening и drop/move обходы остаются. Это подтверждает текущие P2-группы drop/unwind и or-pattern runtime.
 
 5. Backend местами генерирует программу, которая просто вызывает `abort()`.
 
@@ -79,11 +79,11 @@
 | Typeck impls | `hir_typeck_main_bindings.cpp:2121,2349,2383` | Lifetime bounds копируются/заменяются для совпадения представления. |
 | Static solver | `hir_typeck_static.cpp:478,508,1241,2085` | Associated bounds дописываются, `_` автоматически проходит bound, opaque equality обходится локально. |
 | Const eval | `hir_conv_constant_evaluation.cpp:1326,2198,3448,3463` | One-past-end допустим; ignore Drop и «roughly-correct» monomorph state — реальные пробелы. |
-| MIR lowering | `mir_from_hir.cpp:203,1109,1594,6225,6258,8888`; header `:41` | Drop flags, virtual unsize cast, match flattening и hardcoded Box move. Generic slice metadata теперь откладывается до concrete monomorphization без чтения thin-pointer metadata. |
+| MIR lowering | `mir_from_hir.cpp:203,1109,1594,6243,6276,8906`; header `:41` | Drop flags, virtual unsize cast, match flattening и hardcoded Box move. Generic slice metadata теперь откладывается до concrete monomorphization без чтения thin-pointer metadata; guard fallback и source order для or-pattern исправлены. |
 | MIR validation | `mir_helpers.cpp:626` | Validator скрывает отсутствие корректного validity analysis. |
 | MIR passes | `mir_operations.cpp:2804,3937,4005,4031,4742,9841` | Target-width constants, complete-type include, conservative intrinsic-wrapper inlining и drop-flag compaction документированы как invariants. Остались Box layout coupling, usage downgrade и опасное drop removal. |
 | C backend | `trans_codegen_c.cpp:1280,1291,1903,2089,2526,2887,2893,3154,5291,5930` | CAS helpers, `.rlib`/object protocol, `const_eval_select` call adapter и overflow intrinsics документированы как backend conventions. Остались принудительный `-O1`, platform workarounds, incomplete asm translation и runtime `abort`. |
 | Enumeration | `trans_main_bindings.cpp:1349,2204,2487,2872` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующая последовательность: ложные markers в parser/lexer, infrastructure, driver, общих HIR definitions, metadata, безопасных MIR invariants и backend conventions переименованы. `Pointee::Metadata`, always-unsized layout, array→slice HIR и generic array metadata закрыты. Следующий функциональный пункт — drop/move/match из опасного пункта 4, начиная с максимального измеренного fan-out и строго unit-first. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.
+Следующая последовательность: ложные markers в parser/lexer, infrastructure, driver, общих HIR definitions, metadata, безопасных MIR invariants и backend conventions переименованы. `Pointee::Metadata`, always-unsized layout, array→slice HIR, generic array metadata и or-pattern guard fallback/source order закрыты. Следующий функциональный пункт — остаток drop/move/match из опасного пункта 4, начиная с максимального измеренного fan-out и строго unit-first. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.

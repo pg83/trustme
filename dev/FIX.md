@@ -44,7 +44,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 - [ ] `i128/u128`: разделить arithmetic, comparison, cast, shift и ABI передачи/возврата; начинать с общей операции, встречающейся в максимуме runtime failures.
 - [ ] Drop/unwind/leak: общий unit должен записывать destructor order и покрывать normal exit, early return, partial initialization, destructuring assignment и panic path. Не ослаблять тесты утечек.
-- [ ] Or-pattern/match lowering: runtime arm selection должен совпадать для nested tuple/slice/struct patterns.
+- [ ] Or-pattern/match lowering: guard-failure теперь продолжает со следующей альтернативы того же arm, а multiple or-pattern перебираются left-to-right; три runtime target зелёны. Осталось исправить grouped lowering для unguarded nested slice/struct patterns и закрыть оставшиеся runtime arm-selection triggers.
 - [ ] Float runtime и formatting: отдельно signed zero/NaN, arithmetic, exponent precision и debug-hex; ожидаемая строка или bits являются invariant.
 - [ ] Derived `Copy`/`Clone`/`Debug`/`Hash`: отделить ошибку expansion от move/drop/codegen aggregate.
 - [ ] `track_caller`, `type_name`/`TypeId`/`Any`, process environment, SIMD и nonzero arithmetic: группировать только по общему lowered ABI или intrinsic.
