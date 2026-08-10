@@ -756,6 +756,38 @@ namespace {
     ::Ordering typelist_ord_specific(const Span& sp, const ThinVector<::HIR::TypeRef>& left, const ThinVector<::HIR::TypeRef>& right);
     ::Ordering typelist_ord_specific(const Span& sp, const ::std::vector<::HIR::TypeRef>& left, const ::std::vector<::HIR::TypeRef>& right);
 
+    ::Ordering array_size_ord_specific(
+        const Span& sp,
+        const ::HIR::ArraySize& left,
+        const ::HIR::ArraySize& right
+    ) {
+        if (left == right) {
+            return ::OrdEqual;
+        }
+        const bool left_open = left.is_Unevaluated();
+        const bool right_open = right.is_Unevaluated();
+        if (left_open != right_open) {
+            return left_open ? ::OrdLess : ::OrdGreater;
+        }
+        if (left_open) {
+            // Two independently named const parameters are equally general.
+            // Relations between them are accounted for by the surrounding
+            // impl matcher; neither is more specific on syntax alone.
+            return ::OrdEqual;
+        }
+        BUG(sp, "Mismatched const values - " << left << " and " << right);
+    }
+
+    ::Ordering combine_specificity(::Ordering left, ::Ordering right) {
+        if (left == ::OrdEqual) {
+            return right;
+        }
+        if (right == ::OrdEqual || left == right) {
+            return left;
+        }
+        throw TypeOrdSpecific_MixedOrdering{};
+    }
+
     ::Ordering type_ord_specific(const Span& sp, const ::HIR::TypeRef& left, const ::HIR::TypeRef& right) {
         // TODO: What happens if you get `impl<T> Foo<T> for T` vs `impl<T,U> Foo<U> for T`
 
@@ -854,10 +886,10 @@ namespace {
             }
             TU_ARMA(Array, le) {
                 if (const auto* re = right->opt_Array()) {
-                    if (le.size != re->size) {
-                        BUG(sp, "Mismatched types - " << left << " and " << right);
-                    }
-                    return type_ord_specific(sp, le.inner, re->inner);
+                    return combine_specificity(
+                        type_ord_specific(sp, le.inner, re->inner),
+                        array_size_ord_specific(sp, le.size, re->size)
+                    );
                 } else {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
