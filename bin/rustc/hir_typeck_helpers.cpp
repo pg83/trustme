@@ -7199,7 +7199,8 @@ bool TraitResolution::find_trait_impls(
                 DEBUG("Deref " << ty << " into " << e->inner);
                 return &this->m_ivars.get_type(e->inner);
             }
-            // HACK?: Just doing `*[1,2,3]` doesn't work, but this is needed to allow `[1,2,3].iter()` to work
+            // Array-to-slice is the final unsize step in an autoderef search.
+            // create_autoderef materialises it as borrow -> pointer unsize -> deref.
             else if (const auto* e = ty->opt_Array()) {
                 DEBUG("Deref " << ty << " into [" << e->inner << "]");
                 tmp_type = m_crate.m_types.slice(e->inner);

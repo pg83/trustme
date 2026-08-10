@@ -2,10 +2,10 @@
 
 Найдено:
 
-- 134 строки с `hack/HACK/hacky/hackery/hackiness` в 31 файле.
-- 126 точных употреблений слова `HACK`.
-- 128 комментариев и 6 диагностических `DEBUG`-строк.
-- По подсистемам: frontend — 42, HIR/typeck — 57, MIR — 16, backend — 17, инфраструктура — 2.
+- 131 строка с `hack/HACK/hacky/hackery/hackiness` в 31 файле.
+- 99 точных употреблений слова `HACK`.
+- 125 комментариев и 6 диагностических `DEBUG`-строк.
+- По подсистемам: frontend — 42, HIR/typeck — 54, MIR — 16, backend — 17, инфраструктура — 2.
 
 Главный вывод: массово удалять эти комментарии нельзя. Под одной меткой смешаны реальные ошибки модели, допустимые lowerings, устаревший код и просто плохо названные инварианты.
 
@@ -27,11 +27,11 @@
 
    Это может не только задерживать решение, но и оставлять неверные impl-кандидаты. Правильная модель upstream — отдельный goal с результатом `Yes/Ambiguous/No`, а не ослабление отношения типов.
 
-4. Coercion/unsize проходит через заведомо невалидный HIR.
+4. Generic `Unsize<[T]>` оставляет metadata pseudo-op до MIR cleanup.
 
-   [hir_typeck_expr_cs.cpp](/home/pg/monorepo/trustme/bin/rustc/hir_typeck_expr_cs.cpp:4243) создаёт invalid `_Unsize`, который позднее чинит [hir_expand_main_bindings.cpp](/home/pg/monorepo/trustme/bin/rustc/hir_expand_main_bindings.cpp:8690). Generic-array metadata отдельно угадывается в MIR.
+   Array→slice method/index adjustment уже следует модели upstream: типизированная цепочка borrow → pointer unsize → deref создаётся до MIR, а отдельный adjustment-kind позволяет поздно выбрать place mutability, не затрагивая обычные coercions. Прямой `_Unsize([T; N] → [T])` больше не принимается HIR validator.
 
-   Общая relation `Pointee::Metadata` для struct tail уже реализована рекурсивно в обоих solver path и закрыла прежний compile blocker на 34 library cases. Невалидный `_Unsize` и отдельное угадывание generic-array metadata в MIR остаются: adjustment должен быть полностью типизирован до MIR.
+   Остаётся [mir_from_hir.cpp](/home/pg/monorepo/trustme/bin/rustc/mir_from_hir.cpp:1621) и [mir_operations.cpp](/home/pg/monorepo/trustme/bin/rustc/mir_operations.cpp:3630): bounded generic source для slice metadata либо читает `DstMeta`, либо оставляет пустой `ItemAddr` pseudo-op. Metadata должна получаться из доказанного `Unsize` goal, а не угадываться по форме source type.
 
 5. Drop/move/match содержат реальные семантические обходы.
 
@@ -73,15 +73,15 @@
 | Hygiene/macros | `ident.cpp:9`, `synext_macro.cpp:1559,2094` | Неполная hygiene и hardcoded `format_args!` API. |
 | Resolver | `resolve_common.cpp:98,543`; `resolve_main_bindings.cpp:411,641,1512,1702,1760,1851,1860,2681,3792,3858,3891,4096` | Синтетические `=crate`, anon-module и primitive-module paths — единый долг модели путей. |
 | Decorators | `synext_decorator.cpp:1555,2475,2612,2972` | Повторный обход anon modules и частный workaround для `windows-0.48`. |
-| HIR layout | `hir_expr.h:580` | У `ExprNode_Emplace::Noop` не найден producer, но consumers ещё существуют. Это кандидат на доказанное удаление мёртвого HIR, а не ложный marker. |
+| HIR layout | `hir_expr.h:581` | У `ExprNode_Emplace::Noop` не найден producer, но consumers ещё существуют. Это кандидат на доказанное удаление мёртвого HIR, а не ложный marker. |
 | HIR lowering | `hir_from_ast.cpp:176,562,589,590,1620,3041,3631` | Self/HRTB sentinels, синтетический trait bound, null HIR pointer как discriminator. |
 | HIR conversion | `hir_conv_main_bindings.cpp:657,949,1875,2372,2381,2724,3244,4144,4356` | Lifetime heuristics, `#` в enum path, approximate DST и privacy bypass `fmt::rt::Argument`. |
-| HIR expansion | `hir_expand_main_bindings.cpp:114,4553,6867,8690` | Literal-false experiments удалены; active invalid-unsize, generic-array metadata и placeholder fallback остаются. |
+| HIR expansion | `hir_expand_main_bindings.cpp:114,4553,6867` | Literal-false и invalid-unsize обходы удалены; closure Copy prepass, placeholder fallback и generic-array size shortcut остаются. |
 | HIR identity | `hir_hir.cpp:203,697`; `hir_path.cpp:326`; `hir_type.cpp:1475,1481,1490` | Const ordering, нетранзитивный HRTB order и fuzzy type relation — высокий риск. |
 | Metadata | `hir_main_bindings.cpp:1075` | Контракт basename + `.hir` теперь документирован как соглашение custom metadata; empty crate-name rewrite остаётся compatibility debt. |
 | Typeck common | `hir_typeck_common.cpp:503,515,753,761` | Erasure и passthrough lifetime вместо явных binders. |
-| Typeck solver | `hir_typeck_expr_cs.cpp:932,2030,4243,4935,5806,5820,6591,7443,7903,8047,8227`; header `:175` | Остались active heuristics и DEBUG-текст; operator result=LHS и arbitrary ivar fallback требуют отдельных units. |
-| Typeck helpers | `hir_typeck_helpers.cpp:6025,7183` | Opaque fuzzy matching и array→slice shortcut вместо нормального receiver adjustment. |
+| Typeck solver | `hir_typeck_expr_cs.cpp:932,2030,4943,5814,5828,7911,8055,8235`; header `:175` | Остались active heuristics и DEBUG-текст; operator result=LHS и arbitrary ivar fallback требуют отдельных units. |
+| Typeck helpers | `hir_typeck_helpers.cpp:6044` | Opaque fuzzy matching остаётся; array→slice receiver adjustment теперь типизирован до MIR. |
 | Typeck impls | `hir_typeck_main_bindings.cpp:2121,2349,2383` | Lifetime bounds копируются/заменяются для совпадения представления. |
 | Static solver | `hir_typeck_static.cpp:478,508,1241,2085` | Associated bounds дописываются, `_` автоматически проходит bound, opaque equality обходится локально. |
 | Const eval | `hir_conv_constant_evaluation.cpp:1326,2198,3448,3463` | One-past-end допустим; ignore Drop и «roughly-correct» monomorph state — реальные пробелы. |
@@ -92,4 +92,4 @@
 | Enumeration | `trans_main_bindings.cpp:1349,2204,2487,2872` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующая последовательность: ложные markers в parser/lexer, infrastructure, driver, общих HIR definitions, metadata, безопасных MIR invariants и backend conventions переименованы. Общая `Pointee::Metadata` relation и layout always-unsized struct закрыты; следующий функциональный пункт опасного пункта 4 — убрать invalid `_Unsize` и MIR-угадывание metadata, строго unit-first. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.
+Следующая последовательность: ложные markers в parser/lexer, infrastructure, driver, общих HIR definitions, metadata, безопасных MIR invariants и backend conventions переименованы. Общая `Pointee::Metadata` relation, layout always-unsized struct и invalid array→slice HIR закрыты; следующий функциональный пункт опасного пункта 4 — убрать MIR-угадывание metadata для bounded generic `Unsize<[T]>`, строго unit-first. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.

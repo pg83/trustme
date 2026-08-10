@@ -8687,10 +8687,13 @@ namespace {
         void visit(::HIR::ExprNode_Unsize& node) override {
             ::HIR::ExprVisitorDef::visit(node);
 
-            // HACK: The autoderef code has to run before usage information is avaliable, so emits "invalid" _Unsize nodes
-            // - Fix that.
-            if (node.m_value->m_res_type->is_Array()) {
+            const auto* src_borrow = node.m_value->m_res_type->opt_Borrow();
+            const auto* dst_borrow = node.m_res_type->opt_Borrow();
+            auto* borrow_node = dynamic_cast<::HIR::ExprNode_Borrow*>(node.m_value.get());
+            if (node.m_is_array_to_slice_adjustment) {
                 const Span& sp = node.span();
+                ASSERT_BUG(sp, borrow_node && src_borrow && dst_borrow, "Malformed array-to-slice adjustment");
+                ASSERT_BUG(sp, src_borrow->inner->is_Array() && dst_borrow->inner->is_Slice(), "Invalid array-to-slice adjustment types");
 
                 ::HIR::BorrowType bt = ::HIR::BorrowType::Shared;
                 switch (node.m_usage) {
@@ -8704,19 +8707,16 @@ namespace {
                         bt = ::HIR::BorrowType::Unique;
                         break;
                     case ::HIR::ValueUsage::Move:
-                        TODO(sp, "Support moving in _Unsize");
+                        bt = ::HIR::BorrowType::Shared;
                         break;
                 }
 
-                auto ty_src = m_crate.m_types.borrow(bt, node.m_value->m_res_type);
-                auto ty_dst = m_crate.m_types.borrow(bt, node.m_res_type);
-                auto ty_dst2 = ty_dst;
-                // Borrow
-                node.m_value = NEWNODE(mv$(ty_src), Borrow, sp, bt, mv$(node.m_value));
-                // Unsize borrow
-                m_replacement = NEWNODE(mv$(ty_dst), Unsize, sp, mv$(node.m_value), mv$(ty_dst2));
-                // Deref
-                m_replacement = NEWNODE(mv$(node.m_res_type), Deref, sp, mv$(m_replacement));
+                if (src_borrow->type != bt) {
+                    borrow_node->m_type = bt;
+                    borrow_node->m_res_type = m_crate.m_types.borrow(bt, src_borrow->inner);
+                    node.m_res_type = m_crate.m_types.borrow(bt, dst_borrow->inner);
+                    node.m_dst_type = node.m_res_type;
+                }
             }
         }
     };

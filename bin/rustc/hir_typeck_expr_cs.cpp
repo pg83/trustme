@@ -4235,15 +4235,23 @@ const ::HIR::TypeRef& Context::get_var(const Span& sp, unsigned int idx) const {
 ::HIR::ExprNodeP Context::create_autoderef(::HIR::ExprNodeP val_node, ::HIR::TypeRef ty_dst) const {
     const auto& span = val_node->span();
     const auto& ty_src = val_node->m_res_type;
-    // Special case for going Array->Slice, insert _Unsize instead of _Deref
+    // Array-to-slice is an autoref followed by pointer unsizing. A slice value
+    // itself is never produced: dereference the resulting fat borrow to obtain
+    // the slice place used by method/index lookup.
     if (get_type(ty_src)->is_Array()) {
         ASSERT_BUG(span, ty_dst->is_Slice(), "Array should only ever autoderef to Slice");
 
-        // Would emit borrow+unsize+deref, but that requires knowing the borrow class.
-        // HACK: Emit an invalid _Unsize op that is fixed once usage type is known.
-        auto ty_dst_c = ty_dst;
-        val_node = mk_exprnodep(m_crate.m_pool->make<HIR::ExprNode_Unsize>(span, mv$(val_node), mv$(ty_dst_c)), mv$(ty_dst));
-        DEBUG("- Unsize " << &*val_node << " -> " << val_node->m_res_type);
+        const auto borrow_type = ::HIR::BorrowType::Shared;
+        auto ty_src_borrow = m_crate.m_types.borrow(borrow_type, ty_src);
+        auto ty_dst_borrow = m_crate.m_types.borrow(borrow_type, ty_dst);
+        auto ty_dst_borrow_copy = ty_dst_borrow;
+
+        val_node = mk_exprnodep(m_crate.m_pool->make<HIR::ExprNode_Borrow>(span, borrow_type, mv$(val_node)), mv$(ty_src_borrow));
+        auto* unsize_node = m_crate.m_pool->make<HIR::ExprNode_Unsize>(span, mv$(val_node), mv$(ty_dst_borrow_copy));
+        unsize_node->m_is_array_to_slice_adjustment = true;
+        val_node = mk_exprnodep(unsize_node, mv$(ty_dst_borrow));
+        val_node = mk_exprnodep(m_crate.m_pool->make<HIR::ExprNode_Deref>(span, mv$(val_node)), ty_dst);
+        DEBUG("- Array-to-slice adjustment " << &*val_node << " -> " << val_node->m_res_type);
     } else {
         val_node = mk_exprnodep(m_crate.m_pool->make<HIR::ExprNode_Deref>(span, mv$(val_node)), mv$(ty_dst));
         DEBUG("- Deref " << &*val_node << " -> " << val_node->m_res_type);

@@ -542,10 +542,7 @@ namespace {
             const auto& src_ty = node.m_value->m_res_type;
             const auto& dst_ty = node.m_res_type;
 
-            if (src_ty->is_Array()) {
-                ASSERT_BUG(sp, dst_ty->is_Slice(), "");
-                ASSERT_BUG(sp, node.m_usage == ::HIR::ValueUsage::Unknown, "");
-            } else if (src_ty->is_Diverge()) {
+            if (src_ty->is_Diverge()) {
                 // Perfectly valid. (! can become anything)
             } else if (src_ty == dst_ty) {
             } else if (src_ty->is_Borrow() && dst_ty->is_Borrow()) {

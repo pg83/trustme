@@ -520,6 +520,7 @@ namespace HIR {
     struct ExprNode_Unsize: public ExprNode {
         ::HIR::ExprNodeP m_value;
         ::HIR::TypeRef m_dst_type;
+        bool m_is_array_to_slice_adjustment = false;
 
         ExprNode_Unsize(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dst_type)
             : ExprNode(mv$(sp))
