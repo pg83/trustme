@@ -629,16 +629,11 @@ namespace {
                             switch (mode) {
                                 case LookupMode::PatternType:
                                 case LookupMode::Type:
-                                case LookupMode::Namespace:
-                                    // TODO: Want to return the type if handling a struct literal
-                                    if (false) {
-                                        return ::AST::Path::new_ufcs_ty(e->clone(), ::std::vector<::AST::PathNode>());
-                                    } else {
-                                        ::AST::Path rv(name);
-                                        rv.m_bindings.type.set(AST::AbsolutePath(), ::AST::PathBinding_Type::make_TypeParameter({0xFFFF}));
-                                        return rv;
+                                case LookupMode::Namespace: {
+                                    ::AST::Path rv(name);
+                                    rv.m_bindings.type.set(AST::AbsolutePath(), ::AST::PathBinding_Type::make_TypeParameter({0xFFFF}));
+                                    return rv;
                                     }
-                                    break;
                                 case LookupMode::Constant:
                                 case LookupMode::Variable:
                                     // TODO: Ensure validity? (I.e. that `Self` is a unit or tuple struct
@@ -1042,26 +1037,11 @@ namespace {
             rv.nodes().back().args() = mv$(path.nodes().back().args());
             auto ap = sp_to_ap(p);
 
-#if 0
-            ASSERT_BUG(sp, p.m_components.size() == 2, "Invalid component count in " << p);
-
-            if( p.m_components.front() == "types" ) {
-            }
-            else if( p.m_components.front() == "macros" ) {
-            }
-            else if( p.m_components.front() == "intrinsics" ) {
-            }
-            else {
-                BUG(sp, "Invalid class (first) component in " << p);
-            }
-            TODO(sp, "");
-#else
             if (coretype_fromstring(p.components().back().c_str()) != CORETYPE_INVAL) {
                 rv.m_bindings.type.set(ap, AST::PathBinding_Type::make_TypeAlias({nullptr}));
             } else {
                 rv.m_bindings.macro.set(ap, AST::PathBinding_Macro::make_MacroRules({nullptr}));
             }
-#endif
             path = mv$(rv);
             return;
         }

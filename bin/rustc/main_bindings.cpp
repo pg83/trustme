@@ -1126,22 +1126,6 @@ void RustPrinter::handle_module(const AST::Module& mod) {
         m_os << indent() << "}\n";
     }
 
-// HACK: Assume that anon modules have been printed already, so don't include them here.
-// - Needed, because this code is used for proc macro output, which doen't like the `#<n>` syntax
-#if 0
-    for(const auto& m : mod.anon_mods())
-    {
-        if(!m) {
-            m_os << indent() << "/* mod ? (delted anon) */\n";
-            continue ;
-        }
-        m_os << indent() << "mod " << m->path().nodes.back() << " {\n";
-        inc_indent();
-        handle_module(*m);
-        dec_indent();
-        m_os << indent() << "}\n";
-    }
-#endif
 }
 
 void RustPrinter::print_params(const AST::GenericParams& params) {
@@ -1830,15 +1814,6 @@ int main(int argc, char* argv[]) {
         Cfg_SetValueCb("feature", [&params](const ::std::string& s) {
             return params.features.count(s) != 0;
         });
-#if 0
-        DEBUG("sizeof(AST::TypeRef) = " << sizeof(TypeRef));
-        DEBUG("sizeof(AST::Item) = " << sizeof(AST::Item));
-        DEBUG("sizeof(AST::Impl) = " << sizeof(AST::Impl));
-        DEBUG("sizeof(AST::Function) = " << sizeof(AST::Function));
-        DEBUG("sizeof(AST::Module) = " << sizeof(AST::Module));
-        DEBUG("sizeof(HIR::TypeRef) = " << sizeof(HIR::TypeRef));
-        DEBUG("sizeof(HIR::Path) = " << sizeof(HIR::Path));
-#endif
     });
     CompilePhaseV("Target Load", [&]() {
         Target_SetCfg(params.target);

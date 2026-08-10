@@ -650,14 +650,6 @@ namespace MIR {
                 return m_path;
             }
         };
-#if 0 // TODO: Add this sometime?
-    class InlineValue {
-        RelocationPtr   reloc_0;
-        uin64_t data[2];
-        uint16_t    len;
-        uint16_t    mask;
-    };
-#endif
 
         /// Reference to a value
         class ValueRef {

@@ -2273,13 +2273,6 @@ namespace {
                             return false;
                         }
                         // Check for an unused type omitted: `V: FromIterator<A>` `I: IntoIterator<Item=A>` - `A` is only used in the bounds.
-#if 0
-                    // Check that the bounds don't reference an unused type.
-                    auto rv_tp = type_bound_needed(sp, e.trait);
-                    //auto rv_tp = type_bound_needed(sp, e.trait.m_path);
-                    if( rv_tp == TypeNeed::UsesOthers )
-                        return false;
-#endif
                         return true;
                     }
                     TU_ARMA(TypeEquality, e) {
@@ -4289,15 +4282,6 @@ namespace {
                 return;
             }
 
-#if 0
-            // HACK: Handle equality between expanded and unexpanded closures.
-            if( lhs->is_Closure() && rhs->is_Path() ) {
-                const auto& le = lhs->as_Closure();
-                const auto& re = rhs->as_Path();
-                //le.node->m_obj_path_base
-                return ;
-            }
-#endif
 
             if (TU_TEST1(*lhs, ErasedType, .m_inner.is_Alias())) {
                 const auto& le = lhs->as_ErasedType().m_inner.as_Alias();
@@ -5515,9 +5499,6 @@ namespace {
             auto ms = MonomorphStatePtr(m_resolve.m_crate.m_types, &ty, &ty_path.m_params, nullptr);
 
             if( node.m_base_value ) {
-#if 0
-                this->equate_types( node.m_base_value->span(), node.m_res_type, node.m_base_value->m_res_type );
-#else
                 const auto& ty_base = node.m_base_value->m_res_type;
                 const auto& ty_path_base = ty_base->as_Path().path.m_data.as_Generic();
                 auto ms_base = MonomorphStatePtr(m_resolve.m_crate.m_types, &ty_base, &ty_path_base.m_params, nullptr);
@@ -5532,7 +5513,6 @@ namespace {
                         this->equate_types(node.m_base_value->span(), dst_ty, src_ty);
                     }
                 }
-#endif
             }
 
             // Bind fields with type params (coercable)
@@ -8702,168 +8682,7 @@ namespace {
         }
 
         // NOTE: These are now in MIR generation, to handle temporary raising
-#if 0
-        void visit(::HIR::ExprNode_Index& node) override
-        {
-            const auto& sp = node.span();
-            ::HIR::ExprVisitorDef::visit(node);
 
-            const auto& ty_idx = node.m_index->m_res_type;
-            const auto& ty_val = node.m_value->m_res_type;
-
-            TU_MATCH_DEF( ::HIR::TypeData, (ty_val.data()), (val_te),
-            (
-                // Unknown? fall down to the method call
-                ),
-            (Slice,
-                if( ty_idx == ::HIR::CoreType::Usize ) {
-                    // Slices can be trivially indexed using usize
-                    return ;
-                }
-                // Any other index type goes to the function call
-                ),
-            (Array,
-                if( ty_idx == ::HIR::CoreType::Usize ) {
-                    // Arrays also can be trivially indexed using usize
-                    return ;
-                }
-                // Any other index type goes to the function call
-                )
-            )
-
-            // TODO: Which trait should be used?
-            const char* langitem = nullptr;
-            const char* method = nullptr;
-            ::HIR::BorrowType   bt;
-            switch( node.m_value->m_usage )
-            {
-            case ::HIR::ValueUsage::Unknown:
-                BUG(sp, "Usage of index reciever is still `Unknown`");
-                break;
-            case ::HIR::ValueUsage::Borrow:
-                bt = ::HIR::BorrowType::Shared;
-                langitem = method = "index";
-                break;
-            case ::HIR::ValueUsage::Mutate:
-                bt = ::HIR::BorrowType::Unique;
-                langitem = method = "index_mut";
-                break;
-            case ::HIR::ValueUsage::Move:
-                TODO(sp, "Support moving out of indexed values");
-                break;
-            }
-            // Needs replacement, continue
-            assert(langitem);
-            assert(method);
-
-            // - Construct trait path - Index*<IdxTy>
-            ::HIR::PathParams   pp;
-            pp.m_types.push_back( ty_idx.clone() );
-            ::HIR::GenericPath  trait { m_crate.get_lang_item_path(node.span(), langitem), mv$(pp) };
-
-            ::std::vector< ::HIR::ExprNodeP>    args;
-            args.push_back( NEWNODE( ::HIR::TypeRef::new_borrow(bt, ty_val.clone()), Borrow, sp, bt, mv$(node.m_value) ) );
-            args.push_back( mv$(node.m_index) );
-
-            ::HIR::PathParams   pp_method;
-            pp_method.m_lifetimes.push_back(HIR::LifetimeRef());
-
-            m_replacement = NEWNODE( ::HIR::TypeRef::new_borrow(bt, node.m_res_type.clone()), CallPath, sp,
-                ::HIR::Path(ty_val.clone(), mv$(trait), RcString::new_interned(method), mv$(pp_method)),
-                mv$(args)
-                );
-            // Populate the cache for later passes
-            // TODO: The check pass should probably just ignore this and DIY
-            auto& call_node = dynamic_cast< ::HIR::ExprNode_CallPath&>(*m_replacement);
-            auto& arg_types = call_node.m_cache.m_arg_types;
-            arg_types.push_back( ::HIR::TypeRef::new_borrow(bt, ty_val.clone()) );
-            arg_types.push_back( ty_idx.clone() );
-            arg_types.push_back( m_replacement->m_res_type.clone() );
-
-            // - Dereference the result (which is an &-ptr)
-            m_replacement = NEWNODE( mv$(node.m_res_type), Deref, sp,  mv$(m_replacement) );
-        }
-#endif
-
-#if 0
-        void visit(::HIR::ExprNode_Deref& node) override
-        {
-            const auto& sp = node.span();
-
-            ::HIR::ExprVisitorDef::visit(node);
-
-            const auto& ty_val = node.m_value->m_res_type;
-
-            TU_MATCH_DEF( ::HIR::TypeData, (ty_val.m_data), (e),
-            (
-                BUG(sp, "Deref on unexpected type - " << ty_val);
-                ),
-            (Generic,
-                ),
-            (Path,
-                // Box<T> ("owned_box") is magical!
-                if(TU_TEST1(e.path.m_data, Generic, .m_path == m_lang_Box())
-                {
-                    // Leave as is - MIR handles this
-                    return ;
-                }
-                ),
-            (Pointer,
-                // Leave as is (primitive operation)
-                return ;
-                ),
-            (Borrow,
-                // Leave as is (primitive operation)
-                return ;
-                )
-            )
-
-            const char* langitem = nullptr;
-            const char* method = nullptr;
-            ::HIR::BorrowType   bt;
-            // - Uses the value's usage beacuse for T: Copy node.m_value->m_usage is Borrow, but node.m_usage is Move
-            switch( node.m_value->m_usage )
-            {
-            case ::HIR::ValueUsage::Unknown:
-                BUG(sp, "Unknown usage type of deref value");
-                break;
-            case ::HIR::ValueUsage::Borrow:
-                bt = ::HIR::BorrowType::Shared;
-                langitem = method = "deref";
-                break;
-            case ::HIR::ValueUsage::Mutate:
-                bt = ::HIR::BorrowType::Unique;
-                langitem = method = "deref_mut";
-                break;
-            case ::HIR::ValueUsage::Move:
-                TODO(sp, "ValueUsage::Move for desugared Deref of " << node.m_value->m_res_type);
-                break;
-            }
-            // Needs replacement, continue
-            assert(langitem);
-            assert(method);
-
-            // - Construct trait path - Index*<IdxTy>
-            ::HIR::GenericPath  trait { m_crate.get_lang_item_path(node.span(), langitem), {} };
-
-            ::std::vector< ::HIR::ExprNodeP>    args;
-            args.push_back( NEWNODE( ::HIR::TypeRef::new_borrow(bt, ty_val.clone()), Borrow, sp, bt, mv$(node.m_value) ) );
-
-            m_replacement = NEWNODE( ::HIR::TypeRef::new_borrow(bt, node.m_res_type.clone()), CallPath, sp,
-                ::HIR::Path(ty_val.clone(), mv$(trait), method),
-                mv$(args)
-                );
-            // Populate the cache for later passes
-            // TODO: The check pass should probably just ignore this and DIY
-            auto& call_node = dynamic_cast< ::HIR::ExprNode_CallPath&>(*m_replacement);
-            auto& arg_types = call_node.m_cache.m_arg_types;
-            arg_types.push_back( ::HIR::TypeRef::new_borrow(bt, ty_val.clone()) );
-            arg_types.push_back( m_replacement->m_res_type.clone() );
-
-            // - Dereference the result (which is an &-ptr)
-            m_replacement = NEWNODE( mv$(node.m_res_type), Deref, sp,  mv$(m_replacement) );
-        }
-#endif
 
         void visit(::HIR::ExprNode_Unsize& node) override {
             ::HIR::ExprVisitorDef::visit(node);
@@ -9431,42 +9250,6 @@ namespace {
 
             ::HIR::Visitor::visit_trait_impl(trait_path, impl);
 
-#if 0
-            // Check if the trait has a vtable, and if it does emit an associated static for it.
-            const auto& tr = m_crate.get_trait_by_path(sp, trait_path);
-            if(tr.m_value_indexes.size() > 0)
-            {
-                auto monomorph_cb_trait = monomorphise_type_get_cb(sp, &impl.m_type, &impl.m_trait_args, nullptr);
-                auto trait_gpath = ::HIR::GenericPath(trait_path, impl.m_trait_args.clone());
-
-                ::std::vector< ::HIR::Literal>  vals;
-                vals.resize( tr.m_value_indexes.size() );
-                for(const auto& m : tr.m_value_indexes)
-                {
-                    //ASSERT_BUG(sp, tr.m_values.at(m.first).is_Function(), "TODO: Handle generating vtables with non-function items");
-                    DEBUG("- " << m.second.first << " = " << m.second.second << " :: " << m.first);
-                    auto gpath = monomorphise_genericpath_with(sp, m.second.second, monomorph_cb_trait, false);
-                    vals.at(m.second.first) = ::HIR::Literal::make_BorrowOf( ::HIR::Path(impl.m_type.clone(), mv$(gpath), m.first) );
-                }
-
-                auto vtable_sp = trait_path;
-                vtable_sp.m_components.back() += "#vtable";
-                auto vtable_params = impl.m_trait_args.clone();
-                for(const auto& ty : tr.m_type_indexes) {
-                    ::HIR::Path path( impl.m_type.clone(), mv$(trait_gpath), ty.first );
-                    vtable_params.m_types.push_back( ::HIR::TypeRef( mv$(path) ) );
-                }
-
-                const auto& vtable_ref = m_crate.get_struct_by_path(sp, vtable_sp);
-                impl.m_statics.insert(::std::make_pair( RcString::new_interned("vtable#"), ::HIR::TraitImpl::ImplEnt<::HIR::Static> { true, ::HIR::Static {
-                    ::HIR::Linkage(),
-                    false,
-                    ::HIR::TypeRef::new_path(::HIR::GenericPath(mv$(vtable_sp), mv$(vtable_params)), &vtable_ref),
-                    {},
-                    ::HIR::Literal::make_List( mv$(vals) )
-                    } } ));
-            }
-#endif
         }
     };
 

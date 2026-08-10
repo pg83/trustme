@@ -326,6 +326,32 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_compiler_no_dead_branches",
+    inputs=[
+        "$(S)/tst/unit/test_compiler_no_dead_branches.py",
+        *build.glob("$(S)/bin/rustc/**/*.h"),
+        *build.glob("$(S)/bin/rustc/**/*.cpp"),
+        *build.glob("$(S)/bin/rustc/**/*.inc"),
+    ],
+    outputs=["$(B)/tst/unit/compiler_no_dead_branches.stamp"],
+    cmd=[
+        [
+            *TEST_TIMEOUT,
+            "python3",
+            "$(S)/tst/unit/test_compiler_no_dead_branches.py",
+            "-v",
+        ],
+        [
+            *TEST_TIMEOUT,
+            "sh",
+            "-c",
+            "> $(B)/tst/unit/compiler_no_dead_branches.stamp",
+        ],
+    ],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_rust_lib_import",
     inputs=[
         "$(S)/tst/rust_lib/import.py",

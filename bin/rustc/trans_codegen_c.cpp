@@ -1055,12 +1055,6 @@ namespace {
 
                 void push_border() {
 // If the previous is also a marker, don't push
-#if 0
-                    if( this->get_vec().size() == 0 || this->get_vec().back()[0] == '\0' )
-                        return ;
-                    m_ty.push_back(Ty::Border);
-                    this->push_back("");
-#endif
                 }
 
                 class iterator {

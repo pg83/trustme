@@ -1605,14 +1605,6 @@ namespace {
             ty = this->context.m_resolve.expand_associated_types(sp, mv$(ty));
             MonomorphHrlsOnly(context.m_crate.m_types, HIR::PathParams()).monomorph_type(sp, ty);
             DEBUG(ty);
-#if 0 // Sanity check
-            static const HIR::TypeRef ty_self = HIR::TypeRef::new_self();
-            MonomorphStatePtr(
-                this->context.m_resolve.has_self() ? &ty_self : nullptr,
-                &nop_impl,
-                &nop_item
-            ).monomorph_type(sp, ty, false);
-#endif
         }
 
         void check_type_resolved_constgeneric(const Span& sp, ::HIR::ConstGeneric& v, const ::HIR::TypeRef& top_type) const {
@@ -2679,14 +2671,7 @@ void Context::handle_pattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::T
                     }
                     TU_ARM(pv, ByteString, ve) {
                         // TODO: ByteString patterns can match either &[u8] or &[u8; N]
-#if 0
-                    return ::HIR::TypeRef::new_borrow(
-                            ::HIR::BorrowType::Shared,
-                            ::HIR::TypeRef::new_slice(::HIR::CoreType::U8)
-                            );
-#else
                         return ::std::nullopt;
-#endif
                     }
                     TU_ARM(pv, Named, ve) {
                         DEBUG("TODO: Look up the path and get the type: " << ve.path);
@@ -4851,24 +4836,14 @@ namespace {
         // - Recurse/unsize inner value
         if (src->is_Infer() && TU_TEST2(*dst, Path, .binding, Struct, ->m_struct_markings.coerce_unsized != ::HIR::StructMarkings::Coerce::None)) {
             if (context_mut) {
-#if 0
-                auto new_src = H::make_pruned(context, dst);
-                context_mut->equate_types(sp, src, new_src);
-#else
                 context_mut->possible_equate_ivar(sp, src->as_Infer().index, dst, Context::PossibleTypeSource::CoerceTo);
             }
-#endif
             // TODO: Avoid needless loop return
             return CoerceResult::Unknown;
         }
         if (dst->is_Infer() && TU_TEST2(*src, Path, .binding, Struct, ->m_struct_markings.coerce_unsized != ::HIR::StructMarkings::Coerce::None)) {
             if (context_mut) {
-#if 0
-                auto new_dst = H::make_pruned(context, src);
-                context_mut->equate_types(sp, dst, new_dst);
-#else
                 context_mut->possible_equate_ivar(sp, dst->as_Infer().index, src, Context::PossibleTypeSource::CoerceFrom);
-#endif
             }
             // TODO: Avoid needless loop return
             return CoerceResult::Unknown;
@@ -5874,15 +5849,10 @@ namespace {
                         const auto& pe = te.path.m_data.as_UfcsKnown();
                         // If the target type is unbound, and is this rule exactly, don't return success
                         if (te.binding.is_Unbound() && pe.type == v.impl_ty && pe.item == v.name && pe.trait.m_path == v.trait && pe.trait.m_params == v.params) {
-#if 0
-                        DEBUG("Would re-create the same rule, returning unconsumed");
-                        return false;
-#else
                             DEBUG("Would re-create the same rule, setting opaque");
                             auto data = (*output_type)->clone_data();
                             data.as_Path().binding = ::HIR::TypePathBinding::make_Opaque({});
                             output_type = context.m_crate.m_types.intern(std::move(data));
-#endif
                         }
                     }
                     context.equate_types(sp, v.left_ty, *output_type);
@@ -8331,7 +8301,6 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
             // Check the possible equations
             DEBUG("--- IVar possibilities");
             // TODO: De-duplicate this with the block ~80 lines below
-            //for(unsigned int i = context.possible_ivar_vals.size(); i --; ) // NOTE: Ordering is a hack for libgit2
             ::std::unique_ptr<IvarDependencyIndex> dependency_index;
             for (unsigned int i = 0; i < context.possible_ivar_vals.size(); i++) {
                 if (check_ivar_poss(context, *ivar_bound_index, i, context.possible_ivar_vals[i])) {
@@ -8361,7 +8330,6 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
         if (!context.m_ivars.peek_changed()) {
             // Check the possible equations
             DEBUG("--- IVar possibilities (fallback 1)");
-            //for(unsigned int i = context.possible_ivar_vals.size(); i --; ) // NOTE: Ordering is a hack for libgit2
             for (unsigned int i = 0; i < context.possible_ivar_vals.size(); i++) {
                 if (check_ivar_poss(context, *ivar_bound_index, i, context.possible_ivar_vals[i], IvarPossFallbackType::Assume)) {
                     break;
@@ -8374,7 +8342,6 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
         if (!context.m_ivars.peek_changed()) {
             // Check the possible equations
             DEBUG("--- IVar possibilities (fallback)");
-            //for(unsigned int i = context.possible_ivar_vals.size(); i --; ) // NOTE: Ordering is a hack for libgit2
             for (unsigned int i = 0; i < context.possible_ivar_vals.size(); i++) {
                 if (check_ivar_poss(context, *ivar_bound_index, i, context.possible_ivar_vals[i], IvarPossFallbackType::IgnoreWeakDisable)) {
                     break;
@@ -8429,7 +8396,6 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
         if (!context.m_ivars.peek_changed()) {
             // Check the possible equations
             DEBUG("--- IVar possibilities (final fallback)");
-            //for(unsigned int i = context.possible_ivar_vals.size(); i --; ) // NOTE: Ordering is a hack for libgit2
             for (unsigned int i = 0; i < context.possible_ivar_vals.size(); i++) {
                 if (check_ivar_poss(context, *ivar_bound_index, i, context.possible_ivar_vals[i], IvarPossFallbackType::FinalOption)) {
                     break;
@@ -8438,25 +8404,6 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
         }
 #endif
 
-#if 0
-        if( !context.m_ivars.peek_changed() )
-        {
-            DEBUG("--- Coercion consume");
-            if( ! context.link_coerce.empty() )
-            {
-                auto ent = mv$(context.link_coerce.front());
-                context.link_coerce.erase( context.link_coerce.begin() );
-
-                const auto& sp = (*ent->right_node_ptr)->span();
-                auto& src_ty = (*ent->right_node_ptr)->m_res_type;
-                //src_ty = context.m_resolve.expand_associated_types( sp, mv$(src_ty) );
-                ent->left_ty = context.m_resolve.expand_associated_types( sp, mv$(ent->left_ty) );
-                DEBUG("- Equate coercion R" << ent->rule_idx << " " << ent->left_ty << " := " << src_ty);
-
-                context.equate_types(sp, ent->left_ty, src_ty);
-            }
-        }
-#endif
 
         // Finally. If nothing changed, apply ivar defaults
         if (!context.m_ivars.peek_changed()) {

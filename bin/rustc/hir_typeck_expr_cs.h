@@ -74,11 +74,6 @@ struct Context {
         ::std::vector<::HIR::TypeRef> bounded;
 
         void reset() {
-#if 0
-            auto tmp = mv$(this->types_default);
-            *this = IVarPossible();
-            this->types_default = mv$(tmp);
-#else
             // Manually clear, to avoid needing to reallocate the lists all the time.
             this->force_disable = false;
             this->force_no_to = false;
@@ -89,7 +84,6 @@ struct Context {
             this->has_bounded = false;
             this->bounds_include_self = false;
             this->bounded.clear();
-#endif
         }
 
         bool has_rules() const {

@@ -1055,38 +1055,6 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(
             }
         }
 
-    #if 0
-        // TODO: Have a bitmap of if a BB mentions this value. If there are no unvisited BBs that mention this value, stop early.
-        // - CATCH: The original BB contains a reference, but might not have been visited (if it was the terminating call that triggered)
-        //  - Also, we don't want to give up early (if we loop back to the start of the first block)
-        // - A per-statement bitmap would solve this. Return early if `!vl.stmt_bitmap & usage_stmt_bitmap == 0`
-        // > Requires filling the bitmap as we go (for maximum efficiency)
-        {
-            bool found_non_visited = false;
-            for(size_t i = 0; i < use_bitmap.size(); i ++)
-            {
-                // If a place where the value is used is not present in the output bitmap
-                if( !vl.stmt_bitmap[i] && use_bitmap[i] )
-                {
-                    DEBUG("- Still used at +" << i);
-                    found_non_visited = true;
-                }
-            }
-            // If there were no uses of the variable that aren't covered by the lifetime bitmap
-            if( ! found_non_visited )
-            {
-                // Terminate early
-                DEBUG("Early terminate - All possible lifetimes covered");
-                state.finalise(0);
-                for(auto& s : runner.m_states_to_do)
-                {
-                    s.second.bb_history.push_back(bb_idx);
-                    s.second.finalise(0);
-                }
-                return ;
-            }
-        }
-    #endif
 
         // Special case for when doing multiple runs on the same output
         if (vl.stmt_bitmap.at(block_offsets.at(bb_idx) + 0)) {
@@ -1095,20 +1063,6 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(
             state.finalise(0);
             continue;
         }
-    #if 0
-        // TODO: Have a way of knowing if a state will never find a use (the negative of the above)
-        // - Requires knowing for sure that a BB doesn't end up using the value.
-        // - IDEA: Store a fork count and counts of Yes/No for each BB.
-        //  > If ForkCount == No, the value isn't used in that branch.
-        if( runner.m_bb_counts[bb_idx].visit_count > 0
-                && runner.m_bb_counts[bb_idx].visit_count == runner.m_bb_counts[bb_idx].val_unused_count )
-        {
-            DEBUG("Target BB known to be not valid");
-            runner.apply_state(state, 0);
-            continue ;
-        }
-        runner.m_bb_counts[bb_idx].visit_count ++;
-    #endif
 
         runner.run_block(bb_idx, 0, mv$(state));
     }

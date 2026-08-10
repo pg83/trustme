@@ -2004,27 +2004,6 @@ ProcMacroInv::Handles::Handles(Handles&& x)
 #endif
     DEBUG("");
 }
-#if 0
-ProcMacroInv::Handles& ProcMacroInv::Handles::operator=(Handles&& x)
-{
-    #ifdef _WIN32
-    child_handle = x.child_handle;
-    child_stdin  = x.child_stdin;
-    child_stdout = x.child_stdout;
-    x.child_handle = INVALID_HANDLE_VALUE;
-    x.child_stdin = INVALID_HANDLE_VALUE;
-    x.child_stdout = INVALID_HANDLE_VALUE;
-    #else
-    child_pid = x.child_pid;
-    child_stdin = x.child_stdin;
-    child_stdout = x.child_stdout;
-
-    x.child_pid = 0;
-    #endif
-    DEBUG("");
-    return *this;
-}
-#endif
 ProcMacroInv::~ProcMacroInv()
 {
 #ifdef _WIN32

@@ -692,29 +692,6 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
                         }
                     }
                 }
-#if 0
-            if( const auto* inner_erased = pe.type->opt_ErasedType() )
-            {
-                for(const auto& erased_trait = inner_erased->m_traits)
-                {
-                    if( erased_trait.m_path != pe.trait ) {
-                        continue ;
-                    }
-                    if( erased_trait.m_path != pe.trait ) {
-                        continue ;
-                    }
-                    auto it = inner_erased->m_trait_bounds.find(pe.item);
-                    if(it != inner_erased->m_trait_bounds.end())
-                    {
-                        for(const auto& bound : it->traits)
-                        {
-                            if( check_bound(bound) )
-                                return true;
-                        }
-                    }
-                }
-            }
-#endif
 
                 DEBUG("- No bounds on trait/aty matched");
             }
@@ -1053,10 +1030,6 @@ bool StaticTraitResolve::find_impl__check_crate_raw(const Span& sp, const ::HIR:
                 n_placeholder_lfts_needed++;
             }
         }
-#if 0
-        ASSERT_BUG(sp, base_impl_placeholder_idx.ty  + n_placeholder_tys_needed  <= 256, "Out of impl placeholder types");
-        ASSERT_BUG(sp, base_impl_placeholder_idx.lft + n_placeholder_lfts_needed <= 256, "Out of impl placeholder lifetimes");
-#else
         if (n_placeholder_tys_needed > 0) {
             ASSERT_BUG(sp, base_impl_placeholder_idx.ty + impl_params.m_types.size() <= 256, "Out of impl placeholder types");
         }
@@ -1066,7 +1039,6 @@ bool StaticTraitResolve::find_impl__check_crate_raw(const Span& sp, const ::HIR:
         if (n_placeholder_tys_needed > 0) {
             ASSERT_BUG(sp, base_impl_placeholder_idx.lft + impl_params.m_lifetimes.size() <= 256, "Out of impl placeholder lifetimes");
         }
-#endif
     }
     if (match == ::HIR::Compare::Unequal) {
         DEBUG(" > Type mismatch");
@@ -1940,13 +1912,10 @@ bool StaticTraitResolve::expand_associated_types__UfcsKnown(const Span& sp, ::HI
         }
     }
     if( rv ) {
-        if (false) {
-        } else {
-            if (recurse) {
-                this->expand_associated_types_inner(sp, input);
-            }
-            return true;
+        if (recurse) {
+            this->expand_associated_types_inner(sp, input);
         }
+        return true;
     }
 
     // If the type of this UfcsKnown is ALSO a UfcsKnown - Check if it's bounded by this trait with equality

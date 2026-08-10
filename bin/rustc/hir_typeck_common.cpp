@@ -718,17 +718,6 @@ struct CloneTyWith_Monomorph: Monomorphiser {
                     BUG(sp, "Method parameters were not expected (got " << ty << ")");
                 }
                 break;
-#if 0
-        case 3:
-            if( const auto* p = this->get_hrl_params() ) {
-                ASSERT_BUG(sp, ty.idx() < p->m_types.size(), "Type param " << ty << " out of range for (max " << p->m_types.size() << ")");
-                return p->m_types[ty.idx()].clone();
-            }
-            else {
-                BUG(sp, "Higher-ranked parameters were not expected (got " << ty << ")");
-            }
-            break;
-#endif
             default:
                 BUG(sp, "Unexpected type param " << ty);
         }
@@ -754,17 +743,6 @@ struct CloneTyWith_Monomorph: Monomorphiser {
                 BUG(sp, "Method parameters were not expected (got " << val << ")");
             }
             break;
-#if 0
-    case 3:
-        if( const auto* p = this->get_hrl_params() ) {
-            ASSERT_BUG(sp, val.idx() < p->m_values.size(), "Value param " << val << " out of range for (max " << p->m_values.size() << ")");
-            return p->m_values[val.idx()].clone();
-        }
-        else {
-            BUG(sp, "Higher-ranked parameters were not expected (got " << val << ")");
-        }
-        break;
-#endif
         default:
             BUG(sp, "Unexpected value param " << val);
     }

@@ -2418,14 +2418,6 @@ void Expand_Mod_Early(::AST::Crate& crate, ::AST::Module& mod, std::vector<std::
                 new_root_items.push_back(box$(*i));
                 i->data = AST::Item();
 
-#if 0
-                TTStream    lex(i->span, ParseState(crate.m_edition), mac_inv.input_tt());
-                auto mac = Parse_MacroRules(lex);
-                const auto* mac_ptr = &*mac;
-                crate.m_root_module.add_macro(true, mac_inv.input_ident(), std::move(mac));
-                crate.m_exported_macros[mac_inv.input_ident()] = mac_ptr;
-#else
-#endif
             } else if (i->data.is_Macro()) {
                 // TODO: `#[macro_export] macro foo { ... }` DOESN'T move the item to the root
                 // - Instead, it should add an alias? Or just tag for export

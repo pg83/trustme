@@ -2484,19 +2484,6 @@ bool Parse_MacroInvocation_Opt(TokenStream& lex, AST::MacroInvocation& out_inv);
                     path.nodes.pop_back();
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return AST::Visibility::make_restricted(AST::Visibility::Ty::PubSuper, std::move(path));
-#if 0
-                while( lex.lookahead(0) == TOK_DOUBLE_COLON && lex.lookahead(1) == TOK_RWORD_SUPER )
-                {
-                    GET_TOK(tok, lex);
-                    GET_TOK(tok, lex);
-                    path.nodes.pop_back();
-                }
-                while( lex.getTokenIf(TOK_DOUBLE_COLON) )
-                {
-                    GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                    path.nodes.push_back( tok.ident().name );
-                }
-#endif
                     break;
                 case TOK_RWORD_IN: {
                     AST::Path ast_path;
@@ -3995,101 +3982,6 @@ bool Parse_MacroInvocation_Opt(TokenStream& lex, AST::MacroInvocation& out_inv) 
     return true;
 }
 
-#if 0
-namespace {
-    ::AST::Module::FileInfo get_submod_file(
-        Span sp, const ::AST::Module::FileInfo& parent_fileinfo, const ::std::string& new_mod_name, const ::std::string& path_attr,
-        bool is_extern_file, bool is_cfg_disabled
-        )
-    {
-        ::AST::Module::FileInfo rv;
-        TRACE_FUNCTION_F(new_mod_name << ", " << path_attr << ", " << is_extern_file);
-        ::std::string   sub_path;
-        bool    sub_file_controls_dir = true;
-
-        // 1. Determine the base path for the module
-        if( parent_fileinfo.path == "-" ) {
-            if( path_attr.size() ) {
-                ERROR(lex.point_span(), E0000, "Cannot load module from file when reading stdin");
-            }
-            sub_path = "-";
-        }
-        else if( path_attr.size() > 0 )
-        {
-            // #[path] present, add to the parent path
-            sub_path = dirname(parent_fileinfo.path) + path_attr;
-        }
-        else if( mod_fileinfo.controls_dir )
-        {
-            // The parent module is either the crate root, or a `mod.rs` (or otherwise a controller)
-            sub_path = parent_fileinfo.dir + name;
-        }
-        else
-        {
-            sub_path = parent_fileinfo.path;
-            sub_file_controls_dir = false;
-        }
-        DEBUG("Mod '" << name << "', sub_path = " << sub_path);
-
-        rv.path = sub_path;
-        rv.controls_dir = sub_file_controls_dir;
-
-        if( is_cfg_disabled || parent_fileinfo.force_no_load )
-        {
-            rv.force_no_load = true;
-        }
-        if( ! is_extern_file )
-        {
-            // If this is an inline module, set the path to just a directory
-            if( sub_path != "-" ) {
-                rv.path = sub_path + "/";
-                rv.dir = sub_path + "/";
-            }
-            else {
-                rv.path = "-";
-            }
-        }
-        else
-        {
-            if( sub_path == "-" )
-            {
-                ERROR(lex.point_span(), E0000, "Cannot load module from file when reading stdin");
-            }
-            else
-            {
-                ::std::string newpath_dir  = sub_path + "/";
-                ::std::string newpath_file = path_attr.size() > 0 ? sub_path : sub_path + ".rs";
-                DEBUG("newpath_dir = '" << newpath_dir << "', newpath_file = '" << newpath_file << "'");
-                ::std::ifstream ifs_dir (newpath_dir + "mod.rs");
-                ::std::ifstream ifs_file(newpath_file);
-                if( ifs_dir.is_open() && ifs_file.is_open() )
-                {
-                    // Collision
-                    ERROR(lex.point_span(), E0000, "Both modname.rs and modname/mod.rs exist");
-                }
-                else if( ifs_dir.is_open() )
-                {
-                    // Load from dir
-                    rv.path = newpath_dir + "mod.rs";
-                    rv.dir = newpath_dir;
-                }
-                else if( ifs_file.is_open() )
-                {
-                    rv.path = newpath_file;
-                    rv.dir = newpath_dir;
-                    rv.controls_dir = false;
-                }
-                else
-                {
-                    // Can't find file
-                    ERROR(sp, E0000, "Can't find file for '" << name << "' in '" << parent_fileinfo.dir << "'");
-                }
-            }
-        }
-        return rv;
-    }
-}
-#endif
 
 ::AST::Named<::AST::Item> Parse_Mod_Item_S(TokenStream& lex, const AST::Module::FileInfo& mod_fileinfo, const ::AST::AbsolutePath& mod_path, AST::AttributeList meta_items) {
     TRACE_FUNCTION_F("mod_path=" << mod_path << ", meta_items=" << meta_items);

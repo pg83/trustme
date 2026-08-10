@@ -953,11 +953,6 @@ void HMTypeInferrence::set_ivar_to(unsigned int slot, ::HIR::TypeRef type) {
                     break;
             }
         }
-#if 0
-        else TU_IFLET(::HIR::TypeData, root_ivar.type->data(), Diverge, e,
-            // Overwriting ! with anything is valid (it's like a magic ivar)
-        )
-#endif
         else {
             BUG(sp, "Overwriting ivar " << slot << " (" << root_ivar.type << ") with " << type);
         }
@@ -1777,45 +1772,6 @@ TU_ARMA(Alias, ee) {
         // Magic index and unsize impls for Arrays
         // NOTE: The index impl for [T] is in libcore.
         TU_ARMA(Array, e) {
-#if 0
-        if( trait == trait_index || trait == trait_indexmut ) {
-            if( params.m_types.size() != 1 )
-                BUG(sp, "Index* traits require a single argument");
-            DEBUG("- Magic impl of Index* for " << type);
-            const auto& index_ty = m_ivars.get_type(params.m_types[0]);
-
-            ::HIR::Compare  cmp;
-
-            // Index<usize> ?
-            auto ty_usize = ::HIR::TypeRef(::HIR::CoreType::Usize);
-            cmp = ty_usize.compare_with_placeholders(sp, index_ty, this->m_ivars.callback_resolve_infer());
-            if( cmp != ::HIR::Compare::Unequal )
-            {
-                DEBUG("- Magic impl of Index<usize> for " << type);
-                ::HIR::PathParams   pp;
-                pp.m_types.push_back( mv$(ty_usize) );
-                ::std::map<RcString, ::HIR::TypeRef>  types;
-                types.insert( ::std::make_pair( "Output", e.inner.clone() ) );
-                return callback( ImplRef(type.clone(), mv$(pp), mv$(types)), cmp );
-            }
-
-            /*
-            // TODO: Index<Range/RangeFrom/RangeTo/FullRange>? - Requires knowing the path to the range ops (which isn't a lang item)
-            ::HIR::PathParams   pp;
-            pp.m_types.push_back( ::HIR::TypeRef(::HIR::CoreType::Usize) );
-            auto ty_range = ::HIR::TypeRef( ::HIR::GenericPath(this->m_crate.get_lang_item_path(sp, "range"), mv$(pp)) );
-            cmp = ty_range.compare_with_placeholders(sp, index_ty, this->m_ivars.callback_resolve_infer());
-            if( cmp != ::HIR::Compare::Unequal ) {
-                ::HIR::PathParams   pp;
-                pp.m_types.push_back( mv$(ty_range) );
-                ::std::map< ::std::string, ::HIR::TypeRef>  types;
-                types.insert(::std::make_pair( "Output", ::HIR::TypeRef::new_slice(e.inner.clone()) ));
-                return callback( ImplRef(type.clone(), mv$(pp), mv$(types)), cmp );
-            )
-            */
-            //return false;
-        }
-#endif
         }
     }
     return false;
@@ -1836,15 +1792,6 @@ TU_ARMA(Alias, ee) {
             const auto& type = this->m_ivars.get_type(ty);
             TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
 
-#if 0
-    if( const auto* te = type->opt_Infer() )
-    {
-        if( !te->is_lit() ) {
-            // NOTE: Can't hope to find an impl if we know nothing about the type.
-            return false;
-        }
-    }
-#endif
 
             //const auto& trait_index = this->m_crate.get_lang_item_path(sp, "index");
             //const auto& trait_indexmut = this->m_crate.get_lang_item_path(sp, "index_mut");
@@ -7243,14 +7190,6 @@ bool TraitResolution::find_trait_impls(
             else if (ty->is_Slice() || ty->is_Primitive() || ty->is_Tuple() || ty->is_Array()) {
                 return nullptr;
             } else {
-#if 0
-        auto it = m_deref_cache.find(ty_in);
-        if(it != m_deref_cache.end()) {
-            if(it->second == HIR::TypeRef())
-                return nullptr;
-            return &it->second;
-        }
-#endif
 
                 bool succ = this->find_trait_impls(sp, m_lang_Deref, ::HIR::PathParams{}, ty, [&](auto impls, auto match) {
                     tmp_type = impls.get_type(m_crate.m_types, "Target", {});

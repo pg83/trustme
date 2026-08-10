@@ -341,10 +341,5 @@ void memory_dump(const char* phase) {
 #else
         std::cerr << "NOTE: No memory dump supported on this platform" << std::endl;
 #endif
-
-        if (false) {
-            std::cerr << "Press enter to continue after '" << phase << "'" << std::endl;
-            std::cin.get();
-        }
     }
 }

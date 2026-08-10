@@ -399,23 +399,6 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
 }
 
 ::HIR::Compare HIR::PathParams::compare_with_placeholders(const Span& sp, const ::HIR::PathParams& x, ::HIR::t_cb_resolve_type resolve_placeholder) const {
-#if 0
-    struct NopMatch: public MatchGenerics {
-        ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeRef& ty, t_cb_resolve_type resolve_cb) override {
-            if( ty->is_Generic() ) {
-                return ty->as_Generic().binding == g.binding ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal;
-            }
-            return ::HIR::Compare::Unequal;
-        }
-        ::HIR::Compare match_val(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) override {
-            if( sz.is_Unevaluated() ) {
-                return ::HIR::Compare::Fuzzy;
-            }
-            return sz.is_Generic() && sz.as_Generic().binding == g.binding ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal;
-        }
-    } nop_match;
-    return this->match_test_generics_fuzz(sp, x, resolve_placeholder, nop_match);
-#endif
     using ::HIR::Compare;
 
     auto rv = Compare::Equal;

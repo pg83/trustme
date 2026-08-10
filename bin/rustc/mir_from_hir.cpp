@@ -1956,16 +1956,6 @@ namespace {
                 // TODO: Validation?
                 ASSERT_BUG(sp, enm.m_data.is_Data(), "TupleVariant on non-data enum - " << node.m_path.m_path);
 
-#if 0
-                const auto& var_ty = enm.m_data.as_Data()[idx].type;
-                // Take advantage of the identical generics to cheaply clone/monomorph the path.
-                const auto& str = *var_ty->as_Path().binding.as_Struct();
-                ::HIR::GenericPath struct_path = node.m_path.clone();
-                struct_path.m_path = var_ty->as_Path().path.m_data.as_Generic().m_path;
-
-                auto ty = ::HIR::TypeRef::new_path( mv$(struct_path), &str );
-                auto v = m_builder.get_result_in_param(node.span(), ty);
-#endif
 
                 m_builder.set_result(node.span(), ::MIR::RValue::make_EnumVariant({mv$(enum_path), static_cast<unsigned>(idx), mv$(values)}));
             }
@@ -4354,26 +4344,7 @@ void PatternRulesetBuilder::append_from_lit(const Span& sp, EncodedLiteralSlice 
             m_field_path.pop_back();
         }
         TU_ARMA(Slice, e) {
-#if 0
-        size_t size = 0;
-        ASSERT_BUG(sp, Target_GetSizeOf(sp, m_resolve, e.inner, size), "Matching with generic constant type not valid - " << ty);
-
-        ASSERT_BUG(sp, lit.is_List(), "Matching array with non-list literal - " << lit);
-        const auto& list = lit.as_List();
-
-        PatternRulesetBuilder   sub_builder { this->m_resolve };
-        sub_builder.m_field_path = m_field_path;
-        sub_builder.m_field_path.push_back(0);
-        for(const auto& val : list)
-        {
-            sub_builder.append_from_lit( sp, val, e.inner );
-            sub_builder.m_field_path.back() ++;
-        }
-        // Encodes length check and sub-pattern rules
-        this->push_rule( PatternRule::make_Slice({ static_cast<unsigned int>(list.size()), mv$(sub_builder.m_rules) }) );
-#else
             TODO(sp, "Match literal Slice");
-#endif
         }
         TU_ARMA(Borrow, e) {
             m_field_path.push_back(FIELD_DEREF);
@@ -6326,23 +6297,6 @@ void MatchGenGrouped::gen_for_slice(t_rules_subset arm_rules, size_t ofs, ::MIR:
                     // - For now, only the first pattern gets edited.
                     // - Maybe clone the blocks used for the condition?
 
-#if 0
-                    // Check for marking in `ac` that the block has already been terminated, assert that target is `next`
-                    if( ap.cond_fail_tgt != 0 )
-                    {
-                        ASSERT_BUG(sp, ap.cond_fail_tgt == next, "Condition fail target already set with mismatching arm, set to bb" << ap.cond_fail_tgt << " cur is bb" << next);
-                    }
-                    else
-                    {
-                        ap.cond_fail_tgt = next;
-
-                        m_builder.set_cur_block( ap.cond_false );
-                        m_builder.end_block( ::MIR::Terminator::make_Goto(next) );
-                    }
-
-                    if( next != default_arm )
-                        m_builder.set_cur_block(next);
-#endif
                 } else {
                     ASSERT_BUG(sp, idx + 1 == arm_rules.size(), "Ended arm with other arms present");
                 }
@@ -7822,21 +7776,6 @@ void MirBuilder::terminate_scope(const Span& sp, ScopeHandle scope, bool emit_cl
         drop_scope_values(scope_def);
 
 // Emit ScopeEnd for all controlled values
-#if 0
-        ::MIR::Statement::Data_ScopeEnd se;
-        if(const auto* e = scope_def.data.opt_Variables() ) {
-            se.vars = e->vars;
-        }
-        else if(const auto* e = scope_def.data.opt_Temporaries()) {
-            se.tmps = e->temporaries;
-        }
-        else {
-        }
-        // Only push the ScopeEnd if there were variables to end
-        if( !se.vars.empty() || !se.tmps.empty() ) {
-            this->push_stmt(sp, ::MIR::Statement( mv$(se) ));
-        }
-#endif
     }
 
     // 3. Pop scope (last because `drop_scope_values` uses the stack)

@@ -1492,61 +1492,6 @@ namespace {
         return false;
     }
 
-#if 0
-    // Obtain the crate that defined the named type
-    // See https://github.com/rust-lang/rfcs/blob/master/text/2451-re-rebalancing-coherence.md
-    // - Catch: The above allows `impl ForeignTrait for ForeignType<LocalType>`
-    // Could return a list of crates to search
-    RcString get_type_crate(const ::HIR::Crate& crate, const ::HIR::TypeRef& ty)
-    {
-        TU_MATCH_HDRA( (ty.data()), { )
-        TU_ARMA(Infer, _)
-            return RcString();
-        TU_ARMA(Generic, _)
-            return RcString();
-        TU_ARMA(Diverge, _)
-            TODO(Span(), "Find the crate with " << ty << "'s inherent impl");
-        TU_ARMA(Primitive, _) {
-            TODO(Span(), "Find the crate with " << ty << "'s inherent impl");
-            }
-        TU_ARMA(Slice, _) {
-            TODO(Span(), "Find the crate with " << ty << "'s inherent impl");
-            }
-        TU_ARMA(Array, _)
-            TODO(Span(), "Find the crate with " << ty << "'s inherent impl");
-        // Paths: Unowned if unknown/generic, otherwise defining crate
-        TU_ARMA(Path, te) {
-            if( te.binding.is_Unbound() || te.binding.is_Opaque() )
-                return RcString();
-            assert( te.path.m_data.is_Generic() );
-            // TODO: If the type is marked as fundamental, then recurse into the first generic
-            return te.path.m_data.as_Generic().m_path.m_crate_name;
-            }
-        TU_ARMA(TraitObject, te) {
-            return te.m_trait.m_path.m_path.m_crate_name;
-            }
-        TU_ARMA(Closure, _)
-            return crate.m_crate_name;
-        TU_ARMA(Generator, _)
-            return crate.m_crate_name;
-        // Functions aren't owned
-        TU_ARMA(NamedFunction, _)
-            return RcString();
-        TU_ARMA(Function, _)
-            return RcString();
-        TU_ARMA(ErasedType, _)
-            return RcString();
-        TU_ARMA(Tuple, _)
-            return RcString();
-        // Recurse into pointers
-        TU_ARMA(Borrow, te)
-            return get_type_crate(crate, te.inner);
-        TU_ARMA(Pointer, te)
-            return get_type_crate(crate, te.inner);
-        }
-        throw "Unreachable";
-    }
-#endif
 }
 
 bool ::HIR::Crate::find_trait_impls(const ::HIR::SimplePath& trait, const ::HIR::TypeRef& type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const {

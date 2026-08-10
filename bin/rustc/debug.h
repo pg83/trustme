@@ -49,23 +49,19 @@ extern bool g_debug_enabled;
         } while (0)
     #define DEBUG(ss)                       \
         do {                                \
-            if (false)                      \
-                (void)(::NullSink() << ss); \
+            (void)sizeof(::NullSink() << ss); \
         } while (0)
     #define TRACE_FUNCTION \
         do {               \
         } while (0)
     #define TRACE_FUNCTION_F(ss)            \
         do {                                \
-            if (false)                      \
-                (void)(::NullSink() << ss); \
+            (void)sizeof(::NullSink() << ss); \
         } while (0)
     #define TRACE_FUNCTION_FR(ss, ss2)       \
         do {                                 \
-            if (false)                       \
-                (void)(::NullSink() << ss);  \
-            if (false)                       \
-                (void)(::NullSink() << ss2); \
+            (void)sizeof(::NullSink() << ss);  \
+            (void)sizeof(::NullSink() << ss2); \
         } while (0)
 #endif
 

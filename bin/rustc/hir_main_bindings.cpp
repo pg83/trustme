@@ -1581,13 +1581,6 @@ void HirDeserialiser::deserialise_crate(::HIR::Crate& rv) {
         ::std::cerr << "Unable to deserialise crate metadata from " << filename << ": " << e.what() << ::std::endl;
         ::std::abort();
     }
-#if 0
-    catch(const char*)
-    {
-        ::std::cerr << "Unable to load crate from " << filename << ": Deserialisation failure" << ::std::endl;
-        ::std::abort();
-    }
-#endif
 }
 
 RcString HIR_Deserialise_JustName(const ::std::string& filename) {
@@ -1604,13 +1597,6 @@ RcString HIR_Deserialise_JustName(const ::std::string& filename) {
         ::std::cerr << "Unable to deserialise crate metadata from " << filename << ": " << e.what() << ::std::endl;
         ::std::abort();
     }
-#if 0
-    catch(const char*)
-    {
-        ::std::cerr << "Unable to load crate from " << filename << ": Deserialisation failure" << ::std::endl;
-        ::std::abort();
-    }
-#endif
 }
 
 #undef DEBUG_EXTRA_ENABLE
@@ -1890,25 +1876,6 @@ namespace {
         }
 
 // - Misc
-#if 0
-        virtual void visit_params(::HIR::GenericParams& params);
-        virtual void visit_pattern(::HIR::Pattern& pat);
-        virtual void visit_pattern_val(::HIR::Pattern::Value& val);
-        virtual void visit_type(::HIR::TypeRef& tr);
-
-        enum class PathContext {
-            TYPE,
-            TRAIT,
-
-            VALUE,
-        };
-        virtual void visit_trait_path(::HIR::TraitPath& p);
-        virtual void visit_path(::HIR::Path& p, PathContext );
-        virtual void visit_path_params(::HIR::PathParams& p);
-        virtual void visit_generic_path(::HIR::GenericPath& p, PathContext );
-
-        virtual void visit_expr(::HIR::ExprPtr& exp);
-#endif
 
         bool node_is_leaf(const ::HIR::ExprNode& node) {
             if (NODE_IS(&node, _PathValue)) {

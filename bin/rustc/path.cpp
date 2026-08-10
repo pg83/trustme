@@ -103,68 +103,6 @@ helpers::path helpers::path::normalise() const {
     return rv;
 }
 
-#if 0
-void helpers::path::normalise_in_place()
-{
-    size_t insert_point = 0;
-
-    for(size_t read_pos = 0; read_pos < m_str.size(); read_pos ++)
-    {
-        auto pos = m_str.find_first_of(SEP, read_pos);
-        if(pos == ::std::string::npos)
-            pos = m_str.size();
-        auto comp = string_view(m_str.c_str() + read_pos, pos - read_pos);
-
-        bool append;
-        if(comp == ".")
-        {
-            // Advance read without touching insert
-            append = false;
-        }
-        else if( comp == ".." )
-        {
-            // Consume parent (if not a relative component already)
-            // Move insertion point back to the previous separator
-            auto pos = m_str.find_last_of(SEP, insert_point);
-            if(pos == ::std::string::npos)
-            {
-                // Only one component currently (or empty)
-                append = true;
-            }
-            else if(string_view(m_str.c_str() + pos+1, insert_point - pos-1) == "..")
-            {
-                // Last component is ".." - keep adding
-                append = true;
-            }
-            else
-            {
-                insert_point = pos;
-                append = false;
-            }
-        }
-        else
-        {
-            append = true;
-        }
-
-        if(append)
-        {
-            if( read_pos != insert_point )
-            {
-                //assert(read_pos > insert_point);
-                while(read_pos < pos)
-                {
-                    m_str[insert_point++] = m_str[read_pos++];
-                }
-            }
-        }
-        else
-        {
-            read_pos = pos;
-        }
-    }
-}
-#endif
 
 void helpers::path::ComponentsIter::operator++() {
     if (end == p.m_str.size()) {

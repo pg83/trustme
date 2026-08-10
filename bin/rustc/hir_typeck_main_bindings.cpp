@@ -1625,89 +1625,6 @@ namespace {
             return rv;
         }
 
-#if 0
-        void update_self_type(const Span& sp, ::HIR::TypeRef& ty) const
-        {
-            struct H {
-                static void handle_pathparams(const Visitor& self, const Span& sp, ::HIR::PathParams& pp) {
-                    for(auto& typ : pp.m_types)
-                        self.update_self_type(sp, typ);
-                }
-            };
-
-            TU_MATCH(::HIR::TypeData, (ty.data_mut()), (e),
-            (Generic,
-                if(e.name == "Self" || e.binding == GENERIC_Self) {
-                    if( m_self_types.empty() )
-                        ERROR(sp, E0000, "Self appeared in unexpected location");
-                    if( !m_self_types.back() )
-                        ERROR(sp, E0000, "Self appeared in unexpected location");
-                    ty = m_self_types.back()->clone();
-                    return;
-                }
-                ),
-
-            (Infer,
-                ),
-            (Diverge,
-                ),
-            (Primitive,
-                ),
-            (Path,
-                TU_MATCHA( (e.path.m_data), (pe),
-                (Generic,
-                    H::handle_pathparams(*this, sp, pe.m_params);
-                    ),
-                (UfcsKnown,
-                    update_self_type(sp, pe.type);
-                    H::handle_pathparams(*this, sp, pe.trait.m_params);
-                    H::handle_pathparams(*this, sp, pe.params);
-                    ),
-                (UfcsInherent,
-                    update_self_type(sp, pe.type);
-                    H::handle_pathparams(*this, sp, pe.params);
-                    ),
-                (UfcsUnknown,
-                    update_self_type(sp, pe.type);
-                    H::handle_pathparams(*this, sp, pe.params);
-                    )
-                )
-                ),
-            (TraitObject,
-                // NOTE: Can't mention Self anywhere
-                TODO(sp, "TraitObject - " << ty);
-                ),
-            (ErasedType,
-                TODO(sp, "update_self_type - ErasedType");
-                ),
-            (Tuple,
-                for(auto& sty : e)
-                    update_self_type(sp, sty);
-                ),
-            (Array,
-                update_self_type(sp, e.inner);
-                ),
-            (Slice,
-                update_self_type(sp, e.inner);
-                ),
-            (Borrow,
-                update_self_type(sp, e.inner);
-                ),
-            (Pointer,
-                update_self_type(sp, e.inner);
-                ),
-            (Function,
-                TODO(sp, "update_self_type - Function");
-                ),
-            (Closure,
-                TODO(sp, "update_self_type - Closure");
-                ),
-            (Generator,
-                TODO(sp, "update_self_type - Generator?");
-                )
-            )
-        }
-#endif
         void check_parameters(const Span& sp, const ::HIR::GenericParams& param_def, ::HIR::PathParams& param_vals) {
             MonomorphStatePtr ms(crate.m_types, m_self_types.empty() ? nullptr : m_self_types.back(), &param_vals, nullptr);
 
@@ -1872,18 +1789,6 @@ namespace {
                 m_current_lifetime.pop_back();
             }
 
-#if 0
-            if( const auto* te = ty.m_data.opt_Generic() )
-            {
-                if(te->name == "Self" && te->binding == GENERIC_Self) {
-                    if( m_self_types.empty() )
-                        ERROR(sp, E0000, "Self appeared in unexpected location");
-                    if( !m_self_types.back() )
-                        ERROR(sp, E0000, "Self appeared in unexpected location");
-                    ty = m_self_types.back()->clone();
-                }
-            }
-#endif
 
             if (auto* e = data.opt_TraitObject()) {
                 visit_lifetime(sp, e->m_lifetime);
@@ -2327,18 +2232,6 @@ namespace {
                     }
                     // Different logic for lifetimes, only want to check un-elided lifetimes
                     // - Well, elided lifetimes can overlap non-elided ones (as long as they're identical)
-#if 0
-                    {
-                        auto find_first_elided_idx = [](const HIR::GenericParams& gp) {
-                            return std::find_if(gp.m_lifetimes.begin(), gp.m_lifetimes.end(), [](const HIR::LifetimeDef& ld){ return ld.m_name.compare(0, 7, "elided#") == 0; }) - gp.m_lifetimes.begin();
-                            };
-                        size_t impl_n_unelided  = find_first_elided_idx(impl_fcn .m_params);
-                        size_t trait_n_unelided = find_first_elided_idx(trait_fcn.m_params);
-                        if( impl_n_unelided != trait_n_unelided ) {
-                            failures.push_back(FMT("Mismatched lifetime param count (expected " << trait_n_unelided << ", got " << impl_n_unelided << ")"));
-                        }
-                    }
-#endif
                     if (impl_fcn.m_params.m_values.size() != trait_fcn.m_params.m_values.size()) {
                         failures.push_back(FMT("Mismatched const param count (expected " << trait_fcn.m_params.m_values.size() << ", got " << impl_fcn.m_params.m_values.size() << ")"));
                     }
