@@ -5,13 +5,13 @@
  * expand/assert.cpp
  * - assert! built-in macro (1.29)
  */
-#include "synext_macro.hpp"
-#include "synext.hpp" // for Expand_BareExpr
-#include "parse_interpolated_fragment.hpp"
-#include "ast_crate.hpp"
-#include "parse_ttstream.hpp"
-#include "parse_common.hpp"
-#include "parse_parseerror.hpp"
+#include "synext_macro.h"
+#include "synext.h" // for Expand_BareExpr
+#include "parse_interpolated_fragment.h"
+#include "ast_crate.h"
+#include "parse_ttstream.h"
+#include "parse_common.h"
+#include "parse_parseerror.h"
 
 class CExpander_assert: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {

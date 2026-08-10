@@ -5,8 +5,8 @@
  * ast/expr.cpp
  * - AST Expression nodes
  */
-#include "ast_expr.hpp"
-#include "ast_ast.hpp"
+#include "ast_expr.h"
+#include "ast_ast.h"
 #include <cctype>
 
 namespace AST {

@@ -7,17 +7,17 @@
  *
  * Handles implementing Clone (when in 1.29 mode)
  */
-#include "trans_main_bindings.hpp"
-#include "trans_trans_list.hpp"
-#include "hir_hir.hpp"
-#include "mir_mir.hpp"
-#include "hir_typeck_common.hpp" // monomorph
-#include "hir_typeck_static.hpp" // StaticTraitResolve
+#include "trans_main_bindings.h"
+#include "trans_trans_list.h"
+#include "hir_hir.h"
+#include "mir_mir.h"
+#include "hir_typeck_common.h" // monomorph
+#include "hir_typeck_static.h" // StaticTraitResolve
 #include <deque>
 #include <algorithm> // find_if
-#include "trans_target.hpp"
-#include "mir_operations.hpp"
-#include "mir_helpers.hpp"
+#include "trans_target.h"
+#include "mir_operations.h"
+#include "mir_helpers.h"
 
 namespace {
     struct State {

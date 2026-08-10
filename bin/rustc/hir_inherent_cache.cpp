@@ -5,9 +5,9 @@
  * hir/inherent_cache.cpp
  * - Inherent method lookup cache
  */
-#include "hir_inherent_cache.hpp"
-#include "hir_type.hpp"
-#include "hir_hir.hpp"
+#include "hir_inherent_cache.h"
+#include "hir_type.h"
+#include "hir_hir.h"
 
 void HIR::InherentCache::Lowest::insert(const Span& sp, const HIR::TypeImpl& impl) {
     const auto& type = impl.m_type;

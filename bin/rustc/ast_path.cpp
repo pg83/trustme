@@ -5,13 +5,13 @@
  * ast/path.cpp
  * - AST::Path and friends
  */
-#include "ast_path.hpp"
-#include "ast_ast.hpp"
-#include "ast_types.hpp"
+#include "ast_path.h"
+#include "ast_ast.h"
+#include "ast_types.h"
 #include <iostream>
-#include "parse_parseerror.hpp"
+#include "parse_parseerror.h"
 #include <algorithm>
-#include "ast_expr.hpp"
+#include "ast_expr.h"
 
 #define PRETTY_PATH_PRINT 1
 

@@ -5,15 +5,15 @@
  * resolve/common.cpp
  * - Common core to the resolve phase
  */
-#include "resolve_main_bindings.hpp"
-#include "resolve_common.hpp"
-#include "ast_crate.hpp"
-#include "ast_ast.hpp"
-#include "ast_expr.hpp"
-#include "hir_hir.hpp"
-#include "stdspan.hpp" // std::span
-#include "expand_cfg.hpp"
-#include "synext_macro.hpp"
+#include "resolve_main_bindings.h"
+#include "resolve_common.h"
+#include "ast_crate.h"
+#include "ast_ast.h"
+#include "ast_expr.h"
+#include "hir_hir.h"
+#include "stdspan.h" // std::span
+#include "expand_cfg.h"
+#include "synext_macro.h"
 
 ::std::ostream& operator<<(::std::ostream& os, ResolveNamespace ns) {
     switch (ns) {

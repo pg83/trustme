@@ -5,16 +5,16 @@
  * expand/derive.cpp
  * - Support for the `#[derive]` attribute
  */
-#include "synext.hpp"
-#include "common.hpp"
-#include "ast_ast.hpp"
-#include "ast_expr.hpp"
-#include "ast_crate.hpp"
-#include "hir_hir.hpp"      // ABI_RUST
-#include "parse_common.hpp" // Parse_ModRoot_Items
-#include "parse_ttstream.hpp"
-#include "expand_proc_macro.hpp"
-#include "expand_common.hpp" // Expand_LookupMacro
+#include "synext.h"
+#include "common.h"
+#include "ast_ast.h"
+#include "ast_expr.h"
+#include "ast_crate.h"
+#include "hir_hir.h"      // ABI_RUST
+#include "parse_common.h" // Parse_ModRoot_Items
+#include "parse_ttstream.h"
+#include "expand_proc_macro.h"
+#include "expand_common.h" // Expand_LookupMacro
 
 namespace {
     const RcString rcstring_Self = RcString::new_interned("Self");

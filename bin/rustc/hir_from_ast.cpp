@@ -5,21 +5,21 @@
  * hir/from_ast.cpp
  * - Constructs the HIR module tree from the AST module tree
  */
-#include "common.hpp"
-#include "hir_hir.hpp"
-#include "hir_main_bindings.hpp"
-#include "hir_conv_main_bindings.hpp"
-#include "ast_ast.hpp"
-#include "ast_expr.hpp" // For shortcut in array size handling
-#include "ast_crate.hpp"
-#include "hir_from_ast.hpp"
+#include "common.h"
+#include "hir_hir.h"
+#include "hir_main_bindings.h"
+#include "hir_conv_main_bindings.h"
+#include "ast_ast.h"
+#include "ast_expr.h" // For shortcut in array size handling
+#include "ast_crate.h"
+#include "hir_from_ast.h"
 #include <std/mem/obj_pool.h>
-#include "hir_visitor.hpp"
-#include "macro_rules_macro_rules.hpp"
-#include "hir_item_path.hpp"
+#include "hir_visitor.h"
+#include "macro_rules_macro_rules.h"
+#include "hir_item_path.h"
 #include <limits.h>
-#include "hir_typeck_helpers.hpp" // monomorph
-#include "trans_target.hpp"
+#include "hir_typeck_helpers.h" // monomorph
+#include "trans_target.h"
 #include <unordered_set>
 
 ::HIR::ExprPtr LowerHIR_Expr(const ::AST::Expr& e);

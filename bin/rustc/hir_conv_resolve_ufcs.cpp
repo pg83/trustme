@@ -10,11 +10,11 @@
  * - Expression code can handle picking UFCS functions better than this code can
  * - Outer EAT is nice, but StaticTraitResolve will need to handle non-EAT-ed types when doing lookups
  */
-#include "hir_conv_main_bindings.hpp"
-#include "hir_hir.hpp"
-#include "hir_expr.hpp"
-#include "hir_visitor.hpp"
-#include "hir_typeck_static.hpp"
+#include "hir_conv_main_bindings.h"
+#include "hir_hir.h"
+#include "hir_expr.h"
+#include "hir_visitor.h"
+#include "hir_typeck_static.h"
 #include <std/mem/obj_pool.h>
 #include <algorithm> // std::remove_if
 

@@ -5,12 +5,12 @@
  * macro_rules/parse.cpp
  * - macro_rules! parsing
  */
-#include "common.hpp"
-#include "parse_common.hpp"
-#include "parse_parseerror.hpp"
-#include "macro_rules_macro_rules.hpp"
-#include "macro_rules_pattern_checks.hpp"
-#include "ast_crate.hpp" // for editions
+#include "common.h"
+#include "parse_common.h"
+#include "parse_parseerror.h"
+#include "macro_rules_macro_rules.h"
+#include "macro_rules_pattern_checks.h"
+#include "ast_crate.h" // for editions
 
 MacroRulesPtr Parse_MacroRules(TokenStream& lex);
 

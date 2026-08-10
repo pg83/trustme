@@ -5,8 +5,8 @@
  * mir/visit_crate_mir.cpp
  * - Visitor to visit all MIR blobs in a crate
  */
-#include "mir_visit_crate_mir.hpp"
-#include "hir_expr.hpp"
+#include "mir_visit_crate_mir.h"
+#include "hir_expr.h"
 
 // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
 void MIR::OuterVisitor::visit_expr(::HIR::ExprPtr& exp) {

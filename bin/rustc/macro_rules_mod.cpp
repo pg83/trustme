@@ -5,14 +5,14 @@
  * macro_rules/mod.cpp
  * - Top-level handling for macro_rules macros
  */
-#include "common.hpp"
-#include "macro_rules_macro_rules.hpp"
-#include "parse_parseerror.hpp"
-#include "parse_tokentree.hpp"
-#include "parse_common.hpp"
+#include "common.h"
+#include "macro_rules_macro_rules.h"
+#include "parse_parseerror.h"
+#include "parse_tokentree.h"
+#include "parse_common.h"
 #include <limits.h>
 
-#include "macro_rules_pattern_checks.hpp"
+#include "macro_rules_pattern_checks.h"
 
 bool is_token_path(eTokenType tt) {
     switch (tt) {

@@ -10,29 +10,29 @@
 #include <string>
 #include <set>
 #include <climits>
-#include "version.hpp"
-#include "string_view.hpp"
-#include "parse_lex.hpp"
-#include "parse_parseerror.hpp"
-#include "parse_common.hpp" // For edition checks
-#include "ast_ast.hpp"
-#include "ast_crate.hpp"
+#include "version.h"
+#include "string_view.h"
+#include "parse_lex.h"
+#include "parse_parseerror.h"
+#include "parse_common.h" // For edition checks
+#include "ast_ast.h"
+#include "ast_crate.h"
 #include <cstring>
-#include "main_bindings.hpp"
-#include "resolve_main_bindings.hpp"
-#include "hir_main_bindings.hpp"
-#include "hir_conv_main_bindings.hpp"
-#include "hir_typeck_main_bindings.hpp"
-#include "hir_expand_main_bindings.hpp"
-#include "mir_main_bindings.hpp"
-#include "trans_main_bindings.hpp"
-#include "trans_target.hpp"
-#include "trait_solver_mode.hpp"
+#include "main_bindings.h"
+#include "resolve_main_bindings.h"
+#include "hir_main_bindings.h"
+#include "hir_conv_main_bindings.h"
+#include "hir_typeck_main_bindings.h"
+#include "hir_expand_main_bindings.h"
+#include "mir_main_bindings.h"
+#include "trans_main_bindings.h"
+#include "trans_target.h"
+#include "trait_solver_mode.h"
 
-#include "expand_cfg.hpp"
+#include "expand_cfg.h"
 #include "target_detect.h" // tools/common/target_detect.h
-#include "debug_inner.hpp"
-#include "memory_dump.hpp"
+#include "debug_inner.h"
+#include "memory_dump.h"
 #include <std/mem/obj_pool.h>
 
 #ifndef __has_feature

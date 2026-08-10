@@ -10,13 +10,13 @@
  * - Parse_Stmt : Parse a single statement
  * - Parse_Expr0 : Parse a single expression
  */
-#include "parse_parseerror.hpp"
-#include "ast_ast.hpp"
-#include "ast_expr.hpp"
-#include "parse_common.hpp"
+#include "parse_parseerror.h"
+#include "ast_ast.h"
+#include "ast_expr.h"
+#include "parse_common.h"
 #include <iostream>
-#include "parse_tokentree.hpp"
-#include "parse_interpolated_fragment.hpp"
+#include "parse_tokentree.h"
+#include "parse_interpolated_fragment.h"
 
 using AST::ExprNode;
 using AST::ExprNodeP;
@@ -33,7 +33,7 @@ ExprNodeP Parse_ExprBlockNode(TokenStream& lex, AST::ExprNode_Block::Type ty, Id
 //ExprNodeP Parse_ExprBlockLine_WithItems(TokenStream& lex, ::std::shared_ptr<AST::Module>& local_mod, bool& add_silence_if_end);
 //ExprNodeP Parse_ExprBlockLine(TokenStream& lex, bool *add_silence);
 ExprNodeP Parse_ExprBlockLine_Stmt(TokenStream& lex, bool& has_semicolon);
-//ExprNodeP Parse_Stmt(TokenStream& lex);   // common.hpp
+//ExprNodeP Parse_Stmt(TokenStream& lex);   // common.h
 ExprNodeP Parse_Stmt_Let(TokenStream& lex);
 ExprNodeP Parse_Expr0(TokenStream& lex);
 ExprNodeP Parse_Expr1_5(TokenStream& lex); // Boolean OR

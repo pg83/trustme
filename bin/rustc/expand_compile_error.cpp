@@ -5,14 +5,14 @@
 * expand/compile_error.cpp
 * - compile_error! handler
 */
-#include "synext.hpp"
-#include "parse_common.hpp"
-#include "parse_parseerror.hpp"
-#include "parse_tokentree.hpp"
-#include "parse_ttstream.hpp"
-#include "parse_lex.hpp" // For Codepoint
-#include "ast_expr.hpp"
-#include "ast_crate.hpp"
+#include "synext.h"
+#include "parse_common.h"
+#include "parse_parseerror.h"
+#include "parse_tokentree.h"
+#include "parse_ttstream.h"
+#include "parse_lex.h" // For Codepoint
+#include "ast_expr.h"
+#include "ast_crate.h"
 
 class CExpander_CompileError: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {

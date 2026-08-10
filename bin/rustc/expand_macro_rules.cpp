@@ -9,14 +9,14 @@
  *  > #[macro_export]
  *  > #[macro_reexport]
  */
-#include "synext.hpp"
-#include "ast_expr.hpp"
-#include "ast_ast.hpp"
-#include "parse_common.hpp"
-#include "parse_ttstream.hpp"
-#include "ast_crate.hpp"
-#include "macro_rules_macro_rules.hpp"
-#include "hir_hir.hpp" // for HIR::Crate
+#include "synext.h"
+#include "ast_expr.h"
+#include "ast_ast.h"
+#include "parse_common.h"
+#include "parse_ttstream.h"
+#include "ast_crate.h"
+#include "macro_rules_macro_rules.h"
+#include "hir_hir.h" // for HIR::Crate
 
 class CMacroRulesExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {

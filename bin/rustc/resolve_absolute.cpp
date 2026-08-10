@@ -11,11 +11,11 @@
  * - Relative/super/self paths
  * - MaybeBind patterns
  */
-#include "ast_crate.hpp"
-#include "ast_ast.hpp"
-#include "ast_expr.hpp"
-#include "main_bindings.hpp"
-#include "hir_hir.hpp"
+#include "ast_crate.h"
+#include "ast_ast.h"
+#include "ast_expr.h"
+#include "main_bindings.h"
+#include "hir_hir.h"
 
 #define FLAG_CONST_GENERIC (1u << 31)
 

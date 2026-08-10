@@ -13,11 +13,11 @@ namespace {
 }
 
 //#define DISABLE_DEBUG   //  Disable debug for this function - too hot
-#include "hir_hir.hpp"
-#include "hir_main_bindings.hpp"
-#include "mir_mir.hpp"
-#include "macro_rules_macro_rules.hpp"
-#include "hir_serialise_lowlevel.hpp"
+#include "hir_hir.h"
+#include "hir_main_bindings.h"
+#include "mir_mir.h"
+#include "macro_rules_macro_rules.h"
+#include "hir_serialise_lowlevel.h"
 #include <std/mem/obj_pool.h>
 #include <typeinfo>
 

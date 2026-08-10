@@ -7,7 +7,7 @@
  */
 #define NOLOG // Disable logging
 #include "toml.h"
-#include "debug.h"
+#include "common_debug.h"
 #include <cassert>
 #include <string>
 #include <iostream>

@@ -5,9 +5,9 @@
 * expand/misc_attrs.cpp
 * - Miscenaleous attributes that rustc doesn't use (or doesn't use in expand)
 */
-#include "synext.hpp"
-#include "ast_generics.hpp"
-#include "ast_ast.hpp"
+#include "synext.h"
+#include "ast_generics.h"
+#include "ast_ast.h"
 
 // #[must_use] - Marks a type needing to be consumed
 class CHandler_MustUse: public ExpandDecorator {

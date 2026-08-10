@@ -5,12 +5,12 @@
  * hir_conv/markings.cpp
  * - Fills the TraitMarkings structure on types as well as other metadata
  */
-#include "hir_conv_main_bindings.hpp"
-#include "hir_visitor.hpp"
-#include "hir_expr.hpp"
+#include "hir_conv_main_bindings.h"
+#include "hir_visitor.h"
+#include "hir_expr.h"
 #include <algorithm> // std::find_if
 
-#include "hir_typeck_static.hpp"
+#include "hir_typeck_static.h"
 
 namespace {
 

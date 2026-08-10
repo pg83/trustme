@@ -7,10 +7,10 @@
  *
  * Handles a chunk of type resolution (merging) and matching/comparing types
  */
-#include "ast_types.hpp"
-#include "ast_ast.hpp"
-#include "ast_crate.hpp"
-#include "ast_expr.hpp"
+#include "ast_types.h"
+#include "ast_ast.h"
+#include "ast_crate.h"
+#include "ast_expr.h"
 
 TAGGED_UNION_OUT_OF_LINE_IMPL(
     TypeData,

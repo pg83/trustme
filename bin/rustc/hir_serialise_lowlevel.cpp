@@ -5,12 +5,12 @@
  * hir/serialise_lowlevel.cpp
  * - HIR (De)Serialisation low-level "protocol"
  */
-#include "debug.hpp"
-#include "hir_serialise_lowlevel.hpp"
+#include "debug.h"
+#include "hir_serialise_lowlevel.h"
 #include <zlib.h>
 #include <fstream>
 #include <string.h> // memcpy
-#include "common.hpp"
+#include "common.h"
 #include <algorithm>
 #include <iomanip>
 

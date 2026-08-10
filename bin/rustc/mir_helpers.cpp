@@ -2,16 +2,16 @@
  * MRustC - Rust Compiler
  * - By John Hodge (Mutabah/thePowersGang)
  *
- * mir/helpers.hpp
+ * mir/helpers.h
  * - MIR Manipulation helpers
  */
-#include "mir_helpers.hpp"
+#include "mir_helpers.h"
 
-#include "hir_hir.hpp"
-#include "hir_type.hpp"
-#include "mir_mir.hpp"
+#include "hir_hir.h"
+#include "hir_type.h"
+#include "mir_mir.h"
 #include <algorithm> // ::std::find
-#include "trans_target.hpp"
+#include "trans_target.h"
 
 void ::MIR::TypeResolve::fmt_pos(::std::ostream& os, bool include_path /*=false*/) const {
     if (include_path) {

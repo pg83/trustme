@@ -5,7 +5,7 @@
  * version.cpp
  * - Compiler version number
  */
-#include "version.hpp"
+#include "version.h"
 #include <sstream>
 
 #define VERSION_MAJOR 0

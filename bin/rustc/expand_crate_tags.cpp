@@ -5,8 +5,8 @@
  * expand/crate_type.cpp
  * - #![crate_type] handling
  */
-#include "synext.hpp"
-#include "ast_crate.hpp"
+#include "synext.h"
+#include "ast_crate.h"
 
 class Decorator_CrateType: public ExpandDecorator {
 public:

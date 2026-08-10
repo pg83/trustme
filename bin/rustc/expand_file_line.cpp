@@ -5,10 +5,10 @@
  * expand/file_line.cpp
  * - file! line! and macro_path! macros
  */
-#include "synext.hpp"
-#include "parse_common.hpp"
-#include "parse_ttstream.hpp"
-#include "ast_crate.hpp"
+#include "synext.h"
+#include "parse_common.h"
+#include "parse_ttstream.h"
+#include "ast_crate.h"
 
 namespace {
     const SpanInner_Source* get_top_span(const Span& sp) {

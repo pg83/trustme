@@ -5,9 +5,9 @@
  * parse/tokentree.cpp
  * - Token Tree (collection of tokens)
  */
-#include "parse_tokentree.hpp"
-#include "ast_edition.hpp"
-#include "common.hpp"
+#include "parse_tokentree.h"
+#include "ast_edition.h"
+#include "common.h"
 
 TokenTree TokenTree::clone() const {
     if (m_subtrees.size() == 0) {

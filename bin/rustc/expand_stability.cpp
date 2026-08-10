@@ -5,8 +5,8 @@
 * expand/stability.cpp
 * - Item stability
 */
-#include "synext.hpp"
-#include "ast_generics.hpp"
+#include "synext.h"
+#include "ast_generics.h"
 
 class CMultiHandler_Stability: public ExpandDecorator {
     AttrStage stage() const override {

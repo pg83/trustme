@@ -5,16 +5,16 @@
  * trans/target.cpp
  * - Target-specific information
  */
-#include "trans_target.hpp"
+#include "trans_target.h"
 #include <algorithm>
-#include "expand_cfg.hpp"
+#include "expand_cfg.h"
 #include <fstream>
 #include <map>
-#include "hir_hir.hpp"
-#include "hir_typeck_helpers.hpp"
-#include "hir_typeck_monomorph.hpp"
-#include "hir_conv_main_bindings.hpp" // ConvertHIR_ConstantEvaluate_Enum
-#include "trans_mangling.hpp"
+#include "hir_hir.h"
+#include "hir_typeck_helpers.h"
+#include "hir_typeck_monomorph.h"
+#include "hir_conv_main_bindings.h" // ConvertHIR_ConstantEvaluate_Enum
+#include "trans_mangling.h"
 #include <climits>                    // UINT_MAX
 #include <unordered_map>
 #include "toml.h"                     // tools/common

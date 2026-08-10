@@ -5,11 +5,11 @@
  * expand/mod.cpp
  * - Expand pass core code
  */
-#include "ast_ast.hpp"
-#include "ast_expr.hpp"
-#include "ast_crate.hpp"
-#include "main_bindings.hpp"
-#include "hir_hir.hpp" // ABI_RUST
+#include "ast_ast.h"
+#include "ast_expr.h"
+#include "ast_crate.h"
+#include "main_bindings.h"
+#include "hir_hir.h" // ABI_RUST
 
 #define NEWNODE(_ty, ...) ::AST::ExprNodeP(new ::AST::ExprNode##_ty(__VA_ARGS__))
 

@@ -5,10 +5,10 @@
  * trans/codegen_c_structured.cpp
  * - Converts MIR into a semi-structured form
  */
-#include "common.hpp"
-#include "mir_mir.hpp"
+#include "common.h"
+#include "mir_mir.h"
 #include <algorithm>
-#include "trans_codegen_c.hpp"
+#include "trans_codegen_c.h"
 
 NodeRef::NodeRef(size_t idx)
     : bb_idx(idx)

@@ -5,7 +5,7 @@
  * tools/common/helpers.h
  * - General helper classes
  */
-// TODO: Replace this header with src/includ/string_view.hpp
+// TODO: Replace this header with src/includ/string_view.h
 #pragma once
 
 #include <string>

@@ -6,23 +6,23 @@
  * - MIR Optimisations
  *
  */
-#include "mir_main_bindings.hpp"
-#include "mir_mir.hpp"
-#include "hir_visitor.hpp"
-#include "hir_typeck_static.hpp"
-#include "mir_helpers.hpp"
-#include "mir_operations.hpp"
-#include "mir_visit_crate_mir.hpp"
+#include "mir_main_bindings.h"
+#include "mir_mir.h"
+#include "hir_visitor.h"
+#include "hir_typeck_static.h"
+#include "mir_helpers.h"
+#include "mir_operations.h"
+#include "mir_visit_crate_mir.h"
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
 #include <limits>
 #include <unordered_map>
 #include <unordered_set>
-#include "trans_target.hpp"
-#include "trans_trans_list.hpp" // Note: This is included for inlining after enumeration and monomorph
+#include "trans_target.h"
+#include "trans_trans_list.h" // Note: This is included for inlining after enumeration and monomorph
 
-#include "hir_expr.hpp" // HACK
+#include "hir_expr.h" // HACK
 
 #define DUMP_BEFORE_ALL 1
 #define DUMP_BEFORE_CONSTPROPAGATE 0

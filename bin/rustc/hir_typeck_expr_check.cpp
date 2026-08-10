@@ -5,10 +5,10 @@
  * hir_typeck/expr_check.cpp
  * - Expression type checking (validation pass)
  */
-#include "hir_visitor.hpp"
-#include "hir_expr.hpp"
-#include "hir_typeck_static.hpp"
-#include "hir_typeck_main_bindings.hpp"
+#include "hir_visitor.h"
+#include "hir_expr.h"
+#include "hir_typeck_static.h"
+#include "hir_typeck_main_bindings.h"
 #include <algorithm>
 
 namespace {

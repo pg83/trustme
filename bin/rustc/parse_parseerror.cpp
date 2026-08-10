@@ -5,7 +5,7 @@
  * parse/parseerror.cpp
  * - Exceptions thrown for different types of parsing errors
  */
-#include "parse_parseerror.hpp"
+#include "parse_parseerror.h"
 #include <iostream>
 
 CompileError::Base::~Base() throw() {

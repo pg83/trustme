@@ -6,7 +6,7 @@
  * - Handling for switchable allocator backends
  */
 
-#include "trans_allocator.hpp"
+#include "trans_allocator.h"
 
 #define DEF_METHOD_ARGS(name, ...) const AllocatorDataTy ALLOCATOR_METHODS_ARGS_##name[] = {__VA_ARGS__};
 #define DEF_METHOD(name, ret) {#name, AllocatorDataTy::ret, sizeof(ALLOCATOR_METHODS_ARGS_##name) / sizeof(AllocatorDataTy), ALLOCATOR_METHODS_ARGS_##name}

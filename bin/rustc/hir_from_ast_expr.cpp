@@ -5,12 +5,12 @@
  * hir/from_ast_expr.cpp
  * - Constructs a HIR expression tree from an AST expression tree
  */
-#include "hir_expr_ptr.hpp"
-#include "hir_expr.hpp"
-#include "ast_expr.hpp"
-#include "ast_ast.hpp"
-#include "hir_from_ast.hpp"
-#include "hir_hir.hpp"
+#include "hir_expr_ptr.h"
+#include "hir_expr.h"
+#include "ast_expr.h"
+#include "ast_ast.h"
+#include "hir_from_ast.h"
+#include "hir_hir.h"
 #include <std/mem/obj_pool.h>
 
 struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {

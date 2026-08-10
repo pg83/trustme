@@ -8,10 +8,10 @@
  * Ensures that symbols contain only alpha-numerics and `_`
  * NOTE: `$` is used ONLY for shortening excessively long symbols
  */
-#include "debug.hpp"
-#include "string_view.hpp"
-#include "hir_hir.hpp" // ABI_RUST
-#include "hir_type.hpp"
+#include "debug.h"
+#include "string_view.h"
+#include "hir_hir.h" // ABI_RUST
+#include "hir_type.h"
 #include <cctype>
 #include <algorithm> // std::find
 #include <cmath>     // ceil/log10

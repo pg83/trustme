@@ -6,13 +6,13 @@
  * - MIR Borrow Checker
  * 
  */
-#include "mir_main_bindings.hpp"
-#include "mir_mir.hpp"
-#include "hir_visitor.hpp"
-#include "hir_typeck_static.hpp"
-#include "mir_helpers.hpp"
-#include "mir_operations.hpp"
-#include "mir_visit_crate_mir.hpp"
+#include "mir_main_bindings.h"
+#include "mir_mir.h"
+#include "hir_visitor.h"
+#include "hir_typeck_static.h"
+#include "mir_helpers.h"
+#include "mir_operations.h"
+#include "mir_visit_crate_mir.h"
 #include <algorithm>
 #include <iomanip>
 

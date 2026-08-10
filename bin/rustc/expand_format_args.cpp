@@ -5,15 +5,15 @@
  * expand/format_args.cpp
  * - format_args! syntax extension handling
  */
-#include "synext_macro.hpp"
-#include "synext.hpp" // for Expand_BareExpr
-#include "parse_common.hpp"
-#include "parse_parseerror.hpp"
-#include "parse_tokentree.hpp"
-#include "parse_ttstream.hpp"
-#include "parse_interpolated_fragment.hpp"
-#include "ast_crate.hpp" // for m_load_std
-#include "ast_expr.hpp"  // for ExprNode_*
+#include "synext_macro.h"
+#include "synext.h" // for Expand_BareExpr
+#include "parse_common.h"
+#include "parse_parseerror.h"
+#include "parse_tokentree.h"
+#include "parse_ttstream.h"
+#include "parse_interpolated_fragment.h"
+#include "ast_crate.h" // for m_load_std
+#include "ast_expr.h"  // for ExprNode_*
 #include <cctype>
 
 namespace {

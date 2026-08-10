@@ -9,14 +9,14 @@
  * - Ensures that typecheck is performed on the as-written code
  * - Reduces load on MIR generation (no attempting to MIR lower large constant expressions)
  */
-#include "hir_visitor.hpp"
-#include "hir_expr.hpp"
-#include "hir_typeck_static.hpp"
-#include "hir_conv_constant_evaluation.hpp"
+#include "hir_visitor.h"
+#include "hir_expr.h"
+#include "hir_typeck_static.h"
+#include "hir_conv_constant_evaluation.h"
 #include <algorithm>
-#include "hir_expand_main_bindings.hpp"
-#include "hir_expr_state.hpp"
-#include "trans_target.hpp"
+#include "hir_expand_main_bindings.h"
+#include "hir_expr_state.h"
+#include "trans_target.h"
 #include <std/mem/obj_pool.h>
 
 extern RcString g_core_crate; // Defined in hir/from_ast.cpp

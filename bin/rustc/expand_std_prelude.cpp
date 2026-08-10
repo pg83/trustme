@@ -5,8 +5,8 @@
  * expand/std_prelude.cpp
  * - Handling of no_std/no_core/no_prelude
  */
-#include "synext.hpp"
-#include "ast_crate.hpp"
+#include "synext.h"
+#include "ast_crate.h"
 
 class Decorator_NoStd: public ExpandDecorator {
 public:

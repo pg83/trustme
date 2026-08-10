@@ -5,11 +5,11 @@
  * hir_expand/erased_types.cpp
  * - HIR Expansion - Replace `impl Trait` with the real type
  */
-#include "hir_visitor.hpp"
-#include "hir_expr.hpp"
-#include "hir_typeck_static.hpp"
+#include "hir_visitor.h"
+#include "hir_expr.h"
+#include "hir_typeck_static.h"
 #include <algorithm>
-#include "hir_expand_main_bindings.hpp"
+#include "hir_expand_main_bindings.h"
 
 namespace {
 

@@ -5,11 +5,11 @@
  * hir_expand/reborrow.cpp
  * - Insert reborrows when a &mut would be moved
  */
-#include "hir_visitor.hpp"
-#include "hir_expr.hpp"
-#include "hir_typeck_static.hpp"
+#include "hir_visitor.h"
+#include "hir_expr.h"
+#include "hir_typeck_static.h"
 #include <algorithm>
-#include "hir_expand_main_bindings.hpp"
+#include "hir_expand_main_bindings.h"
 #include <std/mem/obj_pool.h>
 
 namespace {

@@ -5,10 +5,10 @@
  * hir_typeck/common.cpp
  * - Typecheck common code
  */
-#include "hir_typeck_common.hpp"
-#include "hir_path.hpp"
-#include "trans_target.hpp"
-#include "hir_conv_main_bindings.hpp"
+#include "hir_typeck_common.h"
+#include "hir_path.h"
+#include "trans_target.h"
+#include "hir_conv_main_bindings.h"
 
 template <typename I>
 struct WConst {

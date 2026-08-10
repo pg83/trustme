@@ -7,20 +7,20 @@
  */
 #include <type_traits> // for TU_MATCHA
 #include <algorithm>
-#include "mir_mir.hpp"
-#include "mir_mir_ptr.hpp"
-#include "hir_expr.hpp"
-#include "hir_hir.hpp"
-#include "hir_visitor.hpp"
-#include "hir_typeck_common.hpp" // monomorphise_type
-#include "mir_main_bindings.hpp"
-#include "mir_from_hir.hpp"
-#include "mir_operations.hpp"
-#include "mir_visit_crate_mir.hpp"
-#include "hir_expr_state.hpp"
-#include "trans_target.hpp" // Target_GetSizeAndAlignOf - for `box`
+#include "mir_mir.h"
+#include "mir_mir_ptr.h"
+#include "hir_expr.h"
+#include "hir_hir.h"
+#include "hir_visitor.h"
+#include "hir_typeck_common.h" // monomorphise_type
+#include "mir_main_bindings.h"
+#include "mir_from_hir.h"
+#include "mir_operations.h"
+#include "mir_visit_crate_mir.h"
+#include "hir_expr_state.h"
+#include "trans_target.h" // Target_GetSizeAndAlignOf - for `box`
 #include <cctype>           // isdigit
-#include "mir_helpers.hpp"
+#include "mir_helpers.h"
 
 namespace {
     class ExprVisitor_Conv: public MirConverter {

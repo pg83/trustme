@@ -7,9 +7,9 @@
  */
 #include <functional>
 #include <iostream>
-#include "span.hpp"
-#include "parse_lex.hpp"
-#include "common.hpp"
+#include "span.h"
+#include "parse_lex.h"
+#include "common.h"
 
 Span::Span(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int end_line, unsigned int end_ofs)
     : m_ptr(SpanInner_Source::alloc(parent, ::std::move(filename), start_line, start_ofs, end_line, end_ofs))

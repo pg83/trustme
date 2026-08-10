@@ -6,17 +6,17 @@
  * - Set binding pointers in HIR structures
  * - Also fixes parameter counts.
  */
-#include "hir_conv_main_bindings.hpp"
-#include "hir_visitor.hpp"
-#include "hir_expr.hpp"
-#include "mir_mir.hpp"
+#include "hir_conv_main_bindings.h"
+#include "hir_visitor.h"
+#include "hir_expr.h"
+#include "mir_mir.h"
 #include <algorithm> // std::find_if
 
-#include "mir_helpers.hpp"
+#include "mir_helpers.h"
 
-#include "hir_typeck_static.hpp"
-#include "hir_typeck_expr_visit.hpp" // For ModuleState
-#include "hir_expr_state.hpp"
+#include "hir_typeck_static.h"
+#include "hir_typeck_expr_visit.h" // For ModuleState
+#include "hir_expr_state.h"
 
 void ConvertHIR_Bind(::HIR::Crate& crate);
 

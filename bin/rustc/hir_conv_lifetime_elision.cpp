@@ -5,11 +5,11 @@
  * hir_conv/lifetime_elision.cpp
  * - 
  */
-#include "hir_hir.hpp"
-#include "hir_visitor.hpp"
-#include "hir_typeck_static.hpp"
-#include "hir_expr.hpp" // ExprVisitor
-#include "hir_conv_main_bindings.hpp"
+#include "hir_hir.h"
+#include "hir_visitor.h"
+#include "hir_typeck_static.h"
+#include "hir_expr.h" // ExprVisitor
+#include "hir_conv_main_bindings.h"
 
 namespace {
     /// <summary>

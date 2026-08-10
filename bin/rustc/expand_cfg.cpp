@@ -5,15 +5,15 @@
  * expand/cfg.cpp
  * - cfg! and #[cfg] handling
  */
-#include "synext.hpp"
-#include "parse_common.hpp"
-#include "parse_tokentree.hpp"
-#include "parse_ttstream.hpp"
-#include "expand_cfg.hpp"
-#include "ast_expr.hpp" // Needed to clear a ExprNodeP
-#include "ast_crate.hpp"
-#include "ast_attrs.hpp"
-#include "parse_parseerror.hpp"
+#include "synext.h"
+#include "parse_common.h"
+#include "parse_tokentree.h"
+#include "parse_ttstream.h"
+#include "expand_cfg.h"
+#include "ast_expr.h" // Needed to clear a ExprNodeP
+#include "ast_crate.h"
+#include "ast_attrs.h"
+#include "parse_parseerror.h"
 
 #include <map>
 #include <optional>

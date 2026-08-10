@@ -2,13 +2,13 @@
  * MRustC - Rust Compiler
  * - By John Hodge (Mutabah/thePowersGang)
  */
-#include "parse_token.hpp"
-#include "common.hpp"
-#include "parse_parseerror.hpp"
-#include "parse_interpolated_fragment.hpp"
-#include "ast_types.hpp"
-#include "ast_ast.hpp"
-#include "ast_expr.hpp" // for reasons
+#include "parse_token.h"
+#include "common.h"
+#include "parse_parseerror.h"
+#include "parse_interpolated_fragment.h"
+#include "ast_types.h"
+#include "ast_ast.h"
+#include "ast_expr.h" // for reasons
 
 Token::~Token() {
     switch (m_type) {

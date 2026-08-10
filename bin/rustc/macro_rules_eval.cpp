@@ -5,17 +5,17 @@
  * macro_rules/parse.cpp
  * - macro_rules! evaluation (expansion)
  */
-#include "common.hpp"
-#include "macro_rules_macro_rules.hpp"
-#include "parse_parseerror.hpp"
-#include "parse_ttstream.hpp"
-#include "parse_common.hpp"
+#include "common.h"
+#include "macro_rules_macro_rules.h"
+#include "parse_parseerror.h"
+#include "parse_ttstream.h"
+#include "parse_common.h"
 #include <limits.h>
-#include "macro_rules_pattern_checks.hpp"
-#include "parse_interpolated_fragment.hpp"
-#include "ast_expr.hpp"
-#include "ast_crate.hpp"
-#include "hir_hir.hpp" // HIR::Crate
+#include "macro_rules_pattern_checks.h"
+#include "parse_interpolated_fragment.h"
+#include "ast_expr.h"
+#include "ast_crate.h"
+#include "hir_hir.h" // HIR::Crate
 
 // Map of: LoopIndex=>(Path=>Count)
 typedef std::map<unsigned, std::map<std::vector<unsigned>, unsigned>> loop_counts_t;

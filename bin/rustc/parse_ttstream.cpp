@@ -5,8 +5,8 @@
  * parse/ttstream.cpp
  * - Token-Tree backed token streams
  */
-#include "parse_ttstream.hpp"
-#include "common.hpp"
+#include "parse_ttstream.h"
+#include "common.h"
 
 TTStream::TTStream(Span parent, ParseState ps, const TokenTree& input_tt)
     : TokenStream(ps)

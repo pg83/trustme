@@ -5,9 +5,9 @@
  * hir_typeck/helpers.cpp
  * - Typecheck helpers
  */
-#include "hir_typeck_helpers.hpp"
-#include "hir_conv_main_bindings.hpp"
-#include "trait_solver_mode.hpp"
+#include "hir_typeck_helpers.h"
+#include "hir_conv_main_bindings.h"
+#include "trait_solver_mode.h"
 #include <algorithm>
 #include <optional>
 #include <unordered_map>

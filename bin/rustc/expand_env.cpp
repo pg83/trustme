@@ -5,12 +5,12 @@
  * expand/env.cpp
  * - env! and option_env! macros
  */
-#include "synext_macro.hpp"
-#include "parse_common.hpp"
-#include "parse_ttstream.hpp"
-#include "ast_expr.hpp"  // ExprNode_*
-#include "ast_crate.hpp" // edition
-#include "synext.hpp"    // for Expand_BareExpr
+#include "synext_macro.h"
+#include "parse_common.h"
+#include "parse_ttstream.h"
+#include "ast_expr.h"  // ExprNode_*
+#include "ast_crate.h" // edition
+#include "synext.h"    // for Expand_BareExpr
 
 namespace {
     // Read a string out of the input stream

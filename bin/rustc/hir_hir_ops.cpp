@@ -5,17 +5,17 @@
  * hir/hir_ops.cpp
  * - Complex operations on the HIR
  */
-#include "hir_hir.hpp"
+#include "hir_hir.h"
 #include <algorithm>
-#include "hir_typeck_common.hpp"
-#include "hir_typeck_expr_visit.hpp" // for invoking typecheck
-#include "hir_item_path.hpp"
-#include "hir_expr_state.hpp"
-#include "hir_conv_main_bindings.hpp"
-#include "hir_expand_main_bindings.hpp"
-#include "mir_main_bindings.hpp"
-#include "trans_target.hpp"
-#include "floats.hpp"
+#include "hir_typeck_common.h"
+#include "hir_typeck_expr_visit.h" // for invoking typecheck
+#include "hir_item_path.h"
+#include "hir_expr_state.h"
+#include "hir_conv_main_bindings.h"
+#include "hir_expand_main_bindings.h"
+#include "mir_main_bindings.h"
+#include "trans_target.h"
+#include "floats.h"
 #include <optional>
 
 namespace {

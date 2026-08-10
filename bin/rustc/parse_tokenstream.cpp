@@ -5,10 +5,10 @@
  * parse/tokenstream.cpp
  * - TokenStream - Parser token source interface
  */
-#include "parse_tokenstream.hpp"
-#include "common.hpp"
-#include "parse_parseerror.hpp"
-#include "ast_crate.hpp" // Edition lookup
+#include "parse_tokenstream.h"
+#include "common.h"
+#include "parse_parseerror.h"
+#include "ast_crate.h" // Edition lookup
 
 const bool DEBUG_PRINT_TOKENS = false;
 //const bool DEBUG_PRINT_TOKENS = true;

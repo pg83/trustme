@@ -5,9 +5,9 @@
 * expand/rustc_box.cpp
 * - 
 */
-#include "synext.hpp"
-#include "ast_generics.hpp"
-#include "ast_ast.hpp"
+#include "synext.h"
+#include "ast_generics.h"
+#include "ast_ast.h"
 
 // #[rustc_box] - Marks the `Box::new` inner constructor
 class CHandler_RustBox: public ExpandDecorator {

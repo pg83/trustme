@@ -5,13 +5,13 @@
  * hir_typeck/static.cpp
  * - Non-inferred type checking
  */
-#include "hir_typeck_static.hpp"
-#include "hir_typeck_helpers.hpp"
-#include "trait_solver_mode.hpp"
+#include "hir_typeck_static.h"
+#include "hir_typeck_helpers.h"
+#include "trait_solver_mode.h"
 #include <algorithm>
 #include <std/mem/obj_pool.h>
-#include "hir_expr.hpp"
-#include "hir_conv_main_bindings.hpp"
+#include "hir_expr.h"
+#include "hir_conv_main_bindings.h"
 
 namespace {
     const HIR::GenericParams empty_params;

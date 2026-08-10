@@ -5,10 +5,10 @@
  * parse/lex.cpp
  * - Lexer (converts input file to token stream)
  */
-#include "parse_lex.hpp"
-#include "parse_tokentree.hpp"
-#include "parse_parseerror.hpp"
-#include "common.hpp"
+#include "parse_lex.h"
+#include "parse_tokentree.h"
+#include "parse_parseerror.h"
+#include "common.h"
 #include <cassert>
 #include <iostream>
 #include <cstdlib> // strtol

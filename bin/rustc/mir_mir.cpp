@@ -5,11 +5,11 @@
  * mir/mir.cpp
  * - MIR (Middle Intermediate Representation) definitions
  */
-#include "mir_mir.hpp"
+#include "mir_mir.h"
 #include <algorithm> // std::min
-#include "hir_typeck_monomorph.hpp"
-#include "hir_encoded_literal.hpp"
-#include "trans_target.hpp" // Target_GetPointerBits
+#include "hir_typeck_monomorph.h"
+#include "hir_encoded_literal.h"
+#include "trans_target.h" // Target_GetPointerBits
 
 namespace MIR {
     ::std::ostream& operator<<(::std::ostream& os, const Constant& v) {

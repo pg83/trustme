@@ -6,9 +6,9 @@
  * - Identifiers with hygiene
  */
 #include <iostream>
-#include "ident.hpp"
-#include "debug.hpp"
-#include "common.hpp" // vector print
+#include "ident.h"
+#include "debug.h"
+#include "common.h" // vector print
 
 unsigned int Ident::Hygiene::g_next_scope = 0;
 

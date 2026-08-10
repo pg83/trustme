@@ -5,16 +5,16 @@
  * trans/codegen.cpp
  * - Wrapper for translation
  */
-#include "trans_main_bindings.hpp"
-#include "trans_trans_list.hpp"
-#include "hir_hir.hpp"
-#include "mir_mir.hpp"
-#include "mir_operations.hpp"
+#include "trans_main_bindings.h"
+#include "trans_trans_list.h"
+#include "hir_hir.h"
+#include "mir_mir.h"
+#include "mir_operations.h"
 #include <algorithm>
-#include "trans_target.hpp"
+#include "trans_target.h"
 
-#include "trans_codegen.hpp"
-#include "trans_monomorphise.hpp"
+#include "trans_codegen.h"
+#include "trans_monomorphise.h"
 
 void Trans_Codegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* crate_ptr, TransList list, const ::std::string& hir_file) {
     static Span sp;

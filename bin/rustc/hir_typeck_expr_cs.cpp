@@ -5,19 +5,19 @@
  * hir_typeck/expr_cs.cpp
  * - Constraint Solver type inferrence
  */
-#include "hir_typeck_main_bindings.hpp"
-#include "hir_expr.hpp"
-#include "hir_hir.hpp"
-#include "hir_visitor.hpp"
+#include "hir_typeck_main_bindings.h"
+#include "hir_expr.h"
+#include "hir_hir.h"
+#include "hir_visitor.h"
 #include <algorithm> // std::find_if
 
-#include "hir_typeck_static.hpp"
-#include "hir_typeck_helpers.hpp"
-#include "hir_typeck_expr_visit.hpp"
-#include "hir_typeck_expr_cs.hpp"
+#include "hir_typeck_static.h"
+#include "hir_typeck_helpers.h"
+#include "hir_typeck_expr_visit.h"
+#include "hir_typeck_expr_cs.h"
 #include <optional>
-#include "hir_conv_main_bindings.hpp"
-#include "trait_solver_mode.hpp"
+#include "hir_conv_main_bindings.h"
+#include "trait_solver_mode.h"
 #include <std/mem/obj_pool.h>
 
 namespace {

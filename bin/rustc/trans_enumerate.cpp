@@ -7,20 +7,20 @@
  *
  * Enumerates items required for translation.
  */
-#include "trans_main_bindings.hpp"
-#include "trans_trans_list.hpp"
-#include "hir_hir.hpp"
-#include "mir_mir.hpp"
-#include "mir_helpers.hpp"
-#include "hir_typeck_common.hpp" // monomorph
-#include "hir_typeck_static.hpp" // StaticTraitResolve
-#include "hir_conv_main_bindings.hpp"
-#include "hir_item_path.hpp"
-#include "hir_visitor.hpp"
+#include "trans_main_bindings.h"
+#include "trans_trans_list.h"
+#include "hir_hir.h"
+#include "mir_mir.h"
+#include "mir_helpers.h"
+#include "hir_typeck_common.h" // monomorph
+#include "hir_typeck_static.h" // StaticTraitResolve
+#include "hir_conv_main_bindings.h"
+#include "hir_item_path.h"
+#include "hir_visitor.h"
 #include <deque>
 #include <algorithm>
-#include "trans_target.hpp"
-#include "trans_mangling.hpp"
+#include "trans_target.h"
+#include "trans_mangling.h"
 #include <unordered_set>
 
 namespace {

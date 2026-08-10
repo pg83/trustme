@@ -5,11 +5,11 @@
  * resolve/index.cpp
  * - Build up a name index in all modules (optimising lookups in later stages)
  */
-#include "ast_ast.hpp"
-#include "ast_crate.hpp"
-#include "main_bindings.hpp"
-#include "hir_hir.hpp"
-#include "macro_rules_macro_rules.hpp"
+#include "ast_ast.h"
+#include "ast_crate.h"
+#include "main_bindings.h"
+#include "hir_hir.h"
+#include "macro_rules_macro_rules.h"
 
 enum class IndexName {
     Namespace,

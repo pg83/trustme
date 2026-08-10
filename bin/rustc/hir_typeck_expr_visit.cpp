@@ -5,11 +5,11 @@
  * hir_typeck/expr_visit.cpp
  * - Wrapper around HIR typecheck that visits all expressions
  */
-#include "hir_hir.hpp"
-#include "hir_expr.hpp"
-#include "hir_visitor.hpp"
-#include "hir_typeck_expr_visit.hpp"
-#include "hir_expr_state.hpp"
+#include "hir_hir.h"
+#include "hir_expr.h"
+#include "hir_visitor.h"
+#include "hir_typeck_expr_visit.h"
+#include "hir_expr_state.h"
 
 void Typecheck_Code(const typeck::ModuleState& ms, t_args& args, const ::HIR::TypeRef& result_type, ::HIR::ExprPtr& expr) {
     if (expr.m_state->stage < ::HIR::ExprState::Stage::Typecheck) {

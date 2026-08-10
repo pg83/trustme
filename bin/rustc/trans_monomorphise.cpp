@@ -2,15 +2,15 @@
  * MRustC - Rust Compiler
  * - By John Hodge (Mutabah/thePowersGang)
  *
- * trans/monomorphise.hpp
+ * trans/monomorphise.h
  * - MIR monomorphisation
  */
-#include "trans_monomorphise.hpp"
-#include "hir_typeck_static.hpp"
-#include "mir_mir.hpp"
-#include "hir_hir.hpp"
-#include "mir_operations.hpp" // Needed for post-monomorph checks and optimisations
-#include "hir_conv_constant_evaluation.hpp"
+#include "trans_monomorphise.h"
+#include "hir_typeck_static.h"
+#include "mir_mir.h"
+#include "hir_hir.h"
+#include "mir_operations.h" // Needed for post-monomorph checks and optimisations
+#include "hir_conv_constant_evaluation.h"
 
 namespace {
     class Cloner: public ::MIR::Cloner {

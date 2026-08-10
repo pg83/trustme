@@ -7,11 +7,11 @@
  *
  * Saves the MIR in a loadable form, used by the `standalone_miri` tool
  */
-#include "trans_codegen.hpp"
-#include "hir_typeck_static.hpp"
-#include "mir_helpers.hpp"
-#include "trans_mangling.hpp"
-#include "trans_target.hpp"
+#include "trans_codegen.h"
+#include "hir_typeck_static.h"
+#include "mir_helpers.h"
+#include "trans_mangling.h"
+#include "trans_target.h"
 
 #include <iomanip>
 #include <fstream>

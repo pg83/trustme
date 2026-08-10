@@ -6,7 +6,7 @@
  * - MIR Building Helper
  */
 #include <algorithm>
-#include "mir_from_hir.hpp"
+#include "mir_from_hir.h"
 
 // --------------------------------------------------------------------
 // MirBuilder

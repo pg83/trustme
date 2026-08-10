@@ -5,12 +5,12 @@
  * ast/crate.cpp
  * - Helper functions for the AST::Crate type (includes loading `extern crate`s)
  */
-#include "ast_crate.hpp"
-#include "ast_ast.hpp"
-#include "parse_parseerror.hpp"
-#include "expand_cfg.hpp"
-#include "hir_hir.hpp"           // HIR::Crate
-#include "hir_main_bindings.hpp" // HIR_Deserialise
+#include "ast_crate.h"
+#include "ast_ast.h"
+#include "parse_parseerror.h"
+#include "expand_cfg.h"
+#include "hir_hir.h"           // HIR::Crate
+#include "hir_main_bindings.h" // HIR_Deserialise
 #include <fstream>
 #ifdef _WIN32
     #define NOGDI // prevent ERROR from being defined

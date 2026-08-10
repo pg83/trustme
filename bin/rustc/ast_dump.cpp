@@ -5,11 +5,11 @@
  * ast/dump.cpp
  * - Dumps the AST of a crate as rust code (annotated)
  */
-#include "ast_crate.hpp"
-#include "ast_ast.hpp"
-#include "ast_expr.hpp"
-#include "main_bindings.hpp"
-#include "hir_hir.hpp" // ABI_RUST - TODO: Move elsewhere?
+#include "ast_crate.h"
+#include "ast_ast.h"
+#include "ast_expr.h"
+#include "main_bindings.h"
+#include "hir_hir.h" // ABI_RUST - TODO: Move elsewhere?
 #include <fstream>
 #include <limits> // std::numeric_limits
 

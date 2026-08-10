@@ -8,7 +8,7 @@
 #pragma once
 #include <stdint.h>
 #include <iostream>
-#include "common.hpp"
+#include "common.h"
 #include <cstring> // memcpy
 
 class U128 {

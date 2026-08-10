@@ -5,11 +5,11 @@
  * hir_conv/expand_type.cpp
  * - Expand `type` aliases in HIR
  */
-#include "hir_conv_main_bindings.hpp"
-#include "hir_hir.hpp"
-#include "hir_expr.hpp"
-#include "hir_visitor.hpp"
-#include "hir_typeck_common.hpp" // monomorphise_type_with
+#include "hir_conv_main_bindings.h"
+#include "hir_hir.h"
+#include "hir_expr.h"
+#include "hir_visitor.h"
+#include "hir_typeck_common.h" // monomorphise_type_with
 
 HIR::PathParams ConvertHIR_CompleteAliasParams(HIR::TypeInterner& types, const Span& sp, const ::HIR::GenericParams& params_def, const ::HIR::GenericPath& path, bool is_expr) {
     auto pp = path.m_params.clone();

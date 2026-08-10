@@ -5,13 +5,13 @@
  * mir/from_hir_match.cpp
  * - Conversion of `match` blocks into MIR
  */
-#include "mir_from_hir.hpp"
-#include "hir_typeck_common.hpp" // monomorphise_type
+#include "mir_from_hir.h"
+#include "hir_typeck_common.h" // monomorphise_type
 #include <algorithm>
 #include <numeric>
 #include <limits> // std::numeric_limits
-#include "trans_target.hpp"
-#include "hir_conv_main_bindings.hpp" // For consteval
+#include "trans_target.h"
+#include "hir_conv_main_bindings.h" // For consteval
 
 void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val);
 

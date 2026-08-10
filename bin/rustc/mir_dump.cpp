@@ -5,10 +5,10 @@
  * mir/dump.cpp
  * - Dump MIR for functions (semi-flattened)
  */
-#include "mir_main_bindings.hpp"
-#include "hir_visitor.hpp"
-#include "mir_mir.hpp"
-#include "mir_operations.hpp"
+#include "mir_main_bindings.h"
+#include "hir_visitor.h"
+#include "mir_mir.h"
+#include "mir_operations.h"
 #include <iomanip>
 
 namespace {

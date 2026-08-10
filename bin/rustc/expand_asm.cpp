@@ -5,20 +5,20 @@
  * expand/asm.cpp
  * - asm! macro
  */
-#include "common.hpp"
-#include "synext_macro.hpp"
-#include "synext.hpp" // for Expand_BareExpr
-#include "parse_tokentree.hpp"
-#include "parse_ttstream.hpp"
-#include "parse_common.hpp"
-#include "parse_parseerror.hpp"
-#include "ast_expr.hpp" // for ExprNode_*
-#include "parse_interpolated_fragment.hpp"
-#include "ast_crate.hpp"
-#include "hir_asm.hpp"
-#include "trans_target.hpp"
+#include "common.h"
+#include "synext_macro.h"
+#include "synext.h" // for Expand_BareExpr
+#include "parse_tokentree.h"
+#include "parse_ttstream.h"
+#include "parse_common.h"
+#include "parse_parseerror.h"
+#include "ast_expr.h" // for ExprNode_*
+#include "parse_interpolated_fragment.h"
+#include "ast_crate.h"
+#include "hir_asm.h"
+#include "trans_target.h"
 #include <cctype>
-#include "expand_cfg.hpp"
+#include "expand_cfg.h"
 
 namespace {
     ::std::string get_string(const Span& sp, TokenStream& lex, const ::AST::Crate& crate, AST::Module& mod) {

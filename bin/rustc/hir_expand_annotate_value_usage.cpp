@@ -5,12 +5,12 @@
  * hir_expand/annotate_value_usage.cpp
  * - Marks _Variable, _Index, _Deref, and _Field nodes with how the result is used
  */
-#include "hir_visitor.hpp"
-#include "hir_expr.hpp"
-#include "hir_typeck_static.hpp"
+#include "hir_visitor.h"
+#include "hir_expr.h"
+#include "hir_typeck_static.h"
 #include <algorithm>
-#include "hir_expand_main_bindings.hpp"
-#include "hir_expr_state.hpp"
+#include "hir_expand_main_bindings.h"
+#include "hir_expr_state.h"
 
 namespace {
 

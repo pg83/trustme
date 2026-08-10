@@ -5,17 +5,17 @@
  * expand/proc_macro.cpp
  * - Support for the `#[proc_macro_derive]` attribute
  */
-#include "synext.hpp"
-#include "common.hpp"
-#include "expand_cfg.hpp"
-#include "ast_ast.hpp"
-#include "ast_expr.hpp"
-#include "ast_crate.hpp"
-#include "main_bindings.hpp"
-#include "hir_hir.hpp" // ABI_RUST
-#include "expand_proc_macro.hpp"
-#include "parse_lex.hpp"
-#include "parse_ttstream.hpp"
+#include "synext.h"
+#include "common.h"
+#include "expand_cfg.h"
+#include "ast_ast.h"
+#include "ast_expr.h"
+#include "ast_crate.h"
+#include "main_bindings.h"
+#include "hir_hir.h" // ABI_RUST
+#include "expand_proc_macro.h"
+#include "parse_lex.h"
+#include "parse_ttstream.h"
 #include <unordered_set>
 #ifdef _WIN32
     #define NOMINMAX

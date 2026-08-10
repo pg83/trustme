@@ -5,8 +5,8 @@
  * hir_typeck/resolve_common.cpp
  * - Common components of both "static" and "dynamic" type checking
  */
-#include "hir_typeck_resolve_common.hpp"
-#include "hir_typeck_monomorph.hpp" // MonomorphStatePtr
+#include "hir_typeck_resolve_common.h"
+#include "hir_typeck_monomorph.h" // MonomorphStatePtr
 
 void TraitResolveCommon::prep_indexes(const Span& sp) {
     TRACE_FUNCTION_F("");

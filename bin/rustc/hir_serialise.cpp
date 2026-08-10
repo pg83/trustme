@@ -5,12 +5,12 @@
  * hir/serialise.cpp
  * - HIR (De)Serialisation for crate metadata
  */
-#include "hir_hir.hpp"
-#include "hir_main_bindings.hpp"
-#include "macro_rules_macro_rules.hpp"
-#include "mir_mir.hpp"
-#include "hir_serialise_lowlevel.hpp"
-#include "hir_typeck_monomorph.hpp" // monomorphise_path_needed
+#include "hir_hir.h"
+#include "hir_main_bindings.h"
+#include "macro_rules_macro_rules.h"
+#include "mir_mir.h"
+#include "hir_serialise_lowlevel.h"
+#include "hir_typeck_monomorph.h" // monomorphise_path_needed
 
 //namespace {
 class HirSerialiser {

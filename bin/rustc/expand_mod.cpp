@@ -5,20 +5,20 @@
  * expand/mod.cpp
  * - Expand pass core code
  */
-#include "ast_ast.hpp"
-#include "ast_crate.hpp"
-#include "main_bindings.hpp"
-#include "synext.hpp"
+#include "ast_ast.h"
+#include "ast_crate.h"
+#include "main_bindings.h"
+#include "synext.h"
 #include <map>
-#include "macro_rules_macro_rules.hpp"
-#include "parse_common.hpp" // For reparse from macros
-#include "ast_expr.hpp"
-#include "hir_hir.hpp" // For macro lookup
-#include "expand_cfg.hpp"
-#include "expand_common.hpp"
-#include "resolve_common.hpp"
-#include "expand_proc_macro.hpp"
-#include "parse_ttstream.hpp"
+#include "macro_rules_macro_rules.h"
+#include "parse_common.h" // For reparse from macros
+#include "ast_expr.h"
+#include "hir_hir.h" // For macro lookup
+#include "expand_cfg.h"
+#include "expand_common.h"
+#include "resolve_common.h"
+#include "expand_proc_macro.h"
+#include "parse_ttstream.h"
 
 // TODO: Respect the crate attribute #![recursion_limit]
 #define MAX_MACRO_RECURSION 256

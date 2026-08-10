@@ -5,13 +5,13 @@
  * resolve/use.cpp
  * - Absolutise and check all 'use' statements
  */
-#include "main_bindings.hpp"
-#include "ast_crate.hpp"
-#include "ast_ast.hpp"
-#include "ast_expr.hpp"
-#include "hir_hir.hpp"
-#include "stdspan.hpp" // std::span
-#include "pop_on_drop.hpp"
+#include "main_bindings.h"
+#include "ast_crate.h"
+#include "ast_ast.h"
+#include "ast_expr.h"
+#include "hir_hir.h"
+#include "stdspan.h" // std::span
+#include "pop_on_drop.h"
 
 enum class Lookup {
     Any,    // Allow binding to anything

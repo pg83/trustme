@@ -5,11 +5,11 @@
 * expand/codegen.cpp
 * - Attributes that influence codegen and layouts
 */
-#include "synext.hpp"
-#include "ast_generics.hpp"
-#include "ast_ast.hpp"
-#include "parse_ttstream.hpp"
-#include "expand_cfg.hpp"
+#include "synext.h"
+#include "ast_generics.h"
+#include "ast_ast.h"
+#include "parse_ttstream.h"
+#include "expand_cfg.h"
 
 namespace {
     class Common_Function: public ExpandDecorator {

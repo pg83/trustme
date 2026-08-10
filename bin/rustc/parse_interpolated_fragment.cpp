@@ -6,9 +6,9 @@
  * - An "interpolated fragment", result of parsing e.g. :expr in a macro invocation
  */
 #include <iostream>
-#include "parse_interpolated_fragment.hpp"
-#include "ast_ast.hpp"
-#include "ast_expr.hpp" // For definition of ExprNode
+#include "parse_interpolated_fragment.h"
+#include "ast_ast.h"
+#include "ast_expr.h" // For definition of ExprNode
 
 InterpolatedFragment::~InterpolatedFragment() {
     if (m_ptr) {

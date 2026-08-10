@@ -6,12 +6,12 @@
  * - Debug printing (with indenting)
  */
 #include <cstdint>
-#include "debug_inner.hpp"
-#include "debug.hpp"
+#include "debug_inner.h"
+#include "debug.h"
 #include <set>
 #include <iostream>
 #include <iomanip>
-#include "common.hpp" // FmtEscaped
+#include "common.h" // FmtEscaped
 #include <cstring>    // strchr
 
 // TODO: Inline debug filter/caching

@@ -5,13 +5,13 @@
  * expand/test.cpp
  * - #[test] handling
  */
-#include "synext_decorator.hpp"
-#include "ast_ast.hpp"
-#include "ast_crate.hpp"
-#include "parse_ttstream.hpp"
-#include "synext.hpp"           // Expand_ParseAndExpand_ExprVal
-#include "parse_parseerror.hpp" // ParseError
-#include "parse_interpolated_fragment.hpp"
+#include "synext_decorator.h"
+#include "ast_ast.h"
+#include "ast_crate.h"
+#include "parse_ttstream.h"
+#include "synext.h"           // Expand_ParseAndExpand_ExprVal
+#include "parse_parseerror.h" // ParseError
+#include "parse_interpolated_fragment.h"
 
 class CTestHandler: public ExpandDecorator {
     AttrStage stage() const override {

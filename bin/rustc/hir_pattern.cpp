@@ -5,7 +5,7 @@
  * hir/pattern.cpp
  * - HIR Representation of patterns
  */
-#include "hir_pattern.hpp"
+#include "hir_pattern.h"
 
 namespace HIR {
     ::std::ostream& operator<<(::std::ostream& os, const Pattern::Value& x) {

@@ -1,0 +1,62 @@
+/*
+ * MRustC - Rust Compiler
+ * - By John Hodge (Mutabah/thePowersGang)
+ *
+ * parse/ttstrea.h
+ * - Token tree streams (for post-lex parsing)
+ */
+#pragma once
+
+#include "parse_tokentree.h"
+#include "parse_tokenstream.h"
+
+/// Borrowed TTStream
+class TTStream: public TokenStream {
+    ::std::vector<::std::pair<unsigned int, const TokenTree*>> m_stack;
+    Span m_parent_span;
+    AST::Edition m_edition = AST::Edition::Rust2015;
+    const Ident::Hygiene* m_hygiene_ptr = nullptr;
+
+public:
+    TTStream(Span parent, ParseState ps, const TokenTree& input_tt);
+    ~TTStream();
+
+    Position getPosition() const override;
+
+    Span outerSpan() const override {
+        return m_parent_span;
+    }
+
+protected:
+    AST::Edition realGetEdition() const override;
+    Ident::Hygiene realGetHygiene() const override;
+    Token realGetToken() override;
+};
+
+/// Owned TTStream
+class TTStreamO: public TokenStream {
+    Span m_parent_span;
+    Position m_last_pos;
+    TokenTree m_input_tt;
+    ::std::vector<::std::pair<unsigned int, TokenTree*>> m_stack;
+    AST::Edition m_edition = AST::Edition::Rust2015;
+    const Ident::Hygiene* m_hygiene_ptr = nullptr;
+
+public:
+    TTStreamO(Span parent, ParseState ps, TokenTree input_tt);
+    ~TTStreamO();
+
+    TTStreamO(TTStreamO&& x) = default;
+    TTStreamO& operator=(TTStreamO&& x) = default;
+
+    Position getPosition() const override;
+
+    Span outerSpan() const override {
+        return m_parent_span;
+    }
+
+protected:
+    AST::Edition realGetEdition() const override;
+    Ident::Hygiene realGetHygiene() const override;
+    Token realGetToken() override;
+};

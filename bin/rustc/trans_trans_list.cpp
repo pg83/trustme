@@ -5,9 +5,9 @@
  * trans/trans_list.cpp
  * - A list of items that require translation
  */
-#include "trans_trans_list.hpp"
-#include "hir_typeck_static.hpp" // StaticTraitResolve
-#include "trans_mangling.hpp"
+#include "trans_trans_list.h"
+#include "hir_typeck_static.h" // StaticTraitResolve
+#include "trans_mangling.h"
 
 TransList_Function* TransList::add_function(HIR::TypeInterner& types, ::HIR::Path p) {
     auto symbol = FMT(Trans_Mangle(p));

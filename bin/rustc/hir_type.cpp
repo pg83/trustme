@@ -5,9 +5,9 @@
  * hir/type.cpp
  * - HIR Type helper code
  */
-#include "hir_type.hpp"
-#include "span.hpp"
-#include "hir_expr.hpp" // Hack for cloning array types
+#include "hir_type.h"
+#include "span.h"
+#include "hir_expr.h" // Hack for cloning array types
 #include <std/mem/obj_pool.h>
 #include <cstdint>
 

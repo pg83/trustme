@@ -5,9 +5,9 @@
  * hir_typeck/expr_cs__enum.cpp
  * - "Constraint Solver" type inferrence (rule enumeration)
  */
-#include "hir_typeck_expr_cs.hpp"
-#include "hir_typeck_expr_visit.hpp"
-#include "hir_expr.hpp"
+#include "hir_typeck_expr_cs.h"
+#include "hir_typeck_expr_visit.h"
+#include "hir_expr.h"
 
 #include <algorithm>
 

@@ -9,19 +9,19 @@
  * - Parse_Crate : Handles crate attrbutes, and passes on to Parse_ModRoot
  * - Parse_ModRoot
  */
-#include "ast_ast.hpp"
-#include "ast_crate.hpp"
-#include "parse_parseerror.hpp"
-#include "parse_common.hpp"
+#include "ast_ast.h"
+#include "ast_crate.h"
+#include "parse_parseerror.h"
+#include "parse_common.h"
 #include <std/mem/obj_pool.h>
 #include <cassert>
-#include "hir_hir.hpp"    // ABI_RUST - TODO: Move elsewhere?
-#include "expand_cfg.hpp" // check_cfg - for `mod nonexistant;`
+#include "hir_hir.h"    // ABI_RUST - TODO: Move elsewhere?
+#include "expand_cfg.h" // check_cfg - for `mod nonexistant;`
 #include <fstream>        // Used by directory path
-#include "parse_lex.hpp"  // New file lexer
-#include "parse_interpolated_fragment.hpp"
-#include "ast_expr.hpp"
-#include "macro_rules_macro_rules.hpp"
+#include "parse_lex.h"  // New file lexer
+#include "parse_interpolated_fragment.h"
+#include "ast_expr.h"
+#include "macro_rules_macro_rules.h"
 #include "path.h"
 
 template <typename T>

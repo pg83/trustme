@@ -5,9 +5,9 @@
  * hir_typeck/impl_ref.cpp
  * - Reference to a trait implementation (either a bound or a impl block)
  */
-#include "hir_typeck_impl_ref.hpp"
-#include "hir_hir.hpp"
-#include "hir_typeck_static.hpp" // for monomorphise_type_with
+#include "hir_typeck_impl_ref.h"
+#include "hir_hir.h"
+#include "hir_typeck_static.h" // for monomorphise_type_with
 
 bool ImplRef::more_specific_than(HIR::TypeInterner& types, const ImplRef& other) const {
     TU_MATCH(Data, (this->m_data), (te), (TraitImpl, if (te.impl == nullptr) { return false; } TU_MATCH(Data, (other.m_data), (oe), (TraitImpl, if (oe.impl == nullptr) { return true; } return te.impl->more_specific_than(types, *oe.impl);), (BoundedPtr, return false;), (Bounded, return false;))), (BoundedPtr, if (!other.m_data.is_BoundedPtr()) return false; const auto& oe = other.m_data.as_BoundedPtr(); assert(*te.type == *oe.type); assert(*te.trait_args == *oe.trait_args); if (te.assoc->size() > oe.assoc->size()) return true; return false;), (Bounded, if (!other.m_data.is_Bounded()) return false; const auto& oe = other.m_data.as_Bounded(); assert(te.type == oe.type); assert(te.trait_args == oe.trait_args); if (te.assoc.size() > oe.assoc.size()) return true; return false;))

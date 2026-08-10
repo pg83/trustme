@@ -5,11 +5,11 @@
  * hir_expand/vtable.cpp
  * - VTable Generation
  */
-#include "hir_expand_main_bindings.hpp"
-#include "hir_hir.hpp"
-#include "hir_visitor.hpp"
-#include "hir_typeck_common.hpp" // visit_ty_with
-#include "hir_typeck_static.hpp" // visit_ty_with
+#include "hir_expand_main_bindings.h"
+#include "hir_hir.h"
+#include "hir_visitor.h"
+#include "hir_typeck_common.h" // visit_ty_with
+#include "hir_typeck_static.h" // visit_ty_with
 #include <algorithm>             // ::std::any_of
 
 namespace {

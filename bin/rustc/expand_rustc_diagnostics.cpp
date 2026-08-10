@@ -5,11 +5,11 @@
  * expand/rustc_diagnostics.cpp
  * - Stubbed handling for __register_diagnostic and __diagnostic_used
  */
-#include "synext.hpp"
-#include "parse_parseerror.hpp" // For GET_CHECK_TOK
-#include "parse_common.hpp"     // TokenTree etc
-#include "parse_ttstream.hpp"
-#include "ast_crate.hpp"
+#include "synext.h"
+#include "parse_parseerror.h" // For GET_CHECK_TOK
+#include "parse_common.h"     // TokenTree etc
+#include "parse_ttstream.h"
+#include "ast_crate.h"
 
 class CExpanderRegisterDiagnostic: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {

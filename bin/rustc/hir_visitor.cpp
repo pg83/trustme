@@ -5,9 +5,9 @@
  * hir/visitor.cpp
  * - HIR Visitor default implementation
  */
-#include "hir_hir.hpp"
-#include "hir_visitor.hpp"
-#include "hir_typeck_static.hpp"
+#include "hir_hir.h"
+#include "hir_visitor.h"
+#include "hir_typeck_static.h"
 
 ::HIR::Visitor::~Visitor() {
 }

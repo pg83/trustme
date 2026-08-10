@@ -5,10 +5,10 @@
  * synexts/lang_item.cpp
  * - Binds language items to #[lang_item] tagged items
  */
-#include "synext.hpp"
-#include "common.hpp"
-#include "ast_ast.hpp"
-#include "ast_crate.hpp"
+#include "synext.h"
+#include "common.h"
+#include "ast_ast.h"
+#include "ast_crate.h"
 
 enum eItemType {
     ITEM_TRAIT,

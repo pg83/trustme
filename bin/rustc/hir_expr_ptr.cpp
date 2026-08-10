@@ -5,9 +5,9 @@
  * hir/expr_ptr.cpp
  * - HIR Expression
  */
-#include "hir_expr_ptr.hpp"
-#include "hir_expr.hpp"
-#include "hir_expr_state.hpp"
+#include "hir_expr_ptr.h"
+#include "hir_expr.h"
+#include "hir_expr_state.h"
 #include <std/mem/obj_pool.h>
 
 ::HIR::ExprPtr::ExprPtr() = default;

@@ -5,24 +5,24 @@
  * hir_conv/constant_evaluation.cpp
  * - Minimal (integer only) constant evaluation
  */
-#include "hir_conv_main_bindings.hpp"
-#include "hir_hir.hpp"
-#include "hir_expr.hpp"
-#include "hir_typeck_expr_visit.hpp"
-#include "hir_visitor.hpp"
+#include "hir_conv_main_bindings.h"
+#include "hir_hir.h"
+#include "hir_expr.h"
+#include "hir_typeck_expr_visit.h"
+#include "hir_visitor.h"
 #include <algorithm>
 #include <cmath>
-#include "mir_mir.hpp"
-#include "hir_typeck_common.hpp" // Monomorph
-#include "mir_helpers.hpp"
-#include "trans_target.hpp"
-#include "hir_expr_state.hpp"
+#include "mir_mir.h"
+#include "hir_typeck_common.h" // Monomorph
+#include "mir_helpers.h"
+#include "trans_target.h"
+#include "hir_expr_state.h"
 #include "int128.h" // 128 bit integer support
-#include "floats.hpp"
+#include "floats.h"
 
-#include "hir_conv_constant_evaluation.hpp"
-#include "trans_monomorphise.hpp" // For handling monomorph of MIR in provided associated constants
-#include "trans_codegen.hpp"      // For encoding as part of transmute
+#include "hir_conv_constant_evaluation.h"
+#include "trans_monomorphise.h" // For handling monomorph of MIR in provided associated constants
+#include "trans_codegen.h"      // For encoding as part of transmute
 
 namespace {
     void ConvertHIR_ConstantEvaluate_Static(const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::ItemPath& ip, ::HIR::Static& e);

@@ -5,22 +5,22 @@
  * trans/codegen_c.cpp
  * - Code generation emitting C code
  */
-#include "trans_codegen.hpp"
-#include "trans_mangling.hpp"
+#include "trans_codegen.h"
+#include "trans_mangling.h"
 #include <fstream>
 #include <algorithm>
 #include <cmath>
-#include "hir_hir.hpp"
+#include "hir_hir.h"
 #include <limits>
-#include "mir_mir.hpp"
-#include "hir_typeck_static.hpp"
-#include "mir_helpers.hpp"
-#include "trans_codegen_c.hpp"
-#include "trans_target.hpp"
-#include "trans_allocator.hpp"
+#include "mir_mir.h"
+#include "hir_typeck_static.h"
+#include "mir_helpers.h"
+#include "trans_codegen_c.h"
+#include "trans_target.h"
+#include "trans_allocator.h"
 #include <iomanip>
-#include "target_version.hpp"
-#include "string_view.hpp"
+#include "target_version.h"
+#include "string_view.h"
 
 namespace {
     struct FmtShell {

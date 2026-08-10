@@ -5,9 +5,9 @@
  * parse/pattern.cpp
  * - Parsing for patterns
  */
-#include "parse_common.hpp"
-#include "parse_parseerror.hpp"
-#include "ast_expr.hpp" // To convert :expr
+#include "parse_common.h"
+#include "parse_parseerror.h"
+#include "ast_expr.h" // To convert :expr
 
 // NEWNODE is needed for the Value pattern type
 typedef ::std::unique_ptr<AST::ExprNode> ExprNodeP;

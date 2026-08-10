@@ -5,9 +5,9 @@
  * parse/paths.cpp
  * - Parsing for module paths
  */
-#include "parse_parseerror.hpp"
-#include "parse_common.hpp"
-#include "ast_ast.hpp"
+#include "parse_parseerror.h"
+#include "parse_common.h"
+#include "ast_ast.h"
 
 AST::Path Parse_Path(TokenStream& lex, eParsePathGenericMode generic_mode);
 AST::Path Parse_Path(TokenStream& lex, bool is_abs, eParsePathGenericMode generic_mode);

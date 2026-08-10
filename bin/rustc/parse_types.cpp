@@ -5,10 +5,10 @@
  * parse/types.cpp
  * - Parsing for type usages
  */
-#include "parse_common.hpp"
-#include "parse_parseerror.hpp"
-#include "ast_types.hpp"
-#include "ast_ast.hpp"
+#include "parse_common.h"
+#include "parse_parseerror.h"
+#include "ast_types.h"
+#include "ast_ast.h"
 
 // === PROTOTYPES ===
 //TypeRef Parse_Type(TokenStream& lex, bool allow_trait_list);

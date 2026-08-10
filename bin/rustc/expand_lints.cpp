@@ -5,9 +5,9 @@
 * expand/lints.cpp
 * - Lint attributes
 */
-#include "synext.hpp"
-#include "ast_generics.hpp"
-#include "ast_ast.hpp"
+#include "synext.h"
+#include "ast_generics.h"
+#include "ast_ast.h"
 
 class CMultiHandler_Lint: public ExpandDecorator {
     AttrStage stage() const override {

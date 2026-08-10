@@ -5,7 +5,7 @@
  * rc_string.cpp
  * - Reference-counted string
  */
-#include "rc_string.hpp"
+#include "rc_string.h"
 #include <cstring>
 #include <string>
 #include <iostream>

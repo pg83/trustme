@@ -5,14 +5,14 @@
  * expand/include.cpp
  * - include!/include_str!/include_bytes! support
  */
-#include "synext_macro.hpp"
-#include "synext.hpp" // for Expand_BareExpr
-#include "parse_common.hpp"
-#include "parse_parseerror.hpp" // for GET_CHECK_TOK
-#include "parse_ttstream.hpp"
-#include "parse_lex.hpp" // Lexer (new files)
-#include "ast_expr.hpp"
-#include "ast_crate.hpp"
+#include "synext_macro.h"
+#include "synext.h" // for Expand_BareExpr
+#include "parse_common.h"
+#include "parse_parseerror.h" // for GET_CHECK_TOK
+#include "parse_ttstream.h"
+#include "parse_lex.h" // Lexer (new files)
+#include "ast_expr.h"
+#include "ast_crate.h"
 
 namespace {
 

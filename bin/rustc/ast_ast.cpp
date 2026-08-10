@@ -5,19 +5,19 @@
  * ast/ast.cpp
  * - Implementation of the various AST classes
  */
-#include "ast_ast.hpp"
-#include "ast_crate.hpp"
-#include "ast_types.hpp"
-#include "ast_expr.hpp"
-#include "common.hpp"
+#include "ast_ast.h"
+#include "ast_crate.h"
+#include "ast_types.h"
+#include "ast_expr.h"
+#include "common.h"
 #include <iostream>
-#include "parse_parseerror.hpp"
+#include "parse_parseerror.h"
 #include <algorithm>
 
-#include "parse_ttstream.hpp"
-#include "parse_common.hpp"
-#include "parse_interpolated_fragment.hpp"
-#include "synext.hpp" // Expand_ParseAndExpand_ExprVal
+#include "parse_ttstream.h"
+#include "parse_common.h"
+#include "parse_interpolated_fragment.h"
+#include "synext.h" // Expand_ParseAndExpand_ExprVal
 
 namespace AST {
 

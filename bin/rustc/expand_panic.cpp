@@ -5,13 +5,13 @@
 * expand/panic.cpp
 * - panic! built-in macro (1.54)
 */
-#include "synext_macro.hpp"
-#include "parse_interpolated_fragment.hpp"
-#include "ast_crate.hpp"
-#include "hir_hir.hpp"
-#include "parse_ttstream.hpp"
-#include "parse_common.hpp"
-#include "parse_parseerror.hpp"
+#include "synext_macro.h"
+#include "parse_interpolated_fragment.h"
+#include "ast_crate.h"
+#include "hir_hir.h"
+#include "parse_ttstream.h"
+#include "parse_common.h"
+#include "parse_parseerror.h"
 
 class CExpander_panic: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {

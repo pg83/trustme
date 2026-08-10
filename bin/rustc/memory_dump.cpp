@@ -5,7 +5,7 @@
  * memory_dump.cpp
  * - Generate a core dump of current compiler state
  */
-#include "memory_dump.hpp"
+#include "memory_dump.h"
 #include <iostream>
 #include <cstdint>
 #include <cstring>

@@ -5,9 +5,9 @@
  * ast/pattern.cpp
  * - AST::Pattern support/implementation code
  */
-#include "common.hpp"
-#include "ast_ast.hpp"
-#include "ast_pattern.hpp"
+#include "common.h"
+#include "ast_ast.h"
+#include "ast_pattern.h"
 
 namespace AST {
 

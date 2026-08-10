@@ -5,10 +5,10 @@
  * expand/stringify.cpp
  * - stringify! macro
  */
-#include "synext.hpp"
-#include "ast_crate.hpp"
-#include "parse_common.hpp"
-#include "parse_ttstream.hpp"
+#include "synext.h"
+#include "ast_crate.h"
+#include "parse_common.h"
+#include "parse_ttstream.h"
 
 class CExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
