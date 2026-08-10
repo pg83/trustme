@@ -497,6 +497,27 @@ unit_tests.append(command(
     descr="UT",
     color="green",
 ))
+unit_tests.append(command(
+    name="unit_proc_macro_attribute",
+    inputs=[
+        "$(S)/tst/unit/test_proc_macro_attribute.py",
+        *build.glob("$(S)/tst/unit/proc_macro_attribute/**/*.toml"),
+        *build.glob("$(S)/tst/unit/proc_macro_attribute/**/*.rs"),
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/proc_macro_attribute.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_proc_macro_attribute.py",
+        "$(S)/tst/unit/proc_macro_attribute/Cargo.toml",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/proc_macro_attribute.stamp",
+    ],
+    deps=[libstd, rustc, cargo],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
 for _src in build.glob("$(S)/tst/unit/test_*.rs"):
     _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
     _uses_rust_lib_dependencies = _stem == "rust_lib_dev_dependencies"

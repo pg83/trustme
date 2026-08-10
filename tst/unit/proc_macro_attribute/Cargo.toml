@@ -1,0 +1,11 @@
+[package]
+name = "proc-macro-attribute-unit"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "proc_macro_attribute_unit"
+path = "src/main.rs"
+
+[dependencies]
+tracing-attributes = { path = "tracing-attributes" }

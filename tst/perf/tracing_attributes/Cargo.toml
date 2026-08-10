@@ -1,0 +1,11 @@
+[package]
+name = "tracing-attributes-perf"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+tracing = "=0.1.37"
+tracing-attributes = "=0.1.30"

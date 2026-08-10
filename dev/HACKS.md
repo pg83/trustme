@@ -2,10 +2,10 @@
 
 Найдено:
 
-- 170 строк с `hack/HACK/hacky/hackery/hackiness` в 36 файлах.
+- 169 строк с `hack/HACK/hacky/hackery/hackiness` в 36 файлах.
 - 158 точных употреблений слова `HACK`.
-- 163 комментария и 7 диагностических `DEBUG`-строк.
-- По подсистемам: frontend — 56, HIR/typeck — 62, MIR — 21, backend — 23, инфраструктура — 8.
+- 162 комментария и 7 диагностических `DEBUG`-строк.
+- По подсистемам: frontend — 55, HIR/typeck — 62, MIR — 21, backend — 23, инфраструктура — 8.
 
 Главный вывод: массово удалять эти комментарии нельзя. Под одной меткой смешаны реальные ошибки модели, допустимые lowerings, устаревший код и просто плохо названные инварианты.
 
@@ -13,7 +13,7 @@
 
 1. Macro hygiene фактически неполна.
 
-   [ident.cpp](/home/pg/monorepo/trustme/bin/rustc/ident.cpp:9) реализует только примитивную видимость контекстов, а `Ident::operator==` вообще сравнивает только имя. [synext_macro.cpp](/home/pg/monorepo/trustme/bin/rustc/synext_macro.cpp:2094) вырезает hygiene из строкового представления, а [expand_common.cpp](/home/pg/monorepo/trustme/bin/rustc/expand_common.cpp:233) из-за этого полностью игнорирует `tracing::instrument`. Это единый архитектурный дефект, а не три независимых костыля: легальная proc-macro семантика тихо исчезает.
+   [ident.cpp](/home/pg/monorepo/trustme/bin/rustc/ident.cpp:9) реализует только примитивную видимость контекстов, а `Ident::operator==` вообще сравнивает только имя. [synext_macro.cpp](/home/pg/monorepo/trustme/bin/rustc/synext_macro.cpp:2094) вырезает hygiene из строкового представления. Hardcoded bypass `tracing_attributes::{instrument}` удалён: proc-macro больше не отбрасывается по имени crate, а `unit_proc_macro_attribute` проверяет его фактический вызов. Общий долг hygiene при этом остаётся.
 
 2. HRTB/lifetime relation местами математически некорректна.
 
@@ -58,7 +58,7 @@
 - [x] Две ветки `range_full` под `!TARGETVER_LEAST_1_54` удалены вместе со всем механизмом `TARGETVER_*`.
 - [x] Блок non-lang operator paths под `TARGETVER_MOST_1_19` удалён.
 - [x] Удалены все 58 блоков `#if 0`, обычные `if (false)` и связанные с ними мёртвые HACK-комментарии. `unit_compiler_no_dead_branches` запрещает возвращать literal-false ветки; debug-макросы сохраняют compile-time проверку выражений через unevaluated `sizeof`.
-- [ ] Обход `tracing_attributes-0_1_26` явно оставлен от rustc 1.74 и всё ещё исполняемо отбрасывает proc-macro по имени crate.
+- [x] Обходы `tracing_attributes-0_1_26` и `tracing_attributes-0_1_30` удалены. Настоящий `tracing-attributes 0.1.30` и workload из 236 `#[instrument]` собираются; отдельный semantic unit запрещает снова тихо отбрасывать attribute proc-macro.
 
 `rustc_legacy_const_generics`, `builtin # offset_of` и leading `|` в match удалять только из-за старого комментария нельзя: соответствующая семантика всё ещё может присутствовать в исходниках, компилируемых Rust 1.90.
 
@@ -68,7 +68,7 @@
 |---|---|---|
 | Infrastructure | `common.h:17`, `tagged_union.h:150,177` | Сокращения `mv$` и macro-loop — плохая читаемость, но не ошибки семантики. |
 | Driver | `main_bindings.cpp:1681,1868,2241,2481,2486` | Literal-false код удалён; testing/pipeline labels и ручной CLI parser остаются активной инфраструктурой. |
-| Expansion | `expand_common.cpp:25,137,233,395,468,957,2100,2231,2439` | Глобальный module context, повторные проходы и early `macro_rules`; `tracing` — тихая потеря семантики. |
+| Expansion | `expand_common.cpp:25,137,387,460,949,2092,2223,2431` | Глобальный module context, повторные проходы и early `macro_rules`; hardcoded потеря `tracing`-семантики удалена. |
 | Parser | `parse_common.cpp:263,306,354,388,403,555,939,1279,1353,1581,1664,1675,1678,1713,1807,2454,2963,3845,3851,4714` | Split `&&/<< />>`, `Fn(...)` и visibility — нормальная работа текущего lexer/parser, плохо названная HACK. Statement/path macro handling связано с `pin!`-группой. |
 | Macro matcher | `macro_rules_macro_rules.cpp:534,833,1537,2311,2313,3811` | Реальные opaque-fragment и matcher-state обходы; строка 534 привязана к ICU из rustc 1.90. |
 | Hygiene/macros | `ident.cpp:9`, `synext_macro.cpp:1559,2094` | Неполная hygiene и hardcoded `format_args!` API. |
@@ -81,7 +81,7 @@
 | HIR identity | `hir_hir.cpp:203,697`; `hir_path.cpp:326`; `hir_type.cpp:1475,1481,1490` | Const ordering, нетранзитивный HRTB order и fuzzy type relation — высокий риск. |
 | Metadata | `hir_main_bindings.cpp:1075,1572,1588` | `.hir` suffix — соглашение custom metadata, не дефект; empty crate-name rewrite — compatibility debt. |
 | Typeck common | `hir_typeck_common.cpp:503,515,753,761` | Erasure и passthrough lifetime вместо явных binders. |
-| Typeck solver | `hir_typeck_expr_cs.cpp:932,2030,4243,4935,5801,5815,6586,7438,7898,8042,8222`; header `:175` | Остались active heuristics и DEBUG-текст; operator result=LHS и arbitrary ivar fallback требуют отдельных units. |
+| Typeck solver | `hir_typeck_expr_cs.cpp:932,2030,4243,4935,5806,5820,6591,7443,7903,8047,8227`; header `:175` | Остались active heuristics и DEBUG-текст; operator result=LHS и arbitrary ivar fallback требуют отдельных units. |
 | Typeck helpers | `hir_typeck_helpers.cpp:6025,7183` | Opaque fuzzy matching и array→slice shortcut вместо нормального receiver adjustment. |
 | Typeck impls | `hir_typeck_main_bindings.cpp:2121,2349,2383` | Lifetime bounds копируются/заменяются для совпадения представления. |
 | Static solver | `hir_typeck_static.cpp:478,508,1241,2085` | Associated bounds дописываются, `_` автоматически проходит bound, opaque equality обходится локально. |
@@ -94,4 +94,4 @@
 | Enumeration | `trans_main_bindings.cpp:1349,2204,2487,2872` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующая последовательность: убрать исполняемый `tracing_attributes` bypass как часть macro-hygiene/proc-macro модели; затем переименовать ложные `HACK` в документированные инварианты; реальные HACK исправлять только unit-first, по измеряемому общему эффекту.
+Следующая последовательность: переименовать ложные `HACK` в документированные инварианты; реальные HACK исправлять только unit-first, по измеряемому общему эффекту. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.

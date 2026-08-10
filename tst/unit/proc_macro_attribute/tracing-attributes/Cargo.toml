@@ -1,0 +1,8 @@
+[package]
+name = "tracing-attributes"
+version = "0.1.30"
+edition = "2021"
+
+[lib]
+proc-macro = true
+path = "src/lib.rs"
