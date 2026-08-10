@@ -2801,8 +2801,8 @@ void MIR_Validate_FullValState(::MIR::TypeResolve& mir_res, const ::MIR::Functio
                 TU_ARMA(Drop, se) {
                     if (se.flag_idx == ~0u || state.drop_flags.at(se.flag_idx)) {
                         if (se.kind == ::MIR::eDropKind::SHALLOW) {
-                            // HACK: A move out of a Box generates the following pattern: `[[[[X_]]X]]`
-                            // - Ensure that that is the pattern we're seeing here.
+                            // A shallow Box drop follows a move from its pointee. Ensure
+                            // that the validator state has the corresponding outer/inner shape.
                             const auto& vs = state.get_lvalue_state(mir_res, se.slot);
 
                             MIR_ASSERT(mir_res, vs.index != ~0u, "Shallow drop on fully-valid value - " << se.slot);
@@ -3934,7 +3934,7 @@ void MIR_Cleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                     break;
                 }
             }
-            // >> Visit all LValues for box deref hackery
+            // >> Elaborate Box dereferences in all LValues
             DEBUG(state << stmt);
             TU_MATCH_HDRA( (stmt), { )
             TU_ARMA(Drop, se) {
@@ -4002,7 +4002,8 @@ void MIR_Cleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                             MIR_Cleanup_LValue(state, mutator, re.val);
                         }
                         TU_ARMA(DstMeta, re) {
-                            // HACK: Ensure that the box Deref conversion fires here.
+                            // DstMeta consumes the pointer represented by a Box, so expose
+                            // its dereference to the Box elaboration pass before splitting it.
                             re.val.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Deref());
                             MIR_Cleanup_LValue(state, mutator, re.val);
                             re.val.m_wrappers.pop_back();
@@ -4028,7 +4029,8 @@ void MIR_Cleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                             }
                         }
                         TU_ARMA(DstPtr, re) {
-                            // HACK: Ensure that the box Deref conversion fires here.
+                            // DstPtr consumes the pointer represented by a Box, so expose
+                            // its dereference to the Box elaboration pass before splitting it.
                             re.val.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Deref());
                             MIR_Cleanup_LValue(state, mutator, re.val);
                             re.val.m_wrappers.pop_back();

@@ -38,7 +38,8 @@ public:
     }
 };
 
-// - Needs to handle future DerefMove (which can't use the Box hack)
+// Rust 1.90 only permits a Box dereference to form a move path. A future
+// DerefMove feature will need a corresponding state variant here.
 enum class InvalidType {
     Uninit,
     Moved,

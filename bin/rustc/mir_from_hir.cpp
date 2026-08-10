@@ -9045,7 +9045,8 @@ VarState* MirBuilder::get_val_state_mut_p(const Span& sp, const ::MIR::LValue& l
                 vs = &ivs.as_Partial().inner_states.at(field_index);
             }
             TU_ARMA(Deref, _e) {
-                // HACK: If the dereferenced type is a Box ("owned_box") then hack in move and shallow drop
+                // A Box dereference is a move path: track its pointee separately so a
+                // later shallow drop deallocates the Box without dropping moved data.
                 bool is_box = false;
                 if (this->m_lang_Box) {
                     with_val_type(sp, lv, [&](const auto& ty) {
