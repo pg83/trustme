@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cassert>
+#include <iosfwd>
 
 class TypeRef;
 class TokenTree;

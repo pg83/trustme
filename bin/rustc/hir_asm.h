@@ -3,6 +3,9 @@
 #pragma once
 #include "tagged_union.h"
 #include <climits>
+#include <ostream>
+#include <string>
+#include <vector>
 
 // HACK! This is used in both AST and HIR, so put common definitions here too
 #define ABI_RUST "Rust"

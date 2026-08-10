@@ -5,6 +5,7 @@
  * trans/codegen_c.cpp
  * - Code generation emitting C code
  */
+#include "trans_codegen_c.h"
 #include "trans_codegen.h"
 #include "trans_mangling.h"
 #include <fstream>
@@ -15,7 +16,6 @@
 #include "mir_mir.h"
 #include "hir_typeck_static.h"
 #include "mir_helpers.h"
-#include "trans_codegen_c.h"
 #include "trans_target.h"
 #include "trans_allocator.h"
 #include <iomanip>

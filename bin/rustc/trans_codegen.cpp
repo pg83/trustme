@@ -5,6 +5,7 @@
  * trans/codegen.cpp
  * - Wrapper for translation
  */
+#include "trans_codegen.h"
 #include "trans_main_bindings.h"
 #include "trans_trans_list.h"
 #include "hir_hir.h"
@@ -13,7 +14,6 @@
 #include <algorithm>
 #include "trans_target.h"
 
-#include "trans_codegen.h"
 #include "trans_monomorphise.h"
 
 void Trans_Codegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* crate_ptr, TransList list, const ::std::string& hir_file) {

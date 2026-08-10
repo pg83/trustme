@@ -8,6 +8,12 @@
 
 #pragma once
 
+#include <functional>
+#include <iosfwd>
+#include <string>
+#include <vector>
+
+struct Span;
 class TokenStream;
 
 enum class CfgLintLevel {

@@ -305,7 +305,7 @@ const char* Token::typestr(enum eTokenType type) {
 #define _(t) \
     case t:  \
         return #t;
-#include "parse_eTokenType.enum.h"
+#include "parse_eTokenType.enum.inc"
 #undef _
     }
     return ">>BUGCHECK: BADTOK<<";
@@ -318,7 +318,7 @@ enum eTokenType Token::typefromstr(const ::std::string& s) {
 #define _(t)     \
     if (s == #t) \
         return t;
-#include "parse_eTokenType.enum.h"
+#include "parse_eTokenType.enum.inc"
 #undef _
     return TOK_NULL;
 }

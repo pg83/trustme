@@ -8,6 +8,9 @@
 #ifndef _COMPILE_ERROR_H_
 #define _COMPILE_ERROR_H_
 
+#include <exception>
+#include <string>
+
 class TokenStream;
 
 namespace CompileError {

@@ -5,6 +5,7 @@
  * hir/from_ast.cpp
  * - Constructs the HIR module tree from the AST module tree
  */
+#include "hir_from_ast.h"
 #include "common.h"
 #include "hir_hir.h"
 #include "hir_main_bindings.h"
@@ -12,7 +13,6 @@
 #include "ast_ast.h"
 #include "ast_expr.h" // For shortcut in array size handling
 #include "ast_crate.h"
-#include "hir_from_ast.h"
 #include <std/mem/obj_pool.h>
 #include "hir_visitor.h"
 #include "macro_rules_macro_rules.h"

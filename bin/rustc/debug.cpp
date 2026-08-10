@@ -5,9 +5,9 @@
  * debug.cpp
  * - Debug printing (with indenting)
  */
+#include "debug.h"
 #include <cstdint>
 #include "debug_inner.h"
-#include "debug.h"
 #include <set>
 #include <iostream>
 #include <iomanip>

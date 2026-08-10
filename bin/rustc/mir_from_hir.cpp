@@ -5,6 +5,7 @@
  * mir/from_hir.cpp
  * - Construction of MIR from the HIR expression tree
  */
+#include "mir_from_hir.h"
 #include <type_traits> // for TU_MATCHA
 #include <algorithm>
 #include "mir_mir.h"
@@ -14,7 +15,6 @@
 #include "hir_visitor.h"
 #include "hir_typeck_common.h" // monomorphise_type
 #include "mir_main_bindings.h"
-#include "mir_from_hir.h"
 #include "mir_operations.h"
 #include "mir_visit_crate_mir.h"
 #include "hir_expr_state.h"

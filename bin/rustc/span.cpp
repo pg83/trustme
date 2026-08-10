@@ -5,9 +5,9 @@
  * span.cpp
  * - Spans and error handling
  */
+#include "span.h"
 #include <functional>
 #include <iostream>
-#include "span.h"
 #include "parse_lex.h"
 #include "common.h"
 

@@ -6,6 +6,8 @@
  * - Pointer type wrapping AST::ExprNode (prevents need to know the full definition)
  */
 #pragma once
+
+#include <cassert>
 #include <memory>
 
 namespace AST {

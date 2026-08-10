@@ -5,12 +5,12 @@
  * debug.cpp
  * - Debugging helpers
  */
+#include "common_debug.h"
 #if defined(__MINGW32__)
     #define DISABLE_MULTITHREAD // Mingw32 doesn't have c++11 threads
 #endif
 #include <set>
 #include <iostream>
-#include "common_debug.h"
 #include <mutex>
 #include <cstring> // strr
 

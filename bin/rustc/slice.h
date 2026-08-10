@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stddef.h>
+#include <ostream>
 
 template <typename T>
 class slice {

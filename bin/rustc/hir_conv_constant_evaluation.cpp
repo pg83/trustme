@@ -5,6 +5,7 @@
  * hir_conv/constant_evaluation.cpp
  * - Minimal (integer only) constant evaluation
  */
+#include "hir_conv_constant_evaluation.h"
 #include "hir_conv_main_bindings.h"
 #include "hir_hir.h"
 #include "hir_expr.h"
@@ -20,7 +21,6 @@
 #include "int128.h" // 128 bit integer support
 #include "floats.h"
 
-#include "hir_conv_constant_evaluation.h"
 #include "trans_monomorphise.h" // For handling monomorph of MIR in provided associated constants
 #include "trans_codegen.h"      // For encoding as part of transmute
 

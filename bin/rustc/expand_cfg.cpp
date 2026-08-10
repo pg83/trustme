@@ -5,11 +5,11 @@
  * expand/cfg.cpp
  * - cfg! and #[cfg] handling
  */
+#include "expand_cfg.h"
 #include "synext.h"
 #include "parse_common.h"
 #include "parse_tokentree.h"
 #include "parse_ttstream.h"
-#include "expand_cfg.h"
 #include "ast_expr.h" // Needed to clear a ExprNodeP
 #include "ast_crate.h"
 #include "ast_attrs.h"

@@ -9,6 +9,26 @@
 
 #include "hir_expr_ptr.h"
 
+class RcString;
+class TypeRef;
+struct Span;
+
+namespace AST {
+    class ExprNode;
+    class Path;
+    struct PathParams;
+    class Pattern;
+}
+
+namespace HIR {
+    class Crate;
+    class GenericPath;
+    class Path;
+    struct PathParams;
+    struct Pattern;
+    struct SimplePath;
+}
+
 enum class FromAST_PathClass {
     Type,
     Value,

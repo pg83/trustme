@@ -8,7 +8,9 @@
 #pragma once
 
 #include <string>
+#include "ast_attrs.h"
 #include "ast_types.h"
+#include "ast_path.h"
 
 namespace AST {
 

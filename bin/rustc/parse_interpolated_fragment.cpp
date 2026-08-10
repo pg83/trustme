@@ -5,8 +5,8 @@
  * parse/interpolated_fragment.cpp
  * - An "interpolated fragment", result of parsing e.g. :expr in a macro invocation
  */
-#include <iostream>
 #include "parse_interpolated_fragment.h"
+#include <iostream>
 #include "ast_ast.h"
 #include "ast_expr.h" // For definition of ExprNode
 

@@ -5,6 +5,7 @@
  * expand/proc_macro.cpp
  * - Support for the `#[proc_macro_derive]` attribute
  */
+#include "expand_proc_macro.h"
 #include "synext.h"
 #include "common.h"
 #include "expand_cfg.h"
@@ -13,7 +14,6 @@
 #include "ast_crate.h"
 #include "main_bindings.h"
 #include "hir_hir.h" // ABI_RUST
-#include "expand_proc_macro.h"
 #include "parse_lex.h"
 #include "parse_ttstream.h"
 #include <unordered_set>

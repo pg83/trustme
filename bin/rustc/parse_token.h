@@ -18,7 +18,7 @@
 
 enum eTokenType {
 #define _(t) t,
-#include "parse_eTokenType.enum.h"
+#include "parse_eTokenType.enum.inc"
 #undef _
 };
 

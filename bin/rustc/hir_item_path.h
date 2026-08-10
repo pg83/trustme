@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include "hir_type.h"
+
 namespace HIR {
 
     class ItemPath {

@@ -5,8 +5,8 @@
  * include/ident.cpp
  * - Identifiers with hygiene
  */
-#include <iostream>
 #include "ident.h"
+#include <iostream>
 #include "debug.h"
 #include "common.h" // vector print
 

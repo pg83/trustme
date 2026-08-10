@@ -1,6 +1,9 @@
 /*
  */
+#pragma once
+
 #include "hir_hir.h"
+#include "hir_typeck_static.h"
 #include <std/mem/obj_pool.h>
 
 namespace MIR {

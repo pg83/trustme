@@ -6,8 +6,15 @@
  * - C codegen backend (internal header)
  */
 #pragma once
+#include "tagged_union.h"
 #include <vector>
 #include <memory>
+
+namespace MIR {
+    class Function;
+    struct LValue;
+    class SwitchValues;
+}
 
 class Node;
 
