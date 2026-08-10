@@ -1,6 +1,6 @@
 #include "hir_type.h"
 #include "span.h"
-#include "hir_expr.h" // Hack for cloning array types
+#include "hir_expr.h" // ArraySize::Unevaluated cloning needs the complete expression definition.
 #include <std/mem/obj_pool.h>
 #include <cstdint>
 

@@ -139,7 +139,7 @@ void ::HIR::Visitor::visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR
         m_resolve->set_impl_generics_raw(MetadataType::Unknown, impl.m_params);
     }
     this->visit_params(impl.m_params);
-    // - HACK: Create a generic path to visit (so that proper checks are performed)
+    // Visit trait arguments through GenericPath so path-context checks and rewrites are shared.
     {
         ::HIR::GenericPath gp{trait_path, mv$(impl.m_trait_args)};
         this->visit_generic_path(gp, PathContext::TRAIT);

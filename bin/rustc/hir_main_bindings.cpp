@@ -1569,7 +1569,7 @@ void HirDeserialiser::deserialise_crate(::HIR::Crate& rv) {
 
 ::HIR::Crate* HIR_Deserialise(stl::ObjPool* pool, ::HIR::TypeInterner& types, const ::std::string& filename) {
     try {
-        ::HIR::serialise::Reader in{filename + ".hir"}; // HACK!
+        ::HIR::serialise::Reader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
         HirDeserialiser s{in, types};
 
         auto* rv = pool->make<::HIR::Crate>(pool, types);
@@ -1585,7 +1585,7 @@ void HirDeserialiser::deserialise_crate(::HIR::Crate& rv) {
 
 RcString HIR_Deserialise_JustName(const ::std::string& filename) {
     try {
-        ::HIR::serialise::Reader in{filename + ".hir"}; // HACK!
+        ::HIR::serialise::Reader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
 
         // NOTE: This is the first item loaded by deserialise_crate
         auto crate_name = in.read_istring();

@@ -2,10 +2,10 @@
 
 Найдено:
 
-- 156 строк с `hack/HACK/hacky/hackery/hackiness` в 36 файлах.
-- 145 точных употреблений слова `HACK`.
-- 150 комментариев и 6 диагностических `DEBUG`-строк.
-- По подсистемам: frontend — 42, HIR/typeck — 62, MIR — 21, backend — 23, инфраструктура — 8.
+- 148 строк с `hack/HACK/hacky/hackery/hackiness` в 32 файлах.
+- 137 точных употреблений слова `HACK`.
+- 142 комментария и 6 диагностических `DEBUG`-строк.
+- По подсистемам: frontend — 42, HIR/typeck — 57, MIR — 21, backend — 23, инфраструктура — 5.
 
 Главный вывод: массово удалять эти комментарии нельзя. Под одной меткой смешаны реальные ошибки модели, допустимые lowerings, устаревший код и просто плохо названные инварианты.
 
@@ -66,7 +66,6 @@
 
 | Подсистема | Файлы и строки | Вывод |
 |---|---|---|
-| Infrastructure | `common.h:17`, `tagged_union.h:150,177` | Сокращения `mv$` и macro-loop — плохая читаемость, но не ошибки семантики. |
 | Driver | `main_bindings.cpp:1681,1868,2241,2481,2486` | Literal-false код удалён; testing/pipeline labels и ручной CLI parser остаются активной инфраструктурой. |
 | Expansion | `expand_common.cpp:25,137,387,460,949,2092,2223,2431` | Глобальный module context, повторные проходы и early `macro_rules`; hardcoded потеря `tracing`-семантики удалена. |
 | Parser | `parse_common.cpp:263,306,354,388,403,1279,1353` | Штатные token splitting, `Fn(...)`, optional leading `|`, tuple-field visibility и внутренние path encodings больше не помечены как HACK. Оставшиеся маркеры относятся к statement/path macro handling, `TOK_HASH` между statements и `builtin #` lowering. |
@@ -74,12 +73,12 @@
 | Hygiene/macros | `ident.cpp:9`, `synext_macro.cpp:1559,2094` | Неполная hygiene и hardcoded `format_args!` API. |
 | Resolver | `resolve_common.cpp:98,543`; `resolve_main_bindings.cpp:411,641,1512,1702,1760,1851,1860,2681,3792,3858,3891,4096` | Синтетические `=crate`, anon-module и primitive-module paths — единый долг модели путей. |
 | Decorators | `synext_decorator.cpp:1555,2475,2612,2972` | Повторный обход anon modules и частный workaround для `windows-0.48`. |
-| HIR layout | `hir_asm.h:10`, `hir_expr.h:580`, `hir_type.cpp:3`, `hir_visitor.cpp:142` | В основном границы файлов и explicit staging; не самостоятельные bugs. |
+| HIR layout | `hir_expr.h:580` | У `ExprNode_Emplace::Noop` не найден producer, но consumers ещё существуют. Это кандидат на доказанное удаление мёртвого HIR, а не ложный marker. |
 | HIR lowering | `hir_from_ast.cpp:176,562,589,590,1620,3041,3631` | Self/HRTB sentinels, синтетический trait bound, null HIR pointer как discriminator. |
 | HIR conversion | `hir_conv_main_bindings.cpp:657,949,1875,2372,2381,2724,3244,4144,4356` | Lifetime heuristics, `#` в enum path, approximate DST и privacy bypass `fmt::rt::Argument`. |
 | HIR expansion | `hir_expand_main_bindings.cpp:114,4553,6867,8690` | Literal-false experiments удалены; active invalid-unsize, generic-array metadata и placeholder fallback остаются. |
 | HIR identity | `hir_hir.cpp:203,697`; `hir_path.cpp:326`; `hir_type.cpp:1475,1481,1490` | Const ordering, нетранзитивный HRTB order и fuzzy type relation — высокий риск. |
-| Metadata | `hir_main_bindings.cpp:1075,1572,1588` | `.hir` suffix — соглашение custom metadata, не дефект; empty crate-name rewrite — compatibility debt. |
+| Metadata | `hir_main_bindings.cpp:1075` | Контракт basename + `.hir` теперь документирован как соглашение custom metadata; empty crate-name rewrite остаётся compatibility debt. |
 | Typeck common | `hir_typeck_common.cpp:503,515,753,761` | Erasure и passthrough lifetime вместо явных binders. |
 | Typeck solver | `hir_typeck_expr_cs.cpp:932,2030,4243,4935,5806,5820,6591,7443,7903,8047,8227`; header `:175` | Остались active heuristics и DEBUG-текст; operator result=LHS и arbitrary ivar fallback требуют отдельных units. |
 | Typeck helpers | `hir_typeck_helpers.cpp:6025,7183` | Opaque fuzzy matching и array→slice shortcut вместо нормального receiver adjustment. |
@@ -94,4 +93,4 @@
 | Enumeration | `trans_main_bindings.cpp:1349,2204,2487,2872` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующая последовательность: parser/lexer-инварианты переименованы; продолжить ту же проверку для infrastructure, HIR layout и metadata markers. Реальные HACK исправлять только unit-first, по измеряемому общему эффекту. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.
+Следующая последовательность: parser/lexer, infrastructure, общие HIR definitions/visitor и metadata suffix переименованы. Продолжить проверку для driver, обычных MIR-pass invariants и backend marker conventions. Реальные HACK исправлять только unit-first, по измеряемому общему эффекту. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.

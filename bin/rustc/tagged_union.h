@@ -147,7 +147,7 @@
     switch ((TU_FIRST VARS).tag())        \
     brace case CLASS::TAGDEAD:            \
         assert(!"ERROR: destructed tagged union used");
-// Evil hack: two for loops, the inner stops the outer after it's done.
+// Nested single-iteration loops provide a declaration scope for the arm binding.
 #define TU_ARM(VAR, TAG, NAME)                                    \
     break;                                                        \
     case ::std::remove_reference<decltype(VAR)>::type::TAG_##TAG: \
@@ -174,7 +174,7 @@
 #define TU_ARMA_DeclInner3(TAG, v1, v2, v3) TU_ARMA_DeclInner1(TAG, v1, v2), v3 = tu_match_hdr2_v3.as_##TAG()
 #define TU_ARMA_Decl(TAG, ...) decltype(tu_match_hdr2_v.as_##TAG()) TU_EXP1(TU_GM(TU_ARMA_DeclInner, __VA_ARGS__)(TAG, __VA_ARGS__))
 #define TU_ARMA_IgnVal(v) (void)v,
-// Evil hack: two for loops, the inner stops the outer after it's done.
+// Nested single-iteration loops provide a declaration scope for the arm bindings.
 #define TU_ARMA(TAG, ...)                                                        \
     break;                                                                       \
     case ::std::remove_reference<decltype(tu_match_hdr2_v)>::type::TAG_##TAG: /*

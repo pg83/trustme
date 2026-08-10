@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-// HACK! This is used in both AST and HIR, so put common definitions here too
+// ABI and builtin crate names are shared by the AST and HIR assembly representations.
 #define ABI_RUST "Rust"
 #define CRATE_BUILTINS "#builtins" // used for macro re-exports of builtins
 
