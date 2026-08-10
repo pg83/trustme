@@ -35,7 +35,7 @@
    - MIR validator помечает значение валидным просто потому, что встретил `Drop`.
    - DCE удаляет drop неиспользуемого local с незакрытым вопросом о conditional drop.
 
-   Guard-failure для раскрытых or-pattern теперь переходит к следующему кандидату того же arm, а декартово произведение альтернатив сохраняет левосторонний depth-first порядок. Три измеренных runtime failure закрыты; grouped flattening и drop/move обходы остаются. Это подтверждает текущие P2-группы drop/unwind и or-pattern runtime.
+   Guard-failure для раскрытых or-pattern теперь переходит к следующему кандидату того же arm, а декартово произведение альтернатив сохраняет левосторонний depth-first порядок. Пустой wildcard discard теперь материализует временное значение и сохраняет его drop: закрыты `issues/issue-6892.rs` и `destructuring-assignment/drop-order.rs`. Всего пять измеренных runtime failure закрыты; grouped flattening и остальные drop/move обходы остаются. Это подтверждает текущие P2-группы drop/unwind и or-pattern runtime.
 
 5. Backend местами генерирует программу, которая просто вызывает `abort()`.
 

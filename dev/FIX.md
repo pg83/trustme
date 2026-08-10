@@ -43,7 +43,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 97 targets компилируются, но падают при исполнении. Их нельзя объединять в одну задачу: порядок внутри раздела пересчитывается по числу triggers одной минимальной причины.
 
 - [ ] `i128/u128`: разделить arithmetic, comparison, cast, shift и ABI передачи/возврата; начинать с общей операции, встречающейся в максимуме runtime failures.
-- [ ] Drop/unwind/leak: общий unit должен записывать destructor order и покрывать normal exit, early return, partial initialization, destructuring assignment и panic path. Не ослаблять тесты утечек.
+- [ ] Drop/unwind/leak: wildcard discard в `let _ = value` и `_ = value` теперь сохраняет drop, два runtime target зелёны. Общий unit должен записывать destructor order и дополнительно покрывать normal exit, early return, partial initialization и panic path. Не ослаблять тесты утечек.
 - [ ] Or-pattern/match lowering: guard-failure теперь продолжает со следующей альтернативы того же arm, а multiple or-pattern перебираются left-to-right; три runtime target зелёны. Осталось исправить grouped lowering для unguarded nested slice/struct patterns и закрыть оставшиеся runtime arm-selection triggers.
 - [ ] Float runtime и formatting: отдельно signed zero/NaN, arithmetic, exponent precision и debug-hex; ожидаемая строка или bits являются invariant.
 - [ ] Derived `Copy`/`Clone`/`Debug`/`Hash`: отделить ошибку expansion от move/drop/codegen aggregate.

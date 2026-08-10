@@ -756,7 +756,7 @@ namespace {
                 auto res = m_builder.get_result(node.span());
 
                 // Shortcut for `let foo = bar;` (avoids the extra temporary that would need to be optimised out)
-                if (node.m_pattern.m_data.is_Any() && std::all_of(node.m_pattern.m_bindings.begin(), node.m_pattern.m_bindings.end(), [](const HIR::PatternBinding& pb) {
+                if (node.m_pattern.m_data.is_Any() && !node.m_pattern.m_bindings.empty() && std::all_of(node.m_pattern.m_bindings.begin(), node.m_pattern.m_bindings.end(), [](const HIR::PatternBinding& pb) {
                     return pb.m_type == ::HIR::PatternBinding::Type::Move;
                 })) {
                     for (const auto& pb : node.m_pattern.m_bindings) {
