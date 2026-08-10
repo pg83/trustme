@@ -5,6 +5,8 @@
  * mir/operations.h
  * - Common header for operations performed on MIR functions
  */
+#pragma once
+
 #include "hir_typeck_static.h"
 #include "hir_item_path.h"
 

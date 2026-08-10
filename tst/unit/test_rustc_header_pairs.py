@@ -23,6 +23,12 @@ class RustcHeaderPairsTest(unittest.TestCase):
                 self.assertTrue(includes, f"{source.name} has no includes")
                 self.assertEqual(includes[0], header.name)
 
+    def test_every_source_has_a_header(self):
+        for source in sorted(RUSTC.glob("*.cpp")):
+            with self.subTest(source=source.name):
+                header = source.with_suffix(".h")
+                self.assertTrue(header.is_file(), f"missing {header.name}")
+
 
 if __name__ == "__main__":
     unittest.main()
