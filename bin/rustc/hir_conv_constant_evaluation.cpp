@@ -1148,6 +1148,7 @@ namespace MIR {
 
             ::std::vector<HIR::TypeRef> local_types;
             ::std::vector<::MIR::eval::AllocationPtr> locals;
+            ::std::vector<bool> drop_flags;
 
             // ---
             CallStackEntry(const CallStackEntry&) = delete;
@@ -1180,6 +1181,7 @@ namespace MIR {
                 , ms(std::move(ms))
                 , retval(AllocationPtr::allocate(value_pool, root_resolve, state, ret_type))
                 , args(args)
+                , drop_flags(fcn.drop_flags)
             {
                 this->resolve.set_both_generics_raw(impl_params_def, item_params_def);
                 local_types.reserve(state.m_fcn.locals.size());
@@ -1195,6 +1197,201 @@ namespace MIR {
 
             HIR::TypeRef monomorph_expand(const HIR::TypeRef& ty) const {
                 return this->resolve.monomorph_expand(this->state.sp, ty, this->ms);
+            }
+
+            unsigned read_enum_variant(const HIR::TypeRef& ty, ValueRef value) const {
+                auto* repr = Target_GetTypeRepr(state.sp, root_resolve, ty);
+                MIR_ASSERT(state, repr, "No representation for enum " << ty);
+
+                unsigned variant = 0;
+                TU_MATCH_HDRA( (repr->variants), { )
+                TU_ARMA(None, ve) {
+                    }
+                    TU_ARMA(Linear, ve) {
+                        auto tag = value.slice(repr->get_offset(state.sp, root_resolve, ve.field), ve.field.size).read_uint(state, 8 * ve.field.size);
+                        variant = tag < U128(ve.offset) ? ve.field.index : (tag - U128(ve.offset)).truncate_u64();
+                    }
+                    TU_ARMA(Values, ve) {
+                        auto tag = value.slice(repr->get_offset(state.sp, root_resolve, ve.field), ve.field.size).read_uint(state, 8 * ve.field.size).truncate_u64();
+                        auto it = std::find(ve.values.begin(), ve.values.end(), tag);
+                        MIR_ASSERT(state, it != ve.values.end(), "Invalid enum tag " << tag << " for " << ty);
+                        variant = it - ve.values.begin();
+                    }
+                    TU_ARMA(NonZero, ve) {
+                        size_t offset = repr->get_offset(state.sp, root_resolve, ve.field);
+                        bool is_nonzero = false;
+                        for (size_t i = 0; i < ve.field.size; i++) {
+                            if (value.slice(offset + i, 1).read_uint(state, 8) != U128(0)) {
+                                is_nonzero = true;
+                                break;
+                            }
+                        }
+                        variant = is_nonzero ? 1 - ve.zero_variant : ve.zero_variant;
+                    }
+                }
+                return variant;
+            }
+
+            static bool allocation_reachable_from(const Allocation* allocation, const Allocation* target, ::std::set<const Allocation*>& visited) {
+                if (allocation == target) {
+                    return true;
+                }
+                if (!visited.insert(allocation).second) {
+                    return false;
+                }
+                for (const auto& relocation : allocation->get_relocations()) {
+                    if (const auto* child = relocation.ptr.as_allocation()) {
+                        if (allocation_reachable_from(child, target, visited)) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            bool value_reachable_from_return(ValueRef value) const {
+                const auto* target = value.get_storage().as_allocation();
+                if (!target) {
+                    return false;
+                }
+                ::std::set<const Allocation*> visited;
+                return allocation_reachable_from(retval.operator->(), target, visited);
+            }
+
+            bool value_needs_non_const_drop(const HIR::TypeRef& ty, ValueRef value) const {
+                if (!root_resolve.type_needs_drop_glue(state.sp, ty)) {
+                    return false;
+                }
+
+                TU_MATCH_HDRA( (*ty), { )
+                TU_ARMA(Diverge, te) {
+                        return false;
+                    }
+                    TU_ARMA(Infer, te) {
+                        return true;
+                    }
+                    TU_ARMA(ErasedType, te) {
+                        return true;
+                    }
+                    TU_ARMA(NodeType, te) {
+                        auto* repr = Target_GetTypeRepr(state.sp, root_resolve, ty);
+                        MIR_ASSERT(state, repr, "No representation for " << ty);
+                        for (const auto& field : repr->fields) {
+                            auto size = size_of_or_bug(field.ty);
+                            if (value_needs_non_const_drop(field.ty, value.slice(field.offset, size))) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                    TU_ARMA(Generic, te) {
+                        return true;
+                    }
+                    TU_ARMA(Primitive, te) {
+                        return false;
+                    }
+                    TU_ARMA(Pointer, te) {
+                        return false;
+                    }
+                    TU_ARMA(NamedFunction, te) {
+                        return false;
+                    }
+                    TU_ARMA(Function, te) {
+                        return false;
+                    }
+                    TU_ARMA(Borrow, te) {
+                        if (te.type != HIR::BorrowType::Owned) {
+                            return false;
+                        }
+                        auto pointer = value.read_ptr(state);
+                        MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, "Invalid owned pointer while checking a constant drop");
+                        auto size = size_of_or_bug(te.inner);
+                        auto inner = ValueRef(pointer.second, pointer.first - EncodedLiteral::PTR_BASE).slice(0, size);
+                        return value_needs_non_const_drop(te.inner, inner);
+                    }
+                    TU_ARMA(Path, te) {
+                        const auto* markings = te.binding.get_trait_markings();
+                        if (!markings) {
+                            return true;
+                        }
+                        if (markings->has_drop_impl) {
+                            return true;
+                        }
+
+                        TU_MATCH_HDRA( (te.binding), { )
+                        TU_ARMA(Unbound, pbe) {
+                                return true;
+                            }
+                            TU_ARMA(Opaque, pbe) {
+                                return true;
+                            }
+                            TU_ARMA(ExternType, pbe) {
+                                return false;
+                            }
+                            TU_ARMA(Union, pbe) {
+                                return false;
+                            }
+                            TU_ARMA(Struct, pbe) {
+                                auto* repr = Target_GetTypeRepr(state.sp, root_resolve, ty);
+                                MIR_ASSERT(state, repr, "No representation for struct " << ty);
+                                for (const auto& field : repr->fields) {
+                                    auto size = size_of_or_bug(field.ty);
+                                    if (value_needs_non_const_drop(field.ty, value.slice(field.offset, size))) {
+                                        return true;
+                                    }
+                                }
+                                return false;
+                            }
+                            TU_ARMA(Enum, pbe) {
+                                const auto* variants = pbe->m_data.opt_Data();
+                                if (!variants) {
+                                    return false;
+                                }
+                                auto variant = read_enum_variant(ty, value);
+                                MIR_ASSERT(state, variant < variants->size(), "Enum variant " << variant << " out of range for " << ty);
+
+                                auto* repr = Target_GetTypeRepr(state.sp, root_resolve, ty);
+                                MIR_ASSERT(state, repr, "No representation for enum " << ty);
+                                MIR_ASSERT(state, variant < repr->fields.size(), "Enum representation has no variant " << variant << " for " << ty);
+                                const auto& field = repr->fields[variant];
+                                auto size = size_of_or_bug(field.ty);
+                                return value_needs_non_const_drop(field.ty, value.slice(field.offset, size));
+                            }
+                        }
+                        throw std::runtime_error("Unreachable path binding");
+                    }
+                    TU_ARMA(Array, te) {
+                        auto count = te.size.as_Known();
+                        if (count == 0) {
+                            return false;
+                        }
+                        auto size = size_of_or_bug(te.inner);
+                        for (size_t i = 0; i < count; i++) {
+                            if (value_needs_non_const_drop(te.inner, value.slice(i * size, size))) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                    TU_ARMA(Slice, te) {
+                        return true;
+                    }
+                    TU_ARMA(TraitObject, te) {
+                        return true;
+                    }
+                    TU_ARMA(Tuple, te) {
+                        auto* repr = Target_GetTypeRepr(state.sp, root_resolve, ty);
+                        MIR_ASSERT(state, repr, "No representation for tuple " << ty);
+                        for (const auto& field : repr->fields) {
+                            auto size = size_of_or_bug(field.ty);
+                            if (value_needs_non_const_drop(field.ty, value.slice(field.offset, size))) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                }
+                throw std::runtime_error("Unreachable type while checking a constant drop");
             }
 
             StaticRefPtr get_staticref_mono(const ::HIR::Path& p, HIR::TypeRef* out_ty = nullptr) const {
@@ -2195,7 +2392,19 @@ namespace HIR {
                 // Fall through
             }
             TU_ARMA(Drop, se) {
-                // HACK: Ignore drops... for now
+                if (se.flag_idx != UINT_MAX && !local_state.drop_flags.at(se.flag_idx)) {
+                    return;
+                }
+
+                ::HIR::TypeRef tmp;
+                const auto& ty = state.get_lvalue_type(tmp, se.slot);
+                auto value = local_state.get_lval(se.slot);
+                if (local_state.value_reachable_from_return(value)) {
+                    return;
+                }
+                if (local_state.value_needs_non_const_drop(ty, value)) {
+                    ERROR(this->root_span, E0000, "destructor of `" << ty << "` cannot be evaluated at compile-time");
+                }
                 return;
             }
             TU_ARMA(ScopeEnd, se) {
@@ -2203,11 +2412,12 @@ namespace HIR {
                 return;
             }
             TU_ARMA(SetDropFlag, se) {
-                // Ignore drop flags, we're ignoring drops
+                MIR_ASSERT(state, se.idx < local_state.drop_flags.size(), "Drop flag " << se.idx << " out of range");
                 if (se.other == UINT_MAX) {
-                    //MIR_TODO(state, "Set df$" << se.idx << " = " << se.new_val);
+                    local_state.drop_flags[se.idx] = se.new_val;
                 } else {
-                    //MIR_TODO(state, "Set df$" << se.idx << " = " << (se.new_val ? "!" : "") << "df$" << se.other);
+                    MIR_ASSERT(state, se.other < local_state.drop_flags.size(), "Drop flag " << se.other << " out of range");
+                    local_state.drop_flags[se.idx] = se.new_val != local_state.drop_flags[se.other];
                 }
                 return;
             }
@@ -2626,51 +2836,16 @@ namespace HIR {
                 return res ? e.bb_true : e.bb_false;
             }
             TU_ARMA(Switch, e) {
-                if (e.valid_flag != ~0u) {
+                if (e.valid_flag != ~0u && !local_state.drop_flags.at(e.valid_flag)) {
                     return e.invalid_target;
                 }
                 HIR::TypeRef tmp;
                 const auto& ty = state.get_lvalue_type(tmp, e.val);
-                auto* enm_repr = Target_GetTypeRepr(state.sp, resolve, ty);
                 auto lit = local_state.get_lval(e.val);
-
-                // TODO: Share code with `MIR_Cleanup_LiteralToRValue`/`PatternRulesetBuilder::append_from_lit`
-                unsigned var_idx = 0;
-            TU_MATCH_HDRA( (enm_repr->variants), { )
-            TU_ARMA(None, e) {
-                    }
-                    TU_ARMA(Linear, ve) {
-                        auto v = lit.slice(enm_repr->get_offset(state.sp, resolve, ve.field), ve.field.size).read_uint(state, 8 * ve.field.size);
-                        if (v < ve.offset) {
-                            var_idx = ve.field.index;
-                            DEBUG("VariantMode::Linear - Niche #" << var_idx);
-                        } else {
-                            var_idx = (v - ve.offset).truncate_u64();
-                            DEBUG("VariantMode::Linear - Other #" << var_idx);
-                        }
-                    }
-                    TU_ARMA(Values, ve) {
-                        auto v = lit.slice(enm_repr->get_offset(state.sp, resolve, ve.field), ve.field.size).read_uint(state, 8 * ve.field.size).truncate_u64();
-                        auto it = std::find(ve.values.begin(), ve.values.end(), v);
-                        ASSERT_BUG(state.sp, it != ve.values.end(), "Invalid enum tag: " << v << " for " << ty);
-                        var_idx = it - ve.values.begin();
-                    }
-                    TU_ARMA(NonZero, ve) {
-                        size_t ofs = enm_repr->get_offset(state.sp, resolve, ve.field);
-                        bool is_nonzero = false;
-                        for (size_t i = 0; i < ve.field.size; i++) {
-                            if (lit.slice(ofs + i, 1).read_uint(state, 8).truncate_u64() != 0) {
-                                is_nonzero = true;
-                                break;
-                            }
-                        }
-
-                        var_idx = (is_nonzero ? 1 - ve.zero_variant : ve.zero_variant);
-                    }
-            }
-            DEBUG(state << " = " << var_idx);
-            MIR_ASSERT(state, var_idx < e.targets.size(), "Switch " << var_idx << " out of range in target list (" << e.targets.size() << ")");
-            return e.targets[var_idx];
+                auto var_idx = local_state.read_enum_variant(ty, lit);
+                DEBUG(state << " = " << var_idx);
+                MIR_ASSERT(state, var_idx < e.targets.size(), "Switch " << var_idx << " out of range in target list (" << e.targets.size() << ")");
+                return e.targets[var_idx];
             }
             TU_ARMA(SwitchValue, e) {
                 HIR::TypeRef tmp;
