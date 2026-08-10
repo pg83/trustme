@@ -31,7 +31,7 @@
 
    [hir_typeck_expr_cs.cpp](/home/pg/monorepo/trustme/bin/rustc/hir_typeck_expr_cs.cpp:4243) создаёт invalid `_Unsize`, который позднее чинит [hir_expand_main_bindings.cpp](/home/pg/monorepo/trustme/bin/rustc/hir_expand_main_bindings.cpp:8690). Generic-array metadata отдельно угадывается в MIR.
 
-   Это тот же общий дефект, что `Pointee/metadata solver: 34 cases` в `FIX.md`: adjustment должен быть полностью типизирован до MIR, а metadata должна вычисляться общей relation.
+   Общая relation `Pointee::Metadata` для struct tail уже реализована рекурсивно в обоих solver path и закрыла прежний compile blocker на 34 library cases. Невалидный `_Unsize` и отдельное угадывание generic-array metadata в MIR остаются: adjustment должен быть полностью типизирован до MIR.
 
 5. Drop/move/match содержат реальные семантические обходы.
 
@@ -92,4 +92,4 @@
 | Enumeration | `trans_main_bindings.cpp:1349,2204,2487,2872` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующая последовательность: ложные markers в parser/lexer, infrastructure, driver, общих HIR definitions, metadata, безопасных MIR invariants и backend conventions переименованы. Следующий функциональный пункт — coercion/unsize и metadata model из опасного пункта 4 (34 измеренных library cases), строго unit-first. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.
+Следующая последовательность: ложные markers в parser/lexer, infrastructure, driver, общих HIR definitions, metadata, безопасных MIR invariants и backend conventions переименованы. Общая `Pointee::Metadata` relation закрыта; следующий функциональный пункт опасного пункта 4 — убрать invalid `_Unsize` и MIR-угадывание metadata, строго unit-first. Отдельный красный unit фиксирует несовпадение layout always-unsized struct и его sized stand-in. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.

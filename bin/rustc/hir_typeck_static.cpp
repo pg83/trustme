@@ -235,21 +235,31 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
                 switch (str.m_struct_markings.dst_type) {
                     case HIR::StructMarkings::DstType::None:
                         return found_cb(ImplRef(HIR::PathParams(), &type, trait_params, &assoc_unit), false);
-                    case HIR::StructMarkings::DstType::Possible: {
-                        const auto& inner_ty = type->as_Path().path.m_data.as_Generic().m_params.m_types.at(str.m_struct_markings.unsized_param);
-                        return find_impl(sp, trait_path, trait_params, inner_ty, [&](ImplRef ir, bool unk) {
-                            DEBUG("ir = " << ir);
-                            if (auto* e = ir.m_data.opt_Bounded()) {
-                                return found_cb(ImplRef(type, trait_params->clone(), std::move(e->assoc)), unk);
-                            } else {
-                                return found_cb(ImplRef(&type, trait_params, ir.m_data.as_BoundedPtr().assoc), unk);
+                    case HIR::StructMarkings::DstType::Possible:
+                    case HIR::StructMarkings::DstType::TraitObject: {
+                        const ::HIR::TypeRef* tail_tpl = nullptr;
+                        TU_MATCHA((str.m_data), (se),
+                            (Unit, BUG(sp, "Unsized unit struct in Pointee lookup - " << type);),
+                            (Tuple, ASSERT_BUG(sp, !se.empty(), "Unsized tuple struct without fields - " << type); tail_tpl = &se.back().ent;),
+                            (Named, ASSERT_BUG(sp, !se.empty(), "Unsized struct without fields - " << type); tail_tpl = &se.back().ty;)
+                        )
+                        ASSERT_BUG(sp, tail_tpl, "Missing unsized tail field for " << type);
+
+                        const auto& path = type->as_Path().path.m_data.as_Generic();
+                        auto tail_ty = MonomorphStatePtr(m_crate.m_types, &type, &path.m_params, nullptr).monomorph_type(sp, *tail_tpl);
+                        this->expand_associated_types(sp, tail_ty);
+
+                        return find_impl(sp, trait_path, trait_params, tail_ty, [&](ImplRef impl, bool unk) {
+                            ::HIR::TraitPath::assoc_list_t assoc;
+                            auto metadata_ty = impl.get_type(m_crate.m_types, "Metadata", {});
+                            if (metadata_ty) {
+                                assoc.insert(std::make_pair(name_Metadata, HIR::TraitPath::AtyEqual{trait_path, {}, std::move(metadata_ty)}));
                             }
+                            return found_cb(ImplRef(type, trait_params ? trait_params->clone() : HIR::PathParams(), std::move(assoc)), unk);
                         });
                     }
                     case HIR::StructMarkings::DstType::Slice:
                         return found_cb(ImplRef(&type, trait_params, &assoc_slice), false);
-                    case HIR::StructMarkings::DstType::TraitObject:
-                        TODO(sp, "m_lang_Pointee - " << type);
                 }
             }
             return found_cb(ImplRef(&type, trait_params, &assoc_unit), false);

@@ -1498,13 +1498,32 @@ TU_ARMA(Alias, ee) {
                             has_meta_ty = true;
                             break;
                         case HIR::StructMarkings::DstType::Possible:
-                            TODO(sp, "m_lang_Pointee - " << type);
+                        case HIR::StructMarkings::DstType::TraitObject: {
+                            const ::HIR::TypeRef* tail_tpl = nullptr;
+                            TU_MATCHA((str.m_data), (se),
+                                (Unit, BUG(sp, "Unsized unit struct in Pointee lookup - " << type);),
+                                (Tuple, ASSERT_BUG(sp, !se.empty(), "Unsized tuple struct without fields - " << type); tail_tpl = &se.back().ent;),
+                                (Named, ASSERT_BUG(sp, !se.empty(), "Unsized struct without fields - " << type); tail_tpl = &se.back().ty;)
+                            )
+                            ASSERT_BUG(sp, tail_tpl, "Missing unsized tail field for " << type);
+
+                            const auto& path = type->as_Path().path.m_data.as_Generic();
+                            auto tail_ty = MonomorphStatePtr(m_crate.m_types, &type, &path.m_params, nullptr).monomorph_type(sp, *tail_tpl);
+                            tail_ty = this->expand_associated_types(sp, std::move(tail_ty));
+
+                            return this->find_trait_impls(sp, trait, params, tail_ty, [&](ImplRef impl, HIR::Compare cmp) {
+                                ::HIR::TraitPath::assoc_list_t assoc;
+                                auto metadata_ty = impl.get_type(m_crate.m_types, "Metadata", {});
+                                if (metadata_ty) {
+                                    assoc.insert(std::make_pair(name_Metadata, HIR::TraitPath::AtyEqual{trait, {}, std::move(metadata_ty)}));
+                                }
+                                return callback(ImplRef(type, params.clone(), std::move(assoc)), cmp);
+                            });
+                        }
                         case HIR::StructMarkings::DstType::Slice:
                             meta_ty = m_crate.m_types.primitive(HIR::CoreType::Usize);
                             has_meta_ty = true;
                             break;
-                        case HIR::StructMarkings::DstType::TraitObject:
-                            TODO(sp, "m_lang_Pointee - " << type);
                     }
                 } else {
                     meta_ty = m_crate.m_types.unit();

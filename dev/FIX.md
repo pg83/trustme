@@ -32,7 +32,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 6. [ ] **MIR control flags: 37 прямых отказов.** Связать `-Z validate-mir` — 20 с validator pipeline, `mir-enable-passes` — 9 и `inline-mir`/`inline_mir` — 8 с реальным pass selection. Не считать зелёным простое принятие option.
 
-7. [ ] **`Pointee`/metadata solver: 34 library cases.** `coretests/ptr` падает в `find_trait_impls_magic` на generic unsized tail. Реализовать общий metadata type для sized, slice/str, dyn и struct tail, затем проверить pointer metadata/codegen.
+7. [x] **`Pointee`/metadata solver: устранён compile blocker для 34 library cases.** Оба solver path теперь вычисляют `Metadata` рекурсивно через фактическое последнее поле struct, включая вложенный generic tail и `dyn`; unit проверяет равенство `<Wrapper<T> as Pointee>::Metadata = <T as Pointee>::Metadata`, а исходный UI trigger `pointee-tail-is-generic.rs` и compile-фаза `coretests/ptr` проходят этот blocker. Runtime layout/codegen дефекты отделены ниже.
 
 8. [ ] **`pin!` expansion/parser: не менее 28 targets.** 21 compile failure видит `let` после path separator, ещё 7 cases заблокированы harness `coretests/pin_macro`. Исправить statement macro expansion в block context, затем проверить `pin!` с expression, `let` и function item.
 
@@ -50,6 +50,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 - [ ] `track_caller`, `type_name`/`TypeId`/`Any`, process environment, SIMD и nonzero arithmetic: группировать только по общему lowered ABI или intrinsic.
 - [ ] Довести `f128` runtime без пропускания binary128 через host `double`; проверить точные bits.
 - [ ] Добавить metadata encoding для cross-crate enum discriminants шире 64 бит и проверить producer/consumer crates.
+- [ ] Always-unsized struct layout должен совпадать с layout его sized stand-in до хвостового поля. Красный unit `test_always_unsized_struct_raw_parts.rs` и upstream `unsized3-rpass.rs` показывают, что текущая сортировка полей меняет offset перед DST tail; исправить общий layout и hardcoded aggregate initializers, не подменяя metadata solver.
 - [ ] `packed-struct-drop-aligned.rs`: сначала исправить `Pin<&mut generator>.resume`, затем layout/drop invariant.
 
 ## P3 — оставшиеся CTFE, MIR и const generics
