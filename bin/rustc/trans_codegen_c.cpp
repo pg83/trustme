@@ -1506,7 +1506,7 @@ namespace {
             }
         }
 
-        void emit_box_drop(unsigned indent_level, const ::HIR::TypeRef& inner_type, const ::HIR::TypeRef& box_type, const ::MIR::LValue& slot, bool run_destructor) {
+        void emit_box_drop(unsigned indent_level, const ::HIR::TypeData* inner_type, const ::HIR::TypeData* box_type, const ::MIR::LValue& slot, bool run_destructor) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indent_level)};
             if (run_destructor) {
                 auto inner_ptr = ::MIR::LValue::new_Field(::MIR::LValue::new_Field(::MIR::LValue::new_Field(slot.clone(), 0), 0), 0);
@@ -1551,7 +1551,7 @@ namespace {
             m_of << "\");\n";
         }
 
-        void emit_type_id(const ::HIR::TypeRef& ty) override {
+        void emit_type_id(const ::HIR::TypeData* ty) override {
             switch (m_compiler) {
                 case Compiler::Gcc:
                     m_of << "tTYPEID __typeid_" << Trans_Mangle(ty) << " __attribute__((weak));\n";
@@ -1562,7 +1562,7 @@ namespace {
             }
         }
 
-        void emit_type_proto(const ::HIR::TypeRef& ty) override {
+        void emit_type_proto(const ::HIR::TypeData* ty) override {
             TRACE_FUNCTION_F(ty);
             TU_MATCH_HDRA( (*ty), {)
             default:
@@ -1619,7 +1619,7 @@ namespace {
             }
         }
 
-        void emit_type_fn(const ::HIR::TypeRef& ty) {
+        void emit_type_fn(const ::HIR::TypeData* ty) {
             if (m_emitted_fn_types.count(ty)) {
                 return;
             }
@@ -1664,7 +1664,7 @@ namespace {
         }
 
         // Shared logic between `emit_struct` and `emit_type` (w/ Tuple)
-        void emit_struct_inner(const ::HIR::TypeRef& ty, const TypeRepr* repr, unsigned packing_max_align) {
+        void emit_struct_inner(const ::HIR::TypeData* ty, const TypeRepr* repr, unsigned packing_max_align) {
             // Fill `fields` with ascending indexes (for sorting)
             // AND: Determine if the type has a a zero-sized item that has an alignment equal to the structure's alignment
             ::std::vector<unsigned> fields;
@@ -1840,7 +1840,7 @@ namespace {
             }
         }
 
-        void emit_type(const ::HIR::TypeRef& ty) override {
+        void emit_type(const ::HIR::TypeData* ty) override {
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
                 sp, m_resolve, FMT_CB(ss, ss << "type " << ty;), ::HIR::TypeRef(), {}, empty_fcn
@@ -2024,7 +2024,7 @@ namespace {
             return false;
         }
 
-        const HIR::TypeRef& emit_enum_path(const TypeRepr* repr, const TypeRepr::FieldPath& path) {
+        const HIR::TypeData* emit_enum_path(const TypeRepr* repr, const TypeRepr::FieldPath& path) {
             if (is_enum_tag(repr, path.index)) {
                 // Some enums have the tag outside, some inside
                 if (m_embedded_tags.count(repr)) {
@@ -2200,7 +2200,7 @@ namespace {
 
             MonomorphStatePtr ms(m_crate.m_types, nullptr, &path.m_params, nullptr);
             ::HIR::TypeRef tmp;
-            auto monomorph = [&](const auto& x) -> const auto& {
+            auto monomorph = [&](const auto& x) {
                 return m_resolve.monomorph_expand_opt(sp, tmp, x, ms);
             };
 
@@ -2251,7 +2251,7 @@ namespace {
             TRACE_FUNCTION_F(p);
             ::HIR::TypeRef tmp;
             MonomorphStatePtr ms(m_crate.m_types, nullptr, &p.m_params, nullptr);
-            auto monomorph = [&](const auto& x) -> const auto& {
+            auto monomorph = [&](const auto& x) {
                 return m_resolve.monomorph_expand_opt(sp, tmp, x, ms);
             };
 
@@ -2289,7 +2289,7 @@ namespace {
         }
 
         // Returns `true` if the type is pointer-aligned (i.e. it could contain a pointer)
-        bool emit_static_ty(const HIR::TypeRef& type, const ::HIR::Path& p, bool is_proto) {
+        bool emit_static_ty(const HIR::TypeData* type, const ::HIR::Path& p, bool is_proto) {
             size_t size = 0, align = 0;
             Target_GetSizeAndAlignOf(sp, m_resolve, type, size, align);
             bool rv = (align * 8 >= Target_GetCurSpec().m_arch.m_pointer_bits);
@@ -2909,7 +2909,7 @@ namespace {
                         }
 
                         struct H {
-                            static const char* get_intr_type(const HIR::TypeRef& ty) {
+                            static const char* get_intr_type(const HIR::TypeData* ty) {
                                 if (ty->is_Path()) {
                                     const auto& p = ty->as_Path().path.m_data.as_Generic();
                                     const auto& fcn_name = p.m_path.components().back();
@@ -3428,12 +3428,12 @@ namespace {
             }
         }
 
-        bool type_is_emulated_i128(const ::HIR::TypeRef& ty) const {
+        bool type_is_emulated_i128(const ::HIR::TypeData* ty) const {
             return m_options.emulated_i128 && (ty == ::HIR::CoreType::I128 || ty == ::HIR::CoreType::U128);
         }
 
         // Returns true if the input type is a ZST and ZSTs are not being emitted
-        bool type_is_bad_zst(const ::HIR::TypeRef& ty) const {
+        bool type_is_bad_zst(const ::HIR::TypeData* ty) const {
             if (m_options.disallow_empty_structs) {
                 // TODO: Extern types are also ZSTs?
                 size_t size, align;
@@ -3482,7 +3482,7 @@ namespace {
             return rv;
         }
 
-        bool type_is_high_align(const ::HIR::TypeRef& ty) const {
+        bool type_is_high_align(const ::HIR::TypeData* ty) const {
             // Only applicable to MSVC (which doesn't like unaligned arguments)
             if (m_compiler != Compiler::Msvc) {
                 return false;
@@ -3581,16 +3581,16 @@ namespace {
                 auto inner = val_ref.inner_ref();
                 ::HIR::TypeRef tmp;
                 const auto& parent_ty = mir_res.get_lvalue_type(tmp, inner);
-                const ::HIR::TypeRef* element_ty = nullptr;
+                const ::HIR::TypeData* element_ty = nullptr;
                 if (const auto* array = parent_ty->opt_Array()) {
-                    element_ty = &array->inner;
+                    element_ty = array->inner;
                 } else if (const auto* slice = parent_ty->opt_Slice()) {
-                    element_ty = &slice->inner;
+                    element_ty = slice->inner;
                 }
                 MIR_ASSERT(mir_res, element_ty, "Index of non-array type in ZST borrow path: " << parent_ty);
                 size_t element_size = 0;
-                MIR_ASSERT(mir_res, Target_GetSizeOf(sp, m_resolve, *element_ty, element_size), "Unknown array element size for " << parent_ty);
-                MIR_ASSERT(mir_res, element_size == 0, "Non-ZST element in ZST borrow path: " << *element_ty);
+                MIR_ASSERT(mir_res, Target_GetSizeOf(sp, m_resolve, element_ty, element_size), "Unknown array element size for " << parent_ty);
+                MIR_ASSERT(mir_res, element_size == 0, "Non-ZST element in ZST borrow path: " << element_ty);
                 if (parent_ty->is_Slice()) {
                     MIR_ASSERT(mir_res, inner.is_Deref(), "Raw slice lvalue in ZST borrow path");
                     m_of << "(void*)";
@@ -3638,17 +3638,17 @@ namespace {
                 } else {
                     ::HIR::TypeRef tmp;
                     const auto& parent_ty = mir_res.get_lvalue_type(tmp, field_inner);
-                    const ::HIR::TypeRef* element_ty = nullptr;
+                    const ::HIR::TypeData* element_ty = nullptr;
                     if (const auto* array = parent_ty->opt_Array()) {
-                        element_ty = &array->inner;
+                        element_ty = array->inner;
                     } else if (const auto* slice = parent_ty->opt_Slice()) {
-                        element_ty = &slice->inner;
+                        element_ty = slice->inner;
                     }
 
                     if (element_ty) {
                         size_t element_size = 0;
-                        MIR_ASSERT(mir_res, Target_GetSizeOf(sp, m_resolve, *element_ty, element_size), "Unknown array element size for " << parent_ty);
-                        MIR_ASSERT(mir_res, element_size == 0, "Non-ZST element in ZST borrow path: " << *element_ty);
+                        MIR_ASSERT(mir_res, Target_GetSizeOf(sp, m_resolve, element_ty, element_size), "Unknown array element size for " << parent_ty);
+                        MIR_ASSERT(mir_res, element_size == 0, "Non-ZST element in ZST borrow path: " << element_ty);
                         m_of << "(void*)( (uint8_t*)";
                         if (parent_ty->is_Slice()) {
                             MIR_ASSERT(mir_res, field_inner.is_Deref(), "Raw slice lvalue in ZST borrow path");
@@ -3784,7 +3784,7 @@ namespace {
                         case ::MIR::eDropKind::SHALLOW:
                             // Shallow drops are only valid on owned_box
                             if (const auto* ity = m_resolve.is_type_owned_box(ty)) {
-                                emit_box_drop(1, *ity, ty, e.slot, /*run_destructor=*/false);
+                                emit_box_drop(1, ity, ty, e.slot, /*run_destructor=*/false);
                             } else {
                                 MIR_BUG(mir_res, "Shallow drop on non-Box - " << ty);
                             }
@@ -6217,7 +6217,7 @@ namespace {
         }
 
     private:
-        const ::HIR::TypeRef& monomorphise_fcn_return(::HIR::TypeRef& tmp, const ::HIR::Function& item, const Trans_Params& params) {
+        const ::HIR::TypeData* monomorphise_fcn_return(::HIR::TypeRef& tmp, const ::HIR::Function& item, const Trans_Params& params) {
             bool has_erased = visit_ty_with(item.m_return, [&](const auto& x) {
                 return x->is_ErasedType();
             });
@@ -6351,7 +6351,7 @@ namespace {
                 }
                 throw "";
             };
-            auto get_prim_size = [&mir_res](const ::HIR::TypeRef& ty) -> unsigned {
+            auto get_prim_size = [&mir_res](const ::HIR::TypeData* ty) -> unsigned {
                 if (ty->is_Pointer()) {
                     return Target_GetCurSpec().m_arch.m_pointer_bits;
                 }
@@ -6758,7 +6758,7 @@ namespace {
             } else if (name == "transmute" || name == "transmute_unchecked") {
                 const auto& ty_src = params.m_types.at(0);
                 const auto& ty_dst = params.m_types.at(1);
-                auto is_ptr = [](const ::HIR::TypeRef& ty) {
+                auto is_ptr = [](const ::HIR::TypeData* ty) {
                     return ty->is_Borrow() || ty->is_Pointer();
                 };
                 if (this->type_is_bad_zst(ty_dst)) {
@@ -8366,7 +8366,7 @@ namespace {
                         Unsigned,
                     } ty;
 
-                    static SimdInfo for_ty(const CodeGenerator_C& self, const HIR::TypeRef& ty) {
+                    static SimdInfo for_ty(const CodeGenerator_C& self, const HIR::TypeData* ty) {
                         const auto* ty_repr = Target_GetTypeRepr(self.sp, self.m_mir_res->m_resolve, ty);
                         MIR_ASSERT(*self.m_mir_res, ty_repr, "No repr for " << ty);
                         size_t size_slot = ty_repr->size;
@@ -8776,7 +8776,7 @@ namespace {
         /// ty :: Type of value to be dropped
         /// unsized_valid ::
         /// indent_level :: (formatting) Current amount of indenting
-        void emit_destructor_call(const ::MIR::LValue& slot, const ::HIR::TypeRef& ty, bool unsized_valid, unsigned indent_level) {
+        void emit_destructor_call(const ::MIR::LValue& slot, const ::HIR::TypeData* ty, bool unsized_valid, unsigned indent_level) {
             // If the type doesn't need dropping, don't try.
             if (!m_resolve.type_needs_drop_glue(sp, ty)) {
                 return;
@@ -8980,7 +8980,7 @@ namespace {
         }
 
         // returns whether a literal can be represented as zeroed memory.
-        bool is_zero_literal(const ::HIR::TypeRef& ty, const EncodedLiteral& lit, const Trans_Params& params) {
+        bool is_zero_literal(const ::HIR::TypeData* ty, const EncodedLiteral& lit, const Trans_Params& params) {
             for (auto v : lit.bytes) {
                 if (v) {
                     return false;
@@ -9271,11 +9271,11 @@ namespace {
             }
         }
 
-        void emit_ctype(const ::HIR::TypeRef& ty) {
+        void emit_ctype(const ::HIR::TypeData* ty) {
             emit_ctype(ty, FMT_CB(_, ));
         }
 
-        void emit_ctype(const ::HIR::TypeRef& ty, ::FmtLambda inner, bool is_extern_c = false) {
+        void emit_ctype(const ::HIR::TypeData* ty, ::FmtLambda inner, bool is_extern_c = false) {
             TU_MATCH_HDRA( (*ty), {)
             TU_ARMA(Infer, te) {
                     m_of << "@" << ty << "@" << inner;
@@ -9420,7 +9420,7 @@ namespace {
             }
         }
 
-        ::HIR::TypeRef get_inner_unsized_type(const ::HIR::TypeRef& ty) {
+        ::HIR::TypeRef get_inner_unsized_type(const ::HIR::TypeData* ty) {
             if (ty == ::HIR::CoreType::Str || ty->is_Slice()) {
                 return ty;
             } else if (ty->is_TraitObject()) {
@@ -9465,7 +9465,7 @@ namespace {
             }
         }
 
-        unsigned get_packing_max_align(const ::HIR::TypeRef& ty) const {
+        unsigned get_packing_max_align(const ::HIR::TypeData* ty) const {
             if (ty->is_Path() && ty->as_Path().binding.is_Struct()) {
                 return ty->as_Path().binding.as_Struct()->m_max_field_alignment;
             }
@@ -9484,7 +9484,7 @@ namespace {
             m_of << ".META)->align";
         }
 
-        void emit_trait_object_dst_tail_align(const ::HIR::TypeRef& outer_ty, const ::HIR::TypeRef& tail_ty, const ::MIR::Param& value) {
+        void emit_trait_object_dst_tail_align(const ::HIR::TypeData* outer_ty, const ::HIR::TypeData* tail_ty, const ::MIR::Param& value) {
             const auto max_align = get_packing_max_align(outer_ty);
             if (max_align != 0) {
                 m_of << "mrustc_min(";
@@ -9495,7 +9495,7 @@ namespace {
             }
         }
 
-        void emit_trait_object_dst_align(const ::HIR::TypeRef& ty, const ::MIR::Param& value) {
+        void emit_trait_object_dst_align(const ::HIR::TypeData* ty, const ::MIR::Param& value) {
             if (ty->is_TraitObject()) {
                 emit_trait_object_vtable_align(value);
                 return;
@@ -9508,7 +9508,7 @@ namespace {
             m_of << ")";
         }
 
-        void emit_trait_object_dst_size(const ::HIR::TypeRef& ty, const ::MIR::Param& value) {
+        void emit_trait_object_dst_size(const ::HIR::TypeData* ty, const ::MIR::Param& value) {
             if (ty->is_TraitObject()) {
                 emit_trait_object_vtable_size(value);
                 return;
@@ -9526,7 +9526,7 @@ namespace {
             m_of << ")";
         }
 
-        void emit_trait_object_dst_field_offset(const ::HIR::TypeRef& ty, size_t field_idx, const ::MIR::Param& value) {
+        void emit_trait_object_dst_field_offset(const ::HIR::TypeData* ty, size_t field_idx, const ::MIR::Param& value) {
             const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
             MIR_ASSERT(*m_mir_res, repr && field_idx < repr->fields.size(), "Invalid DST field " << field_idx << " on " << ty);
             const auto& field = repr->fields[field_idx];
@@ -9537,11 +9537,11 @@ namespace {
             m_of << ")";
         }
 
-        MetadataType metadata_type(const ::HIR::TypeRef& ty) const {
+        MetadataType metadata_type(const ::HIR::TypeData* ty) const {
             return m_resolve.metadata_type(m_mir_res ? m_mir_res->sp : sp, ty);
         }
 
-        void emit_ctype_ptr(const ::HIR::TypeRef& inner_ty, ::FmtLambda inner) {
+        void emit_ctype_ptr(const ::HIR::TypeData* inner_ty, ::FmtLambda inner) {
             //if( inner_ty->is_Array() ) {
             //    emit_ctype(inner_ty, FMT_CB(ss, ss << "(*" << inner << ")";));
             //}
@@ -9564,7 +9564,7 @@ namespace {
             }
         }
 
-        bool is_dst(const ::HIR::TypeRef& ty) const {
+        bool is_dst(const ::HIR::TypeData* ty) const {
             switch (this->metadata_type(ty)) {
                 case MetadataType::Unknown:
                     BUG(sp, ty << " unknown metadata type");

@@ -962,7 +962,7 @@ namespace {
             }
         }
 
-        ::HIR::ValueUsage get_usage_for_pattern_binding(const Span& sp, const ::HIR::PatternBinding& pb, const ::HIR::TypeRef& ty) const {
+        ::HIR::ValueUsage get_usage_for_pattern_binding(const Span& sp, const ::HIR::PatternBinding& pb, const ::HIR::TypeData* ty) const {
             switch (pb.m_type) {
                 case ::HIR::PatternBinding::Type::Move:
                     if (m_resolve.type_is_copy(sp, ty)) {
@@ -978,7 +978,7 @@ namespace {
             throw "";
         }
 
-        ::HIR::ValueUsage get_usage_for_pattern(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::TypeRef& outer_ty) const {
+        ::HIR::ValueUsage get_usage_for_pattern(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::TypeData* outer_ty) const {
             if (pat.m_bindings.size() > 0) {
                 auto vu = ::HIR::ValueUsage::Borrow;
                 for (const auto& pb : pat.m_bindings) {
@@ -988,11 +988,11 @@ namespace {
             }
 
             // Implicit derefs
-            const ::HIR::TypeRef* typ = &outer_ty;
+            const ::HIR::TypeData* typ = outer_ty;
             for (size_t i = 0; i < pat.m_implicit_deref_count; i++) {
-                typ = &(*typ)->as_Borrow().inner;
+                typ = typ->as_Borrow().inner;
             }
-            const ::HIR::TypeRef& ty = *typ;
+            const ::HIR::TypeData* ty = typ;
 
             TU_MATCH_HDRA( (pat.m_data), {)
             TU_ARMA(Any, pe) {
@@ -1556,7 +1556,7 @@ namespace {
 
     /// Mutate the contents of a closure to update captures, variables, and types
     class ClosureExprVisitorMutate: public ::HIR::ExprVisitorDef {
-        const ::HIR::TypeRef& m_closure_type;
+        const ::HIR::TypeData* m_closure_type;
         const ::std::vector<unsigned int>& m_local_vars;
         const ::std::vector<::HIR::ExprNode_Closure::AvuCache::Capture>& m_captures;
 
@@ -1566,7 +1566,7 @@ namespace {
         ::HIR::ExprNodeP m_replacement;
 
     public:
-        ClosureExprVisitorMutate(stl::ObjPool* pool, const ::HIR::TypeRef& closure_type, const ::std::vector<unsigned int>& local_vars, const ::std::vector<::HIR::ExprNode_Closure::AvuCache::Capture>& captures, const Monomorphiser& mcb)
+        ClosureExprVisitorMutate(stl::ObjPool* pool, const ::HIR::TypeData* closure_type, const ::std::vector<unsigned int>& local_vars, const ::std::vector<::HIR::ExprNode_Closure::AvuCache::Capture>& captures, const Monomorphiser& mcb)
             : HIR::ExprVisitorDef(mcb.type_interner())
             , m_closure_type(closure_type)
             , m_local_vars(local_vars)
@@ -1878,7 +1878,7 @@ namespace {
                 {
                 }
 
-                ::HIR::TypeRef monomorph_type(const Span& sp, const ::HIR::TypeRef& ty, bool allow_infer) const override {
+                ::HIR::TypeRef monomorph_type(const Span& sp, const ::HIR::TypeData* ty, bool allow_infer) const override {
                     if (const auto* e = ty->opt_NodeType()) {
                         TU_MATCH_HDRA((*e), {)
                         TU_ARMA(Closure, node_p) {
@@ -1922,7 +1922,7 @@ namespace {
     };
 
     struct H {
-        static void fix_fn_params(::HIR::ExprPtr& code, const ::HIR::TypeRef& self_ty, const ::HIR::TypeRef& args_ty) {
+        static void fix_fn_params(::HIR::ExprPtr& code, const ::HIR::TypeData* self_ty, const ::HIR::TypeData* args_ty) {
             // TODO: The self_ty here is wrong, the borrow needs to be included.
             if (code.m_bindings.size() == 0) {
                 // No bindings - Wrapper function
@@ -1970,7 +1970,7 @@ namespace {
     class ClosureExprVisitorExtract: public ::HIR::ExprVisitorDef {
         const StaticTraitResolve& m_resolve;
         stl::ObjPool* m_pool;
-        const ::HIR::TypeRef* m_self_type;
+        const ::HIR::TypeData* m_self_type;
         const ::std::vector<::HIR::TypeRef>& m_variable_types;
         const ::HIR::ExprPtr& m_expr_ptr;
 
@@ -1979,7 +1979,7 @@ namespace {
         const char* m_new_type_suffix;
 
     public:
-        ClosureExprVisitorExtract(const StaticTraitResolve& resolve, const ::HIR::TypeRef* self_type, const ::std::vector<::HIR::TypeRef>& var_types, const ::HIR::ExprPtr& expr_ptr, OutState& out, const char* new_type_suffix)
+        ClosureExprVisitorExtract(const StaticTraitResolve& resolve, const ::HIR::TypeData* self_type, const ::std::vector<::HIR::TypeRef>& var_types, const ::HIR::ExprPtr& expr_ptr, OutState& out, const char* new_type_suffix)
             : HIR::ExprVisitorDef(resolve.m_crate.m_types)
             , m_resolve(resolve)
             , m_pool(resolve.m_crate.m_pool)
@@ -2095,7 +2095,7 @@ namespace {
                 return ::HIR::LifetimeRef(rv);
             }
 
-            ::HIR::TypeRef monomorph_type(const Span& sp, const ::HIR::TypeRef& tpl, bool allow_infer = true) const override {
+            ::HIR::TypeRef monomorph_type(const Span& sp, const ::HIR::TypeData* tpl, bool allow_infer = true) const override {
                 //if( const auto* te = tpl->opt_Closure() ) {
                 //    this->monomorph_genericpath(sp, te->node->m_obj_path, allow_infer);
                 //}
@@ -2203,10 +2203,10 @@ namespace {
                 Required,
             };
 
-            ::std::function<bool(const ::HIR::TypeRef&)> get_needed_cb(TypeNeed& rv) const {
+            ::std::function<bool(const ::HIR::TypeData*)> get_needed_cb(TypeNeed& rv) const {
                 // Only include if a used generic is present AND there are no unused generics
                 // - Visit the type, if there's a generic then determine if the
-                return [this, &rv](const ::HIR::TypeRef& t) -> bool {
+                return [this, &rv](const ::HIR::TypeData* t) -> bool {
                     if (t->is_Generic()) {
                         if (contains(constructor_path_params.m_types, t)) {
                             if (rv == TypeNeed::NoGenerics) {
@@ -2222,7 +2222,7 @@ namespace {
                 };
             }
 
-            TypeNeed type_bound_needed(const Span& sp, const HIR::TypeRef& ty) const {
+            TypeNeed type_bound_needed(const Span& sp, const HIR::TypeData* ty) const {
                 // Only include if a used generic is present AND there are no unused generics
                 // - Visit the type, if there's a generic then determine if the
                 auto rv = TypeNeed::NoGenerics;
@@ -2557,7 +2557,7 @@ namespace {
                     DEBUG("class=NoCapture");
 
                     struct H2 {
-                        static ::std::pair<::HIR::ExprNode_Closure::Class, HIR::TraitImpl> make_dispatch(HIR::TypeInterner& types, stl::ObjPool* m_pool, const Span& sp, ::HIR::ExprNode_Closure::Class c, ::HIR::GenericParams params, ::HIR::PathParams trait_params, const ::HIR::TypeRef& closure_type, const ::HIR::TypeRef& args_ty, const ::HIR::TypeRef& ret_type) {
+                        static ::std::pair<::HIR::ExprNode_Closure::Class, HIR::TraitImpl> make_dispatch(HIR::TypeInterner& types, stl::ObjPool* m_pool, const Span& sp, ::HIR::ExprNode_Closure::Class c, ::HIR::GenericParams params, ::HIR::PathParams trait_params, const ::HIR::TypeData* closure_type, const ::HIR::TypeData* args_ty, const ::HIR::TypeData* ret_type) {
                             const auto& args_tup_inner = args_ty->as_Tuple();
                             // 1. Create a list of `arg.0, arg.1, arg.2, ...` for the dispatch methods
                             ::std::vector<HIR::ExprNodeP> dispatch_args;
@@ -3148,7 +3148,7 @@ namespace {
         OutState m_out;
 
         const ::HIR::SimplePath* m_cur_mod_path;
-        const ::HIR::TypeRef* m_self_type = nullptr;
+        const ::HIR::TypeData* m_self_type = nullptr;
 
     public:
         ClosureOuterVisitor(const ::HIR::Crate& crate)
@@ -3310,14 +3310,14 @@ namespace {
         void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
             auto _ = this->m_resolve.set_impl_generics(MetadataType::TraitObject, item.m_params);
             ::HIR::TypeRef self = m_resolve.m_crate.m_types.generic(rcstring_Self, 0xFFFF);
-            m_self_type = &self;
+            m_self_type = self;
             ::HIR::Visitor::visit_trait(p, item);
             m_self_type = nullptr;
         }
 
         void visit_type_impl(::HIR::TypeImpl& impl) override {
             TRACE_FUNCTION_F("impl " << impl.m_type);
-            m_self_type = &impl.m_type;
+            m_self_type = impl.m_type;
             auto _ = this->m_resolve.set_impl_generics(impl.m_type, impl.m_params);
 
             // TODO: Re-create m_new_type to store in the source module
@@ -3333,7 +3333,7 @@ namespace {
 
         void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
             TRACE_FUNCTION_F("impl " << trait_path << " for " << impl.m_type);
-            m_self_type = &impl.m_type;
+            m_self_type = impl.m_type;
             auto _ = this->m_resolve.set_impl_generics(impl.m_type, impl.m_params);
 
             auto prev_impls = m_out.save_counts();
@@ -3356,7 +3356,7 @@ void HIR_Expand_Closures_Expr(const ::HIR::Crate& crate_ro, ::HIR::TypeRef& exp_
     assert(exp);
     resolve.set_both_generics_raw(exp.m_state->m_impl_generics, exp.m_state->m_item_generics);
 
-    const ::HIR::TypeRef* self_type = nullptr; // TODO: Need to be able to get this?
+    const ::HIR::TypeData* self_type = nullptr; // TODO: Need to be able to get this?
 
     static int closure_count = 0;
     OutState out;
@@ -3422,10 +3422,12 @@ void HIR_Expand_Closures(::HIR::Crate& crate) {
         void fix_type(HIR::TypeRef& ty) const {
             MonomorphiserNop mm(m_resolve.m_crate.m_types);
             ClosureExprVisitorFixup fixup{m_resolve.m_crate, nullptr, mm, nullptr};
-            visit_ty_with(ty, [&fixup](const HIR::TypeRef& ty) -> bool {
+            visit_ty_with(ty, [&fixup](const HIR::TypeData* ty) -> bool {
                 if (const auto* e = ty->opt_ErasedType()) {
                     if (const auto* ee = e->m_inner.opt_Alias()) {
-                        fixup.visit_type(ee->inner->type);
+                        if (ee->inner->type) {
+                            fixup.visit_type(ee->inner->type);
+                        }
                     }
                 }
                 return false;
@@ -3459,9 +3461,9 @@ void HIR_Expand_Closures(::HIR::Crate& crate) {
 namespace {
 
     struct MonomorphCheckLft: public MonomorphiserNop {
-        const HIR::TypeRef& tpl;
+        const HIR::TypeData* tpl;
 
-        MonomorphCheckLft(HIR::TypeInterner& types, const HIR::TypeRef& tpl)
+        MonomorphCheckLft(HIR::TypeInterner& types, const HIR::TypeData* tpl)
             : MonomorphiserNop(types)
             , tpl(tpl)
         {
@@ -3653,7 +3655,7 @@ namespace {
     struct LifetimeInferState {
         struct LifetimeBound {
             ::HIR::LifetimeRef lft;
-            const ::HIR::TypeRef* ty;
+            const ::HIR::TypeData* ty;
             ::HIR::LifetimeRef valid_for;
 
             LifetimeBound(::HIR::LifetimeRef lft, ::HIR::LifetimeRef valid_for)
@@ -3663,16 +3665,16 @@ namespace {
             {
             }
 
-            LifetimeBound(const ::HIR::TypeRef& ty, ::HIR::LifetimeRef valid_for)
+            LifetimeBound(const ::HIR::TypeData* ty, ::HIR::LifetimeRef valid_for)
                 : lft()
-                , ty(&ty)
+                , ty(ty)
                 , valid_for(valid_for)
             {
             }
 
             ::std::ostream& fmt(::std::ostream& os) const {
                 if (ty) {
-                    os << *ty;
+                    os << ty;
                 } else {
                     os << lft;
                 }
@@ -3684,7 +3686,7 @@ namespace {
                 if (static_cast<bool>(ty) != static_cast<bool>(x.ty)) {
                     return false;
                 }
-                if (ty && *ty != *x.ty) {
+                if (ty != x.ty) {
                     return false;
                 }
                 if (!ty && lft != x.lft) {
@@ -3765,7 +3767,7 @@ namespace {
             m_bounds.push_back(LifetimeInferState::LifetimeBound(test, valid_for));
         }
 
-        void add_type_lifetime_bound(const HIR::TypeRef& ty, const HIR::LifetimeRef& valid_for) {
+        void add_type_lifetime_bound(const HIR::TypeData* ty, const HIR::LifetimeRef& valid_for) {
             DEBUG("Add bound: " << ty << ": " << valid_for);
             m_bounds.push_back(LifetimeInferState::LifetimeBound(ty, valid_for));
             if (const auto* te = ty->opt_Tuple()) {
@@ -3924,10 +3926,10 @@ namespace {
             return false;
         }
 
-        bool iterate_type_lifetime_bounds(const HIR::TypeRef& ty, std::function<bool(const HIR::LifetimeRef&)> cb) const {
+        bool iterate_type_lifetime_bounds(const HIR::TypeData* ty, std::function<bool(const HIR::LifetimeRef&)> cb) const {
             for (const auto& b : m_bounds) {
                 if (b.ty) {
-                    if (*b.ty == ty) {
+                    if (b.ty == ty) {
                         if (cb(b.valid_for)) {
                             return true;
                         }
@@ -4088,7 +4090,7 @@ namespace {
         bool replace_equalities(::HIR::TypeRef& input) const override;
     };
 
-    static bool is_opaque(const ::HIR::TypeRef& ty) {
+    static bool is_opaque(const ::HIR::TypeData* ty) {
         if (ty->is_Generic()) {
             return true;
         }
@@ -4108,7 +4110,7 @@ namespace {
         friend struct LocalTraitResolve;
         const StaticTraitResolve& m_resolve;
         const ::HIR::Function::args_t& m_args;
-        const HIR::TypeRef& m_real_ret_type;
+        const HIR::TypeData* m_real_ret_type;
         HIR::TypeRef m_ret_ty;
         bool remove_locals;
 
@@ -4116,11 +4118,11 @@ namespace {
         const std::vector<HIR::TypeRef>* m_binding_types_ptr;
 
         std::vector<const HIR::ExprNode_Loop*> m_loops;
-        std::vector<const HIR::TypeRef*> m_returns;
-        std::vector<const HIR::TypeRef*> m_yields;
+        std::vector<const HIR::TypeData*> m_returns;
+        std::vector<const HIR::TypeData*> m_yields;
 
     public:
-        ExprVisitor_Enumerate(const StaticTraitResolve& resolve, const ::HIR::Function::args_t& args, const HIR::TypeRef& ret_ty, bool remove_locals, LifetimeInferState& state)
+        ExprVisitor_Enumerate(const StaticTraitResolve& resolve, const ::HIR::Function::args_t& args, const HIR::TypeData* ret_ty, bool remove_locals, LifetimeInferState& state)
             : HIR::ExprVisitorDef(resolve.m_crate.m_types)
             , m_resolve(resolve)
             , m_args(args)
@@ -4138,7 +4140,7 @@ namespace {
             // Translate the return type's erased types
             const auto& sp = ep->span();
             DEBUG("m_real_ret_type = " << m_real_ret_type);
-            m_ret_ty = clone_ty_with(m_resolve.m_crate.m_types, sp, m_real_ret_type, [&](const HIR::TypeRef& tpl, HIR::TypeRef& rv) -> bool {
+            m_ret_ty = clone_ty_with(m_resolve.m_crate.m_types, sp, m_real_ret_type, [&](const HIR::TypeData* tpl, HIR::TypeRef& rv) -> bool {
                 if (const auto* e = tpl->opt_ErasedType()) {
                     if (const auto* ee = e->m_inner.opt_Fcn()) {
                         ASSERT_BUG(sp, ee->m_index < ep.m_erased_types.size(), "Erased type index OOB - " << ee->m_origin << " " << ee->m_index << " >= " << ep.m_erased_types.size());
@@ -4164,7 +4166,7 @@ namespace {
         }
 
     private:
-        const HIR::TypeRef& get_local_var_ty(const Span& sp, size_t binding) const {
+        const HIR::TypeData* get_local_var_ty(const Span& sp, size_t binding) const {
             ASSERT_BUG(sp, m_binding_types_ptr, "get_loca_var_ty: m_binding_types_ptr is null");
             ASSERT_BUG(sp, binding < m_binding_types_ptr->size(), "get_local_var_ty: #" << binding << " out of range (" << m_binding_types_ptr->size() << " bindings)");
             return m_binding_types_ptr->at(binding);
@@ -4274,7 +4276,7 @@ namespace {
             }
         }
 
-        void equate_types(const Span& sp, const HIR::TypeRef& lhs, const HIR::TypeRef& rhs) {
+        void equate_types(const Span& sp, const HIR::TypeData* lhs, const HIR::TypeData* rhs) {
             // TODO: Only print when at the top-level
             TRACE_FUNCTION_F(lhs << " == " << rhs);
             // Match the types, letting lifetimes equate
@@ -4378,10 +4380,10 @@ namespace {
 
         std::vector<HIR::LifetimeRef> m_pattern_lifetime_stack;
 
-        void equate_pattern_binding(const Span& sp, const HIR::PatternBinding& b, const HIR::TypeRef& src_ty, const HIR::ExprNode& root_node) {
-            const HIR::TypeRef* cur_ty = &src_ty;
+        void equate_pattern_binding(const Span& sp, const HIR::PatternBinding& b, const HIR::TypeData* src_ty, const HIR::ExprNode& root_node) {
+            const HIR::TypeData* cur_ty = src_ty;
             if (b.m_implicit_deref_count) {
-                TODO(sp, "Apply implicit derefs (binding) " << *cur_ty << " deref " << b.m_implicit_deref_count);
+                TODO(sp, "Apply implicit derefs (binding) " << cur_ty << " deref " << b.m_implicit_deref_count);
             }
             auto get_lft = [&]() -> HIR::LifetimeRef {
                 if (m_pattern_lifetime_stack.empty()) {
@@ -4395,18 +4397,18 @@ namespace {
             const auto& slot = get_local_var_ty(sp, b.m_slot);
             switch (b.m_type) {
                 case ::HIR::PatternBinding::Type::Move:
-                    this->equate_types(sp, slot, *cur_ty);
+                    this->equate_types(sp, slot, cur_ty);
                     break;
                 case ::HIR::PatternBinding::Type::MutRef:
-                    this->equate_types(sp, slot, m_resolve.m_crate.m_types.borrow(HIR::BorrowType::Unique, *cur_ty, get_lft()));
+                    this->equate_types(sp, slot, m_resolve.m_crate.m_types.borrow(HIR::BorrowType::Unique, cur_ty, get_lft()));
                     break;
                 case ::HIR::PatternBinding::Type::Ref:
-                    this->equate_types(sp, slot, m_resolve.m_crate.m_types.borrow(HIR::BorrowType::Shared, *cur_ty, get_lft()));
+                    this->equate_types(sp, slot, m_resolve.m_crate.m_types.borrow(HIR::BorrowType::Shared, cur_ty, get_lft()));
                     break;
             }
         }
 
-        void equate_pattern(const Span& sp, const HIR::Pattern& pat, const HIR::TypeRef& src_ty, const HIR::ExprNode& root_node) {
+        void equate_pattern(const Span& sp, const HIR::Pattern& pat, const HIR::TypeData* src_ty, const HIR::ExprNode& root_node) {
             // Match pattern into the type (including bindings)
             if (src_ty->is_Diverge()) {
                 return;
@@ -4414,12 +4416,12 @@ namespace {
             for (const auto& b : pat.m_bindings) {
                 equate_pattern_binding(sp, b, src_ty, root_node);
             }
-            const HIR::TypeRef* cur_ty = &src_ty;
+            const HIR::TypeData* cur_ty = src_ty;
             size_t start_lifetime_stack_height = m_pattern_lifetime_stack.size();
             for (auto i = pat.m_implicit_deref_count; i--;) {
-                if (const auto* tep = (*cur_ty)->opt_Borrow()) {
+                if (const auto* tep = cur_ty->opt_Borrow()) {
                     m_pattern_lifetime_stack.push_back(tep->lifetime);
-                    cur_ty = &tep->inner;
+                    cur_ty = tep->inner;
                 } else {
                     TODO(sp, "Apply implicit derefs - " << *cur_ty);
                 }
@@ -4428,32 +4430,32 @@ namespace {
             TU_ARMA(Any, _) {
                 }
                 TU_ARMA(Slice, pe) {
-                    const auto& ity = (*cur_ty)->is_Array() ? (*cur_ty)->as_Array().inner : (*cur_ty)->as_Slice().inner;
+                    const auto& ity = cur_ty->is_Array() ? cur_ty->as_Array().inner : cur_ty->as_Slice().inner;
                     for (const auto& subpat : pe.sub_patterns) {
                         equate_pattern(sp, subpat, ity, root_node);
                     }
                 }
                 TU_ARMA(SplitSlice, pe) {
-                    const auto& ity = (*cur_ty)->is_Array() ? (*cur_ty)->as_Array().inner : (*cur_ty)->as_Slice().inner;
+                    const auto& ity = cur_ty->is_Array() ? cur_ty->as_Array().inner : cur_ty->as_Slice().inner;
                     for (const auto& subpat : pe.leading) {
                         equate_pattern(sp, subpat, ity, root_node);
                     }
                     if (pe.extra_bind.is_valid()) {
-                        equate_pattern_binding(sp, pe.extra_bind, *cur_ty, root_node);
+                        equate_pattern_binding(sp, pe.extra_bind, cur_ty, root_node);
                     }
                     for (const auto& subpat : pe.trailing) {
                         equate_pattern(sp, subpat, ity, root_node);
                     }
                 }
                 TU_ARMA(Tuple, pe) {
-                    const auto& te = (*cur_ty)->as_Tuple();
+                    const auto& te = cur_ty->as_Tuple();
                     ASSERT_BUG(sp, pe.sub_patterns.size() == te.size(), "");
                     for (size_t i = 0; i < te.size(); i++) {
                         equate_pattern(sp, pe.sub_patterns[i], te[i], root_node);
                     }
                 }
                 TU_ARMA(SplitTuple, pe) {
-                    const auto& te = (*cur_ty)->as_Tuple();
+                    const auto& te = cur_ty->as_Tuple();
                     ASSERT_BUG(sp, pe.leading.size() + pe.trailing.size() <= te.size(), "");
                     for (size_t i = 0; i < pe.leading.size(); i++) {
                         equate_pattern(sp, pe.leading[i], te[i], root_node);
@@ -4463,13 +4465,13 @@ namespace {
                     }
                 }
                 TU_ARMA(Box, pe) {
-                    const auto& gp = (*cur_ty)->as_Path().path.m_data.as_Generic();
+                    const auto& gp = cur_ty->as_Path().path.m_data.as_Generic();
                     ASSERT_BUG(sp, gp.m_path == m_resolve.m_lang_Box, *cur_ty);
-                    const HIR::TypeRef& inner_ty = gp.m_params.m_types.at(0);
+                    const HIR::TypeData* inner_ty = gp.m_params.m_types.at(0);
                     equate_pattern(sp, *pe.sub, inner_ty, root_node);
                 }
                 TU_ARMA(Ref, pe) {
-                    const auto& te = (*cur_ty)->as_Borrow();
+                    const auto& te = cur_ty->as_Borrow();
                     m_pattern_lifetime_stack.push_back(te.lifetime);
                     equate_pattern(sp, *pe.sub, te.inner, root_node);
                     m_pattern_lifetime_stack.pop_back();
@@ -4477,7 +4479,7 @@ namespace {
 
                 TU_ARMA(Or, pe) {
                     for (auto& subpat : pe) {
-                        equate_pattern(sp, subpat, *cur_ty, root_node);
+                        equate_pattern(sp, subpat, cur_ty, root_node);
                     }
                 }
 
@@ -4761,7 +4763,7 @@ namespace {
         void visit(::HIR::ExprNode_Return& node) override {
             HIR::ExprVisitorDef::visit(node);
             if (node.m_value) {
-                equate_types(node.m_value->span(), m_returns.empty() ? m_ret_ty : *m_returns.back(), node.m_value->m_res_type);
+                equate_types(node.m_value->span(), m_returns.empty() ? m_ret_ty : m_returns.back(), node.m_value->m_res_type);
             }
         }
 
@@ -4769,7 +4771,7 @@ namespace {
             HIR::ExprVisitorDef::visit(node);
             if (node.m_value) {
                 ASSERT_BUG(node.span(), !m_yields.empty(), "Yield without a generator block?");
-                equate_types(node.m_value->span(), *m_yields.back(), node.m_value->m_res_type);
+                equate_types(node.m_value->span(), m_yields.back(), node.m_value->m_res_type);
             }
         }
 
@@ -4900,7 +4902,7 @@ namespace {
         }
 
         /// Extract lifetimes from a type and equate with the target lifetime.
-        void equate_type_lifetimes(const Span& sp, const HIR::LifetimeRef& dst_lft, const HIR::TypeRef& ty) {
+        void equate_type_lifetimes(const Span& sp, const HIR::LifetimeRef& dst_lft, const HIR::TypeData* ty) {
             struct V: public HIR::Visitor {
                 ExprVisitor_Enumerate& parent;
                 const Span& sp;
@@ -4996,7 +4998,7 @@ namespace {
             v.visit_type(const_cast<HIR::TypeRef&>(ty));
         }
 
-        void unsize_types(const Span& sp, const ::HIR::TypeRef& dst, const ::HIR::TypeRef& src) {
+        void unsize_types(const Span& sp, const ::HIR::TypeData* dst, const ::HIR::TypeData* src) {
             if (dst == src) {
                 this->equate_types(sp, dst, src);
             } else if (dst->is_Slice() && src->is_Array()) {
@@ -5033,7 +5035,7 @@ namespace {
             }
         }
 
-        void coerce_unsize_types(const Span& sp, const ::HIR::TypeRef& dst, const ::HIR::TypeRef& src) {
+        void coerce_unsize_types(const Span& sp, const ::HIR::TypeData* dst, const ::HIR::TypeData* src) {
             if (dst == src) {
                 this->equate_types(sp, dst, src);
             } else if (auto* dst_te = dst->opt_Borrow()) {
@@ -5129,21 +5131,21 @@ namespace {
             } else {
                 ASSERT_BUG(sp, str_ty->is_Path(), "Value type of _Field isn't Path - " << str_ty);
                 const auto& ty_e = str_ty->as_Path();
-                const HIR::TypeRef* fld_ty_ptr = nullptr;
+                const HIR::TypeData* fld_ty_ptr = nullptr;
                 if (const auto* strpp = ty_e.binding.opt_Struct()) {
                     const HIR::Struct& str = **strpp;
                     ASSERT_BUG(sp, is_index == str.m_data.is_Tuple(), "");
                     if (is_index) {
                         const auto& flds = str.m_data.as_Tuple();
                         ASSERT_BUG(sp, index < flds.size(), "");
-                        fld_ty_ptr = &flds[index].ent;
+                        fld_ty_ptr = flds[index].ent;
                     } else {
                         const auto& flds = str.m_data.as_Named();
                         auto it = std::find_if(flds.begin(), flds.end(), [&](const HIR::StructField& f) {
                             return f.name == node.m_field;
                         });
                         ASSERT_BUG(sp, it != flds.end(), "");
-                        fld_ty_ptr = &it->ty;
+                        fld_ty_ptr = it->ty;
                     }
                 } else if (const auto* unnpp = ty_e.binding.opt_Union()) {
                     const HIR::Union& unn = **unnpp;
@@ -5152,15 +5154,15 @@ namespace {
                         return f.name == node.m_field;
                     });
                     ASSERT_BUG(sp, it != flds.end(), "");
-                    fld_ty_ptr = &it->ty;
+                    fld_ty_ptr = it->ty;
                 } else {
                     BUG(sp, "Value type of _Field isn't a Struct or Union - " << str_ty);
                 }
                 assert(fld_ty_ptr);
 
-                auto ms = MonomorphStatePtr(m_resolve.m_crate.m_types, &str_ty, &ty_e.path.m_data.as_Generic().m_params, nullptr);
-                auto fld_ty = m_resolve.monomorph_expand(sp, *fld_ty_ptr, ms);
-                DEBUG("Field type " << node.m_field << ": " << *fld_ty_ptr << " -> " << fld_ty);
+                auto ms = MonomorphStatePtr(m_resolve.m_crate.m_types, str_ty, &ty_e.path.m_data.as_Generic().m_params, nullptr);
+                auto fld_ty = m_resolve.monomorph_expand(sp, fld_ty_ptr, ms);
+                DEBUG("Field type " << node.m_field << ": " << fld_ty_ptr << " -> " << fld_ty);
                 this->equate_types(sp, node.m_res_type, fld_ty);
             }
         }
@@ -5429,7 +5431,7 @@ namespace {
             assert(fields_ptr);
             const ::HIR::t_tuple_fields& fields = *fields_ptr;
             ASSERT_BUG(sp, fields.size() == node.m_args.size(), "");
-            auto ms = MonomorphStatePtr(m_resolve.m_crate.m_types, &ty, &ty->as_Path().path.m_data.as_Generic().m_params, nullptr);
+            auto ms = MonomorphStatePtr(m_resolve.m_crate.m_types, ty, &ty->as_Path().path.m_data.as_Generic().m_params, nullptr);
 
             // Bind fields with type params (coercable)
             for( unsigned int i = 0; i < node.m_args.size(); i ++ )
@@ -5496,12 +5498,12 @@ namespace {
             for(const auto& fld : fields) {
                 DEBUG(fld.name << ": " << fld.ty);
             }
-            auto ms = MonomorphStatePtr(m_resolve.m_crate.m_types, &ty, &ty_path.m_params, nullptr);
+            auto ms = MonomorphStatePtr(m_resolve.m_crate.m_types, ty, &ty_path.m_params, nullptr);
 
             if( node.m_base_value ) {
                 const auto& ty_base = node.m_base_value->m_res_type;
                 const auto& ty_path_base = ty_base->as_Path().path.m_data.as_Generic();
-                auto ms_base = MonomorphStatePtr(m_resolve.m_crate.m_types, &ty_base, &ty_path_base.m_params, nullptr);
+                auto ms_base = MonomorphStatePtr(m_resolve.m_crate.m_types, ty_base, &ty_path_base.m_params, nullptr);
                 for (const auto& fld : fields) {
                     auto it = ::std::find_if(node.m_values.begin(), node.m_values.end(), [&](const auto& v) -> bool {
                         return v.first == fld.name;
@@ -5558,7 +5560,7 @@ namespace {
 
         void visit(::HIR::ExprNode_Closure& node) override {
             const Span& sp = node.span();
-            m_returns.push_back(&node.m_return);
+            m_returns.push_back(node.m_return);
             DEBUG("Closure " << &node);
             HIR::ExprVisitorDef::visit(node);
             if (!node.m_code) {
@@ -5599,8 +5601,8 @@ namespace {
         void visit(::HIR::ExprNode_Generator& node) override {
             const Span& sp = node.span();
 
-            m_returns.push_back(&node.m_return);
-            m_yields.push_back(&node.m_yield_ty);
+            m_returns.push_back(node.m_return);
+            m_yields.push_back(node.m_yield_ty);
 
             if (node.m_is_move) {
                 node.m_capture_lifetime = ::HIR::LifetimeRef::new_static();
@@ -5633,13 +5635,13 @@ namespace {
                 }
             }
 
-            m_returns.push_back(&node.m_code->m_res_type);
+            m_returns.push_back(node.m_code->m_res_type);
             HIR::ExprVisitorDef::visit(node);
             m_returns.pop_back();
         }
     };
 
-    void HIR_Expand_LifetimeInfer_ExprInner(LocalTraitResolve& resolve, const ::HIR::Function::args_t& args, const HIR::TypeRef& ret_ty, HIR::ExprPtr& ep, bool remove_locals, bool is_const_context) {
+    void HIR_Expand_LifetimeInfer_ExprInner(LocalTraitResolve& resolve, const ::HIR::Function::args_t& args, const HIR::TypeData* ret_ty, HIR::ExprPtr& ep, bool remove_locals, bool is_const_context) {
         LifetimeInferState state{resolve, is_const_context};
 
         // Before running algorithm, dump the HIR (just as a reference for debugging)
@@ -5923,7 +5925,7 @@ namespace {
             }
 
             DEBUG("Validate return: " << ret_ty);
-            clone_ty_with(resolve.m_crate.m_types, ep->m_span, ret_ty, [&](const HIR::TypeRef& tpl, HIR::TypeRef& rv) -> bool {
+            clone_ty_with(resolve.m_crate.m_types, ep->m_span, ret_ty, [&](const HIR::TypeData* tpl, HIR::TypeRef& rv) -> bool {
                 if (tpl->is_ErasedType() && tpl->as_ErasedType().m_inner.is_Fcn()) {
                     const auto* e = &tpl->as_ErasedType().m_inner.as_Fcn();
                     ASSERT_BUG(ep->m_span, e->m_index < ep.m_erased_types.size(), "Erased type index OOB - " << e->m_origin << " " << e->m_index << " >= " << ep.m_erased_types.size());
@@ -6272,7 +6274,7 @@ namespace {
                         TODO(sp, "Should this see any generics? Probably not: Lifetime " << g);
                     }
 
-                    HIR::TypeRef monomorph_type(const Span& sp, const HIR::TypeRef& tpl, bool allow_infer) const override {
+                    HIR::TypeRef monomorph_type(const Span& sp, const HIR::TypeData* tpl, bool allow_infer) const override {
                         for (size_t i = 0; i < m_params.m_types.size(); i++) {
                             if (tpl == m_params.m_types[i]) {
                                 return m_types.generic(m_generics.m_types.at(i).m_name, i);
@@ -6301,9 +6303,9 @@ namespace {
         {
             for (const auto& t : ep.m_erased_types) {
                 struct MonomorphCheckLft: public MonomorphiserNop {
-                    const HIR::TypeRef& tpl;
+                    const HIR::TypeData* tpl;
 
-                    MonomorphCheckLft(HIR::TypeInterner& types, const HIR::TypeRef& tpl)
+                    MonomorphCheckLft(HIR::TypeInterner& types, const HIR::TypeData* tpl)
                         : MonomorphiserNop(types)
                         , tpl(tpl)
                     {
@@ -6336,7 +6338,7 @@ namespace {
         {
         }
 
-        void check(const HIR::TypeRef& ret_ty, const ::HIR::Function::args_t& args, HIR::ExprPtr& root, bool is_function = false) {
+        void check(const HIR::TypeData* ret_ty, const ::HIR::Function::args_t& args, HIR::ExprPtr& root, bool is_function = false) {
             if (root.m_mir) {
                 DEBUG("MIR present, skipping");
                 return;
@@ -6448,7 +6450,7 @@ namespace {
                             pp.m_lifetimes.resize(def.m_lifetimes.size());
                         }
 
-                        ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeRef& ty, HIR::t_cb_resolve_type resolve_cb) override {
+                        ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, HIR::t_cb_resolve_type resolve_cb) override {
                             assert(ty->is_Generic());
                             assert(ty->as_Generic().binding == g.binding);
                             return ::HIR::Compare::Equal;
@@ -6507,7 +6509,7 @@ void HIR_Expand_LifetimeInfer_Validate(::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-void HIR_Expand_LifetimeInfer_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, const HIR::Function::args_t& args, const HIR::TypeRef& ret_ty, ::HIR::ExprPtr& exp) {
+void HIR_Expand_LifetimeInfer_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, const HIR::Function::args_t& args, const HIR::TypeData* ret_ty, ::HIR::ExprPtr& exp) {
     TRACE_FUNCTION_F("ip=" << ip << " ret_ty=" << ret_ty << ", args=" << args);
     LocalTraitResolve resolve{crate};
     resolve.set_both_generics_raw(exp.m_state->m_impl_generics, exp.m_state->m_item_generics);
@@ -6756,7 +6758,7 @@ namespace static_borrow_constants {
     /// </summary>
     class StaticBorrowExprVisitorMark: public ::HIR::ExprVisitorDef {
         const StaticTraitResolve& m_resolve;
-        const ::HIR::TypeRef* m_self_type;
+        const ::HIR::TypeData* m_self_type;
         const ::HIR::ExprPtr& m_expr_ptr;
 
         HIR::SimplePath m_lang_RangeFull;
@@ -6767,7 +6769,7 @@ namespace static_borrow_constants {
         bool m_all_constant;
 
     public:
-        StaticBorrowExprVisitorMark(const StaticTraitResolve& resolve, const ::HIR::TypeRef* self_type, const ::HIR::ExprPtr& expr_ptr)
+        StaticBorrowExprVisitorMark(const StaticTraitResolve& resolve, const ::HIR::TypeData* self_type, const ::HIR::ExprPtr& expr_ptr)
             : HIR::ExprVisitorDef(resolve.m_crate.m_types)
             , m_resolve(resolve)
             , m_self_type(self_type)
@@ -7221,7 +7223,7 @@ namespace static_borrow_constants {
         const ::HIR::Crate& m_crate;
         StaticTraitResolve m_resolve;
 
-        const ::HIR::TypeRef* m_self_type = nullptr;
+        const ::HIR::TypeData* m_self_type = nullptr;
         const HIR::ItemPath* m_current_module_path;
         const HIR::Module* m_current_module;
 
@@ -7248,7 +7250,7 @@ namespace static_borrow_constants {
 
         void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
             auto self = m_crate.m_types.self();
-            m_self_type = &self;
+            m_self_type = self;
             auto _ = m_resolve.set_impl_generics(MetadataType::TraitObject, item.m_params);
             ::HIR::Visitor::visit_trait(p, item);
             m_self_type = nullptr;
@@ -7258,7 +7260,7 @@ namespace static_borrow_constants {
             DEBUG("impl " << impl.m_params.fmt_args() << " " << impl.m_type << " (from " << impl.m_src_module << ")");
             const auto& srcmod = m_crate.get_mod_by_path(Span(), impl.m_src_module);
             auto mod_ip = HIR::ItemPath(impl.m_src_module);
-            m_self_type = &impl.m_type;
+            m_self_type = impl.m_type;
             m_current_module = &srcmod;
             m_current_module_path = &mod_ip;
 
@@ -7273,7 +7275,7 @@ namespace static_borrow_constants {
             DEBUG("src module " << impl.m_src_module);
             const auto& srcmod = m_crate.get_mod_by_path(Span(), impl.m_src_module);
             auto mod_ip = HIR::ItemPath(impl.m_src_module);
-            m_self_type = &impl.m_type;
+            m_self_type = impl.m_type;
             m_current_module = &srcmod;
             m_current_module_path = &mod_ip;
 
@@ -7361,14 +7363,14 @@ namespace static_borrow_constants {
 
     private:
         const StaticTraitResolve& m_resolve;
-        const ::HIR::TypeRef* m_self_type;
+        const ::HIR::TypeData* m_self_type;
         t_new_static_cb m_new_static_cb;
         const ::HIR::ExprPtr& m_expr_ptr;
 
         HIR::SimplePath m_lang_RangeFull;
 
     public:
-        StaticBorrowExprVisitorMutate(const StaticTraitResolve& resolve, const ::HIR::TypeRef* self_type, t_new_static_cb new_static_cb, const ::HIR::ExprPtr& expr_ptr)
+        StaticBorrowExprVisitorMutate(const StaticTraitResolve& resolve, const ::HIR::TypeData* self_type, t_new_static_cb new_static_cb, const ::HIR::ExprPtr& expr_ptr)
             : HIR::ExprVisitorDef(resolve.m_crate.m_types)
             , m_resolve(resolve)
             , m_self_type(self_type)
@@ -7462,7 +7464,7 @@ namespace static_borrow_constants {
             // - Needed for some constant evalulated values
             if (m_resolve.has_self() && m_self_type) {
                 ASSERT_BUG(sp, m_self_type, "Missing self type (disagreement between m_resolve and StaticBorrowExprVisitorMutate)");
-                constructor_path_params.m_types.push_back(*m_self_type);
+                constructor_path_params.m_types.push_back(m_self_type);
                 params.m_types.push_back(::HIR::TypeParamDef{RcString::new_interned("Super"), m_resolve.m_crate.m_types.infer(), false}); // TODO: Determine if parent Self is Sized
             }
             // - Top-level params come first
@@ -7779,7 +7781,7 @@ namespace static_borrow_constants {
         const ::HIR::Crate& m_crate;
         StaticTraitResolve m_resolve;
 
-        const ::HIR::TypeRef* m_self_type = nullptr;
+        const ::HIR::TypeData* m_self_type = nullptr;
         const HIR::ItemPath* m_current_module_path;
         const HIR::Module* m_current_module;
         // Is the current context constant (a `const fn` or `const` item)
@@ -7933,7 +7935,7 @@ namespace static_borrow_constants {
 
         void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
             auto self = m_crate.m_types.self();
-            m_self_type = &self;
+            m_self_type = self;
             auto _ = m_resolve.set_impl_generics(MetadataType::TraitObject, item.m_params);
             ::HIR::Visitor::visit_trait(p, item);
             m_self_type = nullptr;
@@ -7943,7 +7945,7 @@ namespace static_borrow_constants {
             DEBUG("impl " << impl.m_params.fmt_args() << " " << impl.m_type << " (from " << impl.m_src_module << ")");
             const auto& srcmod = m_crate.get_mod_by_path(Span(), impl.m_src_module);
             auto mod_ip = HIR::ItemPath(impl.m_src_module);
-            m_self_type = &impl.m_type;
+            m_self_type = impl.m_type;
             m_current_module = &srcmod;
             m_current_module_path = &mod_ip;
 
@@ -7958,7 +7960,7 @@ namespace static_borrow_constants {
             DEBUG("src module " << impl.m_src_module);
             const auto& srcmod = m_crate.get_mod_by_path(Span(), impl.m_src_module);
             auto mod_ip = HIR::ItemPath(impl.m_src_module);
-            m_self_type = &impl.m_type;
+            m_self_type = impl.m_type;
             m_current_module = &srcmod;
             m_current_module_path = &mod_ip;
 
@@ -8055,18 +8057,18 @@ void HIR_Expand_StaticBorrowConstants_Expr(const ::HIR::Crate& crate, const ::HI
 
     static int static_count = 0;
 
-    const HIR::TypeRef* self_type = ip.get_top_ip().ty;
+    const HIR::TypeData* self_type = ip.get_top_ip().ty;
     if (ip.get_top_ip().wrapped) {
         const HIR::Path& p = *ip.get_top_ip().wrapped;
         if (const auto* e = p.m_data.opt_UfcsInherent()) {
-            self_type = &e->type;
+            self_type = e->type;
         }
         if (const auto* e = p.m_data.opt_UfcsKnown()) {
-            self_type = &e->type;
+            self_type = e->type;
         }
     }
     if (self_type) {
-        DEBUG("self_type = " << *self_type);
+        DEBUG("self_type = " << self_type);
     } else {
         DEBUG("self_type = NONE");
     }
@@ -8361,7 +8363,7 @@ namespace {
             dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache = mv$(node.m_cache);
         }
 
-        bool is_builtin_operator(const Span& sp, typeck::PrimitiveOperator op, const char* langitem, const ::HIR::TypeRef& ty_l, const ::HIR::TypeRef& ty_r) const {
+        bool is_builtin_operator(const Span& sp, typeck::PrimitiveOperator op, const char* langitem, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r) const {
             if (!typeck::primitive_operator_has_builtin(op, ty_l, ty_r)) {
                 return false;
             }
@@ -8377,7 +8379,7 @@ namespace {
             });
         }
 
-        bool is_builtin_operator(const Span& sp, typeck::PrimitiveOperator op, const char* langitem, const ::HIR::TypeRef& ty) const {
+        bool is_builtin_operator(const Span& sp, typeck::PrimitiveOperator op, const char* langitem, const ::HIR::TypeData* ty) const {
             if (!typeck::primitive_operator_has_builtin(op, ty)) {
                 return false;
             }
@@ -8409,7 +8411,7 @@ namespace {
 #define _(opname) case ::HIR::ExprNode_Assign::Op::opname
             switch (node.m_op) {
                 _(None)
-                    : ASSERT_BUG(sp, ty_slot == ty_val || ty_slot->equals_ignoring_regions(ty_val), "Types must equal for non-operator assignment, " << ty_slot << " != " << ty_val);
+                    : ASSERT_BUG(sp, m_resolve.types_equal_resolving_opaque(sp, ty_slot, ty_val), "Types must equal for non-operator assignment, " << ty_slot << " != " << ty_val);
                 return;
                 _(Shr)
                     : {
@@ -8860,7 +8862,7 @@ namespace {
         ::HIR::Trait* m_target_trait = nullptr;
         ::HIR::TraitImpl* m_target_impl = nullptr;
 
-        const ::HIR::TypeRef* m_self_ty = nullptr;
+        const ::HIR::TypeData* m_self_ty = nullptr;
         const ::HIR::SimplePath* m_trait_path = nullptr;
         const ::HIR::PathParams* m_trait_args = nullptr;
         const char* m_method_name = nullptr;
@@ -8932,16 +8934,16 @@ namespace {
                         BUG(Span(), "Neither target impl nor target trait set");
                     }
 
-                    ty = type_interner().path(HIR::Path(m_self_ty ? *m_self_ty : type_interner().self(), HIR::GenericPath(m_trait_path->clone(), m_trait_args->clone()), ty_name, m_method_params->make_nop_params(type_interner(), 1)), {});
+                    ty = type_interner().path(HIR::Path(m_self_ty ? m_self_ty : type_interner().self(), HIR::GenericPath(m_trait_path->clone(), m_trait_args->clone()), ty_name, m_method_params->make_nop_params(type_interner(), 1)), {});
                 }
             }
         }
 
-        void handle_method(const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& trait_args, const HIR::TypeRef& self_ty, const RcString& name, ::HIR::Function& fcn) {
+        void handle_method(const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& trait_args, const HIR::TypeData* self_ty, const RcString& name, ::HIR::Function& fcn) {
             TRACE_FUNCTION_F(trait_path << trait_args << " for " << self_ty << " : " << name);
             m_trait_path = &trait_path;
             m_trait_args = &trait_args;
-            m_self_ty = &self_ty;
+            m_self_ty = self_ty;
             m_method_name = name.c_str();
             m_method_params = &fcn.m_params;
             m_var_index = 0;
@@ -9124,7 +9126,7 @@ namespace {
                             return HIR::LifetimeRef(g.binding);
                         }
 
-                        HIR::TypeRef monomorph_type(const Span& sp, const HIR::TypeRef& t, bool allow_infer = true) const override {
+                        HIR::TypeRef monomorph_type(const Span& sp, const HIR::TypeData* t, bool allow_infer = true) const override {
                             if (t->is_Path() && t->as_Path().path.m_data.is_UfcsKnown()) {
                                 const auto& pe = t->as_Path().path.m_data.as_UfcsKnown();
                                 bool is_self = (pe.type == m_types.self());
@@ -9215,7 +9217,7 @@ namespace {
                         supertrait_flags->reserve(tr.m_all_parent_traits.size());
                         for (const auto& st : tr.m_all_parent_traits) {
                             auto self = types.self();
-                            auto st_mono = MonomorphStatePtr(types, &self, &trait_path.m_params, nullptr).monomorph_traitpath(sp, st, false);
+                            auto st_mono = MonomorphStatePtr(types, self, &trait_path.m_params, nullptr).monomorph_traitpath(sp, st, false);
                             // NOTE: Doesn't trigger non-object-safe
                             supertrait_flags->push_back(add_ents_from_trait(*st.m_trait_ptr, st_mono.m_path, nullptr));
                         }

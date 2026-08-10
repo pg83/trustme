@@ -211,7 +211,7 @@ class MirBuilder {
 
     const Span& m_root_span;
     const StaticTraitResolve& m_resolve;
-    const ::HIR::TypeRef& m_ret_ty;
+    const ::HIR::TypeData* m_ret_ty;
     const ::HIR::Function::args_t& m_args;
     ::MIR::Function& m_output;
 
@@ -265,7 +265,7 @@ class MirBuilder {
     ::MIR::LValue m_if_cond_lval;
 
 public:
-    MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ret_ty, const ::HIR::Function::args_t& args, ::MIR::Function& output);
+    MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ret_ty, const ::HIR::Function::args_t& args, ::MIR::Function& output);
 
     void final_cleanup();
 
@@ -282,7 +282,7 @@ public:
     }
 
     /// Check if the passed type is Box<T> and returns a pointer to the T type if so, otherwise nullptr
-    const ::HIR::TypeRef* is_type_owned_box(const ::HIR::TypeRef& ty) const;
+    const ::HIR::TypeData* is_type_owned_box(const ::HIR::TypeData* ty) const;
 
     class SavedAliases {
         friend class MirBuilder;
@@ -335,8 +335,8 @@ public:
         return ::MIR::LValue::new_Local(idx);
     }
 
-    ::MIR::LValue new_temporary(const ::HIR::TypeRef& ty);
-    ::MIR::LValue lvalue_or_temp(const Span& sp, const ::HIR::TypeRef& ty, ::MIR::RValue val);
+    ::MIR::LValue new_temporary(const ::HIR::TypeData* ty);
+    ::MIR::LValue lvalue_or_temp(const Span& sp, const ::HIR::TypeData* ty, ::MIR::RValue val);
     size_t local_count() const {
         return m_output.locals.size();
     }
@@ -350,9 +350,9 @@ public:
     /// Obtains the result, unwrapping into a LValue (and erroring if not)
     ::MIR::LValue get_result_unwrap_lvalue(const Span& sp);
     /// Obtains the result, copying into a temporary if required
-    ::MIR::LValue get_result_in_lvalue(const Span& sp, const ::HIR::TypeRef& ty, bool allow_missing_value = false);
+    ::MIR::LValue get_result_in_lvalue(const Span& sp, const ::HIR::TypeData* ty, bool allow_missing_value = false);
     /// Obtains a result in a param (or a lvalue)
-    ::MIR::Param get_result_in_param(const Span& sp, const ::HIR::TypeRef& ty, bool allow_missing_value = false);
+    ::MIR::Param get_result_in_param(const Span& sp, const ::HIR::TypeData* ty, bool allow_missing_value = false);
 
     ::MIR::LValue get_if_cond() const {
         return m_if_cond_lval.clone();
@@ -513,7 +513,7 @@ private:
     void complete_scope(ScopeDef& sd);
 
 public:
-    void with_val_type(const Span& sp, const ::MIR::LValue& val, ::std::function<void(const ::HIR::TypeRef&)> cb, const ::MIR::LValue::Wrapper* stop_wrapper = nullptr) const;
+    void with_val_type(const Span& sp, const ::MIR::LValue& val, ::std::function<void(const ::HIR::TypeData*)> cb, const ::MIR::LValue::Wrapper* stop_wrapper = nullptr) const;
     bool lvalue_is_copy(const Span& sp, const ::MIR::LValue& lv) const;
 
     // Obtain the base fat poiner for a dst reference. Errors if it wasn't via a fat pointer
@@ -577,9 +577,9 @@ public:
     virtual void register_pattern_variables(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
     virtual void schedule_registered_pattern_drops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
 
-    virtual void destructure_from_list(const Span& sp, const ::HIR::TypeRef& ty, ::MIR::LValue lval, const ::std::vector<PatternBinding>& bindings, bool update_states = true) = 0;
-    virtual MIR::LValue get_value_for_binding_path(const Span& sp, const ::HIR::TypeRef& outer_ty, const ::MIR::LValue& outer_lval, const PatternBinding& b) = 0;
-    virtual const HIR::TypeRef& get_binding_type(const Span& sp, unsigned index) const = 0;
+    virtual void destructure_from_list(const Span& sp, const ::HIR::TypeData* ty, ::MIR::LValue lval, const ::std::vector<PatternBinding>& bindings, bool update_states = true) = 0;
+    virtual MIR::LValue get_value_for_binding_path(const Span& sp, const ::HIR::TypeData* outer_ty, const ::MIR::LValue& outer_lval, const PatternBinding& b) = 0;
+    virtual const HIR::TypeData* get_binding_type(const Span& sp, unsigned index) const = 0;
 
     virtual SaveAndEditVal<const ScopeHandle*> disable_borrow_extension() = 0;
 };
@@ -590,7 +590,7 @@ extern void MIR_LowerHIR_Let(MirBuilder& builder, MirConverter& conv, const Span
 extern void MIR_LowerHIR_GetTypeValueForPath(
     const Span& sp,
     MirBuilder& builder,
-    const ::HIR::TypeRef& top_ty,
+    const ::HIR::TypeData* top_ty,
     const ::MIR::LValue& top_val,
     const field_path_t& field_path, // unsigned int field_path_ofs,
     /*Out ->*/ ::HIR::TypeRef& out_ty,

@@ -161,6 +161,6 @@ TransList_Const* TransList::add_const(HIR::TypeInterner& types, ::HIR::Path p) {
     return rv;
 }
 
-::HIR::TypeRef Trans_Params::monomorph(const ::StaticTraitResolve& resolve, const ::HIR::TypeRef& ty) const {
+::HIR::TypeRef Trans_Params::monomorph(const ::StaticTraitResolve& resolve, const ::HIR::TypeData* ty) const {
     return resolve.monomorph_expand(sp, ty, *this);
 }

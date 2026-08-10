@@ -42,7 +42,7 @@ const ::MIR::BasicBlock& ::MIR::TypeResolve::get_block(::MIR::BasicBlockId id) c
     return m_fcn.blocks[id];
 }
 
-const ::HIR::TypeRef& ::MIR::TypeResolve::get_static_type(::HIR::TypeRef& tmp, const ::HIR::Path& path) const {
+const ::HIR::TypeData* ::MIR::TypeResolve::get_static_type(::HIR::TypeRef& tmp, const ::HIR::Path& path) const {
     if (path.m_data.is_UfcsInherent() && path.m_data.as_UfcsInherent().item == "#type_id") {
         tmp = m_crate.m_types.unit();
         return tmp;
@@ -60,9 +60,9 @@ const ::HIR::TypeRef& ::MIR::TypeResolve::get_static_type(::HIR::TypeRef& tmp, c
     }
 }
 
-const ::HIR::TypeRef& ::MIR::TypeResolve::get_lvalue_type(::HIR::TypeRef& tmp, const ::MIR::LValue& val, unsigned wrapper_skip_count /*=0*/) const {
-    const ::HIR::TypeRef* rv = nullptr;
-    TU_MATCHA((val.m_root), (e), (Return, rv = m_monomorphed_rettype ? m_monomorphed_rettype : &m_ret_type;), (Argument, MIR_ASSERT(*this, e < m_args.size(), "Argument " << val << " out of range (" << m_args.size() << ")"); rv = &m_args.at(e).second;), (Local, MIR_ASSERT(*this, e < m_fcn.locals.size(), "Local " << val << " out of range (" << m_fcn.locals.size() << ")"); rv = m_monomorphed_locals ? &m_monomorphed_locals->at(e) : &m_fcn.locals.at(e);), (Static, rv = &get_static_type(tmp, e);))
+const ::HIR::TypeData* ::MIR::TypeResolve::get_lvalue_type(::HIR::TypeRef& tmp, const ::MIR::LValue& val, unsigned wrapper_skip_count /*=0*/) const {
+    const ::HIR::TypeData* rv = nullptr;
+    TU_MATCHA((val.m_root), (e), (Return, rv = m_monomorphed_rettype ? m_monomorphed_rettype : m_ret_type;), (Argument, MIR_ASSERT(*this, e < m_args.size(), "Argument " << val << " out of range (" << m_args.size() << ")"); rv = m_args.at(e).second;), (Local, MIR_ASSERT(*this, e < m_fcn.locals.size(), "Local " << val << " out of range (" << m_fcn.locals.size() << ")"); rv = m_monomorphed_locals ? m_monomorphed_locals->at(e) : m_fcn.locals.at(e);), (Static, rv = get_static_type(tmp, e);))
     if (val.m_wrappers.size() > 0) {
         assert(wrapper_skip_count <= val.m_wrappers.size());
         const auto* stop_wrapper = val.m_wrappers.data() + (val.m_wrappers.size() - wrapper_skip_count);
@@ -70,15 +70,15 @@ const ::HIR::TypeRef& ::MIR::TypeResolve::get_lvalue_type(::HIR::TypeRef& tmp, c
             if (&w == stop_wrapper) {
                 break;
             }
-            rv = &this->get_unwrapped_type(tmp, w, *rv);
+            rv = this->get_unwrapped_type(tmp, w, rv);
         }
     } else {
         assert(wrapper_skip_count == 0);
     }
-    return *rv;
+    return rv;
 }
 
-const ::HIR::TypeRef& ::MIR::TypeResolve::get_unwrapped_type(::HIR::TypeRef& tmp, const ::MIR::LValue::Wrapper& w, const ::HIR::TypeRef& ty) const {
+const ::HIR::TypeData* ::MIR::TypeResolve::get_unwrapped_type(::HIR::TypeRef& tmp, const ::MIR::LValue::Wrapper& w, const ::HIR::TypeData* ty) const {
     TU_MATCH_HDRA( (w), {)
     TU_ARMA(Field, field_index) {
         TU_MATCH_HDRA( ((*ty)), {)
@@ -99,13 +99,13 @@ const ::HIR::TypeRef& ::MIR::TypeResolve::get_unwrapped_type(::HIR::TypeRef& tmp
                     // TODO: Cache result (to avoid needing to re-monomorph)
                     if (const auto* tep = te.binding.opt_Struct()) {
                         const auto& str = **tep;
-                        auto maybe_monomorph = [&](const auto& ty) -> const auto& {
+                        auto maybe_monomorph = [&](const auto& ty) {
                             return m_resolve.monomorph_expand_opt(sp, tmp, ty, MonomorphStatePtr(m_crate.m_types, nullptr, &te.path.m_data.as_Generic().m_params, nullptr));
                         };
                         TU_MATCHA((str.m_data), (se), (Unit, MIR_BUG(*this, "Field on unit-like struct - " << ty);), (Tuple, MIR_ASSERT(*this, field_index < se.size(), "Field index out of range in tuple-struct " << te.path); return maybe_monomorph(se[field_index].ent);), (Named, MIR_ASSERT(*this, field_index < se.size(), "Field index out of range in struct " << te.path); return maybe_monomorph(se[field_index].ty);))
                     } else if (const auto* tep = te.binding.opt_Union()) {
                         const auto& unm = **tep;
-                        auto maybe_monomorph = [&](const ::HIR::TypeRef& t) -> const ::HIR::TypeRef& {
+                        auto maybe_monomorph = [&](const ::HIR::TypeData* t) -> const ::HIR::TypeData* {
                             return m_resolve.monomorph_expand_opt(sp, tmp, t, MonomorphStatePtr(m_crate.m_types, nullptr, &te.path.m_data.as_Generic().m_params, nullptr));
                         };
                         MIR_ASSERT(*this, field_index < unm.m_variants.size(), "Field index out of range for union");
@@ -122,7 +122,7 @@ const ::HIR::TypeRef& ::MIR::TypeResolve::get_unwrapped_type(::HIR::TypeRef& tmp
             MIR_BUG(*this, "Deref on unexpected type - " << ty);
                 TU_ARMA(Path, te) {
                     if (const auto* inner_ptr = this->is_type_owned_box(ty)) {
-                        return *inner_ptr;
+                        return inner_ptr;
                     } else {
                         MIR_BUG(*this, "Deref on unexpected type - " << ty);
                     }
@@ -177,7 +177,7 @@ const ::HIR::TypeRef& ::MIR::TypeResolve::get_unwrapped_type(::HIR::TypeRef& tmp
     throw "";
 }
 
-const ::HIR::TypeRef& MIR::TypeResolve::get_param_type(::HIR::TypeRef& tmp, const ::MIR::Param& val) const {
+const ::HIR::TypeData* MIR::TypeResolve::get_param_type(::HIR::TypeRef& tmp, const ::MIR::Param& val) const {
     TU_MATCH_HDRA((val), {)
     TU_ARMA(LValue, e) {
             return get_lvalue_type(tmp, e);
@@ -327,12 +327,12 @@ bool ::MIR::TypeResolve::lvalue_is_copy(const ::MIR::LValue& val) const {
     return m_resolve.type_is_copy(this->sp, get_lvalue_type(tmp, val));
 }
 
-const ::HIR::TypeRef* ::MIR::TypeResolve::is_type_owned_box(const ::HIR::TypeRef& ty) const {
+const ::HIR::TypeData* ::MIR::TypeResolve::is_type_owned_box(const ::HIR::TypeData* ty) const {
     return m_resolve.is_type_owned_box(ty);
 }
 
-size_t MIR::TypeResolve::intrinsic_offset_of(const ::HIR::TypeRef& ty, const ::std::vector<MIR::Param>& values) const {
-    const auto* cur_ty = &ty;
+size_t MIR::TypeResolve::intrinsic_offset_of(const ::HIR::TypeData* ty, const ::std::vector<MIR::Param>& values) const {
+    const auto* cur_ty = ty;
     size_t base_ofs = 0;
     for (size_t i = 0; i < values.size(); i++) {
         MIR_ASSERT(*this, values[i].is_Constant(), "Arguments to `offset_of` must be constants");
@@ -354,7 +354,7 @@ size_t MIR::TypeResolve::intrinsic_offset_of(const ::HIR::TypeRef& ty, const ::s
                 if (end != field_name.c_str() && *end == '\0') {
                     MIR_ASSERT(*this, numeric_idx <= SIZE_MAX, "Invalid tuple field index " << field_name);
                     idx = static_cast<size_t>(numeric_idx);
-                } else if (const auto* ty_path = (*cur_ty)->opt_Path()) {
+                } else if (const auto* ty_path = cur_ty->opt_Path()) {
                     if (const auto* bep = ty_path->binding.opt_Struct()) {
                         const auto& str = **bep;
                     TU_MATCH_HDRA((str.m_data), {)
@@ -364,10 +364,10 @@ size_t MIR::TypeResolve::intrinsic_offset_of(const ::HIR::TypeRef& ty, const ::s
                                 }) - fields.begin();
                             }
                             TU_ARMA(Tuple, fields) {
-                                MIR_BUG(*this, "Named field on tuple struct: " << *cur_ty << " ." << field_name);
+                                MIR_BUG(*this, "Named field on tuple struct: " << cur_ty << " ." << field_name);
                             }
                             TU_ARMA(Unit, _) {
-                                MIR_BUG(*this, "Empty struct: " << *cur_ty << " ." << field_name);
+                                MIR_BUG(*this, "Empty struct: " << cur_ty << " ." << field_name);
                             }
                     }
                     } else if (const auto* bep = ty_path->binding.opt_Union()) {
@@ -378,7 +378,7 @@ size_t MIR::TypeResolve::intrinsic_offset_of(const ::HIR::TypeRef& ty, const ::s
                         }) - fields.begin();
                     } else if (const auto* bep = ty_path->binding.opt_Enum()) {
                         const auto& enm = **bep;
-                        MIR_ASSERT(*this, enm.m_data.is_Data(), "Non-Data enum: " << *cur_ty << " ." << field_name);
+                        MIR_ASSERT(*this, enm.m_data.is_Data(), "Non-Data enum: " << cur_ty << " ." << field_name);
                         const auto& fields = enm.m_data.as_Data();
                         idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
                             return x.name == field_name;
@@ -391,18 +391,18 @@ size_t MIR::TypeResolve::intrinsic_offset_of(const ::HIR::TypeRef& ty, const ::s
                 }
             }
         }
-        auto* repr = Target_GetTypeRepr(this->sp, m_resolve, *cur_ty);
+        auto* repr = Target_GetTypeRepr(this->sp, m_resolve, cur_ty);
         if(!repr) {
-            MIR_BUG(*this, "Calling `offset_of!` on type with non-defined repr: " << *cur_ty);
+            MIR_BUG(*this, "Calling `offset_of!` on type with non-defined repr: " << cur_ty);
         }
-        MIR_ASSERT(*this, idx < repr->fields.size(), "Field index " << idx << " out of range for " << *cur_ty);
-        cur_ty = &repr->fields[idx].ty;
+        MIR_ASSERT(*this, idx < repr->fields.size(), "Field index " << idx << " out of range for " << cur_ty);
+        cur_ty = repr->fields[idx].ty;
         base_ofs += repr->fields[idx].offset;
     }
     return base_ofs;
 }
 
-std::string MIR::TypeResolve::intrinsic_type_name(const ::HIR::TypeRef& ty) const {
+std::string MIR::TypeResolve::intrinsic_type_name(const ::HIR::TypeData* ty) const {
     if (ty->is_Path() && ty->as_Path().path.m_data.is_Generic()) {
         auto p = ty->as_Path().path.m_data.as_Generic().clone();
         p.m_params.m_lifetimes.resize(0);

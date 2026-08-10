@@ -63,7 +63,7 @@ struct Trans_Params: public MonomorphiserPP {
         return tp;
     }
 
-    const ::HIR::TypeRef& maybe_monomorph(const ::StaticTraitResolve& resolve, ::HIR::TypeRef& tmp, const ::HIR::TypeRef& p) const {
+    const ::HIR::TypeData* maybe_monomorph(const ::StaticTraitResolve& resolve, ::HIR::TypeRef& tmp, const ::HIR::TypeData* p) const {
         if (monomorphise_type_needed(p)) {
             return tmp = this->monomorph(resolve, p);
         } else {
@@ -71,7 +71,7 @@ struct Trans_Params: public MonomorphiserPP {
         }
     }
 
-    ::HIR::TypeRef monomorph(const ::StaticTraitResolve& resolve, const ::HIR::TypeRef& p) const;
+    ::HIR::TypeRef monomorph(const ::StaticTraitResolve& resolve, const ::HIR::TypeData* p) const;
     ::HIR::Path monomorph(const ::StaticTraitResolve& resolve, const ::HIR::Path& p) const;
     ::HIR::GenericPath monomorph(const ::StaticTraitResolve& resolve, const ::HIR::GenericPath& p) const;
     ::HIR::PathParams monomorph(const ::StaticTraitResolve& resolve, const ::HIR::PathParams& p) const;
@@ -80,8 +80,8 @@ struct Trans_Params: public MonomorphiserPP {
         return force_monomorphisation || pp_method.has_params() || pp_impl.has_params();
     }
 
-    const ::HIR::TypeRef* get_self_type() const override {
-        return &self_type;
+    const ::HIR::TypeData* get_self_type() const override {
+        return self_type;
     }
 
     const ::HIR::PathParams* get_impl_params() const override {

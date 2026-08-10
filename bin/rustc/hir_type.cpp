@@ -6,7 +6,7 @@
 
 namespace HIR {
 
-    ::std::ostream& operator<<(::std::ostream& os, const ::HIR::TypeRef& ty) {
+    ::std::ostream& operator<<(::std::ostream& os, const ::HIR::TypeData* ty) {
         if (ty) {
             ty->fmt(os);
         } else {
@@ -148,7 +148,7 @@ bool ::HIR::TypeData_ErasedType_AliasInner::is_public_to(const HIR::SimplePath& 
 }
 
 ::HIR::TypeData_FunctionPointer HIR::TypeData::Data_NamedFunction::decay(TypeInterner& types, const Span& sp) const {
-    const ::HIR::TypeRef* ty_self = nullptr;
+    const ::HIR::TypeData* ty_self = nullptr;
     const ::HIR::PathParams* pp_impl = nullptr;
     const ::HIR::PathParams* pp_method = nullptr;
 
@@ -160,12 +160,12 @@ bool ::HIR::TypeData_ErasedType_AliasInner::is_public_to(const HIR::SimplePath& 
                     pp_method = &pe.m_params;
                 }
                 TU_ARMA(UfcsKnown, pe) {
-                    ty_self = &pe.type;
+                    ty_self = pe.type;
                     pp_impl = &pe.trait.m_params;
                     pp_method = &pe.params;
                 }
                 TU_ARMA(UfcsInherent, pe) {
-                    ty_self = &pe.type;
+                    ty_self = pe.type;
                     pp_impl = &pe.impl_params;
                     pp_method = &pe.params;
                 }
@@ -1358,7 +1358,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
     return rv;
 }
 
-::HIR::Compare HIR::MatchGenerics::cmp_type(const Span& sp, const ::HIR::TypeRef& ty_l, const ::HIR::TypeRef& ty_r, t_cb_resolve_type resolve_placeholder) {
+::HIR::Compare HIR::MatchGenerics::cmp_type(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, t_cb_resolve_type resolve_placeholder) {
     if (const auto* e = ty_l->opt_Generic()) {
         return this->match_ty(*e, ty_r, resolve_placeholder);
     }

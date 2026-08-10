@@ -7,7 +7,7 @@ namespace HIR {
     class ItemPath {
     public:
         const ItemPath* parent = nullptr;
-        const ::HIR::TypeRef* ty = nullptr;
+        const ::HIR::TypeData* ty = nullptr;
         const ::HIR::SimplePath* trait = nullptr;
         const ::HIR::PathParams* trait_params = nullptr;
         const char* name = nullptr;
@@ -40,13 +40,13 @@ namespace HIR {
         {
         }
 
-        ItemPath(const ::HIR::TypeRef& type)
-            : ty(&type)
+        ItemPath(const ::HIR::TypeData* type)
+            : ty(type)
         {
         }
 
-        ItemPath(const ::HIR::TypeRef& type, const ::HIR::SimplePath& path, const ::HIR::PathParams& params)
-            : ty(&type)
+        ItemPath(const ::HIR::TypeData* type, const ::HIR::SimplePath& path, const ::HIR::PathParams& params)
+            : ty(type)
             , trait(&path)
             , trait_params(&params)
         {
@@ -94,10 +94,10 @@ namespace HIR {
             } else if (parent->trait) {
                 assert(parent->ty);
                 assert(parent->trait_params);
-                return ::HIR::Path(*parent->ty, ::HIR::GenericPath(parent->trait->clone(), parent->trait_params->clone()), RcString::new_interned(name));
+                return ::HIR::Path(parent->ty, ::HIR::GenericPath(parent->trait->clone(), parent->trait_params->clone()), RcString::new_interned(name));
             } else {
                 assert(parent->ty);
-                return ::HIR::Path(*parent->ty, RcString::new_interned(name));
+                return ::HIR::Path(parent->ty, RcString::new_interned(name));
             }
         }
 

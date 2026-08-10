@@ -498,7 +498,7 @@ namespace {
             }
         }
 
-        void emit_type(const ::HIR::TypeRef& ty) override {
+        void emit_type(const ::HIR::TypeData* ty) override {
             TRACE_FUNCTION_F(ty);
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
@@ -531,7 +531,7 @@ namespace {
         }
 
         // TODO: Move this to a more common location
-        MetadataType metadata_type(const ::HIR::TypeRef& ty) const {
+        MetadataType metadata_type(const ::HIR::TypeData* ty) const {
             if ((ty->is_Primitive() && ty->as_Primitive() == ::HIR::CoreType::Str) || ty->is_Slice()) {
                 return MetadataType::Slice;
             } else if (ty->is_TraitObject()) {
@@ -640,7 +640,7 @@ namespace {
 
             ::HIR::TypeRef tmp;
             MonomorphStatePtr ms(m_crate.m_types, nullptr, &var_path.m_params, nullptr);
-            auto monomorph = [&](const auto& x) -> const auto& {
+            auto monomorph = [&](const auto& x) {
                 return m_resolve.monomorph_expand_opt(sp, tmp, x, ms);
             };
 
@@ -677,7 +677,7 @@ namespace {
             TRACE_FUNCTION_F(p);
             ::HIR::TypeRef tmp;
             MonomorphStatePtr ms(m_crate.m_types, nullptr, &p.m_params, nullptr);
-            auto monomorph = [&](const auto& x) -> const auto& {
+            auto monomorph = [&](const auto& x) {
                 return m_resolve.monomorph_expand_opt(sp, tmp, x, ms);
             };
             // Create constructor function
@@ -1344,7 +1344,7 @@ namespace {
         }
 
     private:
-        const ::HIR::TypeRef& monomorphise_fcn_return(::HIR::TypeRef& tmp, const ::HIR::Function& item, const Trans_Params& params) {
+        const ::HIR::TypeData* monomorphise_fcn_return(::HIR::TypeRef& tmp, const ::HIR::Function& item, const Trans_Params& params) {
             bool has_erased = visit_ty_with(item.m_return, [&](const auto& x) {
                 return x->is_ErasedType();
             });

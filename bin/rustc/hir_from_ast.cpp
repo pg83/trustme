@@ -17,7 +17,7 @@
 
 ::HIR::ExprPtr LowerHIR_Expr(const ::AST::Expr& e);
 ::HIR::Module LowerHIR_Module(const ::AST::Module& module, ::HIR::ItemPath path, ::std::vector<::HIR::SimplePath> traits = {});
-::HIR::Function LowerHIR_Function(::HIR::ItemPath path, const ::AST::AttributeList& attrs, const ::AST::Function& f, const ::HIR::TypeRef& self_type);
+::HIR::Function LowerHIR_Function(::HIR::ItemPath path, const ::AST::AttributeList& attrs, const ::AST::Function& f, const ::HIR::TypeData* self_type);
 ::HIR::ValueItem LowerHIR_Static(::HIR::ItemPath p, const ::AST::AttributeList& attrs, const ::AST::Static& e, const Span& sp, const RcString& name);
 ::HIR::PathParams LowerHIR_PathParams(const Span& sp, const ::AST::PathParams& src_params, bool allow_assoc);
 ::HIR::ConstGeneric LowerHIR_ConstGeneric(const ::AST::ExprNode& node_ref);
@@ -609,7 +609,7 @@ namespace {
                 return ms.monomorph_genericpath(sp, path, /*allow_infer=*/false);
             }
             auto self_ty = g_crate_ptr->m_types.self();
-            auto cb = MonomorphStatePtr(g_crate_ptr->m_types, &self_ty, &path.m_params, nullptr);
+            auto cb = MonomorphStatePtr(g_crate_ptr->m_types, self_ty, &path.m_params, nullptr);
             for (const auto& st : trait.m_all_parent_traits) {
                 // NOTE: st.m_trait_ptr isn't populated yet
                 const auto& t = g_crate_ptr->get_trait_by_path(sp, st.m_path.m_path);
@@ -633,7 +633,7 @@ namespace {
             }
 
             auto self_ty = g_crate_ptr->m_types.self();
-            auto cb = MonomorphStatePtr(g_crate_ptr->m_types, &self_ty, &path.m_params, nullptr);
+            auto cb = MonomorphStatePtr(g_crate_ptr->m_types, self_ty, &path.m_params, nullptr);
             for (const auto& st : trait.supertraits()) {
                 auto b = LowerHIR_TraitPath(sp, *st.ent.path, st.ent.hrbs, true);
                 ASSERT_BUG(sp, st.ent.path->m_bindings.type.binding.is_Trait(), "Not a trait: " << *st.ent.path);
@@ -665,7 +665,7 @@ namespace {
                         auto p = ms.monomorph_genericpath(sp, sub_trait.m_path);
                         const auto& t = g_crate_ptr->get_trait_by_path(sp, p.m_path);
                         auto self_ty = g_crate_ptr->m_types.self();
-                        auto rv = find_source_trait_hir(sp, p, t, name, MonomorphStatePtr(g_crate_ptr->m_types, &self_ty, &p.m_params, nullptr));
+                        auto rv = find_source_trait_hir(sp, p, t, name, MonomorphStatePtr(g_crate_ptr->m_types, self_ty, &p.m_params, nullptr));
                         if (rv != HIR::GenericPath()) {
                             return rv;
                         }
@@ -673,7 +673,7 @@ namespace {
                     return HIR::GenericPath();
                 } else if (pbe.trait_) {
                     auto self_ty = g_crate_ptr->m_types.self();
-                    auto cb = MonomorphStatePtr(g_crate_ptr->m_types, &self_ty, &path.m_params, nullptr);
+                    auto cb = MonomorphStatePtr(g_crate_ptr->m_types, self_ty, &path.m_params, nullptr);
                     for (const auto& st : pbe.trait_->traits) {
                         auto b = LowerHIR_TraitPath(sp, *st.ent.path, st.ent.hrbs, true);
                         auto rv = H::find_source_trait(sp, b.m_path, st.ent.path->m_bindings.type.binding, name, cb);
@@ -1336,19 +1336,19 @@ namespace {
     // TODO: Store the scalar valid range information for downstream
     if( ent.m_markings.scalar_valid_start_set || ent.m_markings.scalar_valid_end_set )
     {
-        const HIR::TypeRef* ty = nullptr;
-        const HIR::TypeRef* ty2 = nullptr;
+        const HIR::TypeData* ty = nullptr;
+        const HIR::TypeData* ty2 = nullptr;
         if (const auto* d = rv.m_data.opt_Named()) {
             switch (d->size()) {
                 case 2:
-                    ty2 = &(*d)[1].ty;
+                    ty2 = (*d)[1].ty;
                 case 1:
-                    ty = &(*d)[0].ty;
+                    ty = (*d)[0].ty;
                     break;
             }
         } else if (const auto* d = rv.m_data.opt_Tuple()) {
             if (d->size() == 1) {
-                ty = &(*d)[0].ent;
+                ty = (*d)[0].ent;
             }
             //TODO: Ensure that the other fields are ZSTs
         } else {
@@ -1364,14 +1364,14 @@ namespace {
         uint64_t TGT_PTR_MAX = Target_GetPointerBits() == 64 ? UINT64_MAX : UINT32_MAX;
         U128 min = U128(0), max = U128(UINT64_MAX, UINT64_MAX);
         bool ignore = false;
-        if ((*ty)->is_Pointer()) {
+        if (ty->is_Pointer()) {
             min = U128(0);
             max = U128(TGT_PTR_MAX);
         } else {
             // Check the type
             ::HIR::CoreType ct = HIR::CoreType::Str;
-            if ((*ty)->is_Primitive()) {
-                ct = (*ty)->as_Primitive();
+            if (ty->is_Primitive()) {
+                ct = ty->as_Primitive();
             }
             switch (ct) {
                 case ::HIR::CoreType::U8:
@@ -1699,7 +1699,7 @@ namespace {
     return ta;
 }
 
-::HIR::Function LowerHIR_Function(::HIR::ItemPath p, const ::AST::AttributeList& attrs, const ::AST::Function& f, const ::HIR::TypeRef& real_self_type) {
+::HIR::Function LowerHIR_Function(::HIR::ItemPath p, const ::AST::AttributeList& attrs, const ::AST::Function& f, const ::HIR::TypeData* real_self_type) {
     static Span sp;
 
     TRACE_FUNCTION_F(p);
@@ -1717,9 +1717,9 @@ namespace {
 
         struct Ivcr {
             const Span& sp;
-            const ::HIR::TypeRef& real_self_type;
+            const ::HIR::TypeData* real_self_type;
 
-            Ivcr(const Span& sp, const ::HIR::TypeRef& real_self_type)
+            Ivcr(const Span& sp, const ::HIR::TypeData* real_self_type)
                 : sp(sp)
                 , real_self_type(real_self_type)
             {
@@ -1902,7 +1902,7 @@ namespace {
             f.args()[0].ty.span(),
             visit_ty_with(
                 *rv.m_receiver_type,
-                [](const HIR::TypeRef& v) {
+                [](const HIR::TypeData* v) {
             return v->is_Generic() && v->as_Generic().is_self();
         }
             ),

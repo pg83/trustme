@@ -57,7 +57,7 @@ const TargetArch ARCH_POWERPC = {
 const TargetArch ARCH_RISCV64 = {"riscv64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
 TargetSpec g_target;
 
-bool Target_GetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty, size_t& out_size, size_t& out_align);
+bool Target_GetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size, size_t& out_align);
 
 namespace {
     TargetSpec load_spec_from_file(const ::std::string& filename) {
@@ -497,7 +497,7 @@ void Target_SetCfg(const ::std::string& target_name) {
     });
 }
 
-bool Target_GetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty, size_t& out_size, size_t& out_align) {
+bool Target_GetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size, size_t& out_align) {
     //TRACE_FUNCTION_FR(ty, "size=" << out_size << ", align=" << out_align);
     TU_MATCH_HDRA( (*ty), {)
     TU_ARMA(Infer, te) {
@@ -699,7 +699,7 @@ bool Target_GetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve,
     return false;
 }
 
-bool Target_GetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty, size_t& out_size) {
+bool Target_GetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size) {
     size_t ignore_align;
     bool rv = Target_GetSizeAndAlignOf(sp, resolve, ty, out_size, ignore_align);
     if (rv && out_size == SIZE_MAX) {
@@ -708,7 +708,7 @@ bool Target_GetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const :
     return rv;
 }
 
-bool Target_GetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty, size_t& out_align) {
+bool Target_GetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_align) {
     size_t ignore_size;
     bool rv = Target_GetSizeAndAlignOf(sp, resolve, ty, ignore_size, out_align);
     if (rv && ignore_size == SIZE_MAX) {
@@ -718,7 +718,7 @@ bool Target_GetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const 
 }
 
 namespace {
-    void set_type_repr(const Span& sp, const ::HIR::TypeRef& ty, ::std::unique_ptr<TypeRepr> repr);
+    void set_type_repr(const Span& sp, const ::HIR::TypeData* ty, ::std::unique_ptr<TypeRepr> repr);
 
     struct Ent {
         unsigned int field;
@@ -746,7 +746,7 @@ namespace {
         return true;
     }
 
-    bool struct_enumerate_fields(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty, ::std::vector<Ent>& ents) {
+    bool struct_enumerate_fields(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, ::std::vector<Ent>& ents) {
         const auto& te = ty->as_Path();
         const auto& str = *te.binding.as_Struct();
         // TODO: Wipe lifetimes?
@@ -811,7 +811,7 @@ namespace {
     /// Generate a struct representation using the provided entries
     ///
     /// - Handles (optional) sorting and packing
-    ::std::unique_ptr<TypeRepr> make_type_repr_struct__inner(const Span& sp, const ::HIR::TypeRef& ty, ::std::vector<Ent>& ents, StructSorting sorting, unsigned forced_alignment, unsigned max_alignment) {
+    ::std::unique_ptr<TypeRepr> make_type_repr_struct__inner(const Span& sp, const ::HIR::TypeData* ty, ::std::vector<Ent>& ents, StructSorting sorting, unsigned forced_alignment, unsigned max_alignment) {
         if (ents.size() > 0) {
             auto sort_fields = [&](auto first, auto last) {
                 ::std::stable_sort(first, last, [&](const Ent& a, const Ent& b) {
@@ -910,7 +910,7 @@ namespace {
     }
 
     // Returns NULL when the repr can't be determined
-    ::std::unique_ptr<TypeRepr> make_type_repr_struct(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty) {
+    ::std::unique_ptr<TypeRepr> make_type_repr_struct(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
         TRACE_FUNCTION_F(ty);
         ::std::vector<Ent> ents;
         StructSorting sorting;
@@ -964,7 +964,7 @@ namespace {
         return make_type_repr_struct__inner(sp, ty, ents, sorting, forced_alignment, max_alignment);
     }
 
-    bool bounded_max_is_full_range(const ::HIR::TypeRef& ty, U128 bounded_max) {
+    bool bounded_max_is_full_range(const ::HIR::TypeData* ty, U128 bounded_max) {
         if (const auto* primitive = ty->opt_Primitive()) {
             switch (*primitive) {
                 case ::HIR::CoreType::U8:
@@ -995,7 +995,7 @@ namespace {
         return false;
     }
 
-    bool get_nonzero_path(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty, TypeRepr::FieldPath& out_path) {
+    bool get_nonzero_path(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, TypeRepr::FieldPath& out_path) {
         switch (ty->tag()) {
             TU_ARM(*ty, Tuple, te) {
                 const TypeRepr* repr = Target_GetTypeRepr(sp, resolve, ty);
@@ -1078,7 +1078,7 @@ namespace {
         return false;
     }
 
-    size_t get_size_or_zero(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty) {
+    size_t get_size_or_zero(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
         size_t size = 0;
         Target_GetSizeOf(sp, resolve, ty, size);
         return size;
@@ -1113,7 +1113,7 @@ namespace {
     /// <param name="ty"></param>
     /// <param name="out_path">Path to the variant field</param>
     /// <returns>zero for no niche found, or the number of entries already used in the niche</returns>
-    unsigned get_variant_niche_path(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty, size_t min_offset, size_t max_offset, TypeRepr::FieldPath& out_path) {
+    unsigned get_variant_niche_path(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t min_offset, size_t max_offset, TypeRepr::FieldPath& out_path) {
         TRACE_FUNCTION_F(ty << " min_offset=" << min_offset << " max_offset=" << max_offset);
         switch (ty->tag()) {
             TU_ARM(*ty, Tuple, te) {
@@ -1256,7 +1256,7 @@ namespace {
         return 0;
     }
 
-    ::std::unique_ptr<TypeRepr> make_type_repr_enum(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty) {
+    ::std::unique_ptr<TypeRepr> make_type_repr_enum(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
         TRACE_FUNCTION_F(ty);
         const auto& te = ty->as_Path();
         const auto& enm = *te.binding.as_Enum();
@@ -1850,7 +1850,7 @@ namespace {
         return box$(rv);
     }
 
-    ::std::unique_ptr<TypeRepr> make_type_repr_union(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty) {
+    ::std::unique_ptr<TypeRepr> make_type_repr_union(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
         const auto& te = ty->as_Path();
         const auto& unn = *te.binding.as_Union();
 
@@ -1887,7 +1887,7 @@ namespace {
         return box$(rv);
     }
 
-    ::std::unique_ptr<TypeRepr> make_type_repr_(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty) {
+    ::std::unique_ptr<TypeRepr> make_type_repr_(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
         switch (ty->tag()) {
             case ::HIR::TypeData::TAGDEAD:
                 abort();
@@ -1921,7 +1921,7 @@ namespace {
         }
     }
 
-    ::std::unique_ptr<TypeRepr> make_type_repr(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty) {
+    ::std::unique_ptr<TypeRepr> make_type_repr(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
         ::std::unique_ptr<TypeRepr> rv;
         TRACE_FUNCTION_FR(ty, ty << " " << FMT_CB(ss, if (rv) { ss << "size=" << rv->size << ", align=" << rv->align; } else { ss << "NONE"; }));
         rv = make_type_repr_(sp, resolve, ty);
@@ -1947,7 +1947,7 @@ namespace {
             && !ty->is_NodeType();
     }
 
-    void set_type_repr(const Span& sp, const ::HIR::TypeRef& ty, ::std::unique_ptr<TypeRepr> repr) {
+    void set_type_repr(const Span& sp, const ::HIR::TypeData* ty, ::std::unique_ptr<TypeRepr> repr) {
         if (!has_abi_identity(ty)) {
             const auto* repr_ptr = repr.get();
             auto ires = s_unencoded_cache.emplace(ty, mv$(repr));
@@ -1964,7 +1964,7 @@ namespace {
     }
 }
 
-void Target_ForceTypeRepr(const Span& sp, const ::HIR::TypeRef& ty, TypeRepr repr) {
+void Target_ForceTypeRepr(const Span& sp, const ::HIR::TypeData* ty, TypeRepr repr) {
     set_type_repr(sp, ty, box$(repr));
 }
 
@@ -1972,7 +1972,7 @@ bool Target_CapsMemberAlignment() {
     return Target_GetCurSpec().m_arch.m_name == "powerpc";
 }
 
-bool Target_TypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty) {
+bool Target_TypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
     // Arrays and slices inherit it from the element type, as in gcc's `layout_type`
     if (const auto* te = ty->opt_Array()) {
         return Target_TypeHasUserAlignment(sp, resolve, te->inner);
@@ -1988,7 +1988,7 @@ bool Target_TypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resol
     return false;
 }
 
-const TypeRepr* Target_GetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ty) {
+const TypeRepr* Target_GetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
     auto exact = s_cache_exact.find(ty);
     if (exact != s_cache_exact.end()) {
         return exact->second;
@@ -2023,7 +2023,7 @@ const TypeRepr* Target_GetTypeRepr(const Span& sp, const StaticTraitResolve& res
     return rv;
 }
 
-const ::HIR::TypeRef& Target_GetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& sub_fields, size_t ofs) {
+const ::HIR::TypeData* Target_GetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& sub_fields, size_t ofs) {
     const auto* ty = &repr.fields.at(idx).ty;
     while (ofs < sub_fields.size()) {
         const auto field = sub_fields[ofs++];

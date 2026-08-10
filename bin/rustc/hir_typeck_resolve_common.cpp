@@ -75,7 +75,7 @@ void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::H
     };
 
     auto& trait_params = trait_path.m_path.m_params;
-    auto monomorph = MonomorphStatePtr(m_crate.m_types, &type, &trait_params, nullptr);
+    auto monomorph = MonomorphStatePtr(m_crate.m_types, type, &trait_params, nullptr);
 
     const auto& trait = m_crate.get_trait_by_path(sp, trait_path.m_path.m_path);
 #if 1
@@ -158,7 +158,7 @@ void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::H
 }
 
 /// Obtain the type for a given constant parameter
-const ::HIR::TypeRef& TraitResolveCommon::get_const_param_type(const Span& sp, unsigned binding) const {
+const ::HIR::TypeData* TraitResolveCommon::get_const_param_type(const Span& sp, unsigned binding) const {
     const HIR::GenericParams* p;
     switch (binding >> 8) {
         case 0: // impl level

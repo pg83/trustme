@@ -674,7 +674,7 @@ void HIR::Crate::post_load_update(const RcString& name) {
 #include <optional>
 
 namespace {
-    bool is_unbounded_infer(const ::HIR::TypeRef& type) {
+    bool is_unbounded_infer(const ::HIR::TypeData* type) {
         if (const auto* e = type->opt_Infer()) {
             return e->ty_class == ::HIR::InferClass::None;
         } else {
@@ -691,7 +691,7 @@ namespace {
         {
         }
 
-        ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeRef& ty, ::HIR::t_cb_resolve_type resolve_cb) override {
+        ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::t_cb_resolve_type resolve_cb) override {
             assert(g.binding < impl_types.size());
             if (impl_types[g.binding]) {
                 return (*impl_types[g.binding])->compare_with_placeholders(Span(), ty, resolve_cb);
@@ -708,7 +708,7 @@ namespace {
         }
     };
 
-    bool matches_type_root(const ::HIR::GenericParams& params, const ::HIR::TypeRef& impl_ty, const ::HIR::TypeRef& match_type, ::HIR::t_cb_resolve_type ty_res) {
+    bool matches_type_root(const ::HIR::GenericParams& params, const ::HIR::TypeData* impl_ty, const ::HIR::TypeData* match_type, ::HIR::t_cb_resolve_type ty_res) {
         // A nominal path deserialises without its pointer-valued binding
         // metadata. Its SimplePath is nevertheless complete and is exactly
         // what the impl index and matcher use. Only an unresolved UFCS path is
@@ -729,7 +729,7 @@ namespace {
     }
 }
 
-bool ::HIR::TraitImpl::matches_type(const ::HIR::TypeRef& type, ::HIR::t_cb_resolve_type ty_res) const {
+bool ::HIR::TraitImpl::matches_type(const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res) const {
     // NOTE: Don't return any impls when the type is an unbouned ivar. Wouldn't be able to pick anything anyway
     // TODO: For `Unbound`, it could be valid, if the target is a generic.
     // - Pure infer could also be useful (for knowing if there's any other potential impls)
@@ -741,11 +741,11 @@ bool ::HIR::TraitImpl::matches_type(const ::HIR::TypeRef& type, ::HIR::t_cb_reso
     return matches_type_root(m_params, m_type, type, ty_res);
 }
 
-bool ::HIR::TypeImpl::matches_type(const ::HIR::TypeRef& type, ::HIR::t_cb_resolve_type ty_res) const {
+bool ::HIR::TypeImpl::matches_type(const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res) const {
     return matches_type_root(m_params, m_type, type, ty_res);
 }
 
-bool ::HIR::MarkerImpl::matches_type(const ::HIR::TypeRef& type, ::HIR::t_cb_resolve_type ty_res) const {
+bool ::HIR::MarkerImpl::matches_type(const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res) const {
     return matches_type_root(m_params, m_type, type, ty_res);
 }
 
@@ -788,7 +788,7 @@ namespace {
         throw TypeOrdSpecific_MixedOrdering{};
     }
 
-    ::Ordering type_ord_specific(const Span& sp, const ::HIR::TypeRef& left, const ::HIR::TypeRef& right) {
+    ::Ordering type_ord_specific(const Span& sp, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
         // TODO: What happens if you get `impl<T> Foo<T> for T` vs `impl<T,U> Foo<U> for T`
 
         // A generic can't be more specific than any other type we can see
@@ -952,11 +952,11 @@ namespace {
 }
 
 namespace {
-    void add_bound_from_trait(HIR::TypeInterner& types, ::std::vector<::HIR::GenericBound>& rv, const std::unique_ptr<HIR::GenericParams>& hrtbs, const ::HIR::TypeRef& type, const ::HIR::TraitPath& cur_trait) {
+    void add_bound_from_trait(HIR::TypeInterner& types, ::std::vector<::HIR::GenericBound>& rv, const std::unique_ptr<HIR::GenericParams>& hrtbs, const ::HIR::TypeData* type, const ::HIR::TraitPath& cur_trait) {
         static Span sp;
         assert(cur_trait.m_trait_ptr);
         const auto& tr = *cur_trait.m_trait_ptr;
-        auto monomorph_cb = MonomorphStatePtr(types, &type, &cur_trait.m_path.m_params, nullptr);
+        auto monomorph_cb = MonomorphStatePtr(types, type, &cur_trait.m_path.m_params, nullptr);
 
         for (const auto& trait_path_raw : tr.m_all_parent_traits) {
             // 1. Monomorph
@@ -1097,7 +1097,7 @@ namespace {
         {
         }
 
-        ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeRef& ty, ::HIR::t_cb_resolve_type _resolve_cb) override {
+        ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::t_cb_resolve_type _resolve_cb) override {
             assert(g.binding < impl_tys.size());
             if (impl_tys.at(g.binding)) {
                 DEBUG("Compare " << ty << " and " << *impl_tys.at(g.binding));
@@ -1217,7 +1217,7 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
             return false;
         }
 
-        static bool types_overlap(const ::HIR::TypeRef& a, const ::HIR::TypeRef& b) {
+        static bool types_overlap(const ::HIR::TypeData* a, const ::HIR::TypeData* b) {
             static Span sp;
             if (a == b) {
                 return true;
@@ -1394,7 +1394,7 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
     }
 
     struct H2 {
-        static const ::HIR::TypeRef& monomorph(const Span& sp, const ::HIR::TypeRef& in_ty, const Monomorphiser& ms, ::HIR::TypeRef& tmp) {
+        static const ::HIR::TypeData* monomorph(const Span& sp, const ::HIR::TypeData* in_ty, const Monomorphiser& ms, ::HIR::TypeRef& tmp) {
             if (!monomorphise_type_needed(in_ty)) {
                 return in_ty;
             } else {
@@ -1511,7 +1511,7 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
 
 namespace {
     template <typename ImplType>
-    bool find_impls_list(const typename ::HIR::Crate::ImplGroup<::std::unique_ptr<ImplType>>::list_t& impl_list, const ::HIR::TypeRef& type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ImplType&)> callback) {
+    bool find_impls_list(const typename ::HIR::Crate::ImplGroup<::std::unique_ptr<ImplType>>::list_t& impl_list, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ImplType&)> callback) {
         for (const auto& impl : impl_list) {
             if (impl->matches_type(type, ty_res)) {
                 if (callback(*impl)) {
@@ -1523,7 +1523,7 @@ namespace {
     }
 
     template <typename ImplType>
-    bool find_impls_list(const typename ::HIR::Crate::ImplGroup<const ImplType*>::list_t& impl_list, const ::HIR::TypeRef& type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ImplType&)> callback) {
+    bool find_impls_list(const typename ::HIR::Crate::ImplGroup<const ImplType*>::list_t& impl_list, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ImplType&)> callback) {
         for (const auto& impl : impl_list) {
             if (impl->matches_type(type, ty_res)) {
                 if (callback(*impl)) {
@@ -1536,7 +1536,7 @@ namespace {
 }
 
 namespace {
-    bool find_trait_impls_int(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeRef& type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) {
+    bool find_trait_impls_int(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) {
         auto it = crate.m_trait_impls.find(trait);
         if (it != crate.m_trait_impls.end()) {
             // 1. Find named impls (associated with named types)
@@ -1566,7 +1566,7 @@ namespace {
 
 }
 
-bool ::HIR::Crate::find_trait_impls(const ::HIR::SimplePath& trait, const ::HIR::TypeRef& type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const {
+bool ::HIR::Crate::find_trait_impls(const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const {
     if (this->m_all_trait_impls.size() > 0) {
         auto it = this->m_all_trait_impls.find(trait);
         if (it != this->m_all_trait_impls.end()) {
@@ -1608,7 +1608,7 @@ bool ::HIR::Crate::find_trait_impls(const ::HIR::SimplePath& trait, const ::HIR:
 }
 
 namespace {
-    bool find_auto_trait_impls_int(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeRef& type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) {
+    bool find_auto_trait_impls_int(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) {
         auto it = crate.m_marker_impls.find(trait);
         if (it != crate.m_marker_impls.end()) {
             // 1. Find named impls (associated with named types)
@@ -1628,7 +1628,7 @@ namespace {
     }
 }
 
-bool ::HIR::Crate::find_auto_trait_impls(const ::HIR::SimplePath& trait, const ::HIR::TypeRef& type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const {
+bool ::HIR::Crate::find_auto_trait_impls(const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const {
     if (this->m_all_marker_impls.size() > 0) {
         auto it = this->m_all_marker_impls.find(trait);
         if (it != this->m_all_marker_impls.end()) {
@@ -1660,7 +1660,7 @@ bool ::HIR::Crate::find_auto_trait_impls(const ::HIR::SimplePath& trait, const :
 }
 
 namespace {
-    bool find_type_impls_int(const ::HIR::Crate& crate, const ::HIR::TypeRef& type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) {
+    bool find_type_impls_int(const ::HIR::Crate& crate, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) {
         // 1. Find named impls (associated with named types)
         if (const auto* impl_list = crate.m_type_impls.get_list_for_type(type)) {
             if (find_impls_list(*impl_list, type, ty_res, callback)) {
@@ -1677,7 +1677,7 @@ namespace {
     }
 }
 
-bool ::HIR::Crate::find_type_impls(const ::HIR::TypeRef& type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const {
+bool ::HIR::Crate::find_type_impls(const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const {
     if (m_all_trait_impls.size() > 0) {
         // 1. Find named impls (associated with named types)
         if (const auto* impl_list = this->m_all_type_impls.get_list_for_type(type)) {

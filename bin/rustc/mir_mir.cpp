@@ -460,7 +460,7 @@ bool MIR::SwitchValues::operator==(const SwitchValues& x) const {
     return true;
 }
 
-const HIR::TypeRef& MIR::Cloner::value_generic_type(HIR::GenericRef ce) const {
+const HIR::TypeData* MIR::Cloner::value_generic_type(HIR::GenericRef ce) const {
     TODO(sp, "`value_generic_type` not implemented, shouldn't be called unless `monomorpiser` has been overridden");
 }
 
@@ -476,7 +476,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     return *m_nop;
 }
 
-::HIR::TypeRef MIR::Cloner::monomorph(const ::HIR::TypeRef& ty) const {
+::HIR::TypeRef MIR::Cloner::monomorph(const ::HIR::TypeData* ty) const {
     TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorph_type(sp, ty);
     if (auto* r = resolve()) {

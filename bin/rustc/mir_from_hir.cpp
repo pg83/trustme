@@ -237,7 +237,7 @@ namespace {
             visit_pattern_slots(pat, order, [&](unsigned slot) { m_builder.schedule_registered_variable_drop(slot); });
         }
 
-        MIR::LValue get_value_for_binding_path(const Span& sp, const ::HIR::TypeRef& outer_ty, const ::MIR::LValue& outer_lval, const PatternBinding& b) {
+        MIR::LValue get_value_for_binding_path(const Span& sp, const ::HIR::TypeData* outer_ty, const ::MIR::LValue& outer_lval, const PatternBinding& b) {
             HIR::TypeRef ty;
             MIR::LValue lval;
             MIR_LowerHIR_GetTypeValueForPath(sp, m_builder, outer_ty, outer_lval, b.field, ty, lval);
@@ -309,7 +309,7 @@ namespace {
             return lval;
         }
 
-        void destructure_from_list(const Span& sp, const ::HIR::TypeRef& outer_ty, ::MIR::LValue outer_lval, const ::std::vector<PatternBinding>& bindings, bool update_states /*=true*/) override {
+        void destructure_from_list(const Span& sp, const ::HIR::TypeData* outer_ty, ::MIR::LValue outer_lval, const ::std::vector<PatternBinding>& bindings, bool update_states /*=true*/) override {
             TRACE_FUNCTION_F(outer_lval << ": " << outer_ty << " [" << bindings << "]");
             // Reverse order to avoid potential use-after-move for `foo @ Bar(baz, ..)`
             for (size_t i = bindings.size(); i--;) {
@@ -342,7 +342,7 @@ namespace {
             }
         }
 
-        const HIR::TypeRef& get_binding_type(const Span& sp, unsigned index) const {
+        const HIR::TypeData* get_binding_type(const Span& sp, unsigned index) const {
             return m_variable_types.at(index);
         }
 
@@ -583,14 +583,14 @@ namespace {
         }
 
         // Common code used by both `ExprNode_Return` and the final return of a GeneratorWrapper
-        void coroutine_return(const Span& sp, const ::HIR::TypeRef& value_ty) {
+        void coroutine_return(const Span& sp, const ::HIR::TypeData* value_ty) {
             static RcString rcstring_Complete = RcString::new_interned("Complete");
             static RcString rcstring_Ready = RcString::new_interned("Ready"); // TODO: This is a lang item
             const auto& variant_name = m_generator_state.is_future ? rcstring_Ready : rcstring_Complete;
             // TODO: Handle difference between generators and futures (different return/yield types)
             ::HIR::GenericPath enm_path;
             size_t variant_index = SIZE_MAX;
-            m_builder.with_val_type(sp, ::MIR::LValue::new_Return(), [&](const ::HIR::TypeRef& ty) {
+            m_builder.with_val_type(sp, ::MIR::LValue::new_Return(), [&](const ::HIR::TypeData* ty) {
                 const auto& te = ty->as_Path();
                 enm_path = te.path.m_data.as_Generic().clone();
                 variant_index = te.binding.as_Enum()->find_variant(variant_name);
@@ -627,7 +627,7 @@ namespace {
                 ASSERT_BUG(node.span(), !m_generator_state.is_future, "");
 
                 ::HIR::GenericPath enm_path;
-                m_builder.with_val_type(node.span(), ::MIR::LValue::new_Return(), [&](const ::HIR::TypeRef& ty) {
+                m_builder.with_val_type(node.span(), ::MIR::LValue::new_Return(), [&](const ::HIR::TypeData* ty) {
                     const auto& te = ty->as_Path();
                     enm_path = te.path.m_data.as_Generic().clone();
                     ASSERT_BUG(node.span(), te.binding.as_Enum()->find_variant("Yielded") == 0, "");
@@ -729,7 +729,7 @@ namespace {
 
                 // `retval = ::core::task::Poll::Pending; RETURN`
                 HIR::GenericPath path_local_Poll;
-                m_builder.with_val_type(sp, ::MIR::LValue::new_Return(), [&](const ::HIR::TypeRef& ty) {
+                m_builder.with_val_type(sp, ::MIR::LValue::new_Return(), [&](const ::HIR::TypeData* ty) {
                     path_local_Poll = ty->as_Path().path.m_data.as_Generic().clone();
                 });
                 m_builder.push_stmt_assign(node.span(), ::MIR::LValue::new_Return(), ::MIR::RValue::make_EnumVariant({std::move(path_local_Poll), 1, {}}));
@@ -1030,7 +1030,7 @@ namespace {
             m_builder.end_block(::MIR::Terminator::make_If({mv$(decision_val), true_branch, false_branch}));
         }
 
-        void generate_checked_binop(const Span& sp, ::MIR::LValue res_slot, ::MIR::eBinOp op, ::MIR::Param val_l, const ::HIR::TypeRef& ty_l, ::MIR::Param val_r, const ::HIR::TypeRef& ty_r) {
+        void generate_checked_binop(const Span& sp, ::MIR::LValue res_slot, ::MIR::eBinOp op, ::MIR::Param val_l, const ::HIR::TypeData* ty_l, ::MIR::Param val_r, const ::HIR::TypeData* ty_r) {
             switch (op) {
                 case ::MIR::eBinOp::EQ:
                 case ::MIR::eBinOp::NE:
@@ -1662,7 +1662,7 @@ namespace {
             }
         }
 
-        void visit_index_operator(::HIR::ExprNode_Index& node, const ::HIR::TypeRef& ty_val, MIR::LValue value, const ::HIR::TypeRef& ty_idx, MIR::LValue index) {
+        void visit_index_operator(::HIR::ExprNode_Index& node, const ::HIR::TypeData* ty_val, MIR::LValue value, const ::HIR::TypeData* ty_idx, MIR::LValue index) {
             DEBUG("");
             const Span& sp = node.span();
 
@@ -1881,7 +1881,7 @@ namespace {
             return box_new(node, data_ty, std::move(val));
         }
 
-        void box_new(::HIR::ExprNode& node, const ::HIR::TypeRef& data_ty, ::MIR::RValue val) {
+        void box_new(::HIR::ExprNode& node, const ::HIR::TypeData* data_ty, ::MIR::RValue val) {
             const auto& lang_exchange_malloc = m_builder.crate().get_lang_item_path(node.span(), "exchange_malloc");
             //const auto& lang_owned_box = m_builder.crate().get_lang_item_path(node.span(), "owned_box");
 
@@ -2640,7 +2640,7 @@ namespace {
             m_builder.set_result(node.span(), ::MIR::RValue::make_Struct({node.m_obj_path.clone(), mv$(vals)}));
         }
 
-        void visit_common_cr(const Span& sp, const HIR::GenericPath& obj_path, const HIR::TypeRef& state_type, ::std::vector<::HIR::ExprNodeP>& captures) {
+        void visit_common_cr(const Span& sp, const HIR::GenericPath& obj_path, const HIR::TypeData* state_type, ::std::vector<::HIR::ExprNodeP>& captures) {
             auto _ = save_and_edit(m_borrow_raise_target, nullptr);
 
             ::std::vector<::MIR::Param> vals;
@@ -2700,7 +2700,7 @@ namespace {
     };
 }
 
-::MIR::FunctionPointer LowerMIR(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, const ::HIR::ExprPtr& ptr, const ::HIR::TypeRef& ret_ty, const ::HIR::Function::args_t& args) {
+::MIR::FunctionPointer LowerMIR(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, const ::HIR::ExprPtr& ptr, const ::HIR::TypeData* ret_ty, const ::HIR::Function::args_t& args) {
     TRACE_FUNCTION_F(path);
 
     ::MIR::Function fcn;
@@ -2988,7 +2988,7 @@ namespace {
 
 // --------------------------------------------------------------------
 
-void HIR_GenerateMIR_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& path, ::HIR::ExprPtr& expr_ptr, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& res_ty) {
+void HIR_GenerateMIR_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& path, ::HIR::ExprPtr& expr_ptr, const ::HIR::Function::args_t& args, const ::HIR::TypeData* res_ty) {
     if (!expr_ptr.m_mir) {
         TRACE_FUNCTION;
         StaticTraitResolve resolve{crate};
@@ -3027,7 +3027,7 @@ namespace {
     void get_ty_and_val(
         const Span& sp,
         MirBuilder& builder,
-        const ::HIR::TypeRef& top_ty,
+        const ::HIR::TypeData* top_ty,
         const ::MIR::LValue& top_val,
         const field_path_t& field_path,
         unsigned int field_path_ofs,
@@ -3039,7 +3039,7 @@ namespace {
 void MIR_LowerHIR_GetTypeValueForPath(
     const Span& sp,
     MirBuilder& builder,
-    const ::HIR::TypeRef& top_ty,
+    const ::HIR::TypeData* top_ty,
     const ::MIR::LValue& top_val,
     const field_path_t& field_path,
     /*Out ->*/ ::HIR::TypeRef& out_ty,
@@ -3109,10 +3109,10 @@ struct PatternRuleset {
 
 struct PatternDump {
     const StaticTraitResolve& resolve;
-    const HIR::TypeRef& ty;
+    const HIR::TypeData* ty;
     const ::std::vector<PatternRule>& rules;
 
-    PatternDump(const StaticTraitResolve& resolve, const HIR::TypeRef& ty, const ::std::vector<PatternRule>& rules)
+    PatternDump(const StaticTraitResolve& resolve, const HIR::TypeData* ty, const ::std::vector<PatternRule>& rules)
         : resolve(resolve)
         , ty(ty)
         , rules(rules)
@@ -3142,8 +3142,8 @@ struct ArmCode {
 typedef ::std::vector<PatternRuleset> t_arm_rules;
 
 void MIR_LowerHIR_Match_Simple(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arm_code, ::MIR::BasicBlockId first_cmp_block);
-int MIR_LowerHIR_Match_Simple__GeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int num_rules, const ::HIR::TypeRef& top_ty, const ::MIR::LValue& top_val, unsigned int field_path_ofs, ::MIR::BasicBlockId fail_bb);
-void MIR_LowerHIR_Match_Grouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIR::TypeRef& match_ty, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block);
+int MIR_LowerHIR_Match_Simple__GeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int num_rules, const ::HIR::TypeData* top_ty, const ::MIR::LValue& top_val, unsigned int field_path_ofs, ::MIR::BasicBlockId fail_bb);
+void MIR_LowerHIR_Match_Grouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIR::TypeData* match_ty, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block);
 void MIR_LowerHIR_Match_DecisionTree(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arm_code, ::MIR::BasicBlockId first_cmp_block);
 
 /// Helper to construct rules from a passed pattern
@@ -3194,8 +3194,8 @@ struct PatternRulesetBuilder {
         }
     }
 
-    void append_from_lit(const Span& sp, EncodedLiteralSlice lit, const ::HIR::TypeRef& ty);
-    void append_from(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::TypeRef& ty);
+    void append_from_lit(const Span& sp, EncodedLiteralSlice lit, const ::HIR::TypeData* ty);
+    void append_from(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::TypeData* ty);
 
 private:
     void push_rule(PatternRule r);
@@ -3289,7 +3289,7 @@ void MIR_LowerHIR_Let(MirBuilder& builder, MirConverter& conv, const Span& sp, c
     TRACE_FUNCTION;
 
     HIR::TypeRef outer_ty;
-    builder.with_val_type(sp, val, [&](const HIR::TypeRef& ty) {
+    builder.with_val_type(sp, val, [&](const HIR::TypeData* ty) {
         outer_ty = ty;
     });
 
@@ -4207,7 +4207,7 @@ void PatternRulesetBuilder::multiply_rulesets(size_t n, std::function<void(size_
     }
 }
 
-void PatternRulesetBuilder::append_from_lit(const Span& sp, EncodedLiteralSlice lit, const ::HIR::TypeRef& ty) {
+void PatternRulesetBuilder::append_from_lit(const Span& sp, EncodedLiteralSlice lit, const ::HIR::TypeData* ty) {
     TRACE_FUNCTION_F("lit=" << lit << ", ty=" << ty << ",   m_field_path=[" << m_field_path << "]");
 
     TU_MATCH_HDRA( (*ty), {)
@@ -4453,7 +4453,7 @@ void PatternRulesetBuilder::append_from_lit(const Span& sp, EncodedLiteralSlice 
     }
 }
 
-void PatternRulesetBuilder::append_from(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::TypeRef& top_ty) {
+void PatternRulesetBuilder::append_from(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::TypeData* top_ty) {
     static ::HIR::Pattern empty_pattern;
     TRACE_FUNCTION_F("pat=" << pat << ", ty=" << top_ty << ",   m_field_path=[" << m_field_path << "]");
 
@@ -4716,7 +4716,7 @@ void PatternRulesetBuilder::append_from(const Span& sp, const ::HIR::Pattern& pa
         }
         TU_ARMA(Path, e) {
             struct PH {
-                static void push_pattern_tuple(PatternRulesetBuilder& builder, const Span& sp, const ::HIR::Pattern::Data::Data_PathTuple& pe, std::function<const HIR::TypeRef&(const HIR::TypeRef&)> maybe_monomorph) {
+                static void push_pattern_tuple(PatternRulesetBuilder& builder, const Span& sp, const ::HIR::Pattern::Data::Data_PathTuple& pe, std::function<const HIR::TypeData*(const HIR::TypeData*)> maybe_monomorph) {
                     const auto& sd = ::HIR::pattern_get_tuple(sp, pe.path, pe.binding);
                     assert(sd.size() >= pe.leading.size() + pe.trailing.size());
                     size_t trailing_start = sd.size() - pe.trailing.size();
@@ -4733,7 +4733,7 @@ void PatternRulesetBuilder::append_from(const Span& sp, const ::HIR::Pattern& pa
                         builder.m_field_path.back()++;
                     }
                 }
-                static void push_pattern_struct(PatternRulesetBuilder& builder, const Span& sp, const ::HIR::Pattern::Data::Data_PathNamed& pe, std::function<const HIR::TypeRef&(const HIR::TypeRef&)> maybe_monomorph) {
+                static void push_pattern_struct(PatternRulesetBuilder& builder, const Span& sp, const ::HIR::Pattern::Data::Data_PathNamed& pe, std::function<const HIR::TypeData*(const HIR::TypeData*)> maybe_monomorph) {
                     const auto& sd = ::HIR::pattern_get_named(sp, pe.path, pe.binding);
                     // NOTE: Iterates in field order (not pattern order) to ensure that patterns are in order between arms
                     for (const auto& fld : sd) {
@@ -4752,7 +4752,7 @@ void PatternRulesetBuilder::append_from(const Span& sp, const ::HIR::Pattern& pa
                 }
             };
             ::HIR::TypeRef tmp;
-            auto maybe_monomorph = [&](const ::HIR::TypeRef& ty) -> const ::HIR::TypeRef& {
+            auto maybe_monomorph = [&](const ::HIR::TypeData* ty) -> const ::HIR::TypeData* {
                 if (monomorphise_type_needed(ty)) {
                     tmp = MonomorphStatePtr(m_resolve.m_crate.m_types, nullptr, &e.path.m_data.as_Generic().m_params, nullptr).monomorph_type(sp, ty);
                     this->m_resolve.expand_associated_types(sp, tmp);
@@ -5466,7 +5466,7 @@ namespace {
     void get_ty_and_val(
         const Span& sp,
         MirBuilder& builder,
-        const ::HIR::TypeRef& top_ty,
+        const ::HIR::TypeData* top_ty,
         const ::MIR::LValue& top_val,
         const field_path_t& field_path,
         unsigned int field_path_ofs,
@@ -5476,39 +5476,39 @@ namespace {
         const StaticTraitResolve& resolve = builder.resolve();
         ::MIR::LValue lval = top_val.clone();
         ::HIR::TypeRef tmp_ty;
-        const ::HIR::TypeRef* cur_ty = &top_ty;
+        const ::HIR::TypeData* cur_ty = top_ty;
 
         // TODO: Cache the correspondance of path->type (lval can be inferred)
         ASSERT_BUG(sp, field_path_ofs <= field_path.size(), "Field path offset " << field_path_ofs << " is larger than the path [" << field_path << "]");
         for (unsigned int i = field_path_ofs; i < field_path.size(); i++) {
             unsigned idx = field_path.data[i];
-            DEBUG("> " << *cur_ty << " #" << idx);
+            DEBUG("> " << cur_ty << " #" << idx);
 
-            TU_MATCH_HDRA( (**cur_ty), {)
+            TU_MATCH_HDRA( (*cur_ty), {)
             TU_ARMA(Infer, e)   BUG(sp, "Ivar for in match type");
                 TU_ARMA(Diverge, e) BUG(sp, "Diverge in match type");
                 TU_ARMA(Primitive, e) BUG(sp, "Destructuring a primitive");
                 TU_ARMA(Tuple, e) {
                     ASSERT_BUG(sp, idx < e.size(), "Tuple index out of range");
                     lval = ::MIR::LValue::new_Field(mv$(lval), idx);
-                    cur_ty = &e[idx];
+                    cur_ty = e[idx];
                 }
                 TU_ARMA(Path, e) {
                     if (idx == FIELD_DEREF) {
-                        auto new_ty = resolve.is_type_owned_box(*cur_ty);
-                        ASSERT_BUG(sp, new_ty, "Deref on non-Box - " << *cur_ty);
+                        auto new_ty = resolve.is_type_owned_box(cur_ty);
+                        ASSERT_BUG(sp, new_ty, "Deref on non-Box - " << cur_ty);
                         lval = ::MIR::LValue::new_Deref(mv$(lval));
                         cur_ty = new_ty;
                         break;
                     }
-                    auto monomorph_to_ptr = [&](const ::HIR::TypeRef& ty) -> const ::HIR::TypeRef* {
+                    auto monomorph_to_ptr = [&](const ::HIR::TypeData* ty) -> const ::HIR::TypeData* {
                         if (monomorphise_type_needed(ty)) {
                             auto rv = MonomorphStatePtr(resolve.m_crate.m_types, nullptr, &e.path.m_data.as_Generic().m_params, nullptr).monomorph_type(sp, ty);
                             resolve.expand_associated_types(sp, rv);
                             tmp_ty = mv$(rv);
-                            return &tmp_ty;
+                            return tmp_ty;
                         } else {
-                            return &ty;
+                            return ty;
                         }
                     };
                 TU_MATCH_HDRA( (e.binding), {)
@@ -5516,24 +5516,24 @@ namespace {
                             BUG(sp, "Encounterd unbound path - " << e.path);
                         }
                         TU_ARMA(Opaque, pbe) {
-                            BUG(sp, "Destructuring an opaque type - " << *cur_ty);
+                            BUG(sp, "Destructuring an opaque type - " << cur_ty);
                         }
                         TU_ARMA(ExternType, pbe) {
-                            BUG(sp, "Destructuring an extern type - " << *cur_ty);
+                            BUG(sp, "Destructuring an extern type - " << cur_ty);
                         }
                         TU_ARMA(Struct, pbe) {
                     TU_MATCH_HDRA( (pbe->m_data), { )
                     TU_ARMA(Unit, fields) {
-                                    BUG(sp, "Destructuring an unit-like tuple - " << *cur_ty);
+                                    BUG(sp, "Destructuring an unit-like tuple - " << cur_ty);
                                 }
                                 TU_ARMA(Tuple, fields) {
-                                    ASSERT_BUG(sp, idx < fields.size(), "Tuple struct index (" << idx << ") out of range (" << fields.size() << ") in " << *cur_ty);
+                                    ASSERT_BUG(sp, idx < fields.size(), "Tuple struct index (" << idx << ") out of range (" << fields.size() << ") in " << cur_ty);
                                     const auto& fld = fields[idx];
                                     cur_ty = monomorph_to_ptr(fld.ent);
                                     lval = ::MIR::LValue::new_Field(mv$(lval), idx);
                                 }
                                 TU_ARMA(Named, fields) {
-                                    ASSERT_BUG(sp, idx < fields.size(), "Tuple struct index (" << idx << ") out of range (" << fields.size() << ") in " << *cur_ty);
+                                    ASSERT_BUG(sp, idx < fields.size(), "Tuple struct index (" << idx << ") out of range (" << fields.size() << ") in " << cur_ty);
                                     const auto& fld = fields[idx];
                                     cur_ty = monomorph_to_ptr(fld.ty);
                                     lval = ::MIR::LValue::new_Field(mv$(lval), idx);
@@ -5541,15 +5541,15 @@ namespace {
                     }
                         }
                         TU_ARMA(Union, pbe) {
-                            ASSERT_BUG(sp, idx < pbe->m_variants.size(), "Union variant index (" << idx << ") out of range (" << pbe->m_variants.size() << ") in " << *cur_ty);
+                            ASSERT_BUG(sp, idx < pbe->m_variants.size(), "Union variant index (" << idx << ") out of range (" << pbe->m_variants.size() << ") in " << cur_ty);
                             const auto& fld = pbe->m_variants[idx];
                             cur_ty = monomorph_to_ptr(fld.ty);
                             lval = ::MIR::LValue::new_Downcast(mv$(lval), idx);
                         }
                         TU_ARMA(Enum, pbe) {
-                            ASSERT_BUG(sp, pbe->m_data.is_Data(), "Value enum being destructured - " << *cur_ty);
+                            ASSERT_BUG(sp, pbe->m_data.is_Data(), "Value enum being destructured - " << cur_ty);
                             const auto& variants = pbe->m_data.as_Data();
-                            ASSERT_BUG(sp, idx < variants.size(), "Variant index (" << idx << ") out of range (" << variants.size() << ") for enum " << *cur_ty);
+                            ASSERT_BUG(sp, idx < variants.size(), "Variant index (" << idx << ") out of range (" << variants.size() << ") for enum " << cur_ty);
                             const auto& var = variants[idx];
 
                             cur_ty = monomorph_to_ptr(var.type);
@@ -5558,16 +5558,16 @@ namespace {
                 }
                 }
                 TU_ARMA(Generic, e) {
-                    BUG(sp, "Destructuring a generic - " << *cur_ty);
+                    BUG(sp, "Destructuring a generic - " << cur_ty);
                 }
                 TU_ARMA(TraitObject, e) {
-                    BUG(sp, "Destructuring a trait object - " << *cur_ty);
+                    BUG(sp, "Destructuring a trait object - " << cur_ty);
                 }
                 TU_ARMA(ErasedType, e) {
-                    BUG(sp, "Destructuring an erased type - " << *cur_ty);
+                    BUG(sp, "Destructuring an erased type - " << cur_ty);
                 }
                 TU_ARMA(Array, e) {
-                    cur_ty = &e.inner;
+                    cur_ty = e.inner;
                     if (idx < FIELD_INDEX_MAX) {
                         ASSERT_BUG(sp, idx < e.size.as_Known(), "Index out of range");
                         lval = ::MIR::LValue::new_Field(mv$(lval), idx);
@@ -5579,7 +5579,7 @@ namespace {
                     }
                 }
                 TU_ARMA(Slice, e) {
-                    cur_ty = &e.inner;
+                    cur_ty = e.inner;
                     if (idx < FIELD_INDEX_MAX) {
                         lval = ::MIR::LValue::new_Field(mv$(lval), idx);
                     } else {
@@ -5596,11 +5596,7 @@ namespace {
                 TU_ARMA(Borrow, e) {
                     ASSERT_BUG(sp, idx == FIELD_DEREF, "Destructure of borrow doesn't correspond to a deref in the path");
                     //DEBUG(i << " " << *cur_ty << " - " << cur_ty << " " << &tmp_ty);
-                    if (cur_ty == &tmp_ty) {
-                        tmp_ty = tmp_ty->as_Borrow().inner;
-                    } else {
-                        cur_ty = &e.inner;
-                    }
+                    cur_ty = e.inner;
                     //DEBUG(i << " " << *cur_ty);
                     lval = ::MIR::LValue::new_Deref(mv$(lval));
                 }
@@ -5619,7 +5615,7 @@ namespace {
             }
         }
 
-        out_ty = *cur_ty;
+        out_ty = cur_ty;
         out_val = mv$(lval);
     }
 }
@@ -5672,7 +5668,7 @@ void MIR_LowerHIR_Match_Simple(MirBuilder& builder, MirConverter& conv, ::HIR::E
     builder.end_block(::MIR::Terminator::make_Diverge({}));
 }
 
-int MIR_LowerHIR_Match_Simple__GeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int num_rules, const ::HIR::TypeRef& top_ty, const ::MIR::LValue& top_val, unsigned int field_path_ofs, ::MIR::BasicBlockId fail_bb) {
+int MIR_LowerHIR_Match_Simple__GeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int num_rules, const ::HIR::TypeData* top_ty, const ::MIR::LValue& top_val, unsigned int field_path_ofs, ::MIR::BasicBlockId fail_bb) {
     TRACE_FUNCTION_F("top_ty = " << top_ty << ", rules = [" << FMT_CB(os, for (size_t i = 0; i < num_rules; i++) os << rules[i] << ",";));
     for (unsigned int rule_idx = 0; rule_idx < num_rules; rule_idx++) {
         const auto& rule = rules[rule_idx];
@@ -6177,14 +6173,14 @@ public:
 class MatchGenGrouped {
     const Span& sp;
     MirBuilder& m_builder;
-    const ::HIR::TypeRef& m_top_ty;
+    const ::HIR::TypeData* m_top_ty;
     const ::MIR::LValue& m_top_val;
     const ::std::vector<ArmCode>& m_arms_code;
 
     size_t m_field_path_ofs;
 
 public:
-    MatchGenGrouped(MirBuilder& builder, const Span& sp, const ::HIR::TypeRef& top_ty, const ::MIR::LValue& top_val, const ::std::vector<ArmCode>& arms_code, size_t field_path_ofs)
+    MatchGenGrouped(MirBuilder& builder, const Span& sp, const ::HIR::TypeData* top_ty, const ::MIR::LValue& top_val, const ::std::vector<ArmCode>& arms_code, size_t field_path_ofs)
         : sp(sp)
         , m_builder(builder)
         , m_top_ty(top_ty)
@@ -6268,7 +6264,7 @@ namespace {
     }
 }
 
-void MIR_LowerHIR_Match_Grouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIR::TypeRef& match_ty, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block) {
+void MIR_LowerHIR_Match_Grouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIR::TypeData* match_ty, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block) {
     TRACE_FUNCTION_F("");
 
     // The grouped matcher consumes one constructor or field test per matrix
@@ -7045,7 +7041,7 @@ void MatchGenGrouped::gen_dispatch_splitslice(const field_path_t& field_path, co
 // --------------------------------------------------------------------
 // MirBuilder
 // --------------------------------------------------------------------
-MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeRef& ret_ty, const ::HIR::Function::args_t& args, ::MIR::Function& output)
+MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ret_ty, const ::HIR::Function::args_t& args, ::MIR::Function& output)
     : m_root_span(sp)
     , m_resolve(resolve)
     , m_ret_ty(ret_ty)
@@ -7157,7 +7153,7 @@ void MirBuilder::final_cleanup() {
     }
 }
 
-const ::HIR::TypeRef* MirBuilder::is_type_owned_box(const ::HIR::TypeRef& ty) const {
+const ::HIR::TypeData* MirBuilder::is_type_owned_box(const ::HIR::TypeData* ty) const {
     if (m_lang_Box) {
         if (!ty->is_Path()) {
             return nullptr;
@@ -7173,7 +7169,7 @@ const ::HIR::TypeRef* MirBuilder::is_type_owned_box(const ::HIR::TypeRef& ty) co
             return nullptr;
         }
         // TODO: Properly assert the size?
-        return &pe.m_params.m_types.at(0);
+        return pe.m_params.m_types.at(0);
     } else {
         return nullptr;
     }
@@ -7312,7 +7308,7 @@ void MirBuilder::drop_lvalue(const Span& sp, const ::MIR::LValue& value) {
     *state = VarState::make_Invalid(InvalidType::Moved);
 }
 
-::MIR::LValue MirBuilder::new_temporary(const ::HIR::TypeRef& ty) {
+::MIR::LValue MirBuilder::new_temporary(const ::HIR::TypeData* ty) {
     unsigned int rv = m_output.locals.size();
     DEBUG("DEFINE (temp) _" << rv << ": " << ty);
 
@@ -7349,7 +7345,7 @@ void MirBuilder::drop_lvalue(const Span& sp, const ::MIR::LValue& value) {
     return ::MIR::LValue::new_Local(rv);
 }
 
-::MIR::LValue MirBuilder::lvalue_or_temp(const Span& sp, const ::HIR::TypeRef& ty, ::MIR::RValue val) {
+::MIR::LValue MirBuilder::lvalue_or_temp(const Span& sp, const ::HIR::TypeData* ty, ::MIR::RValue val) {
     TU_IFLET(::MIR::RValue, val, Use, e, return mv$(e);)
     else {
         auto temp = new_temporary(ty);
@@ -7376,7 +7372,7 @@ void MirBuilder::drop_lvalue(const Span& sp, const ::MIR::LValue& value) {
     }
 }
 
-::MIR::LValue MirBuilder::get_result_in_lvalue(const Span& sp, const ::HIR::TypeRef& ty, bool allow_missing_value /*=false*/) {
+::MIR::LValue MirBuilder::get_result_in_lvalue(const Span& sp, const ::HIR::TypeData* ty, bool allow_missing_value /*=false*/) {
     if (allow_missing_value && !block_active()) {
         return new_temporary(ty);
     }
@@ -7389,7 +7385,7 @@ void MirBuilder::drop_lvalue(const Span& sp, const ::MIR::LValue& value) {
     }
 }
 
-::MIR::Param MirBuilder::get_result_in_param(const Span& sp, const ::HIR::TypeRef& ty, bool allow_missing_value) {
+::MIR::Param MirBuilder::get_result_in_param(const Span& sp, const ::HIR::TypeData* ty, bool allow_missing_value) {
     if (allow_missing_value && !block_active()) {
         return new_temporary(ty);
     }
@@ -8746,20 +8742,20 @@ void MirBuilder::complete_scope(ScopeDef& sd) {
     }
 }
 
-void MirBuilder::with_val_type(const Span& sp, const ::MIR::LValue& val, ::std::function<void(const ::HIR::TypeRef&)> cb, const ::MIR::LValue::Wrapper* stop_wrapper /*=nullptr*/) const {
+void MirBuilder::with_val_type(const Span& sp, const ::MIR::LValue& val, ::std::function<void(const ::HIR::TypeData*)> cb, const ::MIR::LValue::Wrapper* stop_wrapper /*=nullptr*/) const {
     ::HIR::TypeRef tmp;
-    const ::HIR::TypeRef* ty_p = nullptr;
-    TU_MATCHA((val.m_root), (e), (Return, ty_p = &m_ret_ty;), (Argument, ty_p = &m_args.at(e).second;), (Local, ty_p = &m_output.locals.at(e);), (Static, TU_MATCHA((e.m_data), (pe), (Generic, ASSERT_BUG(sp, pe.m_params.m_types.empty(), "Path params on static"); const auto& s = m_resolve.m_crate.get_static_by_path(sp, pe.m_path); ty_p = &s.m_type;), (UfcsKnown, TODO(sp, "Static - UfcsKnown - " << e);), (UfcsUnknown, BUG(sp, "Encountered UfcsUnknown in Static - " << e);), (UfcsInherent, TODO(sp, "Static - UfcsInherent - " << e);))))
-    assert(ty_p);
+    const ::HIR::TypeData* ty = nullptr;
+    TU_MATCHA((val.m_root), (e), (Return, ty = m_ret_ty;), (Argument, ty = m_args.at(e).second;), (Local, ty = m_output.locals.at(e);), (Static, TU_MATCHA((e.m_data), (pe), (Generic, ASSERT_BUG(sp, pe.m_params.m_types.empty(), "Path params on static"); const auto& s = m_resolve.m_crate.get_static_by_path(sp, pe.m_path); ty = s.m_type;), (UfcsKnown, TODO(sp, "Static - UfcsKnown - " << e);), (UfcsUnknown, BUG(sp, "Encountered UfcsUnknown in Static - " << e);), (UfcsInherent, TODO(sp, "Static - UfcsInherent - " << e);))))
+    assert(ty);
     for (const auto& w : val.m_wrappers) {
         if (&w == stop_wrapper) {
             stop_wrapper = nullptr; // Reset so the below bugcheck can work
             break;
         }
-        const auto& ty = *ty_p;
-        ty_p = nullptr;
+        const auto* current_ty = ty;
+        ty = nullptr;
         //DEBUG(ty << " " << w);
-        auto maybe_monomorph = [&](const ::HIR::GenericParams& params_def, const ::HIR::Path& p, const ::HIR::TypeRef& t) -> const ::HIR::TypeRef& {
+        auto maybe_monomorph = [&](const ::HIR::GenericParams& params_def, const ::HIR::Path& p, const ::HIR::TypeData* t) -> const ::HIR::TypeData* {
             if (monomorphise_type_needed(t)) {
                 tmp = MonomorphStatePtr(m_resolve.m_crate.m_types, nullptr, &p.m_data.as_Generic().m_params, nullptr).monomorph_type(sp, t);
                 m_resolve.expand_associated_types(sp, tmp);
@@ -8770,57 +8766,57 @@ void MirBuilder::with_val_type(const Span& sp, const ::MIR::LValue& val, ::std::
         };
         TU_MATCH_HDRA( (w), {)
         TU_ARMA(Field, field_index) {
-            TU_MATCH_HDRA( (*ty), {)
+            TU_MATCH_HDRA( (*current_ty), {)
             default:
-                BUG(sp, "Field access on unexpected type - " << ty);
+                BUG(sp, "Field access on unexpected type - " << current_ty);
                     TU_ARMA(Array, te) {
-                        ty_p = &te.inner;
+                        ty = te.inner;
                     }
                     TU_ARMA(Slice, te) {
-                        ty_p = &te.inner;
+                        ty = te.inner;
                     }
                     TU_ARMA(Path, te) {
                         if (const auto* tep = te.binding.opt_Struct()) {
                             const auto& str = **tep;
-                            TU_MATCHA((str.m_data), (se), (Unit, BUG(sp, "Field on unit-like struct - " << ty);), (Tuple, ASSERT_BUG(sp, field_index < se.size(), "Field index out of range in tuple-struct " << ty << " - " << field_index << " > " << se.size()); const auto& fld = se[field_index]; ty_p = &maybe_monomorph(str.m_params, te.path, fld.ent);), (Named, ASSERT_BUG(sp, field_index < se.size(), "Field index out of range in struct " << ty << " - " << field_index << " > " << se.size()); const auto& fld = se[field_index]; ty_p = &maybe_monomorph(str.m_params, te.path, fld.ty);))
+                            TU_MATCHA((str.m_data), (se), (Unit, BUG(sp, "Field on unit-like struct - " << current_ty);), (Tuple, ASSERT_BUG(sp, field_index < se.size(), "Field index out of range in tuple-struct " << current_ty << " - " << field_index << " > " << se.size()); const auto& fld = se[field_index]; ty = maybe_monomorph(str.m_params, te.path, fld.ent);), (Named, ASSERT_BUG(sp, field_index < se.size(), "Field index out of range in struct " << current_ty << " - " << field_index << " > " << se.size()); const auto& fld = se[field_index]; ty = maybe_monomorph(str.m_params, te.path, fld.ty);))
                         } else if (/*const auto* tep =*/te.binding.opt_Union()) {
-                            BUG(sp, "Field access on a union isn't valid, use Downcast instead - " << ty);
+                            BUG(sp, "Field access on a union isn't valid, use Downcast instead - " << current_ty);
                         } else {
-                            BUG(sp, "Field acess on unexpected type - " << ty);
+                            BUG(sp, "Field acess on unexpected type - " << current_ty);
                         }
                     }
                     TU_ARMA(Tuple, te) {
                         ASSERT_BUG(sp, field_index < te.size(), "Field index out of range in tuple " << field_index << " >= " << te.size());
-                        ty_p = &te[field_index];
+                        ty = te[field_index];
                     }
             }
             }
             TU_ARMA(Deref, _e) {
-            TU_MATCH_HDRA( (*ty), { )
+            TU_MATCH_HDRA( (*current_ty), { )
             default:
-                BUG(sp, "Deref on unexpected type - " << ty);
+                BUG(sp, "Deref on unexpected type - " << current_ty);
                     TU_ARMA(Path, te) {
-                        if (const auto* inner_ptr = this->is_type_owned_box(ty)) {
-                            ty_p = &*inner_ptr;
+                        if (const auto* inner = this->is_type_owned_box(current_ty)) {
+                            ty = inner;
                         } else {
-                            BUG(sp, "Deref on unexpected type - " << ty);
+                            BUG(sp, "Deref on unexpected type - " << current_ty);
                         }
                     }
                     TU_ARMA(Pointer, te) {
-                        ty_p = &te.inner;
+                        ty = te.inner;
                     }
                     TU_ARMA(Borrow, te) {
-                        ty_p = &te.inner;
+                        ty = te.inner;
                     }
             }
             }
             TU_ARMA(Index, _index_val) {
-                TU_MATCH_DEF(::HIR::TypeData, (*ty), (te), (BUG(sp, "Index on unexpected type - " << ty);), (Slice, ty_p = &te.inner;), (Array, ty_p = &te.inner;))
+                TU_MATCH_DEF(::HIR::TypeData, (*current_ty), (te), (BUG(sp, "Index on unexpected type - " << current_ty);), (Slice, ty = te.inner;), (Array, ty = te.inner;))
             }
             TU_ARMA(Downcast, variant_index) {
-            TU_MATCH_HDRA( (*ty), { )
+            TU_MATCH_HDRA( (*current_ty), { )
             default:
-                BUG(sp, "Downcast on unexpected type - " << ty);
+                BUG(sp, "Downcast on unexpected type - " << current_ty);
                     TU_ARMA(Path, te) {
                         if (const auto* pbe = te.binding.opt_Enum()) {
                             const auto& enm = **pbe;
@@ -8829,24 +8825,24 @@ void MirBuilder::with_val_type(const Span& sp, const ::MIR::LValue& val, ::std::
                             ASSERT_BUG(sp, variant_index < variants.size(), "Variant index out of range");
                             const auto& variant = variants[variant_index];
 
-                            ty_p = &maybe_monomorph(enm.m_params, te.path, variant.type);
+                            ty = maybe_monomorph(enm.m_params, te.path, variant.type);
                         } else if (const auto* pbe = te.binding.opt_Union()) {
                             const auto& unm = **pbe;
                             ASSERT_BUG(sp, variant_index < unm.m_variants.size(), "Variant index out of range");
                             const auto& variant = unm.m_variants.at(variant_index);
 
-                            ty_p = &maybe_monomorph(unm.m_params, te.path, variant.ty);
+                            ty = maybe_monomorph(unm.m_params, te.path, variant.ty);
                         } else {
-                            BUG(sp, "Downcast on non-Enum/Union - " << ty << " for " << val);
+                            BUG(sp, "Downcast on non-Enum/Union - " << current_ty << " for " << val);
                         }
                     }
             }
             }
         }
-        assert(ty_p);
+        assert(ty);
     }
     ASSERT_BUG(sp, !stop_wrapper, "A stop wrapper was passed, but not found");
-    cb(*ty_p);
+    cb(ty);
 }
 
 bool MirBuilder::lvalue_is_copy(const Span& sp, const ::MIR::LValue& val) const {

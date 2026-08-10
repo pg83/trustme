@@ -106,7 +106,7 @@ namespace HIR {
         unsigned run_terminator(::MIR::eval::CallStackEntry& local_state, const ::MIR::Terminator& stmt);
         bool call_function(::MIR::eval::CallStackEntry& local_state, const MIR::LValue& rv_slot, ::std::shared_ptr<::HIR::Path> path, ::std::vector<::MIR::eval::AllocationPtr> call_args);
 
-        EncodedLiteral allocation_to_encoded(const ::HIR::TypeRef& ty, const ::MIR::eval::Allocation& a);
+        EncodedLiteral allocation_to_encoded(const ::HIR::TypeData* ty, const ::MIR::eval::Allocation& a);
     };
 
 } // namespace HIR

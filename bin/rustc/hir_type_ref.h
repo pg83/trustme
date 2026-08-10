@@ -32,12 +32,12 @@ namespace HIR {
 
     class ResolvePlaceholders {
     public:
-        virtual const ::HIR::TypeRef& get_type(const Span& sp, const HIR::TypeRef& ty) const = 0;
+        virtual const ::HIR::TypeData* get_type(const Span& sp, const HIR::TypeData* ty) const = 0;
         virtual const ::HIR::ConstGeneric& get_val(const Span& sp, const HIR::ConstGeneric& v) const = 0;
     };
 
     class ResolvePlaceholdersNop: public ResolvePlaceholders {
-        const ::HIR::TypeRef& get_type(const Span&, const ::HIR::TypeRef& ty) const override {
+        const ::HIR::TypeData* get_type(const Span&, const ::HIR::TypeData* ty) const override {
             return ty;
         }
 
@@ -84,9 +84,9 @@ namespace HIR {
     class MatchGenerics: virtual public TrackHrbStack {
     public:
         ::HIR::Compare cmp_path(const Span& sp, const ::HIR::Path& ty_l, const ::HIR::Path& ty_r, t_cb_resolve_type resolve_cb);
-        virtual ::HIR::Compare cmp_type(const Span& sp, const ::HIR::TypeRef& ty_l, const ::HIR::TypeRef& ty_r, t_cb_resolve_type resolve_cb);
+        virtual ::HIR::Compare cmp_type(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, t_cb_resolve_type resolve_cb);
 
-        virtual ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeRef& ty, t_cb_resolve_type resolve_cb) = 0;
+        virtual ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, t_cb_resolve_type resolve_cb) = 0;
         virtual ::HIR::Compare match_val(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) = 0;
         virtual ::HIR::Compare match_lft(const ::HIR::GenericRef&, const ::HIR::LifetimeRef&) {
             return HIR::Compare::Equal;

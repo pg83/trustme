@@ -6,7 +6,7 @@ namespace MIR {
 
     class OuterVisitor: public ::HIR::Visitor {
     public:
-        typedef ::std::function<void(const StaticTraitResolve& resolve, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& expr, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type)> cb_t;
+        typedef ::std::function<void(const StaticTraitResolve& resolve, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& expr, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type)> cb_t;
 
     private:
         StaticTraitResolve m_resolve;

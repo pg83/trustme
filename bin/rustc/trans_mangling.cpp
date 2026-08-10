@@ -220,7 +220,7 @@ public:
     //   - char : 'C' 'x'
     //   - str  : 'C' 'y'
     // - Diverge: 'C' 'z'
-    void fmt_type(const ::HIR::TypeRef& ty) {
+    void fmt_type(const ::HIR::TypeData* ty) {
         TU_MATCH_HDRA( ((*ty)), { )
         case ::HIR::TypeData::TAG_Infer:
         case ::HIR::TypeData::TAG_Generic:
@@ -389,8 +389,11 @@ public:
     return FMT_CB(os, os << "ZRG"; Mangler(os).fmt_generic_path(p));
 }
 
-::FmtLambda Trans_MangleTypeRef(const ::HIR::TypeRef& p) {
-    return FMT_CB(os, os << "ZRT"; Mangler(os).fmt_type(p));
+::FmtLambda Trans_MangleTypeRef(const ::HIR::TypeData* p) {
+    return ::FmtLambda([p](::std::ostream& os) {
+        os << "ZRT";
+        Mangler(os).fmt_type(p);
+    });
 }
 
 namespace {
@@ -421,4 +424,7 @@ namespace {
 DO_MANGLE(SimplePath)
 DO_MANGLE(GenericPath)
 DO_MANGLE(Path)
-DO_MANGLE(TypeRef)
+
+::FmtLambda Trans_Mangle(const ::HIR::TypeData* v) {
+    return max_len(Trans_MangleTypeRef(v));
+}

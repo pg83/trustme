@@ -5,10 +5,10 @@
 #include "hir_type.h"
 #include "hir_typeck_monomorph.h"
 
-typedef ::std::function<bool(const ::HIR::TypeRef&)> t_cb_visit_ty;
+typedef ::std::function<bool(const ::HIR::TypeData*)> t_cb_visit_ty;
 /// Calls the provided callback on every type seen when recursing the type.
 /// If the callback returns `true`, no further types are visited and the function returns `true`.
-extern bool visit_ty_with(const ::HIR::TypeRef&, t_cb_visit_ty callback);
+extern bool visit_ty_with(const ::HIR::TypeData*, t_cb_visit_ty callback);
 extern bool visit_trait_path_tys_with(const ::HIR::TraitPath&, t_cb_visit_ty callback);
 extern bool visit_path_tys_with(const ::HIR::Path&, t_cb_visit_ty callback);
 
@@ -16,14 +16,14 @@ typedef ::std::function<bool(::HIR::TypeRef& rewritten, ::HIR::TypeData& data)> 
 extern bool rewrite_ty_with(::HIR::TypeInterner& types, ::HIR::TypeRef& ty, t_cb_rewrite_ty callback);
 extern bool rewrite_path_tys_with(::HIR::TypeInterner& types, ::HIR::Path& path, t_cb_rewrite_ty callback);
 
-typedef ::std::function<bool(const ::HIR::TypeRef&, ::HIR::TypeRef&)> t_cb_clone_ty;
+typedef ::std::function<bool(const ::HIR::TypeData*, ::HIR::TypeRef&)> t_cb_clone_ty;
 /// Clones a type, calling the provided callback on every type (optionally providing a replacement)
 ///
 /// Closure should return `true` if the passed output slot was populated.
-extern ::HIR::TypeRef clone_ty_with(::HIR::TypeInterner& types, const Span& sp, const ::HIR::TypeRef& tpl, t_cb_clone_ty callback);
+extern ::HIR::TypeRef clone_ty_with(::HIR::TypeInterner& types, const Span& sp, const ::HIR::TypeData* tpl, t_cb_clone_ty callback);
 extern ::HIR::PathParams clone_path_params_with(::HIR::TypeInterner& types, const Span& sp, const ::HIR::PathParams& tpl, t_cb_clone_ty callback);
 
-extern void check_type_class_primitive(const Span& sp, const ::HIR::TypeRef& type, ::HIR::InferClass ic, ::HIR::CoreType ct);
+extern void check_type_class_primitive(const Span& sp, const ::HIR::TypeData* type, ::HIR::InferClass ic, ::HIR::CoreType ct);
 
 namespace typeck {
     // The primitive operation is a language candidate, separate from an
@@ -61,7 +61,7 @@ namespace typeck {
         ShrAssign,
     };
 
-    inline bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeRef& left, const ::HIR::TypeRef& right) {
+    inline bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
         const auto* left_primitive = left->opt_Primitive();
         const auto* right_primitive = right->opt_Primitive();
 
@@ -125,7 +125,7 @@ namespace typeck {
     // it also fixes an otherwise untyped right-hand operand. Shifts are
     // deliberately excluded: their right-hand side need only be an integer
     // and may have a different type.
-    inline bool primitive_operator_lhs_determines_rhs(PrimitiveOperator op, const ::HIR::TypeRef& left) {
+    inline bool primitive_operator_lhs_determines_rhs(PrimitiveOperator op, const ::HIR::TypeData* left) {
         const auto* primitive = left->opt_Primitive();
         const auto numeric = primitive && (::HIR::is_integer(*primitive) || ::HIR::is_float(*primitive));
         const auto bitwise = primitive && (::HIR::is_integer(*primitive) || *primitive == ::HIR::CoreType::Bool);
@@ -172,12 +172,12 @@ namespace typeck {
     // A binary language candidate is available either when both operands are
     // already known to be valid primitive inputs, or when the known lhs
     // determines the still-inferred rhs.
-    inline bool primitive_operator_has_language_candidate(PrimitiveOperator op, const ::HIR::TypeRef& left, const ::HIR::TypeRef& right) {
+    inline bool primitive_operator_has_language_candidate(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
         return primitive_operator_has_builtin(op, left, right)
             || (right->is_Infer() && primitive_operator_lhs_determines_rhs(op, left));
     }
 
-    inline bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeRef& value) {
+    inline bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeData* value) {
         if (op == PrimitiveOperator::Deref) {
             return value->is_Borrow() || value->is_Pointer();
         }
@@ -214,4 +214,4 @@ namespace typeck {
 }
 
 class StaticTraitResolve;
-extern void Typecheck_Expressions_ValidateOne(const StaticTraitResolve& resolve, const ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args, const ::HIR::TypeRef& ret_ty, const ::HIR::ExprPtr& code);
+extern void Typecheck_Expressions_ValidateOne(const StaticTraitResolve& resolve, const ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args, const ::HIR::TypeData* ret_ty, const ::HIR::ExprPtr& code);

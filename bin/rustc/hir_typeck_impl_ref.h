@@ -23,7 +23,7 @@ struct ImplRef {
         (BoundedPtr,
          struct {
              ::HIR::PathParams hrls;
-             const ::HIR::TypeRef* type;
+             const ::HIR::TypeData* type;
              const ::HIR::PathParams* trait_args;
              const ::HIR::TraitPath::assoc_list_t* assoc;
          }),
@@ -49,12 +49,12 @@ struct ImplRef {
     {
     }
 
-    ImplRef(const ::HIR::TypeRef* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assoc_list_t* assoc)
+    ImplRef(const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assoc_list_t* assoc)
         : m_data(Data::make_BoundedPtr({HIR::PathParams(), type, args, assoc}))
     {
     }
 
-    ImplRef(::HIR::PathParams hrls, const ::HIR::TypeRef* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assoc_list_t* assoc)
+    ImplRef(::HIR::PathParams hrls, const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assoc_list_t* assoc)
         : m_data(Data::make_BoundedPtr({std::move(hrls), type, args, assoc}))
     {
     }

@@ -626,9 +626,9 @@ namespace HIR {
 
         ::HIR::SimplePath m_src_module;
 
-        bool matches_type(const ::HIR::TypeRef& tr, t_cb_resolve_type ty_res) const;
+        bool matches_type(const ::HIR::TypeData* tr, t_cb_resolve_type ty_res) const;
 
-        bool matches_type(const ::HIR::TypeRef& tr) const {
+        bool matches_type(const ::HIR::TypeData* tr) const {
             return matches_type(tr, ResolvePlaceholdersNop());
         }
     };
@@ -656,9 +656,9 @@ namespace HIR {
         //
         //const TraitImpl*    m_parent_spec_impl;
 
-        bool matches_type(const ::HIR::TypeRef& tr, t_cb_resolve_type ty_res) const;
+        bool matches_type(const ::HIR::TypeData* tr, t_cb_resolve_type ty_res) const;
 
-        bool matches_type(const ::HIR::TypeRef& tr) const {
+        bool matches_type(const ::HIR::TypeData* tr) const {
             return matches_type(tr, ResolvePlaceholdersNop());
         }
 
@@ -675,9 +675,9 @@ namespace HIR {
 
         ::HIR::SimplePath m_src_module;
 
-        bool matches_type(const ::HIR::TypeRef& tr, t_cb_resolve_type ty_res) const;
+        bool matches_type(const ::HIR::TypeData* tr, t_cb_resolve_type ty_res) const;
 
-        bool matches_type(const ::HIR::TypeRef& tr) const {
+        bool matches_type(const ::HIR::TypeData* tr) const {
             return matches_type(tr, ResolvePlaceholdersNop());
         }
     };
@@ -730,7 +730,7 @@ namespace HIR {
             list_t non_named; // TODO: use a map of HIR::TypeRef::Data::Tag
             list_t generic;
 
-            const list_t* get_list_for_type(const ::HIR::TypeRef& ty) const {
+            const list_t* get_list_for_type(const ::HIR::TypeData* ty) const {
                 static list_t empty;
                 if (const auto* p = ty->get_sort_path()) {
                     auto it = named.find(*p);
@@ -745,7 +745,7 @@ namespace HIR {
                 }
             }
 
-            list_t& get_list_for_type_mut(const ::HIR::TypeRef& ty) {
+            list_t& get_list_for_type_mut(const ::HIR::TypeData* ty) {
                 if (const auto* p = ty->get_sort_path()) {
                     return named[*p];
                 } else {
@@ -834,9 +834,9 @@ namespace HIR {
             }
         }
 
-        bool find_trait_impls(const ::HIR::SimplePath& path, const ::HIR::TypeRef& type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const;
-        bool find_auto_trait_impls(const ::HIR::SimplePath& path, const ::HIR::TypeRef& type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const;
-        bool find_type_impls(const ::HIR::TypeRef& type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const;
+        bool find_trait_impls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const;
+        bool find_auto_trait_impls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const;
+        bool find_type_impls(const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const;
 
         const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::args_t& args, ::HIR::TypeRef& ret_ty) const;
 

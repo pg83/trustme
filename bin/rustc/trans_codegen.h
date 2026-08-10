@@ -28,13 +28,13 @@ public:
 
     // Called on all types directly mentioned (e.g. variables, arguments, and fields)
     // - Inner-most types are visited first.
-    virtual void emit_type_proto(const ::HIR::TypeRef&) {
+    virtual void emit_type_proto(const ::HIR::TypeData*) {
     }
 
-    virtual void emit_type(const ::HIR::TypeRef&) {
+    virtual void emit_type(const ::HIR::TypeData*) {
     }
 
-    virtual void emit_type_id(const ::HIR::TypeRef&) {
+    virtual void emit_type_id(const ::HIR::TypeData*) {
     }
 
     // Called when a TypeRef::Path is encountered (after visiting inner types)

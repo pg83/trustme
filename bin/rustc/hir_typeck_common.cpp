@@ -15,9 +15,9 @@ struct WMut {
 
 template <template <typename> class W>
 struct TyVisitor {
-    const LList<const HIR::TypeRef*>* m_cur_recurse_stack = nullptr;
+    const LList<const HIR::TypeData*>* m_cur_recurse_stack = nullptr;
 
-    virtual typename W<HIR::TypeData>::T& get_ty_data(typename W<HIR::TypeRef>::T& ty) const = 0;
+    virtual typename W<HIR::TypeData>::T& get_ty_data(const HIR::TypeData* ty) const = 0;
 
     virtual bool visit_path_params(typename W<::HIR::PathParams>::T& tpl) {
         for (auto& ty : tpl.m_types) {
@@ -65,23 +65,23 @@ struct TyVisitor {
         throw "";
     }
 
-    virtual bool visit_type(typename W<HIR::TypeRef>::T& ty) {
+    virtual bool visit_type(const HIR::TypeData* ty) {
         if (m_cur_recurse_stack) {
             for (const auto* p : *m_cur_recurse_stack) {
-                if (p == &ty) {
+                if (p == ty) {
                     return false;
                 }
             }
         }
 
         struct _ {
-            typedef LList<const HIR::TypeRef*> stack_t;
+            typedef LList<const HIR::TypeData*> stack_t;
             const stack_t*& dst;
             stack_t stack;
 
-            _(const stack_t*& dst, const HIR::TypeRef& ty)
+            _(const stack_t*& dst, const HIR::TypeData* ty)
                 : dst(dst)
-                , stack(dst, &ty)
+                , stack(dst, ty)
             {
                 dst = &stack;
             }
@@ -180,11 +180,11 @@ struct TyVisitor {
 struct TyVisitorCbConst: TyVisitor<WConst> {
     t_cb_visit_ty callback;
 
-    const HIR::TypeData& get_ty_data(const HIR::TypeRef& ty) const override {
+    const HIR::TypeData& get_ty_data(const HIR::TypeData* ty) const override {
         return *ty;
     }
 
-    bool visit_type(const ::HIR::TypeRef& ty) override {
+    bool visit_type(const ::HIR::TypeData* ty) override {
         if (callback(ty)) {
             return true;
         }
@@ -192,7 +192,7 @@ struct TyVisitorCbConst: TyVisitor<WConst> {
     }
 };
 
-bool visit_ty_with(const ::HIR::TypeRef& ty, t_cb_visit_ty callback) {
+bool visit_ty_with(const ::HIR::TypeData* ty, t_cb_visit_ty callback) {
     TyVisitorCbConst v;
     v.callback = callback;
     return v.visit_type(ty);
@@ -323,7 +323,7 @@ struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
     {
     }
 
-    const HIR::TypeData& get_ty_data(const HIR::TypeRef& ty) const override {
+    const HIR::TypeData& get_ty_data(const HIR::TypeData* ty) const override {
         return *ty;
     }
 
@@ -347,7 +347,7 @@ struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
         return TyVisitor::visit_path_params(pp);
     }
 
-    bool visit_type(const ::HIR::TypeRef& ty) override {
+    bool visit_type(const ::HIR::TypeData* ty) override {
         if (ty->is_Generic()) {
             return true;
         }
@@ -388,11 +388,11 @@ bool monomorphise_path_needed(const ::HIR::Path& tpl, bool ignore_lifetimes /*=f
     return v.visit_path(tpl);
 }
 
-bool monomorphise_type_needed(const ::HIR::TypeRef& tpl, bool ignore_lifetimes /*=false*/) {
+bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes /*=false*/) {
     return tpl->needs_monomorphisation(ignore_lifetimes);
 }
 
-::HIR::TypeRef Monomorphiser::monomorph_type(const Span& sp, const ::HIR::TypeRef& tpl, bool allow_infer /*=true*/) const {
+::HIR::TypeRef Monomorphiser::monomorph_type(const Span& sp, const ::HIR::TypeData* tpl, bool allow_infer /*=true*/) const {
     TU_MATCH_HDRA( (*tpl), {)
     TU_ARMA(Infer, e) {
             ASSERT_BUG(sp, allow_infer, "Unexpected ivar seen - " << tpl);
@@ -660,7 +660,7 @@ struct CloneTyWith_Monomorph: Monomorphiser {
         return HIR::LifetimeRef(g.binding);
     }
 
-    ::HIR::TypeRef monomorph_type(const Span& sp, const ::HIR::TypeRef& ty, bool allow_infer = true) const {
+    ::HIR::TypeRef monomorph_type(const Span& sp, const ::HIR::TypeData* ty, bool allow_infer = true) const {
         ::HIR::TypeRef rv;
 
         if (callback(ty, rv)) {
@@ -686,7 +686,7 @@ struct CloneTyWith_Monomorph: Monomorphiser {
     return rv;
 }
 
-::HIR::TypeRef clone_ty_with(::HIR::TypeInterner& types, const Span& sp, const ::HIR::TypeRef& tpl, t_cb_clone_ty callback) {
+::HIR::TypeRef clone_ty_with(::HIR::TypeInterner& types, const Span& sp, const ::HIR::TypeData* tpl, t_cb_clone_ty callback) {
     CloneTyWith_Monomorph m(types);
     m.callback = std::move(callback);
     return m.monomorph_type(sp, tpl, true);
@@ -696,7 +696,7 @@ struct CloneTyWith_Monomorph: Monomorphiser {
 {
     if (ty.is_self()) {
         if (const auto* s = this->get_self_type()) {
-            return *s;
+            return s;
         } else {
             BUG(sp, "Unexpected Self");
         }
@@ -825,7 +825,7 @@ struct CloneTyWith_Monomorph: Monomorphiser {
     return os;
 }
 
-void check_type_class_primitive(const Span& sp, const ::HIR::TypeRef& type, ::HIR::InferClass ic, ::HIR::CoreType ct) {
+void check_type_class_primitive(const Span& sp, const ::HIR::TypeData* type, ::HIR::InferClass ic, ::HIR::CoreType ct) {
     switch (ic) {
         case ::HIR::InferClass::None:
             break;

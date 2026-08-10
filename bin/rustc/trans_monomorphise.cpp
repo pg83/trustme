@@ -18,7 +18,7 @@ namespace {
         {
         }
 
-        const HIR::TypeRef& value_generic_type(HIR::GenericRef g) const override {
+        const HIR::TypeData* value_generic_type(HIR::GenericRef g) const override {
             switch (g.group()) {
                 case 0:
                     ASSERT_BUG(sp, g.idx() < m_resolve.impl_generics().m_values.size(), "Value generic " << g << " out of bounds in impl: " << m_resolve.impl_generics().m_values.size());

@@ -16,7 +16,7 @@ void HIR::InherentCache::Lowest::insert(const Span& sp, const HIR::TypeImpl& imp
     }
 }
 
-void HIR::InherentCache::Lowest::iterate(const HIR::TypeRef& type, InherentCache::inner_callback_t& cb) const {
+void HIR::InherentCache::Lowest::iterate(const HIR::TypeData* type, InherentCache::inner_callback_t& cb) const {
     auto visit = [&](const list_t& l) {
         for (const HIR::TypeImpl* impl_ptr : l) {
             cb(type, *impl_ptr);
@@ -37,9 +37,9 @@ void HIR::InherentCache::Lowest::iterate(const HIR::TypeRef& type, InherentCache
     }
 }
 
-void HIR::InherentCache::Inner::insert(const Span& sp, const HIR::TypeRef& cur_ty, const HIR::TypeImpl& impl) {
+void HIR::InherentCache::Inner::insert(const Span& sp, const HIR::TypeData* cur_ty, const HIR::TypeImpl& impl) {
     struct H {
-        static void insert_inner(const Span& sp, const HIR::TypeRef& inner_ty, const HIR::TypeImpl& impl, std::unique_ptr<Inner>& slot) {
+        static void insert_inner(const Span& sp, const HIR::TypeData* inner_ty, const HIR::TypeImpl& impl, std::unique_ptr<Inner>& slot) {
             if (!slot) {
                 slot = ::std::make_unique<Inner>();
             }
@@ -93,19 +93,19 @@ void HIR::InherentCache::Inner::insert(const Span& sp, const HIR::TypeRef& cur_t
     }
 }
 
-void HIR::InherentCache::Inner::find(const Span& sp, const HIR::TypeRef& cur_ty_act, t_cb_resolve_type ty_res, InherentCache::inner_callback_t& cb) const {
+void HIR::InherentCache::Inner::find(const Span& sp, const HIR::TypeData* cur_ty_act, t_cb_resolve_type ty_res, InherentCache::inner_callback_t& cb) const {
     const auto& cur_ty = ty_res.get_type(sp, cur_ty_act);
     TRACE_FUNCTION_F("[Inner] " << cur_ty);
     m_byvalue.iterate(cur_ty, cb);
 
     const Inner* inner = nullptr;
-    const HIR::TypeRef* inner_ty = nullptr;
+    const HIR::TypeData* inner_ty = nullptr;
     TU_MATCH_HDRA( ((*cur_ty)), { )
     default:
         // No recursion possible
         break;
         TU_ARMA(Borrow, te) {
-            inner_ty = &te.inner;
+            inner_ty = te.inner;
             switch (te.type) {
                 case ::HIR::BorrowType::Shared:
                     inner = m_ref.get();
@@ -119,7 +119,7 @@ void HIR::InherentCache::Inner::find(const Span& sp, const HIR::TypeRef& cur_ty_
             }
         }
         TU_ARMA(Pointer, te) {
-            inner_ty = &te.inner;
+            inner_ty = te.inner;
             switch (te.type) {
                 case ::HIR::BorrowType::Shared:
                     inner = m_ptr.get();
@@ -138,7 +138,7 @@ void HIR::InherentCache::Inner::find(const Span& sp, const HIR::TypeRef& cur_ty_
                 if (gp.m_params.m_types.size() > 0) {
                     auto it = m_path.find(gp.m_path);
                     if (it != m_path.end()) {
-                        inner_ty = &gp.m_params.m_types.at(0);
+                        inner_ty = gp.m_params.m_types.at(0);
                         inner = &it->second;
                     }
                 }
@@ -148,8 +148,8 @@ void HIR::InherentCache::Inner::find(const Span& sp, const HIR::TypeRef& cur_ty_
 
     if(inner) {
         assert(inner_ty);
-        DEBUG("inner_ty = " << *inner_ty);
-        inner->find(sp, *inner_ty, ty_res, cb);
+        DEBUG("inner_ty = " << inner_ty);
+        inner->find(sp, inner_ty, ty_res, cb);
     }
     else {
         DEBUG("no wrapper");
@@ -202,15 +202,15 @@ void HIR::InherentCache::insert_all(const Span& sp, const HIR::TypeImpl& impl, c
     }
 }
 
-void HIR::InherentCache::find(const Span& sp, const RcString& name, const HIR::TypeRef& ty, t_cb_resolve_type ty_res, callback_t cb) const {
+void HIR::InherentCache::find(const Span& sp, const RcString& name, const HIR::TypeData* ty, t_cb_resolve_type ty_res, callback_t cb) const {
     TRACE_FUNCTION_F(name << ", " << ty);
     // Callback that ensures that a potential impl fully matches the required receiver type
-    inner_callback_t inner_cb = [&](const HIR::TypeRef& rough_self_ty, const HIR::TypeImpl& impl) {
+    inner_callback_t inner_cb = [&](const HIR::TypeData* rough_self_ty, const HIR::TypeImpl& impl) {
         DEBUG("- " << rough_self_ty);
         const HIR::Function& fcn = impl.m_methods.at(name).data;
         struct GetSelf: public ::HIR::MatchGenerics {
             ::std::optional<::HIR::TypeRef> detected_self_ty;
-            ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeRef& ty, ::HIR::t_cb_resolve_type _resolve_cb) override {
+            ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::t_cb_resolve_type _resolve_cb) override {
                 if (g.is_self()) {
                     detected_self_ty = ty;
                 }

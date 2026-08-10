@@ -30,8 +30,8 @@ struct TraitResolveCommon {
 
     struct CachedBoundCmp {
         typedef std::pair<::HIR::TypeRef, ::HIR::GenericPath> key_t;
-        typedef std::pair<const ::HIR::TypeRef&, const ::HIR::GenericPath&> ref_t;
-        typedef std::pair<const ::HIR::TypeRef&, const ::HIR::SimplePath&> ref_sp_t;
+        typedef std::pair<const ::HIR::TypeData*, const ::HIR::GenericPath&> ref_t;
+        typedef std::pair<const ::HIR::TypeData*, const ::HIR::SimplePath&> ref_sp_t;
 
         Ordering ord(const key_t& a, const key_t& b) const {
             return ::ord(a, b);
@@ -134,7 +134,7 @@ struct TraitResolveCommon {
     /// <summary>
     /// Obtain the type for a given constant parameter
     /// </summary>
-    const ::HIR::TypeRef& get_const_param_type(const Span& sp, unsigned binding) const;
+    const ::HIR::TypeData* get_const_param_type(const Span& sp, unsigned binding) const;
 
     void prep_indexes(const Span& sp);
 

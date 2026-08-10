@@ -260,12 +260,12 @@ struct Context {
     // - Equate two types, with no possibility of coercion
     //  > Errors if the types are incompatible.
     //  > Forces types if one side is an infer
-    void equate_types(const Span& sp, const ::HIR::TypeRef& l, const ::HIR::TypeRef& r);
-    void equate_types_inner(const Span& sp, const ::HIR::TypeRef& l, const ::HIR::TypeRef& r);
+    void equate_types(const Span& sp, const ::HIR::TypeData* l, const ::HIR::TypeData* r);
+    void equate_types_inner(const Span& sp, const ::HIR::TypeData* l, const ::HIR::TypeData* r);
     // - Equate two types, allowing inferrence
-    void equate_types_coerce(const Span& sp, const ::HIR::TypeRef& l, ::HIR::ExprNodeP& node_ptr);
+    void equate_types_coerce(const Span& sp, const ::HIR::TypeData* l, ::HIR::ExprNodeP& node_ptr);
     // - Equate a type to an associated type (if name == "", no equation is done, but trait is searched)
-    void equate_types_assoc(const Span& sp, const ::HIR::TypeRef& l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeRef& impl_ty, const char* name, const ::HIR::PathParams& aty_pp, bool is_op = false, typeck::PrimitiveOperator operator_kind = typeck::PrimitiveOperator::None);
+    void equate_types_assoc(const Span& sp, const ::HIR::TypeData* l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeData* impl_ty, const char* name, const ::HIR::PathParams& aty_pp, bool is_op = false, typeck::PrimitiveOperator operator_kind = typeck::PrimitiveOperator::None);
 
     bool is_current_operator_impl(const ImplRef& impl) const {
         const auto* trait_impl = impl.m_data.opt_TraitImpl();
@@ -275,7 +275,7 @@ struct Context {
     // A Deref implementation for a native pointer/reference receives `&Self`.
     // Dereferencing that receiver is the native step needed to recover `Self`,
     // not another dispatch through a potentially overlapping Deref impl.
-    bool is_current_native_deref_receiver(const ::HIR::SimplePath& deref_trait, const ::HIR::TypeRef& operand) const {
+    bool is_current_native_deref_receiver(const ::HIR::SimplePath& deref_trait, const ::HIR::TypeData* operand) const {
         const auto* current_trait = m_resolve.current_trait_path();
         const auto& ty = m_ivars.get_type(operand);
         const auto* borrow = ty->opt_Borrow();
@@ -291,10 +291,10 @@ struct Context {
     void equate_values(const Span& sp, const ::HIR::ConstGeneric& rl, const ::HIR::ConstGeneric& rr);
 
     /// Adds a `ty: Sized` bound to the contained ivars.
-    void require_sized(const Span& sp, const ::HIR::TypeRef& ty);
+    void require_sized(const Span& sp, const ::HIR::TypeData* ty);
 
     // - Add a trait bound (gets encoded as an associated type bound)
-    void add_trait_bound(const Span& sp, const ::HIR::TypeRef& impl_ty, const ::HIR::SimplePath& trait, ::HIR::PathParams params) {
+    void add_trait_bound(const Span& sp, const ::HIR::TypeData* impl_ty, const ::HIR::SimplePath& trait, ::HIR::PathParams params) {
         equate_types_assoc(sp, m_crate.m_types.infer(), trait, mv$(params), impl_ty, "", {}, false);
     }
 
@@ -311,9 +311,9 @@ struct Context {
         Bound,
     };
     /// Type is unknown (e.g. no used/results from a trait impl that can't be looked up)
-    void possible_equate_type_unknown(const Span& sp, const ::HIR::TypeRef& ty, IvarUnknownType src_ty);
+    void possible_equate_type_unknown(const Span& sp, const ::HIR::TypeData* ty, IvarUnknownType src_ty);
     /// Type must be one of the provided set
-    void possible_equate_type_bounds(const Span& sp, const ::HIR::TypeRef& ty, ::std::vector<::HIR::TypeRef> t);
+    void possible_equate_type_bounds(const Span& sp, const ::HIR::TypeData* ty, ::std::vector<::HIR::TypeRef> t);
 
     // ----
     // IVar possibilties
@@ -327,10 +327,10 @@ struct Context {
     };
 
     /// Default type
-    //void possible_equate_ivar_def(unsigned int ivar_index, const ::HIR::TypeRef& t);
+    //void possible_equate_ivar_def(unsigned int ivar_index, const ::HIR::TypeData* t);
 
     /// Record that the IVar may be this type (and what the source is)
-    void possible_equate_ivar(const Span& sp, unsigned int ivar_index, const ::HIR::TypeRef& t, PossibleTypeSource src_ty);
+    void possible_equate_ivar(const Span& sp, unsigned int ivar_index, const ::HIR::TypeData* t, PossibleTypeSource src_ty);
     /// Add a possible type for an ivar (which is used if only one possibility meets available bounds)
     void possible_equate_ivar_bounds(const Span& sp, unsigned int ivar_index, ::std::vector<::HIR::TypeRef> t);
     /// Record that the IVar is equated to an unknown type
@@ -341,18 +341,18 @@ struct Context {
     // ----
 
     // - Add a pattern binding (forcing the type to match)
-    void handle_pattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeRef& type, bool is_irrefutable = false);
-    void handle_pattern_direct_inner(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeRef& type);
+    void handle_pattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeData* type, bool is_irrefutable = false);
+    void handle_pattern_direct_inner(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeData* type);
     void add_binding_inner(const Span& sp, const ::HIR::PatternBinding& pb, ::HIR::TypeRef type);
 
     void add_var(const Span& sp, unsigned int index, const RcString& name, ::HIR::TypeRef type);
-    const ::HIR::TypeRef& get_var(const Span& sp, unsigned int idx) const;
+    const ::HIR::TypeData* get_var(const Span& sp, unsigned int idx) const;
 
     // - Add a revisit entry
     void add_revisit(::HIR::ExprNode& node);
     void add_revisit_adv(::std::unique_ptr<Revisitor> ent);
 
-    const ::HIR::TypeRef& get_type(const ::HIR::TypeRef& ty) const {
+    const ::HIR::TypeData* get_type(const ::HIR::TypeData* ty) const {
         return m_ivars.get_type(ty);
     }
 
@@ -369,4 +369,4 @@ namespace typecheck {
     extern bool visit_call_populate_cache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) __attribute__((warn_unused_result));
 }
 
-extern void Typecheck_Code_CS__EnumerateRules(Context& context, const typeck::ModuleState& ms, t_args& args, const ::HIR::TypeRef& result_type, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& root_ptr);
+extern void Typecheck_Code_CS__EnumerateRules(Context& context, const typeck::ModuleState& ms, t_args& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& root_ptr);

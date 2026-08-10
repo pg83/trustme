@@ -2652,7 +2652,7 @@ public:
             }
     }
 
-    void serialise_type(const ::HIR::TypeRef& ty) {
+    void serialise_type(const ::HIR::TypeData* ty) {
         // Use string comparison to ensure that lifetimes are checked
         auto ty_str = FMT(ty);
         if (ty_str[0] == '{') {
@@ -3020,7 +3020,7 @@ public:
         serialise_markerimpl(impl);
     }
 
-    void serialise(const ::HIR::TypeRef& ty) {
+    void serialise(const ::HIR::TypeData* ty) {
         serialise_type(ty);
     }
 

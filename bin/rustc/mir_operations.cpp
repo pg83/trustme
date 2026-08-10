@@ -337,7 +337,7 @@ namespace {
             }
         }
 
-        void type_assign(const HIR::TypeRef& dst_ty, const HIR::TypeRef& src_ty) {
+        void type_assign(const HIR::TypeData* dst_ty, const HIR::TypeData* src_ty) {
             MIR_ASSERT(state, dst_ty->tag() == src_ty->tag(), dst_ty << " != " << src_ty);
             TU_MATCH_HDRA( ((*dst_ty), (*src_ty)),  { )
             TU_ARMA(Infer, de, se) MIR_BUG(state, "Unexpected infer - " << dst_ty << ", " << src_ty);
@@ -406,7 +406,7 @@ namespace {
             }
         }
 
-        void handle_param(const HIR::TypeRef& target, const MIR::Param& param, size_t ofs) {
+        void handle_param(const HIR::TypeData* target, const MIR::Param& param, size_t ofs) {
             if (const auto* b = param.opt_Borrow()) {
                 HIR::TypeRef tmp;
                 auto src_ty = state.get_lvalue_type(tmp, b->val);
@@ -418,7 +418,7 @@ namespace {
             }
         }
 
-        void do_assign(const MIR::LValue& lv, const HIR::TypeRef& src_ty) {
+        void do_assign(const MIR::LValue& lv, const HIR::TypeData* src_ty) {
             HIR::TypeRef tmp;
             const auto& dst_ty = state.get_lvalue_type(tmp, lv);
             type_assign(dst_ty, src_ty);
@@ -496,7 +496,7 @@ namespace {
     };
 }
 
-void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type) {
+void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type) {
     static Span sp;
     TRACE_FUNCTION_F(path);
     ::MIR::TypeResolve state {
@@ -601,10 +601,10 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
                                 const auto& str = resolve.m_crate.get_struct_by_path(state.sp, rse.path.m_path);
                                 MonomorphStatePtr ms(state.m_crate.m_types, nullptr, &rse.path.m_params, nullptr);
                                 HIR::TypeRef tmp;
-                                auto maybe_monomorph = [&](const auto& ty) -> const HIR::TypeRef& {
+                                auto maybe_monomorph = [&](const auto& ty) -> const HIR::TypeData* {
                                     return resolve.monomorph_expand_opt(sp, tmp, ty, ms);
                                 };
-                                auto get_field_ty = [&](size_t field_index) -> const HIR::TypeRef& {
+                                auto get_field_ty = [&](size_t field_index) -> const HIR::TypeData* {
                             TU_MATCH_HDRA( (str.m_data), {)
                             TU_ARMA(Unit, se) {
                                             MIR_BUG(state, "Field on unit-like struct - " << rse.path);
@@ -628,7 +628,7 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
                                 const auto& enm = resolve.m_crate.get_enum_by_path(state.sp, rse.path.m_path);
                                 MonomorphStatePtr ms(state.m_crate.m_types, nullptr, &rse.path.m_params, nullptr);
                                 HIR::TypeRef tmp;
-                                //auto maybe_monomorph = [&](const auto& ty)->const HIR::TypeRef& {
+                                //auto maybe_monomorph = [&](const auto& ty)->const HIR::TypeData* {
                                 //    return resolve.monomorph_expand_opt(sp, tmp, ty, ms);
                                 //};
                                 if (rse.vals.size() > 0) {
@@ -640,7 +640,7 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
                                     const auto& var_ty = resolve.monomorph_expand_opt(sp, tmp, variant.type, MonomorphStatePtr(state.m_crate.m_types, nullptr, &rse.path.m_params, nullptr));
                                     const auto& str = *var_ty->as_Path().binding.as_Struct();
                                     const auto& s_path = var_ty->as_Path().path.m_data.as_Generic();
-                                    auto maybe_monomorph = [&](const HIR::TypeRef& ty) -> const HIR::TypeRef& {
+                                    auto maybe_monomorph = [&](const HIR::TypeData* ty) -> const HIR::TypeData* {
                                         return resolve.monomorph_expand_opt(sp, tmp, ty, MonomorphStatePtr(state.m_crate.m_types, nullptr, &s_path.m_params, nullptr));
                                     };
                             TU_MATCH_HDRA( (str.m_data), {)
@@ -754,7 +754,7 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
 
                             MonomorphState ms(state.m_crate.m_types);
                             auto v = resolve.get_value(state.sp, fe, ms, true);
-                            auto maybe_monomorph = [&](const ::HIR::TypeRef& ty) -> const HIR::TypeRef& {
+                            auto maybe_monomorph = [&](const ::HIR::TypeData* ty) -> const HIR::TypeData* {
                                 return resolve.monomorph_expand_opt(state.sp, tmp, ty, ms);
                             };
 
@@ -805,7 +805,7 @@ void MIR_BorrowCheck_Crate(::HIR::Crate& crate) {
 #include "mir_operations.h"
 
 namespace {
-    ::HIR::TypeRef get_metadata_type(const ::MIR::TypeResolve& state, const ::HIR::TypeRef& unsized_ty) {
+    ::HIR::TypeRef get_metadata_type(const ::MIR::TypeResolve& state, const ::HIR::TypeData* unsized_ty) {
         static Span sp;
         auto& types = state.m_crate.m_types;
         if (const auto* tep = unsized_ty->opt_TraitObject()) {
@@ -1394,7 +1394,7 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
     }
 }
 
-void MIR_Validate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, const ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type) {
+void MIR_Validate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, const ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type) {
     TRACE_FUNCTION_F(path);
     Span sp;
     ::MIR::TypeResolve state {
@@ -1411,7 +1411,7 @@ void MIR_Validate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
         HIR::TypeRef ty_Self = types.self();
         HIR::PathParams empty_params_i = resolve.m_impl_generics ? resolve.m_impl_generics->make_nop_params(types, 0) : HIR::PathParams();
         HIR::PathParams empty_params_m = resolve.m_item_generics ? resolve.m_item_generics->make_nop_params(types, 1) : HIR::PathParams();
-        MonomorphStatePtr m(types, &ty_Self, resolve.m_impl_generics ? &empty_params_i : nullptr, resolve.m_item_generics ? &empty_params_m : nullptr);
+        MonomorphStatePtr m(types, ty_Self, resolve.m_impl_generics ? &empty_params_i : nullptr, resolve.m_item_generics ? &empty_params_m : nullptr);
         for (const auto& ty : fcn.locals) {
             DEBUG("_" << (&ty - fcn.locals.data()) << ": " << ty);
             if (!monomorphise_type_needed(ty)) {
@@ -1800,17 +1800,16 @@ void MIR_Validate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
                             TU_ARMA(DstMeta, e) {
                                 ::HIR::TypeRef tmp;
                                 const auto& ty = state.get_lvalue_type(tmp, e.val);
-                                const ::HIR::TypeRef* ity_p = nullptr;
-                                if ((ity_p = state.is_type_owned_box(ty)))
+                                const ::HIR::TypeData* ity = nullptr;
+                                if ((ity = state.is_type_owned_box(ty)))
                                     ;
                                 else if (ty->is_Borrow())
-                                    ity_p = &ty->as_Borrow().inner;
+                                    ity = ty->as_Borrow().inner;
                                 else if (ty->is_Pointer())
-                                    ity_p = &ty->as_Pointer().inner;
+                                    ity = ty->as_Pointer().inner;
                                 else {
                                     MIR_BUG(state, "DstMeta requires a &-ptr as input, got " << ty);
                                 }
-                                const auto& ity = *ity_p;
                                 HIR::TypeRef res_ty;
                                 if (ity->is_Generic() || (ity->is_Path() && ity->as_Path().binding.is_Opaque()))
                                     ;
@@ -1829,17 +1828,16 @@ void MIR_Validate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
                             TU_ARMA(DstPtr, e) {
                                 ::HIR::TypeRef tmp;
                                 const auto& ty = state.get_lvalue_type(tmp, e.val);
-                                const ::HIR::TypeRef* ity_p = nullptr;
-                                if ((ity_p = state.is_type_owned_box(ty)))
+                                const ::HIR::TypeData* ity = nullptr;
+                                if ((ity = state.is_type_owned_box(ty)))
                                     ;
                                 else if (ty->is_Borrow())
-                                    ity_p = &ty->as_Borrow().inner;
+                                    ity = ty->as_Borrow().inner;
                                 else if (ty->is_Pointer())
-                                    ity_p = &ty->as_Pointer().inner;
+                                    ity = ty->as_Pointer().inner;
                                 else {
                                     MIR_BUG(state, "DstPtr requires a &-ptr as input, got " << ty);
                                 }
-                                const auto& ity = *ity_p;
                                 if (ity->is_Slice() || (ity->is_Primitive() && ity->as_Primitive() == HIR::CoreType::Str))
                                     ;
                                 else if (ity->is_TraitObject())
@@ -1862,16 +1860,16 @@ void MIR_Validate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
                                     //MIR_ASSERT(state, monomorphise_type_needed(src_ty), "MakeDst Unsize with known source - " << src_ty);
                                     break;
                                 }
-                                const ::HIR::TypeRef* ity_p = nullptr;
+                                const ::HIR::TypeData* ity = nullptr;
                                 if (const auto* te = dst_ty->opt_Borrow())
-                                    ity_p = &te->inner;
+                                    ity = te->inner;
                                 else if (const auto* te = dst_ty->opt_Pointer())
-                                    ity_p = &te->inner;
+                                    ity = te->inner;
                                 else {
                                     MIR_BUG(state, "MakeDst requires a pointer as output, got " << dst_ty);
                                 }
-                                assert(ity_p);
-                                auto meta = get_metadata_type(state, *ity_p);
+                                assert(ity);
+                                auto meta = get_metadata_type(state, ity);
                                 if (meta == ::HIR::TypeRef()) {
                                     // In 1.90, this gets used for thin pointers too
                                     meta = types.unit();
@@ -1981,7 +1979,7 @@ void MIR_Validate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
 
                         ::HIR::TypeRef tmp1;
                         ::HIR::TypeRef tmp2;
-                        auto maybe_monomorph = [&](const ::HIR::TypeRef& ty) -> const ::HIR::TypeRef& {
+                        auto maybe_monomorph = [&](const ::HIR::TypeData* ty) -> const ::HIR::TypeData* {
                             if (true || monomorphise_type_needed(ty)) {
                                 tmp2 = out_params.monomorph_type(sp, ty);
                                 state.m_resolve.expand_associated_types(sp, tmp2);
@@ -2862,7 +2860,7 @@ void MIR_Validate_FullValState(::MIR::TypeResolve& mir_res, const ::MIR::Functio
     }
 }
 
-void MIR_Validate_Full(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, const ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type) {
+void MIR_Validate_Full(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, const ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type) {
     TRACE_FUNCTION_F(path);
     Span sp;
     ::MIR::TypeResolve state {
@@ -3026,7 +3024,7 @@ const EncodedLiteral* MIR_Cleanup_GetConstant(const MIR::TypeResolve& state, con
 namespace {
     const RcString rcstring_vtable = RcString::new_interned("vtable#");
 
-    bool type_accepts_all_bit_patterns(const Span& sp, const StaticTraitResolve& resolve, const HIR::TypeRef& ty) {
+    bool type_accepts_all_bit_patterns(const Span& sp, const StaticTraitResolve& resolve, const HIR::TypeData* ty) {
         if (const auto* primitive = ty->opt_Primitive()) {
             return *primitive != HIR::CoreType::Bool && *primitive != HIR::CoreType::Char && *primitive != HIR::CoreType::Str;
         }
@@ -3568,7 +3566,7 @@ namespace {
     return fcn_lval;
 }
 
-bool MIR_Cleanup_Unsize_GetMetadata(const ::MIR::TypeResolve& state, MirMutator& mutator, const ::HIR::TypeRef& dst_ty, const ::HIR::TypeRef& src_ty, const ::MIR::LValue& ptr_value, ::MIR::Param& out_meta_val, ::HIR::TypeRef& out_meta_ty, bool& out_src_is_dst) {
+bool MIR_Cleanup_Unsize_GetMetadata(const ::MIR::TypeResolve& state, MirMutator& mutator, const ::HIR::TypeData* dst_ty, const ::HIR::TypeData* src_ty, const ::MIR::LValue& ptr_value, ::MIR::Param& out_meta_val, ::HIR::TypeRef& out_meta_ty, bool& out_src_is_dst) {
     TU_MATCH_HDRA( (*dst_ty), { )
     default:
         MIR_TODO(state, "Obtain metadata converting to " << dst_ty);
@@ -3664,7 +3662,7 @@ bool MIR_Cleanup_Unsize_GetMetadata(const ::MIR::TypeResolve& state, MirMutator&
     throw "";
 }
 
-::MIR::RValue MIR_Cleanup_Unsize(const ::MIR::TypeResolve& state, MirMutator& mutator, const ::HIR::TypeRef& dst_ty, const ::HIR::TypeRef& src_ty_inner, ::MIR::LValue ptr_value) {
+::MIR::RValue MIR_Cleanup_Unsize(const ::MIR::TypeResolve& state, MirMutator& mutator, const ::HIR::TypeData* dst_ty, const ::HIR::TypeData* src_ty_inner, ::MIR::LValue ptr_value) {
     const auto& dst_ty_inner = (dst_ty->is_Borrow() ? dst_ty->as_Borrow().inner : dst_ty->as_Pointer().inner);
 
     ::HIR::TypeRef meta_type;
@@ -3686,7 +3684,7 @@ bool MIR_Cleanup_Unsize_GetMetadata(const ::MIR::TypeResolve& state, MirMutator&
     }
 }
 
-::MIR::RValue MIR_Cleanup_CoerceUnsized(const ::MIR::TypeResolve& state, MirMutator& mutator, const ::HIR::TypeRef& dst_ty, const ::HIR::TypeRef& src_ty, ::MIR::LValue value) {
+::MIR::RValue MIR_Cleanup_CoerceUnsized(const ::MIR::TypeResolve& state, MirMutator& mutator, const ::HIR::TypeData* dst_ty, const ::HIR::TypeData* src_ty, ::MIR::LValue value) {
     TRACE_FUNCTION_F(dst_ty << " <- " << src_ty << " ( " << value << " )");
     //  > Path -> Path = Unsize
     // (path being destination is otherwise invalid)
@@ -3822,21 +3820,21 @@ void MIR_Cleanup_LValue(const ::MIR::TypeResolve& state, MirMutator& mutator, ::
                 const auto& te = typ->as_Path();
                 MIR_ASSERT(state, te.binding.is_Struct(), "Box contained a non-struct");
                 const auto& str = *te.binding.as_Struct();
-                const ::HIR::TypeRef* ty_tpl = nullptr;
+                const ::HIR::TypeData* ty_tpl = nullptr;
                 TU_MATCH_HDRA( (str.m_data), {)
                 TU_ARMA(Unit, se) {
                         MIR_BUG(state, "Box contained a unit-like struct");
                     }
                     TU_ARMA(Tuple, se) {
                         MIR_ASSERT(state, se.size() > 0, "Box contained an empty tuple struct");
-                        ty_tpl = &se[0].ent;
+                        ty_tpl = se[0].ent;
                     }
                     TU_ARMA(Named, se) {
                         MIR_ASSERT(state, se.size() > 0, "Box contained an empty named struct");
-                        ty_tpl = &se[0].ty;
+                        ty_tpl = se[0].ty;
                     }
                 }
-                tmp = MonomorphStatePtr(state.m_crate.m_types, nullptr, &te.path.m_data.as_Generic().m_params, nullptr).monomorph_type(state.sp, *ty_tpl);
+                tmp = MonomorphStatePtr(state.m_crate.m_types, nullptr, &te.path.m_data.as_Generic().m_params, nullptr).monomorph_type(state.sp, ty_tpl);
                 typ = tmp;
 
                 num_injected_fld_zeros ++;
@@ -3907,7 +3905,7 @@ void MIR_Cleanup_Param(const ::MIR::TypeResolve& state, MirMutator& mutator, ::M
     }
 }
 
-void MIR_Cleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type) {
+void MIR_Cleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type) {
     Span sp;
     TRACE_FUNCTION_F(path);
     ::MIR::TypeResolve state {
@@ -4011,16 +4009,16 @@ void MIR_Cleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                             // If the type is an array (due to a monomorpised generic?) then replace.
                             ::HIR::TypeRef tmp;
                             const auto& ty = state.get_lvalue_type(tmp, re.val);
-                            const ::HIR::TypeRef* ity_p;
+                            const ::HIR::TypeData* ity_p;
                             if (const auto* te = ty->opt_Borrow()) {
-                                ity_p = &te->inner;
+                                ity_p = te->inner;
                             } else if (const auto* te = ty->opt_Pointer()) {
-                                ity_p = &te->inner;
+                                ity_p = te->inner;
                             }
                             // NOTE: This can happen with calling a by-value method on a trait object, e.g. `<dyn Foo as FnOnce>::call_once`
                             // - That is handled with magic in trans, so needs magic here (for inlining)
                             else if (ty->is_TraitObject()) {
-                                ity_p = &ty;
+                                ity_p = ty;
                                 // Remove the deref so downstream doesn't need to care
                                 MIR_ASSERT(state, !re.val.m_wrappers.empty() && re.val.m_wrappers.back().is_Deref(), "DstMeta on bare trait object with no deref: " << re.val);
                                 re.val.m_wrappers.pop_back();
@@ -4037,16 +4035,16 @@ void MIR_Cleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
 
                             ::HIR::TypeRef tmp;
                             const auto& ty = state.get_lvalue_type(tmp, re.val);
-                            const ::HIR::TypeRef* ity_p;
+                            const ::HIR::TypeData* ity_p;
                             if (const auto* te = ty->opt_Borrow()) {
-                                ity_p = &te->inner;
+                                ity_p = te->inner;
                             } else if (const auto* te = ty->opt_Pointer()) {
-                                ity_p = &te->inner;
+                                ity_p = te->inner;
                             }
                             // NOTE: This can happen with calling a by-value method on a trait object, e.g. `<dyn Foo as FnOnce>::call_once`
                             // - That is handled with magic in trans, so needs magic here (for inlining)
                             else if (ty->is_TraitObject()) {
-                                ity_p = &ty;
+                                ity_p = ty;
                                 // Remove the deref so downstream doesn't need to care
                                 MIR_ASSERT(state, !re.val.m_wrappers.empty() && re.val.m_wrappers.back().is_Deref(), "DstPtr on bare trait object with no deref: " << re.val);
                                 re.val.m_wrappers.pop_back();
@@ -4375,7 +4373,7 @@ static bool check_after_all() {
 /// - Runs only the mandatory-inlining hook, not normal cost-based inlining
 /// - Simplifies the call graph (by removing chained gotos)
 /// - Sorts blocks into a rough flow order
-void MIR_OptimiseMin(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type) {
+void MIR_OptimiseMin(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type) {
     static Span sp;
     TRACE_FUNCTION_F(path);
     ::MIR::TypeResolve state {
@@ -4414,7 +4412,7 @@ void MIR_OptimiseMin(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
 /// Perfom inlining only, using a list of monomorphised functions, then cleans up the flow graph
 ///
 /// Returns true if any optimisation was performed
-bool MIR_OptimiseInline(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type, const TransList& list, unsigned opt_level) {
+bool MIR_OptimiseInline(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type, const TransList& list, unsigned opt_level) {
     static Span sp;
     bool rv = false;
     TRACE_FUNCTION_FR(path, rv);
@@ -4437,7 +4435,7 @@ bool MIR_OptimiseInline(const StaticTraitResolve& resolve, const ::HIR::ItemPath
     return rv;
 }
 
-void MIR_Optimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeRef& ret_type, unsigned opt_level, bool do_inline /*=true*/, bool validate /*=true*/) {
+void MIR_Optimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type, unsigned opt_level, bool do_inline /*=true*/, bool validate /*=true*/) {
     static Span sp;
     assert(opt_level > 0);
     TRACE_FUNCTION_F(path);
@@ -4958,7 +4956,7 @@ namespace {
     struct ParamsSet: public MonomorphiserPP {
         ::HIR::PathParams impl_params;
         const ::HIR::PathParams* fcn_params;
-        const ::HIR::TypeRef* self_ty;
+        const ::HIR::TypeData* self_ty;
         const ::HIR::GenericParams* impl_params_def;
         const ::HIR::GenericParams* fcn_params_def;
 
@@ -4973,7 +4971,7 @@ namespace {
         {
         }
 
-        const ::HIR::TypeRef* get_self_type() const override {
+        const ::HIR::TypeData* get_self_type() const override {
             return self_ty;
         }
 
@@ -5043,10 +5041,10 @@ namespace {
                 params.self_ty = nullptr;
             }
             TU_ARMA(UfcsKnown, pe) {
-                params.self_ty = &pe.type;
+                params.self_ty = pe.type;
             }
             TU_ARMA(UfcsInherent, pe) {
-                params.self_ty = &pe.type;
+                params.self_ty = pe.type;
             }
             TU_ARMA(UfcsUnknown, pe) {
                 MIR_BUG(state, "UfcsUnknown hit - " << path);
@@ -5595,7 +5593,7 @@ bool MIR_Optimise_Inlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool
             return this->df_base + f;
         }
 
-        const HIR::TypeRef& value_generic_type(HIR::GenericRef ce) const override {
+        const HIR::TypeData* value_generic_type(HIR::GenericRef ce) const override {
             const HIR::GenericParams* p;
             switch (ce.group()) {
                 case 0: // impl level
@@ -7467,7 +7465,7 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
             // NOTE: libarena assumes that this returns `true` iff T doesn't require drop glue.
             const auto& ty = tef.params.m_types.at(0);
             // - Only expand at this stage if there's no generics, and no unbound paths
-            if (!visit_ty_with(ty, [](const ::HIR::TypeRef& ty) -> bool {
+            if (!visit_ty_with(ty, [](const ::HIR::TypeData* ty) -> bool {
                 return ty->is_Generic() || TU_TEST1(*ty, Path, .binding.is_Unbound());
             })) {
                 bool needs_drop = state.m_resolve.type_needs_drop_glue(state.sp, ty);

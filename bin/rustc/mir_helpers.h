@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <functional>
+#include <type_traits>
 #include "hir_typeck_static.h"
 #include "mir_mir.h"
 
@@ -70,12 +71,12 @@ namespace MIR {
         ::FmtLambda m_path;
 
     public:
-        const ::HIR::TypeRef& m_ret_type;
+        const ::HIR::TypeData* m_ret_type;
         const args_t& m_args;
         const ::MIR::Function& m_fcn;
 
         // If set, these override the list in `m_fcn`
-        const ::HIR::TypeRef* m_monomorphed_rettype;
+        const ::HIR::TypeData* m_monomorphed_rettype;
         const ::std::vector<::HIR::TypeRef>* m_monomorphed_locals;
 
     private:
@@ -85,7 +86,7 @@ namespace MIR {
         unsigned int stmt_idx = 0;
 
     public:
-        TypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const ::HIR::TypeRef& ret_type, const args_t& args, const ::MIR::Function& fcn)
+        TypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const ::HIR::TypeData* ret_type, const args_t& args, const ::MIR::Function& fcn)
             : sp(sp)
             , m_resolve(resolve)
             , m_crate(resolve.m_crate)
@@ -149,34 +150,34 @@ namespace MIR {
 
         const ::MIR::BasicBlock& get_block(::MIR::BasicBlockId id) const;
 
-        const ::HIR::TypeRef& get_static_type(::HIR::TypeRef& tmp, const ::HIR::Path& path) const;
-        const ::HIR::TypeRef& get_lvalue_type(::HIR::TypeRef& tmp, const ::MIR::LValue& val, unsigned wrapper_skip_count = 0) const;
+        const ::HIR::TypeData* get_static_type(::HIR::TypeRef& tmp, const ::HIR::Path& path) const;
+        const ::HIR::TypeData* get_lvalue_type(::HIR::TypeRef& tmp, const ::MIR::LValue& val, unsigned wrapper_skip_count = 0) const;
 
-        const ::HIR::TypeRef& get_lvalue_type(::HIR::TypeRef& tmp, const ::MIR::LValue::CRef& val) const {
+        const ::HIR::TypeData* get_lvalue_type(::HIR::TypeRef& tmp, const ::MIR::LValue::CRef& val) const {
             return get_lvalue_type(tmp, val.lv(), val.lv().m_wrappers.size() - val.wrapper_count());
         }
 
-        const ::HIR::TypeRef& get_lvalue_type(::HIR::TypeRef& tmp, const ::MIR::LValue::MRef& val) const {
+        const ::HIR::TypeData* get_lvalue_type(::HIR::TypeRef& tmp, const ::MIR::LValue::MRef& val) const {
             return get_lvalue_type(tmp, val.lv(), val.lv().m_wrappers.size() - val.wrapper_count());
         }
 
-        const ::HIR::TypeRef& get_unwrapped_type(::HIR::TypeRef& tmp, const ::MIR::LValue::Wrapper& w, const ::HIR::TypeRef& ty) const;
-        const ::HIR::TypeRef& get_param_type(::HIR::TypeRef& tmp, const ::MIR::Param& val) const;
+        const ::HIR::TypeData* get_unwrapped_type(::HIR::TypeRef& tmp, const ::MIR::LValue::Wrapper& w, const ::HIR::TypeData* ty) const;
+        const ::HIR::TypeData* get_param_type(::HIR::TypeRef& tmp, const ::MIR::Param& val) const;
 
         ::HIR::TypeRef get_const_type(const ::MIR::Constant& c) const;
 
         bool lvalue_is_copy(const ::MIR::LValue& val) const;
-        const ::HIR::TypeRef* is_type_owned_box(const ::HIR::TypeRef& ty) const;
+        const ::HIR::TypeData* is_type_owned_box(const ::HIR::TypeData* ty) const;
 
         /// @brief Handler for the `offset_of` intrinsic
         /// @param ty Type
         /// @param params Field names (must be Const::String)
         /// @return Offset in bytes
-        size_t intrinsic_offset_of(const ::HIR::TypeRef& ty, const ::std::vector<MIR::Param>& params) const;
+        size_t intrinsic_offset_of(const ::HIR::TypeData* ty, const ::std::vector<MIR::Param>& params) const;
         /// @brief Handler for the `type_name` intrinsic, strips out mrustc's helper comments
         /// @param ty Type
         /// @return Clean string form of the type
-        std::string intrinsic_type_name(const ::HIR::TypeRef& ty) const;
+        std::string intrinsic_type_name(const ::HIR::TypeData* ty) const;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const TypeResolve& x) {
             x.fmt_pos(os);
@@ -271,7 +272,13 @@ namespace MIR {
         template <template <typename> class Dec>
         class VisitorBase {
         public:
-            virtual void visit_type(typename Dec<::HIR::TypeRef>::Type& t) {
+            using TypeVisitArg = ::std::conditional_t<
+                ::std::is_const_v<typename Dec<int>::Type>,
+                ::HIR::TypeRef,
+                ::HIR::TypeRef&
+            >;
+
+            virtual void visit_type(TypeVisitArg t) {
                 // NOTE: Doesn't recurse
             }
 

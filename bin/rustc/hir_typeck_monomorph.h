@@ -12,7 +12,7 @@ static inline bool monomorphise_genericpath_needed(const ::HIR::GenericPath& tpl
 
 extern bool monomorphise_path_needed(const ::HIR::Path& tpl, bool ignore_lifetimes = false);
 extern bool monomorphise_traitpath_needed(const ::HIR::TraitPath& tpl, bool ignore_lifetimes = false);
-extern bool monomorphise_type_needed(const ::HIR::TypeRef& tpl, bool ignore_lifetimes = false);
+extern bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes = false);
 
 class Monomorphiser: virtual public HIR::TrackHrbStack {
 protected:
@@ -43,7 +43,7 @@ public:
     virtual ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& g) const = 0;
     virtual ::HIR::LifetimeRef get_lifetime(const Span& sp, const ::HIR::GenericRef& g) const = 0;
 
-    virtual ::HIR::TypeRef monomorph_type(const Span& sp, const ::HIR::TypeRef& ty, bool allow_infer = true) const;
+    virtual ::HIR::TypeRef monomorph_type(const Span& sp, const ::HIR::TypeData* ty, bool allow_infer = true) const;
     virtual ::HIR::LifetimeRef monomorph_lifetime(const Span& sp, const ::HIR::LifetimeRef& tpl) const;
     ::HIR::Path monomorph_path(const Span& sp, const ::HIR::Path& tpl, bool allow_infer = true) const;
     ::HIR::TraitPath monomorph_traitpath(const Span& sp, const ::HIR::TraitPath& tpl, bool allow_infer, bool ignore_hrls = false) const;
@@ -54,7 +54,7 @@ public:
     ::HIR::ConstGeneric monomorph_constgeneric(const Span& sp, const ::HIR::ConstGeneric& val, bool allow_infer) const;
     ::HIR::ArraySize monomorph_arraysize(const Span& sp, const ::HIR::ArraySize& tpl) const;
 
-    const ::HIR::TypeRef& maybe_monomorph_type(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeRef& ty, bool allow_infer = true) const {
+    const ::HIR::TypeData* maybe_monomorph_type(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* ty, bool allow_infer = true) const {
         if (monomorphise_type_needed(ty)) {
             return tmp = monomorph_type(sp, ty, allow_infer);
         } else {
@@ -67,7 +67,7 @@ class MonomorphiserPP: public Monomorphiser {
 public:
     explicit MonomorphiserPP(HIR::TypeInterner& types): Monomorphiser(types) {}
 
-    virtual const ::HIR::TypeRef* get_self_type() const = 0;
+    virtual const ::HIR::TypeData* get_self_type() const = 0;
     virtual const ::HIR::PathParams* get_impl_params() const = 0;
     virtual const ::HIR::PathParams* get_method_params() const = 0;
     virtual const ::HIR::PathParams* get_hrb_params() const = 0;
@@ -95,7 +95,7 @@ public:
 };
 
 // Wrappers to only monomorphise if required
-static inline const ::HIR::TypeRef& monomorphise_type_with_opt(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeRef& tpl, const Monomorphiser& mono, bool allow_infer = true) {
+static inline const ::HIR::TypeData* monomorphise_type_with_opt(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* tpl, const Monomorphiser& mono, bool allow_infer = true) {
     return (monomorphise_type_needed(tpl) ? tmp = mono.monomorph_type(sp, tpl, allow_infer) : tpl);
 }
 
@@ -117,7 +117,7 @@ static inline const ::HIR::PathParams& monomorphise_pathparams_with_opt(const Sp
 
 // Helper for passing a group of params around
 struct MonomorphStatePtr: public MonomorphiserPP {
-    const ::HIR::TypeRef* self_ty;
+    const ::HIR::TypeData* self_ty;
     const ::HIR::PathParams* pp_impl;
     const ::HIR::PathParams* pp_method;
     //const ::HIR::PathParams*    pp_placeholder;
@@ -132,7 +132,7 @@ struct MonomorphStatePtr: public MonomorphiserPP {
     {
     }
 
-    MonomorphStatePtr(HIR::TypeInterner& types, const ::HIR::TypeRef* self_ty, const ::HIR::PathParams* params_i, const ::HIR::PathParams* params_m, const ::HIR::PathParams* params_p = nullptr, const ::HIR::PathParams* params_h = nullptr)
+    MonomorphStatePtr(HIR::TypeInterner& types, const ::HIR::TypeData* self_ty, const ::HIR::PathParams* params_i, const ::HIR::PathParams* params_m, const ::HIR::PathParams* params_p = nullptr, const ::HIR::PathParams* params_h = nullptr)
         : MonomorphiserPP(types)
         , self_ty(self_ty)
         , pp_impl(params_i)
@@ -160,7 +160,7 @@ struct MonomorphStatePtr: public MonomorphiserPP {
         return *this;
     }
 
-    const ::HIR::TypeRef* get_self_type() const override {
+    const ::HIR::TypeData* get_self_type() const override {
         return self_ty;
     }
 
@@ -265,8 +265,8 @@ struct MonomorphState: public MonomorphiserPP {
         return (pp_method && pp_method->has_params()) || (pp_impl && pp_impl->has_params());
     }
 
-    const ::HIR::TypeRef* get_self_type() const override {
-        return &self_ty;
+    const ::HIR::TypeData* get_self_type() const override {
+        return self_ty;
     }
 
     const ::HIR::PathParams* get_impl_params() const override {

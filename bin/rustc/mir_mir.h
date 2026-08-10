@@ -1092,7 +1092,7 @@ namespace MIR {
             return f;
         }
 
-        virtual const HIR::TypeRef& value_generic_type(HIR::GenericRef ce) const;
+        virtual const HIR::TypeData* value_generic_type(HIR::GenericRef ce) const;
         virtual const Monomorphiser& monomorphiser() const;
 
         virtual const StaticTraitResolve* resolve() const {
@@ -1113,7 +1113,7 @@ namespace MIR {
         ::std::vector<::MIR::LValue> clone_lval_vec(const ::std::vector<::MIR::LValue>& src) const;
 
         // -- Monomorphise various types
-        ::HIR::TypeRef monomorph(const ::HIR::TypeRef& x) const;
+        ::HIR::TypeRef monomorph(const ::HIR::TypeData* x) const;
         ::HIR::GenericPath monomorph(const ::HIR::GenericPath& x) const;
         ::HIR::Path monomorph(const ::HIR::Path& x) const;
         ::HIR::PathParams monomorph(const ::HIR::PathParams& x) const;

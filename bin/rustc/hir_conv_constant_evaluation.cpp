@@ -36,7 +36,7 @@ namespace {
         }
     };
 
-    EncodedLiteral evaluate_constgeneric(const Span& sp, const ::HIR::Crate& crate, const HIR::TypeRef& type, const ::HIR::ConstGeneric_Unevaluated& value) {
+    EncodedLiteral evaluate_constgeneric(const Span& sp, const ::HIR::Crate& crate, const HIR::TypeData* type, const ::HIR::ConstGeneric_Unevaluated& value) {
         const auto& expr = *value.expr;
         ASSERT_BUG(sp, expr.m_state, "Const-generic expression has no state");
         const auto& state = *expr.m_state;
@@ -142,7 +142,7 @@ namespace MIR {
         /// Mutable allocation
         class AllocationPtr final: public EvalPtr<Allocation> {
         public:
-            static AllocationPtr allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeRef& ty);
+            static AllocationPtr allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeData* ty);
             static AllocationPtr allocate_ro(stl::ObjPool* pool, const void* data, size_t len);
         };
 
@@ -364,7 +364,7 @@ namespace MIR {
             std::vector<Reloc> relocations;
             uint8_t* data;
 
-            Allocation(uint8_t* data, size_t len, const ::HIR::TypeRef& ty)
+            Allocation(uint8_t* data, size_t len, const ::HIR::TypeData* ty)
                 : length(len)
                 , is_readonly(false)
                 , m_type(ty)
@@ -529,7 +529,7 @@ namespace MIR {
                 }
             }
 
-            const ::HIR::TypeRef& get_type() const {
+            const ::HIR::TypeData* get_type() const {
                 return m_type;
             }
 
@@ -908,7 +908,7 @@ namespace MIR {
         }
 
         // ---
-        AllocationPtr AllocationPtr::allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeRef& ty) {
+        AllocationPtr AllocationPtr::allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeData* ty) {
             size_t len;
             if (!Target_GetSizeOf(Span(), resolve, ty, len)) {
                 throw Defer();
@@ -1082,7 +1082,7 @@ namespace {
             return TypeInfo{Other, 0};
         }
 
-        static TypeInfo for_type(const ::HIR::TypeRef& ty) {
+        static TypeInfo for_type(const ::HIR::TypeData* ty) {
             if (!ty->is_Primitive()) {
                 return TypeInfo{Other, 0};
             }
@@ -1191,15 +1191,15 @@ namespace MIR {
                     locals.push_back(AllocationPtr::allocate(value_pool, root_resolve, state, local_types.back()));
                 }
 
-                state.m_monomorphed_rettype = &ret_type;
+                state.m_monomorphed_rettype = ret_type;
                 state.m_monomorphed_locals = &local_types;
             }
 
-            HIR::TypeRef monomorph_expand(const HIR::TypeRef& ty) const {
+            HIR::TypeRef monomorph_expand(const HIR::TypeData* ty) const {
                 return this->resolve.monomorph_expand(this->state.sp, ty, this->ms);
             }
 
-            unsigned read_enum_variant(const HIR::TypeRef& ty, ValueRef value) const {
+            unsigned read_enum_variant(const HIR::TypeData* ty, ValueRef value) const {
                 auto* repr = Target_GetTypeRepr(state.sp, root_resolve, ty);
                 MIR_ASSERT(state, repr, "No representation for enum " << ty);
 
@@ -1258,7 +1258,7 @@ namespace MIR {
                 return allocation_reachable_from(retval.operator->(), target, visited);
             }
 
-            bool value_needs_non_const_drop(const HIR::TypeRef& ty, ValueRef value) const {
+            bool value_needs_non_const_drop(const HIR::TypeData* ty, ValueRef value) const {
                 if (!root_resolve.type_needs_drop_glue(state.sp, ty)) {
                     return false;
                 }
@@ -1466,23 +1466,23 @@ namespace MIR {
 
             ValueRef get_lval(const ::MIR::LValue& lv, ValueRef* meta = nullptr) {
                 ::HIR::TypeRef tmp_ty;
-                const ::HIR::TypeRef* typ = nullptr;
+                const ::HIR::TypeData* typ = nullptr;
                 ValueRef metadata;
                 ValueRef val;
                 //TRACE_FUNCTION_FR(lv, val);
             TU_MATCH_HDRA( (lv.m_root), {)
             TU_ARMA(Return, e) {
-                        typ = &ret_type;
+                        typ = ret_type;
                         val = ValueRef(retval);
                     }
                     TU_ARMA(Local, e) {
                         MIR_ASSERT(state, e < locals.size(), "Local index out of range - " << e << " >= " << locals.size());
-                        typ = &local_types[e];
+                        typ = local_types[e];
                         val = ValueRef(locals[e]);
                     }
                     TU_ARMA(Argument, e) {
                         MIR_ASSERT(state, e < args.size(), "Argument index out of range - " << e << " >= " << args.size());
-                        typ = &state.m_args[e].second;
+                        typ = state.m_args[e].second;
                         val = ValueRef(args[e]);
                     }
                     TU_ARMA(Static, e) {
@@ -1490,24 +1490,24 @@ namespace MIR {
                         if (!lv.m_wrappers.empty()) {
                             MIR_ASSERT(state, tmp_ty != HIR::TypeRef(), "Type not set?");
                         }
-                        typ = &tmp_ty;
+                        typ = tmp_ty;
                     }
             }
 
             for(const auto& w : lv.m_wrappers)
             {
                     MIR_ASSERT(state, typ, "Type not set when unwrapping - " << lv);
-                    DEBUG(w << " " << val << ": " << *typ);
+                    DEBUG(w << " " << val << ": " << typ);
                 TU_MATCH_HDRA( (w), {)
                 TU_ARMA(Field, e) {
-                            if ((*typ)->is_Slice() || (*typ)->is_Array()) {
+                            if (typ->is_Slice() || typ->is_Array()) {
                                 // Check the inner type
                                 size_t size;
-                                if (const auto* te = (*typ)->opt_Array()) {
-                                    typ = &te->inner;
+                                if (const auto* te = typ->opt_Array()) {
+                                    typ = te->inner;
                                     size = te->size.as_Known();
-                                } else if (const auto* te = (*typ)->opt_Slice()) {
-                                    typ = &te->inner;
+                                } else if (const auto* te = typ->opt_Slice()) {
+                                    typ = te->inner;
                                     // Get metadata
                                     size = metadata.read_usize(state);
                                 } else {
@@ -1515,10 +1515,10 @@ namespace MIR {
                                 }
                                 metadata = ValueRef();
                                 size_t sz, al;
-                                if (!Target_GetSizeAndAlignOf(state.sp, root_resolve, *typ, sz, al)) {
+                                if (!Target_GetSizeAndAlignOf(state.sp, root_resolve, typ, sz, al)) {
                                     throw Defer();
                                 }
-                                MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << *typ);
+                                MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << typ);
                                 size_t index = e;
                                 // HACK: Allow one-past-end for `[foo, ref bar @ ...]` support
                                 if (index == size) {
@@ -1529,17 +1529,17 @@ namespace MIR {
                                 }
                                 continue;
                             }
-                            auto* repr = Target_GetTypeRepr(state.sp, this->root_resolve, *typ);
-                            MIR_ASSERT(state, repr, "No repr for " << *typ);
+                            auto* repr = Target_GetTypeRepr(state.sp, this->root_resolve, typ);
+                            MIR_ASSERT(state, repr, "No repr for " << typ);
                             MIR_ASSERT(state, e < repr->fields.size(), "LValue::Field index out of range");
                             if (repr->size != SIZE_MAX) {
                                 metadata = ValueRef();
                             }
                             auto ofs = repr->fields[e].offset;
-                            typ = &repr->fields[e].ty;
+                            typ = repr->fields[e].ty;
 
                             size_t sz, al;
-                            if (!Target_GetSizeAndAlignOf(state.sp, root_resolve, *typ, sz, al)) {
+                            if (!Target_GetSizeAndAlignOf(state.sp, root_resolve, typ, sz, al)) {
                                 throw Defer();
                             }
                             if (sz == SIZE_MAX) {
@@ -1550,16 +1550,16 @@ namespace MIR {
                         }
                         TU_ARMA(Deref, e) {
                             //
-                            if (const auto* te = (*typ)->opt_Pointer()) {
-                                typ = &te->inner;
-                            } else if (const auto* te = (*typ)->opt_Borrow()) {
-                                typ = &te->inner;
+                            if (const auto* te = typ->opt_Pointer()) {
+                                typ = te->inner;
+                            } else if (const auto* te = typ->opt_Borrow()) {
+                                typ = te->inner;
                             } else {
-                                MIR_BUG(state, "Deref of unsupported type - " << *typ);
+                                MIR_BUG(state, "Deref of unsupported type - " << typ);
                             }
                             // If the inner type is unsized
                             size_t sz, al;
-                            if (!Target_GetSizeAndAlignOf(state.sp, root_resolve, *typ, sz, al)) {
+                            if (!Target_GetSizeAndAlignOf(state.sp, root_resolve, typ, sz, al)) {
                                 throw Defer();
                             }
                             if (sz == SIZE_MAX) {
@@ -1570,7 +1570,7 @@ namespace MIR {
                             auto p = val.read_ptr(state);
                             MIR_ASSERT(state, p.first >= EncodedLiteral::PTR_BASE, "Null (<PTR_BASE) pointer deref");
                             MIR_ASSERT(state, p.first % al == 0, "Unaligned pointer deref");
-                            DEBUG("> " << ValueRef(p.second) << " - o=" << (p.first - EncodedLiteral::PTR_BASE) << " sz=" << sz << " " << *typ);
+                            DEBUG("> " << ValueRef(p.second) << " - o=" << (p.first - EncodedLiteral::PTR_BASE) << " sz=" << sz << " " << typ);
                             // TODO: Determine size using metadata?
                             if (sz == SIZE_MAX) {
                                 val = ValueRef(p.second, p.first - EncodedLiteral::PTR_BASE);
@@ -1581,36 +1581,36 @@ namespace MIR {
                         TU_ARMA(Index, e) {
                             // Check the inner type
                             size_t size;
-                            if (const auto* te = (*typ)->opt_Array()) {
-                                typ = &te->inner;
+                            if (const auto* te = typ->opt_Array()) {
+                                typ = te->inner;
                                 size = te->size.as_Known();
-                            } else if (const auto* te = (*typ)->opt_Slice()) {
-                                typ = &te->inner;
+                            } else if (const auto* te = typ->opt_Slice()) {
+                                typ = te->inner;
                                 // Get metadata
                                 size = metadata.read_usize(state);
                             } else {
-                                MIR_BUG(state, "Index of unsupported type - " << *typ);
+                                MIR_BUG(state, "Index of unsupported type - " << typ);
                             }
                             metadata = ValueRef();
                             size_t sz, al;
-                            if (!Target_GetSizeAndAlignOf(state.sp, root_resolve, *typ, sz, al)) {
+                            if (!Target_GetSizeAndAlignOf(state.sp, root_resolve, typ, sz, al)) {
                                 throw Defer();
                             }
-                            MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << *typ);
+                            MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << typ);
                             MIR_ASSERT(state, e < locals.size(), "LValue::Index index local out of range");
                             size_t index = ValueRef(locals[e]).read_usize(state);
                             MIR_ASSERT(state, index < size, "LValue::Index index out of range - " << index << " >= " << size);
                             val = val.slice(index * sz, sz);
                         }
                         TU_ARMA(Downcast, e) {
-                            auto* repr = Target_GetTypeRepr(state.sp, this->root_resolve, *typ);
-                            MIR_ASSERT(state, repr, "No repr for " << *typ);
+                            auto* repr = Target_GetTypeRepr(state.sp, this->root_resolve, typ);
+                            MIR_ASSERT(state, repr, "No repr for " << typ);
                             MIR_ASSERT(state, e < repr->fields.size(), "LValue::Downcast index out of range");
                             if (repr->size != SIZE_MAX) {
                                 metadata = ValueRef();
                             }
-                            typ = &repr->fields[e].ty;
-                            val = val.slice(repr->fields[e].offset, size_of_or_bug(*typ));
+                            typ = repr->fields[e].ty;
+                            val = val.slice(repr->fields[e].offset, size_of_or_bug(typ));
                         }
                 }
             }
@@ -1900,7 +1900,7 @@ namespace MIR {
             abort();
             }
 
-            size_t size_of_or_bug(const ::HIR::TypeRef& ty) const {
+            size_t size_of_or_bug(const ::HIR::TypeData* ty) const {
                 size_t rv;
                 if (!Target_GetSizeOf(state.sp, root_resolve, ty, /*out*/ rv)) {
                     MIR_BUG(state, "No size for " << ty);
@@ -1913,7 +1913,7 @@ namespace MIR {
 } // namespace ::MIR::eval
 
 namespace {
-    ::std::pair<::MIR::eval::ValueRef, ::MIR::eval::ValueRef> get_tuple_t_bool(const ::MIR::eval::CallStackEntry& local_state, ::MIR::eval::ValueRef& src, const HIR::TypeRef& t) {
+    ::std::pair<::MIR::eval::ValueRef, ::MIR::eval::ValueRef> get_tuple_t_bool(const ::MIR::eval::CallStackEntry& local_state, ::MIR::eval::ValueRef& src, const HIR::TypeData* t) {
         auto tuple_t = local_state.root_resolve.m_crate.m_types.tuple({t, local_state.root_resolve.m_crate.m_types.primitive(::HIR::CoreType::Bool)});
         auto* repr = Target_GetTypeRepr(local_state.state.sp, local_state.root_resolve, tuple_t);
         MIR_ASSERT(local_state.state, repr, "No repr for " << tuple_t);
@@ -1923,7 +1923,7 @@ namespace {
 
     bool do_arith_checked(
         ::MIR::eval::CallStackEntry& local_state,
-        const HIR::TypeRef& ty,
+        const HIR::TypeData* ty,
         ::MIR::eval::ValueRef& dst,
         const ::MIR::Param& val_l,
         ::MIR::eBinOp op,
@@ -3558,7 +3558,7 @@ namespace HIR {
         }
     }
 
-    EncodedLiteral Evaluator::allocation_to_encoded(const ::HIR::TypeRef& ty, const ::MIR::eval::Allocation& a) {
+    EncodedLiteral Evaluator::allocation_to_encoded(const ::HIR::TypeData* ty, const ::MIR::eval::Allocation& a) {
         //const auto* a_bytes = a.get_bytes(0, a.size(), true);
         const auto* a_bytes = a.get_bytes(0, a.size(), false); // NOTE: Read the uninitialised bytes (they _should_ be zeroes)
         ASSERT_BUG(this->root_span, a_bytes, "Unable to get entire allocation - " << FMT_CB(ss, a.fmt(ss, 0, a.size())));
@@ -3797,7 +3797,7 @@ namespace {
             m_monomorph_state.pp_impl = nullptr;
         }
 
-        void evalulate_const_generic(const Span& sp, const ::HIR::TypeRef& ty, ::HIR::ConstGeneric& v) {
+        void evalulate_const_generic(const Span& sp, const ::HIR::TypeData* ty, ::HIR::ConstGeneric& v) {
             if (v.is_Unevaluated()) {
                 const auto& e = *v.as_Unevaluated()->expr;
                 auto name = FMT("param_" << &v << "#");
@@ -4340,7 +4340,7 @@ void ConvertHIR_ConstantEvaluate_Constant(const ::HIR::Crate& crate, const ::HIR
     exp.visit_constant(ip, e);
 }
 
-void ConvertHIR_ConstantEvaluate_ConstGeneric(const Span& sp, const ::HIR::Crate& crate, const HIR::TypeRef& ty, ::HIR::ConstGeneric& cg) {
+void ConvertHIR_ConstantEvaluate_ConstGeneric(const Span& sp, const ::HIR::Crate& crate, const HIR::TypeData* ty, ::HIR::ConstGeneric& cg) {
     if (auto* cge_p = cg.opt_Unevaluated()) {
         const auto& cge = *cge_p;
         try {
@@ -4358,7 +4358,7 @@ void ConvertHIR_ConstantEvaluate_ConstGeneric(const Span& sp, const ::HIR::Crate
         ms.pp_impl = &(*value)->params_impl;
         ms.pp_method = &(*value)->params_item;
         auto type = ms.monomorph_type(sp, expr->m_res_type);
-        if (visit_ty_with(type, [](const HIR::TypeRef& t) {
+        if (visit_ty_with(type, [](const HIR::TypeData* t) {
             return t->is_Infer();
         })) {
             return;
@@ -4381,7 +4381,7 @@ void ConvertHIR_ConstantEvaluate_ArraySize(const Span& sp, const ::HIR::Crate& c
 namespace {
     bool params_contain_ivars(const ::HIR::PathParams& params) {
         for (const auto& t : params.m_types) {
-            if (visit_ty_with(t, [](const HIR::TypeRef& t) {
+            if (visit_ty_with(t, [](const HIR::TypeData* t) {
                 return t->is_Infer();
             })) {
                 return true;

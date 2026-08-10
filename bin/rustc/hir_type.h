@@ -375,7 +375,7 @@ namespace HIR {
     }
     inline bool operator!=(TypeRef ty, CoreType ct) { return !(ty == ct); }
 
-    extern ::std::ostream& operator<<(::std::ostream& os, const ::HIR::TypeRef& ty);
+    extern ::std::ostream& operator<<(::std::ostream& os, const ::HIR::TypeData* ty);
 
 } // namespace HIR
 
