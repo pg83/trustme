@@ -7191,42 +7191,86 @@ bool TraitResolution::find_trait_impls(
         // -------------------------------------------------------------------------------------------------------------------
         //
         // -------------------------------------------------------------------------------------------------------------------
-        const ::HIR::TypeRef* TraitResolution::autoderef(const Span& sp, const ::HIR::TypeRef& ty_in, ::HIR::TypeRef& tmp_type) const {
+        TraitResolution::AutoderefResult TraitResolution::autoderef_step(
+            const Span& sp,
+            const ::HIR::TypeRef& ty_in,
+            ::HIR::TypeRef& target,
+            ::std::optional<::HIR::TypeRef>* impl_type
+        ) const {
+            if (impl_type) {
+                impl_type->reset();
+            }
+
             const auto& ty = this->m_ivars.get_type(ty_in);
             if (ty->is_Infer()) {
-                return nullptr;
+                return AutoderefResult::NoMatch;
             } else if (const auto* e = ty->opt_Borrow()) {
                 DEBUG("Deref " << ty << " into " << e->inner);
-                return &this->m_ivars.get_type(e->inner);
+                target = this->m_ivars.get_type(e->inner);
+                return AutoderefResult::Match;
             }
             // Array-to-slice is the final unsize step in an autoderef search.
             // create_autoderef materialises it as borrow -> pointer unsize -> deref.
             else if (const auto* e = ty->opt_Array()) {
                 DEBUG("Deref " << ty << " into [" << e->inner << "]");
-                tmp_type = m_crate.m_types.slice(e->inner);
-                return &tmp_type;
+                target = m_crate.m_types.slice(e->inner);
+                return AutoderefResult::Match;
             }
             // Shortcut, don't look up a Deref impl for primitives or slices
             else if (ty->is_Slice() || ty->is_Primitive() || ty->is_Tuple() || ty->is_Array()) {
-                return nullptr;
+                return AutoderefResult::NoMatch;
             } else {
+                ::std::optional<::HIR::TypeRef> candidate_target;
+                ::std::optional<::HIR::TypeRef> candidate_impl_type;
+                bool exact = false;
+                bool ambiguous = false;
 
-                bool succ = this->find_trait_impls(sp, m_lang_Deref, ::HIR::PathParams{}, ty, [&](auto impls, auto match) {
-                    tmp_type = impls.get_type(m_crate.m_types, "Target", {});
-                    if (tmp_type == ::HIR::TypeRef()) {
-                        tmp_type = m_crate.m_types.path(::HIR::Path(ty, m_lang_Deref, RcString::new_interned("Target")), ::HIR::TypePathBinding::make_Opaque({}));
+                this->find_trait_impls(sp, m_lang_Deref, ::HIR::PathParams{}, ty, [&](auto impl, auto match) {
+                    auto found_target = impl.get_type(m_crate.m_types, "Target", {});
+                    if (found_target == ::HIR::TypeRef()) {
+                        found_target = m_crate.m_types.path(::HIR::Path(ty, m_lang_Deref, RcString::new_interned("Target")), ::HIR::TypePathBinding::make_Opaque({}));
                     } else {
-                        this->expand_associated_types_inplace(sp, tmp_type, {});
+                        this->expand_associated_types_inplace(sp, found_target, {});
                     }
-                    return true;
+                    auto found_impl_type = impl.get_impl_type(m_crate.m_types);
+
+                    if (match == ::HIR::Compare::Equal) {
+                        candidate_target = found_target;
+                        candidate_impl_type = found_impl_type;
+                        exact = true;
+                        return true;
+                    }
+
+                    if (candidate_target) {
+                        ambiguous = true;
+                    } else {
+                        candidate_target = found_target;
+                        candidate_impl_type = found_impl_type;
+                    }
+                    return false;
                 });
-                if (succ) {
-                    DEBUG("Deref " << ty << " into " << tmp_type);
-                    return &tmp_type;
-                } else {
-                    return nullptr;
+
+                if (!exact && ambiguous) {
+                    DEBUG("Ambiguous Deref impl for " << ty);
+                    return AutoderefResult::Ambiguous;
                 }
+                if (!candidate_target) {
+                    return AutoderefResult::NoMatch;
+                }
+
+                target = *candidate_target;
+                if (impl_type) {
+                    *impl_type = *candidate_impl_type;
+                }
+                DEBUG("Deref " << ty << " into " << target);
+                return AutoderefResult::Match;
             }
+        }
+
+        const ::HIR::TypeRef* TraitResolution::autoderef(const Span& sp, const ::HIR::TypeRef& ty, ::HIR::TypeRef& tmp_type) const {
+            return autoderef_step(sp, ty, tmp_type) == AutoderefResult::Match
+                ? &tmp_type
+                : nullptr;
         }
 
         unsigned int TraitResolution::autoderef_find_method(
@@ -7304,7 +7348,16 @@ bool TraitResolution::find_trait_impls(
                         current_ty = typ;
                     } else {
                         // TODO: Update `cur_access` based on the avaliable Deref impls
-                        current_ty = this->autoderef(sp, ty, tmp_type);
+                        switch (this->autoderef_step(sp, ty, tmp_type)) {
+                            case AutoderefResult::NoMatch:
+                                current_ty = nullptr;
+                                break;
+                            case AutoderefResult::Match:
+                                current_ty = &tmp_type;
+                                break;
+                            case AutoderefResult::Ambiguous:
+                                return ~0u;
+                        }
                     }
                 } while (current_ty);
 

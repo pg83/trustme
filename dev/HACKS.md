@@ -27,7 +27,7 @@
 
    Это может не только задерживать решение, но и оставлять неверные impl-кандидаты. Правильная модель upstream — отдельный goal с результатом `Yes/Ambiguous/No`, а не ослабление отношения типов.
 
-   Финальный expression goal с невыведенным `Self` теперь сохраняет `Ambiguous` отдельно от ожидания новых constraints и после фикспойнта выдаёт обычную inference-диагностику. Изменение constraint повторно проверяет goal и снимает ambiguity. Глобальный `Compare::Fuzzy` в relation и impl matching остаётся.
+   Финальный expression goal с невыведенным `Self` теперь сохраняет `Ambiguous` отдельно от ожидания новых constraints и после фикспойнта выдаёт обычную inference-диагностику. Изменение constraint повторно проверяет goal и снимает ambiguity. Method autoderef также разделён на probe/confirm: probe не меняет inference state и не выбирает первый из нескольких fuzzy `Deref` impl, а confirm связывает impl-head только для реально выбранной цепочки. Upstream `methods/method-probe-no-guessing-dyn-trait.rs` и два отдельных unit на commit/ambiguity зелёные. Глобальный `Compare::Fuzzy` в relation и остальных impl matching paths остаётся.
 
 4. Backend местами генерирует программу, которая просто вызывает `abort()`.
 
@@ -77,4 +77,4 @@
 | Enumeration | `trans_main_bindings.cpp:1349,2204,2487,2872` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующая последовательность: ложные markers в parser/lexer, infrastructure, driver, общих HIR definitions, metadata, безопасных MIR invariants и backend conventions переименованы. `Pointee::Metadata`, always-unsized layout, array→slice HIR, generic array metadata, grouped match, or-pattern guard/source order и pattern/remainder drop scheduling закрыты. Первый срез fuzzy solver — явная финальная ambiguity associated goal — закрыт; следующий функциональный пункт — глобальная fuzzy relation и impl matching с максимальным fan-out и строго unit-first. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.
+Следующая последовательность: ложные markers в parser/lexer, infrastructure, driver, общих HIR definitions, metadata, безопасных MIR invariants и backend conventions переименованы. `Pointee::Metadata`, always-unsized layout, array→slice HIR, generic array metadata, grouped match, or-pattern guard/source order и pattern/remainder drop scheduling закрыты. Явная финальная ambiguity associated goal и probe/confirm для method autoderef закрыты; следующий функциональный пункт — оставшаяся глобальная fuzzy relation и impl matching с максимальным fan-out и строго unit-first. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.

@@ -1135,9 +1135,32 @@ namespace {
                     const ::HIR::TypeRef* cur_ty = &node_ptr->m_res_type;
                     while (deref_count--) {
                         auto span = node_ptr->span();
-                        cur_ty = this->context.m_resolve.autoderef(span, *cur_ty, tmp_ty);
-                        assert(cur_ty);
-                        auto ty = *cur_ty;
+                        auto source_ty = *cur_ty;
+                        ::std::optional<::HIR::TypeRef> impl_type;
+                        auto result = this->context.m_resolve.autoderef_step(
+                            span, source_ty, tmp_ty, &impl_type
+                        );
+                        ASSERT_BUG(
+                            span,
+                            result == TraitResolution::AutoderefResult::Match,
+                            "Selected autoderef step no longer has a unique response for " << source_ty
+                        );
+                        if (impl_type) {
+                            this->context.equate_types(span, source_ty, *impl_type);
+                            this->context.equate_types_assoc(
+                                span,
+                                tmp_ty,
+                                this->context.m_crate.get_lang_item_path(span, "deref"),
+                                {},
+                                source_ty,
+                                "Target",
+                                {},
+                                true,
+                                typeck::PrimitiveOperator::Deref
+                            );
+                        }
+                        cur_ty = &tmp_ty;
+                        auto ty = tmp_ty;
 
                         node.m_value = this->context.create_autoderef(mv$(node.m_value), mv$(ty));
                     }

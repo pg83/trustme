@@ -418,6 +418,22 @@ public:
     /// \return Number of times deref was applied (or ~0 if _ was hit)
     unsigned int autoderef_find_field(const Span& sp, const ::HIR::TypeRef& top_ty, const RcString& name, /* Out -> */ ::HIR::TypeRef& field_type) const;
 
+    enum class AutoderefResult {
+        NoMatch,
+        Match,
+        Ambiguous,
+    };
+
+    /// Probe one automatic-dereference step without changing inference state.
+    /// `impl_type` is populated for a trait-based step so that a caller which
+    /// actually selects this step can commit the impl response afterwards.
+    AutoderefResult autoderef_step(
+        const Span& sp,
+        const ::HIR::TypeRef& ty,
+        ::HIR::TypeRef& target,
+        ::std::optional<::HIR::TypeRef>* impl_type = nullptr
+    ) const;
+
     /// Apply an automatic dereference
     const ::HIR::TypeRef* autoderef(const Span& sp, const ::HIR::TypeRef& ty, ::HIR::TypeRef& tmp_type) const;
 

@@ -36,7 +36,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 8. [ ] **`pin!` expansion/parser: не менее 28 targets.** 21 compile failure видит `let` после path separator, ещё 7 cases заблокированы harness `coretests/pin_macro`. Исправить statement macro expansion в block context, затем проверить `pin!` с expression, `let` и function item.
 
-9. [ ] **Повторяющиеся compiler crash signatures.** Сначала символизировать и группировать 75 SIGSEGV по stack/phase. Уже видны TAIT/impl-trait, coroutine/generator drop, projection cycles, const generics и HRTB; повышать отдельную группу выше можно только с измеренным общим fan-out. Отдельно устранить 28 `Invalid path (no nodes)` asserts, 24 оставшихся `Spare rules left after typecheck stabilised` и 24 `Unexpected item type in inherent impl - Type`.
+9. [ ] **Повторяющиеся compiler crash signatures.** Сначала символизировать и группировать 75 SIGSEGV по stack/phase. Уже видны TAIT/impl-trait, coroutine/generator drop, projection cycles, const generics и HRTB; повышать отдельную группу выше можно только с измеренным общим fan-out. Отдельно устранить 28 `Invalid path (no nodes)` asserts, 23 оставшихся `Spare rules left after typecheck stabilised` и 24 `Unexpected item type in inherent impl - Type`; `methods/method-probe-no-guessing-dyn-trait.rs` закрыт разделением autoderef probe/confirm.
 
 ## P2 — runtime correctness и общие codegen/CTFE причины
 
@@ -75,7 +75,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ## P5 — единичные regressions и независимые failures
 
-- [ ] Семь красных unit — это три причины, а не семь приоритетов: два lifetime-elision SIGSEGV на yield/coroutine, два const-relation mismatch и три empty-path asserts в Trans Enumerate. Они закрываются вместе с соответствующим общим кластером выше.
+- [ ] Восемь красных unit — это четыре причины, а не восемь приоритетов: два lifetime-elision SIGSEGV на yield/coroutine, два const-relation mismatch, три empty-path asserts в Trans Enumerate и неверный runtime offset в `qualified_offset_of_macro`. Они закрываются вместе с соответствующим общим кластером выше.
 - [ ] Три независимых library CTFE panic: `cell::refcell_borrow`, `cell::refcell_borrow_mut` и `mem::test_transmute_copy`. Старый monolithic fan-out 94 не подтверждён: при раздельной сборке остальные 91 нода либо зелёные, либо относятся к cfg-selection/runtime failure. Каждый panic сначала минимизировать до неверного branch или CTFE значения.
 - [ ] `resvg`: `AsRef` selection для `Option<HuffmanTable>`; после минимального trait-solver unit вернуть весь standing integration в gate.
 - [ ] Три SIGILL: `const-generics/issues/issue-74906.rs`, `layout/invalid-unsized-const-prop.rs`, `const_prop/issue-86351.rs`.
