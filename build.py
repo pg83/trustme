@@ -1,4 +1,3 @@
-import base64
 import hashlib
 import json
 from pathlib import Path
@@ -41,30 +40,6 @@ def parse_test_partition():
 
 
 test_partition = parse_test_partition()
-
-SOURCE_ROOT = Path(__file__).parent
-OVERRIDE_ROOT = SOURCE_ROOT / "bin" / "rustc" / "overrides"
-
-
-def encode_build_data(data):
-    return base64.b64encode(data).decode("ascii")
-
-
-manifest_overrides = encode_build_data(
-    (OVERRIDE_ROOT / "rustc-1.90.0-overrides.toml").read_bytes()
-)
-script_overrides = encode_build_data(json.dumps(
-    {
-        path.stem.removeprefix("build_"): path.read_text()
-        for path in sorted(OVERRIDE_ROOT.glob("build_*.txt"))
-    },
-    sort_keys=True,
-    separators=(",", ":"),
-).encode())
-cargo_ldflags = " ".join([
-    "-X=main.embeddedManifestOverridesBase64=" + manifest_overrides,
-    "-X=main.embeddedScriptOverridesBase64=" + script_overrides,
-])
 
 build.includes += ["$(S)/bin/rustc"]
 
@@ -242,19 +217,17 @@ rustc = program(
 
 # cargo: Cargo-compatible package resolver and mrustc build driver, written in
 # Go. Dependencies are checked in under bin/cargo/vendor, so this node is
-# offline. Rust 1.90 overrides are link-time data; the resulting binary never
-# opens the source override files.
+# offline. Rust 1.90 source adjustments belong to std_src below; Cargo has no
+# toolchain-specific override configuration.
 cargo = command(
     name="cargo",
     inputs=(
         build.glob("$(S)/bin/cargo/**/*.go")
         + ["$(S)/bin/cargo/go.mod", "$(S)/bin/cargo/go.sum", "$(S)/bin/cargo/vendor/modules.txt"]
-        + build.glob("$(S)/bin/rustc/overrides/build_*.txt")
-        + ["$(S)/bin/rustc/overrides/rustc-1.90.0-overrides.toml"]
     ),
     outputs=["$(B)/bin/cargo"],
     cmd=[
-        "go", "build", "-ldflags", cargo_ldflags,
+        "go", "build",
         "-o", "$(B)/bin/cargo",
         ".",
     ],
@@ -291,18 +264,14 @@ TESTS_LIB = ["$(S)/tst/lib.py"]
 # so select its applet explicitly instead of relying on argv[0].
 TEST_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "60s"]
 
-# std_src: fetch + patch the rust-1.90 source, add the shim, pack it.
+# std_src: fetch + adjust the rust-1.90 source, add the shim, pack it.
 std_src = command(
     name="std_src",
-    inputs=[
-        "$(S)/tst/std/fetch.py",
-        "$(S)/bin/rustc/overrides/rustc-1.90.0-src.patch",
-    ] + TESTS_LIB,
+    inputs=["$(S)/tst/std/fetch.py"] + TESTS_LIB,
     outputs=["$(B)/tst/rust-src.tar"],
     cmd=[
         "python3", "$(S)/tst/std/fetch.py",
         "$(B)/tst/rust-src.tar",
-        "$(S)/bin/rustc/overrides/rustc-1.90.0-src.patch",
     ],
     descr="RS",
     color="cyan",
@@ -435,6 +404,31 @@ unit_tests = [
         color="green",
     )
 ]
+unit_tests.append(command(
+    name="unit_std_source_adjustments",
+    inputs=[
+        "$(S)/tst/unit/test_std_source_adjustments.py",
+        "$(S)/tst/std/fetch.py",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/std_source_adjustments.stamp"],
+    cmd=[
+        [
+            *TEST_TIMEOUT,
+            "python3",
+            "$(S)/tst/unit/test_std_source_adjustments.py",
+            "-v",
+        ],
+        [
+            *TEST_TIMEOUT,
+            "sh",
+            "-c",
+            "> $(B)/tst/unit/std_source_adjustments.stamp",
+        ],
+    ],
+    descr="UT",
+    color="green",
+))
 unit_tests.append(command(
     name="unit_rust_lib_import",
     inputs=[

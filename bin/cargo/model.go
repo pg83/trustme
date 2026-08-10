@@ -107,16 +107,6 @@ type Repository struct {
 	byPath    map[string]*Package
 	patches   map[string]string
 	locked    map[string]map[Version]bool
-	overrides *ManifestOverrides
-}
-
-type ManifestOverride struct {
-	deletes [][]string
-	adds    map[string]any
-}
-
-type ManifestOverrides struct {
-	entries map[string]*ManifestOverride
 }
 
 type BuildOptions struct {
@@ -156,14 +146,13 @@ type TargetSelectors struct {
 }
 
 type BuildContext struct {
-	opts               BuildOptions
-	repository         *Repository
-	root               *Package
-	workspace          *Workspace
-	compiler           string
-	cfg                *CfgSet
-	host               string
-	target             string
-	cross              bool
-	toolchainOverrides bool
+	opts       BuildOptions
+	repository *Repository
+	root       *Package
+	workspace  *Workspace
+	compiler   string
+	cfg        *CfgSet
+	host       string
+	target     string
+	cross      bool
 }

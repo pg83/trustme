@@ -17,10 +17,6 @@ func loadBuildScriptOutput(pkg *Package, path string) {
 	parseBuildScriptOutput(pkg, path, file)
 }
 
-func loadBuildScriptOutputText(pkg *Package, source, text string) {
-	parseBuildScriptOutput(pkg, source, strings.NewReader(text))
-}
-
 func parseBuildScriptOutput(pkg *Package, source string, input io.Reader) {
 	output := BuildScriptOutput{env: map[string]string{}, downstream: map[string]string{}}
 	scanner := bufio.NewScanner(input)

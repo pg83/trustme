@@ -199,8 +199,7 @@ func findDependency(pkg *Package, name string) *Dependency {
 func enabledDependencies(context *BuildContext, pkg *Package, includeDev bool) []*Dependency {
 	deps := append([]*Dependency{}, pkg.dependencies.main...)
 
-	_, buildScriptOverridden := buildScriptOverride(context, pkg)
-	if pkg.buildScript != "" && !buildScriptOverridden {
+	if pkg.buildScript != "" {
 		deps = append(deps, pkg.dependencies.build...)
 	}
 
@@ -221,7 +220,7 @@ func enabledDependencies(context *BuildContext, pkg *Package, includeDev bool) [
 
 		deps = append(deps, group.main...)
 
-		if pkg.buildScript != "" && !buildScriptOverridden {
+		if pkg.buildScript != "" {
 			deps = append(deps, group.build...)
 		}
 

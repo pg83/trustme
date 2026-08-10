@@ -64,37 +64,6 @@ required-features = ["serde"]
 	}
 }
 
-func TestManifestOverrides(t *testing.T) {
-	dir := t.TempDir()
-	packageDir := filepath.Join(dir, "library", "foo")
-
-	writeTestFile(t, filepath.Join(packageDir, "src", "lib.rs"), "")
-
-	writeTestFile(t, filepath.Join(packageDir, "Cargo.toml"), `[package]
-name = "foo"
-version = "1.0.0"
-[dependencies]
-remove = "1"
-`)
-
-	overrides := parseManifestOverrides(`[add.'library/foo'.dependencies.added]
-version = "2"
-features = ["x"]
-[delete]
-'library/foo' = ["dependencies.remove"]
-`)
-	doc := readToml(filepath.Join(packageDir, "Cargo.toml"))
-
-	overrides.apply(packageDir, doc)
-
-	pkg := parsePackage(filepath.Join(packageDir, "Cargo.toml"), doc,
-		&Workspace{dir: dir, dependencies: map[string]*Dependency{}, patches: map[string]string{}})
-
-	if findDependency(pkg, "remove") != nil || findDependency(pkg, "added") == nil {
-		t.Fatalf("override was not applied: %#v", pkg.dependencies.main)
-	}
-}
-
 func TestWorkspaceMembers(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, "Cargo.toml"), `[workspace]

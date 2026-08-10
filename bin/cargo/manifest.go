@@ -20,17 +20,6 @@ func readToml(path string) map[string]any {
 	return value
 }
 
-func readTomlString(source, text string) map[string]any {
-	value := map[string]any{}
-	_, err := toml.Decode(text, &value)
-
-	if err != nil {
-		throwFmt("%s: %v", source, err)
-	}
-
-	return value
-}
-
 func mapValue(value any) map[string]any {
 	if value == nil {
 		return nil
@@ -115,111 +104,6 @@ func tableArray(value any) []map[string]any {
 	return result
 }
 
-func loadManifestOverrides(enabled bool) *ManifestOverrides {
-	if !enabled {
-		return parseManifestOverrides("")
-	}
-
-	return parseManifestOverrides(embeddedManifestOverrides)
-}
-
-func parseManifestOverrides(text string) *ManifestOverrides {
-	if text == "" {
-		return &ManifestOverrides{entries: map[string]*ManifestOverride{}}
-	}
-
-	doc := readTomlString("embedded manifest overrides", text)
-	result := &ManifestOverrides{entries: map[string]*ManifestOverride{}}
-
-	for suffix, value := range mapValue(doc["add"]) {
-		entry := result.entry(suffix)
-
-		entry.adds = mapValue(value)
-	}
-
-	for suffix, value := range mapValue(doc["delete"]) {
-		entry := result.entry(suffix)
-
-		for _, item := range stringsValue(value) {
-			entry.deletes = append(entry.deletes, strings.Split(item, "."))
-		}
-	}
-
-	return result
-}
-
-func (m *ManifestOverrides) entry(suffix string) *ManifestOverride {
-	entry := m.entries[filepath.Clean(suffix)]
-
-	if entry == nil {
-		entry = &ManifestOverride{}
-		m.entries[filepath.Clean(suffix)] = entry
-	}
-
-	return entry
-}
-
-func (m *ManifestOverrides) apply(dir string, doc map[string]any) {
-	clean := filepath.Clean(dir)
-
-	var selected string
-
-	for suffix := range m.entries {
-		if clean != suffix && !strings.HasSuffix(clean, string(filepath.Separator)+suffix) {
-			continue
-		}
-
-		if len(suffix) > len(selected) || len(suffix) == len(selected) && suffix < selected {
-			selected = suffix
-		}
-	}
-
-	if selected == "" {
-		return
-	}
-
-	entry := m.entries[selected]
-
-	for _, path := range entry.deletes {
-		deleteTomlPath(doc, path)
-	}
-
-	mergeToml(doc, entry.adds)
-}
-
-func deleteTomlPath(doc map[string]any, path []string) {
-	if len(path) == 0 {
-		return
-	}
-
-	if len(path) == 1 {
-		delete(doc, path[0])
-
-		return
-	}
-
-	child := mapValue(doc[path[0]])
-
-	if child != nil {
-		deleteTomlPath(child, path[1:])
-	}
-}
-
-func mergeToml(dst, src map[string]any) {
-	for key, value := range src {
-		srcMap := mapValue(value)
-		dstMap := mapValue(dst[key])
-
-		if srcMap != nil && dstMap != nil {
-			mergeToml(dstMap, srcMap)
-
-			continue
-		}
-
-		dst[key] = value
-	}
-}
-
 func findWorkspace(manifestPath string) *Workspace {
 	manifestPath = absolutePath(manifestPath)
 
@@ -302,7 +186,7 @@ func loadWorkspace(path string) *Workspace {
 	return workspace
 }
 
-func newRepository(workspace *Workspace, vendorDir string, overrides *ManifestOverrides) *Repository {
+func newRepository(workspace *Workspace, vendorDir string) *Repository {
 	if vendorDir != "" {
 		vendorDir = absolutePath(vendorDir)
 	}
@@ -314,7 +198,6 @@ func newRepository(workspace *Workspace, vendorDir string, overrides *ManifestOv
 		byPath:    map[string]*Package{},
 		patches:   workspace.patches,
 		locked:    map[string]map[Version]bool{},
-		overrides: overrides,
 	}
 
 	lockPath := filepath.Join(workspace.dir, "Cargo.lock")
@@ -360,8 +243,6 @@ func (r *Repository) loadPath(path string) *Package {
 	}
 
 	doc := readToml(path)
-
-	r.overrides.apply(filepath.Dir(path), doc)
 
 	pkg := parsePackage(path, doc, r.workspace)
 

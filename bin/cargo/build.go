@@ -66,10 +66,7 @@ func buildProject(opts BuildOptions) []string {
 
 func buildPackage(opts BuildOptions, manifestPath string) []string {
 	workspace := findWorkspace(manifestPath)
-	rootManifest := mapValue(readToml(manifestPath)["package"])
-	toolchainOverrides := stringValue(rootManifest["name"]) == stdShimPackage
-	overrides := loadManifestOverrides(toolchainOverrides)
-	repository := newRepository(workspace, opts.vendorDir, overrides)
+	repository := newRepository(workspace, opts.vendorDir)
 	root := repository.loadPath(manifestPath)
 	compiler := os.Getenv("MRUSTC_PATH")
 
@@ -85,15 +82,14 @@ func buildPackage(opts BuildOptions, manifestPath string) []string {
 	}
 
 	context := &BuildContext{
-		opts:               opts,
-		repository:         repository,
-		root:               root,
-		workspace:          workspace,
-		compiler:           compiler,
-		host:               host,
-		target:             target,
-		cross:              opts.target != "" && opts.target != host && !opts.emitMmir,
-		toolchainOverrides: toolchainOverrides,
+		opts:       opts,
+		repository: repository,
+		root:       root,
+		workspace:  workspace,
+		compiler:   compiler,
+		host:       host,
+		target:     target,
+		cross:      opts.target != "" && opts.target != host && !opts.emitMmir,
 	}
 
 	context.cfg = compilerCfg(compiler, opts.target)
@@ -334,8 +330,7 @@ func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
 }
 
 func (b *Builder) buildScriptCompileTask(pkg *Package) *Task {
-	_, overridden := buildScriptOverride(b.context, pkg)
-	if pkg.buildScript == "" || overridden {
+	if pkg.buildScript == "" {
 		return nil
 	}
 
@@ -375,12 +370,6 @@ func (b *Builder) buildScriptCompileTask(pkg *Package) *Task {
 
 func (b *Builder) buildScriptRunTask(pkg *Package) *Task {
 	if pkg.buildScript == "" {
-		return nil
-	}
-
-	if _, overridden := buildScriptOverride(b.context, pkg); overridden {
-		b.ensureBuildOutput(pkg)
-
 		return nil
 	}
 
@@ -689,11 +678,7 @@ func (b *Builder) ensureBuildOutput(pkg *Package) {
 	}
 
 	if len(pkg.buildOutput.linkSearch) == 0 && len(pkg.buildOutput.cfg) == 0 && len(pkg.buildOutput.env) == 0 {
-		if output, overridden := buildScriptOverride(b.context, pkg); overridden {
-			loadBuildScriptOutputText(pkg, "embedded build_"+pkg.name+".txt", output)
-		} else {
-			loadBuildScriptOutput(pkg, b.buildScriptLog(pkg))
-		}
+		loadBuildScriptOutput(pkg, b.buildScriptLog(pkg))
 	}
 }
 

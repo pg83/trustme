@@ -28,10 +28,6 @@ standard Cargo flags:
 -Zpause
 ```
 
-The Rust 1.90 manifest and build-script overrides used by this toolchain are
-embedded into the executable by the repository's `build.py`; Cargo does not
-read override configuration from the runtime filesystem.
-
 `vendor` follows Cargo's destination and `--manifest-path` interface. The test
 graph additionally uses `-Zarchive=FILE.tar.zst` to create a reproducible,
 checksum-verified archive for transport between isolated build nodes.
