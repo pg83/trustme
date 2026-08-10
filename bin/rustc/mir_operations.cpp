@@ -9838,7 +9838,9 @@ bool MIR_Optimise_GarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn
                         }
                     }
 
-                    // HACK: Remove drop if it's of an unused value (TODO: only if it's conditional?)
+                    // A local with no assignment in any reachable block is
+                    // definitely uninitialized. Conditional assignments mark
+                    // the local as used above and preserve its drop flag.
                     if (se->slot.is_Local() && local_rewrite_table[se->slot.as_Local()] == ~0u) {
                         DEBUG(state << "Remove " << stmt << " - Dropping non-set value");
                         to_remove_statements[stmt_idx] = true;
