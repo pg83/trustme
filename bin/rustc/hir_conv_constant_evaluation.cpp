@@ -1556,7 +1556,8 @@ namespace MIR {
                     }
                     TU_ARM(c, ItemAddr, e2) {
                         assert(e2);
-                        dst.write_ptr(state, EncodedLiteral::PTR_BASE, get_staticref_mono(*e2));
+                        MIR_ASSERT(state, e2.offset.is_u64(), "Item address offset is too large: " << e2.offset);
+                        dst.write_ptr(state, EncodedLiteral::PTR_BASE + e2.offset.truncate_u64(), get_staticref_mono(*e2));
                     }
             }
             }
@@ -1702,8 +1703,9 @@ namespace MIR {
                         if (!e.is_ItemAddr()) {
                             MIR_BUG(state, "Invalid argument for pointer: " << p);
                         }
+                        MIR_ASSERT(state, e.as_ItemAddr().offset.is_u64(), "Item address offset is too large: " << e.as_ItemAddr().offset);
                         // TODO: Look up the static
-                        return ::std::make_pair(EncodedLiteral::PTR_BASE, RelocPtr(get_staticref_mono(*e.as_ItemAddr())));
+                        return ::std::make_pair(EncodedLiteral::PTR_BASE + e.as_ItemAddr().offset.truncate_u64(), RelocPtr(get_staticref_mono(*e.as_ItemAddr())));
                     }
             }
             abort();
@@ -3094,6 +3096,7 @@ namespace HIR {
                                 if (const auto* ce = e.opt_Function()) {
                                     fcn_path = std::make_shared<HIR::Path>(ms.monomorph_path(state.sp, *ce->p));
                                 } else if (const auto* ce = e.opt_ItemAddr()) {
+                                    MIR_ASSERT(state, ce->offset == U128(0), "Function pointer has a non-zero offset: " << ce->offset);
                                     fcn_path = std::make_shared<HIR::Path>(ms.monomorph_path(state.sp, **ce));
                                 } else {
                                     MIR_BUG(state, "Invalid argument for function pointer to `const_eval_select`: " << fcn_arg);

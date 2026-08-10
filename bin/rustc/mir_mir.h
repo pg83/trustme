@@ -702,6 +702,46 @@ namespace MIR {
         NEG
     };
 
+    // A compile-time pointer keeps allocation provenance separate from its byte
+    // offset.  The path names the allocation; `offset` selects an address within
+    // it.  A null path is reserved for the unresolved MakeDst metadata marker.
+    struct ItemAddress {
+        ::std::unique_ptr<::HIR::Path> p;
+        U128 offset;
+
+        ItemAddress(::std::unique_ptr<::HIR::Path> p = {}, U128 offset = U128(0))
+            : p(::std::move(p))
+            , offset(offset)
+        {
+        }
+
+        explicit operator bool() const {
+            return static_cast<bool>(p);
+        }
+        const ::HIR::Path* get() const {
+            return p.get();
+        }
+        ::HIR::Path* get() {
+            return p.get();
+        }
+        const ::HIR::Path& operator*() const {
+            return *p;
+        }
+        ::HIR::Path& operator*() {
+            return *p;
+        }
+        const ::HIR::Path* operator->() const {
+            return p.get();
+        }
+        ::HIR::Path* operator->() {
+            return p.get();
+        }
+
+        ItemAddress clone() const {
+            return ItemAddress(p ? box$(p->clone()) : nullptr, offset);
+        }
+    };
+
     // Compile-time known values
     TAGGED_UNION_EX(
         Constant,
@@ -734,8 +774,8 @@ namespace MIR {
          (Generic, ::HIR::GenericRef),
          // ZST function type, NOT its address
          (Function, struct { ::std::unique_ptr<::HIR::Path> p; }),
-         // Address of a value
-         (ItemAddr, ::std::unique_ptr<::HIR::Path>)),
+         // Address within a named allocation
+         (ItemAddr, ItemAddress)),
         (),
         (),
         (friend ::std::ostream & operator<<(::std::ostream& os, const Constant& v); ::Ordering ord(const Constant& b) const; inline bool operator==(const Constant& b) const { return ord(b) == ::OrdEqual; } inline bool operator!=(const Constant& b) const { return ord(b) != ::OrdEqual; } inline bool operator<(const Constant& b) const { return ord(b) == ::OrdLess; } inline bool operator<=(const Constant& b) const { return ord(b) != ::OrdGreater; } inline bool operator>(const Constant& b) const { return ord(b) == ::OrdGreater; } inline bool operator>=(const Constant& b) const { return ord(b) != ::OrdLess; } Constant clone() const;)

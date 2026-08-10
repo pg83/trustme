@@ -31,7 +31,7 @@ namespace MIR {
             (Const, assert(e.p); os << *e.p;),
             (Generic, os << e;),
             (Function, assert(e.p); os << "fn " << *e.p;),
-            (ItemAddr, if (e) { os << "&" << *e; } else {
+            (ItemAddr, if (e) { os << "&" << *e; if (e.offset != U128(0)) os << "+0x" << std::hex << e.offset << std::dec; } else {
                 os << "#UNSIZE_PLACEHOLDER"; // A `Const` with `nullptr` is a placeholder for MakeDst `Unsize`
             })
         )
@@ -42,7 +42,7 @@ namespace MIR {
         if (this->tag() != b.tag()) {
             return ::ord(static_cast<unsigned int>(this->tag()), static_cast<unsigned int>(b.tag()));
         }
-        TU_MATCHA((*this, b), (ae, be), (Int, if (ae.v != be.v) return ::ord(ae.v, be.v); return ::ord((unsigned)ae.t, (unsigned)be.t);), (Uint, if (ae.v != be.v) return ::ord(ae.v, be.v); return ::ord((unsigned)ae.t, (unsigned)be.t);), (Float, if (ae.v != be.v) return ae.v > be.v ? OrdGreater : OrdLess; return ::ord((unsigned)ae.t, (unsigned)be.t);), (Bool, return ::ord(ae.v, be.v);), (Bytes, return ::ord(ae, be);), (StaticString, return ::ord(ae, be);), (Const, return ::ord(*ae.p, *be.p);), (Generic, return ::ord(ae.binding, be.binding);), (Function, return ::ord(*ae.p, *be.p);), (ItemAddr, ORD(static_cast<bool>(ae), static_cast<bool>(be)); if (ae) ORD(*ae, *be); return OrdEqual;))
+        TU_MATCHA((*this, b), (ae, be), (Int, if (ae.v != be.v) return ::ord(ae.v, be.v); return ::ord((unsigned)ae.t, (unsigned)be.t);), (Uint, if (ae.v != be.v) return ::ord(ae.v, be.v); return ::ord((unsigned)ae.t, (unsigned)be.t);), (Float, if (ae.v != be.v) return ae.v > be.v ? OrdGreater : OrdLess; return ::ord((unsigned)ae.t, (unsigned)be.t);), (Bool, return ::ord(ae.v, be.v);), (Bytes, return ::ord(ae, be);), (StaticString, return ::ord(ae, be);), (Const, return ::ord(*ae.p, *be.p);), (Generic, return ::ord(ae.binding, be.binding);), (Function, return ::ord(*ae.p, *be.p);), (ItemAddr, ORD(static_cast<bool>(ae), static_cast<bool>(be)); if (ae) ORD(*ae, *be); ORD(ae.offset, be.offset); return OrdEqual;))
         throw "";
     }
 
@@ -410,7 +410,7 @@ namespace MIR {
 }
 
 ::MIR::Constant MIR::Constant::clone() const {
-    TU_MATCHA((*this), (e2), (Int, return ::MIR::Constant(e2);), (Uint, return ::MIR::Constant(e2);), (Float, return ::MIR::Constant(e2);), (Bool, return ::MIR::Constant(e2);), (Bytes, return ::MIR::Constant(e2);), (StaticString, return ::MIR::Constant(e2);), (Const, return ::MIR::Constant::make_Const({box$(e2.p->clone())});), (Generic, return ::MIR::Constant(e2);), (Function, return ::MIR::Constant::make_Function({box$(e2.p->clone())});), (ItemAddr, return ::MIR::Constant(box$(e2->clone()));))
+    TU_MATCHA((*this), (e2), (Int, return ::MIR::Constant(e2);), (Uint, return ::MIR::Constant(e2);), (Float, return ::MIR::Constant(e2);), (Bool, return ::MIR::Constant(e2);), (Bytes, return ::MIR::Constant(e2);), (StaticString, return ::MIR::Constant(e2);), (Const, return ::MIR::Constant::make_Const({box$(e2.p->clone())});), (Generic, return ::MIR::Constant(e2);), (Function, return ::MIR::Constant::make_Function({box$(e2.p->clone())});), (ItemAddr, return ::MIR::Constant::make_ItemAddr(e2.clone());))
     throw "";
 }
 
@@ -740,7 +740,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             if (!ce) {
                 return ::MIR::Constant::make_ItemAddr({});
             }
-            return ::MIR::Constant::make_ItemAddr(box$(this->monomorph(*ce)));
+            return ::MIR::Constant::make_ItemAddr({box$(this->monomorph(*ce)), ce.offset});
         }
     }
     throw "";

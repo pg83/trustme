@@ -22,7 +22,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 1. [x] **`-C opt-level` и `debug-assertions`: устранены 65 прямых отказов.** `opt-level=0/1/2/3/s/z` связан с MIR-inlining и флагами C backend, `-O` и `-C opt-level` подчиняются правостороннему precedence rustc, а обе формы `debug-assertions` управляют встроенным cfg с rustc-default от optimization level. Unit проверяет cfg, MIR, backend command и invalid values; исходные triggers больше не останавливаются на этих опциях.
 
-2. [ ] **Offset pointer в const borrow: 62 library cases.** Один assert `mir_cleanup.cpp:487: ofs == 0` блокирует `coretests/option` — 33 и `coretests/result` — 29. Сохранять relocation base плюс offset через MIR cleanup и CTFE, проверив field borrow и enum payload.
+2. [x] **Offset pointer в const borrow: устранены 62 library failures.** MIR `ItemAddr` теперь хранит allocation path вместе с byte offset; MIR cleanup, monomorphization, CTFE, metadata и C backend сохраняют его без потерь. Unit покрывает tuple field, `Option`/`Result` payload и cross-crate generic MIR через сериализацию; все 33 `coretests/option` и 29 `coretests/result` зелёные.
 
 3. [ ] **Оставшиеся `-C` options: 55 прямых отказов.** Разделить `debuginfo`, `codegen-units`, target features, LTO и прочие по фактической семантике; опция считается реализованной только когда меняет соответствующий pipeline/backend behavior.
 

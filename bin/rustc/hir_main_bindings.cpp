@@ -634,7 +634,7 @@ public:
                 _(Const, {box$(deserialise_path())})
                 _(Generic, deserialise_genericref())
                 _(Function, {box$(deserialise_path())})
-                _(ItemAddr, box$(deserialise_path()))
+                _(ItemAddr, {box$(deserialise_path()), m_in.read_u128()})
 #undef _
             default:
                 BUG(Span(), "Bad tag for MIR::Const - " << tag);
@@ -3474,7 +3474,7 @@ public:
 
     void serialise(const ::MIR::Constant& v) {
         m_out.write_tag(v.tag());
-        TU_MATCHA((v), (e), (Int, m_out.write_u128(e.v.get_inner()); m_out.write_tag(static_cast<unsigned>(e.t));), (Uint, m_out.write_u128(e.v); m_out.write_tag(static_cast<unsigned>(e.t));), (Float, m_out.write_float_value(e.v); m_out.write_tag(static_cast<unsigned>(e.t));), (Bool, m_out.write_bool(e.v);), (Bytes, m_out.write_count(e.size()); m_out.write(e.data(), e.size());), (StaticString, m_out.write_string(e);), (Const, ASSERT_BUG(Span(), monomorphise_path_needed(*e.p), "Unexpected Constant: " << *e.p); serialise_path(*e.p);), (Generic, serialise(e);), (Function, serialise_path(*e.p);), (ItemAddr, serialise_path(*e);))
+        TU_MATCHA((v), (e), (Int, m_out.write_u128(e.v.get_inner()); m_out.write_tag(static_cast<unsigned>(e.t));), (Uint, m_out.write_u128(e.v); m_out.write_tag(static_cast<unsigned>(e.t));), (Float, m_out.write_float_value(e.v); m_out.write_tag(static_cast<unsigned>(e.t));), (Bool, m_out.write_bool(e.v);), (Bytes, m_out.write_count(e.size()); m_out.write(e.data(), e.size());), (StaticString, m_out.write_string(e);), (Const, ASSERT_BUG(Span(), monomorphise_path_needed(*e.p), "Unexpected Constant: " << *e.p); serialise_path(*e.p);), (Generic, serialise(e);), (Function, serialise_path(*e.p);), (ItemAddr, serialise_path(*e); m_out.write_u128(e.offset);))
     }
 
     void serialise(const ::HIR::TypeItem& item) {

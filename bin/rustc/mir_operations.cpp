@@ -3387,9 +3387,8 @@ namespace {
 
             const auto ofs = data_ptr - EncodedLiteral::PTR_BASE;
             if (data_reloc->p) {
-                MIR_ASSERT(state, ofs == 0, "TODO: Support offset pointers in borrows - +0x" << std::hex << ofs);
                 const auto& path = *data_reloc->p;
-                auto ptr_val = ::MIR::Constant::make_ItemAddr(box$(params.monomorph_path(state.sp, path)));
+                auto ptr_val = ::MIR::Constant::make_ItemAddr({box$(params.monomorph_path(state.sp, path)), ofs});
                 DEBUG("ptr_val = " << ptr_val);
                 ::HIR::TypeRef tmp;
                 const auto& src_ty = state.get_static_type(tmp, path);
@@ -7661,7 +7660,7 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                 if (it != known_values.find(lv)) {
                     DEBUG("Known deref source: " << ilv << " == " << it->second);
                     //MIR_ASSERT(state, it->second.is_ItemAddr(), "Derefernce with known value not an ItemAddr - " << it->second);
-                    if (it->second.is_ItemAddr()) {
+                    if (it->second.is_ItemAddr() && it->second.as_ItemAddr().offset == U128(0)) {
                         lv.m_wrappers.erase(lv.m_wrappers.begin());
                         lv.m_root = MIR::LValue::Storage::new_Static(it->second.as_ItemAddr()->clone());
                         changed = true;

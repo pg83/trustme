@@ -368,6 +368,9 @@ namespace {
                 break;
                 TU_ARM(e, ItemAddr, v) {
                     os << "ADDROF " << fmt(*v);
+                    if (v.offset != U128(0)) {
+                        os << " + " << v.offset;
+                    }
                 }
                 break;
                 TU_ARM(e, Const, v) {

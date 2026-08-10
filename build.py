@@ -414,6 +414,29 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_const_borrow_offset_metadata",
+    inputs=[
+        "$(S)/tst/unit/test_const_borrow_offset_metadata.py",
+        "$(S)/tst/unit/const_borrow_offset_producer.rs",
+        "$(S)/tst/unit/const_borrow_offset_consumer.rs",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/const_borrow_offset_metadata.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_const_borrow_offset_metadata.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/const_borrow_offset_producer.rs",
+        "$(S)/tst/unit/const_borrow_offset_consumer.rs",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/const_borrow_offset_metadata.stamp",
+    ],
+    deps=[libstd, rustc],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_driver_lint_cfg_options",
     inputs=[
         "$(S)/tst/unit/test_driver_lint_cfg_options.py",

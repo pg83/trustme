@@ -9214,6 +9214,11 @@ namespace {
                     MIR_TODO(*m_mir_res, "Constant::Function");
                 }
                 TU_ARMA(ItemAddr, c) {
+                    const bool has_offset = c.offset != U128(0);
+                    if (has_offset) {
+                        MIR_ASSERT(*m_mir_res, c.offset.is_u64(), "Item address offset is too large: " << c.offset);
+                        m_of << "((void*)((uint8_t*)";
+                    }
                     if (c->m_data.is_UfcsInherent() && c->m_data.as_UfcsInherent().item == "#type_id") {
                         m_of << "(void*)&__typeid_" << Trans_Mangle(c->m_data.as_UfcsInherent().type);
                     } else {
@@ -9221,6 +9226,7 @@ namespace {
                         MonomorphState ms_tmp(m_crate.m_types);
                         auto v = m_resolve.get_value(sp, *c, ms_tmp, /*signature_only=*/true);
                         is_fcn = v.is_Function() || v.is_EnumConstructor() || v.is_StructConstructor();
+                        MIR_ASSERT(*m_mir_res, !is_fcn || !has_offset, "Function address has a non-zero offset: " << c.offset);
                         if (!is_fcn) {
                             m_of << "&";
                         }
@@ -9228,6 +9234,9 @@ namespace {
                         if (!is_fcn) {
                             m_of << ".val";
                         }
+                    }
+                    if (has_offset) {
+                        m_of << " + 0x" << ::std::hex << c.offset.truncate_u64() << ::std::dec << "))";
                     }
                 }
             }
