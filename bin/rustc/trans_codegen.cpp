@@ -489,7 +489,7 @@ namespace {
             m_of.flush();
             m_of.close();
 
-            // HACK! Create the output file, but keep it empty
+            // The requested output is a completion marker; MonoMIR is stored in the sibling `.mir` file.
             {
                 ::std::ofstream of(m_outfile_path);
                 if (!of.good()) {

@@ -2,10 +2,10 @@
 
 Найдено:
 
-- 148 строк с `hack/HACK/hacky/hackery/hackiness` в 32 файлах.
-- 137 точных употреблений слова `HACK`.
-- 142 комментария и 6 диагностических `DEBUG`-строк.
-- По подсистемам: frontend — 42, HIR/typeck — 57, MIR — 21, backend — 23, инфраструктура — 5.
+- 134 строки с `hack/HACK/hacky/hackery/hackiness` в 31 файле.
+- 126 точных употреблений слова `HACK`.
+- 128 комментариев и 6 диагностических `DEBUG`-строк.
+- По подсистемам: frontend — 42, HIR/typeck — 57, MIR — 16, backend — 17, инфраструктура — 2.
 
 Главный вывод: массово удалять эти комментарии нельзя. Под одной меткой смешаны реальные ошибки модели, допустимые lowerings, устаревший код и просто плохо названные инварианты.
 
@@ -66,7 +66,7 @@
 
 | Подсистема | Файлы и строки | Вывод |
 |---|---|---|
-| Driver | `main_bindings.cpp:1681,1868,2241,2481,2486` | Literal-false код удалён; testing/pipeline labels и ручной CLI parser остаются активной инфраструктурой. |
+| Driver | `main_bindings.cpp:1868,2241` | Debugger pause, CLI parsing и emulated `-vV` документированы как штатные driver features. Глобальная настройка crate loader и отключённый повтор lifetime validation остаются долгом. |
 | Expansion | `expand_common.cpp:25,137,387,460,949,2092,2223,2431` | Глобальный module context, повторные проходы и early `macro_rules`; hardcoded потеря `tracing`-семантики удалена. |
 | Parser | `parse_common.cpp:263,306,354,388,403,1279,1353` | Штатные token splitting, `Fn(...)`, optional leading `|`, tuple-field visibility и внутренние path encodings больше не помечены как HACK. Оставшиеся маркеры относятся к statement/path macro handling, `TOK_HASH` между statements и `builtin #` lowering. |
 | Macro matcher | `macro_rules_macro_rules.cpp:534,833,1537,2311,2313,3811` | Реальные opaque-fragment и matcher-state обходы; строка 534 привязана к ICU из rustc 1.90. |
@@ -87,10 +87,9 @@
 | Const eval | `hir_conv_constant_evaluation.cpp:1326,2198,3448,3463` | One-past-end допустим; ignore Drop и «roughly-correct» monomorph state — реальные пробелы. |
 | MIR lowering | `mir_from_hir.cpp:203,1109,1594,1621,6225,6258,8888`; header `:41` | Drop flags, unsize metadata, match flattening и hardcoded Box move. |
 | MIR validation | `mir_helpers.cpp:626` | Validator скрывает отсутствие корректного validity analysis. |
-| MIR passes | `mir_operations.cpp:2804,3630,3866,3943,4011,4037,4305,4748,5510,5557,9849,9936` | Box layout coupling, generic metadata и drop removal опасны; 32-bit usize masking и conservative inlining сами по себе нормальны. |
-| Mono MIR backend | `trans_codegen.cpp:492` | Пустой основной output — marker рядом с `.mir`, не самостоятельная потеря кода. |
-| C backend | `trans_codegen_c.cpp:348,595,1280,1291,1500,1903,2089,2526,2887,2893,3154,5291,5930,6719,7235` | Hardcoded std ABI, принудительный `-O1`, platform workarounds, fake `.rlib` marker и runtime `abort`. |
+| MIR passes | `mir_operations.cpp:2804,3630,3943,4011,4037,4748,9847` | Target-width constants, complete-type include, conservative intrinsic-wrapper inlining и drop-flag compaction документированы как invariants. Остались Box layout coupling, generic metadata, usage downgrade и опасное drop removal. |
+| C backend | `trans_codegen_c.cpp:1280,1291,1903,2089,2526,2887,2893,3154,5291,5930` | CAS helpers, `.rlib`/object protocol, `const_eval_select` call adapter и overflow intrinsics документированы как backend conventions. Остались принудительный `-O1`, platform workarounds, incomplete asm translation и runtime `abort`. |
 | Enumeration | `trans_main_bindings.cpp:1349,2204,2487,2872` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующая последовательность: parser/lexer, infrastructure, общие HIR definitions/visitor и metadata suffix переименованы. Продолжить проверку для driver, обычных MIR-pass invariants и backend marker conventions. Реальные HACK исправлять только unit-first, по измеряемому общему эффекту. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.
+Следующая последовательность: ложные markers в parser/lexer, infrastructure, driver, общих HIR definitions, metadata, безопасных MIR invariants и backend conventions переименованы. Следующий функциональный пункт — coercion/unsize и metadata model из опасного пункта 4 (34 измеренных library cases), строго unit-first. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.

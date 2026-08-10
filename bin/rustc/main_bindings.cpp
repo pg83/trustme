@@ -1678,7 +1678,7 @@ struct ProgramParams {
     ::std::set<::std::string> features;
 
     struct {
-        /// Testing hack: Pause just after startup (to allow a debugger to attach)
+        /// Debugger aid: pause just after startup so a debugger can attach.
         bool pause = false;
 
         bool full_validate = false;
@@ -2478,12 +2478,12 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
         this->lib_search_dirs.push_back(a);
     }
 
-    // Hacky command-line parsing
+    // Parse the rustc-compatible command-line subset supported by this driver.
     for (int i = 1; i < argc; i++) {
         const char* arg = argv[i];
 
         // The following imitates rustc's version output (which the crate `rustc_version` tries to parse)
-        // - Very much a hack
+        // Report the emulated rustc release together with the native compiler version.
         if (strcmp(arg, "-vV") == 0) {
             const char* rustc_target = RUSTC_TARGET_VERSION;
 

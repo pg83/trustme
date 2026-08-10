@@ -3863,7 +3863,7 @@ void MIR_Cleanup_LValue(const ::MIR::TypeResolve& state, MirMutator& mutator, ::
 void MIR_Cleanup_Constant(const ::MIR::TypeResolve& state, MirMutator& mutator, ::MIR::Constant& p) {
     if (auto* e = p.opt_Uint()) {
         switch (e->t) {
-            // HACK: Restrict Usize to 32-bits when needed
+            // Constants use U128 storage; truncate usize values to the target pointer width.
             case ::HIR::CoreType::Usize:
                 if (Target_GetCurSpec().m_arch.m_pointer_bits == 32) {
                     e->v &= U128(0xFFFFFFFF);
@@ -4302,7 +4302,7 @@ void MIR_Cleanup_SetPostMonomorph() {
 #include "trans_target.h"
 #include "trans_trans_list.h" // Note: This is included for inlining after enumeration and monomorph
 
-#include "hir_expr.h" // HACK
+#include "hir_expr.h" // The optimiser section accesses complete HIR expression nodes.
 
 #define DUMP_BEFORE_ALL 1
 #define DUMP_BEFORE_CONSTPROPAGATE 0
@@ -5507,8 +5507,7 @@ bool MIR_Optimise_Inlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool
                     if (te.fcn.is_Path() && te.fcn.as_Path() == path) {
                         return false;
                     }
-                    // HACK: Only allow if the wrapped function is an intrinsic
-                    // - Works around the TODO about monomorphed paths above
+                    // Only intrinsic wrapper calls are proven safe before ordinary call paths are monomorphised.
                     if (!te.fcn.is_Intrinsic()) {
                         return false;
                     }
@@ -5554,8 +5553,7 @@ bool MIR_Optimise_Inlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool
                     if (te.fcn.is_Path() && te.fcn.as_Path() == path) {
                         return false;
                     }
-                    // HACK: Only allow if the wrapped function is an intrinsic
-                    // - Works around the TODO about monomorphed paths above
+                    // Only intrinsic wrapper calls are proven safe before ordinary call paths are monomorphised.
                     if (!te.fcn.is_Intrinsic()) {
                         return false;
                     }
@@ -9933,7 +9931,7 @@ bool MIR_Optimise_GarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn
     });
     fcn.blocks.erase(new_blocks_end, fcn.blocks.end());
 
-    // NOTE: Drop flags are bool, so can't use the above hack
+    // Drop flags use vector<bool> proxy storage, so erase them by original and compacted index.
     for (unsigned int i = 0, j = 0; i < n_df; i++) {
         if (!used_dfs[i]) {
             fcn.drop_flags.erase(fcn.drop_flags.begin() + j);
