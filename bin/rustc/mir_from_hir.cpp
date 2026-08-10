@@ -381,7 +381,11 @@ namespace {
                 this->visit_node_ptr(subnode);
 
                 if (m_builder.block_active() || m_builder.has_result()) {
-                    m_builder.get_result_in_lvalue(sp, subnode->m_res_type); // Storing in a temporary will cause a drop if this is not an lvalue
+                    auto result = m_builder.get_result(sp);
+                    if (!m_builder.resolve().type_is_copy(sp, subnode->m_res_type)) {
+                        auto discarded = m_builder.new_temporary(subnode->m_res_type);
+                        m_builder.push_stmt_assign(sp, std::move(discarded), std::move(result));
+                    }
                     m_builder.terminate_scope(sp, mv$(stmt_scope));
                     diverged |= subnode->m_res_type->is_Diverge();
                 } else {
