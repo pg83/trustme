@@ -6883,6 +6883,12 @@ namespace static_borrow_constants {
                 } else if (is_unsized) {
                     DEBUG("-- " << value_ptr->m_res_type << " is unsized");
                 }
+                // Promoted values are never destroyed. Match rustc's
+                // `NeedsDrop` promotion qualification and leave values with
+                // drop glue as ordinary temporaries.
+                else if (candidate_needs_drop(value_ptr)) {
+                    DEBUG("-- Promotion candidate contains a value that needs drop glue");
+                }
                 // Not mutable (... or at least, not a non-shared non-zst)
                 else if (!is_zst && node.m_type != HIR::BorrowType::Shared) {
                     DEBUG("-- Mutable borrow of non-ZST");
@@ -7168,6 +7174,41 @@ namespace static_borrow_constants {
         }
 
     private:
+        bool candidate_needs_drop(::HIR::ExprNodeP& root) const {
+            struct Visitor: public ::HIR::ExprVisitorDef {
+                const StaticTraitResolve& resolve;
+                bool needs_drop = false;
+
+                explicit Visitor(const StaticTraitResolve& resolve)
+                    : HIR::ExprVisitorDef(resolve.m_crate.m_types)
+                    , resolve(resolve)
+                {
+                }
+
+                void visit_node_ptr(::HIR::ExprNodeP& node) override {
+                    if (needs_drop) {
+                        return;
+                    }
+                    if (resolve.type_needs_drop_glue(node->span(), node->m_res_type)) {
+                        needs_drop = true;
+                        return;
+                    }
+                    ::HIR::ExprVisitorDef::visit_node_ptr(node);
+                }
+
+                // Closure and coroutine bodies are not evaluated when their
+                // value is constructed, so their internal temporaries are not
+                // part of the promotion candidate.
+                void visit(::HIR::ExprNode_Closure&) override {}
+                void visit(::HIR::ExprNode_Generator&) override {}
+                void visit(::HIR::ExprNode_GeneratorWrapper&) override {}
+                void visit(::HIR::ExprNode_AsyncBlock&) override {}
+            } visitor(m_resolve);
+
+            visitor.visit_node_ptr(root);
+            return visitor.needs_drop;
+        }
+
         bool is_maybe_interior_mut(const ::HIR::ExprNode& node) const {
             return m_resolve.type_is_interior_mutable(node.span(), node.m_res_type) != HIR::Compare::Unequal;
         }

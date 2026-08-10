@@ -1355,7 +1355,32 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         // - `None => break label`
         arms.push_back(::AST::ExprNode_Match_Arm(::make_vec1(::AST::Pattern(::AST::Pattern::TagValue(), node.span(), ::AST::Pattern::Value::make_Named(path_None))), {}, ::AST::ExprNodeP(new ::AST::ExprNode_Flow(::AST::ExprNode_Flow::BREAK, node.m_label, nullptr))));
 
-        replacement.reset(new ::AST::ExprNode_Match(::AST::ExprNodeP(new ::AST::ExprNode_CallPath(::AST::Path::new_ufcs_trait(::TypeRef(node.span()), path_IntoIterator, {::AST::PathNode(rcstring_into_iter)}), ::make_vec1(mv$(node.m_value)))), ::make_vec1(::AST::ExprNode_Match_Arm(::make_vec1(::AST::Pattern(::AST::Pattern::TagBind(), node.span(), rcstring_it)), {}, ::AST::ExprNodeP(new ::AST::ExprNode_Loop(node.m_label, ::AST::ExprNodeP(new ::AST::ExprNode_Match(::AST::ExprNodeP(new ::AST::ExprNode_CallPath(::AST::Path::new_ufcs_trait(::TypeRef(node.span()), path_Iterator, {::AST::PathNode(rcstring_next)}), ::make_vec1(::AST::ExprNodeP(new ::AST::ExprNode_UniOp(::AST::ExprNode_UniOp::REFMUT, ::AST::ExprNodeP(new ::AST::ExprNode_NamedValue(::AST::Path(rcstring_it)))))))), mv$(arms)))))))));
+        auto next_receiver = ::AST::ExprNodeP(new ::AST::ExprNode_NamedValue(::AST::Path(rcstring_it)));
+        auto next_receiver_borrow = ::AST::ExprNodeP(new ::AST::ExprNode_UniOp(::AST::ExprNode_UniOp::REFMUT, mv$(next_receiver)));
+        auto next_call = ::AST::ExprNodeP(new ::AST::ExprNode_CallPath(
+            ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), path_Iterator, {::AST::PathNode(rcstring_next)}),
+            ::make_vec1(mv$(next_receiver_borrow))));
+        auto next_match = ::AST::ExprNodeP(new ::AST::ExprNode_Match(mv$(next_call), mv$(arms)));
+        auto loop = ::AST::ExprNodeP(new ::AST::ExprNode_Loop(node.m_label, mv$(next_match)));
+
+        auto into_iter_call = ::AST::ExprNodeP(new ::AST::ExprNode_CallPath(
+            ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), path_IntoIterator, {::AST::PathNode(rcstring_into_iter)}),
+            ::make_vec1(mv$(node.m_value))));
+        auto outer_match = ::AST::ExprNodeP(new ::AST::ExprNode_Match(
+            mv$(into_iter_call),
+            ::make_vec1(::AST::ExprNode_Match_Arm(
+                ::make_vec1(::AST::Pattern(::AST::Pattern::TagBind(), node.span(), rcstring_it)),
+                {},
+                mv$(loop)))));
+
+        // rustc wraps the outer match in `DropTemps`: for always yields (), so
+        // a block containing the match as a statement provides the same
+        // terminating temporary scope without leaking head temporaries into a
+        // surrounding initializer or call expression.
+        auto block = new ::AST::ExprNode_Block();
+        block->m_nodes.push_back({true, mv$(outer_match)});
+        replacement.reset(block);
+        replacement->set_span(node.span());
     }
 
     void visit(::AST::ExprNode_While& node) override {
