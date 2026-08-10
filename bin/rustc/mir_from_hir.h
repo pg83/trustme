@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/from_hir.h
- * - Construction of MIR from the HIR expression tree
- */
 #pragma once
 #include "mir_mir.h"
 #include "hir_type.h"

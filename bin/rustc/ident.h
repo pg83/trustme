@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * include/ident.h
- * - Identifiers with hygiene
- */
 #pragma once
 #include <vector>
 #include <string>

@@ -1,18 +1,5 @@
 #include "resolve_main_bindings.h"
 
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * resolve/absolute.cpp
- * - Convert all paths in AST into absolute form (or to the relevant local item)
- *
- * NOTE: This is the core of the 'resolve' pass.
- *
- * After complete there should be no:
- * - Relative/super/self paths
- * - MaybeBind patterns
- */
 #include "ast_crate.h"
 #include "ast_ast.h"
 #include "ast_expr.h"
@@ -2837,15 +2824,8 @@ void Resolve_Absolutise(AST::Crate& crate) {
     Resolve_Absolute_Mod(crate, crate.root_module());
 }
 
-/*
 #undef FLAG_CONST_GENERIC
 
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * resolve/index.cpp
- * - Build up a name index in all modules (optimising lookups in later stages)
- */
 #include "ast_ast.h"
 #include "ast_crate.h"
 #include "main_bindings.h"
@@ -3757,13 +3737,6 @@ void Resolve_Index(AST::Crate& crate) {
     Resolve_Index_Module_Normalise(crate, Span(), crate.m_root_module);
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * resolve/use.cpp
- * - Absolutise and check all 'use' statements
- */
 #include "main_bindings.h"
 #include "ast_crate.h"
 #include "ast_ast.h"

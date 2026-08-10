@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/inherent_cache.h
- * - Inherent method lookup cache
- */
 #pragma once
 #include "range_vec_map.h"
 #include "hir_type_ref.h"

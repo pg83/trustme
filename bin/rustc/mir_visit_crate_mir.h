@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/visit_crate_mir.h
- * - Visitor to visit all expressions in a crate
- */
 #pragma once
 #include "hir_visitor.h"
 #include "hir_typeck_static.h"

@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/mir.cpp
- * - MIR (Middle Intermediate Representation) definitions
- */
 #include "mir_mir.h"
 #include <algorithm> // std::min
 #include "hir_typeck_monomorph.h"

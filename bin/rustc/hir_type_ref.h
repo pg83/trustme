@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/type_ref.h
- * - References to interned HIR type nodes
- */
 #pragma once
 
 #include <cstdint>

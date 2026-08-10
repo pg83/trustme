@@ -1,12 +1,5 @@
 #include "expand_common.h"
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/mod.cpp
- * - Expand pass core code
- */
 #include "ast_ast.h"
 #include "ast_crate.h"
 #include "main_bindings.h"

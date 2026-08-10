@@ -1,12 +1,5 @@
 #include "hir_main_bindings.h"
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/serialise.cpp
- * - HIR (De)Serialisation for crate metadata
- */
 // TODO: Have an environment variable that controls if debug is enabled here.
 #define DEBUG_EXTRA_ENABLE &&des_debug_enabled()
 
@@ -1620,16 +1613,10 @@ RcString HIR_Deserialise_JustName(const ::std::string& filename) {
 #endif
 }
 
-/*
 #undef DEBUG_EXTRA_ENABLE
+#define DEBUG_EXTRA_ENABLE
 #undef DEF_D
 
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/dump.cpp
- * - Dump the HIR module tree as pseudo-rust
- */
 #include "hir_main_bindings.h"
 #include "hir_visitor.h"
 #include "hir_expr.h"
@@ -2485,15 +2472,8 @@ void HIR_DumpExpr(::std::ostream& sink, const ::HIR::ExprPtr& expr) {
     const_cast<HIR::ExprPtr&>(expr)->visit(tv);
 }
 
-/*
 #undef NODE_IS
 
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/serialise.cpp
- * - HIR (De)Serialisation for crate metadata
- */
 #include "hir_hir.h"
 #include "hir_main_bindings.h"
 #include "macro_rules_macro_rules.h"

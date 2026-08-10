@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/item-path.h
- * - Printable path to an item in the HIR
- */
 #pragma once
 
 #include "hir_type.h"

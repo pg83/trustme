@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * ast/attrs.h
- * - AST Attributes (#[foo] and #![foo])
- */
 #ifndef _AST_ATTRS_HPP_
 #define _AST_ATTRS_HPP_
 

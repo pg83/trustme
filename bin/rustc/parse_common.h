@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/common.h
- * - Common definitions used by the parser
- */
 #ifndef PARSE_COMMON_HPP_INCLUDED
 #define PARSE_COMMON_HPP_INCLUDED
 #include <iostream>

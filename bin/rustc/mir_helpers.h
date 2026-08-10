@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/helpers.h
- * - MIR Manipulation helpers
- */
 #pragma once
 #include <vector>
 #include <functional>

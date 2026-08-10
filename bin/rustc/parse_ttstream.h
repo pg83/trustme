@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/ttstrea.h
- * - Token tree streams (for post-lex parsing)
- */
 #pragma once
 
 #include "parse_tokentree.h"

@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_conv/constant_evaluation.cpp
- * - Minimal (integer only) constant evaluation
- */
 #include "hir_conv_constant_evaluation.h"
 #include "hir_conv_main_bindings.h"
 #include "hir_hir.h"

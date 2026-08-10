@@ -1,12 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * include/debug.h
- * - Common compiler debugging macros/helpers
- *
- * see also src/include/span.h
- */
 #pragma once
 #include <sstream>
 #include <cassert>

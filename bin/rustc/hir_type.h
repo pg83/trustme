@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/type.h
- * - HIR Type representation
- */
 #ifndef _HIR_TYPE_HPP_
 #define _HIR_TYPE_HPP_
 #pragma once

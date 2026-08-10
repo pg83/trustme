@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/tokentree.h
- * - Token Trees (groups of tokens
- */
 #ifndef TOKENTREE_HPP_INCLUDED
 #define TOKENTREE_HPP_INCLUDED
 

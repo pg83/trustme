@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/codegen.h
- * - Common class and methods for codegen
- */
 #pragma once
 
 #include "trans_trans_list.h"

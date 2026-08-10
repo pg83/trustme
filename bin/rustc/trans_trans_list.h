@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/trans_list.h
- * - A list of items that require translation
- */
 #pragma once
 
 #include "hir_type.h"

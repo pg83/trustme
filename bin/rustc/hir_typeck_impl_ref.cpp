@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/impl_ref.cpp
- * - Reference to a trait implementation (either a bound or a impl block)
- */
 #include "hir_typeck_impl_ref.h"
 #include "hir_hir.h"
 #include "hir_typeck_static.h" // for monomorphise_type_with

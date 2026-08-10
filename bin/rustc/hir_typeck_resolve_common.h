@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/resolve_common.h
- * - Helper class for logic shared between "static" and "dynamic" type checking/resolution
- */
 #pragma once
 
 #include <map>

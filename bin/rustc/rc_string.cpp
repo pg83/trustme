@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * rc_string.cpp
- * - Reference-counted string
- */
 #include "rc_string.h"
 #include <cstring>
 #include <string>

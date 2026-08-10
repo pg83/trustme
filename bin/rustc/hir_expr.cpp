@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/expr.cpp
- * - HIR expression helper code
- */
 #include "hir_expr.h"
 
 ::HIR::ExprNode::~ExprNode() {

@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * include/main_bindings.h
- * - General bindings of AST passes for main to call
- */
 #ifndef _MAIN_BINDINGS_HPP_
 #define _MAIN_BINDINGS_HPP_
 

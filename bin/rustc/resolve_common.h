@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * resolve/common.h
- * - Common core to the resolve phase
- */
 #pragma once
 #include <stdexcept>
 #include "tagged_union.h"

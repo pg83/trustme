@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/serialise_lowlevel.h
- * - HIR (De)Serialisation low-level "protocol"
- */
 #pragma once
 
 // Encoding protocol ideas:

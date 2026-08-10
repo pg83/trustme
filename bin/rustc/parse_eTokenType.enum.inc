@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/eTokenType.enum.h
- * - Multi-include file for defining the eTokenType enum
- */
 _(TOK_NULL)
 _(TOK_EOF)
 

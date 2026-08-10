@@ -1,11 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/allocator.cpp
- * - Handling for switchable allocator backends
- */
-
 #include "trans_allocator.h"
 
 #define DEF_METHOD_ARGS(name, ...) const AllocatorDataTy ALLOCATOR_METHODS_ARGS_##name[] = {__VA_ARGS__};

@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/codegen_c.cpp
- * - Code generation emitting C code
- */
 #include "trans_codegen_c.h"
 #include "trans_codegen.h"
 #include "trans_mangling.h"
@@ -9654,13 +9647,6 @@ namespace {
     return ::std::unique_ptr<CodeGenerator>(new CodeGenerator_C(crate, outfile));
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/codegen_c_structured.cpp
- * - Converts MIR into a semi-structured form
- */
 #include "common.h"
 #include "mir_mir.h"
 #include <algorithm>

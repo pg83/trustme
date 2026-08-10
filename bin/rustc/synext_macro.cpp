@@ -1,12 +1,5 @@
 #include "synext_macro.h"
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/asm.cpp
- * - asm! macro
- */
 #include "common.h"
 #include "synext_macro.h"
 #include "synext.h" // for Expand_BareExpr
@@ -569,13 +562,6 @@ STATIC_MACRO("asm", CAsmExpander);
 STATIC_MACRO("global_asm", CGlobalAsmExpander);
 STATIC_MACRO("naked_asm", CNakedAsmExpander);
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/assert.cpp
- * - assert! built-in macro (1.29)
- */
 #include "synext_macro.h"
 #include "synext.h" // for Expand_BareExpr
 #include "parse_interpolated_fragment.h"
@@ -671,13 +657,6 @@ void Expand_init_assert() {
     }
 }
 
-/*
-* MRustC - Rust Compiler
-* - By John Hodge (Mutabah/thePowersGang)
-*
-* expand/compile_error.cpp
-* - compile_error! handler
-*/
 #include "synext.h"
 #include "parse_common.h"
 #include "parse_parseerror.h"
@@ -695,13 +674,6 @@ class CExpander_CompileError: public ExpandProcMacro {
 
 STATIC_MACRO("compile_error", CExpander_CompileError);
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/concat.cpp
- * - concat! handler
- */
 #include "synext.h"
 #include "parse_common.h"
 #include "parse_parseerror.h"
@@ -781,13 +753,6 @@ class CConcatIdentsExpander: public ExpandProcMacro {
 STATIC_MACRO("concat", CConcatExpander);
 STATIC_MACRO("concat_idents", CConcatIdentsExpander);
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/env.cpp
- * - env! and option_env! macros
- */
 #include "synext_macro.h"
 #include "parse_common.h"
 #include "parse_ttstream.h"
@@ -856,13 +821,6 @@ class CExpanderOptionEnv: public ExpandProcMacro {
 STATIC_MACRO("env", CExpanderEnv);
 STATIC_MACRO("option_env", CExpanderOptionEnv);
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/file_line.cpp
- * - file! line! and macro_path! macros
- */
 #include "synext.h"
 #include "parse_common.h"
 #include "parse_ttstream.h"
@@ -916,13 +874,6 @@ STATIC_MACRO("column", CExpanderColumn);
 STATIC_MACRO("__rust_unstable_column", CExpanderUnstableColumn);
 STATIC_MACRO("module_path", CExpanderModulePath);
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/format_args.cpp
- * - format_args! syntax extension handling
- */
 #include "synext_macro.h"
 #include "synext.h" // for Expand_BareExpr
 #include "parse_common.h"
@@ -1914,15 +1865,8 @@ STATIC_MACRO("format_args", CFormatArgsExpander);
 STATIC_MACRO("const_format_args", CConstFormatArgsExpander);
 STATIC_MACRO("format_args_nl", CFormatArgsNlExpander);
 
-/*
 #undef CMP
 
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/include.cpp
- * - include!/include_str!/include_bytes! support
- */
 #include "synext_macro.h"
 #include "synext.h" // for Expand_BareExpr
 #include "parse_common.h"
@@ -2055,13 +1999,6 @@ STATIC_MACRO("include", CIncludeExpander);
 STATIC_MACRO("include_bytes", CIncludeBytesExpander);
 STATIC_MACRO("include_str", CIncludeStrExpander);
 
-/*
-* MRustC - Rust Compiler
-* - By John Hodge (Mutabah/thePowersGang)
-*
-* expand/panic.cpp
-* - panic! built-in macro (1.54)
-*/
 #include "synext_macro.h"
 #include "parse_interpolated_fragment.h"
 #include "ast_crate.h"
@@ -2157,13 +2094,6 @@ void Expand_init_panic() {
     }
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/rustc_diagnostics.cpp
- * - Stubbed handling for __register_diagnostic and __diagnostic_used
- */
 #include "synext.h"
 #include "parse_parseerror.h" // For GET_CHECK_TOK
 #include "parse_common.h"     // TokenTree etc
@@ -2228,13 +2158,6 @@ STATIC_MACRO("__register_diagnostic", CExpanderRegisterDiagnostic)
 STATIC_MACRO("__diagnostic_used", CExpanderDiagnosticUsed)
 STATIC_MACRO("__build_diagnostic_array", CExpanderBuildDiagnosticArray)
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/stringify.cpp
- * - stringify! macro
- */
 #include "synext.h"
 #include "ast_crate.h"
 #include "parse_common.h"

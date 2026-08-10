@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/static.cpp
- * - Non-inferred type checking
- */
 #include "hir_typeck_static.h"
 #include "hir_typeck_helpers.h"
 #include "trait_solver_mode.h"

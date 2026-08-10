@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/token.h
- * - Lexer Tokens
- */
 #pragma once
 
 #include "rc_string.h"

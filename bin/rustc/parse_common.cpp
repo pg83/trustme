@@ -1,17 +1,5 @@
 #include "parse_common.h"
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/expr.cpp
- * - Expression (i.e. code) parsing
- *
- * Start points:
- * - Parse_ExprBlockNode : Parses a block
- * - Parse_Stmt : Parse a single statement
- * - Parse_Expr0 : Parse a single expression
- */
 #include "parse_parseerror.h"
 #include "ast_ast.h"
 #include "ast_expr.h"
@@ -1544,16 +1532,9 @@ TokenTree Parse_TT(TokenStream& lex, bool unwrapped) {
     return rv;
 }
 
-/*
 #undef NEWNODE
 #undef LEFTASSOC
 
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/paths.cpp
- * - Parsing for module paths
- */
 #include "parse_parseerror.h"
 #include "parse_common.h"
 #include "ast_ast.h"
@@ -1841,13 +1822,6 @@ AST::Path Parse_Path(TokenStream& lex, bool is_abs, eParsePathGenericMode generi
     return rv;
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/pattern.cpp
- * - Parsing for patterns
- */
 #include "parse_common.h"
 #include "parse_parseerror.h"
 #include "ast_expr.h" // To convert :expr
@@ -2425,19 +2399,8 @@ AST::Pattern Parse_PatternStruct(TokenStream& lex, ProtoSpan ps, AST::Path path)
     return AST::Pattern(AST::Pattern::TagStruct(), lex.end_span(ps), ::std::move(path), ::std::move(subpats), is_exhaustive);
 }
 
-/*
 #undef NEWNODE
 
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/root.cpp
- * - Parsing at the module level (highest-level parsing)
- *
- * Entrypoint:
- * - Parse_Crate : Handles crate attrbutes, and passes on to Parse_ModRoot
- * - Parse_ModRoot
- */
 #include "ast_ast.h"
 #include "ast_crate.h"
 #include "parse_parseerror.h"
@@ -4758,16 +4721,9 @@ AST::Crate* Parse_Crate(stl::ObjPool* pool, HIR::TypeInterner& types, ::std::str
     return crate;
 }
 
-/*
 #undef GET_SPANNED
 #undef LOOKAHEAD2
 
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/types.cpp
- * - Parsing for type usages
- */
 #include "parse_common.h"
 #include "parse_parseerror.h"
 #include "ast_types.h"

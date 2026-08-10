@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * include/ident.cpp
- * - Identifiers with hygiene
- */
 #include "ident.h"
 #include <iostream>
 #include "debug.h"

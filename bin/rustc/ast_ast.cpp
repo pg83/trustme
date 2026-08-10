@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * ast/ast.cpp
- * - Implementation of the various AST classes
- */
 #include "ast_ast.h"
 #include "ast_crate.h"
 #include "ast_types.h"

@@ -1,13 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/visitor.h
- * - HIR Outer Visitor
- *
- * Calls methods on each item type in the HIR (and on paths/types/patterns)
- * Does NOT visit expression nodes
- */
 #pragma once
 
 #include "hir_hir.h"

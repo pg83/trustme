@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * include/span.h
- * - Spans and error handling
- */
 #pragma once
 
 #include "rc_string.h"

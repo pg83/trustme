@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * ast/generics.h
- * - AST Generics (type parameters, bounds, ...)
- */
 #pragma once
 
 #include <string>

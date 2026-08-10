@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/impl_ref.h
- * - Reference to a specific impl block (or the concept of one)
- */
 #pragma once
 
 #include "hir_type.h"

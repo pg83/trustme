@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/mir.h
- * - MIR (Middle Intermediate Representation) definitions
- */
 #pragma once
 #include "tagged_union.h"
 #include <vector>

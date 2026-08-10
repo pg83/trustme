@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/from_ast.h
- * - Shared code definitions for constructing the HIR from AST
- */
 #pragma once
 
 #include "hir_expr_ptr.h"

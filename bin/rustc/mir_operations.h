@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/operations.h
- * - Common header for operations performed on MIR functions
- */
 #pragma once
 
 #include "hir_typeck_static.h"

@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/expr_state.h
- * - Extra state for expression pointers
- */
 #pragma once
 #include "hir_hir.h"
 

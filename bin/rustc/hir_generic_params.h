@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/generic_params.h
- * - HIR version of generic definition blocks
- */
 #pragma once
 #include <string>
 #include <vector>

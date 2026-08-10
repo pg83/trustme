@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/helpers.h
- * - Typecheck dynamic checker
- */
 #pragma once
 
 #include "hir_hir.h"

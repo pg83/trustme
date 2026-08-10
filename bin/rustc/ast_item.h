@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * ast/item.h
- * - AST named item wrapper
- */
 #pragma once
 
 #include <string>

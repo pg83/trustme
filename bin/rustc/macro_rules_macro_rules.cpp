@@ -1,12 +1,5 @@
 #include "macro_rules_macro_rules.h"
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * macro_rules/parse.cpp
- * - macro_rules! evaluation (expansion)
- */
 #include "common.h"
 #include "macro_rules_macro_rules.h"
 #include "parse_parseerror.h"
@@ -2509,13 +2502,6 @@ const ::std::vector<MacroExpansionEnt>* MacroExpandState::getCurLayer() const {
     return ents;
 }
 
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * macro_rules/mod.cpp
- * - Top-level handling for macro_rules macros
- */
 #include "common.h"
 #include "macro_rules_macro_rules.h"
 #include "parse_parseerror.h"
@@ -2871,13 +2857,6 @@ MacroRules::~MacroRules() {
 MacroRulesArm::~MacroRulesArm() {
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * macro_rules/parse.cpp
- * - macro_rules! parsing
- */
 #include "common.h"
 #include "parse_common.h"
 #include "parse_parseerror.h"

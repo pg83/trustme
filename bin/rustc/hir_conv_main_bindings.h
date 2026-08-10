@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_conv/main_bindings.h
- * - Functions in the "HIR Conversion" group called by main
- */
 #pragma once
 
 #include <utility>

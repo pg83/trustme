@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/proc_macro.h
- * - Support for the `#[proc_macro_derive]` attribute
- */
 #pragma once
 #include "parse_tokenstream.h"
 #include "slice.h"

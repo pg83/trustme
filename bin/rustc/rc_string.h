@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * include/rc_string.h
- * - Reference-counted string (used for spans)
- */
 #pragma once
 
 #include <cstring>

@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/expr_ptr.h
- * - HIR Expression
- */
 #pragma once
 #include <vector>
 #include <cassert>

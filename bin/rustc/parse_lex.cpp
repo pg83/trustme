@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/lex.cpp
- * - Lexer (converts input file to token stream)
- */
 #include "parse_lex.h"
 #include "parse_tokentree.h"
 #include "parse_parseerror.h"

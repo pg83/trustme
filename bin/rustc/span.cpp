@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * span.cpp
- * - Spans and error handling
- */
 #include "span.h"
 #include <functional>
 #include <iostream>

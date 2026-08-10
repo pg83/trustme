@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * version.h
- * - Compiler version number
- */
 #pragma once
 
 #include <string>

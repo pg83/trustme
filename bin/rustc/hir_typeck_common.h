@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/common.h
- * - Typecheck common methods
- */
 #pragma once
 
 #include "hir_typeck_impl_ref.h"

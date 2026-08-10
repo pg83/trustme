@@ -1,12 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/hir.h
- * - Processed module tree (High-level Intermediate Representation)
- *
- * Contains the expanded and desugared AST
- */
 #pragma once
 #include "target_version.h"
 #include "int128.h"

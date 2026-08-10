@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * ast/crate.cpp
- * - Helper functions for the AST::Crate type (includes loading `extern crate`s)
- */
 #include "ast_crate.h"
 #include "ast_ast.h"
 #include "parse_parseerror.h"

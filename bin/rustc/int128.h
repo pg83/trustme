@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * include/int128.cpp
- * - Compiler-agnostic 128-bit integers
- */
 #pragma once
 #include <stdint.h>
 #include <iostream>

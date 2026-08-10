@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * debug.cpp
- * - Debug printing (with indenting)
- */
 #include "debug.h"
 #include <cstdint>
 #include "debug_inner.h"

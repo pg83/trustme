@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * include/compile_error.h
- * - Front-end compiler error exception classes
- */
 #ifndef _COMPILE_ERROR_H_
 #define _COMPILE_ERROR_H_
 

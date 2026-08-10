@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/from_ast.cpp
- * - Constructs the HIR module tree from the AST module tree
- */
 #include "hir_from_ast.h"
 #include "common.h"
 #include "hir_hir.h"
@@ -2862,13 +2855,6 @@ public:
     return &rv;
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/from_ast_expr.cpp
- * - Constructs a HIR expression tree from an AST expression tree
- */
 #include "hir_expr_ptr.h"
 #include "hir_expr.h"
 #include "ast_expr.h"

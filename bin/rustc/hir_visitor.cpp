@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/visitor.cpp
- * - HIR Visitor default implementation
- */
 #include "hir_visitor.h"
 #include "hir_hir.h"
 #include "hir_typeck_static.h"

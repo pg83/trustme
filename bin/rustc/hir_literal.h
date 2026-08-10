@@ -1,10 +1,3 @@
-/*
-* MRustC - Rust Compiler
-* - By John Hodge (Mutabah/thePowersGang)
-*
-* hir/literal.h
-* - HIR (partially) evaluated literal
-*/
 #pragma once
 #include "tagged_union.h"
 #include "hir_generic_ref.h"

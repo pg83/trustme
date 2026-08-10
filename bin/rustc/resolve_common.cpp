@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * resolve/common.cpp
- * - Common core to the resolve phase
- */
 #include "resolve_common.h"
 #include "resolve_main_bindings.h"
 #include "ast_crate.h"

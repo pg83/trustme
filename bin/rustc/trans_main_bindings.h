@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/main_bindings.h
- * - Trans functions called by main()
- */
 #pragma once
 
 #include "trans_trans_list.h"

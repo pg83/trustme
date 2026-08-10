@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/codegen.cpp
- * - Wrapper for translation
- */
 #include "trans_codegen.h"
 #include "trans_main_bindings.h"
 #include "trans_trans_list.h"
@@ -178,15 +171,6 @@ void Trans_Codegen(const ::std::string& outfile, CodegenOutput out_ty, const Tra
     codegen->finalise(opt, out_ty, hir_file);
 }
 
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/codegen_mmir.cpp
- * - Monomorphised MIR Backend
- *
- * Saves the MIR in a loadable form, used by the `standalone_miri` tool
- */
 #include "trans_codegen.h"
 #include "hir_typeck_static.h"
 #include "mir_helpers.h"

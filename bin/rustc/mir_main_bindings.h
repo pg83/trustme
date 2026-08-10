@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/main_bindings.h
- * - main.cpp binding
- */
 #pragma once
 #include <iostream>
 #include "hir_hir.h"

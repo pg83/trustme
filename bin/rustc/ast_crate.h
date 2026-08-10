@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * ast/crate.h
- * - AST::Crate type, and other top-level AST definitions
- */
 #pragma once
 
 #include "ast_ast.h"

@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * common/target_detect.h
- * - Auto-magical host target detection
- */
 #pragma once
 
 // - Windows (MSVC)

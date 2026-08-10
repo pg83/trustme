@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * common.h
- * - Compiler-global common header
- */
 #ifndef COMMON_HPP_INCLUDED
 #define COMMON_HPP_INCLUDED
 

@@ -1,7 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- */
 #include "parse_token.h"
 #include "common.h"
 #include "parse_parseerror.h"

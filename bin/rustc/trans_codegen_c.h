@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/codegen_c.h
- * - C codegen backend (internal header)
- */
 #pragma once
 #include "tagged_union.h"
 #include <vector>

@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * ast/expr.cpp
- * - AST Expression nodes
- */
 #include "ast_expr.h"
 #include "ast_ast.h"
 #include <cctype>

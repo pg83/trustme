@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/lex.h
- * - Lexer header
- */
 #ifndef LEX_HPP_INCLUDED
 #define LEX_HPP_INCLUDED
 

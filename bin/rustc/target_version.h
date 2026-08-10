@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * include/target_version.h
- * - rustc language version fixed by this compiler
- */
 #pragma once
 
 inline constexpr const char* RUSTC_TARGET_VERSION = "1.90";

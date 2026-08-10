@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/generic_ref.h
- * - Reference to a generic
- */
 #pragma once
 #include <cstdint>
 #include "rc_string.h"

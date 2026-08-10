@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * ast/ast.h
- * - Core AST header
- */
 #ifndef AST_HPP_INCLUDED
 #define AST_HPP_INCLUDED
 

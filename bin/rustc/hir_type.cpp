@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/type.cpp
- * - HIR Type helper code
- */
 #include "hir_type.h"
 #include "span.h"
 #include "hir_expr.h" // Hack for cloning array types

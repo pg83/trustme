@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/resolve_common.cpp
- * - Common components of both "static" and "dynamic" type checking
- */
 #include "hir_typeck_resolve_common.h"
 #include "hir_typeck_monomorph.h" // MonomorphStatePtr
 

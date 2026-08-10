@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * include/cpp_unpack.h
- * - Macro that performs variadic unpacking and calls a function/macro with the unpacked values
- */
 #ifndef _CPP_UNAPCK_H_
 #define _CPP_UNAPCK_H_
 

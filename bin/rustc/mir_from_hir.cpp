@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/from_hir.cpp
- * - Construction of MIR from the HIR expression tree
- */
 #include "mir_from_hir.h"
 #include <type_traits> // for TU_MATCHA
 #include <algorithm>
@@ -3123,13 +3116,6 @@ void HIR_GenerateMIR(::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/from_hir_match.cpp
- * - Conversion of `match` blocks into MIR
- */
 #include "mir_from_hir.h"
 #include "hir_typeck_common.h" // monomorphise_type
 #include <algorithm>
@@ -7168,13 +7154,6 @@ void MatchGenGrouped::gen_dispatch_splitslice(const field_path_t& field_path, co
     }
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/mir_builder.cpp
- * - MIR Building Helper
- */
 #include <algorithm>
 #include "mir_from_hir.h"
 

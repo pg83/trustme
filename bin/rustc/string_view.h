@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * include/string_view.h
- * - Clone of the `string_view` class (introduced in C++17)
- */
 #pragma once
 #include <string>
 #include <cstddef>  // size_t

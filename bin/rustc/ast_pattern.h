@@ -1,11 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * ast/pattern.h
- * - AST Pattern representation
- */
-
 #ifndef _AST__PATTERN_HPP_INCLUDED_
 #define _AST__PATTERN_HPP_INCLUDED_
 

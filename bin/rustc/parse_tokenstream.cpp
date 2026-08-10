@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/tokenstream.cpp
- * - TokenStream - Parser token source interface
- */
 #include "parse_tokenstream.h"
 #include "common.h"
 #include "parse_parseerror.h"

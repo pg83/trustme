@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/path.h
- * - Item paths (helper code)
- */
 #include "hir_path.h"
 #include "hir_type.h"
 #include "hir_expr.h"

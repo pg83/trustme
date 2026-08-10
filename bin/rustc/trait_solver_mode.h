@@ -1,7 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - Trait solver selection shared by the driver and type checking.
- */
 #pragma once
 
 struct TraitSolverConfig {

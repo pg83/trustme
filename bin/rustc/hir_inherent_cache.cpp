@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/inherent_cache.cpp
- * - Inherent method lookup cache
- */
 #include "hir_inherent_cache.h"
 #include "hir_type.h"
 #include "hir_hir.h"

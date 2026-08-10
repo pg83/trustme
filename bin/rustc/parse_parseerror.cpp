@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/parseerror.cpp
- * - Exceptions thrown for different types of parsing errors
- */
 #include "parse_parseerror.h"
 #include <iostream>
 

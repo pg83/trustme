@@ -1,12 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * types.cpp
- * - Backing code for the TypeRef class
- *
- * Handles a chunk of type resolution (merging) and matching/comparing types
- */
 #include "ast_types.h"
 #include "ast_ast.h"
 #include "ast_crate.h"

@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/expr_cs.cpp
- * - Constraint Solver type inferrence
- */
 #include "hir_typeck_expr_cs.h"
 #include "hir_typeck_main_bindings.h"
 #include "hir_expr.h"
@@ -8726,13 +8719,6 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
     }
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/expr_cs__enum.cpp
- * - "Constraint Solver" type inferrence (rule enumeration)
- */
 #include "hir_typeck_expr_cs.h"
 #include "hir_typeck_expr_visit.h"
 #include "hir_expr.h"

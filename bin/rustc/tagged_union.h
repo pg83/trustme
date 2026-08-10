@@ -1,17 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * include/tagged_union.h
- * - Macro that allows construction of a tagged union (with various helper methods)
- *
- *
- * The most evil CPP abuse I have ever written
- *
- * Constructs a tagged union that correctly handles objects.
- *
- * Union is NOT copy-constructable
- */
 #ifndef INCLUDED_TAGGED_UNION_H_
 #define INCLUDED_TAGGED_UNION_H_
 

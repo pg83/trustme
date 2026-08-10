@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/monomorphise.h
- * - MIR monomorphisation
- */
 #include "trans_monomorphise.h"
 #include "hir_typeck_static.h"
 #include "mir_mir.h"

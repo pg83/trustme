@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * macro_rules/macro_rules_ptr.h
- * - Pointer to a MacroRules instance
- */
 #pragma once
 
 #include <cassert>

@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * resolve/main_bindings.h
- * - Functions in the resolve pass called by main
- */
 #pragma once
 
 namespace AST {

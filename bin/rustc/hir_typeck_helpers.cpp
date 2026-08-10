@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/helpers.cpp
- * - Typecheck helpers
- */
 #include "hir_typeck_helpers.h"
 #include "hir_conv_main_bindings.h"
 #include "trait_solver_mode.h"

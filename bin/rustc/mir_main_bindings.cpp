@@ -1,12 +1,5 @@
 #include "mir_main_bindings.h"
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/dump.cpp
- * - Dump MIR for functions (semi-flattened)
- */
 #include "mir_main_bindings.h"
 #include "hir_visitor.h"
 #include "mir_mir.h"

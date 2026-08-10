@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/expr_cs.cpp
- * - "Constraint Solver" type inferrence
- */
 #pragma once
 #include <algorithm>
 #include "hir_type_ref.h"

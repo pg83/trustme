@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/tokentree.cpp
- * - Token Tree (collection of tokens)
- */
 #include "parse_tokentree.h"
 #include "ast_edition.h"
 #include "common.h"

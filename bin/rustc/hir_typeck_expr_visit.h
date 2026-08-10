@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/expr_visit.h
- * - Helpers for the HIR typecheck expression visiting
- */
 #pragma once
 #include "hir_hir.h"
 #include "hir_item_path.h"

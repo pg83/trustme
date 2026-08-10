@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/allocator.h
- * - Handling for switchable allocator backends
- */
 #include <cstddef>
 
 enum class AllocatorDataTy {

@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * parse/ttstream.cpp
- * - Token-Tree backed token streams
- */
 #include "parse_ttstream.h"
 #include "common.h"
 

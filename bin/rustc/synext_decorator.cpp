@@ -1,12 +1,5 @@
 #include "synext_decorator.h"
 
-/*
-* MRustC - Rust Compiler
-* - By John Hodge (Mutabah/thePowersGang)
-*
-* expand/codegen.cpp
-* - Attributes that influence codegen and layouts
-*/
 #include "synext.h"
 #include "ast_generics.h"
 #include "ast_ast.h"
@@ -660,13 +653,6 @@ class CHandler_Unsafe: public ExpandDecorator {
 
 STATIC_DECORATOR("unsafe", CHandler_Unsafe);
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/crate_type.cpp
- * - #![crate_type] handling
- */
 #include "synext.h"
 #include "ast_crate.h"
 
@@ -765,13 +751,6 @@ STATIC_DECORATOR("allocator", Decorator_Allocator)
 STATIC_DECORATOR("panic_runtime", Decorator_PanicRuntime)
 STATIC_DECORATOR("needs_panic_runtime", Decorator_NeedsPanicRuntime)
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/derive.cpp
- * - Support for the `#[derive]` attribute
- */
 #include "synext.h"
 #include "common.h"
 #include "ast_ast.h"
@@ -2554,15 +2533,6 @@ STATIC_DECORATOR("derive", Decorator_Derive)
 class Decorator_DeriveConst: public Decorator_Derive {};
 STATIC_DECORATOR("derive_const", Decorator_DeriveConst)
 
-/*
-* MRustC - Rust Compiler
-* - By John Hodge (Mutabah/thePowersGang)
-*
-#undef NEWNODE
-
-* expand/doc.cpp
-* - Documentation comments
-*/
 #include "synext.h"
 #include "ast_generics.h"
 
@@ -2598,13 +2568,6 @@ class CDocHandler: public ExpandDecorator {
 
 STATIC_DECORATOR("doc", CDocHandler);
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * synexts/lang_item.cpp
- * - Binds language items to #[lang_item] tagged items
- */
 #include "synext.h"
 #include "common.h"
 #include "ast_ast.h"
@@ -3234,13 +3197,6 @@ STATIC_DECORATOR("panic_handler", Decorator_PanicHandler);
 STATIC_DECORATOR("rustc_std_internal_symbol", Decorator_RustcStdInternalSymbol);
 STATIC_DECORATOR("alloc_error_handler", Decorator_AllocErrorHandler);
 
-/*
-* MRustC - Rust Compiler
-* - By John Hodge (Mutabah/thePowersGang)
-*
-* expand/lints.cpp
-* - Lint attributes
-*/
 #include "synext.h"
 #include "ast_generics.h"
 #include "ast_ast.h"
@@ -3297,13 +3253,6 @@ class CHandler_Forbid: public CMultiHandler_Lint {};
 
 STATIC_DECORATOR("forbid", CHandler_Forbid);
 
-/*
-* MRustC - Rust Compiler
-* - By John Hodge (Mutabah/thePowersGang)
-*
-* expand/misc_attrs.cpp
-* - Miscenaleous attributes that rustc doesn't use (or doesn't use in expand)
-*/
 #include "synext.h"
 #include "ast_generics.h"
 #include "ast_ast.h"
@@ -3409,13 +3358,6 @@ class CHandler_RustcOnUnimiplemented: public ExpandDecorator {
 
 STATIC_DECORATOR("rustc_on_unimplemented", CHandler_RustcOnUnimiplemented);
 
-/*
-* MRustC - Rust Compiler
-* - By John Hodge (Mutabah/thePowersGang)
-*
-* expand/rustc_box.cpp
-* -
-*/
 #include "synext.h"
 #include "ast_generics.h"
 #include "ast_ast.h"
@@ -3439,13 +3381,6 @@ class CHandler_RustBox: public ExpandDecorator {
 
 STATIC_DECORATOR("rustc_box", CHandler_RustBox);
 
-/*
-* MRustC - Rust Compiler
-* - By John Hodge (Mutabah/thePowersGang)
-*
-* expand/stability.cpp
-* - Item stability
-*/
 #include "synext.h"
 #include "ast_generics.h"
 
@@ -3508,13 +3443,6 @@ class CHandler_AllowInternalUnstable: public ExpandDecorator {
 
 STATIC_DECORATOR("allow_internal_unstable", CHandler_AllowInternalUnstable);
 
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/std_prelude.cpp
- * - Handling of no_std/no_core/no_prelude
- */
 #include "synext.h"
 #include "ast_crate.h"
 
@@ -3608,13 +3536,6 @@ void Expand_init_std_prelude() {
     Register_Synext_Decorator_G<Decorator_NoPrelude>("no_prelude");
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/test.cpp
- * - #[test] handling
- */
 #include "synext_decorator.h"
 #include "ast_ast.h"
 #include "ast_crate.h"

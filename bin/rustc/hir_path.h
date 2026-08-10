@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/path.h
- * - Item paths
- */
 #ifndef _HIR_PATH_HPP_
 #define _HIR_PATH_HPP_
 #pragma once

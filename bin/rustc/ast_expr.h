@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * ast/expr.h
- * - AST Expression Nodes
- */
 #ifndef AST_EXPR_INCLUDED
 #define AST_EXPR_INCLUDED
 

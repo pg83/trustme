@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/target.h
- * - Target-specific information
- */
 #pragma once
 
 #include <cstddef>

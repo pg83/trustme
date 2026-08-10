@@ -305,6 +305,7 @@ unit_tests.append(command(
         "$(S)/tst/unit/test_rustc_header_pairs.py",
         *build.glob("$(S)/bin/rustc/*.h"),
         *build.glob("$(S)/bin/rustc/*.cpp"),
+        *build.glob("$(S)/bin/rustc/*.inc"),
     ],
     outputs=["$(B)/tst/unit/rustc_header_pairs.stamp"],
     cmd=[

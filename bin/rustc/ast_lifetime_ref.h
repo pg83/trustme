@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * ast/lifetime_ref.h
- * - AST Lifetime reference
- */
 #pragma once
 #include "common.h"
 #include "ident.h"

@@ -1,12 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/hir.cpp
- * - Processed module tree (High-level Intermediate Representation)
- *
- * HIR type helper code
- */
 #include "hir_hir.h"
 #include <algorithm>
 #include "hir_typeck_common.h"
@@ -619,13 +610,6 @@ const ::HIR::Static& ::HIR::Crate::get_static_by_path(const Span& sp, const ::HI
     BUG(sp, "`static` path " << path << " can't be found");
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/crate_post_load.cpp
- * - Updates the crate after deserialising
- */
 #include "hir_hir.h"
 #include "macro_rules_macro_rules.h" // Used to update the crate name
 
@@ -636,13 +620,6 @@ void HIR::Crate::post_load_update(const RcString& name) {
     // 3. Updates macros with the crate name
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/hir_ops.cpp
- * - Complex operations on the HIR
- */
 #include "hir_hir.h"
 #include <algorithm>
 #include "hir_typeck_common.h"

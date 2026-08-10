@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/trans_list.cpp
- * - A list of items that require translation
- */
 #include "trans_trans_list.h"
 #include "hir_typeck_static.h" // StaticTraitResolve
 #include "trans_mangling.h"

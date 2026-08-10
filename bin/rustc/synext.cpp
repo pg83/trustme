@@ -1,16 +1,5 @@
 #include "synext.h"
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/macro_rules.cpp
- * - Top-level handling of macro_rules! macros
- *  > macro_rules! dispatch handler
- *  > #[macro_use]
- *  > #[macro_export]
- *  > #[macro_reexport]
- */
 #include "synext.h"
 #include "ast_expr.h"
 #include "ast_ast.h"

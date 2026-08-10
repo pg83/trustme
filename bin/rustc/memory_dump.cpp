@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * memory_dump.cpp
- * - Generate a core dump of current compiler state
- */
 #include "memory_dump.h"
 #include <iostream>
 #include <cstdint>

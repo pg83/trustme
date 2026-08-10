@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/mangling.h
- * - Name mangling support
- */
 #pragma once
 #include <string>
 #include "debug.h"

@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/pattern.cpp
- * - HIR Representation of patterns
- */
 #include "hir_pattern.h"
 
 namespace HIR {

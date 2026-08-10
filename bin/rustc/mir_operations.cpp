@@ -1,13 +1,5 @@
 #include "mir_operations.h"
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/borrow_check.cpp
- * - MIR Borrow Checker
- *
- */
 #include "mir_main_bindings.h"
 #include "mir_mir.h"
 #include "hir_visitor.h"
@@ -803,13 +795,6 @@ void MIR_BorrowCheck_Crate(::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/check.cpp
- * - MIR Correctness validation
- */
 #include <algorithm>
 #include "mir_main_bindings.h"
 #include "mir_mir.h"
@@ -2086,13 +2071,6 @@ void MIR_CheckCrate(/*const*/ ::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/check_full.cpp
- * - Full MIR correctness checks (expensive value state checks)
- */
 #include "mir_main_bindings.h"
 #include "mir_mir.h"
 #include "hir_visitor.h"
@@ -2940,17 +2918,6 @@ void MIR_CheckCrate_Full(/*const*/ ::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/cleanup.cpp
- * - MIR Cleanup
- *
- * Removes artefacts left after monomorphisation
- * - Converts <Trait as Trait>::method() into a vtable call
- * - Replaces constants by their value
- */
 #include "mir_main_bindings.h"
 #include "mir_mir.h"
 #include "hir_visitor.h"
@@ -4356,14 +4323,6 @@ void MIR_Cleanup_SetPostMonomorph() {
     g_is_post_monomorph = true;
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/optimise.cpp
- * - MIR Optimisations
- *
- */
 #include "mir_main_bindings.h"
 #include "mir_mir.h"
 #include "hir_visitor.h"

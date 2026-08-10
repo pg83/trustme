@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * ast/path.cpp
- * - AST::Path and friends
- */
 #include "ast_path.h"
 #include "ast_ast.h"
 #include "ast_types.h"

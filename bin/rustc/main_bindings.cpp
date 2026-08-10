@@ -1,12 +1,5 @@
 #include "main_bindings.h"
 
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * ast/dump.cpp
- * - Dumps the AST of a crate as rust code (annotated)
- */
 #include "ast_crate.h"
 #include "ast_ast.h"
 #include "ast_expr.h"
@@ -1483,17 +1476,10 @@ void DumpAST_Node(::std::ostream& os, const AST::ExprNode& node) {
     const_cast<AST::ExprNode&>(node).visit(printer);
 }
 
-/*
 #undef IS
 #undef WRAPIF_CMD
 #undef WRAPIF
 
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/mod.cpp
- * - Expand pass core code
- */
 #include "ast_ast.h"
 #include "ast_expr.h"
 #include "ast_crate.h"
@@ -1616,15 +1602,8 @@ void Expand_TestHarness(::AST::Crate& crate) {
     crate.m_lang_items["mrustc-main"] = ::AST::AbsolutePath("", {"test#", "main"});
 }
 
-/*
 #undef NEWNODE
 
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * main.cpp
- * - Compiler Entrypoint
- */
 #include <iostream>
 #include <iomanip>
 #include <string>

@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * include/synext.h
- * - Generic syntax extension support
- */
 #pragma once
 #ifndef _SYNEXT_HPP_
     #define _SYNEXT_HPP_

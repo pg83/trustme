@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir/expr.h
- * - HIR Expression nodes
- */
 #pragma once
 
 #include "hir_pattern.h"

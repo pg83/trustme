@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * include/synext_decorator.h
- * - Decorator syntax extensions (#[foo])
- */
 #pragma once
 #ifndef _SYNEXT_DECORATOR_HPP_
     #define _SYNEXT_DECORATOR_HPP_

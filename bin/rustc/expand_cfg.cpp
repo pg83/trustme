@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/cfg.cpp
- * - cfg! and #[cfg] handling
- */
 #include "expand_cfg.h"
 #include "synext.h"
 #include "parse_common.h"

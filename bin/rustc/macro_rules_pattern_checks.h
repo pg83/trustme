@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * macro_rules/pattern_checks.h
- * - Checking helpers for the fragement patterns
- */
 #pragma once
 
 #include "parse_token.h"

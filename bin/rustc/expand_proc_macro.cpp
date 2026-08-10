@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * expand/proc_macro.cpp
- * - Support for the `#[proc_macro_derive]` attribute
- */
 #include "expand_proc_macro.h"
 #include "synext.h"
 #include "common.h"

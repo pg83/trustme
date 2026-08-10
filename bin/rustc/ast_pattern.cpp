@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * ast/pattern.cpp
- * - AST::Pattern support/implementation code
- */
 #include "ast_pattern.h"
 #include "common.h"
 #include "ast_ast.h"

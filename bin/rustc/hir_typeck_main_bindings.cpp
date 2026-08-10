@@ -1,12 +1,5 @@
 #include "hir_typeck_main_bindings.h"
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/expr_check.cpp
- * - Expression type checking (validation pass)
- */
 #include "hir_visitor.h"
 #include "hir_expr.h"
 #include "hir_typeck_static.h"
@@ -1540,13 +1533,6 @@ void Typecheck_Expressions_Validate(::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/output.cpp
- * - Typechecking at the module level (no inferrence)
- */
 #include "hir_hir.h"
 #include "hir_visitor.h"
 #include "hir_typeck_static.h"

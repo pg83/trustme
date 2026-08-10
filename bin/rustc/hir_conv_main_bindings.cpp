@@ -1,13 +1,5 @@
 #include "hir_conv_main_bindings.h"
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_conv/bind.cpp
- * - Set binding pointers in HIR structures
- * - Also fixes parameter counts.
- */
 #include "hir_conv_main_bindings.h"
 #include "hir_visitor.h"
 #include "hir_expr.h"
@@ -1292,13 +1284,6 @@ void ConvertHIR_Bind(::HIR::Crate& crate) {
     Visitor_EnumSuperTraits(crate).visit_crate(crate);
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_conv/expand_type.cpp
- * - Expand `type` aliases in HIR
- */
 #include "hir_conv_main_bindings.h"
 #include "hir_hir.h"
 #include "hir_expr.h"
@@ -1949,13 +1934,6 @@ void ConvertHIR_ExpandAliases_Self_Expr(
     exp.visit_expr(expr);
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_conv/lifetime_elision.cpp
- * -
- */
 #include "hir_hir.h"
 #include "hir_visitor.h"
 #include "hir_typeck_static.h"
@@ -3219,13 +3197,6 @@ void ConvertHIR_LifetimeElision(::HIR::Crate& crate) {
     v.visit_crate(crate);
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_conv/markings.cpp
- * - Fills the TraitMarkings structure on types as well as other metadata
- */
 #include "hir_conv_main_bindings.h"
 #include "hir_visitor.h"
 #include "hir_expr.h"
@@ -3563,18 +3534,6 @@ void ConvertHIR_Markings(::HIR::Crate& crate) {
     exp2.visit_crate(crate);
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_conv/resolve_ufcs.cpp
- * - Resolve unkown UFCS traits into inherent or trait
- * - HACK: Will likely be replaced with a proper typeck pass (no it won't)
- *
- * TODO: Remove this pass, except maybe for running EAT on outer types
- * - Expression code can handle picking UFCS functions better than this code can
- * - Outer EAT is nice, but StaticTraitResolve will need to handle non-EAT-ed types when doing lookups
- */
 #include "hir_conv_main_bindings.h"
 #include "hir_hir.h"
 #include "hir_expr.h"

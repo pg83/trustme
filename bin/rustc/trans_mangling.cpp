@@ -1,15 +1,5 @@
 #include "trans_mangling.h"
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/mangling_v2.cpp
- * - Name mangling (encoding of rust paths into symbols)
- *
- * Ensures that symbols contain only alpha-numerics and `_`
- * NOTE: `$` is used ONLY for shortening excessively long symbols
- */
 #include "debug.h"
 #include "string_view.h"
 #include "hir_hir.h" // ABI_RUST

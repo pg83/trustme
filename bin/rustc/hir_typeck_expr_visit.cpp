@@ -1,10 +1,3 @@
-/*
- * MRustC - Mutabah's Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_typeck/expr_visit.cpp
- * - Wrapper around HIR typecheck that visits all expressions
- */
 #include "hir_typeck_expr_visit.h"
 #include "hir_hir.h"
 #include "hir_expr.h"

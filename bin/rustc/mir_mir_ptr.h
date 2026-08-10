@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * mir/mir_ptr.h
- * - Pointer to a blob of MIR
- */
 #pragma once
 
 namespace MIR {

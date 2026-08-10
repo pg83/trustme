@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * macro_rules/macro_rules.h
- * - Macros by example - `macro_rules!`
- */
 #ifndef MACROS_HPP_INCLUDED
 #define MACROS_HPP_INCLUDED
 

@@ -1,10 +1,3 @@
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_expand/main_bindings.h
- * - Functions defined in this folder that are called by main
- */
 #pragma once
 #include <vector>
 #include <utility> // std::pair

@@ -1,14 +1,5 @@
 #include "trans_main_bindings.h"
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/auto_impls.cpp
- * - Automatic trait/method impls
- *
- * Handles implementing Clone (when in 1.29 mode)
- */
 #include "trans_main_bindings.h"
 #include "trans_trans_list.h"
 #include "hir_hir.h"
@@ -1054,15 +1045,6 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
     }
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * trans/enumerate.cpp
- * - Translation item enumeration
- *
- * Enumerates items required for translation.
- */
 #include "trans_main_bindings.h"
 #include "trans_trans_list.h"
 #include "hir_hir.h"

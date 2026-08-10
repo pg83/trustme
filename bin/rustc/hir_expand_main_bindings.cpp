@@ -1,12 +1,5 @@
 #include "hir_expand_main_bindings.h"
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_expand/annotate_value_usage.cpp
- * - Marks _Variable, _Index, _Deref, and _Field nodes with how the result is used
- */
 #include "hir_visitor.h"
 #include "hir_expr.h"
 #include "hir_typeck_static.h"
@@ -1414,13 +1407,6 @@ void HIR_Expand_AnnotateUsage(::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_expand/closures.cpp
- * - HIR Expansion - Closures
- */
 #include "hir_visitor.h"
 #include "hir_expr.h"
 #include "hir_typeck_static.h"
@@ -3476,15 +3462,8 @@ void HIR_Expand_Closures(::HIR::Crate& crate) {
     ClosureOuterVisitorPass2(crate).visit_crate(crate);
 }
 
-/*
 #undef NEWNODE
 
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_expand/erased_types.cpp
- * - HIR Expansion - Replace `impl Trait` with the real type
- */
 #include "hir_visitor.h"
 #include "hir_expr.h"
 #include "hir_typeck_static.h"
@@ -3677,13 +3656,6 @@ void HIR_Expand_ErasedType(::HIR::Crate& crate) {
     ov_fix.visit_crate(crate);
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_expand/lifetime_infer.cpp
- * - Infer and check lifetime annotations
- */
 #include "hir_visitor.h"
 #include "hir_expr.h"
 #include "hir_typeck_static.h"
@@ -6604,13 +6576,6 @@ void HIR_Expand_LifetimeInfer_Expr(const ::HIR::Crate& crate, const ::HIR::ItemP
     HIR_Expand_LifetimeInfer_ExprInner(resolve, args, ret_ty, exp, /*remove_locals*/ false, /*is_const_context=*/true);
 }
 
-/*
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_expand/reborrow.cpp
- * - Insert reborrows when a &mut would be moved
- */
 #include "hir_visitor.h"
 #include "hir_expr.h"
 #include "hir_typeck_static.h"
@@ -6822,19 +6787,8 @@ void HIR_Expand_Reborrows(::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-/*
 #undef NEWNODE
 
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_expand/static_borrow_constants.cpp
- * - Converts borrows of constant values into borrows of statics
- *
- * NOTE: This is done as a post-typeck HIR pass for the following reasons:
- * - Ensures that typecheck is performed on the as-written code
- * - Reduces load on MIR generation (no attempting to MIR lower large constant expressions)
- */
 #include "hir_visitor.h"
 #include "hir_expr.h"
 #include "hir_typeck_static.h"
@@ -8258,16 +8212,8 @@ void HIR_Expand_StaticBorrowConstants(::HIR::Crate& crate) {
     crate.m_new_values.clear();
 }
 
-/*
 #undef NEWNODE
 
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_expand/ufcs_everything.cpp
- * - Expand all function calls (_CallMethod, and _CallValue) and operator overloads to _CallPath
- * - Also handles borrow-unsize-deref for _Unsize on arrays (see comment in _Unsize)
- */
 #include "hir_visitor.h"
 #include "hir_expr.h"
 #include "hir_typeck_static.h"
@@ -9101,15 +9047,8 @@ void HIR_Expand_UfcsEverything(::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-/*
 #undef NEWNODE
 
- * MRustC - Rust Compiler
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * hir_expand/vtable.cpp
- * - VTable Generation
- */
 #include "hir_expand_main_bindings.h"
 #include "hir_hir.h"
 #include "hir_visitor.h"
