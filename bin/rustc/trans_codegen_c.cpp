@@ -1508,7 +1508,6 @@ namespace {
 
         void emit_box_drop(unsigned indent_level, const ::HIR::TypeRef& inner_type, const ::HIR::TypeRef& box_type, const ::MIR::LValue& slot, bool run_destructor) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indent_level)};
-            // Emit a call to box_free for the type
             if (run_destructor) {
                 auto inner_ptr = ::MIR::LValue::new_Field(::MIR::LValue::new_Field(::MIR::LValue::new_Field(slot.clone(), 0), 0), 0);
                 emit_destructor_call(::MIR::LValue::new_Deref(mv$(inner_ptr)), inner_type, /*unsized_valid=*/true, indent_level);
@@ -1518,6 +1517,18 @@ namespace {
             m_of << indent << Trans_Mangle(p) << "(&";
             emit_lvalue(slot);
             m_of << ");\n";
+
+            // The pointee is a synthetic Box move-path, not a physical field. A shallow
+            // drop skips that path, but still drops the real fields after Box::drop.
+            const auto* repr = Target_GetTypeRepr(sp, m_resolve, box_type);
+            MIR_ASSERT(*m_mir_res, repr, "No repr for Box " << box_type);
+            auto field = ::MIR::LValue::new_Field(slot.clone(), 0);
+            for (const auto& field_repr : repr->fields) {
+                if (m_resolve.type_needs_drop_glue(sp, field_repr.ty)) {
+                    emit_destructor_call(field, field_repr.ty, /*unsized_valid=*/false, indent_level);
+                }
+                field.inc_Field();
+            }
         }
 
         void emit_global_asm(const ::HIR::GlobalAssembly& se) override {
