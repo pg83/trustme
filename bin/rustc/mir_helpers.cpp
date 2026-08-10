@@ -622,14 +622,6 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(::MIR::TypeResolve& state, c
                 for (const auto& e : se->outputs) {
                     assigned_lvalue(bb_idx, stmt_idx + 1, e.second);
                 }
-            } else if (const auto* se = stmt.opt_Drop()) {
-                // HACK: Mark values as valid wherever there's a drop (prevents confusion by simple validator)
-                if (se->slot.m_wrappers.empty() && se->slot.m_root.is_Local()) {
-                    auto de = se->slot.m_root.as_Local();
-                    if (!mask || mask->at(de)) {
-                        slot_lifetimes[de].fill(block_offsets, bb_idx, stmt_idx, stmt_idx);
-                    }
-                }
             }
         }
         state.set_cur_stmt_term(bb_idx);
