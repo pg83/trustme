@@ -1681,6 +1681,7 @@ namespace {
     }
 
     rv.m_is_marker = f.is_marker();
+    rv.m_is_coinductive = rv.m_is_marker || attrs.has("rustc_coinductive");
     rv.m_is_fundamental = attrs.has("fundamental");
 
     return rv;

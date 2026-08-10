@@ -491,7 +491,10 @@ namespace HIR {
         // NOTE: Not serialised!
         ::std::vector<::HIR::TraitPath> m_parent_traits;
 
-        bool m_is_marker; // aka OIBIT
+        bool m_is_marker; // aka auto trait/OIBIT
+        /// Auto traits and traits carrying `#[rustc_coinductive]` admit
+        /// productive recursive goals in the trait solver.
+        bool m_is_coinductive;
         /// `#[fundamental]`: absence of an impl for this trait can be used by
         /// coherence once downstream impls have been excluded.
         bool m_is_fundamental;
@@ -517,6 +520,7 @@ namespace HIR {
             , m_lifetime(mv$(lifetime))
             , m_parent_traits(mv$(parents))
             , m_is_marker(false)
+            , m_is_coinductive(false)
             , m_is_fundamental(false)
             , m_vtable_parent_traits_start(0)
         {

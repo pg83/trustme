@@ -1264,6 +1264,7 @@ DEF_D(::HIR::ExternLibrary, return d.deserialise_extlib();)
     const auto trait_flags = m_in.read_u8();
     rv.m_is_marker = trait_flags & 1;
     rv.m_is_fundamental = trait_flags & 2;
+    rv.m_is_coinductive = (trait_flags & 4) || rv.m_is_marker;
     rv.m_types = deserialise_istrumap<::HIR::AssociatedType>();
     rv.m_values = deserialise_istrumap<::HIR::TraitValueItem>();
     rv.m_value_indexes = deserialise_istrummap<::std::pair<unsigned int, ::HIR::GenericPath>>();
@@ -3674,6 +3675,7 @@ public:
         m_out.write_u8(
             (item.m_is_marker ? 1u : 0u)
             | (item.m_is_fundamental ? 2u : 0u)
+            | (item.m_is_coinductive ? 4u : 0u)
         );
         serialise_strmap(item.m_types);
         serialise_strmap(item.m_values);

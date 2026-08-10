@@ -5825,7 +5825,14 @@ namespace {
                     for (unsigned int i = 0; i < v.params.m_values.size(); i++) {
                         context.equate_values(sp, v.params.m_values[i], itp.m_values[i]);
                     }
-                    add_impl_bounds(context, sp, impl);
+                    // The next solver has already evaluated the selected
+                    // impl's where-clauses while building this response.
+                    // Re-exporting them into the legacy constraint loop
+                    // evaluates the same proof a second time and turns a
+                    // coinductive fixed point into an endless new rule.
+                    if (!gTraitSolverConfig.globally) {
+                        add_impl_bounds(context, sp, impl);
+                    }
                     return true;
                 } else {
                     count += 1;
@@ -6126,6 +6133,10 @@ namespace {
                     context.equate_types(sp, v.left_ty, *output_type);
                 }
                 // - Obtain the bounds required for this impl and add those as trait bounds to check/equate
+                // A fuzzy next-solver response has not proved the selected
+                // impl's predicates.  Keep them in the constraint loop just
+                // like the legacy selector; only the Equal response above
+                // may consume its nested goals completely.
                 add_impl_bounds(context, sp, best_impl);
                 return AssociatedCheckResult::Complete;
             } else {

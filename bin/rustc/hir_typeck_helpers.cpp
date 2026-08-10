@@ -3551,9 +3551,9 @@ class NextTraitGoalEvaluator {
                     canonical.type,
                     canonical_associated
                 )) {
-                // Auto traits are coinductive; ordinary trait cycles do not
-                // prove the goal but remain a possible fixed point.
-                return m_crate.get_trait_by_path(span(), trait).m_is_marker
+                // Productive recursive traits prove their provisional goal;
+                // ordinary trait cycles remain ambiguous.
+                return m_crate.get_trait_by_path(span(), trait).m_is_coinductive
                     ? Certainty::Proven
                     : Certainty::Ambiguous;
             }
@@ -4025,7 +4025,7 @@ class NextTraitGoalEvaluator {
                 static const ::HIR::TraitPath::assoc_list_t no_associated;
                 const bool coinductive = m_crate.get_trait_by_path(
                     span(), trait
-                ).m_is_marker;
+                ).m_is_coinductive;
                 return callback(
                     ImplRef(&resolved_type, &goal_params, &no_associated),
                     coinductive
@@ -5574,8 +5574,8 @@ bool TraitResolution::find_trait_impls(
                 }
 
                 // rustc treats an inductive recursive trait predicate as
-                // ambiguous, not proven.  Auto traits remain coinductive.
-                const auto cmp = m_crate.get_trait_by_path(sp, trait).m_is_marker
+                // ambiguous, while productive recursive traits are proven.
+                const auto cmp = m_crate.get_trait_by_path(sp, trait).m_is_coinductive
                     ? ::HIR::Compare::Equal
                     : ::HIR::Compare::Fuzzy;
                 DEBUG("Legacy trait goal recurred: " << trait
