@@ -102,6 +102,34 @@ func TestPathPackagePrecedesRegistryLock(t *testing.T) {
 	}
 }
 
+func TestRepositoryLoadsSymlinkedVendorPackage(t *testing.T) {
+	dir := t.TempDir()
+	workspaceManifest := filepath.Join(dir, "Cargo.toml")
+	vendorDir := filepath.Join(dir, "vendor")
+	packageDir := filepath.Join(dir, "packages", "linked-1.2.3")
+
+	writeTestFile(t, workspaceManifest, `[workspace]
+`)
+	writeTestFile(t, filepath.Join(packageDir, "Cargo.toml"), `[package]
+name = "linked"
+version = "1.2.3"
+`)
+
+	if err := os.MkdirAll(vendorDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(packageDir, filepath.Join(vendorDir, "linked-1.2.3")); err != nil {
+		t.Fatal(err)
+	}
+
+	repository := newRepository(loadWorkspace(workspaceManifest), vendorDir)
+	packages := repository.byName["linked"]
+
+	if len(packages) != 1 || packages[0].version != parseVersion("1.2.3") {
+		t.Fatalf("symlinked vendor package was not loaded: %#v", packages)
+	}
+}
+
 func writeTestFile(t *testing.T, path, contents string) {
 	t.Helper()
 

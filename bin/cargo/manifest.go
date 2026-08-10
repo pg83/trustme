@@ -218,7 +218,7 @@ func newRepository(workspace *Workspace, vendorDir string) *Repository {
 		for _, entry := range entries {
 			manifest := filepath.Join(vendorDir, entry.Name(), "Cargo.toml")
 
-			if !entry.IsDir() || !fileExists(manifest) {
+			if !fileExists(manifest) {
 				continue
 			}
 
