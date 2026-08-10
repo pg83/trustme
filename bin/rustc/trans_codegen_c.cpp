@@ -7003,8 +7003,7 @@ namespace {
                 } else {
                     m_of << "s_" << Trans_Mangle(p);
                 }
-                m_of << " mrustc_empty_caller_location = {0,0,{\"\",0}};";
-                //m_of << " mrustc_empty_caller_location = {{\"\",0},0,0};";  // NOTE: Depends on the generated layout :(
+                m_of << " mrustc_empty_caller_location = {._0={._0={\"\",0}},._1=0,._2=0};";
                 emit_lvalue(e.ret_val);
                 m_of << " = &mrustc_empty_caller_location"; // TODO: Hidden ABI for caller location
             }

@@ -791,10 +791,20 @@ namespace {
         All,
     };
 
-    /// Sort fields with lowest alignment first (and putting smallest fields of equal alignment earlier)
-    /// TODO: Why? It looks like this allows some better niche optimisations
-    /// HOWEVER. It breaks an assumption in 1.74 `std::path::Path` (worked around in `Wtf8Buf` patch)
-    bool sortfn_struct_fields(const Ent& a, const Ent& b) {
+    size_t struct_field_alignment_group(const Ent& e, unsigned max_alignment) {
+        if (max_alignment > 0) {
+            return ::std::min<size_t>(e.align, max_alignment);
+        }
+
+        // Match rustc's default layout grouping: an aggregate whose size has a
+        // stronger power-of-two factor than its ABI alignment is grouped with
+        // fields of that effective alignment. For example, [u8; 4] belongs to
+        // the align-4 group, while [u8; 6] belongs to align-2.
+        const size_t size_as_align = ::std::max(e.size, e.align);
+        return size_as_align & (~size_as_align + 1);
+    }
+
+    bool sortfn_enum_variant_fields(const Ent& a, const Ent& b) {
         return a.align != b.align ? a.align < b.align : a.size < b.size;
     }
 
@@ -803,15 +813,19 @@ namespace {
     /// - Handles (optional) sorting and packing
     ::std::unique_ptr<TypeRepr> make_type_repr_struct__inner(const Span& sp, const ::HIR::TypeRef& ty, ::std::vector<Ent>& ents, StructSorting sorting, unsigned forced_alignment, unsigned max_alignment) {
         if (ents.size() > 0) {
-            // Sort in increasing alignment then size
+            auto sort_fields = [&](auto first, auto last) {
+                ::std::stable_sort(first, last, [&](const Ent& a, const Ent& b) {
+                    return struct_field_alignment_group(a, max_alignment) > struct_field_alignment_group(b, max_alignment);
+                });
+            };
             switch (sorting) {
                 case StructSorting::None:
                     break;
                 case StructSorting::AllButFinal:
-                    ::std::sort(ents.begin(), ents.end() - 1, sortfn_struct_fields);
+                    sort_fields(ents.begin(), ents.end() - 1);
                     break;
                 case StructSorting::All:
-                    ::std::sort(ents.begin(), ents.end(), sortfn_struct_fields);
+                    sort_fields(ents.begin(), ents.end());
                     break;
             }
         }
@@ -1710,7 +1724,7 @@ namespace {
                                 auto& var_ty = variants[var_i].type;
                                 if (e[var_i].type != resolve.m_crate.m_types.unit()) {
                                     if (enm.m_tag_repr == HIR::Enum::Repr::Auto) {
-                                        ::std::sort(ents.begin(), ents.end(), sortfn_struct_fields);
+                                        ::std::sort(ents.begin(), ents.end(), sortfn_enum_variant_fields);
                                     }
                                     // - Add tag
                                     ents.insert(ents.begin(), Ent());

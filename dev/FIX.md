@@ -50,7 +50,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 - [ ] `track_caller`, `type_name`/`TypeId`/`Any`, process environment, SIMD и nonzero arithmetic: группировать только по общему lowered ABI или intrinsic.
 - [ ] Довести `f128` runtime без пропускания binary128 через host `double`; проверить точные bits.
 - [ ] Добавить metadata encoding для cross-crate enum discriminants шире 64 бит и проверить producer/consumer crates.
-- [ ] Always-unsized struct layout должен совпадать с layout его sized stand-in до хвостового поля. Красный unit `test_always_unsized_struct_raw_parts.rs` и upstream `unsized3-rpass.rs` показывают, что текущая сортировка полей меняет offset перед DST tail; исправить общий layout и hardcoded aggregate initializers, не подменяя metadata solver.
+- [x] Always-unsized struct layout совпадает с layout его sized stand-in до хвостового поля. Rust-layout теперь стабильно сортирует поля по убывающей effective alignment group и исключает DST tail; `caller_location` не зависит от физического порядка полей. Unit `test_always_unsized_struct_raw_parts.rs`, соседние packed/offset units и upstream `unsized3-rpass.rs` зелёные после полной пересборки libstd.
 - [ ] `packed-struct-drop-aligned.rs`: сначала исправить `Pin<&mut generator>.resume`, затем layout/drop invariant.
 
 ## P3 — оставшиеся CTFE, MIR и const generics
