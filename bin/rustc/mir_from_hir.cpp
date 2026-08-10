@@ -5087,6 +5087,8 @@ void PatternRulesetBuilder::append_from(const Span& sp, const ::HIR::Pattern& pa
                     auto leading_rulesets = mv$(sub_builder.m_rulesets);
                     sub_builder.m_rulesets.clear();
                     sub_builder.m_rulesets.resize(1);
+                    sub_builder.subset_start = 0;
+                    sub_builder.subset_end = 1;
 
                     if (pe.trailing.size()) {
                         // Needs a way of encoding the negative offset in the field path
@@ -5116,9 +5118,11 @@ void PatternRulesetBuilder::append_from(const Span& sp, const ::HIR::Pattern& pa
                             this->set_impossible();
                         }
 
-                        this->push_rule(PatternRule::make_SplitSlice({static_cast<unsigned int>(pe.leading.size() + pe.trailing.size()), static_cast<unsigned int>(pe.trailing.size()), mv$(sr_l.m_rules), mv$(sr_t.m_rules)}));
-                        this->push_bindings(mv$(sr_l.m_bindings));
-                        this->push_bindings(mv$(sr_t.m_bindings));
+                        auto rules_l = sr_l.clone();
+                        auto rules_t = sr_t.clone();
+                        this->push_rule(PatternRule::make_SplitSlice({static_cast<unsigned int>(pe.leading.size() + pe.trailing.size()), static_cast<unsigned int>(pe.trailing.size()), mv$(rules_l.m_rules), mv$(rules_t.m_rules)}));
+                        this->push_bindings(mv$(rules_l.m_bindings));
+                        this->push_bindings(mv$(rules_t.m_bindings));
                     });
                 }
         }
