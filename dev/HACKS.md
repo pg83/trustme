@@ -27,6 +27,8 @@
 
    Это может не только задерживать решение, но и оставлять неверные impl-кандидаты. Правильная модель upstream — отдельный goal с результатом `Yes/Ambiguous/No`, а не ослабление отношения типов.
 
+   Финальный expression goal с невыведенным `Self` теперь сохраняет `Ambiguous` отдельно от ожидания новых constraints и после фикспойнта выдаёт обычную inference-диагностику. Изменение constraint повторно проверяет goal и снимает ambiguity. Глобальный `Compare::Fuzzy` в relation и impl matching остаётся.
+
 4. Backend местами генерирует программу, которая просто вызывает `abort()`.
 
    [trans_codegen_c.cpp](/home/pg/monorepo/trustme/bin/rustc/trans_codegen_c.cpp:2893) заменяет большой класс MSVC AVX-функций на `abort`, причём условие содержит `true ||`. Аналогично `vmov/vexpand/vpexpand` для GCC-like backend.
@@ -64,7 +66,7 @@
 | HIR identity | `hir_hir.cpp:203,697`; `hir_path.cpp:326`; `hir_type.cpp:1475,1481,1490` | Const ordering, нетранзитивный HRTB order и fuzzy type relation — высокий риск. |
 | Metadata | `hir_main_bindings.cpp:1075` | Контракт basename + `.hir` теперь документирован как соглашение custom metadata; empty crate-name rewrite остаётся compatibility debt. |
 | Typeck common | `hir_typeck_common.cpp:503,515,753,761` | Erasure и passthrough lifetime вместо явных binders. |
-| Typeck solver | `hir_typeck_expr_cs.cpp:932,2030,4943,5814,5828,7911,8055,8235`; header `:175` | Остались active heuristics и DEBUG-текст; operator result=LHS и arbitrary ivar fallback требуют отдельных units. |
+| Typeck solver | `hir_typeck_expr_cs.cpp:932,2030,4943,5863,5877,6648,7500,7960,8104,8284`; header `:175` | Финальный associated goal различает stalled и ambiguous; global fuzzy relation, operator result=LHS и arbitrary ivar fallback остаются. |
 | Typeck helpers | `hir_typeck_helpers.cpp:6044` | Opaque fuzzy matching остаётся; array→slice receiver adjustment теперь типизирован до MIR. |
 | Typeck impls | `hir_typeck_main_bindings.cpp:2121,2349,2383` | Lifetime bounds копируются/заменяются для совпадения представления. |
 | Static solver | `hir_typeck_static.cpp:478,508,1241,2085` | Associated bounds дописываются, `_` автоматически проходит bound, opaque equality обходится локально. |
@@ -75,4 +77,4 @@
 | Enumeration | `trans_main_bindings.cpp:1349,2204,2487,2872` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующая последовательность: ложные markers в parser/lexer, infrastructure, driver, общих HIR definitions, metadata, безопасных MIR invariants и backend conventions переименованы. `Pointee::Metadata`, always-unsized layout, array→slice HIR, generic array metadata, grouped match, or-pattern guard/source order и pattern/remainder drop scheduling закрыты. Следующий функциональный пункт — fuzzy relation в trait solver с максимальным fan-out и строго unit-first. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.
+Следующая последовательность: ложные markers в parser/lexer, infrastructure, driver, общих HIR definitions, metadata, безопасных MIR invariants и backend conventions переименованы. `Pointee::Metadata`, always-unsized layout, array→slice HIR, generic array metadata, grouped match, or-pattern guard/source order и pattern/remainder drop scheduling закрыты. Первый срез fuzzy solver — явная финальная ambiguity associated goal — закрыт; следующий функциональный пункт — глобальная fuzzy relation и impl matching с максимальным fan-out и строго unit-first. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.

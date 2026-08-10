@@ -175,6 +175,7 @@ struct Context {
         // HACK: operators are special - the result when both types are primitives is ALWAYS the lefthand side
         bool is_operator;
         typeck::PrimitiveOperator operator_kind;
+        bool is_ambiguous = false;
 
         ::std::vector<StallDependency> stalled_on;
         ::std::vector<CapturedIvarPossible> stalled_possibilities;

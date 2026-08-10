@@ -5492,6 +5492,7 @@ namespace {
         Complete,
         Retry,
         Stalled,
+        Ambiguous,
     };
 
     AssociatedCheckResult check_associated(Context& context, Context::Associated& v) {
@@ -5698,7 +5699,7 @@ namespace {
         if (const auto* e = context.m_ivars.get_type(v.impl_ty)->opt_Infer()) {
             // TODO: ?
             if (!e->is_lit() && v.params.m_types.empty()) {
-                return AssociatedCheckResult::Stalled;
+                return AssociatedCheckResult::Ambiguous;
             }
 
             // If the type is completely unbounded, then any lookup will fail.
@@ -5708,7 +5709,7 @@ namespace {
                     //context.equate_types_bounded(sp, t, {});
                     context.possible_equate_type_unknown(sp, t, Context::IvarUnknownType::To);
                 }
-                return AssociatedCheckResult::Stalled;
+                return AssociatedCheckResult::Ambiguous;
             }
         }
 
@@ -5922,7 +5923,7 @@ namespace {
                 return AssociatedCheckResult::Complete;
             } else if (count == 0) {
                 if (saw_ambiguous_identity) {
-                    return AssociatedCheckResult::Stalled;
+                    return AssociatedCheckResult::Ambiguous;
                 }
                 // No applicable impl
                 // - TODO: This should really only fire when there isn't an impl. But it currently fires when _
@@ -6069,7 +6070,7 @@ namespace {
                 if (TU_TEST1(*impl_ty, Infer, .is_lit() == false)) {
                     DEBUG("Unbounded ivar, waiting - TODO: Add possibility " << impl_ty << " == " << possible_impl_ty);
                     //context.possible_equate_type_bound(sp, impl_ty->as_Infer().index, possible_impl_ty);
-                    return AssociatedCheckResult::Stalled;
+                    return AssociatedCheckResult::Ambiguous;
                 }
                 assert(possible_impl_ty != ::HIR::TypeRef());
                 context.equate_types(sp, v.impl_ty, possible_impl_ty);
@@ -6135,7 +6136,7 @@ namespace {
                     DEBUG("IVar _/*" << e.first << "*/ ?= [" << e.second << "]");
                     context.possible_equate_ivar_bounds(sp, e.first, std::move(e.second));
                 }
-                return AssociatedCheckResult::Stalled;
+                return AssociatedCheckResult::Ambiguous;
             }
         } catch (const TraitResolution::RecursionDetected&) {
             DEBUG("Recursion detected, deferring");
@@ -8294,6 +8295,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
                     result = check_associated(context, rule);
                 }
                 merge_associated_possibilities(context, captured_possibilities);
+                rule.is_ambiguous = result == AssociatedCheckResult::Ambiguous;
 
                 if (result == AssociatedCheckResult::Complete) {
                     DEBUG("- Consumed associated type rule " << i << "/" << context.link_assoc.size() << " - " << rule);
@@ -8303,7 +8305,8 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
                     }
                     context.link_assoc.pop_back();
                 } else {
-                    if (result == AssociatedCheckResult::Stalled && set_associated_stall(context, rule)) {
+                    if ((result == AssociatedCheckResult::Stalled || result == AssociatedCheckResult::Ambiguous)
+                        && set_associated_stall(context, rule)) {
                         rule.stalled_possibilities = mv$(captured_possibilities);
                     } else {
                         rule.stalled_on.clear();
@@ -8527,6 +8530,30 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
     }
 
     if (context.has_rules()) {
+        for (const auto& rule : context.link_assoc) {
+            if (!rule.is_ambiguous) {
+                continue;
+            }
+            if (rule.name == "") {
+                ERROR(
+                    rule.span,
+                    E0000,
+                    "type annotations needed: cannot infer a type satisfying `"
+                        << context.m_ivars.fmt_type(rule.impl_ty) << ": "
+                        << rule.trait << context.m_ivars.fmt(rule.params) << "`"
+                );
+            } else {
+                ERROR(
+                    rule.span,
+                    E0000,
+                    "type annotations needed: cannot infer `"
+                        << context.m_ivars.fmt_type(rule.left_ty) << " = <"
+                        << context.m_ivars.fmt_type(rule.impl_ty) << " as "
+                        << rule.trait << context.m_ivars.fmt(rule.params) << ">::"
+                        << rule.name << "`"
+                );
+            }
+        }
         context.dump();
         for (const auto& coercion_p : context.link_coerce) {
             const auto& coercion = *coercion_p;
