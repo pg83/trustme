@@ -5219,7 +5219,55 @@ namespace {
             }
         } else if (src->is_NodeType() && src->as_NodeType().is_Closure()) {
             const auto* node_p = src->as_NodeType().as_Closure();
-            if (dst->is_Function()) {
+            if (dst->is_ErasedType()) {
+                // rustc derives an unannotated closure signature from the
+                // predicates of its expected opaque type before checking the
+                // closure body.  Querying FnOnce also elaborates Fn/FnMut and
+                // user-defined supertraits, and exposes the associated Output
+                // equality carried by the opaque bound.
+                ::std::vector<::HIR::TypeRef> closure_args;
+                closure_args.reserve(node_p->m_args.size());
+                for (const auto& arg : node_p->m_args) {
+                    closure_args.push_back(arg.second);
+                }
+                ::HIR::PathParams desired_params{
+                    context.m_crate.m_types.tuple(mv$(closure_args))
+                };
+
+                ::HIR::PathParams expected_params;
+                ::HIR::TypeRef expected_output;
+                const bool found_expectation = context.m_resolve.find_trait_impls(
+                    sp,
+                    context.m_resolve.m_lang_FnOnce,
+                    desired_params,
+                    dst,
+                    [&](ImplRef impl, ::HIR::Compare) {
+                        auto params = impl.get_trait_params(context.m_crate.m_types);
+                        if (params.m_types.size() != 1 || !params.m_types.front()->is_Tuple()) {
+                            return false;
+                        }
+                        const auto& args = params.m_types.front()->as_Tuple();
+                        if (args.size() != node_p->m_args.size()) {
+                            return false;
+                        }
+                        auto output = impl.get_type(context.m_crate.m_types, "Output", {});
+                        if (output == ::HIR::TypeRef()) {
+                            return false;
+                        }
+                        expected_params = mv$(params);
+                        expected_output = mv$(output);
+                        return true;
+                    }
+                );
+                if (found_expectation && context_mut) {
+                    const auto& expected_args = expected_params.m_types.front()->as_Tuple();
+                    for (size_t i = 0; i < expected_args.size(); i++) {
+                        context_mut->equate_types(sp, node_p->m_args[i].second, expected_args[i]);
+                    }
+                    context_mut->equate_types(sp, node_p->m_return, expected_output);
+                }
+                return CoerceResult::Equality;
+            } else if (dst->is_Function()) {
                 const auto& de = dst->as_Function();
                 if (node_ptr_ptr) {
                     auto& node_ptr = *node_ptr_ptr;

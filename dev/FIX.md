@@ -36,7 +36,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 8. [ ] **`pin!` expansion/parser: не менее 28 targets.** 21 compile failure видит `let` после path separator, ещё 7 cases заблокированы harness `coretests/pin_macro`. Исправить statement macro expansion в block context, затем проверить `pin!` с expression, `let` и function item.
 
-9. [ ] **Повторяющиеся compiler crash signatures.** Сначала символизировать и группировать 75 SIGSEGV по stack/phase. Уже видны TAIT/impl-trait, coroutine/generator drop, projection cycles, const generics и HRTB; повышать отдельную группу выше можно только с измеренным общим fan-out. Отдельно устранить 28 `Invalid path (no nodes)` asserts, 26 `Spare rules left after typecheck stabilised` и 24 `Unexpected item type in inherent impl - Type`.
+9. [ ] **Повторяющиеся compiler crash signatures.** Сначала символизировать и группировать 75 SIGSEGV по stack/phase. Уже видны TAIT/impl-trait, coroutine/generator drop, projection cycles, const generics и HRTB; повышать отдельную группу выше можно только с измеренным общим fan-out. Отдельно устранить 28 `Invalid path (no nodes)` asserts, 24 оставшихся `Spare rules left after typecheck stabilised` и 24 `Unexpected item type in inherent impl - Type`.
 
 ## P2 — runtime correctness и общие codegen/CTFE причины
 

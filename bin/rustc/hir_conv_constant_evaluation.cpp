@@ -3612,6 +3612,25 @@ namespace HIR {
         DEBUG("ms = " << ms);
         const auto* mir = this->resolve.m_crate.get_or_gen_mir(ip, expr, exp);
 
+        // Generating MIR can define a local type-alias `impl Trait`.  CTFE
+        // operates on the revealed representation, just like rustc's
+        // reveal-all evaluation environment, so use that hidden type for the
+        // result allocation and encoding instead of asking layout for an
+        // erased type.
+        if (const auto* erased = exp->opt_ErasedType()) {
+            if (const auto* alias = erased->m_inner.opt_Alias()) {
+                if (alias->inner->type != ::HIR::TypeRef()) {
+                    exp = MonomorphStatePtr(
+                        resolve.m_crate.m_types,
+                        nullptr,
+                        &alias->params,
+                        nullptr
+                    ).monomorph_type(expr.span(), alias->inner->type);
+                    resolve.expand_associated_types(expr.span(), exp);
+                }
+            }
+        }
+
         if (mir) {
             ASSERT_BUG(Span(), expr.m_state, "");
             if (!resolve.m_item_generics && !resolve.m_impl_generics) {
