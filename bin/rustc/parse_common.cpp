@@ -552,7 +552,7 @@ ExprNodeP Parse_Expr_Match(TokenStream& lex) {
         Parse_ParentAttrs(lex, node_attrs);
         arm.m_attrs = Parse_ItemAttrs(lex);
 
-        // HACK: Questionably valid, but 1.29 librustc/hir/lowering.rs needs this
+        // Match-arm grammar permits an optional leading `|` before the first pattern.
         lex.getTokenIf(TOK_PIPE);
 
         do {
@@ -936,7 +936,7 @@ ExprNodeP Parse_Expr13(TokenStream& lex) {
             return NEWNODE(AST::ExprNode_BinOp, AST::ExprNode_BinOp::PLACE_IN, mv$(dest), mv$(val));
         }
         case TOK_DOUBLE_AMP:
-            // HACK: Split && into & &
+            // The lexer maximally tokenizes `&&`; unary borrow parsing consumes it as two `&` tokens.
             lex.putback(Token(TOK_AMP));
         case TOK_AMP:
             if (lex.lookahead(0) == TOK_IDENT) {
@@ -1578,7 +1578,7 @@ AST::Path Parse_Path(TokenStream& lex, eParsePathGenericMode generic_mode) {
             } else if (lex.edition_after(AST::Edition::Rust2018)) {
                 // The first component is a crate name
                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                // HACK: if the crate name starts with `=` it's a 2018 absolute path (references a crate loaded with `--extern`)
+                // Internal AST encoding: `=crate` denotes a Rust 2018 extern-prelude absolute path.
                 auto crate_name = RcString(std::string("=") + tok.ident().name.c_str());
                 std::vector<AST::PathNode> nodes;
                 if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
@@ -1661,7 +1661,7 @@ AST::Path Parse_Path(TokenStream& lex, bool is_abs, eParsePathGenericMode generi
             }
             if (lex.lookahead(0) == TOK_LT || lex.lookahead(0) == TOK_DOUBLE_LT || lex.lookahead(0) == TOK_THINARROW_LEFT) {
                 GET_TOK(tok, lex);
-                // HACK! Handle breaking << into < <
+                // The lexer maximally tokenizes `<<`; generics consume the second `<` separately.
                 if (tok.type() == TOK_DOUBLE_LT) {
                     lex.putback(Token(TOK_LT));
                 }
@@ -1672,10 +1672,10 @@ AST::Path Parse_Path(TokenStream& lex, bool is_abs, eParsePathGenericMode generi
                 // Type-mode generics "::path::to::Type<A,B>"
                 params = Parse_Path_GenericList(lex);
             }
-            // HACK - 'Fn*(...) -> ...' notation
+            // Parenthesized arguments encode the `Fn(A, B) -> C` trait-path syntax.
             else if (lex.lookahead(0) == TOK_PAREN_OPEN) {
                 auto ps = lex.start_span();
-                DEBUG("Fn() hack");
+                DEBUG("Fn() parenthesized arguments");
                 ::std::vector<TypeRef> args;
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
                 do {
@@ -1710,7 +1710,7 @@ AST::Path Parse_Path(TokenStream& lex, bool is_abs, eParsePathGenericMode generi
         GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
         if (generic_mode == PATH_GENERIC_EXPR && (lex.lookahead(0) == TOK_LT || lex.lookahead(0) == TOK_DOUBLE_LT || lex.lookahead(0) == TOK_THINARROW_LEFT)) {
             GET_TOK(tok, lex);
-            // HACK! Handle breaking << into < <
+            // The lexer maximally tokenizes `<<`; turbofish generics consume the second `<` separately.
             if (tok.type() == TOK_DOUBLE_LT) {
                 lex.putback(Token(TOK_LT));
             }
@@ -1804,7 +1804,7 @@ AST::Path Parse_Path(TokenStream& lex, bool is_abs, eParsePathGenericMode generi
         }
     } while (GET_TOK(tok, lex) == TOK_COMMA);
 
-    // HACK: Split >> into >
+    // The lexer maximally tokenizes closing `>>`/`>=` operators; consume one generic-list `>` here.
     if (tok.type() == TOK_DOUBLE_GT_EQUAL) {
         lex.putback(Token(TOK_GTE));
     } else if (tok.type() == TOK_GTE) {
@@ -2451,7 +2451,7 @@ bool Parse_MacroInvocation_Opt(TokenStream& lex, AST::MacroInvocation& out_inv);
     }
     if (lex.getTokenIf(TOK_RWORD_PUB)) {
         if (LOOK_AHEAD(lex) == TOK_PAREN_OPEN) {
-            // HACK: tuple structs have a parsing ambiguity around `pub (self::Type,)`
+            // In tuple fields, `pub (Type,)` must stay distinct from restricted visibility such as `pub(self)`.
             if (!allow_restricted) {
                 if (lex.lookahead(1) == TOK_RWORD_IN)
                     ;
@@ -2960,7 +2960,7 @@ AST::Struct Parse_Struct(TokenStream& lex, const AST::AttributeList& meta_items)
             auto item_attrs = Parse_ItemAttrs(lex);
             SET_ATTRS(lex, item_attrs);
 
-            auto vis = Parse_Publicity(lex, /*allow_restricted=*/false); // HACK: Disable `pub(restricted)` syntax in tuple structs, due to ambiguity
+            auto vis = Parse_Publicity(lex, /*allow_restricted=*/false); // Disambiguate `pub (Type)` from tuple-field restricted visibility.
 
             refs.push_back(AST::TupleItem(mv$(item_attrs), vis, Parse_Type(lex)));
             if (GET_TOK(tok, lex) != TOK_COMMA) {
@@ -3842,13 +3842,13 @@ void Parse_Use_Root(TokenStream& lex, ::std::vector<AST::UseItem::Ent>& entries)
             // Leading :: is allowed and ignored for the $crate feature
         case TOK_DOUBLE_COLON:
             // Absolute path
-            // HACK! mrustc emits $crate as `::"crate-name"`
+            // Internal `$crate` path encoding emitted by mrustc is `::"crate-name"`.
             if (LOOK_AHEAD(lex) == TOK_STRING) {
                 GET_CHECK_TOK(tok, lex, TOK_STRING);
                 path = ::AST::Path(RcString::new_interned(tok.str()), {});
             } else if (lex.edition_after(AST::Edition::Rust2018)) {
                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                // HACK: if the crate name starts with `=` it's a 2018 absolute path (references a crate loaded with `--extern`)
+                // Internal AST encoding: `=crate` denotes a Rust 2018 extern-prelude absolute path.
                 path = ::AST::Path(RcString(std::string("=") + tok.ident().name.c_str()), {});
                 // TODO: Is `use ::foo as bar` valid?
                 if (lex.lookahead(0) != TOK_DOUBLE_COLON) {
@@ -4711,7 +4711,7 @@ TypeRef Parse_Type_Int(TokenStream& lex, bool allow_trait_list) {
             PUTBACK(tok, lex);
             return Parse_Type_Path(lex, {}, allow_trait_list);
 
-        // HACK! Convert && into & &
+        // The lexer maximally tokenizes `&&`; reference-type parsing consumes it as two `&` tokens.
         case TOK_DOUBLE_AMP:
             lex.putback(Token(TOK_AMP));
         // '&' - Reference type

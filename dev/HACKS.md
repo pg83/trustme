@@ -2,10 +2,10 @@
 
 Найдено:
 
-- 169 строк с `hack/HACK/hacky/hackery/hackiness` в 36 файлах.
-- 158 точных употреблений слова `HACK`.
-- 162 комментария и 7 диагностических `DEBUG`-строк.
-- По подсистемам: frontend — 55, HIR/typeck — 62, MIR — 21, backend — 23, инфраструктура — 8.
+- 156 строк с `hack/HACK/hacky/hackery/hackiness` в 36 файлах.
+- 145 точных употреблений слова `HACK`.
+- 150 комментариев и 6 диагностических `DEBUG`-строк.
+- По подсистемам: frontend — 42, HIR/typeck — 62, MIR — 21, backend — 23, инфраструктура — 8.
 
 Главный вывод: массово удалять эти комментарии нельзя. Под одной меткой смешаны реальные ошибки модели, допустимые lowerings, устаревший код и просто плохо названные инварианты.
 
@@ -60,7 +60,7 @@
 - [x] Удалены все 58 блоков `#if 0`, обычные `if (false)` и связанные с ними мёртвые HACK-комментарии. `unit_compiler_no_dead_branches` запрещает возвращать literal-false ветки; debug-макросы сохраняют compile-time проверку выражений через unevaluated `sizeof`.
 - [x] Обходы `tracing_attributes-0_1_26` и `tracing_attributes-0_1_30` удалены. Настоящий `tracing-attributes 0.1.30` и workload из 236 `#[instrument]` собираются; отдельный semantic unit запрещает снова тихо отбрасывать attribute proc-macro.
 
-`rustc_legacy_const_generics`, `builtin # offset_of` и leading `|` в match удалять только из-за старого комментария нельзя: соответствующая семантика всё ещё может присутствовать в исходниках, компилируемых Rust 1.90.
+`rustc_legacy_const_generics` и `builtin # offset_of` удалять только из-за старого комментария нельзя: соответствующая семантика всё ещё может присутствовать в исходниках, компилируемых Rust 1.90. Optional leading `|` в match arm подтверждён как штатная грамматика и теперь так и документирован в parser.
 
 ### Полный реестр по файлам
 
@@ -69,7 +69,7 @@
 | Infrastructure | `common.h:17`, `tagged_union.h:150,177` | Сокращения `mv$` и macro-loop — плохая читаемость, но не ошибки семантики. |
 | Driver | `main_bindings.cpp:1681,1868,2241,2481,2486` | Literal-false код удалён; testing/pipeline labels и ручной CLI parser остаются активной инфраструктурой. |
 | Expansion | `expand_common.cpp:25,137,387,460,949,2092,2223,2431` | Глобальный module context, повторные проходы и early `macro_rules`; hardcoded потеря `tracing`-семантики удалена. |
-| Parser | `parse_common.cpp:263,306,354,388,403,555,939,1279,1353,1581,1664,1675,1678,1713,1807,2454,2963,3845,3851,4714` | Split `&&/<< />>`, `Fn(...)` и visibility — нормальная работа текущего lexer/parser, плохо названная HACK. Statement/path macro handling связано с `pin!`-группой. |
+| Parser | `parse_common.cpp:263,306,354,388,403,1279,1353` | Штатные token splitting, `Fn(...)`, optional leading `|`, tuple-field visibility и внутренние path encodings больше не помечены как HACK. Оставшиеся маркеры относятся к statement/path macro handling, `TOK_HASH` между statements и `builtin #` lowering. |
 | Macro matcher | `macro_rules_macro_rules.cpp:534,833,1537,2311,2313,3811` | Реальные opaque-fragment и matcher-state обходы; строка 534 привязана к ICU из rustc 1.90. |
 | Hygiene/macros | `ident.cpp:9`, `synext_macro.cpp:1559,2094` | Неполная hygiene и hardcoded `format_args!` API. |
 | Resolver | `resolve_common.cpp:98,543`; `resolve_main_bindings.cpp:411,641,1512,1702,1760,1851,1860,2681,3792,3858,3891,4096` | Синтетические `=crate`, anon-module и primitive-module paths — единый долг модели путей. |
@@ -94,4 +94,4 @@
 | Enumeration | `trans_main_bindings.cpp:1349,2204,2487,2872` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующая последовательность: переименовать ложные `HACK` в документированные инварианты; реальные HACK исправлять только unit-first, по измеряемому общему эффекту. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.
+Следующая последовательность: parser/lexer-инварианты переименованы; продолжить ту же проверку для infrastructure, HIR layout и metadata markers. Реальные HACK исправлять только unit-first, по измеряемому общему эффекту. Macro hygiene остаётся отдельным архитектурным пунктом, но больше не оправдывает тихое удаление proc-macro.
