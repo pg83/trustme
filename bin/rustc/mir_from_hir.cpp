@@ -6209,20 +6209,20 @@ public:
 };
 
 namespace {
-    void push_flat_rules(::std::vector<PatternRule>& out_rules, PatternRule rule) {
+    void append_rule_columns(::std::vector<PatternRule>& out_rules, PatternRule rule) {
         TU_MATCH_HDRA( (rule), {)
         TU_ARMA(Variant, e) {
                 auto sub_rules = mv$(e.sub_rules);
                 out_rules.push_back(mv$(rule));
                 for (auto& sr : sub_rules) {
-                    push_flat_rules(out_rules, mv$(sr));
+                    append_rule_columns(out_rules, mv$(sr));
                 }
             }
             TU_ARMA(Slice, e) {
                 auto sub_rules = mv$(e.sub_rules);
                 out_rules.push_back(mv$(rule));
                 for (auto& sr : sub_rules) {
-                    push_flat_rules(out_rules, mv$(sr));
+                    append_rule_columns(out_rules, mv$(sr));
                 }
             }
             TU_ARMA(SplitSlice, e) {
@@ -6231,12 +6231,12 @@ namespace {
                 auto idx = out_rules.size();
                 out_rules.push_back(mv$(rule));
                 for (auto& sr : leading) {
-                    push_flat_rules(out_rules, mv$(sr));
+                    append_rule_columns(out_rules, mv$(sr));
                 }
                 // Trailing rules are complex as they break the assumption that patterns across the same type share a prefix
                 // - So, flatten them into the "flattened" rule
                 for (auto& sr : trailing) {
-                    push_flat_rules(out_rules[idx].as_SplitSlice().trailing, mv$(sr));
+                    append_rule_columns(out_rules[idx].as_SplitSlice().trailing, mv$(sr));
                 }
             }
             TU_ARMA(Bool, e) {
@@ -6254,13 +6254,13 @@ namespace {
         }
     }
 
-    t_arm_rules flatten_rules(t_arm_rules rules) {
+    t_arm_rules linearize_rule_columns(t_arm_rules rules) {
         t_arm_rules rv;
         rv.reserve(rules.size());
         for (auto& ruleset : rules) {
             ::std::vector<PatternRule> pattern_rules;
             for (auto& r : ruleset.m_rules) {
-                push_flat_rules(pattern_rules, mv$(r));
+                append_rule_columns(pattern_rules, mv$(r));
             }
             rv.push_back(PatternRuleset{ruleset.arm_idx, ruleset.arm_rule_idx, mv$(pattern_rules)});
         }
@@ -6269,14 +6269,12 @@ namespace {
 }
 
 void MIR_LowerHIR_Match_Grouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIR::TypeRef& match_ty, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block) {
-    // TEMPORARY HACK: Grouped fails in complex matches (e.g. librustc_const_math Int::infer)
-    //MIR_LowerHIR_Match_Simple( builder, conv, node, mv$(match_val), mv$(arm_rules), mv$(arms_code), first_cmp_block );
-    //return;
-
     TRACE_FUNCTION_F("");
 
-    // Flatten ruleset completely (remove grouping of enum/slice rules)
-    arm_rules = flatten_rules(mv$(arm_rules));
+    // The grouped matcher consumes one constructor or field test per matrix
+    // column. Keep each outer constructor before the payload columns and retain
+    // the full field path on every test.
+    arm_rules = linearize_rule_columns(mv$(arm_rules));
 
     // - Create a "slice" of the passed rules, suitable for passing to the recursive part of the algo
     t_rules_subset rules{arm_rules.size(), /*is_arm_indexes=*/true};
@@ -6302,7 +6300,7 @@ void MatchGenGrouped::gen_for_slice(t_rules_subset arm_rules, size_t ofs, ::MIR:
     TRACE_FUNCTION_F("arm_rules=" << arm_rules << ", ofs=" << ofs << ", default_arm=" << default_arm);
     ASSERT_BUG(sp, arm_rules.size() > 0, "");
 
-    // Quick hack: Skip any layers entirely made up of PatternRule::Any
+    // Leading wildcard-only columns cannot discriminate between these rows.
     for (;;) {
         bool is_all_any = true;
         for (size_t i = 0; i < arm_rules.size() && is_all_any; i++) {
