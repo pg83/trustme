@@ -2778,11 +2778,7 @@ namespace HIR {
                         auto ty = resolve.m_crate.m_types.path(ty_path, &resolve.m_crate.get_struct_by_path(state.sp, ty_path));
                         auto* repr = Target_GetTypeRepr(state.sp, resolve, ty);
                         MIR_ASSERT(state, repr, "No repr for panic::Location?");
-                        if (TARGETVER_LEAST_1_90) {
-                            MIR_ASSERT(state, repr->fields.size() == 4, "Unexpected item count in panic::Location");
-                        } else {
-                            MIR_ASSERT(state, repr->fields.size() == 3, "Unexpected item count in panic::Location");
-                        }
+                        MIR_ASSERT(state, repr->fields.size() == 4, "Unexpected item count in panic::Location");
                         auto val = RelocPtr(AllocationPtr::allocate(local_state.value_pool, resolve, state, ty));
                         dst.write_ptr(state, EncodedLiteral::PTR_BASE, val);
                         auto rv = ValueRef(val);
@@ -2812,7 +2808,7 @@ namespace HIR {
 #else
                         unsigned rv = __builtin_popcountll(val.get_lo()) + __builtin_popcountll(val.get_hi());
 #endif
-                        dst.write_uint(state, TARGETVER_LEAST_1_90 ? 32 : ti.bits, U128(rv));
+                        dst.write_uint(state, 32, U128(rv));
                     }
                     // - CounT Trailing Zeros
                     else if (te->name == "cttz" || te->name == "cttz_nonzero") {
@@ -2829,7 +2825,7 @@ namespace HIR {
                                 rv += 1;
                             }
                         }
-                        dst.write_uint(state, TARGETVER_LEAST_1_90 ? 32 : ti.bits, U128(rv));
+                        dst.write_uint(state, 32, U128(rv));
                     }
                     // - CounT Lrailing Zeros
                     else if (te->name == "ctlz" || te->name == "ctlz_nonzero") {
@@ -2844,7 +2840,7 @@ namespace HIR {
                             rv += 1;
                         }
                         // Then subtract from the total bit count (no shift needed = max bits)
-                        dst.write_uint(state, TARGETVER_LEAST_1_90 ? 32 : ti.bits, U128(ti.bits - rv));
+                        dst.write_uint(state, 32, U128(ti.bits - rv));
                     } else if (te->name == "bswap") {
                         auto ty = local_state.monomorph_expand(te->params.m_types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "bswap with non-primitive " << ty);

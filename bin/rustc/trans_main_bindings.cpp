@@ -251,9 +251,7 @@ namespace {
 
     MIR::LValue deref_box(MIR::LValue box) {
         auto inner_ptr = ::MIR::LValue::new_Field(::MIR::LValue::new_Field(mv$(box), 0), 0);
-        if (TARGETVER_MOST_1_29 || TARGETVER_LEAST_1_74) {
-            inner_ptr = ::MIR::LValue::new_Field(std::move(inner_ptr), 0);
-        }
+        inner_ptr = ::MIR::LValue::new_Field(std::move(inner_ptr), 0);
         return ::MIR::LValue::new_Deref(std::move(inner_ptr));
     }
 
@@ -307,7 +305,7 @@ namespace {
 void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
     State state{crate, trans_list};
 
-    if (TARGETVER_LEAST_1_29) {
+    {
         // Generate for all
         for (const auto& ty : trans_list.auto_clone_impls) {
             state.done_list.insert(ty);
@@ -510,7 +508,7 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                 offset = 0;
             } else if (trait_path.m_path == state.resolve.m_lang_FnMut) {
                 offset = 1;
-            } else if (TARGETVER_LEAST_1_39 && trait_path.m_path == state.resolve.m_lang_FnOnce) {
+            } else if (trait_path.m_path == state.resolve.m_lang_FnOnce) {
                 offset = 2;
             } else {
                 offset = 3; // Wait, is this reachable?
@@ -866,11 +864,7 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
                 builder.push_stmt_drop(std::move(inner_val));
             }
 
-            if (TARGETVER_MOST_1_54 && state.resolve.is_type_owned_box(ty)) {
-                // Shallow drop the box (triggering a free call in the backend)
-                // - If this is 1.74+, emit a standard Drop::drop call that will handle the dealloc
-                builder.push_stmt(MIR::Statement::make_Drop({MIR::eDropKind::SHALLOW, ::MIR::LValue::new_Deref(builder.self.clone()), ~0u}));
-            } else if (state.resolve.type_needs_drop_glue(sp, ty)) {
+            if (state.resolve.type_needs_drop_glue(sp, ty)) {
                 TU_MATCH_HDRA( ((*ty)), {)
                 TU_ARMA(Infer, _te)
                     throw "";
@@ -1259,10 +1253,7 @@ TransList Trans_Enumerate_Main(const ::HIR::Crate& crate) {
             const auto& fcn = crate.get_function_by_path(sp, start_path);
 
             Trans_Params lang_start_pp(crate.m_types);
-            if (TARGETVER_LEAST_1_29) {
-                // With 1.29, this now takes main's return type as a type parameter
-                lang_start_pp.pp_method.m_types.push_back(main_fcn.m_return);
-            }
+            lang_start_pp.pp_method.m_types.push_back(main_fcn.m_return);
             HIR::Path p = HIR::GenericPath(start_path, lang_start_pp.pp_method.clone());
             state.rv.m_roots.push_back(p.clone());
             //state.enum_fcn( start_path, fcn, mv$(lang_start_pp) );
@@ -2220,11 +2211,9 @@ namespace {
                 }
                 // In 1.74+ the `offset` intrinsic takes a pointer as its generic
                 else if (e2.name == "offset") {
-                    if (TARGETVER_LEAST_1_74) {
-                        HIR::TypeRef tmp;
-                        const auto& ty = pp.maybe_monomorph(tv.m_resolve, tmp, e2.params.m_types.at(0));
-                        tv.visit_type(ty->as_Pointer().inner);
-                    }
+                    HIR::TypeRef tmp;
+                    const auto& ty = pp.maybe_monomorph(tv.m_resolve, tmp, e2.params.m_types.at(0));
+                    tv.visit_type(ty->as_Pointer().inner);
                 }
             }
             if (block.terminator.is_Call() && block.terminator.as_Call().fcn.is_Path()) {
@@ -2373,12 +2362,6 @@ void Trans_Enumerate_Types(EnumState& state) {
                 const auto& p = ty->as_Path().path.m_data.as_Generic().m_params;
                 tv.visit_type(*ity);
 
-                if (TARGETVER_MOST_1_54) {
-                    // Reqire drop glue for inner type.
-                    // - Should that already exist?
-                    // Requires box_free lang item
-                    Trans_Enumerate_FillFrom_PathMono(state, ::HIR::GenericPath(state.crate.get_lang_item_path(sp, "box_free"), p.clone()));
-                }
             }
         }
         types_count = state.rv.m_types.size();
@@ -2619,7 +2602,7 @@ void Trans_Enumerate_FillFrom_PathMono(EnumState& state, ::HIR::Path path_mono) 
                 state.rv.auto_fnptr_impls.insert(path_mono.m_data.as_UfcsKnown().type);
             }
             // <* as Clone>::clone
-            else if (TARGETVER_LEAST_1_29 && path_mono.m_data.is_UfcsKnown() && path_mono.m_data.as_UfcsKnown().trait == state.crate.get_lang_item_path_opt("clone")) {
+            else if (path_mono.m_data.is_UfcsKnown() && path_mono.m_data.as_UfcsKnown().trait == state.crate.get_lang_item_path_opt("clone")) {
                 const auto& pe = path_mono.m_data.as_UfcsKnown();
                 ASSERT_BUG(sp, pe.item == "clone" || pe.item == "clone_from", "Unexpected Clone method called, " << path_mono);
                 const auto& inner_ty = pe.type;

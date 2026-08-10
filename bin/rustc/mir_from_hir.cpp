@@ -173,7 +173,7 @@ namespace {
             // if state is 0, then drop captures (this is the pre-run state)
             arms.push_back(out_builder.new_bb_unlinked());
             out_builder.set_cur_block(arms.back());
-            size_t arg_count = 1 + (TARGETVER_LEAST_1_74 ? 1 : 0);
+            size_t arg_count = 2;
             for (size_t i = 0; i < n_captures; i++) {
                 // TODO: State tracking on captures, what if a by-value capture is moved?
                 if (mappings.count(arg_count + i) == 0) {
@@ -1746,7 +1746,7 @@ namespace {
                 }
             }
 
-            if (TARGETVER_LEAST_1_74) {
+            {
                 auto limit_lval = m_builder.lvalue_or_temp(node.span(), ty_idx, mv$(limit_val));
 
                 auto cmp_res = m_builder.new_temporary(m_builder.resolve().m_crate.m_types.primitive(::HIR::CoreType::Bool));
@@ -1852,127 +1852,13 @@ namespace {
         }
 
         void visit(::HIR::ExprNode_Emplace& node) override {
-            if (TARGETVER_MOST_1_19) {
-                return visit_emplace_119(node);
-            } else {
-                assert(node.m_type == ::HIR::ExprNode_Emplace::Type::Boxer);
-                const auto& data_ty = node.m_value->m_res_type;
-
-                node.m_value->visit(*this);
-                auto val = m_builder.get_result(node.span());
-
-                return box_new(node, data_ty, std::move(val));
-            }
-        }
-
-        void visit_emplace_119(::HIR::ExprNode_Emplace& node) {
-            if (node.m_type == ::HIR::ExprNode_Emplace::Type::Noop) {
-                return node.m_value->visit(*this);
-            }
-            const auto& path_Placer = m_builder.crate().get_lang_item_path(node.span(), "placer_trait");
-            const auto& path_Boxed = m_builder.crate().get_lang_item_path(node.span(), "boxed_trait");
-            const auto& path_Place = m_builder.crate().get_lang_item_path(node.span(), "place_trait");
-            const auto& path_BoxPlace = m_builder.crate().get_lang_item_path(node.span(), "box_place_trait");
-            const auto& path_InPlace = m_builder.crate().get_lang_item_path(node.span(), "in_place_trait");
-
+            assert(node.m_type == ::HIR::ExprNode_Emplace::Type::Boxer);
             const auto& data_ty = node.m_value->m_res_type;
-            auto& types = m_builder.resolve().m_crate.m_types;
 
-            ::HIR::PathParams trait_params_data;
-            trait_params_data.m_types.push_back(data_ty);
-            // 1. Obtain the type of the `place` variable
-            ::HIR::TypeRef place_type;
-            switch (node.m_type) {
-                case ::HIR::ExprNode_Emplace::Type::Noop:
-                    throw "";
-                case ::HIR::ExprNode_Emplace::Type::Boxer:
-                    place_type = types.path(::HIR::Path(node.m_res_type, ::HIR::GenericPath(path_Boxed), "Place", {}), {});
-                    break;
-                case ::HIR::ExprNode_Emplace::Type::Placer:
-                    place_type = types.path(::HIR::Path(node.m_place->m_res_type, ::HIR::GenericPath(path_Placer, trait_params_data.clone()), "Place", {}), {});
-                    break;
-            }
-            m_builder.resolve().expand_associated_types(node.span(), place_type);
-
-            // 2. Initialise the place
-            auto place = m_builder.new_temporary(place_type);
-            auto place__panic = m_builder.new_bb_unlinked();
-            auto place__ok = m_builder.new_bb_unlinked();
-            switch (node.m_type) {
-                case ::HIR::ExprNode_Emplace::Type::Noop:
-                    throw "";
-                case ::HIR::ExprNode_Emplace::Type::Boxer: {
-                    m_builder.end_block(::MIR::Terminator::make_Call({place__ok, place__panic, place.clone(), ::HIR::Path(place_type, ::HIR::GenericPath(path_BoxPlace, mv$(trait_params_data)), "make_place", {}), {}}));
-                    break;
-                }
-                case ::HIR::ExprNode_Emplace::Type::Placer: {
-                    // Visit the place
-                    node.m_place->visit(*this);
-                    auto val = m_builder.get_result_in_param(node.m_place->span(), node.m_place->m_res_type);
-                    if (const auto* e = val.opt_LValue()) {
-                        m_builder.moved_lvalue(node.m_place->span(), *e);
-                    }
-                    // Extract the "Place" type
-                    m_builder.end_block(::MIR::Terminator::make_Call({place__ok, place__panic, place.clone(), ::HIR::Path(node.m_place->m_res_type, ::HIR::GenericPath(path_Placer, trait_params_data.clone()), "make_place", {}), ::make_vec1(mv$(val))}));
-                    break;
-                }
-            }
-
-            m_builder.set_cur_block(place__panic);
-            emit_unwind(node.span());
-            m_builder.set_cur_block(place__ok);
-
-            // 2. Get `place_raw`
-            auto place_raw__type = types.pointer(::HIR::BorrowType::Unique, node.m_value->m_res_type);
-            auto place_raw = m_builder.new_temporary(place_raw__type);
-            auto place_raw__panic = m_builder.new_bb_unlinked();
-            auto place_raw__ok = m_builder.new_bb_unlinked();
-            {
-                auto place_refmut__type = types.borrow(::HIR::BorrowType::Unique, place_type);
-                auto place_refmut = m_builder.lvalue_or_temp(node.span(), place_refmut__type, ::MIR::RValue::make_Borrow({::HIR::BorrowType::Unique, false, place.clone()}));
-                // <typeof(place) as ops::Place<T>>::pointer (T = inner)
-                auto fcn_path = ::HIR::Path(place_type, ::HIR::GenericPath(path_Place, ::HIR::PathParams(data_ty)), "pointer", ::HIR::PathParams(HIR::LifetimeRef()));
-                m_builder.moved_lvalue(node.span(), place_refmut);
-                m_builder.end_block(::MIR::Terminator::make_Call({place_raw__ok, place_raw__panic, place_raw.clone(), mv$(fcn_path), ::make_vec1(::MIR::Param(mv$(place_refmut)))}));
-            }
-
-            // TODO: Proper panic handling, including scope destruction
-            m_builder.set_cur_block(place_raw__panic);
-            // TODO: Drop `place` (as it's a raw pointer)
-            emit_unwind(node.span());
-            m_builder.set_cur_block(place_raw__ok);
-
-            // 3. Get the value and assign it into `place_raw`
             node.m_value->visit(*this);
             auto val = m_builder.get_result(node.span());
-            m_builder.push_stmt_assign(node.span(), ::MIR::LValue::new_Deref(place_raw.clone()), mv$(val), /*drop_destination=*/false);
 
-            // 3. Return a call to `finalize`
-            ::HIR::Path finalize_path(::HIR::GenericPath{});
-            switch (node.m_type) {
-                case ::HIR::ExprNode_Emplace::Type::Noop:
-                    throw "";
-                case ::HIR::ExprNode_Emplace::Type::Boxer:
-                    finalize_path = ::HIR::Path(node.m_res_type, ::HIR::GenericPath(path_Boxed), "finalize");
-                    break;
-                case ::HIR::ExprNode_Emplace::Type::Placer:
-                    finalize_path = ::HIR::Path(place_type, ::HIR::GenericPath(path_InPlace, trait_params_data.clone()), "finalize");
-                    break;
-            }
-
-            auto res = m_builder.new_temporary(node.m_res_type);
-            auto res__panic = m_builder.new_bb_unlinked();
-            auto res__ok = m_builder.new_bb_unlinked();
-            m_builder.moved_lvalue(node.span(), place);
-            m_builder.end_block(::MIR::Terminator::make_Call({res__ok, res__panic, res.clone(), mv$(finalize_path), ::make_vec1(::MIR::Param(mv$(place)))}));
-
-            // TODO: Proper panic handling, including scope destruction
-            m_builder.set_cur_block(res__panic);
-            emit_unwind(node.span());
-            m_builder.set_cur_block(res__ok);
-
-            m_builder.mark_value_assigned(node.span(), res);
-            m_builder.set_result(node.span(), mv$(res));
+            return box_new(node, data_ty, std::move(val));
         }
 
         void box_new(::HIR::ExprNode& node, const ::HIR::TypeRef& data_ty, ::MIR::RValue val) {

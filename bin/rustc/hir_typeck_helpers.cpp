@@ -1424,14 +1424,13 @@ TU_ARMA(Alias, ee) {
                 }
             }
 
-            // 1.74: Magic impls of `fn_ptr_trait` for function pointers
-            if (TARGETVER_LEAST_1_74 && !lang_FnPtr.components().empty() && trait == lang_FnPtr) {
+            if (!lang_FnPtr.components().empty() && trait == lang_FnPtr) {
                 if (type->is_Function()) {
                     return callback(ImplRef(&type, &null_params, &null_assoc), HIR::Compare::Equal);
                 }
             }
 
-            if (TARGETVER_LEAST_1_29 && trait == m_lang_Clone) {
+            if (trait == m_lang_Clone) {
                 auto cmp = this->type_is_clone(sp, type);
                 if (cmp != ::HIR::Compare::Unequal) {
                     return callback(ImplRef(&type, &null_params, &null_assoc), cmp);
@@ -1441,7 +1440,7 @@ TU_ARMA(Alias, ee) {
             }
 
             // - `DiscriminantKind`
-            if (TARGETVER_LEAST_1_54 && !m_lang_DiscriminantKind.components().empty() && trait == m_lang_DiscriminantKind) {
+            if (!m_lang_DiscriminantKind.components().empty() && trait == m_lang_DiscriminantKind) {
                 static auto name_Discriminant = RcString::new_interned("Discriminant");
                 // TODO: This logic is near identical to the logic in `static.cpp` - can it be de-duplicated?
 
@@ -1465,7 +1464,7 @@ TU_ARMA(Alias, ee) {
                     return callback(ImplRef(type, {}, std::move(assoc_list)), ::HIR::Compare::Equal);
                 }
             }
-            if (TARGETVER_LEAST_1_54 && !m_lang_Pointee.components().empty() && trait == m_lang_Pointee) {
+            if (!m_lang_Pointee.components().empty() && trait == m_lang_Pointee) {
                 static auto name_Metadata = RcString::new_interned("Metadata");
                 // TODO: This logic is near identical to the logic in `static.cpp` - can it be de-duplicated?
 
@@ -1525,7 +1524,7 @@ TU_ARMA(Alias, ee) {
                 return callback(ImplRef(type, {}, std::move(assoc_list)), ::HIR::Compare::Equal);
             }
             // - `Tuple`
-            if (TARGETVER_LEAST_1_74 && !lang_Tuple.components().empty() && trait == lang_Tuple) {
+            if (!lang_Tuple.components().empty() && trait == lang_Tuple) {
                 // Fuzzy impl for `_` and unbound ATYs
                 if (type->is_Infer() || (type->is_Path() && type->as_Path().binding.is_Unbound())) {
                     return callback(ImplRef(type, HIR::PathParams(), ::HIR::TraitPath::assoc_list_t()), ::HIR::Compare::Fuzzy);
@@ -1587,13 +1586,13 @@ TU_ARMA(Alias, ee) {
                         }
                     }
                 }
-            } else if (TARGETVER_LEAST_1_90 && trait == m_lang_PointeeSized) {
+            } else if (trait == m_lang_PointeeSized) {
                 if (find_trait_impls_bound(sp, trait, params, type, callback)) {
                     return true;
                 }
                 // Lowest level of sizedness: This _might_ be sized (i.e. it's not an extern type?)
                 return callback(ImplRef(type, {}, ::HIR::TraitPath::assoc_list_t()), ::HIR::Compare::Equal);
-            } else if (TARGETVER_LEAST_1_90 && trait == m_lang_MetaSized) {
+            } else if (trait == m_lang_MetaSized) {
                 TODO(sp, "MetaSized");
                 // Next level of sizedness: There's metadata that allows getting the size
                 // - No difference to the above?
@@ -1609,7 +1608,7 @@ TU_ARMA(Alias, ee) {
                 //}
             }
 
-            if (TARGETVER_LEAST_1_90 && trait == m_lang_Destruct) {
+            if (trait == m_lang_Destruct) {
                 // Inidicates that something is droppable
                 // - Applies to everything?
                 if (find_trait_impls_bound(sp, trait, params, type, callback)) {
@@ -1671,21 +1670,19 @@ TU_ARMA(Alias, ee) {
                     }
                 }
                 TU_ARMA(Generator, node_p) {
-                    if (TARGETVER_LEAST_1_39 && trait == m_lang_Generator) {
+                    if (trait == m_lang_Generator) {
                         static const RcString rcstring_Yield = RcString::new_interned("Yield");
                         static const RcString rcstring_Return = RcString::new_interned("Return");
                         ::HIR::TraitPath::assoc_list_t assoc;
                         assoc.insert(::std::make_pair(rcstring_Yield, ::HIR::TraitPath::AtyEqual{trait.clone(), {}, node_p->m_yield_ty}));
                         assoc.insert(::std::make_pair(rcstring_Return, ::HIR::TraitPath::AtyEqual{trait.clone(), {}, node_p->m_return}));
                         HIR::PathParams params;
-                        if (TARGETVER_LEAST_1_74) {
-                            params.m_types.push_back(node_p->m_resume_ty);
-                        }
+                        params.m_types.push_back(node_p->m_resume_ty);
                         return callback(ImplRef(type, mv$(params), mv$(assoc)), ::HIR::Compare::Equal);
                     }
                 }
                 TU_ARMA(Async, node_p) {
-                    if (TARGETVER_LEAST_1_74 && trait == m_lang_Future) {
+                    if (trait == m_lang_Future) {
                         static const RcString rcstring_Output = RcString::new_interned("Output");
                         ::HIR::TraitPath::assoc_list_t assoc;
                         assoc.insert(::std::make_pair(rcstring_Output, ::HIR::TraitPath::AtyEqual{trait.clone(), {}, node_p->m_code->m_res_type}));

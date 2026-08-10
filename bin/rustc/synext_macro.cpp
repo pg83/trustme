@@ -221,10 +221,6 @@ namespace {
 class CAsmExpander: public ExpandProcMacro {
 public:
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
-        if (TARGETVER_MOST_1_39) {
-            return CLlvmAsmExpander().expand(sp, crate, tt, mod);
-        }
-
         // Stabilisation-path `asm!`
 
         Token tok;
@@ -652,9 +648,7 @@ class CExpander_assert: public ExpandProcMacro {
 };
 
 void Expand_init_assert() {
-    if (TARGETVER_LEAST_1_29) {
-        Register_Synext_Macro("assert", ::std::unique_ptr<ExpandProcMacro>(new CExpander_assert));
-    }
+    Register_Synext_Macro("assert", ::std::unique_ptr<ExpandProcMacro>(new CExpander_assert));
 }
 
 #include "synext.h"
@@ -1561,38 +1555,22 @@ namespace {
                 toks.push_back(TokenTree(TOK_AMP));
                 toks.push_back(TokenTree(TOK_SQUARE_OPEN));
                 for (const auto& frag : fragments) {
-                    if (TARGETVER_LEAST_1_90) {
-                        // In 1.90.0, there's a collection of functions like `new_display`, one for each trait
-                        // Hacky option: Convert `LowerHex` into `_lower_hex`
-                        ::std::stringstream new_fn_ss;
-                        new_fn_ss << "new";
-                        for (const char* s = frag.trait_name; *s; s++) {
-                            if (isupper(*s)) {
-                                new_fn_ss << "_" << char(tolower(*s));
-                            } else {
-                                new_fn_ss << *s;
-                            }
-                        }
-                        push_path(toks, crate, {"fmt", "rt", "Argument", new_fn_ss.str().c_str()});
-                        toks.push_back(Token(TOK_PAREN_OPEN));
-                        toks.push_back(ident(FMT("a" << frag.arg_index).c_str()));
-                        toks.push_back(Token(TOK_PAREN_CLOSE));
-                        toks.push_back(TokenTree(TOK_COMMA));
-                    } else {
-                        if (TARGETVER_LEAST_1_74) {
-                            push_path(toks, crate, {"fmt", "rt", "Argument", "new"});
+                    // In 1.90.0, there's a collection of functions like `new_display`, one for each trait
+                    // Hacky option: Convert `LowerHex` into `_lower_hex`
+                    ::std::stringstream new_fn_ss;
+                    new_fn_ss << "new";
+                    for (const char* s = frag.trait_name; *s; s++) {
+                        if (isupper(*s)) {
+                            new_fn_ss << "_" << char(tolower(*s));
                         } else {
-                            push_path(toks, crate, {"fmt", "ArgumentV1", "new"});
+                            new_fn_ss << *s;
                         }
-                        toks.push_back(Token(TOK_PAREN_OPEN));
-                        toks.push_back(ident(FMT("a" << frag.arg_index).c_str()));
-
-                        toks.push_back(TokenTree(TOK_COMMA));
-
-                        push_path(toks, crate, {"fmt", frag.trait_name, "fmt"});
-                        toks.push_back(TokenTree(TOK_PAREN_CLOSE));
-                        toks.push_back(TokenTree(TOK_COMMA));
                     }
+                    push_path(toks, crate, {"fmt", "rt", "Argument", new_fn_ss.str().c_str()});
+                    toks.push_back(Token(TOK_PAREN_OPEN));
+                    toks.push_back(ident(FMT("a" << frag.arg_index).c_str()));
+                    toks.push_back(Token(TOK_PAREN_CLOSE));
+                    toks.push_back(TokenTree(TOK_COMMA));
                 }
                 toks.push_back(TokenTree(TOK_SQUARE_CLOSE));
             }
@@ -1635,52 +1613,13 @@ namespace {
                 toks.push_back(TokenTree(TOK_AMP));
                 toks.push_back(TokenTree(TOK_SQUARE_OPEN));
                 for (const auto& frag : fragments) {
-                    if (TARGETVER_LEAST_1_74) {
-                        push_path(toks, crate, {"fmt", "rt", "Placeholder"});
-                    } else {
-                        push_path(toks, crate, {"fmt", "rt", "v1", "Argument"});
-                    }
+                    push_path(toks, crate, {"fmt", "rt", "Placeholder"});
                     toks.push_back(TokenTree(TOK_BRACE_OPEN));
 
                     push_toks(toks, ident("position"), TOK_COLON);
-                    if (TARGETVER_MOST_1_39) {
-                        push_path(toks, crate, {"fmt", "rt", "v1", "Position", "Next"});
-                    } else {
-                        push_toks(toks, Token(U128(&frag - fragments.data()), CORETYPE_UINT));
-                    }
+                    push_toks(toks, Token(U128(&frag - fragments.data()), CORETYPE_UINT));
                     push_toks(toks, TOK_COMMA);
 
-                    if (TARGETVER_LEAST_1_74) {
-                    } else {
-                        push_toks(toks, ident("format"), TOK_COLON);
-                        push_path(toks, crate, {"fmt", "rt", "v1", "FormatSpec"});
-                        toks.push_back(TokenTree(TOK_BRACE_OPEN));
-                    }
-                    if (TARGETVER_MOST_1_74) {
-                        push_toks(toks, ident("fill"), TOK_COLON, Token(U128(frag.args.align_char), CORETYPE_CHAR), TOK_COMMA);
-                        push_toks(toks, ident("align"), TOK_COLON);
-                        const char* align_var_name = nullptr;
-                        switch (frag.args.align) {
-                            case FmtArgs::Align::Unspec:
-                                align_var_name = "Unknown";
-                                break;
-                            case FmtArgs::Align::Left:
-                                align_var_name = "Left";
-                                break;
-                            case FmtArgs::Align::Center:
-                                align_var_name = "Center";
-                                break;
-                            case FmtArgs::Align::Right:
-                                align_var_name = "Right";
-                                break;
-                        }
-                        if (TARGETVER_LEAST_1_74) {
-                            push_path(toks, crate, {"fmt", "rt", "Alignment", align_var_name});
-                        } else {
-                            push_path(toks, crate, {"fmt", "rt", "v1", "Alignment", align_var_name});
-                        }
-                        push_toks(toks, TOK_COMMA);
-                    }
                     // Flags
                     {
                         push_toks(toks, ident("flags"), TOK_COLON);
@@ -1724,50 +1663,44 @@ namespace {
                                 flags |= 1 << Flag::DebugUpperHex;
                                 break;
                         }
-                        if (TARGETVER_LEAST_1_90) {
-                            // Flags shifted, with 21 being SignPlus now
-                            // See `rustc-1.90.0-src/library/core/src/fmt/mod.rs` `mod flags`
-                            flags <<= 21;
-                            // NOTE: The fill character is in the low 21 bits (max size of a codepoint)
-                            flags |= frag.args.align_char & 0x1FFFFF;
+                        // Flags shifted, with 21 being SignPlus now
+                        // See `rustc-1.90.0-src/library/core/src/fmt/mod.rs` `mod flags`
+                        flags <<= 21;
+                        // NOTE: The fill character is in the low 21 bits (max size of a codepoint)
+                        flags |= frag.args.align_char & 0x1FFFFF;
 
-                            // Width and precision flags
-                            if (frag.args.width_is_arg || frag.args.width != 0) {
-                                flags |= 1 << 27;
-                            }
-                            if (frag.args.prec_is_arg || frag.args.prec != 0) {
-                                flags |= 1 << 28;
-                            }
-
-                            // Algnment now a flag
-                            switch (frag.args.align) {
-                                case FmtArgs::Align::Unspec:
-                                    flags |= 3 << 29;
-                                    break;
-                                case FmtArgs::Align::Left:
-                                    flags |= 0 << 29;
-                                    break;
-                                case FmtArgs::Align::Right:
-                                    flags |= 1 << 29;
-                                    break;
-                                case FmtArgs::Align::Center:
-                                    flags |= 2 << 29;
-                                    break;
-                            }
-
-                            flags |= 1 << 31;
+                        // Width and precision flags
+                        if (frag.args.width_is_arg || frag.args.width != 0) {
+                            flags |= 1 << 27;
                         }
+                        if (frag.args.prec_is_arg || frag.args.prec != 0) {
+                            flags |= 1 << 28;
+                        }
+
+                        // Alignment is encoded as a flag.
+                        switch (frag.args.align) {
+                            case FmtArgs::Align::Unspec:
+                                flags |= 3 << 29;
+                                break;
+                            case FmtArgs::Align::Left:
+                                flags |= 0 << 29;
+                                break;
+                            case FmtArgs::Align::Right:
+                                flags |= 1 << 29;
+                                break;
+                            case FmtArgs::Align::Center:
+                                flags |= 2 << 29;
+                                break;
+                        }
+
+                        flags |= 1 << 31;
                         push_toks(toks, Token(U128(flags), CORETYPE_U32));
                         push_toks(toks, TOK_COMMA);
                     }
                     // Counts (precision and width)
                     {
                         auto push_path_count = [&](const char* variant) {
-                            if (TARGETVER_LEAST_1_74) {
-                                push_path(toks, crate, {"fmt", "rt", "Count", variant});
-                            } else {
-                                push_path(toks, crate, {"fmt", "rt", "v1", "Count", variant});
-                            }
+                            push_path(toks, crate, {"fmt", "rt", "Count", variant});
                         };
 
                         push_toks(toks, ident("precision"), TOK_COLON);
@@ -1776,11 +1709,9 @@ namespace {
                             push_toks(toks, TOK_PAREN_OPEN);
                             if (frag.args.prec_is_arg) {
                                 push_toks(toks, TOK_STAR, ident(FMT("a" << frag.args.prec).c_str()));
-                                if (TARGETVER_LEAST_1_90) {
-                                    push_toks(toks, TOK_RWORD_AS, ident("u16"));
-                                }
+                                push_toks(toks, TOK_RWORD_AS, ident("u16"));
                             } else {
-                                push_toks(toks, Token(U128(frag.args.prec), TARGETVER_LEAST_1_90 ? CORETYPE_U16 : CORETYPE_UINT));
+                                push_toks(toks, Token(U128(frag.args.prec), CORETYPE_U16));
                             }
                             toks.push_back(TokenTree(TOK_PAREN_CLOSE));
                         } else {
@@ -1794,22 +1725,15 @@ namespace {
                             push_toks(toks, TOK_PAREN_OPEN);
                             if (frag.args.width_is_arg) {
                                 push_toks(toks, TOK_STAR, ident(FMT("a" << frag.args.width).c_str()));
-                                if (TARGETVER_LEAST_1_90) {
-                                    push_toks(toks, TOK_RWORD_AS, ident("u16"));
-                                }
+                                push_toks(toks, TOK_RWORD_AS, ident("u16"));
                             } else {
-                                push_toks(toks, Token(U128(frag.args.width), TARGETVER_LEAST_1_90 ? CORETYPE_U16 : CORETYPE_UINT));
+                                push_toks(toks, Token(U128(frag.args.width), CORETYPE_U16));
                             }
                             toks.push_back(TokenTree(TOK_PAREN_CLOSE));
                         } else {
                             push_path_count("Implied");
                         }
                         toks.push_back(TokenTree(TOK_COMMA));
-                    }
-
-                    if (TARGETVER_LEAST_1_74) {
-                    } else {
-                        toks.push_back(TokenTree(TOK_BRACE_CLOSE));
                     }
 
                     toks.push_back(TokenTree(TOK_BRACE_CLOSE));
@@ -2017,11 +1941,7 @@ class CExpander_panic: public ExpandProcMacro {
         }
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_DOUBLE_COLON));
-        if (crate.m_load_std == AST::Crate::LOAD_STD && TARGETVER_MOST_1_54) {
-            toks.push_back(Token(TOK_STRING, std::string(crate.m_ext_cratename_std.c_str()), {}));
-        } else {
-            toks.push_back(Token(TOK_STRING, std::string(crate.m_ext_cratename_core.c_str()), {}));
-        }
+        toks.push_back(Token(TOK_STRING, std::string(crate.m_ext_cratename_core.c_str()), {}));
         toks.push_back(Token(TOK_DOUBLE_COLON));
         toks.push_back(Token(TOK_IDENT, RcString::new_interned("panic")));
         toks.push_back(Token(TOK_DOUBLE_COLON));
@@ -2056,11 +1976,7 @@ class CExpander_unreachable: public ExpandProcMacro {
         }
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_DOUBLE_COLON));
-        if (crate.m_load_std == AST::Crate::LOAD_STD && TARGETVER_MOST_1_54) {
-            toks.push_back(Token(TOK_STRING, std::string(crate.m_ext_cratename_std.c_str()), {}));
-        } else {
-            toks.push_back(Token(TOK_STRING, std::string(crate.m_ext_cratename_core.c_str()), {}));
-        }
+        toks.push_back(Token(TOK_STRING, std::string(crate.m_ext_cratename_core.c_str()), {}));
         toks.push_back(Token(TOK_DOUBLE_COLON));
         toks.push_back(Token(TOK_IDENT, RcString::new_interned("panic")));
         toks.push_back(Token(TOK_DOUBLE_COLON));
@@ -2086,12 +2002,8 @@ class CExpander_unreachable: public ExpandProcMacro {
 };
 
 void Expand_init_panic() {
-    if (TARGETVER_LEAST_1_54) {
-        Register_Synext_Macro("panic", ::std::unique_ptr<ExpandProcMacro>(new CExpander_panic));
-    }
-    if (TARGETVER_LEAST_1_74) {
-        Register_Synext_Macro("unreachable", ::std::unique_ptr<ExpandProcMacro>(new CExpander_unreachable));
-    }
+    Register_Synext_Macro("panic", ::std::unique_ptr<ExpandProcMacro>(new CExpander_panic));
+    Register_Synext_Macro("unreachable", ::std::unique_ptr<ExpandProcMacro>(new CExpander_unreachable));
 }
 
 #include "synext.h"

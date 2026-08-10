@@ -943,7 +943,7 @@ namespace {
                 lex.consume();
                 return consume_type_TraitList(lex);
             case TOK_IDENT:
-                if (TARGETVER_LEAST_1_29 && lex.next_tok().ident().name == "dyn") {
+                if (lex.next_tok().ident().name == "dyn") {
                     lex.consume();
                     return consume_type_TraitList(lex);
                 }
@@ -3009,11 +3009,11 @@ public:
                             ty = MacroPatEnt::PAT_BLOCK;
                         } else if (type == "item") {
                             ty = MacroPatEnt::PAT_ITEM;
-                        } else if (/*TARGETVER_1_29 && */ type == "vis") { // TODO: Should this be selective?
+                        } else if (type == "vis") { // TODO: Should this be selective?
                             ty = MacroPatEnt::PAT_VIS;
-                        } else if (/*TARGETVER_1_29 && */ type == "lifetime") { // TODO: Should this be selective?
+                        } else if (type == "lifetime") { // TODO: Should this be selective?
                             ty = MacroPatEnt::PAT_LIFETIME;
-                        } else if (/*TARGETVER_1_39 && */ type == "literal") { // TODO: Should this be selective?
+                        } else if (type == "literal") { // TODO: Should this be selective?
                             ty = MacroPatEnt::PAT_LITERAL;
                         } else {
                             ERROR(lex.point_span(), E0000, "Unknown fragment type '" << type << "'");

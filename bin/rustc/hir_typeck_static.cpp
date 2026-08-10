@@ -159,7 +159,7 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
             if (this->type_is_copy(sp, type)) {
                 return found_cb(ImplRef(HIR::PathParams(), &type, &null_params, &null_assoc), false);
             }
-        } else if (TARGETVER_LEAST_1_29 && trait_path == m_lang_Clone) {
+        } else if (trait_path == m_lang_Clone) {
             // NOTE: Duplicated check for enumerate
             if (type->is_Tuple() || type->is_Array() || type->is_Function() || type->is_NodeType() || type->is_NamedFunction() || TU_TEST1(*type, Path, .is_closure())) {
                 if (this->type_is_clone(sp, type)) {
@@ -176,7 +176,7 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
             if (this->can_unsize(sp, dst_ty, type)) {
                 return found_cb(ImplRef(HIR::PathParams(), &type, trait_params, &null_assoc), false);
             }
-        } else if (TARGETVER_LEAST_1_54 && trait_path == m_lang_DiscriminantKind) {
+        } else if (trait_path == m_lang_DiscriminantKind) {
             // If the type is generic, then don't populate the ATY
             // Otherwise, populate the ATY with the correct type
             // - Unit for non-enums
@@ -199,7 +199,7 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
                 assoc_u8.insert(std::make_pair(RcString::new_interned("Discriminant"), HIR::TraitPath::AtyEqual{m_lang_DiscriminantKind, {}, m_crate.m_types.primitive(HIR::CoreType::U8)}));
             }
             return found_cb(ImplRef(HIR::PathParams(), &type, trait_params, &assoc_u8), false);
-        } else if (TARGETVER_LEAST_1_54 && trait_path == m_lang_Pointee) {
+        } else if (trait_path == m_lang_Pointee) {
             static ::HIR::TraitPath::assoc_list_t assoc_unit;
             static ::HIR::TraitPath::assoc_list_t assoc_slice;
             static RcString name_Metadata;
@@ -253,7 +253,7 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
                 }
             }
             return found_cb(ImplRef(&type, trait_params, &assoc_unit), false);
-        } else if (TARGETVER_LEAST_1_90 && trait_path == m_lang_PointeeSized) {
+        } else if (trait_path == m_lang_PointeeSized) {
             // Lowest level of sizedness: This _might_ be sized (i.e. it's not an extern type?)
             return found_cb(ImplRef(&type, &null_params, &null_assoc), false);
             //switch( this->metadata_type(sp, type) )
@@ -266,7 +266,7 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
             //case MetadataType::Zero:
             //    return found_cb( ImplRef(&null_hrls, &type, &null_params, &null_assoc), false );
             //}
-        } else if (TARGETVER_LEAST_1_90 && trait_path == m_lang_MetaSized) {
+        } else if (trait_path == m_lang_MetaSized) {
             // Next level of sizedness: There's metadata that allows getting the size
             // - No difference to the above?
             switch (this->metadata_type(sp, type)) {
@@ -278,7 +278,7 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
                 case MetadataType::Zero: // TODO: Does zero apply here?
                     return found_cb(ImplRef(&type, &null_params, &null_assoc), false);
             }
-        } else if (TARGETVER_LEAST_1_90 && trait_path == m_lang_Destruct) {
+        } else if (trait_path == m_lang_Destruct) {
             // is there anything indestructible? Maybe extern types
             return found_cb(ImplRef(&type, &null_params, &null_assoc), false);
         }
@@ -326,7 +326,7 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
     default:
         // Nothing magic
     TU_ARMA(Tuple, e) {
-            if (TARGETVER_LEAST_1_74 && trait_path == m_crate.get_lang_item_path(sp, "tuple_trait")) {
+            if (trait_path == m_crate.get_lang_item_path(sp, "tuple_trait")) {
                 return found_cb(ImplRef(type, HIR::PathParams(), ::HIR::TraitPath::assoc_list_t()), false);
             }
         }
@@ -424,19 +424,17 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
                     }
                 }
                 TU_ARMA(Generator, node_p) {
-                    if (TARGETVER_LEAST_1_39 && trait_path == m_lang_Generator) {
+                    if (trait_path == m_lang_Generator) {
                         ::HIR::TraitPath::assoc_list_t assoc;
                         assoc.insert(::std::make_pair("Yield", ::HIR::TraitPath::AtyEqual{trait_path.clone(), {}, node_p->m_yield_ty}));
                         assoc.insert(::std::make_pair("Return", ::HIR::TraitPath::AtyEqual{trait_path.clone(), {}, node_p->m_return}));
                         HIR::PathParams params;
-                        if (TARGETVER_LEAST_1_74) {
-                            params.m_types.push_back(node_p->m_resume_ty);
-                        }
+                        params.m_types.push_back(node_p->m_resume_ty);
                         return found_cb(ImplRef(type, mv$(params), mv$(assoc)), ::HIR::Compare::Equal);
                     }
                 }
                 TU_ARMA(Async, node_p) {
-                    if (TARGETVER_LEAST_1_90 && trait_path == m_lang_Future) {
+                    if (trait_path == m_lang_Future) {
                         ::HIR::TraitPath::assoc_list_t assoc;
                         assoc.insert(::std::make_pair("Output", ::HIR::TraitPath::AtyEqual{trait_path.clone(), {}, node_p->m_code->m_res_type}));
                         ::HIR::PathParams params;
@@ -2288,7 +2286,7 @@ bool StaticTraitResolve::type_is_copy(const Span& sp, const ::HIR::TypeRef& ty) 
         TU_ARMA(NodeType, e) {
         TU_MATCH_HDRA((e), {)
         TU_ARMA(Closure, node_p) {
-                    return TARGETVER_LEAST_1_29 ? node_p->m_is_copy : false;
+                    return node_p->m_is_copy;
                 }
                 TU_ARMA(Generator, node_p) {
                     // NOTE: Generators aren't Copy
@@ -2362,10 +2360,6 @@ bool StaticTraitResolve::type_is_copy(const Span& sp, const ::HIR::TypeRef& ty) 
 }
 
 bool StaticTraitResolve::type_is_clone(const Span& sp, const ::HIR::TypeRef& ty) const {
-    if (!TARGETVER_LEAST_1_29) {
-        BUG(sp, "Calling type_is_clone when not in >=1.29 mode");
-    }
-
     TU_MATCH_HDRA( (*ty), {)
     TU_ARMA(Generic, e) {
             {
@@ -2408,10 +2402,7 @@ bool StaticTraitResolve::type_is_clone(const Span& sp, const ::HIR::TypeRef& ty)
         TU_ARMA(NodeType, e) {
         TU_MATCH_HDRA((e), {)
         TU_ARMA(Closure, node_p) {
-                    if (TARGETVER_LEAST_1_29) {
-                        return node_p->m_is_copy;
-                    }
-                    return false;
+                    return node_p->m_is_copy;
                 }
                 TU_ARMA(Generator, node_p) {
                     TODO(sp, "type_is_clone - Generator");
@@ -3105,8 +3096,7 @@ bool StaticTraitResolve::type_needs_drop_glue(const Span& sp, const ::HIR::TypeR
                 return true;
             }
 
-            // In 1.29, "manually_drop" is a struct with special behaviour (instead of being a union)
-            if (TARGETVER_LEAST_1_29 && e.path.m_data.as_Generic().m_path == m_crate.get_lang_item_path_opt("manually_drop")) {
+            if (e.path.m_data.as_Generic().m_path == m_crate.get_lang_item_path_opt("manually_drop")) {
                 return false;
             }
 

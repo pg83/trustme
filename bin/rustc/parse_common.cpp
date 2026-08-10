@@ -845,7 +845,7 @@ ExprNodeP Parse_Expr1_1(TokenStream& lex) {
     ExprNodeP left, right;
 
     // Inclusive range to a value
-    if (GET_TOK(tok, lex) == TOK_TRIPLE_DOT || (TARGETVER_LEAST_1_29 && tok.type() == TOK_DOUBLE_DOT_EQUAL)) {
+    if (GET_TOK(tok, lex) == TOK_TRIPLE_DOT || tok.type() == TOK_DOUBLE_DOT_EQUAL) {
         right = next(lex);
         return NEWNODE(AST::ExprNode_BinOp, AST::ExprNode_BinOp::RANGE_INC, nullptr, mv$(right));
     } else {
@@ -877,12 +877,8 @@ LEFTASSOC(Parse_Expr1_2, Parse_Expr1_5,
         rv = NEWNODE( AST::ExprNode_BinOp, AST::ExprNode_BinOp::RANGE_INC, mv$(rv), next(lex) );
         break;
     case TOK_DOUBLE_DOT_EQUAL:
-        if( TARGETVER_LEAST_1_29 )
-        {
-            rv = NEWNODE( AST::ExprNode_BinOp, AST::ExprNode_BinOp::RANGE_INC, mv$(rv), next(lex) );
-            break;
-        }
-        // Fall through
+        rv = NEWNODE( AST::ExprNode_BinOp, AST::ExprNode_BinOp::RANGE_INC, mv$(rv), next(lex) );
+        break;
 )
 // 1: Bool OR
 LEFTASSOC(Parse_Expr1_5, Parse_Expr2, case TOK_DOUBLE_PIPE : rv = NEWNODE(AST::ExprNode_BinOp, AST::ExprNode_BinOp::BOOLOR, ::std::move(rv), next(lex)); break;)
@@ -1181,7 +1177,7 @@ ExprNodeP Parse_ExprVal_Inner(TokenStream& lex) {
     Token tok;
     AST::Path path;
 
-    if (TARGETVER_LEAST_1_90 && lex.lookahead(0) == TOK_INTERPOLATED_PATH && ((lex.lookahead(1) == TOK_RWORD_MOVE && lex.lookahead(2) == TOK_BRACE_OPEN) || lex.lookahead(1) == TOK_BRACE_OPEN)) {
+    if (lex.lookahead(0) == TOK_INTERPOLATED_PATH && ((lex.lookahead(1) == TOK_RWORD_MOVE && lex.lookahead(2) == TOK_BRACE_OPEN) || lex.lookahead(1) == TOK_BRACE_OPEN)) {
         GET_TOK(tok, lex);
         if (tok.frag_path().is_trivial() && tok.frag_path().as_trivial() == "gen") {
             // Generators!
@@ -1979,7 +1975,7 @@ AST::Pattern Parse_PatternReal(TokenStream& lex, AllowOrPattern allow_or) {
     }
     auto ps = lex.start_span();
     AST::Pattern ret = Parse_PatternReal1(lex, allow_or);
-    if ((GET_TOK(tok, lex) == TOK_TRIPLE_DOT) || (TARGETVER_LEAST_1_29 && tok.type() == TOK_DOUBLE_DOT_EQUAL)) {
+    if ((GET_TOK(tok, lex) == TOK_TRIPLE_DOT) || tok.type() == TOK_DOUBLE_DOT_EQUAL) {
         if (!ret.data().is_Value()) {
             throw ParseError::Generic(lex, "Using '...' with a non-value on left");
         }
@@ -1992,7 +1988,7 @@ AST::Pattern Parse_PatternReal(TokenStream& lex, AllowOrPattern allow_or) {
         }
 
         return AST::Pattern(lex.end_span(ps), AST::Pattern::Data::make_Value({mv$(leftval), mv$(rightval)}));
-    } else if (TARGETVER_LEAST_1_39 && tok.type() == TOK_DOUBLE_DOT) {
+    } else if (tok.type() == TOK_DOUBLE_DOT) {
         if (!ret.data().is_Value()) {
             throw ParseError::Generic(lex, "Using `..` with a non-value on left");
         }
@@ -3415,7 +3411,7 @@ AST::Attribute Parse_MetaItem(TokenStream& lex) {
 
     AST::AttributeName name;
     // NOTE: After 1.19 mode, values can be present with no name
-    if (TARGETVER_LEAST_1_29 && lex.lookahead(0) != TOK_IDENT && lex.lookahead(0) != TOK_DOUBLE_COLON && !Token::type_is_rword(lex.lookahead(0))) {
+    if (lex.lookahead(0) != TOK_IDENT && lex.lookahead(0) != TOK_DOUBLE_COLON && !Token::type_is_rword(lex.lookahead(0))) {
         // Put a fake equals token in the queue
         tok = Token(TOK_EQUAL);
     } else {
@@ -4353,7 +4349,7 @@ namespace {
                 }
                 // `unsafe auto trait`
                 case TOK_IDENT:
-                    if (TARGETVER_LEAST_1_29 && tok.ident().name == "auto") {
+                    if (tok.ident().name == "auto") {
                         GET_CHECK_TOK(tok, lex, TOK_RWORD_TRAIT);
                         GET_CHECK_TOK(tok, lex, TOK_IDENT);
                         item_name = tok.ident().name;
@@ -4416,7 +4412,7 @@ namespace {
                 item_data = ::AST::Item(Parse_Union(lex, meta_items));
             }
             // `auto trait`
-            else if (TARGETVER_LEAST_1_29 && tok.ident().name == "auto") {
+            else if (tok.ident().name == "auto") {
                 GET_CHECK_TOK(tok, lex, TOK_RWORD_TRAIT);
                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
                 item_name = tok.ident().name;
@@ -4461,7 +4457,7 @@ namespace {
         }
 
         case TOK_RWORD_MACRO:
-            if (TARGETVER_LEAST_1_29) {
+            {
                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
                 auto name = tok.ident().name;
                 DEBUG("name = " << name);
@@ -4486,8 +4482,6 @@ namespace {
 
                 item_name = name;
                 item_data = ::AST::Item(mv$(mrp));
-            } else {
-                throw ParseError::Unexpected(lex, tok);
             }
             break;
 
@@ -4800,7 +4794,7 @@ TypeRef Parse_Type_Int(TokenStream& lex, bool allow_trait_list) {
         // <ident> - Either a primitive, or a path
         case TOK_IDENT:
             // TODO: Only allow if the next token isn't `::` or `!`
-            if (TARGETVER_LEAST_1_29 && tok.ident().name == "dyn") {
+            if (tok.ident().name == "dyn") {
                 ::AST::HigherRankedBounds hrbs = Parse_HRB_Opt(lex);
                 return Parse_Type_TraitObject(lex, mv$(hrbs));
             }

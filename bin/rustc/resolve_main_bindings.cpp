@@ -729,7 +729,7 @@ namespace {
             }
 
             // #![feature(extern_prelude)] - 2018-style extern paths
-            if (mode == LookupMode::Namespace && TARGETVER_LEAST_1_29 /*&& m_crate.has_feature("extern_prelude")*/) {
+            if (mode == LookupMode::Namespace /*&& m_crate.has_feature("extern_prelude")*/) {
                 DEBUG("Extern crates - " << AST::g_implicit_crates);
                 auto it = AST::g_implicit_crates.find(name);
                 if (it != AST::g_implicit_crates.end()) {
@@ -1972,9 +1972,6 @@ void Resolve_Absolute_Lifetime(Context& context, const Span& sp, AST::LifetimeRe
         }
 
         if (lft.name() == "_") {
-            if (TARGETVER_MOST_1_19) {
-                ERROR(sp, E0000, "'_ is not a valid lifetime name in 1.19 mode");
-            }
             // Note: '_ is just an explicit elided lifetime
             lft.set_binding(AST::LifetimeRef::BINDING_INFER);
             return;
@@ -1992,7 +1989,7 @@ void Resolve_Absolute_Lifetime(Context& context, const Span& sp, AST::LifetimeRe
             }
         }
 
-        if (TARGETVER_LEAST_1_29) {
+        {
             // If parsing a function header, add a new lifetime param to the function
             // - Does the same apply to impl headers? Yes it does.
             if (context.m_ibl_target_generics) {
@@ -3787,7 +3784,7 @@ void Resolve_Use(::AST::Crate& crate) {
             DEBUG("Relative " << path);
 
             // 2018 edition and later: all extern crates are implicitly in the namespace.
-            // - Fun fact: The equivalent logic for non-use is gated on TARGETVER_LEAST_1_29 (but use is still special until 2018)
+            // - Non-use paths use the extern prelude too, while use paths remain edition-sensitive.
             if (crate.m_edition >= AST::Edition::Rust2018) {
                 const auto& name = e.nodes.at(0).name();
                 auto ec_it = AST::g_implicit_crates.find(name);

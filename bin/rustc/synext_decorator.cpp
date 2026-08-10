@@ -2631,7 +2631,7 @@ void handle_lang_item(const Span& sp, AST::Crate& crate, const AST::AbsolutePath
         H::add("sync", Handler(ITEM_TRAIT, handle_save));
         H::add("sized", Handler(ITEM_TRAIT, handle_save));
         H::add("copy", Handler(ITEM_TRAIT, handle_save));
-        if (TARGETVER_LEAST_1_29) {
+        {
             H::add("clone", Handler(ITEM_TRAIT, handle_save));
         }
         // ops traits
@@ -2672,7 +2672,7 @@ void handle_lang_item(const Span& sp, AST::Crate& crate, const AST::AbsolutePath
 
         H::add("eq", Handler(ITEM_TRAIT, handle_save));
         H::add("ord", Handler(ITEM_TRAIT, handle_save)); // In 1.29 this is Ord, before it was PartialOrd
-        if (TARGETVER_LEAST_1_29) {
+        {
             H::add("partial_ord", Handler(ITEM_TRAIT, handle_save)); // New name for v1.29
         }
 
@@ -2683,11 +2683,11 @@ void handle_lang_item(const Span& sp, AST::Crate& crate, const AST::AbsolutePath
         H::add("iterator", Handler(ITEM_TRAIT, handle_save));    /* mrustc just desugars? */
         H::add("debug_trait", Handler(ITEM_TRAIT, handle_save)); /* TODO: Poke derive() with this */
 
-        if (TARGETVER_LEAST_1_29) {
+        {
             H::add("termination", Handler(ITEM_TRAIT, handle_save)); // 1.29 - trait used for non-() main
         }
 
-        if (TARGETVER_LEAST_1_54) {
+        {
             H::add("pointee_trait", Handler(ITEM_TRAIT, handle_save));     // 1.54 - pointer metadata trait
             H::add("dyn_metadata", Handler(ITEM_STRUCT, handle_save));     // 1.54 - `dyn Trait` metadata structure
             H::add("structural_peq", Handler(ITEM_TRAIT, handle_save));    // 1.54 - Structural equality trait (partial)
@@ -2698,7 +2698,7 @@ void handle_lang_item(const Span& sp, AST::Crate& crate, const AST::AbsolutePath
         H::add("non_zero", Handler(ITEM_STRUCT, handle_save));
         H::add("phantom_data", Handler(ITEM_STRUCT, handle_save));
 
-        if (TARGETVER_LEAST_1_54) {
+        {
             H::add("RangeFull", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
                 handle_save(sp, crate, "range_full", p);
             }));
@@ -2717,18 +2717,13 @@ void handle_lang_item(const Span& sp, AST::Crate& crate, const AST::AbsolutePath
             H::add("RangeToInclusive", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
                 handle_save(sp, crate, "range_to_inclusive", p);
             }));
-        } else {
-            H::add("range_full", Handler(ITEM_STRUCT, handle_save));
-            H::add("range", Handler(ITEM_STRUCT, handle_save));
-            H::add("range_from", Handler(ITEM_STRUCT, handle_save));
-            H::add("range_to", Handler(ITEM_STRUCT, handle_save));
         }
 
-        if (TARGETVER_LEAST_1_54) {
+        {
             H::add("unwind_safe", Handler(ITEM_TRAIT, handle_save));     // 1.54 - UnwindSafe trait
             H::add("ref_unwind_safe", Handler(ITEM_TRAIT, handle_save)); // 1.54 - RefUnwindSafe trait
         }
-        if (TARGETVER_LEAST_1_74) {
+        {
             H::add("transmute_trait", Handler(ITEM_TRAIT, handle_save)); // 1.74 - `BikeshedIntrinsicFrom` trait
             // - Markers
             H::add("destruct", Handler(ITEM_TRAIT, handle_save));       // 1.74 - `Destruct` trait
@@ -2769,7 +2764,7 @@ void handle_lang_item(const Span& sp, AST::Crate& crate, const AST::AbsolutePath
             H::add("Poll", Handler(ITEM_ENUM, handle_save));       // 1.74 - `::core::task::poll::Poll`
             H::add("Context", Handler(ITEM_STRUCT, handle_save));  // 1.74 - `::core::task::wake::Context`
         }
-        if (TARGETVER_LEAST_1_90) {
+        {
             H::add("contract_build_check_ensures", Handler(ITEM_FN, handle_save)); // 1.90 - `::core::contracts::build_check_ensures`
             H::add("contract_check_requires", Handler(ITEM_FN, handle_save));      // 1.90 - `::core::intrinsics::contract_check_requires`
             H::add("contract_check_ensures", Handler(ITEM_FN, handle_save));       // 1.90 - `::core::intrinsics::contract_check_ensures`
@@ -2851,52 +2846,52 @@ void handle_lang_item(const Span& sp, AST::Crate& crate, const AST::AbsolutePath
 
     // Structs
     else if (name == "unsafe_cell") {
-    } else if (TARGETVER_LEAST_1_29 && name == "alloc_layout") {
-    } else if (TARGETVER_LEAST_1_29 && name == "panic_info") {
+    } else if (name == "alloc_layout") {
+    } else if (name == "panic_info") {
     } // Struct
-    else if (TARGETVER_LEAST_1_54 && name == "panic_location") {
+    else if (name == "panic_location") {
     } // Struct
-    else if (TARGETVER_LEAST_1_29 && name == "manually_drop") {
-    } // Struct
-
-    else if (TARGETVER_LEAST_1_39 && name == "arc") {
-    } // Struct
-    else if (TARGETVER_LEAST_1_39 && name == "rc") {
+    else if (name == "manually_drop") {
     } // Struct
 
-    else if (/*TARGETVER_1_39 &&*/ name == "maybe_uninit") {
+    else if (name == "arc") {
+    } // Struct
+    else if (name == "rc") {
+    } // Struct
+
+    else if (name == "maybe_uninit") {
     } // Union
 
     // Futures
-    else if (/*TARGETVER_1_39 &&*/ name == "unpin") {
+    else if (name == "unpin") {
     } // Trait
-    else if (/*TARGETVER_1_39 &&*/ name == "pin") {
+    else if (name == "pin") {
     } // Struct
-    else if (/*TARGETVER_1_39 &&*/ name == "future_trait") {
+    else if (name == "future_trait") {
     } // Trait
-    else if (TARGETVER_LEAST_1_54 && name == "from_generator") {
+    else if (name == "from_generator") {
     } // Function
-    else if (TARGETVER_LEAST_1_54 && name == "get_context") {
+    else if (name == "get_context") {
     } // Function
 
     // Variable argument lists
-    else if (/*TARGETVER_1_39 &&*/ name == "va_list") {
+    else if (name == "va_list") {
     } // Struct
 
     // Arbitary receivers
-    else if (/*TARGETVER_1_39 &&*/ name == "receiver") {
+    else if (name == "receiver") {
     } // Trait
-    else if (/*TARGETVER_1_39 &&*/ name == "dispatch_from_dyn") {
+    else if (name == "dispatch_from_dyn") {
     } // Trait
 
     // Generators
-    else if (TARGETVER_LEAST_1_29 && name == "generator") {
+    else if (name == "generator") {
     } // - Trait
-    else if (TARGETVER_LEAST_1_29 && name == "generator_state") {
+    else if (name == "generator_state") {
     } // - State enum
 
     // Try
-    else if (TARGETVER_LEAST_1_54 && name == "Try") {
+    else if (name == "Try") {
         real_name = "try";
     }
 
@@ -2917,9 +2912,9 @@ void handle_lang_item(const Span& sp, AST::Crate& crate, const AST::AbsolutePath
     } else if (name == "str_eq") {
     } else if (name == "drop_in_place") {
     } else if (name == "align_offset") {
-    } else if (TARGETVER_LEAST_1_39 && name == "begin_panic") {
+    } else if (name == "begin_panic") {
     } // Function
-    else if (TARGETVER_LEAST_1_54 && name == "panic_str") {
+    else if (name == "panic_str") {
     }
     // - builtin `box` support
     else if (name == "exchange_malloc") {
@@ -3010,10 +3005,10 @@ public:
                 } else if (name == "usize") {
                 } else if (name == "const_ptr") {
                 } else if (name == "mut_ptr") {
-                } else if (TARGETVER_LEAST_1_54 && name == "const_slice_ptr") {
-                } else if (TARGETVER_LEAST_1_54 && name == "mut_slice_ptr") {
-                } else if (TARGETVER_LEAST_1_54 && name == "array") {
-                } else if (/*TARGETVER_1_39 &&*/ name == "bool") {
+                } else if (name == "const_slice_ptr") {
+                } else if (name == "mut_slice_ptr") {
+                } else if (name == "array") {
+                } else if (name == "bool") {
                 }
                 // rustc_unicode
                 else if (name == "char") {
@@ -3021,19 +3016,19 @@ public:
                 // collections
                 else if (name == "str") {
                 } else if (name == "slice") {
-                } else if (TARGETVER_LEAST_1_29 && name == "slice_u8") {
+                } else if (name == "slice_u8") {
                 } // libcore now, `impl [u8]`
-                else if (TARGETVER_LEAST_1_29 && name == "slice_alloc") {
+                else if (name == "slice_alloc") {
                 } // liballoc's impls on [T]
-                else if (TARGETVER_LEAST_1_29 && name == "slice_u8_alloc") {
+                else if (name == "slice_u8_alloc") {
                 } // liballoc's impls on [u8]
-                else if (TARGETVER_LEAST_1_29 && name == "str_alloc") {
+                else if (name == "str_alloc") {
                 } // liballoc's impls on str
                 // std - interestingly
                 else if (name == "f32") {
                 } else if (name == "f64") {
-                } else if (TARGETVER_LEAST_1_29 && name == "f32_runtime") {
-                } else if (TARGETVER_LEAST_1_29 && name == "f64_runtime") {
+                } else if (name == "f32_runtime") {
+                } else if (name == "f64_runtime") {
                 } else {
                     ERROR(sp, E0000, "Unknown lang item '" << name << "' on impl");
                 }

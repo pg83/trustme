@@ -98,9 +98,7 @@ struct TraitResolveCommon {
         , m_item_generics(nullptr)
     {
         m_lang_Copy = m_crate.get_lang_item_path_opt("copy");
-        if (TARGETVER_LEAST_1_29) {
-            m_lang_Clone = m_crate.get_lang_item_path_opt("clone");
-        }
+        m_lang_Clone = m_crate.get_lang_item_path_opt("clone");
         m_lang_Drop = m_crate.get_lang_item_path_opt("drop");
         m_lang_Sized = m_crate.get_lang_item_path_opt("sized");
         m_lang_Unsize = m_crate.get_lang_item_path_opt("unsize");
@@ -109,8 +107,7 @@ struct TraitResolveCommon {
         m_lang_FnOnce = m_crate.get_lang_item_path_opt("fn_once");
         m_lang_Box = m_crate.get_lang_item_path_opt("owned_box");
         m_lang_PhantomData = m_crate.get_lang_item_path_opt("phantom_data");
-        // In 1.90 this has changed name. Same interface, just called "Coroutine" now
-        m_lang_Generator = m_crate.get_lang_item_path_opt(TARGETVER_LEAST_1_90 ? "coroutine" : "generator");
+        m_lang_Generator = m_crate.get_lang_item_path_opt("coroutine");
         m_lang_DiscriminantKind = m_crate.get_lang_item_path_opt("discriminant_kind");
         m_lang_Pointee = m_crate.get_lang_item_path_opt("pointee_trait");
         m_lang_DynMetadata = m_crate.get_lang_item_path_opt("dyn_metadata");

@@ -857,15 +857,10 @@ namespace {
                         m_of << "\treturn 0;\n";
                     } else {
                         auto start_gpath = ::HIR::GenericPath(m_resolve.m_crate.get_lang_item_path(Span(), "start"));
-                        if (TARGETVER_LEAST_1_29) {
-                            // With 1.29, this now takes main's return type as a type parameter
-                            start_gpath.m_params.m_types.push_back(main_fcn.m_return);
-                        }
+                        start_gpath.m_params.m_types.push_back(main_fcn.m_return);
                         m_of << "\treturn " << Trans_Mangle(start_gpath) << "(" << Trans_Mangle(::HIR::GenericPath(main_path)) << ", argc, (uint8_t**)argv";
-                        if (TARGETVER_LEAST_1_74) {
-                            m_of << ", 0"; // `sigpipe` setting
-                            // 0: Default, 1: Inherit, 2: SIG_IGN, 3: SIG_DFL
-                        }
+                        m_of << ", 0"; // `sigpipe` setting
+                        // 0: Default, 1: Inherit, 2: SIG_IGN, 3: SIG_DFL
                         m_of << ");\n";
                     }
                 } else {
@@ -882,7 +877,7 @@ namespace {
                 }
 
                 // Allocator/panic shims
-                if (TARGETVER_LEAST_1_29) {
+                {
                     // If #[global_allocator]  present, use `__rg_`
                     const char* alloc_prefix = "__rdl_";
                     for (size_t i = 0; i < NUM_ALLOCATOR_METHODS; i++) {
@@ -958,16 +953,12 @@ namespace {
                         m_of << "}\n";
                     }
 
-                    if (TARGETVER_LEAST_1_90) {
-                        m_of << "void __rust_no_alloc_shim_is_unstable_v2() {}\n";
-                    }
+                    m_of << "void __rust_no_alloc_shim_is_unstable_v2() {}\n";
 
-                    if (TARGETVER_LEAST_1_54) {
+                    {
                         auto oom_method = m_crate.get_lang_item_path_opt("mrustc-alloc_error_handler");
-                        if (TARGETVER_LEAST_1_74) {
-                            m_of << "uint8_t __rust_alloc_error_handler_should_panic = 0;\n";
-                            m_of << "uint8_t __rust_no_alloc_shim_is_unstable = 0;\n";
-                        }
+                        m_of << "uint8_t __rust_alloc_error_handler_should_panic = 0;\n";
+                        m_of << "uint8_t __rust_no_alloc_shim_is_unstable = 0;\n";
 
                         auto layout_path = ::HIR::SimplePath("core", {"alloc", "Layout"});
                         if (oom_method != HIR::SimplePath()) {
@@ -978,38 +969,21 @@ namespace {
                                  << " }\n";
                         }
 
-                        if (TARGETVER_LEAST_1_90) {
-                            // Force abort on alloc error, rustc uses `-Zoom={panic,abort}` to select this
-                            m_of << "uint8_t __rust_alloc_error_handler_should_panic_v2() { return 0; }";
-                        }
+                        // Force abort on alloc error, rustc uses `-Zoom={panic,abort}` to select this
+                        m_of << "uint8_t __rust_alloc_error_handler_should_panic_v2() { return 0; }";
                         m_of << "void __rust_alloc_error_handler(uintptr_t s, uintptr_t a) {\n";
                         if (oom_method == HIR::SimplePath()) {
                             m_of << "\tvoid __rdl_oom(uintptr_t, uintptr_t);\n";
                             m_of << "\t__rdl_oom(s,a);\n";
-                        } else if (TARGETVER_LEAST_1_74) {
+                        } else {
                             m_of << "\tstruct s_" << Trans_Mangle(layout_path) << "_A v = { s, a };\n";
                             m_of << "\toom_impl(v);\n";
-                        } else {
-                            m_of << "\tvoid __rg_oom(uintptr_t, uintptr_t);\n";
-                            m_of << "\t__rg_oom(s,a);\n";
                         }
                         m_of << "}\n";
-                    } else {
-                        // TODO: Bind `oom` lang item to the item tagged with `alloc_error_handler`
-                        // - Can do this in enumerate/auto_impls instead, for better iteraction with enum
-                        // XXX: HACK HACK HACK - This only works with libcore/libstd's current layout
-                        auto layout_path = ::HIR::SimplePath("core", {"alloc", "Layout"});
-                        //auto oom_method = ::HIR::SimplePath("std", {"alloc", "rust_oom"});
-                        auto oom_method = m_crate.get_lang_item_path(Span(), "mrustc-alloc_error_handler");
-                        m_of << "struct s_" << Trans_Mangle(layout_path) << "_A { uintptr_t a, b; };\n";
-                        m_of << "void oom_impl(struct s_" << Trans_Mangle(layout_path) << "_A l) {"
-                             << " extern void " << Trans_Mangle(oom_method) << "(struct s_" << Trans_Mangle(layout_path) << "_A l);"
-                             << " " << Trans_Mangle(oom_method) << "(l);"
-                             << " }\n";
                     }
                 }
 
-                if (TARGETVER_LEAST_1_29) {
+                {
                     // Bind `panic_impl` only when this crate actually provides
                     // a panic implementation. A no_core binary without one can
                     // still be valid when no generated code uses it.
@@ -1536,54 +1510,10 @@ namespace {
                 emit_destructor_call(::MIR::LValue::new_Deref(mv$(inner_ptr)), inner_type, /*unsized_valid=*/true, indent_level);
             }
 
-            if (TARGETVER_MOST_1_54) {
-                // NOTE: This is specific to the official liballoc's owned_box
-                const auto& p = box_type->as_Path().path.m_data.as_Generic().m_params;
-                ::HIR::GenericPath box_free{m_crate.get_lang_item_path(sp, "box_free"), p.clone()};
-
-                // If the allocator is a ZST, it won't exist in the type (need to create a dummy instance for the argument)
-                bool alloc_is_zst = false;
-                if (TARGETVER_LEAST_1_54) {
-                    ::HIR::TypeRef tmp;
-                    const auto& ty = m_mir_res->get_lvalue_type(tmp, MIR::LValue::new_Field(slot.clone(), 1));
-                    if (type_is_bad_zst(ty)) {
-                        alloc_is_zst = true;
-                        m_of << indent << "{ ";
-                        emit_ctype(ty);
-                        m_of << " zst_alloc = {0};";
-                    }
-                }
-
-                m_of << indent << Trans_Mangle(box_free) << "(";
-                if (TARGETVER_LEAST_1_29) {
-                    // In 1.29, `box_free` takes Unique, so pass the Unique within the Box
-                    emit_lvalue(slot);
-                    m_of << "._0";
-                } else {
-                    emit_lvalue(slot);
-                    m_of << "._0._0._0";
-                }
-                // With 1.54, also need to pass the allocator
-                if (TARGETVER_LEAST_1_54) {
-                    m_of << ", ";
-                    if (alloc_is_zst) {
-                        m_of << "zst_alloc";
-                    } else {
-                        emit_lvalue(slot);
-                        m_of << "._1";
-                    }
-                }
-                m_of << ");";
-                if (alloc_is_zst) {
-                    m_of << " }";
-                }
-                m_of << "\n";
-            } else {
-                auto p = ::HIR::Path(box_type, m_crate.get_lang_item_path(Span(), "drop"), "drop");
-                m_of << indent << Trans_Mangle(p) << "(&";
-                emit_lvalue(slot);
-                m_of << ");\n";
-            }
+            auto p = ::HIR::Path(box_type, m_crate.get_lang_item_path(Span(), "drop"), "drop");
+            m_of << indent << Trans_Mangle(p) << "(&";
+            emit_lvalue(slot);
+            m_of << ");\n";
         }
 
         void emit_global_asm(const ::HIR::GlobalAssembly& se) override {
@@ -4377,12 +4307,8 @@ namespace {
                                 case MetadataType::Zero:
                                 case MetadataType::Unknown:
                                 case MetadataType::None:
-                                    if (TARGETVER_MOST_1_74) {
-                                        MIR_BUG(mir_res, "MakeDst on type without metadata");
-                                    } else {
-                                        m_of << "(void*)";
-                                        emit_param(ve.ptr_val);
-                                    }
+                                    m_of << "(void*)";
+                                    emit_param(ve.ptr_val);
                                     break;
                             }
                         }
@@ -6801,11 +6727,11 @@ namespace {
                 // NOTE: Would define the typeid here, but it has to be public
                 emit_lvalue(e.ret_val);
                 m_of << " = ";
-                if (TARGETVER_LEAST_1_74 && m_options.emulated_i128) {
+                if (m_options.emulated_i128) {
                     m_of << "make128(";
                 }
                 m_of << "(uintptr_t)&__typeid_" << Trans_Mangle(ty);
-                if (TARGETVER_LEAST_1_74 && m_options.emulated_i128) {
+                if (m_options.emulated_i128) {
                     m_of << ")";
                 }
             } else if (name == "type_name") {
@@ -7031,17 +6957,11 @@ namespace {
                         m_of << " jmp_buf jmpbuf, *old = mrustc_panic_target; mrustc_panic_target = &jmpbuf;";
                         m_of << " if(setjmp(jmpbuf)) {";
                         // NOTE: gcc unwind has a pointer as its `local_ptr` parameter
-                        if (TARGETVER_MOST_1_39) {
-                            m_of << " *(void**)(";
-                            emit_param(e.args.at(2));
-                            m_of << ") = mrustc_panic_value;";
-                        } else {
-                            m_of << "(";
-                            emit_param(e.args.at(2));
-                            m_of << ")(";
-                            emit_param(e.args.at(1));
-                            m_of << ", mrustc_panic_value);";
-                        }
+                        m_of << "(";
+                        emit_param(e.args.at(2));
+                        m_of << ")(";
+                        emit_param(e.args.at(1));
+                        m_of << ", mrustc_panic_value);";
                         m_of << " ";
                         emit_lvalue(e.ret_val);
                         m_of << " = 1;"; // Return value non-zero when panic happens
@@ -7865,7 +7785,7 @@ namespace {
                         m_of << ";";
                         m_of << " unsigned shift = ";
                         emit_param(e.args.at(1));
-                        m_of << (m_options.emulated_i128 && TARGETVER_MOST_1_74 ? ".lo" : "") << ";";
+                        m_of << ";";
                         if (m_options.emulated_i128) {
                             m_of << " if(shift < 64) {";
                             m_of << " ";
@@ -7964,7 +7884,7 @@ namespace {
                         m_of << ";";
                         m_of << " unsigned shift = ";
                         emit_param(e.args.at(1));
-                        m_of << (m_options.emulated_i128 && TARGETVER_MOST_1_74 ? ".lo" : "") << ";";
+                        m_of << ";";
                         if (m_options.emulated_i128) {
                             m_of << " if(shift < 64) {";
                             m_of << " ";
@@ -8031,7 +7951,7 @@ namespace {
                     } else {
                     }
                     m_of << ")";
-                    if (m_options.emulated_i128 && TARGETVER_LEAST_1_90) {
+                    if (m_options.emulated_i128) {
                         m_of << ".lo";
                     }
                     m_of << ";";
@@ -8074,9 +7994,7 @@ namespace {
                     m_of << "popcount128(";
                     emit_param(e.args.at(0));
                     m_of << ")";
-                    if (TARGETVER_LEAST_1_90) {
-                        m_of << ".lo";
-                    }
+                    m_of << ".lo";
                 } else {
                     m_of << "__builtin_popcountll(";
                     emit_param(e.args.at(0));
@@ -8673,9 +8591,7 @@ namespace {
                     m_of << "for(int i = 0; i < " << div << "; i++) {";
                     m_of << " int j = ";
                     emit_param(e.args.at(2));
-                    if (TARGETVER_LEAST_1_90) {
-                        m_of << "._0";
-                    }
+                    m_of << "._0";
                     m_of << ".DATA[i];";
                     m_of << " ((uint" << (size_val * 8) << "_t*)&";
                     emit_lvalue(e.ret_val);

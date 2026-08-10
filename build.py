@@ -358,7 +358,12 @@ unit_tests.append(command(
 ))
 unit_tests.append(command(
     name="unit_target_version_default",
-    inputs=["$(S)/tst/unit/test_target_version_default.py"],
+    inputs=[
+        "$(S)/tst/unit/test_target_version_default.py",
+        *build.glob("$(S)/bin/rustc/*.h"),
+        *build.glob("$(S)/bin/rustc/*.cpp"),
+        *build.glob("$(S)/bin/rustc/*.inc"),
+    ],
     outputs=["$(B)/tst/unit/target_version_default.stamp"],
     cmd=[
         *TEST_TIMEOUT,

@@ -1321,10 +1321,8 @@ namespace {
     if(attrs.get("rustc_nonnull_optimization_guaranteed"))
     {
         //ent.m_markings.scalar_valid_start_set = true;
-        // In 1.90, this stops being applied to types that wrap u32/pointer/... and start wrappping types with scalar limits
-        if (TARGETVER_MOST_1_74) {
-            rv.m_struct_markings.is_nonzero = true;
-        }
+        // In 1.90 this no longer marks wrappers as nonzero; scalar limits carry
+        // the layout information instead.
     }
     rv.m_struct_markings.is_fundamental = attrs.has("fundamental");
     if(ent.m_markings.scalar_valid_start_set)
@@ -2610,77 +2608,6 @@ public:
 
     // Set all pointers in the HIR to the correct (now fixed) locations
     //IndexVisitor(rv).visit_crate( rv );
-
-    // HACK: If the current crate is libcore, store the paths to various non-lang ops items
-    // - Some operators aren't tagged with #[lang], so this works around that
-    if (crate.m_crate_name_set == "core") {
-        struct H {
-            static ::HIR::SimplePath resolve_path(const ::HIR::Crate& crate, bool is_value, ::std::initializer_list<const char*> n) {
-                ::std::vector<RcString> cur_path_components;
-
-                const ::HIR::Module* mod = &crate.m_root_module;
-                assert(n.begin() != n.end());
-                for (auto it = n.begin(); it != n.end() - 1; ++it) {
-                    auto it2 = mod->m_mod_items.find(*it);
-                    if (it2 == mod->m_mod_items.end()) {
-                        return ::HIR::SimplePath();
-                    }
-                    const auto& e = it2->second;
-                    if (const auto* ip = e->ent.opt_Import()) {
-                        // TODO: Handle module aliases?
-                        (void)ip;
-                        return ::HIR::SimplePath();
-                    } else if (const auto* ep = e->ent.opt_Module()) {
-                        cur_path_components.push_back(*it);
-                        mod = ep;
-                    } else {
-                        // Incorrect item type
-                        return ::HIR::SimplePath();
-                    }
-                }
-
-                auto last = *(n.end() - 1);
-                if (is_value) {
-                    throw "";
-                } else {
-                    auto it2 = mod->m_mod_items.find(last);
-                    if (it2 == mod->m_mod_items.end()) {
-                        return ::HIR::SimplePath();
-                    }
-
-                    // Found: Either return the current path, or return this alias.
-                    if (const auto* ip = it2->second->ent.opt_Import()) {
-                        if (ip->is_variant) {
-                            return ::HIR::SimplePath();
-                        }
-                        return ip->path;
-                    } else {
-                        cur_path_components.push_back(last);
-                        return ::HIR::SimplePath("", std::move(cur_path_components));
-                    }
-                }
-            }
-        };
-
-        // Check for existing defintions of lang items before adding magic ones
-        if (TARGETVER_MOST_1_19) {
-            if (rv.m_lang_items.count("boxed_trait") == 0) {
-                rv.m_lang_items.insert(::std::make_pair(::std::string("boxed_trait"), H::resolve_path(rv, false, {"ops", "Boxed"})));
-            }
-            if (rv.m_lang_items.count("placer_trait") == 0) {
-                rv.m_lang_items.insert(::std::make_pair(::std::string("placer_trait"), H::resolve_path(rv, false, {"ops", "Placer"})));
-            }
-            if (rv.m_lang_items.count("place_trait") == 0) {
-                rv.m_lang_items.insert(::std::make_pair(::std::string("place_trait"), H::resolve_path(rv, false, {"ops", "Place"})));
-            }
-            if (rv.m_lang_items.count("box_place_trait") == 0) {
-                rv.m_lang_items.insert(::std::make_pair(::std::string("box_place_trait"), H::resolve_path(rv, false, {"ops", "BoxPlace"})));
-            }
-            if (rv.m_lang_items.count("in_place_trait") == 0) {
-                rv.m_lang_items.insert(::std::make_pair(::std::string("in_place_trait"), H::resolve_path(rv, false, {"ops", "InPlace"})));
-            }
-        }
-    }
 
     // Macro fixups:
     // - Convert interpolated AST items to token sequences

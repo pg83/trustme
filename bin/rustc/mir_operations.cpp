@@ -845,7 +845,7 @@ namespace {
                 }
             }
             return ::HIR::TypeRef();
-        } else if (TARGETVER_LEAST_1_90 && unsized_ty->is_Generic()) {
+        } else if (unsized_ty->is_Generic()) {
             ::HIR::Path p{unsized_ty, state.m_resolve.m_lang_Pointee, "Metadata"};
             auto rv = types.path(std::move(p), {});
             state.m_resolve.expand_associated_types(sp, rv);
@@ -1832,9 +1832,6 @@ void MIR_Validate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
                                 else if (ity->is_Path()) {
                                     // TODO: Check DST type of this path
                                 } else {
-                                    if (TARGETVER_MOST_1_74) {
-                                        MIR_BUG(state, "DstMeta on invalid type - " << ity);
-                                    }
                                 }
                                 // TODO: Check return type
                             }
@@ -1885,9 +1882,6 @@ void MIR_Validate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
                                 assert(ity_p);
                                 auto meta = get_metadata_type(state, *ity_p);
                                 if (meta == ::HIR::TypeRef()) {
-                                    if (TARGETVER_MOST_1_74) {
-                                        MIR_BUG(state, "MakeDst requires a pointer to an unsized type as output, got " << dst_ty);
-                                    }
                                     // In 1.90, this gets used for thin pointers too
                                     meta = types.unit();
                                 }

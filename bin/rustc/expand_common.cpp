@@ -984,15 +984,9 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         m_try_stack.pop_back();
 
         auto core_crate = crate.m_ext_cratename_core;
-        AST::ExprNodeP ok_node;
-        if (TARGETVER_MOST_1_39) {
-            auto path_Ok = get_path(core_crate, "result", "Result", "Ok");
-            ok_node = ::AST::ExprNodeP(new ::AST::ExprNode_CallPath(mv$(path_Ok), ::make_vec1(mv$(node.m_inner))));
-        } else {
-            auto path_Try = get_path(core_crate, "ops", "Try");
-            auto path_Try_from_output = ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), path_Try, {::AST::PathNode(RcString::new_interned("from_output"))});
-            ok_node = ::AST::ExprNodeP(new ::AST::ExprNode_CallPath(mv$(path_Try_from_output), ::make_vec1(mv$(node.m_inner))));
-        }
+        auto path_Try = get_path(core_crate, "ops", "Try");
+        auto path_Try_from_output = ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), path_Try, {::AST::PathNode(RcString::new_interned("from_output"))});
+        auto ok_node = ::AST::ExprNodeP(new ::AST::ExprNode_CallPath(mv$(path_Try_from_output), ::make_vec1(mv$(node.m_inner))));
         auto break_node = AST::ExprNodeP(new AST::ExprNode_Flow(AST::ExprNode_Flow::BREAK, loop_name, mv$(ok_node)));
         this->replacement = AST::ExprNodeP(new AST::ExprNode_Loop(loop_name, mv$(break_node)));
     }
@@ -1620,41 +1614,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
             auto path_Try = get_path(core_crate, "ops", "Try");
             static const RcString rcstring_v = RcString::new_interned("v");
             static const RcString rcstring_r = RcString::new_interned("r");
-            if (TARGETVER_MOST_1_39) {
-                auto path_Ok = get_path(core_crate, "result", "Result", "Ok");
-                auto path_Err = get_path(core_crate, "result", "Result", "Err");
-                auto path_From = get_path(core_crate, "convert", "From");
-                path_From.nodes().back().args().m_entries.push_back(::TypeRef(node.span()));
-
-                auto path_Try_into_result = ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), path_Try, {::AST::PathNode(RcString::new_interned("into_result"))});
-                auto path_Try_from_error = ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), path_Try, {::AST::PathNode(RcString::new_interned("from_error"))});
-
-                // Desugars into
-                // ```
-                // match `Try::into_result(m_value)` {
-                // Ok(v) => v,
-                // Err(e) => return Try::from_error(From::from(e)),
-                // }
-                // ```
-
-                ::std::vector<::AST::ExprNode_Match_Arm> arms;
-                // `Ok(v) => v,`
-                arms.push_back(::AST::ExprNode_Match_Arm(::make_vec1(::AST::Pattern(::AST::Pattern::TagNamedTuple(), node.span(), path_Ok, ::make_vec1(::AST::Pattern(::AST::Pattern::TagBind(), node.span(), rcstring_v)))), {}, ::AST::ExprNodeP(new ::AST::ExprNode_NamedValue(::AST::Path(rcstring_v)))));
-                // `Err(e) => return Try::from_error(From::from(e)),`
-                arms.push_back(
-                    ::AST::ExprNode_Match_Arm(
-                        ::make_vec1(::AST::Pattern(::AST::Pattern::TagNamedTuple(), node.span(), path_Err, ::make_vec1(::AST::Pattern(::AST::Pattern::TagBind(), node.span(), rcstring_r)))),
-                        {},
-                        ::AST::ExprNodeP(new ::AST::ExprNode_Flow(
-                            (m_try_stack.empty() ? ::AST::ExprNode_Flow::RETURN : ::AST::ExprNode_Flow::BREAK), // NOTE: uses `break 'tryblock` instead of `return` if in a try block.
-                            (m_try_stack.empty() ? RcString("") : m_try_stack.back()),
-                            ::AST::ExprNodeP(new ::AST::ExprNode_CallPath(::AST::Path(path_Try_from_error), ::make_vec1(::AST::ExprNodeP(new ::AST::ExprNode_CallPath(::AST::Path::new_ufcs_trait(::TypeRef(node.span()), mv$(path_From), {::AST::PathNode(RcString::new_interned("from"))}), ::make_vec1(::AST::ExprNodeP(new ::AST::ExprNode_NamedValue(::AST::Path(rcstring_r)))))))))
-                        ))
-                    )
-                );
-
-                replacement.reset(new ::AST::ExprNode_Match(::AST::ExprNodeP(new AST::ExprNode_CallPath(mv$(path_Try_into_result), ::make_vec1(mv$(node.m_value)))), mv$(arms)));
-            } else // 1.54+ - TryV2
+            // TryV2
             {
                 auto path_Try_branch = ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), path_Try, {::AST::PathNode(RcString::new_interned("branch"))});
                 // Not a lang item

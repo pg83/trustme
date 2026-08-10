@@ -1538,17 +1538,13 @@ void Expand_TestHarness(::AST::Crate& crate) {
             }
             desc_vals.push_back({{}, "should_panic", mv$(should_panic_val)});
         }
-        if (TARGETVER_LEAST_1_29 && TARGETVER_MOST_1_54) {
-            // TODO: Get this from attributes
-            desc_vals.push_back({{}, "allow_fail", NEWNODE(_Bool, false)});
-        }
-        if (TARGETVER_LEAST_1_54) {
+        {
             // TODO: Get this from attributes
             desc_vals.push_back({{}, "compile_fail", NEWNODE(_Bool, false)});
             desc_vals.push_back({{}, "no_run", NEWNODE(_Bool, false)});
             desc_vals.push_back({{}, "test_type", NEWNODE(_NamedValue, ::AST::Path(c_test, {AST::PathNode("TestType"), AST::PathNode("UnitTest")}))});
         }
-        if (TARGETVER_LEAST_1_74) {
+        {
             desc_vals.push_back({{}, "ignore_message", NEWNODE(_NamedValue, ::AST::Path(crate.m_ext_cratename_std, {AST::PathNode("option"), AST::PathNode("Option"), AST::PathNode("None")}))});
             auto sp = test.span.get_top_file_span();
             desc_vals.push_back({{}, "source_file", NEWNODE(_String, sp.filename.c_str())});
@@ -1563,7 +1559,7 @@ void Expand_TestHarness(::AST::Crate& crate) {
         descandfn_vals.push_back({{}, RcString::new_interned("desc"), mv$(desc_expr)});
 
         auto test_fcn_node = NEWNODE(_NamedValue, AST::Path(test.path));
-        if (TARGETVER_LEAST_1_74) {
+        {
             // Convert `fn()` into `fn()->Result<(),String>`
             // Use `|| ::test::assert_test_result( fcn() )`
             test_fcn_node = NEWNODE(_Closure, {}, TypeRef(Span()), NEWNODE(_CallPath, ::AST::Path(c_test, {::AST::PathNode("assert_test_result")}), ::make_vec1(NEWNODE(_CallPath, AST::Path(test.path), {}))), false, false);
@@ -1573,7 +1569,7 @@ void Expand_TestHarness(::AST::Crate& crate) {
 
         test_nodes.push_back(NEWNODE(_StructLiteral, ::AST::Path(c_test, {::AST::PathNode("TestDescAndFn")}), nullptr, mv$(descandfn_vals)));
         // NOTE: 1.39+ needs &TestDescAndFn here
-        if (TARGETVER_LEAST_1_39) {
+        {
             test_nodes.back() = NEWNODE(_UniOp, ::AST::ExprNode_UniOp::REF, mv$(test_nodes.back()));
         }
     }
@@ -1582,7 +1578,7 @@ void Expand_TestHarness(::AST::Crate& crate) {
     size_t test_count = tests_array->m_values.size();
     auto list_item_ty = TypeRef(Span(), ::AST::Path(c_test, {::AST::PathNode("TestDescAndFn")}));
     // NOTE: 1.39+ needs &TestDescAndFn here
-    if (TARGETVER_LEAST_1_39) {
+    {
         list_item_ty = TypeRef(TypeRef::TagReference(), Span(), AST::LifetimeRef::new_static(), false, mv$(list_item_ty));
     }
     auto tests_list = ::AST::Static{::AST::Static::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), mv$(list_item_ty), ::std::shared_ptr<::AST::ExprNode>(new ::AST::ExprNode_Integer(U128(test_count), CORETYPE_UINT))), ::AST::Expr(mv$(tests_array))};
@@ -2046,10 +2042,8 @@ int main(int argc, char* argv[]) {
                         panic_runtime_needed = true;
                     }
                 }
-                if (TARGETVER_LEAST_1_39) {
-                    // 1.39 has the default (system) allocator in liballoc
-                    allocator_crate_loaded = true;
-                }
+                // The default (system) allocator is provided by liballoc.
+                allocator_crate_loaded = true;
                 if (!allocator_crate_loaded) {
                     crate.load_extern_crate(Span(), "alloc_system");
                 }

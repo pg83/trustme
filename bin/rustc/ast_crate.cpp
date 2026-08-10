@@ -108,19 +108,15 @@ namespace AST {
             //}
         }
 
-        // Ensure that all crates passed on the command line are loaded
-        //if( this->m_edition >= Edition::Rust2018 )
-        if (TARGETVER_LEAST_1_29) {
-            DEBUG("Load from --crate");
-            for (const auto& c : g_crate_overrides) {
-                auto n = RcString::new_interned(c.first);
-                auto real_name = this->load_extern_crate(Span(), n);
-                g_implicit_crates.insert(std::make_pair(n, real_name));
-            }
-            //
-            if (this->m_ext_cratename_core != "") {
-                g_implicit_crates.insert(std::make_pair(RcString::new_interned("core"), this->m_ext_cratename_core));
-            }
+        // Ensure that all crates passed on the command line are loaded.
+        DEBUG("Load from --crate");
+        for (const auto& c : g_crate_overrides) {
+            auto n = RcString::new_interned(c.first);
+            auto real_name = this->load_extern_crate(Span(), n);
+            g_implicit_crates.insert(std::make_pair(n, real_name));
+        }
+        if (this->m_ext_cratename_core != "") {
+            g_implicit_crates.insert(std::make_pair(RcString::new_interned("core"), this->m_ext_cratename_core));
         }
     }
 

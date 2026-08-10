@@ -284,16 +284,16 @@ namespace {
                             item_name = "eq";
                             break;
                         case ::HIR::ExprNode_BinOp::Op::CmpLt:
-                            item_name = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                            item_name = "partial_ord";
                             break;
                         case ::HIR::ExprNode_BinOp::Op::CmpLtE:
-                            item_name = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                            item_name = "partial_ord";
                             break;
                         case ::HIR::ExprNode_BinOp::Op::CmpGt:
-                            item_name = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                            item_name = "partial_ord";
                             break;
                         case ::HIR::ExprNode_BinOp::Op::CmpGtE:
-                            item_name = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                            item_name = "partial_ord";
                             break;
                         default:
                             break;

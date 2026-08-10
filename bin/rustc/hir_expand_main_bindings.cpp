@@ -2862,7 +2862,7 @@ namespace {
             auto monomorph_cb = create_params(sp, m_resolve, params, constructor_path_params);
 
             // Generate the structure,
-            auto cr_vars = coroutine_vars(node.span(), node.m_avu_cache, 1 + (TARGETVER_LEAST_1_74 ? 1 : 0), monomorph_cb);
+            auto cr_vars = coroutine_vars(node.span(), node.m_avu_cache, 2, monomorph_cb);
 
             {
                 TRACE_FUNCTION_F("-- Rewrite variables");
@@ -2906,8 +2906,7 @@ namespace {
             node.m_state_data_type = m_resolve.m_crate.m_types.path(::HIR::GenericPath(state_struct_path, node.m_obj_path.m_params.clone()), &state_struct_ptr->as_Struct());
 
             auto lang_Pin = m_resolve.m_crate.get_lang_item_path(sp, "pin");
-            // Return wrapper: Renamed in 1.90
-            auto lang_GeneratorState = m_resolve.m_crate.get_lang_item_path(sp, TARGETVER_LEAST_1_90 ? "coroutine_state" : "generator_state");
+            auto lang_GeneratorState = m_resolve.m_crate.get_lang_item_path(sp, "coroutine_state");
 
             // `::path::to::struct`
             auto self_arg_ty = m_resolve.m_crate.m_types.path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &gen_struct_ref);
@@ -2915,9 +2914,7 @@ namespace {
             self_arg_ty = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, self_arg_ty);
             ::std::vector<HIR::TypeRef> resume_args;
             resume_args.push_back(self_arg_ty);
-            if (TARGETVER_LEAST_1_74) {
-                resume_args.push_back(node.m_resume_ty);
-            }
+            resume_args.push_back(node.m_resume_ty);
             // `Pin<&mut Self>`
             self_arg_ty = m_resolve.m_crate.m_types.path(::HIR::GenericPath(lang_Pin, ::HIR::PathParams(self_arg_ty)), &m_resolve.m_crate.get_struct_by_path(sp, lang_Pin));
             resume_args[0] = self_arg_ty;
@@ -2954,9 +2951,7 @@ namespace {
             ::HIR::Function fcn_resume;
             // - `self: Pin<&mut {Self}>`
             fcn_resume.m_args.push_back(std::make_pair(HIR::Pattern(), self_arg_ty));
-            if (TARGETVER_LEAST_1_74) {
-                fcn_resume.m_args.push_back(std::make_pair(HIR::Pattern(), monomorph_cb.monomorph_type(sp, node.m_resume_ty)));
-            }
+            fcn_resume.m_args.push_back(std::make_pair(HIR::Pattern(), monomorph_cb.monomorph_type(sp, node.m_resume_ty)));
             // - `-> GeneratorState<{Yield},{Return}>`
             ::HIR::PathParams ret_params;
             ret_params.m_types.push_back(monomorph_cb.monomorph_type(sp, node.m_yield_ty));
@@ -2985,15 +2980,13 @@ namespace {
 
             // -- Create impl
             ::HIR::TraitImpl impl;
-            if (TARGETVER_LEAST_1_74) {
-                impl.m_trait_args.m_types.push_back(monomorph_cb.monomorph_type(sp, node.m_resume_ty));
-            }
+            impl.m_trait_args.m_types.push_back(monomorph_cb.monomorph_type(sp, node.m_resume_ty));
             impl.m_type = m_resolve.m_crate.m_types.path(::HIR::GenericPath(gen_struct_path, params.make_nop_params(m_resolve.m_crate.m_types, 0)), &gen_struct_ref);
             impl.m_types.insert(std::make_pair(RcString::new_interned("Yield"), ::HIR::TraitImpl::ImplEnt<HIR::TypeRef>{false, monomorph_cb.monomorph_type(sp, node.m_yield_ty)}));
             impl.m_types.insert(std::make_pair(RcString::new_interned("Return"), ::HIR::TraitImpl::ImplEnt<HIR::TypeRef>{false, monomorph_cb.monomorph_type(sp, node.m_return)}));
             impl.m_methods.insert(std::make_pair(RcString::new_interned("resume"), ::HIR::TraitImpl::ImplEnt<HIR::Function>{false, std::move(fcn_resume)}));
             impl.m_params = std::move(params);
-            m_out.trait_impls.push_back(std::make_pair(TARGETVER_LEAST_1_90 ? "coroutine" : "generator", std::move(impl)));
+            m_out.trait_impls.push_back(std::make_pair("coroutine", std::move(impl)));
         }
 
         void visit(::HIR::ExprNode_AsyncBlock& node) override {
@@ -5404,45 +5397,11 @@ namespace {
 
         void visit(::HIR::ExprNode_Emplace& node) override {
             HIR::ExprVisitorDef::visit(node);
-            if (TARGETVER_MOST_1_19) {
-                switch (node.m_type) {
-                    case ::HIR::ExprNode_Emplace::Type::Noop:
-                        assert(!node.m_place);
-                        this->equate_types(node.span(), node.m_res_type, node.m_value->m_res_type);
-                        break;
-                    case ::HIR::ExprNode_Emplace::Type::Boxer: {
-                        // NOTE: `m_place` is `()` - so just ignore it.
-                        //assert( !node.m_place );
-                        const auto& data_ty = node.m_value->m_res_type;
-                        const auto& box_ty = node.m_res_type;
-
-                        // TODO: Full trait magic?
-                        // - `<box_ty as Boxed>::finalize( < <box_ty as Boxer>::Place as BoxPlace<data_ty> >::make_place() )`
-
-                        const auto& box_path = box_ty->as_Path().path.m_data.as_Generic();
-                        this->equate_types(node.span(), box_path.m_params.m_types.at(0), data_ty);
-                    } break;
-                    case ::HIR::ExprNode_Emplace::Type::Placer: {
-                        const auto& data_ty = node.m_value->m_res_type;
-                        const auto& placer_ty = node.m_place->m_res_type;
-                        // Where P = `placer_ty` and D = `data_ty`
-                        // Result type is <<P as Placer<D>>::Place as InPlace<D>>::Owner
-                        const auto& lang_Placer = m_resolve.m_crate.get_lang_item_path(node.span(), "placer_trait");
-                        const auto& lang_InPlace = m_resolve.m_crate.get_lang_item_path(node.span(), "in_place_trait");
-                        // -
-                        auto place_ty = m_resolve.m_crate.m_types.path(::HIR::Path(placer_ty, ::HIR::GenericPath(lang_Placer, ::HIR::PathParams(data_ty)), "Place"), {});
-                        auto owner_ty = m_resolve.m_crate.m_types.path(::HIR::Path(place_ty, ::HIR::GenericPath(lang_InPlace, ::HIR::PathParams(data_ty)), "Owner"), {});
-                        m_resolve.expand_associated_types(node.span(), owner_ty);
-                        this->equate_types(node.span(), node.m_res_type, owner_ty);
-                    } break;
-                }
-            } else {
-                assert(node.m_type == ::HIR::ExprNode_Emplace::Type::Boxer);
-                const auto& data_ty = node.m_value->m_res_type;
-                const auto& box_ty = node.m_res_type;
-                const auto& box_path = box_ty->as_Path().path.m_data.as_Generic();
-                this->equate_types(node.span(), box_path.m_params.m_types.at(0), data_ty);
-            }
+            assert(node.m_type == ::HIR::ExprNode_Emplace::Type::Boxer);
+            const auto& data_ty = node.m_value->m_res_type;
+            const auto& box_ty = node.m_res_type;
+            const auto& box_path = box_ty->as_Path().path.m_data.as_Generic();
+            this->equate_types(node.span(), box_path.m_params.m_types.at(0), data_ty);
         }
 
         void visit(::HIR::ExprNode_TupleVariant& node) override {
@@ -6837,16 +6796,6 @@ namespace static_borrow_constants {
             , m_all_constant(false)
         {
             m_lang_RangeFull = m_resolve.m_crate.get_lang_item_path_opt("range_full");
-            // EVIL hack: Since `range_full` wasn't a lang item until (latest) 1.54, resolve the path here
-            if (!TARGETVER_LEAST_1_54 && m_lang_RangeFull == ::HIR::SimplePath()) {
-                auto sp = ::HIR::SimplePath(g_core_crate, {"ops", "RangeFull"});
-                auto& ti = m_resolve.m_crate.get_typeitem_by_path(Span(), sp);
-                if (ti.is_Import()) {
-                    m_lang_RangeFull = ti.as_Import().path;
-                } else {
-                    m_lang_RangeFull = mv$(sp);
-                }
-            }
         }
 
         bool all_constant() const {
@@ -7406,16 +7355,6 @@ namespace static_borrow_constants {
             , m_expr_ptr(expr_ptr)
         {
             m_lang_RangeFull = m_resolve.m_crate.get_lang_item_path_opt("range_full");
-            // EVIL hack: Since `range_full` wasn't a lang item until (latest) 1.54, resolve the path here
-            if (!TARGETVER_LEAST_1_54 && m_lang_RangeFull == ::HIR::SimplePath()) {
-                auto sp = ::HIR::SimplePath(g_core_crate, {"ops", "RangeFull"});
-                auto& ti = m_resolve.m_crate.get_typeitem_by_path(Span(), sp);
-                if (ti.is_Import()) {
-                    m_lang_RangeFull = ti.as_Import().path;
-                } else {
-                    m_lang_RangeFull = mv$(sp);
-                }
-            }
         }
 
         void visit_node_ptr(::HIR::ExprPtr& root) {
@@ -8587,25 +8526,25 @@ namespace {
                     operator_kind = typeck::PrimitiveOperator::Equal;
                     break;
                 case ::HIR::ExprNode_BinOp::Op::CmpLt:
-                    langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                    langitem = "partial_ord";
                     method = "lt";
                     is_comparison = true;
                     operator_kind = typeck::PrimitiveOperator::Order;
                     break;
                 case ::HIR::ExprNode_BinOp::Op::CmpLtE:
-                    langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                    langitem = "partial_ord";
                     method = "le";
                     is_comparison = true;
                     operator_kind = typeck::PrimitiveOperator::Order;
                     break;
                 case ::HIR::ExprNode_BinOp::Op::CmpGt:
-                    langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                    langitem = "partial_ord";
                     method = "gt";
                     is_comparison = true;
                     operator_kind = typeck::PrimitiveOperator::Order;
                     break;
                 case ::HIR::ExprNode_BinOp::Op::CmpGtE:
-                    langitem = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                    langitem = "partial_ord";
                     method = "ge";
                     is_comparison = true;
                     operator_kind = typeck::PrimitiveOperator::Order;
@@ -9370,14 +9309,6 @@ namespace {
                                     DEBUG("- '" << vi.first << "' NOT object safe (generic), not creating vtable");
                                     return false;
                                 }
-                                // NOTE: by-value methods are valid in 1.39 (Added for FnOnce)
-                                if (!TARGETVER_LEAST_1_39) {
-                                    if (ve.m_receiver == ::HIR::Function::Receiver::Value) {
-                                        DEBUG("- '" << vi.first << "' NOT object safe (by-value), not creating vtable");
-                                        return false;
-                                    }
-                                }
-
                                 ::HIR::TypeRef tmp;
 
                                 ::HIR::TypeData_FunctionPointer ft;

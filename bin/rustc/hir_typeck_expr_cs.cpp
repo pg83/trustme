@@ -659,10 +659,8 @@ namespace {
             const auto& str = this->context.m_crate.get_struct_by_path(sp, lang_Boxed);
             // TODO: Store this type to avoid having to construct it every pass
             auto p = ::HIR::GenericPath(lang_Boxed, {data_ty});
-            if (TARGETVER_LEAST_1_54) {
-                p.m_params.m_types.push_back(MonomorphStatePtr(context.m_crate.m_types, nullptr, &p.m_params, nullptr).monomorph_type(sp, str.m_params.m_types.at(1).m_default));
-                this->context.add_ivars(p.m_params.m_types.back());
-            }
+            p.m_params.m_types.push_back(MonomorphStatePtr(context.m_crate.m_types, nullptr, &p.m_params, nullptr).monomorph_type(sp, str.m_params.m_types.at(1).m_default));
+            this->context.add_ivars(p.m_params.m_types.back());
             auto boxed_ty = context.m_crate.m_types.path(mv$(p), &str);
 
             // TODO: is there anyting special about this node that might need revisits?
@@ -671,103 +669,7 @@ namespace {
             this->m_completed = true;
         }
 
-        void visit_emplace_119(::HIR::ExprNode_Emplace& node) {
-            const auto& sp = node.span();
-            const auto& exp_ty = this->context.get_type(node.m_res_type);
-            const auto& data_ty = this->context.get_type(node.m_value->m_res_type);
-            const auto& placer_ty = this->context.get_type(node.m_place->m_res_type);
-            auto node_ty = node.m_type;
-            TRACE_FUNCTION_F("_Emplace: exp_ty=" << exp_ty << ", data_ty=" << data_ty << ", placer_ty" << placer_ty);
-
-            switch (node_ty) {
-                case ::HIR::ExprNode_Emplace::Type::Noop:
-                    BUG(sp, "No-op _Emplace in typeck?");
-                    break;
-                case ::HIR::ExprNode_Emplace::Type::Placer: {
-                    if (placer_ty->is_Infer()) {
-                        // Can't do anything, the place is still unknown
-                        DEBUG("Place unknown, wait");
-                        //this->context.equate_types_to_shadow(sp, placer_ty);
-                        this->context.possible_equate_type_unknown(sp, data_ty, Context::IvarUnknownType::To);
-                        return;
-                    }
-
-                    // Where P = `placer_ty` and D = `data_ty`
-                    // Result type is <<P as Placer<D>>::Place as InPlace<D>>::Owner
-                    const auto& lang_Placer = this->context.m_crate.get_lang_item_path(sp, "placer_trait");
-                    const auto& lang_InPlace = this->context.m_crate.get_lang_item_path(sp, "in_place_trait");
-                    // - Bound P: Placer<D>
-                    this->context.equate_types_assoc(sp, {}, lang_Placer, HIR::PathParams(data_ty), placer_ty, "", {});
-                    // -
-                    auto place_ty = context.m_crate.m_types.path(::HIR::Path(placer_ty, ::HIR::GenericPath(lang_Placer, ::HIR::PathParams(data_ty)), "Place"), {});
-                    this->context.equate_types_assoc(sp, node.m_res_type, lang_InPlace, HIR::PathParams(data_ty), place_ty, "Owner", {});
-                    break;
-                }
-                case ::HIR::ExprNode_Emplace::Type::Boxer: {
-                    const ::HIR::TypeRef* inner_ty;
-                    if (exp_ty->is_Infer()) {
-                        // If the expected result type is still an ivar, nothing can be done
-
-                        // HACK: Add a possibility of the result type being ``Box<`data_ty`>``
-                        // - This only happens if the `owned_box` lang item is present and this node is a `box` operation
-                        const auto& lang_Boxed = this->context.m_lang_Box;
-                        if (!lang_Boxed.components().empty()) {
-                            // NOTE: `owned_box` shouldn't point to anything but a struct
-                            const auto& str = this->context.m_crate.get_struct_by_path(sp, lang_Boxed);
-                            // TODO: Store this type to avoid having to construct it every pass
-                            auto boxed_ty = context.m_crate.m_types.path(::HIR::GenericPath(lang_Boxed, {data_ty}), &str);
-                            this->context.possible_equate_ivar(sp, exp_ty->as_Infer().index, boxed_ty, Context::PossibleTypeSource::CoerceFrom);
-                        }
-                        this->context.possible_equate_type_unknown(sp, data_ty, Context::IvarUnknownType::To);
-                        return;
-                    }
-                    // Assert that the expected result is a Path::Generic type.
-                    if (!exp_ty->is_Path()) {
-                        ERROR(sp, E0000, "box/in can only produce GenericPath types, got " << exp_ty);
-                    }
-                    const auto& path = exp_ty->as_Path().path;
-                    if (!path.m_data.is_Generic()) {
-                        ERROR(sp, E0000, "box/in can only produce GenericPath types, got " << exp_ty);
-                    }
-                    const auto& gpath = path.m_data.as_Generic();
-
-                    if (gpath.m_params.m_types.size() > 0) {
-                        // TODO: If there's only one, check if it's a valid coercion target, if not don't bother making the coercion.
-
-                        // Take a copy of the type with all type parameters replaced with new ivars
-                        auto newpath = ::HIR::GenericPath(gpath.m_path);
-                        for (const auto& t : gpath.m_params.m_types) {
-                            (void)t;
-                            newpath.m_params.m_types.push_back(this->context.m_ivars.new_ivar_tr());
-                        }
-                        auto newty = context.m_crate.m_types.path(mv$(newpath), exp_ty->as_Path().binding.clone());
-
-                        // Turn this revisit into a coercion point with the new result type
-                        // - Mangle this node to be a passthrough to a copy of itself.
-
-                        node.m_value = ::HIR::ExprNodeP(context.m_crate.m_pool->make<::HIR::ExprNode_Emplace>(node.span(), node.m_type, mv$(node.m_place), mv$(node.m_value)));
-                        node.m_type = ::HIR::ExprNode_Emplace::Type::Noop;
-                        node.m_value->m_res_type = mv$(newty);
-                        inner_ty = &node.m_value->m_res_type;
-
-                        this->context.equate_types_coerce(sp, exp_ty, node.m_value);
-                    } else {
-                        inner_ty = &exp_ty;
-                    }
-
-                    // Insert a trait bound on the result type to impl `Placer/Boxer`
-                    this->context.equate_types_assoc(sp, data_ty, this->context.m_crate.get_lang_item_path(sp, "boxed_trait"), {}, *inner_ty, "Data", {});
-                    break;
-                }
-            }
-
-            this->m_completed = true;
-        }
-
         void visit(::HIR::ExprNode_Emplace& node) override {
-            if (TARGETVER_MOST_1_19) {
-                return visit_emplace_119(node);
-            }
             return visit_emplace_129(node);
         }
 
@@ -2683,7 +2585,7 @@ void Context::handle_pattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::T
 
     fixup_pattern_value_paths(*this, sp, pat);
 
-    // TODO: 1.29 includes "match ergonomics" which allows automatic insertion of borrow/deref when matching
+    // Match ergonomics allows automatic insertion of borrow/deref when matching.
     // - Handling this will make pattern matching slightly harder (all patterns needing revisist)
     // - BUT: New bindings will still be added as usualin this pass.
     // - Any use of `&` (or `ref`?) in the pattern disables match ergonomics for the entire pattern.
@@ -2707,9 +2609,8 @@ void Context::handle_pattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::T
 
     // NOTE: Even if the top-level is a binding, and even if the top-level type is fully known, match ergonomics
     // still applies.
-    if (TARGETVER_LEAST_1_29) {
-        // There's not a `&` or `ref` in the pattern, and we're targeting 1.29
-        // - Run the match ergonomics handler
+    {
+        // There's not a `&` or `ref` in the pattern, so run the match ergonomics handler.
         // TODO: Default binding mode can be overridden back to "move" with `mut`
 
         struct MatchErgonomicsRevisit: public Revisitor {
@@ -9457,11 +9358,7 @@ namespace typecheck {
             this->push_inner_coerce(true);
             node.m_value->visit(*this);
             this->pop_inner_coerce();
-            if (TARGETVER_LEAST_1_74) {
-                this->context.equate_types(node.span(), node.m_res_type, resume_ty);
-            } else {
-                this->context.equate_types(node.span(), node.m_res_type, this->context.m_crate.m_types.unit());
-            }
+            this->context.equate_types(node.span(), node.m_res_type, resume_ty);
         }
 
         void visit(::HIR::ExprNode_AWait& node) override {
@@ -9720,16 +9617,16 @@ namespace typecheck {
                             item_name = "eq";
                             break;
                         case ::HIR::ExprNode_BinOp::Op::CmpLt:
-                            item_name = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                            item_name = "partial_ord";
                             break;
                         case ::HIR::ExprNode_BinOp::Op::CmpLtE:
-                            item_name = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                            item_name = "partial_ord";
                             break;
                         case ::HIR::ExprNode_BinOp::Op::CmpGt:
-                            item_name = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                            item_name = "partial_ord";
                             break;
                         case ::HIR::ExprNode_BinOp::Op::CmpGtE:
-                            item_name = TARGETVER_LEAST_1_29 ? "partial_ord" : "ord";
+                            item_name = "partial_ord";
                             break;
                         default:
                             break;
@@ -10792,10 +10689,6 @@ namespace typecheck {
             this->context.equate_types(node.span(), node.m_res_type, this->context.m_crate.m_types.generator(&node));
 
             this->context.equate_types_coerce(node.span(), node.m_return, node.m_code);
-            if (TARGETVER_MOST_1_54) {
-                this->context.equate_types(node.span(), node.m_resume_ty, this->context.m_crate.m_types.unit());
-            }
-
             // TODO: Save/clear/restore loop labels
             auto _ = this->push_inner_coerce_scoped(true);
             this->closure_ret_types.push_back(RetTarget(node.m_return, node.m_resume_ty, node.m_yield_ty));
