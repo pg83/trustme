@@ -2454,6 +2454,7 @@ public:
     }
     rv.m_edition = crate.m_edition;
     rv.m_is_no_core = crate.m_load_std == ::AST::Crate::LOAD_NONE;
+    rv.m_features = crate.m_features;
 
     g_crate_ptr = &rv;
     g_ast_crate_ptr = &crate;

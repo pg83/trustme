@@ -7296,6 +7296,30 @@ bool TraitResolution::find_trait_impls(
                 // - If no, try &move T
                 // - If no, dereference T and try again
                 auto cur_access = MethodAccess::Move; // Assume that the input value is movable
+                auto collapse_to_most_specific_subtrait = [&]() {
+                    if (!m_crate.feature_enabled("supertrait_item_shadowing")
+                        || possibilities.size() < 2) {
+                        return;
+                    }
+
+                    ::std::vector<::HIR::SimplePath> candidate_traits;
+                    candidate_traits.reserve(possibilities.size());
+                    for (const auto& possibility : possibilities) {
+                        const auto* path = possibility.second.m_data.opt_UfcsKnown();
+                        if (!path) {
+                            // RFC 3624 only collapses extension-trait picks.
+                            return;
+                        }
+                        candidate_traits.push_back(path->trait.m_path);
+                    }
+
+                    const auto selected = m_crate.find_most_specific_trait(sp, candidate_traits);
+                    if (selected) {
+                        auto selected_possibility = mv$(possibilities[*selected]);
+                        possibilities.clear();
+                        possibilities.push_back(mv$(selected_possibility));
+                    }
+                };
                 do {
                     const auto& ty = this->m_ivars.get_type(*current_ty);
                     auto should_pause = [](const auto& ty) -> bool {
@@ -7337,6 +7361,7 @@ bool TraitResolution::find_trait_impls(
                         DEBUG("FOUND &move *{" << deref_count << "}, fcn_path = " << possibilities.back().second);
                     }
                     if (!possibilities.empty()) {
+                        collapse_to_most_specific_subtrait();
                         DEBUG("FOUND " << possibilities.size() << " options: " << possibilities);
                         return deref_count;
                     }

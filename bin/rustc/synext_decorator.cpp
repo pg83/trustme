@@ -697,6 +697,9 @@ public:
     }
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate) const override {
+        mi.parse_paren_ident_list([&](const Span&, RcString feature) {
+            crate.m_features.insert(feature);
+        });
     }
 };
 STATIC_DECORATOR("feature", Decorator_Feature)

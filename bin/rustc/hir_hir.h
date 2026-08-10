@@ -7,6 +7,7 @@
 #include <vector>
 #include <memory>
 #include <optional>
+#include <set>
 
 #include "tagged_union.h"
 
@@ -708,6 +709,9 @@ namespace HIR {
         // Compile-local crate configuration. This is not serialised because an
         // external crate can never provide this crate's executable entrypoint.
         bool m_is_no_core = false;
+        // Enabled language features affect type checking of this crate only;
+        // consumers of its metadata use their own feature set.
+        ::std::set<RcString> m_features;
 
         Module m_root_module;
 
@@ -798,10 +802,15 @@ namespace HIR {
         const ::HIR::SimplePath& get_lang_item_path(const Span& sp, const char* name) const;
         const ::HIR::SimplePath& get_lang_item_path_opt(const char* name) const;
 
+        bool feature_enabled(const char* name) const {
+            return m_features.count(RcString::new_interned(name)) != 0;
+        }
+
         const ::HIR::MacroItem& get_macroitem_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name = false, bool ignore_last_node = false) const;
 
         const ::HIR::TypeItem& get_typeitem_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name = false, bool ignore_last_node = false) const;
         const ::HIR::Trait& get_trait_by_path(const Span& sp, const ::HIR::SimplePath& path) const;
+        ::std::optional<size_t> find_most_specific_trait(const Span& sp, const ::std::vector<::HIR::SimplePath>& candidates) const;
         const ::HIR::Struct& get_struct_by_path(const Span& sp, const ::HIR::SimplePath& path) const;
         const ::HIR::Union& get_union_by_path(const Span& sp, const ::HIR::SimplePath& path) const;
         const ::HIR::Enum& get_enum_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name = false, bool ignore_last_node = false) const;

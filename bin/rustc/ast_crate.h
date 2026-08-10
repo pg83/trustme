@@ -3,6 +3,7 @@
 #include "ast_ast.h"
 #include "ast_types.h"
 #include "ast_edition.h"
+#include <set>
 
 namespace HIR {
     class Crate;
@@ -55,6 +56,7 @@ namespace AST {
         ::AST::AttributeList m_attrs;
 
         ::std::map<::std::string, ::AST::AbsolutePath> m_lang_items;
+        ::std::set<RcString> m_features;
 
     public:
         Module m_root_module;

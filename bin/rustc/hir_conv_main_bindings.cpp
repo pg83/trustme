@@ -4173,6 +4173,8 @@ namespace resolve_ufcs {
         bool resolve_UfcsUnknown_trait(const ::HIR::Path& p, ::HIR::Visitor::PathContext pc, ::HIR::Path::Data& pd) {
             static Span sp;
             auto& e = pd.as_UfcsUnknown();
+            const bool collapse_to_subtrait = m_crate.feature_enabled("supertrait_item_shadowing");
+            ::std::vector<::std::pair<::HIR::SimplePath, ::HIR::Path::Data>> candidates;
             DEBUG("m_traits.size() = " << m_traits.size());
             for (const auto& trait_info : m_traits) {
                 const auto& trait = *trait_info.second;
@@ -4204,7 +4206,31 @@ namespace resolve_ufcs {
                 // TODO: Search supertraits
                 // TODO: Should impls be searched first, or item names?
                 // - Item names add complexity, but impls are slower
-                if (this->locate_in_trait_impl_and_set(sp, pc, mv$(trait_path), trait, pd)) {
+                if (!collapse_to_subtrait) {
+                    if (this->locate_in_trait_impl_and_set(sp, pc, mv$(trait_path), trait, pd)) {
+                        return true;
+                    }
+                    continue;
+                }
+
+                auto candidate_data = ::HIR::Path::Data::make_UfcsUnknown({
+                    e.type,
+                    e.item,
+                    e.params.clone(),
+                });
+                if (this->locate_in_trait_impl_and_set(sp, pc, mv$(trait_path), trait, candidate_data)) {
+                    candidates.push_back(::std::make_pair(*trait_info.first, mv$(candidate_data)));
+                }
+            }
+
+            if (collapse_to_subtrait && !candidates.empty()) {
+                ::std::vector<::HIR::SimplePath> candidate_traits;
+                candidate_traits.reserve(candidates.size());
+                for (const auto& candidate : candidates) {
+                    candidate_traits.push_back(candidate.first);
+                }
+                if (const auto selected = m_crate.find_most_specific_trait(sp, candidate_traits)) {
+                    pd = mv$(candidates[*selected].second);
                     return true;
                 }
             }

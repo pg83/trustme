@@ -524,6 +524,46 @@ const ::HIR::Trait& ::HIR::Crate::get_trait_by_path(const Span& sp, const ::HIR:
     }
 }
 
+::std::optional<size_t> HIR::Crate::find_most_specific_trait(
+    const Span& sp,
+    const ::std::vector<::HIR::SimplePath>& candidates
+) const {
+    ::std::optional<size_t> selected;
+    for (size_t candidate_index = 0; candidate_index < candidates.size(); candidate_index++) {
+        const auto& candidate = candidates[candidate_index];
+        const auto& trait = this->get_trait_by_path(sp, candidate);
+        bool is_subtrait_of_all = true;
+
+        for (const auto& other : candidates) {
+            if (candidate == other) {
+                continue;
+            }
+            const bool has_supertrait = ::std::any_of(
+                trait.m_all_parent_traits.begin(),
+                trait.m_all_parent_traits.end(),
+                [&](const auto& parent) {
+                    return parent.m_path.m_path == other;
+                }
+            );
+            if (!has_supertrait) {
+                is_subtrait_of_all = false;
+                break;
+            }
+        }
+
+        if (!is_subtrait_of_all) {
+            continue;
+        }
+        if (selected && candidates[*selected] != candidate) {
+            return {};
+        }
+        if (!selected) {
+            selected = candidate_index;
+        }
+    }
+    return selected;
+}
+
 const ::HIR::Struct& ::HIR::Crate::get_struct_by_path(const Span& sp, const ::HIR::SimplePath& path) const {
     const auto& ti = this->get_typeitem_by_path(sp, path);
     TU_IFLET(::HIR::TypeItem, ti, Struct, e, return e;)
