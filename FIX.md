@@ -20,23 +20,21 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ## P1 — 25–99 targets одним общим исправлением
 
-1. [ ] **Driver compatibility для lint/cfg options: до 79 прямых отказов.** Общий parser должен принимать rustc-формы `--check-cfg`, `-A/-D/-W/-F`, `--force-warn`, `--cap-lints` и `--cfg=...`. Diagnostic-only option не должен запускать несуществующий codegen feature; option с проверяемой семантикой нельзя молча игнорировать.
+1. [ ] **`-C` mapping: 65 прямых отказов только на `opt-level` и `debug-assertions`.** Связать `-C opt-level` с существующим optimization level, а обе формы `debug-assertions` — с cfg/codegen поведением. Затем разбирать оставшиеся 55 `-C` failures (`debuginfo`, `codegen-units`, target features, LTO и прочие) по фактической семантике.
 
-2. [ ] **`-C` mapping: 65 прямых отказов только на `opt-level` и `debug-assertions`.** Связать `-C opt-level` с существующим optimization level, а обе формы `debug-assertions` — с cfg/codegen поведением. Затем разбирать оставшиеся 55 `-C` failures (`debuginfo`, `codegen-units`, target features, LTO и прочие) по фактической семантике.
+2. [ ] **Offset pointer в const borrow: 62 library cases.** Один assert `mir_cleanup.cpp:487: ofs == 0` блокирует `coretests/option` — 33 и `coretests/result` — 29. Сохранять relocation base плюс offset через MIR cleanup и CTFE, проверив field borrow и enum payload.
 
-3. [ ] **Offset pointer в const borrow: 62 library cases.** Один assert `mir_cleanup.cpp:487: ofs == 0` блокирует `coretests/option` — 33 и `coretests/result` — 29. Сохранять relocation base плюс offset через MIR cleanup и CTFE, проверив field borrow и enum payload.
+3. [ ] **Настоящий check-only: 49 измеренных failures.** Из 815 текущих красных `check-pass` только 49 проходят `-Z stop-after=typeck`; это реальный, а не верхний fan-out. Реализовать `--emit=metadata`/check stop в driver и включать его в adapter только для `check-pass`; `build-pass` обязан оставаться на полном pipeline.
 
-4. [ ] **Настоящий check-only: 49 измеренных failures.** Из 815 текущих красных `check-pass` только 49 проходят `-Z stop-after=typeck`; это реальный, а не верхний fan-out. Реализовать `--emit=metadata`/check stop в driver и включать его в adapter только для `check-pass`; `build-pass` обязан оставаться на полном pipeline.
+4. [ ] **MIR control flags: 37 прямых отказов.** Связать `-Z validate-mir` — 20 с validator pipeline, `mir-enable-passes` — 9 и `inline-mir`/`inline_mir` — 8 с реальным pass selection. Не считать зелёным простое принятие option.
 
-5. [ ] **MIR control flags: 37 прямых отказов.** Связать `-Z validate-mir` — 20 с validator pipeline, `mir-enable-passes` — 9 и `inline-mir`/`inline_mir` — 8 с реальным pass selection. Не считать зелёным простое принятие option.
+5. [ ] **`Pointee`/metadata solver: 34 library cases.** `coretests/ptr` падает в `find_trait_impls_magic` на generic unsized tail. Реализовать общий metadata type для sized, slice/str, dyn и struct tail, затем проверить pointer metadata/codegen.
 
-6. [ ] **`Pointee`/metadata solver: 34 library cases.** `coretests/ptr` падает в `find_trait_impls_magic` на generic unsized tail. Реализовать общий metadata type для sized, slice/str, dyn и struct tail, затем проверить pointer metadata/codegen.
+6. [ ] **Оставшиеся `no_core` lang-item paths: 43 прямых отказа.** `coerce_unsized` — 37, `unsafe_cell` — 5 и `tuple_trait` — 1. Для каждого сначала сверить upstream semantics и отделить настоящий lang-free builtin от неполного GCCRS fixture; отсутствие trait нельзя обходить, если upstream требует trait для самой операции.
 
-7. [ ] **Оставшиеся `no_core` lang-item paths: 43 прямых отказа.** `coerce_unsized` — 37, `unsafe_cell` — 5 и `tuple_trait` — 1. Для каждого сначала сверить upstream semantics и отделить настоящий lang-free builtin от неполного GCCRS fixture; отсутствие trait нельзя обходить, если upstream требует trait для самой операции.
+7. [ ] **`pin!` expansion/parser: не менее 28 targets.** 21 compile failure видит `let` после path separator, ещё 7 cases заблокированы harness `coretests/pin_macro`. Исправить statement macro expansion в block context, затем проверить `pin!` с expression, `let` и function item.
 
-8. [ ] **`pin!` expansion/parser: не менее 28 targets.** 21 compile failure видит `let` после path separator, ещё 7 cases заблокированы harness `coretests/pin_macro`. Исправить statement macro expansion в block context, затем проверить `pin!` с expression, `let` и function item.
-
-9. [ ] **Повторяющиеся compiler crash signatures.** Сначала символизировать и группировать 75 SIGSEGV по stack/phase. Уже видны TAIT/impl-trait, coroutine/generator drop, projection cycles, const generics и HRTB; повышать отдельную группу выше можно только с измеренным общим fan-out. Отдельно устранить 28 `Invalid path (no nodes)` asserts, 26 `Spare rules left after typecheck stabilised` и 24 `Unexpected item type in inherent impl - Type`.
+8. [ ] **Повторяющиеся compiler crash signatures.** Сначала символизировать и группировать 75 SIGSEGV по stack/phase. Уже видны TAIT/impl-trait, coroutine/generator drop, projection cycles, const generics и HRTB; повышать отдельную группу выше можно только с измеренным общим fan-out. Отдельно устранить 28 `Invalid path (no nodes)` asserts, 26 `Spare rules left after typecheck stabilised` и 24 `Unexpected item type in inherent impl - Type`.
 
 ## P2 — runtime correctness и общие codegen/CTFE причины
 
@@ -62,6 +60,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ## P4 — parser, macros, resolver и type system без доказанного крупного fan-out
 
+- [ ] Полный source-scoped lint store отсутствует: кроме CLI-level `unexpected_cfgs`, `allow/warn/deny/forbid/force-warn` пока не производят rustc diagnostics, а текущий positive harness их не сравнивает. Сначала добавить diagnostic-verifying nodes и измерить fan-out; не считать простую успешную компиляцию lint UI семантическим покрытием.
 - [ ] Macro matcher: сгруппировать `No arm matched` по одной matcher state transition; отдельно interpolated block/type/visibility/meta fragments и statement boundaries.
 - [ ] Associated inherent types: после общего HIR lowering fix для 24 текущих asserts проверить lookup/normalization и visibility, а не просто принимать item.
 - [ ] Trait objects, HRTB/binders, associated projections, generic/const inference и TAIT: минимизировать до конкретного misplaced binder, потерянного constraint или normalization cycle. Не подменять unresolved projection первым impl.

@@ -3,7 +3,6 @@
 
 import os
 import re
-import shlex
 import subprocess
 import sys
 
@@ -30,11 +29,11 @@ def main() -> int:
     compile_flags = []
     for value in re.findall(r"^//@\s*compile-flags:\s*(.*)$", text,
                             re.MULTILINE):
-        compile_flags.extend(shlex.split(value))
+        compile_flags.extend(lib.compiletest_split_flags(value))
     run_flags = []
     for value in re.findall(r"^//@\s*run-flags:\s*(.*)$", text,
                             re.MULTILINE):
-        run_flags.extend(shlex.split(value))
+        run_flags.extend(lib.compiletest_split_flags(value))
     environment = dict(os.environ)
     environment["MRUSTC_TARGET_VER"] = "1.90"
     environment.setdefault("CC", "cc")

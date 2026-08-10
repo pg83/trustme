@@ -6,10 +6,12 @@ Usage: import.py /path/to/rust-1.90.0
 
 import json
 import re
-import shlex
 import shutil
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import lib  # noqa: E402
 
 
 HERE = Path(__file__).resolve().parent
@@ -58,7 +60,7 @@ def settings(text: str, test_mode: str) -> tuple[str, str, list[str]]:
     edition = edition_match.group(1) if edition_match else "2015"
     flags = []
     for value in re.findall(r"^//@\s*compile-flags\s*:\s*(.*)$", text, re.MULTILINE):
-        flags.extend(shlex.split(value))
+        flags.extend(lib.compiletest_split_flags(value))
     has_crate_type = any(
         flag == "--crate-type" or flag.startswith("--crate-type=") for flag in flags
     )

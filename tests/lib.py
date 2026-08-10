@@ -7,6 +7,17 @@ import sys
 import tempfile
 
 
+def compiletest_split_flags(flags: str) -> list[str]:
+    """Match rustc compiletest's directive parser, including literal `"`."""
+    result = []
+    for index, part in enumerate(flags.split("'")):
+        if index % 2:
+            result.append(part)
+        else:
+            result.extend(part.split())
+    return result
+
+
 def log(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
 

@@ -2226,7 +2226,7 @@
     "edition": "2015",
     "crate_type": "lib",
     "flags": [
-      "-Zcrate-attr=crate_name=override"
+      "-Zcrate-attr=crate_name=\"override\""
     ]
   },
   {
@@ -2235,7 +2235,7 @@
     "edition": "2015",
     "crate_type": "lib",
     "flags": [
-      "-Zcrate-attr=crate_type=lib"
+      "-Zcrate-attr=crate_type=\"lib\""
     ]
   },
   {
@@ -2657,10 +2657,10 @@
     "edition": "2015",
     "crate_type": "lib",
     "flags": [
-      "--check-cfg=cfg(foo,values(value))",
-      "--check-cfg=cfg(bar,values(value))",
-      "--check-cfg=cfg(bee,values(value))",
-      "--check-cfg=cfg(cow,values(value))"
+      "--check-cfg=cfg(foo,values(\"value\"))",
+      "--check-cfg=cfg(bar,values(\"value\"))",
+      "--check-cfg=cfg(bee,values(\"value\"))",
+      "--check-cfg=cfg(cow,values(\"value\"))"
     ]
   },
   {
@@ -2669,8 +2669,8 @@
     "edition": "2015",
     "crate_type": "lib",
     "flags": [
-      "--check-cfg=cfg(foo,values(my_value))",
-      "--check-cfg=cfg(bar,values(my_value))"
+      "--check-cfg=cfg(foo,values(\"my_value\"))",
+      "--check-cfg=cfg(bar,values(\"my_value\"))"
     ]
   },
   {
@@ -2706,8 +2706,8 @@
     "edition": "2015",
     "crate_type": "lib",
     "flags": [
-      "--check-cfg=cfg(my_cfg,values(foo))",
-      "--check-cfg=cfg(my_cfg,values(bar))",
+      "--check-cfg=cfg(my_cfg,values(\"foo\"))",
+      "--check-cfg=cfg(my_cfg,values(\"bar\"))",
       "--check-cfg=cfg(my_cfg,values())"
     ]
   },
@@ -2747,10 +2747,10 @@
     "crate_type": "lib",
     "flags": [
       "--cfg",
-      "feature=bar",
+      "feature=\"bar\"",
       "--cfg",
       "unknown_name",
-      "--check-cfg=cfg(feature,values(foo))"
+      "--check-cfg=cfg(feature,values(\"foo\"))"
     ]
   },
   {
@@ -2787,8 +2787,8 @@
     "edition": "2015",
     "crate_type": "lib",
     "flags": [
-      "--cfg=feature=rand",
-      "--check-cfg=cfg(feature,values(serde,full))"
+      "--cfg=feature=\"rand\"",
+      "--check-cfg=cfg(feature,values(\"serde\",\"full\"))"
     ]
   },
   {

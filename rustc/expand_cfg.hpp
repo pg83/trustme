@@ -10,6 +10,14 @@
 
 class TokenStream;
 
+enum class CfgLintLevel {
+    Allow,
+    Warn,
+    ForceWarn,
+    Deny,
+    Forbid,
+};
+
 namespace AST {
     class Attribute;
     class AttributeList;
@@ -19,6 +27,10 @@ extern void Cfg_Dump(::std::ostream& os);
 extern void Cfg_SetFlag(::std::string name);
 extern void Cfg_SetValue(::std::string name, ::std::string val);
 extern void Cfg_SetValueCb(::std::string name, ::std::function<bool(const ::std::string&)> cb);
+extern bool Cfg_ParseOption(const ::std::string& spec, ::std::string& name, bool& has_value, ::std::string& value, ::std::string& error);
+extern bool Cfg_SetCheckSpec(const ::std::string& spec, ::std::string& error);
+extern void Cfg_SetLintLevel(::std::string name, CfgLintLevel level);
+extern void Cfg_SetLintCap(CfgLintLevel level);
 extern bool check_cfg_attrs(const ::AST::AttributeList& attrs);
 extern bool check_cfg(const Span& sp, const ::AST::Attribute& mi);
 /// Check a parenthesised list of cfg rules (treated as `all()`)

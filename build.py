@@ -462,6 +462,41 @@ unit_tests.append(command(
     descr="UT",
     color="green",
 ))
+unit_tests.append(command(
+    name="unit_driver_lint_cfg_options",
+    inputs=[
+        "$(S)/tests/unit/test_driver_lint_cfg_options.py",
+        "$(S)/tests/unit/driver_lint_cfg_input.rs",
+    ],
+    outputs=["$(B)/tests/unit/driver_lint_cfg_options.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tests/unit/test_driver_lint_cfg_options.py",
+        "$(B)/rustc/rustc",
+        "$(S)/tests/unit/driver_lint_cfg_input.rs",
+        "$(B)/tests/unit/driver_lint_cfg_options.stamp",
+    ],
+    deps=[rustc],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
+    name="unit_compiletest_flags",
+    inputs=[
+        "$(S)/tests/unit/test_compiletest_flags.py",
+        "$(S)/tests/lib.py",
+        "$(S)/tests/rust_1_90/adapter.py",
+        "$(S)/tests/rust_ui_compile/import.py",
+    ],
+    outputs=["$(B)/tests/unit/compiletest_flags.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tests/unit/test_compiletest_flags.py",
+        "$(B)/tests/unit/compiletest_flags.stamp",
+    ],
+    descr="UT",
+    color="green",
+))
 for _src in build.glob("$(S)/tests/unit/test_*.rs"):
     _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
     _uses_rust_lib_dependencies = _stem == "rust_lib_dev_dependencies"

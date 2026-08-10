@@ -995,6 +995,32 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         this->libraries.push_back(arg + 1);
                     }
                     continue;
+                case 'A':
+                case 'W':
+                case 'D':
+                case 'F': {
+                    const auto flag = *arg;
+                    const char* lint_name;
+                    if (arg[1] == '\0') {
+                        if (i == argc - 1) {
+                            ::std::cerr << "Option -" << flag << " requires an argument" << ::std::endl;
+                            exit(1);
+                        }
+                        lint_name = argv[++i];
+                    } else {
+                        lint_name = arg + 1;
+                    }
+                    if (lint_name[0] == '\0') {
+                        ::std::cerr << "Option -" << flag << " requires an argument" << ::std::endl;
+                        exit(1);
+                    }
+                    const auto level = flag == 'A' ? CfgLintLevel::Allow
+                        : flag == 'W' ? CfgLintLevel::Warn
+                        : flag == 'D' ? CfgLintLevel::Deny
+                        : CfgLintLevel::Forbid;
+                    Cfg_SetLintLevel(lint_name, level);
+                    continue;
+                }
                 case 'C': {
                     ::std::string optname;
                     ::std::string optval;
@@ -1150,6 +1176,11 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     } else if (optname == "print-cfgs") {
                         no_optval();
                         this->print_cfgs = true;
+                    } else if (optname == "check-cfg-all-expected") {
+                        // This only controls how many expected cfg values rustc
+                        // prints in diagnostics.  mrustc emits a compact
+                        // diagnostic and has no corresponding display limit.
+                        no_optval();
                     } else if (optname == "borrowcheck") {
                         no_optval();
                         this->run_borrowcheck = true;
@@ -1260,36 +1291,53 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     exit(1);
                 }
             }
-            // `--cfg <flag>`
-            // `--cfg <var>=<value>`
-            else if (strcmp(arg, "--cfg") == 0) {
-                if (i == argc - 1) {
-                    ::std::cerr << "Flag --cfg requires an argument" << ::std::endl;
+            // `--cfg <flag>` / `--cfg=<flag>`
+            // `--cfg <var>=<value>` / `--cfg=<var>=<value>`
+            else if (const char* cfg_spec = check_with_arg("cfg")) {
+                ::std::string name;
+                ::std::string value;
+                ::std::string error;
+                bool has_value = false;
+                if (!Cfg_ParseOption(cfg_spec, name, has_value, value, error)) {
+                    ::std::cerr << "invalid `--cfg` argument: `" << cfg_spec << "`: " << error << ::std::endl;
                     exit(1);
                 }
-                char* opt_and_val = argv[++i];
-                if (char* p = strchr(opt_and_val, '=')) {
-                    *p = '\0';
-                    const char* opt = opt_and_val;
-                    const char* val = p + 1;
-                    std::string s;
-                    // TODO: Correctly parse the values.
-                    // - Value should be a double-quoted string.
-                    if (val[0] == '"') {
-                        // TODO: Something cleaner than this.
-                        s = val + 1;
-                        assert(s.back() == '"');
-                        s.pop_back();
-                        val = s.c_str();
-                    }
-                    if (::std::strcmp(opt, "feature") == 0) {
-                        this->features.insert(::std::string(val));
+                if (has_value) {
+                    if (name == "feature") {
+                        this->features.insert(value);
                     } else {
-                        Cfg_SetValue(opt, val);
+                        Cfg_SetValue(mv$(name), mv$(value));
                     }
                 } else {
-                    Cfg_SetFlag(opt_and_val);
+                    Cfg_SetFlag(mv$(name));
                 }
+            } else if (const char* check_cfg_spec = check_with_arg("check-cfg")) {
+                ::std::string error;
+                if (!Cfg_SetCheckSpec(check_cfg_spec, error)) {
+                    ::std::cerr << "invalid `--check-cfg` argument: `" << check_cfg_spec << "`: " << error << ::std::endl;
+                    exit(1);
+                }
+            } else if (const char* force_warn = check_with_arg("force-warn")) {
+                if (force_warn[0] == '\0') {
+                    ::std::cerr << "Flag --force-warn requires an argument" << ::std::endl;
+                    exit(1);
+                }
+                Cfg_SetLintLevel(force_warn, CfgLintLevel::ForceWarn);
+            } else if (const char* lint_cap = check_with_arg("cap-lints")) {
+                CfgLintLevel level;
+                if (strcmp(lint_cap, "allow") == 0) {
+                    level = CfgLintLevel::Allow;
+                } else if (strcmp(lint_cap, "warn") == 0) {
+                    level = CfgLintLevel::Warn;
+                } else if (strcmp(lint_cap, "deny") == 0) {
+                    level = CfgLintLevel::Deny;
+                } else if (strcmp(lint_cap, "forbid") == 0) {
+                    level = CfgLintLevel::Forbid;
+                } else {
+                    ::std::cerr << "unknown lint level: `" << lint_cap << "`" << ::std::endl;
+                    exit(1);
+                }
+                Cfg_SetLintCap(level);
             } else if (const char* emit = check_with_arg("emit")) {
                 ::std::cerr << "Ignoring `--emit " << emit << "` for compatability with rustc" << std::endl;
             }
