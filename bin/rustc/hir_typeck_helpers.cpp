@@ -2585,6 +2585,16 @@ class NextTraitGoalEvaluator {
             return false;
         }
 
+        bool self_is_unresolved_projection_over_ivar(
+            const ::HIR::TypeData* type
+        ) const {
+            const auto* path = type->opt_Path();
+            return path
+                && path->binding.is_Unbound()
+                && path->path.m_data.is_UfcsKnown()
+                && m_resolve.type_contains_ivars(type);
+        }
+
         bool type_has_unknown(const ::HIR::TypeData* input) const {
             const auto& type = m_resolve.resolve_type(input);
             if (type->is_Infer() || type->is_Generic()) {
@@ -4335,6 +4345,14 @@ class NextTraitGoalEvaluator {
                 )) {
                 return Certainty::Ambiguous;
             }
+            // rustc structurally normalises Self before candidate assembly.
+            // An unresolved projection over a type variable normalises to an
+            // inference variable and therefore forces ambiguity; treating the
+            // projection syntax as rigid lets an unrelated fuzzy ParamEnv
+            // predicate constrain its output.
+            if (self_is_unresolved_projection_over_ivar(goal_type)) {
+                return Certainty::Ambiguous;
+            }
             const auto& resolved_type = m_resolve.resolve_type(goal_type);
             // Candidate assembly must not use an unconstrained `Self` type to
             // guide inference.  A concrete associated-type equality does
@@ -4854,6 +4872,9 @@ class NextTraitGoalEvaluator {
                 param = m_resolve.expand_associated_types(
                     span(), ::std::move(param)
                 );
+            }
+            if (self_is_unresolved_projection_over_ivar(goal_type)) {
+                return emit_forced_ambiguity();
             }
             const auto& resolved_type = m_resolve.resolve_type(goal_type);
             // Match rustc's forced-ambiguity response for a genuinely
