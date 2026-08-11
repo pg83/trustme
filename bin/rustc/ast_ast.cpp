@@ -115,7 +115,7 @@ namespace AST {
         auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
 
         std::string rv;
-        if (auto* v = dynamic_cast<::AST::ExprNode_String*>(&*n)) {
+        if (auto* v = cast<::AST::ExprNode_String>(&*n)) {
             rv = v->m_value;
         } else {
             throw ParseError::Unexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);

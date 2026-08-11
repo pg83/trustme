@@ -85,6 +85,12 @@ rustc = program(
     ldflags=["-lz"],
 )
 
+node_cast_test = program(
+    name="node_cast_test",
+    srcs=["$(S)/tst/unit/test_node_cast.cpp"],
+    output="$(B)/tst/unit/node_cast_test",
+)
+
 # cargo: Cargo-compatible package resolver and mrustc build driver, written in
 # Go. Dependencies are checked in under bin/cargo/vendor, so this node is
 # offline. Rust 1.90 source adjustments belong to std_src below; Cargo has no
@@ -278,6 +284,26 @@ unit_tests = [
         color="green",
     )
 ]
+unit_tests.append(command(
+    name="unit_node_cast",
+    inputs=[
+        "$(S)/tst/unit/test_node_cast.py",
+        "$(S)/bin/rustc/common.h",
+        *build.glob("$(S)/bin/rustc/**/*.h"),
+        *build.glob("$(S)/bin/rustc/**/*.cpp"),
+        *build.glob("$(S)/bin/rustc/**/*.inc"),
+    ],
+    outputs=["$(B)/tst/unit/node_cast.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_node_cast.py",
+        "$(S)/bin/rustc", "$(B)/tst/unit/node_cast_test",
+        "$(B)/tst/unit/node_cast.stamp",
+    ],
+    deps=[node_cast_test],
+    descr="UT",
+    color="green",
+))
 unit_tests.append(command(
     name="unit_std_source_adjustments",
     inputs=[

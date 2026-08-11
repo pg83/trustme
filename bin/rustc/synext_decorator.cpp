@@ -138,7 +138,7 @@ class CHandler_Repr: public ExpandDecorator {
                     }
                     if (lex.getTokenIf(TOK_PAREN_OPEN)) {
                         auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
-                        auto* val = dynamic_cast<AST::ExprNode_Integer*>(&*n);
+                        auto* val = cast<AST::ExprNode_Integer>(&*n);
                         ASSERT_BUG(n->span(), val, "#[repr(packed(...))] - alignment must be an integer");
                         auto v = val->m_value;
                         ASSERT_BUG(lex.point_span(), v > U128(0), "#[repr(packed(" << v << "))] - alignment must be non-zero");
@@ -157,7 +157,7 @@ class CHandler_Repr: public ExpandDecorator {
                 } else if (repr_type == "align") {
                     lex.getTokenCheck(TOK_PAREN_OPEN);
                     auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
-                    auto* val = dynamic_cast<AST::ExprNode_Integer*>(&*n);
+                    auto* val = cast<AST::ExprNode_Integer>(&*n);
                     ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
                     auto v = val->m_value;
                     ASSERT_BUG(lex.point_span(), v > U128(0), "#[repr(align(" << v << "))] - alignment must be non-zero");
@@ -216,7 +216,7 @@ class CHandler_Repr: public ExpandDecorator {
                 } else if (repr_str == "align") {
                     lex.getTokenCheck(TOK_PAREN_OPEN);
                     auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
-                    auto* val = dynamic_cast<AST::ExprNode_Integer*>(&*n);
+                    auto* val = cast<AST::ExprNode_Integer>(&*n);
                     ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
                     auto v = val->m_value;
                     ASSERT_BUG(lex.point_span(), v > U128(0), "#[repr(align(" << v << "))] - alignment must be non-zero");
@@ -260,7 +260,7 @@ class CHandler_Repr: public ExpandDecorator {
                     //}
                     if (lex.getTokenIf(TOK_PAREN_OPEN)) {
                         auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
-                        auto* val = dynamic_cast<AST::ExprNode_Integer*>(&*n);
+                        auto* val = cast<AST::ExprNode_Integer>(&*n);
                         ASSERT_BUG(n->span(), val, "#[repr(packed(...))] - alignment must be an integer");
                         auto v = val->m_value;
                         ASSERT_BUG(lex.point_span(), v > U128(0), "#[repr(packed(" << v << "))] - alignment must be non-zero");
@@ -314,7 +314,7 @@ class CHandler_RustcLayoutScalarValidRangeStart: public ExpandDecorator {
             TTStream lex(sp, ParseState(), mi.data());
             lex.getTokenCheck(TOK_PAREN_OPEN);
             auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
-            auto* np = dynamic_cast<AST::ExprNode_Integer*>(n.get());
+            auto* np = cast<AST::ExprNode_Integer>(n.get());
             ASSERT_BUG(n->span(), np, "#[rustc_layout_scalar_valid_range_start] requires an integer - got " << FMT_CB(ss, n->print(ss)));
             lex.getTokenCheck(TOK_PAREN_CLOSE);
             lex.getTokenCheck(TOK_EOF);
@@ -341,7 +341,7 @@ class CHandler_RustcLayoutScalarValidRangeEnd: public ExpandDecorator {
             TTStream lex(sp, ParseState(), mi.data());
             lex.getTokenCheck(TOK_PAREN_OPEN);
             auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
-            auto* np = dynamic_cast<AST::ExprNode_Integer*>(n.get());
+            auto* np = cast<AST::ExprNode_Integer>(n.get());
             ASSERT_BUG(n->span(), np, "#[rustc_layout_scalar_valid_range_end] requires an integer - got " << FMT_CB(ss, n->print(ss)));
             lex.getTokenCheck(TOK_PAREN_CLOSE);
             lex.getTokenCheck(TOK_EOF);
@@ -580,7 +580,7 @@ class CHandler_TrackCaller: public ExpandDecorator {
     }
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNodeP& expr) const override {
-        if (auto* n = dynamic_cast<AST::ExprNode_Closure*>(expr.get())) {
+        if (auto* n = cast<AST::ExprNode_Closure>(expr.get())) {
             //n->m_track_caller = true;
             (void)n;
         } else {
@@ -3384,7 +3384,7 @@ class CHandler_RustBox: public ExpandDecorator {
     }
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNodeP& expr) const override {
-        auto* n = dynamic_cast<AST::ExprNode_CallPath*>(expr.get());
+        auto* n = cast<AST::ExprNode_CallPath>(expr.get());
         ASSERT_BUG(expr->span(), n, "");
         ASSERT_BUG(expr->span(), n->m_args.size() == 1, "");
         auto val = std::move(n->m_args[0]);
@@ -3608,7 +3608,7 @@ class CTestHandler_SP: public ExpandDecorator {
                     TTStream lex(sp, ParseState(), mi.data());
                     auto parse_message = [&]() {
                         auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
-                        if (auto* v = dynamic_cast<::AST::ExprNode_String*>(&*n)) {
+                        if (auto* v = cast<::AST::ExprNode_String>(&*n)) {
                             td.expected_panic_message = v->m_value;
                         } else {
                             throw ParseError::Unexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);

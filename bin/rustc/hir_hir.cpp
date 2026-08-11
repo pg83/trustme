@@ -144,8 +144,8 @@ namespace HIR {
         }
 
         bool const_expr_nodes_equal(const ::HIR::ConstGeneric_Unevaluated& left_value, const ::HIR::ExprNode& left, const ::HIR::ConstGeneric_Unevaluated& right_value, const ::HIR::ExprNode& right) {
-            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_ConstParam*>(&left)) {
-                const auto* r = dynamic_cast<const ::HIR::ExprNode_ConstParam*>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNode_ConstParam>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_ConstParam>(&right);
                 if (!r) {
                     return false;
                 }
@@ -153,28 +153,28 @@ namespace HIR {
                 const auto* r_param = get_unevaluated_param(right_value, r->m_binding);
                 return l_param && r_param ? *l_param == *r_param : l->m_binding == r->m_binding;
             }
-            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_Literal*>(&left)) {
-                const auto* r = dynamic_cast<const ::HIR::ExprNode_Literal*>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNode_Literal>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_Literal>(&right);
                 return r && const_expr_literals_equal(*l, *r);
             }
-            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_BinOp*>(&left)) {
-                const auto* r = dynamic_cast<const ::HIR::ExprNode_BinOp*>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNode_BinOp>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_BinOp>(&right);
                 return r && l->m_op == r->m_op && const_expr_nodes_equal(left_value, *l->m_left, right_value, *r->m_left) && const_expr_nodes_equal(left_value, *l->m_right, right_value, *r->m_right);
             }
-            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_UniOp*>(&left)) {
-                const auto* r = dynamic_cast<const ::HIR::ExprNode_UniOp*>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNode_UniOp>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_UniOp>(&right);
                 return r && l->m_op == r->m_op && const_expr_nodes_equal(left_value, *l->m_value, right_value, *r->m_value);
             }
-            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_Cast*>(&left)) {
-                const auto* r = dynamic_cast<const ::HIR::ExprNode_Cast*>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNode_Cast>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_Cast>(&right);
                 return r && l->m_dst_type == r->m_dst_type && const_expr_nodes_equal(left_value, *l->m_value, right_value, *r->m_value);
             }
-            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_ConstBlock*>(&left)) {
-                const auto* r = dynamic_cast<const ::HIR::ExprNode_ConstBlock*>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNode_ConstBlock>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_ConstBlock>(&right);
                 return r && const_expr_nodes_equal(left_value, *l->m_inner, right_value, *r->m_inner);
             }
-            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_Block*>(&left)) {
-                const auto* r = dynamic_cast<const ::HIR::ExprNode_Block*>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNode_Block>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_Block>(&right);
                 if (!r || l->m_nodes.size() != r->m_nodes.size() || static_cast<bool>(l->m_value_node) != static_cast<bool>(r->m_value_node)) {
                     return false;
                 }
@@ -202,8 +202,8 @@ namespace HIR {
 
             // HACK: If the inner is a const param on both, sort based on that.
             // - Very similar to the ordering of TypeRef::Generic
-            const auto* tn = dynamic_cast<const HIR::ExprNode_ConstParam*>(&**this->expr);
-            const auto* xn = dynamic_cast<const HIR::ExprNode_ConstParam*>(&**x.expr);
+            const auto* tn = cast<const HIR::ExprNode_ConstParam>(&**this->expr);
+            const auto* xn = cast<const HIR::ExprNode_ConstParam>(&**x.expr);
             if (tn && xn) {
                 // Is this valid? What if they're from different scopes?
                 return ::ord(tn->m_binding, xn->m_binding);

@@ -18,6 +18,14 @@
 #include "debug.h"
 #include "compile_error.h"
 
+template <typename Y, typename X>
+Y* cast(X* x) noexcept {
+    if (x && x->node_kind() == Y::kind) {
+        return static_cast<Y*>(x);
+    }
+    return nullptr;
+}
+
 template <typename T>
 ::std::unique_ptr<T> make_unique_ptr(T&& v) {
     return ::std::unique_ptr<T>(new T(mv$(v)));

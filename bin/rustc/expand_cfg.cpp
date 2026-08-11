@@ -508,7 +508,7 @@ namespace {
                 std::string val;
                 if (lex.lookahead(0) == TOK_INTERPOLATED_EXPR) {
                     auto n = lex.getTokenCheck(TOK_INTERPOLATED_EXPR).take_frag_node();
-                    const auto* np = dynamic_cast<AST::ExprNode_String*>(n.get());
+                    const auto* np = cast<AST::ExprNode_String>(n.get());
                     ASSERT_BUG(n->span(), np, "");
                     val = np->m_value;
                 } else {

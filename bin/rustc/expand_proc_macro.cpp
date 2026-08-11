@@ -380,7 +380,7 @@ public:
         this->send_u8(static_cast<uint8_t>(TokenClass::SpanDef));
         this->send_v128u(index);
         this->send_v128u(0); // TODO: Parent span
-        if (const auto* sp_p = dynamic_cast<const SpanInner_Source*>(sp.get())) {
+        if (const auto* sp_p = cast<const SpanInner_Source>(sp.get())) {
             this->send_bytes(sp_p->filename.c_str(), sp_p->filename.size());
             this->send_u8(1); // path_is_real
             this->send_v128u(sp_p->start_line);

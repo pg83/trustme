@@ -2430,8 +2430,8 @@ namespace {
         }
 
         bool equate_node(const ::HIR::ConstGeneric_Unevaluated& left_value, const ::HIR::ExprNode& left, const ::HIR::ConstGeneric_Unevaluated& right_value, const ::HIR::ExprNode& right) const {
-            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_ConstParam*>(&left)) {
-                const auto* r = dynamic_cast<const ::HIR::ExprNode_ConstParam*>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNode_ConstParam>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_ConstParam>(&right);
                 if (!r) {
                     return false;
                 }
@@ -2443,32 +2443,32 @@ namespace {
                 context.equate_values(sp, *l_param, *r_param);
                 return true;
             }
-            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_Literal*>(&left)) {
-                const auto* r = dynamic_cast<const ::HIR::ExprNode_Literal*>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNode_Literal>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_Literal>(&right);
                 return r && equate_literal(*l, *r);
             }
-            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_BinOp*>(&left)) {
-                const auto* r = dynamic_cast<const ::HIR::ExprNode_BinOp*>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNode_BinOp>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_BinOp>(&right);
                 return r && l->m_op == r->m_op && equate_node(left_value, *l->m_left, right_value, *r->m_left) && equate_node(left_value, *l->m_right, right_value, *r->m_right);
             }
-            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_UniOp*>(&left)) {
-                const auto* r = dynamic_cast<const ::HIR::ExprNode_UniOp*>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNode_UniOp>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_UniOp>(&right);
                 return r && l->m_op == r->m_op && equate_node(left_value, *l->m_value, right_value, *r->m_value);
             }
-            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_Cast*>(&left)) {
-                const auto* r = dynamic_cast<const ::HIR::ExprNode_Cast*>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNode_Cast>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_Cast>(&right);
                 if (!r) {
                     return false;
                 }
                 context.equate_types_inner(sp, l->m_dst_type, r->m_dst_type);
                 return equate_node(left_value, *l->m_value, right_value, *r->m_value);
             }
-            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_ConstBlock*>(&left)) {
-                const auto* r = dynamic_cast<const ::HIR::ExprNode_ConstBlock*>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNode_ConstBlock>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_ConstBlock>(&right);
                 return r && equate_node(left_value, *l->m_inner, right_value, *r->m_inner);
             }
-            if (const auto* l = dynamic_cast<const ::HIR::ExprNode_Block*>(&left)) {
-                const auto* r = dynamic_cast<const ::HIR::ExprNode_Block*>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNode_Block>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_Block>(&right);
                 if (!r || l->m_nodes.size() != r->m_nodes.size() || static_cast<bool>(l->m_value_node) != static_cast<bool>(r->m_value_node)) {
                     return false;
                 }
@@ -4318,7 +4318,7 @@ namespace {
 #if 1
         // If the coercion is of a block, apply the mutation to the inner node
         ASSERT_BUG(Span(), orig_node_ptr, "Null node pointer passed to `add_coerce_borrow`");
-        while (auto* p = dynamic_cast<::HIR::ExprNode_Block*>(&**node_ptr_ptr)) {
+        while (auto* p = cast<::HIR::ExprNode_Block>(&**node_ptr_ptr)) {
             DEBUG("- Moving into block");
             assert(p->m_value_node);
             // Block result and the inner node's result must be the same type
@@ -4332,7 +4332,7 @@ namespace {
         const auto& src_type = context.m_ivars.get_type(node_ptr->m_res_type);
 
         // - If the pointed node is a borrow operation, add the dereferences within its value
-        if (auto* p = dynamic_cast<::HIR::ExprNode_Borrow*>(&*node_ptr)) {
+        if (auto* p = cast<::HIR::ExprNode_Borrow>(&*node_ptr)) {
             // Set the result of the borrow operation to the output type
             node_ptr->m_res_type = context.m_crate.m_types.borrow(borrow_type, des_borrow_inner);
 
@@ -4351,11 +4351,12 @@ namespace {
             node_ptr = NEWNODE(src_inner_ty, span, _Deref, mv$(node_ptr));
             DEBUG("- Deref " << &*node_ptr << " -> " << node_ptr->m_res_type);
             // 2. Borrow (resulting in the referenced output type)
-            node_ptr = NEWNODE(mv$(inner_ty_ref), span, _Borrow, borrow_type, mv$(node_ptr));
+            auto* borrow_node = context.m_crate.m_pool->make<HIR::ExprNode_Borrow>(span, borrow_type, mv$(node_ptr));
+            node_ptr = mk_exprnodep(borrow_node, mv$(inner_ty_ref));
             DEBUG("- Borrow " << &*node_ptr << " -> " << node_ptr->m_res_type);
 
             // - Set node pointer reference to point into the new borrow op
-            node_ptr_ptr = &dynamic_cast<::HIR::ExprNode_Borrow&>(*node_ptr).m_value;
+            node_ptr_ptr = &borrow_node->m_value;
         }
 
         cb(*node_ptr_ptr);
@@ -5027,7 +5028,7 @@ namespace {
                         // - Cleans up the dumped MIR and prevents needing a reborrow elsewhere.
                         // - TODO: Alter the block's result types
                         ::HIR::ExprNodeP* npp = node_ptr_ptr; // Note: Node pointer can be null (when checking)
-                        while (auto* p = dynamic_cast<::HIR::ExprNode_Block*>(npp->get())) {
+                        while (auto* p = cast<::HIR::ExprNode_Block>(npp->get())) {
                             DEBUG("- Propagate to the last node of a _Block");
                             ASSERT_BUG(p->span(), context.m_ivars.types_equal(p->m_res_type, p->m_value_node->m_res_type), "Block and result mismatch - " << context.m_ivars.fmt_type(p->m_res_type) << " != " << context.m_ivars.fmt_type(p->m_value_node->m_res_type));
                             if (!context.m_ivars.types_equal(p->m_res_type, src)) {
@@ -5178,7 +5179,7 @@ namespace {
                         // - TODO: Alter the block's result types
                         {
                             ::HIR::ExprNodeP* npp = node_ptr_ptr;
-                            while (auto* p = dynamic_cast<::HIR::ExprNode_Block*>(npp->get())) {
+                            while (auto* p = cast<::HIR::ExprNode_Block>(npp->get())) {
                                 if (!context.m_ivars.types_equal(p->m_res_type, src)) {
                                     DEBUG("(borrow) Block and result mismatch - " << context.m_ivars.fmt_type(p->m_res_type) << " != " << context.m_ivars.fmt_type(src));
                                     return CoerceResult::Unknown;
@@ -5188,7 +5189,7 @@ namespace {
                             }
                         }
                         ::HIR::ExprNodeP* npp = node_ptr_ptr;
-                        while (auto* p = dynamic_cast<::HIR::ExprNode_Block*>(npp->get())) {
+                        while (auto* p = cast<::HIR::ExprNode_Block>(npp->get())) {
                             DEBUG("- Propagate borrow coercion to the last node of a _Block: " << context.m_ivars.fmt_type(p->m_res_type));
                             ASSERT_BUG(p->span(), context.m_ivars.types_equal(p->m_res_type, p->m_value_node->m_res_type), "(borrow) Block and result mismatch - " << context.m_ivars.fmt_type(p->m_res_type) << " != " << context.m_ivars.fmt_type(p->m_value_node->m_res_type));
                             ASSERT_BUG(p->span(), context.m_ivars.types_equal(p->m_res_type, src), "(borrow) Block and result mismatch - " << context.m_ivars.fmt_type(p->m_res_type) << " != " << context.m_ivars.fmt_type(src));
@@ -6510,7 +6511,7 @@ namespace {
                 add_refs(dependencies, &IvarBoundRefs::associated, &bound);
             }
             for (const auto* node_ptr_dyn : context.to_visit) {
-                if (const auto* node_ptr = dynamic_cast<const ::HIR::ExprNode_CallMethod*>(node_ptr_dyn)) {
+                if (const auto* node_ptr = cast<const ::HIR::ExprNode_CallMethod>(node_ptr_dyn)) {
                     dependencies.clear();
                     collect_ivars(context.get_type(node_ptr->m_value->m_res_type), dependencies);
                     IvarDependencyIndex::deduplicate(dependencies);

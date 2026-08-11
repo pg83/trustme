@@ -763,7 +763,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         if (cnode.get()) {
             cnode->visit(*this);
             // If the node was a macro, and it was consumed, reset it
-            if (auto* n_mac = dynamic_cast<AST::ExprNode_Macro*>(cnode.get())) {
+            if (auto* n_mac = cast<AST::ExprNode_Macro>(cnode.get())) {
                 if (!n_mac->m_path.is_valid()) {
                     cnode.reset();
                 }
@@ -902,7 +902,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         for (auto it = node.m_nodes.begin(); it != node.m_nodes.end();) {
             assert(it->node.get());
 
-            if (auto* node_mac = dynamic_cast<::AST::ExprNode_Macro*>(it->node.get())) {
+            if (auto* node_mac = cast<::AST::ExprNode_Macro>(it->node.get())) {
                 auto attrs = std::move(it->node->attrs());
                 Expand_Attrs_CfgAttr(attrs);
                 Expand_Attrs(expand_state, attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
@@ -1235,7 +1235,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                     std::vector<AST::Pattern> subpats_start;
                     std::vector<AST::Pattern> subpats;
                     for (auto& m : v.m_values) {
-                        if (const auto* e = dynamic_cast<AST::ExprNode_BinOp*>(m.get())) {
+                        if (const auto* e = cast<AST::ExprNode_BinOp>(m.get())) {
                             if (e->m_type == ::AST::ExprNode_BinOp::RANGE && !e->m_left && !e->m_right) {
                                 ASSERT_BUG(v.span(), !is_split, "Multiple `..` in tuple pattern?");
                                 is_split = true;

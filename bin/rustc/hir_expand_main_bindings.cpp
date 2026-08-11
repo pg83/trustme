@@ -489,18 +489,18 @@ namespace {
 
                     // Extract a chain of field names
                     auto* inner = node.m_value.get();
-                    while (auto* inner_field = dynamic_cast<::HIR::ExprNode_Field*>(inner)) {
+                    while (auto* inner_field = cast<::HIR::ExprNode_Field>(inner)) {
                         fields.push_back(inner_field->m_field);
                         inner = inner_field->m_value.get();
                     }
-                    if (auto* inner_deref = dynamic_cast<::HIR::ExprNode_Deref*>(inner)) {
+                    if (auto* inner_deref = cast<::HIR::ExprNode_Deref>(inner)) {
                         if (inner_deref->m_value->m_res_type->is_Borrow()) {
                             fields.push_back(RcString());
                             inner = inner_deref->m_value.get();
                         }
                     }
                     // and if the final value is a variable, then insert into the captures
-                    if (auto* inner_var = dynamic_cast<::HIR::ExprNode_Variable*>(inner)) {
+                    if (auto* inner_var = cast<::HIR::ExprNode_Variable>(inner)) {
                         std::reverse(fields.begin(), fields.end());
 
                         mark_used_variable(node.span(), inner_var->m_slot, fields, this->get_usage());
@@ -1687,16 +1687,16 @@ namespace {
 
             // Extract a chain of field names
             auto* inner = node.m_value.get();
-            while (auto* inner_field = dynamic_cast<::HIR::ExprNode_Field*>(inner)) {
+            while (auto* inner_field = cast<::HIR::ExprNode_Field>(inner)) {
                 fields.push_back(inner_field->m_field);
                 inner = inner_field->m_value.get();
             }
-            if (auto* inner_deref = dynamic_cast<::HIR::ExprNode_Deref*>(inner)) {
+            if (auto* inner_deref = cast<::HIR::ExprNode_Deref>(inner)) {
                 fields.push_back(RcString());
                 inner = inner_deref->m_value.get();
             }
             // and if the final value is a variable, then insert into the captures
-            if (auto* inner_var = dynamic_cast<::HIR::ExprNode_Variable*>(inner)) {
+            if (auto* inner_var = cast<::HIR::ExprNode_Variable>(inner)) {
                 std::reverse(fields.begin(), fields.end());
 
                 auto binding_it = ::std::find_if(m_captures.begin(), m_captures.end(), [&](const HIR::ExprNode_Closure::AvuCache::Capture& x) {
@@ -2572,8 +2572,9 @@ namespace {
                             dispatch_node_args_cache.push_back(ret_type);
                             auto path = ::HIR::Path(closure_type, rcstring_call_free);
                             path.m_data.as_UfcsInherent().impl_params = closure_type->as_Path().path.m_data.as_Generic().m_params.clone();
-                            HIR::ExprNodeP dispatch_node = NEWNODE(ret_type, CallPath, sp, mv$(path), mv$(dispatch_args));
-                            dynamic_cast<::HIR::ExprNode_CallPath&>(*dispatch_node).m_cache.m_arg_types = mv$(dispatch_node_args_cache);
+                            auto* dispatch_call = m_pool->make<HIR::ExprNode_CallPath>(sp, mv$(path), mv$(dispatch_args));
+                            HIR::ExprNodeP dispatch_node = closure_mk_exprnodep(dispatch_call, ret_type);
+                            dispatch_call->m_cache.m_arg_types = mv$(dispatch_node_args_cache);
 
                             auto args_arg = ::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_args, 1}, {}}, args_ty);
                             HIR::TraitImpl fcn;
@@ -2621,16 +2622,18 @@ namespace {
 
                     // - FnOnce
                     {
-                        auto dispatch_node = NEWNODE(ret_type, CallPath, sp, ::HIR::Path(closure_type, ::HIR::GenericPath(lang_Fn, trait_params.clone()), rcstring_call, HIR::PathParams(HIR::LifetimeRef())), make_vec2(NEWNODE(method_self_ty, Borrow, sp, ::HIR::BorrowType::Shared, NEWNODE(closure_type, Variable, sp, rcstring_self, 0)), NEWNODE(args_ty, Variable, sp, rcstring_arg, 1)));
-                        dynamic_cast<::HIR::ExprNode_CallPath&>(*dispatch_node).m_cache.m_arg_types = make_vec3(method_self_ty, args_ty, ret_type);
+                        auto* dispatch_call = m_pool->make<HIR::ExprNode_CallPath>(sp, ::HIR::Path(closure_type, ::HIR::GenericPath(lang_Fn, trait_params.clone()), rcstring_call, HIR::PathParams(HIR::LifetimeRef())), make_vec2(NEWNODE(method_self_ty, Borrow, sp, ::HIR::BorrowType::Shared, NEWNODE(closure_type, Variable, sp, rcstring_self, 0)), NEWNODE(args_ty, Variable, sp, rcstring_arg, 1)));
+                        auto dispatch_node = closure_mk_exprnodep(dispatch_call, ret_type);
+                        dispatch_call->m_cache.m_arg_types = make_vec3(method_self_ty, args_ty, ret_type);
                         auto args_arg = ::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_args, 1}, {}}, args_ty);
                         m_out.impls_closure.push_back(::std::make_pair(::HIR::ExprNode_Closure::Class::Once, H::make_fnonce(params.clone(), trait_params.clone(), closure_type, mv$(args_arg), ret_type, mv$(dispatch_node))));
                     }
                     // - FnMut
                     {
                         auto self_ty = m_resolve.m_crate.m_types.borrow(::HIR::BorrowType::Unique, closure_type);
-                        auto dispatch_node = NEWNODE(ret_type, CallPath, sp, ::HIR::Path(closure_type, ::HIR::GenericPath(lang_Fn, trait_params.clone()), rcstring_call, HIR::PathParams(HIR::LifetimeRef())), make_vec2(NEWNODE(method_self_ty, Borrow, sp, ::HIR::BorrowType::Shared, NEWNODE(closure_type, Deref, sp, NEWNODE(mv$(self_ty), Variable, sp, rcstring_self, 0))), NEWNODE(args_ty, Variable, sp, rcstring_arg, 1)));
-                        dynamic_cast<::HIR::ExprNode_CallPath&>(*dispatch_node).m_cache.m_arg_types = make_vec3(method_self_ty, args_ty, ret_type);
+                        auto* dispatch_call = m_pool->make<HIR::ExprNode_CallPath>(sp, ::HIR::Path(closure_type, ::HIR::GenericPath(lang_Fn, trait_params.clone()), rcstring_call, HIR::PathParams(HIR::LifetimeRef())), make_vec2(NEWNODE(method_self_ty, Borrow, sp, ::HIR::BorrowType::Shared, NEWNODE(closure_type, Deref, sp, NEWNODE(mv$(self_ty), Variable, sp, rcstring_self, 0))), NEWNODE(args_ty, Variable, sp, rcstring_arg, 1)));
+                        auto dispatch_node = closure_mk_exprnodep(dispatch_call, ret_type);
+                        dispatch_call->m_cache.m_arg_types = make_vec3(method_self_ty, args_ty, ret_type);
                         auto args_arg = ::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_args, 1}, {}}, args_ty);
                         m_out.impls_closure.push_back(::std::make_pair(::HIR::ExprNode_Closure::Class::Mut, H::make_fnmut(m_resolve.m_crate.m_types, params.clone(), trait_params.clone(), closure_type, mv$(args_arg), ret_type, mv$(dispatch_node))));
                     }
@@ -2645,8 +2648,9 @@ namespace {
 
                     // - FnOnce
                     {
-                        auto dispatch_node = NEWNODE(ret_type, CallPath, sp, ::HIR::Path(closure_type, ::HIR::GenericPath(lang_FnMut, trait_params.clone()), rcstring_call_mut, HIR::PathParams(HIR::LifetimeRef())), make_vec2(NEWNODE(method_self_ty, Borrow, sp, ::HIR::BorrowType::Unique, NEWNODE(closure_type, Variable, sp, rcstring_self, 0)), NEWNODE(args_ty, Variable, sp, rcstring_arg, 1)));
-                        dynamic_cast<::HIR::ExprNode_CallPath&>(*dispatch_node).m_cache.m_arg_types = make_vec3(method_self_ty, args_ty, ret_type);
+                        auto* dispatch_call = m_pool->make<HIR::ExprNode_CallPath>(sp, ::HIR::Path(closure_type, ::HIR::GenericPath(lang_FnMut, trait_params.clone()), rcstring_call_mut, HIR::PathParams(HIR::LifetimeRef())), make_vec2(NEWNODE(method_self_ty, Borrow, sp, ::HIR::BorrowType::Unique, NEWNODE(closure_type, Variable, sp, rcstring_self, 0)), NEWNODE(args_ty, Variable, sp, rcstring_arg, 1)));
+                        auto dispatch_node = closure_mk_exprnodep(dispatch_call, ret_type);
+                        dispatch_call->m_cache.m_arg_types = make_vec3(method_self_ty, args_ty, ret_type);
                         auto args_arg = ::std::make_pair(::HIR::Pattern{{false, ::HIR::PatternBinding::Type::Move, rcstring_args, 1}, {}}, args_ty);
                         m_out.impls_closure.push_back(::std::make_pair(::HIR::ExprNode_Closure::Class::Once, H::make_fnonce(params.clone(), trait_params.clone(), closure_type, mv$(args_arg), ret_type, mv$(dispatch_node))));
                     }
@@ -6572,8 +6576,8 @@ namespace {
             assert(node_ptr);
             if (const auto* e = node_ptr->m_res_type->opt_Borrow()) {
                 if (e->type == ::HIR::BorrowType::Unique) {
-                    if (dynamic_cast<::HIR::ExprNode_Index*>(node_ptr.get()) || dynamic_cast<::HIR::ExprNode_Variable*>(node_ptr.get()) || dynamic_cast<::HIR::ExprNode_Field*>(node_ptr.get()) || dynamic_cast<::HIR::ExprNode_Deref*>(node_ptr.get())) {
-                        if (auto* inner = dynamic_cast<::HIR::ExprNode_Deref*>(node_ptr.get())) {
+                    if (cast<::HIR::ExprNode_Index>(node_ptr.get()) || cast<::HIR::ExprNode_Variable>(node_ptr.get()) || cast<::HIR::ExprNode_Field>(node_ptr.get()) || cast<::HIR::ExprNode_Deref>(node_ptr.get())) {
+                        if (auto* inner = cast<::HIR::ExprNode_Deref>(node_ptr.get())) {
                             inner->m_value->m_usage = HIR::ValueUsage::Mutate;
                         }
                         DEBUG("Insert reborrow - " << node_ptr->span() << " - type=" << node_ptr->m_res_type);
@@ -6583,7 +6587,7 @@ namespace {
                         node_ptr = NEWNODE(mv$(ty_mut), Borrow, sp, ::HIR::BorrowType::Unique, NEWNODE(mv$(ty), Deref, sp, mv$(node_ptr)));
                     }
                     // Recurse into blocks - Neater this way
-                    else if (auto p = dynamic_cast<::HIR::ExprNode_Block*>(node_ptr.get())) {
+                    else if (auto p = cast<::HIR::ExprNode_Block>(node_ptr.get())) {
                         if (p->m_value_node) {
                             p->m_value_node = do_reborrow(mv$(p->m_value_node));
                         } else {
@@ -6820,7 +6824,7 @@ namespace static_borrow_constants {
             ::HIR::ExprVisitorDef::visit(node);
 
             if (
-                const auto* inode = dynamic_cast<::HIR::ExprNode_PathValue*>(node.m_value.get())
+                const auto* inode = cast<::HIR::ExprNode_PathValue>(node.m_value.get())
                 //&& node.m_value->m_usage == HIR::ValueUsage::Borrow
             ) {
                 MonomorphState ms(m_resolve.m_crate.m_types);
@@ -6837,11 +6841,11 @@ namespace static_borrow_constants {
                 // Handle a `_Unsize` inner
                 auto* value_ptr_ptr = &node.m_value;
                 for (;;) {
-                    if (auto* inner_node = dynamic_cast<::HIR::ExprNode_Index*>(value_ptr_ptr->get())) {
+                    if (auto* inner_node = cast<::HIR::ExprNode_Index>(value_ptr_ptr->get())) {
                         value_ptr_ptr = &inner_node->m_value;
                         continue;
                     }
-                    if (auto* inner_node = dynamic_cast<::HIR::ExprNode_Unsize*>(value_ptr_ptr->get())) {
+                    if (auto* inner_node = cast<::HIR::ExprNode_Unsize>(value_ptr_ptr->get())) {
                         value_ptr_ptr = &inner_node->m_value;
                         continue;
                     }
@@ -6851,10 +6855,10 @@ namespace static_borrow_constants {
                 // - Seek through field accesses
                 {
                     auto vpp = value_ptr_ptr;
-                    while (auto* inner_node = dynamic_cast<::HIR::ExprNode_Field*>(vpp->get())) {
+                    while (auto* inner_node = cast<::HIR::ExprNode_Field>(vpp->get())) {
                         vpp = &inner_node->m_value;
                     }
-                    if (auto* inner_node = dynamic_cast<::HIR::ExprNode_Deref*>(vpp->get())) {
+                    if (auto* inner_node = cast<::HIR::ExprNode_Deref>(vpp->get())) {
                         (void)inner_node;
                         m_all_constant = saved_all_constant;
                         m_is_constant = true;
@@ -6905,7 +6909,7 @@ namespace static_borrow_constants {
                 }
             } else {
                 // TODO: It would be nice if this could see through indexing/fields, but indexing needs a constant index
-                if (dynamic_cast<::HIR::ExprNode_PathValue*>(node.m_value.get()) && node.m_value->m_usage == HIR::ValueUsage::Borrow) {
+                if (cast<::HIR::ExprNode_PathValue>(node.m_value.get()) && node.m_value->m_usage == HIR::ValueUsage::Borrow) {
                     m_is_constant = true;
                 }
             }
@@ -7693,11 +7697,11 @@ namespace static_borrow_constants {
                 // Handle a `_Unsize` inner
                 auto* value_ptr_ptr = &node.m_value;
                 for (;;) {
-                    if (auto* inner_node = dynamic_cast<::HIR::ExprNode_Index*>(value_ptr_ptr->get())) {
+                    if (auto* inner_node = cast<::HIR::ExprNode_Index>(value_ptr_ptr->get())) {
                         value_ptr_ptr = &inner_node->m_value;
                         continue;
                     }
-                    if (auto* inner_node = dynamic_cast<::HIR::ExprNode_Unsize*>(value_ptr_ptr->get())) {
+                    if (auto* inner_node = cast<::HIR::ExprNode_Unsize>(value_ptr_ptr->get())) {
                         value_ptr_ptr = &inner_node->m_value;
                         continue;
                     }
@@ -7705,7 +7709,7 @@ namespace static_borrow_constants {
                 }
                 // If the inner value is already a static or it's a constant, then treat as a valid static
                 auto& value_ptr = *value_ptr_ptr;
-                if (auto* inner_node = dynamic_cast<::HIR::ExprNode_Deref*>(value_ptr_ptr->get())) {
+                if (auto* inner_node = cast<::HIR::ExprNode_Deref>(value_ptr_ptr->get())) {
                     (void)inner_node;
                     BUG(node.span(), "Unexpected inner being deref?");
                     return;
@@ -7745,7 +7749,7 @@ namespace static_borrow_constants {
         void visit(::HIR::ExprNode_ConstBlock& node) {
             HIR::ExprVisitorDef::visit(node);
 
-            if (dynamic_cast<HIR::ExprNode_PathValue*>(node.m_inner.get())) {
+            if (cast<HIR::ExprNode_PathValue>(node.m_inner.get())) {
             } else {
                 DEBUG("-- Creating const");
                 auto usage = node.m_inner->m_usage;
@@ -8332,10 +8336,11 @@ namespace {
             args.push_back(mv$(node.m_value));
             args.push_back(NEWNODE(arg_tup_type, Tuple, sp, mv$(node.m_args)));
 
-            m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, mv$(method_path), mv$(args));
+            auto* replacement = m_crate.m_pool->make<HIR::ExprNode_CallPath>(sp, mv$(method_path), mv$(args));
+            m_replacement = ufcs_mk_exprnodep(replacement, mv$(node.m_res_type));
 
             // Populate the cache for later passes
-            auto& arg_types = dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache.m_arg_types;
+            auto& arg_types = replacement->m_cache.m_arg_types;
             arg_types.push_back(mv$(self_arg_type));
             arg_types.push_back(mv$(arg_tup_type));
             arg_types.push_back(m_replacement->m_res_type);
@@ -8358,9 +8363,10 @@ namespace {
             }
 
             // Replace using known function path
-            m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, mv$(node.m_method_path), mv$(args));
+            auto* replacement = m_crate.m_pool->make<HIR::ExprNode_CallPath>(sp, mv$(node.m_method_path), mv$(args));
+            m_replacement = ufcs_mk_exprnodep(replacement, mv$(node.m_res_type));
             // Populate the cache for later passes
-            dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache = mv$(node.m_cache);
+            replacement->m_cache = mv$(node.m_cache);
         }
 
         bool is_builtin_operator(const Span& sp, typeck::PrimitiveOperator op, const char* langitem, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r) const {
@@ -8515,10 +8521,11 @@ namespace {
             ::std::vector<::HIR::ExprNodeP> args;
             args.push_back(NEWNODE(slot_type_refmut, Borrow, sp, ::HIR::BorrowType::Unique, mv$(node.m_slot)));
             args.push_back(mv$(node.m_value));
-            m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, ::HIR::Path(ty_slot, mv$(trait), RcString::new_interned(opname), HIR::PathParams(HIR::LifetimeRef())), mv$(args));
+            auto* replacement = m_crate.m_pool->make<HIR::ExprNode_CallPath>(sp, ::HIR::Path(ty_slot, mv$(trait), RcString::new_interned(opname), HIR::PathParams(HIR::LifetimeRef())), mv$(args));
+            m_replacement = ufcs_mk_exprnodep(replacement, mv$(node.m_res_type));
 
             // Populate the cache for later passes
-            auto& arg_types = dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache.m_arg_types;
+            auto& arg_types = replacement->m_cache.m_arg_types;
             arg_types.push_back(mv$(slot_type_refmut));
             arg_types.push_back(ty_val);
             arg_types.push_back(m_crate.m_types.unit());
@@ -8653,10 +8660,11 @@ namespace {
                 args.push_back(NEWNODE(ty_l_ref, Borrow, sp_left, ::HIR::BorrowType::Shared, mv$(node.m_left)));
                 args.push_back(NEWNODE(ty_r_ref, Borrow, sp_right, ::HIR::BorrowType::Shared, mv$(node.m_right)));
 
-                m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, ::HIR::Path(ty_l, mv$(trait), RcString::new_interned(method), mv$(fcn_params)), mv$(args));
+                auto* replacement = m_crate.m_pool->make<HIR::ExprNode_CallPath>(sp, ::HIR::Path(ty_l, mv$(trait), RcString::new_interned(method), mv$(fcn_params)), mv$(args));
+                m_replacement = ufcs_mk_exprnodep(replacement, mv$(node.m_res_type));
 
                 // Populate the cache for later passes
-                auto& arg_types = dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache.m_arg_types;
+                auto& arg_types = replacement->m_cache.m_arg_types;
                 arg_types.push_back(mv$(ty_l_ref));
                 arg_types.push_back(mv$(ty_r_ref));
                 arg_types.push_back(m_crate.m_types.primitive(::HIR::CoreType::Bool));
@@ -8675,10 +8683,11 @@ namespace {
             args.push_back(mv$(node.m_left));
             args.push_back(mv$(node.m_right));
 
-            m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, ::HIR::Path(ty_l, mv$(trait), RcString::new_interned(method)), mv$(args));
+            auto* replacement = m_crate.m_pool->make<HIR::ExprNode_CallPath>(sp, ::HIR::Path(ty_l, mv$(trait), RcString::new_interned(method)), mv$(args));
+            m_replacement = ufcs_mk_exprnodep(replacement, mv$(node.m_res_type));
 
             // Populate the cache for later passes
-            auto& arg_types = dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache.m_arg_types;
+            auto& arg_types = replacement->m_cache.m_arg_types;
             arg_types.push_back(ty_l);
             arg_types.push_back(ty_r);
             arg_types.push_back(m_replacement->m_res_type);
@@ -8716,10 +8725,11 @@ namespace {
             ::std::vector<::HIR::ExprNodeP> args;
             args.push_back(mv$(node.m_value));
 
-            m_replacement = NEWNODE(mv$(node.m_res_type), CallPath, sp, ::HIR::Path(ty_val, mv$(trait), RcString::new_interned(method)), mv$(args));
+            auto* replacement = m_crate.m_pool->make<HIR::ExprNode_CallPath>(sp, ::HIR::Path(ty_val, mv$(trait), RcString::new_interned(method)), mv$(args));
+            m_replacement = ufcs_mk_exprnodep(replacement, mv$(node.m_res_type));
 
             // Populate the cache for later passes
-            auto& arg_types = dynamic_cast<::HIR::ExprNode_CallPath&>(*m_replacement).m_cache.m_arg_types;
+            auto& arg_types = replacement->m_cache.m_arg_types;
             arg_types.push_back(ty_val);
             arg_types.push_back(m_replacement->m_res_type);
         }
@@ -8732,7 +8742,7 @@ namespace {
 
             const auto* src_borrow = node.m_value->m_res_type->opt_Borrow();
             const auto* dst_borrow = node.m_res_type->opt_Borrow();
-            auto* borrow_node = dynamic_cast<::HIR::ExprNode_Borrow*>(node.m_value.get());
+            auto* borrow_node = cast<::HIR::ExprNode_Borrow>(node.m_value.get());
             if (node.m_is_array_to_slice_adjustment) {
                 const Span& sp = node.span();
                 ASSERT_BUG(sp, borrow_node && src_borrow && dst_borrow, "Malformed array-to-slice adjustment");

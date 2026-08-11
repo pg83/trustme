@@ -500,7 +500,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
                             return false;
                         }
                         const auto& node = **(*uev)->expr;
-                        if (const auto* lit = dynamic_cast<const ::HIR::ExprNode_Literal*>(&node)) {
+                        if (const auto* lit = cast<const ::HIR::ExprNode_Literal>(&node)) {
                             if (const auto* i = lit->m_data.opt_Integer()) {
                                 out = i->m_value;
                                 return true;

@@ -377,7 +377,7 @@ namespace {
 
                 auto stmt_scope = m_builder.new_scope_temp(sp);
                 // NOTE: Only set the statement scope if processing a block
-                auto _stmt_scope_push = save_and_edit(m_stmt_scope, dynamic_cast<::HIR::ExprNode_Block*>(subnode.get()) ? &stmt_scope : nullptr);
+                auto _stmt_scope_push = save_and_edit(m_stmt_scope, cast<::HIR::ExprNode_Block>(subnode.get()) ? &stmt_scope : nullptr);
                 this->visit_node_ptr(subnode);
 
                 if (m_builder.block_active() || m_builder.has_result()) {
@@ -442,7 +442,7 @@ namespace {
         }
 
         void visit(::HIR::ExprNode_ConstBlock& node) override {
-            if (dynamic_cast<HIR::ExprNode_PathValue*>(node.m_inner.get())) {
+            if (cast<HIR::ExprNode_PathValue>(node.m_inner.get())) {
                 this->visit_node_ptr(node.m_inner);
             } else {
                 BUG(node.span(), "Const block shouldn't have reached MIR generation");
@@ -951,7 +951,7 @@ namespace {
             // - Convert ! into a reverse of the branches
             {
                 bool reverse = false;
-                while (auto* cond_uni = dynamic_cast<::HIR::ExprNode_UniOp*>(cond_p->get())) {
+                while (auto* cond_uni = cast<::HIR::ExprNode_UniOp>(cond_p->get())) {
                     ASSERT_BUG(cond_uni->span(), cond_uni->m_op == ::HIR::ExprNode_UniOp::Op::Invert, "Unexpected UniOp on boolean in `if` condition");
                     cond_p = &cond_uni->m_value;
                     reverse = !reverse;
@@ -963,7 +963,7 @@ namespace {
             }
 
             // Short-circuit && and ||
-            if (auto* cond_bin = dynamic_cast<::HIR::ExprNode_BinOp*>(cond_p->get())) {
+            if (auto* cond_bin = cast<::HIR::ExprNode_BinOp>(cond_p->get())) {
                 switch (cond_bin->m_op) {
                     case ::HIR::ExprNode_BinOp::Op::BoolAnd:
                     case ::HIR::ExprNode_BinOp::Op::BoolOr: {
@@ -1007,7 +1007,7 @@ namespace {
                 }
             }
 
-            if (auto* cond_lit = dynamic_cast<::HIR::ExprNode_Literal*>(cond_p->get())) {
+            if (auto* cond_lit = cast<::HIR::ExprNode_Literal>(cond_p->get())) {
                 DEBUG("- constant condition");
                 if (cond_lit->m_data.as_Boolean()) {
                     m_builder.end_block(::MIR::Terminator::make_Goto(true_branch));
@@ -2715,7 +2715,7 @@ namespace {
 
         ::HIR::ExprNode& root_node = const_cast<::HIR::ExprNode&>(*ptr);
         MirBuilder builder{ptr->span(), resolve, ret_ty, args, fcn};
-        ExprVisitor_Conv ev{builder, ptr.m_bindings, dynamic_cast<::HIR::ExprNode_GeneratorWrapper*>(&root_node)};
+        ExprVisitor_Conv ev{builder, ptr.m_bindings, cast<::HIR::ExprNode_GeneratorWrapper>(&root_node)};
 
         // 1. Apply destructuring to arguments
         unsigned int i = 0;
@@ -2734,7 +2734,7 @@ namespace {
         }
 
         // 2. Destructure code
-        if (auto* gen_node = dynamic_cast<::HIR::ExprNode_GeneratorWrapper*>(&root_node)) {
+        if (auto* gen_node = cast<::HIR::ExprNode_GeneratorWrapper>(&root_node)) {
             // Mark all capture locals as valid (for later rewrite into variable acesses)
             ::std::map<unsigned, std::vector<MIR::LValue::Wrapper>> mappings;
             for (size_t i = 0; i < gen_node->m_capture_usages.size(); i++) {

@@ -42,7 +42,7 @@ const SpanInner_Source& Span::get_top_file_span() const {
     while (top_span->get() && (*top_span)->parent_span != Span()) {
         top_span = &(*top_span)->parent_span;
     }
-    if (const auto* ts = dynamic_cast<const SpanInner_Source*>(top_span->get())) {
+    if (const auto* ts = cast<const SpanInner_Source>(top_span->get())) {
         return *ts;
     }
     TODO(*this, "Top span isn't source?");
@@ -99,6 +99,10 @@ SpanInner::~SpanInner() {
 SpanInner_Source::~SpanInner_Source() {
 }
 
+unsigned int SpanInner_Source::node_kind() const {
+    return SpanInner_Source::kind;
+}
+
 void SpanInner_Source::fmt(::std::ostream& os) const {
     os << this->filename;
     if (this->start_line != this->end_line) {
@@ -111,6 +115,10 @@ void SpanInner_Source::fmt(::std::ostream& os) const {
 }
 
 SpanInner_Macro::~SpanInner_Macro() {
+}
+
+unsigned int SpanInner_Macro::node_kind() const {
+    return SpanInner_Macro::kind;
 }
 
 void SpanInner_Macro::fmt(::std::ostream& os) const {

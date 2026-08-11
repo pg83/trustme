@@ -20,7 +20,7 @@ namespace {
     ::std::string get_string(const Span& sp, TokenStream& lex, const ::AST::Crate& crate, AST::Module& mod) {
         auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
 
-        auto* format_string_np = dynamic_cast<AST::ExprNode_String*>(&*n);
+        auto* format_string_np = cast<AST::ExprNode_String>(&*n);
         if (!format_string_np) {
             ERROR(sp, E0000, "asm! requires a string literal - got " << *n);
         }
@@ -523,7 +523,7 @@ public:
         auto o = CAsmExpander().expand(sp, crate, tt, mod);
 
         auto node = o->getToken().take_frag_node();
-        auto* node_ap = dynamic_cast<AST::ExprNode_Asm2*>(node.get());
+        auto* node_ap = cast<AST::ExprNode_Asm2>(node.get());
         ASSERT_BUG(sp, node_ap, "");
         auto& node_a = *node_ap;
 
@@ -546,7 +546,7 @@ public:
         auto o = CAsmExpander().expand(sp, crate, tt, mod);
 
         auto node = o->getToken().take_frag_node();
-        auto* node_ap = dynamic_cast<AST::ExprNode_Asm2*>(node.get());
+        auto* node_ap = cast<AST::ExprNode_Asm2>(node.get());
         ASSERT_BUG(sp, node_ap, "");
         node_ap->m_options.naked = true;
 
@@ -694,17 +694,17 @@ class CConcatExpander: public ExpandProcMacro {
             Expand_BareExpr(crate, mod, v);
             DEBUG("concat[pe] - v=" << *v);
             // TODO: Visitor instead
-            if (auto* vp = dynamic_cast<AST::ExprNode_String*>(v.get())) {
+            if (auto* vp = cast<AST::ExprNode_String>(v.get())) {
                 rv += vp->m_value;
-            } else if (auto* vp = dynamic_cast<AST::ExprNode_Integer*>(v.get())) {
+            } else if (auto* vp = cast<AST::ExprNode_Integer>(v.get())) {
                 if (vp->m_datatype == CORETYPE_CHAR) {
                     rv += Codepoint{static_cast<uint32_t>(vp->m_value.truncate_u64())};
                 } else {
                     rv += FMT(vp->m_value);
                 }
-            } else if (auto* vp = dynamic_cast<AST::ExprNode_Float*>(v.get())) {
+            } else if (auto* vp = cast<AST::ExprNode_Float>(v.get())) {
                 rv += FMT(vp->m_value);
-            } else if (auto* vp = dynamic_cast<AST::ExprNode_Bool*>(v.get())) {
+            } else if (auto* vp = cast<AST::ExprNode_Bool>(v.get())) {
                 rv += (vp->m_value ? "true" : "false");
             } else {
                 ERROR(sp, E0000, "Unexpected expression type in concat! argument");
@@ -765,7 +765,7 @@ namespace {
         }
         Expand_BareExpr(crate, mod, n);
 
-        auto* string_np = dynamic_cast<AST::ExprNode_String*>(&*n);
+        auto* string_np = cast<AST::ExprNode_String>(&*n);
         if (!string_np) {
             ERROR(sp, E0000, "Expected a string literal - got " << *n);
         }
@@ -1411,7 +1411,7 @@ namespace {
         ASSERT_BUG(sp, format_string_node, "No expression returned");
         Expand_BareExpr(crate, lex.parse_state().get_current_mod(), format_string_node);
 
-        auto* format_string_np = dynamic_cast<AST::ExprNode_String*>(&*format_string_node);
+        auto* format_string_np = cast<AST::ExprNode_String>(&*format_string_node);
         if (!format_string_np) {
             ERROR(sp, E0000, "format_args! requires a string literal - got " << *format_string_node);
         }
@@ -1787,7 +1787,7 @@ namespace {
         ASSERT_BUG(sp, n, "No expression returned");
         Expand_BareExpr(crate, mod, n);
 
-        auto* string_np = dynamic_cast<AST::ExprNode_String*>(&*n);
+        auto* string_np = cast<AST::ExprNode_String>(&*n);
         if (!string_np) {
             ERROR(sp, E0000, "include! requires a string literal - got " << *n);
         }

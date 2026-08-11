@@ -58,6 +58,7 @@ namespace HIR {
         }
 
         virtual void visit(ExprVisitor& v) = 0;
+        virtual unsigned int node_kind() const = 0;
 
         ExprNode(Span sp)
             : m_span(mv$(sp))
@@ -68,8 +69,6 @@ namespace HIR {
 
         const char* type_name() const;
     };
-
-#define NODE_METHODS() virtual void visit(ExprVisitor& nv) override;
 
     struct ExprNode_Block: public ExprNode {
         bool m_is_unsafe;
@@ -93,7 +92,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 1;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_ConstBlock: public ExprNode {
@@ -105,7 +106,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 2;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Asm: public ExprNode {
@@ -130,7 +133,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 3;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Asm2: public ExprNode {
@@ -165,7 +170,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 4;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Return: public ExprNode {
@@ -177,7 +184,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 5;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     /// @brief `foo = yield bar` generator yield statement
@@ -190,7 +199,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 6;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     /// @brief Async Wait (the `.await` postfix operator)
@@ -203,7 +214,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 7;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Loop: public ExprNode {
@@ -220,7 +233,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 8;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_LoopControl: public ExprNode {
@@ -239,7 +254,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 9;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Let: public ExprNode {
@@ -255,7 +272,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 10;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Match: public ExprNode {
@@ -289,7 +308,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 11;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Assign: public ExprNode {
@@ -349,7 +370,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 12;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_BinOp: public ExprNode {
@@ -434,7 +457,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 13;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_UniOp: public ExprNode {
@@ -463,7 +488,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 14;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Borrow: public ExprNode {
@@ -483,7 +510,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 15;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_RawBorrow: public ExprNode {
@@ -497,7 +526,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 16;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Cast: public ExprNode {
@@ -511,7 +542,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 17;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     // Magical pointer unsizing operation:
@@ -531,7 +564,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 18;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Index: public ExprNode {
@@ -549,7 +584,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 19;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     // unary `*`
@@ -573,7 +610,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 20;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     /// `box` and `in`/`<-`
@@ -597,7 +636,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 21;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_TupleVariant: public ExprNode {
@@ -617,7 +658,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 22;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprCallCache {
@@ -643,7 +686,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 23;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_CallValue: public ExprNode {
@@ -674,7 +719,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 24;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     // TODO: Refactor to support efficient method chaining
@@ -712,7 +759,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 25;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Field: public ExprNode {
@@ -726,7 +775,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 26;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Literal: public ExprNode {
@@ -757,7 +808,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 27;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_UnitVariant: public ExprNode {
@@ -772,7 +825,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 28;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_PathValue: public ExprNode {
@@ -795,7 +850,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 29;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Variable: public ExprNode {
@@ -809,7 +866,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 30;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_ConstParam: public ExprNode {
@@ -823,7 +882,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 31;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_StructLiteral: public ExprNode {
@@ -860,7 +921,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 32;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Tuple: public ExprNode {
@@ -872,7 +935,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 33;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_ArrayList: public ExprNode {
@@ -884,7 +949,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 34;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     // TODO: Might want a second variant for dynamically-sized arrays
@@ -899,7 +966,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 35;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_Closure: public ExprNode {
@@ -951,7 +1020,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 36;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     ::std::ostream& operator<<(::std::ostream& os, const ExprNode_Closure::AvuCache::Capture& x);
@@ -992,7 +1063,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 37;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     /// <summary>
@@ -1031,7 +1104,9 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 38;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
 
     struct ExprNode_AsyncBlock: public ExprNode {
@@ -1057,10 +1132,10 @@ namespace HIR {
         {
         }
 
-        NODE_METHODS();
+        static constexpr unsigned int kind = 39;
+        unsigned int node_kind() const override;
+        void visit(ExprVisitor& nv) override;
     };
-
-#undef NODE_METHODS
 
     class ExprVisitor {
     public:

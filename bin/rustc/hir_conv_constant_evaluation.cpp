@@ -2951,7 +2951,7 @@ namespace HIR {
                         auto pb = Target_GetPointerBits() / 8;
                         const SpanInner_Source* caller = nullptr;
                         for (const Span* span = &state.sp; span->get(); span = &span->get()->parent_span) {
-                            caller = dynamic_cast<const SpanInner_Source*>(span->get());
+                            caller = cast<const SpanInner_Source>(span->get());
                             if (caller) {
                                 break;
                             }
@@ -3931,7 +3931,7 @@ namespace {
                     as = val.read_usize(0);
                     //DEBUG("Array size = " << as);
                 } catch (const Defer&) {
-                    const auto* tn = dynamic_cast<const HIR::ExprNode_ConstParam*>(&*expr_ptr);
+                    const auto* tn = cast<const HIR::ExprNode_ConstParam>(&*expr_ptr);
                     if (tn) {
                         as = HIR::ConstGeneric(HIR::GenericRef(tn->m_name, tn->m_binding));
                     } else {

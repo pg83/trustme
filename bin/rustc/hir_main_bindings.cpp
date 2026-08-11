@@ -1629,7 +1629,7 @@ RcString HIR_Deserialise_JustName(const ::std::string& filename) {
 #include "hir_expr.h"
 #include "hir_expr_state.h"
 
-#define NODE_IS(valptr, tysuf) (dynamic_cast<const ::HIR::ExprNode##tysuf*>(&*valptr) != nullptr)
+#define NODE_IS(valptr, tysuf) (cast<const ::HIR::ExprNode##tysuf>(&*valptr) != nullptr)
 
 namespace {
 
@@ -1849,7 +1849,7 @@ namespace {
 
             if (item.m_code) {
                 m_os << indent();
-                if (dynamic_cast<::HIR::ExprNode_Block*>(&*item.m_code)) {
+                if (cast<::HIR::ExprNode_Block>(&*item.m_code)) {
                     item.m_code->visit(*this);
                 } else {
                     m_os << "{\n";

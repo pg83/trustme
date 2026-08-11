@@ -11,7 +11,7 @@
 
 #include "cpp_unpack.h"
 
-#define IS(v, c) (dynamic_cast<c*>(&v) != 0)
+#define IS(v, c) (cast<c>(&v) != 0)
 #define WRAPIF_CMD(v, t) || IS(v, t)
 #define WRAPIF(uniq_ptr, class1, ...)                                   \
     do {                                                                \
@@ -471,7 +471,7 @@ public:
             m_os << "if ";
             visit_iflet_conditions(arm.m_conditions);
 
-            bool is_block = (dynamic_cast<const AST::ExprNode_Block*>(&*arm.m_body) != nullptr);
+            bool is_block = (cast<const AST::ExprNode_Block>(&*arm.m_body) != nullptr);
             if (!is_block) {
                 m_os << "{ ";
             }
@@ -488,7 +488,7 @@ public:
                 m_os << indent();
             }
             m_os << "else";
-            bool is_block = (dynamic_cast<const AST::ExprNode_Block*>(&*n.m_else) != nullptr);
+            bool is_block = (cast<const AST::ExprNode_Block>(&*n.m_else) != nullptr);
             if (!is_block) {
                 m_os << "{ ";
             }
@@ -735,9 +735,10 @@ public:
 
     virtual void visit(AST::ExprNode_BinOp& n) override {
         m_expr_root = false;
+        auto* left_binop = cast<AST::ExprNode_BinOp>(n.m_left.get());
         if (!n.m_left) {
             m_os << "/*null*/";
-        } else if (IS(*n.m_left, AST::ExprNode_BinOp) && dynamic_cast<AST::ExprNode_BinOp&>(*n.m_left).m_type == n.m_type) {
+        } else if (left_binop && left_binop->m_type == n.m_type) {
             AST::NodeVisitor::visit(n.m_left);
         } else {
             WRAPIF(n.m_left, AST::ExprNode_Cast, AST::ExprNode_BinOp);
@@ -809,9 +810,10 @@ public:
                 break;
         }
         m_os << " ";
+        auto* right_binop = cast<AST::ExprNode_BinOp>(n.m_right.get());
         if (!n.m_right) {
             m_os << "/*null*/";
-        } else if (IS(*n.m_right, AST::ExprNode_BinOp) && dynamic_cast<AST::ExprNode_BinOp&>(*n.m_right).m_type != n.m_type) {
+        } else if (right_binop && right_binop->m_type != n.m_type) {
             paren_wrap(n.m_right);
         } else {
             AST::NodeVisitor::visit(n.m_right);

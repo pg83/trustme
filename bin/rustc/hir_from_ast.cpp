@@ -525,13 +525,13 @@ namespace {
 ::HIR::ConstGeneric LowerHIR_ConstGeneric(const ::AST::ExprNode& node_ref) {
     const Span& sp = node_ref.span();
     const ::AST::ExprNode* node_p = &node_ref;
-    if (const auto* e = dynamic_cast<const AST::ExprNode_Block*>(node_p)) {
+    if (const auto* e = cast<const AST::ExprNode_Block>(node_p)) {
         if (e->m_nodes.size() == 1 && !e->m_nodes.back().has_semicolon) {
             node_p = e->m_nodes.back().node.get();
         }
     }
     // TODO: Explicitly handle each expected variant... or add a proper consteval expression
-    if (const auto* e = dynamic_cast<const AST::ExprNode_NamedValue*>(node_p)) {
+    if (const auto* e = cast<const AST::ExprNode_NamedValue>(node_p)) {
         if (e->m_path.is_trivial()) {
             const auto& b = e->m_path.m_bindings.value.binding;
             ASSERT_BUG(sp, b.is_Generic(), "Trivial path not type parameter - " << e->m_path << " - " << b.tag_str());
@@ -1099,7 +1099,7 @@ namespace {
             auto inner = LowerHIR_Type(*e.inner);
             if (e.size) {
                 // If the size expression is an unannotated or usize integer literal, don't bother converting the expression
-                if (const auto* ptr = dynamic_cast<const ::AST::ExprNode_Integer*>(&*e.size)) {
+                if (const auto* ptr = cast<const ::AST::ExprNode_Integer>(&*e.size)) {
                     if (ptr->m_datatype == CORETYPE_UINT || ptr->m_datatype == CORETYPE_ANY) {
                         // TODO: Chage the HIR format to support very large arrays
                         if (ptr->m_value >= U128(UINT64_MAX)) {
@@ -1108,7 +1108,7 @@ namespace {
                         return g_crate_ptr->m_types.array(inner, ptr->m_value.truncate_u64());
                     }
                 }
-                if (const auto* ptr = dynamic_cast<const ::AST::ExprNode_NamedValue*>(&*e.size)) {
+                if (const auto* ptr = cast<const ::AST::ExprNode_NamedValue>(&*e.size)) {
                     if (ptr->m_path.is_trivial()) {
                         auto gr = HIR::GenericRef(ptr->m_path.as_trivial(), ptr->m_path.m_bindings.value.binding.as_Generic().index);
                         return g_crate_ptr->m_types.array(inner, HIR::ConstGeneric(mv$(gr)));
@@ -2635,9 +2635,9 @@ public:
                             }
 
                             void emit_ast(const AST::ExprNode& e) {
-                                if (const auto* ep = dynamic_cast<const AST::ExprNode_Integer*>(&e)) {
+                                if (const auto* ep = cast<const AST::ExprNode_Integer>(&e)) {
                                     out.push_back(Token(ep->m_value, ep->m_datatype));
-                                } else if (const auto* ep = dynamic_cast<const AST::ExprNode_Bool*>(&e)) {
+                                } else if (const auto* ep = cast<const AST::ExprNode_Bool>(&e)) {
                                     out.push_back(ep->m_value ? TOK_RWORD_TRUE : TOK_RWORD_FALSE);
                                 } else {
                                     throw std::runtime_error(FMT("Unknown node type: " << typeid(e).name()));

@@ -354,7 +354,6 @@ ExprNodeP Parse_ExprBlockLine(TokenStream& lex, bool* add_silence) {
                 // HACK: Just treat a leading `:expr` as a statement (rust-lang/rust #78829) (ref: rustc-1.39.0-src\vendor\indexmap\src\map.rs:1139)
                 //case TOK_INTERPOLATED_EXPR:
                 //    DEBUG(":expr");
-                //    if( dynamic_cast<AST::ExprNode_Block .frag_node()
                 //    PUTBACK(tok, lex);
                 //    return Parse_Stmt(lex);
 
@@ -387,7 +386,7 @@ ExprNodeP Parse_ExprBlockLine_Stmt(TokenStream& lex, bool& has_semicolon) {
 
     // If `ret` is a braced macro call, don't require the semicolon (to remove the hackiness above)
     // - Don't trigger this when parens are present
-    if (const auto* mac = dynamic_cast<AST::ExprNode_Macro*>(&*ret)) {
+    if (const auto* mac = cast<AST::ExprNode_Macro>(&*ret)) {
         if (!is_paren && mac->m_is_braced) {
             return ret;
         }
@@ -1293,13 +1292,13 @@ ExprNodeP Parse_ExprVal_Inner(TokenStream& lex) {
                                     const auto* expr = &tok.frag_node();
                                     std::vector<AST::ExprNodeP> expr_args;
                                     for (;;) {
-                                        if (const auto* n = dynamic_cast<const AST::ExprNode_NamedValue*>(expr)) {
+                                        if (const auto* n = cast<const AST::ExprNode_NamedValue>(expr)) {
                                             expr_args.push_back(NEWNODE(AST::ExprNode_String, n->m_path.as_trivial().c_str(), {}));
                                             break;
-                                        } else if (const auto* n = dynamic_cast<const AST::ExprNode_Integer*>(expr)) {
+                                        } else if (const auto* n = cast<const AST::ExprNode_Integer>(expr)) {
                                             expr_args.push_back(NEWNODE(AST::ExprNode_Integer, n->m_value, n->m_datatype));
                                             break;
-                                        } else if (const auto* n = dynamic_cast<const AST::ExprNode_Float*>(expr)) {
+                                        } else if (const auto* n = cast<const AST::ExprNode_Float>(expr)) {
                                             auto value = static_cast<_Float128>(n->m_value);
                                             if (value < 0 || __builtin_isnan(value) || __builtin_isinf(value)) {
                                                 TODO(lex.point_span(), "offset_of - invalid tuple indices " << *expr);
@@ -1329,7 +1328,7 @@ ExprNodeP Parse_ExprVal_Inner(TokenStream& lex) {
                                             expr_args.push_back(NEWNODE(AST::ExprNode_Integer, U128(static_cast<uint64_t>(fractional_index)), CORETYPE_ANY));
                                             expr_args.push_back(NEWNODE(AST::ExprNode_Integer, U128(static_cast<uint64_t>(whole)), CORETYPE_ANY));
                                             break;
-                                        } else if (const auto* n = dynamic_cast<const AST::ExprNode_Field*>(expr)) {
+                                        } else if (const auto* n = cast<const AST::ExprNode_Field>(expr)) {
                                             expr_args.push_back(NEWNODE(AST::ExprNode_String, n->m_name.c_str(), {}));
                                             expr = &*n->m_obj;
                                         } else {
@@ -2049,15 +2048,15 @@ AST::Pattern::Value Parse_PatternValue(TokenStream& lex) {
         case TOK_INTERPOLATED_EXPR: {
             auto e = tok.take_frag_node();
             // TODO: Visitor?
-            if (auto* n = dynamic_cast<AST::ExprNode_String*>(e.get())) {
+            if (auto* n = cast<AST::ExprNode_String>(e.get())) {
                 return AST::Pattern::Value::make_String(mv$(n->m_value));
-            } else if (auto* n = dynamic_cast<AST::ExprNode_ByteString*>(e.get())) {
+            } else if (auto* n = cast<AST::ExprNode_ByteString>(e.get())) {
                 return AST::Pattern::Value::make_ByteString({mv$(n->m_value)});
-            } else if (auto* n = dynamic_cast<AST::ExprNode_Bool*>(e.get())) {
+            } else if (auto* n = cast<AST::ExprNode_Bool>(e.get())) {
                 return AST::Pattern::Value::make_Integer({CORETYPE_BOOL, U128(n->m_value ? 1 : 0)});
-            } else if (auto* n = dynamic_cast<AST::ExprNode_Integer*>(e.get())) {
+            } else if (auto* n = cast<AST::ExprNode_Integer>(e.get())) {
                 return AST::Pattern::Value::make_Integer({n->m_datatype, n->m_value});
-            } else if (auto* n = dynamic_cast<AST::ExprNode_Float*>(e.get())) {
+            } else if (auto* n = cast<AST::ExprNode_Float>(e.get())) {
                 return AST::Pattern::Value::make_Float({n->m_datatype, n->m_value});
             } else {
                 TODO(lex.point_span(), "Convert :expr into a pattern value - " << *e);

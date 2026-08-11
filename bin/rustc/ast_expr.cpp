@@ -74,6 +74,45 @@ namespace AST {
     ExprNode::~ExprNode() {
     }
 
+    unsigned int ExprNode_Block::node_kind() const { return ExprNode_Block::kind; }
+    unsigned int ExprNode_AsyncBlock::node_kind() const { return ExprNode_AsyncBlock::kind; }
+    unsigned int ExprNode_GeneratorBlock::node_kind() const { return ExprNode_GeneratorBlock::kind; }
+    unsigned int ExprNode_Try::node_kind() const { return ExprNode_Try::kind; }
+    unsigned int ExprNode_Macro::node_kind() const { return ExprNode_Macro::kind; }
+    unsigned int ExprNode_Asm::node_kind() const { return ExprNode_Asm::kind; }
+    unsigned int ExprNode_Asm2::node_kind() const { return ExprNode_Asm2::kind; }
+    unsigned int ExprNode_Flow::node_kind() const { return ExprNode_Flow::kind; }
+    unsigned int ExprNode_LetBinding::node_kind() const { return ExprNode_LetBinding::kind; }
+    unsigned int ExprNode_Assign::node_kind() const { return ExprNode_Assign::kind; }
+    unsigned int ExprNode_CallPath::node_kind() const { return ExprNode_CallPath::kind; }
+    unsigned int ExprNode_CallMethod::node_kind() const { return ExprNode_CallMethod::kind; }
+    unsigned int ExprNode_CallObject::node_kind() const { return ExprNode_CallObject::kind; }
+    unsigned int ExprNode_Loop::node_kind() const { return ExprNode_Loop::kind; }
+    unsigned int ExprNode_For::node_kind() const { return ExprNode_For::kind; }
+    unsigned int ExprNode_While::node_kind() const { return ExprNode_While::kind; }
+    unsigned int ExprNode_Match::node_kind() const { return ExprNode_Match::kind; }
+    unsigned int ExprNode_If::node_kind() const { return ExprNode_If::kind; }
+    unsigned int ExprNode_WildcardPattern::node_kind() const { return ExprNode_WildcardPattern::kind; }
+    unsigned int ExprNode_Integer::node_kind() const { return ExprNode_Integer::kind; }
+    unsigned int ExprNode_Float::node_kind() const { return ExprNode_Float::kind; }
+    unsigned int ExprNode_Bool::node_kind() const { return ExprNode_Bool::kind; }
+    unsigned int ExprNode_String::node_kind() const { return ExprNode_String::kind; }
+    unsigned int ExprNode_ByteString::node_kind() const { return ExprNode_ByteString::kind; }
+    unsigned int ExprNode_CString::node_kind() const { return ExprNode_CString::kind; }
+    unsigned int ExprNode_Closure::node_kind() const { return ExprNode_Closure::kind; }
+    unsigned int ExprNode_StructLiteral::node_kind() const { return ExprNode_StructLiteral::kind; }
+    unsigned int ExprNode_StructLiteralPattern::node_kind() const { return ExprNode_StructLiteralPattern::kind; }
+    unsigned int ExprNode_Array::node_kind() const { return ExprNode_Array::kind; }
+    unsigned int ExprNode_Tuple::node_kind() const { return ExprNode_Tuple::kind; }
+    unsigned int ExprNode_NamedValue::node_kind() const { return ExprNode_NamedValue::kind; }
+    unsigned int ExprNode_Field::node_kind() const { return ExprNode_Field::kind; }
+    unsigned int ExprNode_Index::node_kind() const { return ExprNode_Index::kind; }
+    unsigned int ExprNode_Deref::node_kind() const { return ExprNode_Deref::kind; }
+    unsigned int ExprNode_Cast::node_kind() const { return ExprNode_Cast::kind; }
+    unsigned int ExprNode_TypeAnnotation::node_kind() const { return ExprNode_TypeAnnotation::kind; }
+    unsigned int ExprNode_BinOp::node_kind() const { return ExprNode_BinOp::kind; }
+    unsigned int ExprNode_UniOp::node_kind() const { return ExprNode_UniOp::kind; }
+
 #define NODE(class, _print, _clone)       \
     void class ::visit(NodeVisitor& nv) { \
         nv.visit(*this);                  \
