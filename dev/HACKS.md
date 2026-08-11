@@ -20,6 +20,8 @@
 
    Это может оставлять неверные impl-кандидаты. Нужен отдельный goal с результатом `Yes/Ambiguous/No`, а не ослабление отношения типов.
 
+   Opt-in goal evaluator уже обрабатывает raw type/const inference и associated equality, сужающую `Self`. Глобальное включение всё ещё блокирует merge нескольких ambiguous responses: сейчас он теряет общие constraints в identity-response, например `SliceIndex` не проталкивает `usize` назад через цепочку operator goals.
+
 4. Backend местами генерирует программу, которая просто вызывает `abort()`.
 
    [trans_codegen_c.cpp](/home/pg/monorepo/trustme/bin/rustc/trans_codegen_c.cpp:4634) обрывает `vmov/vexpand/vpexpand` в GCC-like backend.
@@ -61,4 +63,4 @@
 | Enumeration | `trans_main_bindings.cpp:1595,2450,2738,3118` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующий функциональный пункт — глобальная fuzzy relation/impl matching с максимальным fan-out, строго unit-first. Macro hygiene остаётся отдельной архитектурной задачей.
+Следующий функциональный пункт — merge общих constraints ambiguous goal responses, затем удаление глобальной fuzzy relation/impl matching, строго unit-first. Macro hygiene остаётся отдельной архитектурной задачей.

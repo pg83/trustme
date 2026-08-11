@@ -5637,6 +5637,12 @@ namespace {
         bool current_operator_impl_has_builtin_signature = false;
         if (v.operator_kind != typeck::PrimitiveOperator::None) {
             context.m_resolve.find_trait_impls(sp, v.trait, v.params, v.impl_ty, [&](ImplRef impl, HIR::Compare) {
+                if (impl.is_ambiguous_identity()) {
+                    // A merged identity response says that no concrete impl
+                    // may guide inference.  It is not itself an overloaded
+                    // operator implementation.
+                    return false;
+                }
                 if (context.is_current_operator_impl(impl)) {
                     saw_current_operator_impl = true;
                     current_operator_impl_has_builtin_signature = impl_has_builtin_operator_signature(impl);

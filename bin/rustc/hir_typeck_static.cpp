@@ -84,6 +84,7 @@ class StaticTraitResolve::NextSolverBridge {
 public:
     explicit NextSolverBridge(const ::HIR::Crate& crate)
         : m_ivars(crate.m_types)
+        , m_visibility(crate.m_crate_name, {})
         , m_resolve(m_ivars, crate, nullptr, nullptr, m_visibility, nullptr)
     {
     }
@@ -125,7 +126,8 @@ public:
             type,
             [&](ImplRef impl, ::HIR::Compare match) {
                 return callback(::std::move(impl), match != ::HIR::Compare::Equal);
-            }
+            },
+            ""
         );
     }
 };

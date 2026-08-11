@@ -2394,6 +2394,186 @@ class NextTraitGoalEvaluator {
             return false;
         }
 
+        bool value_has_unassigned_infer(
+            const ::HIR::ConstGeneric& value
+        ) const {
+            if (const auto* infer = value.opt_Infer()) {
+                return infer->index == ~0u;
+            }
+            if (const auto* unevaluated = value.opt_Unevaluated()) {
+                return params_have_unassigned_infer((*unevaluated)->params_impl)
+                    || params_have_unassigned_infer((*unevaluated)->params_item);
+            }
+            return false;
+        }
+
+        bool params_have_unassigned_infer(
+            const ::HIR::PathParams& params
+        ) const {
+            for (const auto& type : params.m_types) {
+                if (type_has_unassigned_infer(type)) {
+                    return true;
+                }
+            }
+            for (const auto& value : params.m_values) {
+                if (value_has_unassigned_infer(value)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        bool path_has_unassigned_infer(const ::HIR::Path& path) const {
+            if (const auto* pe = path.m_data.opt_Generic()) {
+                return params_have_unassigned_infer(pe->m_params);
+            }
+            if (const auto* pe = path.m_data.opt_UfcsInherent()) {
+                return type_has_unassigned_infer(pe->type)
+                    || params_have_unassigned_infer(pe->params)
+                    || params_have_unassigned_infer(pe->impl_params);
+            }
+            if (const auto* pe = path.m_data.opt_UfcsKnown()) {
+                return type_has_unassigned_infer(pe->type)
+                    || params_have_unassigned_infer(pe->trait.m_params)
+                    || params_have_unassigned_infer(pe->params);
+            }
+            const auto& pe = path.m_data.as_UfcsUnknown();
+            return type_has_unassigned_infer(pe.type)
+                || params_have_unassigned_infer(pe.params);
+        }
+
+        bool trait_path_has_unassigned_infer(
+            const ::HIR::TraitPath& trait
+        ) const {
+            if (params_have_unassigned_infer(trait.m_path.m_params)) {
+                return true;
+            }
+            for (const auto& assoc : trait.m_type_bounds) {
+                if (params_have_unassigned_infer(
+                        assoc.second.source_trait.m_params
+                    )
+                    || params_have_unassigned_infer(assoc.second.aty_params)
+                    || type_has_unassigned_infer(assoc.second.type)) {
+                    return true;
+                }
+            }
+            for (const auto& assoc : trait.m_trait_bounds) {
+                if (params_have_unassigned_infer(
+                        assoc.second.source_trait.m_params
+                    )
+                    || params_have_unassigned_infer(assoc.second.aty_params)) {
+                    return true;
+                }
+                for (const auto& bound : assoc.second.traits) {
+                    if (trait_path_has_unassigned_infer(bound)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        bool type_has_unassigned_infer(
+            const ::HIR::TypeData* input
+        ) const {
+            if (const auto* infer = input->opt_Infer()) {
+                if (infer->index == ~0u) {
+                    return true;
+                }
+                const auto* resolved = m_resolve.resolve_type(input);
+                return resolved != input
+                    && type_has_unassigned_infer(resolved);
+            }
+            if (const auto* path = input->opt_Path()) {
+                return path_has_unassigned_infer(path->path);
+            }
+            if (const auto* object = input->opt_TraitObject()) {
+                if (trait_path_has_unassigned_infer(object->m_trait)) {
+                    return true;
+                }
+                for (const auto& marker : object->m_markers) {
+                    if (params_have_unassigned_infer(marker.m_params)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            if (const auto* erased = input->opt_ErasedType()) {
+                for (const auto& trait : erased->m_traits) {
+                    if (trait_path_has_unassigned_infer(trait)) {
+                        return true;
+                    }
+                }
+                if (const auto* known = erased->m_inner.opt_Known()) {
+                    return type_has_unassigned_infer(*known);
+                }
+                if (const auto* alias = erased->m_inner.opt_Alias()) {
+                    return params_have_unassigned_infer(alias->params);
+                }
+                if (const auto* fcn = erased->m_inner.opt_Fcn()) {
+                    return path_has_unassigned_infer(fcn->m_origin);
+                }
+                return false;
+            }
+            if (const auto* array = input->opt_Array()) {
+                const auto* size = array->size.opt_Unevaluated();
+                return type_has_unassigned_infer(array->inner)
+                    || (size && value_has_unassigned_infer(*size));
+            }
+            if (const auto* slice = input->opt_Slice()) {
+                return type_has_unassigned_infer(slice->inner);
+            }
+            if (const auto* tuple = input->opt_Tuple()) {
+                for (const auto& field : *tuple) {
+                    if (type_has_unassigned_infer(field)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            if (const auto* borrow = input->opt_Borrow()) {
+                return type_has_unassigned_infer(borrow->inner);
+            }
+            if (const auto* pointer = input->opt_Pointer()) {
+                return type_has_unassigned_infer(pointer->inner);
+            }
+            if (const auto* named = input->opt_NamedFunction()) {
+                return path_has_unassigned_infer(named->path);
+            }
+            if (const auto* fcn = input->opt_Function()) {
+                for (const auto& arg : fcn->m_arg_types) {
+                    if (type_has_unassigned_infer(arg)) {
+                        return true;
+                    }
+                }
+                return type_has_unassigned_infer(fcn->m_rettype);
+            }
+            return false;
+        }
+
+        bool goal_has_unassigned_infer(
+            const ::HIR::PathParams& params,
+            const ::HIR::TypeData* type,
+            const ::HIR::TraitPath::assoc_list_t* associated
+        ) const {
+            if (params_have_unassigned_infer(params)
+                || type_has_unassigned_infer(type)) {
+                return true;
+            }
+            if (associated) {
+                for (const auto& entry : *associated) {
+                    if (params_have_unassigned_infer(
+                            entry.second.source_trait.m_params
+                        )
+                        || params_have_unassigned_infer(entry.second.aty_params)
+                        || type_has_unassigned_infer(entry.second.type)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         bool type_has_unknown(const ::HIR::TypeData* input) const {
             const auto& type = m_resolve.resolve_type(input);
             if (type->is_Infer() || type->is_Generic()) {
@@ -3982,17 +4162,34 @@ class NextTraitGoalEvaluator {
             }
             auto goal_type = type;
             auto goal_params = params.clone();
+            if (goal_has_unassigned_infer(
+                    goal_params, goal_type, associated
+                )) {
+                return Certainty::Ambiguous;
+            }
             for (auto& param : goal_params.m_types) {
                 param = m_resolve.expand_associated_types(
                     span(), ::std::move(param)
                 );
             }
+            if (goal_has_unassigned_infer(
+                    goal_params, goal_type, associated
+                )) {
+                return Certainty::Ambiguous;
+            }
             const auto& resolved_type = m_resolve.resolve_type(goal_type);
             // Candidate assembly must not use an unconstrained `Self` type to
-            // guide inference.  rustc's next solver forces ambiguity here,
-            // before it assembles any candidates.
+            // guide inference.  A concrete associated-type equality does
+            // constrain the goal, however, and may uniquely determine Self.
+            bool associated_constrains_self = false;
+            if (associated) {
+                for (const auto& entry : *associated) {
+                    associated_constrains_self |=
+                        !type_has_unknown(entry.second.type);
+                }
+            }
             if (const auto* infer = resolved_type->opt_Infer()) {
-                if (!infer->is_lit()) {
+                if (!infer->is_lit() && !associated_constrains_self) {
                     return Certainty::Ambiguous;
                 }
             }
@@ -4449,40 +4646,49 @@ class NextTraitGoalEvaluator {
 
             auto goal_type = type;
             auto goal_params = params.clone();
+            auto emit_forced_ambiguity = [&]() {
+                // Ordinary lookup cannot consume an identity response, while
+                // extended solver callers use it to retain the original goal
+                // without committing any candidate substitutions.
+                if (!assoc_name) {
+                    return false;
+                }
+                auto ambiguous = ImplRef(
+                    goal_type,
+                    goal_params.clone(),
+                    ::HIR::TraitPath::assoc_list_t()
+                );
+                ambiguous.mark_ambiguous_identity();
+                return callback(
+                    materialize_root_associated(
+                        ::std::move(ambiguous),
+                        trait,
+                        assoc_name,
+                        assoc_params
+                    ),
+                    ::HIR::Compare::Fuzzy
+                );
+            };
+            if (goal_has_unassigned_infer(
+                    goal_params, goal_type, nullptr
+                )) {
+                return emit_forced_ambiguity();
+            }
             for (auto& param : goal_params.m_types) {
                 param = m_resolve.expand_associated_types(
                     span(), ::std::move(param)
                 );
             }
             const auto& resolved_type = m_resolve.resolve_type(goal_type);
-            // Match rustc's forced-ambiguity response for an unconstrained
-            // `Self` type.  Returning the identity response is important: no
-            // particular impl is allowed to constrain the caller here.
+            // Match rustc's forced-ambiguity response for a genuinely
+            // unconstrained `Self` type.  A known associated output is an
+            // input constraint and can legitimately select a unique response.
+            const bool associated_constrains_self =
+                assoc_name && assoc_name[0] && assoc_type
+                && !type_has_unknown(assoc_type);
             if (const auto* infer = resolved_type->opt_Infer()) {
-                if (!infer->is_lit()) {
-                    // The legacy lookup callback has no representation for a
-                    // canonical identity response and would treat it as a
-                    // concrete impl.  Extended solver callers pass a non-null
-                    // assoc_name (possibly empty) and understand the marker;
-                    // ordinary lookup observes ambiguity as no selection.
-                    if (!assoc_name) {
-                        return false;
-                    }
-                    auto ambiguous = ImplRef(
-                        resolved_type,
-                        goal_params.clone(),
-                        ::HIR::TraitPath::assoc_list_t()
-                    );
-                    ambiguous.mark_ambiguous_identity();
-                    return callback(
-                        materialize_root_associated(
-                            ::std::move(ambiguous),
-                            trait,
-                            assoc_name,
-                            assoc_params
-                        ),
-                        ::HIR::Compare::Fuzzy
-                    );
+                if (!infer->is_lit() && !associated_constrains_self) {
+                    return emit_forced_ambiguity();
                 }
             }
             CanonicalizeTraitGoal canonicalizer(m_crate.m_types);
