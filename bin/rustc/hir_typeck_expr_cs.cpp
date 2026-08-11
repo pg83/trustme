@@ -6001,11 +6001,14 @@ namespace {
                     DEBUG("No impl of " << v.trait << context.m_ivars.fmt(v.params) << " for " << context.m_ivars.fmt_type(v.impl_ty) << " with " << v.name << " = " << context.m_ivars.fmt_type(v.left_ty));
                 }
 
-                const auto& ty = context.get_type(v.impl_ty);
-                bool is_known = !ty->is_Infer() && !(ty->is_Path() && ty->as_Path().binding.is_Unbound());
-                //bool is_known = !context.m_ivars.type_contains_ivars(v.impl_ty);
-                //for(const auto& t : v.params.m_types)
-                //    is_known &= !context.m_ivars.type_contains_ivars(t);
+                auto has_unresolved_ivars = [&](::HIR::TypeRef type) {
+                    context.m_ivars.expand_ivars(type);
+                    return context.m_ivars.type_contains_ivars(type);
+                };
+                bool is_known = !has_unresolved_ivars(v.impl_ty);
+                for (const auto& type : v.params.m_types) {
+                    is_known &= !has_unresolved_ivars(type);
+                }
                 if (!is_known) {
                     // There's still an ivar (or an unbound UFCS), keep trying
                     return AssociatedCheckResult::Stalled;
