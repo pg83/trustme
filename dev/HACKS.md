@@ -63,4 +63,4 @@
 | Enumeration | `trans_main_bindings.cpp:1595,2450,2738,3118` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующий функциональный пункт — продолжение удаления глобальной fuzzy relation/impl matching, строго unit-first; конкретный следующий fan-out blocker определяет полный gate. Macro hygiene остаётся отдельной архитектурной задачей.
+Следующий функциональный blocker — impl-placeholder покидает solver и доходит до общей type relation: полный `core -Znext-solver` падает в `hir_typeck_expr_cs.cpp:1971` на `Option<ph_...>` и assert `!type_contains_impl_placeholder(...)`. Исправление строго unit-first. Macro hygiene остаётся отдельной архитектурной задачей.

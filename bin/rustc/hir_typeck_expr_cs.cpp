@@ -5647,11 +5647,38 @@ namespace {
             ) == ::HIR::Compare::Equal;
         };
 
+        // The operator obligation is created with a fresh RHS variable, but
+        // the coercion pass may already know the expression's concrete type.
+        // Use that type while probing for semantic overloads: an ambiguous
+        // `Add<_> for i8` hides the forwarding `Add<&i8>` candidate, and then
+        // a builtin hint would incorrectly force the variable to `i8`.
+        const auto concrete_coercion_source = [&](const ::HIR::TypeData* type) {
+            const auto* infer = context.get_type(type)->opt_Infer();
+            if (!infer || infer->index == ~0u
+                || infer->index >= context.possible_ivar_vals.size()) {
+                return static_cast<const ::HIR::TypeData*>(nullptr);
+            }
+            const auto& possible = context.possible_ivar_vals[infer->index];
+            for (const auto& source : possible.types_coerce_from) {
+                const auto* source_type = context.get_type(source.ty);
+                if (!source_type->is_Infer()) {
+                    return source_type;
+                }
+            }
+            return static_cast<const ::HIR::TypeData*>(nullptr);
+        };
+
         bool has_semantic_operator_impl = false;
         bool saw_current_operator_impl = false;
         bool current_operator_impl_has_builtin_signature = false;
         if (v.operator_kind != typeck::PrimitiveOperator::None) {
-            context.m_resolve.find_trait_impls(sp, v.trait, v.params, v.impl_ty, [&](ImplRef impl, HIR::Compare) {
+            auto probe_params = v.params.clone();
+            if (probe_params.m_types.size() == 1) {
+                if (const auto* source = concrete_coercion_source(probe_params.m_types.front())) {
+                    probe_params.m_types.front() = source;
+                }
+            }
+            context.m_resolve.find_trait_impls(sp, v.trait, probe_params, v.impl_ty, [&](ImplRef impl, HIR::Compare) {
                 if (impl.is_ambiguous_identity()) {
                     // A merged identity response says that no concrete impl
                     // may guide inference.  It is not itself an overloaded
@@ -5721,7 +5748,10 @@ namespace {
                 const auto& left_ty = context.get_type(left);
                 const auto& right_ty = context.get_type(right);
                 const bool primitive_or_literal_pair = H::type_is_num(left_ty) && H::type_is_num(right_ty);
-                const bool language_primitive_candidate = typeck::primitive_operator_has_language_candidate(v.operator_kind, left_ty, right_ty);
+                const bool language_primitive_candidate =
+                    typeck::primitive_operator_has_language_candidate(
+                        v.operator_kind, left_ty, right_ty
+                    );
                 if (primitive_or_literal_pair || language_primitive_candidate) {
                     DEBUG("- Magic inferrence link for primitive binops");
                     if (v.name == "") {
