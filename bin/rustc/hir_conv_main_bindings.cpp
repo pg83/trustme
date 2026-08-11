@@ -4072,7 +4072,9 @@ namespace resolve_ufcs {
                         return m_types.generic(ty.name, ty.binding);
                     }
                     ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& val) const override {
-                        return val;
+                        return val.is_placeholder()
+                            ? ::HIR::ConstGeneric()
+                            : ::HIR::ConstGeneric(val);
                     }
                     ::HIR::LifetimeRef get_lifetime(const Span& sp, const ::HIR::GenericRef& g) const override {
                         return HIR::LifetimeRef(g.binding);

@@ -20,7 +20,7 @@
 
    Это может оставлять неверные impl-кандидаты. Нужен отдельный goal с результатом `Yes/Ambiguous/No`, а не ослабление отношения типов.
 
-   Opt-in goal evaluator уже обрабатывает raw type/const inference, associated equality, сужающую `Self`, и сохраняет constraints единственного или эквивалентного ambiguous response. Response-producing lookup теперь, как и certainty-only lookup, сохраняет identity-response при пустом наборе кандидатов с inference inputs. Исправлены обратное проталкивание `usize` через `SliceIndex`/operator goals, связывание ivar с жёсткой unresolved-проекцией в `Iterator::try_find` и преждевременный отказ от `IntoIterator` для `Zip<A::IntoIter, B::IntoIter>`. Полный `core` теперь доходит до отдельной петли alias const-value ivar при мономорфизации сгенерированной `vector::splat_rt`.
+   Opt-in goal evaluator уже обрабатывает raw type/const inference, associated equality, сужающую `Self`, и сохраняет constraints единственного или эквивалентного ambiguous response. Response-producing lookup теперь, как и certainty-only lookup, сохраняет identity-response при пустом наборе кандидатов с inference inputs. Исправлены обратное проталкивание `usize` через `SliceIndex`/operator goals, связывание ivar с жёсткой unresolved-проекцией в `Iterator::try_find` и преждевременный отказ от `IntoIterator` для `Zip<A::IntoIter, B::IntoIter>`. Static next-solver lookup больше не выпускает const/type ivar из своей частной inference-таблицы в HIR: неизвестные параметры пересекают границу как placeholders и становятся caller-owned ivar. Полный `core` проходит `vector::splat_rt` и теперь останавливается на отдельном отсутствии `CoerceUnsized<Pin<&Args>>` для `Pin<&mut Args>`.
 
 4. Backend местами генерирует программу, которая просто вызывает `abort()`.
 
@@ -63,4 +63,4 @@
 | Enumeration | `trans_main_bindings.cpp:1595,2450,2738,3118` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующий функциональный пункт — canonical union-find для const-value ivar и петля в `vector::splat_rt`, затем удаление глобальной fuzzy relation/impl matching, строго unit-first. Macro hygiene остаётся отдельной архитектурной задачей.
+Следующий функциональный пункт — `CoerceUnsized<Pin<&Args>>` для `Pin<&mut Args>` в полном `core -Znext-solver`, затем удаление глобальной fuzzy relation/impl matching, строго unit-first. Macro hygiene остаётся отдельной архитектурной задачей.

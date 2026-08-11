@@ -103,17 +103,29 @@ public:
         ::HIR::PathParams inferred_params;
         if (!params) {
             const auto& trait_def = m_resolve.m_crate.get_trait_by_path(sp, trait);
+            // This resolver owns m_ivars, so its inference indexes must not
+            // escape into HIR and be mistaken for indexes in expression typeck.
+            const auto placeholder_name = RcString::new_interned(
+                FMT("static_find_impl_" << &inferred_params)
+            );
             inferred_params.m_lifetimes = ThinVector<::HIR::LifetimeRef>(
                 trait_def.m_params.m_lifetimes.size()
             );
             inferred_params.m_types.reserve(trait_def.m_params.m_types.size());
             for (size_t i = 0; i < trait_def.m_params.m_types.size(); i++) {
-                inferred_params.m_types.push_back(m_ivars.new_ivar_tr());
+                inferred_params.m_types.push_back(m_resolve.m_crate.m_types.generic(
+                    placeholder_name, ::HIR::GENERIC_Placeholder * 256 + i
+                ));
             }
             inferred_params.m_values.reserve(trait_def.m_params.m_values.size());
             for (size_t i = 0; i < trait_def.m_params.m_values.size(); i++) {
                 inferred_params.m_values.push_back(
-                    ::HIR::ConstGeneric::make_Infer({m_ivars.new_ivar_val()})
+                    ::HIR::ConstGeneric::make_Generic({
+                        placeholder_name,
+                        static_cast<unsigned int>(
+                            ::HIR::GENERIC_Placeholder * 256 + i
+                        )
+                    })
                 );
             }
             params = &inferred_params;
