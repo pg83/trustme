@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 macro_rules! add {
     ($e:literal) => {
@@ -10,8 +8,10 @@ macro_rules! add {
     };
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = add!(1 2 3 10); // 16
 
     a - 16
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

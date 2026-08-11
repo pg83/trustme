@@ -79,6 +79,24 @@ class SystemRustcModeTest(unittest.TestCase):
             any("$(B)/tst/resvg.stamp" in node["outputs"] for node in nodes)
         )
 
+        gccrs_nodes = [
+            node
+            for node in nodes
+            if any("$(B)/tst/gccrs/" in output for output in node["outputs"])
+        ]
+        gccrs_compile_nodes = [
+            node
+            for node in nodes
+            if any("$(B)/tst/gccrs_compile/" in output for output in node["outputs"])
+        ]
+        self.assertEqual(len(gccrs_nodes), 301)
+        self.assertEqual(len(gccrs_compile_nodes), 571)
+        for node in (*gccrs_nodes, *gccrs_compile_nodes):
+            self.assertIn("$(B)/tst/libstd.tar", node["inputs"])
+            self.assertTrue(
+                any("$(B)/tst/libstd.tar" in command for command in node["cmd"])
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

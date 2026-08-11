@@ -1,6 +1,4 @@
 // { dg-output "Named variadic" }
-#![feature(no_core)]
-#![no_core]
 
 
 extern "C" {
@@ -16,8 +14,10 @@ fn print(s: &str) {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     print("Named variadic");
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,19 +1,9 @@
 // { dg-output "unit\r*\nmake_unit\r*\nunit_expr\r*\nmake_value\r*\nnonunit\r*\ninner\r*\nouter\r*\n" }
 // { dg-additional-options "-w" }
-#![feature(no_core)]
 #![feature(lang_items)]
-#![no_core]
 
 extern "C" {
     fn printf(s: *const i8, ...);
-}
-
-#[lang = "sized"]
-pub trait Sized {}
-
-#[lang = "drop"]
-pub trait Drop {
-    fn drop(&mut self);
 }
 
 struct UnitDroppable;
@@ -90,7 +80,7 @@ fn nested_return() {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     unit_return ();
     unit_return_expr ();
 
@@ -103,3 +93,4 @@ fn main() -> i32 {
 
     0
 }
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

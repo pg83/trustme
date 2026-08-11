@@ -1,6 +1,4 @@
 // { dg-output "a\r*\nseven\r*\nquote\r*\nelse" }
-#![feature(no_core)]
-#![no_core]
 
 
 extern "C" {
@@ -47,7 +45,7 @@ fn foo(x: u8) {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let x: u8 = 7;
 
     foo(b'a');
@@ -57,3 +55,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

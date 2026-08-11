@@ -1,8 +1,6 @@
 /* { dg-output "hi\r*" } */
-#![feature(no_core)]
-#![no_core]
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     {
         extern "C" {
             fn puts(s: *const i8);
@@ -15,3 +13,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

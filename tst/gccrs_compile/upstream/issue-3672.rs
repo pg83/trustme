@@ -1,6 +1,4 @@
 // { dg-options "-w" }
-#![feature(no_core)]
-#![no_core]
 struct Y(usize, usize);
 
 fn distinct_variant() {

@@ -1,12 +1,7 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(intrinsics)]
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 #[lang = "clone"]
 pub trait Clone: Sized {
     fn clone(&self) -> Self;

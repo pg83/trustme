@@ -1,8 +1,4 @@
-#![feature(no_core, lang_items)]
-#![no_core]
-
-#[lang = "sized"]
-pub trait Sized {}
+#![feature(lang_items)]
 
 trait TraitA {
     fn do_a(&self) -> i32;
@@ -41,7 +37,7 @@ impl TraitA for StructY {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let x = StructX { val: 0 };
     let x1 = StructX { val: 1 };
     let x2 = StructX { val: 2 };
@@ -71,3 +67,5 @@ fn main() -> i32 {
         0
     }
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

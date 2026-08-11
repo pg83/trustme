@@ -1,6 +1,4 @@
 // { dg-additional-options "-w -frust-cfg=A" }
-#![feature(no_core)]
-#![no_core]
 
 struct Foo;
 impl Foo {

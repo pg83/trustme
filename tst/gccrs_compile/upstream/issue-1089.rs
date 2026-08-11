@@ -1,7 +1,6 @@
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
+#[path = "issue-1089/test_mod.rs"]
 pub mod test_mod;
 
 fn main() {

@@ -1,9 +1,3 @@
-#![feature(no_core)]
-#![no_core]
-
-#![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
 
 macro_rules! foo {
     () => {"foo"};
@@ -22,9 +16,7 @@ impl Number for u32 {
     const VALUE: u32 = foo!(number);
 }
 
-impl u32 {
-    pub const TWELVE: u32 = foo!(number);
-}
+pub const TWELVE: u32 = foo!(number);
 
 pub enum E {
     Variant = foo!(number),
@@ -41,5 +33,5 @@ pub fn f(c: bool) -> &'static str {
 
 fn main() {
     let _ = A;
-    let _ = u32::VALUE - u32::TWELVE;
+    let _ = <u32 as Number>::VALUE - TWELVE;
 }

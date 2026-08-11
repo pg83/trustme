@@ -1,14 +1,10 @@
-#![feature(no_core, intrinsics, lang_items)]
-#![no_core]
-
-#[lang = "sized"]
-pub trait Sized {}
+#![feature(intrinsics, lang_items)]
 
 extern "rust-intrinsic" {
     fn arith_offset<T>(dst: *const T, offset: isize) -> *const T;
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let base_addr: usize = 0;
     let ptr = base_addr as *const u64;
 
@@ -21,3 +17,5 @@ fn main() -> i32 {
         }
     }
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

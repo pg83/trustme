@@ -1,10 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 pub struct A<T>(T);
 pub struct B<T>(T);
 

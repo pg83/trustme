@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 fn _a(_: i32) {}
 fn _b(_x: i32) {}
 fn _d((_x, _y): (i32, i32)) {}

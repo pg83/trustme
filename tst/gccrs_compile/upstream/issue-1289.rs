@@ -1,10 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 #![feature(intrinsics, staged_api)]
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 extern "C" {
     fn printf(s: *const i8, ...);
 }

@@ -1,12 +1,10 @@
 // { dg-output "correct\r*" }
-#![feature(no_core)]
-#![no_core]
 
 extern "C" {
     fn puts(s: *const i8);
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let x = (1, 2, 3, 4);
     let mut ret = 1;
 
@@ -28,3 +26,4 @@ fn main() -> i32 {
 
     ret
 }
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

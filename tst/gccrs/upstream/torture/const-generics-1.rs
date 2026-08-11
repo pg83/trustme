@@ -1,10 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-
-#[lang = "sized"]
-trait Sized {}
 
 struct Foo<const N: usize>;
 
@@ -20,10 +15,12 @@ impl Foo<2> {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = Foo::<1> {};
     let b = Foo::<2> {};
     let aa = a.call();
     let bb = b.call();
     bb - aa - 10
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

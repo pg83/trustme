@@ -1,6 +1,4 @@
 // { dg-output "22\r*\n25\r*\n" }
-#![feature(no_core)]
-#![no_core]
 #![feature(rustc_attrs)]
 
 extern "C" {
@@ -13,12 +11,7 @@ fn print(s: u32) {
     }
 }
 
-#[rustc_builtin_macro]
-macro_rules! line {
-    () => {{}};
-}
-
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = line!();
     print(a);
 
@@ -27,3 +20,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,10 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 trait Valuable {
     const VALUE: i32;
 }
@@ -21,6 +16,8 @@ impl Valuable for Something {
     implement!();
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     Something::VALUE - 18
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,8 +1,4 @@
-#![feature(no_core, intrinsics, lang_items)]
-#![no_core]
-
-#[lang = "sized"]
-pub trait Sized {}
+#![feature(intrinsics, lang_items)]
 
 extern "rust-intrinsic" {
     pub fn size_of_val<T: ?Sized>(_: *const T) -> usize;
@@ -20,7 +16,7 @@ struct StructA {
 impl TraitA for StructA {}
 impl TraitA for u8 {}
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let val_i32: i32 = 32;
     let size_i32 = unsafe { size_of_val(&val_i32 as *const i32) };
 
@@ -61,3 +57,5 @@ fn main() -> i32 {
         0
     }
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,10 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(min_specialization, lang_items)]
-
-#[lang = "sized"]
-trait Sized {}
 
 trait Foo {
     fn foo(&self) -> i32;
@@ -34,6 +29,8 @@ impl Foo for Wrap<bool> {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     Wrap(true).foo() - 1
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

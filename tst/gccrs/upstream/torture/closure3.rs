@@ -1,22 +1,9 @@
 // { dg-output "3\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
 
 extern "C" {
     fn printf(s: *const i8, ...);
-}
-
-#[lang = "sized"]
-pub trait Sized {}
-
-#[lang = "fn_once"]
-pub trait FnOnce<Args> {
-    #[lang = "fn_once_output"]
-    type Output;
-
-    extern "rust-call" fn call_once(self, args: Args) -> Self::Output;
 }
 
 fn f<F: FnOnce(i32) -> i32>(g: F) {
@@ -30,7 +17,7 @@ fn f<F: FnOnce(i32) -> i32>(g: F) {
     }
 }
 
-pub fn main() -> i32 {
+pub fn gccrs_main() -> i32 {
     let capture = 2;
     let a = |i: i32| {
         let b = i + capture;
@@ -39,3 +26,5 @@ pub fn main() -> i32 {
     f(a);
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

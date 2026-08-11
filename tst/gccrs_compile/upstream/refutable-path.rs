@@ -1,14 +1,14 @@
-#![feature(no_core)]
-#![no_core]
 // { dg-ice "" }
 enum E {
     A,
     B,
 }
 const A: u32 = 0;
-fn a(E::A: E) {}
-fn b(A: u32) {}
+fn a(value: E) {
+    let E::A = value else { return };
+}
+fn b(value: u32) {}
 fn main() {
-    let A: u32;
-    let E::A: E;
+    let value: u32;
+    let value: E;
 }

@@ -1,15 +1,10 @@
 /* { dg-output "Result: 123\r*\n" } */
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
 
 extern "C" {
     fn printf(s: *const i8, ...);
 }
-
-#[lang = "sized"]
-pub trait Sized {}
 
 enum Foo<T> {
     A,
@@ -35,9 +30,11 @@ fn inspect(a: Foo<i32>) {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = Foo::B(123);
     inspect(a);
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,30 +1,12 @@
-#![feature(no_core)]
-#![no_core]
 
-#![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
+#[derive(Clone, Copy)]
+struct Number(i32);
 
-pub trait Clone {
-    fn clone(&self) -> Self;
-}
-
-pub trait Copy {}
-
-impl Copy for i32 {}
-
-impl<T> Clone for T
-where
-    T: Copy,
-{
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-fn main() -> i32 {
-    let a = 15i32;
+fn gccrs_main() -> i32 {
+    let a = Number(15);
     let b = a.clone();
 
-    a - b
+    a.0 - b.0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,6 +1,4 @@
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
 mod a {
     pub mod b {

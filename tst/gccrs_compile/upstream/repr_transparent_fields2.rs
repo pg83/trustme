@@ -1,6 +1,4 @@
 // { dg-additional-options "-fdump-tree-gimple" }
-#![feature(no_core)]
-#![no_core]
 
 struct NonTransparent {
     foo: i32

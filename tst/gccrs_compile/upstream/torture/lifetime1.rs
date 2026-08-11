@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 fn foo<'a>(t: &'a str) -> &'a str {
     t

@@ -1,7 +1,5 @@
 // { dg-options "-w" }
 // { dg-output "73\r*\n37\r*\n24\r*\n24\r*\n" }
-#![feature(no_core)]
-#![no_core]
 extern "C" {
     fn printf(s: *const i8, ...);
 }
@@ -42,10 +40,12 @@ fn compute(limit: i32, stop_at: i32) -> i32 {
     sum
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     dump_number(compute(20, 100));
     dump_number(compute(30, 26));
     dump_number(compute(18, 17));
     dump_number(compute(15, 14));
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

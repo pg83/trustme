@@ -1,4 +1,2 @@
-#![feature(no_core)]
-#![no_core]
 
-﻿pub fn main () { }
+pub fn main () { }

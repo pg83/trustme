@@ -1,6 +1,4 @@
 // { dg-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
 struct S {
     x: i32,
@@ -10,6 +8,7 @@ struct S {
 fn main() {
     let s = S{x: 1, y: 2};
     match s {
-        S{x: 1, ..} => {}
+        S{x: 1, ..} => {},
+        _ => {},
     }
 }

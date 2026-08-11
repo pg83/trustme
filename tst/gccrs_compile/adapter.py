@@ -32,6 +32,21 @@ def compiler_options(text: str) -> list[str]:
     return result
 
 
+def edition(text: str) -> str:
+    values = re.findall(r"-frust-edition=(2015|2018|2021|2024)", text)
+    return values[-1] if values else "2015"
+
+
+def crate_name_options(case: str, text: str) -> list[str]:
+    if re.search(r"^#!\[crate_name\s*=", text, re.MULTILINE):
+        return []
+    stem = os.path.splitext(os.path.basename(case))[0]
+    name = re.sub(r"[^A-Za-z0-9_]", "_", stem)
+    if not name or name[0].isdigit():
+        name = "gccrs_" + name
+    return ["--crate-name", name]
+
+
 def target_applies(text: str) -> bool:
     machine = platform.machine().lower()
     targets = re.findall(r"dg-do\s+compile\s+\{\s*target\s+([^\s}]+)", text)
@@ -53,12 +68,15 @@ def fail_output(result: subprocess.CompletedProcess, case: str) -> int:
 
 
 def main() -> int:
-    if len(sys.argv) != 6:
-        raise SystemExit("usage: adapter.py CASES START COUNT UPSTREAM STAMP")
-    cases_path, start_text, count_text, upstream, stamp = sys.argv[1:]
+    if len(sys.argv) != 7:
+        raise SystemExit(
+            "usage: adapter.py CASES START COUNT UPSTREAM LIBSTD_TAR STAMP"
+        )
+    cases_path, start_text, count_text, upstream, libstd_tar, stamp = sys.argv[1:]
     start = int(start_text)
     count = int(count_text)
     upstream = os.path.abspath(upstream)
+    libstd_tar = os.path.abspath(libstd_tar)
     stamp = os.path.abspath(stamp)
     rustc = lib.require_env("RUSTC")
     cases = open(cases_path).read().splitlines()
@@ -69,6 +87,8 @@ def main() -> int:
     base_environment = dict(os.environ)
     base_environment.setdefault("CC", "cc")
     with lib.workdir() as work:
+        libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
+        library_path = os.path.join(libstd, "release")
         for index, case in enumerate(selected):
             print(f"[gccrs compile] {case}", file=sys.stderr, flush=True)
             source = os.path.join(upstream, case)
@@ -85,9 +105,11 @@ def main() -> int:
                 [
                     rustc,
                     source,
+                    "-L", library_path,
                     "-o", os.path.join(work, f"case-{index}.rlib"),
                     "--crate-type", "lib",
-                    "--edition", "2015",
+                    *crate_name_options(case, text),
+                    "--edition", edition(text),
                     *compiler_options(text),
                 ],
                 env=environment,

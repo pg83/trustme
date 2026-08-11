@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 const ARR: [usize; 1] = [2];
 

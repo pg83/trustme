@@ -1,14 +1,12 @@
-#![feature(no_core)]
-#![no_core]
+
+#[derive(PartialEq, Eq)]
+struct SomeStruct(u8);
+
+const STRUCT_CONST_1: SomeStruct = SomeStruct(1);
 
 fn main() {
     match SomeStruct(2) {
-        StructConst1(_) => {}
-
+        STRUCT_CONST_1 => {}
         _ => {}
     }
-
-    struct SomeStruct(u8);
-
-    const StructConst1: SomeStruct = SomeStruct(1);
 }

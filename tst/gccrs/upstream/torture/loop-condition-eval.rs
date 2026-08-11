@@ -1,6 +1,4 @@
 // { dg-output "1\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 pub fn test() -> u64 {
     let mut n = 113383; // #20 in https://oeis.org/A006884
@@ -18,7 +16,9 @@ extern "C" {
     fn printf(fmt: *const i8, ...);
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     unsafe { printf("%lu\n" as *const str as *const i8, test_1()) }
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

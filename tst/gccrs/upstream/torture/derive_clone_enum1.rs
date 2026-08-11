@@ -1,20 +1,3 @@
-#![feature(no_core)]
-#![no_core]
-#![feature(lang_items)]
-
-mod clone {
-    #[lang = "clone"]
-    trait Clone {
-        pub fn clone(&self) -> Self;
-    }
-
-    impl Clone for i32 {
-        fn clone(&self) -> Self {
-            *self
-        }
-    }
-}
-
 #[derive(Clone)]
 enum MixAndMatch {
     A,
@@ -22,7 +5,7 @@ enum MixAndMatch {
     C { inner: i32 },
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = MixAndMatch::A;
     let a_copy = a.clone();
 
@@ -55,3 +38,5 @@ fn main() -> i32 {
 
     res
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

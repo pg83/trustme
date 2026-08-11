@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 fn main() {
     const A: [i32; 3] = [1, 2, 3];

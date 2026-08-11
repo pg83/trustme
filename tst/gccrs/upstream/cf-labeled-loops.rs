@@ -1,6 +1,4 @@
 // { dg-output "91\r*\n45\r*\n" }
-#![feature(no_core)]
-#![no_core]
 extern "C" {
     fn printf(s: *const i8, ...);
 }
@@ -25,10 +23,12 @@ fn play(b: i32) -> i32 {
     res
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a: i32 = play(111);
     let b: i32 = play(10);
     dump_number(a);
     dump_number(b);
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

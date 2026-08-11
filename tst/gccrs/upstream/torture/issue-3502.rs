@@ -1,15 +1,10 @@
 /* { dg-output "parent 123\r*\nchild\r*\n" } */
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
 
 extern "C" {
     fn printf(s: *const i8, ...);
 }
-
-#[lang = "sized"]
-pub trait Sized {}
 
 struct Foo {
     my_int: u32,
@@ -46,7 +41,7 @@ impl Child for Foo {
     }
 }
 
-pub fn main() -> i32 {
+pub fn gccrs_main() -> i32 {
     let a = Foo { my_int: 123 };
     let b: &dyn Child = &a;
 
@@ -55,3 +50,5 @@ pub fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

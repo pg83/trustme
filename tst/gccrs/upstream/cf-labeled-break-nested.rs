@@ -1,6 +1,4 @@
 // { dg-output "999\r*\n3000\r*\n" }
-#![feature(no_core)]
-#![no_core]
 extern "C" {
     fn printf(s: *const i8, ...);
 }
@@ -31,9 +29,11 @@ fn run() -> i32 {
     score
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let total = run();
     dump_number(999);
     dump_number(total);
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

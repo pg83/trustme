@@ -1,9 +1,4 @@
-#![feature(no_core)]
 #![feature(lang_items)]
-#![no_core]
-
-#[lang = "sized"]
-trait Sized {}
 
 pub struct Pair<A, B>(A, B);
 

@@ -1,37 +1,19 @@
-#![feature(no_core)]
-#![no_core]
+use std::ops::Add;
 
-#![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
+#[derive(Clone, Copy)]
+struct Number(u32);
 
-#[lang = "add"]
-pub trait Add<RHS = Self> {
-    type Output;
-
-    fn add(self, rhs: RHS) -> Self::Output;
+impl Add for Number {
+    type Output = Number;
+    fn add(self, other: Number) -> Number { Number(self.0 + other.0) }
 }
 
-impl Add for u32 {
-    type Output = u32;
-
-    fn add(self, other: u32) -> u32 {
-        self + other
-    }
+impl Add<Number> for &Number {
+    type Output = Number;
+    fn add(self, other: Number) -> Number { (*self).add(other) }
 }
 
-impl<'a> Add<u32> for &'a u32 {
-    type Output = <u32 as Add<u32>>::Output;
-
-    fn add(self, other: u32) -> <u32 as Add<u32>>::Output {
-        Add::add(*self, other)
-    }
-}
-
-impl<'a> Add<&'a u32> for u32 {
-    type Output = <u32 as Add<u32>>::Output;
-
-    fn add(self, other: &'a u32) -> <u32 as Add<u32>>::Output {
-        Add::add(self, *other)
-    }
+impl Add<&Number> for Number {
+    type Output = Number;
+    fn add(self, other: &Number) -> Number { self.add(*other) }
 }

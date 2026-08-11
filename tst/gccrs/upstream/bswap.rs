@@ -14,11 +14,7 @@
  * of the logical integer value, this test is inherently endian-agnostic.
  */
 
-#![feature(intrinsics, lang_items, no_core)]
-#![no_core]
-
-#[lang = "sized"]
-pub trait Sized {}
+#![feature(intrinsics, lang_items)]
 
 #[lang = "copy"]
 pub trait Copy {}
@@ -253,7 +249,7 @@ fn test_bswap_i128() {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     test_bswap_16_and_32();
     test_bswap_u64();
     test_bswap_i64();
@@ -261,3 +257,5 @@ fn main() -> i32 {
     test_bswap_i128();
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

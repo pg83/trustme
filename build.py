@@ -845,8 +845,9 @@ for _index, _case in enumerate(rust_ui_compile_cases):
         color="green",
     ))
 
-# gccrs' no_core execute tests need no Rust standard library.  Preserve the
-# upstream file boundary and let the adapter interpret its dg-* invariants.
+# Preserve the upstream file boundary and let the adapter interpret its dg-*
+# invariants.  The imported programs are normalized to ordinary Rust 1.90 and
+# use the same standard library as the rest of the semantic corpus.
 gccrs_root = Path(__file__).parent / "tst" / "gccrs"
 gccrs_cases = (gccrs_root / "cases.txt").read_text().splitlines()
 gccrs_case_set = set(gccrs_cases)
@@ -867,15 +868,17 @@ for _case in gccrs_cases:
             *gccrs_support,
             "$(S)/tst/gccrs/adapter.py",
             "$(S)/tst/gccrs/cases.txt",
+            "$(B)/tst/libstd.tar",
             *TESTS_LIB,
         ],
         outputs=["$(B)/tst/gccrs/" + _case + ".stamp"],
         cmd=[
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/gccrs/adapter.py",
-            _case, _src, "$(B)/tst/gccrs/" + _case + ".stamp",
+            _case, _src, "$(B)/tst/libstd.tar",
+            "$(B)/tst/gccrs/" + _case + ".stamp",
         ],
-        deps=[rustc],
+        deps=[libstd, rustc],
         env={"RUSTC": "$(B)/bin/rustc"},
         descr="GX",
         color="green",
@@ -900,6 +903,7 @@ for _index, _case in enumerate(gccrs_compile_cases):
         inputs=[
             "$(S)/tst/gccrs_compile/adapter.py",
             "$(S)/tst/gccrs_compile/cases.txt",
+            "$(B)/tst/libstd.tar",
             *gccrs_compile_sources,
             *TESTS_LIB,
         ],
@@ -908,9 +912,9 @@ for _index, _case in enumerate(gccrs_compile_cases):
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/gccrs_compile/adapter.py",
             "$(S)/tst/gccrs_compile/cases.txt", str(_index), "1",
-            "$(S)/tst/gccrs_compile/upstream", _stamp,
+            "$(S)/tst/gccrs_compile/upstream", "$(B)/tst/libstd.tar", _stamp,
         ],
-        deps=[rustc],
+        deps=[libstd, rustc],
         env={"RUSTC": "$(B)/bin/rustc"},
         descr="GC",
         color="green",

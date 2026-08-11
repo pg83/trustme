@@ -1,41 +1,21 @@
 /* { dg-output "not\r*\n" } */
-#![feature(no_core)]
-#![no_core]
 
-#![feature(lang_items)]
+use std::ops::Not;
 
-extern "C" {
-    fn printf(s: *const i8, ...);
-}
+struct Number(i32);
 
-#[lang = "sized"]
-pub trait Sized {}
+impl Not for Number {
+    type Output = Number;
 
-#[lang = "not"]
-pub trait Not {
-    type Output;
-
-    fn not(self) -> Self::Output;
-}
-
-impl Not for i32 {
-    type Output = i32;
-
-    fn not(self) -> i32 {
-        unsafe {
-            let a = "not\n\0";
-            let b = a as *const str;
-            let c = b as *const i8;
-
-            printf(c);
-        }
-        !self
+    fn not(self) -> Number {
+        println!("not");
+        Number(!self.0)
     }
 }
 
-fn main() -> i32 {
-    let a: i32 = 1;
-    let _b = !a;
-
+fn gccrs_main() -> i32 {
+    let _ = !Number(1);
     0
 }
+
+fn main() { let code = gccrs_main(); if code != 0 { std::process::exit(code); } }

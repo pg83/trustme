@@ -1,45 +1,22 @@
 // { dg-output "1\r*\n" }
-// { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
-#![feature(lang_items)]
+use std::ops::BitAnd;
 
-extern "C" {
-    fn printf(s: *const i8, ...);
-}
+struct Number(i32);
 
-#[lang = "sized"]
-pub trait Sized {}
+impl BitAnd for Number {
+    type Output = Number;
 
-#[lang = "bitand"]
-pub trait BitAnd<Rhs = Self> {
-    type Output;
-
-    fn bitand(self, rhs: Rhs) -> Self::Output;
-}
-
-impl BitAnd for i32 {
-    type Output = i32;
-
-    fn bitand(self, other: i32) -> i32 {
-        let res = self & other;
-
-        unsafe {
-            let a = "%i\n\0";
-            let b = a as *const str;
-            let c = b as *const i8;
-
-            printf(c, res);
-        }
-
-        res
+    fn bitand(self, other: Number) -> Number {
+        let result = Number(self.0 & other.0);
+        println!("{}", result.0);
+        result
     }
 }
 
-fn main() -> i32 {
-    let a;
-    a = 1 & 1;
-
+fn gccrs_main() -> i32 {
+    let _ = Number(1) & Number(1);
     0
 }
+
+fn main() { let code = gccrs_main(); if code != 0 { std::process::exit(code); } }

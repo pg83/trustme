@@ -1,41 +1,21 @@
 /* { dg-output "neg\r*\n" } */
-#![feature(no_core)]
-#![no_core]
 
-#![feature(lang_items)]
+use std::ops::Neg;
 
-extern "C" {
-    fn printf(s: *const i8, ...);
-}
+struct Number(i32);
 
-#[lang = "sized"]
-pub trait Sized {}
+impl Neg for Number {
+    type Output = Number;
 
-#[lang = "neg"]
-pub trait Neg {
-    type Output;
-
-    fn neg(self) -> Self::Output;
-}
-
-impl Neg for i32 {
-    type Output = i32;
-
-    fn neg(self) -> i32 {
-        unsafe {
-            let a = "neg\n\0";
-            let b = a as *const str;
-            let c = b as *const i8;
-
-            printf(c);
-        }
-        -self
+    fn neg(self) -> Number {
+        println!("neg");
+        Number(-self.0)
     }
 }
 
-fn main() -> i32 {
-    let a: i32 = 1;
-    let _b = -a;
-
+fn gccrs_main() -> i32 {
+    let _ = -Number(1);
     0
 }
+
+fn main() { let code = gccrs_main(); if code != 0 { std::process::exit(code); } }

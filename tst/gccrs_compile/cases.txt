@@ -2,7 +2,6 @@ additional-trait-bounds1.rs
 array4.rs
 assert_zero_valid.rs
 assume.rs
-attr-allocator1.rs
 attr-mismatch-crate-name.rs
 attr_cold.rs
 auto_trait_valid.rs
@@ -16,8 +15,6 @@ braced_macro_statements1.rs
 braced_macro_statements2.rs
 braced_macro_statements3.rs
 break-label-loop.rs
-break-rust3.rs
-broken_utf8.rs
 canonical_paths1.rs
 cast_float_as_integer.rs
 cfg-attr.rs
@@ -59,7 +56,6 @@ derive_empty.rs
 derive_macro1.rs
 derive_macro3.rs
 derive_macro6.rs
-derive_macro7.rs
 derive_partial_ord1.rs
 doc_macro.rs
 doc_macro_2.rs
@@ -249,7 +245,6 @@ issue-3929-2.rs
 issue-3930.rs
 issue-3947.rs
 issue-3965-2.rs
-issue-3977.rs
 issue-4116.rs
 issue-4163-2.rs
 issue-4163.rs
@@ -330,7 +325,6 @@ macros/mbe/macro_return.rs
 macros/mbe/macro_rules_macro_rules.rs
 macros/mbe/macro_use1.rs
 macros/mbe/meta-param.rs
-macros/proc/derive_malformed.rs
 match-identifierpattern-enum.rs
 match-identifierpattern.rs
 match-never-ltype.rs
@@ -393,12 +387,8 @@ repr_transparent_fields2.rs
 rust-const-blog-issue.rs
 rust_abi.rs
 rustc_attr1.rs
-rustc_const_stable.rs
-rustc_const_unstable.rs
 rustc_std_internal_symbol1.rs
 self-path1.rs
-silly-order-bug.rs
-sized-stub.rs
 sizeof-stray-infer-var-bug.rs
 slice_rest_pattern.rs
 specify-crate-name.rs
@@ -431,7 +421,6 @@ torture/conditional.rs
 torture/constant2.rs
 torture/constant3.rs
 torture/deref_function.rs
-torture/doc_comment.rs
 torture/enum1.rs
 torture/extern_mod1/modules/mod.rs
 torture/extern_mod1.rs

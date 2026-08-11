@@ -1,11 +1,6 @@
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 struct Foo<T>(T);
 impl<T> Foo<T> {
     fn new<Y>(a: T, b: Y) -> Self {

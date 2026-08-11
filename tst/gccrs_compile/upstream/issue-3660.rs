@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 pub static A: [u32; 2] = [1, 2];
 

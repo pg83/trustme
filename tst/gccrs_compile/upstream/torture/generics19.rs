@@ -1,10 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 struct Foo<X, Y>(X, Y);
 
 impl<T> Foo<u32, T> {

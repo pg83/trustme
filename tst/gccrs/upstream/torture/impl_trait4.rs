@@ -1,10 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-
-#[lang = "sized"]
-trait Sized {}
 
 trait Foo {
     fn id(&self) -> i32;
@@ -29,8 +24,10 @@ fn takes_tuple(pair: (impl Foo, impl Foo)) -> i32 {
     pair.0.id() + pair.1.id()
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = A(1);
     let b = B(2);
     takes_tuple((a, b)) - 3
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

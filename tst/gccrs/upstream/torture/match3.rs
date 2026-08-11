@@ -1,6 +1,4 @@
 // { dg-output "Foo::A\r*\nwildcard\r*\nwildcard\r*\nFoo::D 20 80\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 extern "C" {
     fn printf(s: *const i8, ...);
@@ -39,7 +37,7 @@ fn inspect(f: Foo) {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = Foo::A;
     let b = Foo::B;
     let c = Foo::C('x');
@@ -52,3 +50,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

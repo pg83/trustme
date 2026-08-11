@@ -1,14 +1,7 @@
 // { dg-output "1\r*\n1\r*\n1\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 
 #![feature(rustc_attrs)]
-
-#[rustc_builtin_macro]
-macro_rules! include_bytes {
-    () => {{}};
-}
 
 macro_rules! my_file {
     () => {"include.txt"};
@@ -40,7 +33,7 @@ fn check_bytes(bytes: &[u8; 16]) {
     print_int(x as i32);
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let bytes1: &'static [u8; 16] = include_bytes!("include.txt");
     check_bytes(bytes1);
 
@@ -52,3 +45,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

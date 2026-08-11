@@ -1,7 +1,5 @@
 // { dg-output "hello world: gccrs\r*\n" }
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
 static TEST_1: &str = "gccrs";
 static TEST_2: i32 = 123;
@@ -13,17 +11,9 @@ extern "C" {
     fn printf(s: *const i8, ...);
 }
 
-fn main() -> i32 {
-    unsafe {
-        let a1 = "hello world: %s\n";
-        let b1 = a1 as *const str;
-        let c1 = b1 as *const i8;
-
-        let a2 = TEST_1;
-        let b2 = a2 as *const str;
-        let c2 = b2 as *const i8;
-
-        printf(c1, c2);
-    }
+fn gccrs_main() -> i32 {
+    println!("hello world: {}", TEST_1);
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

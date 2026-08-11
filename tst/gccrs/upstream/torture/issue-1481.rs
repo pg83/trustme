@@ -1,12 +1,7 @@
 /* { dg-output "called Foo::print\\(\\)\r*" } */
 /* { dg-options "-w" } */
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-
-#[lang = "sized"]
-trait Sized {}
 
 trait Printable {
     fn print(&self);
@@ -31,9 +26,11 @@ extern "C" {
     fn puts(s: *const i8);
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let p = get_printable();
     p.print();
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,16 +1,7 @@
 // { dg-options "-w" }
 // { dg-output "prime\r*\nnot_prime\r*\nprime\r*\nprime\r*\nnot_prime\r*\n" }
-#![feature(no_core)]
-#![no_core]
-extern "C" {
-    fn puts(s: *const i8);
-}
 fn dump(message: &str) {
-    unsafe {
-        let b = message as *const str;
-        let c = b as *const i8;
-        puts(c);
-    }
+    println!("{}", message);
 }
 fn is_prime(number: i32) -> bool {
     if number <= 1 {
@@ -39,7 +30,7 @@ fn debug_prime(number: i32) {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     debug_prime(11);
     debug_prime(12);
     debug_prime(13);
@@ -47,3 +38,5 @@ fn main() -> i32 {
     debug_prime(100);
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

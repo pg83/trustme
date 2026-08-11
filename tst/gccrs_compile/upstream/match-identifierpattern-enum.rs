@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 enum Foo {
     I(i32),

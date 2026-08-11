@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 pub const uint_val: usize = 1;
 pub const uint_expr: usize = 1 << uint_val;

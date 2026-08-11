@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 macro_rules! t {
     ($t:tt) => {
@@ -11,6 +9,8 @@ fn frob() -> i32 {
     t!(15) + t!((14))
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     frob() - 29
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

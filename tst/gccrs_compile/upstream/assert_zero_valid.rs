@@ -1,8 +1,4 @@
-#![feature(intrinsics, no_core, lang_items)]
-#![no_core]
-
-#[lang = "sized"]
-trait Sized {}
+#![feature(intrinsics, lang_items)]
 
 extern "rust-intrinsic" {
     fn assert_zero_valid<T>();

@@ -1,13 +1,6 @@
 // { dg-output "14\r*\n42\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 #![feature(rustc_attrs)]
-
-#[rustc_builtin_macro]
-macro_rules! column {
-    () => {{}};
-}
 
 extern "C" {
     fn printf(fmt: *const i8, ...);
@@ -19,7 +12,7 @@ fn print(s: u32) {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let c0 = column!();
 
     print(c0);
@@ -30,3 +23,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

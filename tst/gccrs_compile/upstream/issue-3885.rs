@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 pub fn test() {
     let _u: [_; _] = [15u32];

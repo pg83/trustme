@@ -1,6 +1,4 @@
 // { dg-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
 #![feature(intrinsics, lang_items)]
 
@@ -20,9 +18,6 @@ mod result {
         Err(E),
     }
 }
-
-#[lang = "sized"]
-pub trait Sized {}
 
 #[lang = "clone"]
 pub trait Clone: Sized {

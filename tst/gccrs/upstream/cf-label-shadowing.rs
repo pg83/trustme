@@ -1,6 +1,4 @@
 // { dg-output "100\r*\n200\r*\n300\r*\n201\r*\n302\r*\n101\r*\n210\r*\n310\r*\n211\r*\n312\r*\n102\r*\n220\r*\n320\r*\n221\r*\n322\r*\n999" }
-#![feature(no_core)]
-#![no_core]
 extern "C" {
     fn printf(s: *const i8, ...);
 }
@@ -12,7 +10,7 @@ fn dump_number(num: i32) {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let mut outer = 0;
 
     'l: while outer < 3 {
@@ -45,3 +43,5 @@ fn main() -> i32 {
     dump_number(999);
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

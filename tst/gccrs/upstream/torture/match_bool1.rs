@@ -1,6 +1,4 @@
 // { dg-output "182 is more than 100\r*\n55 is less than 100\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 
 extern "C" {
@@ -41,7 +39,7 @@ fn bar(y: i32) {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = foo(true);
     let b = foo(false);
 
@@ -50,3 +48,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

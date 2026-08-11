@@ -1,7 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let x = -55;
 
     match x {
@@ -10,3 +8,4 @@ fn main() -> i32 {
         _ => 1
     }
 }
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

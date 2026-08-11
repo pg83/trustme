@@ -1,6 +1,4 @@
 // { dg-output "macro\r*\nmacro\r*\nmacro\r*\nmacro\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 extern "C" {
     fn printf(s: *const i8, ...);
@@ -11,7 +9,7 @@ fn f() {
     let s_p = r_s as *const str;
     let c_p = s_p as *const i8;
 
-    printf(c_p);
+    unsafe { printf(c_p); }
 }
 
 macro_rules! empty0 {
@@ -29,6 +27,7 @@ macro_rules! empty2 {
 // using multiple parens/brackets/curlies variants allows us to make sure we
 // parse everything properly
 fn main() {
+    empty0!();
     empty0!();
     empty1!{};
     empty2![];

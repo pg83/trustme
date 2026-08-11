@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 #![feature(rustc_attrs)]
 #![feature(staged_api)]
 

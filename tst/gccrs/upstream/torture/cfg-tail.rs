@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 fn foo() -> i32 {
     {54}
@@ -7,6 +5,8 @@ fn foo() -> i32 {
     {45}
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     return foo() - 54;
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,6 +1,5 @@
 // { dg-additional-options "-fdump-tree-gimple" }
-#![feature(no_core, rustc_attrs)]
-#![no_core]
+#![feature(rustc_attrs)]
 
 #[rustc_allocator]
 #[rustc_allocator_nounwind]

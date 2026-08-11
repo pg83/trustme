@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 struct A {
     // the two warnings are invalid but this should be fixed by our lint rework
@@ -8,7 +6,7 @@ struct A {
     b: i32, // { dg-warning "never read" }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = A { a: 15, b: 14 };
 
     let result = match a {
@@ -20,3 +18,5 @@ fn main() -> i32 {
 
     result - 29
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

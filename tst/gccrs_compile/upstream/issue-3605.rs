@@ -1,7 +1,7 @@
-#![feature(no_core)]
-#![no_core]
 
-enum Foo<'a> {}
+enum Foo<'a> {
+    Marker(std::marker::PhantomData<&'a ()>),
+}
 
 enum Bar<'a> {
     in_band_def_explicit_impl(Foo<'a>),

@@ -1,11 +1,6 @@
 /* { dg-output "Hello from Message\r*\n" } */
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 extern "C" {
     fn printf(s: *const i8, ...);
 }
@@ -40,10 +35,12 @@ impl Speak for Message {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let c = Console;
     let msg = Message("Hello from Message\n");
     c.print(msg);
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

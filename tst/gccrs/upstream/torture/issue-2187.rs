@@ -1,12 +1,10 @@
-/* { dg-output "L1\r*\n\L2\r*\nL3\r*\nL4" } */
-#![feature(no_core)]
-#![no_core]
+/* { dg-output "L1\r*\nL2\r*\nL3\r*\nL4" } */
 
 extern "C" {
     fn printf(s: *const i8, ...);
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let A = b"L1
 L2\0";
     let B = "L3
@@ -23,3 +21,5 @@ L4\0";
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

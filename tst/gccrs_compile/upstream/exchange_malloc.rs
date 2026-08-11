@@ -1,7 +1,4 @@
-#![feature(no_core,lang_items)]
-#![no_core]
-
-#[lang = "exchange_malloc"]
-unsafe fn _allocate(_size: usize, _align: usize) -> *mut u8 {
-    0 as *mut u8
+pub unsafe fn allocate(size: usize, align: usize) -> *mut u8 {
+    let layout = unsafe { std::alloc::Layout::from_size_align_unchecked(size, align) };
+    unsafe { std::alloc::alloc(layout) }
 }

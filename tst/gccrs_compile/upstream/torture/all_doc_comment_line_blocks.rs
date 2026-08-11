@@ -1,7 +1,5 @@
 // comment line not a doc
 /* comment block not a doc                   */
-#![feature(no_core)]
-#![no_core]
 
 
 //! inner line comment for most outer crate

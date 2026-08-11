@@ -1,10 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 macro_rules! maybe_impl {
     ($left:ident, $right:ident, $l_fn:ident, $r_fn:ident) => {
         fn $l_fn(value: T) -> Maybe<T> {

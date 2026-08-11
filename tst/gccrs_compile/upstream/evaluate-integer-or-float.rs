@@ -1,6 +1,4 @@
 // { dg-options "-frust-dump-lex" }
-#![feature(no_core)]
-#![no_core]
 
 fn main() {
     let _a: u32 = 1_000u32;

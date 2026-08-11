@@ -1,45 +1,21 @@
 /* { dg-output "add_assign\r*\n3\r*\n" } */
-#![feature(no_core)]
-#![no_core]
 
-#![feature(lang_items)]
+use std::ops::AddAssign;
 
-extern "C" {
-    fn printf(s: *const i8, ...);
-}
+struct Number(i32);
 
-#[lang = "sized"]
-pub trait Sized {}
-
-#[lang = "add_assign"]
-pub trait AddAssign<Rhs = Self> {
-    fn add_assign(&mut self, rhs: Rhs);
-}
-
-impl AddAssign for i32 {
-    fn add_assign(&mut self, other: i32) {
-        unsafe {
-            let a = "add_assign\n\0";
-            let b = a as *const str;
-            let c = b as *const i8;
-
-            printf(c);
-        }
-        *self += other
+impl AddAssign for Number {
+    fn add_assign(&mut self, other: Number) {
+        println!("add_assign");
+        self.0 += other.0;
     }
 }
 
-fn main() -> i32 {
-    let mut res = 1;
-    res += 2;
-
-    unsafe {
-        let a = "%i\n\0";
-        let b = a as *const str;
-        let c = b as *const i8;
-
-        printf(c, res);
-    }
-
+fn gccrs_main() -> i32 {
+    let mut result = Number(1);
+    result += Number(2);
+    println!("{}", result.0);
     0
 }
+
+fn main() { let code = gccrs_main(); if code != 0 { std::process::exit(code); } }

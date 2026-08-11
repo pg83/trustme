@@ -1,6 +1,4 @@
 // { dg-output "2\r*" }
-#![feature(no_core)]
-#![no_core]
 
 extern "C" {
     fn printf(s: *const i8, ...);
@@ -19,10 +17,12 @@ macro_rules! add_exprs {
     ($($e:expr)?) => (0 $(+ $e)?)
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     // 2
     let a = add_exprs!(2);
     print_int(a);
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

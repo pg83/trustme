@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 fn main() {
     struct A (i32, i32);

@@ -1,6 +1,4 @@
 // { dg-output "1\r*\n2\r*\nNaN\r*\n3\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 
 macro_rules! print_num {
@@ -16,7 +14,7 @@ extern "C" {
 }
 
 // Check to make sure that expanding macros does not break the flow of calls
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     print_num!(1);
     print_num!(2);
 
@@ -28,3 +26,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

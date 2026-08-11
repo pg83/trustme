@@ -1,10 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 #![feature(intrinsics, staged_api)]
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 mod mem {
     extern "rust-intrinsic" {
         #[rustc_const_stable(feature = "const_size_of", since = "1.40.0")]
@@ -18,7 +13,9 @@ impl<T> Foo<T> {
     const MAGIC: usize = mem::size_of::<T>();
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let sz = Foo::<u16>::MAGIC;
     sz as i32 - 2
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

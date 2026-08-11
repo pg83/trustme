@@ -1,10 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-
-#[lang = "sized"]
-trait Sized {}
 
 pub trait Foo {}
 
@@ -29,9 +24,11 @@ where
     15
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let bar = MyBar;
     let result: i32 = foo::<MyBar, MyBaz>(bar);
 
     result - 15
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

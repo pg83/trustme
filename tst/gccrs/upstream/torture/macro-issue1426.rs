@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 macro_rules! stmt {
     ($s:stmt) => {
@@ -27,6 +25,8 @@ pub fn test() -> i32 {
     f
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     test() - 14
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

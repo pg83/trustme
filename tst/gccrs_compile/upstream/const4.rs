@@ -1,6 +1,4 @@
 // { dg-options "-w -O0 -fdump-tree-gimple" }
-#![feature(no_core)]
-#![no_core]
 
 const A: i32 = 1;
 

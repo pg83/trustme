@@ -1,19 +1,9 @@
 // { dg-output "C\r*\nB\r*\nA\r*\n" }
 // { dg-additional-options "-w" }
-#![feature(no_core)]
 #![feature(lang_items)]
-#![no_core]
 
 extern "C" {
     fn printf(s: *const i8, ...);
-}
-
-#[lang = "sized"]
-pub trait Sized {}
-
-#[lang = "drop"]
-pub trait Drop {
-    fn drop(&mut self);
 }
 
 struct A;
@@ -47,10 +37,11 @@ impl Drop for C {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let _a = A;
     let _b = B;
     let _c = C;
 
     0
 }
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

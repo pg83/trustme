@@ -1,6 +1,4 @@
 // { dg-excess-errors "accessing value of"  }
-#![feature(no_core)]
-#![no_core]
 
 #![feature(intrinsics)]
 

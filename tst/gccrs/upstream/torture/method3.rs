@@ -1,86 +1,21 @@
-// { dg-additional-options "-w" }
 // { dg-output "mut_deref\r*\nfoobar: 123\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
-#![feature(lang_items)]
+use std::ops::{Deref, DerefMut};
 
-extern "C" {
-    fn printf(s: *const i8, ...);
-}
+struct Bar(i32);
+impl Bar { fn foobar(&mut self) -> i32 { self.0 } }
 
-#[lang = "sized"]
-pub trait Sized {}
-
-#[lang = "deref"]
-pub trait Deref {
-    type Target;
-
-    fn deref(&self) -> &Self::Target;
-}
-
-#[lang = "deref_mut"]
-pub trait DerefMut: Deref {
-    fn deref_mut(&mut self) -> &mut Self::Target;
-}
-
-impl<T> Deref for &T {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        *self
-    }
-}
-
-impl<T> Deref for &mut T {
-    type Target = T;
-    fn deref(&self) -> &T {
-        *self
-    }
-}
-
-pub struct Bar(i32);
-impl Bar {
-    pub fn foobar(&mut self) -> i32 {
-        self.0
-    }
-}
-
-pub struct Foo<T>(T);
-impl<T> Deref for Foo<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
+struct Foo<T>(T);
+impl<T> Deref for Foo<T> { type Target = T; fn deref(&self) -> &T { &self.0 } }
 impl<T> DerefMut for Foo<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe {
-            let a = "mut_deref\n\0";
-            let b = a as *const str;
-            let c = b as *const i8;
-
-            printf(c);
-        }
-
-        &mut self.0
-    }
+    fn deref_mut(&mut self) -> &mut T { println!("mut_deref"); &mut self.0 }
 }
 
-pub fn main() -> i32 {
-    let bar = Bar(123);
-    let mut foo: Foo<Bar> = Foo(bar);
-    let foobar = foo.foobar();
-
-    unsafe {
-        let a = "foobar: %i\n\0";
-        let b = a as *const str;
-        let c = b as *const i8;
-
-        printf(c, foobar);
-    }
-
-    foobar - 123
+fn gccrs_main() -> i32 {
+    let mut value = Foo(Bar(123));
+    let result = value.foobar();
+    println!("foobar: {}", result);
+    result - 123
 }
+
+fn main() { let code = gccrs_main(); if code != 0 { std::process::exit(code); } }

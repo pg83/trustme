@@ -1,10 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(min_specialization, lang_items)]
-
-#[lang = "sized"]
-trait Sized {}
 
 trait Foo {
     fn foo(&self) -> i32;
@@ -26,9 +21,11 @@ impl Foo for bool {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = 1.foo() - 15;
     let b = true.foo() - 1;
 
     a + b
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 // this test ICEs because in CompilePatternBindings::visit (HIR::TupleStructPattern &pattern)
 // we are missing an implementation handling 'E::T(a, .., b)' with rest patterns

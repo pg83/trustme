@@ -1,6 +1,4 @@
 /* { dg-output "Value is: 42\r*\n" } */
-#![feature(no_core)]
-#![no_core]
 
 #![feature(rustc_attrs, lang_items)]
 
@@ -8,23 +6,11 @@ extern "C" {
     fn printf(s: *const i8, ...);
 }
 
-#[lang = "sized"]
-pub trait Sized {}
-
-#[rustc_builtin_macro]
-macro_rules! llvm_asm {
-    () => {};
+pub fn black_box<T>(dummy: T) -> T {
+    std::hint::black_box(dummy)
 }
 
-pub fn black_box<T>(mut dummy: T) -> T {
-    unsafe {
-        llvm_asm!("" : : "r"(&mut dummy) : "memory" : "volatile");
-    }
-
-    dummy
-}
-
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let dummy: i32 = 42;
     let result = black_box(dummy);
     unsafe {
@@ -32,3 +18,5 @@ fn main() -> i32 {
     }
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

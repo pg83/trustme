@@ -1,6 +1,4 @@
 // fake function
-#![feature(no_core)]
-#![no_core]
 
 pub fn swap_bytes(this: u32) -> u32 {
     (((this) & 0xff000000) >> 24)

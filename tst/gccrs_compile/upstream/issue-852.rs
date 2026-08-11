@@ -1,6 +1,5 @@
 // { dg-options "-w" }
-#![feature(no_core)]
-#![no_core]
+#![allow(bindings_with_variant_name)]
 
 extern "C" {
     fn printf(s: *const i8, ...);

@@ -1,6 +1,4 @@
 // { dg-output "arg\r*\narg\r*\narg\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 extern "C" {
     fn printf(s: *const i8, ...);
@@ -34,10 +32,12 @@ macro_rules! kw2 {
     };
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     kw0!(keyword);
     kw1!(fn);
     kw2!(kw0 kw1 kw3);
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

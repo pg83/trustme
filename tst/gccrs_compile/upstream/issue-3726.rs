@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 pub enum TypeCtor {
     Slice,
@@ -15,6 +13,7 @@ macro_rules! ty_app {
 
 pub fn foo(ty: ApplicationTy) {
     match ty {
-        ty_app!(TypeCtor::Array) => {}
+        ty_app!(TypeCtor::Array) => {},
+        _ => {},
     }
 }

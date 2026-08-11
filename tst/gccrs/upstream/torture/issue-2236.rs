@@ -1,44 +1,12 @@
-// { dg-options "-w" }
-#![feature(no_core)]
-#![no_core]
+use std::ops::Deref;
 
-#![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
-mod core {
-    mod ops {
-        #[lang = "deref"]
-        trait Deref {
-            type Target;
-            fn deref(&self) -> &Self::Target;
-        }
-
-        impl<T> Deref for &T {
-            type Target = T;
-
-            fn deref(&self) -> &T {
-                *self
-            }
-        }
-    }
+fn foo<T: Deref<Target = i32>>(value: T) -> i32 {
+    (*value).max(2)
 }
 
-impl i32 {
-    fn max(self, other: i32) -> i32 {
-        if self > other {
-            self
-        } else {
-            other
-        }
-    }
+fn gccrs_main() -> i32 {
+    let value = 1i32;
+    foo(&value) - 2
 }
 
-fn foo<T: core::ops::Deref<Target = i32>>(t: T) -> i32 {
-    t.max(2)
-}
-
-fn main() -> i32 {
-    let a: i32 = 1;
-    foo(&a) - 2
-}
+fn main() { let code = gccrs_main(); if code != 0 { std::process::exit(code); } }

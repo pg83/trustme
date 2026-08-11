@@ -1,6 +1,4 @@
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
 enum E {
     A,
@@ -8,7 +6,7 @@ enum E {
     C
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     use E::*;
 
     match A {
@@ -16,3 +14,5 @@ fn main() -> i32 {
         _ => 0
     }
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

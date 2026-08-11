@@ -1,13 +1,8 @@
 // { dg-options "-w" }
 // { dg-output "1\r*\n2\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 extern "C" {
     fn printf(s: *const i8, ...);
 }
@@ -40,7 +35,9 @@ impl T for S {
     }
 }
 
-pub fn main() -> i32 {
+pub fn gccrs_main() -> i32 {
     <dyn T>::bar(&S);
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

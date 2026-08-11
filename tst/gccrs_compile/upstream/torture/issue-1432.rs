@@ -1,12 +1,7 @@
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 #![feature(intrinsics)]
 #![feature(staged_api)]
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 mod intrinsics {
     extern "rust-intrinsic" {
         #[rustc_const_stable(feature = "const_int_wrapping", since = "1.40.0")]

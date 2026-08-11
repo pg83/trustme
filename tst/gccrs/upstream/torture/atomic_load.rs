@@ -1,12 +1,7 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(intrinsics)]
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 #[lang = "clone"]
 pub trait Clone: Sized {
     fn clone(&self) -> Self;
@@ -70,7 +65,7 @@ extern "rust-intrinsic" {
     pub fn atomic_load_unordered<T: Copy>(src: *const T) -> T;
 }
 
-fn main() -> u32 {
+fn gccrs_main() -> u32 {
     let one;
     let two;
     let three;
@@ -92,3 +87,5 @@ fn main() -> u32 {
 
     (four + three + two + one) - 10
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

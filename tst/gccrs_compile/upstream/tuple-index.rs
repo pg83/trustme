@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 fn main() {
     let t = (10, 20);

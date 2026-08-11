@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 macro_rules! two {
     (2) => {
@@ -13,8 +11,10 @@ macro_rules! one {
     }};
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = one!(1);
 
     a - 3
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

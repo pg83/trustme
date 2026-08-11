@@ -35,6 +35,11 @@ def compiler_options(text: str) -> list[str]:
     return result
 
 
+def edition(text: str) -> str:
+    values = re.findall(r"-frust-edition=(2015|2018|2021|2024)", text)
+    return values[-1] if values else "2015"
+
+
 def target_applies(text: str) -> bool:
     machine = platform.machine().lower()
     target_matches = re.findall(r"dg-do\s+run\s+\{\s*target\s+([^\s}]+)", text)
@@ -54,10 +59,11 @@ def write_stamp(stamp: str) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) != 4:
-        raise SystemExit("usage: adapter.py CASE SOURCE STAMP")
-    case, source, stamp = sys.argv[1:]
+    if len(sys.argv) != 5:
+        raise SystemExit("usage: adapter.py CASE SOURCE LIBSTD_TAR STAMP")
+    case, source, libstd_tar, stamp = sys.argv[1:]
     source = os.path.abspath(source)
+    libstd_tar = os.path.abspath(libstd_tar)
     stamp = os.path.abspath(stamp)
     rustc = lib.require_env("RUSTC")
     text = open(source, encoding="utf-8", errors="surrogateescape").read()
@@ -76,14 +82,17 @@ def main() -> int:
         environment[key] = value
 
     with lib.workdir() as work:
+        libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
+        library_path = os.path.join(libstd, "release")
         binary = os.path.join(work, "test")
         compile_result = subprocess.run(
             [
                 rustc,
                 source,
+                "-L", library_path,
                 "-o", binary,
                 "--crate-type", "bin",
-                "--edition", "2015",
+                "--edition", edition(text),
                 *compiler_options(text),
             ],
             env=environment,

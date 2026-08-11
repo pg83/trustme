@@ -1,12 +1,7 @@
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 struct Adt;
 enum EAdt {
     V0,
@@ -33,7 +28,7 @@ fn foo10(value: &str) {}
 fn foo11(value: *const i8) {}
 fn foo12<T>(value: T) {}
 fn foo13(value: [i32; 5]) {}
-fn foo14(value: [Adt]) {}
+fn foo14(value: Box<[Adt]>) {}
 fn foo15(value: fn(i32) -> i32) {}
 fn foo16(value: (i32, Adt)) {}
 fn foo17(value: (i32, [f64; 5])) {}

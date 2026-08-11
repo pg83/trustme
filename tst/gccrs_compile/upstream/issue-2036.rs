@@ -1,10 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 trait Hash<H> {
     fn hash2(&self, hasher: &H) -> u64;
 }
@@ -28,7 +23,7 @@ trait StreamHash<H: StreamHasher>: Hash<H> {
 impl<H: StreamHasher> Hash<H> for u8 {
     fn hash2(&self, hasher: &H) -> u64 {
         let mut stream = hasher.stream();
-        self.input_stream(&mut stream);
+        <u8 as StreamHash<H>>::input_stream(self, &mut stream);
         Stream::result(&stream)
     }
 }

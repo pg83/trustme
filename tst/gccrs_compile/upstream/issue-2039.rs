@@ -1,6 +1,4 @@
 // { dg-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
 pub struct Lexer<'a> {
     input: &'a str,
@@ -17,7 +15,7 @@ struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(lexer: &'a mut Lexer) -> Parser<'a> {
+    pub fn new(lexer: &'a mut Lexer<'a>) -> Parser<'a> {
         Parser { lexer: lexer }
     }
 }

@@ -1,7 +1,5 @@
 // { dg-additional-options "-w -frust-cfg=A" }
 // { dg-output "test1\r*\ntest2\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 extern "C" {
     fn printf(s: *const i8, ...);
@@ -32,10 +30,12 @@ impl Foo {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = Foo(123);
     a.test();
     a.test2();
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

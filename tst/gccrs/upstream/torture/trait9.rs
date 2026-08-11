@@ -1,28 +1,21 @@
 /* { dg-output "3\r*\n" } */
-#![feature(no_core)]
-#![no_core]
-
-#![feature(lang_items)]
 
 extern "C" {
     fn printf(s: *const i8, ...);
 }
 
-#[lang = "sized"]
-pub trait Sized {}
-
-trait FnLike<A, R> {
-    fn call(&self, arg: A) -> R;
+trait FnLike<T> {
+    fn call<'a>(&self, arg: &'a T) -> &'a T;
 }
 
 struct S;
-impl<T> FnLike<&T, &T> for S {
-    fn call(&self, arg: &T) -> &T {
+impl<T> FnLike<T> for S {
+    fn call<'a>(&self, arg: &'a T) -> &'a T {
         arg
     }
 }
 
-fn indirect<F: FnLike<&isize, &isize>>(f: F) {
+fn indirect<F: FnLike<isize>>(f: F) {
     let x = 3;
     let y = f.call(&x);
 
@@ -35,8 +28,10 @@ fn indirect<F: FnLike<&isize, &isize>>(f: F) {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     indirect(S);
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,25 +1,18 @@
 /* { dg-do run { target arm*-*-* } } */
 /* { dg-output "5\r*\n9\r*\n" }*/
-#![feature(no_core)]
-#![no_core]
 
 
 #![feature(rustc_attrs)]
-#[rustc_builtin_macro]
-macro_rules! asm {
-    () => {};
-}
-
 extern "C" {
     fn printf(s: *const i8, ...);
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let mut _x: i32 = 0;
     let mut _y: i32 = 9;
 
     unsafe {
-        asm!(
+        std::arch::asm!(
             "mov {}, 5",
             out(reg) _x
         );
@@ -27,7 +20,7 @@ fn main() -> i32 {
     };
 
     unsafe {
-        asm!(
+        std::arch::asm!(
             "mov {}, {}",
             in(reg) _y,
             out(reg) _x
@@ -37,3 +30,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

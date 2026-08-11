@@ -1,16 +1,9 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(rustc_attrs)]
 
-#[rustc_builtin_macro]
-macro_rules! asm {
-    () => {};
-}
-
 fn main() -> i32 {
     unsafe {
-        asm!(
+        std::arch::asm!(
             "add {}, 1",
             in(reg) 0
         );
@@ -22,7 +15,7 @@ fn main() -> i32 {
     let mut _num1: i32 = 10;
     let _num2: i32 = 20;
     unsafe {
-        asm!(
+        std::arch::asm!(
             "add {}, {}",
             in(reg) _num2,
             out(reg) _num1,
@@ -31,7 +24,7 @@ fn main() -> i32 {
 
     let mut _output_testing: u32 = 0;
     unsafe {
-        asm!(
+        std::arch::asm!(
             "add {}, 1",
             in(reg) _num1,
             //out(reg) _,

@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(exclusive_range_pattern)]
 
@@ -9,5 +7,6 @@ fn main() {
     match x {
         -55..0 => 2,
         -99..-55 => 3,
+        _ => 4,
     };
 }

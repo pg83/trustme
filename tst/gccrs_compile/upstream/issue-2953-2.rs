@@ -1,22 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-
-#[lang = "sized"]
-pub trait Sized {
-    // Empty.
-}
-
-#[lang = "fn_once"]
-pub trait FnOnce<Args> {
-    /// The returned type after the call operator is used.
-    #[lang = "fn_once_output"]
-    type Output;
-
-    /// Performs the call operation.
-    extern "rust-call" fn call_once(self, args: Args) -> Self::Output;
-}
 
 pub enum Ordering {
     /// An ordering where a compared value is less than another.

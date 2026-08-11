@@ -1,8 +1,4 @@
-#![feature(no_core, lang_items)]
-#![no_core]
-
-#[lang = "sized"]
-pub trait Sized {}
+#![feature(lang_items)]
 
 trait TraitA {
     fn do_a(&self) -> i32;
@@ -13,7 +9,7 @@ mod mod_a {
 
     pub struct StructX<T> {
         pub val: i32,
-        _marker: T,
+        pub _marker: T,
     }
 
     impl TraitA for StructX<i32> {
@@ -33,7 +29,7 @@ mod mod_b {
 
     pub struct StructX<T> {
         pub val: i32,
-        _marker: T,
+        pub _marker: T,
     }
 
     impl TraitA for StructX<u32> {
@@ -48,7 +44,7 @@ mod mod_b {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = mod_a::StructX {
         val: 10,
         _marker: 0_i32,
@@ -67,3 +63,5 @@ fn main() -> i32 {
         1
     }
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

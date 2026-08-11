@@ -1,11 +1,6 @@
 // { dg-output "123\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 trait A {
     fn get_int(&self) -> i32;
 }
@@ -24,7 +19,7 @@ extern "C" {
     fn printf(s: *const i8, ...) -> i32;
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let x = 123;
     let y = get_dyn_a(&x);
     let value = y.get_int();
@@ -34,3 +29,5 @@ fn main() -> i32 {
     }
     return 0;
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

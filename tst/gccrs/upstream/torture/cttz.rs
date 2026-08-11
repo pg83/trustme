@@ -1,17 +1,12 @@
-#![feature(no_core)]
-#![no_core]
 #![feature(intrinsics)]
 #![feature(lang_items)]
-
-#[lang = "sized"]
-pub trait Sized {}
 
 extern "rust-intrinsic" {
     pub fn cttz<T>(x: T) -> T;
     pub fn abort() -> !;
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     // cttz(0) must return bit_size per the Rust reference
     if cttz(0u8) != 8 {
         abort();
@@ -95,3 +90,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

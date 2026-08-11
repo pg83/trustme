@@ -1,15 +1,10 @@
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
 #![feature(intrinsics, lang_items)]
 
 extern "rust-intrinsic" {
     fn transmute<T, U>(value: T) -> U;
 }
-
-#[lang = "sized"]
-pub trait Sized {}
 
 struct WrapI {
     inner: i32,
@@ -19,7 +14,7 @@ struct WrapF {
     inner: f32,
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let f = 15.4f32;
     let f_wrap = WrapF { inner: f };
 
@@ -28,3 +23,5 @@ fn main() -> i32 {
 
     fst - snd.inner
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

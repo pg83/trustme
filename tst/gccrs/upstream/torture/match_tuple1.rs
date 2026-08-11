@@ -1,6 +1,4 @@
 // { dg-output "x:15\r*\ny:20\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 
 extern "C" {
@@ -33,16 +31,14 @@ fn inspect(f: Foo, g: u8) -> i32 {
     return 25;
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let x = inspect(Foo::B, 2);
     let y = inspect(Foo::B, 1);
 
-    unsafe {
-        printf("x:%d\n" as *const str as *const i8, x);
-    }
-    unsafe {
-        printf("y:%d\n" as *const str as *const i8, y);
-    }
+    println!("x:{}", x);
+    println!("y:{}", y);
 
     y - x - 5
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

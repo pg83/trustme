@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 enum E {
     A = {
         enum Foo {

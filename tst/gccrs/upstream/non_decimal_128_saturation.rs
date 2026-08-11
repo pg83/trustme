@@ -1,10 +1,8 @@
 // { dg-do run }
 // { dg-require-effective-target lp64 }
 // { dg-options "-O0" }
-#![feature(no_core)]
-#![no_core]
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let hex_val: u128 = 0x1_0000_0000_0000_0000_u128;
     if (hex_val >> 64) as u8 != 1 {
         return 1;
@@ -22,3 +20,5 @@ fn main() -> i32 {
     }
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

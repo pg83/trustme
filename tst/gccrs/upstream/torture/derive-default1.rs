@@ -1,7 +1,3 @@
-#![feature(no_core)]
-#![no_core]
-#![feature(lang_items)]
-
 #[derive(Default)]
 struct Foo {
     a: i32,
@@ -10,26 +6,11 @@ struct Foo {
 #[derive(Default)]
 struct Bar(i32);
 
-#[lang = "sized"]
-trait Sized {}
-
-mod default {
-    use crate::Sized;
-
-    trait Default: Sized {
-        fn default() -> Self;
-    }
-
-    impl Default for i32 {
-        fn default() -> Self {
-            1
-        }
-    }
-}
-
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let foo = Foo::default();
     let bar = Bar::default();
 
-    foo.a + bar.0 - 2
+    foo.a + bar.0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

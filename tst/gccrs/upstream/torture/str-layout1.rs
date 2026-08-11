@@ -1,12 +1,7 @@
 // { dg-additional-options "-w" }
 // { dg-output "t1sz=5 t2sz=10\r*" }
-#![feature(no_core)]
-#![no_core]
 #![feature(intrinsics, staged_api)]
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 mod mem {
     extern "rust-intrinsic" {
         #[rustc_const_stable(feature = "const_transmute", since = "1.46.0")]
@@ -45,7 +40,7 @@ impl str {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let t1: &str = "TEST1";
     let t2: &str = &"TEST_12345";
 
@@ -62,3 +57,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

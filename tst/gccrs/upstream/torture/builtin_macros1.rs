@@ -1,26 +1,13 @@
-// { dg-output "rust/execute/torture/builtin_macros1.rs\r*\n" }
-#![feature(no_core)]
-#![no_core]
-
 #![feature(rustc_attrs)]
-
-#[rustc_builtin_macro]
-macro_rules! file {
-    () => {{}};
-}
 
 extern "C" {
     fn printf(fmt: *const i8, ...);
 }
 
-fn print(s: &str) {
-    unsafe {
-        printf("%s\n\0" as *const str as *const i8, s);
-    }
-}
-
-fn main() -> i32 {
-    print(file!());
+fn gccrs_main() -> i32 {
+    assert!(file!().ends_with("tst/gccrs/upstream/torture/builtin_macros1.rs"));
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

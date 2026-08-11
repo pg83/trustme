@@ -1,6 +1,4 @@
 // { dg-output "zero to END_RANGE\r*\nzero to END_RANGE\r*\nelse\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 
 extern "C" {
@@ -31,10 +29,12 @@ fn foo(x: i32) {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     foo(11);
     foo(15);
     foo(21);
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

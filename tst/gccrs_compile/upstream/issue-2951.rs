@@ -1,17 +1,2 @@
-#![feature(no_core)]
-#![no_core]
-
-#![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
-#[lang = "clone"]
-pub trait Clone: Sized {
-    fn clone(&self) -> Self;
-}
-
-impl Clone for ! {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
+#![feature(never_type)]
+pub fn clone_never(value: &!) -> ! { value.clone() }

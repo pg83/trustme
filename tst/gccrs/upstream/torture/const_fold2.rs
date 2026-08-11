@@ -1,6 +1,4 @@
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
 const A: i32 = 1;
 const B: i32 = { A + 2 };
@@ -14,6 +12,8 @@ const C: i32 = {
     test() + a
 };
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     C - 7
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

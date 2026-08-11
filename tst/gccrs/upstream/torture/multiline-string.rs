@@ -1,13 +1,11 @@
 // { dg-output "gcc\n\nrs\n" }
-#![feature(no_core)]
-#![no_core]
 
 
 extern "C" {
     fn printf(fmt: *const i8, ...);
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = "gcc
 
 rs\0";
@@ -16,3 +14,5 @@ rs\0";
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

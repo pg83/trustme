@@ -1,11 +1,9 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(prelude_import)]
 
 mod core {
-    mod prelude {
-        mod v1 {
+    pub mod prelude {
+        pub mod v1 {
             // hehe
         }
     }

@@ -1,7 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
-#![feature(rustc_attrs)]
-
-#[rustc_deprecated(since = "right now", reason = "a whim")]
+#[deprecated(since = "1.0.0", note = "a whim")]
 pub fn foo() {}

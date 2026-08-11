@@ -1,13 +1,11 @@
 /* { dg-output "bar foo baz foobar\r*\n" } */
-#![feature(no_core)]
-#![no_core]
 
 extern "C" {
     fn printf(s: *const i8, ...);
     fn memchr(s: *const i8, c: u8, n: usize) -> *const i8;
 }
 
-pub fn main() -> i32 {
+pub fn gccrs_main() -> i32 {
     let f = "%s %s %s %s\n\0";
     let s = "bar\0\
            foo\
@@ -24,3 +22,5 @@ pub fn main() -> i32 {
     }
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,15 +1,10 @@
 /* { dg-output "S::f\r*\nT1::f\r*\nT2::f\r*\n" } */
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
 
 extern "C" {
     fn printf(s: *const i8, ...);
 }
-
-#[lang = "sized"]
-pub trait Sized {}
 
 struct S;
 
@@ -51,10 +46,12 @@ trait T2 {
 }
 impl T2 for S {}
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     S::f();
     <S as T1>::f();
     <S as T2>::f();
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

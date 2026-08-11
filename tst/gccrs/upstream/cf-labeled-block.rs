@@ -1,6 +1,4 @@
 // { dg-output "222\r*\n333\r*\n" }
-#![feature(no_core)]
-#![no_core]
 extern "C" {
     fn printf(s: *const i8, ...);
 }
@@ -12,7 +10,7 @@ fn dump_number(num: i32) {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = 'block_a: {
         if false {
             break 'block_a 111;
@@ -34,3 +32,5 @@ fn main() -> i32 {
     // dump_number(c);
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

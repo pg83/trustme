@@ -1,12 +1,7 @@
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 #![feature(intrinsics)]
 #![feature(staged_api)]
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 extern "rust-intrinsic" {
     #[rustc_const_stable(feature = "const_ptr_offset", since = "1.61.0")]
     pub fn offset<T>(dst: *const T, offset: isize) -> *const T;

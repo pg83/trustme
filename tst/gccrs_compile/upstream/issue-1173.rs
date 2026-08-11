@@ -1,14 +1,9 @@
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
 
 #![feature(intrinsics)]
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 mod mem {
     extern "rust-intrinsic" {
         pub fn transmute<U, V>(_: U) -> V;

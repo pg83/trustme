@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 const TRUE: bool = true;
 const FALSE: bool = !TRUE;

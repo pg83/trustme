@@ -1,19 +1,9 @@
 // { dg-output "d\r*\nd\r*\n" }
 // { dg-additional-options "-w" }
-#![feature(no_core)]
 #![feature(lang_items)]
-#![no_core]
 
 extern "C" {
     fn printf(s: *const i8, ...);
-}
-
-#[lang = "sized"]
-pub trait Sized {}
-
-#[lang = "drop"]
-pub trait Drop {
-    fn drop(&mut self);
 }
 
 struct Droppable;
@@ -39,8 +29,9 @@ fn unit_tail_literal() {
     ()
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     unit_tail_call();
     unit_tail_literal();
     0
 }
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

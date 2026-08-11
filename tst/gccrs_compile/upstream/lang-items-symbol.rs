@@ -1,8 +1,2 @@
-#![feature(no_core, lang_items)]
-#![no_core]
-
-#[lang = "alloc_layout"]
-pub struct Layout;
-
-#[lang = "oom"]
-pub fn _oom() {}
+pub use std::alloc::Layout;
+pub fn oom(layout: Layout) -> ! { std::alloc::handle_alloc_error(layout) }

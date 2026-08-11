@@ -1,8 +1,4 @@
-#![feature(no_core, lang_items)]
-#![no_core]
-
-#[lang = "sized"]
-pub trait Sized {}
+#![feature(lang_items)]
 
 trait TraitA {
     fn do_a(&self) -> i32;
@@ -36,7 +32,7 @@ mod mod_b {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = mod_a::StructX { val: 10 };
     let b = mod_b::StructX { val: 20 };
 
@@ -49,3 +45,5 @@ fn main() -> i32 {
         1
     }
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

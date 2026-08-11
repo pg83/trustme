@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 extern "C" {
     fn printf(fmt: *const i8, _: ...);

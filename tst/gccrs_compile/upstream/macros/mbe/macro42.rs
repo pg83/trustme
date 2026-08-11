@@ -1,13 +1,6 @@
 // { dg-additional-options "-w -frust-cfg=A" }
-#![feature(no_core)]
-#![no_core]
 
 #![feature(rustc_attrs)]
-
-#[rustc_builtin_macro]
-macro_rules! cfg {
-    () => {{}};
-}
 
 fn main() -> i32 {
     let mut res = 0;

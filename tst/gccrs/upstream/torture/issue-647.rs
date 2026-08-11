@@ -1,15 +1,10 @@
 /* { dg-output "Hello World 123\r*\n" }*/
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
 
 extern "C" {
     fn printf(s: *const i8, ...);
 }
-
-#[lang = "sized"]
-pub trait Sized {}
 
 struct Foo<T>(T);
 
@@ -23,7 +18,7 @@ fn test<T>(a: Bar<T>) -> Foo<T> {
     a.a
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a: Bar<i32> = Bar::<i32> {
         a: Foo::<i32>(123),
         b: true,
@@ -39,3 +34,5 @@ fn main() -> i32 {
     }
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

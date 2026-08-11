@@ -1,35 +1,18 @@
-// { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
-
-#![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
-#[lang = "index"]
-trait Index<Idx> {
-    type Output;
-
-    fn index(&self, index: Idx) -> &Self::Output;
-}
+use std::ops::Index;
 
 struct Foo(i32, i32);
+
 impl Index<isize> for Foo {
     type Output = i32;
 
     fn index(&self, index: isize) -> &i32 {
-        if index == 0 {
-            &self.0
-        } else {
-            &self.1
-        }
+        if index == 0 { &self.0 } else { &self.1 }
     }
 }
 
-fn main() -> i32 {
-    let a = Foo(1, 2);
-    let b = a[0];
-    let c = a[1];
-
-    c - b - 1
+fn gccrs_main() -> i32 {
+    let value = Foo(1, 2);
+    value[1] - value[0] - 1
 }
+
+fn main() { let code = gccrs_main(); if code != 0 { std::process::exit(code); } }

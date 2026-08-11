@@ -1,7 +1,6 @@
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
+#[path = "extern_mod1/modules/mod.rs"]
 mod modules;
 
 fn main() {

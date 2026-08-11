@@ -1,17 +1,12 @@
-#![feature(no_core)]
-#![no_core]
 #![feature(intrinsics)]
 #![feature(lang_items)]
-
-#[lang = "sized"]
-pub trait Sized {}
 
 extern "rust-intrinsic" {
     pub fn ctlz<T>(x: T) -> T;
     pub fn abort() -> !;
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     if ctlz(0u8) != 8 {
         abort();
     }
@@ -24,3 +19,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

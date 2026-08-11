@@ -1,6 +1,4 @@
 // { dg-output "zo1\r*\nzo1\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 extern "C" {
     fn printf(s: *const i8, ...);
@@ -22,9 +20,11 @@ macro_rules! zero_or_one {
     };
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     zero_or_one!();
     zero_or_one!(f());
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

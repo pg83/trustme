@@ -1,64 +1,9 @@
-/* { dg-output "a == b\r*\na != c\r*\n" }*/
-/* { dg-options "-w" } */
-#![feature(no_core)]
-#![no_core]
-
-
-#![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
-#[lang = "eq"]
-pub trait PartialEq<Rhs: ?Sized = Self> {
-    fn eq(&self, other: &Rhs) -> bool;
-
-    fn ne(&self, other: &Rhs) -> bool {
-        !self.eq(other)
-    }
-}
-
-impl PartialEq for i32 {
-    fn eq(&self, other: &Self) -> bool {
-        *self == *other
-    }
-}
-
-struct Foo<T> {
-    value: T,
-}
-
-impl<T: PartialEq> PartialEq for Foo<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.value.eq(&other.value)
-    }
-}
-
-extern "C" {
-    fn puts(s: *const i8);
-}
-
-fn print(s: &str) {
-    unsafe {
-        puts(s as *const str as *const i8);
-    }
-}
-
-fn main() -> i32 {
-    let a = Foo { value: 42i32 };
-    let b = Foo { value: 42i32 };
-    let c = Foo { value: 99i32 };
-
-    if a == b {
-        print("a == b");
-    } else {
-        print("a != b");
-    }
-
-    if a == c {
-        print("a == c");
-    } else {
-        print("a != c");
-    }
-
+/* { dg-output "a == b\r*\na != c\r*\n" } */
+#[derive(PartialEq)] struct Foo<T> { value: T }
+fn gccrs_main() -> i32 {
+    let a = Foo { value: 42 }; let b = Foo { value: 42 }; let c = Foo { value: 99 };
+    println!("{}", if a == b { "a == b" } else { "a != b" });
+    println!("{}", if a == c { "a == c" } else { "a != c" });
     0
 }
+fn main() { let code = gccrs_main(); if code != 0 { std::process::exit(code); } }

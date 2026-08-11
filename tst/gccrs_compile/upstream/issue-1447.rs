@@ -1,12 +1,6 @@
 // { dg-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
-#![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
-struct PhantomData<T>;
+use std::marker::PhantomData;
 
 struct Hasher<S> {
     _marker: PhantomData<S>,

@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 fn foo() {}
 fn bar() -> i32 { return 10; }

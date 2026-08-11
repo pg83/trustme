@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 pub fn rlib() {
     let _ = ((-1 as i8) << 8 - 1) as f32;

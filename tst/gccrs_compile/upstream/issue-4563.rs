@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 mod foo {
     pub fn foo() {}

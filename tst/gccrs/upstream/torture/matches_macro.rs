@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 macro_rules! matches {
     ($expression:expr, $($pattern:pat)|+ $( if $guard:expr ),*) => {
@@ -18,7 +16,7 @@ pub fn shouldnt() -> bool {
     matches!(1, 2)
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let mut retval = 2;
 
     if should_match() {
@@ -31,3 +29,5 @@ fn main() -> i32 {
 
     retval
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

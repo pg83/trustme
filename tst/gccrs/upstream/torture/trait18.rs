@@ -1,7 +1,5 @@
 /* { dg-output "parent\r*\nchild\r*\n" } */
 //Testing default implementations with supertraits.
-#![feature(no_core)]
-#![no_core]
 
 
 extern "C" {
@@ -45,7 +43,7 @@ impl Child for Foo {
     }
 }
 
-pub fn main() -> i32 {
+pub fn gccrs_main() -> i32 {
     let a = Foo{ my_int: 0xfeedf00d};
     let b: &dyn Child = &a;
 
@@ -57,3 +55,5 @@ pub fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

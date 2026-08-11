@@ -1,6 +1,5 @@
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
+#![allow(bindings_with_variant_name)]
 
 enum E {
     A,
@@ -8,7 +7,7 @@ enum E {
     C
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     use E::C;
 
     let v1 = match E::A {
@@ -25,3 +24,5 @@ fn main() -> i32 {
 
     v1 + v2
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

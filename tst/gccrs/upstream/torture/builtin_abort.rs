@@ -1,6 +1,4 @@
 // { dg-shouldfail "abort should stop the program" }
-#![feature(no_core)]
-#![no_core]
 
 #![feature(rustc_attrs)]
 #![feature(intrinsics)]
@@ -11,7 +9,9 @@ mod intrinsics {
     }
 }
 
-pub fn main () -> i32 {
+pub fn gccrs_main () -> i32 {
     intrinsics::abort();
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

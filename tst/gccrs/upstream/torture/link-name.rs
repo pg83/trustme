@@ -1,8 +1,6 @@
 // { dg-additional-options "-fdump-rtl-final" }
 // { dg-final { scan-rtl-dump "printf" "final" } }
 // { dg-output "gcc\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 
 extern "C" {
@@ -10,10 +8,12 @@ extern "C" {
     fn druckt(fmt: *const i8, ...);
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = "gcc\0";
 
     unsafe { druckt("%s\n\0" as *const str as *const i8, a as *const str as *const i8); }
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

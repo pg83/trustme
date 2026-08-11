@@ -1,28 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
-#![feature(rustc_attrs, lang_items)]
-
-#[rustc_builtin_macro]
-macro_rules! option_env {
-    () => {}
-}
-
-#[lang = "sized"]
-trait Sized {}
-
-pub mod core {
-    pub mod option {
-        pub enum Option<T> {
-            #[lang = "Some"]
-            Some(T),
-            #[lang = "None"]
-            None,
-        }
-    }
-}
-
-use core::option::Option;
+use std::option::Option;
 
 
 fn main() {

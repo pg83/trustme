@@ -1,6 +1,4 @@
 // { dg-output "invok\r*\ninvok\r*\ninvok\r*\ninvok\r*\ninvok\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 extern "C" {
     fn printf(s: *const i8, ...);
@@ -51,7 +49,7 @@ macro_rules! invocation4 {
     (not a keyword) => {};
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     invocation0!(valid);
     invocation1!();
     invocation2!(valid);
@@ -62,3 +60,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 macro_rules! c_fn {
     {$name:ident ($($arg_name:ident $arg_ty:ty),*) -> $ret_ty:ty} => {

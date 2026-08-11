@@ -1,6 +1,4 @@
 // { dg-output "73\r*\n12\r*\n5\r*\n" }
-#![feature(no_core)]
-#![no_core]
 extern "C" {
     fn printf(s: *const i8, ...);
 }
@@ -70,7 +68,7 @@ fn unlabeled_only(limit: i32) -> i32 {
     acc
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = mixed_flow(20);
     let b = unlabeled_only(9);
     dump_number(a);
@@ -78,3 +76,5 @@ fn main() -> i32 {
     dump_number(5);
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

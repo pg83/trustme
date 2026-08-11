@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 // TODO: this test ICEs because slices in function parameters aren't fully implemented.
 // once implementation is added this test should compile normally
 // { dg-ice "" }

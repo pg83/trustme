@@ -1,39 +1,20 @@
 // { dg-output "1\r*\n" }
-// { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
-#![feature(lang_items)]
+use std::ops::BitAndAssign;
 
-extern "C" {
-    fn printf(s: *const i8, ...);
-}
+struct Number(i32);
 
-#[lang = "sized"]
-pub trait Sized {}
-
-#[lang = "bitand_assign"]
-pub trait BitAndAssign<Rhs = Self> {
-    fn bitand_assign(&mut self, rhs: Rhs);
-}
-
-impl BitAndAssign for i32 {
-    fn bitand_assign(&mut self, other: i32) {
-        *self &= other;
-
-        unsafe {
-            let a = "%i\n\0";
-            let b = a as *const str;
-            let c = b as *const i8;
-
-            printf(c, *self);
-        }
+impl BitAndAssign for Number {
+    fn bitand_assign(&mut self, other: Number) {
+        self.0 &= other.0;
+        println!("{}", self.0);
     }
 }
 
-fn main() -> i32 {
-    let mut a = 1;
-    a &= 1;
-
+fn gccrs_main() -> i32 {
+    let mut value = Number(1);
+    value &= Number(1);
     0
 }
+
+fn main() { let code = gccrs_main(); if code != 0 { std::process::exit(code); } }

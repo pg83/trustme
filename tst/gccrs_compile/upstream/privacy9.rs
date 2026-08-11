@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 fn main() {
     let _arr0: [i32; 5] = [1, 2, 3, 4, 5];

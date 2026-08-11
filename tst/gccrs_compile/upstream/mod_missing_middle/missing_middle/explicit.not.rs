@@ -1,4 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
+#[path = "explicit.not/other.rs"]
 mod other;

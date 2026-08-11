@@ -1,12 +1,7 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(intrinsics)]
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 enum BookFormat {
     Paperback,
     Hardback,
@@ -22,8 +17,10 @@ mod core {
     }
 }
 
-pub fn main() -> i32 {
+pub fn gccrs_main() -> i32 {
     let count = core::intrinsics::variant_count::<BookFormat>();
 
     (count as i32) - 3
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,8 +1,4 @@
-#![feature(no_core, intrinsics, staged_api, lang_items)]
-#![no_core]
-
-#[lang = "sized"]
-pub trait Sized {}
+#![feature(intrinsics, staged_api, lang_items)]
 
 // below's helper code copied from issue-1232.rs
 extern "rust-intrinsic" {

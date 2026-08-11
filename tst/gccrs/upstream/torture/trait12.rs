@@ -1,15 +1,10 @@
 /* { dg-output "3\r*\n" } */
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
 
 extern "C" {
     fn printf(s: *const i8, ...);
 }
-
-#[lang = "sized"]
-pub trait Sized {}
 
 trait FnLike<A, R> {
     fn call(&self, arg: A) -> R;
@@ -38,8 +33,10 @@ fn call_repeatedly(f: &FnObject) {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     call_repeatedly(&Identity);
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

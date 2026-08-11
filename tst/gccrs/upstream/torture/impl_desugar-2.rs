@@ -1,10 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-
-#[lang = "sized"]
-trait Sized {}
 
 macro_rules! impl_foo {
 	() => { impl Foo }
@@ -29,9 +24,11 @@ pub fn foo(_value: impl Bar<Baz = impl_foo!()>) -> i32 {
     15
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let bar = MyBar;
     let result: i32 = foo(bar);
 
     result - 15
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

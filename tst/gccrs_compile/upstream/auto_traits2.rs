@@ -1,11 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
-#![feature(optin_builtin_traits, lang_items)]
-
-pub unsafe auto trait Send {}
-#[lang = "sync"]
-pub unsafe auto trait Sync {}
+use std::marker::{Send, Sync};
 
 trait A {
     fn a_method(&self) {}

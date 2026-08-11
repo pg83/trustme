@@ -1,22 +1,3 @@
-#![feature(no_core)]
-#![no_core]
-#![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
-mod clone {
-    #[lang = "clone"]
-    pub trait Clone {
-        fn clone(&self) -> Self;
-    }
-
-    impl Clone for i32 {
-        fn clone(&self) -> Self {
-            *self
-        }
-    }
-}
-
 #[derive(Clone)]
 struct Foo {
     a: i32,
@@ -28,7 +9,7 @@ struct S {
     b: Foo,
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let s1 = S {
         a: 15,
         b: Foo { a: 14 },
@@ -41,3 +22,5 @@ fn main() -> i32 {
     // should be 0 if all fields were cloned correctly
     l + r
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

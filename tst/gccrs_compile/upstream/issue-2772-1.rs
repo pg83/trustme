@@ -1,11 +1,6 @@
 // { dg-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
 struct Pair<'a, T, U>
 where
     T: 'a,
@@ -13,6 +8,7 @@ where
 {
     left: T,
     right: U,
+    marker: std::marker::PhantomData<&'a ()>,
 }
 
 pub fn test<'a>() {
@@ -20,5 +16,6 @@ pub fn test<'a>() {
     let x = Pair {
         left: &&a,
         right: &a,
+        marker: std::marker::PhantomData,
     };
 }

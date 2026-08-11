@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 const X: i32 = const {
     let a = 15;
@@ -7,6 +5,8 @@ const X: i32 = const {
     a + b
 };
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     X - 29
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,6 +1,4 @@
 // { dg-output "other!\r*\nother!\r*\nother!\r*\nfifteen!\r*\nfifteen!\r*\nother!\r*\nother!\r*\nfifteen!\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 
 extern "C" {
@@ -95,7 +93,7 @@ fn foo_usize(x: usize) {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let x = -2;
     foo_i32(x);
     foo_i32(334);
@@ -110,3 +108,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

@@ -1,12 +1,10 @@
-#![feature(no_core)]
-#![no_core]
 
 enum Foo {
     A,
     B(i32),
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let result = Foo::A;
 
     let value = match result {
@@ -16,3 +14,5 @@ fn main() -> i32 {
 
     value - 15
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

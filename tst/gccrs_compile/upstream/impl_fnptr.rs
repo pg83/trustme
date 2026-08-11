@@ -1,22 +1,8 @@
-#![feature(no_core)]
-#![no_core]
+extern "C" fn first() -> i32 { 1 }
+extern "C" fn second() -> i32 { 2 }
 
-#![feature(lang_items)]
-#[lang = "sized"]
-pub trait Sized {}
-
-#[lang = "eq"]
-pub trait PartialEq<Rhs: ?Sized = Self> {
-    fn eq(&self, other: &Rhs) -> bool;
-
-    fn ne(&self, other: &Rhs) -> bool {
-        !self.eq(other)
-    }
-}
-
-impl<Ret> PartialEq for extern "C" fn() -> Ret {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        *self as usize == *other as usize
-    }
+pub fn compare_function_pointers() -> bool {
+    let left: extern "C" fn() -> i32 = first;
+    let right: extern "C" fn() -> i32 = second;
+    left == right
 }

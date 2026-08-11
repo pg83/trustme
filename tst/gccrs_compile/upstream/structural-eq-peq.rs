@@ -1,14 +1,6 @@
-#![feature(no_core)]
-#![no_core]
+#[derive(PartialEq, Eq)]
+struct StructuralValue { field: i32 }
 
-#![feature(lang_items)]
-
-#[lang = "structural_peq"]
-pub trait StructuralPartialEq {
-    // Empty.
-}
-
-#[lang = "structural_teq"]
-pub trait StructuralEq {
-    // Empty.
+pub fn compare() -> bool {
+    StructuralValue { field: 1 } == StructuralValue { field: 1 }
 }

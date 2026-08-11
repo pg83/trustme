@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 macro_rules! multi {
     ($( $a:ident )? $( + $b:ident )?) => {

@@ -1,10 +1,5 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-
-#[lang = "sized"]
-trait Sized {}
 
 pub trait Value {
     fn get(&self) -> i32;
@@ -28,9 +23,11 @@ pub fn foo(a: &impl Value, b: &impl Value) -> i32 {
     a.get() + b.get()
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = Foo(1);
     let b = Bar(2);
 
     foo(&a, &b) - 3
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

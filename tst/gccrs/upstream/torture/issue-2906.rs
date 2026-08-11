@@ -1,7 +1,5 @@
 // { dg-warning "field is never read: .x." "" { target *-*-* } .-1 }
 // { dg-warning "field is never read: .y." "" { target *-*-* } .-2 }
-#![feature(no_core)]
-#![no_core]
 
 struct Point {
     x: u32,
@@ -20,7 +18,7 @@ fn is_origin(p: Point) -> bool {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let p = Point { x: 0, y: 0 };
     let q = Point { x: 0, y: 1 };
     let mut retval = 2;
@@ -35,3 +33,5 @@ fn main() -> i32 {
 
     retval
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

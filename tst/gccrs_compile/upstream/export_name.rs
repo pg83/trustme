@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 #[export_name = "other_name"]
 fn func() {}

@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 /// doc comment 1
 /// doc comment 2

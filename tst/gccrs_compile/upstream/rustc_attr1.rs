@@ -1,6 +1,4 @@
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
 
 #![feature(rustc_attrs)]

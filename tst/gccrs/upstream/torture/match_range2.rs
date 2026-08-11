@@ -1,6 +1,4 @@
 // { dg-output "lowercase\r*\nuppercase\r*\nother\r*\n" }
-#![feature(no_core)]
-#![no_core]
 
 
 extern "C" {
@@ -39,10 +37,12 @@ fn bar(x: char) {
     }
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     bar('b');
     bar('X');
     bar('!');
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

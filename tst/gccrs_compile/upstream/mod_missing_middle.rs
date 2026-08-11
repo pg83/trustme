@@ -1,14 +1,11 @@
 // { dg-additional-options "-w" }
-#![feature(no_core)]
-#![no_core]
 
 
-mod missing_middle {
-    mod sub;
+#[path = "mod_missing_middle/missing_middle/sub/mod.rs"]
+mod missing_middle_sub;
 
-    #[path = "explicit.not.rs"]
-    mod explicit;
-}
+#[path = "mod_missing_middle/missing_middle/explicit.not.rs"]
+mod missing_middle_explicit;
 
 #[path = "mod_missing_middle/missing_middle"]
 mod with_outer_path_attr {

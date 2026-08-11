@@ -1,5 +1,3 @@
-#![feature(no_core)]
-#![no_core]
 
 pub fn f() {
     let _ = 0.;

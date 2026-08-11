@@ -1,20 +1,12 @@
-#![feature(no_core)]
-#![no_core]
 
 #![feature(lang_items)]
-#[lang = "sized"]
-trait Sized {}
-
 #[allow(unused)]
 macro_rules! simd_shuffle {
     ($x:expr, $y:expr, $idx:expr $(,)?) => {{
         simd_shuffle(
             $x,
             $y,
-            const {
-                let v: [u32; _] = $idx;
-                v
-            },
+            $idx,
         )
     }};
 }
@@ -23,7 +15,7 @@ const fn simd_shuffle(_a: [u32; 4], _b: [u32; 4], idx: [u32; 4]) -> [u32; 4] {
     idx
 }
 
-fn main() -> i32 {
+fn gccrs_main() -> i32 {
     let a = [1, 2, 3, 4];
     let b = [5, 6, 7, 8];
     let indices = [3, 2, 1, 0];
@@ -45,3 +37,5 @@ fn main() -> i32 {
 
     0
 }
+
+fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }
