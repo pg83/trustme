@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <unordered_map>
 #include "hir_type_ref.h"
 #include "hir_expr_ptr.h"
 #include "hir_expr.h"
@@ -204,6 +205,9 @@ struct Context {
     unsigned next_rule_idx;
     // NOTE: unique_ptr used to reduce copy costs of the list
     ::std::vector<::std::unique_ptr<Coercion>> link_coerce;
+    // Expected types are available while aggregate fields are enumerated,
+    // before the corresponding coercion rules are solved.
+    ::std::unordered_map<const ::HIR::ExprNode*, ::HIR::TypeRef> coercion_hints;
     ::std::vector<Associated> link_assoc;
     /// Nodes that need revisiting (e.g. method calls when the receiver isn't known)
     ::std::vector<::HIR::ExprNode*> to_visit;
@@ -264,6 +268,12 @@ struct Context {
     void equate_types_inner(const Span& sp, const ::HIR::TypeData* l, const ::HIR::TypeData* r);
     // - Equate two types, allowing inferrence
     void equate_types_coerce(const Span& sp, const ::HIR::TypeData* l, ::HIR::ExprNodeP& node_ptr);
+    void record_coercion_hint(const ::HIR::TypeData* type, ::HIR::ExprNodeP& node_ptr);
+
+    const ::HIR::TypeData* coercion_hint(const ::HIR::ExprNode& node) const {
+        const auto it = coercion_hints.find(&node);
+        return it == coercion_hints.end() ? nullptr : it->second;
+    }
     // - Equate a type to an associated type (if name == "", no equation is done, but trait is searched)
     void equate_types_assoc(const Span& sp, const ::HIR::TypeData* l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeData* impl_ty, const char* name, const ::HIR::PathParams& aty_pp, bool is_op = false, typeck::PrimitiveOperator operator_kind = typeck::PrimitiveOperator::None);
 

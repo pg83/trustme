@@ -3906,8 +3906,23 @@ void Context::handle_pattern_direct_inner(const Span& sp, ::HIR::Pattern& pat, c
     }
 }
 
+void Context::record_coercion_hint(const ::HIR::TypeData* type, ::HIR::ExprNodeP& node_ptr) {
+    auto* hint_node = node_ptr.get();
+    // A block's tail expression is checked with the block's expectation.
+    while (const auto* block = cast<const ::HIR::ExprNode_Block>(hint_node)) {
+        if (!block->m_value_node) {
+            break;
+        }
+        hint_node = block->m_value_node.get();
+    }
+    if (hint_node) {
+        this->coercion_hints[hint_node] = type;
+    }
+}
+
 void Context::equate_types_coerce(const Span& sp, const ::HIR::TypeData* l, ::HIR::ExprNodeP& node_ptr) {
     this->m_ivars.get_type(l);
+    this->record_coercion_hint(l, node_ptr);
     // - Just record the equality
     this->link_coerce.push_back(std::make_unique<Coercion>(Coercion{this->next_rule_idx++, l, &node_ptr}));
     DEBUG("++ " << *this->link_coerce.back());
@@ -10121,6 +10136,23 @@ namespace typecheck {
             // - Create ivars in path, and set result type
             const auto ty = this->get_structenum_ty(node.span(), node.m_is_struct, ty_path);
             this->context.equate_types(node.span(), node.m_res_type, ty);
+            if (const auto* expected_hint = this->context.coercion_hint(node)) {
+                const auto* expected = this->context.get_type(expected_hint);
+                const auto* actual_path = ty->opt_Path();
+                const auto* expected_path = expected->opt_Path();
+                if (actual_path && expected_path
+                    && actual_path->path.m_data.is_Generic()
+                    && expected_path->path.m_data.is_Generic()
+                    && actual_path->path.m_data.as_Generic().m_path
+                        == expected_path->path.m_data.as_Generic().m_path
+                    && ty->compare_with_placeholders(
+                           sp,
+                           expected,
+                           this->context.m_ivars.callback_resolve_infer()
+                       ) != ::HIR::Compare::Unequal) {
+                    this->context.equate_types(sp, ty, expected);
+                }
+            }
             if (node.m_base_value) {
                 this->context.equate_types(node.span(), node.m_base_value->m_res_type, ty);
             }
@@ -10991,6 +11023,7 @@ void Typecheck_Code_CS__EnumerateRules(Context& context, const typeck::ModuleSta
     }
 
     DEBUG("--- Enumerating");
+    context.record_coercion_hint(new_res_ty, root_ptr);
     typecheck::ExprVisitor_Enum visitor(context, ms.m_traits, new_res_ty);
     context.add_ivars(root_ptr->m_res_type);
     root_ptr->visit(visitor);
