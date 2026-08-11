@@ -1,5 +1,6 @@
 //@ edition: 2015
 
+#[repr(C)]
 struct Pair {
     first: u8,
     second: u16,

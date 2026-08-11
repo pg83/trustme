@@ -17,6 +17,18 @@ build.flags.allow({
         "descr": "total number of lite test partitions",
         "default": "",
     },
+    "system_rustc": {
+        "descr": "external rustc used for the semantic test corpus",
+        "default": "",
+    },
+    "system_cargo": {
+        "descr": "external Cargo paired with -Dsystem_rustc",
+        "default": "cargo",
+    },
+    "system_linker": {
+        "descr": "native linker used by the external rustc",
+        "default": "gcc",
+    },
 })
 
 
@@ -40,6 +52,7 @@ def parse_test_partition():
 
 
 test_partition = parse_test_partition()
+system_rustc_mode = bool(build.flags.system_rustc)
 
 build.includes += ["$(S)/bin/rustc"]
 
@@ -77,13 +90,27 @@ platform_libstd.name = "platform_libstd"
 
 SRC = build.glob("$(S)/bin/rustc/*.cpp")
 
-rustc = program(
-    srcs=SRC,
-    name="rustc",
-    output="$(B)/bin/rustc",
-    deps=[platform_libstd],
-    ldflags=["-lz"],
-)
+if system_rustc_mode:
+    rustc = command(
+        name="rustc",
+        inputs=["$(S)/tst/system_rustc.py"],
+        outputs=["$(B)/bin/rustc"],
+        cmd=[
+            "python3", "$(S)/tst/system_rustc.py", "launcher",
+            build.flags.system_rustc, build.flags.system_linker,
+            "$(B)/bin/rustc",
+        ],
+        descr="SR",
+        color="cyan",
+    )
+else:
+    rustc = program(
+        srcs=SRC,
+        name="rustc",
+        output="$(B)/bin/rustc",
+        deps=[platform_libstd],
+        ldflags=["-lz"],
+    )
 
 node_cast_test = program(
     name="node_cast_test",
@@ -171,6 +198,7 @@ std_src = command(
     inputs=["$(S)/tst/std/fetch.py"] + TESTS_LIB,
     outputs=["$(B)/tst/rust-src.tar"],
     cmd=[
+        *(LIBSTD_TIMEOUT if system_rustc_mode else []),
         "python3", "$(S)/tst/std/fetch.py",
         "$(B)/tst/rust-src.tar",
     ],
@@ -178,51 +206,96 @@ std_src = command(
     color="cyan",
 )
 
-# libstd: build the standard library (+ libproc_macro) once, from that source.
-libstd = command(
-    name="libstd",
-    inputs=(
-        ["$(S)/tst/std/build.py"]
-        + build.glob("$(S)/lib/proc_macro/**/*.rs")
-        + build.glob("$(S)/lib/proc_macro/Cargo.toml")
-        + TESTS_LIB
-    ),
-    outputs=["$(B)/tst/libstd.tar"],
-    cmd=[
-        *LIBSTD_TIMEOUT,
-        "python3", "$(S)/tst/std/build.py",
-        "$(B)/tst/rust-src.tar", "$(B)/tst/libstd.tar",
-        "$(S)/lib/proc_macro/Cargo.toml",
-    ],
-    deps=[std_src, rustc, cargo],
-    env=TOOLCHAIN_ENV,
-    descr="LS",
-    color="cyan",
-)
+# System rustc obtains its standard library from its own sysroot. The empty
+# archive preserves the adapters' interface while making their `-L` harmless.
+if system_rustc_mode:
+    libstd = command(
+        name="libstd",
+        inputs=["$(S)/tst/system_rustc.py"],
+        outputs=["$(B)/tst/libstd.tar"],
+        cmd=[
+            "python3", "$(S)/tst/system_rustc.py", "empty-libstd",
+            "$(B)/tst/libstd.tar",
+        ],
+        descr="SL",
+        color="cyan",
+    )
+else:
+    # Build the standard library (+ libproc_macro) once, from that source.
+    libstd = command(
+        name="libstd",
+        inputs=(
+            ["$(S)/tst/std/build.py"]
+            + build.glob("$(S)/lib/proc_macro/**/*.rs")
+            + build.glob("$(S)/lib/proc_macro/Cargo.toml")
+            + TESTS_LIB
+        ),
+        outputs=["$(B)/tst/libstd.tar"],
+        cmd=[
+            *LIBSTD_TIMEOUT,
+            "python3", "$(S)/tst/std/build.py",
+            "$(B)/tst/rust-src.tar", "$(B)/tst/libstd.tar",
+            "$(S)/lib/proc_macro/Cargo.toml",
+        ],
+        deps=[std_src, rustc, cargo],
+        env=TOOLCHAIN_ENV,
+        descr="LS",
+        color="cyan",
+    )
 
-rust_lib_dependencies = command(
-    name="rust_lib_dependencies",
-    inputs=(
-        [
+if system_rustc_mode:
+    rust_lib_dependencies = command(
+        name="rust_lib_dependencies",
+        inputs=(
+            [
+                "$(S)/tst/rust_lib/build_system_dependencies.py",
+                "$(S)/tst/rust_lib/dependencies/Cargo.toml",
+                "$(S)/tst/rust_lib/dependencies/Cargo.lock",
+            ]
+            + build.glob("$(S)/tst/rust_lib/dependencies/src/**/*.rs")
+            + TESTS_LIB
+        ),
+        outputs=["$(B)/tst/rust-lib-dependencies.tar"],
+        cmd=[
+            *LIBSTD_TIMEOUT,
+            "python3",
+            "$(S)/tst/rust_lib/build_system_dependencies.py",
+            "$(B)/tst/rust-src.tar",
+            "$(B)/tst/rust-lib-dependencies.tar",
+        ],
+        deps=[std_src, rustc],
+        env={
+            "RUSTC": "$(B)/bin/rustc",
+            "CARGO": build.flags.system_cargo,
+        },
+        descr="SD",
+        color="cyan",
+    )
+else:
+    rust_lib_dependencies = command(
+        name="rust_lib_dependencies",
+        inputs=(
+            [
+                "$(S)/tst/rust_lib/build_dependencies.py",
+                "$(S)/tst/rust_lib/dependencies/Cargo.toml",
+                "$(S)/tst/rust_lib/dependencies/Cargo.lock",
+            ]
+            + build.glob("$(S)/tst/rust_lib/dependencies/src/**/*.rs")
+            + TESTS_LIB
+        ),
+        outputs=["$(B)/tst/rust-lib-dependencies.tar"],
+        cmd=[
+            "python3",
             "$(S)/tst/rust_lib/build_dependencies.py",
-            "$(S)/tst/rust_lib/dependencies/Cargo.toml",
-        ]
-        + build.glob("$(S)/tst/rust_lib/dependencies/src/**/*.rs")
-        + TESTS_LIB
-    ),
-    outputs=["$(B)/tst/rust-lib-dependencies.tar"],
-    cmd=[
-        "python3",
-        "$(S)/tst/rust_lib/build_dependencies.py",
-        "$(B)/tst/rust-src.tar",
-        "$(B)/tst/libstd.tar",
-        "$(B)/tst/rust-lib-dependencies.tar",
-    ],
-    deps=[std_src, libstd, rustc, cargo],
-    env=TOOLCHAIN_ENV,
-    descr="LD",
-    color="cyan",
-)
+            "$(B)/tst/rust-src.tar",
+            "$(B)/tst/libstd.tar",
+            "$(B)/tst/rust-lib-dependencies.tar",
+        ],
+        deps=[std_src, libstd, rustc, cargo],
+        env=TOOLCHAIN_ENV,
+        descr="LD",
+        color="cyan",
+    )
 
 # resvg_src: the project source at a pinned revision.
 resvg_src = command(
@@ -255,28 +328,32 @@ resvg_vendor = command(
     color="magenta",
 )
 
-# resvg: build resvg offline against the shared libstd, then render-test it.
-resvg = command(
-    name="resvg",
-    inputs=["$(S)/tst/build_project.py", "$(S)/tst/resvg/run.py"] + TESTS_LIB,
-    outputs=["$(B)/tst/resvg.stamp"],
-    cmd=[
-        [
-            *TEST_TIMEOUT,
-            "python3", "$(S)/tst/build_project.py",
-            "$(B)/tst/resvg-src.tar",
-            "$(B)/tst/resvg-vendor.tar.zst",
-            "$(B)/tst/libstd.tar",
-            "crates/resvg",
-            "python3", "$(S)/tst/resvg/run.py", "@BIN@",
+# Real-project builds exercise our Cargo/toolchain integration, not the
+# semantic Rust corpus, so they do not exist in system-rustc mode.
+project_tests = []
+if not system_rustc_mode:
+    resvg = command(
+        name="resvg",
+        inputs=["$(S)/tst/build_project.py", "$(S)/tst/resvg/run.py"] + TESTS_LIB,
+        outputs=["$(B)/tst/resvg.stamp"],
+        cmd=[
+            [
+                *TEST_TIMEOUT,
+                "python3", "$(S)/tst/build_project.py",
+                "$(B)/tst/resvg-src.tar",
+                "$(B)/tst/resvg-vendor.tar.zst",
+                "$(B)/tst/libstd.tar",
+                "crates/resvg",
+                "python3", "$(S)/tst/resvg/run.py", "@BIN@",
+            ],
+            [*TEST_TIMEOUT, "sh", "-c", "> $(B)/tst/resvg.stamp"],
         ],
-        [*TEST_TIMEOUT, "sh", "-c", "> $(B)/tst/resvg.stamp"],
-    ],
-    deps=[resvg_src, resvg_vendor, libstd, rustc, cargo],
-    env=TOOLCHAIN_ENV,
-    descr="TS",
-    color="magenta",
-)
+        deps=[resvg_src, resvg_vendor, libstd, rustc, cargo],
+        env=TOOLCHAIN_ENV,
+        descr="TS",
+        color="magenta",
+    )
+    project_tests.append(resvg)
 
 # Unit regressions: one self-contained tst/unit/test_*.rs per compiler fix,
 # each its own node — compiled against the shared libstd and run (must exit 0).
@@ -630,10 +707,32 @@ unit_tests.append(command(
     descr="UT",
     color="green",
 ))
+unit_tests.append(command(
+    name="unit_system_rustc_mode",
+    inputs=[
+        "$(S)/build.py",
+        "$(S)/tst/system_rustc.py",
+        "$(S)/tst/unit/test_system_rustc_mode.py",
+    ],
+    outputs=["$(B)/tst/unit/system_rustc_mode.stamp"],
+    cmd=[
+        [
+            *TEST_TIMEOUT,
+            "python3", "$(S)/tst/unit/test_system_rustc_mode.py", "-v",
+        ],
+        [
+            *TEST_TIMEOUT,
+            "sh", "-c", "> $(B)/tst/unit/system_rustc_mode.stamp",
+        ],
+    ],
+    descr="UT",
+    color="green",
+))
+rust_unit_tests = []
 for _src in build.glob("$(S)/tst/unit/test_*.rs"):
     _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
     _uses_rust_lib_dependencies = _stem == "rust_lib_dev_dependencies"
-    unit_tests.append(command(
+    _target = command(
         name="unit_" + _stem,
         inputs=[_src, "$(S)/tst/unit/run_one.py"] + TESTS_LIB,
         outputs=["$(B)/tst/unit/" + _stem + ".stamp"],
@@ -651,7 +750,9 @@ for _src in build.glob("$(S)/tst/unit/test_*.rs"):
         },
         descr="UT",
         color="green",
-    ))
+    )
+    unit_tests.append(_target)
+    rust_unit_tests.append(_target)
 
 # Compile-time performance regressions are deliberately separate from the
 # normal test groups: they are valid programs, but expensive enough to run only
@@ -1241,7 +1342,7 @@ for _index, _case in enumerate(miri_cases):
     ))
 
 lite_tests = [
-    *unit_tests,
+    *(rust_unit_tests if system_rustc_mode else unit_tests),
     *rust_1_90_tests,
     *rust_ui_compile_tests,
     *gccrs_tests,
@@ -1280,9 +1381,9 @@ def partition_lite_tests(targets):
     return selected
 
 
-group("test", resvg, *lite_tests)
+group("test", *project_tests, *lite_tests)
 group("lite_tests", *partition_lite_tests(lite_tests))
-group("unit", *unit_tests)
+group("unit", *(rust_unit_tests if system_rustc_mode else unit_tests))
 group("perf", *perf_tests)
 group("rust_1_90", *rust_1_90_tests)
 group("rust_ui_compile", *rust_ui_compile_tests)

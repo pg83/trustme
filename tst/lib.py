@@ -67,9 +67,17 @@ def tar_dir(src: str, out: str, *, zstd: bool = False) -> None:
 def extern_rlib_args(root: str, crates: list[str]) -> list[str]:
     """Return `-L`/`--extern` arguments for uniquely built Cargo rlibs."""
     release = Path(root) / "release"
-    arguments = ["-L", str(release)]
+    search_paths = [release, release / "deps"]
+    arguments = []
+    for search_path in search_paths:
+        if search_path.is_dir():
+            arguments.extend(("-L", str(search_path)))
     for crate in crates:
-        matches = sorted(release.glob(f"lib{crate}-*.rlib"))
+        matches = sorted(
+            path
+            for search_path in search_paths
+            for path in search_path.glob(f"lib{crate}-*.rlib")
+        )
         if len(matches) != 1:
             raise RuntimeError(
                 f"expected one {crate} rlib under {release}, got {matches}"
