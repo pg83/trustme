@@ -137,6 +137,77 @@ namespace {
         }
     };
 
+    // Canonical query variables created while evaluating a goal are
+    // existential.  They must be instantiated as fresh variables in the
+    // caller's inference table before a root response leaves the solver.
+    // Placeholders already present in the input goal are universal and stay
+    // unchanged.
+    class InstantiateTraitResponseForCaller final: public Monomorphiser {
+        HMTypeInferrence& m_ivars;
+        const ::std::vector<::std::pair<RcString, RcString>>& m_goal_names;
+        mutable ::std::vector<::std::pair<::HIR::GenericRef, ::HIR::TypeRef>> m_type_values;
+        mutable ::std::vector<::std::pair<::HIR::GenericRef, ::HIR::ConstGeneric>> m_values;
+
+        bool is_goal_placeholder(const ::HIR::GenericRef& generic) const {
+            for (const auto& entry : m_goal_names) {
+                if (entry.first == generic.name) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+    public:
+        InstantiateTraitResponseForCaller(
+            ::HIR::TypeInterner& types,
+            HMTypeInferrence& ivars,
+            const ::std::vector<::std::pair<RcString, RcString>>& goal_names
+        )
+            : Monomorphiser(types)
+            , m_ivars(ivars)
+            , m_goal_names(goal_names)
+        {
+        }
+
+        ::HIR::TypeRef get_type(
+            const Span&, const ::HIR::GenericRef& generic
+        ) const override {
+            if (!generic.is_placeholder() || is_goal_placeholder(generic)) {
+                return Monomorphiser::m_types.generic(generic.name, generic.binding);
+            }
+            for (const auto& entry : m_type_values) {
+                if (entry.first == generic) {
+                    return entry.second;
+                }
+            }
+            auto fresh = m_ivars.new_ivar_tr();
+            m_type_values.push_back({generic, fresh});
+            return fresh;
+        }
+
+        ::HIR::ConstGeneric get_value(
+            const Span&, const ::HIR::GenericRef& generic
+        ) const override {
+            if (!generic.is_placeholder() || is_goal_placeholder(generic)) {
+                return ::HIR::ConstGeneric(generic);
+            }
+            for (const auto& entry : m_values) {
+                if (entry.first == generic) {
+                    return entry.second.clone();
+                }
+            }
+            auto fresh = ::HIR::ConstGeneric::make_Infer({m_ivars.new_ivar_val()});
+            m_values.push_back({generic, fresh.clone()});
+            return fresh;
+        }
+
+        ::HIR::LifetimeRef get_lifetime(
+            const Span&, const ::HIR::GenericRef& generic
+        ) const override {
+            return ::HIR::LifetimeRef(generic.binding);
+        }
+    };
+
     struct MatchHrls: public HIR::MatchGenerics, public Monomorphiser {
         ::HIR::PathParams hrls;
 
@@ -4919,9 +4990,30 @@ class NextTraitGoalEvaluator {
             const auto canonical = canonicalize_goal(
                 goal_params, resolved_type, nullptr, canonicalizer
             );
+            // The associated output is not part of the response cache key,
+            // but its placeholders are still inputs of this query.  Record
+            // them so root response instantiation does not mistake them for
+            // existential variables created by candidate evaluation.
+            if (assoc_type) {
+                canonicalizer.monomorph_type(span(), assoc_type, true);
+            }
+            if (assoc_params) {
+                canonicalizer.monomorph_path_params(span(), *assoc_params, true);
+            }
             const auto root_hash = goal_hash(
                 trait, canonical.params, canonical.type, nullptr
             );
+            auto instantiate_for_caller = [&](ImplRef response) {
+                if (!outermost) {
+                    return response;
+                }
+                InstantiateTraitResponseForCaller instantiator(
+                    m_crate.m_types,
+                    const_cast<HMTypeInferrence&>(m_resolve.m_ivars),
+                    canonicalizer.placeholder_names()
+                );
+                return monomorph_impl_ref(response, instantiator);
+            };
             // Extended callers use an explicit empty associated-item name
             // when they need the canonical trait response itself. Cache that
             // completed response, not just its certainty: otherwise every
@@ -4940,15 +5032,20 @@ class NextTraitGoalEvaluator {
                         canonicalizer.placeholder_names(),
                         m_response_instance_counter++
                     );
+                    auto response = monomorph_impl_ref(
+                        cached->response, instantiator
+                    );
                     return callback(
-                        monomorph_impl_ref(cached->response, instantiator),
+                        instantiate_for_caller(::std::move(response)),
                         cached->response_certainty
                     );
                 }
             }
             auto emit_response = [&](ImplRef response, ::HIR::Compare certainty) {
                 if (!cacheable_response) {
-                    return callback(::std::move(response), certainty);
+                    return callback(
+                        instantiate_for_caller(::std::move(response)), certainty
+                    );
                 }
                 auto canonical_response = monomorph_impl_ref(
                     response, canonicalizer
@@ -4962,7 +5059,10 @@ class NextTraitGoalEvaluator {
                     ::std::move(canonical_response),
                     certainty
                 );
-                return callback(::std::move(response), cached->response_certainty);
+                return callback(
+                    instantiate_for_caller(::std::move(response)),
+                    cached->response_certainty
+                );
             };
             if (find_active_goal(
                     root_hash,

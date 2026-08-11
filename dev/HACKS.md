@@ -20,8 +20,6 @@
 
    Это может оставлять неверные impl-кандидаты. Нужен отдельный goal с результатом `Yes/Ambiguous/No`, а не ослабление отношения типов.
 
-   Opt-in goal evaluator уже обрабатывает raw type/const inference, associated equality, сужающую `Self`, и сохраняет constraints единственного или эквивалентного ambiguous response. Response-producing lookup теперь, как и certainty-only lookup, сохраняет identity-response при пустом наборе кандидатов с inference inputs. Исправлены обратное проталкивание `usize` через `SliceIndex`/operator goals, связывание ivar с жёсткой unresolved-проекцией в `Iterator::try_find` и преждевременный отказ от `IntoIterator` для `Zip<A::IntoIter, B::IntoIter>`. Static next-solver lookup больше не выпускает const/type ivar из своей частной inference-таблицы в HIR: неизвестные параметры пересекают границу как placeholders и становятся caller-owned ivar. Expected type coercion теперь до enumeration направляет inferred generic args struct literal: `Pin<&mut T>::into_ref` coercит поле `&mut T` в `&T`, а не требует ложный outer `CoerceUnsized` через отсутствующий `T: Unsize<T>`. Эквивалентные solver responses теперь сравниваются отдельной relation без регионов: это объединяет declared GAT-bound `Searcher<'#omitted>` после HM region erasure и тот же `Searcher<'a>` из `ReverseSearcher<'a>`, не ослабляя pointer equality типов и не обходя HRTB leak-check. Projection response вложенного impl-bound теперь связывает caller-owned ivar, даже если impl-параметр уже пересёк корневой response как ivar; normalizes-to с таким destination возвращает доказанный ответ и equality constraint, а не ложный `Maybe`. `Self` вложенной trait-цели теперь нормализуется до сборки кандидатов: impl-bound `<Option::IntoIter<T> as Iterator>::Item: IntoIterator` доказывается через `T`. Candidate assembly сохраняет источник builtin/ParamEnv, bounded responses дедуплицируются вместе с HRTB и associated equalities, а зависимый от generic ParamEnv имеет upstream-приоритет: `T: Thin` сохраняет `Pointee::Metadata = ()`. Unresolved projection `Self` над type ivar теперь, как после upstream structural normalization, даёт forced ambiguity: `<_ as FnOnce>::Output: Debug` не привязывается к постороннему `T: Debug` до вывода closure, поэтому полный `core` проходит `portable-simd/crates/core_simd/src/masks.rs:440`.
-
 4. Backend местами генерирует программу, которая просто вызывает `abort()`.
 
    [trans_codegen_c.cpp](/home/pg/monorepo/trustme/bin/rustc/trans_codegen_c.cpp:4634) обрывает `vmov/vexpand/vpexpand` в GCC-like backend.
@@ -53,14 +51,14 @@
 | Metadata | `hir_main_bindings.cpp:1076` | Empty crate-name rewrite остаётся compatibility debt. |
 | Typeck common | `hir_typeck_common.cpp:503,515,753,761` | Erasure и passthrough lifetime вместо явных binders. |
 | Typeck solver | `hir_typeck_expr_cs.cpp:932,4991,5924,5938,6713,7565,8025,8169,8349`; header `:175` | Global fuzzy relation, operator result=LHS и arbitrary ivar/associated-type fallbacks. |
-| Typeck helpers | `hir_typeck_helpers.cpp:6614` | Opaque fuzzy matching. |
+| Typeck helpers | `hir_typeck_helpers.cpp:7168` | Opaque fuzzy matching. |
 | Typeck impls | `hir_typeck_main_bindings.cpp:2118,2346,2380` | Lifetime bounds копируются или заменяются для совпадения представления. |
 | Static solver | `hir_typeck_static.cpp:488,518,1251,2122` | Associated bounds дописываются, `_` автоматически проходит bound, opaque equality обходится локально. |
 | Const eval | `hir_conv_constant_evaluation.cpp:1523,3639,3654` | One-past-end допуск и lazy/«roughly-correct» monomorph state. `impl const Drop` неотличим от обычного `Drop`: parser не сохраняет constness trait impl (`parse_common.cpp:3450`). |
 | MIR lowering | `mir_from_hir.cpp:203,1129,1614` | Generator drop-flag remap, assignment borrow-extension suppression и virtual unsize cast. |
 | MIR passes | `mir_operations.cpp:4749` | Usage downgrade при move. |
 | C backend | `trans_codegen_c.cpp:1309,1320,1944,2130,2587,2945,2951,5092,5731` | Принудительный `-O1`, platform workarounds, incomplete asm/AVX translation и runtime `abort()`. |
-| Enumeration | `trans_main_bindings.cpp:1595,2450,2738,3118` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
+| Enumeration | `trans_main_bindings.cpp:1595,2449,2738,2887,3117` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model; magic `Clone` принимает только tuple/array/closure. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующий функциональный blocker — impl-placeholder покидает solver и доходит до общей type relation: полный `core -Znext-solver` падает в `hir_typeck_expr_cs.cpp:1971` на `Option<ph_...>` и assert `!type_contains_impl_placeholder(...)`. Исправление строго unit-first. Macro hygiene остаётся отдельной архитектурной задачей.
+Следующий функциональный blocker — enumeration magic `Clone`: полный `core -Znext-solver` проходит typecheck, validation и MIR, но падает в `trans_main_bindings.cpp:2887` на `LayoutError`, потому что auto-generated `Clone` поддерживает только tuple/array/closure. Исправление строго unit-first. Macro hygiene остаётся отдельной архитектурной задачей.
