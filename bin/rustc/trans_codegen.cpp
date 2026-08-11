@@ -1188,20 +1188,6 @@ namespace {
                                 continue;
                             }
                             break;
-                            TU_ARM(stmt, Drop, se) {
-                                m_of << "DROP " << fmt(se.slot);
-                                switch (se.kind) {
-                                    case ::MIR::eDropKind::DEEP:
-                                        break;
-                                    case ::MIR::eDropKind::SHALLOW:
-                                        m_of << " SHALLOW";
-                                        break;
-                                }
-                                if (se.flag_idx != ~0u) {
-                                    m_of << " IF df" << se.flag_idx;
-                                }
-                            }
-                            break;
                     }
                     m_of << ";\n";
                 }
@@ -1219,14 +1205,17 @@ namespace {
                         TU_ARM(term, Return, _e)(void) _e;
                         m_of << "RETURN\n";
                         break;
-                        TU_ARM(term, Diverge, _e)(void) _e;
-                        m_of << "DIVERGE\n";
+                        TU_ARM(term, UnwindResume, _e)(void) _e;
+                        m_of << "UNWIND RESUME\n";
+                        break;
+                        TU_ARM(term, UnwindTerminate, _e)(void) _e;
+                        m_of << "UNWIND TERMINATE\n";
+                        break;
+                        TU_ARM(term, Unreachable, _e)(void) _e;
+                        m_of << "UNREACHABLE\n";
                         break;
                         TU_ARM(term, Goto, e)
                         m_of << "GOTO " << e << "\n";
-                        break;
-                        TU_ARM(term, Panic, e)
-                        m_of << "PANIC " << e.dst << "\n";
                         break;
                         TU_ARM(term, If, e)
                         m_of << "IF " << fmt(e.cond) << " goto " << e.bb_true << " else " << e.bb_false << "\n";
@@ -1294,6 +1283,13 @@ namespace {
                             m_of << " }\n";
                         }
                         break;
+                        TU_ARM(term, Drop, e) {
+                            m_of << "DROP " << fmt(e.slot);
+                            if (e.kind == ::MIR::eDropKind::SHALLOW) m_of << " SHALLOW";
+                            if (e.flag_idx != ~0u) m_of << " IF df" << e.flag_idx;
+                            m_of << " goto " << e.target << " unwind " << e.unwind.tag_str() << "\n";
+                        }
+                        break;
                         TU_ARM(term, Call, e) {
                             if (const auto* f_p = e.fcn.opt_Intrinsic()) {
                                 if (f_p->name == "offset_of") {
@@ -1327,7 +1323,7 @@ namespace {
                             for (const auto& a : e.args) {
                                 m_of << fmt(a) << ", ";
                             }
-                            m_of << ") goto " << e.ret_block << " else " << e.panic_block << "\n";
+                            m_of << ") goto " << e.ret_block << " unwind " << e.unwind.tag_str() << "\n";
                         }
                         break;
                 }

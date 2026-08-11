@@ -139,7 +139,15 @@
         {
           default = mkDevShell pkgs toolchain pkgs.gcc16Stdenv [ ] "";
           # Use the wrapped LLVM binutils so -fuse-ld=lld keeps Nix RPATHs.
-          clang = mkDevShell pkgs toolchain pkgs.llvmPackages.libcxxStdenv [ pkgs.llvmPackages.bintools ] "-fuse-ld=lld";
+          clang = mkDevShell pkgs toolchain pkgs.llvmPackages.libcxxStdenv [
+            pkgs.llvmPackages.bintools
+            # Clang otherwise only sees GCC's static libatomic archive.  A
+            # generated executable linked against that archive and libc++'s
+            # dynamic libatomic dependency defines the same IFUNC symbols and
+            # cannot be loaded.  Put the shared runtime on the linker's search
+            # path so the generated C++ translation units use one libatomic.
+            pkgs.gcc.cc.lib
+          ] "-fuse-ld=lld";
         }
       );
     };

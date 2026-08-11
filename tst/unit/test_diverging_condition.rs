@@ -3,6 +3,18 @@ struct Pair {
     second: u32,
 }
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static GUARD_DROPS: AtomicUsize = AtomicUsize::new(0);
+
+struct GuardDrop;
+
+impl Drop for GuardDrop {
+    fn drop(&mut self) {
+        GUARD_DROPS.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
 fn exits_from_condition() -> u32 {
     if (return 10) {}
     0
@@ -41,6 +53,7 @@ fn exits_loop_from_condition() -> u32 {
 }
 
 fn exits_from_cloned_guard(value: u32) -> u32 {
+    let _drop = GuardDrop;
     match value {
         0 | 1 if return 16 => 0,
         _ => 17,
@@ -56,5 +69,7 @@ fn main() {
     assert!(matches!(exits_from_struct_field(), Err(14)));
     assert_eq!(exits_loop_from_condition(), 15);
     assert_eq!(exits_from_cloned_guard(1), 16);
+    assert_eq!(GUARD_DROPS.load(Ordering::SeqCst), 1);
     assert_eq!(exits_from_cloned_guard(2), 17);
+    assert_eq!(GUARD_DROPS.load(Ordering::SeqCst), 2);
 }

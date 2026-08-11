@@ -127,7 +127,7 @@ namespace {
             // Final arm is the end/panic state - it's a bug to reach this
             arm_targets.push_back(m_builder.new_bb_unlinked());
             m_builder.set_cur_block(arm_targets.back());
-            m_builder.end_block(::MIR::Terminator::make_Diverge({}));
+            m_builder.end_block(::MIR::Terminator::make_Unreachable({}));
 
             enum_variants.push_back(HIR::Enum::ValueVariant{RcString::new_interned("END"), ::HIR::ExprPtr(), U128(arm_targets.size() - 1)});
             state_enm.m_data = ::HIR::Enum::Class::make_Value({mv$(enum_variants)});
@@ -348,7 +348,7 @@ namespace {
 
         void emit_unwind(const Span& sp) {
             m_builder.emit_unwind_cleanup(sp);
-            m_builder.end_block(::MIR::Terminator::make_Diverge({}));
+            m_builder.end_block(::MIR::Terminator::make_UnwindResume({}));
         }
 
         // -- ExprVisitor
@@ -430,7 +430,7 @@ namespace {
                     m_builder.terminate_scope(node.span(), mv$(tmp_scope), false);
                     m_builder.terminate_scope(node.span(), mv$(scope), false);
                     m_builder.terminate_scope(node.span(), mv$(tail_tmp_scope), false);
-                    m_builder.end_block(::MIR::Terminator::make_Diverge({}));
+                    m_builder.end_block(::MIR::Terminator::make_Unreachable({}));
                     // Don't set a result if there's no block.
                 } else {
                     m_builder.terminate_scope(node.span(), mv$(tmp_scope));
@@ -578,7 +578,7 @@ namespace {
             if (!node.m_options.noreturn) {
                 m_builder.set_result(node.span(), ::MIR::RValue::make_Tuple({}));
             } else {
-                m_builder.end_block(::MIR::Terminator::make_Diverge({}));
+                m_builder.end_block(::MIR::Terminator::make_Unreachable({}));
             }
         }
 
@@ -684,7 +684,7 @@ namespace {
             {
                 auto bb_ret = m_builder.new_bb_unlinked();
                 auto bb_panic = m_builder.new_bb_unlinked();
-                m_builder.end_block(::MIR::Terminator::make_Call({bb_ret, bb_panic, lv_pin.clone(), ::HIR::Path(type_pin, "new_unchecked"), make_vec1(::MIR::Param(lv_mut.clone()))}));
+                m_builder.end_block(::MIR::Terminator::make_Call({bb_ret, ::MIR::UnwindAction::make_Cleanup(bb_panic), lv_pin.clone(), ::HIR::Path(type_pin, "new_unchecked"), make_vec1(::MIR::Param(lv_mut.clone()))}));
                 m_builder.moved_lvalue(node.span(), std::move(lv_mut));
                 m_builder.set_cur_block(bb_panic);
                 emit_unwind(sp);
@@ -700,7 +700,7 @@ namespace {
                 m_builder.end_block(
                     ::MIR::Terminator::make_Call(
                         {bb_ret,
-                         bb_panic,
+                         ::MIR::UnwindAction::make_Cleanup(bb_panic),
                          lv_poll.clone(),
                          ::HIR::Path(ty_inner, m_builder.resolve().m_lang_Future, "poll"),
                          make_vec2(
@@ -824,7 +824,7 @@ namespace {
                 m_builder.set_cur_block(loop_next);
                 m_builder.end_split_arm_early(node.span());
                 assert(!m_builder.has_result());
-                m_builder.end_block(::MIR::Terminator::make_Diverge({}));
+                m_builder.end_block(::MIR::Terminator::make_Unreachable({}));
             }
 
             // TODO: Store the variable state on a break for restoration at the end of the loop.
@@ -923,7 +923,7 @@ namespace {
                 //const auto& ty = node.m_value->m_res_type;
                 // TODO: Ensure that the type is a zero-variant enum or !
                 m_builder.end_split_arm_early(node.span());
-                m_builder.end_block(::MIR::Terminator::make_Diverge({}));
+                m_builder.end_block(::MIR::Terminator::make_Unreachable({}));
                 // Push an "diverge" result
                 //m_builder.set_cur_block( m_builder.new_bb_unlinked() );
                 //m_builder.set_result(node.span(), ::MIR::LValue::make_Invalid({}) );
@@ -1715,7 +1715,7 @@ namespace {
             // Store result of that call in `val` (which will be derefed below)
             auto ok_block = m_builder.new_bb_unlinked();
             auto panic_block = m_builder.new_bb_unlinked();
-            m_builder.end_block(::MIR::Terminator::make_Call({ok_block, panic_block, res_val.clone(), std::move(method_path), std::move(args)}));
+            m_builder.end_block(::MIR::Terminator::make_Call({ok_block, ::MIR::UnwindAction::make_Cleanup(panic_block), res_val.clone(), std::move(method_path), std::move(args)}));
             m_builder.set_cur_block(panic_block);
             emit_unwind(sp);
 
@@ -1783,7 +1783,7 @@ namespace {
                 m_builder.end_block(
                     ::MIR::Terminator::make_Call({
                         panic_return,
-                        panic_unwind,
+                        ::MIR::UnwindAction::make_Cleanup(panic_unwind),
                         std::move(panic_result),
                         ::HIR::Path(panic_bounds_check),
                         make_vec2<::MIR::Param>(index.clone(), limit_lval.clone()),
@@ -1791,7 +1791,7 @@ namespace {
                 );
 
                 m_builder.set_cur_block(panic_return);
-                m_builder.end_block(::MIR::Terminator::make_Diverge({}));
+                m_builder.end_block(::MIR::Terminator::make_Unreachable({}));
 
                 m_builder.set_cur_block(panic_unwind);
                 emit_unwind(node.span());
@@ -1861,7 +1861,7 @@ namespace {
                 val = m_builder.new_temporary(m_builder.resolve().m_crate.m_types.borrow(bt, node.m_res_type));
                 auto ok_block = m_builder.new_bb_unlinked();
                 auto panic_block = m_builder.new_bb_unlinked();
-                m_builder.end_block(::MIR::Terminator::make_Call({ok_block, panic_block, val.clone(), mv$(method_path), mv$(args)}));
+                m_builder.end_block(::MIR::Terminator::make_Call({ok_block, ::MIR::UnwindAction::make_Cleanup(panic_block), val.clone(), mv$(method_path), mv$(args)}));
                 m_builder.set_cur_block(panic_block);
                 emit_unwind(sp);
 
@@ -1900,14 +1900,14 @@ namespace {
                 auto size_slot = m_builder.new_temporary(types.primitive(::HIR::CoreType::Usize));
                 auto size__panic = m_builder.new_bb_unlinked();
                 auto size__ok = m_builder.new_bb_unlinked();
-                m_builder.end_block(::MIR::Terminator::make_Call({size__ok, size__panic, size_slot.clone(), ::MIR::CallTarget::make_Intrinsic({"size_of", trait_params_data.clone()}), {}}));
+                m_builder.end_block(::MIR::Terminator::make_Call({size__ok, ::MIR::UnwindAction::make_Cleanup(size__panic), size_slot.clone(), ::MIR::CallTarget::make_Intrinsic({"size_of", trait_params_data.clone()}), {}}));
                 m_builder.set_cur_block(size__panic);
                 emit_unwind(node.span());
                 m_builder.set_cur_block(size__ok);
                 auto align_slot = m_builder.new_temporary(types.primitive(::HIR::CoreType::Usize));
                 auto align__panic = m_builder.new_bb_unlinked();
                 auto align__ok = m_builder.new_bb_unlinked();
-                m_builder.end_block(::MIR::Terminator::make_Call({align__ok, align__panic, align_slot.clone(), ::MIR::CallTarget::make_Intrinsic({"align_of", trait_params_data.clone()}), {}}));
+                m_builder.end_block(::MIR::Terminator::make_Call({align__ok, ::MIR::UnwindAction::make_Cleanup(align__panic), align_slot.clone(), ::MIR::CallTarget::make_Intrinsic({"align_of", trait_params_data.clone()}), {}}));
                 m_builder.set_cur_block(align__panic);
                 emit_unwind(node.span());
                 m_builder.set_cur_block(align__ok);
@@ -1923,7 +1923,7 @@ namespace {
 
             auto place__panic = m_builder.new_bb_unlinked();
             auto place__ok = m_builder.new_bb_unlinked();
-            m_builder.end_block(::MIR::Terminator::make_Call({place__ok, place__panic, place_raw.clone(), ::HIR::Path(lang_exchange_malloc), make_vec2<::MIR::Param>(::std::move(size_param), ::std::move(align_param))}));
+            m_builder.end_block(::MIR::Terminator::make_Call({place__ok, ::MIR::UnwindAction::make_Cleanup(place__panic), place_raw.clone(), ::HIR::Path(lang_exchange_malloc), make_vec2<::MIR::Param>(::std::move(size_param), ::std::move(align_param))}));
             m_builder.set_cur_block(place__panic);
             emit_unwind(node.span());
             m_builder.set_cur_block(place__ok);
@@ -1941,7 +1941,7 @@ namespace {
             ::HIR::PathParams transmute_params;
             transmute_params.m_types.push_back(res_type);
             transmute_params.m_types.push_back(place_type);
-            m_builder.end_block(::MIR::Terminator::make_Call({cast__ok, cast__panic, res.clone(), ::MIR::CallTarget::make_Intrinsic({"transmute", mv$(transmute_params)}), make_vec1(::MIR::Param(mv$(place)))}));
+            m_builder.end_block(::MIR::Terminator::make_Call({cast__ok, ::MIR::UnwindAction::make_Cleanup(cast__panic), res.clone(), ::MIR::CallTarget::make_Intrinsic({"transmute", mv$(transmute_params)}), make_vec1(::MIR::Param(mv$(place)))}));
             m_builder.set_cur_block(cast__panic);
             emit_unwind(node.span());
             m_builder.set_cur_block(cast__ok);
@@ -2052,7 +2052,7 @@ namespace {
                 if (gpath.m_path.crate_name() == "#intrinsics") {
                     const auto& name = gpath.m_path.components().back();
                     if (name == "offset_of") {
-                        m_builder.end_block(::MIR::Terminator::make_Call({next_block, panic_block, res.clone(), ::MIR::CallTarget::make_Intrinsic({name, gpath.m_params.clone()}), mv$(values)}));
+                        m_builder.end_block(::MIR::Terminator::make_Call({next_block, ::MIR::UnwindAction::make_Cleanup(panic_block), res.clone(), ::MIR::CallTarget::make_Intrinsic({name, gpath.m_params.clone()}), mv$(values)}));
                     } else {
                         ERROR(node.span(), E0000, "Unknown builtin - " << gpath.m_path);
                     }
@@ -2151,14 +2151,14 @@ namespace {
                         box_new(node, data_ty, std::move(val));
                         return ;
                     }
-                    m_builder.end_block(::MIR::Terminator::make_Call({next_block, panic_block, res.clone(), ::MIR::CallTarget::make_Intrinsic({name, gpath.m_params.clone()}), mv$(values)}));
+                    m_builder.end_block(::MIR::Terminator::make_Call({next_block, ::MIR::UnwindAction::make_Cleanup(panic_block), res.clone(), ::MIR::CallTarget::make_Intrinsic({name, gpath.m_params.clone()}), mv$(values)}));
                 } else if (fcn.m_abi == "platform-intrinsic") {
-                    m_builder.end_block(::MIR::Terminator::make_Call({next_block, panic_block, res.clone(), ::MIR::CallTarget::make_Intrinsic({RcString(FMT("platform:" << gpath.m_path.components().back())), gpath.m_params.clone()}), mv$(values)}));
+                    m_builder.end_block(::MIR::Terminator::make_Call({next_block, ::MIR::UnwindAction::make_Cleanup(panic_block), res.clone(), ::MIR::CallTarget::make_Intrinsic({RcString(FMT("platform:" << gpath.m_path.components().back())), gpath.m_params.clone()}), mv$(values)}));
                 }
 
                 // rustc has drop_in_place as a lang item, mrustc uses an intrinsic
                 if (gpath.m_path == m_builder.crate().get_lang_item_path_opt("drop_in_place")) {
-                    m_builder.end_block(::MIR::Terminator::make_Call({next_block, panic_block, res.clone(), ::MIR::CallTarget::make_Intrinsic({"drop_in_place", gpath.m_params.clone()}), mv$(values)}));
+                    m_builder.end_block(::MIR::Terminator::make_Call({next_block, ::MIR::UnwindAction::make_Cleanup(panic_block), res.clone(), ::MIR::CallTarget::make_Intrinsic({"drop_in_place", gpath.m_params.clone()}), mv$(values)}));
                 }
 
                 if (fcn.m_return->is_Diverge()) {
@@ -2173,7 +2173,7 @@ namespace {
 
             // If the call wasn't to an intrinsic, emit it as a path
             if (m_builder.block_active()) {
-                m_builder.end_block(::MIR::Terminator::make_Call({next_block, panic_block, res.clone(), node.m_path.clone(), mv$(values)}));
+                m_builder.end_block(::MIR::Terminator::make_Call({next_block, ::MIR::UnwindAction::make_Cleanup(panic_block), res.clone(), node.m_path.clone(), mv$(values)}));
             }
 
             m_builder.set_cur_block(panic_block);
@@ -2183,7 +2183,7 @@ namespace {
 
             // If the function doesn't return, early-terminate the return block.
             if (unconditional_diverge) {
-                m_builder.end_block(::MIR::Terminator::make_Diverge({}));
+                m_builder.end_block(::MIR::Terminator::make_Unreachable({}));
                 m_builder.set_cur_block(m_builder.new_bb_unlinked());
             } else {
                 // NOTE: This has to be done here because the builder can't easily do it.
@@ -2215,7 +2215,7 @@ namespace {
             auto panic_block = m_builder.new_bb_unlinked();
             auto next_block = m_builder.new_bb_unlinked();
             auto res = m_builder.new_temporary(node.m_res_type);
-            m_builder.end_block(::MIR::Terminator::make_Call({next_block, panic_block, res.clone(), mv$(fcn_val), mv$(values)}));
+            m_builder.end_block(::MIR::Terminator::make_Call({next_block, ::MIR::UnwindAction::make_Cleanup(panic_block), res.clone(), mv$(fcn_val), mv$(values)}));
 
             m_builder.set_cur_block(panic_block);
             emit_unwind(node.span());
@@ -2315,7 +2315,7 @@ namespace {
                     ::HIR::PathParams transmute_params;
                     transmute_params.m_types.push_back(node.m_res_type);
                     transmute_params.m_types.push_back(m_builder.resolve().m_crate.m_types.borrow(::HIR::BorrowType::Shared, m_builder.resolve().m_crate.m_types.primitive(::HIR::CoreType::Str)));
-                    m_builder.end_block(::MIR::Terminator::make_Call({cast__ok, cast__panic, res.clone(), ::MIR::CallTarget::make_Intrinsic({"transmute", mv$(transmute_params)}), make_vec1(::MIR::Param(::MIR::Constant(std::move(s))))}));
+                    m_builder.end_block(::MIR::Terminator::make_Call({cast__ok, ::MIR::UnwindAction::make_Cleanup(cast__panic), res.clone(), ::MIR::CallTarget::make_Intrinsic({"transmute", mv$(transmute_params)}), make_vec1(::MIR::Param(::MIR::Constant(std::move(s))))}));
                     m_builder.set_cur_block(cast__panic);
                     emit_unwind(node.span());
                     m_builder.set_cur_block(cast__ok);
@@ -2658,7 +2658,7 @@ namespace {
                 m_builder.end_block(
                     ::MIR::Terminator::make_Call(
                         {size__ok,
-                         size__panic,
+                         ::MIR::UnwindAction::make_Cleanup(size__panic),
                          res_slot.clone(),
                          ::MIR::CallTarget::make_Intrinsic({"init", ::HIR::PathParams(mv$(slot_type))}), // I.e. `mem::zeroed`
                          {}}
@@ -2876,20 +2876,7 @@ namespace {
                         slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(m_drop_flags_field)); // .drop_flags
                         return slot;
                     };
-                    if (auto* s = stmt.opt_Drop()) {
-                        if (m_drop_flag_mapping.count(s->flag_idx) != 0) {
-                            // `LoadDropFlag(df$N, src_lv, bit_num)`, where `src_lv` is an array of `u8`
-                            auto slot = get_drop_flags_slot();
-                            unsigned bit_num = m_drop_flag_mapping.at(s->flag_idx);
-                            m_new_statements.push_back(
-                                ::MIR::Statement::make_LoadDropFlag({
-                                    s->flag_idx,
-                                    std::move(slot),
-                                    bit_num,
-                                })
-                            );
-                        }
-                    } else if (auto* s = stmt.opt_SetDropFlag()) {
+                    if (auto* s = stmt.opt_SetDropFlag()) {
                         if (m_drop_flag_mapping.count(s->other) != 0) {
                             auto slot = get_drop_flags_slot();
                             unsigned bit_num = m_drop_flag_mapping.at(s->other);
@@ -2934,6 +2921,22 @@ namespace {
                             this->push_statements(bb, stmt_idx);
                         }
                         this->stmt_idx = ~0u;
+                        if (auto* s = bb.terminator.opt_Drop()) {
+                            if (m_drop_flag_mapping.count(s->flag_idx) != 0) {
+                                auto slot = ::MIR::LValue::new_Argument(0);
+                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(0));
+                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Deref());
+                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(0));
+                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Downcast(1));
+                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(0));
+                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(m_drop_flags_field));
+                                m_new_statements.push_back(::MIR::Statement::make_LoadDropFlag({
+                                    s->flag_idx,
+                                    std::move(slot),
+                                    m_drop_flag_mapping.at(s->flag_idx),
+                                }));
+                            }
+                        }
                         this->visit_terminator(bb.terminator);
                         size_t stmt_idx = bb.statements.size();
                         this->push_statements(bb, stmt_idx);
@@ -2956,13 +2959,13 @@ namespace {
             }
             for (auto& bb : drop_impl_body->blocks) {
                 for (auto& stmt : bb.statements) {
-                    if (auto* d = stmt.opt_Drop()) {
-                        if (d->flag_idx != ~0u) {
-                            d->flag_idx = drop_flag_mapping.at(d->flag_idx);
-                        }
-                    }
                     if (auto* d = stmt.opt_LoadDropFlag()) {
                         d->idx = drop_flag_mapping.at(d->idx);
+                    }
+                }
+                if (auto* d = bb.terminator.opt_Drop()) {
+                    if (d->flag_idx != ~0u) {
+                        d->flag_idx = drop_flag_mapping.at(d->flag_idx);
                     }
                 }
             }
@@ -3664,49 +3667,10 @@ void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode
             DEBUG("Arm " << arm_idx << " rule " << 0 << ":  Destructure");
             scopes.push_back({builder.new_scope_var(arm.m_code->span()), false});
             conv.schedule_pattern_drops(node.span(), arm.m_patterns.back(), PatternDropOrder::LastCandidate);
+            auto binding_split = builder.new_scope_split(arm.m_code->span());
             conv.destructure_from_list(arm.m_code->span(), match_ty, match_val.clone(), bindings0);
+            builder.end_split_arm(arm.m_code->span(), binding_split, /*reachable=*/true);
             builder.end_block(::MIR::Terminator::make_Goto(arm_body_block));
-            // Emit body code
-            DEBUG("-- Body Code");
-
-            scopes.push_back({builder.new_scope_temp(arm.m_code->span()), false});
-            builder.set_cur_block(arm_body_block);
-
-            if (node.m_is_let_else && arm_idx + 1 == node.m_arms.size()) {
-                for (const auto temporary : ::reverse(let_else_initializer_temps)) {
-                    builder.drop_lvalue(node.span(), ::MIR::LValue::new_Local(temporary));
-                }
-            }
-
-            // Push the MovedOut state up into the split's m_cond_state, so that values moved
-            // in the pattern are recognized as moved in following branches.
-            //builder.end_split_condition( arm.m_code->span(), match_scope );
-
-            conv.visit_node_ptr(arm.m_code);
-
-            if (builder.block_active()) {
-                // - Set result
-                auto res = builder.get_result(arm.m_code->span());
-                builder.push_stmt_assign(arm.m_code->span(), result_val.clone(), mv$(res));
-            } else {
-                assert(!builder.has_result());
-            }
-            // Pop/end scopes
-            while (!scopes.empty()) {
-                if (scopes.back().is_split) {
-                    builder.end_split_arm(arm.m_code->span(), scopes.back().handle, /*reachable*/ builder.block_active());
-                }
-                builder.terminate_scope(arm.m_code->span(), std::move(scopes.back().handle), builder.block_active());
-                scopes.pop_back();
-            }
-            builder.end_split_arm(arm.m_code->span(), pat_scope, /*reachable*/ builder.block_active());
-            builder.terminate_scope(sp, std::move(pat_scope), builder.block_active());
-            builder.terminate_scope_early(sp, match_scope);
-
-            // Go to the next block (out of the match) (if the body didn't diverge)
-            if (builder.block_active()) {
-                builder.end_block(::MIR::Terminator::make_Goto(next_block));
-            }
 
             // The first rule just uses the code generated above
             {
@@ -3787,13 +3751,57 @@ void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode
                 // Add the final bindings and jump to the body
                 builder.set_cur_block(mapper.new_cond_true);
                 DEBUG("Arm " << arm_idx << " rule " << i - first_arm_rule_idx << ":  Destructure");
-                conv.destructure_from_list(arm.m_code->span(), match_ty, match_val.clone(), arm_rules[i].m_bindings, /*update_dst_state*/ false);
+                conv.destructure_from_list(arm.m_code->span(), match_ty, match_val.clone(), arm_rules[i].m_bindings);
+                builder.end_split_arm(arm.m_code->span(), binding_split, /*reachable=*/true);
                 builder.end_block(::MIR::Terminator::make_Goto(arm_body_block));
 
                 ArmCode::Pattern acp;
                 acp.entry = entry_block;
                 acp.cond_false = mapper.new_cond_false;
                 ac.rules.push_back(acp);
+            }
+
+            // All successful pattern alternatives enter the same body. Merge
+            // their move states first so the body and every unwind edge use
+            // drop flags valid for every predecessor.
+            builder.terminate_scope(arm.m_code->span(), std::move(binding_split), /*emit_cleanup=*/false);
+
+            // Emit body code
+            DEBUG("-- Body Code");
+
+            scopes.push_back({builder.new_scope_temp(arm.m_code->span()), false});
+            builder.set_cur_block(arm_body_block);
+
+            if (node.m_is_let_else && arm_idx + 1 == node.m_arms.size()) {
+                for (const auto temporary : ::reverse(let_else_initializer_temps)) {
+                    builder.drop_lvalue(node.span(), ::MIR::LValue::new_Local(temporary));
+                }
+            }
+
+            conv.visit_node_ptr(arm.m_code);
+
+            if (builder.block_active()) {
+                // - Set result
+                auto res = builder.get_result(arm.m_code->span());
+                builder.push_stmt_assign(arm.m_code->span(), result_val.clone(), mv$(res));
+            } else {
+                assert(!builder.has_result());
+            }
+            // Pop/end scopes
+            while (!scopes.empty()) {
+                if (scopes.back().is_split) {
+                    builder.end_split_arm(arm.m_code->span(), scopes.back().handle, /*reachable*/ builder.block_active());
+                }
+                builder.terminate_scope(arm.m_code->span(), std::move(scopes.back().handle), builder.block_active());
+                scopes.pop_back();
+            }
+            builder.end_split_arm(arm.m_code->span(), pat_scope, /*reachable*/ builder.block_active());
+            builder.terminate_scope(sp, std::move(pat_scope), builder.block_active());
+            builder.terminate_scope_early(sp, match_scope);
+
+            // Go to the next block (out of the match) (if the body didn't diverge)
+            if (builder.block_active()) {
+                builder.end_block(::MIR::Terminator::make_Goto(next_block));
             }
         }
 
@@ -5663,9 +5671,9 @@ void MIR_LowerHIR_Match_Simple(MirBuilder& builder, MirConverter& conv, ::HIR::E
         builder.set_cur_block(next_pattern_bb);
     }
     // - Kill the final pattern block (which is dead code)
-    builder.end_block(::MIR::Terminator::make_Diverge({}));
+    builder.end_block(::MIR::Terminator::make_Unreachable({}));
     builder.set_cur_block(next_arm_bb);
-    builder.end_block(::MIR::Terminator::make_Diverge({}));
+    builder.end_block(::MIR::Terminator::make_Unreachable({}));
 }
 
 int MIR_LowerHIR_Match_Simple__GeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int num_rules, const ::HIR::TypeData* top_ty, const ::MIR::LValue& top_val, unsigned int field_path_ofs, ::MIR::BasicBlockId fail_bb) {
@@ -6289,7 +6297,7 @@ void MIR_LowerHIR_Match_Grouped(MirBuilder& builder, MirConverter& conv, const S
     // Make the default infinite loop.
     // - Preferably, it'd abort.
     builder.set_cur_block(default_arm);
-    builder.end_block(::MIR::Terminator::make_Diverge({}));
+    builder.end_block(::MIR::Terminator::make_Unreachable({}));
 }
 
 void MatchGenGrouped::gen_for_slice(t_rules_subset arm_rules, size_t ofs, ::MIR::BasicBlockId default_arm) {
@@ -7093,7 +7101,7 @@ void MirBuilder::final_cleanup() {
             terminate_scope_early(sp, fcn_scope());
             // Validation fails if this is reachable.
             //end_block( ::MIR::Terminator::make_Incomplete({}) );
-            end_block(::MIR::Terminator::make_Diverge({}));
+            end_block(::MIR::Terminator::make_Unreachable({}));
         } else {
             if (has_result()) {
                 push_stmt_assign(sp, ::MIR::LValue::new_Return(), get_result(sp));
@@ -7305,7 +7313,6 @@ void MirBuilder::drop_lvalue(const Span& sp, const ::MIR::LValue& value) {
     auto* state = get_val_state_mut_p(sp, value);
     ASSERT_BUG(sp, state, "Dropping invalid value " << value);
     drop_value_from_state(sp, *state, value.clone());
-    *state = VarState::make_Invalid(InvalidType::Moved);
 }
 
 ::MIR::LValue MirBuilder::new_temporary(const ::HIR::TypeData* ty) {
@@ -7485,7 +7492,7 @@ void MirBuilder::push_stmt_drop(const Span& sp, ::MIR::LValue val, unsigned int 
         return;
     }
 
-    this->push_stmt(sp, ::MIR::Statement::make_Drop({::MIR::eDropKind::DEEP, mv$(val), flag}));
+    this->push_drop_terminator(sp, ::MIR::eDropKind::DEEP, mv$(val), flag);
 }
 
 void MirBuilder::push_stmt_drop_shallow(const Span& sp, ::MIR::LValue val, unsigned int flag /*=~0u*/) {
@@ -7493,7 +7500,18 @@ void MirBuilder::push_stmt_drop_shallow(const Span& sp, ::MIR::LValue val, unsig
 
     // TODO: Ensure that the type is a Box?
 
-    this->push_stmt(sp, ::MIR::Statement::make_Drop({::MIR::eDropKind::SHALLOW, mv$(val), flag}));
+    this->push_drop_terminator(sp, ::MIR::eDropKind::SHALLOW, mv$(val), flag);
+}
+
+void MirBuilder::push_drop_terminator(const Span& sp, ::MIR::eDropKind kind, ::MIR::LValue val, unsigned int flag) {
+    ASSERT_BUG(sp, m_block_active, "Dropping a value with no active block");
+
+    const auto next_block = new_bb_unlinked();
+    auto unwind = m_building_cleanup
+        ? ::MIR::UnwindAction::make_Terminate({})
+        : make_unwind_action(sp, &val);
+    end_block(::MIR::Terminator::make_Drop({kind, mv$(val), flag, next_block, mv$(unwind)}));
+    set_cur_block(next_block);
 }
 
 void MirBuilder::push_stmt_asm(const Span& sp, ::MIR::Statement::Data_Asm data) {
@@ -7542,7 +7560,8 @@ void MirBuilder::mark_value_assigned(const Span& sp, const ::MIR::LValue& dst) {
         *state_p = std::move(new_state);
     } else {
         // Assigning into non-tracked locations still causes a drop
-        drop_value_from_state(sp, VarState::make_Valid({}), dst.clone());
+        auto state = VarState::make_Valid({});
+        drop_value_from_state(sp, state, dst.clone());
     }
 }
 
@@ -7840,6 +7859,7 @@ void MirBuilder::end_block(::MIR::Terminator term) {
     auto rv = m_output.blocks.size();
     DEBUG("BB" << rv);
     m_output.blocks.push_back({});
+    m_output.blocks.back().is_cleanup = m_building_cleanup;
     return rv;
 }
 
@@ -8038,6 +8058,18 @@ void MirBuilder::terminate_scope_early(const Span& sp, const ScopeHandle& scope,
     }
     unsigned int slot = it - m_scope_stack.begin();
 
+    bool use_frozen_exit_state = false;
+    for (unsigned int i = m_scope_stack.size(); i-- > slot;) {
+        const auto* freeze = m_scopes.at(m_scope_stack[i]).data.opt_Freeze();
+        use_frozen_exit_state |= freeze && !freeze->unfrozen;
+    }
+    ASSERT_BUG(sp, !use_frozen_exit_state || !m_frozen_exit_state_active, "Nested frozen early-exit state");
+    if (use_frozen_exit_state) {
+        m_frozen_exit_state_active = true;
+        m_frozen_exit_slot_states.clear();
+        m_frozen_exit_arg_states.clear();
+    }
+
     bool is_conditional = false;
     for (unsigned int i = m_scope_stack.size(); i-- > slot;) {
         auto idx = m_scope_stack[i];
@@ -8068,6 +8100,12 @@ void MirBuilder::terminate_scope_early(const Span& sp, const ScopeHandle& scope,
             // Inform the scope that it's been early-exited
             TU_IFLET(ScopeType, scope_def.data, Split, e, e.arms.back().has_early_terminated = true;)
         }
+    }
+
+    if (use_frozen_exit_state) {
+        m_frozen_exit_slot_states.clear();
+        m_frozen_exit_arg_states.clear();
+        m_frozen_exit_state_active = false;
     }
 
 }
@@ -8856,6 +8894,14 @@ bool MirBuilder::lvalue_is_copy(const Span& sp, const ::MIR::LValue& val) const 
 }
 
 const VarState& MirBuilder::get_slot_state(const Span& sp, unsigned int idx, SlotType type, const ScopeHandle* above_scope /*=nullptr*/) const {
+    if (m_frozen_exit_state_active && !above_scope) {
+        const auto& states = type == SlotType::Local ? m_frozen_exit_slot_states : m_frozen_exit_arg_states;
+        auto it = states.find(idx);
+        if (it != states.end()) {
+            return it->second;
+        }
+    }
+
     // 1. Find an applicable Split scope
     for (auto scope_idx : ::reverse(m_scope_stack)) {
         // Is this supposed to only consider above a specified (likely split) scope?
@@ -8874,7 +8920,10 @@ const VarState& MirBuilder::get_slot_state(const Span& sp, unsigned int idx, Slo
                 if (type == SlotType::Local) {
                     auto it = ::std::find(e.slots.begin(), e.slots.end(), idx);
                     if (it != e.slots.end()) {
-                        break;
+                        // State from an outer split belongs to the outer
+                        // incarnation of this local.  Once its owning scope
+                        // is reached, fall back to the local's base state.
+                        goto out_of_loop;
                     }
                 }
             }
@@ -8890,6 +8939,7 @@ const VarState& MirBuilder::get_slot_state(const Span& sp, unsigned int idx, Slo
         }
     }
 
+out_of_loop:
     if (above_scope) {
         BUG(sp, "Scope " << *above_scope << " not found on stack");
     }
@@ -8910,6 +8960,15 @@ const VarState& MirBuilder::get_slot_state(const Span& sp, unsigned int idx, Slo
 }
 
 VarState& MirBuilder::get_slot_state_mut(const Span& sp, unsigned int idx, SlotType type) {
+    if (m_frozen_exit_state_active) {
+        auto& states = type == SlotType::Local ? m_frozen_exit_slot_states : m_frozen_exit_arg_states;
+        auto it = states.find(idx);
+        if (it == states.end()) {
+            it = states.insert(::std::make_pair(idx, get_slot_state(sp, idx, type).clone())).first;
+        }
+        return it->second;
+    }
+
     VarState* ret = nullptr;
     for (auto scope_idx : ::reverse(m_scope_stack)) {
         auto& scope_def = m_scopes.at(scope_idx);
@@ -9103,13 +9162,13 @@ VarState* MirBuilder::get_val_state_mut_p(const Span& sp, const ::MIR::LValue& l
     return vs;
 }
 
-void MirBuilder::drop_value_from_state(const Span& sp, const VarState& vs, ::MIR::LValue lv) {
+void MirBuilder::drop_value_from_state(const Span& sp, VarState& vs, ::MIR::LValue lv) {
     TRACE_FUNCTION_F(lv << " " << vs);
     TU_MATCHA(
         (vs),
         (vse),
         (Invalid, ),
-        (Valid, push_stmt_drop(sp, mv$(lv));),
+        (Valid, vs = VarState::make_Invalid(InvalidType::Moved); push_stmt_drop(sp, mv$(lv));),
         (
             MovedOut, bool is_box = false; with_val_type(
                 sp,
@@ -9120,7 +9179,9 @@ void MirBuilder::drop_value_from_state(const Span& sp, const VarState& vs, ::MIR
             );
             if (is_box) {
                 drop_value_from_state(sp, *vse.inner_state, ::MIR::LValue::new_Deref(lv.clone()));
-                push_stmt_drop_shallow(sp, mv$(lv), vse.outer_flag);
+                const auto outer_flag = vse.outer_flag;
+                vs = VarState::make_Invalid(InvalidType::Moved);
+                push_stmt_drop_shallow(sp, mv$(lv), outer_flag);
             } else { TODO(sp, ""); }
         ),
         (
@@ -9141,6 +9202,8 @@ void MirBuilder::drop_value_from_state(const Span& sp, const VarState& vs, ::MIR
                     return;
                 }
 
+                auto original_state = vs.clone();
+                const auto outer_flag = vse.outer_flag;
                 const auto next_bb = new_bb_unlinked();
                 ::std::vector<::MIR::BasicBlockId> arms;
                 ::std::vector<::MIR::BasicBlockId> cleanup_blocks;
@@ -9151,42 +9214,57 @@ void MirBuilder::drop_value_from_state(const Span& sp, const VarState& vs, ::MIR
                     arms.push_back(cleanup_bb);
                     cleanup_blocks.push_back(cleanup_bb);
                 }
-                end_block(::MIR::Terminator::make_Switch({lv.clone(), mv$(arms), vse.outer_flag, vse.outer_flag == ~0u ? ~0u : next_bb}));
+                end_block(::MIR::Terminator::make_Switch({lv.clone(), mv$(arms), outer_flag, outer_flag == ~0u ? ~0u : next_bb}));
 
-                for (size_t i = 0; i < vse.inner_states.size(); i++) {
-                    if (vse.inner_states[i].is_Invalid()) {
+                const auto variant_count = original_state.as_Partial().inner_states.size();
+                for (size_t i = 0; i < variant_count; i++) {
+                    if (original_state.as_Partial().inner_states[i].is_Invalid()) {
                         continue;
                     }
                     set_cur_block(cleanup_blocks[i]);
-                    drop_value_from_state(sp, vse.inner_states[i], ::MIR::LValue::new_Downcast(lv.clone(), static_cast<unsigned int>(i)));
+                    vs = original_state.clone();
+                    drop_value_from_state(sp, vs.as_Partial().inner_states[i], ::MIR::LValue::new_Downcast(lv.clone(), static_cast<unsigned int>(i)));
+                    vs = VarState::make_Invalid(InvalidType::Moved);
                     end_block(::MIR::Terminator::make_Goto(next_bb));
                 }
+                vs = VarState::make_Invalid(InvalidType::Moved);
                 set_cur_block(next_bb);
             } else if (is_union) {
                 // NOTE: Unions don't drop inner items.
+                vs = VarState::make_Invalid(InvalidType::Moved);
             } else {
                 for (size_t i = 0; i < vse.inner_states.size(); i++) {
                     drop_value_from_state(sp, vse.inner_states[i], ::MIR::LValue::new_Field(lv.clone(), static_cast<unsigned int>(i)));
                 }
+                vs = VarState::make_Invalid(InvalidType::Moved);
             }
         ),
-        (Optional, push_stmt_drop(sp, mv$(lv), vse);)
+        (Optional, const auto flag = vse; vs = VarState::make_Invalid(InvalidType::Moved); push_stmt_drop(sp, mv$(lv), flag);)
     )
 }
 
-void MirBuilder::drop_scope_values(const ScopeDef& sd) {
+void MirBuilder::drop_scope_values(ScopeDef& sd) {
     TU_MATCHA(
         (sd.data),
         (e),
         (Owning,
          for (const auto& slot : ::reverse(e.drop_slots)) {
              const auto slot_type = slot.is_argument ? SlotType::Argument : SlotType::Local;
-             const auto& vs = get_slot_state(sd.span, slot.index, slot_type);
              auto lvalue = slot.is_argument
                  ? ::MIR::LValue::new_Argument(slot.index)
                  : ::MIR::LValue::new_Local(slot.index);
-             DEBUG(lvalue << " - " << vs);
-             drop_value_from_state(sd.span, vs, mv$(lvalue));
+             if (m_building_cleanup) {
+                 if (m_unwind_consumed_value && lvalue == *m_unwind_consumed_value) {
+                     continue;
+                 }
+                 auto state = get_slot_state(sd.span, slot.index, slot_type).clone();
+                 DEBUG(lvalue << " - " << state);
+                 drop_value_from_state(sd.span, state, mv$(lvalue));
+             } else {
+                 auto& state = get_slot_state_mut(sd.span, slot.index, slot_type);
+                 DEBUG(lvalue << " - " << state);
+                 drop_value_from_state(sd.span, state, mv$(lvalue));
+             }
          }),
         (
             Split,
@@ -9252,13 +9330,35 @@ std::map<unsigned, MirBuilder::SavedActiveLocal> MirBuilder::get_active_locals(c
 }
 
 void MirBuilder::drop_actve_local(const Span& sp, ::MIR::LValue lv, const SavedActiveLocal& loc) {
-    this->drop_value_from_state(sp, loc.state, mv$(lv));
+    auto state = loc.state.clone();
+    this->drop_value_from_state(sp, state, mv$(lv));
 }
 
 void MirBuilder::emit_unwind_cleanup(const Span& sp) {
+    const auto was_building_cleanup = m_building_cleanup;
+    m_building_cleanup = true;
+    m_output.blocks.at(m_current_block).is_cleanup = true;
     for (auto it = m_scope_stack.rbegin(); it != m_scope_stack.rend(); ++it) {
         drop_scope_values(m_scopes.at(*it));
     }
+    m_building_cleanup = was_building_cleanup;
+}
+
+::MIR::UnwindAction MirBuilder::make_unwind_action(const Span& sp, const ::MIR::LValue* consumed_value) {
+    if (m_building_cleanup) {
+        return ::MIR::UnwindAction::make_Terminate({});
+    }
+
+    const auto source_block = pause_cur_block();
+    const auto cleanup_block = new_bb_unlinked();
+    set_cur_block(cleanup_block);
+    const auto* old_consumed_value = m_unwind_consumed_value;
+    m_unwind_consumed_value = consumed_value;
+    emit_unwind_cleanup(sp);
+    m_unwind_consumed_value = old_consumed_value;
+    end_block(::MIR::Terminator::make_UnwindResume({}));
+    set_cur_block(source_block);
+    return ::MIR::UnwindAction::make_Cleanup(cleanup_block);
 }
 
 // --------------------------------------------------------------------

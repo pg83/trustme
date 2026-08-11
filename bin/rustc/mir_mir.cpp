@@ -228,7 +228,27 @@ namespace MIR {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Terminator& x) {
-        TU_MATCHA((x), (e), (Incomplete, os << "Invalid";), (Return, os << "Return";), (Diverge, os << "Diverge";), (Goto, os << "Goto(" << e << ")";), (Panic, os << "Panic(" << e.dst << ";)";), (If, os << "If( " << e.cond << " : " << e.bb_true << ", " << e.bb_false << ")";), (Switch, os << "Switch( "; if (e.valid_flag != ~0u) os << "IF df$" << e.valid_flag << " ELSE bb" << e.invalid_target << ", "; os << e.val << " : "; for (unsigned int j = 0; j < e.targets.size(); j++) os << j << " => bb" << e.targets[j] << ", "; os << ")";), (SwitchValue, os << "SwitchValue( " << e.val << " : "; TU_MATCHA((e.values), (ve), (Unsigned, for (unsigned int j = 0; j < e.targets.size(); j++) os << ve[j] << " => bb" << e.targets[j] << ", ";), (Signed, for (unsigned int j = 0; j < e.targets.size(); j++) os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";), (String, for (unsigned int j = 0; j < e.targets.size(); j++) os << "\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";), (ByteString, for (unsigned int j = 0; j < e.targets.size(); j++) os << "b\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";)) os << "else bb" << e.def_target << ")";), (Call, os << "Call( " << e.ret_val << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << e2 << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << arg << ", "; os << "), bb" << e.ret_block << ", bb" << e.panic_block << ")";))
+        auto fmt_unwind = [&os](const UnwindAction& action) {
+            TU_MATCHA((action), (ue),
+                (Continue, os << "continue";),
+                (Cleanup, os << "cleanup bb" << ue;),
+                (Terminate, os << "terminate";),
+                (Unreachable, os << "unreachable";)
+            )
+        };
+        TU_MATCHA((x), (e),
+            (Incomplete, os << "Invalid";),
+            (Return, os << "Return";),
+            (UnwindResume, os << "UnwindResume";),
+            (UnwindTerminate, os << "UnwindTerminate";),
+            (Unreachable, os << "Unreachable";),
+            (Goto, os << "Goto(" << e << ")";),
+            (If, os << "If( " << e.cond << " : " << e.bb_true << ", " << e.bb_false << ")";),
+            (Switch, os << "Switch( "; if (e.valid_flag != ~0u) os << "IF df$" << e.valid_flag << " ELSE bb" << e.invalid_target << ", "; os << e.val << " : "; for (unsigned int j = 0; j < e.targets.size(); j++) os << j << " => bb" << e.targets[j] << ", "; os << ")";),
+            (SwitchValue, os << "SwitchValue( " << e.val << " : "; TU_MATCHA((e.values), (ve), (Unsigned, for (unsigned int j = 0; j < e.targets.size(); j++) os << ve[j] << " => bb" << e.targets[j] << ", ";), (Signed, for (unsigned int j = 0; j < e.targets.size(); j++) os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";), (String, for (unsigned int j = 0; j < e.targets.size(); j++) os << "\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";), (ByteString, for (unsigned int j = 0; j < e.targets.size(); j++) os << "b\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";)) os << "else bb" << e.def_target << ")";),
+            (Drop, os << "Drop(" << e.slot; if (e.kind == eDropKind::SHALLOW) os << " SHALLOW"; if (e.flag_idx != ~0u) os << " IF df$" << e.flag_idx; os << ") -> bb" << e.target << " unwind "; fmt_unwind(e.unwind);),
+            (Call, os << "Call( " << e.ret_val << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << e2 << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << arg << ", "; os << "), bb" << e.ret_block << ", "; fmt_unwind(e.unwind); os << ")";)
+        )
 
         return os;
     }
@@ -237,7 +257,12 @@ namespace MIR {
         if (a.tag() != b.tag()) {
             return false;
         }
-        TU_MATCHA((a, b), (ae, be), (Incomplete, ), (Return, ), (Diverge, ), (Goto, if (ae != be) return false;), (Panic, if (ae.dst != be.dst) return false;), (If, if (ae.cond != be.cond) return false; if (ae.bb_true != be.bb_true) return false; if (ae.bb_false != be.bb_false) return false;), (Switch, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.valid_flag != be.valid_flag) return false; if (ae.invalid_target != be.invalid_target) return false;), (SwitchValue, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.values != be.values) return false;), (Call, if (ae.ret_val != be.ret_val) return false; TU_MATCHA((ae.fcn, be.fcn), (afe, bfe), (Value, if (afe != bfe) return false;), (Path, if (afe != bfe) return false;), (Intrinsic, if (afe.name != bfe.name) return false; if (afe.params != bfe.params) return false;)) if (ae.args != be.args) return false; if (ae.ret_block != be.ret_block) return false; if (ae.panic_block != be.panic_block) return false;))
+        auto unwind_equal = [](const UnwindAction& lhs, const UnwindAction& rhs) {
+            if (lhs.tag() != rhs.tag()) return false;
+            TU_MATCHA((lhs, rhs), (le, re), (Continue, return true;), (Cleanup, return le == re;), (Terminate, return true;), (Unreachable, return true;))
+            return false;
+        };
+        TU_MATCHA((a, b), (ae, be), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, if (ae != be) return false;), (If, if (ae.cond != be.cond) return false; if (ae.bb_true != be.bb_true) return false; if (ae.bb_false != be.bb_false) return false;), (Switch, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.valid_flag != be.valid_flag) return false; if (ae.invalid_target != be.invalid_target) return false;), (SwitchValue, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.def_target != be.def_target) return false; if (ae.values != be.values) return false;), (Drop, if (ae.kind != be.kind || ae.slot != be.slot || ae.flag_idx != be.flag_idx || ae.target != be.target || !unwind_equal(ae.unwind, be.unwind)) return false;), (Call, if (ae.ret_val != be.ret_val) return false; if (ae.fcn.tag() != be.fcn.tag()) return false; TU_MATCHA((ae.fcn, be.fcn), (afe, bfe), (Value, if (afe != bfe) return false;), (Path, if (afe != bfe) return false;), (Intrinsic, if (afe.name != bfe.name) return false; if (afe.params != bfe.params) return false;)) if (ae.args != be.args) return false; if (ae.ret_block != be.ret_block) return false; if (!unwind_equal(ae.unwind, be.unwind)) return false;))
         return true;
     }
 
@@ -345,16 +370,6 @@ namespace MIR {
             TU_ARMA(LoadDropFlag, e) {
                 os << "LoadDropFlag()";
             }
-            TU_ARMA(Drop, e) {
-                os << "drop(" << e.slot;
-                if (e.kind == ::MIR::eDropKind::SHALLOW) {
-                    os << " SHALLOW";
-                }
-                if (e.flag_idx != ~0u) {
-                    os << " IF df$" << e.flag_idx;
-                }
-                os << ")";
-            }
             TU_ARMA(ScopeEnd, e) {
                 os << "ScopeEnd(";
                 for (auto idx : e.slots) {
@@ -389,9 +404,6 @@ namespace MIR {
             }
             TU_ARMA(LoadDropFlag, ae, be) {
                 return ae.idx == be.idx && ae.slot == be.slot && ae.bit_index == be.bit_index;
-            }
-            TU_ARMA(Drop, ae, be) {
-                return ae.slot == be.slot && ae.kind == be.kind && ae.flag_idx == be.flag_idx;
             }
             TU_ARMA(ScopeEnd, ae, be) {
                 return ae.slots == be.slots;
@@ -563,9 +575,6 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
         TU_ARMA(LoadDropFlag, se) {
             TODO(Span(), "clone_bb LoadDropFlag");
         }
-        TU_ARMA(Drop, se) {
-            return ::MIR::Statement::make_Drop({se.kind, this->clone_lval(se.slot), se.flag_idx == ~0u ? ~0u : map_drop_flag(se.flag_idx)});
-        }
         TU_ARMA(ScopeEnd, se) {
             ::MIR::Statement::Data_ScopeEnd new_se;
             new_se.slots.reserve(se.slots.size());
@@ -586,11 +595,14 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
         TU_ARMA(Return, se) {
             return ::MIR::Terminator::make_Return({});
         }
-        TU_ARMA(Diverge, se) {
-            return ::MIR::Terminator::make_Diverge({});
+        TU_ARMA(UnwindResume, se) {
+            return ::MIR::Terminator::make_UnwindResume({});
         }
-        TU_ARMA(Panic, se) {
-            return ::MIR::Terminator::make_Panic({});
+        TU_ARMA(UnwindTerminate, se) {
+            return ::MIR::Terminator::make_UnwindTerminate({});
+        }
+        TU_ARMA(Unreachable, se) {
+            return ::MIR::Terminator::make_Unreachable({});
         }
         TU_ARMA(Goto, se) {
             return ::MIR::Terminator::make_Goto(map_bb_idx(se));
@@ -614,10 +626,17 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             }
             return ::MIR::Terminator::make_SwitchValue({this->clone_lval(se.val), map_bb_idx(se.def_target), mv$(arms), se.values.clone()});
         }
+        TU_ARMA(Drop, se) {
+            UnwindAction unwind;
+            TU_MATCHA((se.unwind), (ue), (Continue, unwind = UnwindAction::make_Continue({});), (Cleanup, unwind = UnwindAction::make_Cleanup(map_bb_idx(ue));), (Terminate, unwind = UnwindAction::make_Terminate({});), (Unreachable, unwind = UnwindAction::make_Unreachable({});))
+            return ::MIR::Terminator::make_Drop({se.kind, this->clone_lval(se.slot), se.flag_idx == ~0u ? ~0u : map_drop_flag(se.flag_idx), map_bb_idx(se.target), mv$(unwind)});
+        }
         TU_ARMA(Call, se) {
             ::MIR::CallTarget tgt;
             TU_MATCHA((se.fcn), (ste), (Value, tgt = ::MIR::CallTarget::make_Value(this->clone_lval(ste));), (Path, tgt = ::MIR::CallTarget::make_Path(this->monomorph(ste));), (Intrinsic, tgt = ::MIR::CallTarget::make_Intrinsic({ste.name, this->monomorph(ste.params)});))
-            return ::MIR::Terminator::make_Call({map_bb_idx(se.ret_block), map_bb_idx(se.panic_block), this->clone_lval(se.ret_val), mv$(tgt), this->clone_param_vec(se.args)});
+            UnwindAction unwind;
+            TU_MATCHA((se.unwind), (ue), (Continue, unwind = UnwindAction::make_Continue({});), (Cleanup, unwind = UnwindAction::make_Cleanup(map_bb_idx(ue));), (Terminate, unwind = UnwindAction::make_Terminate({});), (Unreachable, unwind = UnwindAction::make_Unreachable({});))
+            return ::MIR::Terminator::make_Call({map_bb_idx(se.ret_block), mv$(unwind), this->clone_lval(se.ret_val), mv$(tgt), this->clone_param_vec(se.args)});
         }
     }
     throw "";

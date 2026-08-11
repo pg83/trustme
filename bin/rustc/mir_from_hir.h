@@ -219,6 +219,8 @@ class MirBuilder {
 
     unsigned int m_current_block;
     bool m_block_active;
+    bool m_building_cleanup = false;
+    const MIR::LValue* m_unwind_consumed_value = nullptr;
 
     ::MIR::RValue m_result;
     bool m_result_valid;
@@ -228,6 +230,13 @@ class MirBuilder {
     ::std::vector<VarState> m_arg_states;
     ::std::vector<VarState> m_slot_states;
     size_t m_first_temp_idx;
+
+    // A diverging match guard is generated once and then cloned for each
+    // alternative. Drops on that terminal path must update state for nested
+    // unwind cleanups without mutating the canonical state being cloned.
+    bool m_frozen_exit_state_active = false;
+    ::std::map<unsigned int, VarState> m_frozen_exit_slot_states;
+    ::std::map<unsigned int, VarState> m_frozen_exit_arg_states;
 
     /// Mapping between variable slots and MIR arguments (for when the argument is not destructuring)
     ::std::map<unsigned, unsigned> m_var_arg_mappings;
@@ -507,8 +516,10 @@ private:
 
     void terminate_loop_early(const Span& sp, ScopeType::Data_Loop& sd_loop);
 
-    void drop_value_from_state(const Span& sp, const VarState& vs, ::MIR::LValue lv);
-    void drop_scope_values(const ScopeDef& sd);
+    void drop_value_from_state(const Span& sp, VarState& vs, ::MIR::LValue lv);
+    void drop_scope_values(ScopeDef& sd);
+    ::MIR::UnwindAction make_unwind_action(const Span& sp, const ::MIR::LValue* consumed_value = nullptr);
+    void push_drop_terminator(const Span& sp, ::MIR::eDropKind kind, ::MIR::LValue val, unsigned int drop_flag);
     /// Finalise a scope before it's fully destroyed. Doesn't emit destructors (already done by `drop_scope_values`)
     void complete_scope(ScopeDef& sd);
 

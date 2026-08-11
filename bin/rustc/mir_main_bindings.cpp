@@ -116,21 +116,6 @@ namespace {
                         TU_ARMA(LoadDropFlag, e) {
                             m_os << "LoadDropFlag(df$" << e.idx << " = " << FMT_M(e.slot) << " BIT " << e.bit_index << ")";
                         }
-                        TU_ARMA(Drop, e) {
-                            //DEBUG("- DROP " << e.slot);
-                            m_os << "drop(" << FMT_M(e.slot);
-                            switch (e.kind) {
-                                case ::MIR::eDropKind::SHALLOW:
-                                    m_os << " SHALLOW";
-                                    break;
-                                case ::MIR::eDropKind::DEEP:
-                                    break;
-                            }
-                            if (e.flag_idx != ~0u) {
-                                m_os << " IF df$" << e.flag_idx;
-                            }
-                            m_os << ");\n";
-                        }
                         TU_ARMA(ScopeEnd, e) {
                             m_os << "// Scope End: ";
                             for (auto idx : e.slots) {
@@ -142,14 +127,23 @@ namespace {
                 }
 
                 m_os << indent();
+                auto fmt_unwind = [this](const ::MIR::UnwindAction& action) {
+                    TU_MATCHA((action), (ue),
+                        (Continue, m_os << "continue";),
+                        (Cleanup, m_os << "cleanup bb" << ue;),
+                        (Terminate, m_os << "terminate";),
+                        (Unreachable, m_os << "unreachable";)
+                    )
+                };
                 TU_MATCHA(
                     (block.terminator),
                     (e),
                     (Incomplete, m_os << "INVALID;\n";),
                     (Return, m_os << "return;\n";),
-                    (Diverge, m_os << "diverge;\n";),
+                    (UnwindResume, m_os << "unwind resume;\n";),
+                    (UnwindTerminate, m_os << "unwind terminate;\n";),
+                    (Unreachable, m_os << "unreachable;\n";),
                     (Goto, m_os << "goto bb" << e << ";\n";),
-                    (Panic, m_os << "panic bb" << e.dst << ";\n";),
                     (If, m_os << "if " << FMT_M(e.cond) << " { goto bb" << e.bb_true << "; } else { goto bb" << e.bb_false << "; }\n";),
                     (Switch, m_os << "switch " << FMT_M(e.val) << " {"; for (unsigned int j = 0; j < e.targets.size(); j++) m_os << j << " => bb" << e.targets[j] << ", "; m_os << "}\n";),
                     (SwitchValue, m_os << "switch " << FMT_M(e.val) << " {"; TU_MATCHA(
@@ -185,7 +179,8 @@ namespace {
                                                                                   })
                                                                              ) m_os
                                                                              << "_ => bb" << e.def_target << "}\n";),
-                    (Call, m_os << FMT_M(e.ret_val) << " = "; TU_MATCHA((e.fcn), (e2), (Value, m_os << "(" << FMT_M(e2) << ")";), (Path, m_os << e2;), (Intrinsic, m_os << "\"" << e2.name << "\"::" << e2.params;)) m_os << "( "; for (const auto& arg : e.args) m_os << FMT_M(arg) << ", "; m_os << ") goto bb" << e.ret_block << " else bb" << e.panic_block << "\n";)
+                    (Drop, m_os << "drop(" << FMT_M(e.slot); if (e.kind == ::MIR::eDropKind::SHALLOW) m_os << " SHALLOW"; if (e.flag_idx != ~0u) m_os << " IF df$" << e.flag_idx; m_os << ") goto bb" << e.target << " unwind "; fmt_unwind(e.unwind); m_os << "\n";),
+                    (Call, m_os << FMT_M(e.ret_val) << " = "; TU_MATCHA((e.fcn), (e2), (Value, m_os << "(" << FMT_M(e2) << ")";), (Path, m_os << e2;), (Intrinsic, m_os << "\"" << e2.name << "\"::" << e2.params;)) m_os << "( "; for (const auto& arg : e.args) m_os << FMT_M(arg) << ", "; m_os << ") goto bb" << e.ret_block << " unwind "; fmt_unwind(e.unwind); m_os << "\n";)
                 )
                 dec_indent();
                 m_os << indent() << "}\n";

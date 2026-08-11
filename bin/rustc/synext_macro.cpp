@@ -614,9 +614,7 @@ class CExpander_assert: public ExpandProcMacro {
                     }
                     GET_CHECK_TOK(tok, lex, TOK_COMMA);
                 }
-            } else { // Single-argument: Treat as a `Display`-able value
-                toks.push_back(Token(TOK_STRING, std::string("{}"), {}));
-                toks.push_back(TOK_COMMA);
+            } else {
                 toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, fmt.release())));
             }
 

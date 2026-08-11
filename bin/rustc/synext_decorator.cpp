@@ -3187,6 +3187,23 @@ public:
     }
 };
 
+class Decorator_GlobalAllocator: public ExpandDecorator {
+public:
+    AttrStage stage() const override {
+        return AttrStage::Post;
+    }
+
+    void handle(const Span& sp, const AST::Attribute&, AST::Crate& crate, const AST::AbsolutePath& path, AST::Module&, size_t, slice<const AST::Attribute>, const AST::Visibility&, AST::Item& item) const override {
+        if (!item.is_Static()) {
+            ERROR(sp, E0000, "#[global_allocator] on non-static " << path);
+        }
+        auto rv = crate.m_lang_items.insert(::std::make_pair(::std::string("mrustc-global_allocator"), path));
+        if (!rv.second && rv.first->second != path) {
+            ERROR(sp, E0000, "Duplicate definition of #[global_allocator] - " << rv.first->second << " and " << path);
+        }
+    }
+};
+
 STATIC_DECORATOR("lang", Decorator_LangItem)
 STATIC_DECORATOR("main", Decorator_Main);
 STATIC_DECORATOR("start", Decorator_Start);
@@ -3194,6 +3211,7 @@ STATIC_DECORATOR("panic_implementation", Decorator_PanicImplementation);
 STATIC_DECORATOR("panic_handler", Decorator_PanicHandler);
 STATIC_DECORATOR("rustc_std_internal_symbol", Decorator_RustcStdInternalSymbol);
 STATIC_DECORATOR("alloc_error_handler", Decorator_AllocErrorHandler);
+STATIC_DECORATOR("global_allocator", Decorator_GlobalAllocator);
 
 #include "synext.h"
 #include "ast_generics.h"

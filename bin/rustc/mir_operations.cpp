@@ -718,8 +718,6 @@ void MIR_BorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& p
                     }
                     TU_ARMA(ScopeEnd, se) { /* todo */
                     }
-                    TU_ARMA(Drop, se) { /* todo */
-                    }
                     TU_ARMA(Asm, se) {
                     }
                     TU_ARMA(Asm2, se) {
@@ -1228,15 +1226,6 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
                     MIR_ASSERT(state, stmt.as_SaveDropFlag().idx < fcn.drop_flags.size(), "");
                     val_state.ensure_valid(state, stmt.as_SaveDropFlag().slot);
                     break;
-                case ::MIR::Statement::TAG_Drop:
-                    // Invalidate the slot
-                    if (stmt.as_Drop().flag_idx == ~0u) {
-                        val_state.ensure_valid(state, stmt.as_Drop().slot);
-                    } else {
-                        MIR_ASSERT(state, stmt.as_Drop().flag_idx < fcn.drop_flags.size(), "");
-                    }
-                    val_state.mark_validity(state, stmt.as_Drop().slot, false);
-                    break;
                 case ::MIR::Statement::TAG_Asm:
                     for (const auto& v : stmt.as_Asm().inputs) {
                         val_state.ensure_valid(state, v.second);
@@ -1341,15 +1330,16 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
                     }
                 }
             }
-            TU_ARMA(Diverge, e) {
+            TU_ARMA(UnwindResume, e) {
                 // TODO: Ensure that cleanup has been performed.
+            }
+            TU_ARMA(UnwindTerminate, e) {
+            }
+            TU_ARMA(Unreachable, e) {
             }
             TU_ARMA(Goto, e) {
                 // Push block with the new state
                 add_to_visit(e, val_state);
-            }
-            TU_ARMA(Panic, e) {
-                // What should be done here?
             }
             TU_ARMA(If, e) {
                 // Push blocks
@@ -1376,6 +1366,18 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
                 }
                 add_to_visit(e.def_target, val_state);
             }
+            TU_ARMA(Drop, e) {
+                if (e.flag_idx == ~0u) {
+                    val_state.ensure_valid(state, e.slot);
+                } else {
+                    MIR_ASSERT(state, e.flag_idx < fcn.drop_flags.size(), "");
+                }
+                val_state.mark_validity(state, e.slot, false);
+                TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target,
+                    add_to_visit(target, val_state);
+                )
+                add_to_visit(e.target, val_state);
+            }
             TU_ARMA(Call, e) {
                 if (e.fcn.is_Value()) {
                     val_state.ensure_valid(state, e.fcn.as_Value());
@@ -1383,8 +1385,9 @@ void MIR_Validate_ValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn
                 for (const auto& arg : e.args) {
                     val_state.move_val(state, arg);
                 }
-                // Push blocks (with return valid only in one)
-                add_to_visit(e.panic_block, val_state);
+                TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target,
+                    add_to_visit(target, val_state);
+                )
 
                 // TODO: If the function returns !, don't follow the ret_block
                 val_state.mark_validity(state, e.ret_val, true);
@@ -1460,16 +1463,15 @@ void MIR_Validate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
                 (e),
                 (Incomplete, MIR_BUG(state, "Encounterd `Incomplete` block in control flow - BB" << block);),
                 (Return, returns = true;),
-                (
-                    Diverge,
-                    //can_panic = true;
-                ),
+                (UnwindResume, ),
+                (UnwindTerminate, ),
+                (Unreachable, ),
                 (Goto, PUSH_BB(e, "Goto");),
-                (Panic, PUSH_BB(e.dst, "Panic");),
                 (If, PUSH_BB(e.bb_true, "If true"); PUSH_BB(e.bb_false, "If false");),
                 (Switch, for (unsigned int i = 0; i < e.targets.size(); i++) { PUSH_BB(e.targets[i], "Switch V" << i); }),
                 (SwitchValue, for (unsigned int i = 0; i < e.targets.size(); i++) { PUSH_BB(e.targets[i], "SwitchValue " << i); } PUSH_BB(e.def_target, "SwitchValue def");),
-                (Call, PUSH_BB(e.ret_block, "Call ret"); PUSH_BB(e.panic_block, "Call panic");)
+                (Drop, PUSH_BB(e.target, "Drop ret"); TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, PUSH_BB(target, "Drop cleanup");)),
+                (Call, PUSH_BB(e.ret_block, "Call ret"); TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, PUSH_BB(target, "Call cleanup");))
             )
 #undef PUSH_BB
         }
@@ -1908,20 +1910,7 @@ void MIR_Validate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
                     case ::MIR::Statement::TAG_Asm2:
                         // TODO: Ensure that values are all thin pointers or integers?
                         break;
-                    case ::MIR::Statement::TAG_Drop: {
-                        const auto& se = stmt.as_Drop();
-                        // TODO: Anything need checking here?
-                        // - Check the path to see if this has mutable/owned access
-                        if (se.slot.is_Deref()) {
-                            HIR::TypeRef tmp;
-                            const auto& ty = state.get_lvalue_type(tmp, se.slot, 1);
-                            if (ty->is_Borrow()) {
-                                // Note: Dropping through `&mut` happens when assigning
-                                MIR_ASSERT(state, ty->as_Borrow().type != HIR::BorrowType::Shared, "Droping though non-owned pointer: " << ty);
-                            }
-                        }
-                    } break;
-                    case ::MIR::Statement::TAG_ScopeEnd:
+                case ::MIR::Statement::TAG_ScopeEnd:
                         // TODO: Mark listed values as descoped
                         break;
                 }
@@ -1935,11 +1924,13 @@ void MIR_Validate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
                 TU_ARMA(Return, e) {
                     // TODO: Check if the function can return (i.e. if its return type isn't an empty type)
                 }
-                TU_ARMA(Diverge, e) {
+                TU_ARMA(UnwindResume, e) {
+                }
+                TU_ARMA(UnwindTerminate, e) {
+                }
+                TU_ARMA(Unreachable, e) {
                 }
                 TU_ARMA(Goto, e) {
-                }
-                TU_ARMA(Panic, e) {
                 }
                 TU_ARMA(If, e) {
                     // Check that condition lvalue is a bool
@@ -1959,6 +1950,22 @@ void MIR_Validate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path
                 }
                 TU_ARMA(SwitchValue, e) {
                     // Check that the condition's type matches the values
+                }
+                TU_ARMA(Drop, e) {
+                    if (e.slot.is_Deref()) {
+                        HIR::TypeRef tmp;
+                        const auto& ty = state.get_lvalue_type(tmp, e.slot, 1);
+                        if (ty->is_Borrow()) {
+                            MIR_ASSERT(state, ty->as_Borrow().type != HIR::BorrowType::Shared, "Dropping through non-owned pointer: " << ty);
+                        }
+                    }
+                    MIR_ASSERT(state, e.target < fcn.blocks.size(), "Drop target out of range");
+                    if (e.flag_idx != ~0u) {
+                        MIR_ASSERT(state, e.flag_idx < fcn.drop_flags.size(), "Drop flag out of range");
+                    }
+                    TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target,
+                        MIR_ASSERT(state, target < fcn.blocks.size(), "Drop cleanup target out of range");
+                    )
                 }
                 TU_ARMA(Call, e) {
                     if (e.fcn.is_Value()) {
@@ -2796,26 +2803,6 @@ void MIR_Validate_FullValState(::MIR::TypeResolve& mir_res, const ::MIR::Functio
                 TU_ARMA(SaveDropFlag, se) {
                     MIR_TODO(mir_res, "");
                 }
-                TU_ARMA(Drop, se) {
-                    if (se.flag_idx == ~0u || state.drop_flags.at(se.flag_idx)) {
-                        if (se.kind == ::MIR::eDropKind::SHALLOW) {
-                            // A shallow Box drop follows a move from its pointee. Ensure
-                            // that the validator state has the corresponding outer/inner shape.
-                            const auto& vs = state.get_lvalue_state(mir_res, se.slot);
-
-                            MIR_ASSERT(mir_res, vs.index != ~0u, "Shallow drop on fully-valid value - " << se.slot);
-
-                            // Box<T> - Wrapper around Unique<T>
-                            MIR_ASSERT(mir_res, vs.is_composite(), "Shallow drop on non-composite state - " << se.slot << " (state=" << StateFmt(state, vs) << ")");
-                            const auto& sub_states = state.get_composite(mir_res, vs);
-                            MIR_ASSERT(mir_res, sub_states.size() == 2, "Shallow drop of slot with incorrect state shape (state=" << StateFmt(state, vs) << ")");
-                            MIR_ASSERT(mir_res, sub_states[0].is_valid(), "Shallow drop on deallocated Box - " << se.slot << " (state=" << StateFmt(state, vs) << ")");
-                            state.set_lvalue_state(mir_res, se.slot, State(false));
-                        } else {
-                            state.move_lvalue(mir_res, se.slot);
-                        }
-                    }
-                }
                 TU_ARMA(ScopeEnd, se) {
                     // TODO: Mark all mentioned variables as invalid
                 }
@@ -2836,10 +2823,11 @@ void MIR_Validate_FullValState(::MIR::TypeResolve& mir_res, const ::MIR::Functio
             (
                 Return, state.ensure_lvalue_valid(mir_res, ::MIR::LValue::new_Return());
             ),
-            (Diverge, ),
+            (UnwindResume, ),
+            (UnwindTerminate, ),
+            (Unreachable, ),
             (Goto, // Jump to another block
              todo_queue.push_back(::std::make_pair(te, mv$(state)));),
-            (Panic, todo_queue.push_back(::std::make_pair(te.dst, mv$(state)));),
             (If, state.ensure_lvalue_valid(mir_res, te.cond); todo_queue.push_back(::std::make_pair(te.bb_true, state.clone())); todo_queue.push_back(::std::make_pair(te.bb_false, mv$(state)));),
             (Switch, if (te.valid_flag != ~0u && !state.drop_flags.at(te.valid_flag)) { todo_queue.push_back(::std::make_pair(te.invalid_target, mv$(state))); } else {
                 state.ensure_lvalue_valid(mir_res, te.val);
@@ -2848,13 +2836,30 @@ void MIR_Validate_FullValState(::MIR::TypeResolve& mir_res, const ::MIR::Functio
                 }
             }),
             (SwitchValue, state.ensure_lvalue_valid(mir_res, te.val); for (size_t i = 0; i < te.targets.size(); i++) { todo_queue.push_back(::std::make_pair(te.targets[i], state.clone())); } todo_queue.push_back(::std::make_pair(te.def_target, mv$(state)));),
+            (Drop, if (te.flag_idx == ~0u || state.drop_flags.at(te.flag_idx)) {
+                if (te.kind == ::MIR::eDropKind::SHALLOW) {
+                    const auto& vs = state.get_lvalue_state(mir_res, te.slot);
+                    MIR_ASSERT(mir_res, vs.index != ~0u, "Shallow drop on fully-valid value - " << te.slot);
+                    MIR_ASSERT(mir_res, vs.is_composite(), "Shallow drop on non-composite state - " << te.slot << " (state=" << StateFmt(state, vs) << ")");
+                    const auto& sub_states = state.get_composite(mir_res, vs);
+                    MIR_ASSERT(mir_res, sub_states.size() == 2, "Shallow drop of slot with incorrect state shape (state=" << StateFmt(state, vs) << ")");
+                    MIR_ASSERT(mir_res, sub_states[0].is_valid(), "Shallow drop on deallocated Box - " << te.slot << " (state=" << StateFmt(state, vs) << ")");
+                    state.set_lvalue_state(mir_res, te.slot, State(false));
+                } else {
+                    state.move_lvalue(mir_res, te.slot);
+                }
+            }
+            TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target,
+                todo_queue.push_back(::std::make_pair(target, state.clone()));
+            )
+            todo_queue.push_back(::std::make_pair(te.target, mv$(state)));),
             (Call, if (const auto* e = te.fcn.opt_Value()) { state.ensure_lvalue_valid(mir_res, *e); } for (auto& arg : te.args) {
                 if (const auto* e = arg.opt_LValue()) {
                     state.move_lvalue(mir_res, *e);
                 }
-            } if (fcn.blocks[te.panic_block].statements.empty() && fcn.blocks[te.panic_block].terminator.is_Diverge()) {
-                // Don't bother, it's just an empty block
-            } else { todo_queue.push_back(::std::make_pair(te.panic_block, state.clone())); } state.mark_lvalue_valid(mir_res, te.ret_val);
+            } TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target,
+                todo_queue.push_back(::std::make_pair(target, state.clone()));
+            ) state.mark_lvalue_valid(mir_res, te.ret_val);
              todo_queue.push_back(::std::make_pair(te.ret_block, mv$(state)));)
         )
     }
@@ -3928,17 +3933,14 @@ void MIR_Cleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 })) {
                     DEBUG(state << "Truncate entire block due to use of `!` as a value - " << stmt);
                     block.statements.erase(it, block.statements.end());
-                    block.terminator = ::MIR::Terminator::make_Diverge({});
+                    block.terminator = ::MIR::Terminator::make_Unreachable({});
                     break;
                 }
             }
             // >> Elaborate Box dereferences in all LValues
             DEBUG(state << stmt);
             TU_MATCH_HDRA( (stmt), { )
-            TU_ARMA(Drop, se) {
-                    MIR_Cleanup_LValue(state, mutator, se.slot);
-                }
-                TU_ARMA(SetDropFlag, se) {
+            TU_ARMA(SetDropFlag, se) {
                 }
                 TU_ARMA(SaveDropFlag, se) {
                     MIR_Cleanup_LValue(state, mutator, se.slot);
@@ -4143,11 +4145,13 @@ void MIR_Cleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
             }
             TU_ARMA(Return, e) {
             }
-            TU_ARMA(Diverge, e) {
+            TU_ARMA(UnwindResume, e) {
+            }
+            TU_ARMA(UnwindTerminate, e) {
+            }
+            TU_ARMA(Unreachable, e) {
             }
             TU_ARMA(Goto, e) {
-            }
-            TU_ARMA(Panic, e) {
             }
             TU_ARMA(If, e) {
                 MIR_Cleanup_LValue(state, mutator, e.cond);
@@ -4157,6 +4161,9 @@ void MIR_Cleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
             }
             TU_ARMA(SwitchValue, e) {
                 MIR_Cleanup_LValue(state, mutator, e.val);
+            }
+            TU_ARMA(Drop, e) {
+                MIR_Cleanup_LValue(state, mutator, e.slot);
             }
             TU_ARMA(Call, e) {
                 MIR_Cleanup_LValue(state, mutator, e.ret_val);
@@ -4875,10 +4882,6 @@ namespace {
             TU_ARMA(LoadDropFlag, e) {
                 rv |= visit_mir_lvalue_raw_mut(e.slot, ValUsage::Read, cb);
             }
-            TU_ARMA(Drop, e) {
-                // Well, it mutates...
-                rv |= visit_mir_lvalue_raw_mut(e.slot, ValUsage::Write, cb);
-            }
             TU_ARMA(ScopeEnd, e) {
             }
         }
@@ -4898,11 +4901,13 @@ namespace {
             }
             TU_ARMA(Return, e) {
             }
-            TU_ARMA(Diverge, e) {
+            TU_ARMA(UnwindResume, e) {
+            }
+            TU_ARMA(UnwindTerminate, e) {
+            }
+            TU_ARMA(Unreachable, e) {
             }
             TU_ARMA(Goto, e) {
-            }
-            TU_ARMA(Panic, e) {
             }
             TU_ARMA(If, e) {
                 rv |= visit_mir_lvalue_raw_mut(e.cond, ValUsage::Read, cb);
@@ -4912,6 +4917,9 @@ namespace {
             }
             TU_ARMA(SwitchValue, e) {
                 rv |= visit_mir_lvalue_raw_mut(e.val, ValUsage::Read, cb);
+            }
+            TU_ARMA(Drop, e) {
+                rv |= visit_mir_lvalue_raw_mut(e.slot, ValUsage::Move, cb);
             }
             TU_ARMA(Call, e) {
                 if (e.fcn.is_Value()) {
@@ -5074,13 +5082,14 @@ namespace {
             }
             TU_ARMA(Return, e) {
             }
-            TU_ARMA(Diverge, e) {
+            TU_ARMA(UnwindResume, e) {
+            }
+            TU_ARMA(UnwindTerminate, e) {
+            }
+            TU_ARMA(Unreachable, e) {
             }
             TU_ARMA(Goto, e) {
                 cb(e);
-            }
-            TU_ARMA(Panic, e) {
-                cb(e.dst);
             }
             TU_ARMA(If, e) {
                 cb(e.bb_true);
@@ -5100,9 +5109,13 @@ namespace {
                 }
                 cb(e.def_target);
             }
+            TU_ARMA(Drop, e) {
+                cb(e.target);
+                TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, cb(target);)
+            }
             TU_ARMA(Call, e) {
                 cb(e.ret_block);
-                cb(e.panic_block);
+                TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, cb(target);)
             }
         }
     }
@@ -5301,9 +5314,17 @@ bool MIR_Optimise_BlockSimplify(::MIR::TypeResolve& state, ::MIR::Function& fcn)
                 DEBUG(state << " -> Return");
                 block.terminator = MIR::Terminator::make_Return({});
                 changed = true;
-            } else if (fcn.blocks[tgt].terminator.is_Diverge()) {
-                DEBUG(state << " -> Diverge");
-                block.terminator = MIR::Terminator::make_Diverge({});
+            } else if (fcn.blocks[tgt].terminator.is_UnwindResume()) {
+                DEBUG(state << " -> UnwindResume");
+                block.terminator = MIR::Terminator::make_UnwindResume({});
+                changed = true;
+            } else if (fcn.blocks[tgt].terminator.is_UnwindTerminate()) {
+                DEBUG(state << " -> UnwindTerminate");
+                block.terminator = MIR::Terminator::make_UnwindTerminate({});
+                changed = true;
+            } else if (fcn.blocks[tgt].terminator.is_Unreachable()) {
+                DEBUG(state << " -> Unreachable");
+                block.terminator = MIR::Terminator::make_Unreachable({});
                 changed = true;
             } else {
                 // No replace
@@ -5423,7 +5444,7 @@ bool MIR_Optimise_Inlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool
                 return fcn.blocks[0].statements.size() < 10 && !fcn.blocks[0].terminator.is_Goto();
             } else if (fcn.blocks.size() == 2 && fcn.blocks[0].terminator.is_Call()) {
                 const auto& blk0_te = fcn.blocks[0].terminator.as_Call();
-                if (!fcn.blocks[1].terminator.is_Diverge()) {
+                if (!(fcn.blocks[1].terminator.is_UnwindResume() || fcn.blocks[1].terminator.is_UnwindTerminate() || fcn.blocks[1].terminator.is_Unreachable())) {
                     return false;
                 }
                 if (fcn.blocks[0].statements.size() + fcn.blocks[1].statements.size() > 10) {
@@ -5438,10 +5459,10 @@ bool MIR_Optimise_Inlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool
                 return true;
             } else if (fcn.blocks.size() == 3 && fcn.blocks[0].terminator.is_Call()) {
                 const auto& blk0_te = fcn.blocks[0].terminator.as_Call();
-                if (!(fcn.blocks[1].terminator.is_Diverge() || fcn.blocks[1].terminator.is_Return())) {
+                if (!(fcn.blocks[1].terminator.is_UnwindResume() || fcn.blocks[1].terminator.is_UnwindTerminate() || fcn.blocks[1].terminator.is_Unreachable() || fcn.blocks[1].terminator.is_Return())) {
                     return false;
                 }
-                if (!(fcn.blocks[2].terminator.is_Diverge() || fcn.blocks[2].terminator.is_Return())) {
+                if (!(fcn.blocks[2].terminator.is_UnwindResume() || fcn.blocks[2].terminator.is_UnwindTerminate() || fcn.blocks[2].terminator.is_Unreachable() || fcn.blocks[2].terminator.is_Return())) {
                     return false;
                 }
                 if (fcn.blocks[0].statements.size() + fcn.blocks[1].statements.size() + fcn.blocks[2].statements.size() > 10) {
@@ -5620,6 +5641,7 @@ bool MIR_Optimise_Inlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool
 
         ::MIR::BasicBlock clone_bb(const ::MIR::BasicBlock& src, unsigned src_idx, unsigned new_idx) const {
             ::MIR::BasicBlock rv;
+            rv.is_cleanup = src.is_cleanup;
             rv.statements.reserve(src.statements.size());
             for (const auto& stmt : src.statements) {
                 DEBUG("BB" << src_idx << "->BB" << new_idx << "/" << rv.statements.size() << ": " << stmt);
@@ -5639,8 +5661,14 @@ bool MIR_Optimise_Inlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool
         ::MIR::Terminator clone_term(const ::MIR::Terminator& src) const override {
             if (src.is_Return()) {
                 return ::MIR::Terminator::make_Goto(this->te.ret_block);
-            } else if (src.is_Diverge()) {
-                return ::MIR::Terminator::make_Goto(this->te.panic_block);
+            } else if (src.is_UnwindResume()) {
+                TU_MATCHA((this->te.unwind), (ue),
+                    (Continue, return ::MIR::Terminator::make_UnwindResume({});),
+                    (Cleanup, return ::MIR::Terminator::make_Goto(ue);),
+                    (Terminate, return ::MIR::Terminator::make_UnwindTerminate({});),
+                    (Unreachable, return ::MIR::Terminator::make_Unreachable({});)
+                )
+                throw "";
             } else {
                 return ::MIR::Cloner::clone_term(src);
             }
@@ -6048,7 +6076,7 @@ bool MIR_Optimise_DeTemporary_SingleSetAndUse(::MIR::TypeResolve& state, ::MIR::
                                                                 slot.use_loc,
                                                                 // TODO: What about a mutable borrow?
                                                                 [&](auto loc, const auto& stmt) -> bool {
-                    return stmt.is_Drop() || check_invalidates_lvalue(stmt, dst, false, /*also_read=*/true);
+                    return check_invalidates_lvalue(stmt, dst, false, /*also_read=*/true);
                 },
                                                                 [&](auto loc, const auto& term) -> bool {
                     return check_invalidates_lvalue(term, dst, false, /*also_read=*/true);
@@ -6279,23 +6307,15 @@ bool MIR_Optimise_DeTemporary_Borrows(::MIR::TypeResolve& state, ::MIR::Function
         for (const auto& stmt : bb.statements) {
             cur_loc = OptimiseStmtRef(&bb - &fcn.blocks.front(), &stmt - &bb.statements.front());
 
-            // If the statement is a drop of a local, then don't count that as a read
-            // - But do record the location of the drop, so it can be deleted later on?
-            if (stmt.is_Drop()) {
-                const auto& drop_lv = stmt.as_Drop().slot;
-                if (drop_lv.m_root.is_Local() && drop_lv.m_wrappers.empty()) {
-                    auto& slot = usage_info[drop_lv.m_root.as_Local()];
-                    slot.drop_locs.push_back(cur_loc);
-                    continue;
-                }
-            }
-
             //DEBUG(cur_loc << ":" << stmt);
             visit_mir_lvalues(stmt, visit_cb);
         }
         cur_loc = OptimiseStmtRef(&bb - &fcn.blocks.front(), bb.statements.size());
-        //DEBUG(cur_loc << ":" << bb.terminator);
-        visit_mir_lvalues(bb.terminator, visit_cb);
+        if (const auto* drop = bb.terminator.opt_Drop(); drop && drop->slot.m_root.is_Local() && drop->slot.m_wrappers.empty()) {
+            usage_info[drop->slot.m_root.as_Local()].drop_locs.push_back(cur_loc);
+        } else {
+            visit_mir_lvalues(bb.terminator, visit_cb);
+        }
     }
 
     // Look single-write/deref-only locals assigned with `_0 = Borrow`
@@ -6432,7 +6452,10 @@ bool MIR_Optimise_DeTemporary_Borrows(::MIR::TypeResolve& state, ::MIR::Function
             src_bb.statements[slot.set_loc.stmt_idx] = ::MIR::Statement();
             for (const auto& drop_loc : slot.drop_locs) {
                 DEBUG(this_var << " - Drop at " << drop_loc);
-                fcn.blocks[drop_loc.bb_idx].statements[drop_loc.stmt_idx] = ::MIR::Statement();
+                auto& drop_bb = fcn.blocks[drop_loc.bb_idx];
+                MIR_ASSERT(state, drop_loc.stmt_idx == drop_bb.statements.size() && drop_bb.terminator.is_Drop(), "Recorded drop is no longer a terminator");
+                auto target = drop_bb.terminator.as_Drop().target;
+                drop_bb.terminator = ::MIR::Terminator::make_Goto(target);
             }
         } else {
             // The variable is still used, keep the source where it is
@@ -6604,17 +6627,12 @@ bool MIR_Optimise_DeTemporary_ReborrowOfUnused(::MIR::TypeResolve& state, ::MIR:
         for (const auto& stmt : blk.statements) {
             state.set_cur_stmt(&blk - fcn.blocks.data(), &stmt - blk.statements.data());
             auto pos = OptimiseStmtRef(state.get_cur_block(), state.get_cur_stmt_ofs());
-            const ::MIR::LValue* dropped = stmt.is_Drop() ? &stmt.as_Drop().slot : nullptr;
             visit_mir_lvalues(stmt, [&](const ::MIR::LValue& lv, ValUsage /*vu*/) {
                 if (!(lv.m_root.is_Local() || lv.m_root.is_Argument())) {
                     return false;
                 }
                 auto it = possible_by_source.find(lv.m_root.get_inner());
                 if (it == possible_by_source.end()) {
-                    return false;
-                }
-                if (dropped && dropped->m_wrappers.empty() && dropped->m_root.get_inner() == lv.m_root.get_inner()) {
-                    DEBUG(state << lv.m_root << " Droped - " << stmt);
                     return false;
                 }
                 for (auto possible_idx : it->second) {
@@ -6627,12 +6645,16 @@ bool MIR_Optimise_DeTemporary_ReborrowOfUnused(::MIR::TypeResolve& state, ::MIR:
                 return false;
             });
         }
+        const auto* dropped = blk.terminator.opt_Drop();
         visit_mir_lvalues(blk.terminator, [&](const ::MIR::LValue& lv, ValUsage /*vu*/) {
             if (!(lv.m_root.is_Local() || lv.m_root.is_Argument())) {
                 return false;
             }
             auto it = possible_by_source.find(lv.m_root.get_inner());
             if (it != possible_by_source.end()) {
+                if (dropped && dropped->slot.m_wrappers.empty() && dropped->slot.m_root.get_inner() == lv.m_root.get_inner()) {
+                    return false;
+                }
                 for (auto possible_idx : it->second) {
                     auto& p = possible[possible_idx];
                     DEBUG(state << p.slot << " Used - " << blk.terminator);
@@ -6667,11 +6689,6 @@ bool MIR_Optimise_DeTemporary_ReborrowOfUnused(::MIR::TypeResolve& state, ::MIR:
     for (auto& blk : fcn.blocks) {
         for (auto& stmt : blk.statements) {
             state.set_cur_stmt(&blk - fcn.blocks.data(), &stmt - blk.statements.data());
-            if (stmt.is_Drop() && stmt.as_Drop().slot.m_wrappers.empty() && (stmt.as_Drop().slot.m_root.is_Local() || stmt.as_Drop().slot.m_root.is_Argument()) && source_slots.count(stmt.as_Drop().slot.m_root.get_inner()) != 0) {
-                DEBUG(state << stmt.as_Drop().slot.m_root << " Erase drop");
-                stmt = ::MIR::Statement();
-                continue;
-            }
             visit_mir_lvalues_mut(stmt, [&](::MIR::LValue& lv, ValUsage /*vu*/) {
                 if (lv.m_root.is_Local()) {
                     auto it = replacements.find(lv.m_root.get_inner());
@@ -6684,6 +6701,11 @@ bool MIR_Optimise_DeTemporary_ReborrowOfUnused(::MIR::TypeResolve& state, ::MIR:
             });
         }
 
+        if (auto* drop = blk.terminator.opt_Drop(); drop && drop->slot.m_wrappers.empty() && (drop->slot.m_root.is_Local() || drop->slot.m_root.is_Argument()) && source_slots.count(drop->slot.m_root.get_inner()) != 0) {
+            DEBUG(state << drop->slot.m_root << " Erase drop");
+            auto target = drop->target;
+            blk.terminator = ::MIR::Terminator::make_Goto(target);
+        }
         visit_mir_lvalues_mut(blk.terminator, [&](::MIR::LValue& lv, ValUsage /*vu*/) {
             if (lv.m_root.is_Local()) {
                 auto it = replacements.find(lv.m_root.get_inner());
@@ -7047,6 +7069,9 @@ bool MIR_Optimise_UnifyBlocks(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
         }
 
         static bool blocks_equal(const ::MIR::BasicBlock& a, const ::MIR::BasicBlock& b) {
+            if (a.is_cleanup != b.is_cleanup) {
+                return false;
+            }
             if (a.statements.size() != b.statements.size()) {
                 return false;
             }
@@ -7124,17 +7149,6 @@ bool MIR_Optimise_UnifyBlocks(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
                             return false;
                         }
                     }
-                    TU_ARMA(Drop, ae, be) {
-                        if (ae.kind != be.kind) {
-                            return false;
-                        }
-                        if (ae.flag_idx != be.flag_idx) {
-                            return false;
-                        }
-                        if (ae.slot != be.slot) {
-                            return false;
-                        }
-                    }
                     TU_ARMA(ScopeEnd, ae, be) {
                         if (ae.slots != be.slots) {
                             return false;
@@ -7142,26 +7156,7 @@ bool MIR_Optimise_UnifyBlocks(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
                     }
                 }
             }
-            if (a.terminator.tag() != b.terminator.tag()) {
-                return false;
-            }
-            TU_MATCHA(
-                (a.terminator, b.terminator),
-                (ae, be),
-                (Incomplete, ),
-                (Return, ),
-                (Diverge, ),
-                (Goto, if (ae != be) return false;),
-                (Panic, if (ae.dst != be.dst) return false;),
-                (If, if (ae.cond != be.cond) return false; if (ae.bb_true != be.bb_true) return false; if (ae.bb_false != be.bb_false) return false;),
-                (Switch, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false;),
-                (SwitchValue, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.def_target != be.def_target) return false; if (ae.values != be.values) return false;),
-                (Call, if (ae.ret_block != be.ret_block) return false; if (ae.panic_block != be.panic_block) return false; if (ae.ret_val != be.ret_val) return false; if (ae.args != be.args) return false;
-
-                 if (ae.fcn.tag() != be.fcn.tag()) return false;
-                 TU_MATCHA((ae.fcn, be.fcn), (af, bf), (Value, if (af != bf) return false;), (Path, if (af != bf) return false;), (Intrinsic, if (af.name != bf.name) return false; if (af.params != bf.params) return false;)))
-            )
-            return true;
+            return a.terminator == b.terminator;
         }
     };
 
@@ -8350,18 +8345,6 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                         known_drop_flags[se->idx] = se->new_val != it->second;
                     }
                 }
-            } else if (auto* se = stmt.opt_Drop()) {
-                if (se->flag_idx != ~0u) {
-                    auto it = known_drop_flags.find(se->flag_idx);
-                    if (it != known_drop_flags.end()) {
-                        if (it->second) {
-                            se->flag_idx = ~0u;
-                        } else {
-                            // TODO: Delete drop
-                            stmt = ::MIR::Statement::make_ScopeEnd({});
-                        }
-                    }
-                }
             }
             // - If a known temporary is borrowed mutably or mutated somehow, clear its knowledge
             visit_mir_lvalues(stmt, [&known_values, &known_values_var](const ::MIR::LValue& lv, ValUsage vu) -> bool {
@@ -8408,6 +8391,20 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
         }
 
         state.set_cur_stmt_term(bbidx);
+        if (auto* te = bb.terminator.opt_Drop()) {
+            if (te->flag_idx != ~0u) {
+                auto it = known_drop_flags.find(te->flag_idx);
+                if (it != known_drop_flags.end()) {
+                    if (it->second) {
+                        te->flag_idx = ~0u;
+                    } else {
+                        auto target = te->target;
+                        bb.terminator = ::MIR::Terminator::make_Goto(target);
+                    }
+                    changed = true;
+                }
+            }
+        }
         visit_mir_lvalues_mut(bb.terminator, edit_lval);
         switch (bb.terminator.tag()) {
             case ::MIR::Terminator::TAGDEAD:
@@ -8927,7 +8924,11 @@ bool MIR_Optimise_PropagateSingleAssignments(::MIR::TypeResolve& state, ::MIR::F
                             return found;
                         });
                     }
-                    TU_MATCHA((block.terminator), (e), (Incomplete, ), (Return, ), (Diverge, ), (Goto, DEBUG("TODO: Chain");), (Panic, ), (If, stop = true;), (Switch, stop = true;), (SwitchValue, stop = true;), (Call, stop = true;))
+                    TU_MATCHA((block.terminator), (e),
+                        (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ),
+                        (Goto, DEBUG("TODO: Chain");),
+                        (If, stop = true;), (Switch, stop = true;), (SwitchValue, stop = true;),
+                        (Drop, stop = true;), (Call, stop = true;))
                 }
                 // Schedule a replacement in a future pass
                 if (found) {
@@ -9226,16 +9227,17 @@ bool MIR_Optimise_DeadDropFlags(::MIR::TypeResolve& state, ::MIR::Function& fcn)
                         used_drop_flags[e->other] = true;
                     }
                     used_drop_flags[e->idx] = true;
-                } else if (const auto* e = stmt.opt_Drop()) {
-                    if (e->flag_idx != ~0u) {
-                        read_drop_flags[e->flag_idx] = true;
-                        used_drop_flags[e->flag_idx] = true;
-                    }
                 } else if (const auto* e = stmt.opt_SaveDropFlag()) {
                     read_drop_flags[e->idx] = true;
                     used_drop_flags[e->idx] = true;
                 } else if (const auto* e = stmt.opt_LoadDropFlag()) {
                     used_drop_flags[e->idx] = true;
+                }
+            }
+            if (const auto* e = block.terminator.opt_Drop()) {
+                if (e->flag_idx != ~0u) {
+                    read_drop_flags[e->flag_idx] = true;
+                    used_drop_flags[e->flag_idx] = true;
                 }
             }
             if (const auto* e = block.terminator.opt_Switch()) {
@@ -9330,31 +9332,21 @@ bool MIR_Optimise_DeadAssignments(::MIR::TypeResolve& state, ::MIR::Function& fc
             if (stmt.is_Assign() && stmt.as_Assign().dst.is_Local()) {
                 visit_mir_lvalues(stmt.as_Assign().src, cb);
             }
-            // Record drops differently, allowing us to remove unused non-Copy items
-            else if (stmt.is_Drop() && stmt.as_Drop().slot.is_Local()) {
-                dropped_locals[stmt.as_Drop().slot.as_Local()] = true;
-            }
             // For other statment types (e.g. asm) - record anything
             else {
                 visit_mir_lvalues(stmt, cb);
             }
         }
-        visit_mir_lvalues(bb.terminator, cb);
+        if (const auto* drop = bb.terminator.opt_Drop(); drop && drop->slot.is_Local()) {
+            dropped_locals[drop->slot.as_Local()] = true;
+        } else {
+            visit_mir_lvalues(bb.terminator, cb);
+        }
     }
 
     for (auto& bb : fcn.blocks) {
         for (auto it = bb.statements.begin(); it != bb.statements.end();) {
             state.set_cur_stmt(&bb - &fcn.blocks.front(), it - bb.statements.begin());
-
-            // Remove drops of assigned values that will be removed
-            if (it->is_Drop() && it->as_Drop().slot.is_Local()) {
-                auto idx = it->as_Drop().slot.as_Local();
-                if (!read_locals[idx] && fcn.locals[idx]->is_Borrow()) {
-                    DEBUG(state << "Drop of unread value, remove - " << *it);
-                    it = bb.statements.erase(it);
-                    continue;
-                }
-            }
 
             // Not an assignment, ignore
             if (!(it->is_Assign() && it->as_Assign().dst.is_Local())) {
@@ -9376,6 +9368,15 @@ bool MIR_Optimise_DeadAssignments(::MIR::TypeResolve& state, ::MIR::Function& fc
             DEBUG(state << "Unread assignment, remove - " << *it);
             it = bb.statements.erase(it);
             changed = true;
+        }
+        if (auto* drop = bb.terminator.opt_Drop(); drop && drop->slot.is_Local()) {
+            auto idx = drop->slot.as_Local();
+            if (!read_locals[idx] && fcn.locals[idx]->is_Borrow()) {
+                auto target = drop->target;
+                DEBUG(state << "Drop of unread value, replace with Goto(bb" << target << ")");
+                bb.terminator = ::MIR::Terminator::make_Goto(target);
+                changed = true;
+            }
         }
     }
 
@@ -9486,16 +9487,14 @@ bool MIR_Optimise_NoopRemoval(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
                 continue;
             }
 
-            // Drop of Copy type
-            if (it->is_Drop() && state.lvalue_is_copy(it->as_Drop().slot)) {
-                DEBUG(state << "Drop of Copy type, remove - " << *it);
-                it = bb.statements.erase(it);
-                changed = true;
-
-                continue;
-            }
-
             ++it;
+        }
+        state.set_cur_stmt_term(&bb - fcn.blocks.data());
+        if (auto* drop = bb.terminator.opt_Drop(); drop && state.lvalue_is_copy(drop->slot)) {
+            auto target = drop->target;
+            DEBUG(state << "Drop of Copy type, replace with Goto(bb" << target << ")");
+            bb.terminator = ::MIR::Terminator::make_Goto(target);
+            changed = true;
         }
     }
 
@@ -9759,6 +9758,10 @@ bool MIR_Optimise_GarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn
 
         if (const auto* te = block.terminator.opt_Call()) {
             assigned_lval(te->ret_val);
+        } else if (const auto* te = block.terminator.opt_Drop()) {
+            if (te->flag_idx != ~0u) {
+                used_dfs.at(te->flag_idx) = true;
+            }
         } else if (const auto* te = block.terminator.opt_Switch()) {
             if (te->valid_flag != ~0u) {
                 used_dfs.at(te->valid_flag) = true;
@@ -9766,10 +9769,6 @@ bool MIR_Optimise_GarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn
         }
     });
 
-    ::std::vector<unsigned int> block_rewrite_table;
-    for (unsigned int i = 0, j = 0; i < fcn.blocks.size(); i++) {
-        block_rewrite_table.push_back(visited[i] ? j++ : ~0u);
-    }
     ::std::vector<unsigned int> local_rewrite_table;
     unsigned int n_locals = fcn.locals.size();
     for (unsigned int i = 0, j = 0; i < n_locals; i++) {
@@ -9825,36 +9824,8 @@ bool MIR_Optimise_GarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn
                     continue;
                 }
 
-                if (auto* se = stmt.opt_Drop()) {
-                    // If the drop flag was unset, either remove the drop or remove the drop flag reference
-                    if (se->flag_idx != ~0u && df_rewrite_table[se->flag_idx] == ~0u) {
-                        if (fcn.drop_flags.at(se->flag_idx)) {
-                            DEBUG(state << "Remove flag from " << stmt << " - Flag never set and default true");
-                            se->flag_idx = ~0u;
-                        } else {
-                            DEBUG(state << "Remove " << stmt << " - Flag never set and default false");
-                            to_remove_statements[stmt_idx] = true;
-                            continue;
-                        }
-                    }
-
-                    // A local with no assignment in any reachable block is
-                    // definitely uninitialized. Conditional assignments mark
-                    // the local as used above and preserve its drop flag.
-                    if (se->slot.is_Local() && local_rewrite_table[se->slot.as_Local()] == ~0u) {
-                        DEBUG(state << "Remove " << stmt << " - Dropping non-set value");
-                        to_remove_statements[stmt_idx] = true;
-                        continue;
-                    }
-                }
-
                 visit_mir_lvalues_mut(stmt, lvalue_cb);
-                if (auto* se = stmt.opt_Drop()) {
-                    // Rewrite drop flag indexes
-                    if (se->flag_idx != ~0u) {
-                        se->flag_idx = df_rewrite_table[se->flag_idx];
-                    }
-                } else if (auto* se = stmt.opt_SetDropFlag()) {
+                if (auto* se = stmt.opt_SetDropFlag()) {
                     // Rewrite drop flag indexes OR delete
                     if (df_rewrite_table[se->idx] == ~0u) {
                         to_remove_statements[stmt_idx] = true;
@@ -9886,26 +9857,33 @@ bool MIR_Optimise_GarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn
                 }
             }
             state.set_cur_stmt_term(i);
-            // Rewrite and advance
-            visit_mir_lvalues_mut(it->terminator, lvalue_cb);
-            TU_MATCHA(
-                (it->terminator),
-                (e),
-                (Incomplete, ),
-                (Return, ),
-                (Diverge, ),
-                (Goto, e = block_rewrite_table[e];),
-                (Panic, ),
-                (If, e.bb_true = block_rewrite_table[e.bb_true]; e.bb_false = block_rewrite_table[e.bb_false];),
-                (
-                    Switch, for (auto& target : e.targets) target = block_rewrite_table[target]; if (e.valid_flag != ~0u) {
-                        e.valid_flag = df_rewrite_table[e.valid_flag];
-                        e.invalid_target = block_rewrite_table[e.invalid_target];
+            if (auto* drop = it->terminator.opt_Drop()) {
+                bool remove_drop = false;
+                if (drop->flag_idx != ~0u && df_rewrite_table[drop->flag_idx] == ~0u) {
+                    if (fcn.drop_flags.at(drop->flag_idx)) {
+                        drop->flag_idx = ~0u;
+                    } else {
+                        remove_drop = true;
                     }
-                ),
-                (SwitchValue, for (auto& target : e.targets) target = block_rewrite_table[target]; e.def_target = block_rewrite_table[e.def_target];),
-                (Call, e.ret_block = block_rewrite_table[e.ret_block]; e.panic_block = block_rewrite_table[e.panic_block];)
-            )
+                }
+                if (drop->slot.is_Local() && local_rewrite_table[drop->slot.as_Local()] == ~0u) {
+                    remove_drop = true;
+                }
+                if (remove_drop) {
+                    auto target = drop->target;
+                    it->terminator = ::MIR::Terminator::make_Goto(target);
+                }
+            }
+            visit_mir_lvalues_mut(it->terminator, lvalue_cb);
+            if (auto* drop = it->terminator.opt_Drop()) {
+                if (drop->flag_idx != ~0u) {
+                    drop->flag_idx = df_rewrite_table[drop->flag_idx];
+                }
+            } else if (auto* sw = it->terminator.opt_Switch()) {
+                if (sw->valid_flag != ~0u) {
+                    sw->valid_flag = df_rewrite_table[sw->valid_flag];
+                }
+            }
 
             // Delete all statements flagged in a bitmap for deletion
             assert(it->statements.size() == to_remove_statements.size());
@@ -9916,6 +9894,29 @@ bool MIR_Optimise_GarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn
             it->statements.erase(new_end, it->statements.end());
         }
         ++it;
+    }
+
+    // Removing a Drop terminator also removes its unwind edge.  Recompute block
+    // reachability after all such rewrites, otherwise the detached cleanup
+    // subgraph is retained and can be sorted ahead of the real entry block.
+    visited.assign(fcn.blocks.size(), false);
+    visit_blocks(state, fcn, [&](auto bb, const auto&) {
+        visited[bb] = true;
+    });
+
+    ::std::vector<unsigned int> block_rewrite_table;
+    for (unsigned int i = 0, j = 0; i < fcn.blocks.size(); i++) {
+        block_rewrite_table.push_back(visited[i] ? j++ : ~0u);
+    }
+    for (unsigned int i = 0; i < fcn.blocks.size(); i++) {
+        if (!visited[i]) {
+            continue;
+        }
+        visit_terminator_target_mut(fcn.blocks[i].terminator, [&](auto& target) {
+            MIR_ASSERT(state, target < block_rewrite_table.size(), "Block target out of range - bb" << target);
+            MIR_ASSERT(state, block_rewrite_table[target] != ~0u, "Reachable block targets unreachable bb" << target);
+            target = block_rewrite_table[target];
+        });
     }
 
     auto new_blocks_end = ::std::remove_if(fcn.blocks.begin(), fcn.blocks.end(), [&](const auto& bb) {
@@ -9967,7 +9968,14 @@ void MIR_SortBlocks(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
         depths[info.bb_idx] = ::std::make_pair(info.branch_count, info.level);
         const auto& bb = fcn.blocks[info.bb_idx];
 
-        TU_MATCHA((bb.terminator), (te), (Incomplete, ), (Return, ), (Diverge, ), (Goto, todo.push_back(Todo{te, info.branch_count, info.level + 1});), (Panic, todo.push_back(Todo{te.dst, info.branch_count, info.level + 1});), (If, todo.push_back(Todo{te.bb_true, ++branches, info.level + 1}); todo.push_back(Todo{te.bb_false, ++branches, info.level + 1});), (Switch, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1});), (SwitchValue, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.def_target, info.branch_count, info.level + 1});), (Call, todo.push_back(Todo{te.ret_block, info.branch_count, info.level + 1}); todo.push_back(Todo{te.panic_block, ++branches, info.level + 1});))
+        TU_MATCHA((bb.terminator), (te),
+            (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ),
+            (Goto, todo.push_back(Todo{te, info.branch_count, info.level + 1});),
+            (If, todo.push_back(Todo{te.bb_true, ++branches, info.level + 1}); todo.push_back(Todo{te.bb_false, ++branches, info.level + 1});),
+            (Switch, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); if (te.valid_flag != ~0u) todo.push_back(Todo{te.invalid_target, ++branches, info.level + 1});),
+            (SwitchValue, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.def_target, info.branch_count, info.level + 1});),
+            (Drop, todo.push_back(Todo{te.target, info.branch_count, info.level + 1}); TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)),
+            (Call, todo.push_back(Todo{te.ret_block, info.branch_count, info.level + 1}); TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)))
     }
 
     // Sort a list of block indexes by `depths`

@@ -551,6 +551,7 @@ public:
     ::MIR::AsmParam deserialise_asm_param();
     ::MIR::Terminator deserialise_mir_terminator();
     ::MIR::Terminator deserialise_mir_terminator_();
+    ::MIR::UnwindAction deserialise_mir_unwind_action();
     ::MIR::SwitchValues deserialise_mir_switchvalues();
     ::MIR::CallTarget deserialise_mir_calltarget();
 
@@ -1338,7 +1339,10 @@ EncodedLiteral HirDeserialiser::deserialise_encodedliteral() {
 ::MIR::BasicBlock HirDeserialiser::deserialise_mir_basicblock() {
     TRACE_FUNCTION;
 
-    return ::MIR::BasicBlock{deserialise_vec<::MIR::Statement>(), deserialise_mir_terminator()};
+    auto statements = deserialise_vec<::MIR::Statement>();
+    auto terminator = deserialise_mir_terminator();
+    const auto is_cleanup = m_in.read_bool();
+    return ::MIR::BasicBlock{mv$(statements), mv$(terminator), is_cleanup};
 }
 
 AsmCommon::Options HirDeserialiser::deserialise_asm_options() {
@@ -1407,8 +1411,7 @@ AsmCommon::RegisterSpec HirDeserialiser::deserialise_asm_spec() {
             rv = ::MIR::Statement::make_Assign({deserialise_mir_lvalue(), deserialise_mir_rvalue()});
             break;
         case 1:
-            rv = ::MIR::Statement::make_Drop({m_in.read_bool() ? ::MIR::eDropKind::DEEP : ::MIR::eDropKind::SHALLOW, deserialise_mir_lvalue(), static_cast<unsigned int>(m_in.read_count())});
-            break;
+            BUG(Span(), "Obsolete MIR statement Drop in metadata");
         case 2:
             rv = ::MIR::Statement::make_Asm({m_in.read_string(), deserialise_vec<::std::pair<::std::string, ::MIR::LValue>>(), deserialise_vec<::std::pair<::std::string, ::MIR::LValue>>(), deserialise_vec<::std::string>(), deserialise_vec<::std::string>()});
             break;
@@ -1453,9 +1456,10 @@ AsmCommon::RegisterSpec HirDeserialiser::deserialise_asm_spec() {
             BUG(Span(), "MIR::Terminator::TAGDEAD found");
             _(Incomplete, {})
             _(Return, {})
-            _(Diverge, {})
+            _(UnwindResume, {})
+            _(UnwindTerminate, {})
+            _(Unreachable, {})
             _(Goto, static_cast<unsigned int>(m_in.read_count()))
-            _(Panic, {static_cast<unsigned int>(m_in.read_count())})
             _(If, {deserialise_mir_lvalue(), static_cast<unsigned int>(m_in.read_count()), static_cast<unsigned int>(m_in.read_count())})
             _(Switch,
               {deserialise_mir_lvalue(),
@@ -1471,10 +1475,26 @@ AsmCommon::RegisterSpec HirDeserialiser::deserialise_asm_spec() {
                 return static_cast<unsigned int>(m_in.read_count());
             }),
                deserialise_mir_switchvalues()})
-            _(Call, {static_cast<unsigned int>(m_in.read_count()), static_cast<unsigned int>(m_in.read_count()), deserialise_mir_lvalue(), deserialise_mir_calltarget(), deserialise_vec<::MIR::Param>()})
+            _(Drop, {static_cast<::MIR::eDropKind>(m_in.read_tag()), deserialise_mir_lvalue(), static_cast<unsigned int>(m_in.read_count()), static_cast<unsigned int>(m_in.read_count()), deserialise_mir_unwind_action()})
+            _(Call, {static_cast<unsigned int>(m_in.read_count()), deserialise_mir_unwind_action(), deserialise_mir_lvalue(), deserialise_mir_calltarget(), deserialise_vec<::MIR::Param>()})
 #undef _
         default:
             BUG(Span(), "Bad tag for MIR::Terminator - " << tag);
+    }
+}
+
+::MIR::UnwindAction HirDeserialiser::deserialise_mir_unwind_action() {
+    switch (auto tag = m_in.read_tag()) {
+        case ::MIR::UnwindAction::TAG_Continue:
+            return ::MIR::UnwindAction::make_Continue({});
+        case ::MIR::UnwindAction::TAG_Cleanup:
+            return ::MIR::UnwindAction::make_Cleanup(static_cast<unsigned int>(m_in.read_count()));
+        case ::MIR::UnwindAction::TAG_Terminate:
+            return ::MIR::UnwindAction::make_Terminate({});
+        case ::MIR::UnwindAction::TAG_Unreachable:
+            return ::MIR::UnwindAction::make_Unreachable({});
+        default:
+            BUG(Span(), "Bad tag for MIR::UnwindAction - " << tag);
     }
 }
 
@@ -3250,6 +3270,7 @@ public:
     void serialise(const ::MIR::BasicBlock& block) {
         serialise_vec(block.statements);
         serialise(block.terminator);
+        m_out.write_bool(block.is_cleanup);
     }
 
     void serialise(const ::AsmCommon::LineFragment& l) {
@@ -3323,13 +3344,6 @@ public:
                 serialise(e.dst);
                 serialise(e.src);
             }
-            TU_ARMA(Drop, e) {
-                m_out.write_tag(1);
-                assert(e.kind == ::MIR::eDropKind::DEEP || e.kind == ::MIR::eDropKind::SHALLOW);
-                m_out.write_bool(e.kind == ::MIR::eDropKind::DEEP);
-                serialise(e.slot);
-                m_out.write_count(e.flag_idx);
-            }
             TU_ARMA(Asm, e) {
                 m_out.write_tag(2);
                 m_out.write_string(e.tpl);
@@ -3370,6 +3384,10 @@ public:
     }
 
     void serialise(const ::MIR::Terminator& term) {
+        auto serialise_unwind = [this](const ::MIR::UnwindAction& action) {
+            m_out.write_tag(static_cast<int>(action.tag()));
+            TU_IFLET(::MIR::UnwindAction, action, Cleanup, target, m_out.write_count(target);)
+        };
         m_out.write_tag(static_cast<int>(term.tag()));
         TU_MATCHA(
             (term),
@@ -3380,13 +3398,15 @@ public:
                 //assert(!"Entountered Incomplete MIR block");
             ),
             (Return, ),
-            (Diverge, ),
+            (UnwindResume, ),
+            (UnwindTerminate, ),
+            (Unreachable, ),
             (Goto, m_out.write_count(e);),
-            (Panic, m_out.write_count(e.dst);),
             (If, serialise(e.cond); m_out.write_count(e.bb_true); m_out.write_count(e.bb_false);),
             (Switch, serialise(e.val); serialise_vec(e.targets); m_out.write_count(e.valid_flag); m_out.write_count(e.invalid_target);),
             (SwitchValue, serialise(e.val); m_out.write_count(e.def_target); serialise_vec(e.targets); serialise(e.values);),
-            (Call, m_out.write_count(e.ret_block); m_out.write_count(e.panic_block); serialise(e.ret_val); serialise(e.fcn); serialise_vec(e.args);)
+            (Drop, m_out.write_tag(static_cast<unsigned>(e.kind)); serialise(e.slot); m_out.write_count(e.flag_idx); m_out.write_count(e.target); serialise_unwind(e.unwind);),
+            (Call, m_out.write_count(e.ret_block); serialise_unwind(e.unwind); serialise(e.ret_val); serialise(e.fcn); serialise_vec(e.args);)
         )
     }
 

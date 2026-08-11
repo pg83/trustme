@@ -2391,22 +2391,6 @@ namespace HIR {
         TU_ARMA(Assign, e) {
                 // Fall through
             }
-            TU_ARMA(Drop, se) {
-                if (se.flag_idx != UINT_MAX && !local_state.drop_flags.at(se.flag_idx)) {
-                    return;
-                }
-
-                ::HIR::TypeRef tmp;
-                const auto& ty = state.get_lvalue_type(tmp, se.slot);
-                auto value = local_state.get_lval(se.slot);
-                if (local_state.value_reachable_from_return(value)) {
-                    return;
-                }
-                if (local_state.value_needs_non_const_drop(ty, value)) {
-                    ERROR(this->root_span, E0000, "destructor of `" << ty << "` cannot be evaluated at compile-time");
-                }
-                return;
-            }
             TU_ARMA(ScopeEnd, se) {
                 // Just ignore, it's a hint
                 return;
@@ -2873,6 +2857,19 @@ namespace HIR {
             else {
                     return e.targets[target_idx];
             }
+            }
+            TU_ARMA(Drop, e) {
+                if (e.flag_idx != UINT_MAX && !local_state.drop_flags.at(e.flag_idx)) {
+                    return e.target;
+                }
+
+                ::HIR::TypeRef tmp;
+                const auto& ty = state.get_lvalue_type(tmp, e.slot);
+                auto value = local_state.get_lval(e.slot);
+                if (!local_state.value_reachable_from_return(value) && local_state.value_needs_non_const_drop(ty, value)) {
+                    ERROR(this->root_span, E0000, "destructor of `" << ty << "` cannot be evaluated at compile-time");
+                }
+                return e.target;
             }
             TU_ARMA(Call, e) {
                 const auto& ms = local_state.ms;

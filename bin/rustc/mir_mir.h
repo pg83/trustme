@@ -893,13 +893,28 @@ namespace MIR {
     TAGGED_UNION_EX(SwitchValues, (), Unsigned, ((Unsigned, ::std::vector<uint64_t>), (Signed, ::std::vector<int64_t>), (String, ::std::vector<::std::string>), (ByteString, ::std::vector<::std::vector<uint8_t>>)), (), (), (SwitchValues clone() const; bool operator==(const SwitchValues& x) const; bool operator!=(const SwitchValues& x) const { return !(*this == x); }));
 
     TAGGED_UNION(
+        UnwindAction,
+        Continue,
+        (Continue, struct {}),
+        (Cleanup, BasicBlockId),
+        (Terminate, struct {}),
+        (Unreachable, struct {})
+    );
+
+    enum class eDropKind {
+        SHALLOW,
+        DEEP,
+    };
+
+    TAGGED_UNION(
         Terminator,
         Incomplete,
         (Incomplete, struct {}),               // Block isn't complete (ERROR in output)
         (Return, struct {}),                   // Return clealy to caller
-        (Diverge, struct {}),                  // Continue unwinding up the stack
+        (UnwindResume, struct {}),             // Resume the currently caught exception
+        (UnwindTerminate, struct {}),          // Abort if unwinding reaches this point
+        (Unreachable, struct {}),              // This control-flow edge cannot be reached
         (Goto, BasicBlockId),                  // Jump to another block
-        (Panic, struct { BasicBlockId dst; }), // ?
         (If,
          struct {
              LValue cond;
@@ -919,10 +934,17 @@ namespace MIR {
              BasicBlockId def_target;
              ::std::vector<BasicBlockId> targets;
              SwitchValues values;
-         }),
+        }),
+        (Drop, struct {
+            eDropKind kind;
+            LValue slot;
+            unsigned int flag_idx;
+            BasicBlockId target;
+            UnwindAction unwind;
+        }),
         (Call, struct {
             BasicBlockId ret_block;
-            BasicBlockId panic_block;
+            UnwindAction unwind;
             LValue ret_val;
             CallTarget fcn;
             ::std::vector<Param> args;
@@ -943,10 +965,6 @@ namespace MIR {
                  }));
     extern bool operator==(const AsmParam& a, const AsmParam& b);
 
-    enum class eDropKind {
-        SHALLOW,
-        DEEP,
-    };
     TAGGED_UNION(
         Statement,
         Asm,
@@ -999,13 +1017,6 @@ namespace MIR {
              /// Source bit index
              unsigned int bit_index;
          }),
-        // Drop a value
-        (Drop,
-         struct {
-             eDropKind kind; // NOTE: For the `box` primitive
-             LValue slot;
-             unsigned int flag_idx; // Valid if != ~0u
-         }),
         (ScopeEnd, struct { ::std::vector<unsigned> slots; })
     );
     extern ::std::ostream& operator<<(::std::ostream& os, const Statement& x);
@@ -1018,6 +1029,7 @@ namespace MIR {
     struct BasicBlock {
         ::std::vector<Statement> statements;
         Terminator terminator;
+        bool is_cleanup = false;
     };
 
     struct EnumCache; // Defined in trans/enumerate.cpp

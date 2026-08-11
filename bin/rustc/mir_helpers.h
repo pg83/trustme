@@ -454,9 +454,6 @@ namespace MIR {
                     TU_ARMA(LoadDropFlag, e) {
                         rv |= visit_lvalue(e.slot, ValUsage::Read);
                     }
-                    TU_ARMA(Drop, e) {
-                        rv |= visit_lvalue(e.slot, ValUsage::Move);
-                    }
                     TU_ARMA(ScopeEnd, e) {
                     }
             }
@@ -474,13 +471,14 @@ namespace MIR {
                     }
                     TU_ARMA(Return, e) {
                     }
-                    TU_ARMA(Diverge, e) {
+                    TU_ARMA(UnwindResume, e) {
+                    }
+                    TU_ARMA(UnwindTerminate, e) {
+                    }
+                    TU_ARMA(Unreachable, e) {
                     }
                     TU_ARMA(Goto, e) {
                         visit_block_id(e);
-                    }
-                    TU_ARMA(Panic, e) {
-                        visit_block_id(e.dst);
                     }
                     TU_ARMA(If, e) {
                         rv |= visit_lvalue(e.cond, ValUsage::Read);
@@ -503,6 +501,11 @@ namespace MIR {
                         }
                         rv |= visit_block_id(e.def_target);
                     }
+                    TU_ARMA(Drop, e) {
+                        rv |= visit_lvalue(e.slot, ValUsage::Move);
+                        rv |= visit_block_id(e.target);
+                        TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, rv |= visit_block_id(target);)
+                    }
                     TU_ARMA(Call, e) {
                 TU_MATCH_HDRA( (e.fcn), {)
                 TU_ARMA(Value, ce) {
@@ -519,7 +522,7 @@ namespace MIR {
                     rv |= visit_param(v, ValUsage::Read);
                 rv |= visit_lvalue(e.ret_val, ValUsage::Write);
                 rv |= visit_block_id(e.ret_block);
-                rv |= visit_block_id(e.panic_block);
+                TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, rv |= visit_block_id(target);)
                     }
             }
             return rv;

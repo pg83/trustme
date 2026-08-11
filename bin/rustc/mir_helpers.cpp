@@ -879,21 +879,6 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(
                             return;
                         }
                     }
-                    TU_ARMA(Drop, se) {
-                        visit_mir_lvalue(se.slot, ValUsage::Read, visit_cb);
-                        if (se.slot == m_lv) {
-                            // Value dropped, update read position and apply
-                            DEBUG(m_mir_res << "- Dropped, return");
-                            // - If it was borrowed, it can't still be borrowed here.
-                            // TODO: Enable this once it's known to not cause mis-optimisation. It could currently.
-                            //if( state.is_borrowed() ) {
-                            //    state.clear_borrowed();
-                            //}
-                            state.mark_read(stmt_idx);
-                            state.finalise(stmt_idx);
-                            return;
-                        }
-                    }
                     TU_ARMA(Asm, se) {
                         //
                         for (const auto& e : se.outputs) {
@@ -965,15 +950,20 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(
                     DEBUG(m_mir_res << "Return");
                     state.finalise(stmt_idx);
                 }
-                TU_ARMA(Diverge, te) {
-                    DEBUG(m_mir_res << "Diverge");
+                TU_ARMA(UnwindResume, te) {
+                    DEBUG(m_mir_res << "UnwindResume");
+                    state.finalise(stmt_idx);
+                }
+                TU_ARMA(UnwindTerminate, te) {
+                    DEBUG(m_mir_res << "UnwindTerminate");
+                    state.finalise(stmt_idx);
+                }
+                TU_ARMA(Unreachable, te) {
+                    DEBUG(m_mir_res << "Unreachable");
                     state.finalise(stmt_idx);
                 }
                 TU_ARMA(Goto, te) {
                     m_states_to_do.push_back(::std::make_pair(te, mv$(state)));
-                }
-                TU_ARMA(Panic, te) {
-                    m_states_to_do.push_back(::std::make_pair(te.dst, mv$(state)));
                 }
                 TU_ARMA(If, te) {
                     m_states_to_do.push_back(::std::make_pair(te.bb_true, state.clone()));
@@ -993,6 +983,18 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(
                     }
                     m_states_to_do.push_back(::std::make_pair(te.def_target, mv$(state)));
                 }
+                TU_ARMA(Drop, te) {
+                    if (te.slot == m_lv) {
+                        DEBUG(m_mir_res << "Dropped, return");
+                        state.mark_read(stmt_idx);
+                        state.finalise(stmt_idx);
+                        return;
+                    }
+                    TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target,
+                        m_states_to_do.push_back(::std::make_pair(target, state.clone()));
+                    )
+                    m_states_to_do.push_back(::std::make_pair(te.target, mv$(state)));
+                }
                 TU_ARMA(Call, te) {
                     if (te.ret_val == m_lv) {
                         DEBUG(m_mir_res << "Assigned (Call), return");
@@ -1000,11 +1002,9 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(
                         state.finalise(stmt_idx);
                         return;
                     }
-                    if (m_fcn.blocks.at(te.panic_block).statements.size() == 0 && m_fcn.blocks.at(te.panic_block).terminator.is_Diverge()) {
-                        // Shortcut: Don't create a new state if the panic target is Diverge
-                    } else {
-                        m_states_to_do.push_back(::std::make_pair(te.panic_block, state.clone()));
-                    }
+                    TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target,
+                        m_states_to_do.push_back(::std::make_pair(target, state.clone()));
+                    )
                     m_states_to_do.push_back(::std::make_pair(te.ret_block, mv$(state)));
                 }
             }
@@ -1489,12 +1489,10 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(
             (Return,
              // End all active lifetimes at their previous location.
              apply_state(val_state);),
-            (Diverge, apply_state(val_state);),
+            (UnwindResume, apply_state(val_state);),
+            (UnwindTerminate, apply_state(val_state);),
+            (Unreachable, apply_state(val_state);),
             (Goto, add_to_visit(e, mv$(val_state));),
-            (
-                Panic,
-                // What should be done here?
-            ),
             (If, visit_mir_lvalue(e.cond, ValUsage::Read, visit_lval_cb);
 
              // Push blocks
@@ -1508,10 +1506,11 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(
                     add_to_visit(tgt, mv$(vs));
                 }
             ),
+            (Drop, visit_mir_lvalue(e.slot, ValUsage::Move, visit_lval_cb); TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, add_to_visit(target, val_state.clone());) add_to_visit(e.target, mv$(val_state));),
             (Call, if (const auto* f = e.fcn.opt_Value()) visit_mir_lvalue(*f, ValUsage::Read, visit_lval_cb); for (const auto& arg : e.args) if (const auto* e = arg.opt_LValue()) visit_mir_lvalue(*e, ValUsage::Read, visit_lval_cb);
 
              // Push blocks (with return valid only in one)
-             add_to_visit(e.panic_block, val_state.clone());
+             TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, add_to_visit(target, val_state.clone());)
 
              // TODO: If the function returns !, don't follow the ret_block
              lvalue_set(e.ret_val);

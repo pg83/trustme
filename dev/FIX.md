@@ -58,7 +58,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 ## P3 — оставшиеся CTFE, MIR и const generics
 
 - [ ] Объединить только после доказательства общей причины: `Encountered Infer value in constant`, потерю outer argument в nested unevaluated const, identity const argument `{{ L }}` и рекурсивный вход Typecheck/CTFE для `N * 2`.
-- [ ] Обычное pointer equality интернированных типов не заменять semantic comparison. Два красных unit на unevaluated const, различающихся lifetime metadata (`'M0` против `'#omitted`), должны использовать явную const relation.
+- [ ] Обычное pointer equality интернированных типов не заменять semantic comparison. Два красных unit `const_generic_trait_return_match` и `dyn_const_generic_array_return` доходят до сравнения `N + 1`, уже lowered в `ExprNode_CallPath`, которого не знают ни `ConstExprEquate`, ни relation `ConstGeneric_Unevaluated::equivalent`; lifetime metadata (`'M0` против `'#omitted`) лишь делает exact representation различным. После добавления `CallPath` открывается второй независимый дефект: `MIR::OuterVisitor::visit_type` валидирует MIR unevaluated const из generic struct/enum/union без установленного impl-generic context и падает в `get_const_param_type` с `No generic list for 0:0`. Исправлять оба этапа отдельной const-generic задачей; точное interning equality не ослаблять.
 - [ ] Реализовать CTFE float `signum`, rotate normalization, `simd_extract`, `three_way_compare`, `black_box` с relocations и корректную обработку invalid enum tag `255`.
 - [ ] Исправить 12 `Null (<PTR_BASE) pointer deref` и 7 `sizeof on an erased type` по месту потери relocation/type, не по месту assert.
 - [ ] Не возвращать path-copy алгоритмы и не ослаблять MIR validation ради зелёного теста.
@@ -75,8 +75,8 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ## P5 — единичные regressions и независимые failures
 
-- [ ] Восемь красных unit — это четыре причины, а не восемь приоритетов: два lifetime-elision SIGSEGV на yield/coroutine, два const-relation mismatch, три empty-path asserts в Trans Enumerate и неверный runtime offset в `qualified_offset_of_macro`. Они закрываются вместе с соответствующим общим кластером выше.
-- [ ] Три независимых library CTFE panic: `cell::refcell_borrow`, `cell::refcell_borrow_mut` и `mem::test_transmute_copy`. Старый monolithic fan-out 94 не подтверждён: при раздельной сборке остальные 91 нода либо зелёные, либо относятся к cfg-selection/runtime failure. Каждый panic сначала минимизировать до неверного branch или CTFE значения.
+- [ ] Пять красных unit — это три причины, а не пять приоритетов: `coroutine_addassign_yield` и `yield_unit` одинаково падают ещё в `Lifetime Elision` на `HIR::TypeData::clone_data(this=0x0)` из `LifetimeVisitor::visit_type` (`hir_conv_main_bindings.cpp:2262`), до MIR/unwind; два const-relation mismatch описаны в P3; неверный runtime offset в `qualified_offset_of_macro` относится к своему общему кластеру. Они не входят в C++ unwind-задачу.
+- [ ] Два независимых library CTFE panic: `cell::refcell_borrow` и `cell::refcell_borrow_mut`. Старый monolithic fan-out 94 не подтверждён: `mem::test_transmute_copy` и остальные 91 нода при раздельной сборке зелёные либо относятся к cfg-selection/runtime failure. Каждый panic сначала минимизировать до неверного branch или CTFE значения.
 - [ ] `resvg`: `AsRef` selection для `Option<HuffmanTable>`; после минимального trait-solver unit вернуть весь standing integration в gate.
 - [ ] Три SIGILL: `const-generics/issues/issue-74906.rs`, `layout/invalid-unsized-const-prop.rs`, `const_prop/issue-86351.rs`.
 - [ ] Оставшиеся timeout после `coretests/iter`: два UI, три Rust 1.90, один Exercism, три RustSmith и один runtime `select_nth_unstable`. Каждый сначала привязать к stack/phase; лимит не увеличивать.
