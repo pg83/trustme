@@ -187,7 +187,11 @@ struct MacroRulesArm {
 
 /// A sigle 'macro_rules!' block
 class MacroRules {
+    static unsigned int g_next_definition_id;
+
 public:
+    unsigned int m_definition_id;
+
     /// Marks if this macro should be exported from the defining crate
     bool m_exported = false;
 
@@ -199,12 +203,16 @@ public:
     AST::Edition m_edition;
 
     Ident::Hygiene m_hygiene;
+    // Lexical context at the macro definition, before the parser enters the
+    // token-tree scope used to distinguish literal RHS tokens.
+    Ident::Hygiene m_definition_hygiene;
 
     /// Expansion rules
     ::std::vector<MacroRulesArm> m_rules;
 
     MacroRules(RcString source_crate, AST::Edition edition)
-        : m_source_crate(std::move(source_crate))
+        : m_definition_id(++g_next_definition_id)
+        , m_source_crate(std::move(source_crate))
         , m_edition(edition)
     {
     }

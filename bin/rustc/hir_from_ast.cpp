@@ -2798,8 +2798,15 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
     struct LoopLabel {
         Ident source;
         RcString lowered;
+        size_t macro_definition_depth;
+    };
+    struct MacroDefinition {
+        unsigned int definition_id;
+        Ident::Hygiene token_hygiene;
+        Ident::Hygiene definition_hygiene;
     };
     ::std::vector<LoopLabel> m_loop_labels;
+    ::std::vector<MacroDefinition> m_macro_definitions;
     unsigned m_next_loop_label = 0;
 
     // Used to track if a closure is a generator or a normal closure
@@ -2811,7 +2818,7 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
             return {};
         }
         auto lowered = RcString::new_interned(FMT("@label" << m_next_loop_label++));
-        m_loop_labels.push_back(LoopLabel{source, lowered});
+        m_loop_labels.push_back(LoopLabel{source, lowered, m_macro_definitions.size()});
         return lowered;
     }
 
@@ -2828,8 +2835,18 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
         if (target.name == "") {
             return {};
         }
+        auto target_hygiene = target.hygiene;
+        size_t definition_depth = m_macro_definitions.size();
         for (auto it = m_loop_labels.rbegin(); it != m_loop_labels.rend(); ++it) {
-            if (it->source.name == target.name && it->source.hygiene.is_visible(target.hygiene)) {
+            while (definition_depth > it->macro_definition_depth) {
+                const auto& definition = m_macro_definitions[--definition_depth];
+                target_hygiene.leave_macro_definition(
+                    definition.definition_id,
+                    definition.token_hygiene,
+                    definition.definition_hygiene
+                );
+            }
+            if (it->source.name == target.name && it->source.hygiene.is_visible(target_hygiene)) {
                 return it->lowered;
             }
         }
@@ -2862,18 +2879,30 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
     }
 
     virtual void visit(::AST::ExprNode_Block& v) override {
+        const size_t macro_definition_base = m_macro_definitions.size();
         auto label = enter_loop_label(v.m_label);
         auto rv = g_crate_ptr->m_pool->make<::HIR::ExprNode_Block>(v.span());
+        bool last_has_semicolon = true;
         for (auto& n : v.m_nodes) {
             ASSERT_BUG(v.span(), n.node, "NULL node encountered in block");
+            if (const auto* definition = cast<::AST::ExprNode_MacroDefinition>(n.node.get())) {
+                m_macro_definitions.push_back(MacroDefinition{
+                    definition->m_definition_id,
+                    definition->m_token_hygiene,
+                    definition->m_definition_hygiene
+                });
+                continue;
+            }
             rv->m_nodes.push_back(lower(n.node));
+            last_has_semicolon = n.has_semicolon;
         }
         leave_loop_label(label);
         // If the final node wasn't a statement (there wasn't a semicolon on it), then make that the value
-        if (!rv->m_nodes.empty() && !v.m_nodes.back().has_semicolon) {
+        if (!rv->m_nodes.empty() && !last_has_semicolon) {
             rv->m_value_node = mv$(rv->m_nodes.back());
             rv->m_nodes.pop_back();
         }
+        m_macro_definitions.resize(macro_definition_base);
 
         if (v.m_local_mod) {
             // TODO: Populate m_traits from the local module's import list
@@ -2931,6 +2960,10 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
 
     virtual void visit(::AST::ExprNode_Macro& v) override {
         BUG(v.span(), "Hit ExprNode_Macro");
+    }
+
+    virtual void visit(::AST::ExprNode_MacroDefinition& v) override {
+        BUG(v.span(), "Hit ExprNode_MacroDefinition outside a block");
     }
 
     virtual void visit(::AST::ExprNode_Asm& v) override {

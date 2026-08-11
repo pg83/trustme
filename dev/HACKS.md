@@ -4,29 +4,25 @@
 
 ## Самые опасные места
 
-1. Macro hygiene фактически неполна.
-
-   [ident.cpp](/home/pg/monorepo/trustme/bin/rustc/ident.cpp:9) реализует только примитивную видимость контекстов.
-
-2. HRTB/lifetime relation местами математически некорректна.
+1. HRTB/lifetime relation местами математически некорректна.
 
    В [hir_path.cpp](/home/pg/monorepo/trustme/bin/rustc/hir_path.cpp:326) `TraitPath::ord` считает два пути равными, если хотя бы у одного есть `#apply_elision`. Такое равенство нетранзитивно и нарушает требования `std::map/std::set`.
 
    Тот же кластер включает sentinel `#apply_elision`, синтетический `Self: Trait`, выбор единственного lifetime trait object, passthrough отсутствующих lifetime-параметров и замену lifetime в impl-методах.
 
-3. Trait solver использует глобальное «не знаю — значит fuzzy».
+2. Trait solver использует глобальное «не знаю — значит fuzzy».
 
    [hir_type.cpp](/home/pg/monorepo/trustme/bin/rustc/hir_type.cpp:1475) превращает несовпадение тегов в `Fuzzy` для opaque/unbound/placeholder; [hir_hir.cpp](/home/pg/monorepo/trustme/bin/rustc/hir_hir.cpp:737) считает unbounded infer подходящим любому impl; [hir_typeck_static.cpp](/home/pg/monorepo/trustme/bin/rustc/hir_typeck_static.cpp:1251) автоматически принимает bound для `_`.
 
    Это может оставлять неверные impl-кандидаты. Нужен отдельный goal с результатом `Yes/Ambiguous/No`, а не ослабление отношения типов.
 
-4. Backend местами генерирует программу, которая просто вызывает `abort()`.
+3. Backend местами генерирует программу, которая просто вызывает `abort()`.
 
    [trans_codegen_c.cpp](/home/pg/monorepo/trustme/bin/rustc/trans_codegen_c.cpp:4634) обрывает `vmov/vexpand/vpexpand` в GCC-like backend.
 
    Workaround GCC bug в [trans_codegen_c.cpp](/home/pg/monorepo/trustme/bin/rustc/trans_codegen_c.cpp:976) выбирается по компилятору самого trustme, а не по C++-компилятору, запускаемому backend.
 
-5. Mangling допускает потенциальные коллизии.
+4. Mangling допускает потенциальные коллизии.
 
    [trans_mangling.cpp](/home/pg/monorepo/trustme/bin/rustc/trans_mangling.cpp:254) кодирует значения associated types trait object, но не их имена. `-` и `#` также сознательно сводятся к одному представлению.
 
@@ -40,7 +36,7 @@
 | Expansion | `expand_common.cpp:25,137,387,460,949,2117,2248,2456` | Глобальный module context, повторные проходы, ранний `macro_rules` и преобразование inner items в outer. |
 | Parser | `parse_common.cpp:263,306,354,388,403,1279,1353` | Statement/path macro handling, `TOK_HASH` между statements и `builtin #` lowering. |
 | Macro matcher | `macro_rules_macro_rules.cpp:534,833,1537,2311,2313,3811` | Opaque fragments, `$crate` special name и matcher-state обходы. |
-| Hygiene/macros | `ident.cpp:9`; `synext_macro.cpp:1539` | Примитивная hygiene visibility и hardcoded `format_args!` API. |
+| Hygiene/macros | `synext_macro.cpp:1539` | Hardcoded `format_args!` API. |
 | Resolver | `resolve_common.cpp:98,543`; `resolve_main_bindings.cpp:411,641,1512,1702,1760,1851,1860,2681,3792,3858,3891,4096` | Синтетические `=crate`, anon-module и primitive-module paths. |
 | Decorators | `synext_decorator.cpp:1558,2478,2615,2975` | Повторный обход anon modules и частные path/zero-sized-array workarounds. |
 | HIR layout | `hir_expr.h:583` | У `ExprNode_Emplace::Noop` не найден producer, но consumers ещё существуют. |
@@ -60,5 +56,3 @@
 | C backend | `trans_codegen_c.cpp:1309,1320,1944,2130,2587,2945,2951,5092,5731` | Принудительный `-O1`, platform workarounds, incomplete asm/AVX translation и runtime `abort()`. |
 | Enumeration | `trans_main_bindings.cpp:1595,2449,2738,3117` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
-
-Следующий unit-first срез macro hygiene — `Ident::Hygiene::is_visible`: текущая проверка ищет только последний context definition в source chain.

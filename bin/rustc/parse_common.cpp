@@ -1453,6 +1453,7 @@ ExprNodeP Parse_ExprVal(TokenStream& lex) {
 
 ExprNodeP Parse_ExprMacro(TokenStream& lex, AST::Path path) {
     Token tok;
+    auto definition_hygiene = lex.get_hygiene();
 
     RcString ident;
     if (lex.getTokenIf(TOK_IDENT, tok)) {
@@ -1475,7 +1476,7 @@ ExprNodeP Parse_ExprMacro(TokenStream& lex, AST::Path path) {
     }
 
     DEBUG("name=" << path << ", ident=" << ident << ", tt=" << tt);
-    return NEWNODE(AST::ExprNode_Macro, mv$(path), mv$(ident), mv$(tt), is_braced);
+    return NEWNODE(AST::ExprNode_Macro, mv$(path), mv$(ident), mv$(tt), is_braced, mv$(definition_hygiene));
 }
 
 // Token Tree Parsing

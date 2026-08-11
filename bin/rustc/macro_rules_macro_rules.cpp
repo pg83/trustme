@@ -461,11 +461,12 @@ class MacroExpander: public TokenStream {
     AST::Edition m_source_edition;
     bool m_is_macro_item;
     Ident::Hygiene m_hygiene;
+    Ident::Hygiene m_last_hygiene;
 
 public:
     MacroExpander(const MacroExpander& x) = delete;
 
-    MacroExpander(const RcString& macro_name, const Span& sp, AST::Edition edition, bool is_macro_item, const Ident::Hygiene& parent_hygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crate_name, AST::Edition source_edition)
+    MacroExpander(const RcString& macro_name, const Span& sp, AST::Edition edition, bool is_macro_item, unsigned int definition_id, const Ident::Hygiene& parent_hygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crate_name, AST::Edition source_edition)
         : TokenStream(ParseState())
         , m_log_index(s_next_log_index++)
         , m_this_span(sp, crate_name, macro_name)
@@ -476,7 +477,8 @@ public:
         , m_state(contents, m_mappings)
         , m_source_edition(source_edition)
         , m_is_macro_item(is_macro_item)
-        , m_hygiene(Ident::Hygiene::new_scope_chained(parent_hygiene))
+        , m_hygiene(Ident::Hygiene::new_scope_chained(parent_hygiene, definition_id))
+        , m_last_hygiene(m_hygiene)
     {
     }
 
@@ -492,6 +494,7 @@ public:
 };
 
 unsigned MacroExpander::s_next_log_index = 0;
+unsigned int MacroRules::g_next_definition_id = 0;
 
 void Macro_InitDefaults() {
 }
@@ -611,7 +614,7 @@ InterpolatedFragment Macro_HandlePatternCap(TokenStream& lex, MacroPatEnt::Type 
     // Run through the expansion counting the number of times each fragment is used
     Macro_InvokeRules_CountSubstUses(bound_tts, rule.m_contents);
 
-    TokenStream* ret_ptr = new MacroExpander(name, sp, crate.m_edition, rules.m_is_macro_item, rules.m_hygiene, rule.m_contents, mv$(bound_tts), rules.m_source_crate == "" ? crate.m_crate_name_real : rules.m_source_crate, rules.m_edition);
+    TokenStream* ret_ptr = new MacroExpander(name, sp, crate.m_edition, rules.m_is_macro_item, rules.m_definition_id, rules.m_hygiene, rule.m_contents, mv$(bound_tts), rules.m_source_crate == "" ? crate.m_crate_name_real : rules.m_source_crate, rules.m_edition);
 
     return ::std::unique_ptr<TokenStream>(ret_ptr);
 }
@@ -2237,11 +2240,12 @@ Ident::Hygiene MacroExpander::realGetHygiene() const {
     if (m_ttstream) {
         return m_ttstream->get_hygiene();
     } else {
-        return m_hygiene;
+        return m_last_hygiene;
     }
 }
 
 Token MacroExpander::realGetToken() {
+    m_last_hygiene = m_hygiene;
     // Use m_next_token first
     if (m_next_token.type() != TOK_NULL) {
         DEBUG("[" << m_log_index << "] m_next_token = " << m_next_token);
@@ -2265,12 +2269,9 @@ Token MacroExpander::realGetToken() {
                 switch (e.type()) {
                     case TOK_IDENT:
                     case TOK_LIFETIME: {
-                        // Rewrite the hygiene of an ident such that idents in the macro explicitly are unique for each expansion
-                        // - Appears to be a valid option.
                         auto ident = e.ident();
-                        if (ident.hygiene == m_hygiene.get_parent() || m_is_macro_item) {
-                            ident.hygiene = m_hygiene;
-                        }
+                        ident.hygiene = ident.hygiene.with_tail_scope(m_hygiene, m_is_macro_item);
+                        m_last_hygiene = ident.hygiene;
                         auto rv = Token(e.type(), std::move(ident));
                         DEBUG("[" << m_log_index << "] Updated hygine: " << rv);
                         return rv;
@@ -2279,9 +2280,8 @@ Token MacroExpander::realGetToken() {
                     case TOK_BYTESTRING:
                     case TOK_STRING: {
                         auto h = e.str_hygiene();
-                        if (h == m_hygiene.get_parent() || m_is_macro_item) {
-                            h = m_hygiene;
-                        }
+                        h = h.with_tail_scope(m_hygiene, m_is_macro_item);
+                        m_last_hygiene = h;
                         auto rv = Token(e.type(), e.str(), std::move(h));
                         DEBUG("[" << m_log_index << "] Updated hygine: " << rv);
                         return rv;

@@ -159,12 +159,14 @@ namespace AST {
         RcString m_ident;
         ::TokenTree m_tokens;
         bool m_is_braced;
+        Ident::Hygiene m_definition_hygiene;
 
-        ExprNode_Macro(AST::Path name, RcString ident, ::TokenTree&& tokens, bool is_braced = false)
+        ExprNode_Macro(AST::Path name, RcString ident, ::TokenTree&& tokens, bool is_braced = false, Ident::Hygiene definition_hygiene = {})
             : m_path(::std::move(name))
             , m_ident(ident)
             , m_tokens(::std::move(tokens))
             , m_is_braced(is_braced)
+            , m_definition_hygiene(::std::move(definition_hygiene))
         {
         }
 
@@ -914,6 +916,28 @@ namespace AST {
         ExprNodeP clone() const override;
     };
 
+    // A lexical rib introduced by a block-local macro definition. Expansion
+    // preserves it until local-variable and label resolution have crossed the
+    // definition at the correct source position.
+    struct ExprNode_MacroDefinition: public ExprNode {
+        unsigned int m_definition_id;
+        Ident::Hygiene m_token_hygiene;
+        Ident::Hygiene m_definition_hygiene;
+
+        ExprNode_MacroDefinition(unsigned int definition_id, Ident::Hygiene token_hygiene, Ident::Hygiene definition_hygiene)
+            : m_definition_id(definition_id)
+            , m_token_hygiene(::std::move(token_hygiene))
+            , m_definition_hygiene(::std::move(definition_hygiene))
+        {
+        }
+
+        static constexpr unsigned int kind = 39;
+        unsigned int node_kind() const override;
+        void visit(NodeVisitor& nv) override;
+        void print(::std::ostream& os) const override;
+        ExprNodeP clone() const override;
+    };
+
     class NodeVisitor {
     public:
         virtual ~NodeVisitor() = default;
@@ -971,6 +995,7 @@ namespace AST {
         NT(ExprNode_TypeAnnotation);
         NT(ExprNode_BinOp);
         NT(ExprNode_UniOp);
+        NT(ExprNode_MacroDefinition);
 #undef NT
     };
 
@@ -1026,6 +1051,7 @@ namespace AST {
         NT(ExprNode_TypeAnnotation);
         NT(ExprNode_BinOp);
         NT(ExprNode_UniOp);
+        NT(ExprNode_MacroDefinition);
 #undef NT
     };
 

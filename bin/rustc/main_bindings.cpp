@@ -870,6 +870,10 @@ public:
         }
     }
 
+    virtual void visit(AST::ExprNode_MacroDefinition& n) override {
+        m_os << "/* macro definition #" << n.m_definition_id << " */";
+    }
+
 private:
     void paren_wrap(::AST::ExprNodeP& node) {
         m_os << "(";

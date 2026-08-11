@@ -19,6 +19,9 @@ struct Ident {
 
         struct Inner {
             ::std::vector<unsigned int> contexts;
+            // Zero for lexical scopes, otherwise the macro definition whose
+            // invocation introduced the corresponding context.
+            ::std::vector<unsigned int> macro_definitions;
             ::std::shared_ptr<ModPath> search_module;
         };
 
@@ -30,6 +33,7 @@ struct Ident {
             : m_inner(new Inner())
         {
             m_inner->contexts.push_back(index);
+            m_inner->macro_definitions.push_back(0);
         }
 
         Inner* operator->() {
@@ -74,12 +78,27 @@ struct Ident {
             return Hygiene(++g_next_scope);
         }
 
-        static Hygiene new_scope_chained(const Hygiene& parent) {
+        static Hygiene new_scope_chained(const Hygiene& parent, unsigned int macro_definition = 0) {
             Hygiene rv;
             rv->search_module = parent->search_module;
             rv->contexts.reserve(parent->contexts.size() + 1);
+            rv->macro_definitions.reserve(parent->macro_definitions.size() + 1);
             rv->contexts.insert(rv->contexts.begin(), parent->contexts.begin(), parent->contexts.end());
+            rv->macro_definitions.insert(rv->macro_definitions.begin(), parent->macro_definitions.begin(), parent->macro_definitions.end());
             rv->contexts.push_back(++g_next_scope);
+            rv->macro_definitions.push_back(macro_definition);
+            return rv;
+        }
+
+        Hygiene with_tail_scope(const Hygiene& scope, bool inherit_mod_path = false) const {
+            assert(!scope->contexts.empty());
+            assert(scope->contexts.size() == scope->macro_definitions.size());
+            Hygiene rv(*this);
+            rv->contexts.push_back(scope->contexts.back());
+            rv->macro_definitions.push_back(scope->macro_definitions.back());
+            if (inherit_mod_path && scope->search_module) {
+                rv->search_module = scope->search_module;
+            }
             return rv;
         }
 
@@ -87,7 +106,21 @@ struct Ident {
             //assert(this->contexts.size() > 1);
             Hygiene rv;
             rv->contexts.insert(rv->contexts.begin(), m_inner->contexts.begin(), m_inner->contexts.end() - 1);
+            rv->macro_definitions.insert(rv->macro_definitions.begin(), m_inner->macro_definitions.begin(), m_inner->macro_definitions.end() - 1);
             return rv;
+        }
+
+        bool leave_macro_definition(unsigned int definition, const Hygiene& token_context, const Hygiene& definition_context) {
+            assert(m_inner->contexts.size() == m_inner->macro_definitions.size());
+            if (m_inner->macro_definitions.empty() || m_inner->macro_definitions.back() != definition) {
+                return false;
+            }
+            m_inner->contexts.pop_back();
+            m_inner->macro_definitions.pop_back();
+            if (*this == token_context) {
+                *this = definition_context;
+            }
+            return true;
         }
 
         bool has_mod_path() const {
@@ -107,7 +140,8 @@ struct Ident {
         bool is_visible(const Hygiene& source) const;
 
         Ordering ord(const Hygiene& x) const {
-            ORD(m_inner->contexts, x->contexts); /*ORD(*m_inner->search_module, *x->search_module);*/
+            ORD(m_inner->contexts, x->contexts);
+            ORD(m_inner->macro_definitions, x->macro_definitions); /*ORD(*m_inner->search_module, *x->search_module);*/
             return OrdEqual;
         }
 

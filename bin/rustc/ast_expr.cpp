@@ -112,6 +112,7 @@ namespace AST {
     unsigned int ExprNode_TypeAnnotation::node_kind() const { return ExprNode_TypeAnnotation::kind; }
     unsigned int ExprNode_BinOp::node_kind() const { return ExprNode_BinOp::kind; }
     unsigned int ExprNode_UniOp::node_kind() const { return ExprNode_UniOp::kind; }
+    unsigned int ExprNode_MacroDefinition::node_kind() const { return ExprNode_MacroDefinition::kind; }
 
 #define NODE(class, _print, _clone)       \
     void class ::visit(NodeVisitor& nv) { \
@@ -160,7 +161,7 @@ namespace AST {
             }
             os << "(" << " /*TODO*/ " << ")";
         },
-        { return NEWNODE(ExprNode_Macro, AST::Path(m_path), m_ident, m_tokens.clone()); }
+        { return NEWNODE(ExprNode_Macro, AST::Path(m_path), m_ident, m_tokens.clone(), m_is_braced, m_definition_hygiene); }
     )
 
     NODE(
@@ -789,6 +790,12 @@ namespace AST {
         { return NEWNODE(ExprNode_UniOp, m_type, m_value->clone()); }
     )
 
+    NODE(
+        ExprNode_MacroDefinition,
+        { os << "/* macro definition #" << m_definition_id << " */"; },
+        { return NEWNODE(ExprNode_MacroDefinition, m_definition_id, m_token_hygiene, m_definition_hygiene); }
+    )
+
 #define NV(type, actions)                                              \
     void NodeVisitorDef::visit(type& node) { /*DEBUG("DEF - "#type);*/ \
         actions                                                        \
@@ -959,6 +966,7 @@ namespace AST {
         visit(node.m_right);
     })
     NV(ExprNode_UniOp, { visit(node.m_value); })
+    NV(ExprNode_MacroDefinition, {})
 #undef NV
 
 };

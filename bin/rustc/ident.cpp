@@ -6,20 +6,23 @@
 unsigned int Ident::Hygiene::g_next_scope = 0;
 
 bool Ident::Hygiene::is_visible(const Hygiene& src) const {
-    // HACK: Disable hygiene for now
-    //return true;
-
-    if (m_inner->contexts.size() == 0) {
-        return src->contexts.size() == 0;
+    if (m_inner->contexts.size() > src->contexts.size()) {
+        return false;
     }
-
-    auto des = m_inner->contexts.back();
-    for (const auto& c : src->contexts) {
-        if (des == c) {
-            return true;
+    for (size_t i = 0; i < m_inner->contexts.size(); i++) {
+        if (m_inner->contexts[i] != src->contexts[i] || m_inner->macro_definitions[i] != src->macro_definitions[i]) {
+            return false;
         }
     }
-    return false;
+    // Ordinary lexical scopes extend visibility. A macro invocation is a
+    // semi-opaque rib: it must be removed at its definition boundary before
+    // bindings outside that definition become visible.
+    for (size_t i = m_inner->contexts.size(); i < src->contexts.size(); i++) {
+        if (src->macro_definitions[i] != 0) {
+            return false;
+        }
+    }
+    return true;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const Ident& x) {
@@ -28,7 +31,17 @@ bool Ident::Hygiene::is_visible(const Hygiene& src) const {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const Ident::Hygiene& x) {
-    os << "/*" << x->contexts;
+    os << "/*[";
+    for (size_t i = 0; i < x->contexts.size(); i++) {
+        if (i != 0) {
+            os << ", ";
+        }
+        os << x->contexts[i];
+        if (x->macro_definitions[i] != 0) {
+            os << "@" << x->macro_definitions[i];
+        }
+    }
+    os << "]";
     if (x->search_module) {
         os << " " << *x->search_module;
     }

@@ -57,6 +57,13 @@ namespace {
                  // "Map" of names to function-level variable slots
                  ::std::vector<::std::pair<Ident, unsigned int>> variables;
              }),
+            (MacroDefinition,
+             struct {
+                 unsigned int level;
+                 unsigned int definition_id;
+                 Ident::Hygiene token_hygiene;
+                 Ident::Hygiene definition_hygiene;
+             }),
             (Generic, struct {
                 // Map of names to slots
                 GenericSlot::Level level;
@@ -231,6 +238,11 @@ namespace {
             DEBUG("Push block to " << m_block_level);
         }
 
+        void push_macro_definition(unsigned int definition_id, const Ident::Hygiene& token_hygiene, const Ident::Hygiene& definition_hygiene) {
+            assert(m_block_level > 0);
+            m_name_context.push_back(Ent::make_MacroDefinition({m_block_level, definition_id, token_hygiene, definition_hygiene}));
+        }
+
         unsigned int push_var(const Span& sp, const Ident& name) {
             if (m_var_count == ~0u) {
                 BUG(sp, "Assigning local when there's no variable context");
@@ -278,20 +290,20 @@ namespace {
 
         void pop_block() {
             assert(m_block_level > 0);
-            if (m_name_context.size() > 0 && m_name_context.back().is_VarBlock() && m_name_context.back().as_VarBlock().level == m_block_level) {
-                DEBUG("Pop block from " << m_block_level << " with vars:" << FMT_CB(os, for (const auto& v : m_name_context.back().as_VarBlock().variables) os << " " << v.first << "#" << v.second;));
-                m_name_context.pop_back();
-            } else {
-                DEBUG("Pop block from " << m_block_level << " - no vars");
-                for (const auto& ent : ::reverse(m_name_context)) {
-                    TU_IFLET(
-                        Ent,
-                        ent,
-                        VarBlock,
-                        e,
-                        //DEBUG("Block @" << e.level << ": " << e.variables.size() << " vars");
-                        assert(e.level < m_block_level);
-                    )
+            while (!m_name_context.empty()) {
+                if (const auto* e = m_name_context.back().opt_VarBlock()) {
+                    if (e->level != m_block_level) {
+                        break;
+                    }
+                    DEBUG("Pop block from " << m_block_level << " with vars:" << FMT_CB(os, for (const auto& v : e->variables) os << " " << v.first << "#" << v.second;));
+                    m_name_context.pop_back();
+                } else if (const auto* e = m_name_context.back().opt_MacroDefinition()) {
+                    if (e->level != m_block_level) {
+                        break;
+                    }
+                    m_name_context.pop_back();
+                } else {
+                    break;
                 }
             }
             m_block_level -= 1;
@@ -465,6 +477,7 @@ namespace {
 
         AST::Path lookup_opt(const RcString& name, const Ident::Hygiene& src_context, LookupMode mode) const {
             DEBUG("name=" << name << ", src_context=" << src_context);
+            auto lookup_context = src_context;
             // NOTE: src_context may provide a module to search
             // TODO: This should be checked AFTER locals
             if (src_context.has_mod_path()) {
@@ -662,12 +675,17 @@ namespace {
                                 if (it2->first.name == name) {
                                     DEBUG("> Match: Hygiene " << it2->first.hygiene << " check against src_context");
                                 }
-                                if (it2->first.name == name && it2->first.hygiene.is_visible(src_context)) {
+                                if (it2->first.name == name && it2->first.hygiene.is_visible(lookup_context)) {
                                     ::AST::Path rv(name);
                                     rv.bind_variable(it2->second);
                                     return rv;
                                 }
                             }
+                        }
+                    }
+                    TU_ARMA(MacroDefinition, e) {
+                        if (mode == LookupMode::Variable) {
+                            lookup_context.leave_macro_definition(e.definition_id, e.token_hygiene, e.definition_hygiene);
                         }
                     }
                     TU_ARMA(Generic, e) {
@@ -754,6 +772,8 @@ namespace {
                                 }
                             }
                         }
+                    }
+                    TU_ARMA(MacroDefinition, e) {
                     }
                     TU_ARMA(Generic, e) {
                         DEBUG("- Generic");
@@ -2146,7 +2166,17 @@ void Resolve_Absolute_ExprNode(Context& context, ::AST::ExprNode& node) {
                 Resolve_Absolute_Mod(this->context.clone_mod(), *node.m_local_mod);
             }
             this->context.push_block();
-            AST::NodeVisitorDef::visit(node);
+            for (auto& line : node.m_nodes) {
+                if (const auto* definition = cast<AST::ExprNode_MacroDefinition>(line.node.get())) {
+                    this->context.push_macro_definition(
+                        definition->m_definition_id,
+                        definition->m_token_hygiene,
+                        definition->m_definition_hygiene
+                    );
+                } else {
+                    line.node->visit(*this);
+                }
+            }
             this->context.pop_block();
             if (node.m_local_mod) {
                 this->context.pop(*node.m_local_mod);
