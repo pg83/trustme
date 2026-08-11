@@ -4238,6 +4238,12 @@ class NextTraitGoalEvaluator {
                 )) {
                 return Certainty::Ambiguous;
             }
+            // Nested obligations are formed directly from monomorphised impl
+            // bounds.  Their Self type can therefore still be a projection,
+            // e.g. `<Option::IntoIter<T> as Iterator>::Item: IntoIterator`.
+            // Candidate assembly operates on the normalized goal input, just
+            // as it already does for trait arguments.
+            goal_type = m_resolve.expand_associated_types(span(), goal_type);
             for (auto& param : goal_params.m_types) {
                 param = m_resolve.expand_associated_types(
                     span(), ::std::move(param)
@@ -4760,6 +4766,7 @@ class NextTraitGoalEvaluator {
                 )) {
                 return emit_forced_ambiguity();
             }
+            goal_type = m_resolve.expand_associated_types(span(), goal_type);
             for (auto& param : goal_params.m_types) {
                 param = m_resolve.expand_associated_types(
                     span(), ::std::move(param)
