@@ -1,3 +1,5 @@
+// { dg-additional-options "-frust-edition=2021" }
+
 use std::ffi::CStr;
 fn gccrs_main() -> i32 {
     let value: &CStr = c"gccrs";

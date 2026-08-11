@@ -1,26 +1,20 @@
-
-#![feature(intrinsics)]
-
-#![feature(lang_items)]
-extern "rust-intrinsic" {
-    pub fn wrapping_add<T>(l: T, r: T) -> T;
-    pub fn wrapping_sub<T>(l: T, r: T) -> T;
-    pub fn wrapping_mul<T>(l: T, r: T) -> T;
-}
-
 fn five() -> u8 {
     5
 }
 
 fn gccrs_main() -> u8 {
-    let l = 255;
-    let r = five();
+    let left = 255u8;
+    let right = five();
 
-    let ret0 = unsafe { wrapping_add(l, r) - 4 }; // 4
-    let ret1 = unsafe { wrapping_sub(r, l) - 6 }; // 6
-    let ret2 = unsafe { wrapping_mul(r, l) - 251 }; // 251
-
-    ret0 + ret1 + ret2
+    let add = left.wrapping_add(right) - 4;
+    let sub = right.wrapping_sub(left) - 6;
+    let mul = right.wrapping_mul(left) - 251;
+    add + sub + mul
 }
 
-fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }
+fn main() {
+    let code = gccrs_main() as i32;
+    if code != 0 {
+        std::process::exit(code);
+    }
+}

@@ -90,7 +90,7 @@ class SystemRustcModeTest(unittest.TestCase):
             if any("$(B)/tst/gccrs_compile/" in output for output in node["outputs"])
         ]
         self.assertEqual(len(gccrs_nodes), 301)
-        self.assertEqual(len(gccrs_compile_nodes), 571)
+        self.assertEqual(len(gccrs_compile_nodes), 570)
         for node in (*gccrs_nodes, *gccrs_compile_nodes):
             self.assertIn("$(B)/tst/libstd.tar", node["inputs"])
             self.assertTrue(

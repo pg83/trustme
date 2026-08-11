@@ -1,8 +1,3 @@
-
-#![feature(intrinsics)]
-
-#![feature(lang_items)]
-extern "rust-intrinsic" {
-    fn size_of<T>() -> usize;
-    fn offset<T>(dst: *const T, offset: isize) -> *const T;
+pub fn size_and_offset<T>(pointer: *const T, count: isize) -> (usize, *const T) {
+    (std::mem::size_of::<T>(), pointer.wrapping_offset(count))
 }

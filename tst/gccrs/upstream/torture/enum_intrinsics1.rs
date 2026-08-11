@@ -1,49 +1,22 @@
 /* { dg-output "0\r*\n2\r*\n" } */
 
-#![feature(intrinsics)]
-
-#![feature(lang_items)]
+#[repr(isize)]
 enum BookFormat {
     Paperback,
     Hardback,
     Ebook,
 }
 
-extern "C" {
-    fn printf(s: *const i8, ...);
-}
-
-mod core {
-    mod intrinsics {
-        #[lang = "discriminant_kind"]
-        pub trait DiscriminantKind {
-            #[lang = "discriminant_type"]
-            type Discriminant;
-        }
-
-        extern "rust-intrinsic" {
-            pub fn discriminant_value<T>(v: &T) -> <T as DiscriminantKind>::Discriminant;
-        }
-    }
-}
-
-pub fn gccrs_main() -> i32 {
-    let a = BookFormat::Paperback;
-    let b = BookFormat::Ebook;
-
-    unsafe {
-        let val1: isize = core::intrinsics::discriminant_value(&a);
-        let val2 = core::intrinsics::discriminant_value(&b);
-
-        let a = "%i\n";
-        let b = a as *const str;
-        let c = b as *const i8;
-
-        printf(c, val1 as i32);
-        printf(c, val2 as i32);
-    }
-
+fn gccrs_main() -> i32 {
+    println!("{}", BookFormat::Paperback as isize);
+    println!("{}", BookFormat::Ebook as isize);
+    let _ = BookFormat::Hardback;
     0
 }
 
-fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }
+fn main() {
+    let code = gccrs_main();
+    if code != 0 {
+        std::process::exit(code);
+    }
+}

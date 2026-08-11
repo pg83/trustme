@@ -1,27 +1,19 @@
-// { dg-output "a! ()" }
-
-#![feature(rustc_attrs)]
-
 macro_rules! a {
     () => {
-        " foo"
+        "foo"
     };
 }
 
-extern "C" {
-    fn printf(fmt: *const i8, ...);
-}
-
-fn print(s: &str) {
-    print!("{}", s);
-}
-
 fn gccrs_main() -> i32 {
-    let a = stringify!(a!());
-
-    print(a);
-
+    let tokens = stringify!(a!());
+    assert_eq!(tokens, "a!()");
+    let _ = a!();
     0
 }
 
-fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }
+fn main() {
+    let code = gccrs_main();
+    if code != 0 {
+        std::process::exit(code);
+    }
+}

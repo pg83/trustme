@@ -1,67 +1,61 @@
-#![feature(intrinsics)]
-#![feature(lang_items)]
 
-extern "rust-intrinsic" {
-    pub fn cttz_nonzero<T>(x: T) -> T;
-    pub fn abort() -> !;
-}
 
 fn gccrs_main() -> i32 {
     unsafe {
-        if cttz_nonzero(1u8) != 0 {
-            abort();
+        if (1u8).trailing_zeros() != 0 {
+            std::process::abort();
         }
-        if cttz_nonzero(0xFFu8) != 0 {
-            abort();
-        }
-
-        if cttz_nonzero(1u16) != 0 {
-            abort();
-        }
-        if cttz_nonzero(0xFFFFu16) != 0 {
-            abort();
+        if (0xFFu8).trailing_zeros() != 0 {
+            std::process::abort();
         }
 
-        if cttz_nonzero(1u32) != 0 {
-            abort();
+        if (1u16).trailing_zeros() != 0 {
+            std::process::abort();
         }
-        if cttz_nonzero(0xFFFFFFFFu32) != 0 {
-            abort();
-        }
-
-        if cttz_nonzero(1u64) != 0 {
-            abort();
-        }
-        if cttz_nonzero(!0u64) != 0 {
-            abort();
+        if (0xFFFFu16).trailing_zeros() != 0 {
+            std::process::abort();
         }
 
-        if cttz_nonzero(1i8) != 0 {
-            abort();
+        if (1u32).trailing_zeros() != 0 {
+            std::process::abort();
         }
-        if cttz_nonzero(-1i8) != 0 {
-            abort();
-        }
-
-        if cttz_nonzero(1i16) != 0 {
-            abort();
-        }
-        if cttz_nonzero(-1i16) != 0 {
-            abort();
+        if (0xFFFFFFFFu32).trailing_zeros() != 0 {
+            std::process::abort();
         }
 
-        if cttz_nonzero(1i32) != 0 {
-            abort();
+        if (1u64).trailing_zeros() != 0 {
+            std::process::abort();
         }
-        if cttz_nonzero(-1i32) != 0 {
-            abort();
+        if (!0u64).trailing_zeros() != 0 {
+            std::process::abort();
         }
 
-        if cttz_nonzero(1i64) != 0 {
-            abort();
+        if (1i8).trailing_zeros() != 0 {
+            std::process::abort();
         }
-        if cttz_nonzero(-1i64) != 0 {
-            abort();
+        if (-1i8).trailing_zeros() != 0 {
+            std::process::abort();
+        }
+
+        if (1i16).trailing_zeros() != 0 {
+            std::process::abort();
+        }
+        if (-1i16).trailing_zeros() != 0 {
+            std::process::abort();
+        }
+
+        if (1i32).trailing_zeros() != 0 {
+            std::process::abort();
+        }
+        if (-1i32).trailing_zeros() != 0 {
+            std::process::abort();
+        }
+
+        if (1i64).trailing_zeros() != 0 {
+            std::process::abort();
+        }
+        if (-1i64).trailing_zeros() != 0 {
+            std::process::abort();
         }
     }
 

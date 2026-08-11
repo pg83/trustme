@@ -1,91 +1,85 @@
-#![feature(intrinsics)]
-#![feature(lang_items)]
 
-extern "rust-intrinsic" {
-    pub fn cttz<T>(x: T) -> T;
-    pub fn abort() -> !;
-}
 
 fn gccrs_main() -> i32 {
-    // cttz(0) must return bit_size per the Rust reference
-    if cttz(0u8) != 8 {
-        abort();
+    // (0).trailing_zeros() must return bit_size per the Rust reference
+    if (0u8).trailing_zeros() != 8 {
+        std::process::abort();
     }
-    if cttz(1u8) != 0 {
-        abort();
+    if (1u8).trailing_zeros() != 0 {
+        std::process::abort();
     }
-    if cttz(0xFFu8) != 0 {
-        abort();
-    }
-
-    if cttz(0u16) != 16 {
-        abort();
-    }
-    if cttz(1u16) != 0 {
-        abort();
-    }
-    if cttz(0xFFFFu16) != 0 {
-        abort();
+    if (0xFFu8).trailing_zeros() != 0 {
+        std::process::abort();
     }
 
-    if cttz(0u32) != 32 {
-        abort();
+    if (0u16).trailing_zeros() != 16 {
+        std::process::abort();
     }
-    if cttz(1u32) != 0 {
-        abort();
+    if (1u16).trailing_zeros() != 0 {
+        std::process::abort();
     }
-    if cttz(0xFFFFFFFFu32) != 0 {
-        abort();
-    }
-
-    if cttz(0u64) != 64 {
-        abort();
-    }
-    if cttz(1u64) != 0 {
-        abort();
-    }
-    if cttz(!0u64) != 0 {
-        abort();
+    if (0xFFFFu16).trailing_zeros() != 0 {
+        std::process::abort();
     }
 
-    if cttz(0i8) != 8 {
-        abort();
+    if (0u32).trailing_zeros() != 32 {
+        std::process::abort();
     }
-    if cttz(1i8) != 0 {
-        abort();
+    if (1u32).trailing_zeros() != 0 {
+        std::process::abort();
     }
-    if cttz(-1i8) != 0 {
-        abort();
-    }
-
-    if cttz(0i16) != 16 {
-        abort();
-    }
-    if cttz(1i16) != 0 {
-        abort();
-    }
-    if cttz(-1i16) != 0 {
-        abort();
+    if (0xFFFFFFFFu32).trailing_zeros() != 0 {
+        std::process::abort();
     }
 
-    if cttz(0i32) != 32 {
-        abort();
+    if (0u64).trailing_zeros() != 64 {
+        std::process::abort();
     }
-    if cttz(1i32) != 0 {
-        abort();
+    if (1u64).trailing_zeros() != 0 {
+        std::process::abort();
     }
-    if cttz(-1i32) != 0 {
-        abort();
+    if (!0u64).trailing_zeros() != 0 {
+        std::process::abort();
     }
 
-    if cttz(0i64) != 64 {
-        abort();
+    if (0i8).trailing_zeros() != 8 {
+        std::process::abort();
     }
-    if cttz(1i64) != 0 {
-        abort();
+    if (1i8).trailing_zeros() != 0 {
+        std::process::abort();
     }
-    if cttz(-1i64) != 0 {
-        abort();
+    if (-1i8).trailing_zeros() != 0 {
+        std::process::abort();
+    }
+
+    if (0i16).trailing_zeros() != 16 {
+        std::process::abort();
+    }
+    if (1i16).trailing_zeros() != 0 {
+        std::process::abort();
+    }
+    if (-1i16).trailing_zeros() != 0 {
+        std::process::abort();
+    }
+
+    if (0i32).trailing_zeros() != 32 {
+        std::process::abort();
+    }
+    if (1i32).trailing_zeros() != 0 {
+        std::process::abort();
+    }
+    if (-1i32).trailing_zeros() != 0 {
+        std::process::abort();
+    }
+
+    if (0i64).trailing_zeros() != 64 {
+        std::process::abort();
+    }
+    if (1i64).trailing_zeros() != 0 {
+        std::process::abort();
+    }
+    if (-1i64).trailing_zeros() != 0 {
+        std::process::abort();
     }
 
     0

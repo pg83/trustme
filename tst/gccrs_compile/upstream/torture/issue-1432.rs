@@ -1,79 +1,35 @@
-// { dg-additional-options "-w" }
-#![feature(intrinsics)]
-#![feature(staged_api)]
-#![feature(lang_items)]
-mod intrinsics {
-    extern "rust-intrinsic" {
-        #[rustc_const_stable(feature = "const_int_wrapping", since = "1.40.0")]
-        pub fn wrapping_add<T>(a: T, b: T) -> T;
-        #[rustc_const_stable(feature = "const_int_rotate", since = "1.40.0")]
-        pub fn rotate_left<T>(a: T, b: T) -> T;
-        #[rustc_const_stable(feature = "const_int_rotate", since = "1.40.0")]
-        pub fn rotate_right<T>(a: T, b: T) -> T;
-        #[rustc_const_stable(feature = "const_ptr_offset", since = "1.61.0")]
-        pub fn offset<T>(ptr: *const T, count: isize) -> *const T;
-    }
-}
-
-mod mem {
-    extern "rust-intrinsic" {
-        #[rustc_const_stable(feature = "const_transmute", since = "1.46.0")]
-        fn transmute<T, U>(_: T) -> U;
-        #[rustc_const_stable(feature = "const_size_of", since = "1.40.0")]
-        fn size_of<T>() -> usize;
-    }
+trait UintExt: Sized {
+    fn wrapping_add_ext(self, rhs: Self) -> Self;
+    fn rotate_left_ext(self, amount: u32) -> Self;
+    fn rotate_right_ext(self, amount: u32) -> Self;
 }
 
 macro_rules! impl_uint {
-    ($($ty:ident = $lang:literal),*) => {
+    ($($ty:ty),* $(,)?) => {
         $(
-            impl $ty {
-                pub fn wrapping_add(self, rhs: Self) -> Self {
-                    // intrinsics::wrapping_add(self, rhs)
-                    self + rhs
+            impl UintExt for $ty {
+                fn wrapping_add_ext(self, rhs: Self) -> Self {
+                    self.wrapping_add(rhs)
                 }
 
-                pub fn rotate_left(self, n: u32) -> Self {
-                    unsafe {
-                        intrinsics::rotate_left(self, n as Self)
-                    }
+                fn rotate_left_ext(self, amount: u32) -> Self {
+                    self.rotate_left(amount)
                 }
 
-                pub fn rotate_right(self, n: u32) -> Self {
-                    unsafe {
-                        intrinsics::rotate_right(self, n as Self)
-                    }
-                }
-
-                pub fn to_le(self) -> Self {
-                    {
-                        self
-                    }
-                }
-
-                pub const fn from_le_bytes(bytes: [u8; mem::size_of::<Self>()]) -> Self {
-                    Self::from_le(Self::from_ne_bytes(bytes))
-                }
-
-                pub const fn from_le(x: Self) -> Self {
-                    #[cfg(target_endian = "little")]
-                    {
-                        x
-                    }
-                }
-
-                pub const fn from_ne_bytes(bytes: [u8; mem::size_of::<Self>()]) -> Self {
-                    unsafe { mem::transmute(bytes) }
+                fn rotate_right_ext(self, amount: u32) -> Self {
+                    self.rotate_right(amount)
                 }
             }
         )*
-    }
+    };
 }
 
-impl_uint!(
-    u8 = "u8",
-    u16 = "u16",
-    u32 = "u32",
-    u64 = "u64",
-    usize = "usize"
-);
+impl_uint!(u8, u16, u32, u64, usize);
+
+pub fn exercise(value: u32, rhs: u32) -> (u32, u32, u32) {
+    (
+        value.wrapping_add_ext(rhs),
+        value.rotate_left_ext(rhs),
+        value.rotate_right_ext(rhs),
+    )
+}

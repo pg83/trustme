@@ -1,12 +1,7 @@
-#![feature(intrinsics, lang_items)]
-
-extern "rust-intrinsic" {
-    fn assert_zero_valid<T>();
+pub fn zeroed_integer() -> i32 {
+    unsafe { std::mem::MaybeUninit::<i32>::zeroed().assume_init() }
 }
 
-fn main() {
-    unsafe {
-        assert_zero_valid::<i32>();
-        assert_zero_valid::<&i32>();
-    }
+pub fn zeroed_reference_storage() -> std::mem::MaybeUninit<&'static i32> {
+    std::mem::MaybeUninit::zeroed()
 }

@@ -1,22 +1,15 @@
-
-#![feature(intrinsics)]
-#![feature(lang_items)]
-extern "rust-intrinsic" {
-    pub fn copy_nonoverlapping<T>(src: *const T, dst: *mut T, count: usize);
+fn gccrs_main() -> i32 {
+    let source = 15;
+    let mut destination = 16;
+    unsafe {
+        std::ptr::copy_nonoverlapping(&source, &mut destination, 1);
+    }
+    destination - source
 }
 
-fn gccrs_main() -> i32 {
-    let i = 15;
-    let mut i_copy = 16;
-
-    let i = &i as *const i32;
-    let i_copy = &mut i_copy as *mut i32;
-
-    unsafe {
-        copy_nonoverlapping(i, i_copy, 1);
-
-        *i_copy - *i
+fn main() {
+    let code = gccrs_main();
+    if code != 0 {
+        std::process::exit(code);
     }
 }
-
-fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }

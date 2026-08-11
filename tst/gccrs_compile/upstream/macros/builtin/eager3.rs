@@ -1,12 +1,7 @@
-
-#![feature(rustc_attrs)]
-
-macro_rules! file1 {
+macro_rules! file_name {
     () => {
-        "builtin_macro_include_str.rs"
+        "eager3.rs"
     };
 }
 
-fn main () {
-  include_str!(file1!()); // ok
-}
+pub const SOURCE: &str = include_str!(file_name!());

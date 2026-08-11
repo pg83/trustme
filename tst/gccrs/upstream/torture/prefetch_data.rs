@@ -1,21 +1,28 @@
+#[cfg(target_arch = "x86_64")]
+fn prefetch(address: *const i32) {
+    unsafe {
+        std::arch::x86_64::_mm_prefetch(
+            address.cast::<i8>(),
+            std::arch::x86_64::_MM_HINT_T0,
+        );
+    }
+}
 
-#![feature(intrinsics)]
-
-#![feature(lang_items)]
-extern "rust-intrinsic" {
-    fn prefetch_read_data<T>(addr: *const T, locality: i32);
-    fn prefetch_write_data<T>(addr: *const T, locality: i32);
+#[cfg(not(target_arch = "x86_64"))]
+fn prefetch(address: *const i32) {
+    std::hint::black_box(address);
 }
 
 fn gccrs_main() -> i32 {
-    let a = [1, 2, 3, 4];
-
-    unsafe {
-        prefetch_read_data(&a, 3);
-        prefetch_write_data(&a[0], 3);
-    }
-
+    let values = [1, 2, 3, 4];
+    prefetch(values.as_ptr());
+    std::hint::black_box(values.as_ptr());
     0
 }
 
-fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }
+fn main() {
+    let code = gccrs_main();
+    if code != 0 {
+        std::process::exit(code);
+    }
+}

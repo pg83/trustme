@@ -1,8 +1,4 @@
-#![feature(rustc_attrs)]
-#![feature(extended_key_value_attributes)]
-#![doc = concat!("AB")]
+#![doc = concat!("A", "B")]
 
-// This macro export should not be required for rust 1.49 because inner
-// attributes are resolved after the macros, however it is required in newer
-// versions of rustc.
-#[macro_export]
+#[doc = concat!("documented", " item")]
+pub fn documented() {}

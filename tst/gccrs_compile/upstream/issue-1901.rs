@@ -1,37 +1,7 @@
-
-#![feature(intrinsics)]
-
-#![feature(lang_items)]
-mod intrinsics {
-    extern "rust-intrinsic" {
-        pub fn offset<T>(ptr: *const T, count: isize) -> *const T;
-    }
+pub unsafe fn test_const(pointer: *const u8) -> *const u8 {
+    unsafe { pointer.offset(1) }
 }
 
-mod ptr {
-    #[lang = "const_ptr"]
-    impl<T> *const T {
-        pub unsafe fn offset(self, count: isize) -> *const T {
-            crate::intrinsics::offset(self, count)
-        }
-    }
-
-    #[lang = "mut_ptr"]
-    impl<T> *mut T {
-        pub unsafe fn offset(self, count: isize) -> *mut T {
-            crate::intrinsics::offset(self, count) as *mut T
-        }
-    }
-}
-
-pub fn test_const(x: *const u8) {
-    unsafe {
-        x.offset(1);
-    }
-}
-
-pub fn test_mut(x: *mut u8) {
-    unsafe {
-        x.offset(1);
-    }
+pub unsafe fn test_mut(pointer: *mut u8) -> *mut u8 {
+    unsafe { pointer.offset(1) }
 }

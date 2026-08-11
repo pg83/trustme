@@ -1,18 +1,12 @@
-#![feature(intrinsics)]
-#![feature(lang_items)]
 
-extern "rust-intrinsic" {
-    pub fn ctlz_nonzero<T>(x: T) -> T;
-    pub fn abort() -> !;
-}
 
 fn gccrs_main() -> i32 {
     unsafe {
-        if ctlz_nonzero(1u8) != 7 {
-            abort();
+        if (1u8).leading_zeros() != 7 {
+            std::process::abort();
         }
-        if ctlz_nonzero(255u8) != 0 {
-            abort();
+        if (255u8).leading_zeros() != 0 {
+            std::process::abort();
         }
     }
 

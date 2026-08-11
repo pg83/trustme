@@ -1,27 +1,26 @@
 // { dg-additional-options "-w" }
 
-#![feature(intrinsics, lang_items)]
-
-extern "rust-intrinsic" {
-    fn transmute<T, U>(value: T) -> U;
-}
-
+#[repr(transparent)]
 struct WrapI {
     inner: i32,
 }
 
+#[repr(transparent)]
 struct WrapF {
     inner: f32,
 }
 
 fn gccrs_main() -> i32 {
-    let f = 15.4f32;
-    let f_wrap = WrapF { inner: f };
-
-    let fst = unsafe { transmute::<f32, i32>(f) };
-    let snd = unsafe { transmute::<WrapF, WrapI>(f_wrap) };
-
-    fst - snd.inner
+    let value = 15.4f32;
+    let wrapped = WrapF { inner: value };
+    let first = value.to_bits() as i32;
+    let second = unsafe { std::mem::transmute::<WrapF, WrapI>(wrapped) };
+    first - second.inner
 }
 
-fn main() { let code = gccrs_main() as i32; if code != 0 { std::process::exit(code); } }
+fn main() {
+    let code = gccrs_main();
+    if code != 0 {
+        std::process::exit(code);
+    }
+}

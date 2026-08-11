@@ -1,15 +1,3 @@
-
-#![feature(intrinsics)]
-
-#![feature(lang_items)]
-extern "rust-intrinsic" {
-    pub fn size_of<T>() -> usize;
-}
-
-fn test() -> usize {
-    unsafe { size_of::<i32>() }
-}
-
-fn main() {
-    let _a = test();
+pub fn size() -> usize {
+    std::mem::size_of::<i32>()
 }

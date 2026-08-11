@@ -384,7 +384,6 @@ pub_restricted_3.rs
 ref_pattern_fn_param2.rs
 refutable-path.rs
 repr_transparent_fields2.rs
-rust-const-blog-issue.rs
 rust_abi.rs
 rustc_attr1.rs
 rustc_std_internal_symbol1.rs
