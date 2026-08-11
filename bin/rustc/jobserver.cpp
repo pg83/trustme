@@ -5,88 +5,19 @@
 * tools/common/jobserver.cpp
 * - An interface to (or emulation of) make's jobserver
 */
-#define _CRT_SECURE_NO_WARNINGS // No thread issues
 #include "jobserver.h"
 #include <cstring>
 #include <cassert>
 #include <string>
 #include <sstream>
 #include <iostream>
-#ifdef _WIN32
-    #include <Windows.h>
-#else
     #include <unistd.h>
     #include <sys/types.h>
     #include <sys/stat.h>
     #include <fcntl.h>
     #include <thread>
     #include <vector>
-#endif
 
-#ifdef _WIN32
-class JobServer_Client: public JobServer {
-    HANDLE m_sem_handle;
-
-public:
-    JobServer_Client(std::string path, HANDLE sem_handle)
-        : m_sem_handle(sem_handle)
-    {
-    }
-
-    ~JobServer_Client() {
-        CloseHandle(m_sem_handle);
-    }
-
-    bool take_one(unsigned long timeout_ms) override {
-        if (WaitForSingleObject(m_sem_handle, timeout_ms) == 0) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    void return_one() override {
-        ReleaseSemaphore(m_sem_handle, 1, NULL);
-    }
-};
-
-class JobServer_Server: public JobServer {
-    std::string m_path;
-    HANDLE m_sem_handle;
-
-public:
-    JobServer_Server(size_t max_jobs)
-        : m_path(make_path())
-        , m_sem_handle(CreateSemaphoreA(nullptr, max_jobs, max_jobs, m_path.c_str()))
-    {
-        ::std::stringstream ss;
-        if (const auto* makeflags = getenv("MAKEFLAGS")) {
-            ss << makeflags << " ";
-        }
-        ss << "--jobserver-auth=" << m_path;
-        SetEnvironmentVariableA("MAKEFLAGS", ss.str().c_str());
-    }
-
-    ~JobServer_Server() {
-        CloseHandle(m_sem_handle);
-    }
-
-    bool take_one(unsigned long timeout_ms) override {
-        return (WaitForSingleObject(m_sem_handle, timeout_ms) == 0);
-    }
-
-    void return_one() override {
-        ReleaseSemaphore(m_sem_handle, 1, NULL);
-    }
-
-private:
-    static std::string make_path() {
-        ::std::stringstream ss;
-        ss << "mrustc_job_server-" << GetProcessId(NULL);
-        return ss.str();
-    }
-};
-#else
 class JobServer_Client: public JobServer {
     int m_fd_read;
     int m_fd_write;
@@ -242,7 +173,6 @@ public:
         return m_client.return_one();
     }
 };
-#endif
 
 ::std::unique_ptr<JobServer> JobServer::create(size_t server_jobs) {
     const auto* makeflags = getenv("MAKEFLAGS");
@@ -266,13 +196,6 @@ public:
         std::string auth_str(jobserver_auth, len);
 
         // Found a valid jobserver string!
-#ifdef _WIN32
-        // - Windows: named semaphore
-        auto sem_handle = OpenSemaphoreA(0, FALSE, auth_str.c_str());
-        if (sem_handle) {
-            return ::std::make_unique<JobServer_Client>(auth_str, sem_handle);
-        }
-#else
         // - Named pipe: `fifo:PATH`
         if (std::strncmp(auth_str.c_str(), "fifo:", 5) == 0) {
             auto fd = open(auth_str.c_str() + 5, O_RDWR | O_CLOEXEC);
@@ -294,7 +217,6 @@ public:
                 }
             }
         }
-#endif
     }
     // If no `-j` option is passed to this application, then don't create a jobserver
     if (server_jobs == 0) {

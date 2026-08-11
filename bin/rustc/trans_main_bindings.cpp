@@ -1615,7 +1615,6 @@ namespace {
                             case ::HIR::Function::Markings::Inline::Always:
                             case ::HIR::Function::Markings::Inline::Normal:
                                 // Don't emit, it's going to be emitted by callers
-                                // NOTE: This avoids DLL issues on windows with un-used functions
                                 DEBUG("Don't emit inlined function");
                                 is_inline = true;
                                 break;

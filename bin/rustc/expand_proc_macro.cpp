@@ -10,18 +10,9 @@
 #include "parse_lex.h"
 #include "parse_ttstream.h"
 #include <unordered_set>
-#ifdef _WIN32
-    #define NOMINMAX
-    #define NOGDI // Don't include GDI functions (defines some macros that collide with mrustc ones)
-    #include <Windows.h>
-    #ifdef CONST
-        #undef CONST // mingw's `minwindef.h` defines this
-    #endif
-#else
-    #include <unistd.h> // read/write/pipe
-    #include <spawn.h>
-    #include <sys/wait.h>
-#endif
+#include <unistd.h> // read/write/pipe
+#include <spawn.h>
+#include <sys/wait.h>
 
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__) || defined(__APPLE__)
 extern char** environ;
@@ -226,17 +217,10 @@ struct ProcMacroInv: public TokenStream {
         Handles(const Handles&) = delete;
         Handles& operator=(Handles&&) = delete;
         Handles& operator=(const Handles&) = delete;
-#ifdef _WIN32
-        HANDLE child_handle;
-        HANDLE child_stdin;
-        HANDLE child_stdout;
-#else
-        // POSIX
-        pid_t child_pid; // Questionably needed
-        int child_stdin;
-        int child_stdout;
+        pid_t child_pid = 0; // Questionably needed
+        int child_stdin = -1;
+        int child_stdout = -1;
         // NOTE: stderr stays as our stderr
-#endif
     } handles;
 
     bool m_eof_hit = false;
@@ -474,7 +458,6 @@ ProcMacroInv ProcMacro_Invoke_int(const Span& sp, const ::AST::Crate& crate, con
     }
 
     // 2. Get executable and macro name
-    // TODO: Windows will have .exe?
     ::std::string proc_macro_exe_name = ext_crate.m_filename;
 
     // 3. Create ProcMacroInv
@@ -1888,61 +1871,6 @@ ProcMacroInv::ProcMacroInv(const Span& sp, AST::Edition edition, const char* exe
     } else {
         DEBUG("Set MRUSTC_DUMP_PROCMACRO=procmacro_dump to dump to `procmacro_dump-NNN-{out,res}.bin`");
     }
-#ifdef _WIN32
-    std::string commandline = std::string{executable} + " " + proc_macro_desc.name.c_str();
-    DEBUG(commandline);
-
-    HANDLE stdin_read = INVALID_HANDLE_VALUE;
-    HANDLE stdin_write = INVALID_HANDLE_VALUE;
-    HANDLE stdout_read = INVALID_HANDLE_VALUE;
-    HANDLE stdout_write = INVALID_HANDLE_VALUE;
-
-    SECURITY_ATTRIBUTES saAttr{};
-    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
-    saAttr.bInheritHandle = true;
-    saAttr.lpSecurityDescriptor = nullptr;
-
-    // Create a pipe for the child process's STDOUT.
-    if (!CreatePipe(&stdout_read, &stdout_write, &saAttr, 0)) {
-        BUG(sp, "stdout CreatePipe failed: " << GetLastError());
-    }
-
-    // Ensure the read handle to the pipe for STDOUT is not inherited.
-    if (!SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0)) {
-        BUG(sp, "stdout SetHandleInformation failed: " << GetLastError());
-    }
-
-    // Create a pipe for the child process's STDIN.
-    if (!CreatePipe(&stdin_read, &stdin_write, &saAttr, 0)) {
-        BUG(sp, "stdin CreatePipe failed: " << GetLastError());
-    }
-
-    // Ensure the write handle to the pipe for STDIN is not inherited.
-    if (!SetHandleInformation(stdin_write, HANDLE_FLAG_INHERIT, 0)) {
-        BUG(sp, "stdin SetHandleInformation failed: " << GetLastError());
-    }
-
-    // Create the child process.
-    PROCESS_INFORMATION piProcInfo{};
-    STARTUPINFO siStartInfo{};
-    siStartInfo.cb = sizeof(STARTUPINFO);
-    siStartInfo.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-    siStartInfo.hStdOutput = stdout_write;
-    siStartInfo.hStdInput = stdin_read;
-    siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
-    if (!CreateProcessA(executable, const_cast<char*>(commandline.c_str()), NULL, NULL, TRUE, 0, NULL, NULL, &siStartInfo, &piProcInfo)) {
-        BUG(sp, "Error in CreateProcessW - " << GetLastError() << " - can't start `" << executable << "`");
-    }
-
-    this->handles.child_stdin = stdin_write;
-    this->handles.child_stdout = stdout_read;
-    this->handles.child_handle = piProcInfo.hProcess;
-
-    // Close the handles we don't care about.
-    CloseHandle(stdin_read);
-    CloseHandle(stdout_write);
-    CloseHandle(piProcInfo.hThread);
-#else
     int stdin_pipes[2];
     if (pipe(stdin_pipes) != 0) {
         BUG(sp, "Unable to create stdin pipe pair for proc macro, " << strerror(errno));
@@ -1975,46 +1903,23 @@ ProcMacroInv::ProcMacroInv(const Span& sp, AST::Edition edition, const char* exe
     // Close the ends we don't care about.
     close(stdin_pipes[0]);
     close(stdout_pipes[1]);
-#endif
 
     // Invocation span is #1 (#0 is always empty/undefined)
     this->send_span_def(1, sp);
 }
 
 ProcMacroInv::Handles::Handles(Handles&& x)
-    :
-#ifdef _WIN32
-    child_handle(x.child_handle)
+    : child_pid(x.child_pid)
     , child_stdin(x.child_stdin)
     , child_stdout(x.child_stdout)
-#else
-    child_pid(x.child_pid)
-    , child_stdin(x.child_stdin)
-    , child_stdout(x.child_stdout)
-#endif
 {
-#ifdef _WIN32
-    x.child_handle = INVALID_HANDLE_VALUE;
-    x.child_stdin = INVALID_HANDLE_VALUE;
-    x.child_stdout = INVALID_HANDLE_VALUE;
-#else
     x.child_pid = 0;
     x.child_stdin = -1;
     x.child_stdout = -1;
-#endif
     DEBUG("");
 }
 ProcMacroInv::~ProcMacroInv()
 {
-#ifdef _WIN32
-    if (this->handles.child_handle != INVALID_HANDLE_VALUE) {
-        DEBUG("Waiting for child to terminate");
-        WaitForSingleObject(this->handles.child_handle, INFINITE);
-        CloseHandle(this->handles.child_stdout);
-        CloseHandle(this->handles.child_stdin);
-        CloseHandle(this->handles.child_handle);
-    }
-#else
     if (this->handles.child_pid != 0) {
         DEBUG("Waiting for child " << this->handles.child_pid << " to terminate");
         int status;
@@ -2022,30 +1927,19 @@ ProcMacroInv::~ProcMacroInv()
         close(this->handles.child_stdout);
         close(this->handles.child_stdin);
     }
-#endif
 }
 
 bool ProcMacroInv::check_good() {
     char v;
-#ifdef _WIN32
-    DWORD rv = 0;
-    if (!ReadFile(this->handles.child_stdout, &v, 1, &rv, nullptr)) {
-        DEBUG("Error reading from child, " << GetLastError());
-        return false;
-    }
-#else
     int rv = read(this->handles.child_stdout, &v, 1);
-#endif
     if (rv == 0) {
         DEBUG("Unexpected EOF from child");
         return false;
     }
-#ifndef _WIN32
     if (rv < 0) {
         DEBUG("Error reading from child, rv=" << rv << " " << strerror(errno));
         return false;
     }
-#endif
     DEBUG("Child started, value = " << (int)v);
     if (v != 0) {
         return false;
@@ -2066,16 +1960,9 @@ void ProcMacroInv::send_bytes_raw(const void* val, size_t size) {
     if (m_dump_file_out.is_open()) {
         m_dump_file_out.write(reinterpret_cast<const char*>(val), size);
     }
-#ifdef _WIN32
-    DWORD bytesWritten = 0;
-    if (!WriteFile(this->handles.child_stdin, val, size, &bytesWritten, nullptr) || bytesWritten != size) {
-        BUG(m_parent_span, "Error writing to child, " << GetLastError());
-    }
-#else
     if (write(this->handles.child_stdin, val, size) != static_cast<ssize_t>(size)) {
         BUG(m_parent_span, "Error writing to child, " << strerror(errno));
     }
-#endif
 }
 
 void ProcMacroInv::send_v128u(uint64_t val) {
@@ -2115,12 +2002,7 @@ void ProcMacroInv::recv_bytes_raw(void* out_void, size_t len) {
     uint8_t* val = reinterpret_cast<uint8_t*>(out_void);
     size_t ofs = 0, rem = len;
     while (rem > 0) {
-#ifdef _WIN32
-        DWORD n;
-        ReadFile(this->handles.child_stdout, &val[ofs], rem, &n, nullptr);
-#else
         auto n = read(this->handles.child_stdout, &val[ofs], rem);
-#endif
         if (n == 0) {
             BUG(this->m_this_span, "Unexpected EOF while reading from child process");
         }

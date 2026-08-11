@@ -6,12 +6,8 @@
  * - Generic representation of a filesystem path
  */
 #include "path.h"
-#if _WIN32
-    #include <Windows.h>
-#else
-    #include <unistd.h> // getcwd/chdir
-    #include <limits.h> // PATH_MAX
-#endif
+#include <unistd.h> // getcwd/chdir
+#include <limits.h> // PATH_MAX
 
 helpers::path::path(const char* s)
     : m_str(s)
@@ -45,15 +41,10 @@ helpers::path helpers::path::to_absolute() const {
         return *this;
     }
 
-#if _WIN32
-    char cwd[1024];
-    GetCurrentDirectoryA(sizeof(cwd), cwd);
-#else
     char cwd[PATH_MAX];
     if (!getcwd(cwd, sizeof(cwd))) {
         throw ::std::runtime_error("Calling getcwd() failed in path::to_absolute()");
     }
-#endif
     auto rv = path(cwd);
     for (auto comp : *this) {
         if (comp == ".")
@@ -64,9 +55,6 @@ helpers::path helpers::path::to_absolute() const {
             rv /= comp;
         }
     }
-#if _WIN32
-#else
-#endif
     return rv;
 }
 

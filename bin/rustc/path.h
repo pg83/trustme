@@ -16,11 +16,7 @@ namespace helpers {
 
     /// Path helper class (because I don't want to include boost)
     class path {
-#ifdef _WIN32
-        static const char SEP = '\\';
-#else
         static const char SEP = '/';
-#endif
 
         ::std::string m_str;
 

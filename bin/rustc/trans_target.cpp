@@ -133,11 +133,7 @@ namespace {
 
                         if (key_val.path[2] == "variant") {
                             check_path_length(key_val, 3);
-                            if (key_val.value.as_string() == "msvc") {
-                                rv.m_backend_c.m_codegen_mode = CodegenMode::Msvc;
-                            } else if (key_val.value.as_string() == "gnu") {
-                                rv.m_backend_c.m_codegen_mode = CodegenMode::Gnu11;
-                            } else {
+                            if (key_val.value.as_string() != "gnu") {
                                 ::std::cerr << "ERROR: Unknown C variant name '" << key_val.value.as_string() << "' in " << filename << ::std::endl;
                                 exit(1);
                             }
@@ -236,6 +232,10 @@ namespace {
             ::std::cerr << "ERROR: Architecture not specified in " << filename << ::std::endl;
             exit(1);
         }
+        if (rv.m_family == "windows" || rv.m_os_name == "windows") {
+            ::std::cerr << "ERROR: Windows targets are not supported in " << filename << ::std::endl;
+            exit(1);
+        }
 
         return rv;
     }
@@ -249,15 +249,6 @@ namespace {
                 return v ? "true" : "false";
             }
 
-            static const char* c_variant_name(const CodegenMode m) {
-                switch (m) {
-                    case CodegenMode::Gnu11:
-                        return "gnu";
-                    case CodegenMode::Msvc:
-                        return "msvc";
-                }
-                return "";
-            }
         };
 
         of << "[target]\n"
@@ -268,7 +259,7 @@ namespace {
            //<< "arch = \"" << spec.m_arch.m_name << "\"\n"
            << "\n"
            << "[backend.c]\n"
-           << "variant = \"" << H::c_variant_name(spec.m_backend_c.m_codegen_mode) << "\"\n"
+           << "variant = \"gnu\"\n"
            << "target = \"" << spec.m_backend_c.m_c_compiler << "\"\n"
            << "compiler-opts = [";
         for (const auto& s : spec.m_backend_c.m_compiler_opts) {
@@ -309,84 +300,75 @@ namespace {
     TargetSpec init_from_spec_name(const ::std::string& target_name) {
 // Options for all the fully-GNU environments
 #define BACKEND_C_OPTS_GNU {"-ffunction-sections", "-pthread"}, {"-Wl,--start-group"}, {"-Wl,--end-group", "-Wl,--gc-sections", "-l", "atomic"}
-        // If there's a '/' or a '\' in the filename, open it as a path, otherwise assume it's a triple.
-        if (target_name.find('/') != ::std::string::npos || target_name.find('\\') != ::std::string::npos) {
+        // If there's a '/' in the filename, open it as a path, otherwise assume it's a triple.
+        if (target_name.find('/') != ::std::string::npos) {
             return load_spec_from_file(target_name);
         } else if (target_name == "i586-linux-gnu" || target_name == "i586-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {CodegenMode::Gnu11, true, "i586-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_X86};
+            return TargetSpec{"unix", "linux", "gnu", {true, "i586-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_X86};
         } else if (target_name == "x86_64-linux-gnu" || target_name == "x86_64-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {CodegenMode::Gnu11, true /*false*/, "x86_64-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
+            return TargetSpec{"unix", "linux", "gnu", {true /*false*/, "x86_64-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
         } else if (target_name == "x86_64-linux-musl" || target_name == "x86_64-unknown-linux-musl") {
-            return TargetSpec{"unix", "linux", "musl", {CodegenMode::Gnu11, true /*false*/, "x86_64-linux-musl", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
+            return TargetSpec{"unix", "linux", "musl", {true /*false*/, "x86_64-linux-musl", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
         } else if (target_name == "x86_64-unknown-linux-gnux32") {
-            return TargetSpec{"unix", "linux", "gnu", {CodegenMode::Gnu11, true, "x86_64-unknown-linux-gnux32", BACKEND_C_OPTS_GNU}, ARCH_X32};
+            return TargetSpec{"unix", "linux", "gnu", {true, "x86_64-unknown-linux-gnux32", BACKEND_C_OPTS_GNU}, ARCH_X32};
         } else if (target_name == "arm-linux-gnu" || target_name == "arm-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {CodegenMode::Gnu11, true, "arm-elf-eabi", BACKEND_C_OPTS_GNU}, ARCH_ARM32};
+            return TargetSpec{"unix", "linux", "gnu", {true, "arm-elf-eabi", BACKEND_C_OPTS_GNU}, ARCH_ARM32};
         } else if (target_name == "aarch64-linux-gnu" || target_name == "aarch64-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {CodegenMode::Gnu11, false, "aarch64-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_ARM64};
+            return TargetSpec{"unix", "linux", "gnu", {false, "aarch64-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_ARM64};
         } else if (target_name == "m68k-linux-gnu" || target_name == "m68k-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {CodegenMode::Gnu11, true, "m68k-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_M68K};
+            return TargetSpec{"unix", "linux", "gnu", {true, "m68k-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_M68K};
         } else if (target_name == "powerpc64-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {CodegenMode::Gnu11, false, "powerpc64-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_POWERPC64};
+            return TargetSpec{"unix", "linux", "gnu", {false, "powerpc64-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_POWERPC64};
         } else if (target_name == "powerpc64le-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {CodegenMode::Gnu11, false, "powerpc64le-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_POWERPC64LE};
+            return TargetSpec{"unix", "linux", "gnu", {false, "powerpc64le-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_POWERPC64LE};
         } else if (target_name == "riscv64-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {CodegenMode::Gnu11, false, "riscv64-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_RISCV64};
+            return TargetSpec{"unix", "linux", "gnu", {false, "riscv64-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_RISCV64};
         } else if (target_name == "riscv64-unknown-linux-musl") {
-            return TargetSpec{"unix", "linux", "musl", {CodegenMode::Gnu11, false, "riscv64-unknown-linux-musl", BACKEND_C_OPTS_GNU}, ARCH_RISCV64};
-        } else if (target_name == "i586-pc-windows-gnu") {
-            return TargetSpec{"windows", "windows", "gnu", {CodegenMode::Gnu11, true, "mingw32", BACKEND_C_OPTS_GNU}, ARCH_X86};
-        } else if (target_name == "x86_64-pc-windows-gnu") {
-            return TargetSpec{"windows", "windows", "gnu", {CodegenMode::Gnu11, false, "x86_64-w64-mingw32", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
-        } else if (target_name == "x86-pc-windows-msvc") {
-            // TODO: Should this include the "kernel32.lib" inclusion?
-            return TargetSpec{"windows", "windows", "msvc", {CodegenMode::Msvc, true, "x86", {}, {}}, ARCH_X86};
-        } else if (target_name == "x86_64-pc-windows-msvc") {
-            return TargetSpec{"windows", "windows", "msvc", {CodegenMode::Msvc, true, "amd64", {}, {}}, ARCH_X86_64};
+            return TargetSpec{"unix", "linux", "musl", {false, "riscv64-unknown-linux-musl", BACKEND_C_OPTS_GNU}, ARCH_RISCV64};
         } else if (target_name == "i686-unknown-freebsd") {
-            return TargetSpec{"unix", "freebsd", "gnu", {CodegenMode::Gnu11, true, "i686-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_X86};
+            return TargetSpec{"unix", "freebsd", "gnu", {true, "i686-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_X86};
         } else if (target_name == "x86_64-unknown-freebsd") {
-            return TargetSpec{"unix", "freebsd", "gnu", {CodegenMode::Gnu11, false, "x86_64-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
+            return TargetSpec{"unix", "freebsd", "gnu", {false, "x86_64-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
         } else if (target_name == "arm-unknown-freebsd") {
-            return TargetSpec{"unix", "freebsd", "gnu", {CodegenMode::Gnu11, true, "arm-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_ARM32};
+            return TargetSpec{"unix", "freebsd", "gnu", {true, "arm-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_ARM32};
         } else if (target_name == "aarch64-unknown-freebsd") {
-            return TargetSpec{"unix", "freebsd", "gnu", {CodegenMode::Gnu11, false, "aarch64-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_ARM64};
+            return TargetSpec{"unix", "freebsd", "gnu", {false, "aarch64-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_ARM64};
         } else if (target_name == "x86_64-unknown-netbsd") {
-            return TargetSpec{"unix", "netbsd", "gnu", {CodegenMode::Gnu11, false, "x86_64-unknown-netbsd", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
+            return TargetSpec{"unix", "netbsd", "gnu", {false, "x86_64-unknown-netbsd", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
         } else if (target_name == "i686-unknown-openbsd") {
-            return TargetSpec{"unix", "openbsd", "gnu", {CodegenMode::Gnu11, true, "i686-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_X86};
+            return TargetSpec{"unix", "openbsd", "gnu", {true, "i686-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_X86};
         } else if (target_name == "x86_64-unknown-openbsd") {
-            return TargetSpec{"unix", "openbsd", "gnu", {CodegenMode::Gnu11, false, "x86_64-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
+            return TargetSpec{"unix", "openbsd", "gnu", {false, "x86_64-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
         } else if (target_name == "arm-unknown-openbsd") {
-            return TargetSpec{"unix", "openbsd", "gnu", {CodegenMode::Gnu11, true, "arm-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_ARM32};
+            return TargetSpec{"unix", "openbsd", "gnu", {true, "arm-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_ARM32};
         } else if (target_name == "aarch64-unknown-openbsd") {
-            return TargetSpec{"unix", "openbsd", "gnu", {CodegenMode::Gnu11, false, "aarch64-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_ARM64};
+            return TargetSpec{"unix", "openbsd", "gnu", {false, "aarch64-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_ARM64};
         } else if (target_name == "x86_64-unknown-dragonfly") {
-            return TargetSpec{"unix", "dragonfly", "gnu", {CodegenMode::Gnu11, false, "x86_64-unknown-dragonfly", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
+            return TargetSpec{"unix", "dragonfly", "gnu", {false, "x86_64-unknown-dragonfly", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
         }
         // `*-apple-darwin` has an empty target_env (as in rustc); "gnu" selects glibc-only code on a platform with no glibc.
         else if (target_name == "i686-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
             // The first 32bit Intel Mac was Core Solo aka yonah. It allows to use `-march=yonah` like Rust.
-            return TargetSpec{"unix", "macos", "", {CodegenMode::Gnu11, false, "x86_64-apple-darwin", {"-march=yonah"}, {}}, ARCH_X86_64};
+            return TargetSpec{"unix", "macos", "", {false, "x86_64-apple-darwin", {"-march=yonah"}, {}}, ARCH_X86_64};
         } else if (target_name == "x86_64-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
             // The first 64bit Intel Mac was Core Duo. It allows to use `-march=core2` like Rust.
-            return TargetSpec{"unix", "macos", "", {CodegenMode::Gnu11, false, "x86_64-apple-darwin", {"-march=core2"}, {}}, ARCH_X86_64};
+            return TargetSpec{"unix", "macos", "", {false, "x86_64-apple-darwin", {"-march=core2"}, {}}, ARCH_X86_64};
         } else if (target_name == "aarch64-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
-            return TargetSpec{"unix", "macos", "", {CodegenMode::Gnu11, false, "aarch64-apple-darwin", {}, {}}, ARCH_ARM64};
+            return TargetSpec{"unix", "macos", "", {false, "aarch64-apple-darwin", {}, {}}, ARCH_ARM64};
         } else if (target_name == "powerpc-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
             // NOTE: 32-bit PowerPC needs libatomic for the 8-byte atomics (see ARCH_POWERPC)
-            return TargetSpec{"unix", "macos", "", {CodegenMode::Gnu11, true, "powerpc-apple-darwin", {}, {}, {"-l", "atomic"}}, ARCH_POWERPC};
+            return TargetSpec{"unix", "macos", "", {true, "powerpc-apple-darwin", {}, {}, {"-l", "atomic"}}, ARCH_POWERPC};
         } else if (target_name == "powerpc64-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
-            return TargetSpec{"unix", "macos", "", {CodegenMode::Gnu11, false, "powerpc64-apple-darwin", {}, {}}, ARCH_POWERPC64};
+            return TargetSpec{"unix", "macos", "", {false, "powerpc64-apple-darwin", {}, {}}, ARCH_POWERPC64};
         } else if (target_name == "arm-unknown-haiku") {
-            return TargetSpec{"unix", "haiku", "gnu", {CodegenMode::Gnu11, true, "arm-unknown-haiku", {}, {}}, ARCH_ARM32};
+            return TargetSpec{"unix", "haiku", "gnu", {true, "arm-unknown-haiku", {}, {}}, ARCH_ARM32};
         } else if (target_name == "x86_64-unknown-haiku") {
-            return TargetSpec{"unix", "haiku", "gnu", {CodegenMode::Gnu11, false, "x86_64-unknown-haiku", {}, {}}, ARCH_X86_64};
+            return TargetSpec{"unix", "haiku", "gnu", {false, "x86_64-unknown-haiku", {}, {}}, ARCH_X86_64};
         } else {
             ::std::cerr << "Unknown target name '" << target_name << "'" << ::std::endl;
             abort();
@@ -408,8 +390,6 @@ void Target_SetCfg(const ::std::string& target_name) {
 
     if (g_target.m_family == "unix") {
         Cfg_SetFlag("unix");
-    } else if (g_target.m_family == "windows") {
-        Cfg_SetFlag("windows");
     }
     Cfg_SetValue("target_family", g_target.m_family);
 

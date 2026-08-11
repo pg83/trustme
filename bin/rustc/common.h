@@ -9,10 +9,6 @@
 #include <sstream>
 #include <memory>
 
-#ifdef _MSC_VER
-    #define __attribute__(x) /* no-op */
-#endif
-
 #define FMT(ss) (static_cast<::std::ostringstream&&>(::std::ostringstream() << ss).str())
 // Project-wide shorthand retained for the pervasive move idiom.
 #define mv$(...) ::std::move(__VA_ARGS__)

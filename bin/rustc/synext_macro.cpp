@@ -1797,20 +1797,15 @@ namespace {
     ::std::string get_path_relative_to(const ::std::string& base_path, ::std::string path) {
         DEBUG(base_path << ", " << path);
         // Absolute
-        if (path[0] == '/' || path[0] == '\\') {
+        if (path[0] == '/') {
             return path;
         }
-        // Windows absolute
-        else if (isalnum(path[0]) && path[1] == ':' && (path[2] == '/' || path[2] == '\\')) {
+        if (base_path.size() == 0) {
             return path;
-        } else if (base_path.size() == 0) {
-            return path;
-        } else if (base_path.back() == '/' || base_path.back() == '\\') {
+        } else if (base_path.back() == '/') {
             return base_path + path;
         } else {
-            auto slash_fwd = base_path.find_last_of('/');
-            auto slash_back = base_path.find_last_of('\\');
-            auto slash = slash_fwd == std::string::npos ? slash_back : slash_back == std::string::npos ? slash_fwd : std::max(slash_fwd, slash_back);
+            auto slash = base_path.find_last_of('/');
             if (slash == ::std::string::npos) {
                 return path;
             } else {

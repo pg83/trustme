@@ -22,9 +22,9 @@
 
 4. Backend местами генерирует программу, которая просто вызывает `abort()`.
 
-   [trans_codegen_c.cpp](/home/pg/monorepo/trustme/bin/rustc/trans_codegen_c.cpp:2945) заменяет большой класс MSVC AVX-функций на `abort()`, причём условие содержит `true ||`. [trans_codegen_c.cpp](/home/pg/monorepo/trustme/bin/rustc/trans_codegen_c.cpp:5731) так же обрывает `vmov/vexpand/vpexpand` в GCC-like backend.
+   [trans_codegen_c.cpp](/home/pg/monorepo/trustme/bin/rustc/trans_codegen_c.cpp:4634) обрывает `vmov/vexpand/vpexpand` в GCC-like backend.
 
-   Workaround GCC bug в [trans_codegen_c.cpp](/home/pg/monorepo/trustme/bin/rustc/trans_codegen_c.cpp:1320) выбирается по компилятору самого trustme, а не по C++-компилятору, запускаемому backend.
+   Workaround GCC bug в [trans_codegen_c.cpp](/home/pg/monorepo/trustme/bin/rustc/trans_codegen_c.cpp:976) выбирается по компилятору самого trustme, а не по C++-компилятору, запускаемому backend.
 
 5. Mangling допускает потенциальные коллизии.
 

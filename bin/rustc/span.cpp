@@ -71,22 +71,14 @@ void Span::bug(::std::function<void(::std::ostream&)> msg) const {
     print_span_message([](auto& os) {
         os << "BUG";
     }, msg);
-#ifndef _WIN32
     abort();
-#else
-    exit(1);
-#endif
 }
 
 void Span::error(ErrorType tag, ::std::function<void(::std::ostream&)> msg) const {
     print_span_message([&](auto& os) {
         os << "error:" << tag;
     }, msg);
-#ifndef _WIN32
     abort();
-#else
-    exit(1);
-#endif
 }
 
 void Span::warning(WarningType tag, ::std::function<void(::std::ostream&)> msg) const {

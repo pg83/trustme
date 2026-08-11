@@ -1020,7 +1020,7 @@ func hostTriple() string {
 	case "darwin":
 		return arch + "-apple-darwin"
 	case "windows":
-		return arch + "-pc-windows-msvc"
+		panic("Windows hosts are not supported")
 	default:
 		return arch + "-unknown-" + runtime.GOOS
 	}
@@ -1057,18 +1057,10 @@ func debugAssertions(profile string) bool {
 }
 
 func executableSuffix() string {
-	if runtime.GOOS == "windows" {
-		return ".exe"
-	}
-
 	return ""
 }
 
 func sharedLibrarySuffix() string {
-	if runtime.GOOS == "windows" {
-		return ".dll"
-	}
-
 	if runtime.GOOS == "darwin" {
 		return ".dylib"
 	}
@@ -1077,10 +1069,6 @@ func sharedLibrarySuffix() string {
 }
 
 func staticLibrarySuffix() string {
-	if runtime.GOOS == "windows" {
-		return ".lib"
-	}
-
 	return ".a"
 }
 

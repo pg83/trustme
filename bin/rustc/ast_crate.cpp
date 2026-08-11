@@ -5,12 +5,7 @@
 #include "hir_hir.h"           // HIR::Crate
 #include "hir_main_bindings.h" // HIR_Deserialise
 #include <fstream>
-#ifdef _WIN32
-    #define NOGDI // prevent ERROR from being defined
-    #include <Windows.h>
-#else
-    #include <dirent.h>
-#endif
+#include <dirent.h>
 
 ::std::vector<::std::string> AST::g_crate_load_dirs = {};
 ::std::map<::std::string, ::std::string> AST::g_crate_overrides;
@@ -158,12 +153,7 @@ namespace AST {
             ::std::vector<::std::string> paths;
 #define RLIB_SUFFIX ".rlib"
 #define RDYLIB_SUFFIX ".so"
-#ifdef WIN32
-    #define EXESUF ".exe"
-#else
-    #define EXESUF ""
-#endif
-#define PLUGIN_SUFFIX "-plugin" EXESUF
+#define PLUGIN_SUFFIX "-plugin"
             auto direct_filename = FMT("lib" << name << RLIB_SUFFIX);
             auto direct_filename_so = FMT("lib" << name << RDYLIB_SUFFIX);
             auto name_prefix = FMT("lib" << name << "-");
@@ -181,16 +171,6 @@ namespace AST {
                 path = "";
 
                 // Search for `p+"/lib"+name+"-*.rlib" (which would match e.g. libnum-0.11.rlib)
-#ifdef _WIN32
-                WIN32_FIND_DATA find_data;
-                auto mask = p + "\\*";
-                HANDLE find_handle = FindFirstFile(mask.c_str(), &find_data);
-                if (find_handle == INVALID_HANDLE_VALUE) {
-                    continue;
-                }
-                do {
-                    const auto* fname = find_data.cFileName;
-#else
                 auto dp = opendir(p.c_str());
                 if (!dp) {
                     DEBUG("Unable to opendir `" << p << "`");
@@ -199,7 +179,6 @@ namespace AST {
                 struct dirent* ent;
                 while ((ent = readdir(dp)) != nullptr && path == "") {
                     const auto* fname = ent->d_name;
-#endif
 
                     // AND the start is "lib"+name
                     size_t len = strlen(fname);
@@ -217,13 +196,8 @@ namespace AST {
                     }
 
                     paths.push_back(p + "/" + fname);
-#ifdef _WIN32
-                } while (FindNextFile(find_handle, &find_data));
-                FindClose(find_handle);
-#else
                 }
                 closedir(dp);
-#endif
                 if (paths.size() > 0) {
                     break;
                 }

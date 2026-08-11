@@ -2,7 +2,6 @@
 
 _In-progress_ alternative rust compiler. Capable of building a fully-working copy of rustc, but not suitable for everyday use (due to terrible error messages).
 
-[![Build Status: windows](https://ci.appveyor.com/api/projects/status/96y4ui20pl8xjm2h/branch/master?svg=true)](https://ci.appveyor.com/project/thepowersgang/mrustc/branch/master)
 [![C/C++ CI](https://github.com/thepowersgang/mrustc/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/thepowersgang/mrustc/actions/workflows/c-cpp.yml)
 
 Intro
@@ -20,10 +19,8 @@ Progress
   - NOTE: Older versions (1.29 and older) don't build on modern systems, due to outdated openssl bindings
 - Supported Targets (CI tested for libstd):
   - x86-64 linux GNU (Specifically Debian/Ubuntu; should always work, fully bootstrap tested)
-  - x86-64 windows MSVC (Status: runnable executables on Windows 10, but bootstrap hasn't ever been fully tested)
   - Secondary Targets
     - x86-64 and arm64 macOS
-    - (incomplete) x86 windows MSVC
 - `rustc` bootstrap tested and validated (1.19.0 isn't fully repeatable, but later versions are)
   - See the script `TestRustcBootstrap.sh` for how this was done.
 
@@ -35,11 +32,11 @@ You can set the number of jobs (parallel builds) by setting the enviromment vari
 
 Dependencies
 ------------
-- C++14-compatible compiler (tested with gcc 5.4 and gcc 6, and MSVC 2015)
+- C++20-compatible GCC or Clang
 - C11 compatible C compiler (for output, see above)
 - `GNU make` (for the mrustc makefiles)
 - `patch` (for doing minor edits to the rustc source)
-- `libz-dev` (used for reducing the size of bytecode files, linux only - windows uses vcpkg to download it)
+- `libz-dev` (used for reducing the size of bytecode files on Linux)
 - `curl` (for downloading the rust source, linux only)
 - `cmake` (at least 3.4.3, required for building llvm in rustc)
 - `pkg-config` (required for finding crate build deps, i.e libssl)
@@ -61,22 +58,11 @@ Similar to Linux, but you might need to
 
 e.g. `gmake CC=gcc RUSTC_TARGET=x86_64-unknown-freebsd -f minicargo.mk`
 
-Windows
---------
-(Tested with VS2015)
-- Download and extract `rustc-1.29.0-src.tar.gz` to the repository root (such that the `rustc-1.29.0-src` directory is present)
-  - NOTE: I am open to suggestions for how to automate that step
-- Open `vsproject/mrustc.sln` and build minicargo
-- Run `vsproject/run_hello.cmd` to build libstd and "hello, world", and run it
-  - There are other similar scripts for building cargo and rustc. Cargo works,
-    but rustc hasn't fully been tested (building LLVM on windows has been a challenge)
-
-
 Building non-rustc code
 =======================
 
 To build your own code with mrustc, first you need to build at least libcore (and probably the full standard library).
-This can be done on Linux or macOS by running `make -f minicargo.mk LIBS`, or on windows with `build_std.cmd`.
+This can be done on Linux or macOS by running `make -f minicargo.mk LIBS`.
 
 Next, run
 - `minicargo -L <path_to_libstd> <crate_path>` to build a cargo project.
@@ -131,4 +117,3 @@ Medium-term
 - Implement MIR borrow checker
 - Emit C code that is (more) human readable (uses names from the original source, reduced/no gotos)
 - Add alternate backends (e.g. LLVM IR, cretonne, ...)
-

@@ -1958,20 +1958,15 @@ int main(int argc, char* argv[]) {
         crate.set_crate_name(crate_name);
 
         if (params.outfile == "") {
-#ifdef WIN32
-    #define EXESUF ".exe"
-#else
-    #define EXESUF ""
-#endif
             switch (crate.m_crate_type) {
                 case ::AST::Crate::Type::RustLib:
                     params.outfile = FMT(params.output_dir << "lib" << crate.m_crate_name_set << ".rlib");
                     break;
                 case ::AST::Crate::Type::Executable:
-                    params.outfile = FMT(params.output_dir << crate.m_crate_name_set << EXESUF);
+                    params.outfile = FMT(params.output_dir << crate.m_crate_name_set);
                     break;
                 case ::AST::Crate::Type::ProcMacro:
-                    params.outfile = FMT(params.output_dir << "lib" << crate.m_crate_name_set << "-plugin" EXESUF);
+                    params.outfile = FMT(params.output_dir << "lib" << crate.m_crate_name_set << "-plugin");
                     break;
                 default:
                     params.outfile = FMT(params.output_dir << crate.m_crate_name_set << ".o");
@@ -2433,7 +2428,7 @@ int main(int argc, char* argv[]) {
                 break;
             case ::AST::Crate::Type::RustDylib:
             case ::AST::Crate::Type::CDylib:
-                // Generate a .so/.dll
+                // Generate a shared library
                 CompilePhaseV("Trans Codegen", [&]() {
                     Trans_Codegen(params.outfile, CodegenOutput::DynamicLibrary, trans_opt, hir_crate, std::move(items), hir_file);
                 });

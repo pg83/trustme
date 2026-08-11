@@ -2969,11 +2969,7 @@ namespace HIR {
                         MIR_ASSERT(state, ty->is_Primitive(), "ctpop with non-primitive " << ty);
                         auto ti = TypeInfo::for_type(ty);
                         auto val = ti.mask(local_state.read_param_uint(ti.bits, e.args.at(0)));
-#ifdef _MSC_VER
-                        unsigned rv = __popcnt(val.get_lo() & 0xFFFFFFFF) + __popcnt(val.get_lo() >> 32) + __popcnt(val.get_hi() & 0xFFFFFFFF) + __popcnt(val.get_hi() >> 32);
-#else
                         unsigned rv = __builtin_popcountll(val.get_lo()) + __builtin_popcountll(val.get_hi());
-#endif
                         dst.write_uint(state, 32, U128(rv));
                     }
                     // - CounT Trailing Zeros

@@ -218,7 +218,7 @@ namespace HIR {
         GenericParams hrls; // Higher-ranked lifetimes
         bool is_unsafe;
         bool is_variadic;
-        RcString m_abi; // While RcString is usually used for identifiers only, there's not many ABIs, and this saves (on msvc x64 - 32-8 bytes)
+        RcString m_abi; // RcString is usually used for identifiers, but ABI names also form a small interned set.
         TypeRef m_rettype;
         ::std::vector<TypeRef> m_arg_types;
     };

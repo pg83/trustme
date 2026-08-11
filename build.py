@@ -406,6 +406,27 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_no_windows_support",
+    inputs=[
+        "$(S)/tst/unit/test_no_windows_support.py",
+        "$(S)/tst/unit/test_no_core_main_without_start.rs",
+        *build.glob("$(S)/bin/rustc/*.h"),
+        *build.glob("$(S)/bin/rustc/*.cpp"),
+        *build.glob("$(S)/bin/rustc/*.inc"),
+    ],
+    outputs=["$(B)/tst/unit/no_windows_support.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_no_windows_support.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/test_no_core_main_without_start.rs",
+        "$(B)/tst/unit/no_windows_support.stamp",
+    ],
+    deps=[rustc],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_mir_opt_level",
     inputs=[
         "$(S)/tst/unit/test_mir_opt_level.py",

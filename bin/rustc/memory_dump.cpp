@@ -5,13 +5,7 @@
 #include <cassert>
 #include <vector>
 
-#ifdef _WIN32
-    #define NOGDI
-    #include <Windows.h>
-    #include <DbgHelp.h>
-    #undef min
-    #undef max
-#elif defined(__linux__)
+#if defined(__linux__)
     #include <zlib.h>
 #endif
 
@@ -21,38 +15,7 @@ void memory_dump(const char* phase) {
         auto idx = s_count++;
         char filename[256];
         sprintf(filename, "mrustc-%i-%s.dmp", idx, phase);
-#ifdef _MSC_VER
-    #pragma comment(lib, "dbghelp.lib")
-
-        struct H {
-            static int GenerateDump(const char* phase, const char* filename, EXCEPTION_POINTERS* pExceptionPointers) {
-                HANDLE outfile = CreateFileA(filename, GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-                if (outfile != NULL && outfile != INVALID_HANDLE_VALUE) {
-                    MINIDUMP_EXCEPTION_INFORMATION ExpParam;
-                    ExpParam.ThreadId = GetCurrentThreadId();
-                    ExpParam.ExceptionPointers = pExceptionPointers;
-                    ExpParam.ClientPointers = TRUE;
-
-                    if (!MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), outfile, MiniDumpWithFullMemory, &ExpParam, NULL, NULL)) {
-                        std::cerr << "Unable to dump to " << filename << ": (MiniDumpWriteDump) " << std::hex << GetLastError() << std::endl;
-                    } else {
-                        std::cerr << "Wrote dump to  " << filename << std::endl;
-                    }
-                    CloseHandle(outfile);
-                } else {
-                    std::cerr << "Unable to dump to " << filename << ": (CreateFileA) " << std::hex << GetLastError() << std::endl;
-                }
-
-                return EXCEPTION_EXECUTE_HANDLER;
-            }
-        };
-
-        __try {
-            int* pBadPtr = NULL;
-            *pBadPtr = 0;
-        } __except (H::GenerateDump(phase, filename, GetExceptionInformation())) {
-        }
-#elif defined(__linux__) && defined(__x86_64__)
+#if defined(__linux__) && defined(__x86_64__)
         // On linux, dump out a custom format that covers the entire address space
         // Could save as an ELF core dump, but lazy
         //

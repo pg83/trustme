@@ -6,9 +6,6 @@
  * - Debugging helpers
  */
 #include "common_debug.h"
-#if defined(__MINGW32__)
-    #define DISABLE_MULTITHREAD // Mingw32 doesn't have c++11 threads
-#endif
 #include <set>
 #include <iostream>
 #include <mutex>
@@ -19,9 +16,7 @@ static const char* gsDebugPhase = "";
 static bool gbDebugPhaseEnabled = false;
 static bool gbEnableHeaders = false;
 static ::std::set<::std::string> gmDisabledDebug;
-#ifndef DISABLE_MULTITHREAD
 static ::std::mutex gDebugLock;
-#endif
 
 void Debug_ProcessEnable(const char* e) {
     if (*e) {
@@ -72,9 +67,7 @@ void Debug_Print(::std::function<void(::std::ostream& os)> cb) {
     if (!Debug_IsEnabled()) {
         return;
     }
-#ifndef DISABLE_MULTITHREAD
     ::std::unique_lock<::std::mutex> _lh{gDebugLock};
-#endif
 
     ::std::cout << gsDebugPhase << "- ";
     for (auto i = giIndentLevel; i--;) {
@@ -88,9 +81,7 @@ void Debug_EnterScope(const char* name, dbg_cb_t cb) {
     if (!Debug_IsEnabled()) {
         return;
     }
-#ifndef DISABLE_MULTITHREAD
     ::std::unique_lock<::std::mutex> _lh{gDebugLock};
-#endif
 
     ::std::cout << gsDebugPhase << "- ";
     for (auto i = giIndentLevel; i--;) {
@@ -106,9 +97,7 @@ void Debug_LeaveScope(const char* name, dbg_cb_t cb) {
     if (!Debug_IsEnabled()) {
         return;
     }
-#ifndef DISABLE_MULTITHREAD
     ::std::unique_lock<::std::mutex> _lh{gDebugLock};
-#endif
 
     ::std::cout << gsDebugPhase << "- ";
     giIndentLevel--;

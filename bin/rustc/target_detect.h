@@ -1,14 +1,7 @@
 #pragma once
 
-// - Windows (MSVC)
-#ifdef _MSC_VER
-    #if defined(_WIN64)
-        #define DEFAULT_TARGET_NAME "x86_64-pc-windows-msvc"
-    #else
-        #define DEFAULT_TARGET_NAME "x86-pc-windows-msvc"
-    #endif
 // - Linux
-#elif defined(__linux__)
+#if defined(__linux__)
     #ifndef _GNU_SOURCE
         #define _GNU_SOURCE
     #endif
@@ -65,20 +58,6 @@
         #endif
     #else
         #warning "Unable to detect a suitable default target (linux-gnu)"
-    #endif
-// - msys/cygwin
-#elif defined(__CYGWIN__)
-    #if defined(__x86_64__)
-        #define DEFAULT_TARGET_NAME "x86_64-pc-windows-gnu"
-    #else
-        #define DEFAULT_TARGET_NAME "i586-pc-windows-gnu"
-    #endif
-// - MinGW
-#elif defined(__MINGW32__)
-    #if defined(_WIN64)
-        #define DEFAULT_TARGET_NAME "x86_64-pc-windows-gnu"
-    #else
-        #define DEFAULT_TARGET_NAME "i586-pc-windows-gnu"
     #endif
 // - FreeBSD
 #elif defined(__FreeBSD__)

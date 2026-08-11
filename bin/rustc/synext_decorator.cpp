@@ -2476,7 +2476,7 @@ static void derive_item(const Span& sp, const AST::Crate& crate, AST::Module& mo
         }
 
         // HACK! If the trait path is for `=core` and the last component passes `find_impl`, then assume it's a proper path
-        // This is for the 1.74 crate `windows-0.48.0`, which has `#[derive(::core::cmp::PartialEq, ::core::cmp::Eq)]` for some reason.
+        // Some crates spell builtin derives as fully-qualified `::core` paths.
 
         // Absolute path
         if (const auto* ap = trait_path.m_class.opt_Absolute()) {
@@ -2621,7 +2621,6 @@ void handle_save(const Span& sp, AST::Crate& crate, const std::string& name, con
 }
 
 void handle_lang_item(const Span& sp, AST::Crate& crate, const AST::AbsolutePath& path, const ::std::string& name, eItemType type, AST::Item& item) {
-    // NOTE: MSVC has a limit to the number of if-else chains
     if (g_handlers.empty()) {
         struct H {
             static void add(const char* n, Handler h) {

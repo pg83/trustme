@@ -5,14 +5,6 @@
 #define VERSION_MINOR 12
 #define VERSION_PATCH 0
 
-#ifdef _WIN32
-    #define VERSION_GIT_ISDIRTY 1
-    #define VERSION_GIT_FULLHASH "unknown"
-    #define VERSION_GIT_SHORTHASH "msvc"
-    #define VERSION_BUILDTIME "unknown"
-    #define VERSION_GIT_BRANCH "unknown"
-#endif
-
 unsigned int giVersion_Major = VERSION_MAJOR;
 unsigned int giVersion_Minor = VERSION_MINOR;
 unsigned int giVersion_Patch = VERSION_PATCH;
