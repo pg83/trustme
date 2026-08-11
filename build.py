@@ -689,6 +689,21 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_build_output_bytes",
+    inputs=[
+        "$(S)/build",
+        "$(S)/tst/unit/test_build_output_bytes.py",
+    ],
+    outputs=["$(B)/tst/unit/build_output_bytes.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_build_output_bytes.py",
+        "$(S)/build", "$(B)/tst/unit/build_output_bytes.stamp",
+    ],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_compiletest_flags",
     inputs=[
         "$(S)/tst/unit/test_compiletest_flags.py",

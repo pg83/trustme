@@ -2122,7 +2122,16 @@ class Executor:
             # Through the interpreter, not the shebang: the nix sandbox has
             # no /usr/bin/env.
             args = [sys.executable, str(Path(__file__).resolve()), "strace", payload, "--", *args]
-        result = subprocess.run(args, cwd=cwd, env=env, text=True, stdout=None, stderr=subprocess.PIPE)
+        result = subprocess.run(
+            args,
+            cwd=cwd,
+            env=env,
+            text=True,
+            encoding="utf-8",
+            errors="surrogateescape",
+            stdout=None,
+            stderr=subprocess.PIPE,
+        )
         if result.returncode != 0:
             detail = result.stderr.rstrip()
             message = f"command exited {result.returncode}: {shlex.join(display_args)}"
@@ -2493,6 +2502,8 @@ def flag_help(build_file: Path, source_root: Path, build_dir: str,
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="surrogateescape")
     parser = make_parser()
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
     build_file = (Path(args.build_file).resolve() if args.build_file

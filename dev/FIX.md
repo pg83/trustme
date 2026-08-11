@@ -38,10 +38,6 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 В 513 красных targets первым внутренним маркером является явный assert/TODO из `bin/rustc`; это 125 разных `file.cpp:line`. Первые десять сигнатур дают 254 targets, первые двадцать — 315. Остальные большие классы (`Unexpected token` — 348, `Type mismatch` — 93, `Failed to find an impl` — 65) пока являются только симптомами и не считаются одним исправлением.
 
-## Сначала достоверность gate
-
-- [ ] Исправить две ошибки byte/UTF-8 handling в adapters: `gccrs_compile/facd5a7a3c1c` и `rust_1_90/parser/utf8_idents-rpass`. Adapter обязан сохранять произвольный compiler output и не падать при его декодировании.
-
 ## P1 — 25–99 targets одним общим исправлением
 
 1. [ ] **Macro matcher: 36 targets.** Одна сигнатура `macro_rules_macro_rules.cpp:2113`, `Macro_InvokeRules_MatchPattern - No arm matched`, проходит через UI, doctest, Rust 1.90, Reference и lib tests. Минимизировать по одной matcher state transition; отдельно проверить interpolated block/type/visibility/meta fragments и statement boundaries.

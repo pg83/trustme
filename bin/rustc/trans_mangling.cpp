@@ -60,42 +60,65 @@ public:
     // - "<ofs:base26> <len:int> <raw_data1> <raw_data2>" (`#` or `-` present)
     // - "<len:base26> `_` <raw_data2>" (`#` or `-` at the start)
     void fmt_name(const char* const s) {
-        size_t size = strlen(s);
+        bool has_non_ascii = false;
+        for (const auto* p = reinterpret_cast<const unsigned char*>(s); *p; ++p) {
+            has_non_ascii |= *p >= 0x80;
+        }
+
+        // The C backend needs an ASCII identifier, not the externally-visible
+        // Rust v0 symbol spelling.  `U` marks a bytewise UTF-8 encoding.  Escape
+        // ordinary ASCII names beginning with `U` as well, so the mapping stays
+        // injective (e.g. Unicode Ue588... and source identifier Ue588...).
+        ::std::string encoded;
+        if (has_non_ascii) {
+            static constexpr char HEX[] = "0123456789abcdef";
+            encoded = "U";
+            for (const auto* p = reinterpret_cast<const unsigned char*>(s); *p; ++p) {
+                encoded += HEX[*p >> 4];
+                encoded += HEX[*p & 0xf];
+            }
+        } else if (s[0] == 'U') {
+            encoded = "U";
+            encoded += s;
+        }
+        const auto* name = encoded.empty() ? s : encoded.c_str();
+
+        size_t size = strlen(name);
         const char* hash_pos = nullptr;
         // Search the string for a '#' or '-' character (only one allowed)
-        for (const auto* p = s; *p; p++) {
-            if (isalnum(*p)) {
+        for (const auto* p = name; *p; p++) {
+            if (isalnum(static_cast<unsigned char>(*p))) {
             } else if (*p == '_') {
             } else if (*p == '#' || *p == '-') { // HACK: Treat '-' and '#' as the same in encoding
                 // Multiple hash characters? abort/error
                 // HACK: Only treat the last one as special, previous ones are replaced by underscores
                 hash_pos = p;
             } else {
-                BUG(Span(), "Encounteded invalid character in symbol name while mangling: '" << *p << "' in '" << s << "'");
+                BUG(Span(), "Encounteded invalid character in symbol name while mangling: '" << *p << "' in '" << name << "'");
             }
         }
 
         // If there's a hash, then encode such that it's removed
         if (hash_pos != nullptr) {
-            auto pre_hash_len = static_cast<int>(hash_pos - s);
+            auto pre_hash_len = static_cast<int>(hash_pos - name);
             // If the hash is at the start, and is followed by either a digit (expected) or an underscore (unlikely) - then encode with a leading underscore
-            if (hash_pos == s && (isdigit(hash_pos[1]) || hash_pos[1] == '_')) {
+            if (hash_pos == name && (isdigit(static_cast<unsigned char>(hash_pos[1])) || hash_pos[1] == '_')) {
                 // <len:base26> '_' <body2>
                 // An encoding that allows this pattern
                 fmt_base26_int(size - 1);
-                ASSERT_BUG(Span(), hash_pos[1] != '_', "Leading underscore not valid in '" << s << "'");
+                ASSERT_BUG(Span(), hash_pos[1] != '_', "Leading underscore not valid in '" << name << "'");
                 m_os << '_';
                 m_os << hash_pos + 1;
             } else {
                 // <pos:base26> <len:int> <body1> <body2>
                 fmt_base26_int(pre_hash_len);
-                bool needs_leading_escape = (isdigit(s[0]) || s[0] == '_');
+                bool needs_leading_escape = (isdigit(static_cast<unsigned char>(name[0])) || name[0] == '_');
                 m_os << size - 1 + (needs_leading_escape ? 1 : 0);
                 // If the string starts with a digit or underscrore, then escape it with another underscore.
                 if (needs_leading_escape) {
                     m_os << '_';
                 }
-                for (const char* c = s; c != hash_pos; ++c) {
+                for (const char* c = name; c != hash_pos; ++c) {
                     if (*c == '-' || *c == '#') {
                         m_os << '_';
                     } else {
@@ -105,12 +128,12 @@ public:
                 m_os << hash_pos + 1;
             }
         } else {
-            bool needs_leading_escape = (isdigit(s[0]) || s[0] == '_');
+            bool needs_leading_escape = (isdigit(static_cast<unsigned char>(name[0])) || name[0] == '_');
             m_os << size + (needs_leading_escape ? 1 : 0);
             if (needs_leading_escape) {
                 m_os << '_';
             }
-            m_os << s;
+            m_os << name;
         }
     }
 
