@@ -51,14 +51,14 @@
 | Metadata | `hir_main_bindings.cpp:1076` | Empty crate-name rewrite остаётся compatibility debt. |
 | Typeck common | `hir_typeck_common.cpp:503,515,753,761` | Erasure и passthrough lifetime вместо явных binders. |
 | Typeck solver | `hir_typeck_expr_cs.cpp:932,4991,5924,5938,6713,7565,8025,8169,8349`; header `:175` | Global fuzzy relation, operator result=LHS и arbitrary ivar/associated-type fallbacks. |
-| Typeck helpers | `hir_typeck_helpers.cpp:7168` | Opaque fuzzy matching. |
+| Typeck helpers | `hir_typeck_helpers.cpp:7184` | Opaque fuzzy matching. |
 | Typeck impls | `hir_typeck_main_bindings.cpp:2118,2346,2380` | Lifetime bounds копируются или заменяются для совпадения представления. |
 | Static solver | `hir_typeck_static.cpp:488,518,1251,2122` | Associated bounds дописываются, `_` автоматически проходит bound, opaque equality обходится локально. |
 | Const eval | `hir_conv_constant_evaluation.cpp:1523,3639,3654` | One-past-end допуск и lazy/«roughly-correct» monomorph state. `impl const Drop` неотличим от обычного `Drop`: parser не сохраняет constness trait impl (`parse_common.cpp:3450`). |
 | MIR lowering | `mir_from_hir.cpp:203,1129,1614` | Generator drop-flag remap, assignment borrow-extension suppression и virtual unsize cast. |
 | MIR passes | `mir_operations.cpp:4749` | Usage downgrade при move. |
 | C backend | `trans_codegen_c.cpp:1309,1320,1944,2130,2587,2945,2951,5092,5731` | Принудительный `-O1`, platform workarounds, incomplete asm/AVX translation и runtime `abort()`. |
-| Enumeration | `trans_main_bindings.cpp:1595,2449,2738,2887,3117` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model; magic `Clone` принимает только tuple/array/closure. |
+| Enumeration | `trans_main_bindings.cpp:1595,2449,2738,3117` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующий функциональный blocker — enumeration magic `Clone`: полный `core -Znext-solver` проходит typecheck, validation и MIR, но падает в `trans_main_bindings.cpp:2887` на `LayoutError`, потому что auto-generated `Clone` поддерживает только tuple/array/closure. Исправление строго unit-first. Macro hygiene остаётся отдельной архитектурной задачей.
+Следующий приоритет — macro hygiene; исправление строго unit-first.

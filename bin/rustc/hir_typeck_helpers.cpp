@@ -1567,7 +1567,13 @@ TU_ARMA(Alias, ee) {
                 }
             }
 
-            if (trait == m_lang_Clone) {
+            if (trait == m_lang_Clone
+                && (type->is_Tuple()
+                    || type->is_Array()
+                    || type->is_Function()
+                    || type->is_NodeType()
+                    || type->is_NamedFunction()
+                    || TU_TEST1(*type, Path, .is_closure()))) {
                 auto cmp = this->type_is_clone(sp, type);
                 if (cmp != ::HIR::Compare::Unequal) {
                     return callback(ImplRef(type, &null_params, &null_assoc), cmp);
