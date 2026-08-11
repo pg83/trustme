@@ -4446,8 +4446,10 @@ class NextTraitGoalEvaluator {
                     || normalized_rhs == ::HIR::TypeRef()) {
                     return normalized_lhs == normalized_rhs;
                 }
-                return m_resolve.resolve_type(normalized_lhs)
-                    == m_resolve.resolve_type(normalized_rhs);
+                const auto* resolved_lhs = m_resolve.resolve_type(normalized_lhs);
+                const auto* resolved_rhs = m_resolve.resolve_type(normalized_rhs);
+                return resolved_lhs == resolved_rhs
+                    || resolved_lhs->equals_ignoring_regions(resolved_rhs);
             };
             auto params_equal_after_normalization = [&](const ::HIR::PathParams& lhs,
                                                         const ::HIR::PathParams& rhs) {
@@ -4456,11 +4458,14 @@ class NextTraitGoalEvaluator {
                     || lhs.m_values.size() != rhs.m_values.size()) {
                     return false;
                 }
-                for (size_t i = 0; i < lhs.m_lifetimes.size(); i++) {
-                    if (lhs.m_lifetimes[i] != rhs.m_lifetimes[i]) {
-                        return false;
-                    }
-                }
+                // Ordinary regions are deliberately erased when a type is
+                // stored in an HM inference variable, and trait selection
+                // defers their constraints to lifetime inference.  Thus a
+                // ParamEnv proof for `Projection<'a>` and the same declared
+                // GAT bound seen through `Projection<'#omitted>` are one
+                // canonical solver response.  Higher-ranked leak checking is
+                // performed while evaluating the candidate bounds above; it
+                // must not be reintroduced here as response identity.
                 for (size_t i = 0; i < lhs.m_types.size(); i++) {
                     if (!types_equal_after_normalization(
                             lhs.m_types[i], rhs.m_types[i]
