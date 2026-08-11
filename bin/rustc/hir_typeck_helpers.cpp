@@ -1874,7 +1874,8 @@ TU_ARMA(Alias, ee) {
             const ::HIR::TypeData* ty,
             t_cb_trait_impl_r callback,
             bool magic_trait_impls /*=true*/,
-            bool search_crate /*=true*/
+            bool search_crate /*=true*/,
+            bool search_bounds /*=true*/
         ) const {
             static ::HIR::PathParams null_params;
             static ::HIR::TraitPath::assoc_list_t null_assoc;
@@ -2121,7 +2122,7 @@ TU_ARMA(Alias, ee) {
     } // TU_MATCH_HDRA
 
     // 1. Search generic params
-    if( find_trait_impls_bound(sp, trait, params, type, callback) )
+    if( search_bounds && find_trait_impls_bound(sp, trait, params, type, callback) )
         return true;
     // 2. Search crate-level impls
     if( !search_crate )
@@ -2134,6 +2135,13 @@ class NextTraitGoalEvaluator {
             NoSolution,
             Ambiguous,
             Proven,
+        };
+
+        enum class CandidateSource {
+            Builtin,
+            ParamEnv,
+            Other,
+            TraitImpl,
         };
 
         enum class OrphanPerspective {
@@ -2154,6 +2162,7 @@ class NextTraitGoalEvaluator {
             const ::HIR::MarkerImpl* marker_impl;
             ::HIR::PathParams marker_impl_params;
             bool auto_builtin;
+            CandidateSource source;
             bool ambiguity_beyond_head = false;
             bool discarded = false;
 
@@ -2162,7 +2171,8 @@ class NextTraitGoalEvaluator {
                 ::HIR::Compare head_match,
                 const ::HIR::MarkerImpl* marker_impl,
                 ::HIR::PathParams marker_impl_params,
-                bool auto_builtin
+                bool auto_builtin,
+                CandidateSource source
             )
                 : impl(::std::move(impl))
                 , head_match(head_match)
@@ -2170,6 +2180,7 @@ class NextTraitGoalEvaluator {
                 , marker_impl(marker_impl)
                 , marker_impl_params(::std::move(marker_impl_params))
                 , auto_builtin(auto_builtin)
+                , source(source)
             {
             }
 
@@ -3169,6 +3180,40 @@ class NextTraitGoalEvaluator {
             m_goal_cache.clear();
         }
 
+        static const ::HIR::PathParams& bounded_hrls(const ImplRef& impl) {
+            if (const auto* bounded = impl.m_data.opt_BoundedPtr()) {
+                return bounded->hrls;
+            }
+            return impl.m_data.as_Bounded().hrls;
+        }
+
+        static const ::HIR::TraitPath::assoc_list_t& bounded_associated(
+            const ImplRef& impl
+        ) {
+            if (const auto* bounded = impl.m_data.opt_BoundedPtr()) {
+                return *bounded->assoc;
+            }
+            return impl.m_data.as_Bounded().assoc;
+        }
+
+        static bool associated_responses_equal(
+            const ::HIR::TraitPath::assoc_list_t& left,
+            const ::HIR::TraitPath::assoc_list_t& right
+        ) {
+            if (left.size() != right.size()) {
+                return false;
+            }
+            auto li = left.begin();
+            auto ri = right.begin();
+            for (; li != left.end(); ++li, ++ri) {
+                if (li->first != ri->first
+                    || li->second.ord(ri->second) != OrdEqual) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         bool is_same_impl(const ImplRef& left, const ImplRef& right) const {
             const auto* li = left.m_data.opt_TraitImpl();
             const auto* ri = right.m_data.opt_TraitImpl();
@@ -3176,7 +3221,33 @@ class NextTraitGoalEvaluator {
                 return li && ri && li->impl == ri->impl && li->impl_params == ri->impl_params;
             }
             return left.get_impl_type(m_crate.m_types) == right.get_impl_type(m_crate.m_types)
-                && left.get_trait_params(m_crate.m_types) == right.get_trait_params(m_crate.m_types);
+                && left.get_trait_params(m_crate.m_types) == right.get_trait_params(m_crate.m_types)
+                && bounded_hrls(left) == bounded_hrls(right)
+                && associated_responses_equal(
+                    bounded_associated(left), bounded_associated(right)
+                );
+        }
+
+        bool param_env_candidate_is_non_global(const Candidate& candidate) const {
+            if (candidate.source != CandidateSource::ParamEnv) {
+                return false;
+            }
+            if (type_has_unknown(candidate.impl.get_impl_type(m_crate.m_types))
+                || params_have_unknown_types(
+                    candidate.impl.get_trait_params(m_crate.m_types)
+                )) {
+                return true;
+            }
+            for (const auto& associated : bounded_associated(candidate.impl)) {
+                if (params_have_unknown_types(
+                        associated.second.source_trait.m_params
+                    )
+                    || params_have_unknown_types(associated.second.aty_params)
+                    || type_has_unknown(associated.second.type)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         void push_candidate(
@@ -3185,7 +3256,8 @@ class NextTraitGoalEvaluator {
             ::HIR::Compare match,
             const ::HIR::MarkerImpl* marker_impl = nullptr,
             ::HIR::PathParams marker_impl_params = {},
-            bool auto_builtin = false
+            bool auto_builtin = false,
+            CandidateSource source = CandidateSource::Other
         ) {
             if (match == ::HIR::Compare::Unequal) {
                 return;
@@ -3193,7 +3265,8 @@ class NextTraitGoalEvaluator {
             auto& candidates = m_frames[frame_index]->candidates;
             for (size_t i = 0; i < candidates.size(); i++) {
                 const bool same_source = candidates[i]->marker_impl == marker_impl
-                    && candidates[i]->auto_builtin == auto_builtin;
+                    && candidates[i]->auto_builtin == auto_builtin
+                    && candidates[i]->source == source;
                 const bool same = marker_impl
                     ? same_source
                         && candidates[i]->marker_impl_params == marker_impl_params
@@ -3208,7 +3281,8 @@ class NextTraitGoalEvaluator {
                 match,
                 marker_impl,
                 ::std::move(marker_impl_params),
-                auto_builtin
+                auto_builtin,
+                source
             ));
         }
 
@@ -3218,30 +3292,34 @@ class NextTraitGoalEvaluator {
             const ::HIR::PathParams& params,
             const ::HIR::TypeData* type
         ) {
-            auto collect = [&](ImplRef impl, ::HIR::Compare match) {
-                push_candidate(
-                    frame_index, ::std::move(impl), match,
-                    nullptr, {}, false
-                );
-                return false;
+            auto collect = [&](CandidateSource source) {
+                return [&, source](ImplRef impl, ::HIR::Compare match) {
+                    push_candidate(
+                        frame_index, ::std::move(impl), match,
+                        nullptr, {}, false, source
+                    );
+                    return false;
+                };
             };
 
-            // Builtin, type-derived, and ParamEnv candidates do not have impl
-            // where-clauses.  Keep their established construction logic, but
-            // never enter the crate impl selector from this assembly pass.
+            // Candidate source is semantically significant: a non-global
+            // ParamEnv predicate shadows builtin and impl candidates in the
+            // next solver.  The legacy lookup flattened these sources into
+            // the same bounded ImplRef, so collect each source independently.
+            m_resolve.find_trait_impls_magic(
+                span(), trait, params, type,
+                collect(CandidateSource::Builtin)
+            );
             m_resolve.find_trait_impls_legacy(
-                span(), trait, params, type, collect, true, false
+                span(), trait, params, type,
+                collect(CandidateSource::Other), false, false, false
+            );
+            m_resolve.find_trait_impls_bound(
+                span(), trait, params, type,
+                collect(CandidateSource::ParamEnv)
             );
 
-            // The old lookup intentionally stops at a trait-object/erased
-            // builtin candidate.  Candidate assembly in the next solver must
-            // still include environment candidates, notably the
-            // blanket `Any` impl that overlaps the builtin dyn-object proof.
             const auto& resolved_type = m_resolve.resolve_type(type);
-            if (resolved_type->is_TraitObject() || resolved_type->is_ErasedType()) {
-                m_resolve.find_trait_impls_bound(span(), trait, params, resolved_type, collect);
-            }
-
             const auto& trait_def = m_crate.get_trait_by_path(span(), trait);
             if (!trait_def.m_is_marker) {
                 // Assemble impl heads without evaluating their where-clauses.
@@ -3275,7 +3353,8 @@ class NextTraitGoalEvaluator {
                                 match,
                                 nullptr,
                                 {},
-                                false
+                                false,
+                                CandidateSource::TraitImpl
                             );
                         }
                         return false;
@@ -3322,7 +3401,8 @@ class NextTraitGoalEvaluator {
                                 match,
                                 &impl,
                                 ::std::move(impl_params),
-                                false
+                                false,
+                                CandidateSource::TraitImpl
                             );
                         }
                         return false;
@@ -3344,7 +3424,8 @@ class NextTraitGoalEvaluator {
                         : ::HIR::Compare::Equal,
                     nullptr,
                     {},
-                    true
+                    true,
+                    CandidateSource::Builtin
                 );
             }
         }
@@ -4686,12 +4767,14 @@ class NextTraitGoalEvaluator {
             push_candidate(
                 frame_index,
                 ImplRef(::std::move(left_params), trait_def, trait, left),
-                ::HIR::Compare::Equal
+                ::HIR::Compare::Equal,
+                nullptr, {}, false, CandidateSource::TraitImpl
             );
             push_candidate(
                 frame_index,
                 ImplRef(::std::move(right_params), trait_def, trait, right),
-                right_match
+                right_match,
+                nullptr, {}, false, CandidateSource::TraitImpl
             );
 
             const auto& candidates = m_frames[frame_index]->candidates;
@@ -4998,6 +5081,29 @@ class NextTraitGoalEvaluator {
                     return emit_forced_ambiguity();
                 }
                 return false;
+            }
+
+            // rustc prefers all ParamEnv responses when any applicable
+            // non-global where-bound exists. In particular, `T:
+            // Pointee<Metadata = ()>` must retain the environment response
+            // instead of normalising through the generic builtin fallback.
+            const bool has_non_global_param_env = ::std::any_of(
+                frame.viable.begin(), frame.viable.end(),
+                [&](const Candidate* candidate) {
+                    return param_env_candidate_is_non_global(*candidate);
+                }
+            );
+            if (has_non_global_param_env) {
+                auto& viable = frame.viable;
+                viable.erase(
+                    ::std::remove_if(
+                        viable.begin(), viable.end(),
+                        [](const Candidate* candidate) {
+                            return candidate->source != CandidateSource::ParamEnv;
+                        }
+                    ),
+                    viable.end()
+                );
             }
 
             // A proven ParamEnv or builtin candidate shadows impl candidates.

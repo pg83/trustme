@@ -335,7 +335,7 @@ public:
     /// Candidate lookup used by the legacy selector and by next-solver
     /// candidate assembly.  Callers performing trait selection must use
     /// `find_trait_impls`, not this assembly primitive.
-    bool find_trait_impls_legacy(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams& params, const ::HIR::TypeData* type, t_cb_trait_impl_r callback, bool magic_trait_impls = true, bool search_crate = true) const;
+    bool find_trait_impls_legacy(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams& params, const ::HIR::TypeData* type, t_cb_trait_impl_r callback, bool magic_trait_impls = true, bool search_crate = true, bool search_bounds = true) const;
 
     /// Evaluate a trait goal using the next-solver candidate model.  Candidate
     /// assembly is exhaustive, impl where-clauses are evaluated recursively,
