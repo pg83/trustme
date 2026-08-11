@@ -2051,6 +2051,66 @@ namespace {
             return rv;
         }
 
+        struct ExplicitInputLifetimeCollector: public HIR::Visitor {
+            HIR::LifetimeRef lifetime;
+            unsigned int count = 0;
+            unsigned int nested_hrtb_depth = 0;
+
+            ExplicitInputLifetimeCollector(HIR::TypeInterner& types)
+                : HIR::Visitor(nullptr, types)
+            {
+            }
+
+            void add_lifetime(const HIR::LifetimeRef& lft) {
+                // Unknown/inferred input lifetimes are counted after the main
+                // visitor creates their binder entries.
+                if (lft.binding == HIR::LifetimeRef::UNKNOWN || lft.binding == HIR::LifetimeRef::INFER) {
+                    return;
+                }
+                if (nested_hrtb_depth != 0 && lft.is_hrl()) {
+                    return;
+                }
+                count += 1;
+                if (count == 1) {
+                    lifetime = lft;
+                }
+            }
+
+            void visit_path_params(HIR::PathParams& pp) override {
+                for (const auto& lft : pp.m_lifetimes) {
+                    add_lifetime(lft);
+                }
+                HIR::Visitor::visit_path_params(pp);
+            }
+
+            void visit_trait_path(HIR::TraitPath& trait) override {
+                const bool nested_hrtb = trait.m_hrtbs && !trait.m_hrtbs->m_lifetimes.empty();
+                nested_hrtb_depth += nested_hrtb;
+                HIR::Visitor::visit_trait_path(trait);
+                nested_hrtb_depth -= nested_hrtb;
+            }
+
+            void visit_type(HIR::TypeRef& ty) override {
+                if (const auto* e = ty->opt_Borrow()) {
+                    add_lifetime(e->lifetime);
+                }
+                if (const auto* e = ty->opt_TraitObject()) {
+                    add_lifetime(e->m_lifetime);
+                }
+                if (const auto* e = ty->opt_ErasedType()) {
+                    for (const auto& lft : e->m_lifetime_bounds) {
+                        add_lifetime(lft);
+                    }
+                }
+
+                const auto* function = ty->opt_Function();
+                const bool nested_hrtb = function && !function->hrls.m_lifetimes.empty();
+                nested_hrtb_depth += nested_hrtb;
+                HIR::Visitor::visit_type(ty);
+                nested_hrtb_depth -= nested_hrtb;
+            }
+        };
+
     public:
         void visit_lifetime(const Span& sp, HIR::LifetimeRef& lft) {
             if (!lft.is_param()) {
@@ -2247,7 +2307,6 @@ namespace {
         }
 
         void visit_type(::HIR::TypeRef& ty) override {
-            static const HIR::LifetimeRef lft_hrtb = ::HIR::LifetimeRef(HIR::GenericRef(RcString(), HIR::GENERIC_Hrtb, 0).binding);
             static Span _sp;
             const Span& sp = _sp;
 
@@ -2272,16 +2331,27 @@ namespace {
                 m_current_lifetime.push_back(nullptr);
                 set_params(&e->hrls, HIR::GENERIC_Hrtb);
                 auto saved_create = m_create_elided;
+                const auto first_elided_lifetime_idx = e->hrls.m_lifetimes.size();
+                ExplicitInputLifetimeCollector input_lifetimes(crate.m_types);
+                for (auto& t : e->m_arg_types) {
+                    input_lifetimes.visit_type(t);
+                }
                 m_create_elided = true;
                 for (auto& t : e->m_arg_types) {
                     this->visit_type(t);
                 }
                 m_create_elided = false;
-                if (e->hrls.m_lifetimes.size() == 1) {
+                const auto elided_lifetime_count = e->hrls.m_lifetimes.size() - first_elided_lifetime_idx;
+                HIR::LifetimeRef output_lifetime;
+                if (input_lifetimes.count + elided_lifetime_count == 1) {
+                    output_lifetime = input_lifetimes.count == 1
+                        ? input_lifetimes.lifetime
+                        : HIR::LifetimeRef(HIR::GENERIC_Hrtb * 256 + first_elided_lifetime_idx);
                     m_current_lifetime.pop_back();
-                    m_current_lifetime.push_back(&lft_hrtb);
+                    m_current_lifetime.push_back(&output_lifetime);
                 }
                 this->visit_type(e->m_rettype);
+                m_current_lifetime.pop_back();
                 m_create_elided = saved_create;
             }
             if (auto* e = data.opt_TraitObject()) {
@@ -2704,27 +2774,13 @@ namespace {
             const Span sp;
             TRACE_FUNCTION_FR(tp, tp);
 
-            auto has_apply_elision = [](::HIR::TraitPath& tp, bool& created_hrls) -> bool {
-                bool was_paren_trait_object = tp.m_hrtbs && tp.m_hrtbs->m_lifetimes.size() >= 1 && tp.m_hrtbs->m_lifetimes.back().m_name == "#apply_elision";
-                created_hrls = false;
-                if (was_paren_trait_object) {
-                    if (!tp.m_hrtbs) {
-                        tp.m_hrtbs = std::make_unique<HIR::GenericParams>();
-                        created_hrls = true;
-                    }
-                    if (was_paren_trait_object) {
-                        tp.m_hrtbs->m_lifetimes.pop_back();
-                    }
-                    return true;
-                } else {
-                    return false;
-                }
-            };
-
-            // Handle a hack from lowering pass added when the path is `Foo()`
-            bool created_hrls = false;
-            if (has_apply_elision(tp, created_hrls)) {
+            if (tp.m_lifetime_elision) {
+                assert(tp.m_hrtbs);
+                tp.m_lifetime_elision = false;
                 m_current_lifetime.push_back(nullptr);
+                const auto first_elided_lifetime_idx = tp.m_hrtbs->m_lifetimes.size();
+                ExplicitInputLifetimeCollector input_lifetimes(crate.m_types);
+                input_lifetimes.visit_path_params(tp.m_path.m_params);
 
                 // Visit the trait args (as inputs)
                 auto saved_params = push_params(tp.m_hrtbs.get(), 3);
@@ -2735,65 +2791,12 @@ namespace {
                     DEBUG("for " << tp.m_hrtbs->fmt_args());
                 }
 
-#if 1
                 HIR::LifetimeRef lft;
-                if (tp.m_hrtbs && tp.m_hrtbs->m_lifetimes.size() == 1) {
-                    lft = HIR::LifetimeRef(/*tp.m_hrtbs->m_lifetimes[0].m_name,*/ 3 * 256 + 0);
-                }
-                if (lft == HIR::LifetimeRef()) {
-                    // If there wasn't an elided lifetime in the input, then get a lifetime from that as the output.
-                    // - If there's only one lifetime in `tp.m_path`, use that
-                    struct V: public HIR::Visitor {
-                        HIR::LifetimeRef out;
-                        unsigned n_found = 0;
-
-                        V(HIR::TypeInterner& types)
-                            : HIR::Visitor(nullptr, types)
-                        {
-                        }
-
-                        void add_lifetime(const HIR::LifetimeRef& lft) {
-                            if (lft.is_hrl()) {
-                                // HRL - ignore
-                                return;
-                            }
-                            n_found += 1;
-                            out = lft;
-                        }
-
-                        void visit_path_params(HIR::PathParams& pp) override {
-                            for (auto& lft : pp.m_lifetimes) {
-                                add_lifetime(lft);
-                            }
-
-                            HIR::Visitor::visit_path_params(pp);
-                        }
-
-                        void visit_type(HIR::TypeRef& ty) override {
-                            if (const auto* tep = ty->opt_Borrow()) {
-                                add_lifetime(tep->lifetime);
-                            }
-                            if (const auto* tep = ty->opt_Function()) {
-                                // Push HRLs?
-                                (void)tep;
-                            }
-                            if (const auto* tep = ty->opt_TraitObject()) {
-                                add_lifetime(tep->m_lifetime);
-                                // Push HRLs?
-                            }
-                            if (auto* tep = ty->opt_ErasedType()) {
-                                for (const auto& lft : tep->m_lifetime_bounds) {
-                                    add_lifetime(lft);
-                                }
-                            }
-                            HIR::Visitor::visit_type(ty);
-                        }
-                    } v(crate.m_types);
-
-                    v.visit_path_params(tp.m_path.m_params);
-                    if (v.n_found == 1) {
-                        lft = v.out;
-                    }
+                const auto elided_lifetime_count = tp.m_hrtbs->m_lifetimes.size() - first_elided_lifetime_idx;
+                if (input_lifetimes.count + elided_lifetime_count == 1) {
+                    lft = input_lifetimes.count == 1
+                        ? input_lifetimes.lifetime
+                        : HIR::LifetimeRef(HIR::GENERIC_Hrtb * 256 + first_elided_lifetime_idx);
                 }
                 if (lft != HIR::LifetimeRef()) {
                     m_current_lifetime.push_back(&lft);
@@ -2811,8 +2814,6 @@ namespace {
                     }
                     m_current_lifetime.pop_back();
                 }
-#endif
-
                 saved_params.restore();
 
                 // Fix the source paths in ATYs
@@ -2880,7 +2881,6 @@ namespace {
                 auto fix_source = [&](HIR::GenericPath& gp, const RcString& name) {
                     //fix_path(gp);
                     DEBUG("[fix_source] >> " << gp);
-                    // NOTE: The HRLs of this path have been edited! (they were `<'#apply_elision,>`, now blank)
                     if (gp.equals_ignoring_regions(tp.m_path)) {
                         gp = tp.m_path.clone();
                         return;
@@ -2904,23 +2904,15 @@ namespace {
                     fix_source(assoc.second.source_trait, assoc.first);
                 }
 
-                // Set the output lifetime (if present)
-                auto output_lifetime = HIR::LifetimeRef(3 * 256 + 0);
-                if (tp.m_hrtbs->m_lifetimes.size() == 1) {
+                if (lft != HIR::LifetimeRef()) {
                     m_current_lifetime.pop_back();
-                    m_current_lifetime.push_back(&output_lifetime);
-                } else {
-                    // No output lifetime
+                    m_current_lifetime.push_back(&lft);
                 }
 
                 // Visit the rest (associated types mostly), using the output lifetime from above
                 ::HIR::Visitor::visit_trait_path(tp);
 
                 m_current_lifetime.pop_back();
-
-                if (created_hrls && tp.m_hrtbs->is_empty()) {
-                    tp.m_hrtbs.reset();
-                }
             } else {
                 ::HIR::Visitor::visit_trait_path(tp);
             }
@@ -3051,6 +3043,10 @@ namespace {
             visit_params(item.m_params);
 
             auto first_elided_lifetime_idx = item.m_params.m_lifetimes.size();
+            ExplicitInputLifetimeCollector input_lifetimes(crate.m_types);
+            for (auto& arg : item.m_args) {
+                input_lifetimes.visit_type(arg.second);
+            }
 
             // TODO: Add lifetime bounds from argument types!
             // - While visiting the argument types, find path types and inherit the lifetime bounds
@@ -3088,81 +3084,13 @@ namespace {
                     m_value_self_type = m_resolve.m_self_type;
                 }
             }
-            // - OR, look for only one elided lifetime
             if (elided_output_lifetime == HIR::LifetimeRef()) {
-                if (item.m_params.m_lifetimes.size() == first_elided_lifetime_idx + 1) {
-                    elided_output_lifetime = HIR::LifetimeRef(256 + first_elided_lifetime_idx);
-                    DEBUG("Elided 'only");
-                }
-            }
-            if (elided_output_lifetime == HIR::LifetimeRef()) {
-                if (item.m_params.m_lifetimes.size() == 1) {
-                    elided_output_lifetime = HIR::LifetimeRef(256 + 0);
-                    DEBUG("Elided 'single");
-                }
-            }
-            // TODO: Search for an explicit lifetime in the input, and use that if there was only one?
-            if (elided_output_lifetime == HIR::LifetimeRef()) {
-                struct V: public HIR::Visitor {
-                    HIR::LifetimeRef out;
-                    unsigned n_found = 0;
-
-                    V(HIR::TypeInterner& types)
-                        : HIR::Visitor(nullptr, types)
-                    {
-                    }
-
-                    void add_lifetime(const HIR::LifetimeRef& lft) {
-                        if (lft.is_hrl()) {
-                            // HRL - ignore
-                            return;
-                        }
-                        n_found += 1;
-                        out = lft;
-                    }
-
-                    void visit_path_params(HIR::PathParams& pp) override {
-                        for (auto& lft : pp.m_lifetimes) {
-                            add_lifetime(lft);
-                        }
-
-                        HIR::Visitor::visit_path_params(pp);
-                    }
-
-                    void visit_type(HIR::TypeRef& ty) override {
-                        if (const auto* tep = ty->opt_Borrow()) {
-                            add_lifetime(tep->lifetime);
-                        }
-                        if (const auto* tep = ty->opt_Function()) {
-                            // Push HRLs?
-                            (void)tep;
-                        }
-                        if (const auto* tep = ty->opt_TraitObject()) {
-                            add_lifetime(tep->m_lifetime);
-                            // Push HRLs?
-                        }
-                        if (const auto* tep = ty->opt_ErasedType()) {
-                            for (const auto& lft : tep->m_lifetime_bounds) {
-                                add_lifetime(lft);
-                            }
-                        }
-                        HIR::Visitor::visit_type(ty);
-                    }
-                } v(crate.m_types);
-
-                for (auto& a : item.m_args) {
-                    v.visit_type(a.second);
-                }
-                if (v.n_found == 1 && v.out != HIR::LifetimeRef::new_static()) {
-                    elided_output_lifetime = v.out;
-                    DEBUG("Explicit 'single (recurse) - " << elided_output_lifetime);
-                }
-            }
-            if (elided_output_lifetime == HIR::LifetimeRef()) {
-                // TODO: If the only argument is a `'static`, use that? (or if there's only one borrow in the arguments, use that)
-                if (item.m_args.size() == 1 && item.m_args.front().second->is_Borrow()) {
-                    elided_output_lifetime = item.m_args.front().second->as_Borrow().lifetime;
-                    DEBUG("Explicit 'single - " << elided_output_lifetime);
+                const auto elided_lifetime_count = item.m_params.m_lifetimes.size() - first_elided_lifetime_idx;
+                if (input_lifetimes.count + elided_lifetime_count == 1) {
+                    elided_output_lifetime = input_lifetimes.count == 1
+                        ? input_lifetimes.lifetime
+                        : HIR::LifetimeRef(HIR::GENERIC_Item * 256 + first_elided_lifetime_idx);
+                    DEBUG("Single input lifetime - " << elided_output_lifetime);
                 }
             }
             // If present, set it (push to the stack)

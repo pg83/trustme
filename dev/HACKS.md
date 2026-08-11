@@ -4,9 +4,9 @@
 
 ## Самые опасные места
 
-1. HRTB/lifetime lowering всё ещё опирается на sentinel и эвристики.
+1. HRTB/lifetime lowering всё ещё содержит локальные эвристики.
 
-   Кластер включает sentinel `#apply_elision`, синтетический `Self: Trait`, выбор единственного lifetime trait object, passthrough отсутствующих lifetime-параметров и замену lifetime в impl-методах.
+   Кластер включает синтетический `Self: Trait`, выбор lifetime trait object, passthrough отсутствующих lifetime-параметров и замену lifetime в impl-методах.
 
 2. Trait solver использует глобальное «не знаю — значит fuzzy».
 
@@ -38,8 +38,8 @@
 | Resolver | `resolve_common.cpp:98,543`; `resolve_main_bindings.cpp:411,641,1512,1702,1760,1851,1860,2681,3792,3858,3891,4096` | Синтетические `=crate`, anon-module и primitive-module paths. |
 | Decorators | `synext_decorator.cpp:1558,2478,2615,2975` | Повторный обход anon modules и частные path/zero-sized-array workarounds. |
 | HIR layout | `hir_expr.h:583` | У `ExprNode_Emplace::Noop` не найден producer, но consumers ещё существуют. |
-| HIR lowering | `hir_from_ast.cpp:176,562,589,1620,3094,3689` | Self/HRTB sentinels, синтетический trait bound и null HIR pointer как discriminator. |
-| HIR conversion | `hir_conv_main_bindings.cpp:657,949,1875,2372,2381,2724,3244,4144,4382` | Lifetime heuristics, `#` в enum path, approximate DST, privacy bypass и hardcoded trait lookup. |
+| HIR lowering | `hir_from_ast.cpp:176,562,1619,3126,3721` | Синтетические Self paths/trait bound и null HIR pointer как discriminator. |
+| HIR conversion | `hir_conv_main_bindings.cpp:657,949,1875,2442,3172,4074,4384` | Trait-object lifetime heuristic, `#` в enum path, approximate DST, privacy bypass и hardcoded trait lookup. |
 | HIR expansion | `hir_expand_main_bindings.cpp:114,4555,6869` | Closure Copy prepass, placeholder fallback и generic-array size shortcut. |
 | HIR identity | `hir_hir.cpp:203,737`; `hir_type.cpp:1475,1481,1490` | Const ordering и fuzzy type relation. |
 | Metadata | `hir_main_bindings.cpp:1076` | Empty crate-name rewrite остаётся compatibility debt. |

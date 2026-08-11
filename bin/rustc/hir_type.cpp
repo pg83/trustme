@@ -533,6 +533,7 @@ namespace {
     bool exact_trait_path_equal(const TraitPath& a, const TraitPath& b) {
         if (!exact_optional_generic_params_equal(a.m_hrtbs, b.m_hrtbs)
             || !exact_generic_path_equal(a.m_path, b.m_path)
+            || a.m_lifetime_elision != b.m_lifetime_elision
             || a.m_trait_ptr != b.m_trait_ptr
             || a.m_type_bounds.size() != b.m_type_bounds.size()
             || a.m_trait_bounds.size() != b.m_trait_bounds.size()) {

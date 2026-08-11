@@ -555,6 +555,7 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
     }
 
     ::HIR::TraitPath rv{tpl.m_hrtbs ? box$(tpl.m_hrtbs->clone()) : nullptr, this->monomorph_genericpath(sp, tpl.m_path, allow_infer, true), {}, {}, tpl.m_trait_ptr};
+    rv.m_lifetime_elision = tpl.m_lifetime_elision;
 
     for (const auto& assoc : tpl.m_type_bounds) {
         rv.m_type_bounds.insert(::std::make_pair(assoc.first, this->monomorph_tp_aty_equal(sp, assoc.second, allow_infer)));

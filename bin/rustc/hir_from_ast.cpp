@@ -586,14 +586,13 @@ namespace {
         {},
         nullptr
     };
-    // HACK: If the path is from `Fn(Foo)` flag it for lifetime elision.
-    // - Matching hack in `lifetime_elision.cpp` `visit_traitpath`
+    // Parenthesised Fn-trait syntax follows function lifetime-elision rules.
     if (!rv.m_hrtbs && path.nodes().back().args().m_is_paren) {
         HIR::GenericParams params;
         rv.m_hrtbs = box$(params);
     }
     if (rv.m_hrtbs && path.nodes().back().args().m_is_paren) {
-        rv.m_hrtbs->m_lifetimes.push_back(HIR::LifetimeDef{"#apply_elision"});
+        rv.m_lifetime_elision = true;
     }
 
     if (rv.m_hrtbs) {

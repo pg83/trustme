@@ -2787,6 +2787,7 @@ public:
 
     void serialise_traitpath(const ::HIR::TraitPath& path) {
         auto _ = m_out.open_object("HIR::TraitPath");
+        assert(!path.m_lifetime_elision);
         m_out.write_bool(static_cast<bool>(path.m_hrtbs));
         if (path.m_hrtbs) {
             serialise_generics(*path.m_hrtbs);

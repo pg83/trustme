@@ -360,6 +360,9 @@ namespace HIR {
         GenericPath m_path;
         assoc_list_t m_type_bounds;
         ::std::map<RcString, AtyBound> m_trait_bounds;
+        // Parenthesised Fn-trait syntax uses function lifetime-elision rules.
+        // This is consumed and cleared by ConvertHIR_LifetimeElision.
+        bool m_lifetime_elision = false;
 
         const ::HIR::Trait* m_trait_ptr;
 

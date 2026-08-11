@@ -21,13 +21,14 @@ namespace {
         std::unique_ptr<HIR::GenericParams> hrtbs;
         if (apply_elision) {
             hrtbs = std::make_unique<HIR::GenericParams>();
-            hrtbs->m_lifetimes.push_back(HIR::LifetimeDef{RcString::new_interned("#apply_elision")});
         }
 
         std::vector<RcString> components;
         components.push_back(RcString::new_interned(name));
         HIR::GenericPath path(HIR::SimplePath(RcString::new_interned("test"), std::move(components)));
-        return HIR::TraitPath(std::move(hrtbs), std::move(path));
+        HIR::TraitPath trait(std::move(hrtbs), std::move(path));
+        trait.m_lifetime_elision = apply_elision;
+        return trait;
     }
 }
 

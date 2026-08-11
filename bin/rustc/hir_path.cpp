@@ -271,6 +271,7 @@ Ordering HIR::GenericPath::ord(const HIR::GenericPath& x) const {
 
 ::HIR::TraitPath HIR::TraitPath::clone() const {
     ::HIR::TraitPath rv{m_hrtbs ? box$(m_hrtbs->clone()) : nullptr, m_path.clone(), {}, {}, m_trait_ptr};
+    rv.m_lifetime_elision = m_lifetime_elision;
 
     for (const auto& assoc : m_type_bounds) {
         rv.m_type_bounds.insert(::std::make_pair(assoc.first, assoc.second.clone()));
