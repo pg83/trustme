@@ -101,6 +101,18 @@ ident_ordering_test = program(
     output="$(B)/tst/unit/ident_ordering_test",
 )
 
+hir_trait_path_ordering_test = program(
+    name="hir_trait_path_ordering_test",
+    srcs=[
+        "$(S)/tst/unit/test_hir_trait_path_ordering.cpp",
+        "$(S)/bin/rustc/hir_path.cpp",
+        "$(S)/bin/rustc/rc_string.cpp",
+    ],
+    cxxflags=["-ffunction-sections", "-fdata-sections"],
+    ldflags=["-Wl,--gc-sections"],
+    output="$(B)/tst/unit/hir_trait_path_ordering_test",
+)
+
 # cargo: Cargo-compatible package resolver and mrustc build driver, written in
 # Go. Dependencies are checked in under bin/cargo/vendor, so this node is
 # offline. Rust 1.90 source adjustments belong to std_src below; Cargo has no
@@ -323,6 +335,18 @@ unit_tests.append(command(
         [*TEST_TIMEOUT, "sh", "-c", "> $(B)/tst/unit/ident_ordering.stamp"],
     ],
     deps=[ident_ordering_test],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
+    name="unit_hir_trait_path_ordering",
+    inputs=["$(S)/tst/unit/test_hir_trait_path_ordering.cpp"],
+    outputs=["$(B)/tst/unit/hir_trait_path_ordering.stamp"],
+    cmd=[
+        [*TEST_TIMEOUT, "$(B)/tst/unit/hir_trait_path_ordering_test"],
+        [*TEST_TIMEOUT, "sh", "-c", "> $(B)/tst/unit/hir_trait_path_ordering.stamp"],
+    ],
+    deps=[hir_trait_path_ordering_test],
     descr="UT",
     color="green",
 ))

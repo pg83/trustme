@@ -4,11 +4,9 @@
 
 ## Самые опасные места
 
-1. HRTB/lifetime relation местами математически некорректна.
+1. HRTB/lifetime lowering всё ещё опирается на sentinel и эвристики.
 
-   В [hir_path.cpp](/home/pg/monorepo/trustme/bin/rustc/hir_path.cpp:326) `TraitPath::ord` считает два пути равными, если хотя бы у одного есть `#apply_elision`. Такое равенство нетранзитивно и нарушает требования `std::map/std::set`.
-
-   Тот же кластер включает sentinel `#apply_elision`, синтетический `Self: Trait`, выбор единственного lifetime trait object, passthrough отсутствующих lifetime-параметров и замену lifetime в impl-методах.
+   Кластер включает sentinel `#apply_elision`, синтетический `Self: Trait`, выбор единственного lifetime trait object, passthrough отсутствующих lifetime-параметров и замену lifetime в impl-методах.
 
 2. Trait solver использует глобальное «не знаю — значит fuzzy».
 
@@ -43,7 +41,7 @@
 | HIR lowering | `hir_from_ast.cpp:176,562,589,1620,3094,3689` | Self/HRTB sentinels, синтетический trait bound и null HIR pointer как discriminator. |
 | HIR conversion | `hir_conv_main_bindings.cpp:657,949,1875,2372,2381,2724,3244,4144,4382` | Lifetime heuristics, `#` в enum path, approximate DST, privacy bypass и hardcoded trait lookup. |
 | HIR expansion | `hir_expand_main_bindings.cpp:114,4555,6869` | Closure Copy prepass, placeholder fallback и generic-array size shortcut. |
-| HIR identity | `hir_hir.cpp:203,737`; `hir_path.cpp:326`; `hir_type.cpp:1475,1481,1490` | Const ordering, нетранзитивный HRTB order и fuzzy type relation. |
+| HIR identity | `hir_hir.cpp:203,737`; `hir_type.cpp:1475,1481,1490` | Const ordering и fuzzy type relation. |
 | Metadata | `hir_main_bindings.cpp:1076` | Empty crate-name rewrite остаётся compatibility debt. |
 | Typeck common | `hir_typeck_common.cpp:503,515,753,761` | Erasure и passthrough lifetime вместо явных binders. |
 | Typeck solver | `hir_typeck_expr_cs.cpp:932,4991,5924,5938,6713,7565,8025,8169,8349`; header `:175` | Global fuzzy relation, operator result=LHS и arbitrary ivar/associated-type fallbacks. |

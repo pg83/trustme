@@ -323,15 +323,6 @@ bool HIR::TraitPath::equals_ignoring_regions(const TraitPath& x) const {
 }
 
 Ordering HIR::TraitPath::ord(const TraitPath& x) const {
-    // HACK! if either of the HRLs are tagged as not having been un-elided, then assume they're equal
-    // - Mostly a workaround for `lifetime_elision.cpp` fixing TraitPath ATY origins
-    auto is_elision = [](const HIR::TraitPath& gp) {
-        return gp.m_hrtbs && gp.m_hrtbs->m_lifetimes.size() >= 1 && gp.m_hrtbs->m_lifetimes.back().m_name == "#apply_elision";
-    };
-    if (is_elision(*this) || is_elision(x)) {
-        return OrdEqual;
-    }
-
     // NOTE: An empty set is treated as the same as none
     if (g_compare_hrls) {
         ORD(m_hrtbs.get() && !m_hrtbs->is_empty(), x.m_hrtbs.get() && !x.m_hrtbs->is_empty());
