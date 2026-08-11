@@ -44,7 +44,7 @@
 | Resolver | `resolve_common.cpp:98,543`; `resolve_main_bindings.cpp:411,641,1512,1702,1760,1851,1860,2681,3792,3858,3891,4096` | Синтетические `=crate`, anon-module и primitive-module paths. |
 | Decorators | `synext_decorator.cpp:1558,2478,2615,2975` | Повторный обход anon modules и частные path/zero-sized-array workarounds. |
 | HIR layout | `hir_expr.h:583` | У `ExprNode_Emplace::Noop` не найден producer, но consumers ещё существуют. |
-| HIR lowering | `hir_from_ast.cpp:176,562,589,590,1620,3046,3636` | Self/HRTB sentinels, синтетический trait bound и null HIR pointer как discriminator. |
+| HIR lowering | `hir_from_ast.cpp:176,562,589,1620,3094,3689` | Self/HRTB sentinels, синтетический trait bound и null HIR pointer как discriminator. |
 | HIR conversion | `hir_conv_main_bindings.cpp:657,949,1875,2372,2381,2724,3244,4144,4382` | Lifetime heuristics, `#` в enum path, approximate DST, privacy bypass и hardcoded trait lookup. |
 | HIR expansion | `hir_expand_main_bindings.cpp:114,4555,6869` | Closure Copy prepass, placeholder fallback и generic-array size shortcut. |
 | HIR identity | `hir_hir.cpp:203,737`; `hir_path.cpp:326`; `hir_type.cpp:1475,1481,1490` | Const ordering, нетранзитивный HRTB order и fuzzy type relation. |
@@ -61,4 +61,4 @@
 | Enumeration | `trans_main_bindings.cpp:1595,2449,2738,3117` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующий приоритет — macro hygiene; исправление строго unit-first.
+Следующий unit-first срез macro hygiene — устранить несогласованность `Ident::operator==`/`operator<`: equality игнорирует hygiene, ordering учитывает.

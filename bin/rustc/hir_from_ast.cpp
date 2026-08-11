@@ -2795,9 +2795,46 @@ public:
 struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
     ::HIR::ExprNodeP m_rv;
 
+    struct LoopLabel {
+        Ident source;
+        RcString lowered;
+    };
+    ::std::vector<LoopLabel> m_loop_labels;
+    unsigned m_next_loop_label = 0;
+
     // Used to track if a closure is a generator or a normal closure
     // - They have different HIR node types
     bool m_has_yield = false;
+
+    RcString enter_loop_label(const Ident& source) {
+        if (source.name == "") {
+            return {};
+        }
+        auto lowered = RcString::new_interned(FMT("@label" << m_next_loop_label++));
+        m_loop_labels.push_back(LoopLabel{source, lowered});
+        return lowered;
+    }
+
+    void leave_loop_label(const RcString& lowered) {
+        if (lowered == "") {
+            return;
+        }
+        assert(!m_loop_labels.empty());
+        assert(m_loop_labels.back().lowered == lowered);
+        m_loop_labels.pop_back();
+    }
+
+    RcString resolve_loop_label(const Span& sp, const Ident& target) const {
+        if (target.name == "") {
+            return {};
+        }
+        for (auto it = m_loop_labels.rbegin(); it != m_loop_labels.rend(); ++it) {
+            if (it->source.name == target.name && it->source.hygiene.is_visible(target.hygiene)) {
+                return it->lowered;
+            }
+        }
+        ERROR(sp, E0000, "Could not find loop label '" << target.name);
+    }
 
     ::HIR::ExprNodeP lower(::AST::ExprNodeP& ep) {
         assert(ep);
@@ -2815,12 +2852,23 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
         }
     }
 
+    ::HIR::ExprNodeP lower_isolated(::AST::ExprNodeP& ep) {
+        ::std::vector<LoopLabel> outer_labels;
+        outer_labels.swap(m_loop_labels);
+        auto rv = lower(ep);
+        assert(m_loop_labels.empty());
+        outer_labels.swap(m_loop_labels);
+        return rv;
+    }
+
     virtual void visit(::AST::ExprNode_Block& v) override {
+        auto label = enter_loop_label(v.m_label);
         auto rv = g_crate_ptr->m_pool->make<::HIR::ExprNode_Block>(v.span());
         for (auto& n : v.m_nodes) {
             ASSERT_BUG(v.span(), n.node, "NULL node encountered in block");
             rv->m_nodes.push_back(lower(n.node));
         }
+        leave_loop_label(label);
         // If the final node wasn't a statement (there wasn't a semicolon on it), then make that the value
         if (!rv->m_nodes.empty() && !v.m_nodes.back().has_semicolon) {
             rv->m_value_node = mv$(rv->m_nodes.back());
@@ -2842,14 +2890,13 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
                 break;
         }
 
-        if (v.m_label != "") {
+        if (label != "") {
             if (rv->m_value_node) {
-                // TODO: Hygine (resolve should turn loop labels into loop indexes)
-                auto* break_node = g_crate_ptr->m_pool->make<::HIR::ExprNode_LoopControl>(v.span(), v.m_label.name, /*cont=*/false, ::std::move(rv->m_value_node));
+                auto* break_node = g_crate_ptr->m_pool->make<::HIR::ExprNode_LoopControl>(v.span(), label, /*cont=*/false, ::std::move(rv->m_value_node));
                 rv->m_nodes.push_back(HIR::ExprNodeP(break_node));
                 rv->m_value_node.reset();
             }
-            auto* loop = g_crate_ptr->m_pool->make<::HIR::ExprNode_Loop>(v.span(), v.m_label.name, HIR::ExprNodeP(rv));
+            auto* loop = g_crate_ptr->m_pool->make<::HIR::ExprNode_Loop>(v.span(), label, HIR::ExprNodeP(rv));
             loop->m_require_label = true;
             m_rv.reset(loop);
         } else {
@@ -2868,13 +2915,13 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
     }
 
     virtual void visit(::AST::ExprNode_AsyncBlock& v) override {
-        m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_AsyncBlock>(v.span(), lower(v.m_inner), v.m_is_move));
+        m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_AsyncBlock>(v.span(), lower_isolated(v.m_inner), v.m_is_move));
     }
 
     virtual void visit(::AST::ExprNode_GeneratorBlock& v) override {
         // TODO: Wrap with something that provides an impl of Iterator
         // - `::core::iter::from_coroutine`
-        m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Generator>(v.span(), g_crate_ptr->m_types.infer(), lower(v.m_inner), v.m_is_move, false));
+        m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Generator>(v.span(), g_crate_ptr->m_types.infer(), lower_isolated(v.m_inner), v.m_is_move, false));
         m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_CallPath>(v.span(), HIR::SimplePath(g_core_crate, {"iter", "sources", "from_coroutine", "from_coroutine"}), make_vec1(mv$(m_rv))));
     }
 
@@ -2947,7 +2994,8 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
             case ::AST::ExprNode_Flow::BREAK: {
                 auto val = v.m_value ? lower(v.m_value) : ::HIR::ExprNodeP();
                 ASSERT_BUG(v.span(), !(v.m_type == ::AST::ExprNode_Flow::CONTINUE && val), "Continue with a value isn't allowed");
-                m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_LoopControl>(v.span(), v.m_target.name, (v.m_type == ::AST::ExprNode_Flow::CONTINUE), mv$(val)));
+                auto target = resolve_loop_label(v.span(), v.m_target);
+                m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_LoopControl>(v.span(), mv$(target), (v.m_type == ::AST::ExprNode_Flow::CONTINUE), mv$(val)));
             } break;
             case ::AST::ExprNode_Flow::YEET:
                 BUG(v.span(), "do yeet should have been desugared");
@@ -3286,7 +3334,10 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
     }
 
     virtual void visit(::AST::ExprNode_Loop& v) override {
-        m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Loop>(v.span(), v.m_label.name, lower(v.m_code)));
+        auto label = enter_loop_label(v.m_label);
+        auto code = lower(v.m_code);
+        leave_loop_label(label);
+        m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Loop>(v.span(), mv$(label), mv$(code)));
     }
 
     void visit(::AST::ExprNode_For& v) override {
@@ -3307,10 +3358,12 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
 
     virtual void visit(::AST::ExprNode_While& v) override {
         // Desugar to `loop { match () { _ if ... => { body }, _ => break, } }`
+        auto label = enter_loop_label(v.m_label);
         ::std::vector<::HIR::ExprNode_Match::Arm> arms;
         arms.push_back(::HIR::ExprNode_Match::Arm{make_vec1(::HIR::Pattern()), iflet_to_guards(v.m_conditions), lower(v.m_code)});
         arms.push_back(::HIR::ExprNode_Match::Arm{make_vec1(::HIR::Pattern()), {}, HIR::ExprNodeP(g_crate_ptr->m_pool->make<HIR::ExprNode_LoopControl>(v.span(), "", false, nullptr))});
-        m_rv.reset(g_crate_ptr->m_pool->make<HIR::ExprNode_Loop>(v.span(), v.m_label.name, HIR::ExprNodeP(g_crate_ptr->m_pool->make<HIR::ExprNode_Match>(v.span(), HIR::ExprNodeP(g_crate_ptr->m_pool->make<HIR::ExprNode_Tuple>(v.span(), ::std::vector<HIR::ExprNodeP>())), std::move(arms)))));
+        leave_loop_label(label);
+        m_rv.reset(g_crate_ptr->m_pool->make<HIR::ExprNode_Loop>(v.span(), mv$(label), HIR::ExprNodeP(g_crate_ptr->m_pool->make<HIR::ExprNode_Match>(v.span(), HIR::ExprNodeP(g_crate_ptr->m_pool->make<HIR::ExprNode_Tuple>(v.span(), ::std::vector<HIR::ExprNodeP>())), std::move(arms)))));
     }
 
     virtual void visit(::AST::ExprNode_Match& v) override {
@@ -3443,7 +3496,7 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
 
         auto orig_has_yield = m_has_yield;
         m_has_yield = false;
-        auto inner = lower(v.m_code);
+        auto inner = lower_isolated(v.m_code);
         auto has_yield = m_has_yield;
         m_has_yield = orig_has_yield;
 
