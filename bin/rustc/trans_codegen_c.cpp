@@ -12,8 +12,8 @@
 #include "trans_target.h"
 #include "trans_allocator.h"
 #include <iomanip>
+#include <string_view>
 #include "target_version.h"
-#include "string_view.h"
 
 namespace {
     struct FmtShell {
@@ -8152,7 +8152,7 @@ namespace {
             }
             // -- Platform Intrinsics (and SIMD) --
             else if (name.compare(0, 9, "platform:") == 0 || name.compare(0, 5, "simd_") == 0) {
-                auto name_strip = ::stdx::string_view(name.c_str() + (name.compare(0, 9, "platform:") == 0 ? 9 : 0));
+                auto name_strip = ::std::string_view(name.c_str() + (name.compare(0, 9, "platform:") == 0 ? 9 : 0));
 
                 struct SimdInfo {
                     unsigned count;

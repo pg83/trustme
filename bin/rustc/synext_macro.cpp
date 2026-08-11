@@ -13,6 +13,7 @@
 #include "hir_asm.h"
 #include "trans_target.h"
 #include <cctype>
+#include <string_view>
 #include "expand_cfg.h"
 
 namespace {
@@ -992,25 +993,6 @@ namespace {
         FmtArgs args;
     };
 
-    class string_view {
-        const char* s;
-        const char* e;
-
-    public:
-        string_view(const char* s, const char* e)
-            : s(s)
-            , e(e)
-        {
-        }
-
-        friend ::std::ostream& operator<<(::std::ostream& os, const string_view& x) {
-            for (const char* p = x.s; p != x.e; p++) {
-                os << *p;
-            }
-            return os;
-        }
-    };
-
     uint32_t parse_utf8(const char* s, int& out_len) {
         uint8_t v1 = s[0];
         if (v1 < 0x80) {
@@ -1122,7 +1104,7 @@ namespace {
                 while (s2 < s_end && *s2 != '}') {
                     s2++;
                 }
-                auto fmt_frag_str = string_view{s, s2};
+                auto fmt_frag_str = ::std::string_view{s, s2};
 
                 unsigned int index = ~0u;
                 const char* trait_name;

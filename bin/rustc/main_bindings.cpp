@@ -7,6 +7,7 @@
 #include "hir_hir.h" // ABI_RUST - TODO: Move elsewhere?
 #include <fstream>
 #include <limits> // std::numeric_limits
+#include <string_view>
 
 #include "cpp_unpack.h"
 
@@ -1590,7 +1591,6 @@ void Expand_TestHarness(::AST::Crate& crate) {
 #include <set>
 #include <climits>
 #include "version.h"
-#include "string_view.h"
 #include "parse_lex.h"
 #include "parse_parseerror.h"
 #include "parse_common.h" // For edition checks
@@ -2940,13 +2940,13 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
         while (a[0]) {
             const char* end = strchr(a, ':');
 
-            ::stdx::string_view s;
+            ::std::string_view s;
             if (end) {
-                s = ::stdx::string_view{a, end};
+                s = ::std::string_view{a, end};
                 a = end + 1;
             } else {
                 end = a + strlen(a);
-                s = ::stdx::string_view{a, end};
+                s = ::std::string_view{a, end};
                 a = end;
             }
 

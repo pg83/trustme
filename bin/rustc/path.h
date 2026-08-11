@@ -7,9 +7,10 @@
  */
 #pragma once
 
+#include <cstring>
 #include <string>
+#include <string_view>
 #include <stdexcept>
-#include "helpers.h"
 
 namespace helpers {
 
@@ -70,7 +71,7 @@ namespace helpers {
             return *this;
         }
 
-        path& operator/=(const string_view& o) {
+        path& operator/=(::std::string_view o) {
             if (!this->is_valid()) {
                 throw ::std::runtime_error("Appending to an invalid path");
             }
@@ -78,7 +79,7 @@ namespace helpers {
                 throw ::std::runtime_error("Appending an absolute path to another path");
             }
             this->m_str.push_back(SEP);
-            this->m_str += o;
+            this->m_str.append(o);
             return *this;
         }
 
@@ -176,8 +177,8 @@ namespace helpers {
             }
 
         public:
-            string_view operator*() const {
-                return string_view(p.m_str.c_str() + pos, end - pos);
+            ::std::string_view operator*() const {
+                return ::std::string_view(p.m_str.c_str() + pos, end - pos);
             }
 
             void operator++();

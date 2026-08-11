@@ -1,7 +1,6 @@
 #include "trans_mangling.h"
 
 #include "debug.h"
-#include "string_view.h"
 #include "hir_hir.h" // ABI_RUST
 #include "hir_type.h"
 #include <cctype>
