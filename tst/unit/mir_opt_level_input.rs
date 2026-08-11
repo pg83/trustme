@@ -1,5 +1,19 @@
-#![feature(no_core)]
+#![feature(lang_items, no_core)]
 #![no_core]
+
+#[lang = "pointee_sized"]
+trait PointeeSized {}
+
+#[lang = "meta_sized"]
+trait MetaSized: PointeeSized {}
+
+#[lang = "sized"]
+trait Sized: MetaSized {}
+
+#[lang = "copy"]
+trait Copy {}
+
+impl Copy for i32 {}
 
 fn ordinary(value: i32) -> i32 {
     value

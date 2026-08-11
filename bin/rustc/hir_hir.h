@@ -713,6 +713,7 @@ namespace HIR {
         // Compile-local crate configuration. This is not serialised because an
         // external crate can never provide this crate's executable entrypoint.
         bool m_is_no_core = false;
+        bool m_no_main = false;
         // Enabled language features affect type checking of this crate only;
         // consumers of its metadata use their own feature set.
         ::std::set<RcString> m_features;

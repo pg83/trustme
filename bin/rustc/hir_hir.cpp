@@ -173,6 +173,18 @@ namespace HIR {
                 const auto* r = cast<const ::HIR::ExprNode_ConstBlock>(&right);
                 return r && const_expr_nodes_equal(left_value, *l->m_inner, right_value, *r->m_inner);
             }
+            if (const auto* l = cast<const ::HIR::ExprNode_CallPath>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_CallPath>(&right);
+                if (!r || l->m_path != r->m_path || l->m_args.size() != r->m_args.size()) {
+                    return false;
+                }
+                for (unsigned int i = 0; i < l->m_args.size(); i++) {
+                    if (!const_expr_nodes_equal(left_value, *l->m_args[i], right_value, *r->m_args[i])) {
+                        return false;
+                    }
+                }
+                return true;
+            }
             if (const auto* l = cast<const ::HIR::ExprNode_Block>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNode_Block>(&right);
                 if (!r || l->m_nodes.size() != r->m_nodes.size() || static_cast<bool>(l->m_value_node) != static_cast<bool>(r->m_value_node)) {

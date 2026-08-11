@@ -1699,6 +1699,7 @@ struct ProgramParams {
         ::std::string codegen_type;
         ::std::string emit_build_command;
         ::std::string panic_type;
+        ::std::vector<::std::string> linker_args;
     } codegen;
 
     ProgramParams(int argc, char* argv[]);
@@ -2038,7 +2039,9 @@ int main(int argc, char* argv[]) {
                 }
 
                 // - `mrustc-main` lang item default
-                crate.m_lang_items.insert(::std::make_pair(::std::string("mrustc-main"), ::AST::AbsolutePath("", {"main"})));
+                if (!crate.m_no_main) {
+                    crate.m_lang_items.insert(::std::make_pair(::std::string("mrustc-main"), ::AST::AbsolutePath("", {"main"})));
+                }
             }
         });
 
@@ -2319,6 +2322,7 @@ int main(int argc, char* argv[]) {
         TransOptions trans_opt;
         trans_opt.mode = params.codegen.codegen_type == "" ? "c" : params.codegen.codegen_type;
         trans_opt.build_command_file = params.codegen.emit_build_command;
+        trans_opt.linker_args = params.codegen.linker_args;
         trans_opt.opt_level = params.opt_level;
         trans_opt.panic_crate = "panic_" + params.codegen.panic_type;
         for (const char* libdir : params.lib_search_dirs) {
@@ -2600,6 +2604,21 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     } else if (optname == "panic") {
                         get_optval();
                         this->codegen.panic_type = optval;
+                    } else if (optname == "link-arg") {
+                        get_optval();
+                        this->codegen.linker_args.push_back(optval);
+                    } else if (optname == "overflow-checks" || optname == "overflow_checks") {
+                        get_optval();
+                        if (optval == "n" || optval == "no" || optval == "off" || optval == "false") {
+                            // The current MIR pipeline performs wrapping integer
+                            // arithmetic, which is exactly the requested mode.
+                        } else if (optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
+                            ::std::cerr << "-C " << optname << "=on is not implemented" << ::std::endl;
+                            exit(1);
+                        } else {
+                            ::std::cerr << "invalid value for -C " << optname << ": '" << optval << "'" << ::std::endl;
+                            exit(1);
+                        }
                     } else if (optname == "opt-level") {
                         get_optval();
                         if (optval == "0") {

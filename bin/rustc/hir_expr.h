@@ -1052,11 +1052,19 @@ namespace HIR {
         // State data type (needed for initialising)
         ::HIR::TypeRef m_state_data_type;
 
-        ExprNode_Generator(Span sp, /*ExprNode_Closure::args_t args,*/ ::HIR::TypeRef rv, ::HIR::ExprNodeP code, bool is_move, bool is_pinned)
+        ExprNode_Generator(
+            Span sp,
+            ::HIR::TypeRef rv,
+            ::HIR::TypeRef resume_ty,
+            ::HIR::TypeRef yield_ty,
+            ::HIR::ExprNodeP code,
+            bool is_move,
+            bool is_pinned
+        )
             : ExprNode(mv$(sp))
-            ,
-            //m_args( ::std::move(args) ),
-            m_return(::std::move(rv))
+            , m_return(::std::move(rv))
+            , m_resume_ty(resume_ty)
+            , m_yield_ty(yield_ty)
             , m_code(::std::move(code))
             , m_is_move(is_move)
             , m_is_pinned(is_pinned)

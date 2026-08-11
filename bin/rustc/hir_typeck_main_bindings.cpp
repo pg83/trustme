@@ -2450,6 +2450,10 @@ namespace {
         void visit_function(::HIR::ItemPath p, ::HIR::Function& item) override {
             TRACE_FUNCTION_F(p);
 
+            if (m_resolve.m_crate.get_lang_item_path_opt("sized").components().empty()) {
+                ERROR(Span(), E0000, "requires `sized` lang_item");
+            }
+
             auto _ = m_resolve.set_item_generics(item.m_params);
             // NOTE: Superfluous... except that it makes the params valid for the return type.
             visit_params(item.m_params);

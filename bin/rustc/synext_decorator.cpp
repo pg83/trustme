@@ -3490,6 +3490,17 @@ public:
     }
 };
 
+class Decorator_NoMain: public ExpandDecorator {
+public:
+    AttrStage stage() const override {
+        return AttrStage::Pre;
+    }
+
+    void handle(const Span&, const AST::Attribute&, AST::Crate& crate) const override {
+        crate.m_no_main = true;
+    }
+};
+
 //class Decorator_Prelude:
 //    public ExpandDecorator
 //{
@@ -3546,6 +3557,7 @@ public:
 void Expand_init_std_prelude() {
     Register_Synext_Decorator_G<Decorator_NoStd>("no_std");
     Register_Synext_Decorator_G<Decorator_NoCore>("no_core");
+    Register_Synext_Decorator_G<Decorator_NoMain>("no_main");
     //Register_Synext_Decorator_G<Decorator_Prelude>("prelude");
     Register_Synext_Decorator_G<Decorator_PreludeImport>("prelude_import");
     Register_Synext_Decorator_G<Decorator_NoPrelude>("no_prelude");

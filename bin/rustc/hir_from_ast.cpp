@@ -2454,6 +2454,7 @@ public:
     }
     rv.m_edition = crate.m_edition;
     rv.m_is_no_core = crate.m_load_std == ::AST::Crate::LOAD_NONE;
+    rv.m_no_main = crate.m_no_main;
     rv.m_features = crate.m_features;
 
     g_crate_ptr = &rv;
@@ -2949,7 +2950,15 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
     virtual void visit(::AST::ExprNode_GeneratorBlock& v) override {
         // TODO: Wrap with something that provides an impl of Iterator
         // - `::core::iter::from_coroutine`
-        m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Generator>(v.span(), g_crate_ptr->m_types.infer(), lower_isolated(v.m_inner), v.m_is_move, false));
+        m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Generator>(
+            v.span(),
+            g_crate_ptr->m_types.infer(),
+            g_crate_ptr->m_types.infer(),
+            g_crate_ptr->m_types.infer(),
+            lower_isolated(v.m_inner),
+            v.m_is_move,
+            false
+        ));
         m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_CallPath>(v.span(), HIR::SimplePath(g_core_crate, {"iter", "sources", "from_coroutine", "from_coroutine"}), make_vec1(mv$(m_rv))));
     }
 
@@ -3539,8 +3548,9 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
             }
             m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Generator>(
                 v.span(),
-                //mv$(args),
                 LowerHIR_Type(v.m_return),
+                g_crate_ptr->m_types.infer(),
+                g_crate_ptr->m_types.infer(),
                 mv$(inner),
                 v.m_is_move,
                 v.m_is_pinned
@@ -3569,38 +3579,66 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
         }
 
         if (values.empty() && !v.m_base_value) {
+            enum class EmptyKind {
+                None,
+                Unit,
+                Tuple,
+            };
+
             if (const auto* binding = v.m_path.m_bindings.type.binding.opt_EnumVar()) {
-                bool is_empty = false;
+                EmptyKind kind = EmptyKind::None;
                 if (binding->enum_) {
                     const auto& data = binding->enum_->variants().at(binding->idx).m_data;
-                    is_empty = data.is_Unit() || (data.is_Tuple() && data.as_Tuple().m_items.empty());
+                    kind = data.is_Unit() ? EmptyKind::Unit
+                        : data.is_Tuple() && data.as_Tuple().m_items.empty() ? EmptyKind::Tuple
+                        : EmptyKind::None;
                 } else if (binding->hir) {
                     const auto& enm = *binding->hir;
                     if (enm.m_data.is_Value()) {
-                        is_empty = true;
+                        kind = EmptyKind::Unit;
                     } else {
                         const auto& var = enm.m_data.as_Data().at(binding->idx);
-                        const auto& str = *var.type->as_Path().binding.as_Struct();
-                        is_empty = str.m_data.is_Unit() || (str.m_data.is_Tuple() && str.m_data.as_Tuple().empty());
+                        if (var.type == g_crate_ptr->m_types.unit()) {
+                            kind = EmptyKind::Unit;
+                        } else {
+                            const auto& str = *var.type->as_Path().binding.as_Struct();
+                            kind = str.m_data.is_Unit() ? EmptyKind::Unit
+                                : str.m_data.is_Tuple() && str.m_data.as_Tuple().empty() ? EmptyKind::Tuple
+                                : EmptyKind::None;
+                        }
                     }
                 }
-                if (is_empty) {
+                if (kind == EmptyKind::Unit) {
                     m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_UnitVariant>(
                         v.span(), LowerHIR_GenericPath(v.span(), v.m_path, FromAST_PathClass::Type), false));
                     return;
                 }
+                if (kind == EmptyKind::Tuple) {
+                    m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_TupleVariant>(
+                        v.span(), LowerHIR_GenericPath(v.span(), v.m_path, FromAST_PathClass::Type), false, ::std::vector<::HIR::ExprNodeP>{}));
+                    return;
+                }
             } else if (const auto* binding = v.m_path.m_bindings.type.binding.opt_Struct()) {
-                bool is_empty = false;
+                EmptyKind kind = EmptyKind::None;
                 if (binding->struct_) {
                     const auto& data = binding->struct_->m_data;
-                    is_empty = data.is_Unit() || (data.is_Tuple() && data.as_Tuple().ents.empty());
+                    kind = data.is_Unit() ? EmptyKind::Unit
+                        : data.is_Tuple() && data.as_Tuple().ents.empty() ? EmptyKind::Tuple
+                        : EmptyKind::None;
                 } else if (binding->hir) {
                     const auto& data = binding->hir->m_data;
-                    is_empty = data.is_Unit() || (data.is_Tuple() && data.as_Tuple().empty());
+                    kind = data.is_Unit() ? EmptyKind::Unit
+                        : data.is_Tuple() && data.as_Tuple().empty() ? EmptyKind::Tuple
+                        : EmptyKind::None;
                 }
-                if (is_empty) {
+                if (kind == EmptyKind::Unit) {
                     m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_UnitVariant>(
                         v.span(), LowerHIR_GenericPath(v.span(), v.m_path, FromAST_PathClass::Type), true));
+                    return;
+                }
+                if (kind == EmptyKind::Tuple) {
+                    m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_TupleVariant>(
+                        v.span(), LowerHIR_GenericPath(v.span(), v.m_path, FromAST_PathClass::Type), true, ::std::vector<::HIR::ExprNodeP>{}));
                     return;
                 }
             }

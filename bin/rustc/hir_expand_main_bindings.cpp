@@ -9044,7 +9044,6 @@ namespace {
                 ::HIR::TypeInterner& types;
                 ::HIR::Trait* trait_ptr;
                 ::HIR::GenericParams params_def;
-                ::HIR::PathParams params_use;
                 bool has_conflict = false;
 
                 Foo(HIR::TypeInterner& types, HIR::Trait& root_trait)
@@ -9083,9 +9082,14 @@ namespace {
             };
 
             Foo visitor{m_crate.m_types, tr};
+            for (const auto& lp : tr.m_params.m_lifetimes) {
+                visitor.params_def.m_lifetimes.push_back(::HIR::LifetimeDef{lp.m_name});
+            }
             for (const auto& tp : tr.m_params.m_types) {
                 visitor.params_def.m_types.push_back(::HIR::TypeParamDef{tp.m_name, m_crate.m_types.infer(), tp.m_is_sized});
-                visitor.params_use.m_types.push_back(m_crate.m_types.generic(tp.m_name, &tp - tr.m_params.m_types.data()));
+            }
+            for (const auto& vp : tr.m_params.m_values) {
+                visitor.params_def.m_values.push_back(::HIR::ValueParamDef{vp.m_name, vp.m_type});
             }
             visitor.add_types_from_trait(trait_path, tr, {});
             for (const auto& st : tr.m_all_parent_traits) {
@@ -9273,6 +9277,13 @@ namespace {
             ::HIR::PathParams params;
             {
                 unsigned int i = 0;
+                for (const auto& lp : tr.m_params.m_lifetimes) {
+                    params.m_lifetimes.push_back(::HIR::LifetimeRef(i));
+                    i++;
+                }
+            }
+            {
+                unsigned int i = 0;
                 for (const auto& tp : tr.m_params.m_types) {
                     params.m_types.push_back(m_crate.m_types.generic(tp.m_name, i));
                     i++;
@@ -9286,7 +9297,14 @@ namespace {
                     params.m_types.push_back(m_crate.m_types.path(mv$(path), {}));
                 }
             }
-            ASSERT_BUG(sp, true && args.m_types.size() == params.m_types.size() && args.m_values.size() == params.m_values.size(), "Count mismatch args=" << args.fmt_args() << " params=" << params);
+            {
+                unsigned int i = 0;
+                for (const auto& vp : tr.m_params.m_values) {
+                    params.m_values.push_back(::HIR::GenericRef(vp.m_name, i));
+                    i++;
+                }
+            }
+            ASSERT_BUG(sp, args.m_lifetimes.size() == params.m_lifetimes.size() && args.m_types.size() == params.m_types.size() && args.m_values.size() == params.m_values.size(), "Count mismatch args=" << args.fmt_args() << " params=" << params);
             // TODO: Would like to have access to the publicity marker
             auto item_path = m_new_type(true, RcString::new_interned(FMT(p.get_name() << "#vtable")), ::HIR::Struct(std::move(args), ::HIR::Struct::Repr::C, ::HIR::Struct::Data(mv$(fields))));
             tr.m_vtable_path = item_path;

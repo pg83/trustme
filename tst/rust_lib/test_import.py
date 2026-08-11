@@ -262,11 +262,12 @@ class ImportTest(unittest.TestCase):
             "#[test]\n    #[should_panic]\n    fn selected() {}",
             filtered,
         )
-        self.assertIn("#[cfg(any())]\n#[test]\nfn outer() {}", filtered)
+        self.assertIn("#[cfg(any())]\nfn outer() {}", filtered)
         self.assertIn(
-            "#[cfg(any())]\n    #[test]\n    fn other() {}",
+            "#[cfg(any())]\n    fn other() {}",
             filtered,
         )
+        self.assertEqual(filtered.count("#[test]"), 1)
 
     def test_filter_disables_tests_inside_macro_templates(self):
         source = textwrap.dedent(
@@ -290,7 +291,8 @@ class ImportTest(unittest.TestCase):
         )
 
         self.assertEqual(filtered.count("#[cfg(any())]"), 1)
-        self.assertIn("#[cfg(any())]\n        #[test]", filtered)
+        self.assertIn("#[cfg(any())]\n        fn generated_test() {}", filtered)
+        self.assertEqual(filtered.count("#[test]"), 1)
 
     def test_filter_rejects_missing_test(self):
         with self.assertRaisesRegex(ValueError, "got 0"):

@@ -30,6 +30,8 @@ namespace MIR {
         void visit_function(::HIR::ItemPath p, ::HIR::Function& item) override;
         void visit_static(::HIR::ItemPath p, ::HIR::Static& item) override;
         void visit_constant(::HIR::ItemPath p, ::HIR::Constant& item) override;
+        void visit_struct(::HIR::ItemPath p, ::HIR::Struct& item) override;
+        void visit_union(::HIR::ItemPath p, ::HIR::Union& item) override;
         void visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) override;
 
         // Boilerplate

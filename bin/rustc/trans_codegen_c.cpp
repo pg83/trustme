@@ -485,7 +485,7 @@ namespace {
             // TODO: Support dynamic libraries too
             // - No main, but has the rest.
             // - Well... for cdylibs that's the case, for rdylibs it's not
-            if (out_ty == CodegenOutput::Executable) {
+            if (out_ty == CodegenOutput::Executable && !m_crate.m_no_main) {
                 // TODO: Define this function in MIR?
                 m_of << "}\n";
                 m_of << "int main(int argc, const char* argv[]) {\n";
@@ -1032,6 +1032,9 @@ namespace {
                         }
                     }
                     for (const auto& a : Target_GetCurSpec().m_backend_c.m_linker_opts_post) {
+                        args.push_back(a.c_str());
+                    }
+                    for (const auto& a : opt.linker_args) {
                         args.push_back(a.c_str());
                     }
                     // TODO: Include the HIR file as a magic object?
@@ -6199,10 +6202,10 @@ namespace {
                         m_of << ";";
                         m_of << " unsigned shift = ";
                         emit_param(e.args.at(1));
-                        m_of << ";";
+                        m_of << " % 8;";
                         m_of << " ";
                         emit_lvalue(e.ret_val);
-                        m_of << " = (v << shift) | (v >> (8 - shift));";
+                        m_of << " = shift == 0 ? v : (v << shift) | (v >> (8 - shift));";
                         m_of << "}";
                         break;
                     case ::HIR::CoreType::I16:
@@ -6213,10 +6216,10 @@ namespace {
                         m_of << ";";
                         m_of << " unsigned shift = ";
                         emit_param(e.args.at(1));
-                        m_of << ";";
+                        m_of << " % 16;";
                         m_of << " ";
                         emit_lvalue(e.ret_val);
-                        m_of << " = (v << shift) | (v >> (16 - shift));";
+                        m_of << " = shift == 0 ? v : (v << shift) | (v >> (16 - shift));";
                         m_of << "}";
                         break;
                     case ::HIR::CoreType::I32:
@@ -6227,10 +6230,10 @@ namespace {
                         m_of << ";";
                         m_of << " unsigned shift = ";
                         emit_param(e.args.at(1));
-                        m_of << ";";
+                        m_of << " % 32;";
                         m_of << " ";
                         emit_lvalue(e.ret_val);
-                        m_of << " = (v << shift) | (v >> (32 - shift));";
+                        m_of << " = shift == 0 ? v : (v << shift) | (v >> (32 - shift));";
                         m_of << "}";
                         break;
                     case ::HIR::CoreType::I64:
@@ -6241,10 +6244,10 @@ namespace {
                         m_of << ";";
                         m_of << " unsigned shift = ";
                         emit_param(e.args.at(1));
-                        m_of << ";";
+                        m_of << " % 64;";
                         m_of << " ";
                         emit_lvalue(e.ret_val);
-                        m_of << " = (v << shift) | (v >> (64 - shift));";
+                        m_of << " = shift == 0 ? v : (v << shift) | (v >> (64 - shift));";
                         m_of << "}";
                         break;
                     case ::HIR::CoreType::I128:
@@ -6255,15 +6258,26 @@ namespace {
                         m_of << ";";
                         m_of << " unsigned shift = ";
                         emit_param(e.args.at(1));
-                        m_of << ";";
+                        m_of << " % 128;";
                         if (m_options.emulated_i128) {
-                            m_of << " if(shift < 64) {";
+                            m_of << " if(shift == 0) {";
+                            m_of << " ";
+                            emit_lvalue(e.ret_val);
+                            m_of << " = v;";
+                            m_of << " } else if(shift < 64) {";
                             m_of << " ";
                             emit_lvalue(e.ret_val);
                             m_of << ".lo = (v.lo << shift) | (v.hi >> (64 - shift));";
                             m_of << " ";
                             emit_lvalue(e.ret_val);
                             m_of << ".hi = (v.hi << shift) | (v.lo >> (64 - shift));";
+                            m_of << " } else if(shift == 64) {";
+                            m_of << " ";
+                            emit_lvalue(e.ret_val);
+                            m_of << ".lo = v.hi;";
+                            m_of << " ";
+                            emit_lvalue(e.ret_val);
+                            m_of << ".hi = v.lo;";
                             m_of << " } else {";
                             m_of << " shift -= 64;"; // Swap order and reduce shift
                             m_of << " ";
@@ -6276,7 +6290,7 @@ namespace {
                         } else {
                             m_of << " ";
                             emit_lvalue(e.ret_val);
-                            m_of << " = (v << shift) | (v >> (128 - shift));";
+                            m_of << " = shift == 0 ? v : (v << shift) | (v >> (128 - shift));";
                         }
                         m_of << "}";
                         break;
@@ -6294,11 +6308,10 @@ namespace {
                         m_of << ";";
                         m_of << " unsigned shift = ";
                         emit_param(e.args.at(1));
-                        m_of << ";";
-                        m_of << " uint8_t rv = (v >> shift) | (v << (8 - shift));";
+                        m_of << " % 8;";
                         m_of << " ";
                         emit_lvalue(e.ret_val);
-                        m_of << " = rv;";
+                        m_of << " = shift == 0 ? v : (v >> shift) | (v << (8 - shift));";
                         m_of << "}";
                         break;
                     case ::HIR::CoreType::I16:
@@ -6309,11 +6322,10 @@ namespace {
                         m_of << ";";
                         m_of << " unsigned shift = ";
                         emit_param(e.args.at(1));
-                        m_of << ";";
-                        m_of << " uint16_t rv = (v >> shift) | (v << (16 - shift));";
+                        m_of << " % 16;";
                         m_of << " ";
                         emit_lvalue(e.ret_val);
-                        m_of << " = rv;";
+                        m_of << " = shift == 0 ? v : (v >> shift) | (v << (16 - shift));";
                         m_of << "}";
                         break;
                     case ::HIR::CoreType::I32:
@@ -6324,11 +6336,10 @@ namespace {
                         m_of << ";";
                         m_of << " unsigned shift = ";
                         emit_param(e.args.at(1));
-                        m_of << ";";
-                        m_of << " uint32_t rv = (v >> shift) | (v << (32 - shift));";
+                        m_of << " % 32;";
                         m_of << " ";
                         emit_lvalue(e.ret_val);
-                        m_of << " = rv;";
+                        m_of << " = shift == 0 ? v : (v >> shift) | (v << (32 - shift));";
                         m_of << "}";
                         break;
                     case ::HIR::CoreType::I64:
@@ -6339,11 +6350,10 @@ namespace {
                         m_of << ";";
                         m_of << " unsigned shift = ";
                         emit_param(e.args.at(1));
-                        m_of << ";";
-                        m_of << " uint64_t rv = (v >> shift) | (v << (64 - shift));";
+                        m_of << " % 64;";
                         m_of << " ";
                         emit_lvalue(e.ret_val);
-                        m_of << " = rv;";
+                        m_of << " = shift == 0 ? v : (v >> shift) | (v << (64 - shift));";
                         m_of << "}";
                         break;
                     case ::HIR::CoreType::I128:
@@ -6354,15 +6364,26 @@ namespace {
                         m_of << ";";
                         m_of << " unsigned shift = ";
                         emit_param(e.args.at(1));
-                        m_of << ";";
+                        m_of << " % 128;";
                         if (m_options.emulated_i128) {
-                            m_of << " if(shift < 64) {";
+                            m_of << " if(shift == 0) {";
+                            m_of << " ";
+                            emit_lvalue(e.ret_val);
+                            m_of << " = v;";
+                            m_of << " } else if(shift < 64) {";
                             m_of << " ";
                             emit_lvalue(e.ret_val);
                             m_of << ".lo = (v.lo >> shift) | (v.hi << (64 - shift));";
                             m_of << " ";
                             emit_lvalue(e.ret_val);
                             m_of << ".hi = (v.hi >> shift) | (v.lo << (64 - shift));";
+                            m_of << " } else if(shift == 64) {";
+                            m_of << " ";
+                            emit_lvalue(e.ret_val);
+                            m_of << ".lo = v.hi;";
+                            m_of << " ";
+                            emit_lvalue(e.ret_val);
+                            m_of << ".hi = v.lo;";
                             m_of << " } else {";
                             m_of << " shift -= 64;"; // Swap order and reduce shift
                             m_of << " ";
@@ -6375,7 +6396,7 @@ namespace {
                         } else {
                             m_of << " ";
                             emit_lvalue(e.ret_val);
-                            m_of << " = (v >> shift) | (v << (128 - shift));";
+                            m_of << " = shift == 0 ? v : (v >> shift) | (v << (128 - shift));";
                         }
                         m_of << "}";
                         break;

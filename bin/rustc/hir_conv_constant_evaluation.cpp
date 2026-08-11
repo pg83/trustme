@@ -3072,12 +3072,11 @@ namespace HIR {
                         auto ti = TypeInfo::for_type(ty);
 
                         auto val = local_state.read_param_uint(ti.bits, e.args.at(0));
-                        auto count = local_state.read_param_uint(ti.bits, e.args.at(1));
-                        MIR_ASSERT(state, count <= ti.bits, "Excessive rotation");
-                        unsigned count_i = count.truncate_u64();
+                        auto count = local_state.read_param_uint(32, e.args.at(1));
+                        unsigned count_i = (count % ti.bits).truncate_u64();
 
                         U128 rv;
-                        if (count_i == 0 || ti.bits == 64) {
+                        if (count_i == 0) {
                             rv = val;
                         } else if (te->name == "rotate_left") {
                             // NOTE: `read_param_uint` has zeroes in the high bits, so anything above `ti.bits` should be zero

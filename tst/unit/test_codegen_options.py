@@ -85,10 +85,46 @@ def codegen_flag(rustc: str, src: str, work: str, name: str, level: str) -> list
     return shlex.split(Path(response).read_text())
 
 
+def check_link_args(rustc: str, src: str, work: str) -> None:
+    output = os.path.join(work, "link-args")
+    command_file = output + ".command"
+    expected = ["trustme-link-arg-first", "trustme-link-arg-second"]
+    result = subprocess.run(
+        [
+            rustc,
+            src,
+            "--crate-type",
+            "bin",
+            "-o",
+            output,
+            f"-Cemit-build-command={command_file}",
+            f"-Clink-arg={expected[0]}",
+            "-C",
+            f"link-arg={expected[1]}",
+        ],
+        env=dict(os.environ),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    expect_ok(result, "link-arg codegen")
+    command = shlex.split(Path(command_file).read_text())
+    response = next((arg[1:] for arg in command if arg.startswith("@")), None)
+    if response is None:
+        raise RuntimeError(f"link-arg command has no response file: {command!r}")
+    args = shlex.split(Path(response).read_text())
+    actual = [arg for arg in args if arg.startswith("trustme-link-arg-")]
+    if actual != expected:
+        raise RuntimeError(f"link args changed order: {actual!r} != {expected!r}")
+
+
 def main() -> int:
-    if len(sys.argv) != 5:
-        raise SystemExit("usage: test_codegen_options.py RUSTC MIR_RS CFG_RS STAMP")
-    rustc, mir_src, cfg_src, stamp = map(os.path.abspath, sys.argv[1:])
+    if len(sys.argv) != 6:
+        raise SystemExit(
+            "usage: test_codegen_options.py RUSTC MIR_RS CFG_RS LINK_RS STAMP"
+        )
+    rustc, mir_src, cfg_src, link_src, stamp = map(os.path.abspath, sys.argv[1:])
 
     with tempfile.TemporaryDirectory(prefix="mrustc-codegen-options-") as work:
         mir_cases = [
@@ -131,6 +167,7 @@ def main() -> int:
             flags = codegen_flag(rustc, mir_src, work, f"codegen-{level}", level)
             if expected_flag not in flags:
                 raise RuntimeError(f"opt-level={level} did not emit {expected_flag}: {flags!r}")
+        check_link_args(rustc, link_src, work)
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)
     Path(stamp).touch()

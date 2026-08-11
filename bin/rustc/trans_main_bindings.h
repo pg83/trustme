@@ -20,6 +20,7 @@ struct TransOptions {
     OptimizationLevel opt_level = OptimizationLevel::None;
     bool emit_debug_info = false;
     ::std::string build_command_file;
+    ::std::vector<::std::string> linker_args;
 
     ::std::string panic_crate;
 

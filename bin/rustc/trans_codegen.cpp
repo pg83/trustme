@@ -443,31 +443,33 @@ namespace {
 
         void finalise(const TransOptions& opt, CodegenOutput out_ty, const ::std::string& hir_file) override {
             if (out_ty == CodegenOutput::Executable) {
-                m_of << "fn main#(isize, *const *const i8): isize {\n";
-                auto c_start_path = m_resolve.m_crate.get_lang_item_path_opt("mrustc-start");
-                if (c_start_path == ::HIR::SimplePath()) {
-                    auto main_path = m_resolve.m_crate.get_lang_item_path(Span(), "mrustc-main");
-                    const auto& start_path = m_resolve.m_crate.get_lang_item_path_opt("start");
-                    if (m_crate.m_is_no_core && start_path == ::HIR::SimplePath()) {
-                        const auto& main_fcn = m_crate.get_function_by_path(Span(), main_path);
-                        m_of << "\tlet direct_main_result: " << fmt(main_fcn.m_return) << ";\n";
-                        m_of << "\t0: {\n";
-                        m_of << "\t\tCALL direct_main_result = " << fmt(::HIR::GenericPath(main_path)) << "() goto 1 else 1\n";
+                if (!m_crate.m_no_main) {
+                    m_of << "fn main#(isize, *const *const i8): isize {\n";
+                    auto c_start_path = m_resolve.m_crate.get_lang_item_path_opt("mrustc-start");
+                    if (c_start_path == ::HIR::SimplePath()) {
+                        auto main_path = m_resolve.m_crate.get_lang_item_path(Span(), "mrustc-main");
+                        const auto& start_path = m_resolve.m_crate.get_lang_item_path_opt("start");
+                        if (m_crate.m_is_no_core && start_path == ::HIR::SimplePath()) {
+                            const auto& main_fcn = m_crate.get_function_by_path(Span(), main_path);
+                            m_of << "\tlet direct_main_result: " << fmt(main_fcn.m_return) << ";\n";
+                            m_of << "\t0: {\n";
+                            m_of << "\t\tCALL direct_main_result = " << fmt(::HIR::GenericPath(main_path)) << "() goto 1 else 1\n";
+                        } else {
+                            m_of << "\tlet m: fn();\n";
+                            m_of << "\t0: {\n";
+                            m_of << "\t\tASSIGN m = ADDROF " << fmt(::HIR::GenericPath(main_path)) << ";\n";
+                            m_of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(m_resolve.m_crate.get_lang_item_path(Span(), "start"))) << "(m, arg0, arg1) goto 1 else 1\n";
+                        }
                     } else {
-                        m_of << "\tlet m: fn();\n";
                         m_of << "\t0: {\n";
-                        m_of << "\t\tASSIGN m = ADDROF " << fmt(::HIR::GenericPath(main_path)) << ";\n";
-                        m_of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(m_resolve.m_crate.get_lang_item_path(Span(), "start"))) << "(m, arg0, arg1) goto 1 else 1\n";
+                        m_of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(c_start_path)) << "(arg0, arg1) goto 1 else 1;\n";
                     }
-                } else {
-                    m_of << "\t0: {\n";
-                    m_of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(c_start_path)) << "(arg0, arg1) goto 1 else 1;\n";
+                    m_of << "\t}\n";
+                    m_of << "\t1: {\n";
+                    m_of << "\t\tRETURN\n";
+                    m_of << "\t}\n";
+                    m_of << "}\n";
                 }
-                m_of << "\t}\n";
-                m_of << "\t1: {\n";
-                m_of << "\t\tRETURN\n";
-                m_of << "\t}\n";
-                m_of << "}\n";
 
                 // Bind `panic_impl` lang item to the item tagged with `panic_implementation`.
                 const auto& panic_impl_path = m_crate.get_lang_item_path_opt("mrustc-panic_implementation");

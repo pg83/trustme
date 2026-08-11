@@ -616,6 +616,7 @@ unit_tests.append(command(
         "$(S)/tst/unit/test_codegen_options.py",
         "$(S)/tst/unit/mir_opt_level_input.rs",
         "$(S)/tst/unit/codegen_options_cfg.rs",
+        "$(S)/tst/unit/codegen_options_link.rs",
     ],
     outputs=["$(B)/tst/unit/codegen_options.stamp"],
     cmd=[
@@ -624,6 +625,7 @@ unit_tests.append(command(
         "$(B)/bin/rustc",
         "$(S)/tst/unit/mir_opt_level_input.rs",
         "$(S)/tst/unit/codegen_options_cfg.rs",
+        "$(S)/tst/unit/codegen_options_link.rs",
         "$(B)/tst/unit/codegen_options.stamp",
     ],
     deps=[rustc],

@@ -74,6 +74,7 @@ namespace AST {
 
         // List of tests (populated in expand if --test is passed)
         bool m_test_harness = false;
+        bool m_no_main = false;
         ::std::vector<TestDesc> m_tests;
 
         /// Files loaded using things like include! and include_str!

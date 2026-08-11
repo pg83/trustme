@@ -1397,6 +1397,9 @@ namespace {
 }
 
 TransList Trans_Enumerate_CommonPost(EnumState& state);
+namespace {
+    void Trans_Enumerate_ExplicitLinkage(EnumState& state, const ::HIR::Module& mod, ::HIR::SimplePath mod_path);
+}
 void Trans_Enumerate_Types(EnumState& state);
 void Trans_Enumerate_FillFrom_Path(EnumState& state, const ::HIR::Path& path, const Trans_Params& pp);
 void Trans_Enumerate_FillFrom_PathMono(EnumState& state, ::HIR::Path path);
@@ -1481,39 +1484,42 @@ TransList Trans_Enumerate_Main(const ::HIR::Crate& crate) {
 
     EnumState state{crate};
 
-    auto c_start_path = crate.get_lang_item_path_opt("mrustc-start");
-    if (c_start_path == ::HIR::SimplePath()) {
-        // user entrypoint
-        auto main_path = crate.get_lang_item_path(Span(), "mrustc-main");
-        const auto& main_fcn = crate.get_function_by_path(sp, main_path);
+    if (!crate.m_no_main) {
+        auto c_start_path = crate.get_lang_item_path_opt("mrustc-start");
+        if (c_start_path == ::HIR::SimplePath()) {
+            // user entrypoint
+            auto main_path = crate.get_lang_item_path(Span(), "mrustc-main");
+            const auto& main_fcn = crate.get_function_by_path(sp, main_path);
 
-        state.rv.m_roots.push_back(main_path);
-        state.enum_fcn(main_path, main_fcn, Trans_Params(crate.m_types));
+            state.rv.m_roots.push_back(main_path);
+            state.enum_fcn(main_path, main_fcn, Trans_Params(crate.m_types));
 
-        // "start" language item
-        // - Takes main, and argc/argv as arguments
-        const auto& start_path = crate.get_lang_item_path_opt("start");
-        if (start_path != ::HIR::SimplePath()) {
-            const auto& fcn = crate.get_function_by_path(sp, start_path);
+            // "start" language item
+            // - Takes main, and argc/argv as arguments
+            const auto& start_path = crate.get_lang_item_path_opt("start");
+            if (start_path != ::HIR::SimplePath()) {
+                const auto& fcn = crate.get_function_by_path(sp, start_path);
 
-            Trans_Params lang_start_pp(crate.m_types);
-            lang_start_pp.pp_method.m_types.push_back(main_fcn.m_return);
-            HIR::Path p = HIR::GenericPath(start_path, lang_start_pp.pp_method.clone());
-            state.rv.m_roots.push_back(p.clone());
-            //state.enum_fcn( start_path, fcn, mv$(lang_start_pp) );
-            state.enum_fcn(std::move(p), fcn, mv$(lang_start_pp));
-        } else if (!crate.m_is_no_core) {
-            // Preserve the usual diagnostic for crates that rely on the
-            // standard entrypoint protocol.
-            crate.get_lang_item_path(sp, "start");
+                Trans_Params lang_start_pp(crate.m_types);
+                lang_start_pp.pp_method.m_types.push_back(main_fcn.m_return);
+                HIR::Path p = HIR::GenericPath(start_path, lang_start_pp.pp_method.clone());
+                state.rv.m_roots.push_back(p.clone());
+                //state.enum_fcn( start_path, fcn, mv$(lang_start_pp) );
+                state.enum_fcn(std::move(p), fcn, mv$(lang_start_pp));
+            } else if (!crate.m_is_no_core) {
+                // Preserve the usual diagnostic for crates that rely on the
+                // standard entrypoint protocol.
+                crate.get_lang_item_path(sp, "start");
+            }
+        } else {
+            const auto& fcn = crate.get_function_by_path(sp, c_start_path);
+
+            state.rv.m_roots.push_back(c_start_path);
+            state.enum_fcn(c_start_path, fcn, Trans_Params(crate.m_types));
         }
-    } else {
-        const auto& fcn = crate.get_function_by_path(sp, c_start_path);
-
-        state.rv.m_roots.push_back(c_start_path);
-        state.enum_fcn(c_start_path, fcn, Trans_Params(crate.m_types));
     }
 
+    Trans_Enumerate_ExplicitLinkage(state, crate.m_root_module, ::HIR::SimplePath(crate.m_crate_name, {}));
     Trans_Enumerate_GlobalAllocator(state);
 
     return Trans_Enumerate_CommonPost(state);
@@ -1647,6 +1653,29 @@ namespace {
                     }
                 }
                 break;
+        }
+    }
+
+    void Trans_Enumerate_ExplicitLinkage(EnumState& state, const ::HIR::Module& mod, ::HIR::SimplePath mod_path) {
+        for (const auto& vi : mod.m_value_items) {
+            bool has_explicit_linkage = false;
+            if (const auto* function = vi.second->ent.opt_Function()) {
+                has_explicit_linkage = function->m_linkage.name != "" || function->m_linkage.section != "";
+            } else if (const auto* stat = vi.second->ent.opt_Static()) {
+                has_explicit_linkage = stat->m_linkage.name != "" || stat->m_linkage.section != "";
+            }
+            if (has_explicit_linkage) {
+                auto path = mod_path + vi.first;
+                Trans_Enumerate_ValItem(state, vi.second->ent, false, [path]() {
+                    return path;
+                });
+            }
+        }
+
+        for (const auto& ti : mod.m_mod_items) {
+            if (const auto* child = ti.second->ent.opt_Module()) {
+                Trans_Enumerate_ExplicitLinkage(state, *child, mod_path + ti.first);
+            }
         }
     }
 

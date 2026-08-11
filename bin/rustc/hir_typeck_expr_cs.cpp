@@ -2467,6 +2467,18 @@ namespace {
                 const auto* r = cast<const ::HIR::ExprNode_ConstBlock>(&right);
                 return r && equate_node(left_value, *l->m_inner, right_value, *r->m_inner);
             }
+            if (const auto* l = cast<const ::HIR::ExprNode_CallPath>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNode_CallPath>(&right);
+                if (!r || l->m_path != r->m_path || l->m_args.size() != r->m_args.size()) {
+                    return false;
+                }
+                for (unsigned int i = 0; i < l->m_args.size(); i++) {
+                    if (!equate_node(left_value, *l->m_args[i], right_value, *r->m_args[i])) {
+                        return false;
+                    }
+                }
+                return true;
+            }
             if (const auto* l = cast<const ::HIR::ExprNode_Block>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNode_Block>(&right);
                 if (!r || l->m_nodes.size() != r->m_nodes.size() || static_cast<bool>(l->m_value_node) != static_cast<bool>(r->m_value_node)) {
@@ -4869,38 +4881,40 @@ namespace {
         // - Else, equate and return
         // TODO: Should ErasedType be counted here? probably not.
         if (H::type_is_bounded(src) || H::type_is_bounded(dst)) {
-            const auto& lang_CoerceUnsized = context.m_crate.get_lang_item_path(sp, "coerce_unsized"); // TODO: Pre-load
+            const auto lang_CoerceUnsized = context.m_crate.get_lang_item_path_opt("coerce_unsized"); // TODO: Pre-load
             // `CoerceUnsized<U> for T` means `T -> U`
 
-            ::HIR::PathParams pp{dst};
+            if (!lang_CoerceUnsized.components().empty()) {
+                ::HIR::PathParams pp{dst};
 
-            // PROBLEM: This can false-negative leading to the types being falsely equated.
+                // PROBLEM: This can false-negative leading to the types being falsely equated.
 
-            bool fuzzy_match = false;
-            ImplRef best_impl;
-            bool found = context.m_resolve.find_trait_impls(sp, lang_CoerceUnsized, pp, src, [&](auto impl, auto cmp) -> bool {
-                DEBUG("[check_coerce] cmp=" << cmp << ", impl=" << impl);
-                // TODO: Allow fuzzy match if it's the only matching possibility?
-                // - Recorded for now to know if there could be a matching impl later
-                if (cmp == ::HIR::Compare::Fuzzy) {
-                    fuzzy_match = true;
-                    if (impl.more_specific_than(context.m_crate.m_types, best_impl)) {
-                        best_impl = mv$(impl);
-                    } else {
-                        TODO(sp, "Equal specificity impls");
+                bool fuzzy_match = false;
+                ImplRef best_impl;
+                bool found = context.m_resolve.find_trait_impls(sp, lang_CoerceUnsized, pp, src, [&](auto impl, auto cmp) -> bool {
+                    DEBUG("[check_coerce] cmp=" << cmp << ", impl=" << impl);
+                    // TODO: Allow fuzzy match if it's the only matching possibility?
+                    // - Recorded for now to know if there could be a matching impl later
+                    if (cmp == ::HIR::Compare::Fuzzy) {
+                        fuzzy_match = true;
+                        if (impl.more_specific_than(context.m_crate.m_types, best_impl)) {
+                            best_impl = mv$(impl);
+                        } else {
+                            TODO(sp, "Equal specificity impls");
+                        }
                     }
+                    return cmp == ::HIR::Compare::Equal;
+                });
+                // - Concretely found - emit the _Unsize op and remove this rule
+                if (found) {
+                    return CoerceResult::Unsize;
                 }
-                return cmp == ::HIR::Compare::Equal;
-            });
-            // - Concretely found - emit the _Unsize op and remove this rule
-            if (found) {
-                return CoerceResult::Unsize;
+                if (fuzzy_match) {
+                    DEBUG("- best_impl = " << best_impl);
+                    return CoerceResult::Unknown;
+                }
+                DEBUG("- No CoerceUnsized impl found");
             }
-            if (fuzzy_match) {
-                DEBUG("- best_impl = " << best_impl);
-                return CoerceResult::Unknown;
-            }
-            DEBUG("- No CoerceUnsized impl found");
         }
 
         // CoerceUnsized struct paths

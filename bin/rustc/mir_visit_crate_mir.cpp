@@ -51,6 +51,16 @@ void MIR::OuterVisitor::visit_constant(::HIR::ItemPath p, ::HIR::Constant& item)
     }
 }
 
+void MIR::OuterVisitor::visit_struct(::HIR::ItemPath p, ::HIR::Struct& item) {
+    auto _ = this->m_resolve.set_impl_generics(item.m_struct_markings.dst_type, item.m_params);
+    ::HIR::Visitor::visit_struct(p, item);
+}
+
+void MIR::OuterVisitor::visit_union(::HIR::ItemPath p, ::HIR::Union& item) {
+    auto _ = this->m_resolve.set_impl_generics(MetadataType::Unknown, item.m_params);
+    ::HIR::Visitor::visit_union(p, item);
+}
+
 void MIR::OuterVisitor::visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) {
     auto _ = this->m_resolve.set_impl_generics(MetadataType::None, item.m_params);
 
