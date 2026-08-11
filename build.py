@@ -91,6 +91,16 @@ node_cast_test = program(
     output="$(B)/tst/unit/node_cast_test",
 )
 
+ident_ordering_test = program(
+    name="ident_ordering_test",
+    srcs=[
+        "$(S)/tst/unit/test_ident_ordering.cpp",
+        "$(S)/bin/rustc/ident.cpp",
+        "$(S)/bin/rustc/rc_string.cpp",
+    ],
+    output="$(B)/tst/unit/ident_ordering_test",
+)
+
 # cargo: Cargo-compatible package resolver and mrustc build driver, written in
 # Go. Dependencies are checked in under bin/cargo/vendor, so this node is
 # offline. Rust 1.90 source adjustments belong to std_src below; Cargo has no
@@ -301,6 +311,18 @@ unit_tests.append(command(
         "$(B)/tst/unit/node_cast.stamp",
     ],
     deps=[node_cast_test],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
+    name="unit_ident_ordering",
+    inputs=["$(S)/tst/unit/test_ident_ordering.cpp"],
+    outputs=["$(B)/tst/unit/ident_ordering.stamp"],
+    cmd=[
+        [*TEST_TIMEOUT, "$(B)/tst/unit/ident_ordering_test"],
+        [*TEST_TIMEOUT, "sh", "-c", "> $(B)/tst/unit/ident_ordering.stamp"],
+    ],
+    deps=[ident_ordering_test],
     descr="UT",
     color="green",
 ))

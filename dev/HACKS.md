@@ -6,7 +6,7 @@
 
 1. Macro hygiene фактически неполна.
 
-   [ident.cpp](/home/pg/monorepo/trustme/bin/rustc/ident.cpp:9) реализует только примитивную видимость контекстов, а `Ident::operator==` сравнивает только имя. [synext_macro.cpp](/home/pg/monorepo/trustme/bin/rustc/synext_macro.cpp:2092) вырезает hygiene из строкового представления.
+   [ident.cpp](/home/pg/monorepo/trustme/bin/rustc/ident.cpp:9) реализует только примитивную видимость контекстов. [synext_macro.cpp](/home/pg/monorepo/trustme/bin/rustc/synext_macro.cpp:2092) вырезает hygiene из строкового представления.
 
 2. HRTB/lifetime relation местами математически некорректна.
 
@@ -61,4 +61,4 @@
 | Enumeration | `trans_main_bindings.cpp:1595,2449,2738,3117` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующий unit-first срез macro hygiene — устранить несогласованность `Ident::operator==`/`operator<`: equality игнорирует hygiene, ordering учитывает.
+Следующий unit-first срез macro hygiene — устранить потерю контекста при строковом преобразовании в `synext_macro.cpp:2092`.

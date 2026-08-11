@@ -686,7 +686,7 @@ namespace {
                             case LookupMode::Variable:
                             case LookupMode::Constant:
                                 for (auto it2 = e.constants.rbegin(); it2 != e.constants.rend(); ++it2) {
-                                    if (it2->name == name) {
+                                    if (it2->name.name == name) {
                                         ::AST::Path rv(name);
                                         rv.m_bindings.value.set(AST::AbsolutePath(), AST::PathBinding_Value::make_Generic({it2->value.to_binding()}));
                                         return rv;
@@ -767,7 +767,7 @@ namespace {
                                 break;
                             case LookupMode::Variable:
                                 for (auto it2 = e.constants.rbegin(); it2 != e.constants.rend(); ++it2) {
-                                    if (it2->name == name) {
+                                    if (it2->name.name == name) {
                                         //TODO(sp, "Return a reference to a constant generic '" << name << "'");
                                         // Need to disambiguate it... could set a high bit
                                         return it2->value.to_binding() | FLAG_CONST_GENERIC;

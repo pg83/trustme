@@ -217,7 +217,7 @@ public:
         if (type() != r.type()) {
             return false;
         }
-        TU_MATCH(Data, (m_data, r.m_data), (e, re), (None, return true;), (Ident, return e == re;), (String, return e == re;), (Integer, return e.m_datatype == re.m_datatype && e.m_intval == re.m_intval;), (Float, return e.m_datatype == re.m_datatype && e.m_floatval == re.m_floatval;), (Fragment, assert(!"Token equality on Fragment");))
+        TU_MATCH(Data, (m_data, r.m_data), (e, re), (None, return true;), (Ident, return e.same_name(re);), (String, return e == re;), (Integer, return e.m_datatype == re.m_datatype && e.m_intval == re.m_intval;), (Float, return e.m_datatype == re.m_datatype && e.m_floatval == re.m_floatval;), (Fragment, assert(!"Token equality on Fragment");))
         throw "";
     }
 

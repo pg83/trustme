@@ -160,13 +160,12 @@ struct Ident {
         return this->name == s;
     }
 
+    bool same_name(const Ident& x) const {
+        return this->name == x.name;
+    }
+
     bool operator==(const Ident& x) const {
-        if (this->name != x.name) {
-            return false;
-        }
-        //if( this->hygine.indexes != x.hygine.indexes )
-        //    return false;
-        return true;
+        return this->name == x.name && this->hygiene == x.hygiene;
     }
 
     bool operator!=(const Ident& x) const {
