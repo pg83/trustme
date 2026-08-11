@@ -2052,12 +2052,22 @@ namespace {
         }
 
         struct ExplicitInputLifetimeCollector: public HIR::Visitor {
-            HIR::LifetimeRef lifetime;
-            unsigned int count = 0;
+            std::vector<HIR::LifetimeRef> lifetimes;
             unsigned int nested_hrtb_depth = 0;
+            bool only_created = false;
+            unsigned int created_level = 0;
+            unsigned int first_created_index = 0;
 
             ExplicitInputLifetimeCollector(HIR::TypeInterner& types)
                 : HIR::Visitor(nullptr, types)
+            {
+            }
+
+            ExplicitInputLifetimeCollector(HIR::TypeInterner& types, unsigned int level, unsigned int first_index)
+                : HIR::Visitor(nullptr, types)
+                , only_created(true)
+                , created_level(level)
+                , first_created_index(first_index)
             {
             }
 
@@ -2070,9 +2080,19 @@ namespace {
                 if (nested_hrtb_depth != 0 && lft.is_hrl()) {
                     return;
                 }
-                count += 1;
-                if (count == 1) {
-                    lifetime = lft;
+                if (only_created && (!lft.is_param()
+                        || (lft.binding >> 8) != created_level
+                        || (lft.binding & 0xFF) < first_created_index)) {
+                    return;
+                }
+                if (std::find(lifetimes.begin(), lifetimes.end(), lft) == lifetimes.end()) {
+                    lifetimes.push_back(lft);
+                }
+            }
+
+            void merge(const ExplicitInputLifetimeCollector& other) {
+                for (const auto& lft : other.lifetimes) {
+                    add_lifetime(lft);
                 }
             }
 
@@ -2091,23 +2111,100 @@ namespace {
             }
 
             void visit_type(HIR::TypeRef& ty) override {
+                // A nested function signature and an input-position impl Trait
+                // each resolve elision in their own scope. Neither contributes
+                // a candidate to the surrounding function parameter.
+                if (ty->is_Function() || ty->is_ErasedType()) {
+                    return;
+                }
                 if (const auto* e = ty->opt_Borrow()) {
                     add_lifetime(e->lifetime);
                 }
                 if (const auto* e = ty->opt_TraitObject()) {
                     add_lifetime(e->m_lifetime);
                 }
-                if (const auto* e = ty->opt_ErasedType()) {
-                    for (const auto& lft : e->m_lifetime_bounds) {
-                        add_lifetime(lft);
+                HIR::Visitor::visit_type(ty);
+            }
+        };
+
+        struct InputLifetimeSelection {
+            HIR::LifetimeRef lifetime;
+            bool has_lifetime = false;
+            bool ambiguous = false;
+            bool from_self = false;
+
+            void add_parameter(const ExplicitInputLifetimeCollector& parameter) {
+                if (parameter.lifetimes.empty() || from_self || ambiguous) {
+                    return;
+                }
+                if (parameter.lifetimes.size() != 1 || has_lifetime) {
+                    has_lifetime = false;
+                    ambiguous = true;
+                    return;
+                }
+                lifetime = parameter.lifetimes.front();
+                has_lifetime = true;
+            }
+
+            void set_self(const ExplicitInputLifetimeCollector& self_lifetimes) {
+                lifetime = HIR::LifetimeRef();
+                has_lifetime = false;
+                ambiguous = self_lifetimes.lifetimes.size() > 1;
+                from_self = !self_lifetimes.lifetimes.empty();
+                if (self_lifetimes.lifetimes.size() == 1) {
+                    lifetime = self_lifetimes.lifetimes.front();
+                    has_lifetime = true;
+                }
+            }
+
+            HIR::LifetimeRef get() const {
+                return has_lifetime && !ambiguous ? lifetime : HIR::LifetimeRef();
+            }
+        };
+
+        struct SelfLifetimeCollector: public HIR::Visitor {
+            HIR::TypeInterner& types;
+            const HIR::TypeData* impl_self;
+            ExplicitInputLifetimeCollector lifetimes;
+
+            SelfLifetimeCollector(HIR::TypeInterner& types, const HIR::TypeData* impl_self)
+                : HIR::Visitor(nullptr, types)
+                , types(types)
+                , impl_self(impl_self)
+                , lifetimes(types)
+            {
+            }
+
+            bool contains_self(HIR::TypeRef ty) {
+                struct SelfFinder: public HIR::Visitor {
+                    const HIR::TypeData* impl_self;
+                    bool found = false;
+
+                    SelfFinder(HIR::TypeInterner& types, const HIR::TypeData* impl_self)
+                        : HIR::Visitor(nullptr, types)
+                        , impl_self(impl_self)
+                    {
+                    }
+
+                    void visit_type(HIR::TypeRef& ty) override {
+                        if (ty == impl_self || (ty->is_Generic() && ty->as_Generic().binding == GENERIC_Self)) {
+                            found = true;
+                            return;
+                        }
+                        HIR::Visitor::visit_type(ty);
+                    }
+                } finder(types, impl_self);
+                finder.visit_type(ty);
+                return finder.found;
+            }
+
+            void visit_type(HIR::TypeRef& ty) override {
+                if (const auto* borrow = ty->opt_Borrow()) {
+                    if (contains_self(borrow->inner)) {
+                        lifetimes.add_lifetime(borrow->lifetime);
                     }
                 }
-
-                const auto* function = ty->opt_Function();
-                const bool nested_hrtb = function && !function->hrls.m_lifetimes.empty();
-                nested_hrtb_depth += nested_hrtb;
                 HIR::Visitor::visit_type(ty);
-                nested_hrtb_depth -= nested_hrtb;
             }
         };
 
@@ -2331,22 +2428,22 @@ namespace {
                 m_current_lifetime.push_back(nullptr);
                 set_params(&e->hrls, HIR::GENERIC_Hrtb);
                 auto saved_create = m_create_elided;
-                const auto first_elided_lifetime_idx = e->hrls.m_lifetimes.size();
-                ExplicitInputLifetimeCollector input_lifetimes(crate.m_types);
-                for (auto& t : e->m_arg_types) {
-                    input_lifetimes.visit_type(t);
-                }
+                InputLifetimeSelection input_lifetimes;
                 m_create_elided = true;
                 for (auto& t : e->m_arg_types) {
+                    ExplicitInputLifetimeCollector parameter_lifetimes(crate.m_types);
+                    parameter_lifetimes.visit_type(t);
+                    const auto first_elided_lifetime_idx = e->hrls.m_lifetimes.size();
                     this->visit_type(t);
+                    ExplicitInputLifetimeCollector created_lifetimes(
+                        crate.m_types, HIR::GENERIC_Hrtb, first_elided_lifetime_idx);
+                    created_lifetimes.visit_type(t);
+                    parameter_lifetimes.merge(created_lifetimes);
+                    input_lifetimes.add_parameter(parameter_lifetimes);
                 }
                 m_create_elided = false;
-                const auto elided_lifetime_count = e->hrls.m_lifetimes.size() - first_elided_lifetime_idx;
-                HIR::LifetimeRef output_lifetime;
-                if (input_lifetimes.count + elided_lifetime_count == 1) {
-                    output_lifetime = input_lifetimes.count == 1
-                        ? input_lifetimes.lifetime
-                        : HIR::LifetimeRef(HIR::GENERIC_Hrtb * 256 + first_elided_lifetime_idx);
+                HIR::LifetimeRef output_lifetime = input_lifetimes.get();
+                if (output_lifetime != HIR::LifetimeRef()) {
                     m_current_lifetime.pop_back();
                     m_current_lifetime.push_back(&output_lifetime);
                 }
@@ -2779,8 +2876,15 @@ namespace {
                 tp.m_lifetime_elision = false;
                 m_current_lifetime.push_back(nullptr);
                 const auto first_elided_lifetime_idx = tp.m_hrtbs->m_lifetimes.size();
-                ExplicitInputLifetimeCollector input_lifetimes(crate.m_types);
-                input_lifetimes.visit_path_params(tp.m_path.m_params);
+                std::vector<std::vector<HIR::LifetimeRef>> explicit_input_lifetimes;
+                ASSERT_BUG(sp, tp.m_path.m_params.m_types.size() == 1
+                    && tp.m_path.m_params.m_types.front()->is_Tuple(),
+                    "Parenthesised Fn arguments aren't a tuple: " << tp.m_path);
+                for (auto input : *tp.m_path.m_params.m_types.front()->opt_Tuple()) {
+                    ExplicitInputLifetimeCollector parameter_lifetimes(crate.m_types);
+                    parameter_lifetimes.visit_type(input);
+                    explicit_input_lifetimes.push_back(mv$(parameter_lifetimes.lifetimes));
+                }
 
                 // Visit the trait args (as inputs)
                 auto saved_params = push_params(tp.m_hrtbs.get(), 3);
@@ -2791,13 +2895,20 @@ namespace {
                     DEBUG("for " << tp.m_hrtbs->fmt_args());
                 }
 
-                HIR::LifetimeRef lft;
-                const auto elided_lifetime_count = tp.m_hrtbs->m_lifetimes.size() - first_elided_lifetime_idx;
-                if (input_lifetimes.count + elided_lifetime_count == 1) {
-                    lft = input_lifetimes.count == 1
-                        ? input_lifetimes.lifetime
-                        : HIR::LifetimeRef(HIR::GENERIC_Hrtb * 256 + first_elided_lifetime_idx);
+                InputLifetimeSelection input_lifetimes;
+                auto& inputs = *tp.m_path.m_params.m_types.front()->opt_Tuple();
+                ASSERT_BUG(sp, inputs.size() == explicit_input_lifetimes.size(), "Fn argument tuple changed size");
+                for (size_t i = 0; i < inputs.size(); i++) {
+                    auto input = inputs[i];
+                    ExplicitInputLifetimeCollector parameter_lifetimes(crate.m_types);
+                    parameter_lifetimes.lifetimes = mv$(explicit_input_lifetimes[i]);
+                    ExplicitInputLifetimeCollector created_lifetimes(
+                        crate.m_types, HIR::GENERIC_Hrtb, first_elided_lifetime_idx);
+                    created_lifetimes.visit_type(input);
+                    parameter_lifetimes.merge(created_lifetimes);
+                    input_lifetimes.add_parameter(parameter_lifetimes);
                 }
+                HIR::LifetimeRef lft = input_lifetimes.get();
                 if (lft != HIR::LifetimeRef()) {
                     m_current_lifetime.push_back(&lft);
                     for (auto& assoc : tp.m_type_bounds) {
@@ -3042,56 +3153,43 @@ namespace {
             // NOTE: Superfluous... except that it makes the params valid for the return type.
             visit_params(item.m_params);
 
-            auto first_elided_lifetime_idx = item.m_params.m_lifetimes.size();
-            ExplicitInputLifetimeCollector input_lifetimes(crate.m_types);
-            for (auto& arg : item.m_args) {
-                input_lifetimes.visit_type(arg.second);
-            }
-
             // TODO: Add lifetime bounds from argument types!
             // - While visiting the argument types, find path types and inherit the lifetime bounds
 
             // Visit arguments to get the input lifetimes
             auto saved_params = push_params(item.m_params, 1);
-            for (auto& arg : item.m_args) {
+            InputLifetimeSelection input_lifetimes;
+            for (size_t i = 0; i < item.m_args.size(); i++) {
+                auto& arg = item.m_args[i];
                 TRACE_FUNCTION_FR("ARG " << arg, "ARG " << arg);
+                ExplicitInputLifetimeCollector parameter_lifetimes(crate.m_types);
+                parameter_lifetimes.visit_type(arg.second);
+                const auto first_elided_lifetime_idx = item.m_params.m_lifetimes.size();
                 visit_type(arg.second);
+                ExplicitInputLifetimeCollector created_lifetimes(
+                    crate.m_types, HIR::GENERIC_Item, first_elided_lifetime_idx);
+                created_lifetimes.visit_type(arg.second);
+                parameter_lifetimes.merge(created_lifetimes);
+
+                if (i == 0 && item.m_receiver != HIR::Function::Receiver::Free) {
+                    SelfLifetimeCollector self_lifetimes(crate.m_types, m_resolve.m_self_type);
+                    self_lifetimes.visit_type(arg.second);
+                    input_lifetimes.set_self(self_lifetimes.lifetimes);
+                } else {
+                    input_lifetimes.add_parameter(parameter_lifetimes);
+                }
             }
             m_create_elided = false;
 
             // Get output lifetime
-            // - Try `&self`'s lifetime (if it was an elided lifetime)
-            HIR::LifetimeRef elided_output_lifetime;
+            HIR::LifetimeRef elided_output_lifetime = input_lifetimes.get();
             if (item.m_receiver != HIR::Function::Receiver::Free) {
-                if (const auto* b = item.m_args[0].second->opt_Borrow()) {
-                    // If this was an elided lifetime.
-                    if (b->lifetime.is_param() && (b->lifetime.binding >> 8) == 1 && (b->lifetime.binding & 0xFF) >= first_elided_lifetime_idx) {
-                        elided_output_lifetime = b->lifetime;
-                        DEBUG("Elided 'self");
-                    }
-                    // Also allow 'static self (see lazy_static 1.0.2)
-                    if (b->lifetime.binding == HIR::LifetimeRef::STATIC) {
-                        elided_output_lifetime = b->lifetime;
-                        DEBUG("Static 'self");
-                    }
-                    // OR, just always use `'self` if present
-                    if (true) {
-                        DEBUG("'self specified");
-                        elided_output_lifetime = b->lifetime;
-                    }
-                }
                 if (item.m_receiver == HIR::Function::Receiver::Value) {
                     m_value_self_type = m_resolve.m_self_type;
                 }
             }
-            if (elided_output_lifetime == HIR::LifetimeRef()) {
-                const auto elided_lifetime_count = item.m_params.m_lifetimes.size() - first_elided_lifetime_idx;
-                if (input_lifetimes.count + elided_lifetime_count == 1) {
-                    elided_output_lifetime = input_lifetimes.count == 1
-                        ? input_lifetimes.lifetime
-                        : HIR::LifetimeRef(HIR::GENERIC_Item * 256 + first_elided_lifetime_idx);
-                    DEBUG("Single input lifetime - " << elided_output_lifetime);
-                }
+            if (elided_output_lifetime != HIR::LifetimeRef()) {
+                DEBUG("Single input lifetime - " << elided_output_lifetime);
             }
             // If present, set it (push to the stack)
             assert(m_current_lifetime.empty());
