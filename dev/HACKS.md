@@ -20,7 +20,7 @@
 
    Это может оставлять неверные impl-кандидаты. Нужен отдельный goal с результатом `Yes/Ambiguous/No`, а не ослабление отношения типов.
 
-   Opt-in goal evaluator уже обрабатывает raw type/const inference и associated equality, сужающую `Self`. Глобальное включение всё ещё блокирует merge нескольких ambiguous responses: сейчас он теряет общие constraints в identity-response, например `SliceIndex` не проталкивает `usize` назад через цепочку operator goals.
+   Opt-in goal evaluator уже обрабатывает raw type/const inference, associated equality, сужающую `Self`, и сохраняет constraints единственного или эквивалентного ambiguous response. Исправлены обратное проталкивание `usize` через `SliceIndex`/operator goals и связывание ivar с жёсткой unresolved-проекцией в `Iterator::try_find`. Глобальное включение всё ещё блокирует выбор `IntoIterator` для `Zip<A::IntoIter, B::IntoIter>` при specialization.
 
 4. Backend местами генерирует программу, которая просто вызывает `abort()`.
 
@@ -63,4 +63,4 @@
 | Enumeration | `trans_main_bindings.cpp:1595,2450,2738,3118` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующий функциональный пункт — merge общих constraints ambiguous goal responses, затем удаление глобальной fuzzy relation/impl matching, строго unit-first. Macro hygiene остаётся отдельной архитектурной задачей.
+Следующий функциональный пункт — `IntoIterator`/specialization для `Zip<A::IntoIter, B::IntoIter>`, затем удаление глобальной fuzzy relation/impl matching, строго unit-first. Macro hygiene остаётся отдельной архитектурной задачей.

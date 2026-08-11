@@ -8,7 +8,7 @@ fn fill<const OFFSET: usize>(buffer: &mut [u8]) {
 }
 
 fn main() {
-    let mut buffer = [0; 8];
+    let mut buffer = [0; 16];
     fill::<0>(&mut buffer);
-    assert_eq!(buffer[3], 1);
+    assert_eq!(buffer[15], 1);
 }

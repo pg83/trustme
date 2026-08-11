@@ -5903,8 +5903,7 @@ bool TraitResolution::find_trait_impls(
             trait_path.m_params,
             pe.type,
             [&](ImplRef impl, ::HIR::Compare certainty) {
-                if (impl.is_ambiguous_identity()
-                    || certainty == ::HIR::Compare::Fuzzy) {
+                if (impl.is_ambiguous_identity()) {
                     ambiguous = true;
                     return true;
                 }
@@ -5916,6 +5915,7 @@ bool TraitResolution::find_trait_impls(
                 }
                 input = ::std::move(output);
                 normalized = true;
+                ambiguous = certainty == ::HIR::Compare::Fuzzy;
                 return true;
             },
             pe.item.c_str(),

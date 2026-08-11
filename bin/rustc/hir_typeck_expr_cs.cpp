@@ -6162,9 +6162,6 @@ namespace {
                                 auto data = (*output_type)->clone_data();
                                 data.as_Path().binding = HIR::TypePathBinding::make_Opaque({});
                                 output_type = context.m_crate.m_types.intern(std::move(data));
-                            } else {
-                                DEBUG("- Attempted recursion, stopping it");
-                                return AssociatedCheckResult::Retry;
                             }
                         }
                     }
