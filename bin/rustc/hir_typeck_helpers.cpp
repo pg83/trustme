@@ -2678,6 +2678,16 @@ class NextTraitGoalEvaluator {
             return found;
         }
 
+        static bool type_has_ufcs_unknown(const ::HIR::TypeData* type) {
+            if (!type) {
+                return false;
+            }
+            return visit_ty_with(type, [](const ::HIR::TypeData* inner) {
+                const auto* path = inner->opt_Path();
+                return path && path->path.m_data.is_UfcsUnknown();
+            });
+        }
+
         static bool params_have_candidate_placeholders(
             const ::HIR::PathParams& params
         ) {
@@ -3659,6 +3669,23 @@ class NextTraitGoalEvaluator {
                         requirement.second.source_trait,
                         requirement.first,
                         requirement.second.aty_params
+                    );
+                }
+                if (!use_candidate_response
+                    && !type_has_ufcs_unknown(candidate_output)) {
+                    // rustc normalises a nested projection response before it
+                    // is unified with the outer candidate.  In particular,
+                    // `<&mut I as Iterator>::Item` first becomes
+                    // `<I as Iterator>::Item` and then the ParamEnv equality
+                    // `&T`; matching the unnormalised alias against
+                    // `&placeholder` only reports a fuzzy relation and loses
+                    // the constraint.  A candidate's own response is not a
+                    // nested solver response: during Resolve UFCS Outer either
+                    // form can still legally contain a local UfcsUnknown, and
+                    // such a response must remain deferred until that pass
+                    // resolves its trait path.
+                    candidate_output = m_resolve.expand_associated_types(
+                        span(), ::std::move(candidate_output)
                     );
                 }
                 const auto match = (use_candidate_response
