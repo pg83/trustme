@@ -6,7 +6,7 @@
 
 1. Macro hygiene фактически неполна.
 
-   [ident.cpp](/home/pg/monorepo/trustme/bin/rustc/ident.cpp:9) реализует только примитивную видимость контекстов. [synext_macro.cpp](/home/pg/monorepo/trustme/bin/rustc/synext_macro.cpp:2092) вырезает hygiene из строкового представления.
+   [ident.cpp](/home/pg/monorepo/trustme/bin/rustc/ident.cpp:9) реализует только примитивную видимость контекстов.
 
 2. HRTB/lifetime relation местами математически некорректна.
 
@@ -40,7 +40,7 @@
 | Expansion | `expand_common.cpp:25,137,387,460,949,2117,2248,2456` | Глобальный module context, повторные проходы, ранний `macro_rules` и преобразование inner items в outer. |
 | Parser | `parse_common.cpp:263,306,354,388,403,1279,1353` | Statement/path macro handling, `TOK_HASH` между statements и `builtin #` lowering. |
 | Macro matcher | `macro_rules_macro_rules.cpp:534,833,1537,2311,2313,3811` | Opaque fragments, `$crate` special name и matcher-state обходы. |
-| Hygiene/macros | `ident.cpp:9`; `synext_macro.cpp:1557,2092` | Неполная hygiene и hardcoded `format_args!` API. |
+| Hygiene/macros | `ident.cpp:9`; `synext_macro.cpp:1539` | Примитивная hygiene visibility и hardcoded `format_args!` API. |
 | Resolver | `resolve_common.cpp:98,543`; `resolve_main_bindings.cpp:411,641,1512,1702,1760,1851,1860,2681,3792,3858,3891,4096` | Синтетические `=crate`, anon-module и primitive-module paths. |
 | Decorators | `synext_decorator.cpp:1558,2478,2615,2975` | Повторный обход anon modules и частные path/zero-sized-array workarounds. |
 | HIR layout | `hir_expr.h:583` | У `ExprNode_Emplace::Noop` не найден producer, но consumers ещё существуют. |
@@ -61,4 +61,4 @@
 | Enumeration | `trans_main_bindings.cpp:1595,2449,2738,3117` | Generated statics, `caller_location`, default trait bodies и lifetime population обходят неполную dependency model. |
 | Mangling | `trans_mangling.cpp:70,72,254` | Потенциальные symbol collisions. |
 
-Следующий unit-first срез macro hygiene — устранить потерю контекста при строковом преобразовании в `synext_macro.cpp:2092`.
+Следующий unit-first срез macro hygiene — `Ident::Hygiene::is_visible`: текущая проверка ищет только последний context definition в source chain.
