@@ -2,57 +2,40 @@
 
 В этом файле остаётся только незакрытая функциональная работа. История исправлений находится в git.
 
-## Текущий baseline
-
-Полный gate на commit `22eccad8` запускался на всех доступных ядрах:
+## Gate и приоритизация
 
 ```sh
 nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC=clang CXX=clang++ LDFLAGS='-fuse-ld=lld' ./build -B .build-clang -j "$(nproc)" -k test
 ```
 
-Результат: `3289 failed nodes`, `3260 broken requested targets`. Лог: `/tmp/trustme-full-gate-20260809-all-cores.log`.
-
-Из 2384 целых записей о прямом падении: 1571 compiler abort/rejection, 627 обычных compile/adapter failures, 97 runtime failures, 75 SIGSEGV, 11 timeout и 3 SIGILL. Ещё две строки были повреждены параллельным выводом. Основные прямые источники: `rust_ui_compile` — 963, `rust_1_90` — 534, GCCRS — 412, `rust_lib` — 149, reference и doctest — по 127.
-
-Приоритет определяется не краснотой отдельного unit и не размером каталога, а числом targets, которые снимает одно общее исправление. Число рядом с задачей — измеренный fan-out этого gate. Если минимизация показывает разные причины, задача делится, а части реклассифицируются ниже.
+Приоритет определяется не краснотой отдельного unit и не размером каталога, а числом targets, которые снимает одно общее исправление. Если минимизация показывает разные причины, задача делится, а части реклассифицируются ниже.
 
 Для compiler fix порядок остаётся строгим: минимальный красный `tst/unit/test_*.rs` → исправление общего пути → зелёный unit → исходный upstream trigger → соседние triggers той же сигнатуры → clang/lld build → commit и push. Unit подтверждает причину, но сам по себе не повышает приоритет.
 
 ## P1 — 25–99 targets одним общим исправлением
 
-1. [x] **`-C opt-level` и `debug-assertions`: устранены 65 прямых отказов.** `opt-level=0/1/2/3/s/z` связан с MIR-inlining и флагами C backend, `-O` и `-C opt-level` подчиняются правостороннему precedence rustc, а обе формы `debug-assertions` управляют встроенным cfg с rustc-default от optimization level. Unit проверяет cfg, MIR, backend command и invalid values; исходные triggers больше не останавливаются на этих опциях.
+1. [ ] **Оставшиеся `-C` options: 55 прямых отказов.** Разделить `debuginfo`, `codegen-units`, target features, LTO и прочие по фактической семантике; опция считается реализованной только когда меняет соответствующий pipeline/backend behavior.
 
-2. [x] **Offset pointer в const borrow: устранены 62 library failures.** MIR `ItemAddr` теперь хранит allocation path вместе с byte offset; MIR cleanup, monomorphization, CTFE, metadata и C backend сохраняют его без потерь. Unit покрывает tuple field, `Option`/`Result` payload и cross-crate generic MIR через сериализацию; все 33 `coretests/option` и 29 `coretests/result` зелёные.
+2. [ ] **Настоящий check-only: 49 измеренных failures.** Из 815 текущих красных `check-pass` только 49 проходят `-Z stop-after=typeck`; это реальный, а не верхний fan-out. Реализовать `--emit=metadata`/check stop в driver и включать его в adapter только для `check-pass`; `build-pass` обязан оставаться на полном pipeline.
 
-3. [ ] **Оставшиеся `-C` options: 55 прямых отказов.** Разделить `debuginfo`, `codegen-units`, target features, LTO и прочие по фактической семантике; опция считается реализованной только когда меняет соответствующий pipeline/backend behavior.
+3. [ ] **Оставшиеся `no_core` lang-item paths: 43 прямых отказа.** `coerce_unsized` — 37, `unsafe_cell` — 5 и `tuple_trait` — 1. Для каждого сначала сверить upstream semantics и отделить настоящий lang-free builtin от неполного GCCRS fixture; отсутствие trait нельзя обходить, если upstream требует trait для самой операции.
 
-4. [ ] **Настоящий check-only: 49 измеренных failures.** Из 815 текущих красных `check-pass` только 49 проходят `-Z stop-after=typeck`; это реальный, а не верхний fan-out. Реализовать `--emit=metadata`/check stop в driver и включать его в adapter только для `check-pass`; `build-pass` обязан оставаться на полном pipeline.
+4. [ ] **MIR control flags: 37 прямых отказов.** Связать `-Z validate-mir` — 20 с validator pipeline, `mir-enable-passes` — 9 и `inline-mir`/`inline_mir` — 8 с реальным pass selection. Не считать зелёным простое принятие option.
 
-5. [ ] **Оставшиеся `no_core` lang-item paths: 43 прямых отказа.** `coerce_unsized` — 37, `unsafe_cell` — 5 и `tuple_trait` — 1. Для каждого сначала сверить upstream semantics и отделить настоящий lang-free builtin от неполного GCCRS fixture; отсутствие trait нельзя обходить, если upstream требует trait для самой операции.
+5. [ ] **`pin!` expansion/parser: не менее 28 targets.** 21 compile failure видит `let` после path separator, ещё 7 cases заблокированы harness `coretests/pin_macro`. Исправить statement macro expansion в block context, затем проверить `pin!` с expression, `let` и function item.
 
-6. [ ] **MIR control flags: 37 прямых отказов.** Связать `-Z validate-mir` — 20 с validator pipeline, `mir-enable-passes` — 9 и `inline-mir`/`inline_mir` — 8 с реальным pass selection. Не считать зелёным простое принятие option.
-
-7. [x] **`Pointee`/metadata solver: устранён compile blocker для 34 library cases.** Оба solver path теперь вычисляют `Metadata` рекурсивно через фактическое последнее поле struct, включая вложенный generic tail и `dyn`; unit проверяет равенство `<Wrapper<T> as Pointee>::Metadata = <T as Pointee>::Metadata`, а исходный UI trigger `pointee-tail-is-generic.rs` и compile-фаза `coretests/ptr` проходят этот blocker. Runtime layout/codegen дефекты отделены ниже.
-
-8. [ ] **`pin!` expansion/parser: не менее 28 targets.** 21 compile failure видит `let` после path separator, ещё 7 cases заблокированы harness `coretests/pin_macro`. Исправить statement macro expansion в block context, затем проверить `pin!` с expression, `let` и function item.
-
-9. [ ] **Повторяющиеся compiler crash signatures.** Сначала символизировать и группировать 75 SIGSEGV по stack/phase. Уже видны TAIT/impl-trait, coroutine/generator drop, projection cycles, const generics и HRTB; повышать отдельную группу выше можно только с измеренным общим fan-out. Отдельно устранить 28 `Invalid path (no nodes)` asserts, 20 оставшихся `Spare rules left after typecheck stabilised` и 24 `Unexpected item type in inherent impl - Type`; `methods/method-probe-no-guessing-dyn-trait.rs` закрыт разделением autoderef probe/confirm, а три `methods/supertrait-shadowing/common-ancestor*.rs` — feature-gated выбором наиболее специфичного subtrait.
+6. [ ] **Повторяющиеся compiler crash signatures.** Сначала символизировать и группировать 75 SIGSEGV по stack/phase. Уже видны TAIT/impl-trait, coroutine/generator drop, projection cycles, const generics и HRTB; повышать отдельную группу выше можно только с измеренным общим fan-out. Отдельно устранить 28 `Invalid path (no nodes)` asserts, 20 оставшихся `Spare rules left after typecheck stabilised` и 24 `Unexpected item type in inherent impl - Type`.
 
 ## P2 — runtime correctness и общие codegen/CTFE причины
 
 97 targets компилируются, но падают при исполнении. Их нельзя объединять в одну задачу: порядок внутри раздела пересчитывается по числу triggers одной минимальной причины.
 
 - [ ] `i128/u128`: разделить arithmetic, comparison, cast, shift и ABI передачи/возврата; начинать с общей операции, встречающейся в максимуме runtime failures.
-- [ ] Drop/unwind/leak: wildcard discard в `let _ = value` и `_ = value` теперь сохраняет drop; зелёны `issues/issue-6892.rs`, `destructuring-assignment/drop-order.rs` и `drop/issue-90752.rs`. Pattern bindings планируются в порядке rustc match-кандидатур, function arguments/block locals/tail temporaries имеют отдельные ordered scopes, а let-else различает success remainder и cleanup перед `else`; зелёны ещё `drop/or-pattern-drop-order.rs`, `pattern/move-ref-patterns/move-ref-patterns-dynamic-semantics.rs`, `drop/issue-23338-ensure-param-drop-order.rs` и `let-else/let-else-drop-order.rs`. Non-Copy place в expression statement потребляется и уничтожается в statement scope; `drop/issue-48962.rs` зелёный. Shallow drop частично перемещённого `Box<T, A>` теперь после `Box::drop` уничтожает физические поля, включая allocator; `drop/box-conditional-drop-allocator.rs` зелёный. Desugared `for` имеет собственную terminating temporary scope, а static promotion рекурсивно запрещён для кандидатов с `NeedsDrop`; зелёны `drop/for-expr-temporary-drop-scope.rs`, `consts/promoted_const_call4.rs` и `dropck/issue-34053.rs`. Normal/early/panic unwind и leak-пути остаются отдельной работой. `drop/issue-90752-raw-ptr-shenanigans.rs` намеренно ожидает известную upstream-утечку `[0]`, тогда как trustme корректно уничтожает оба значения и получает `[0, 1]`; не вводить утечку ради этого ожидания. Не ослаблять тесты утечек.
-- [x] Or-pattern/match runtime: guard-failure продолжает со следующей альтернативы того же arm, multiple or-pattern перебираются left-to-right, а SplitSlice строит полный неизменяемый `leading × trailing` cross-product. Все четыре измеренных runtime arm-selection target зелёны; дополнительный bindings-after-`@` slice trigger подтверждает тот же путь.
 - [ ] Float runtime и formatting: отдельно signed zero/NaN, arithmetic, exponent precision и debug-hex; ожидаемая строка или bits являются invariant.
 - [ ] Derived `Copy`/`Clone`/`Debug`/`Hash`: отделить ошибку expansion от move/drop/codegen aggregate.
 - [ ] `track_caller`, `type_name`/`TypeId`/`Any`, process environment, SIMD и nonzero arithmetic: группировать только по общему lowered ABI или intrinsic.
 - [ ] Довести `f128` runtime без пропускания binary128 через host `double`; проверить точные bits.
 - [ ] Добавить metadata encoding для cross-crate enum discriminants шире 64 бит и проверить producer/consumer crates.
-- [x] Always-unsized struct layout совпадает с layout его sized stand-in до хвостового поля. Rust-layout теперь стабильно сортирует поля по убывающей effective alignment group и исключает DST tail; `caller_location` не зависит от физического порядка полей. Unit `test_always_unsized_struct_raw_parts.rs`, соседние packed/offset units и upstream `unsized3-rpass.rs` зелёные после полной пересборки libstd.
-- [x] Array→slice autoderef больше не создаёт невалидное unsized value в HIR. Method/index paths получают явную borrow → pointer unsize → deref adjustment chain; отдельный kind ограничивает позднюю смену place mutability этой цепочкой. Unit покрывает shared/unique slice methods и range indexing, полный libstd rebuild и шесть соседних array/slice nodes зелёные.
-- [x] Bounded generic `A: Unsize<[T]>` больше не читает `DstMeta` из thin `&A`. MIR сохраняет unresolved unsize до monomorphization, затем общий cleanup получает длину concrete array; красный unit `&[u8; 4] → &[u8]`, полный libstd rebuild и связанный adjustment unit зелёные.
 - [ ] `packed-struct-drop-aligned.rs`: сначала исправить `Pin<&mut generator>.resume`, затем layout/drop invariant.
 
 ## P3 — оставшиеся CTFE, MIR и const generics
@@ -75,8 +58,8 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ## P5 — единичные regressions и независимые failures
 
-- [ ] Пять красных unit — это три причины, а не пять приоритетов: `coroutine_addassign_yield` и `yield_unit` одинаково падают ещё в `Lifetime Elision` на `HIR::TypeData::clone_data(this=0x0)` из `LifetimeVisitor::visit_type` (`hir_conv_main_bindings.cpp:2262`), до MIR/unwind; два const-relation mismatch описаны в P3; неверный runtime offset в `qualified_offset_of_macro` относится к своему общему кластеру. Они не входят в C++ unwind-задачу.
-- [ ] Два независимых library CTFE panic: `cell::refcell_borrow` и `cell::refcell_borrow_mut`. Старый monolithic fan-out 94 не подтверждён: `mem::test_transmute_copy` и остальные 91 нода при раздельной сборке зелёные либо относятся к cfg-selection/runtime failure. Каждый panic сначала минимизировать до неверного branch или CTFE значения.
+- [ ] Пять красных unit — это три причины, а не пять приоритетов: `coroutine_addassign_yield` и `yield_unit` одинаково падают ещё в `Lifetime Elision` на `HIR::TypeData::clone_data(this=0x0)` из `LifetimeVisitor::visit_type` (`hir_conv_main_bindings.cpp:2262`); два const-relation mismatch описаны в P3; неверный runtime offset в `qualified_offset_of_macro` относится к своему общему кластеру.
+- [ ] Два независимых library CTFE panic: `cell::refcell_borrow` и `cell::refcell_borrow_mut`. Каждый сначала минимизировать до неверного branch или CTFE значения.
 - [ ] `resvg`: `AsRef` selection для `Option<HuffmanTable>`; после минимального trait-solver unit вернуть весь standing integration в gate.
 - [ ] Три SIGILL: `const-generics/issues/issue-74906.rs`, `layout/invalid-unsized-const-prop.rs`, `const_prop/issue-86351.rs`.
 - [ ] Оставшиеся timeout после `coretests/iter`: два UI, три Rust 1.90, один Exercism, три RustSmith и один runtime `select_nth_unstable`. Каждый сначала привязать к stack/phase; лимит не увеличивать.
