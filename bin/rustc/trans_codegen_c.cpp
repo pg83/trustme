@@ -2109,8 +2109,26 @@ namespace {
                 emit_ctype(item.m_return);
                 m_of << " rv;\n";
 
+                if (item.m_linkage.name == "llvm.prefetch") {
+                    m_of << "\tif(arg1) {\n"
+                         << "\t\tswitch(arg2) {\n"
+                         << "\t\tcase 0: __builtin_prefetch(arg0, 1, 0); break;\n"
+                         << "\t\tcase 1: __builtin_prefetch(arg0, 1, 1); break;\n"
+                         << "\t\tcase 2: __builtin_prefetch(arg0, 1, 2); break;\n"
+                         << "\t\tdefault: __builtin_prefetch(arg0, 1, 3); break;\n"
+                         << "\t\t}\n"
+                         << "\t} else {\n"
+                         << "\t\tswitch(arg2) {\n"
+                         << "\t\tcase 0: __builtin_prefetch(arg0, 0, 0); break;\n"
+                         << "\t\tcase 1: __builtin_prefetch(arg0, 0, 1); break;\n"
+                         << "\t\tcase 2: __builtin_prefetch(arg0, 0, 2); break;\n"
+                         << "\t\tdefault: __builtin_prefetch(arg0, 0, 3); break;\n"
+                         << "\t\t}\n"
+                         << "\t}\n"
+                         << "\treturn;\n";
+                }
                 // pshufb instruction w/ 128 bit operands
-                if (item.m_linkage.name == "llvm.x86.ssse3.pshuf.b.128") {
+                else if (item.m_linkage.name == "llvm.x86.ssse3.pshuf.b.128") {
                     m_of << "\tconst uint8_t* src = (const uint8_t*)&arg0;\n"
                          << "\tconst uint8_t* mask = (const uint8_t*)&arg1;\n"
                          << "\tuint8_t* dst = (uint8_t*)&rv;\n"
@@ -6425,8 +6443,22 @@ namespace {
                     m_of << " != 0 ? ";
                     if (name == "ctlz" || name == "ctlz_nonzero") {
                         m_of << "__builtin_clz(";
+                        if (ty == ::HIR::CoreType::U8 || ty == ::HIR::CoreType::I8) {
+                            m_of << "(uint8_t)(";
+                        } else if (ty == ::HIR::CoreType::U16 || ty == ::HIR::CoreType::I16) {
+                            m_of << "(uint16_t)(";
+                        }
                         emit_param(e.args.at(0));
+                        if (ty == ::HIR::CoreType::U8 || ty == ::HIR::CoreType::I8
+                            || ty == ::HIR::CoreType::U16 || ty == ::HIR::CoreType::I16) {
+                            m_of << ")";
+                        }
                         m_of << ")";
+                        if (ty == ::HIR::CoreType::U8 || ty == ::HIR::CoreType::I8) {
+                            m_of << " - 24";
+                        } else if (ty == ::HIR::CoreType::U16 || ty == ::HIR::CoreType::I16) {
+                            m_of << " - 16";
+                        }
                     } else {
                         m_of << "__builtin_ctz(";
                         emit_param(e.args.at(0));

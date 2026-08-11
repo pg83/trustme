@@ -760,6 +760,9 @@ namespace {
 
         auto n = Parse_ExprVal(lex);
         ASSERT_BUG(sp, n, "No expression returned");
+        if (lex.lookahead(0) == TOK_COMMA) {
+            lex.getToken();
+        }
         if (lex.lookahead(0) != TOK_EOF) {
             ERROR(sp, E0000, "Unexpected token after string literal - " << lex.getToken());
         }
@@ -839,13 +842,18 @@ class CExpanderLine: public ExpandProcMacro {
 
 class CExpanderColumn: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(get_top_span(sp)->start_ofs), CORETYPE_U32))));
+        const auto offset = get_top_span(sp)->start_ofs;
+        ASSERT_BUG(sp, offset >= 10, "column! invocation span is too short");
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(offset - 10), CORETYPE_U32))));
     }
 };
 
 class CExpanderUnstableColumn: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(get_top_span(sp)->start_ofs), CORETYPE_U32))));
+        const auto offset = get_top_span(sp)->start_ofs;
+        constexpr unsigned macro_width = sizeof("__rust_unstable_column!()") - 1 + 1;
+        ASSERT_BUG(sp, offset >= macro_width, "__rust_unstable_column! invocation span is too short");
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(offset - macro_width), CORETYPE_U32))));
     }
 };
 
@@ -1785,6 +1793,9 @@ namespace {
     ::std::string include_get_string(const Span& sp, TokenStream& lex, const ::AST::Crate& crate, AST::Module& mod) {
         auto n = Parse_ExprVal(lex);
         ASSERT_BUG(sp, n, "No expression returned");
+        if (lex.lookahead(0) == TOK_COMMA) {
+            lex.getToken();
+        }
         Expand_BareExpr(crate, mod, n);
 
         auto* string_np = cast<AST::ExprNode_String>(&*n);

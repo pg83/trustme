@@ -2881,6 +2881,15 @@ AST::Function Parse_FunctionDef(TokenStream& lex, bool allow_self, bool can_be_p
                 GET_TOK(tok, lex);
                 break;
             }
+            if ((lex.lookahead(0) == TOK_IDENT || lex.lookahead(0) == TOK_UNDERSCORE)
+                && lex.lookahead(1) == TOK_COLON && lex.lookahead(2) == TOK_TRIPLE_DOT) {
+                GET_TOK(tok, lex);
+                GET_TOK(tok, lex);
+                GET_TOK(tok, lex);
+                is_variadic = true;
+                GET_TOK(tok, lex);
+                break;
+            }
             args.push_back(Parse_Function_Arg(lex, !can_be_prototype));
         } while (GET_TOK(tok, lex) == TOK_COMMA);
         CHECK_TOK(tok, TOK_PAREN_CLOSE);

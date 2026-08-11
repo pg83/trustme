@@ -3567,6 +3567,44 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
         for (auto& val : v.m_values) {
             values.push_back(::std::make_pair(val.name, lower(val.value)));
         }
+
+        if (values.empty() && !v.m_base_value) {
+            if (const auto* binding = v.m_path.m_bindings.type.binding.opt_EnumVar()) {
+                bool is_empty = false;
+                if (binding->enum_) {
+                    const auto& data = binding->enum_->variants().at(binding->idx).m_data;
+                    is_empty = data.is_Unit() || (data.is_Tuple() && data.as_Tuple().m_items.empty());
+                } else if (binding->hir) {
+                    const auto& enm = *binding->hir;
+                    if (enm.m_data.is_Value()) {
+                        is_empty = true;
+                    } else {
+                        const auto& var = enm.m_data.as_Data().at(binding->idx);
+                        const auto& str = *var.type->as_Path().binding.as_Struct();
+                        is_empty = str.m_data.is_Unit() || (str.m_data.is_Tuple() && str.m_data.as_Tuple().empty());
+                    }
+                }
+                if (is_empty) {
+                    m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_UnitVariant>(
+                        v.span(), LowerHIR_GenericPath(v.span(), v.m_path, FromAST_PathClass::Type), false));
+                    return;
+                }
+            } else if (const auto* binding = v.m_path.m_bindings.type.binding.opt_Struct()) {
+                bool is_empty = false;
+                if (binding->struct_) {
+                    const auto& data = binding->struct_->m_data;
+                    is_empty = data.is_Unit() || (data.is_Tuple() && data.as_Tuple().ents.empty());
+                } else if (binding->hir) {
+                    const auto& data = binding->hir->m_data;
+                    is_empty = data.is_Unit() || (data.is_Tuple() && data.as_Tuple().empty());
+                }
+                if (is_empty) {
+                    m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_UnitVariant>(
+                        v.span(), LowerHIR_GenericPath(v.span(), v.m_path, FromAST_PathClass::Type), true));
+                    return;
+                }
+            }
+        }
         auto ty = LowerHIR_Type(::TypeRef(v.span(), v.m_path));
         if (v.m_path.m_bindings.type.binding.is_EnumVar()) {
             ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.m_data.is_Generic()), "Enum variant path not GenericPath: " << ty);

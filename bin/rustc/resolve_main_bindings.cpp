@@ -1630,7 +1630,10 @@ void Resolve_Absolute_Path_BindAbsolute(Context& context, const Span& sp, Contex
 
                                 DEBUG("Bound to enum variant '" << var.m_name << "' (#" << idx << ")");
                                 auto ap = name_ref.path.m_bindings.type.path + var.m_name;
-                                if (var.m_data.is_Struct()) {
+                                if (var.m_data.is_Struct()
+                                    || mode == Context::LookupMode::Type
+                                    || mode == Context::LookupMode::Namespace
+                                    || mode == Context::LookupMode::PatternType) {
                                     path.m_bindings.type.set(ap, AST::PathBinding_Type::make_EnumVar({e.enum_, idx}));
                                 } else {
                                     path.m_bindings.value.set(ap, AST::PathBinding_Value::make_EnumVar({e.enum_, idx}));
