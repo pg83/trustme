@@ -20,7 +20,7 @@
 
    Это может оставлять неверные impl-кандидаты. Нужен отдельный goal с результатом `Yes/Ambiguous/No`, а не ослабление отношения типов.
 
-   Opt-in goal evaluator уже обрабатывает raw type/const inference, associated equality, сужающую `Self`, и сохраняет constraints единственного или эквивалентного ambiguous response. Исправлены обратное проталкивание `usize` через `SliceIndex`/operator goals, связывание ivar с жёсткой unresolved-проекцией в `Iterator::try_find` и преждевременный отказ от `IntoIterator` для `Zip<A::IntoIter, B::IntoIter>`. Полный `core` теперь доходит до отдельной петли alias const-value ivar при мономорфизации сгенерированной `vector::splat_rt`.
+   Opt-in goal evaluator уже обрабатывает raw type/const inference, associated equality, сужающую `Self`, и сохраняет constraints единственного или эквивалентного ambiguous response. Response-producing lookup теперь, как и certainty-only lookup, сохраняет identity-response при пустом наборе кандидатов с inference inputs. Исправлены обратное проталкивание `usize` через `SliceIndex`/operator goals, связывание ivar с жёсткой unresolved-проекцией в `Iterator::try_find` и преждевременный отказ от `IntoIterator` для `Zip<A::IntoIter, B::IntoIter>`. Полный `core` теперь доходит до отдельной петли alias const-value ivar при мономорфизации сгенерированной `vector::splat_rt`.
 
 4. Backend местами генерирует программу, которая просто вызывает `abort()`.
 

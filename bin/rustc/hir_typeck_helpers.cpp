@@ -4893,6 +4893,17 @@ class NextTraitGoalEvaluator {
 
             if (frame.viable.empty()) {
                 DEBUG("next-solver: no viable response");
+                // solve_goal keeps an obligation ambiguous while inference
+                // still occurs in its inputs.  The response-producing path
+                // must preserve the same result: nested candidate evaluation
+                // calls it specifically to recover constraints from an
+                // ambiguous goal.  Returning false here would turn e.g.
+                // `<_ as IntoIterator>::IntoIter: Iterator` into NoSolution
+                // and incorrectly discard an enclosing `Zip` candidate.
+                if (m_resolve.type_contains_ivars(resolved_type)
+                    || m_resolve.params_contain_ivars(goal_params)) {
+                    return emit_forced_ambiguity();
+                }
                 return false;
             }
 
