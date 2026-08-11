@@ -3397,6 +3397,67 @@ class NextTraitGoalEvaluator {
                 const Span& m_span;
                 ::HIR::TypeInterner& m_types;
                 ::HIR::PathParams& m_params;
+                ::std::vector<::std::pair<::HIR::TypeRef, ::HIR::TypeRef>> m_bindings;
+
+                bool is_bindable(const ::HIR::TypeData* type) const {
+                    if (const auto* generic = type->opt_Generic()) {
+                        return generic->group() == ::HIR::GENERIC_Placeholder;
+                    }
+                    if (const auto* infer = type->opt_Infer()) {
+                        return !infer->is_lit();
+                    }
+                    return false;
+                }
+
+                ::std::optional<::HIR::Compare> bind_type(
+                    const ::HIR::TypeData* pattern,
+                    const ::HIR::TypeData* value,
+                    ::HIR::t_cb_resolve_type resolve
+                ) {
+                    for (const auto& binding : m_bindings) {
+                        if (binding.first == pattern) {
+                            return binding.second->compare_with_placeholders(
+                                m_span, value, resolve
+                            );
+                        }
+                    }
+                    if (!is_bindable(pattern)) {
+                        return {};
+                    }
+                    bool is_parameter = false;
+                    for (const auto& parameter : m_params.m_types) {
+                        is_parameter |= visit_ty_with(
+                            parameter,
+                            [&](const ::HIR::TypeData* inner) {
+                                return inner == pattern;
+                            }
+                        );
+                    }
+                    if (!is_parameter) {
+                        return {};
+                    }
+                    if (pattern == value) {
+                        return ::HIR::Compare::Equal;
+                    }
+                    for (auto& parameter : m_params.m_types) {
+                        parameter = clone_ty_with(
+                            m_types,
+                            m_span,
+                            parameter,
+                            [&](const ::HIR::TypeData* input,
+                                ::HIR::TypeRef& output) {
+                                if (input != pattern) {
+                                    return false;
+                                }
+                                output = value;
+                                return true;
+                            }
+                        );
+                    }
+                    m_bindings.push_back({pattern, value});
+                    changed = true;
+                    return ::HIR::Compare::Equal;
+                }
 
             public:
                 bool changed = false;
@@ -3412,27 +3473,32 @@ class NextTraitGoalEvaluator {
                 {
                 }
 
+                ::HIR::Compare cmp_type(
+                    const Span& span,
+                    const ::HIR::TypeData* pattern,
+                    const ::HIR::TypeData* value,
+                    ::HIR::t_cb_resolve_type resolve
+                ) override {
+                    if (auto result = bind_type(pattern, value, resolve)) {
+                        return *result;
+                    }
+                    return ::HIR::MatchGenerics::cmp_type(
+                        span, pattern, value, resolve
+                    );
+                }
+
                 ::HIR::Compare match_ty(
                     const ::HIR::GenericRef& generic,
                     const ::HIR::TypeData* type,
                     ::HIR::t_cb_resolve_type resolve
                 ) override {
-                    if (const auto* other = type->opt_Generic()) {
-                        if (*other == generic) {
-                            return ::HIR::Compare::Equal;
-                        }
+                    const auto pattern = m_types.generic(
+                        generic.name, generic.binding
+                    );
+                    if (auto result = bind_type(pattern, type, resolve)) {
+                        return *result;
                     }
-                    if (generic.group() == ::HIR::GENERIC_Placeholder) {
-                        for (auto& parameter : m_params.m_types) {
-                            const auto* current = parameter->opt_Generic();
-                            if (current && *current == generic) {
-                                parameter = type;
-                                changed = true;
-                                return ::HIR::Compare::Equal;
-                            }
-                        }
-                    }
-                    return m_types.generic(generic.name, generic.binding)->compare_with_placeholders(
+                    return pattern->compare_with_placeholders(
                         m_span, type, resolve
                     );
                 }
@@ -3771,7 +3837,12 @@ class NextTraitGoalEvaluator {
                         aty.aty_params
                     );
                 }
-                const auto cmp = m_resolve.compare_ty(span(), output, aty.type);
+                // The projection response may contain the very caller-owned
+                // inference variable from the requested equality. That is an
+                // exact response, not an ambiguous comparison of two ivars.
+                const auto cmp = output == aty.type
+                    ? ::HIR::Compare::Equal
+                    : m_resolve.compare_ty(span(), output, aty.type);
                 if (cmp == ::HIR::Compare::Unequal) {
                     return Certainty::NoSolution;
                 }
@@ -4359,6 +4430,16 @@ class NextTraitGoalEvaluator {
             const auto cmp = m_resolve.compare_ty(span(), assoc_type, output);
             if (cmp == ::HIR::Compare::Unequal) {
                 return Certainty::NoSolution;
+            }
+            // A normalizes-to goal with a caller inference variable has a
+            // proven response plus an equality constraint. The caller applies
+            // that constraint from the returned ImplRef; the unassigned
+            // destination alone must not turn a unique response into `Maybe`.
+            if (cmp == ::HIR::Compare::Fuzzy
+                && m_resolve.type_contains_ivars(assoc_type)
+                && !m_resolve.type_contains_ivars(output)
+                && !type_has_candidate_placeholder(output)) {
+                return Certainty::Proven;
             }
             return cmp == ::HIR::Compare::Equal
                 ? Certainty::Proven
