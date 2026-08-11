@@ -272,16 +272,27 @@ def filter_test_source(
             )
         selected_offsets.update(candidates)
 
-    insertions = []
+    replacements = []
     for marker in re.finditer(r"^[ \t]*#\s*\[\s*test\s*\][^\n]*", text, re.MULTILINE):
         if marker.start() in selected_offsets:
             continue
         line = marker.group(0)
         indentation = line[: len(line) - len(line.lstrip(" \t"))]
-        insertions.append((marker.start(), indentation + "#[cfg(any())]\n"))
+        replacements.append(
+            (marker.start(), marker.end(), indentation + "#[cfg(any())]")
+        )
 
-    for offset, insertion in reversed(insertions):
-        text = text[:offset] + insertion + text[offset:]
+    for start, end, replacement in reversed(replacements):
+        text = text[:start] + replacement + text[end:]
+    if function is not None:
+        # Isolating one test can make helpers used only by sibling tests appear
+        # unused. Do not let a module-wide deny(warnings) turn that artifact
+        # into a compilation failure.
+        text = re.sub(
+            r"#!\s*\[\s*deny\s*\(\s*warnings\s*\)\s*\]",
+            "#![allow(warnings)]",
+            text,
+        )
     return text
 
 

@@ -1,8 +1,24 @@
-#![feature(lang_items, no_core, start)]
+#![feature(lang_items, no_core)]
 #![no_core]
+#![no_main]
+//@ compile-flags: -Coverflow-checks=off -Clink-arg=-lc
+
+#[lang = "pointee_sized"]
+pub trait PointeeSized {}
+
+#[lang = "meta_sized"]
+pub trait MetaSized: PointeeSized {}
 
 #[lang = "sized"]
-pub trait Sized {}
+pub trait Sized: MetaSized {}
+
+#[lang = "copy"]
+pub trait Copy {}
+
+impl Copy for i32 {}
+
+#[lang = "drop_in_place"]
+pub unsafe fn drop_in_place<T: PointeeSized>(_to_drop: *mut T) {}
 
 #[lang = "add"]
 pub trait Add<Rhs = Self> {
@@ -13,25 +29,24 @@ pub trait Add<Rhs = Self> {
 
 static mut ADD_CALLED: i32 = 1;
 
-impl Add for i32 {
+struct Left;
+struct Right;
+
+impl Add<Right> for Left {
     type Output = i32;
 
-    fn add(self, _rhs: i32) -> i32 {
+    fn add(self, _rhs: Right) -> i32 {
         unsafe {
             ADD_CALLED = 0;
         }
-        self
+        0
     }
 }
 
-fn main() -> i32 {
-    let value;
-    value = 1 + 2;
+#[no_mangle]
+extern "C-unwind" fn main() -> i32 {
+    let _value;
+    _value = Left + Right;
 
     unsafe { ADD_CALLED }
-}
-
-#[start]
-fn start(_argc: isize, _argv: *const *const u8) -> isize {
-    main() as isize
 }

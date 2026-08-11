@@ -33,7 +33,9 @@ impl Drop for Capture {
 fn main() {
     let first = Capture { bit: 0, cloned: false, panic_on_clone: false };
     let second = Capture { bit: 1, cloned: false, panic_on_clone: true };
-    let closure = move || (&first, &second);
+    let closure = move || {
+        let _ = (&first, &second);
+    };
 
     let result = catch_unwind(AssertUnwindSafe(|| {
         let _ = closure.clone();

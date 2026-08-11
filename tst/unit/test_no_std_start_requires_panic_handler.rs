@@ -1,12 +1,8 @@
 //@ compile-fail: Undefined language item 'mrustc-panic_implementation' required
-#![feature(start)]
 #![no_std]
+#![no_main]
 
-fn main() -> i32 {
+#[no_mangle]
+extern "C" fn main() -> i32 {
     0
-}
-
-#[start]
-fn start(_argc: isize, _argv: *const *const u8) -> isize {
-    main() as isize
 }

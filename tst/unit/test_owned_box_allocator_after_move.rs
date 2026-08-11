@@ -1,9 +1,35 @@
-#![feature(lang_items, no_core, start)]
+#![feature(auto_traits, lang_items, no_core)]
 #![allow(path_statements)]
 #![no_core]
+#![no_main]
+//@ compile-flags: -Cpanic=abort -Clink-arg=-lc
+
+#[lang = "pointee_sized"]
+pub trait PointeeSized {}
+
+#[lang = "meta_sized"]
+pub trait MetaSized: PointeeSized {}
 
 #[lang = "sized"]
-pub trait Sized {}
+pub trait Sized: MetaSized {}
+
+#[lang = "legacy_receiver"]
+pub trait LegacyReceiver: PointeeSized {}
+
+impl<T: PointeeSized> LegacyReceiver for &T {}
+impl<T: PointeeSized> LegacyReceiver for &mut T {}
+
+#[lang = "copy"]
+pub trait Copy {}
+
+impl Copy for bool {}
+impl Copy for u32 {}
+
+#[lang = "freeze"]
+pub unsafe auto trait Freeze {}
+
+#[lang = "unpin"]
+pub auto trait Unpin {}
 
 #[lang = "coerce_unsized"]
 pub trait CoerceUnsized<T> {}
@@ -11,6 +37,17 @@ pub trait CoerceUnsized<T> {}
 #[lang = "drop"]
 pub trait Drop {
     fn drop(&mut self);
+}
+
+#[lang = "destruct"]
+pub trait Destruct {}
+
+#[lang = "drop_in_place"]
+pub unsafe fn drop_in_place<T: PointeeSized>(_to_drop: *mut T) {}
+
+#[lang = "panic_in_cleanup"]
+fn panic_in_cleanup() -> ! {
+    loop {}
 }
 
 #[lang = "deref"]
@@ -57,7 +94,10 @@ struct Allocator;
 impl Drop for Allocator {
     fn drop(&mut self) {
         unsafe {
-            ALLOCATOR_DROPS += 1;
+            ALLOCATOR_DROPS = match ALLOCATOR_DROPS {
+                0 => 1,
+                _ => 2,
+            };
         }
     }
 }
@@ -68,7 +108,8 @@ fn take_payload() -> bool {
     true
 }
 
-fn main() -> i32 {
+#[no_mangle]
+extern "C-unwind" fn main() -> i32 {
     {
         let owner = unsafe {
             Owner(Unique(NonNull(&mut SLOT as *mut Payload)), Allocator)
@@ -81,11 +122,9 @@ fn main() -> i32 {
     }
 
     unsafe {
-        if PAYLOAD_DROPPED && ALLOCATOR_DROPS == 1 { 0 } else { 1 }
+        match (PAYLOAD_DROPPED, ALLOCATOR_DROPS) {
+            (true, 1) => 0,
+            _ => 1,
+        }
     }
-}
-
-#[start]
-fn start(_argc: isize, _argv: *const *const u8) -> isize {
-    main() as isize
 }

@@ -12,16 +12,20 @@ pub trait MetaSized: PointeeSized {}
 #[lang = "sized"]
 pub trait Sized: MetaSized {}
 
-#[lang = "copy"]
-pub trait Copy {}
+#[lang = "unsize"]
+pub trait Unsize<T: PointeeSized>: PointeeSized {}
 
-impl<T: PointeeSized> Copy for *const T {}
-impl<T: PointeeSized> Copy for &T {}
+#[lang = "coerce_unsized"]
+pub trait CoerceUnsized<T: PointeeSized> {}
+
+impl<'a, 'b: 'a, T: PointeeSized + Unsize<U>, U: PointeeSized> CoerceUnsized<&'a U>
+    for &'b T
+{}
+
+fn accept(_bytes: &[u8]) {}
 
 #[no_mangle]
 extern "C-unwind" fn main() -> i32 {
-    let text = "x\0";
-    let string_ptr = text as *const str;
-    let _byte_ptr = string_ptr as *const i8;
+    accept(&[37u8]);
     0
 }

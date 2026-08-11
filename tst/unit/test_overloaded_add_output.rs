@@ -1,7 +1,7 @@
 #![feature(lang_items, no_core)]
 #![no_core]
 #![no_main]
-//@ compile-flags: -Coverflow-checks=off -Clink-arg=-lc
+//@ compile-flags: -Clink-arg=-lc
 
 #[lang = "pointee_sized"]
 pub trait PointeeSized {}
@@ -27,33 +27,25 @@ pub trait Add<Rhs = Self> {
     fn add(self, rhs: Rhs) -> Self::Output;
 }
 
-struct Foo(i32);
+static mut ADD_CALLED: i32 = 1;
 
-static mut FOO_ADD_CALLED: i32 = 1;
+struct Left;
+struct Right;
 
-impl Add for i32 {
-    type Output = i32;
+impl Add<Right> for Left {
+    type Output = i64;
 
-    fn add(self, rhs: i32) -> i32 {
-        self + rhs
-    }
-}
-
-impl Add for Foo {
-    type Output = Foo;
-
-    fn add(self, other: Foo) -> Foo {
-        let result = Foo(self.0 + other.0);
+    fn add(self, _rhs: Right) -> i64 {
         unsafe {
-            FOO_ADD_CALLED = 0;
+            ADD_CALLED = 0;
         }
-        result
+        3
     }
 }
 
 #[no_mangle]
 extern "C-unwind" fn main() -> i32 {
-    let _value = Foo(1) + Foo(2);
+    let _value: i64 = Left + Right;
 
-    unsafe { FOO_ADD_CALLED }
+    unsafe { ADD_CALLED }
 }

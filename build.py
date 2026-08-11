@@ -174,13 +174,15 @@ cargo = command(
 # The standard library is a *shared* pair of nodes — fetched and built once,
 # then depended on by every project. See tst/README.md.
 #
-# These are heavy (a from-scratch libstd plus a full project build) and only
-# run on request: `./build test`, or a single artifact like `./build resvg`.
+# Real-project and unusually long upstream tests are outside the fast `test`
+# gate. Run them together with `./build slow_tests`, or select one target such
+# as `./build resvg` directly.
 
 TOOLCHAIN_ENV = {
     "RUSTC": "$(B)/bin/rustc",
     "CARGO": "$(B)/bin/cargo",
 }
+SYSTEM_TEST_ENV = {"TRUSTME_SYSTEM_RUSTC": "1"} if system_rustc_mode else {}
 
 # All node scripts are Python and share tst/lib.py.
 TESTS_LIB = ["$(S)/tst/lib.py"]
@@ -242,6 +244,21 @@ else:
         descr="LS",
         color="cyan",
     )
+
+rust_test_helpers = command(
+    name="rust_test_helpers",
+    inputs=["$(S)/tst/rust_1_90/build_native.py", *TESTS_LIB],
+    outputs=["$(B)/tst/rust_1_90/native/librust_test_helpers.a"],
+    cmd=[
+        "python3",
+        "$(S)/tst/rust_1_90/build_native.py",
+        "$(B)/tst/rust-src.tar",
+        "$(B)/tst/rust_1_90/native/librust_test_helpers.a",
+    ],
+    deps=[std_src],
+    descr="RN",
+    color="cyan",
+)
 
 if system_rustc_mode:
     rust_lib_dependencies = command(
@@ -745,6 +762,7 @@ for _src in build.glob("$(S)/tst/unit/test_*.rs"):
         deps=[libstd, rustc] + ([rust_lib_dependencies] if _uses_rust_lib_dependencies else []),
         env={
             "RUSTC": "$(B)/bin/rustc",
+            **SYSTEM_TEST_ENV,
             **({"RUST_LIB_DEPENDENCIES": "$(B)/tst/rust-lib-dependencies.tar"}
                if _uses_rust_lib_dependencies else {}),
         },
@@ -771,7 +789,7 @@ for _src in build.glob("$(S)/tst/perf/test_*.rs"):
             "$(B)/tst/perf/" + _stem + ".stamp",
         ],
         deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        env={"RUSTC": "$(B)/bin/rustc", **SYSTEM_TEST_ENV},
         descr="PF",
         color="cyan",
     ))
@@ -805,10 +823,11 @@ for _case in rust_1_90_cases:
             *TEST_TIMEOUT,
             "python3", "$(S)/tst/rust_1_90/adapter.py",
             _case, _src, "$(B)/tst/libstd.tar",
+            "$(B)/tst/rust_1_90/native/librust_test_helpers.a",
             "$(B)/tst/rust_1_90/" + _case + ".stamp",
         ],
-        deps=[libstd, rustc],
-        env={"RUSTC": "$(B)/bin/rustc"},
+        deps=[libstd, rust_test_helpers, rustc],
+        env={"RUSTC": "$(B)/bin/rustc", **SYSTEM_TEST_ENV},
         descr="RP",
         color="green",
     ))
@@ -1213,7 +1232,14 @@ rust_lib_adapters = [
 ]
 
 rust_lib_tests = []
+slow_rust_lib_tests = []
 rust_lib_tests_by_group = {}
+slow_rust_lib_cases = {
+    "coretests/num/flt2dec/random.rs::num::flt2dec::random::shortest_f32_exhaustive_equivalence_test",
+    "coretests/num/flt2dec/random.rs::num::flt2dec::random::shortest_f64_hard_random_equivalence_test",
+    "coretests/slice.rs::slice::select_nth_unstable",
+}
+found_slow_rust_lib_cases = set()
 for _suite, _harness_group, _source, _function, _hint in rust_lib_cases:
     _case = _suite + "/" + _source + "::" + _hint
     _digest = hashlib.sha256(_case.encode()).hexdigest()[:12]
@@ -1235,7 +1261,7 @@ for _suite, _harness_group, _source, _function, _hint in rust_lib_cases:
         ],
         outputs=[_stamp],
         cmd=[
-            *TEST_TIMEOUT,
+            *LIBSTD_TIMEOUT,
             "python3", "$(S)/tst/rust_lib/case.py",
             _suite, _harness_group, _kind, _root, _edition,
             _source, _function, _hint,
@@ -1247,8 +1273,17 @@ for _suite, _harness_group, _source, _function, _hint in rust_lib_cases:
         descr="LT",
         color="green",
     )
-    rust_lib_tests.append(_target)
-    rust_lib_tests_by_group.setdefault(_key, []).append(_target)
+    if _case in slow_rust_lib_cases:
+        slow_rust_lib_tests.append(_target)
+        found_slow_rust_lib_cases.add(_case)
+    else:
+        rust_lib_tests.append(_target)
+        rust_lib_tests_by_group.setdefault(_key, []).append(_target)
+if found_slow_rust_lib_cases != slow_rust_lib_cases:
+    raise RuntimeError(
+        "missing slow rust_lib cases: "
+        + ", ".join(sorted(slow_rust_lib_cases - found_slow_rust_lib_cases))
+    )
 
 # Runnable library documentation examples, extracted into standalone
 # programs so each fence remains an independent compile-and-run node.
@@ -1305,7 +1340,7 @@ for _index, (_stem, _seed) in enumerate(rustsmith_cases):
         ],
         outputs=[_stamp],
         cmd=[
-            *TEST_TIMEOUT,
+            *LIBSTD_TIMEOUT,
             "python3", "$(S)/tst/rustsmith/adapter.py",
             "$(S)/tst/rustsmith/cases.tsv", str(_index), "1",
             "$(S)/tst/rustsmith/upstream", "$(B)/tst/libstd.tar", _stamp,
@@ -1385,8 +1420,9 @@ def partition_lite_tests(targets):
     return selected
 
 
-group("test", *project_tests, *lite_tests)
+group("test", *lite_tests)
 group("lite_tests", *partition_lite_tests(lite_tests))
+group("slow_tests", *project_tests, *slow_rust_lib_tests)
 group("unit", *(rust_unit_tests if system_rustc_mode else unit_tests))
 group("perf", *perf_tests)
 group("rust_1_90", *rust_1_90_tests)

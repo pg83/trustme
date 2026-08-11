@@ -1,9 +1,38 @@
-#![feature(lang_items, no_core, start)]
+#![feature(lang_items, no_core)]
 #![no_core]
-//@ compile-flags: -O -Zmir-opt-level=1
+#![no_main]
+//@ compile-flags: -O -Zmir-opt-level=1 -Clink-arg=-lc
+
+#[lang = "pointee_sized"]
+pub trait PointeeSized {}
+
+#[lang = "meta_sized"]
+pub trait MetaSized: PointeeSized {}
 
 #[lang = "sized"]
-pub trait Sized {}
+pub trait Sized: MetaSized {}
+
+#[lang = "legacy_receiver"]
+pub trait LegacyReceiver: PointeeSized {}
+
+impl<T: PointeeSized> LegacyReceiver for &T {}
+impl<T: PointeeSized> LegacyReceiver for &mut T {}
+
+#[lang = "copy"]
+pub trait Copy {}
+
+impl Copy for i32 {}
+
+#[lang = "eq"]
+pub trait PartialEq<Rhs = Self> {
+    fn eq(&self, other: &Rhs) -> bool;
+}
+
+impl PartialEq for i32 {
+    fn eq(&self, other: &i32) -> bool {
+        *self == *other
+    }
+}
 
 #[lang = "coerce_unsized"]
 pub trait CoerceUnsized<T> {}
@@ -11,6 +40,17 @@ pub trait CoerceUnsized<T> {}
 #[lang = "drop"]
 pub trait Drop {
     fn drop(&mut self);
+}
+
+#[lang = "destruct"]
+pub trait Destruct {}
+
+#[lang = "drop_in_place"]
+pub unsafe fn drop_in_place<T: PointeeSized>(_to_drop: *mut T) {}
+
+#[lang = "panic_in_cleanup"]
+fn panic_in_cleanup() -> ! {
+    loop {}
 }
 
 struct Edge<T> {
@@ -58,14 +98,10 @@ fn next<T>(mut edge: Edge<T>) -> Outcome<Item<T>, Node<T>> {
     }
 }
 
-fn main() -> i32 {
+#[no_mangle]
+extern "C-unwind" fn main() -> i32 {
     match next(Edge { value: 3, index: 0 }) {
         Outcome::Ok(_) => 1,
         Outcome::Err(_) => 0,
     }
-}
-
-#[start]
-fn start(_argc: isize, _argv: *const *const u8) -> isize {
-    main() as isize
 }

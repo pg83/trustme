@@ -15,24 +15,9 @@ impl Drop for CountDrop {
 const RETURNED: CountDrop = CountDrop;
 const RETURNED_REFERENCE: &'static CountDrop = &CountDrop;
 
-const DEAD_BRANCH: () = {
-    if false {
-        let _value = CountDrop;
-    }
-};
-
 const INACTIVE_VARIANT: () = {
     let _value: Option<CountDrop> = None;
 };
-
-const fn maybe_create(create: bool) {
-    let value;
-    if create {
-        value = CountDrop;
-    }
-}
-
-const INACTIVE_DROP_FLAG: () = maybe_create(false);
 
 fn main() {
     let _reference = RETURNED_REFERENCE;

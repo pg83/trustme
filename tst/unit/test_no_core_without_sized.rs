@@ -1,16 +1,15 @@
-#![feature(lang_items, no_core, start)]
+//@ compile-fail: requires `sized` lang_item
+#![feature(lang_items, no_core)]
 #![no_core]
+#![no_main]
 
-fn main() -> i32 {
+#[lang = "pointee_sized"]
+trait PointeeSized {}
+
+#[lang = "meta_sized"]
+trait MetaSized: PointeeSized {}
+
+#[no_mangle]
+extern "C" fn main() -> i32 {
     0
-}
-
-#[start]
-fn start(_argc: isize, _argv: *const *const u8) -> isize {
-    main() as isize
-}
-
-#[panic_handler]
-fn panic(_payload: usize) -> u32 {
-    1
 }

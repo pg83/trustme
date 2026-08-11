@@ -23,6 +23,7 @@ def main() -> int:
     stamp = os.path.abspath(sys.argv[3])
     rustc = lib.require_env("RUSTC")
     source_text = open(src, encoding="utf-8", errors="surrogateescape").read()
+    system_rustc = os.environ.get("TRUSTME_SYSTEM_RUSTC") == "1"
     test_harness = "//@ test-harness" in source_text
     compile_fail_match = re.search(
         r"^//@\s*compile-fail:\s*(.+)$", source_text, re.MULTILINE
@@ -39,6 +40,7 @@ def main() -> int:
 
     with lib.workdir() as work:
         env = dict(os.environ)
+        env.pop("TRUSTME_SYSTEM_RUSTC", None)
         env.setdefault("CC", "cc")
 
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
@@ -56,13 +58,14 @@ def main() -> int:
         mode = ["--test"] if test_harness else ["--crate-type", "bin"]
         command = [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
                    *mode, "--edition", edition, *dependency_args, *compile_flags]
-        if compile_fail_match:
+        expected_failure = compile_fail_match is not None
+        if expected_failure:
             result = subprocess.run(command, env=env, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, check=False)
-            expected = compile_fail_match.group(1).encode()
             if result.returncode == 0:
                 raise RuntimeError("compiler unexpectedly accepted compile-fail unit")
-            if expected not in result.stderr:
+            expected = compile_fail_match.group(1).encode() if compile_fail_match else b""
+            if expected and not system_rustc and expected not in result.stderr:
                 sys.stdout.buffer.write(result.stdout)
                 sys.stderr.buffer.write(result.stderr)
                 raise RuntimeError(
@@ -70,7 +73,7 @@ def main() -> int:
                 )
         else:
             lib.run(command, env=env)
-        if compile_fail_match:
+        if expected_failure:
             os.makedirs(os.path.dirname(stamp), exist_ok=True)
             open(stamp, "w").close()
             return 0

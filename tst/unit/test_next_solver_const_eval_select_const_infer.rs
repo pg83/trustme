@@ -1,7 +1,7 @@
 //@ check-pass
 //@ compile-flags: -Znext-solver
 
-#![feature(core_intrinsics, portable_simd)]
+#![feature(const_eval_select, core_intrinsics, portable_simd)]
 
 use std::simd::{LaneCount, Simd, SimdElement, SupportedLaneCount, Swizzle};
 

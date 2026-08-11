@@ -1,4 +1,4 @@
-#![feature(layout_for_ptr)]
+#![feature(layout_for_ptr, ptr_metadata)]
 
 use std::{mem, ptr};
 

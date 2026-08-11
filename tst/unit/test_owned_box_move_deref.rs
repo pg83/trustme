@@ -1,8 +1,30 @@
-#![feature(lang_items, no_core, start)]
+#![feature(auto_traits, lang_items, no_core)]
 #![no_core]
+#![no_main]
+//@ compile-flags: -Clink-arg=-lc
+
+#[lang = "pointee_sized"]
+pub trait PointeeSized {}
+
+#[lang = "meta_sized"]
+pub trait MetaSized: PointeeSized {}
 
 #[lang = "sized"]
-pub trait Sized {}
+pub trait Sized: MetaSized {}
+
+#[lang = "copy"]
+pub trait Copy {}
+
+impl Copy for i32 {}
+
+#[lang = "freeze"]
+pub unsafe auto trait Freeze {}
+
+#[lang = "legacy_receiver"]
+pub trait LegacyReceiver: PointeeSized {}
+
+impl<T: PointeeSized> LegacyReceiver for &T {}
+impl<T: PointeeSized> LegacyReceiver for &mut T {}
 
 #[lang = "coerce_unsized"]
 pub trait CoerceUnsized<T> {}
@@ -11,6 +33,12 @@ pub trait CoerceUnsized<T> {}
 pub trait Drop {
     fn drop(&mut self);
 }
+
+#[lang = "destruct"]
+pub trait Destruct {}
+
+#[lang = "drop_in_place"]
+pub unsafe fn drop_in_place<T: PointeeSized>(_to_drop: *mut T) {}
 
 #[lang = "deref"]
 pub trait Deref {
@@ -46,15 +74,11 @@ fn into_inner<T>(owner: Owner<T>) -> T {
     *owner
 }
 
-fn main() -> i32 {
+#[no_mangle]
+extern "C-unwind" fn main() -> i32 {
     let value = unsafe { into_inner(Owner(Unique(NonNull(&mut SLOT as *mut Payload)))) };
     match value.0 {
         37 => 0,
         _ => 1,
     }
-}
-
-#[start]
-fn start(_argc: isize, _argv: *const *const u8) -> isize {
-    main() as isize
 }

@@ -1,8 +1,28 @@
-#![feature(f16, lang_items, no_core, start)]
+#![feature(f16, f128, lang_items, no_core)]
 #![no_core]
+#![no_main]
+//@ compile-flags: -Clink-arg=-lc
+
+#[lang = "pointee_sized"]
+pub trait PointeeSized {}
+
+#[lang = "meta_sized"]
+pub trait MetaSized: PointeeSized {}
 
 #[lang = "sized"]
-pub trait Sized {}
+pub trait Sized: MetaSized {}
+
+#[lang = "legacy_receiver"]
+pub trait LegacyReceiver: PointeeSized {}
+
+impl<T: PointeeSized> LegacyReceiver for &T {}
+impl<T: PointeeSized> LegacyReceiver for &mut T {}
+
+#[lang = "copy"]
+pub trait Copy {}
+
+impl Copy for f16 {}
+impl Copy for f128 {}
 
 #[lang = "eq"]
 pub trait PartialEq<Rhs = Self> {
@@ -16,8 +36,8 @@ pub trait PartialOrd<Rhs = Self>: PartialEq<Rhs> {
     fn le(&self, other: &Rhs) -> bool;
 }
 
-extern "Rust" {
-    fn deferred<T>() -> T;
+fn deferred<T>() -> T {
+    loop {}
 }
 
 macro_rules! partial_eq_impl {
@@ -51,11 +71,7 @@ macro_rules! partial_ord_impl {
 partial_eq_impl! { f16 f128 }
 partial_ord_impl! { f16 f128 }
 
-fn main() -> i32 {
+#[no_mangle]
+extern "C-unwind" fn main() -> i32 {
     0
-}
-
-#[start]
-fn start(_argc: isize, _argv: *const *const u8) -> isize {
-    main() as isize
 }

@@ -64,6 +64,11 @@ def selected(text: str) -> bool:
     if re.search(r"^//@\s*compile-flags:.*rust_test_helpers", text,
                  re.MULTILINE):
         return False
+    # Static-linker/runtime environment tests are not compiler semantics and
+    # require a host-specific static libc outside this corpus.
+    if re.search(r"^//@\s*compile-flags:.*\+crt-static", text,
+                 re.MULTILINE):
+        return False
 
     # Keep this first tranche genuinely one-file. Multi-file tests belong in
     # a later adapter with explicit dependency discovery, not in a silently
@@ -78,6 +83,16 @@ def selected(text: str) -> bool:
     return True
 
 
+def ignored_by_compiletest(path: Path, root: Path) -> bool:
+    """Honor compiletest-ignore-dir markers in fixture/support directories."""
+    for parent in path.parents:
+        if parent == root:
+            return False
+        if (parent / "compiletest-ignore-dir").is_file():
+            return True
+    return False
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         raise SystemExit("usage: import.py /path/to/rust-1.90.0")
@@ -90,6 +105,8 @@ def main() -> int:
 
     cases = []
     for path in sorted(source.rglob("*.rs")):
+        if ignored_by_compiletest(path, source):
+            continue
         text = path.read_text(errors="surrogateescape")
         if not selected(text):
             continue

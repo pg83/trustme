@@ -31,7 +31,7 @@ def main() -> int:
         environment = dict(os.environ)
         environment["RUSTC_BOOTSTRAP"] = "1"
 
-        lib.log("[system rust-lib dependencies] rand and rand_xorshift")
+        lib.log("[system rust-lib dependencies] cfg-if, rand, and rand_xorshift")
         lib.run(
             [
                 cargo,

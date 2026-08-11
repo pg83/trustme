@@ -53,9 +53,16 @@ def main() -> int:
                 *case["flags"],
                 "--edition", case["edition"],
             ]
+            if case["mode"] == "check":
+                command.append("--emit=metadata")
             if case["crate_type"] != "flags":
                 command.extend(["--crate-type", case["crate_type"]])
-            command.extend(["-o", os.path.join(work, f"case-{index}")])
+            has_output = any(
+                flag == "-o" or flag.startswith("-o")
+                for flag in case["flags"]
+            )
+            if not has_output:
+                command.extend(["-o", os.path.join(work, f"case-{index}")])
             compile_result = subprocess.run(
                 command,
                 env=environment,

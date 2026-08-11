@@ -1,8 +1,27 @@
-#![feature(lang_items, no_core, start)]
+#![feature(lang_items, no_core)]
 #![no_core]
+#![no_main]
+//@ compile-flags: -Clink-arg=-lc
+
+#[lang = "pointee_sized"]
+pub trait PointeeSized {}
+
+#[lang = "meta_sized"]
+pub trait MetaSized: PointeeSized {}
 
 #[lang = "sized"]
-pub trait Sized {}
+pub trait Sized: MetaSized {}
+
+#[lang = "legacy_receiver"]
+pub trait LegacyReceiver: PointeeSized {}
+
+impl<T: PointeeSized> LegacyReceiver for &T {}
+impl<T: PointeeSized> LegacyReceiver for &mut T {}
+
+#[lang = "copy"]
+pub trait Copy {}
+
+impl<T: PointeeSized> Copy for *const T {}
 
 #[lang = "eq"]
 pub trait PartialEq<Rhs = Self> {
@@ -15,11 +34,7 @@ impl PartialEq for *const u8 {
     }
 }
 
-fn main() -> i32 {
+#[no_mangle]
+extern "C-unwind" fn main() -> i32 {
     0
-}
-
-#[start]
-fn start(_argc: isize, _argv: *const *const u8) -> isize {
-    main() as isize
 }

@@ -53,7 +53,8 @@ hermetic vendor tree between isolated nodes.
 ./build platform_libstd # just the vendored C++ platform library
 ./build unit            # the one-file compiler regressions
 ./build resvg           # build resvg from source and render-test it
-./build test            # everything under test
+./build test            # the fast semantic corpus
+./build slow_tests      # resvg + unusually long upstream library tests
 ```
 
 See [`tst/README.md`](tst/README.md) for how a project test is wired as a

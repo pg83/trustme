@@ -18,6 +18,11 @@ SPEC = importlib.util.spec_from_file_location("rust_lib_import", HERE / "import.
 IMPORTER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(IMPORTER)
 
+FEATURE_ATTRIBUTE_RE = re.compile(
+    r"#!\s*\[\s*feature\s*\((.*?)\)\s*\]",
+    re.DOTALL,
+)
+
 
 def populate_overlay(
     source: Path,
@@ -25,6 +30,8 @@ def populate_overlay(
     selected_source: Path,
     function: str,
     hint: str,
+    *,
+    strip_selected_features: bool = False,
 ) -> None:
     """Mirror one suite and disable tests other than the selected one."""
     for path in sorted(source.rglob("*")):
@@ -44,6 +51,8 @@ def populate_overlay(
                 function=function,
                 hint=hint,
             )
+            if strip_selected_features:
+                filtered = FEATURE_ATTRIBUTE_RE.sub("", filtered)
         else:
             filtered = IMPORTER.filter_test_source(text)
         # Keep every Rust source physically in the overlay.  Module lookup must
@@ -61,6 +70,28 @@ def selected_preamble(
     if source == "lib.rs":
         return IMPORTER.filter_test_source(text, function=function, hint=hint)
     return IMPORTER.filter_test_source(text)
+
+
+def feature_names(text: str) -> list[str]:
+    attributes = FEATURE_ATTRIBUTE_RE.findall(text)
+    return [
+        name.strip()
+        for features in attributes
+        for name in features.split(",")
+        if name.strip()
+    ]
+
+
+def selected_features(path: Path, crate_preamble: str) -> str:
+    """Lift only module feature gates absent from the harness crate."""
+    text = path.read_text(encoding="utf-8", errors="surrogateescape")
+    existing = set(feature_names(crate_preamble))
+    lifted = []
+    for name in feature_names(text):
+        if name not in existing:
+            existing.add(name)
+            lifted.append(name)
+    return "".join(f"#![feature({name})]\n" for name in lifted)
 
 
 def prepare_source(
@@ -83,6 +114,7 @@ def prepare_source(
         Path("tests") / source,
         function,
         hint,
+        strip_selected_features=kind not in ("crate", "adapter-crate"),
     )
 
     overlay_adapter = source_root / "adapter"
@@ -107,6 +139,10 @@ def prepare_source(
         function,
         hint,
     )
+    wrapper = selected_features(
+        upstream / suite / "tests" / source,
+        wrapper,
+    ) + wrapper
     wrapper_path = overlay_suite / "tests" / "lib.rs"
     if suite == "alloctests":
         wrapper += "\nmod testing;\n"
@@ -204,6 +240,9 @@ def main() -> int:
             hint,
         )
         binary = work / "test"
+        crate_name = (
+            Path(source).stem if kind in ("crate", "adapter-crate") else suite
+        )
         result = subprocess.run(
             [
                 rustc,
@@ -214,12 +253,12 @@ def main() -> int:
                 "--edition", edition,
                 *lib.extern_rlib_args(
                     dependencies,
-                    ["rand", "rand_xorshift"],
+                    ["cfg_if", "rand", "rand_xorshift"],
                 ),
                 "--crate-name", re.sub(
                     r"[^A-Za-z0-9_]",
                     "_",
-                    f"rust_lib_{suite}_{group}_{function}",
+                    crate_name,
                 ),
             ],
             env=environment,
@@ -236,7 +275,7 @@ def main() -> int:
             [str(binary), "--list"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=60,
+            timeout=600,
             check=False,
         )
         if listing.returncode != 0:
@@ -252,11 +291,11 @@ def main() -> int:
         try:
             result = subprocess.run(
                 [str(binary), selected, "--exact", "--include-ignored", "--nocapture"],
-                timeout=60,
+                timeout=600,
                 check=False,
             )
         except subprocess.TimeoutExpired:
-            print(f"FAIL {case}: timed out after 60 seconds", file=sys.stderr)
+            print(f"FAIL {case}: timed out after 600 seconds", file=sys.stderr)
             return 1
         if result.returncode != 0:
             return result.returncode or 1

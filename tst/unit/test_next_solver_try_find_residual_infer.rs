@@ -1,7 +1,7 @@
 //@ check-pass
 //@ compile-flags: -Znext-solver
 
-#![feature(try_trait_v2)]
+#![feature(try_trait_v2, try_trait_v2_residual)]
 
 use std::ops::{ControlFlow, FromResidual, Residual, Try};
 

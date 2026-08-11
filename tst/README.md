@@ -55,6 +55,11 @@ the regression. They use the same compiler-and-runner setup as unit tests, but
 are excluded from the normal `unit`, `lite_tests`, and `test` groups. Run one as
 `./build perf_<name>` or the complete performance corpus as `./build perf`.
 
+Three unusually long upstream library tests are kept with the real-project
+integration tests instead of the fast semantic gate: the exhaustive f32 and
+f64 `flt2dec` equivalence tests and `slice::select_nth_unstable`. Run them and
+resvg together as `./build slow_tests`.
+
 ## running
 
 ```
@@ -62,7 +67,8 @@ are excluded from the normal `unit`, `lite_tests`, and `test` groups. Run one as
 ./build unit              # every one-file compiler regression
 ./build perf              # compile-time performance regressions
 ./build resvg             # the whole resvg chain (build + test)
-./build test              # everything under test (unit + projects)
+./build test              # the fast semantic corpus
+./build slow_tests        # resvg + unusually long upstream library tests
 ```
 
 These are heavy and only run when asked for, never as part of the default

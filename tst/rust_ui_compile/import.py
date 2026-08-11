@@ -17,6 +17,7 @@ import lib  # noqa: E402
 HERE = Path(__file__).resolve().parent
 UPSTREAM = HERE / "upstream"
 REJECTED_DIRECTIVES = (
+    "add-core-stubs",
     "aux-build",
     "aux-crate",
     "proc-macro",
@@ -44,7 +45,7 @@ def self_contained(text: str) -> bool:
         return False
     if re.search(r"\binclude(?:_str|_bytes)?!\s*\(", text):
         return False
-    if re.search(r"#\s*\[\s*path\s*=", text):
+    if re.search(r"#\s*\[[^\]]*\bpath\s*=", text):
         return False
     if re.search(
         r"^\s*(?:pub\s+)?(?:unsafe\s+)?mod\s+[A-Za-z_][A-Za-z0-9_]*\s*;",
@@ -64,10 +65,13 @@ def settings(text: str, test_mode: str) -> tuple[str, str, list[str]]:
     has_crate_type = any(
         flag == "--crate-type" or flag.startswith("--crate-type=") for flag in flags
     )
+    source_crate_type = re.search(
+        r"#!\s*\[\s*crate_type\s*=\s*\"([^\"]+)\"\s*\]", text
+    )
     if has_crate_type:
         crate_type = "flags"
-    elif test_mode == "check":
-        crate_type = "lib"
+    elif source_crate_type:
+        crate_type = source_crate_type.group(1)
     elif re.search(r"\bfn\s+main\s*\(", text):
         crate_type = "bin"
     else:

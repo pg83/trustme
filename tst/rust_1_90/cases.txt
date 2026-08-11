@@ -1143,9 +1143,7 @@ for-loop-while/while-with-break.rs
 for-loop-while/while.rs
 foreign/foreign-fn-linkname.rs
 foreign/foreign-int-types.rs
-foreign/foreign-mod-src/inner.rs
 foreign/foreign-mod-unused-const.rs
-foreign/foreign-src/foreign.rs
 foreign/foreign-truncated-arguments.rs
 foreign/foreign2.rs
 foreign/nil-decl-in-foreign.rs
@@ -1309,7 +1307,6 @@ imports/import6.rs
 imports/import7.rs
 imports/import8.rs
 imports/imports.rs
-imports/issue-26873-multifile/issue-26873-onefile.rs
 imports/issue-4865-1.rs
 imports/issue-4865-2.rs
 imports/issue-4865-3.rs
@@ -2231,7 +2228,6 @@ process/env-funky-keys.rs
 process/env-null-vars.rs
 process/env-vars.rs
 process/exec-env.rs
-process/nofile-limit.rs
 process/windows-exit-code-still-active.rs
 ptr_ops/issue-80309-safe.rs
 ptr_ops/issue-80309.rs
