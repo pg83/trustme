@@ -89,7 +89,7 @@ public:
     /// Increment the number of times a particular fragment will be used
     void inc_count(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx);
     /// Decrement the number of times a particular fragment is used (returns true if there are still usages remaining)
-    bool dec_count(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx);
+    bool decCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx);
 
     friend ::std::ostream& operator<<(::std::ostream& os, const CapturedVal& x) {
         os << x.frag;
@@ -307,7 +307,7 @@ void ParameterMappings::inc_count(const Span& sp, const ::std::vector<unsigned i
     cap.num_uses += 1;
 }
 
-bool ParameterMappings::dec_count(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) {
+bool ParameterMappings::decCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) {
     auto& cap = get_cap(sp, iterations, name_idx);
     assert(cap.num_used < cap.num_uses);
     cap.num_used += 1;
@@ -335,26 +335,26 @@ const SimplePatEnt& MacroPatternStream::next() {
             static SimplePatEnt END = SimplePatEnt::make_End({});
             return END;
         }
-        const auto& cur_ent = simpleEnts[curPos];
+        const auto& curEnt = simpleEnts[curPos];
         // If replaying, and this is a conditional
-        if (conditionReplay && cur_ent.is_If()) {
+        if (conditionReplay && curEnt.is_If()) {
             // Skip the conditional (following its target or just skipping over)
             if ((*conditionReplay)[conditionReplayPos++]) {
-                curPos = cur_ent.as_If().jump_target;
+                curPos = curEnt.as_If().jump_target;
             } else {
                 curPos += 1;
             }
             continue;
         }
         curPos += 1;
-        TU_MATCH_HDRA( (cur_ent), {)
+        TU_MATCH_HDRA( (curEnt), {)
         default:
-            if( cur_ent.is_If() )
+            if( curEnt.is_If() )
             {
                 lastWasCond = true;
                 conditionMet = false;
             }
-            return cur_ent;
+            return curEnt;
             TU_ARMA(End, _e)
             BUG(Span(), "Unexpected End");
             TU_ARMA(Jump, e)
@@ -530,8 +530,8 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
                     return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, tok.take_frag_stmt_item());
                 }
                 assert(lex.parse_state().module);
-                const auto& cur_mod = *lex.parse_state().module;
-                return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, ParseModItemS(lex, cur_mod.fileInfo, cur_mod.path(), AST::AttributeList{}));
+                const auto& curMod = *lex.parse_state().module;
+                return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, ParseModItemS(lex, curMod.fileInfo, curMod.path(), AST::AttributeList{}));
             }
             return InterpolatedFragment(InterpolatedFragment::STMT, ParseStmt(lex).release());
         case MacroPatEnt::PAT_PATH:
@@ -546,8 +546,8 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
             return InterpolatedFragment(ParseMetaItem(lex));
         case MacroPatEnt::PAT_ITEM: {
             assert(lex.parse_state().module);
-            const auto& cur_mod = *lex.parse_state().module;
-            return InterpolatedFragment(ParseModItemS(lex, cur_mod.fileInfo, cur_mod.path(), AST::AttributeList{}));
+            const auto& curMod = *lex.parse_state().module;
+            return InterpolatedFragment(ParseModItemS(lex, curMod.fileInfo, curMod.path(), AST::AttributeList{}));
         } break;
         case MacroPatEnt::PAT_IDENT:
             // NOTE: Any reserved word is also valid as an ident
@@ -644,9 +644,9 @@ namespace {
                 activeOffset = 0;
                 DEBUG("TOK_EOF");
             } else {
-                const auto* cur_tree = &tt;
-                while (!cur_tree->is_token()) {
-                    cur_tree = &(*cur_tree)[0];
+                const auto* curTree = &tt;
+                while (!curTree->is_token()) {
+                    curTree = &(*curTree)[0];
                     offsets.push_back(0);
                 }
                 assert(offsets.size() > 0);
@@ -665,7 +665,7 @@ namespace {
         }
 
         const Token& next_tok() const {
-            static Token eof_token = TOK_EOF;
+            static Token eofToken = TOK_EOF;
 
             if (fakedNext.type() != TOK_NULL) {
                 return fakedNext;
@@ -673,13 +673,13 @@ namespace {
 
             if (offsets.empty() && activeOffset == tt.size()) {
                 //DEBUG(m_consume_count << " " << eof_token << "(EOF)");
-                return eof_token;
+                return eofToken;
             } else {
-                const auto* cur_tree = &tt;
+                const auto* curTree = &tt;
                 for (auto idx : offsets) {
-                    cur_tree = &(*cur_tree)[idx];
+                    curTree = &(*curTree)[idx];
                 }
-                const auto& rv = (*cur_tree)[activeOffset].tok();
+                const auto& rv = (*curTree)[activeOffset].tok();
                 //DEBUG(m_consume_count << " " << rv);
                 return rv;
             }
@@ -697,14 +697,14 @@ namespace {
             DEBUG(consumeCount << " " << next_tok());
             consumeCount++;
             for (;;) {
-                const auto* cur_tree = &tt;
+                const auto* curTree = &tt;
                 for (auto idx : offsets) {
-                    cur_tree = &(*cur_tree)[idx];
+                    curTree = &(*curTree)[idx];
                 }
 
                 activeOffset++;
                 // If reached the end of a tree...
-                if (activeOffset == cur_tree->size()) {
+                if (activeOffset == curTree->size()) {
                     // If the end of the root is reached, return (leaving the state indicating EOS)
                     if (offsets.empty()) {
                         return;
@@ -714,8 +714,8 @@ namespace {
                     offsets.pop_back();
                 } else {
                     // Dig into nested trees
-                    while (!(*cur_tree)[activeOffset].is_token()) {
-                        cur_tree = &(*cur_tree)[activeOffset];
+                    while (!(*curTree)[activeOffset].is_token()) {
+                        curTree = &(*curTree)[activeOffset];
                         offsets.push_back(activeOffset);
                         activeOffset = 0;
                     }
@@ -2043,7 +2043,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
         ::std::vector<bool> stmt_is_item_history;
     };
     ::std::vector<Match> matches;
-    ::std::vector<std::pair<size_t, eTokenType>> fail_pos;
+    ::std::vector<std::pair<size_t, eTokenType>> failPos;
     for (size_t i = 0; i < rules.rules.size(); i++) {
         auto lex = TokenStreamRO(input);
         auto armStream = MacroPatternStream(rules.rules[i].pattern);
@@ -2112,14 +2112,14 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
             DEBUG(i << " MATCHED");
         } else {
             DEBUG(i << " FAILED");
-            fail_pos.push_back(std::make_pair(lex.position(), lex.next()));
+            failPos.push_back(std::make_pair(lex.position(), lex.next()));
         }
     }
 
     if (matches.size() == 0) {
         // ERROR!
         // TODO: Keep track of where each arm failed.
-        TODO(sp, "No arm matched - " << fail_pos);
+        TODO(sp, "No arm matched - " << failPos);
     } else {
         // yay!
 
@@ -2189,9 +2189,9 @@ void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::ve
     TRACE_FUNCTION;
     MacroExpandState state(contents, boundTts);
 
-    while (const auto* ent_ptr = state.next_ent()) {
-        DEBUG(*ent_ptr);
-        TU_MATCH_HDRA( (*ent_ptr), { )
+    while (const auto* entPtr = state.next_ent()) {
+        DEBUG(*entPtr);
+        TU_MATCH_HDRA( (*entPtr), { )
         TU_ARMA(Token, e) {
             }
             TU_ARMA(Loop, e) {
@@ -2321,7 +2321,7 @@ Token MacroExpander::realGetToken() {
                             case NAMEDVALUE_MAGIC_CRATE:
                                 DEBUG("[" << logIndex << "] Crate name hack");
                                 if (crateName == "") {
-                                    if (this->edition_after(AST::Edition::Rust2018)) {
+                                    if (this->editionAfter(AST::Edition::Rust2018)) {
                                         return Token(TOK_RWORD_CRATE);
                                     }
                                 } else {
@@ -2340,7 +2340,7 @@ Token MacroExpander::realGetToken() {
                         auto* frag = mMappings.get(this->point_span(), state.iterations(), e);
                         ASSERT_BUG(this->point_span(), frag, "Cannot find '" << e << "' for " << state.iterations());
 
-                        bool canSteal = (mMappings.dec_count(this->point_span(), state.iterations(), e) == false);
+                        bool canSteal = (mMappings.decCount(this->point_span(), state.iterations(), e) == false);
                         DEBUG("[" << logIndex << "] Insert replacement #" << e << " = " << *frag);
                         if (frag->mType == InterpolatedFragment::TT) {
                             auto res_tt = canSteal ? mv$(frag->asTt()) : frag->asTt().clone();
@@ -2362,7 +2362,7 @@ Token MacroExpander::realGetToken() {
                 for (const auto& ent : e) {
                 TU_MATCH_HDRA( (ent), { )
                 TU_ARMA(Named, v) {
-                            bool canSteal = (mMappings.dec_count(this->point_span(), state.iterations(), v) == false);
+                            bool canSteal = (mMappings.decCount(this->point_span(), state.iterations(), v) == false);
                             auto* frag = mMappings.get(this->point_span(), state.iterations(), v);
                             ASSERT_BUG(this->point_span(), frag, "Cannot find '" << v << "' for " << state.iterations());
                             Token tok;
@@ -2424,10 +2424,10 @@ const MacroExpansionEnt* MacroExpandState::next_ent() {
                     return &ent;
                 }
                 TU_ARMA(Loop, e) {
-                    assert(!e.controlling_input_loops.empty());
-                    unsigned int num_repeats = mMappings.get_loop_repeats(Span(), mIterations, *e.controlling_input_loops.begin());
-                    for (auto loop_ident : e.controlling_input_loops) {
-                        if (loop_ident == *e.controlling_input_loops.begin()) {
+                    assert(!e.controllingInputLoops.empty());
+                    unsigned int num_repeats = mMappings.get_loop_repeats(Span(), mIterations, *e.controllingInputLoops.begin());
+                    for (auto loop_ident : e.controllingInputLoops) {
+                        if (loop_ident == *e.controllingInputLoops.begin()) {
                             continue;
                         }
 
@@ -2437,7 +2437,7 @@ const MacroExpansionEnt* MacroExpandState::next_ent() {
                             ERROR(Span(), E0000, "Mismatch in loop iterations: " << this_repeats << " != " << num_repeats);
                         }
                     }
-                    DEBUG("Looping " << num_repeats << " times based on {" << e.controlling_input_loops << "}");
+                    DEBUG("Looping " << num_repeats << " times based on {" << e.controllingInputLoops << "}");
                     // 2. If it's going to repeat, start the loop
                     if (num_repeats > 0) {
                         offsets.push_back({0, 0, num_repeats});
@@ -2450,14 +2450,14 @@ const MacroExpansionEnt* MacroExpandState::next_ent() {
         } else if (layer > 0) {
             // - Otherwise, restart/end loop and fall through
             DEBUG("layer = " << layer << ", m_iterations = " << mIterations);
-            auto& cur_ofs = offsets.back();
-            DEBUG("Layer #" << layer << " Cur: " << cur_ofs.loop_index << ", Max: " << cur_ofs.max_index);
-            if (cur_ofs.loop_index + 1 < cur_ofs.max_index) {
+            auto& curOfs = offsets.back();
+            DEBUG("Layer #" << layer << " Cur: " << curOfs.loop_index << ", Max: " << curOfs.max_index);
+            if (curOfs.loop_index + 1 < curOfs.max_index) {
                 mIterations.back()++;
 
                 DEBUG("Restart layer");
-                cur_ofs.read_pos = 0;
-                cur_ofs.loop_index++;
+                curOfs.read_pos = 0;
+                curOfs.loop_index++;
 
                 auto& loop_layer = getCurLayerEnt();
                 if (loop_layer.as_Loop().joiner.type() != TOK_NULL) {
@@ -2847,7 +2847,7 @@ MacroRulesPtr::~MacroRulesPtr() {
             os << "${concat(...)}";
         }
         TU_ARMA(Loop, e) {
-            os << "${" << e.controlling_input_loops << "}(" << e.entries << ") " << e.joiner;
+            os << "${" << e.controllingInputLoops << "}(" << e.entries << ") " << e.joiner;
         }
     }
     return os;
@@ -2960,7 +2960,7 @@ public:
                 switch (GET_TOK(tok, lex)) {
                     case TOK_SQUARE_CLOSE:
                     case TOK_PAREN_CLOSE:
-                        ret.push_back(MacroPatEnt(lex.end_span(ps), TOK_DOLLAR));
+                        ret.push_back(MacroPatEnt(lex.endSpan(ps), TOK_DOLLAR));
                         PUTBACK(tok, lex);
                         break;
                     case TOK_RWORD_CRATE: // Not valid, as `$crate` already has meaning
@@ -2979,7 +2979,7 @@ public:
 
                         auto idx = state.addName(name);
 
-                        auto sp = lex.end_span(ps);
+                        auto sp = lex.endSpan(ps);
                         MacroPatEnt::Type ty;
                         if (0)
                             ;
@@ -3038,7 +3038,7 @@ public:
                             joiner = tok.type();
                             GET_TOK(tok, lex);
                         }
-                        auto sp = lex.end_span(ps);
+                        auto sp = lex.endSpan(ps);
 
                         const char* sep_flag = nullptr;
                         switch (tok.type()) {
@@ -3053,7 +3053,7 @@ public:
                                 // TODO: Can a `$()?` have a joiner?
                                 break;
                             default:
-                                if (lex.edition_after(AST::Edition::Rust2018)) {
+                                if (lex.editionAfter(AST::Edition::Rust2018)) {
                                     throw ParseError::Unexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
                                 } else {
                                     throw ParseError::Unexpected(lex, tok, {TOK_PLUS, TOK_STAR});
@@ -3069,7 +3069,7 @@ public:
             case TOK_EOF:
                 throw ParseError::Unexpected(lex, tok);
             default:
-                ret.push_back(MacroPatEnt(lex.end_span(ps), tok));
+                ret.push_back(MacroPatEnt(lex.endSpan(ps), tok));
                 break;
         }
         ps = lex.start_span();
@@ -3137,7 +3137,7 @@ struct ContentLoopVariableUse {
 
                 GET_TOK(tok, lex);
                 enum eTokenType joiner = TOK_NULL;
-                if (lex.edition_after(AST::Edition::Rust2018) && tok.type() == TOK_QMARK) {
+                if (lex.editionAfter(AST::Edition::Rust2018) && tok.type() == TOK_QMARK) {
                     // 2018 added `?` repetition operator
                 } else if (tok.type() == TOK_PLUS || tok.type() == TOK_STAR) {
                     // `+` and `*` were present at 1.0 (2015)
@@ -3158,7 +3158,7 @@ struct ContentLoopVariableUse {
                         loop_type = '?';
                         break;
                     default:
-                        if (lex.edition_after(AST::Edition::Rust2018)) {
+                        if (lex.editionAfter(AST::Edition::Rust2018)) {
                             throw ParseError::Unexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
                         } else {
                             throw ParseError::Unexpected(lex, tok, {TOK_PLUS, TOK_STAR});
@@ -3168,7 +3168,7 @@ struct ContentLoopVariableUse {
 
                 // Look up the variables used in `var_set` and determine the controlling loop(s) for this loop
                 // - Pull based on current depth
-                std::set<unsigned> controlling_loops;
+                std::set<unsigned> controllingLoops;
                 for (const auto& v : var_usage) {
                     // Empty stack: Doesn't control anything
                     if (v.second.loop_stack.size() == 0) {
@@ -3181,10 +3181,10 @@ struct ContentLoopVariableUse {
                         //controlling_loops.insert( v.second.loop_stack.back() );
                     } else {
                         // Take the current point in the stack
-                        controlling_loops.insert(v.second.loop_stack[loop_depth]);
+                        controllingLoops.insert(v.second.loop_stack[loop_depth]);
                     }
                 }
-                if (controlling_loops.empty()) {
+                if (controllingLoops.empty()) {
                     // quick_error 1.2.2 has a potential typo in the arm marked with "Flush buffer on meta after ident"
                     // - This is the same as the the comment in `$foo` handling below
                     WARNING(lex.point_span(), W0000, "Macro loop doesn't contain any variables at this depth, omitting as it'll not run");
@@ -3205,8 +3205,8 @@ struct ContentLoopVariableUse {
                     }
                 }
 
-                DEBUG("joiner = " << Token(joiner) << ", controlling_loops = {" << controlling_loops << "}, content = " << content);
-                ret.push_back(MacroExpansionEnt::make_Loop({mv$(content), joiner, mv$(controlling_loops)}));
+                DEBUG("joiner = " << Token(joiner) << ", controlling_loops = {" << controllingLoops << "}, content = " << content);
+                ret.push_back(MacroExpansionEnt::make_Loop({mv$(content), joiner, mv$(controllingLoops)}));
             }
             // - `${operator(args}` - Extensions
             else if (tok.type() == TOK_BRACE_OPEN) {
@@ -3379,7 +3379,7 @@ MacroRule ParseMacroRulesVar(TokenStream& lex) {
     {
         auto ps = lex.start_span();
         rule.pattern = ParseMacroRulesPat(lex, tok.type(), close, state);
-        rule.patSpan = lex.end_span(ps);
+        rule.patSpan = lex.endSpan(ps);
     }
 
     GET_CHECK_TOK(tok, lex, TOK_FATARROW);
@@ -3403,10 +3403,10 @@ MacroRule ParseMacroRulesVar(TokenStream& lex) {
 }
 
 // TODO: Also count the number of times each variable is used?
-void enumerate_names(const ::std::vector<MacroPatEnt>& pats, ::std::vector<RcString>& names) {
+void enumerateNames(const ::std::vector<MacroPatEnt>& pats, ::std::vector<RcString>& names) {
     for (const auto& pat : pats) {
         if (pat.type == MacroPatEnt::PAT_LOOP) {
-            enumerate_names(pat.subpats, names);
+            enumerateNames(pat.subpats, names);
         } else if (pat.name != "") {
             auto b = names.begin();
             auto e = names.end();
@@ -3421,7 +3421,7 @@ MacroRulesArm ParseMacroRulesMakeArm(Span pat_sp, ::std::vector<MacroPatEnt> pat
     // - Convert the rule into an instruction stream
     auto rule_sequence = macro_pattern_to_simple(pat_sp, pattern);
     auto arm = MacroRulesArm(mv$(rule_sequence), mv$(contents));
-    enumerate_names(pattern, arm.paramNames);
+    enumerateNames(pattern, arm.paramNames);
     return arm;
 }
 
@@ -3475,7 +3475,7 @@ MacroRulesPtr ParseMacroRulesSingleArm(TokenStream& lex) {
     auto ps = lex.start_span();
     GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
     auto armPat = ParseMacroRulesPat(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state);
-    auto pat_span = lex.end_span(ps);
+    auto pat_span = lex.endSpan(ps);
     GET_CHECK_TOK(tok, lex, TOK_BRACE_OPEN);
     // TODO: Pass a flag that annotates all idents with the current module?
     auto body = ParseMacroRulesCont(lex, TOK_BRACE_OPEN, TOK_BRACE_CLOSE, state);
@@ -3531,9 +3531,9 @@ namespace {
     /// direct_pos: Position in `pattern` at which to start the search
     /// indirect_path: Token/check path to follow before returning an item
     /// indirect_ofs: Current offset into `indirect_path`
-    PatternHeadRv macro_pattern_get_head_set_inner(::std::vector<ExpTok>& rv, const ::std::vector<MacroPatEnt>& pattern, size_t direct_pos, const std::vector<ExpTok>& indirect_path, size_t indirect_ofs) {
-        TRACE_FUNCTION_F(&pattern << " #" << direct_pos << " [" << indirect_path << "]+" << indirect_ofs);
-        for (size_t idx = direct_pos; idx < pattern.size(); idx++) {
+    PatternHeadRv macro_pattern_get_head_set_inner(::std::vector<ExpTok>& rv, const ::std::vector<MacroPatEnt>& pattern, size_t directPos, const std::vector<ExpTok>& indirect_path, size_t indirect_ofs) {
+        TRACE_FUNCTION_F(&pattern << " #" << directPos << " [" << indirect_path << "]+" << indirect_ofs);
+        for (size_t idx = directPos; idx < pattern.size(); idx++) {
             const auto& ent = pattern[idx];
             DEBUG(idx << " " << ent);
             switch (ent.type) {
@@ -3608,11 +3608,11 @@ namespace {
         return PatternHeadRv::NotFound;
     }
 
-    ::std::vector<ExpTok> macro_pattern_get_head_set(const ::std::vector<MacroPatEnt>& pattern, size_t direct_pos, const std::vector<ExpTok>& indirect_path) {
+    ::std::vector<ExpTok> macro_pattern_get_head_set(const ::std::vector<MacroPatEnt>& pattern, size_t directPos, const std::vector<ExpTok>& indirect_path) {
         ::std::vector<ExpTok> rv;
         TRACE_FUNCTION_FR("", rv);
         // If the pattern set isn't closed (hit something unconditional), then add `EOF` to it
-        if (macro_pattern_get_head_set_inner(rv, pattern, direct_pos, indirect_path, 0) != PatternHeadRv::Closed) {
+        if (macro_pattern_get_head_set_inner(rv, pattern, directPos, indirect_path, 0) != PatternHeadRv::Closed) {
             //if(rv.empty())
             if (!::std::any_of(rv.begin(), rv.end(), [](const ExpTok& e) {
                 return e.ty == MacroPatEnt::PAT_TOKEN && *e.tok == TOK_EOF;
@@ -3639,27 +3639,27 @@ namespace {
             DEBUG("[" << idx << "] ent = " << ent);
             switch (ent.type) {
                 case MacroPatEnt::PAT_LOOP: {
-                    auto entry_pats1 = macro_pattern_get_head_set(ent.subpats, 0, {});
-                    DEBUG("Entry = [" << entry_pats1 << "]");
-                    ASSERT_BUG(ent.sp, entry_pats1.size() > 0, "No entry conditions extracted from sub-pattern [" << ent.subpats << "]");
+                    auto entryPats1 = macro_pattern_get_head_set(ent.subpats, 0, {});
+                    DEBUG("Entry = [" << entryPats1 << "]");
+                    ASSERT_BUG(ent.sp, entryPats1.size() > 0, "No entry conditions extracted from sub-pattern [" << ent.subpats << "]");
                     auto skip_pats1 = macro_pattern_get_head_set(pattern, idx + 1, {});
                     DEBUG("Skip = [" << skip_pats1 << "]");
 
                     // TODO: If EOF is in both entry and skip, then remove from entry
                     bool bodySkippable = false;
-                    if (::std::find(entry_pats1.begin(), entry_pats1.end(), TOK_EOF) != entry_pats1.end()) {
-                        if (::std::find(skip_pats1.begin(), skip_pats1.end(), TOK_EOF) != entry_pats1.end()) {
-                            entry_pats1.erase(::std::find(entry_pats1.begin(), entry_pats1.end(), TOK_EOF));
+                    if (::std::find(entryPats1.begin(), entryPats1.end(), TOK_EOF) != entryPats1.end()) {
+                        if (::std::find(skip_pats1.begin(), skip_pats1.end(), TOK_EOF) != entryPats1.end()) {
+                            entryPats1.erase(::std::find(entryPats1.begin(), entryPats1.end(), TOK_EOF));
                             bodySkippable = true;
                         }
                     }
 
-                    std::vector<std::vector<SimplePatIfCheck>> entry_conds;
+                    std::vector<std::vector<SimplePatIfCheck>> entryConds;
                     std::vector<std::vector<SimplePatIfCheck>> skip_conds;
                     std::vector<std::vector<SimplePatIfCheck>> repeat_conds;
 
-                    for (const auto& ee : entry_pats1) {
-                        entry_conds.push_back(::make_vec1<SimplePatIfCheck>({ee.ty, *ee.tok}));
+                    for (const auto& ee : entryPats1) {
+                        entryConds.push_back(::make_vec1<SimplePatIfCheck>({ee.ty, *ee.tok}));
                     }
                     for (const auto& ee : skip_pats1) {
                         skip_conds.push_back(::make_vec1<SimplePatIfCheck>({ee.ty, *ee.tok}));
@@ -3668,35 +3668,35 @@ namespace {
                     // - Duplicates need special handling (build up a subseqent set)
                     const size_t MAX_CONDITION_ADD = 2;
                     for (size_t iterations = 0; iterations < MAX_CONDITION_ADD; iterations++) {
-                        bool did_extend = false;
-                        for (auto e_it = entry_conds.begin(); e_it != entry_conds.end(); ++e_it) {
-                            auto s_it = ::std::find(skip_conds.begin(), skip_conds.end(), *e_it);
+                        bool didExtend = false;
+                        for (auto eIt = entryConds.begin(); eIt != entryConds.end(); ++eIt) {
+                            auto s_it = ::std::find(skip_conds.begin(), skip_conds.end(), *eIt);
                             if (s_it != skip_conds.end()) {
-                                did_extend = true;
-                                DEBUG("Entry condition is also in skip condition: " << *e_it);
+                                didExtend = true;
+                                DEBUG("Entry condition is also in skip condition: " << *eIt);
 
                                 std::vector<ExpTok> path;
-                                for (auto it = e_it->begin(); it != e_it->end(); ++it) {
+                                for (auto it = eIt->begin(); it != eIt->end(); ++it) {
                                     path.push_back(ExpTok(it->ty, &it->tok));
                                 }
-                                auto entry_pats2 = macro_pattern_get_head_set(ent.subpats, 0, path);
-                                assert(entry_pats2.size() > 0);
+                                auto entryPats2 = macro_pattern_get_head_set(ent.subpats, 0, path);
+                                assert(entryPats2.size() > 0);
                                 // Replace `TOK_EOF` in entry patterns with the first skip pattern
-                                if (::std::find(entry_pats2.begin(), entry_pats2.end(), TOK_EOF) != entry_pats2.end()) {
-                                    entry_pats2.erase(::std::find(entry_pats2.begin(), entry_pats2.end(), TOK_EOF));
-                                    entry_pats2.insert(entry_pats2.end(), skip_pats1.begin(), skip_pats1.end());
+                                if (::std::find(entryPats2.begin(), entryPats2.end(), TOK_EOF) != entryPats2.end()) {
+                                    entryPats2.erase(::std::find(entryPats2.begin(), entryPats2.end(), TOK_EOF));
+                                    entryPats2.insert(entryPats2.end(), skip_pats1.begin(), skip_pats1.end());
                                 }
                                 auto skip_pats2 = macro_pattern_get_head_set(pattern, idx + 1, path);
                                 assert(skip_pats2.size() > 0);
-                                DEBUG("entry_pats2 = [" << entry_pats2 << "]");
+                                DEBUG("entry_pats2 = [" << entryPats2 << "]");
                                 DEBUG("skip_pats2 = [" << skip_pats2 << "]");
                                 // Update the current element for both of them, and add new elements to the end of each list
                                 {
-                                    auto e2_it = entry_pats2.begin();
-                                    e_it->push_back({e2_it->ty, *e2_it->tok});
-                                    for (++e2_it; e2_it != entry_pats2.end(); ++e2_it) {
-                                        e_it = entry_conds.insert(e_it, *e_it);
-                                        e_it->back() = SimplePatIfCheck{e2_it->ty, *e2_it->tok};
+                                    auto e2It = entryPats2.begin();
+                                    eIt->push_back({e2It->ty, *e2It->tok});
+                                    for (++e2It; e2It != entryPats2.end(); ++e2It) {
+                                        eIt = entryConds.insert(eIt, *eIt);
+                                        eIt->back() = SimplePatIfCheck{e2It->ty, *e2It->tok};
                                     }
                                 }
 
@@ -3711,18 +3711,18 @@ namespace {
                             }
                         }
                         // TODO: If any end with `:vis` then extend
-                        if (!did_extend) {
+                        if (!didExtend) {
                             break;
                         }
                     }
                     // - If there's three-level needed, error?
-                    for (auto e_it = entry_conds.begin(); e_it != entry_conds.end(); ++e_it) {
-                        auto s_it = ::std::find(skip_conds.begin(), skip_conds.end(), *e_it);
+                    for (auto eIt = entryConds.begin(); eIt != entryConds.end(); ++eIt) {
+                        auto s_it = ::std::find(skip_conds.begin(), skip_conds.end(), *eIt);
                         if (s_it != skip_conds.end()) {
-                            TODO(ent.sp, "Entry and skip patterns share an entry (max extend " << MAX_CONDITION_ADD << "), ambigious - " << *e_it);
+                            TODO(ent.sp, "Entry and skip patterns share an entry (max extend " << MAX_CONDITION_ADD << "), ambigious - " << *eIt);
                         }
                     }
-                    for (const auto& e : entry_conds) {
+                    for (const auto& e : entryConds) {
                         DEBUG("Entry += [" << e << "]");
                     }
                     for (const auto& e : skip_conds) {
@@ -3732,7 +3732,7 @@ namespace {
                     // - Generate the repeat condition set
                     if (ent.tok != TOK_NULL) {
                         // NOTE: If the separator is also allowed after the list, then this can't just check for the separator
-                        for (const auto& p : entry_conds) {
+                        for (const auto& p : entryConds) {
                             auto v = ::make_vec1<SimplePatIfCheck>({MacroPatEnt::PAT_TOKEN, ent.tok});
                             v.insert(v.end(), p.begin(), p.end());
                             repeat_conds.push_back(mv$(v));
@@ -3764,9 +3764,9 @@ namespace {
                         if (ent.tok != TOK_NULL) {
                             if (repeat_conds.size() > 1) {
                                 DEBUG("Loop+ Multi-option repeat");
-                                size_t expect_and_jump_pos = rv.size() + repeat_conds.size() + 1;
+                                size_t expectAndJumpPos = rv.size() + repeat_conds.size() + 1;
                                 for (const auto& ee : repeat_conds) {
-                                    push_ifv(true, ee, expect_and_jump_pos);
+                                    push_ifv(true, ee, expectAndJumpPos);
                                 }
                                 // If any of the above succeeded, they'll jump past this jump to the ExpectTok
                                 push(SimplePatEnt::make_Jump({~0u}));
@@ -3778,7 +3778,7 @@ namespace {
                             push(SimplePatEnt::make_Jump({start}));
                         } else {
                             // TODO: What if there's a collision at this level?
-                            for (const auto& p : entry_conds) {
+                            for (const auto& p : entryConds) {
                                 push_ifv(true, p, start);
                             }
                         }
@@ -3804,14 +3804,14 @@ namespace {
                         // - Enter the loop (if the next token is one of the head set of the loop)
                         // - Skip the loop (the next token is the head set of the subsequent entries)
                         size_t rewrite_start = rv.size();
-                        if (entry_conds.size() == 1 && entry_conds[0].back().tok != TOK_EOF) // HACK: if the entry ends with `EOF` then it won't be correct
+                        if (entryConds.size() == 1 && entryConds[0].back().tok != TOK_EOF) // HACK: if the entry ends with `EOF` then it won't be correct
                         {
                             // If not the entry pattern, skip.
-                            push_ifv(false, entry_conds.front(), ~0u);
+                            push_ifv(false, entryConds.front(), ~0u);
                         } else if (skip_conds.empty()) {
                             // No skip patterns, try all entry patterns
-                            size_t start = rv.size() + entry_conds.size() + 1;
-                            for (const auto& p : entry_conds) {
+                            size_t start = rv.size() + entryConds.size() + 1;
+                            for (const auto& p : entryConds) {
                                 push_ifv(true, p, start);
                             }
                             push(SimplePatEnt::make_Jump({~0u}));

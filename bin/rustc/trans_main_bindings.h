@@ -26,7 +26,7 @@ enum class DebugInfoLevel : unsigned {
 struct TransOptions {
     ::std::string mode = "c";
     OptimizationLevel opt_level = OptimizationLevel::None;
-    DebugInfoLevel debug_info = DebugInfoLevel::None;
+    DebugInfoLevel debugInfo = DebugInfoLevel::None;
     ::std::string buildCommandFile;
     ::std::vector<::std::string> linker_args;
 

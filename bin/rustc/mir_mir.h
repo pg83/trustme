@@ -260,11 +260,11 @@ namespace MIR {
         LValue cloneWrapped(::std::vector<Wrapper> wrappers) const;
 
         template <typename It>
-        LValue cloneWrapped(It beginIt, It end_it) const {
+        LValue cloneWrapped(It beginIt, It endIt) const {
             ::std::vector<Wrapper> newWrappers;
-            newWrappers.reserve(wrappers.size() + ::std::distance(beginIt, end_it));
+            newWrappers.reserve(wrappers.size() + ::std::distance(beginIt, endIt));
             newWrappers.insert(newWrappers.end(), wrappers.begin(), wrappers.end());
-            newWrappers.insert(newWrappers.end(), beginIt, end_it);
+            newWrappers.insert(newWrappers.end(), beginIt, endIt);
             return LValue(root.clone(), ::std::move(newWrappers));
         }
 
@@ -695,7 +695,7 @@ namespace MIR {
         (SwitchValue,
          struct {
              LValue val;
-             BasicBlockId def_target;
+             BasicBlockId defTarget;
              ::std::vector<BasicBlockId> targets;
              SwitchValues values;
         }),
@@ -827,7 +827,7 @@ namespace MIR {
     public:
         ::std::vector<::HIR::TypeRef> locals;
         //::std::vector< RcString>   local_names;
-        ::std::vector<bool> drop_flags;
+        ::std::vector<bool> dropFlags;
 
         ::std::vector<BasicBlock> blocks;
 

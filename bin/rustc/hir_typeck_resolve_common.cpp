@@ -37,8 +37,8 @@ void TraitResolveCommon::prep_indexes(const Span& sp) {
 void TraitResolveCommon::prepIndexesAddEquality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef long_ty, ::HIR::TypeRef short_ty) {
     DEBUG("ADD " << long_ty << " => " << short_ty);
     if (!hrtbs) {
-        static const HIR::GenericParams empty_hrtbs;
-        hrtbs = &empty_hrtbs;
+        static const HIR::GenericParams emptyHrtbs;
+        hrtbs = &emptyHrtbs;
     }
     // TODO: Sort the two types by "complexity" (most of the time long >= short)
     this->typeEqualities.insert(::std::make_pair(mv$(long_ty), CachedEquality{hrtbs->clone(), mv$(short_ty)}));
@@ -52,8 +52,8 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
         auto it = ::std::find_if(traitBounds.begin(), traitBounds.end(), [&](const auto& entry) {
             const auto& boundType = entry.first.first;
             const auto& boundTrait = entry.first.second;
-            return (boundType == type || boundType->equals_ignoring_regions(type))
-                && boundTrait.equals_ignoring_regions(generic_path);
+            return (boundType == type || boundType->equalsIgnoringRegions(type))
+                && boundTrait.equalsIgnoringRegions(generic_path);
         });
         if (it != traitBounds.end()) {
             DEBUG("[get_or_add_trait_bound] Existing " << FMT_CB(os, if (hrbs) os << "for" << hrbs->fmt_args() << " ";) << generic_path);

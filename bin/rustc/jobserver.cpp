@@ -136,7 +136,7 @@ class JobServerServer: public JobServer {
             return wrFd;
         }
 
-        void dump_desc(::std::ostream& os) const {
+        void dumpDesc(::std::ostream& os) const {
             if (rdFd == -1) {
                 os << "fifo:" << mPath << "/fifo";
             } else {
@@ -158,7 +158,7 @@ public:
             ss << makeflags << " ";
         }
         ss << "--jobserver-auth=";
-        server.dump_desc(ss);
+        server.dumpDesc(ss);
         setenv("MAKEFLAGS", ss.str().c_str(), /*overwrite=*/1);
     }
 

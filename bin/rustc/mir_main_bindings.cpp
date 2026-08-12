@@ -19,12 +19,12 @@ namespace {
         {
         }
 
-        void dump_mir(const ::MIR::Function& fcn) {
+        void dumpMir(const ::MIR::Function& fcn) {
             for (size_t i = 0; i < fcn.locals.size(); i++) {
                 os << indent() << "let _$" << i << ": " << fcn.locals[i] << ";\n";
             }
-            for (unsigned int i = 0; i < fcn.drop_flags.size(); i++) {
-                os << indent() << "let df$" << i << " = " << fcn.drop_flags[i] << ";\n";
+            for (unsigned int i = 0; i < fcn.dropFlags.size(); i++) {
+                os << indent() << "let df$" << i << " = " << fcn.dropFlags[i] << ";\n";
             }
 
 #define FMT_M(x) FMT_CB(os, this->fmt_val(os, x);)
@@ -178,11 +178,11 @@ namespace {
                                                                                       os << "\" => bb" << e.targets[j] << ", ";
                                                                                   })
                                                                              ) os
-                                                                             << "_ => bb" << e.def_target << "}\n";),
+                                                                             << "_ => bb" << e.defTarget << "}\n";),
                     (Drop, os << "drop(" << FMT_M(e.slot); if (e.kind == ::MIR::eDropKind::SHALLOW) os << " SHALLOW"; if (e.flag_idx != ~0u) os << " IF df$" << e.flag_idx; os << ") goto bb" << e.target << " unwind "; fmt_unwind(e.unwind); os << "\n";),
                     (Call, os << FMT_M(e.ret_val) << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << FMT_M(e2) << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << FMT_M(arg) << ", "; os << ") goto bb" << e.ret_block << " unwind "; fmt_unwind(e.unwind); os << "\n";)
                 )
-                dec_indent();
+                decIndent();
                 os << indent() << "}\n";
 
                 os.flush();
@@ -366,14 +366,14 @@ namespace {
             indentLevel++;
         }
 
-        void dec_indent() {
+        void decIndent() {
             indentLevel--;
         }
     };
 
-    void dump_mir(::std::ostream& os, unsigned int il, const ::MIR::Function& fcn) {
+    void dumpMir(::std::ostream& os, unsigned int il, const ::MIR::Function& fcn) {
         MirDumper md{os, il};
-        md.dump_mir(fcn);
+        md.dumpMir(fcn);
     }
 
     class TreeVisitor: public ::HIR::Visitor {
@@ -399,7 +399,7 @@ namespace {
             os << indent() << "{\n";
             inc_indent();
             ::HIR::Visitor::visit_type_impl(impl);
-            dec_indent();
+            decIndent();
             os << indent() << "}\n";
 
             shortItemName = false;
@@ -415,7 +415,7 @@ namespace {
             os << indent() << "{\n";
             inc_indent();
             ::HIR::Visitor::visit_trait_impl(trait_path, impl);
-            dec_indent();
+            decIndent();
             os << indent() << "}\n";
 
             shortItemName = false;
@@ -444,7 +444,7 @@ namespace {
             os << indent() << "{\n";
             inc_indent();
             ::HIR::Visitor::visit_trait(p, item);
-            dec_indent();
+            decIndent();
             os << indent() << "}\n";
 
             shortItemName = false;
@@ -482,8 +482,8 @@ namespace {
             if (item.mCode) {
                 os << indent() << "{\n";
                 inc_indent();
-                dump_mir(os, indentLevel, item.mCode.get_mir_or_error(Span()));
-                dec_indent();
+                dumpMir(os, indentLevel, item.mCode.get_mir_or_error(Span()));
+                decIndent();
                 os << indent() << "}\n";
             } else {
                 os << indent() << "  ;\n";
@@ -503,10 +503,10 @@ namespace {
                 inc_indent();
                 os << " = {\n";
                 inc_indent();
-                dump_mir(os, indentLevel, item.mValue.get_mir_or_error(Span()));
-                dec_indent();
+                dumpMir(os, indentLevel, item.mValue.get_mir_or_error(Span()));
+                decIndent();
                 os << indent() << "} /* = " << item.valueRes << "*/;\n";
-                dec_indent();
+                decIndent();
             } else {
                 os << ";\n";
             }
@@ -525,10 +525,10 @@ namespace {
                 inc_indent();
                 os << " = {\n";
                 inc_indent();
-                dump_mir(os, indentLevel, item.mValue.get_mir_or_error(Span()));
-                dec_indent();
+                dumpMir(os, indentLevel, item.mValue.get_mir_or_error(Span()));
+                decIndent();
                 os << indent() << "} /* = " << item.valueRes << "*/;\n";
-                dec_indent();
+                decIndent();
             } else {
                 os << ";\n";
             }
@@ -543,7 +543,7 @@ namespace {
             indentLevel++;
         }
 
-        void dec_indent() {
+        void decIndent() {
             indentLevel--;
         }
     };
@@ -557,5 +557,5 @@ void MIRDump(::std::ostream& sink, const ::HIR::Crate& crate) {
 
 void MIRDumpFcn(::std::ostream& sink, const ::MIR::Function& fcn, unsigned int il) {
     MirDumper md{sink, il};
-    md.dump_mir(fcn);
+    md.dumpMir(fcn);
 }

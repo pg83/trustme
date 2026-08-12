@@ -12,15 +12,15 @@
 #include <vector>
 #include <sstream>
 
-typedef ::std::function<void(::std::ostream& os)> dbg_cb_t;
+typedef ::std::function<void(::std::ostream& os)> dbgCbT;
 extern void DebugSetPhase(const char* phase_name);
-extern void DebugProcessEnable(const char* enable_string);
+extern void DebugProcessEnable(const char* enableString);
 extern void DebugDisablePhase(const char* phase_name);
 extern void DebugEnablePhase(const char* phase_name);
 extern bool DebugIsEnabled();
-extern void DebugEnterScope(const char* name, dbg_cb_t);
-extern void DebugLeaveScope(const char* name, dbg_cb_t);
-extern void DebugPrint(dbg_cb_t cb);
+extern void DebugEnterScope(const char* name, dbgCbT);
+extern void DebugLeaveScope(const char* name, dbgCbT);
+extern void DebugPrint(dbgCbT cb);
 
 #if defined(NOLOG)
     #define DEBUG(fmt) \
@@ -67,7 +67,7 @@ namespace {
 struct DebugFunctionScope {
     const char* mName;
 
-    DebugFunctionScope(const char* name, dbg_cb_t cb);
+    DebugFunctionScope(const char* name, dbgCbT cb);
 
     ~DebugFunctionScope();
 };

@@ -104,18 +104,18 @@ namespace {
                                     os << " " << v.first;
                                 }
                             }));
-                            auto ec_it = AST::g_implicit_crates.find(name);
-                            if (ec_it != AST::g_implicit_crates.end()) {
+                            auto ecIt = AST::g_implicit_crates.find(name);
+                            if (ecIt != AST::g_implicit_crates.end()) {
                                 return ResolveModuleRef::make_ImplicitPrelude({});
                             }
                         }
 
                         DEBUG("Ignore last");
-                        const auto& current_mod = this->get_mod_by_true_path(baseNodes, baseNodes.size());
+                        const auto& currentMod = this->get_mod_by_true_path(baseNodes, baseNodes.size());
                         if (out_path) {
-                            *out_path = current_mod.path();
+                            *out_path = currentMod.path();
                         }
-                        return ResolveModuleRef(&current_mod);
+                        return ResolveModuleRef(&currentMod);
                     }
                     const auto& name = e.nodes.front().name();
                     // Look up in stack of anon modules
@@ -191,17 +191,17 @@ namespace {
                                 os << " " << v.first;
                             }
                         }));
-                        auto ec_it = AST::g_implicit_crates.find(name);
-                        if (ec_it != AST::g_implicit_crates.end()) {
-                            if (ec_it->second == "") {
+                        auto ecIt = AST::g_implicit_crates.find(name);
+                        if (ecIt != AST::g_implicit_crates.end()) {
+                            if (ecIt->second == "") {
                                 // This crate!
                                 return get_module_ast(crate.rootModule, path, 1, ignore_last, out_path);
                             } else {
-                                ASSERT_BUG(sp, crate.externCrates.count(ec_it->second), "Crate \"" << ec_it->second << "\" not loaded (for \"" << ec_it->first << "\")");
-                                const auto& ec = crate.externCrates.at(ec_it->second);
+                                ASSERT_BUG(sp, crate.externCrates.count(ecIt->second), "Crate \"" << ecIt->second << "\" not loaded (for \"" << ecIt->first << "\")");
+                                const auto& ec = crate.externCrates.at(ecIt->second);
                                 DEBUG("Implicitly imported crate");
                                 if (out_path) {
-                                    *out_path = AST::AbsolutePath(ec_it->second, {});
+                                    *out_path = AST::AbsolutePath(ecIt->second, {});
                                 }
                                 return get_module_hir(ec.hir->rootModule, path, 1, ignore_last, out_path);
                             }
@@ -248,30 +248,30 @@ namespace {
                         if (n == crate.crateNameSet) {
                             return get_module_ast(crate.rootModule, path, 0, ignore_last, out_path);
                         }
-                        auto ec_it = AST::g_implicit_crates.find(n);
-                        if (ec_it == AST::g_implicit_crates.end()) {
+                        auto ecIt = AST::g_implicit_crates.find(n);
+                        if (ecIt == AST::g_implicit_crates.end()) {
                             return ResolveModuleRef();
                         }
-                        auto ec_it2 = crate.externCrates.find(ec_it->second);
-                        if (ec_it2 == crate.externCrates.end()) {
-                            DEBUG("Crate " << ec_it->second << " not found");
+                        auto ecIt2 = crate.externCrates.find(ecIt->second);
+                        if (ecIt2 == crate.externCrates.end()) {
+                            DEBUG("Crate " << ecIt->second << " not found");
                             return ResolveModuleRef();
                         }
                         if (out_path) {
-                            *out_path = AST::AbsolutePath(ec_it->second, {});
+                            *out_path = AST::AbsolutePath(ecIt->second, {});
                         }
-                        return get_module_hir(ec_it2->second.hir->rootModule, path, 0, ignore_last, out_path);
+                        return get_module_hir(ecIt2->second.hir->rootModule, path, 0, ignore_last, out_path);
                     } else {
                         // HIR lookup (different)
-                        auto ec_it = crate.externCrates.find(e.crate);
-                        if (ec_it == crate.externCrates.end()) {
+                        auto ecIt = crate.externCrates.find(e.crate);
+                        if (ecIt == crate.externCrates.end()) {
                             DEBUG("Crate " << e.crate << " not found");
                             return ResolveModuleRef();
                         }
                         if (out_path) {
                             *out_path = AST::AbsolutePath(e.crate, {});
                         }
-                        return get_module_hir(ec_it->second.hir->rootModule, path, 0, ignore_last, out_path);
+                        return get_module_hir(ecIt->second.hir->rootModule, path, 0, ignore_last, out_path);
                     }
                 }
             }
@@ -624,13 +624,13 @@ namespace {
                                 }
                                 TU_ARMA(ImplicitPrelude, _e) {
                                     if (ns == ResolveNamespace::Namespace) {
-                                        auto ec_it = AST::g_implicit_crates.find(item_name);
-                                        if (ec_it != AST::g_implicit_crates.end()) {
+                                        auto ecIt = AST::g_implicit_crates.find(item_name);
+                                        if (ecIt != AST::g_implicit_crates.end()) {
                                             if (out_path) {
-                                                out_path->crate = ec_it->second;
+                                                out_path->crate = ecIt->second;
                                                 out_path->nodes.clear();
                                             }
-                                            return ResolveItemRefType(&*crate.externCrates.at(ec_it->second).hir);
+                                            return ResolveItemRefType(&*crate.externCrates.at(ecIt->second).hir);
                                         }
                                         TODO(sp, "ImplicitPrelude?");
                                     }

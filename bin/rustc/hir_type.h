@@ -303,7 +303,7 @@ namespace HIR {
             void fmt(::std::ostream& os) const;
 
             // Deliberately semantic relations. Plain TypeRef equality is pointer identity.
-            bool equals_ignoring_regions(::HIR::TypeRef x) const;
+            bool equalsIgnoringRegions(::HIR::TypeRef x) const;
             Ordering ord_ignoring_regions(::HIR::TypeRef x) const;
             bool match_test_generics(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder, MatchGenerics& callback) const;
             ::HIR::Compare match_test_generics_fuzz(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder, MatchGenerics& callback) const;

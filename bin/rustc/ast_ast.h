@@ -82,7 +82,7 @@ namespace AST {
         //TypeAlias() {}
         TypeAlias(GenericParams params, TypeRef type);
 
-        static TypeAlias new_associated_type(GenericParams params, GenericParams type_bounds, TypeRef default_type);
+        static TypeAlias new_associated_type(GenericParams params, GenericParams type_bounds, TypeRef defaultType);
 
         const GenericParams& params() const {
             return mParams;
@@ -695,7 +695,7 @@ namespace AST {
 
     public:
         struct FileInfo {
-            bool controls_dir = false;
+            bool controlsDir = false;
             ////
             //bool    force_no_load = false;
             // Is this module disabled (i.e. it's tagged with a failing `#[cfg]`)?
@@ -768,7 +768,7 @@ namespace AST {
 
         void addItem(Named<Item> item);
         void addItem(Span sp, Visibility vis, RcString name, Item it, AttributeList attrs);
-        void addExtCrate(Span sp, Visibility vis, RcString ext_name, RcString imp_name, AttributeList attrs);
+        void addExtCrate(Span sp, Visibility vis, RcString extName, RcString imp_name, AttributeList attrs);
         void addMacroInvocation(MacroInvocation item);
 
         void addMacro(bool is_exported, RcString name, MacroRulesPtr macro);

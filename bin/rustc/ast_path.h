@@ -477,7 +477,7 @@ namespace AST {
     private:
         static void resolve_args_nl(::std::vector<PathNode>& nodes, ::std::function<TypeRef(const char*)> fcn);
 
-        void checkParamCounts(const GenericParams& params, bool expect_params, PathNode& node);
+        void checkParamCounts(const GenericParams& params, bool expectParams, PathNode& node);
 
     public:
         //void bind_enum_var(const Enum& ent, const RcString& name);

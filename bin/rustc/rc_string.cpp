@@ -13,11 +13,11 @@ RcString::RcString(const char* s, size_t len)
         ptr->refcount = 1;
         ptr->size = static_cast<unsigned>(len);
         ptr->ordering = 0;
-        char* data_mut = reinterpret_cast<char*>(ptr->data);
+        char* dataMut = reinterpret_cast<char*>(ptr->data);
         for (unsigned int j = 0; j < len; j++) {
-            data_mut[j] = s[j];
+            dataMut[j] = s[j];
         }
-        data_mut[len] = '\0';
+        dataMut[len] = '\0';
     }
 }
 
@@ -215,7 +215,7 @@ namespace {
 
 #if VALIDATE
             StringView prev{nullptr, 0};
-            size_t end_len = 0;
+            size_t endLen = 0;
             for (auto& v : *this) {
                 if (prev.p) {
                     if (v.ord(prev.p, prev.l) > 0) {
@@ -226,13 +226,13 @@ namespace {
                 }
                 prev.p = v.c_str();
                 prev.l = v.size();
-                end_len += 1;
+                endLen += 1;
             }
-            if (start_len + 1 != end_len) {
-                std::cerr << "BUG: Counts failed after addition of `" << rv << " (was " << start_len << ", now " << end_len << ")`\n";
+            if (start_len + 1 != endLen) {
+                std::cerr << "BUG: Counts failed after addition of `" << rv << " (was " << start_len << ", now " << endLen << ")`\n";
                 abort();
             }
-            ::std::cerr << "ADDED #" << end_len << ": `" << rv << "`\n";
+            ::std::cerr << "ADDED #" << endLen << ": `" << rv << "`\n";
 #endif
 
             return std::make_pair(&*slot, true);

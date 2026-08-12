@@ -109,7 +109,7 @@ TAGGED_UNION_OUT_OF_LINE(
     (Bang, struct {}),
     (Unit, struct {}),
     (Macro, struct { ::std::unique_ptr<::AST::MacroInvocation> inv; }),
-    (Primitive, struct { enum eCoreType core_type; }),
+    (Primitive, struct { enum eCoreType coreType; }),
     (Function, struct { TypeFunction info; }),
     (Tuple, struct { ::std::vector<TypeRef> inner_types; }),
     (Borrow,

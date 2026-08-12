@@ -23,7 +23,7 @@ extern void HIRExpandStaticBorrowConstantsMark(::HIR::Crate& crate);
 extern void HIRExpandStaticBorrowConstants(::HIR::Crate& crate);
 
 extern void HIRExpandAnnotateUsageExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp);
-extern void HIRExpandClosuresExpr(const ::HIR::Crate& crate, ::HIR::TypeRef& exp_ty, ::HIR::ExprPtr& exp);
+extern void HIRExpandClosuresExpr(const ::HIR::Crate& crate, ::HIR::TypeRef& expTy, ::HIR::ExprPtr& exp);
 extern void HIRExpandUfcsEverythingExpr(const ::HIR::Crate& crate, ::HIR::ExprPtr& exp, const ::HIR::TraitImpl* current_trait_impl = nullptr);
 extern void HIRExpandReborrowsExpr(const ::HIR::Crate& crate, ::HIR::ExprPtr& exp);
 extern void HIRExpandStaticBorrowConstantsMarkExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp);

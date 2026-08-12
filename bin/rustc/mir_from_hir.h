@@ -91,13 +91,13 @@ TAGGED_UNION(
      struct {
          bool is_temporary;
          ::std::vector<unsigned int> slots; // Locals whose state is owned by this scope
-         ::std::vector<ScopeDropSlot> drop_slots; // Locals and arguments in scheduled drop order
+         ::std::vector<ScopeDropSlot> dropSlots; // Locals and arguments in scheduled drop order
      }),
     (Split,
      struct {
-         bool end_state_valid = false;
+         bool endStateValid = false;
          SplitEnd condState;
-         SplitEnd end_state;
+         SplitEnd endState;
          ::std::vector<SplitArm> arms;
      }),
     (Loop,
@@ -105,11 +105,11 @@ TAGGED_UNION(
          // NOTE: This contains the original state for variables changed after `exit_state_valid` is true
          ::std::map<unsigned int, VarState> changedSlots;
          ::std::map<unsigned int, VarState> changedArgs;
-         bool exit_state_valid;
-         SplitEnd exit_state;
+         bool exitStateValid;
+         SplitEnd exitState;
          // TODO: Any drop flags allocated in the loop must be re-initialised at the start of the loop (or before a loopback)
-         ::MIR::BasicBlockId entry_bb;
-         ::std::vector<unsigned> drop_flags;
+         ::MIR::BasicBlockId entryBb;
+         ::std::vector<unsigned> dropFlags;
      }),
     (Freeze, struct {
         /// Has `unfreeze_scope` been called on this entry?
@@ -302,9 +302,9 @@ public:
     // Push an assignment. NOTE: This also marks the rvalue as moved
     void push_stmt_assign(const Span& sp, ::MIR::LValue dst, ::MIR::RValue val, bool update_dest_state = true);
     // Push a drop (likely only used by scope cleanup)
-    void push_stmt_drop(const Span& sp, ::MIR::LValue val, unsigned int drop_flag = ~0u);
+    void push_stmt_drop(const Span& sp, ::MIR::LValue val, unsigned int dropFlag = ~0u);
     // Push a shallow drop (for Box)
-    void push_stmt_drop_shallow(const Span& sp, ::MIR::LValue val, unsigned int drop_flag = ~0u);
+    void push_stmt_drop_shallow(const Span& sp, ::MIR::LValue val, unsigned int dropFlag = ~0u);
     // Push an inline assembly statement (NOTE: inputs aren't marked as moved)
     void push_stmt_asm(const Span& sp, ::MIR::Statement::Data_Asm data);
     // Push a setting/clearing of a drop flag
@@ -365,16 +365,16 @@ public:
     void set_cur_block(unsigned int new_block);
     ::MIR::BasicBlockId pause_cur_block();
 
-    void end_block(::MIR::Terminator term);
+    void endBlock(::MIR::Terminator term);
 
     ::MIR::BasicBlockId new_bb_linked();
     ::MIR::BasicBlockId new_bb_unlinked();
 
-    unsigned int new_drop_flag(bool default_state);
+    unsigned int new_drop_flag(bool defaultState);
     unsigned int new_drop_flag_and_set(const Span& sp, bool set_state);
     bool get_drop_flag_default(const Span& sp, unsigned int index);
     /// Add a drop flag to be set when another is also set (used to rewrite drop flags after the fact)
-    void drop_flag_alias(unsigned int old_idx, unsigned int new_idx);
+    void dropFlagAlias(unsigned int old_idx, unsigned int new_idx);
 
     // --- Scopes ---
     /// Scope controlling the state of defined variables
@@ -395,11 +395,11 @@ public:
     /// Terminates a scope early (e.g. via return/break/...)
     void terminate_scope_early(const Span& sp, const ScopeHandle&, bool loop_exit = false);
     /// Marks the end of a split arm (end match arm, if body, ...)
-    void end_split_arm(const Span& sp, const ScopeHandle&, bool reachable, bool early = false);
+    void endSplitArm(const Span& sp, const ScopeHandle&, bool reachable, bool early = false);
     /// Terminates the current split early (TODO: What does this mean?)
-    void end_split_arm_early(const Span& sp);
+    void endSplitArmEarly(const Span& sp);
     /// Terminates the current split condition clause (used for the conditional portion of a match arm)
-    void end_split_condition(const Span& sp, const ScopeHandle&);
+    void endSplitCondition(const Span& sp, const ScopeHandle&);
     /// Allows mutation through a freeze scope (see `new_scope_freeze`)
     void unfreeze_scope(const Span& sp, const ScopeHandle&);
 
@@ -420,7 +420,7 @@ public:
     /// Move a local binding from its lexical block into the scope selected for a `super let`.
     void move_variable_to_scope(const Span& sp, unsigned int idx, const ScopeHandle& target);
     /// Drop a live value on the current control-flow path and mark it invalid.
-    void drop_lvalue(const Span& sp, const ::MIR::LValue& value);
+    void dropLvalue(const Span& sp, const ::MIR::LValue& value);
     // Helper - Marks a variable/... as moved (and checks if the move is valid)
     void moved_lvalue(const Span& sp, const ::MIR::LValue& lv);
 
@@ -434,16 +434,16 @@ private:
     const VarState& get_slot_state(const Span& sp, unsigned int idx, SlotType type, const ScopeHandle* aboveScope = nullptr) const;
     VarState& get_slot_state_mut(const Span& sp, unsigned int idx, SlotType type);
 
-    VarState* get_val_state_mut_p(const Span& sp, const ::MIR::LValue& lv, bool expect_valid = false);
+    VarState* get_val_state_mut_p(const Span& sp, const ::MIR::LValue& lv, bool expectValid = false);
 
-    void merge_split_lists(const Span& sp, const ScopeHandle& handle, const ::std::map<unsigned int, VarState>& states, ::std::map<unsigned int, VarState>& end_states, MirBuilder::SlotType type);
+    void merge_split_lists(const Span& sp, const ScopeHandle& handle, const ::std::map<unsigned int, VarState>& states, ::std::map<unsigned int, VarState>& endStates, MirBuilder::SlotType type);
 
     void terminate_loop_early(const Span& sp, ScopeType::Data_Loop& sd_loop);
 
-    void drop_value_from_state(const Span& sp, VarState& vs, ::MIR::LValue lv);
-    void drop_scope_values(ScopeDef& sd);
+    void dropValueFromState(const Span& sp, VarState& vs, ::MIR::LValue lv);
+    void dropScopeValues(ScopeDef& sd);
     ::MIR::UnwindAction make_unwind_action(const Span& sp, const ::MIR::LValue* consumedValue = nullptr);
-    void push_drop_terminator(const Span& sp, ::MIR::eDropKind kind, ::MIR::LValue val, unsigned int drop_flag);
+    void push_drop_terminator(const Span& sp, ::MIR::eDropKind kind, ::MIR::LValue val, unsigned int dropFlag);
     /// Finalise a scope before it's fully destroyed. Doesn't emit destructors (already done by `drop_scope_values`)
     void completeScope(ScopeDef& sd);
 
@@ -470,11 +470,11 @@ public:
     std::map<unsigned, SavedActiveLocal> get_active_locals(const Span& sp, std::set<unsigned>& saved_drop_flags) const;
 
     // Calls `drop_value_from_state` on the value
-    void drop_actve_local(const Span& sp, ::MIR::LValue lv, const SavedActiveLocal& loc);
+    void dropActveLocal(const Span& sp, ::MIR::LValue lv, const SavedActiveLocal& loc);
 
     /// Emits the drops needed when unwinding from the current point without
     /// changing the state used by the normal path.
-    void emit_unwind_cleanup(const Span& sp);
+    void emitUnwindCleanup(const Span& sp);
 };
 
 template <typename T>
@@ -509,11 +509,11 @@ public:
     virtual void register_pattern_variables(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
     virtual void schedule_registered_pattern_drops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
 
-    virtual void destructure_from_list(const Span& sp, const ::HIR::TypeData* ty, ::MIR::LValue lval, const ::std::vector<PatternBinding>& bindings, bool update_states = true) = 0;
+    virtual void destructureFromList(const Span& sp, const ::HIR::TypeData* ty, ::MIR::LValue lval, const ::std::vector<PatternBinding>& bindings, bool update_states = true) = 0;
     virtual MIR::LValue get_value_for_binding_path(const Span& sp, const ::HIR::TypeData* outer_ty, const ::MIR::LValue& outer_lval, const PatternBinding& b) = 0;
     virtual const HIR::TypeData* get_binding_type(const Span& sp, unsigned index) const = 0;
 
-    virtual SaveAndEditVal<const ScopeHandle*> disable_borrow_extension() = 0;
+    virtual SaveAndEditVal<const ScopeHandle*> disableBorrowExtension() = 0;
 };
 
 extern void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps);

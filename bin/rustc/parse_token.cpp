@@ -416,7 +416,7 @@ struct EscapedString {
                 case CORETYPE_ANY:
                     return FMT(mData.as_Integer().intval);
                 default:
-                    return FMT(mData.as_Integer().intval << "_" << coretype_name(mData.as_Integer().datatype));
+                    return FMT(mData.as_Integer().intval << "_" << coretypeName(mData.as_Integer().datatype));
             }
             break;
         }

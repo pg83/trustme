@@ -819,7 +819,7 @@ namespace {
         ::std::vector<TypeRepr::Field> fields(ents.size() > 0 ? max_field + 1 : 0);
 
         TypeRepr rv;
-        size_t cur_ofs = 0;
+        size_t curOfs = 0;
         size_t max_align = 1;
         bool is_first_field = true;
         for (auto& e : ents) {
@@ -844,8 +844,8 @@ namespace {
             // Increase offset to fit alignment
             align = max_alignment > 0 ? std::min<size_t>(align, max_alignment) : align;
             if (align > 0) {
-                while (cur_ofs % align != 0) {
-                    cur_ofs++;
+                while (curOfs % align != 0) {
+                    curOfs++;
                 }
             }
             max_align = ::std::max(max_align, align);
@@ -854,16 +854,16 @@ namespace {
             if (e.field != ~0u) {
                 ASSERT_BUG(sp, e.field < fields.size(), "Field index out of range");
                 ASSERT_BUG(sp, fields[e.field].ty == HIR::TypeRef(), "Dupliate field index");
-                fields[e.field].offset = cur_ofs;
+                fields[e.field].offset = curOfs;
                 fields[e.field].ty = e.ty;
             }
-            DEBUG("#" << e.field << " @" << cur_ofs << "+" << e.size << " : " << e.ty);
+            DEBUG("#" << e.field << " @" << curOfs << "+" << e.size << " : " << e.ty);
             if (e.size == SIZE_MAX) {
                 // Ensure that this is the last item
                 ASSERT_BUG(sp, &e == &ents.back(), "Unsized item isn't the last item in " << ty);
-                cur_ofs = SIZE_MAX;
+                curOfs = SIZE_MAX;
             } else {
-                cur_ofs += e.size;
+                curOfs += e.size;
             }
         }
         if (forced_alignment > 0) {
@@ -872,10 +872,10 @@ namespace {
             rv.user_align = true;
         }
         // If not packing (and the size isn't infinite/unsized) then round the size up to the alignment
-        if (cur_ofs != SIZE_MAX) {
+        if (curOfs != SIZE_MAX) {
             // Size must be a multiple of alignment
-            while (cur_ofs % max_align != 0) {
-                cur_ofs++;
+            while (curOfs % max_align != 0) {
+                curOfs++;
             }
         }
         for (const auto& f : fields) {
@@ -883,7 +883,7 @@ namespace {
         }
         // Aligment is 1 for packed structs, and `max_align` otherwise
         rv.align = max_align;
-        rv.size = cur_ofs;
+        rv.size = curOfs;
         rv.fields = ::std::move(fields);
         DEBUG(ty << ": size = " << rv.size << ", align = " << rv.align);
         return box$(rv);
@@ -1246,9 +1246,9 @@ namespace {
             return resolve.monomorph_expand(sp, tpl, monomorph_cb);
         };
 
-        if (!enm.discriminants_evaluated) {
+        if (!enm.discriminantsEvaluated) {
             ConvertHIRConstantEvaluateEnum(resolve.crate, te.path.mData.as_Generic().mPath, enm);
-            assert(enm.discriminants_evaluated);
+            assert(enm.discriminantsEvaluated);
         }
 
         TypeRepr rv;
@@ -1275,7 +1275,7 @@ namespace {
                             max_align = ::std::max(max_align, align);
                             rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
 
-                            ASSERT_BUG(sp, !var.discriminant_expr, "TODO: Handle explicit discriminants with repr(C) data");
+                            ASSERT_BUG(sp, !var.discriminantExpr, "TODO: Handle explicit discriminants with repr(C) data");
                         }
                         DEBUG("max_size = " << max_size << ", max_align = " << max_align);
 
@@ -1283,16 +1283,16 @@ namespace {
                         rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(tag_ty)});
                         size_t tag_size, tag_align;
                         TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, tag_size, tag_align);
-                        size_t data_ofs = tag_size;
+                        size_t dataOfs = tag_size;
 
-                        while (data_ofs % max_align != 0) {
-                            data_ofs++;
+                        while (dataOfs % max_align != 0) {
+                            dataOfs++;
                         }
 
                         for (size_t i = 0; i < e.size(); i++) {
-                            rv.fields[i].offset = data_ofs;
+                            rv.fields[i].offset = dataOfs;
                         }
-                        rv.size = data_ofs + max_size;
+                        rv.size = dataOfs + max_size;
                         rv.align = std::max(tag_align, max_align);
                         while (rv.size % rv.align != 0) {
                             rv.size++;
@@ -1331,7 +1331,7 @@ namespace {
                         std::vector<Variant> variants;
                         variants.reserve(e.size());
                         for (const auto& var : e) {
-                            if (var.discriminant_expr) {
+                            if (var.discriminantExpr) {
                                 has_explcit_value = true;
                             }
 
@@ -1470,7 +1470,7 @@ namespace {
                                                 rv.variants = TypeRepr::VariantMode::make_Linear({std::move(nz_path), offset, e.size()});
                                                 break;
                                             } else {
-                                                if (debug_enabled()) {
+                                                if (debugEnabled()) {
                                                     nz_path.sub_fields.push_back(i);
                                                     nz_path.index = biggestVar;
                                                 }
@@ -1987,7 +1987,7 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
     auto symbol = FMT(TransMangle(ty));
     auto existing = s_cache.find(symbol);
     if (existing != s_cache.end()) {
-        ASSERT_BUG(sp, existing->second.canonical == ty || existing->second.canonical->equals_ignoring_regions(ty),
+        ASSERT_BUG(sp, existing->second.canonical == ty || existing->second.canonical->equalsIgnoringRegions(ty),
             "Distinct types have the same mangled name: " << existing->second.canonical << " and " << ty);
         const auto* repr = existing->second.repr.get();
         s_cache_exact.emplace(ty, repr);

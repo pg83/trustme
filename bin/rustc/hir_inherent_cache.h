@@ -42,7 +42,7 @@ namespace HIR {
             std::map<HIR::SimplePath, Inner> mPath;
 
             void insert(const Span& sp, const HIR::TypeData* receiver, const HIR::TypeImpl& impl);
-            void find(const Span& sp, const HIR::TypeData* cur_ty, t_cb_resolve_type ty_res, inner_callback_t& cb) const;
+            void find(const Span& sp, const HIR::TypeData* curTy, t_cb_resolve_type ty_res, inner_callback_t& cb) const;
         };
 
         std::map<RcString, Inner> items;

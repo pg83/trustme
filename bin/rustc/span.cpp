@@ -4,8 +4,8 @@
 #include "parse_lex.h"
 #include "common.h"
 
-Span::Span(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int end_line, unsigned int end_ofs)
-    : ptr(SpanInnerSource::alloc(parent, ::std::move(filename), start_line, start_ofs, end_line, end_ofs))
+Span::Span(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int endLine, unsigned int endOfs)
+    : ptr(SpanInnerSource::alloc(parent, ::std::move(filename), start_line, start_ofs, endLine, endOfs))
 {
 }
 
@@ -105,10 +105,10 @@ unsigned int SpanInnerSource::node_kind() const {
 
 void SpanInnerSource::fmt(::std::ostream& os) const {
     os << this->filename;
-    if (this->start_line != this->end_line) {
-        os << ":" << this->start_line << "-" << this->end_line;
-    } else if (this->start_ofs != this->end_ofs) {
-        os << ":" << this->start_line << ":" << this->start_ofs << "-" << this->end_ofs;
+    if (this->start_line != this->endLine) {
+        os << ":" << this->start_line << "-" << this->endLine;
+    } else if (this->start_ofs != this->endOfs) {
+        os << ":" << this->start_line << ":" << this->start_ofs << "-" << this->endOfs;
     } else {
         os << ":" << this->start_line << ":" << this->start_ofs;
     }
@@ -161,14 +161,14 @@ Span& Span::operator=(Span&& x) {
     new (this) Span(std::move(x));
     return *this;
 }
-SpanInner* SpanInnerSource::alloc(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int end_line, unsigned int end_ofs) {
+SpanInner* SpanInnerSource::alloc(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int endLine, unsigned int endOfs) {
     auto* rv = new SpanInnerSource();
     rv->reference_count = 1;
     rv->parent_span = parent;
     rv->filename = ::std::move(filename);
     rv->start_line = start_line;
     rv->start_ofs = start_ofs;
-    rv->end_line = end_line;
-    rv->end_ofs = end_ofs;
+    rv->endLine = endLine;
+    rv->endOfs = endOfs;
     return rv;
 }

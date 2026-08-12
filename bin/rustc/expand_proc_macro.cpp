@@ -141,13 +141,13 @@ void ExpandProcMacroHarness(::AST::Crate& crate) {
             default:
                 break;
         }
-        ::AST::ExprNodeStructLiteral::t_values desc_vals;
+        ::AST::ExprNodeStructLiteral::t_values descVals;
         // `name: "foo",`
-        desc_vals.push_back({{}, "name", NEWNODE(String, desc.name.c_str())});
+        descVals.push_back({{}, "name", NEWNODE(String, desc.name.c_str())});
         // `handler`: ::foo
-        desc_vals.push_back({{}, "handler", NEWNODE(CallPath, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroType"), ::AST::PathNode(type_name)}), ::make_vec1(NEWNODE(NamedValue, AST::Path(desc.path))))});
+        descVals.push_back({{}, "handler", NEWNODE(CallPath, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroType"), ::AST::PathNode(type_name)}), ::make_vec1(NEWNODE(NamedValue, AST::Path(desc.path))))});
 
-        test_nodes.push_back(NEWNODE(StructLiteral, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroDesc")}), nullptr, mv$(desc_vals)));
+        test_nodes.push_back(NEWNODE(StructLiteral, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroDesc")}), nullptr, mv$(descVals)));
     }
     auto* tests_array = new ::AST::ExprNodeArray(mv$(test_nodes));
 
@@ -385,9 +385,9 @@ public:
             this->send_bytes(sp_p->filename.c_str(), sp_p->filename.size());
             this->send_u8(1); // path_is_real
             this->send_v128u(sp_p->start_line);
-            this->send_v128u(sp_p->end_line);
+            this->send_v128u(sp_p->endLine);
             this->send_v128u(sp_p->start_ofs);
-            this->send_v128u(sp_p->end_ofs);
+            this->send_v128u(sp_p->endOfs);
         } else {
             this->send_bytes("MACRO", 5); // TODO: better filename?
             this->send_u8(0);             // path_is_real
@@ -475,7 +475,7 @@ namespace {
     struct Visitor {
         const Span& sp;
         ProcMacroInv& pmi;
-        bool emit_all_attrs;
+        bool emitAllAttrs;
         // Derive inputs must not include `#[derive(...)]` attributes themselves (rustc
         // strips them before invoking a derive macro).
         bool skip_derive_attrs = false;
@@ -484,7 +484,7 @@ namespace {
             : sp(sp)
             , pmi(pmi)
             //,emit_all_attrs(false)
-            , emit_all_attrs(true)
+            , emitAllAttrs(true)
         {
         }
 
@@ -1419,7 +1419,7 @@ namespace {
                 return;
             }
             auto is_local = (a.name().is_trivial() && pmi.attrIsUsed(a.name().asTrivial()));
-            if (this->emit_all_attrs || is_local) {
+            if (this->emitAllAttrs || is_local) {
                 if (is_local) {
                     a.mark_inert();
                 }
@@ -1858,7 +1858,7 @@ namespace {
 // --- attribute
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, const TokenTree& tt, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& item_name, const ::AST::Item& i) {
     return ProcMacroInvoke(sp, crate, mac_path, &tt, [&](Visitor& v) {
-        v.emit_all_attrs = true;
+        v.emitAllAttrs = true;
         v.visit_top_attrs(attrs);
         v.visit_item(item_name, vis, i);
     });
@@ -1880,13 +1880,13 @@ ProcMacroInv::ProcMacroInv(const Span& sp, AST::Edition edition, const char* exe
 {
     if (getenv("MRUSTC_DUMP_PROCMACRO") && getenv("MRUSTC_DUMP_PROCMACRO")[0]) {
         // TODO: Dump both input and output, AND (optionally) dump each invocation
-        static unsigned int dump_count = 0;
+        static unsigned int dumpCount = 0;
         std::string name_prefix;
-        name_prefix = FMT(getenv("MRUSTC_DUMP_PROCMACRO") << "-" << dump_count);
+        name_prefix = FMT(getenv("MRUSTC_DUMP_PROCMACRO") << "-" << dumpCount);
         DEBUG("Dumping to " << name_prefix);
         dumpFileOut.open(FMT(name_prefix << "-out.bin"), ::std::ios::out | ::std::ios::binary);
         dumpFileRes.open(FMT(name_prefix << "-res.bin"), ::std::ios::out | ::std::ios::binary);
-        dump_count++;
+        dumpCount++;
     } else {
         DEBUG("Set MRUSTC_DUMP_PROCMACRO=procmacro_dump to dump to `procmacro_dump-NNN-{out,res}.bin`");
     }

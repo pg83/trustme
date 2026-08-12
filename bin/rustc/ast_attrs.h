@@ -118,7 +118,7 @@ namespace AST {
             return mData;
         }
 
-        TokenTree& data_mut() {
+        TokenTree& dataMut() {
             return mData;
         }
 

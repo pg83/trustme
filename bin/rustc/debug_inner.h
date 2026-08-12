@@ -5,7 +5,7 @@
 #include <ctime>
 #include <initializer_list>
 
-extern void debug_init_phases(const char* env_var_name, std::initializer_list<const char*> il);
+extern void debugInitPhases(const char* envVarName, std::initializer_list<const char*> il);
 
 class DebugTimedPhase {
     const char* mName;

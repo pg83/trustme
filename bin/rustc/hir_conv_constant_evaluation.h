@@ -58,7 +58,7 @@ namespace HIR {
         stl::ObjPool::Ref value_pool;
         StaticTraitResolve resolve;
         Newval& nvs;
-        unsigned int eval_index;
+        unsigned int evalIndex;
         unsigned int num_frames;
         bool require_const_calls;
         // Note: Pointer is needed to maintain internal reference stability
@@ -72,8 +72,8 @@ namespace HIR {
         Evaluator(Evaluator&&) = default;
         Evaluator(const Evaluator&) = delete;
 
-        EncodedLiteral evaluate_constant(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& expr, ::HIR::TypeRef exp);
-        EncodedLiteral evaluate_constant(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& expr, ::HIR::TypeRef exp, MonomorphState ms);
+        EncodedLiteral evaluateConstant(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& expr, ::HIR::TypeRef exp);
+        EncodedLiteral evaluateConstant(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& expr, ::HIR::TypeRef exp, MonomorphState ms);
 
         void set_require_const_calls() {
             require_const_calls = true;

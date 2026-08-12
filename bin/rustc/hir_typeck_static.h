@@ -81,23 +81,23 @@ public:
         return this->find_impl(sp, trait_path, &trait_params, type, found_cb);
     }
 
-    bool find_impl(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb, bool dont_handoff_to_specialised = false) const;
+    bool find_impl(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb, bool dontHandoffToSpecialised = false) const;
 
 private:
     bool findImplBounds(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb) const;
     bool findImplCheckCrate(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb, const ::HIR::TraitImpl& impl) const;
-    bool findImplCheckCrateRaw(const Span& sp, const ::HIR::SimplePath& des_trait_path, const ::HIR::PathParams* des_trait_params, const ::HIR::TypeData* des_type, const ::HIR::GenericParams& impl_params_def, const ::HIR::PathParams& impl_trait_params, const ::HIR::TypeData* impl_type, ::std::function<bool(HIR::PathParams, ::HIR::Compare)>) const;
+    bool findImplCheckCrateRaw(const Span& sp, const ::HIR::SimplePath& desTraitPath, const ::HIR::PathParams* desTraitParams, const ::HIR::TypeData* desType, const ::HIR::GenericParams& impl_params_def, const ::HIR::PathParams& impl_trait_params, const ::HIR::TypeData* impl_type, ::std::function<bool(HIR::PathParams, ::HIR::Compare)>) const;
     ::HIR::Compare checkAutoTraitImplDestructure(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* params_ptr, const ::HIR::TypeData* type) const;
 
 public:
     const ::HIR::TypeData* fix_trait_default_return(const Span& sp, const HIR::ItemPath& p, const ::HIR::TypeData* tpl, ::HIR::TypeRef& tmp) const;
 
-    void expand_associated_types(const Span& sp, ::HIR::TypeRef& input) const;
-    void expand_associated_types_path(const Span& sp, ::HIR::Path& input) const;
-    void evaluate_array_size(const Span& sp, ::HIR::ArraySize& size) const;
-    void evaluate_const_generic(const Span& sp, ::HIR::ConstGeneric& value) const;
-    void evaluate_path_params(const Span& sp, ::HIR::PathParams& params) const;
-    bool expand_associated_types_single(const Span& sp, ::HIR::TypeRef& input) const;
+    void expandAssociatedTypes(const Span& sp, ::HIR::TypeRef& input) const;
+    void expandAssociatedTypesPath(const Span& sp, ::HIR::Path& input) const;
+    void evaluateArraySize(const Span& sp, ::HIR::ArraySize& size) const;
+    void evaluateConstGeneric(const Span& sp, ::HIR::ConstGeneric& value) const;
+    void evaluatePathParams(const Span& sp, ::HIR::PathParams& params) const;
+    bool expandAssociatedTypesSingle(const Span& sp, ::HIR::TypeRef& input) const;
     bool types_equal_resolving_opaque(const Span& sp, const ::HIR::TypeData* left, const ::HIR::TypeData* right) const;
 
     // Helper: Run monomorphise+EAT if the type contains generics
@@ -105,11 +105,11 @@ public:
 
     ::HIR::TypeRef monomorph_expand(const Span& sp, const ::HIR::TypeData* input, const Monomorphiser& m) const;
 
-    void expand_associated_types_tp(const Span& sp, ::HIR::TraitPath& input) const;
+    void expandAssociatedTypesTp(const Span& sp, ::HIR::TraitPath& input) const;
 
 private:
-    void expand_associated_types_params(const Span& sp, ::HIR::PathParams& input) const;
-    void expand_associated_types_inner(const Span& sp, ::HIR::TypeRef& input) const;
+    void expandAssociatedTypesParams(const Span& sp, ::HIR::PathParams& input) const;
+    void expandAssociatedTypesInner(const Span& sp, ::HIR::TypeRef& input) const;
     bool expandAssociatedTypesUfcsInherent(const Span& sp, ::HIR::TypeRef& input) const;
     bool expandAssociatedTypesUfcsKnown(const Span& sp, ::HIR::TypeRef& input, bool recurse = true) const;
 
@@ -140,7 +140,7 @@ public:
     //  - `Unequal` if it doesn't (shared=immutable)
     HIR::Compare type_is_interior_mutable(const Span& sp, const ::HIR::TypeData* ty) const;
 
-    MetadataType metadata_type(const Span& sp, const ::HIR::TypeData* ty, bool err_on_unknown = false) const;
+    MetadataType metadata_type(const Span& sp, const ::HIR::TypeData* ty, bool errOnUnknown = false) const;
 
     /// Returns `true` if the passed type either implements Drop, or contains a type that implements Drop
     bool type_needs_drop_glue(const Span& sp, const ::HIR::TypeData* ty) const;

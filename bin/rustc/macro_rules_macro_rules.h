@@ -28,7 +28,7 @@ TAGGED_UNION(
         /// Token used to join iterations
         Token joiner;
         /// List of loop indexes that control this loop
-        ::std::set<unsigned int> controlling_input_loops;
+        ::std::set<unsigned int> controllingInputLoops;
     })
 );
 extern ::std::ostream& operator<<(::std::ostream& os, const MacroExpansionEnt& x);

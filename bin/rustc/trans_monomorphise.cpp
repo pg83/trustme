@@ -55,7 +55,7 @@ namespace {
         output.locals.push_back(params.monomorph(resolve, var));
         DEBUG(" = " << output.locals.back());
     }
-    output.drop_flags = tpl->drop_flags;
+    output.dropFlags = tpl->dropFlags;
 
     Cloner c{sp, resolve, params};
     // 2. Monomorphise all paths
@@ -143,7 +143,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         ms.pp_method = &pp.pp_method;
         DEBUG("ms = " << ms);
         try {
-            auto new_lit = eval.evaluate_constant(path, c.mValue, ::std::move(ty), ::std::move(ms));
+            auto new_lit = eval.evaluateConstant(path, c.mValue, ::std::move(ty), ::std::move(ms));
             // 2. Store evaluated HIR::Literal in c.m_monomorph_cache
             c.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(new_lit)));
         } catch (...) {
@@ -172,7 +172,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         ms.pp_method = &pp.pp_method;
         DEBUG("ms = " << ms);
         try {
-            auto new_lit = eval.evaluate_constant(path, s.mValue, ::std::move(ty), ::std::move(ms));
+            auto new_lit = eval.evaluateConstant(path, s.mValue, ::std::move(ty), ::std::move(ms));
             // 2. Store evaluated HIR::Literal in s.m_monomorph_cache
             s.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(new_lit)));
         } catch (...) {
@@ -181,27 +181,27 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         }
     }
 
-    for (auto& fcn_ent : list.functions) {
-        const auto& fcn = *fcn_ent.second->ptr;
+    for (auto& fcnEnt : list.functions) {
+        const auto& fcn = *fcnEnt.second->ptr;
         // Trait methods (which are the only case where `Self` can exist in the argument list at this stage) always need to be monomorphised.
         bool is_method = (fcn.mArgs.size() > 0 && visit_ty_with(fcn.mArgs[0].second, [&](const auto& x) {
             return x == crate.types.self();
         }));
-        bool monomorph_needed = fcn_ent.second->pp.has_types() || is_method;
+        bool monomorph_needed = fcnEnt.second->pp.has_types() || is_method;
 
         if (monomorph_needed) {
-            const auto& path = fcn_ent.first;
-            const auto& pp = fcn_ent.second->pp;
+            const auto& path = fcnEnt.first;
+            const auto& pp = fcnEnt.second->pp;
             TRACE_FUNCTION_FR("FUNCTION " << path, "FUNCTION " << path);
             ASSERT_BUG(Span(), fcn.mCode.mir, "No code for " << path);
 
             // TODO: Get the item params too
-            if (fcn_ent.second->pp.pp_impl.has_params()) {
+            if (fcnEnt.second->pp.pp_impl.has_params()) {
                 assert(pp.gdef_impl);
             }
             resolve.set_both_generics_raw(pp.gdef_impl, &fcn.mParams);
 
-            auto mir = TransMonomorphise(resolve, fcn_ent.second->pp, fcn.mCode.mir);
+            auto mir = TransMonomorphise(resolve, fcnEnt.second->pp, fcn.mCode.mir);
 
             // TODO: Should these be moved to their own pass? Potentially not, the extra pass should just be an inlining optimise pass
             auto ret_type = pp.monomorph(resolve, fcn.returnType);
@@ -221,12 +221,12 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
             }
             MIRValidate(resolve, ip, *mir, args, ret_type);
 
-            fcn_ent.second->monomorphised.ret_ty = ::std::move(ret_type);
-            fcn_ent.second->monomorphised.argTys = ::std::move(args);
-            fcn_ent.second->monomorphised.code = ::std::move(mir);
+            fcnEnt.second->monomorphised.ret_ty = ::std::move(ret_type);
+            fcnEnt.second->monomorphised.argTys = ::std::move(args);
+            fcnEnt.second->monomorphised.code = ::std::move(mir);
             resolve.clearBothGenerics();
         } else {
-            DEBUG("Non-generic: FUNCTION " << fcn_ent.first);
+            DEBUG("Non-generic: FUNCTION " << fcnEnt.first);
         }
     }
 

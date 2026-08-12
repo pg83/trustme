@@ -162,7 +162,7 @@ namespace HIR {
             (Slice, struct { ::std::vector<Pattern> sub_patterns; }),
             (SplitSlice, struct {
                 ::std::vector<Pattern> leading;
-                PatternBinding extra_bind;
+                PatternBinding extraBind;
                 ::std::vector<Pattern> trailing;
             })
         );

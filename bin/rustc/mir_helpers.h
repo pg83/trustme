@@ -440,7 +440,7 @@ namespace MIR {
                         for (auto& target : e.targets) {
                             rv |= visit_block_id(target);
                         }
-                        rv |= visit_block_id(e.def_target);
+                        rv |= visit_block_id(e.defTarget);
                     }
                     TU_ARMA(Drop, e) {
                         rv |= visit_lvalue(e.slot, ValUsage::Move);
@@ -502,4 +502,4 @@ namespace MIR {
 
 } // namespace MIR
 
-extern ::MIR::ValueLifetimes MIRHelperGetLifetimes(::MIR::TypeResolve& state, const ::MIR::Function& fcn, bool dump_debug, const ::std::vector<bool>* mask = nullptr);
+extern ::MIR::ValueLifetimes MIRHelperGetLifetimes(::MIR::TypeResolve& state, const ::MIR::Function& fcn, bool dumpDebug, const ::std::vector<bool>* mask = nullptr);

@@ -246,12 +246,12 @@ HIR::PathParams::PathParams(::HIR::LifetimeRef lft) {
     return GenericPath(mPath.clone(), mParams.clone());
 }
 
-bool HIR::PathParams::equals_ignoring_regions(const HIR::PathParams& x) const {
+bool HIR::PathParams::equalsIgnoringRegions(const HIR::PathParams& x) const {
     if (types.size() != x.types.size() || values.size() != x.values.size()) {
         return false;
     }
     for (size_t i = 0; i < types.size(); i++) {
-        if (types[i] != x.types[i] && !types[i]->equals_ignoring_regions(x.types[i])) {
+        if (types[i] != x.types[i] && !types[i]->equalsIgnoringRegions(x.types[i])) {
             return false;
         }
     }
@@ -263,8 +263,8 @@ bool HIR::PathParams::equals_ignoring_regions(const HIR::PathParams& x) const {
     return true;
 }
 
-bool HIR::GenericPath::equals_ignoring_regions(const HIR::GenericPath& x) const {
-    return mPath == x.mPath && mParams.equals_ignoring_regions(x.mParams);
+bool HIR::GenericPath::equalsIgnoringRegions(const HIR::GenericPath& x) const {
+    return mPath == x.mPath && mParams.equalsIgnoringRegions(x.mParams);
 }
 
 Ordering HIR::GenericPath::ord(const HIR::GenericPath& x) const {
@@ -289,8 +289,8 @@ Ordering HIR::GenericPath::ord(const HIR::GenericPath& x) const {
     return rv;
 }
 
-bool HIR::TraitPath::equals_ignoring_regions(const TraitPath& x) const {
-    if (!mPath.equals_ignoring_regions(x.mPath)
+bool HIR::TraitPath::equalsIgnoringRegions(const TraitPath& x) const {
+    if (!mPath.equalsIgnoringRegions(x.mPath)
         || typeBounds.size() != x.typeBounds.size()
         || traitBounds.size() != x.traitBounds.size()) {
         return false;
@@ -302,9 +302,9 @@ bool HIR::TraitPath::equals_ignoring_regions(const TraitPath& x) const {
         const auto& lhs = lhs_type->second;
         const auto& rhs = rhs_type->second;
         if (lhs_type->first != rhs_type->first
-            || !lhs.source_trait.equals_ignoring_regions(rhs.source_trait)
-            || !lhs.atyParams.equals_ignoring_regions(rhs.atyParams)
-            || (lhs.type != rhs.type && !lhs.type->equals_ignoring_regions(rhs.type))) {
+            || !lhs.source_trait.equalsIgnoringRegions(rhs.source_trait)
+            || !lhs.atyParams.equalsIgnoringRegions(rhs.atyParams)
+            || (lhs.type != rhs.type && !lhs.type->equalsIgnoringRegions(rhs.type))) {
             return false;
         }
     }
@@ -315,13 +315,13 @@ bool HIR::TraitPath::equals_ignoring_regions(const TraitPath& x) const {
         const auto& lhs = lhs_bound->second;
         const auto& rhs = rhs_bound->second;
         if (lhs_bound->first != rhs_bound->first
-            || !lhs.source_trait.equals_ignoring_regions(rhs.source_trait)
-            || !lhs.atyParams.equals_ignoring_regions(rhs.atyParams)
+            || !lhs.source_trait.equalsIgnoringRegions(rhs.source_trait)
+            || !lhs.atyParams.equalsIgnoringRegions(rhs.atyParams)
             || lhs.traits.size() != rhs.traits.size()) {
             return false;
         }
         for (size_t i = 0; i < lhs.traits.size(); i++) {
-            if (!lhs.traits[i].equals_ignoring_regions(rhs.traits[i])) {
+            if (!lhs.traits[i].equalsIgnoringRegions(rhs.traits[i])) {
                 return false;
             }
         }
@@ -660,30 +660,30 @@ Ordering HIR::Path::ord(const ::HIR::Path& x) const {
     throw "";
 }
 
-bool HIR::Path::equals_ignoring_regions(const Path& x) const {
+bool HIR::Path::equalsIgnoringRegions(const Path& x) const {
     if (mData.tag() != x.mData.tag()) {
         return false;
     }
     TU_MATCH_HDRA((mData, x.mData), {)
     TU_ARMA(Generic, lhs, rhs) {
-        return lhs.equals_ignoring_regions(rhs);
+        return lhs.equalsIgnoringRegions(rhs);
     }
     TU_ARMA(UfcsInherent, lhs, rhs) {
         return lhs.item == rhs.item
-            && (lhs.type == rhs.type || lhs.type->equals_ignoring_regions(rhs.type))
-            && lhs.params.equals_ignoring_regions(rhs.params)
-            && lhs.impl_params.equals_ignoring_regions(rhs.impl_params);
+            && (lhs.type == rhs.type || lhs.type->equalsIgnoringRegions(rhs.type))
+            && lhs.params.equalsIgnoringRegions(rhs.params)
+            && lhs.impl_params.equalsIgnoringRegions(rhs.impl_params);
     }
     TU_ARMA(UfcsKnown, lhs, rhs) {
         return lhs.item == rhs.item
-            && (lhs.type == rhs.type || lhs.type->equals_ignoring_regions(rhs.type))
-            && lhs.trait.equals_ignoring_regions(rhs.trait)
-            && lhs.params.equals_ignoring_regions(rhs.params);
+            && (lhs.type == rhs.type || lhs.type->equalsIgnoringRegions(rhs.type))
+            && lhs.trait.equalsIgnoringRegions(rhs.trait)
+            && lhs.params.equalsIgnoringRegions(rhs.params);
     }
     TU_ARMA(UfcsUnknown, lhs, rhs) {
         return lhs.item == rhs.item
-            && (lhs.type == rhs.type || lhs.type->equals_ignoring_regions(rhs.type))
-            && lhs.params.equals_ignoring_regions(rhs.params);
+            && (lhs.type == rhs.type || lhs.type->equalsIgnoringRegions(rhs.type))
+            && lhs.params.equalsIgnoringRegions(rhs.params);
     }
     }
     throw "";

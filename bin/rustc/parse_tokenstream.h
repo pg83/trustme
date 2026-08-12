@@ -20,9 +20,9 @@ public:
     ParseState();
 
     // Used for "for/if/while" to handle ambiguity
-    bool disallow_struct_literal = false;
+    bool disallowStructLiteral = false;
     // Used for match arms to disallow `foo => if false {} (bar) => ...`
-    bool disallow_call_or_index = false;
+    bool disallowCallOrIndex = false;
     // A debugging hook that disables expansion of macros
     bool no_expand_macros = false;
 
@@ -84,16 +84,16 @@ public:
         return edition;
     }
 
-    bool edition_after(AST::Edition e) const {
+    bool editionAfter(AST::Edition e) const {
         return edition >= e;
     }
 
-    bool edition_before(AST::Edition e) const {
+    bool editionBefore(AST::Edition e) const {
         return edition < e;
     }
 
     ProtoSpan start_span() const;
-    Span end_span(ProtoSpan ps) const;
+    Span endSpan(ProtoSpan ps) const;
     Span point_span() const;
 
     Span sub_span(const Position& p) const {
@@ -139,6 +139,6 @@ public:
     lex.parse_state().flag = false
 #define CLEAR_PARSE_FLAGS_EXPR(lex)                    \
     SavedParseState _sps(lex, lex.parse_state());      \
-    lex.parse_state().disallow_struct_literal = false; \
-    lex.parse_state().disallow_call_or_index = false
+    lex.parse_state().disallowStructLiteral = false; \
+    lex.parse_state().disallowCallOrIndex = false
 #define CHECK_PARSE_FLAG(lex, flag) (lex.parse_state().flag == true)

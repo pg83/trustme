@@ -137,8 +137,8 @@ namespace AST {
                 if (needs_comma) {
                     os << ", ";
                 }
-                if (ent.extra_bind.is_valid()) {
-                    os << ent.extra_bind;
+                if (ent.extraBind.is_valid()) {
+                    os << ent.extraBind;
                 }
                 os << "..";
                 needs_comma = true;
@@ -241,7 +241,7 @@ namespace AST {
                 rv.mData = Data::make_Slice({H::cloneList(e.sub_pats)});
             }
             TU_ARMA(SplitSlice, e) {
-                rv.mData = Data::make_SplitSlice({H::cloneList(e.leading), e.extra_bind, H::cloneList(e.trailing)});
+                rv.mData = Data::make_SplitSlice({H::cloneList(e.leading), e.extraBind, H::cloneList(e.trailing)});
             }
             TU_ARMA(Or, e) {
                 rv.mData = Data::make_Or(H::cloneList(e));

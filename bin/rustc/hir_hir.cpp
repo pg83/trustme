@@ -449,10 +449,10 @@ const ::HIR::SimplePath& ::HIR::Crate::get_lang_item_path(const Span& sp, const 
 }
 
 const ::HIR::SimplePath& ::HIR::Crate::get_lang_item_path_opt(const char* name) const {
-    static ::HIR::SimplePath empty_path;
+    static ::HIR::SimplePath emptyPath;
     auto it = this->mLangItems.find(name);
     if (it == this->mLangItems.end()) {
-        return empty_path;
+        return emptyPath;
     }
     return it->second;
 }
@@ -955,11 +955,11 @@ namespace {
 }
 
 namespace {
-    void addBoundFromTrait(HIR::TypeInterner& types, ::std::vector<::HIR::GenericBound>& rv, const std::unique_ptr<HIR::GenericParams>& hrtbs, const ::HIR::TypeData* type, const ::HIR::TraitPath& cur_trait) {
+    void addBoundFromTrait(HIR::TypeInterner& types, ::std::vector<::HIR::GenericBound>& rv, const std::unique_ptr<HIR::GenericParams>& hrtbs, const ::HIR::TypeData* type, const ::HIR::TraitPath& curTrait) {
         static Span sp;
-        assert(cur_trait.traitPtr);
-        const auto& tr = *cur_trait.traitPtr;
-        auto monomorph_cb = MonomorphStatePtr(types, type, &cur_trait.mPath.mParams, nullptr);
+        assert(curTrait.traitPtr);
+        const auto& tr = *curTrait.traitPtr;
+        auto monomorph_cb = MonomorphStatePtr(types, type, &curTrait.mPath.mParams, nullptr);
 
         for (const auto& trait_path_raw : tr.allParentTraits) {
             // 1. Monomorph
@@ -1721,7 +1721,7 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
             TRACE_FUNCTION_F(ip);
             ASSERT_BUG(Span(), ep.state, "No ExprState for " << ip);
 
-            auto& ep_mut = const_cast<::HIR::ExprPtr&>(ep);
+            auto& epMut = const_cast<::HIR::ExprPtr&>(ep);
 
             ::HIR::GenericPath current_trait;
             if (ep.state->currentTraitImpl) {
@@ -1735,7 +1735,7 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
                     ep.state->currentTraitImpl->mType,
                     const_cast<::HIR::Function::argsT&>(args),
                     ret_ty,
-                    ep_mut
+                    epMut
                     );
             }
 
@@ -1745,8 +1745,8 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
                     ERROR(Span(), E0000, "Loop in constant evaluation");
                 }
                 ep.state->stage = ::HIR::ExprState::Stage::ConstEvalRequest;
-                ConvertHIRResolveUFCSExpr(*this, ip, ep_mut);
-                ConvertHIRConstantEvaluateExpr(*this, ip, ep_mut);
+                ConvertHIRResolveUFCSExpr(*this, ip, epMut);
+                ConvertHIRConstantEvaluateExpr(*this, ip, epMut);
                 ep.state->stage = ::HIR::ExprState::Stage::ConstEval;
             }
 
@@ -1768,19 +1768,19 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
                 ms.currentTraitImpl = ep.state->currentTraitImpl;
                 ms.traits = ep.state->traits;
                 ms.modPaths.push_back(ep.state->modPath);
-                TypecheckCode(ms, const_cast<::HIR::Function::argsT&>(args), ret_ty, ep_mut);
+                TypecheckCode(ms, const_cast<::HIR::Function::argsT&>(args), ret_ty, epMut);
                 // NOTE: This is already set by the above function
                 ASSERT_BUG(Span(), ep.state->stage == ::HIR::ExprState::Stage::Typecheck, "Typecheck_Code didn't set stage");
             }
             if (ep.state->stage < ::HIR::ExprState::Stage::PostTypecheck) {
                 //Debug_SetStagePre("Expand HIR Annotate");
-                HIRExpandAnnotateUsageExpr(*this, ip, ep_mut);
+                HIRExpandAnnotateUsageExpr(*this, ip, epMut);
                 //Debug_SetStagePre("Expand HIR Statics Mark");
-                HIRExpandStaticBorrowConstantsMarkExpr(*this, ip, ep_mut);
+                HIRExpandStaticBorrowConstantsMarkExpr(*this, ip, epMut);
             }
             if (ep.state->stage < ::HIR::ExprState::Stage::Lifetimes) {
                 //Debug_SetStagePre("Expand HIR Lifetimes");
-                HIRExpandLifetimeInferExpr(*this, ip, args, ret_ty, ep_mut);
+                HIRExpandLifetimeInferExpr(*this, ip, args, ret_ty, epMut);
                 ep.state->stage = ::HIR::ExprState::Stage::Lifetimes;
             }
             if (ep.state->stage < ::HIR::ExprState::Stage::Sbc) {
@@ -1789,9 +1789,9 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
                 }
                 ep.state->stage = ::HIR::ExprState::Stage::SbcRequest;
                 //Debug_SetStagePre("Expand HIR Closures");
-                HIRExpandClosuresExpr(*this, ret_ty, ep_mut);
+                HIRExpandClosuresExpr(*this, ret_ty, epMut);
                 //Debug_SetStagePre("Expand HIR Statics");
-                HIRExpandStaticBorrowConstantsExpr(*this, ip, ep_mut);
+                HIRExpandStaticBorrowConstantsExpr(*this, ip, epMut);
             }
             if (ep.state->stage < ::HIR::ExprState::Stage::Expand) {
                 if (ep.state->stage == ::HIR::ExprState::Stage::ExpandRequest) {
@@ -1799,9 +1799,9 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
                 }
                 ep.state->stage = ::HIR::ExprState::Stage::ExpandRequest;
                 //Debug_SetStagePre("Expand HIR Calls");
-                HIRExpandUfcsEverythingExpr(*this, ep_mut, ep.state->currentTraitImpl);
+                HIRExpandUfcsEverythingExpr(*this, epMut, ep.state->currentTraitImpl);
                 //Debug_SetStagePre("Expand HIR Reborrows");
-                HIRExpandReborrowsExpr(*this, ep_mut);
+                HIRExpandReborrowsExpr(*this, epMut);
                 //Debug_SetStagePre("Expand HIR ErasedType");
                 //HIR_Expand_ErasedType(*this, ep_mut);    // - Maybe?
                 //Typecheck_Expressions_Validate(*hir_crate);
@@ -1815,7 +1815,7 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
                 }
                 ep.state->stage = ::HIR::ExprState::Stage::MirRequest;
                 //Debug_SetStage("Lower MIR");
-                HIRGenerateMIRExpr(*this, ip, ep_mut, args, ret_ty);
+                HIRGenerateMIRExpr(*this, ip, epMut, args, ret_ty);
                 ep.state->stage = ::HIR::ExprState::Stage::Mir;
             }
             assert(ep.mir);
@@ -1906,14 +1906,14 @@ const ::HIR::Struct& HIR::pattern_get_struct(const Span& sp, const ::HIR::Path& 
             } else {
                 ASSERT_BUG(sp, enm.mData.is_Data(), "PathNamed pattern with non-data enum - " << path);
             }
-            const auto& enm_d = enm.mData.as_Data();
-            ASSERT_BUG(sp, be.var_idx < enm_d.size(), "Variant index " << be.var_idx << " out of range - " << path);
+            const auto& enmD = enm.mData.as_Data();
+            ASSERT_BUG(sp, be.var_idx < enmD.size(), "Variant index " << be.var_idx << " out of range - " << path);
             if (is_tuple) {
-                ASSERT_BUG(sp, !enm_d[be.var_idx].is_struct, "PathTuple pattern with brace enum variant - " << path);
+                ASSERT_BUG(sp, !enmD[be.var_idx].is_struct, "PathTuple pattern with brace enum variant - " << path);
             } else {
-                ASSERT_BUG(sp, enm_d[be.var_idx].is_struct, "PathNamed pattern with non-brace enum variant - " << path);
+                ASSERT_BUG(sp, enmD[be.var_idx].is_struct, "PathNamed pattern with non-brace enum variant - " << path);
             }
-            str_p = enm_d[be.var_idx].type->as_Path().binding.as_Struct();
+            str_p = enmD[be.var_idx].type->as_Path().binding.as_Struct();
         }
     }
     const auto& str = *str_p;
@@ -2224,15 +2224,15 @@ AssociatedType::AssociatedType(
     bool is_sized,
     LifetimeRef lifetime_bound,
     ::std::vector<::HIR::TraitPath> trait_bounds,
-    ::HIR::TypeRef default_type
+    ::HIR::TypeRef defaultType
 )
     : generics(::std::move(generics))
     , is_sized(is_sized)
     , lifetimeBound(lifetime_bound)
     , traitBounds(::std::move(trait_bounds))
-    , hasDefault(default_type && !default_type->is_Infer())
-    , defaultValue(default_type) {
-    assert(default_type);
+    , hasDefault(defaultType && !defaultType->is_Infer())
+    , defaultValue(defaultType) {
+    assert(defaultType);
 }
 Trait::Trait(GenericParams gps, LifetimeRef lifetime, ::std::vector<::HIR::TraitPath> parents)
     : mParams(mv$(gps))
@@ -2262,8 +2262,8 @@ const ::MIR::Function* Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, const ::
     auto ty = fcn.returnType;
     return get_or_gen_mir(ip, fcn.mCode, fcn.mArgs, ty);
 }
-const ::MIR::Function* Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& exp_ty) const {
+const ::MIR::Function* Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& expTy) const {
     static ::HIR::Function::argsT s_args;
-    return get_or_gen_mir(ip, ep, s_args, exp_ty);
+    return get_or_gen_mir(ip, ep, s_args, expTy);
 }
 }

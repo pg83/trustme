@@ -23,7 +23,7 @@ private:
 public:
     Span();
 
-    Span(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int end_line, unsigned int end_ofs);
+    Span(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int endLine, unsigned int endOfs);
     Span(Span parent, const Position& position);
     Span(Span parent, RcString source_crate, RcString macro_name);
     ~Span();
@@ -104,8 +104,8 @@ public:
 
     unsigned int start_line;
     unsigned int start_ofs;
-    unsigned int end_line;
-    unsigned int end_ofs;
+    unsigned int endLine;
+    unsigned int endOfs;
 
     ~SpanInnerSource() override;
     void fmt(::std::ostream& os) const override;
@@ -115,7 +115,7 @@ public:
     }
 
 private:
-    static SpanInner* alloc(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int end_line, unsigned int end_ofs);
+    static SpanInner* alloc(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int endLine, unsigned int endOfs);
 };
 
 struct SpanInnerMacro: public SpanInner {

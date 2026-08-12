@@ -154,17 +154,17 @@ namespace AST {
 #define RLIB_SUFFIX ".rlib"
 #define RDYLIB_SUFFIX ".so"
 #define PLUGIN_SUFFIX "-plugin"
-            auto direct_filename = FMT("lib" << name << RLIB_SUFFIX);
-            auto direct_filename_so = FMT("lib" << name << RDYLIB_SUFFIX);
+            auto directFilename = FMT("lib" << name << RLIB_SUFFIX);
+            auto directFilenameSo = FMT("lib" << name << RDYLIB_SUFFIX);
             auto name_prefix = FMT("lib" << name << "-");
             // Search a list of load paths for the crate
             for (const auto& p : g_crate_load_dirs) {
                 DEBUG("Searching in " << p);
-                path = p + "/" + direct_filename;
+                path = p + "/" + directFilename;
                 if (::std::ifstream(path).good()) {
                     paths.push_back(path);
                 }
-                path = p + "/" + direct_filename_so;
+                path = p + "/" + directFilenameSo;
                 if (::std::ifstream(path).good()) {
                     paths.push_back(path);
                 }
@@ -226,10 +226,10 @@ namespace AST {
         auto& ext_crate = res.first->second;
         // Move the external list out (doesn't need to be kept in the nested crate)
         //auto crate_ext_list = mv$( ext_crate.m_hir->m_ext_crates );
-        const auto& crate_ext_list = ext_crate.hir->extCrates;
+        const auto& crateExtList = ext_crate.hir->extCrates;
 
         // Load referenced crates
-        for (const auto& ext : crate_ext_list) {
+        for (const auto& ext : crateExtList) {
             if (externCrates.count(ext.first) == 0) {
                 const auto load_name = this->load_extern_crate(sp, ext.first, ext.second.basename);
                 if (load_name != ext.first) {

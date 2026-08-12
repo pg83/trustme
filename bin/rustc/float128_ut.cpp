@@ -16,13 +16,13 @@ namespace {
         uint64_t addHi, addLo;
         uint64_t sub_hi, sub_lo;
         uint64_t mul_hi, mul_lo;
-        uint64_t div_hi, div_lo;
+        uint64_t divHi, divLo;
         uint64_t mod_hi, mod_lo;
     };
 
     struct ConvertVector {
         uint64_t hi, lo;
-        uint64_t double_bits;
+        uint64_t doubleBits;
         uint32_t float_bits;
         int64_t asInt64;
         uint64_t asUint64;
@@ -60,7 +60,7 @@ namespace {
         return out.str();
     }
 
-    static double double_from_bits(uint64_t bits) {
+    static double doubleFromBits(uint64_t bits) {
         double v;
         std::memcpy(&v, &bits, sizeof(v));
         return v;
@@ -89,15 +89,15 @@ STD_TEST_SUITE(Float128Vectors) {
             STD_INSIST(same_bits(a - b, v.sub_hi, v.sub_lo));
             STD_INSIST(same_bits(a * b, v.mul_hi, v.mul_lo));
             STD_INSIST(same_bits(b * a, v.mul_hi, v.mul_lo));
-            STD_INSIST(same_bits(a / b, v.div_hi, v.div_lo));
+            STD_INSIST(same_bits(a / b, v.divHi, v.divLo));
             STD_INSIST(same_bits(Float128::remainder(a, b), v.mod_hi, v.mod_lo));
         }
     }
 
     STD_TEST(testConversions) {
-        for (const auto& v : convert_vectors) {
+        for (const auto& v : convertVectors) {
             const auto value = Float128::from_bits(v.hi, v.lo);
-            STD_INSIST(bitsFromDouble(static_cast<double>(value)) == v.double_bits);
+            STD_INSIST(bitsFromDouble(static_cast<double>(value)) == v.doubleBits);
             STD_INSIST(bitsFromFloat(static_cast<float>(value)) == v.float_bits);
             STD_INSIST(static_cast<int64_t>(value) == v.asInt64);
             STD_INSIST(static_cast<uint64_t>(value) == v.asUint64);
@@ -135,9 +135,9 @@ STD_TEST_SUITE(Float128Specials) {
         STD_INSIST(same_bits(Float128(-2.0), 0xc000'0000'0000'0000ull, 0));
         STD_INSIST(same_bits(Float128(0.5), 0x3ffe'0000'0000'0000ull, 0));
         // Subnormal double widens to a normal binary128
-        STD_INSIST(same_bits(Float128(double_from_bits(1)), 0x3bcd'0000'0000'0000ull, 0));
-        STD_INSIST(Float128(double_from_bits(0x7FF8'0000'0000'0000ull)).is_nan());
-        STD_INSIST(Float128(double_from_bits(0x7FF0'0000'0000'0000ull)).is_infinite());
+        STD_INSIST(same_bits(Float128(doubleFromBits(1)), 0x3bcd'0000'0000'0000ull, 0));
+        STD_INSIST(Float128(doubleFromBits(0x7FF8'0000'0000'0000ull)).is_nan());
+        STD_INSIST(Float128(doubleFromBits(0x7FF0'0000'0000'0000ull)).is_infinite());
         STD_INSIST(same_bits(Float128::quiet_nan(), 0x7fff'8000'0000'0000ull, 0));
         STD_INSIST(Float128::quiet_nan().is_nan());
         STD_INSIST(Float128::infinity(false).is_infinite());
@@ -272,9 +272,9 @@ STD_TEST_SUITE(Float128Specials) {
         STD_INSIST(bitsFromDouble(static_cast<double>(tiny)) == 0);
         STD_INSIST(bitsFromDouble(static_cast<double>(-tiny)) == 0x8000'0000'0000'0000ull);
         // A value halfway into double subnormal range
-        const auto sub = Float128(double_from_bits(0x0000'0000'0000'0001ull));
+        const auto sub = Float128(doubleFromBits(0x0000'0000'0000'0001ull));
         STD_INSIST(bitsFromDouble(static_cast<double>(sub)) == 1);
-        STD_INSIST(Float128(double_from_bits(0x7ff8'0000'0000'0000ull)).is_nan());
+        STD_INSIST(Float128(doubleFromBits(0x7ff8'0000'0000'0000ull)).is_nan());
         STD_INSIST(bitsFromDouble(static_cast<double>(Float128::quiet_nan())) == 0x7ff8'0000'0000'0000ull);
         STD_INSIST(bitsFromFloat(static_cast<float>(Float128::infinity(true))) == 0xff80'0000u);
     }

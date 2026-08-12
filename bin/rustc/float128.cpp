@@ -11,7 +11,7 @@ namespace {
 
     // binary128: 1 sign bit, 15 exponent bits, 112 fraction bits
     constexpr int significand_bits = 112;
-    constexpr int exponent_bias = 16383;
+    constexpr int exponentBias = 16383;
     constexpr int min_exponent = -16382;  // of normal values
     constexpr int max_exponent = 16383;
 
@@ -72,7 +72,7 @@ namespace {
         } else {
             r.kind = Kind::Finite;
             r.significand = fraction | implicit_bit;
-            r.exponent = static_cast<int32_t>(biased) - exponent_bias;
+            r.exponent = static_cast<int32_t>(biased) - exponentBias;
         }
         return r;
     }
@@ -86,7 +86,7 @@ namespace {
         uint64_t biased;
         if (significand >= implicit_bit) {
             assert(min_exponent <= exponent && exponent <= max_exponent);
-            biased = static_cast<uint64_t>(exponent + exponent_bias);
+            biased = static_cast<uint64_t>(exponent + exponentBias);
             significand &= fraction_mask;
         } else {
             assert(exponent == min_exponent);
@@ -215,7 +215,7 @@ namespace {
         }
 
         // Returns the remainder
-        uint64_t divide_small(uint64_t divisor) {
+        uint64_t divideSmall(uint64_t divisor) {
             assert(divisor != 0);
             u128 remainder = 0;
             for (size_t i = limbs_.size(); i-- > 0;) {
@@ -314,7 +314,7 @@ namespace {
             std::string reversed;
             BigUint copy = *this;
             while (!copy.is_zero()) {
-                uint64_t chunk = copy.divide_small(10'000'000'000'000'000'000ull);
+                uint64_t chunk = copy.divideSmall(10'000'000'000'000'000'000ull);
                 const bool more = !copy.is_zero();
                 for (int i = 0; i < 19 && (more || chunk != 0); i++) {
                     reversed.push_back(static_cast<char>('0' + chunk % 10));
@@ -342,9 +342,9 @@ namespace {
         }
     }
 
-    static void divide_pow5_sticky(BigUint& v, uint64_t power, bool& sticky) {
+    static void dividePow5Sticky(BigUint& v, uint64_t power, bool& sticky) {
         while (power >= 27) {
-            sticky |= v.divide_small(five_pow_27) != 0;
+            sticky |= v.divideSmall(five_pow_27) != 0;
             power -= 27;
         }
         uint64_t factor = 1;
@@ -352,7 +352,7 @@ namespace {
             factor *= 5;
         }
         if (factor != 1) {
-            sticky |= v.divide_small(factor) != 0;
+            sticky |= v.divideSmall(factor) != 0;
         }
     }
 
@@ -397,7 +397,7 @@ namespace {
     // floor(|value| / 10^lowest_exponent10) rounded to nearest (ties to
     // even), as decimal digits without leading zeros ("" means zero). This is
     // the shared exact core of every decimal output format.
-    static std::string digits_at(const Unpacked& value, int64_t lowest_exponent10) {
+    static std::string digitsAt(const Unpacked& value, int64_t lowest_exponent10) {
         assert(value.kind == Kind::Finite);
         // One extra decimal digit plus a sticky bit make the final rounding
         // exact: the extra digit separates above-half from below-half, and
@@ -414,7 +414,7 @@ namespace {
             work.shift_left(static_cast<size_t>(shift2));
         }
         if (scale10 < 0) {
-            divide_pow5_sticky(work, static_cast<uint64_t>(-scale10), sticky);
+            dividePow5Sticky(work, static_cast<uint64_t>(-scale10), sticky);
         }
         if (shift2 < 0) {
             work.shift_right_sticky(static_cast<size_t>(-shift2), sticky);
@@ -455,26 +455,26 @@ namespace {
     // Correctly rounded conversion of |value| to `digit_count` significant
     // decimal digits. The first returned digit has weight
     // 10^decimal_exponent.
-    static std::string decimal_digits(const Unpacked& value, int digit_count, int32_t& decimal_exponent) {
-        assert(digit_count >= 1);
+    static std::string decimalDigits(const Unpacked& value, int digitCount, int32_t& decimalExponent) {
+        assert(digitCount >= 1);
         // log10(2) ~ 0.30103: first-digit estimate, corrected below
         int32_t estimate = static_cast<int32_t>((static_cast<int64_t>(value.exponent) * 30103) / 100000);
         for (int attempt = 0;; attempt++) {
             assert(attempt < 4);
-            std::string digits = digits_at(value, static_cast<int64_t>(estimate) - digit_count + 1);
-            if (static_cast<int>(digits.size()) != digit_count) {
-                estimate += static_cast<int>(digits.size()) - digit_count;
+            std::string digits = digitsAt(value, static_cast<int64_t>(estimate) - digitCount + 1);
+            if (static_cast<int>(digits.size()) != digitCount) {
+                estimate += static_cast<int>(digits.size()) - digitCount;
                 continue;
             }
-            decimal_exponent = estimate;
+            decimalExponent = estimate;
             return digits;
         }
     }
 
-    static void appendExponent(std::string& out, int32_t decimal_exponent) {
+    static void appendExponent(std::string& out, int32_t decimalExponent) {
         out.push_back('e');
-        out.push_back(decimal_exponent < 0 ? '-' : '+');
-        std::string digits = std::to_string(decimal_exponent < 0 ? -decimal_exponent : decimal_exponent);
+        out.push_back(decimalExponent < 0 ? '-' : '+');
+        std::string digits = std::to_string(decimalExponent < 0 ? -decimalExponent : decimalExponent);
         if (digits.size() < 2) {
             digits.insert(digits.begin(), '0');
         }
@@ -495,14 +495,14 @@ namespace {
             appendExponent(out, 0);
             return out;
         }
-        int32_t decimal_exponent = 0;
-        const std::string digits = decimal_digits(value, precision + 1, decimal_exponent);
+        int32_t decimalExponent = 0;
+        const std::string digits = decimalDigits(value, precision + 1, decimalExponent);
         out.push_back(digits[0]);
         if (precision > 0) {
             out.push_back('.');
             out.append(digits, 1, std::string::npos);
         }
-        appendExponent(out, decimal_exponent);
+        appendExponent(out, decimalExponent);
         return out;
     }
 
@@ -513,7 +513,7 @@ namespace {
         }
         std::string digits;
         if (value.kind != Kind::Zero) {
-            digits = digits_at(value, -static_cast<int64_t>(precision));
+            digits = digitsAt(value, -static_cast<int64_t>(precision));
         }
         if (static_cast<int>(digits.size()) <= precision) {
             out.push_back('0');
@@ -544,29 +544,29 @@ namespace {
             out.push_back('0');
             return out;
         }
-        int32_t decimal_exponent = 0;
-        std::string digits = decimal_digits(value, significant, decimal_exponent);
+        int32_t decimalExponent = 0;
+        std::string digits = decimalDigits(value, significant, decimalExponent);
         while (digits.size() > 1 && digits.back() == '0') {
             digits.pop_back();
         }
-        if (decimal_exponent < -4 || decimal_exponent >= significant) {
+        if (decimalExponent < -4 || decimalExponent >= significant) {
             out.push_back(digits[0]);
             if (digits.size() > 1) {
                 out.push_back('.');
                 out.append(digits, 1, std::string::npos);
             }
-            appendExponent(out, decimal_exponent);
-        } else if (decimal_exponent < 0) {
+            appendExponent(out, decimalExponent);
+        } else if (decimalExponent < 0) {
             out += "0.";
-            out.append(static_cast<size_t>(-decimal_exponent - 1), '0');
+            out.append(static_cast<size_t>(-decimalExponent - 1), '0');
             out += digits;
-        } else if (static_cast<size_t>(decimal_exponent) + 1 >= digits.size()) {
+        } else if (static_cast<size_t>(decimalExponent) + 1 >= digits.size()) {
             out += digits;
-            out.append(static_cast<size_t>(decimal_exponent) + 1 - digits.size(), '0');
+            out.append(static_cast<size_t>(decimalExponent) + 1 - digits.size(), '0');
         } else {
-            out.append(digits, 0, static_cast<size_t>(decimal_exponent) + 1);
+            out.append(digits, 0, static_cast<size_t>(decimalExponent) + 1);
             out.push_back('.');
-            out.append(digits, static_cast<size_t>(decimal_exponent) + 1, std::string::npos);
+            out.append(digits, static_cast<size_t>(decimalExponent) + 1, std::string::npos);
         }
         return out;
     }
@@ -1134,20 +1134,20 @@ Float128 Float128::parse_decimal(const char* text) {
     int64_t exponent10 = -fraction_digits;
     if (*cursor == 'e' || *cursor == 'E') {
         cursor++;
-        bool exponent_negative = false;
+        bool exponentNegative = false;
         if (*cursor == '+' || *cursor == '-') {
-            exponent_negative = *cursor == '-';
+            exponentNegative = *cursor == '-';
             cursor++;
         }
-        int64_t explicit_exponent = 0;
+        int64_t explicitExponent = 0;
         assert('0' <= *cursor && *cursor <= '9');
         for (; '0' <= *cursor && *cursor <= '9'; cursor++) {
-            explicit_exponent = explicit_exponent * 10 + (*cursor - '0');
-            if (explicit_exponent > 1'000'000'000) {
-                explicit_exponent = 1'000'000'000;
+            explicitExponent = explicitExponent * 10 + (*cursor - '0');
+            if (explicitExponent > 1'000'000'000) {
+                explicitExponent = 1'000'000'000;
             }
         }
-        exponent10 += exponent_negative ? -explicit_exponent : explicit_exponent;
+        exponent10 += exponentNegative ? -explicitExponent : explicitExponent;
     }
     assert(*cursor == '\0');
     if (digits.is_zero()) {
@@ -1177,7 +1177,7 @@ Float128 Float128::parse_decimal(const char* text) {
         const size_t have = digits.bitLength();
         scaled_up = need > have ? need - have : 0;
         digits.shift_left(scaled_up);
-        divide_pow5_sticky(digits, power, sticky);
+        dividePow5Sticky(digits, power, sticky);
         digits.shift_right_sticky(static_cast<size_t>(power), sticky);
     }
     // value = digits * 2^-scaled_up

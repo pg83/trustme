@@ -164,32 +164,32 @@ struct Context {
     // - Equate two types, with no possibility of coercion
     //  > Errors if the types are incompatible.
     //  > Forces types if one side is an infer
-    void equate_types(const Span& sp, const ::HIR::TypeData* l, const ::HIR::TypeData* r);
-    void equate_types_inner(const Span& sp, const ::HIR::TypeData* l, const ::HIR::TypeData* r);
+    void equateTypes(const Span& sp, const ::HIR::TypeData* l, const ::HIR::TypeData* r);
+    void equateTypesInner(const Span& sp, const ::HIR::TypeData* l, const ::HIR::TypeData* r);
     // - Equate two types, allowing inferrence
-    void equate_types_coerce(const Span& sp, const ::HIR::TypeData* l, ::HIR::ExprNodeP& node_ptr);
+    void equateTypesCoerce(const Span& sp, const ::HIR::TypeData* l, ::HIR::ExprNodeP& node_ptr);
     void record_coercion_hint(const ::HIR::TypeData* type, ::HIR::ExprNodeP& node_ptr);
 
     const ::HIR::TypeData* coercionHint(const ::HIR::ExprNode& node) const;
     // - Equate a type to an associated type (if name == "", no equation is done, but trait is searched)
-    void equate_types_assoc(const Span& sp, const ::HIR::TypeData* l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeData* impl_ty, const char* name, const ::HIR::PathParams& atyPp, bool is_op = false, typeck::PrimitiveOperator operator_kind = typeck::PrimitiveOperator::None);
+    void equateTypesAssoc(const Span& sp, const ::HIR::TypeData* l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeData* impl_ty, const char* name, const ::HIR::PathParams& atyPp, bool is_op = false, typeck::PrimitiveOperator operator_kind = typeck::PrimitiveOperator::None);
 
     bool is_current_operator_impl(const ImplRef& impl) const;
 
     // A Deref implementation for a native pointer/reference receives `&Self`.
     // Dereferencing that receiver is the native step needed to recover `Self`,
     // not another dispatch through a potentially overlapping Deref impl.
-    bool is_current_native_deref_receiver(const ::HIR::SimplePath& deref_trait, const ::HIR::TypeData* operand) const;
+    bool is_current_native_deref_receiver(const ::HIR::SimplePath& derefTrait, const ::HIR::TypeData* operand) const;
 
     // Equate const generics (values)
-    void equate_values(const Span& sp, const ::HIR::ConstGeneric& rl, const ::HIR::ConstGeneric& rr);
+    void equateValues(const Span& sp, const ::HIR::ConstGeneric& rl, const ::HIR::ConstGeneric& rr);
 
     /// Adds a `ty: Sized` bound to the contained ivars.
     void require_sized(const Span& sp, const ::HIR::TypeData* ty);
 
     // - Add a trait bound (gets encoded as an associated type bound)
     void addTraitBound(const Span& sp, const ::HIR::TypeData* impl_ty, const ::HIR::SimplePath& trait, ::HIR::PathParams params) {
-        equate_types_assoc(sp, crate.types.infer(), trait, mv$(params), impl_ty, "", {}, false);
+        equateTypesAssoc(sp, crate.types.infer(), trait, mv$(params), impl_ty, "", {}, false);
     }
 
     /// Get the `possible_ivar_vals` entry for the given ivar index
@@ -251,7 +251,7 @@ struct Context {
     }
 
     /// Create an autoderef operation from val_node->m_res_type to ty_dst (handling implicit unsizing)
-    ::HIR::ExprNodeP create_autoderef(::HIR::ExprNodeP val_node, ::HIR::TypeRef ty_dst) const;
+    ::HIR::ExprNodeP createAutoderef(::HIR::ExprNodeP val_node, ::HIR::TypeRef ty_dst) const;
 
 private:
     void addIvarsParams(::HIR::PathParams& params) {

@@ -8,7 +8,7 @@ U128::U128(uint64_t lo, uint64_t hi)
     : lo(lo)
     , hi(hi) {
 }
-uint64_t U128::encode_float(int bits, int zero_exp) const {
+uint64_t U128::encodeFloat(int bits, int zero_exp) const {
     // Adapted from https://blog.m-ou.se/floats/
     //int n = intrinsic_ctlz_u128(v).lo;
     int n;
@@ -30,13 +30,13 @@ uint64_t U128::encode_float(int bits, int zero_exp) const {
     return (e << bits) + m;
 }
 double U128::to_double() const {
-    uint64_t vi = encode_float(52, 1023);
+    uint64_t vi = encodeFloat(52, 1023);
     double rv;
     memcpy(&rv, &vi, sizeof(rv));
     return rv;
 }
 float U128::to_float() const {
-    uint32_t vi = static_cast<uint32_t>(encode_float(23, 127));
+    uint32_t vi = static_cast<uint32_t>(encodeFloat(23, 127));
     float rv;
     memcpy(&rv, &vi, sizeof(rv));
     return rv;
@@ -71,12 +71,12 @@ U128 U128::operator*(U128 x) const {
 }
 U128 U128::operator/(U128 x) const {
     U128 rv(0);
-    div128_o(*this, x, &rv, nullptr);
+    div128O(*this, x, &rv, nullptr);
     return rv;
 }
 U128 U128::operator%(U128 x) const {
     U128 rv(0);
-    div128_o(*this, x, nullptr, &rv);
+    div128O(*this, x, nullptr, &rv);
     return rv;
 }
 U128& U128::operator+=(unsigned x) {
@@ -214,7 +214,7 @@ bool U128::mul128_o(U128 a, U128 b, U128* o) {
     return of;
 }
 // Long division
-bool U128::div128_o(U128 a, U128 b, U128* q, U128* r) {
+bool U128::div128O(U128 a, U128 b, U128* q, U128* r) {
     if (a.hi == 0 && b.hi == 0) {
         if (q) {
             q->hi = 0;
@@ -398,7 +398,7 @@ std::ostream& operator<<(::std::ostream& os, const U128& x) {
             default:
                 while (v.hi > 0 || v.lo > 0) {
                     U128 v2(0), rem(0);
-                    U128::div128_o(v, U128(10), &v2, &rem);
+                    U128::div128O(v, U128(10), &v2, &rem);
                     output[i++] = chars[(rem.lo % 10)];
                     v = v2;
                 }

@@ -25,11 +25,11 @@ extern bool g_debug_enabled;
         do {                           \
             g_debug_indent_level -= 1; \
         } while (0)
-    #define DEBUG_ENABLED (debug_enabled() DEBUG_EXTRA_ENABLE)
+    #define DEBUG_ENABLED (debugEnabled() DEBUG_EXTRA_ENABLE)
     #define DEBUG(ss)                                                                              \
         do {                                                                                       \
             if (DEBUG_ENABLED) {                                                                   \
-                debug_output(g_debug_indent_level, __FUNCTION__) << ss << std::dec << ::std::endl; \
+                debugOutput(g_debug_indent_level, __FUNCTION__) << ss << std::dec << ::std::endl; \
             }                                                                                      \
         } while (0)
     #define TRACE_FUNCTION TraceLog _tf_(DEBUG_ENABLED ? __func__ : nullptr)
@@ -66,10 +66,10 @@ extern bool g_debug_enabled;
         } while (0)
 #endif
 
-inline bool debug_enabled() {
+inline bool debugEnabled() {
     return g_debug_enabled;
 }
-extern ::std::ostream& debug_output(int indent, const char* function);
+extern ::std::ostream& debugOutput(int indent, const char* function);
 
 struct RepeatLitStr {
     const char* s;
@@ -97,7 +97,7 @@ public:
         : mTag(tag)
     {
         if (mTag) {
-            auto& os = debug_output(g_debug_indent_level, mTag);
+            auto& os = debugOutput(g_debug_indent_level, mTag);
             os << ">> (";
             info_cb(os);
             os << ")" << ::std::endl;
@@ -122,7 +122,7 @@ public:
         , ret(::std::forward<Ret>(ret))
     {
         if (mTag) {
-            auto& os = debug_output(g_debug_indent_level, mTag);
+            auto& os = debugOutput(g_debug_indent_level, mTag);
             os << ">> (";
             info_cb(os);
             os << ")" << ::std::endl;
@@ -133,7 +133,7 @@ public:
     ~TraceLogRet() {
         if (mTag) {
             UNINDENT();
-            auto& os = debug_output(g_debug_indent_level, mTag);
+            auto& os = debugOutput(g_debug_indent_level, mTag);
             os << "<< (";
             ret(os);
             os << ")" << ::std::endl;

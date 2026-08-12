@@ -442,8 +442,8 @@ namespace AST {
         addItem(Named<Item>(mv$(sp), mv$(attrs), mv$(vis), mv$(name), mv$(it)));
     }
 
-    void Module::addExtCrate(Span sp, AST::Visibility vis, RcString ext_name, RcString imp_name, AttributeList attrs) {
-        this->addItem(mv$(sp), mv$(vis), imp_name, Item::make_Crate({mv$(ext_name)}), mv$(attrs));
+    void Module::addExtCrate(Span sp, AST::Visibility vis, RcString extName, RcString imp_name, AttributeList attrs) {
+        this->addItem(mv$(sp), mv$(vis), imp_name, Item::make_Crate({mv$(extName)}), mv$(attrs));
     }
 
     void Module::addMacroInvocation(MacroInvocation item) {
@@ -634,8 +634,8 @@ TypeAlias::TypeAlias(GenericParams params, TypeRef type)
     : mParams(std::move(params))
     , mType(std::move(type)) {
 }
-TypeAlias TypeAlias::new_associated_type(GenericParams params, GenericParams type_bounds, TypeRef default_type) {
-    TypeAlias rv{std::move(params), std::move(default_type)};
+TypeAlias TypeAlias::new_associated_type(GenericParams params, GenericParams type_bounds, TypeRef defaultType) {
+    TypeAlias rv{std::move(params), std::move(defaultType)};
     rv.selfBounds = std::move(type_bounds);
     return rv;
 }

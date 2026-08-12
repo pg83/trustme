@@ -83,7 +83,7 @@ public:
             }
         }
         os << "\n";
-        dec_indent();
+        decIndent();
         os << indent() << "}";
     }
 
@@ -108,16 +108,16 @@ public:
         AST::NodeVisitor::visit(n.inner);
     }
 
-    void dump_token(const Token& t) {
+    void dumpToken(const Token& t) {
         os << t.to_str() << " ";
     }
 
-    void dump_tokentree(const TokenTree& tt) {
+    void dumpTokentree(const TokenTree& tt) {
         if (tt.is_token()) {
-            dump_token(tt.tok());
+            dumpToken(tt.tok());
         } else {
             for (size_t i = 0; i < tt.size(); i++) {
-                dump_tokentree(tt[i]);
+                dumpTokentree(tt[i]);
             }
         }
     }
@@ -130,7 +130,7 @@ public:
             os << n.ident;
         }
         os << (n.isBraced ? "{" : "(");
-        dump_tokentree(n.tokens);
+        dumpTokentree(n.tokens);
         os << (n.isBraced ? "}" : ")");
     }
 
@@ -444,7 +444,7 @@ public:
             // Increase indent, but don't print. Causes nested blocks to be indented above the match
             inc_indent();
             AST::NodeVisitor::visit(arm.mCode);
-            dec_indent();
+            decIndent();
             os << ",\n";
         }
 
@@ -452,7 +452,7 @@ public:
             os << indent() << "}";
         } else {
             os << indent() << "}";
-            dec_indent();
+            decIndent();
         }
     }
 
@@ -566,7 +566,7 @@ public:
             case CORETYPE_UINT:
             case CORETYPE_ANY:
                 os << "0x" << ::std::hex << n.mValue << ::std::dec;
-                os << "_" << coretype_name(n.datatype);
+                os << "_" << coretypeName(n.datatype);
                 break;
             case CORETYPE_I8:
             case CORETYPE_I16:
@@ -575,7 +575,7 @@ public:
             case CORETYPE_I128:
             case CORETYPE_INT:
                 os << n.mValue;
-                os << "_" << coretype_name(n.datatype);
+                os << "_" << coretypeName(n.datatype);
                 break;
         }
     }
@@ -591,17 +591,17 @@ public:
             case CORETYPE_F32:
                 os.precision(::std::numeric_limits<float>::max_digits10 + 1);
                 os << n.mValue;
-                os << "_" << coretype_name(n.datatype);
+                os << "_" << coretypeName(n.datatype);
                 break;
             case CORETYPE_F64:
                 os.precision(::std::numeric_limits<double>::max_digits10 + 1);
                 os << n.mValue;
-                os << "_" << coretype_name(n.datatype);
+                os << "_" << coretypeName(n.datatype);
                 break;
             case CORETYPE_F128:
                 os.precision(::std::numeric_limits<double>::max_digits10 + 1);
                 os << n.mValue;
-                os << "_" << coretype_name(n.datatype);
+                os << "_" << coretypeName(n.datatype);
                 break;
             default:
                 break;
@@ -648,7 +648,7 @@ public:
             os << "\n";
         }
         os << indent() << "}";
-        dec_indent();
+        decIndent();
     }
 
     virtual void visit(AST::ExprNodeStructLiteralPattern& n) override {
@@ -663,7 +663,7 @@ public:
         }
         os << indent() << "..\n";
         os << indent() << "}";
-        dec_indent();
+        decIndent();
     }
 
     virtual void visit(AST::ExprNodeArray& n) override {
@@ -889,7 +889,7 @@ private:
 
     void inc_indent();
     RepeatLitStr indent();
-    void dec_indent();
+    void decIndent();
 };
 
 void RustPrinter::print_attrs(const AST::AttributeList& attrs) {
@@ -971,7 +971,7 @@ void RustPrinter::handle_module(const AST::Module& mod) {
         os << indent() << "{\n";
         inc_indent();
         handle_module(e);
-        dec_indent();
+        decIndent();
         os << indent() << "}\n";
         os << "\n";
     }
@@ -1131,7 +1131,7 @@ void RustPrinter::handle_module(const AST::Module& mod) {
                 (Function, handle_function(it.vis, it.name, e);)
             )
         }
-        dec_indent();
+        decIndent();
         os << indent() << "}\n";
     }
 
@@ -1192,7 +1192,7 @@ void RustPrinter::print_bounds(const AST::GenericParams& params) {
         }
         os << "\n";
 
-        dec_indent();
+        decIndent();
     }
 }
 
@@ -1288,8 +1288,8 @@ void RustPrinter::print_pattern(const AST::Pattern& p, bool is_refutable) {
                 os << ", ";
             }
 
-                                                               if (v.extra_bind.is_valid()) {
-                                                                   const auto& b = v.extra_bind;
+                                                               if (v.extraBind.is_valid()) {
+                                                                   const auto& b = v.extraBind;
                                                                    if (b.isMutable) {
                                                                        os << "mut ";
                                                                    }
@@ -1343,7 +1343,7 @@ void RustPrinter::handle_struct(const AST::Struct& s) {
 
          os << indent() << "{\n";
          inc_indent();
-         for (const auto& i : e.ents) { os << indent() << i.vis << i.mName << ": " << i.mType.print_pretty() << ",\n"; } dec_indent();
+         for (const auto& i : e.ents) { os << indent() << i.vis << i.mName << ": " << i.mType.print_pretty() << ",\n"; } decIndent();
          os << indent() << "}\n";)
     )
     os << "\n";
@@ -1359,14 +1359,14 @@ void RustPrinter::handle_enum(const AST::Enum& s) {
     unsigned int idx = 0;
     for (const auto& i : s.variants()) {
         os << indent() << "/*" << idx << "*/" << i.mName;
-        TU_MATCH(AST::EnumVariantData, (i.mData), (e), (Unit, ), (Tuple, os << "("; for (const auto& t : e.mItems) os << t.mType.print_pretty() << ", "; os << ")";), (Struct, os << "{\n"; inc_indent(); for (const auto& i : e.fields) { os << indent() << i.mName << ": " << i.mType.print_pretty() << ",\n"; } dec_indent(); os << indent() << "}";))
+        TU_MATCH(AST::EnumVariantData, (i.mData), (e), (Unit, ), (Tuple, os << "("; for (const auto& t : e.mItems) os << t.mType.print_pretty() << ", "; os << ")";), (Struct, os << "{\n"; inc_indent(); for (const auto& i : e.fields) { os << indent() << i.mName << ": " << i.mType.print_pretty() << ",\n"; } decIndent(); os << indent() << "}";))
         if (i.discriminantValue) {
             os << " = " << i.discriminantValue;
         }
         os << ",\n";
         idx++;
     }
-    dec_indent();
+    decIndent();
     os << indent() << "}\n";
     os << "\n";
 }
@@ -1394,7 +1394,7 @@ void RustPrinter::handle_trait(const AST::Trait& s) {
         TU_MATCH_DEF(AST::Item, (i.data), (e), (), (Type, os << indent() << "type " << i.name << ";\n";), (Function, handle_function(AST::Visibility::make_bare_private(), i.name, e);))
     }
 
-    dec_indent();
+    decIndent();
     os << indent() << "}\n";
     os << "\n";
 }
@@ -1454,7 +1454,7 @@ RepeatLitStr RustPrinter::indent() {
     return RepeatLitStr{"    ", indentLevel};
 }
 
-void RustPrinter::dec_indent() {
+void RustPrinter::decIndent() {
     indentLevel--;
 }
 

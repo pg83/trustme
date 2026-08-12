@@ -300,7 +300,7 @@ void ::HIR::Visitor::visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) {
         TU_ARMA(Data, e) {
             for (auto& var : e) {
                 this->visit_type(var.type);
-                this->visit_expr(var.discriminant_expr);
+                this->visit_expr(var.discriminantExpr);
             }
         }
     }

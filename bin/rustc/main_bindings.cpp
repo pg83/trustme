@@ -62,11 +62,11 @@ void ExpandTestHarness(::AST::Crate& crate) {
     ::std::vector<::AST::ExprNodeP> test_nodes;
 
     for (const auto& test : crate.tests) {
-        ::AST::ExprNodeStructLiteral::t_values desc_vals;
+        ::AST::ExprNodeStructLiteral::t_values descVals;
         // `name: "foo",`
-        desc_vals.push_back({{}, "name", NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("StaticTestName")}), ::make_vec1(NEWNODE(String, test.name)))});
+        descVals.push_back({{}, "name", NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("StaticTestName")}), ::make_vec1(NEWNODE(String, test.name)))});
         // `ignore: false,`
-        desc_vals.push_back({{}, "ignore", NEWNODE(Bool, test.ignore)});
+        descVals.push_back({{}, "ignore", NEWNODE(Bool, test.ignore)});
         // `should_panic: ShouldPanic::No,`
         {
             ::AST::ExprNodeP should_panic_val;
@@ -78,30 +78,30 @@ void ExpandTestHarness(::AST::Crate& crate) {
                     should_panic_val = NEWNODE(NamedValue, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("Yes")}));
                     break;
                 case ::AST::TestDesc::ShouldPanic::YesWithMessage:
-                    should_panic_val = NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("YesWithMessage")}), make_vec1(NEWNODE(String, test.expected_panic_message)));
+                    should_panic_val = NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("YesWithMessage")}), make_vec1(NEWNODE(String, test.expectedPanicMessage)));
                     break;
             }
-            desc_vals.push_back({{}, "should_panic", mv$(should_panic_val)});
+            descVals.push_back({{}, "should_panic", mv$(should_panic_val)});
         }
         {
             // TODO: Get this from attributes
-            desc_vals.push_back({{}, "compile_fail", NEWNODE(Bool, false)});
-            desc_vals.push_back({{}, "no_run", NEWNODE(Bool, false)});
-            desc_vals.push_back({{}, "test_type", NEWNODE(NamedValue, ::AST::Path(cTest, {AST::PathNode("TestType"), AST::PathNode("UnitTest")}))});
+            descVals.push_back({{}, "compile_fail", NEWNODE(Bool, false)});
+            descVals.push_back({{}, "no_run", NEWNODE(Bool, false)});
+            descVals.push_back({{}, "test_type", NEWNODE(NamedValue, ::AST::Path(cTest, {AST::PathNode("TestType"), AST::PathNode("UnitTest")}))});
         }
         {
-            desc_vals.push_back({{}, "ignore_message", NEWNODE(NamedValue, ::AST::Path(crate.extCratenameStd, {AST::PathNode("option"), AST::PathNode("Option"), AST::PathNode("None")}))});
+            descVals.push_back({{}, "ignore_message", NEWNODE(NamedValue, ::AST::Path(crate.extCratenameStd, {AST::PathNode("option"), AST::PathNode("Option"), AST::PathNode("None")}))});
             auto sp = test.span.get_top_file_span();
-            desc_vals.push_back({{}, "source_file", NEWNODE(String, sp.filename.c_str())});
-            desc_vals.push_back({{}, "start_line", NEWNODE(Integer, U128(sp.start_line), CORETYPE_UINT)});
-            desc_vals.push_back({{}, "start_col", NEWNODE(Integer, U128(sp.start_ofs), CORETYPE_UINT)});
-            desc_vals.push_back({{}, "end_line", NEWNODE(Integer, U128(sp.end_line), CORETYPE_UINT)});
-            desc_vals.push_back({{}, "end_col", NEWNODE(Integer, U128(sp.end_ofs), CORETYPE_UINT)});
+            descVals.push_back({{}, "source_file", NEWNODE(String, sp.filename.c_str())});
+            descVals.push_back({{}, "start_line", NEWNODE(Integer, U128(sp.start_line), CORETYPE_UINT)});
+            descVals.push_back({{}, "start_col", NEWNODE(Integer, U128(sp.start_ofs), CORETYPE_UINT)});
+            descVals.push_back({{}, "end_line", NEWNODE(Integer, U128(sp.endLine), CORETYPE_UINT)});
+            descVals.push_back({{}, "end_col", NEWNODE(Integer, U128(sp.endOfs), CORETYPE_UINT)});
         }
-        auto desc_expr = NEWNODE(StructLiteral, ::AST::Path(cTest, {::AST::PathNode("TestDesc")}), nullptr, mv$(desc_vals));
+        auto descExpr = NEWNODE(StructLiteral, ::AST::Path(cTest, {::AST::PathNode("TestDesc")}), nullptr, mv$(descVals));
 
-        ::AST::ExprNodeStructLiteral::t_values descandfn_vals;
-        descandfn_vals.push_back({{}, RcString::new_interned("desc"), mv$(desc_expr)});
+        ::AST::ExprNodeStructLiteral::t_values descandfnVals;
+        descandfnVals.push_back({{}, RcString::new_interned("desc"), mv$(descExpr)});
 
         auto test_fcn_node = NEWNODE(NamedValue, AST::Path(test.path));
         {
@@ -110,9 +110,9 @@ void ExpandTestHarness(::AST::Crate& crate) {
             test_fcn_node = NEWNODE(Closure, {}, TypeRef(Span()), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("assert_test_result")}), ::make_vec1(NEWNODE(CallPath, AST::Path(test.path), {}))), false, false);
         }
         auto test_type_var_name = test.is_benchmark ? "StaticBenchFn" : "StaticTestFn";
-        descandfn_vals.push_back({{}, RcString::new_interned("testfn"), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode(test_type_var_name)}), ::make_vec1(std::move(test_fcn_node)))});
+        descandfnVals.push_back({{}, RcString::new_interned("testfn"), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode(test_type_var_name)}), ::make_vec1(std::move(test_fcn_node)))});
 
-        test_nodes.push_back(NEWNODE(StructLiteral, ::AST::Path(cTest, {::AST::PathNode("TestDescAndFn")}), nullptr, mv$(descandfn_vals)));
+        test_nodes.push_back(NEWNODE(StructLiteral, ::AST::Path(cTest, {::AST::PathNode("TestDescAndFn")}), nullptr, mv$(descandfnVals)));
         // NOTE: 1.39+ needs &TestDescAndFn here
         {
             test_nodes.back() = NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, mv$(test_nodes.back()));
@@ -174,7 +174,7 @@ struct ProgramParams {
     ::std::string output_dir = "";
     ::std::string target = DEFAULT_TARGET_NAME;
 
-    ::std::string emit_depfile;
+    ::std::string emitDepfile;
 
     AST::Edition edition = AST::Edition::Rust2015;
     ::AST::Crate::Type crate_type = ::AST::Crate::Type::Unknown;
@@ -182,14 +182,14 @@ struct ProgramParams {
     ::std::string crate_name_suffix;
 
     OptimizationLevel opt_level = OptimizationLevel::None;
-    bool debug_assertions = false;
-    bool debug_assertions_explicit = false;
+    bool debugAssertions = false;
+    bool debugAssertionsExplicit = false;
     // rustc defaults MIR optimisation to 1 at -O0 and to 2 otherwise.
     // Keep the explicit bit separate so `-Zmir-opt-level=0` is distinguishable
     // from the implicit default.
     unsigned mir_opt_level = 0;
     bool mir_opt_level_explicit = false;
-    DebugInfoLevel debug_info = DebugInfoLevel::None;
+    DebugInfoLevel debugInfo = DebugInfoLevel::None;
 
     bool test_harness = false;
 
@@ -205,7 +205,7 @@ struct ProgramParams {
 
     ::std::vector<const char*> lib_search_dirs;
     ::std::vector<const char*> libraries;
-    ::std::map<::std::string, ::std::string> crate_overrides; // --extern name=path
+    ::std::map<::std::string, ::std::string> crateOverrides; // --extern name=path
 
     ::std::set<::std::string> features;
 
@@ -216,29 +216,29 @@ struct ProgramParams {
         bool full_validate = false;
         bool full_validate_early = false;
 
-        bool dump_ast = false;
-        bool dump_hir = false;
-        bool dump_mir = false;
+        bool dumpAst = false;
+        bool dumpHir = false;
+        bool dumpMir = false;
     } debug;
 
     struct {
         ::std::string codegenType;
-        ::std::string emit_build_command;
+        ::std::string emitBuildCommand;
         ::std::string panic_type;
         ::std::vector<::std::string> linker_args;
     } codegen;
 
     ProgramParams(int argc, char* argv[]);
 
-    unsigned effective_mir_opt_level() const {
+    unsigned effectiveMirOptLevel() const {
         return mir_opt_level_explicit ? mir_opt_level : (opt_level == OptimizationLevel::None ? 1 : 2);
     }
-    bool enable_mir_inlining() const {
-        const auto level = effective_mir_opt_level();
+    bool enableMirInlining() const {
+        const auto level = effectiveMirOptLevel();
         return level >= 3 || (level == 2 && opt_level != OptimizationLevel::None && opt_level != OptimizationLevel::Less);
     }
-    bool debug_assertions_enabled() const {
-        return debug_assertions_explicit ? debug_assertions : opt_level == OptimizationLevel::None;
+    bool debugAssertionsEnabled() const {
+        return debugAssertionsExplicit ? debugAssertions : opt_level == OptimizationLevel::None;
     }
 
     void show_help() const;
@@ -257,7 +257,7 @@ void CompilePhaseV(const char* name, Fcn f) {
 }
 
 void init_debug_list() {
-    debug_init_phases(
+    debugInitPhases(
         "MRUSTC_DEBUG",
         {"Target Load",
          "Parse",
@@ -325,8 +325,8 @@ int main(int argc, char* argv[]) {
     init_debug_list();
     ProgramParams params(argc, argv);
     gTraitSolverConfig = params.trait_solver;
-    const auto mir_opt_level = params.effective_mir_opt_level();
-    const auto enable_mir_inlining = params.enable_mir_inlining();
+    const auto mir_opt_level = params.effectiveMirOptLevel();
+    const auto enableMirInlining = params.enableMirInlining();
     if (params.codegen.panic_type.empty()) {
         params.codegen.panic_type = "unwind";
     }
@@ -341,7 +341,7 @@ int main(int argc, char* argv[]) {
     CompilePhaseV("Setup", [&]() {
         CfgSetValue("rust_compiler", "mrustc");
         CfgSetValue("panic", params.codegen.panic_type);
-        if (params.debug_assertions_enabled()) {
+        if (params.debugAssertionsEnabled()) {
             CfgSetFlag("debug_assertions");
         }
         CfgSetValueCb("feature", [&params](const ::std::string& s) {
@@ -383,10 +383,10 @@ int main(int argc, char* argv[]) {
 
     try {
         // Parse the crate into AST
-        AST::Crate* crate_ptr = CompilePhase<AST::Crate*>("Parse", [&]() {
+        AST::Crate* cratePtr = CompilePhase<AST::Crate*>("Parse", [&]() {
             return ParseCrate(pool, *types, params.infile, params.edition);
         });
-        AST::Crate& crate = *crate_ptr;
+        AST::Crate& crate = *cratePtr;
         crate.testHarness = params.test_harness;
         crate.crateNameSuffix = params.crate_name_suffix;
         //crate.m_crate_name = params.crate_name;
@@ -399,7 +399,7 @@ int main(int argc, char* argv[]) {
         // Load external crates.
         CompilePhaseV("LoadCrates", [&]() {
             // Hacky!
-            AST::g_crate_overrides = params.crate_overrides;
+            AST::g_crate_overrides = params.crateOverrides;
             for (const auto& ld : params.lib_search_dirs) {
                 AST::g_crate_load_dirs.push_back(ld);
             }
@@ -508,7 +508,7 @@ int main(int argc, char* argv[]) {
             DEBUG("params.outfile = " << params.outfile);
         }
 
-        if (params.debug.dump_ast) {
+        if (params.debug.dumpAst) {
             CompilePhaseV("Dump Expanded", [&]() {
                 DumpRust(FMT(params.outfile << "_1_ast.rs").c_str(), crate);
             });
@@ -572,7 +572,7 @@ int main(int argc, char* argv[]) {
         });
 
         /// Emit the dependency files
-        if (params.emit_depfile != "") {
+        if (params.emitDepfile != "") {
             // - Iterate all loaded files for modules
             struct PathEnumerator {
                 ::std::vector<::std::string> out;
@@ -596,7 +596,7 @@ int main(int argc, char* argv[]) {
             PathEnumerator pe;
             pe.visit_module(crate.rootModule);
 
-            ::std::ofstream of{params.emit_depfile};
+            ::std::ofstream of{params.emitDepfile};
             // TODO: Escape spaces and colons in these paths
             of << params.outfile << ": " << params.infile;
             for (const auto& mod_path : pe.out) {
@@ -626,7 +626,7 @@ int main(int argc, char* argv[]) {
         });
         memory_dump("Resolved");
 
-        if (params.debug.dump_ast) {
+        if (params.debug.dumpAst) {
             CompilePhaseV("Temp output - Resolved", [&]() {
                 DumpRust(FMT(params.outfile << "_1_ast.rs").c_str(), crate);
             });
@@ -644,7 +644,7 @@ int main(int argc, char* argv[]) {
             return LowerHIRFromAST(pool, crate);
         });
         memory_dump("HIR Gen");
-        if (params.debug.dump_hir) {
+        if (params.debug.dumpHir) {
             CompilePhaseV("Dump HIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
                 HIRDump(os, *hir_crate);
@@ -688,7 +688,7 @@ int main(int argc, char* argv[]) {
         CompilePhaseV("Resolve UFCS paths", [&]() {
             ConvertHIRResolveUFCS(*hir_crate);
         });
-        if (params.debug.dump_hir) {
+        if (params.debug.dumpHir) {
             CompilePhaseV("Dump HIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
                 HIRDump(os, *hir_crate);
@@ -701,7 +701,7 @@ int main(int argc, char* argv[]) {
             ConvertHIRConstantEvaluate(*hir_crate);
         });
 
-        if (params.debug.dump_hir) {
+        if (params.debug.dumpHir) {
             // DUMP after initial consteval
             CompilePhaseV("Dump HIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
@@ -757,7 +757,7 @@ int main(int argc, char* argv[]) {
         CompilePhaseV("Expand HIR ErasedType", [&]() {
             HIRExpandErasedType(*hir_crate);
         });
-        if (params.debug.dump_hir) {
+        if (params.debug.dumpHir) {
             // DUMP after typecheck (before validation)
             CompilePhaseV("Dump HIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
@@ -784,7 +784,7 @@ int main(int argc, char* argv[]) {
             HIRGenerateMIR(*hir_crate);
         });
 
-        if (params.debug.dump_mir) {
+        if (params.debug.dumpMir) {
             // DUMP after generation
             CompilePhaseV("Dump MIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
@@ -815,10 +815,10 @@ int main(int argc, char* argv[]) {
 
         // Optimise the MIR
         CompilePhaseV("MIR Optimise", [&]() {
-            MIROptimiseCrate(*hir_crate, mir_opt_level, enable_mir_inlining);
+            MIROptimiseCrate(*hir_crate, mir_opt_level, enableMirInlining);
         });
 
-        if (params.debug.dump_mir) {
+        if (params.debug.dumpMir) {
             // DUMP: After optimisation
             CompilePhaseV("Dump MIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
@@ -847,7 +847,7 @@ int main(int argc, char* argv[]) {
         // - Require codegen (public or used by an exported function)
         TransOptions trans_opt;
         trans_opt.mode = params.codegen.codegenType == "" ? "c" : params.codegen.codegenType;
-        trans_opt.buildCommandFile = params.codegen.emit_build_command;
+        trans_opt.buildCommandFile = params.codegen.emitBuildCommand;
         trans_opt.linker_args = params.codegen.linker_args;
         trans_opt.opt_level = params.opt_level;
         trans_opt.panic_crate = "panic_" + params.codegen.panic_type;
@@ -858,7 +858,7 @@ int main(int argc, char* argv[]) {
         for (const char* libname : params.libraries) {
             hir_crate->extLibs.push_back(::HIR::ExternLibrary{libname});
         }
-        trans_opt.debug_info = params.debug_info;
+        trans_opt.debugInfo = params.debugInfo;
 
         // Generate code for non-generic public items (if requested)
         if (params.test_harness) {
@@ -870,17 +870,17 @@ int main(int argc, char* argv[]) {
         if (crate_type == ::AST::Crate::Type::ProcMacro) {
             // - Save a very basic HIR dump, making sure that there's no lang items in it (e.g. `mrustc-main`)
             CompilePhaseV("HIR Serialise", [&]() {
-                HIR::Crate crate_for_ser(pool, *types);
-                crate_for_ser.crateName = hir_crate->crateName;
-                crate_for_ser.edition = hir_crate->edition;
+                HIR::Crate crateForSer(pool, *types);
+                crateForSer.crateName = hir_crate->crateName;
+                crateForSer.edition = hir_crate->edition;
                 for (const auto& i : hir_crate->rootModule.macroItems) {
                     DEBUG(i.first << ": " << i.second->ent.tag_str());
                     if (const auto* e = i.second->ent.opt_ProcMacro()) {
-                        crate_for_ser.rootModule.macroItems.insert(std::make_pair(i.first, box$(HIR::VisEnt<HIR::MacroItem>{i.second->publicity, *e})));
+                        crateForSer.rootModule.macroItems.insert(std::make_pair(i.first, box$(HIR::VisEnt<HIR::MacroItem>{i.second->publicity, *e})));
                     }
                 }
-                crate_for_ser.exportedMacroNames = hir_crate->exportedMacroNames;
-                HIRSerialise(params.outfile + ".hir", crate_for_ser);
+                crateForSer.exportedMacroNames = hir_crate->exportedMacroNames;
+                HIRSerialise(params.outfile + ".hir", crateForSer);
             });
         }
 
@@ -912,7 +912,7 @@ int main(int argc, char* argv[]) {
         });
         // - Do post-monomorph inlining
         CompilePhaseV("MIR Optimise Inline", [&]() {
-            MIROptimiseCrateInlining(*hir_crate, items, false, mir_opt_level, enable_mir_inlining);
+            MIROptimiseCrateInlining(*hir_crate, items, false, mir_opt_level, enableMirInlining);
         });
 
         // - Expand constants in HIR (using ones that were monomorphised above)
@@ -946,7 +946,7 @@ int main(int argc, char* argv[]) {
 
         // - Do post-monomorph inlining
         CompilePhaseV("MIR Optimise Inline PostSave", [&]() {
-            MIROptimiseCrateInlining(*hir_crate, items, true, mir_opt_level, enable_mir_inlining);
+            MIROptimiseCrateInlining(*hir_crate, items, true, mir_opt_level, enableMirInlining);
         });
         // - Clean up ununused functions
         CompilePhaseV("Trans Enumerate Cleanup", [&]() {
@@ -1100,13 +1100,13 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     } else {
                         optname = arg + 1;
                     }
-                    auto eq_pos = optname.find('=');
-                    if (eq_pos != ::std::string::npos) {
-                        optval = optname.substr(eq_pos + 1);
-                        optname.resize(eq_pos);
+                    auto eqPos = optname.find('=');
+                    if (eqPos != ::std::string::npos) {
+                        optval = optname.substr(eqPos + 1);
+                        optname.resize(eqPos);
                     }
                     auto get_optval = [&]() {
-                        if (eq_pos == ::std::string::npos) {
+                        if (eqPos == ::std::string::npos) {
                             ::std::cerr << "Flag -C " << optname << " requires an argument" << ::std::endl;
                             exit(1);
                         }
@@ -1120,13 +1120,13 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
 
                     if (optname == "emit-build-command") {
                         get_optval();
-                        this->codegen.emit_build_command = optval;
+                        this->codegen.emitBuildCommand = optval;
                     } else if (optname == "codegen-type") {
                         get_optval();
                         this->codegen.codegenType = optval;
                     } else if (optname == "emit-depfile") {
                         get_optval();
-                        this->emit_depfile = optval;
+                        this->emitDepfile = optval;
                     } else if (optname == "panic") {
                         get_optval();
                         this->codegen.panic_type = optval;
@@ -1164,27 +1164,27 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                             exit(1);
                         }
                     } else if (optname == "debug-assertions") {
-                        if (eq_pos == ::std::string::npos || optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
-                            this->debug_assertions = true;
+                        if (eqPos == ::std::string::npos || optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
+                            this->debugAssertions = true;
                         } else if (optval == "n" || optval == "no" || optval == "off" || optval == "false") {
-                            this->debug_assertions = false;
+                            this->debugAssertions = false;
                         } else {
                             ::std::cerr << "invalid value for -C debug-assertions: '" << optval << "'" << ::std::endl;
                             exit(1);
                         }
-                        this->debug_assertions_explicit = true;
+                        this->debugAssertionsExplicit = true;
                     } else if (optname == "debuginfo") {
                         get_optval();
                         if (optval == "0" || optval == "none") {
-                            this->debug_info = DebugInfoLevel::None;
+                            this->debugInfo = DebugInfoLevel::None;
                         } else if (optval == "line-directives-only") {
-                            this->debug_info = DebugInfoLevel::LineDirectivesOnly;
+                            this->debugInfo = DebugInfoLevel::LineDirectivesOnly;
                         } else if (optval == "line-tables-only") {
-                            this->debug_info = DebugInfoLevel::LineTablesOnly;
+                            this->debugInfo = DebugInfoLevel::LineTablesOnly;
                         } else if (optval == "1" || optval == "limited") {
-                            this->debug_info = DebugInfoLevel::Limited;
+                            this->debugInfo = DebugInfoLevel::Limited;
                         } else if (optval == "2" || optval == "full") {
-                            this->debug_info = DebugInfoLevel::Full;
+                            this->debugInfo = DebugInfoLevel::Full;
                         } else {
                             ::std::cerr << "invalid value for -C debuginfo: '" << optval << "'" << ::std::endl;
                             exit(1);
@@ -1207,19 +1207,19 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     } else {
                         optname = arg + 1;
                     }
-                    auto eq_pos = optname.find('=');
-                    if (eq_pos != ::std::string::npos) {
-                        optval = optname.substr(eq_pos + 1);
-                        optname.resize(eq_pos);
+                    auto eqPos = optname.find('=');
+                    if (eqPos != ::std::string::npos) {
+                        optval = optname.substr(eqPos + 1);
+                        optname.resize(eqPos);
                     }
                     auto get_optval = [&]() {
-                        if (eq_pos == ::std::string::npos) {
+                        if (eqPos == ::std::string::npos) {
                             ::std::cerr << "Flag -Z " << optname << " requires an argument" << ::std::endl;
                             exit(1);
                         }
                     };
                     auto no_optval = [&]() {
-                        if (eq_pos != ::std::string::npos) {
+                        if (eqPos != ::std::string::npos) {
                             ::std::cerr << "Flag -Z " << optname << " doesn't take an argument" << ::std::endl;
                             exit(1);
                         }
@@ -1251,7 +1251,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         this->mir_opt_level = value;
                         this->mir_opt_level_explicit = true;
                     } else if (optname == "next-solver") {
-                        if (eq_pos == ::std::string::npos || optval == "globally") {
+                        if (eqPos == ::std::string::npos || optval == "globally") {
                             this->trait_solver.coherence = true;
                             this->trait_solver.globally = true;
                         } else if (optval == "coherence") {
@@ -1274,13 +1274,13 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         this->debug.full_validate_early = true;
                     } else if (optname == "dump-ast") {
                         no_optval();
-                        this->debug.dump_ast = true;
+                        this->debug.dumpAst = true;
                     } else if (optname == "dump-hir") {
                         no_optval();
-                        this->debug.dump_hir = true;
+                        this->debug.dumpHir = true;
                     } else if (optname == "dump-mir") {
                         no_optval();
-                        this->debug.dump_mir = true;
+                        this->debug.dumpMir = true;
                     } else if (optname == "stop-after") {
                         get_optval();
                         if (optval == "parse") {
@@ -1336,7 +1336,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         this->opt_level = OptimizationLevel::Aggressive;
                         break;
                     case 'g':
-                        this->debug_info = DebugInfoLevel::Full;
+                        this->debugInfo = DebugInfoLevel::Full;
                         break;
                     default:
                         ::std::cerr << "Unknown option: '-" << *arg << "'" << ::std::endl;
@@ -1392,7 +1392,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
 
                 auto name = ::std::string(desc, pos);
                 auto path = ::std::string(pos + 1);
-                this->crate_overrides.insert(::std::make_pair(mv$(name), mv$(path)));
+                this->crateOverrides.insert(::std::make_pair(mv$(name), mv$(path)));
             }
             // --crate-tag <name>  >> Specify a version/identifier suffix for the crate
             else if (const auto* name_str = checkWithArg("crate-tag")) {
@@ -1478,17 +1478,17 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 this->target_saveback = argv[++i];
             } else if (strcmp(arg, "--test") == 0) {
                 this->test_harness = true;
-            } else if (const char* edition_str = checkWithArg("edition")) {
-                if (strcmp(edition_str, "2015") == 0) {
+            } else if (const char* editionStr = checkWithArg("edition")) {
+                if (strcmp(editionStr, "2015") == 0) {
                     this->edition = AST::Edition::Rust2015;
-                } else if (strcmp(edition_str, "2018") == 0) {
+                } else if (strcmp(editionStr, "2018") == 0) {
                     this->edition = AST::Edition::Rust2018;
-                } else if (strcmp(edition_str, "2021") == 0) {
+                } else if (strcmp(editionStr, "2021") == 0) {
                     this->edition = AST::Edition::Rust2021;
-                } else if (strcmp(edition_str, "2024") == 0) {
+                } else if (strcmp(editionStr, "2024") == 0) {
                     this->edition = AST::Edition::Rust2024;
                 } else {
-                    ::std::cerr << "Unknown value for " << arg << " - '" << edition_str << "'" << ::std::endl;
+                    ::std::cerr << "Unknown value for " << arg << " - '" << editionStr << "'" << ::std::endl;
                     exit(1);
                 }
             } else {
@@ -1515,11 +1515,11 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
             if (s == "") {
                 // Ignore
             } else if (s == "ast") {
-                this->debug.dump_ast = true;
+                this->debug.dumpAst = true;
             } else if (s == "hir") {
-                this->debug.dump_hir = true;
+                this->debug.dumpHir = true;
             } else if (s == "mir") {
-                this->debug.dump_mir = true;
+                this->debug.dumpMir = true;
             } else {
                 ::std::cerr << "Unknown option in $MRUSTC_DUMP '" << s << "'" << ::std::endl;
                 // - No terminate, just warn

@@ -62,7 +62,7 @@ struct Ident {
 
         Hygiene get_parent() const;
 
-        bool leave_macro_definition(unsigned int definition, const Hygiene& token_context, const Hygiene& definition_context);
+        bool leave_macro_definition(unsigned int definition, const Hygiene& token_context, const Hygiene& definitionContext);
 
         bool has_mod_path() const {
             return inner->search_module != 0;

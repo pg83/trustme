@@ -14,14 +14,14 @@
 #include <iomanip>
 #include <fstream>
 
-void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* crate_ptr, TransList list, const ::std::string& hir_file) {
+void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* cratePtr, TransList list, const ::std::string& hir_file) {
     static Span sp;
 
     ::std::unique_ptr<CodeGenerator> codegen;
     if (opt.mode == "monomir") {
-        codegen = TransCodegenGetGeneratorMonoMir(*crate_ptr, outfile);
+        codegen = TransCodegenGetGeneratorMonoMir(*cratePtr, outfile);
     } else if (opt.mode == "c") {
-        codegen = TransCodegenGetGeneratorC(*crate_ptr, outfile);
+        codegen = TransCodegenGetGeneratorC(*cratePtr, outfile);
     } else {
         BUG(sp, "Unknown codegen mode '" << opt.mode << "'");
     }
@@ -30,7 +30,7 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
     // - Emit in the order they're needed.
     for (const auto& ty : list.types) {
         if (ty.second) {
-            codegen->emit_type_proto(ty.first);
+            codegen->emitTypeProto(ty.first);
         } else {
             if (const auto* te = ty.first->opt_Path()) {
                 TU_MATCHA(
@@ -42,17 +42,17 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
                         ExternType,
                         //codegen->emit_extern_type(sp, te->path.m_data.as_Generic(), *tpb);
                     ),
-                    (Struct, codegen->emit_struct(sp, te->path.mData.as_Generic(), *tpb);),
-                    (Union, codegen->emit_union(sp, te->path.mData.as_Generic(), *tpb);),
-                    (Enum, codegen->emit_enum(sp, te->path.mData.as_Generic(), *tpb);)
+                    (Struct, codegen->emitStruct(sp, te->path.mData.as_Generic(), *tpb);),
+                    (Union, codegen->emitUnion(sp, te->path.mData.as_Generic(), *tpb);),
+                    (Enum, codegen->emitEnum(sp, te->path.mData.as_Generic(), *tpb);)
                 )
             }
-            codegen->emit_type(ty.first);
+            codegen->emitType(ty.first);
         }
     }
     list.clearTypes();
     for (const auto& ty : list.typeids) {
-        codegen->emit_type_id(ty);
+        codegen->emitTypeId(ty);
     }
     list.typeids.clear();
     // Emit required constructor methods (and other wrappers)
@@ -63,20 +63,20 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
         // - Enum variant (must be a tuple variant)
         const ::HIR::Module* mod_ptr = nullptr;
         if (path.mPath.components().size() > 1) {
-            const auto& nse = crate_ptr->get_typeitem_by_path(sp, path.mPath, false, true);
+            const auto& nse = cratePtr->get_typeitem_by_path(sp, path.mPath, false, true);
             if (const auto* e = nse.opt_Enum()) {
                 auto var_idx = e->find_variant(path.mPath.components().back());
-                codegen->emit_constructor_enum(sp, path, *e, var_idx);
+                codegen->emitConstructorEnum(sp, path, *e, var_idx);
                 continue;
             }
             mod_ptr = &nse.as_Module();
         } else {
-            mod_ptr = &crate_ptr->get_mod_by_path(sp, path.mPath, true);
+            mod_ptr = &cratePtr->get_mod_by_path(sp, path.mPath, true);
         }
 
         // Not an enum, currently must be a struct
         const auto& te = mod_ptr->modItems.at(path.mPath.components().back())->ent;
-        codegen->emit_constructor_struct(sp, path, te.as_Struct());
+        codegen->emitConstructorStruct(sp, path, te.as_Struct());
     }
     list.constructors.clear();
 
@@ -88,7 +88,7 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
         // Extern if there isn't any HIR
         bool is_extern = !static_cast<bool>(fcn.mCode);
         if (fcn.mCode.mir && !ent.second->force_prototype) {
-            codegen->emit_function_proto(ent.first, fcn, ent.second->pp, is_extern);
+            codegen->emitFunctionProto(ent.first, fcn, ent.second->pp, is_extern);
         }
     }
     // - External functions
@@ -102,7 +102,7 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
             // - If it's exported it does.
             if (fcn.mAbi == "rust-intrinsic") {
             } else {
-                codegen->emit_function_ext(ent.first, fcn, ent.second->pp);
+                codegen->emitFunctionExt(ent.first, fcn, ent.second->pp);
             }
         }
     }
@@ -118,9 +118,9 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
                             << "(m_value_generated=" << stat.valueGenerated << " && !m_no_emit_value=" << stat.noEmitValue << ") || is_generic=" << stat.mParams.is_generic()
         );
         if ((stat.valueGenerated && !stat.noEmitValue) || stat.mParams.is_generic()) {
-            codegen->emit_static_proto(ent.first, stat, ent.second->pp);
+            codegen->emitStaticProto(ent.first, stat, ent.second->pp);
         } else {
-            codegen->emit_static_ext(ent.first, stat, ent.second->pp);
+            codegen->emitStaticExt(ent.first, stat, ent.second->pp);
         }
     }
     for (const auto& ent : list.statics) {
@@ -129,9 +129,9 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
         const auto& stat = *ent.second->ptr;
 
         if (stat.mParams.is_generic()) {
-            codegen->emit_static_local(ent.first, stat, ent.second->pp, stat.monomorphCache.at(ent.first));
+            codegen->emitStaticLocal(ent.first, stat, ent.second->pp, stat.monomorphCache.at(ent.first));
         } else if (stat.valueGenerated && !stat.noEmitValue) {
-            codegen->emit_static_local(ent.first, stat, ent.second->pp, stat.valueRes);
+            codegen->emitStaticLocal(ent.first, stat, ent.second->pp, stat.valueRes);
         } else {
         }
     }
@@ -149,24 +149,24 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
             bool is_extern = !static_cast<bool>(fcn.mCode);
             // If this is a provided trait method, it needs to be monomorphised too.
             bool is_method = (fcn.mArgs.size() > 0 && visit_ty_with(fcn.mArgs[0].second, [&](const auto& x) {
-                return x == crate_ptr->types.self();
+                return x == cratePtr->types.self();
             }));
 
             bool is_monomorph = pp.has_types() || is_method;
             if (ent.second->monomorphised.code) {
                 // TODO: Flag that this should be a weak (or weak-er) symbol?
                 // - If it's from an external crate, it should be weak, but what about local ones?
-                codegen->emit_function_code(path, fcn, pp, is_extern, ent.second->monomorphised.code);
+                codegen->emitFunctionCode(path, fcn, pp, is_extern, ent.second->monomorphised.code);
             } else {
                 ASSERT_BUG(sp, !is_monomorph, "Function that required monomorphisation wasn't monomorphised");
-                codegen->emit_function_code(path, fcn, pp, is_extern, fcn.mCode.mir);
+                codegen->emitFunctionCode(path, fcn, pp, is_extern, fcn.mCode.mir);
             }
         }
     }
     list.functions.clear();
 
-    for (const auto& a : crate_ptr->globalAsm) {
-        codegen->emit_global_asm(a);
+    for (const auto& a : cratePtr->globalAsm) {
+        codegen->emitGlobalAsm(a);
     }
 
     // NOTE: Completely reinitialise the `TransList` to free all monomorphised memory before calling the backend compilation tool
@@ -336,7 +336,7 @@ namespace {
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<::MIR::Constant>& x) {
         struct H {
-            static uint64_t double_to_u64(double v) {
+            static uint64_t doubleToU64(double v) {
                 uint64_t rv;
                 ::std::memcpy(&rv, &v, sizeof(double));
                 return rv;
@@ -356,7 +356,7 @@ namespace {
                 break;
                 TU_ARM(e, Float, v) {
                     // TODO: Infinity/nan/...
-                    auto vi = H::double_to_u64(static_cast<double>(v.v));
+                    auto vi = H::doubleToU64(static_cast<double>(v.v));
                     bool sign = (vi & (1ull << 63)) != 0;
                     int exp = (vi >> 52) & 0x7FF;
                     uint64_t frac = vi & ((1ull << 52) - 1);
@@ -498,11 +498,11 @@ namespace {
             }
         }
 
-        void emit_type(const ::HIR::TypeData* ty) override {
+        void emitType(const ::HIR::TypeData* ty) override {
             TRACE_FUNCTION_F(ty);
-            ::MIR::Function empty_fcn;
+            ::MIR::Function emptyFcn;
             ::MIR::TypeResolve top_mir_res {
-                sp, mResolve, FMT_CB(ss, ss << "type " << ty;), ::HIR::TypeRef(), {}, empty_fcn
+                sp, mResolve, FMT_CB(ss, ss << "type " << ty;), ::HIR::TypeRef(), {}, emptyFcn
             };
             mirRes = &top_mir_res;
 
@@ -512,12 +512,12 @@ namespace {
                     MIR_ASSERT(*mirRes, repr, "No repr for tuple " << ty);
 
                     bool has_drop_glue = mResolve.type_needs_drop_glue(sp, ty);
-                    auto drop_glue_path = ::HIR::Path(ty, "#drop_glue");
+                    auto dropGluePath = ::HIR::Path(ty, "#drop_glue");
 
                     of << "type " << fmt(ty) << " {\n";
                     of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
                     if (has_drop_glue) {
-                        of << "\tDROP " << fmt(drop_glue_path) << ";\n";
+                        of << "\tDROP " << fmt(dropGluePath) << ";\n";
                     }
                     for (const auto& e : repr->fields) {
                         of << "\t" << e.offset << " = " << fmt(e.ty) << ";\n";
@@ -575,14 +575,14 @@ namespace {
             }
         }
 
-        void emit_struct(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Struct& item) override {
-            ::MIR::Function empty_fcn;
+        void emitStruct(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Struct& item) override {
+            ::MIR::Function emptyFcn;
             ::MIR::TypeResolve top_mir_res {
-                sp, mResolve, FMT_CB(ss, ss << "struct " << p;), ::HIR::TypeRef(), {}, empty_fcn
+                sp, mResolve, FMT_CB(ss, ss << "struct " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
             mirRes = &top_mir_res;
 
-            auto drop_glue_path = ::HIR::Path(crate.types.path(p.clone(), &item), "#drop_glue");
+            auto dropGluePath = ::HIR::Path(crate.types.path(p.clone(), &item), "#drop_glue");
 
             TRACE_FUNCTION_F(p);
             ::HIR::TypeRef ty = crate.types.path(p.clone(), &item);
@@ -625,7 +625,7 @@ namespace {
                 of << "\tDSTMETA " << H::get_metadata_type(sp, mResolve, *repr) << ";\n";
             }
             if (has_drop_glue) {
-                of << "\tDROP " << fmt(drop_glue_path) << ";\n";
+                of << "\tDROP " << fmt(dropGluePath) << ";\n";
             }
             for (const auto& e : repr->fields) {
                 of << "\t" << e.offset << " = " << fmt(e.ty) << ";\n";
@@ -635,7 +635,7 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emit_constructor_enum(const Span& sp, const ::HIR::GenericPath& var_path, const ::HIR::Enum& item, size_t var_idx) override {
+        void emitConstructorEnum(const Span& sp, const ::HIR::GenericPath& var_path, const ::HIR::Enum& item, size_t var_idx) override {
             TRACE_FUNCTION_F(var_path);
 
             ::HIR::TypeRef tmp;
@@ -644,8 +644,8 @@ namespace {
                 return mResolve.monomorph_expand_opt(sp, tmp, x, ms);
             };
 
-            auto enum_path = var_path.clone();
-            enum_path.mPath.pop_component();
+            auto enumPath = var_path.clone();
+            enumPath.mPath.pop_component();
 
             // Create constructor function
             const auto& var_ty = item.mData.as_Data().at(var_idx).type;
@@ -658,9 +658,9 @@ namespace {
                 }
                 of << fmt(monomorph(e[i].ent));
             }
-            of << "): " << fmt(enum_path) << " {\n";
+            of << "): " << fmt(enumPath) << " {\n";
             of << "\t0: {\n";
-            of << "\t\tASSIGN RETURN = ENUM " << fmt(enum_path) << " " << var_idx << " { ";
+            of << "\t\tASSIGN RETURN = ENUM " << fmt(enumPath) << " " << var_idx << " { ";
             for (unsigned int i = 0; i < e.size(); i++) {
                 if (i != 0) {
                     of << ", ";
@@ -673,7 +673,7 @@ namespace {
             of << "}";
         }
 
-        void emit_constructor_struct(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Struct& item) override {
+        void emitConstructorStruct(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Struct& item) override {
             TRACE_FUNCTION_F(p);
             ::HIR::TypeRef tmp;
             MonomorphStatePtr ms(crate.types, nullptr, &p.mParams, nullptr);
@@ -705,10 +705,10 @@ namespace {
             of << "}\n";
         }
 
-        void emit_union(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Union& item) override {
-            ::MIR::Function empty_fcn;
+        void emitUnion(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Union& item) override {
+            ::MIR::Function emptyFcn;
             ::MIR::TypeResolve top_mir_res {
-                sp, mResolve, FMT_CB(ss, ss << "union " << p;), ::HIR::TypeRef(), {}, empty_fcn
+                sp, mResolve, FMT_CB(ss, ss << "union " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
             mirRes = &top_mir_res;
 
@@ -716,14 +716,14 @@ namespace {
             ::HIR::TypeRef ty = crate.types.path(p.clone(), &item);
 
             bool has_drop_glue = mResolve.type_needs_drop_glue(sp, ty);
-            auto drop_glue_path = ::HIR::Path(ty, "#drop_glue");
+            auto dropGluePath = ::HIR::Path(ty, "#drop_glue");
 
             const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
             MIR_ASSERT(*mirRes, repr, "No repr for union " << ty);
             of << "type " << fmt(p) << " {\n";
             of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
             if (has_drop_glue) {
-                of << "\tDROP " << fmt(drop_glue_path) << ";\n";
+                of << "\tDROP " << fmt(dropGluePath) << ";\n";
             }
             for (const auto& e : repr->fields) {
                 of << "\t" << e.offset << " = " << fmt(e.ty) << ";\n";
@@ -731,10 +731,10 @@ namespace {
             of << "}\n";
         }
 
-        void emit_enum(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Enum& item) override {
-            ::MIR::Function empty_fcn;
+        void emitEnum(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Enum& item) override {
+            ::MIR::Function emptyFcn;
             ::MIR::TypeResolve top_mir_res {
-                sp, mResolve, FMT_CB(ss, ss << "enum " << p;), ::HIR::TypeRef(), {}, empty_fcn
+                sp, mResolve, FMT_CB(ss, ss << "enum " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
             mirRes = &top_mir_res;
 
@@ -743,20 +743,20 @@ namespace {
 
             // Generate the drop glue (and determine if there is any)
             bool has_drop_glue = mResolve.type_needs_drop_glue(sp, ty);
-            auto drop_glue_path = ::HIR::Path(ty, "#drop_glue");
+            auto dropGluePath = ::HIR::Path(ty, "#drop_glue");
 
             const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
             MIR_ASSERT(*mirRes, repr, "No repr for enum " << ty);
             of << "type " << fmt(p) << " {\n";
             of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
             if (has_drop_glue) {
-                of << "\tDROP " << fmt(drop_glue_path) << ";\n";
+                of << "\tDROP " << fmt(dropGluePath) << ";\n";
             }
             for (const auto& e : repr->fields) {
                 of << "\t" << e.offset << " = " << fmt(e.ty) << ";\n";
             }
 
-            auto emit_value = [&](const TypeRepr::FieldPath& path, U128 v) {
+            auto emitValue = [&](const TypeRepr::FieldPath& path, U128 v) {
                 of << "\"";
                 for (size_t i = 0; i < path.size; i++) {
                     int val = ((v >> (i * 8)) & U128(0xFF)).truncate_u64();
@@ -782,7 +782,7 @@ namespace {
                             if (e.is_niche(i)) {
                                 of << "*";
                             } else {
-                                emit_value(e.field, U128(e.offset + i));
+                                emitValue(e.field, U128(e.offset + i));
                             }
                             // - Data field number (optional)
                             if (!item.is_value()) {
@@ -797,7 +797,7 @@ namespace {
                         for (size_t idx = 0; idx < e.values.size(); idx++) {
                             of << "\t\t";
                             // - Tag value
-                            emit_value(e.field, e.values[idx]);
+                            emitValue(e.field, e.values[idx]);
                             // - Data field number (optional)
                             if (!item.is_value()) {
                                 of << " =" << idx;
@@ -831,7 +831,7 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emit_str_byte(uint8_t b) {
+        void emitStrByte(uint8_t b) {
             if (b == 0) {
                 of << "\\0";
             } else if (b == '\\') {
@@ -847,10 +847,10 @@ namespace {
             }
         }
 
-        void emit_static_local(const ::HIR::Path& p, const ::HIR::Static& item, const TransParams& params, const EncodedLiteral& encoded) override {
-            ::MIR::Function empty_fcn;
+        void emitStaticLocal(const ::HIR::Path& p, const ::HIR::Static& item, const TransParams& params, const EncodedLiteral& encoded) override {
+            ::MIR::Function emptyFcn;
             ::MIR::TypeResolve top_mir_res {
-                sp, mResolve, FMT_CB(ss, ss << "static " << p;), ::HIR::TypeRef(), {}, empty_fcn
+                sp, mResolve, FMT_CB(ss, ss << "static " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
             mirRes = &top_mir_res;
 
@@ -860,7 +860,7 @@ namespace {
 
             of << "static " << fmt(p) << ": " << fmt(type) << " = \"";
             for (auto b : encoded.bytes) {
-                emit_str_byte(b);
+                emitStrByte(b);
             }
             of << "\"";
             of << "{";
@@ -879,10 +879,10 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emit_function_ext(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params) override {
-            ::MIR::Function empty_fcn;
+        void emitFunctionExt(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params) override {
+            ::MIR::Function emptyFcn;
             ::MIR::TypeResolve top_mir_res {
-                sp, mResolve, FMT_CB(ss, ss << "extern fn " << p;), ::HIR::TypeRef(), {}, empty_fcn
+                sp, mResolve, FMT_CB(ss, ss << "extern fn " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
             mirRes = &top_mir_res;
             TRACE_FUNCTION_F(p);
@@ -906,7 +906,7 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emit_function_code(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool is_extern_def, const ::MIR::FunctionPointer& code) override {
+        void emitFunctionCode(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool is_extern_def, const ::MIR::FunctionPointer& code) override {
             TRACE_FUNCTION_F(p);
 
             ::MIR::TypeResolve::argsT arg_types;
@@ -941,8 +941,8 @@ namespace {
                 DEBUG("var" << i << " : " << code->locals[i]);
                 of << "\tlet var" << i << ": " << fmt(code->locals[i]) << ";\n";
             }
-            for (unsigned int i = 0; i < code->drop_flags.size(); i++) {
-                of << "\tlet df" << i << " = " << code->drop_flags[i] << ";\n";
+            for (unsigned int i = 0; i < code->dropFlags.size(); i++) {
+                of << "\tlet df" << i << " = " << code->dropFlags[i] << ";\n";
             }
 
             for (unsigned int i = 0; i < code->blocks.size(); i++) {
@@ -1279,7 +1279,7 @@ namespace {
                             //{
                             //    m_of << ", ";
                             //}
-                            of << "_ = " << e.def_target;
+                            of << "_ = " << e.defTarget;
                             of << " }\n";
                         }
                         break;
@@ -1291,9 +1291,9 @@ namespace {
                         }
                         break;
                         TU_ARM(term, Call, e) {
-                            if (const auto* f_p = e.fcn.opt_Intrinsic()) {
-                                if (f_p->name == "offset_of") {
-                                    size_t val = mir_res.intrinsic_offset_of(f_p->params.types.at(0), e.args);
+                            if (const auto* fP = e.fcn.opt_Intrinsic()) {
+                                if (fP->name == "offset_of") {
+                                    size_t val = mir_res.intrinsic_offset_of(fP->params.types.at(0), e.args);
                                     of << fmt(e.ret_val) << " = " << val << " usize;\n";
                                     of << "\t\tGOTO " << e.ret_block;
                                     break;
@@ -1335,7 +1335,7 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emit_global_asm(const ::HIR::GlobalAssembly&) override {
+        void emitGlobalAsm(const ::HIR::GlobalAssembly&) override {
             TODO(Span(), "global_asm! codegen");
         }
 
@@ -1361,7 +1361,7 @@ namespace {
                 } else {
                     tmp = params.monomorph_type(Span(), item.returnType);
                 }
-                mResolve.expand_associated_types(Span(), tmp);
+                mResolve.expandAssociatedTypes(Span(), tmp);
                 return tmp;
             } else {
                 return item.returnType;

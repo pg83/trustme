@@ -516,7 +516,7 @@ namespace AST {
                 if (datatype == CORETYPE_ANY)
                     ;
                 else {
-                    os << "_" << coretype_name(datatype);
+                    os << "_" << coretypeName(datatype);
                 }
             }
         },
@@ -1032,11 +1032,11 @@ ExprNodeFlow::ExprNodeFlow(Type type, Ident target, ExprNodeP value)
     , target(::std::move(target))
     , mValue(::std::move(value)) {
 }
-ExprNodeLetBinding::ExprNodeLetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP else_arm, bool is_super)
+ExprNodeLetBinding::ExprNodeLetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP elseArm, bool is_super)
     : pat(::std::move(pat))
     , mType(::std::move(type))
     , mValue(::std::move(value))
-    , elseNode(::std::move(else_arm))
+    , elseNode(::std::move(elseArm))
     , isSuper(is_super) {
 }
 ExprNodeAssign::ExprNodeAssign()
@@ -1089,9 +1089,9 @@ ExprNodeMatch::ExprNodeMatch(ExprNodeP val, ::std::vector<ExprNodeMatchArm> arms
     : val(::std::move(val))
     , arms(::std::move(arms)) {
 }
-ExprNodeIf::ExprNodeIf(std::vector<Arm> arms, ExprNodeP else_code)
+ExprNodeIf::ExprNodeIf(std::vector<Arm> arms, ExprNodeP elseCode)
     : arms(::std::move(arms))
-    , elseNode(::std::move(else_code)) {
+    , elseNode(::std::move(elseCode)) {
 }
 ExprNodeInteger::ExprNodeInteger(U128 value, enum eCoreType datatype)
     : datatype(datatype)

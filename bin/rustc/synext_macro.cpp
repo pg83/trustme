@@ -234,7 +234,7 @@ public:
             auto ps = lex.start_span();
             auto attrs = ParseItemAttrs(lex);
             auto text = get_string(sp, lex, crate, mod);
-            auto sp = lex.end_span(ps);
+            auto sp = lex.endSpan(ps);
             if (checkCfgAttrs(attrs)) {
                 raw_lines.push_back(std::make_pair(sp, std::move(text)));
             }
@@ -421,7 +421,7 @@ public:
             AsmCommon::Line line;
 
             const char* c = text.c_str();
-            std::string cur_string;
+            std::string curString;
             while (*c) {
                 if (*c == '}') {
                     c++;
@@ -432,14 +432,14 @@ public:
                         ERROR(sp, E0000, "Closing braces in `asm!` need to be written as `}}`");
                     }
                     c++;
-                    cur_string += '}';
+                    curString += '}';
                     continue;
                 }
 
                 if (*c == '{') {
                     c++;
                     if (*c == '{') {
-                        cur_string += '{';
+                        curString += '{';
                         c++;
                         continue;
                     }
@@ -489,15 +489,15 @@ public:
                         ERROR(sp, E0000, "Expected '}' in asm! format string");
                     }
 
-                    frag.before = std::move(cur_string);
-                    cur_string.clear();
+                    frag.before = std::move(curString);
+                    curString.clear();
                     line.frags.push_back(std::move(frag));
                 } else {
-                    cur_string += *c;
+                    curString += *c;
                 }
                 c++;
             }
-            line.trailing = std::move(cur_string);
+            line.trailing = std::move(curString);
             lines.push_back(std::move(line));
         }
 
@@ -873,7 +873,7 @@ namespace {
         bool alternate = false;
         bool zero_pad = false;
 
-        Debug debug_ty = Debug::Normal;
+        Debug debugTy = Debug::Normal;
 
         bool width_is_arg = false;
         unsigned int width = 0;
@@ -1025,7 +1025,7 @@ namespace {
         unsigned int next_free = 0;
 
         ::std::vector<FmtFrag> frags;
-        ::std::string cur_literal;
+        ::std::string curLiteral;
 
         auto get_named = [&](RcString ident) -> unsigned {
             auto it = named.find(ident);
@@ -1054,15 +1054,15 @@ namespace {
                         s--; // Step backwards, just in case
                     }
                     // Doesn't need escaping
-                    cur_literal += '}';
+                    curLiteral += '}';
                 } else {
-                    cur_literal += *s;
+                    curLiteral += *s;
                 }
             } else {
                 s++;
                 // Escaped '{' as "{{"
                 if (*s == '{') {
-                    cur_literal += '{';
+                    curLiteral += '{';
                     continue;
                 }
 
@@ -1288,10 +1288,10 @@ namespace {
                         assert(*s == '}');
                     } else {
                         if (strncmp(s, "x?}", 3) == 0) {
-                            args.debug_ty = FmtArgs::Debug::LowerHex;
+                            args.debugTy = FmtArgs::Debug::LowerHex;
                             trait_name = "Debug";
                         } else if (strncmp(s, "X?}", 3) == 0) {
-                            args.debug_ty = FmtArgs::Debug::UpperHex;
+                            args.debugTy = FmtArgs::Debug::UpperHex;
                             trait_name = "Debug";
                         } else {
                             TODO(sp, "Parse formatting fragment at \"" << fmt_frag_str << "\" (long type) - s=...\"" << s << "\"");
@@ -1314,11 +1314,11 @@ namespace {
                     next_free++;
                 }
 
-                frags.push_back(FmtFrag{mv$(cur_literal), index, trait_name, mv$(args)});
+                frags.push_back(FmtFrag{mv$(curLiteral), index, trait_name, mv$(args)});
             }
         }
 
-        return ::std::make_tuple(mv$(frags), mv$(cur_literal));
+        return ::std::make_tuple(mv$(frags), mv$(curLiteral));
     }
 }
 
@@ -1371,7 +1371,7 @@ namespace {
         toks.push_back(mv$(t4));
     }
 
-    ::std::unique_ptr<TokenStream> expand_format_args(const Span& sp, const ::AST::Crate& crate, TTStream& lex, bool addNewline) {
+    ::std::unique_ptr<TokenStream> expandFormatArgs(const Span& sp, const ::AST::Crate& crate, TTStream& lex, bool addNewline) {
         Token tok;
 
         auto format_string_node = ParseExprVal(lex);
@@ -1405,19 +1405,19 @@ namespace {
 
                 GET_CHECK_TOK(tok, lex, TOK_EQUAL);
 
-                auto expr_tt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
+                auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
 
                 auto ins_rv = named_args_index.insert(::std::make_pair(mv$(name), static_cast<unsigned>(named_args.size())));
                 if (ins_rv.second == false) {
                     ERROR(sp, E0000, "Duplicate definition of named argument `" << ins_rv.first->first << "`");
                 }
-                named_args.push_back(mv$(expr_tt));
+                named_args.push_back(mv$(exprTt));
             }
             // - Free parameters
             else {
                 DEBUG("Free");
-                auto expr_tt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
-                free_args.push_back(mv$(expr_tt));
+                auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
+                free_args.push_back(mv$(exprTt));
             }
         }
         CHECK_TOK(tok, TOK_EOF);
@@ -1600,7 +1600,7 @@ namespace {
                         if (frag.args.zero_pad) {
                             flags |= 1 << Flag::SignAwareZeroPad;
                         }
-                        switch (frag.args.debug_ty) {
+                        switch (frag.args.debugTy) {
                             case FmtArgs::Debug::Normal:
                                 break;
                             case FmtArgs::Debug::LowerHex:
@@ -1706,7 +1706,7 @@ class CFormatArgsExpander: public ExpandProcMacro {
         auto lex = TTStream(sp, ParseState(), tt);
         lex.parse_state().module = &mod;
 
-        return expand_format_args(sp, crate, lex, /*add_newline=*/false);
+        return expandFormatArgs(sp, crate, lex, /*add_newline=*/false);
     }
 };
 
@@ -1717,7 +1717,7 @@ class CConstFormatArgsExpander: public ExpandProcMacro {
         auto lex = TTStream(sp, ParseState(), tt);
         lex.parse_state().module = &mod;
 
-        return expand_format_args(sp, crate, lex, /*add_newline=*/false);
+        return expandFormatArgs(sp, crate, lex, /*add_newline=*/false);
     }
 };
 
@@ -1728,7 +1728,7 @@ class CFormatArgsNlExpander: public ExpandProcMacro {
         auto lex = TTStream(sp, ParseState(), tt);
         lex.parse_state().module = &mod;
 
-        return expand_format_args(sp, crate, lex, /*add_newline=*/true);
+        return expandFormatArgs(sp, crate, lex, /*add_newline=*/true);
     }
 };
 

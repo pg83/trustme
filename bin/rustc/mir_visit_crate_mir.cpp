@@ -72,11 +72,11 @@ void MIR::OuterVisitor::visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) {
     auto _ = this->mResolve.set_impl_generics(MetadataType::None, item.mParams);
 
     if (auto* e = item.mData.opt_Value()) {
-        auto enum_type = mResolve.crate.types.primitive(::HIR::Enum::get_repr_type(item.tagRepr));
+        auto enumType = mResolve.crate.types.primitive(::HIR::Enum::get_repr_type(item.tagRepr));
 
         for (auto& var : e->variants) {
             if (var.expr) {
-                cb(mResolve, p + var.name, var.expr, {}, enum_type);
+                cb(mResolve, p + var.name, var.expr, {}, enumType);
             }
         }
     }

@@ -31,7 +31,7 @@ namespace {
 
     struct CheckCfgState {
         bool active = false;
-        bool exhaustive_names = true;
+        bool exhaustiveNames = true;
         ::std::map<::std::string, ExpectedCfgValues> expected;
         LintSetting warnings;
         LintSetting unexpected_cfgs;
@@ -388,7 +388,7 @@ namespace {
                 report_unexpected_cfg(span, name, value, true);
                 return;
             case BuiltinExpectation::UnknownName:
-                if (g_check_cfg.exhaustive_names) {
+                if (g_check_cfg.exhaustiveNames) {
                     report_unexpected_cfg(span, name, value, false);
                 }
                 return;
@@ -438,7 +438,7 @@ bool CfgSetCheckSpec(const ::std::string& spec, ::std::string& error) {
         auto parsed = CfgSpecParser(spec).parse_check_spec();
         g_check_cfg.active = true;
         if (parsed.anyNames) {
-            g_check_cfg.exhaustive_names = false;
+            g_check_cfg.exhaustiveNames = false;
         }
         for (auto& name : parsed.names) {
             auto& expected = g_check_cfg.expected[name];

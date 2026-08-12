@@ -161,7 +161,7 @@ namespace HIR {
 
         Compare compareWithPlaceholders(const Span& sp, const PathParams& x, t_cb_resolve_type resolve_placeholder) const;
         Compare match_test_generics_fuzz(const Span& sp, const PathParams& x, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& match) const;
-        bool equals_ignoring_regions(const PathParams& x) const;
+        bool equalsIgnoringRegions(const PathParams& x) const;
 
         /// Indicates that params exist (and thus the target requires monomorphisation)
         /// - Ignores lifetime params
@@ -199,7 +199,7 @@ namespace HIR {
 
         GenericPath clone() const;
         Compare compareWithPlaceholders(const Span& sp, const GenericPath& x, t_cb_resolve_type resolve_placeholder) const;
-        bool equals_ignoring_regions(const GenericPath& x) const;
+        bool equalsIgnoringRegions(const GenericPath& x) const;
 
         bool operator==(const GenericPath& x) const {
             return ord(x) == OrdEqual;
@@ -268,7 +268,7 @@ namespace HIR {
 
         TraitPath clone() const;
         Compare compareWithPlaceholders(const Span& sp, const TraitPath& x, t_cb_resolve_type resolve_placeholder) const;
-        bool equals_ignoring_regions(const TraitPath& x) const;
+        bool equalsIgnoringRegions(const TraitPath& x) const;
 
         bool operator==(const TraitPath& x) const {
             return ord(x) == OrdEqual;
@@ -332,7 +332,7 @@ namespace HIR {
 
         Path clone() const;
         Compare compareWithPlaceholders(const Span& sp, const Path& x, t_cb_resolve_type resolve_placeholder) const;
-        bool equals_ignoring_regions(const Path& x) const;
+        bool equalsIgnoringRegions(const Path& x) const;
 
         Ordering ord(const Path& x) const;
 

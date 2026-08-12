@@ -107,7 +107,7 @@ namespace AST {
             (SplitSlice,
              struct {
                  ::std::vector<Pattern> leading;
-                 PatternBinding extra_bind;
+                 PatternBinding extraBind;
                  ::std::vector<Pattern> trailing;
              }),
             (Or, std::vector<Pattern>)

@@ -14,7 +14,7 @@ class CMacroRulesExpander: public ExpandProcMacro {
         ERROR(sp, E0000, "macro_rules! requires an identifier");
     }
 
-    ::std::unique_ptr<TokenStream> expand_ident(const Span& sp, const ::AST::Crate& crate, const RcString& ident, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expandIdent(const Span& sp, const ::AST::Crate& crate, const RcString& ident, const TokenTree& tt, AST::Module& mod) override {
         DEBUG("Parsing macro_rules! " << ident);
         TTStream lex(sp, ParseState(), tt);
         auto mac = ParseMacroRules(lex);
@@ -91,8 +91,8 @@ class CMacroUseHandler: public ExpandDecorator {
 
         if (i.is_None()) {
             // Just ignore
-        } else if (const auto* ec_item = i.opt_Crate()) {
-            const auto& ec = crate.externCrates.at(ec_item->name);
+        } else if (const auto* ecItem = i.opt_Crate()) {
+            const auto& ec = crate.externCrates.at(ecItem->name);
 
             DEBUG(ec.hir->exportedMacroNames.size() << " exported macros");
             for (const auto& name : ec.hir->exportedMacroNames) {
@@ -107,7 +107,7 @@ class CMacroUseHandler: public ExpandDecorator {
                     continue;
                 }
 
-                AST::AbsolutePath path{ec_item->name, {name}};
+                AST::AbsolutePath path{ecItem->name, {name}};
                 if (const auto* imp = e->ent.opt_Import()) {
                     if (imp->path.crate_name() == CRATE_BUILTINS) {
                         DEBUG("Importing builtin (skip): " << name);

@@ -194,7 +194,7 @@ HIR::LifetimeRef LowerHIRLifetimeRef(const ::AST::LifetimeRef& r) {
 }
 
 namespace {
-    ::HIR::PatternBinding::Type convert_binding_type(::AST::PatternBinding::Type pbt) {
+    ::HIR::PatternBinding::Type convertBindingType(::AST::PatternBinding::Type pbt) {
         switch (pbt) {
             case ::AST::PatternBinding::Type::MOVE:
                 return ::HIR::PatternBinding::Type::Move;
@@ -212,7 +212,7 @@ namespace {
 
     std::vector<::HIR::PatternBinding> bindings;
     for (const auto& pb : pat.bindings()) {
-        bindings.push_back(::HIR::PatternBinding(pb.isMutable, convert_binding_type(pb.mType), pb.mName.name, pb.slot));
+        bindings.push_back(::HIR::PatternBinding(pb.isMutable, convertBindingType(pb.mType), pb.mName.name, pb.slot));
     }
 
     struct H {
@@ -415,9 +415,9 @@ namespace {
                 trailing.push_back(LowerHIRPattern(sp));
             }
 
-            auto extra_bind = e.extra_bind.is_valid() ? ::HIR::PatternBinding(false, convert_binding_type(e.extra_bind.mType), e.extra_bind.mName.name, e.extra_bind.slot) : ::HIR::PatternBinding();
+            auto extraBind = e.extraBind.is_valid() ? ::HIR::PatternBinding(false, convertBindingType(e.extraBind.mType), e.extraBind.mName.name, e.extraBind.slot) : ::HIR::PatternBinding();
 
-            return ::HIR::Pattern{mv$(bindings), ::HIR::Pattern::Data::make_SplitSlice({mv$(leading), mv$(extra_bind), mv$(trailing)})};
+            return ::HIR::Pattern{mv$(bindings), ::HIR::Pattern::Data::make_SplitSlice({mv$(leading), mv$(extraBind), mv$(trailing)})};
         }
         TU_ARMA(Or, e) {
             ::std::vector<::HIR::Pattern> subpats;
@@ -917,7 +917,7 @@ namespace {
             }
         };
 
-        ActiveAlias enter_alias(const void* key, const ::HIR::GenericPath& path) {
+        ActiveAlias enterAlias(const void* key, const ::HIR::GenericPath& path) {
             if (!activeAliases.insert(key).second) {
                 ERROR(mSpan, E0000, "Recursive trait alias in trait object: " << path);
             }
@@ -933,7 +933,7 @@ namespace {
             }
         };
 
-        ActiveHrtbs enter_hrtbs(::HIR::TraitPath& path) {
+        ActiveHrtbs enterHrtbs(::HIR::TraitPath& path) {
             const size_t old_size = activeHrtbs.size();
             if (path.hrtbs) {
                 ASSERT_BUG(mSpan,
@@ -953,7 +953,7 @@ namespace {
                 ASSERT_BUG(mSpan, trait->trait_ || trait->hir, "Null trait binding for " << path.mPath);
                 addTrait(mv$(path), trait->trait_ ? trait->trait_->is_marker() : trait->hir->isMarker);
             } else if (const auto* alias = binding.opt_TraitAlias()) {
-                expand_ast_alias(mv$(path), *alias);
+                expandAstAlias(mv$(path), *alias);
             } else {
                 BUG(mSpan, "Not a trait or trait alias: " << path.mPath << " (" << binding.tag_str() << ")");
             }
@@ -964,17 +964,17 @@ namespace {
             if (const auto* trait = item.opt_Trait()) {
                 addTrait(mv$(path), trait->isMarker);
             } else if (const auto* alias = item.opt_TraitAlias()) {
-                expand_hir_alias(mv$(path), *alias);
+                expandHirAlias(mv$(path), *alias);
             } else {
                 BUG(mSpan, "Trait alias expanded to non-trait path " << path.mPath << " (" << item.tag_str() << ")");
             }
         }
 
-        void expand_ast_alias(::HIR::TraitPath aliasPath, const ::AST::PathBindingType::Data_TraitAlias& binding) {
+        void expandAstAlias(::HIR::TraitPath aliasPath, const ::AST::PathBindingType::Data_TraitAlias& binding) {
             const void* key = binding.trait_ ? static_cast<const void*>(binding.trait_) : static_cast<const void*>(binding.hir);
             ASSERT_BUG(mSpan, key, "Null trait alias binding for " << aliasPath.mPath);
-            auto active = enter_alias(key, aliasPath.mPath);
-            auto active_hrtbs = enter_hrtbs(aliasPath);
+            auto active = enterAlias(key, aliasPath.mPath);
+            auto active_hrtbs = enterHrtbs(aliasPath);
             const bool had_principal = has_principal();
 
             if (binding.trait_) {
@@ -990,13 +990,13 @@ namespace {
                 }
             } else {
                 ASSERT_BUG(mSpan, binding.hir, "Null trait alias binding for " << aliasPath.mPath);
-                expand_hir_alias_contents(aliasPath, *binding.hir);
+                expandHirAliasContents(aliasPath, *binding.hir);
             }
 
             applyAliasBounds(aliasPath, had_principal);
         }
 
-        void expand_hir_alias_contents(const ::HIR::TraitPath& aliasPath, const ::HIR::TraitAlias& alias) {
+        void expandHirAliasContents(const ::HIR::TraitPath& aliasPath, const ::HIR::TraitAlias& alias) {
             auto params = ConvertHIRCompleteAliasParams(g_crate_ptr->types, mSpan, alias.mParams, aliasPath.mPath, false);
             auto monomorph = MonomorphStatePtr(g_crate_ptr->types, nullptr, &params, nullptr);
             for (const auto& bound : alias.traits) {
@@ -1005,11 +1005,11 @@ namespace {
             }
         }
 
-        void expand_hir_alias(::HIR::TraitPath aliasPath, const ::HIR::TraitAlias& alias) {
-            auto active = enter_alias(&alias, aliasPath.mPath);
-            auto active_hrtbs = enter_hrtbs(aliasPath);
+        void expandHirAlias(::HIR::TraitPath aliasPath, const ::HIR::TraitAlias& alias) {
+            auto active = enterAlias(&alias, aliasPath.mPath);
+            auto active_hrtbs = enterHrtbs(aliasPath);
             const bool had_principal = has_principal();
-            expand_hir_alias_contents(aliasPath, alias);
+            expandHirAliasContents(aliasPath, alias);
             applyAliasBounds(aliasPath, had_principal);
         }
 
@@ -1045,7 +1045,7 @@ namespace {
             BUG(ty.span(), "TypeData::Macro");
         }
         TU_ARMA(Primitive, e) {
-            switch (e.core_type) {
+            switch (e.coreType) {
                 case CORETYPE_BOOL:
                     return g_crate_ptr->types.primitive(::HIR::CoreType::Bool);
                 case CORETYPE_CHAR:
@@ -1148,7 +1148,7 @@ namespace {
                 }
                 return g_crate_ptr->types.generic(l->name, slot);
             } else if (e->mBindings.type.path.crate == CRATE_BUILTINS) {
-                return LowerHIRType(TypeRef(ty.span(), coretype_fromstring(e->mBindings.type.path.nodes.back().c_str())));
+                return LowerHIRType(TypeRef(ty.span(), coretypeFromstring(e->mBindings.type.path.nodes.back().c_str())));
             } else {
                 return g_crate_ptr->types.path(LowerHIRPath(ty.span(), *e, FromASTPathClass::Type), {});
             }
@@ -1553,7 +1553,7 @@ namespace {
                 if (repr == ::HIR::Enum::Repr::Auto) {
                     ERROR(var.discriminantValue.node().span(), E0000, "Discrimiant value set on enum with no `repr` set");
                 }
-                variants.back().discriminant_expr = LowerHIRExpr(var.discriminantValue);
+                variants.back().discriminantExpr = LowerHIRExpr(var.discriminantValue);
             }
         }
 
@@ -2579,7 +2579,7 @@ public:
     if (crate.crateType == ::AST::Crate::Type::ProcMacro) {
         for (const auto& ent : crate.procMacros) {
             struct H {
-                static ::HIR::ProcMacro::Ty cvt_macro_ty(::AST::ProcMacroTy ast) {
+                static ::HIR::ProcMacro::Ty cvtMacroTy(::AST::ProcMacroTy ast) {
                     switch (ast) {
                         case ::AST::ProcMacroTy::Function:
                             return ::HIR::ProcMacro::Ty::Function;
@@ -2593,7 +2593,7 @@ public:
             };
 
             // Register under an invalid SimplePath
-            ::HIR::ProcMacro::Ty ty = H::cvt_macro_ty(ent.ty);
+            ::HIR::ProcMacro::Ty ty = H::cvtMacroTy(ent.ty);
             macros.insert(std::make_pair(ent.name, ::HIR::ProcMacro{ty, ent.name, ::HIR::SimplePath(RcString(""), {ent.name}), ent.attributes}));
             rv.exportedMacroNames.push_back(ent.name);
             DEBUG("Export proc_macro " << ent.name);
@@ -2630,8 +2630,8 @@ public:
         auto p1 = ext_crate.second.filename.rfind('/');
         auto p2 = ext_crate.second.filename.rfind('\\');
         auto p = (p1 == ::std::string::npos ? p2 : (p2 == ::std::string::npos ? p1 : ::std::max(p1, p2)));
-        auto crate_file = (p == ::std::string::npos ? ext_crate.second.filename : ext_crate.second.filename.substr(p + 1));
-        rv.extCrates.insert(::std::make_pair(ext_crate.first, ::HIR::ExternCrate{ext_crate.second.hir, crate_file, ext_crate.second.filename}));
+        auto crateFile = (p == ::std::string::npos ? ext_crate.second.filename : ext_crate.second.filename.substr(p + 1));
+        rv.extCrates.insert(::std::make_pair(ext_crate.first, ::HIR::ExternCrate{ext_crate.second.hir, crateFile, ext_crate.second.filename}));
     }
     pathSized = rv.get_lang_item_path_opt("sized");
     pathPointeeSized = rv.get_lang_item_path_opt("pointee_sized");
@@ -2661,7 +2661,7 @@ public:
                         struct NewToks {
                             std::vector<MacroExpansionEnt> out;
 
-                            void emit_from_string(const std::string& s) {
+                            void emitFromString(const std::string& s) {
                                 ::std::istringstream iss{s};
                                 Lexer l{iss, AST::Edition::Rust2021, {}};
                                 for (;;) {
@@ -2673,7 +2673,7 @@ public:
                                 }
                             }
 
-                            void emit_ast(const AST::ExprNode& e) {
+                            void emitAst(const AST::ExprNode& e) {
                                 if (const auto* ep = cast<const AST::ExprNodeInteger>(&e)) {
                                     out.push_back(Token(ep->mValue, ep->datatype));
                                 } else if (const auto* ep = cast<const AST::ExprNodeBool>(&e)) {
@@ -2683,33 +2683,33 @@ public:
                                 }
                             }
 
-                            void emit_path(const ::AST::Path& path) {
+                            void emitPath(const ::AST::Path& path) {
                                 ::std::stringstream ss;
                                 ss << path;
-                                emit_from_string(ss.str());
+                                emitFromString(ss.str());
                             }
 
-                            void emit_type(::TypeRef& ty) {
+                            void emitType(::TypeRef& ty) {
                                 TU_MATCH_HDRA( (ty.mData), { )
                                 default:
                                     TODO(Span(), "Convert interpolated macro fragment: " << ty);
                                     TU_ARMA(Path, p) {
-                                        emit_path(*p);
+                                        emitPath(*p);
                                     }
                                 }
                             }
 
-                            void emit_tokentree(TokenTree& tt) {
+                            void emitTokentree(TokenTree& tt) {
                                 if (tt.is_token()) {
-                                    emit_token(tt.tok());
+                                    emitToken(tt.tok());
                                 } else {
                                     for (size_t i = 0; i < tt.size(); i++) {
-                                        emit_tokentree(tt[i]);
+                                        emitTokentree(tt[i]);
                                     }
                                 }
                             }
 
-                            void emit_token(Token& tok) {
+                            void emitToken(Token& tok) {
                                 switch (tok.type()) {
                                     case TOK_INTERPOLATED_PATH:
                                     case TOK_INTERPOLATED_PATTERN:
@@ -2722,7 +2722,7 @@ public:
                                         TODO(Span(), "Convert interpolated macro fragment: " << tok);
                                         break;
                                     case TOK_INTERPOLATED_TYPE:
-                                        emit_type(tok.frag_type());
+                                        emitType(tok.frag_type());
                                         break;
                                     case TOK_INTERPOLATED_META: {
                                         auto& i = tok.frag_meta();
@@ -2732,12 +2732,12 @@ public:
                                             }
                                             out.push_back(Token(TOK_IDENT, e));
                                         }
-                                        emit_tokentree(i.data_mut());
+                                        emitTokentree(i.dataMut());
                                         break;
                                     }
                                     case TOK_INTERPOLATED_EXPR:
                                         try {
-                                            emit_ast(tok.frag_node());
+                                            emitAst(tok.frag_node());
                                         } catch (const std::exception& e) {
                                             TODO(Span(), "Convert interpolated macro fragment: " << tok << " - " << e.what());
                                         }
@@ -2761,7 +2761,7 @@ public:
                             case TOK_INTERPOLATED_VIS:
                             case TOK_INTERPOLATED_META:
                             case TOK_INTERPOLATED_EXPR:
-                                new_toks.emit_token(*tok);
+                                new_toks.emitToken(*tok);
                                 break;
                             default:
                                 ++it;
@@ -2845,7 +2845,7 @@ struct LowerHIRExprNodeVisitor: public ::AST::NodeVisitor {
     // - They have different HIR node types
     bool hasYield = false;
 
-    RcString enter_loop_label(const Ident& source) {
+    RcString enterLoopLabel(const Ident& source) {
         if (source.name == "") {
             return {};
         }
@@ -2868,10 +2868,10 @@ struct LowerHIRExprNodeVisitor: public ::AST::NodeVisitor {
             return {};
         }
         auto target_hygiene = target.hygiene;
-        size_t definition_depth = macroDefinitions.size();
+        size_t definitionDepth = macroDefinitions.size();
         for (auto it = loopLabels.rbegin(); it != loopLabels.rend(); ++it) {
-            while (definition_depth > it->macro_definition_depth) {
-                const auto& definition = macroDefinitions[--definition_depth];
+            while (definitionDepth > it->macro_definition_depth) {
+                const auto& definition = macroDefinitions[--definitionDepth];
                 target_hygiene.leave_macro_definition(
                     definition.definition_id,
                     definition.token_hygiene,
@@ -2912,7 +2912,7 @@ struct LowerHIRExprNodeVisitor: public ::AST::NodeVisitor {
 
     virtual void visit(::AST::ExprNodeBlock& v) override {
         const size_t macro_definition_base = macroDefinitions.size();
-        auto label = enter_loop_label(v.label);
+        auto label = enterLoopLabel(v.label);
         auto rv = g_crate_ptr->pool->make<::HIR::ExprNodeBlock>(v.span());
         bool last_has_semicolon = true;
         for (auto& n : v.nodes) {
@@ -3109,8 +3109,8 @@ struct LowerHIRExprNodeVisitor: public ::AST::NodeVisitor {
                     }
                     // SplitSlice also defines bindings
                     if (auto* e = pat.mData.opt_SplitSlice()) {
-                        if (e->extra_bind.is_valid()) {
-                            this->handle_binding(e->extra_bind);
+                        if (e->extraBind.is_valid()) {
+                            this->handle_binding(e->extraBind);
                         }
                     }
                     // - SplitTuple doesn't?
@@ -3407,7 +3407,7 @@ struct LowerHIRExprNodeVisitor: public ::AST::NodeVisitor {
     }
 
     virtual void visit(::AST::ExprNodeLoop& v) override {
-        auto label = enter_loop_label(v.label);
+        auto label = enterLoopLabel(v.label);
         auto code = lower(v.mCode);
         leave_loop_label(label);
         mRv.reset(g_crate_ptr->pool->make<::HIR::ExprNodeLoop>(v.span(), mv$(label), mv$(code)));
@@ -3431,7 +3431,7 @@ struct LowerHIRExprNodeVisitor: public ::AST::NodeVisitor {
 
     virtual void visit(::AST::ExprNodeWhile& v) override {
         // Desugar to `loop { match () { _ if ... => { body }, _ => break, } }`
-        auto label = enter_loop_label(v.label);
+        auto label = enterLoopLabel(v.label);
         ::std::vector<::HIR::ExprNodeMatch::Arm> arms;
         arms.push_back(::HIR::ExprNodeMatch::Arm{make_vec1(::HIR::Pattern()), iflet_to_guards(v.conditions), lower(v.mCode)});
         arms.push_back(::HIR::ExprNodeMatch::Arm{make_vec1(::HIR::Pattern()), {}, HIR::ExprNodeP(g_crate_ptr->pool->make<HIR::ExprNodeLoopControl>(v.span(), "", false, nullptr))});
@@ -3507,7 +3507,7 @@ struct LowerHIRExprNodeVisitor: public ::AST::NodeVisitor {
                         return ::HIR::CoreType::Char;
 
                     default:
-                        BUG(sp, "Unknown type for integer literal - " << coretype_name(ct));
+                        BUG(sp, "Unknown type for integer literal - " << coretypeName(ct));
                 }
             }
         };
@@ -3539,7 +3539,7 @@ struct LowerHIRExprNodeVisitor: public ::AST::NodeVisitor {
                 ct = ::HIR::CoreType::F128;
                 break;
             default:
-                BUG(v.span(), "Unknown type for float literal - " << coretype_name(v.datatype));
+                BUG(v.span(), "Unknown type for float literal - " << coretypeName(v.datatype));
         }
         mRv.reset(g_crate_ptr->pool->make<::HIR::ExprNodeLiteral>(v.span(), ::HIR::ExprNodeLiteral::Data::make_Float({ct, v.mValue})));
     }
@@ -3681,8 +3681,8 @@ struct LowerHIRExprNodeVisitor: public ::AST::NodeVisitor {
             auto data = ty->cloneData();
             auto& gp = data.as_Path().path.mData.as_Generic();
             auto var_name = gp.mPath.pop_component();
-            auto enum_ty = g_crate_ptr->types.intern(mv$(data));
-            ty = g_crate_ptr->types.path(::HIR::Path(enum_ty, mv$(var_name)), {});
+            auto enumTy = g_crate_ptr->types.intern(mv$(data));
+            ty = g_crate_ptr->types.path(::HIR::Path(enumTy, mv$(var_name)), {});
         }
         mRv.reset(g_crate_ptr->pool->make<::HIR::ExprNodeStructLiteral>(v.span(), mv$(ty), !v.mPath.mBindings.type.binding.is_EnumVar(), lower_opt(v.baseValue), mv$(values)));
     }
@@ -3704,8 +3704,8 @@ struct LowerHIRExprNodeVisitor: public ::AST::NodeVisitor {
             auto data = ty->cloneData();
             auto& gp = data.as_Path().path.mData.as_Generic();
             auto var_name = gp.mPath.pop_component();
-            auto enum_ty = g_crate_ptr->types.intern(mv$(data));
-            ty = g_crate_ptr->types.path(::HIR::Path(enum_ty, mv$(var_name)), {});
+            auto enumTy = g_crate_ptr->types.intern(mv$(data));
+            ty = g_crate_ptr->types.path(::HIR::Path(enumTy, mv$(var_name)), {});
         }
         mRv.reset(g_crate_ptr->pool->make<::HIR::ExprNodeStructLiteral>(v.span(), mv$(ty), !v.mPath.mBindings.type.binding.is_EnumVar(), true, mv$(values)));
     }

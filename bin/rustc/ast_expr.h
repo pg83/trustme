@@ -224,7 +224,7 @@ namespace AST {
         /// Allocated binding slots/indexes for the pattern in `let-else`
         ::std::pair<unsigned, unsigned> letelseSlots;
 
-        ExprNodeLetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP else_arm = {}, bool is_super = false);
+        ExprNodeLetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP elseArm = {}, bool is_super = false);
 
         static constexpr unsigned int kind = 9;
         unsigned int node_kind() const override;
@@ -386,7 +386,7 @@ namespace AST {
         std::vector<Arm> arms;
         ExprNodeP elseNode;
 
-        ExprNodeIf(std::vector<Arm> arms, ExprNodeP else_code);
+        ExprNodeIf(std::vector<Arm> arms, ExprNodeP elseCode);
 
         static constexpr unsigned int kind = 18;
         unsigned int node_kind() const override;

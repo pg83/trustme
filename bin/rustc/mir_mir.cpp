@@ -245,7 +245,7 @@ namespace MIR {
             (Goto, os << "Goto(" << e << ")";),
             (If, os << "If( " << e.cond << " : " << e.bbTrue << ", " << e.bbFalse << ")";),
             (Switch, os << "Switch( "; if (e.valid_flag != ~0u) os << "IF df$" << e.valid_flag << " ELSE bb" << e.invalid_target << ", "; os << e.val << " : "; for (unsigned int j = 0; j < e.targets.size(); j++) os << j << " => bb" << e.targets[j] << ", "; os << ")";),
-            (SwitchValue, os << "SwitchValue( " << e.val << " : "; TU_MATCHA((e.values), (ve), (Unsigned, for (unsigned int j = 0; j < e.targets.size(); j++) os << ve[j] << " => bb" << e.targets[j] << ", ";), (Signed, for (unsigned int j = 0; j < e.targets.size(); j++) os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";), (String, for (unsigned int j = 0; j < e.targets.size(); j++) os << "\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";), (ByteString, for (unsigned int j = 0; j < e.targets.size(); j++) os << "b\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";)) os << "else bb" << e.def_target << ")";),
+            (SwitchValue, os << "SwitchValue( " << e.val << " : "; TU_MATCHA((e.values), (ve), (Unsigned, for (unsigned int j = 0; j < e.targets.size(); j++) os << ve[j] << " => bb" << e.targets[j] << ", ";), (Signed, for (unsigned int j = 0; j < e.targets.size(); j++) os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";), (String, for (unsigned int j = 0; j < e.targets.size(); j++) os << "\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";), (ByteString, for (unsigned int j = 0; j < e.targets.size(); j++) os << "b\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";)) os << "else bb" << e.defTarget << ")";),
             (Drop, os << "Drop(" << e.slot; if (e.kind == eDropKind::SHALLOW) os << " SHALLOW"; if (e.flag_idx != ~0u) os << " IF df$" << e.flag_idx; os << ") -> bb" << e.target << " unwind "; fmt_unwind(e.unwind);),
             (Call, os << "Call( " << e.ret_val << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << e2 << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << arg << ", "; os << "), bb" << e.ret_block << ", "; fmt_unwind(e.unwind); os << ")";)
         )
@@ -262,7 +262,7 @@ namespace MIR {
             TU_MATCHA((lhs, rhs), (le, re), (Continue, return true;), (Cleanup, return le == re;), (Terminate, return true;), (Unreachable, return true;))
             return false;
         };
-        TU_MATCHA((a, b), (ae, be), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, if (ae != be) return false;), (If, if (ae.cond != be.cond) return false; if (ae.bbTrue != be.bbTrue) return false; if (ae.bbFalse != be.bbFalse) return false;), (Switch, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.valid_flag != be.valid_flag) return false; if (ae.invalid_target != be.invalid_target) return false;), (SwitchValue, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.def_target != be.def_target) return false; if (ae.values != be.values) return false;), (Drop, if (ae.kind != be.kind || ae.slot != be.slot || ae.flag_idx != be.flag_idx || ae.target != be.target || !unwind_equal(ae.unwind, be.unwind)) return false;), (Call, if (ae.ret_val != be.ret_val) return false; if (ae.fcn.tag() != be.fcn.tag()) return false; TU_MATCHA((ae.fcn, be.fcn), (afe, bfe), (Value, if (afe != bfe) return false;), (Path, if (afe != bfe) return false;), (Intrinsic, if (afe.name != bfe.name) return false; if (afe.params != bfe.params) return false;)) if (ae.args != be.args) return false; if (ae.ret_block != be.ret_block) return false; if (!unwind_equal(ae.unwind, be.unwind)) return false;))
+        TU_MATCHA((a, b), (ae, be), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, if (ae != be) return false;), (If, if (ae.cond != be.cond) return false; if (ae.bbTrue != be.bbTrue) return false; if (ae.bbFalse != be.bbFalse) return false;), (Switch, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.valid_flag != be.valid_flag) return false; if (ae.invalid_target != be.invalid_target) return false;), (SwitchValue, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.defTarget != be.defTarget) return false; if (ae.values != be.values) return false;), (Drop, if (ae.kind != be.kind || ae.slot != be.slot || ae.flag_idx != be.flag_idx || ae.target != be.target || !unwind_equal(ae.unwind, be.unwind)) return false;), (Call, if (ae.ret_val != be.ret_val) return false; if (ae.fcn.tag() != be.fcn.tag()) return false; TU_MATCHA((ae.fcn, be.fcn), (afe, bfe), (Value, if (afe != bfe) return false;), (Path, if (afe != bfe) return false;), (Intrinsic, if (afe.name != bfe.name) return false; if (afe.params != bfe.params) return false;)) if (ae.args != be.args) return false; if (ae.ret_block != be.ret_block) return false; if (!unwind_equal(ae.unwind, be.unwind)) return false;))
         return true;
     }
 
@@ -492,7 +492,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorph_type(sp, ty);
     if (auto* r = resolve()) {
-        r->expand_associated_types(sp, rv);
+        r->expandAssociatedTypes(sp, rv);
     }
     return rv;
 }
@@ -501,9 +501,9 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorph_genericpath(sp, ty, false);
     if (const auto* r = resolve()) {
-        r->evaluate_path_params(sp, rv.mParams);
+        r->evaluatePathParams(sp, rv.mParams);
         for (auto& arg : rv.mParams.types) {
-            r->expand_associated_types(sp, arg);
+            r->expandAssociatedTypes(sp, arg);
         }
     }
     return rv;
@@ -517,11 +517,11 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             ::HIR::Path::Data,
             (rv.mData),
             (e2),
-            (Generic, r->evaluate_path_params(sp, e2.mParams); for (auto& arg : e2.mParams.types) r->expand_associated_types(sp, arg);),
-            (UfcsInherent, r->expand_associated_types(sp, e2.type); r->evaluate_path_params(sp, e2.params); r->evaluate_path_params(sp, e2.impl_params); for (auto& arg : e2.params.types) r->expand_associated_types(sp, arg);
+            (Generic, r->evaluatePathParams(sp, e2.mParams); for (auto& arg : e2.mParams.types) r->expandAssociatedTypes(sp, arg);),
+            (UfcsInherent, r->expandAssociatedTypes(sp, e2.type); r->evaluatePathParams(sp, e2.params); r->evaluatePathParams(sp, e2.impl_params); for (auto& arg : e2.params.types) r->expandAssociatedTypes(sp, arg);
              // TODO: impl params too?
-             for (auto& arg : e2.impl_params.types) r->expand_associated_types(sp, arg);),
-            (UfcsKnown, r->expand_associated_types(sp, e2.type); r->evaluate_path_params(sp, e2.trait.mParams); r->evaluate_path_params(sp, e2.params); for (auto& arg : e2.trait.mParams.types) r->expand_associated_types(sp, arg); for (auto& arg : e2.params.types) r->expand_associated_types(sp, arg);),
+             for (auto& arg : e2.impl_params.types) r->expandAssociatedTypes(sp, arg);),
+            (UfcsKnown, r->expandAssociatedTypes(sp, e2.type); r->evaluatePathParams(sp, e2.trait.mParams); r->evaluatePathParams(sp, e2.params); for (auto& arg : e2.trait.mParams.types) r->expandAssociatedTypes(sp, arg); for (auto& arg : e2.params.types) r->expandAssociatedTypes(sp, arg);),
             (UfcsUnknown, BUG(sp, "Encountered UfcsUnknown");)
         )
     }
@@ -532,9 +532,9 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorph_path_params(sp, ty, false);
     if (const auto* r = resolve()) {
-        r->evaluate_path_params(sp, rv);
+        r->evaluatePathParams(sp, rv);
         for (auto& arg : rv.types) {
-            r->expand_associated_types(sp, arg);
+            r->expandAssociatedTypes(sp, arg);
         }
     }
     return rv;
@@ -624,7 +624,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             for (const auto& bbi : se.targets) {
                 arms.push_back(map_bb_idx(bbi));
             }
-            return ::MIR::Terminator::make_SwitchValue({this->cloneLval(se.val), map_bb_idx(se.def_target), mv$(arms), se.values.clone()});
+            return ::MIR::Terminator::make_SwitchValue({this->cloneLval(se.val), map_bb_idx(se.defTarget), mv$(arms), se.values.clone()});
         }
         TU_ARMA(Drop, se) {
             UnwindAction unwind;
@@ -707,7 +707,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
         TU_ARMA(Generic, ce) {
             auto val = monomorphiser().get_value(sp, ce);
             if (const auto* r = resolve()) {
-                r->evaluate_const_generic(sp, val);
+                r->evaluateConstGeneric(sp, val);
             }
         TU_MATCH_HDRA( (val), {)
         default:
@@ -784,7 +784,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
         TU_ARMA(SizedArray, se) {
             auto count = monomorphiser().monomorph_arraysize(sp, se.count);
             if (const auto* resolver = resolve()) {
-                resolver->evaluate_array_size(sp, count);
+                resolver->evaluateArraySize(sp, count);
             }
             return ::MIR::RValue::make_SizedArray({this->cloneParam(se.val), std::move(count)});
         }

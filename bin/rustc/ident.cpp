@@ -112,7 +112,7 @@ Ident::Hygiene Ident::Hygiene::get_parent() const {
     rv->macro_definitions.insert(rv->macro_definitions.begin(), inner->macro_definitions.begin(), inner->macro_definitions.end() - 1);
     return rv;
 }
-bool Ident::Hygiene::leave_macro_definition(unsigned int definition, const Hygiene& token_context, const Hygiene& definition_context) {
+bool Ident::Hygiene::leave_macro_definition(unsigned int definition, const Hygiene& token_context, const Hygiene& definitionContext) {
     assert(inner->contexts.size() == inner->macro_definitions.size());
     if (inner->macro_definitions.empty() || inner->macro_definitions.back() != definition) {
         return false;
@@ -120,7 +120,7 @@ bool Ident::Hygiene::leave_macro_definition(unsigned int definition, const Hygie
     inner->contexts.pop_back();
     inner->macro_definitions.pop_back();
     if (*this == token_context) {
-        *this = definition_context;
+        *this = definitionContext;
     }
     return true;
 }

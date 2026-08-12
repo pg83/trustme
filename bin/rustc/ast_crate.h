@@ -32,7 +32,7 @@ namespace AST {
             YesWithMessage,
         } panic_type = ShouldPanic::No;
 
-        ::std::string expected_panic_message;
+        ::std::string expectedPanicMessage;
     };
 
     enum class ProcMacroTy {

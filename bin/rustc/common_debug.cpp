@@ -77,7 +77,7 @@ void DebugPrint(::std::function<void(::std::ostream& os)> cb) {
     ::std::cout << ::std::endl;
 }
 
-void DebugEnterScope(const char* name, dbg_cb_t cb) {
+void DebugEnterScope(const char* name, dbgCbT cb) {
     if (!DebugIsEnabled()) {
         return;
     }
@@ -93,7 +93,7 @@ void DebugEnterScope(const char* name, dbg_cb_t cb) {
     giIndentLevel++;
 }
 
-void DebugLeaveScope(const char* name, dbg_cb_t cb) {
+void DebugLeaveScope(const char* name, dbgCbT cb) {
     if (!DebugIsEnabled()) {
         return;
     }
@@ -107,7 +107,7 @@ void DebugLeaveScope(const char* name, dbg_cb_t cb) {
     ::std::cout << "<<< " << name << ::std::endl;
 }
 
-DebugFunctionScope::DebugFunctionScope(const char* name, dbg_cb_t cb)
+DebugFunctionScope::DebugFunctionScope(const char* name, dbgCbT cb)
     : mName(name) {
     DebugEnterScope(mName, cb);
 }

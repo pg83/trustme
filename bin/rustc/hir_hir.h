@@ -303,7 +303,7 @@ namespace HIR {
             ::HIR::TypeRef type;
 
             /// Optional explicit descriminant value, only valid when repr isn't Repr::Auto
-            ::HIR::ExprPtr discriminant_expr;
+            ::HIR::ExprPtr discriminantExpr;
             // Constant-evaluated descriminant value
             U128 discriminant_value = U128(0);
         };
@@ -338,7 +338,7 @@ namespace HIR {
         Class mData;
 
         // Flag indicating that constant evaluation has completed
-        bool discriminants_evaluated;
+        bool discriminantsEvaluated;
 
         TraitMarkings markings;
 
@@ -422,7 +422,7 @@ namespace HIR {
             bool is_sized,
             LifetimeRef lifetime_bound,
             ::std::vector<::HIR::TraitPath> trait_bounds,
-            ::HIR::TypeRef default_type
+            ::HIR::TypeRef defaultType
         );
     };
 
@@ -769,7 +769,7 @@ namespace HIR {
 
         const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const;
 
-        const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& exp_ty) const;
+        const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& expTy) const;
     };
 
     /// Helper for obtaining the matching target for PathTuple/PathNamed

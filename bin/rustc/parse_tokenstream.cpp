@@ -114,7 +114,7 @@ ProtoSpan TokenStream::start_span() const {
     return ProtoSpan{p.span, p.filename, p.line, p.ofs};
 }
 
-Span TokenStream::end_span(ProtoSpan ps) const {
+Span TokenStream::endSpan(ProtoSpan ps) const {
     auto p = this->getPosition();
     if (ps.span && p.span) {
         if (ps.span == p.span) {
@@ -175,7 +175,7 @@ SavedParseState::~SavedParseState() {
 
 ::std::ostream& operator<<(::std::ostream& os, const ParseState& ps) {
     os << "ParseState {";
-    if (ps.disallow_struct_literal) {
+    if (ps.disallowStructLiteral) {
         os << " disallow_struct_literal";
     }
     if (ps.no_expand_macros) {

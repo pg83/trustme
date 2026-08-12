@@ -53,7 +53,7 @@ const ::HIR::TypeData* ::MIR::TypeResolve::get_static_type(::HIR::TypeRef& tmp, 
     MIR_ASSERT(*this, v.as_Static(), "LValue::Static is null? - " << path << " : " << v.tag_str());
     if (ms.has_types()) {
         tmp = ms.monomorph_type(sp, v.as_Static()->mType);
-        mResolve.expand_associated_types(this->sp, tmp);
+        mResolve.expandAssociatedTypes(this->sp, tmp);
         return tmp;
     } else {
         return v.as_Static()->mType;
@@ -220,7 +220,7 @@ const ::HIR::TypeData* MIR::TypeResolve::get_param_type(::HIR::TypeRef& tmp, con
                 const auto& ty = (*ve)->mType;
                 if (monomorphise_type_needed(ty)) {
                     auto rv = p.monomorph_type(this->sp, ty);
-                    mResolve.expand_associated_types(this->sp, rv);
+                    mResolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 } else {
                     return ty;
@@ -278,7 +278,7 @@ const ::HIR::TypeData* MIR::TypeResolve::get_param_type(::HIR::TypeRef& tmp, con
                     HIR::TypeRef rv;
                     if (monomorphise_type_needed(ty)) {
                         rv = p.monomorph_type(this->sp, ty);
-                        mResolve.expand_associated_types(this->sp, rv);
+                        mResolve.expandAssociatedTypes(this->sp, rv);
                     } else {
                         rv = ty;
                     }
@@ -289,7 +289,7 @@ const ::HIR::TypeData* MIR::TypeResolve::get_param_type(::HIR::TypeRef& tmp, con
                     HIR::TypeRef rv;
                     if (monomorphise_type_needed(ty)) {
                         rv = p.monomorph_type(this->sp, ty);
-                        mResolve.expand_associated_types(this->sp, rv);
+                        mResolve.expandAssociatedTypes(this->sp, rv);
                     } else {
                         rv = ty;
                     }
@@ -297,7 +297,7 @@ const ::HIR::TypeData* MIR::TypeResolve::get_param_type(::HIR::TypeRef& tmp, con
                 }
                 TU_ARMA(Function, ve) {
                     auto rv = crate.types.function((::HIR::TypeData::Data_NamedFunction{e->clone(), ve}).decay(crate.types, this->sp));
-                    mResolve.expand_associated_types(this->sp, rv);
+                    mResolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 }
                 TU_ARMA(EnumValue, ve) {
@@ -305,7 +305,7 @@ const ::HIR::TypeData* MIR::TypeResolve::get_param_type(::HIR::TypeRef& tmp, con
                 }
                 TU_ARMA(EnumConstructor, ve) {
                     auto rv = crate.types.function((::HIR::TypeData::Data_NamedFunction{e->clone(), ::HIR::TypeDataNamedFunctionTy::make_EnumConstructor({ve.e, ve.v})}).decay(crate.types, this->sp));
-                    mResolve.expand_associated_types(this->sp, rv);
+                    mResolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 }
                 TU_ARMA(StructConstant, ve) {
@@ -313,7 +313,7 @@ const ::HIR::TypeData* MIR::TypeResolve::get_param_type(::HIR::TypeRef& tmp, con
                 }
                 TU_ARMA(StructConstructor, ve) {
                     auto rv = crate.types.function((::HIR::TypeData::Data_NamedFunction{e->clone(), ve.s}).decay(crate.types, this->sp));
-                    mResolve.expand_associated_types(this->sp, rv);
+                    mResolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 }
         }
@@ -332,7 +332,7 @@ const ::HIR::TypeData* ::MIR::TypeResolve::is_type_owned_box(const ::HIR::TypeDa
 }
 
 size_t MIR::TypeResolve::intrinsic_offset_of(const ::HIR::TypeData* ty, const ::std::vector<MIR::Param>& values) const {
-    const auto* cur_ty = ty;
+    const auto* curTy = ty;
     size_t baseOfs = 0;
     for (size_t i = 0; i < values.size(); i++) {
         MIR_ASSERT(*this, values[i].is_Constant(), "Arguments to `offset_of` must be constants");
@@ -354,7 +354,7 @@ size_t MIR::TypeResolve::intrinsic_offset_of(const ::HIR::TypeData* ty, const ::
                 if (end != field_name.c_str() && *end == '\0') {
                     MIR_ASSERT(*this, numeric_idx <= SIZE_MAX, "Invalid tuple field index " << field_name);
                     idx = static_cast<size_t>(numeric_idx);
-                } else if (const auto* ty_path = cur_ty->opt_Path()) {
+                } else if (const auto* ty_path = curTy->opt_Path()) {
                     if (const auto* bep = ty_path->binding.opt_Struct()) {
                         const auto& str = **bep;
                     TU_MATCH_HDRA((str.mData), {)
@@ -364,10 +364,10 @@ size_t MIR::TypeResolve::intrinsic_offset_of(const ::HIR::TypeData* ty, const ::
                                 }) - fields.begin();
                             }
                             TU_ARMA(Tuple, fields) {
-                                MIR_BUG(*this, "Named field on tuple struct: " << cur_ty << " ." << field_name);
+                                MIR_BUG(*this, "Named field on tuple struct: " << curTy << " ." << field_name);
                             }
                             TU_ARMA(Unit, _) {
-                                MIR_BUG(*this, "Empty struct: " << cur_ty << " ." << field_name);
+                                MIR_BUG(*this, "Empty struct: " << curTy << " ." << field_name);
                             }
                     }
                     } else if (const auto* bep = ty_path->binding.opt_Union()) {
@@ -378,7 +378,7 @@ size_t MIR::TypeResolve::intrinsic_offset_of(const ::HIR::TypeData* ty, const ::
                         }) - fields.begin();
                     } else if (const auto* bep = ty_path->binding.opt_Enum()) {
                         const auto& enm = **bep;
-                        MIR_ASSERT(*this, enm.mData.is_Data(), "Non-Data enum: " << cur_ty << " ." << field_name);
+                        MIR_ASSERT(*this, enm.mData.is_Data(), "Non-Data enum: " << curTy << " ." << field_name);
                         const auto& fields = enm.mData.as_Data();
                         idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
                             return x.name == field_name;
@@ -391,12 +391,12 @@ size_t MIR::TypeResolve::intrinsic_offset_of(const ::HIR::TypeData* ty, const ::
                 }
             }
         }
-        auto* repr = TargetGetTypeRepr(this->sp, mResolve, cur_ty);
+        auto* repr = TargetGetTypeRepr(this->sp, mResolve, curTy);
         if(!repr) {
-            MIR_BUG(*this, "Calling `offset_of!` on type with non-defined repr: " << cur_ty);
+            MIR_BUG(*this, "Calling `offset_of!` on type with non-defined repr: " << curTy);
         }
-        MIR_ASSERT(*this, idx < repr->fields.size(), "Field index " << idx << " out of range for " << cur_ty);
-        cur_ty = repr->fields[idx].ty;
+        MIR_ASSERT(*this, idx < repr->fields.size(), "Field index " << idx << " out of range for " << curTy);
+        curTy = repr->fields[idx].ty;
         baseOfs += repr->fields[idx].offset;
     }
     return baseOfs;
@@ -523,7 +523,7 @@ namespace {
             }
         }
 
-        void dump_debug(const char* suffix, unsigned i, const ::std::vector<size_t>& block_offsets) {
+        void dumpDebug(const char* suffix, unsigned i, const ::std::vector<size_t>& block_offsets) {
             ::std::string name = FMT(suffix << "$" << i);
             while (name.size() < 3 + 1 + 3) {
                 name += " ";
@@ -554,7 +554,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(::MIR::TypeResolve& state, cons
 // - an asignment of the value
 // - a use-by-move
 
-::MIR::ValueLifetimes MIRHelperGetLifetimes(::MIR::TypeResolve& state, const ::MIR::Function& fcn, bool dump_debug, const ::std::vector<bool>* mask /*=nullptr*/) {
+::MIR::ValueLifetimes MIRHelperGetLifetimes(::MIR::TypeResolve& state, const ::MIR::Function& fcn, bool dumpDebug, const ::std::vector<bool>* mask /*=nullptr*/) {
     TRACE_FUNCTION_F(state);
 
     size_t statement_count = 0;
@@ -631,9 +631,9 @@ void MIRHelperGetLifetimesDetermineValueLifetime(::MIR::TypeResolve& state, cons
     }
 
     // Dump out variable lifetimes.
-    if (dump_debug) {
+    if (dumpDebug) {
         for (size_t i = 0; i < slot_lifetimes.size(); i++) {
-            slot_lifetimes[i].dump_debug("_", i, block_offsets);
+            slot_lifetimes[i].dumpDebug("_", i, block_offsets);
         }
     }
 
@@ -981,7 +981,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     for (size_t i = 0; i < te.targets.size(); i++) {
                         statesToDo.push_back(::std::make_pair(te.targets[i], state.clone()));
                     }
-                    statesToDo.push_back(::std::make_pair(te.def_target, mv$(state)));
+                    statesToDo.push_back(::std::make_pair(te.defTarget, mv$(state)));
                 }
                 TU_ARMA(Drop, te) {
                     if (te.slot == mLv) {
@@ -1086,7 +1086,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
 
 #else
 
-::MIR::ValueLifetimes MIRHelperGetLifetimes(::MIR::TypeResolve& state, const ::MIR::Function& fcn, bool dump_debug) {
+::MIR::ValueLifetimes MIRHelperGetLifetimes(::MIR::TypeResolve& state, const ::MIR::Function& fcn, bool dumpDebug) {
     TRACE_FUNCTION_F(state);
 
     // New algorithm notes:
@@ -1137,7 +1137,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
         unsigned int index = 0;
         ::std::vector<unsigned int> blockPath;
         ::std::vector<unsigned int> blockChangeIdx;
-        unsigned int cur_change_idx = 0;
+        unsigned int curChangeIdx = 0;
 
         // if read, update. If set, save and update
         ::std::vector<ProtoLifetime> tmp_ends;
@@ -1198,9 +1198,9 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 if (lft.is_borrowed()) {
                     return false;
                 }
-                auto end_idx = block_offsets.at(val_state.blockPath.at(lft.end.path_index)) + lft.end.stmt_idx;
+                auto endIdx = block_offsets.at(val_state.blockPath.at(lft.end.path_index)) + lft.end.stmt_idx;
 
-                auto it = ::std::find(seen.begin(), seen.end(), end_idx);
+                auto it = ::std::find(seen.begin(), seen.end(), endIdx);
                 return (it == seen.end());
             };
             for (size_t i = 0; i < val_state.tmp_ends.size(); i++) {
@@ -1226,11 +1226,11 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 if (lft.end == Position{~0u, ~0u}) {
                     return false;
                 }
-                auto end_idx = block_offsets.at(val_state.blockPath.at(lft.end.path_index)) + lft.end.stmt_idx;
+                auto endIdx = block_offsets.at(val_state.blockPath.at(lft.end.path_index)) + lft.end.stmt_idx;
 
-                auto it = ::std::find(seen.begin(), seen.end(), end_idx);
+                auto it = ::std::find(seen.begin(), seen.end(), endIdx);
                 if (it == seen.end()) {
-                    seen.push_back(end_idx);
+                    seen.push_back(endIdx);
                     return true;
                 } else {
                     return false;
@@ -1280,7 +1280,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             }
 
             // Fill lifetime map for this temporary in the indicated range
-            bool did_set = false;
+            bool didSet = false;
             unsigned int j = start.stmt_idx;
             unsigned int i = start.path_index;
             while (i <= end.path_index && i < val_state.blockPath.size()) {
@@ -1293,7 +1293,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 auto idx = blockBase + j;
                 if (!lft->stmt_bitmap.at(idx)) {
                     lft->stmt_bitmap[idx] = true;
-                    did_set = true;
+                    didSet = true;
                 }
 
                 if (i == end.path_index && j == (end.stmt_idx != ~0u ? end.stmt_idx : bb.statements.size())) {
@@ -1310,9 +1310,9 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             }
 
             // - If the above set a new bit, increment `val_state.cur_change_idx`
-            if (did_set) {
+            if (didSet) {
                 DEBUG("[add_lifetime] " << lv << " (" << start.path_index << "," << start.stmt_idx << ") -- (" << end.path_index << "," << end.stmt_idx << ") - New information");
-                val_state.cur_change_idx += 1;
+                val_state.curChangeIdx += 1;
             }
         };
         auto addLifetime = [&](const ::MIR::LValue& lv, const Position& start, const Position& end) {
@@ -1385,18 +1385,18 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             auto it = ::std::find(val_state.blockPath.rbegin(), val_state.blockPath.rend(), bbIdx);
             if (it != val_state.blockPath.rend()) {
                 auto idx = &*it - &val_state.blockPath.front();
-                if (val_state.blockChangeIdx[idx] == val_state.cur_change_idx) {
+                if (val_state.blockChangeIdx[idx] == val_state.curChangeIdx) {
                     DEBUG(state << " " << val_state.index << " Loop and no change");
                     continue;
                 } else {
-                    assert(val_state.blockChangeIdx[idx] < val_state.cur_change_idx);
-                    DEBUG(state << " " << val_state.index << " --- Loop, " << val_state.cur_change_idx - val_state.blockChangeIdx[idx] << " changes");
+                    assert(val_state.blockChangeIdx[idx] < val_state.curChangeIdx);
+                    DEBUG(state << " " << val_state.index << " --- Loop, " << val_state.curChangeIdx - val_state.blockChangeIdx[idx] << " changes");
                 }
             } else {
                 DEBUG(state << " " << val_state.index << " ---");
             }
             val_state.blockPath.push_back(bbIdx);
-            val_state.blockChangeIdx.push_back(val_state.cur_change_idx);
+            val_state.blockChangeIdx.push_back(val_state.curChangeIdx);
         }
 
         Position cur_pos;
@@ -1519,12 +1519,12 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
     }
 
     // Dump out variable lifetimes.
-    if (dump_debug) {
+    if (dumpDebug) {
         for (unsigned int i = 0; i < temporary_lifetimes.size(); i++) {
-            temporary_lifetimes[i].dump_debug("tmp", i, block_offsets);
+            temporary_lifetimes[i].dumpDebug("tmp", i, block_offsets);
         }
         for (unsigned int i = 0; i < variable_lifetimes.size(); i++) {
-            variable_lifetimes[i].dump_debug("var", i, block_offsets);
+            variable_lifetimes[i].dumpDebug("var", i, block_offsets);
         }
     }
 

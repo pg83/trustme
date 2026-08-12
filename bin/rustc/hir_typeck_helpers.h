@@ -131,8 +131,8 @@ public:
     const ::HIR::ConstGeneric& get_value(unsigned idx) const;
 
     void checkForLoops();
-    void expand_ivars(::HIR::TypeRef& type);
-    void expand_ivars_params(::HIR::PathParams& params);
+    void expandIvars(::HIR::TypeRef& type);
+    void expandIvarsParams(::HIR::PathParams& params);
 
     // Helpers
     bool pathparams_contain_ivars(const ::HIR::PathParams& pps, bool only_unbound) const;
@@ -231,11 +231,11 @@ public:
     bool has_associated_type(const ::HIR::TypeData* ty) const;
 
     /// Expand any located associated types in the input, operating in-place and returning the result
-    ::HIR::TypeRef expand_associated_types(const Span& sp, ::HIR::TypeRef input) const;
+    ::HIR::TypeRef expandAssociatedTypes(const Span& sp, ::HIR::TypeRef input) const;
 
-    const ::HIR::TypeData* expand_associated_types(const Span& sp, const ::HIR::TypeData* input, ::HIR::TypeRef& tmp) const;
+    const ::HIR::TypeData* expandAssociatedTypes(const Span& sp, const ::HIR::TypeData* input, ::HIR::TypeRef& tmp) const;
 
-    void expand_associated_types_params(const Span& sp, ::HIR::PathParams& params) const;
+    void expandAssociatedTypesParams(const Span& sp, ::HIR::PathParams& params) const;
 
     typedef ::std::function<bool(HIR::Compare cmp, const ::HIR::TypeData*, const ::HIR::GenericPath& trait_path, const CachedBound& info)> t_cb_bound;
     bool iterate_bounds_traits(const Span& sp, const HIR::TypeData* type, const HIR::SimplePath& trait, t_cb_bound cb) const;
@@ -309,7 +309,7 @@ private:
         const ::HIR::PathParams& impl_trait_args,
         const ::HIR::TypeData* impl_ty,
         /*Out->*/ HIR::PathParams& out_impl_params,
-        bool evaluate_bounds = true
+        bool evaluateBounds = true
     ) const;
 
 public:
@@ -386,16 +386,16 @@ public:
 
     // If `new_type_callback` is populated, it will be called with the actual/possible dst_type
     // If `infer_callback` is populated, it will be called when either side is an ivar
-    ::HIR::Compare canUnsize(const Span& sp, const ::HIR::TypeData* dst_ty, const ::HIR::TypeData* src_ty, ::std::function<void(::HIR::TypeRef new_dst)> new_type_callback) const {
-        return canUnsize(sp, dst_ty, src_ty, &new_type_callback);
+    ::HIR::Compare canUnsize(const Span& sp, const ::HIR::TypeData* dstTy, const ::HIR::TypeData* src_ty, ::std::function<void(::HIR::TypeRef new_dst)> new_type_callback) const {
+        return canUnsize(sp, dstTy, src_ty, &new_type_callback);
     }
 
-    ::HIR::Compare canUnsize(const Span& sp, const ::HIR::TypeData* dst_ty, const ::HIR::TypeData* src_ty, ::std::function<void(::HIR::TypeRef new_dst)>* new_type_callback, ::std::function<void(const ::HIR::TypeData* dst, const ::HIR::TypeData* src)>* infer_callback = nullptr) const;
+    ::HIR::Compare canUnsize(const Span& sp, const ::HIR::TypeData* dstTy, const ::HIR::TypeData* src_ty, ::std::function<void(::HIR::TypeRef new_dst)>* new_type_callback, ::std::function<void(const ::HIR::TypeData* dst, const ::HIR::TypeData* src)>* infer_callback = nullptr) const;
 
     const ::HIR::TypeData* type_is_owned_box(const Span& sp, const ::HIR::TypeData* ty) const;
 
 private:
-    void expand_associated_types_inplace(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const;
+    void expandAssociatedTypesInplace(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const;
     bool expandAssociatedTypesInplaceUfcsInherent(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const;
     void expandAssociatedTypesInplaceUfcsKnown(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const;
 };

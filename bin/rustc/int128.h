@@ -35,7 +35,7 @@ public:
         return lo;
     }
 
-    uint64_t encode_float(int bits, int zero_exp) const;
+    uint64_t encodeFloat(int bits, int zero_exp) const;
 
     double to_double() const;
 
@@ -219,7 +219,7 @@ private:
     static bool mul128_o(U128 a, U128 b, U128* o);
 
     // Long division
-    static bool div128_o(U128 a, U128 b, U128* q, U128* r);
+    static bool div128O(U128 a, U128 b, U128* q, U128* r);
 };
 
 class S128 {

@@ -330,16 +330,16 @@ namespace {
             visit_type_inner(ty);
         }
 
-        void visit_type_inner(::HIR::TypeRef& ty, bool do_bind = true) {
+        void visit_type_inner(::HIR::TypeRef& ty, bool doBind = true) {
             //TRACE_FUNCTION_F(ty);
             static Span sp;
             auto data = ty->cloneData();
-            bool data_visited = false;
+            bool dataVisited = false;
 
             if (auto* e = data.opt_Path()) {
                 TU_MATCH_HDRA( (e->path.mData), {)
                 TU_ARMA(Generic, pe) {
-                        if (!do_bind) {
+                        if (!doBind) {
                             break;
                         }
                         const auto& item = *reinterpret_cast<const ::HIR::TypeItem*>(get_type_pointer(sp, crate, pe.mPath, Target::TypeItem));
@@ -433,7 +433,7 @@ namespace {
                     else if (fcnPtr) {
                         // Visit inner first, to handle nested
                         visit_type_data(data);
-                        data_visited = true;
+                        dataVisited = true;
 
                         size_t idx = fcnPtr->mParams.types.size();
                         auto name = RcString::new_interned(FMT("erased$" << idx));
@@ -485,7 +485,7 @@ namespace {
                 DEBUG("- " << ty);
             }
 
-            if (!data_visited) {
+            if (!dataVisited) {
                 visit_type_data(data);
             }
             ty = crate.types.intern(mv$(data));
@@ -815,7 +815,7 @@ namespace {
                 Enumerate(HIR::TypeInterner& types, HIR::TypeRef ty_self)
                     : types(types), ty_self(ty_self) {}
 
-                void enum_supertraits_in(const ::HIR::Trait& tr, ::HIR::TraitPath path) {
+                void enumSupertraitsIn(const ::HIR::Trait& tr, ::HIR::TraitPath path) {
                     TRACE_FUNCTION_F(path);
                     tp_stack.push_back(&path);
                     auto& params = path.mPath.mParams;
@@ -848,7 +848,7 @@ namespace {
                     } else {
                         // Recurse into parent traits
                         for (const auto& pt : tr.parentTraits) {
-                            enum_supertraits_in(*pt.traitPtr, monomorph_tp(pt));
+                            enumSupertraitsIn(*pt.traitPtr, monomorph_tp(pt));
                         }
                         // - Bound parent traits
                         for (const auto& b : tr.mParams.bounds) {
@@ -864,7 +864,7 @@ namespace {
                                 continue;
                             }
 
-                            enum_supertraits_in(*pt.traitPtr, monomorph_tp(pt));
+                            enumSupertraitsIn(*pt.traitPtr, monomorph_tp(pt));
                         }
                     }
 
@@ -942,7 +942,7 @@ namespace {
 
             Enumerate e{crate.types, ty_self};
             for (const auto& pt : tr.parentTraits) {
-                e.enum_supertraits_in(*pt.traitPtr, pt.clone());
+                e.enumSupertraitsIn(*pt.traitPtr, pt.clone());
             }
             for (const auto& b : tr.mParams.bounds) {
                 if (!b.is_TraitBound()) {
@@ -960,13 +960,13 @@ namespace {
                     continue;
                 }
 
-                e.enum_supertraits_in(*be.trait.traitPtr, be.trait.clone());
+                e.enumSupertraitsIn(*be.trait.traitPtr, be.trait.clone());
             }
 
             ::std::sort(e.supertraits.begin(), e.supertraits.end());
             DEBUG("supertraits = " << e.supertraits);
             if (e.supertraits.size() > 0) {
-                bool dedeup_done = false;
+                bool dedeupDone = false;
                 auto prev = e.supertraits.begin();
                 for (auto it = e.supertraits.begin() + 1; it != e.supertraits.end();) {
                     if (prev->mPath == it->mPath) {
@@ -987,13 +987,13 @@ namespace {
                         }
                         DEBUG("= " << *prev);
                         it = e.supertraits.erase(it);
-                        dedeup_done = true;
+                        dedeupDone = true;
                     } else {
                         ++it;
                         ++prev;
                     }
                 }
-                if (dedeup_done) {
+                if (dedeupDone) {
                     DEBUG("supertraits dd = " << e.supertraits);
                 }
             }
@@ -1027,7 +1027,7 @@ namespace {
             visit_type_inner(ty);
         }
 
-        void visit_type_inner(::HIR::TypeRef& ty, bool do_bind = true) {
+        void visit_type_inner(::HIR::TypeRef& ty, bool doBind = true) {
             //TRACE_FUNCTION_F(ty);
             static Span sp;
 
@@ -1385,20 +1385,20 @@ std::vector<HIR::TraitPath> ConvertHIRExpandAliasesGetTraitExpansion(const Span&
     if (!rv.empty()) {
         if (!path.traitBounds.empty() || !path.typeBounds.empty()) {
             struct H {
-                static bool containsTrait(const Span& sp, const HIR::Crate& crate, const HIR::GenericPath& path, const HIR::GenericPath& des_path) {
-                    if (path.mPath == des_path.mPath) {
+                static bool containsTrait(const Span& sp, const HIR::Crate& crate, const HIR::GenericPath& path, const HIR::GenericPath& desPath) {
+                    if (path.mPath == desPath.mPath) {
                         return true;
                     }
                     const auto& ti = crate.get_typeitem_by_path(sp, path.mPath);
                     if (const auto* t = ti.opt_Trait()) {
                         for (const auto& pt : t->parentTraits) {
-                            if (containsTrait(sp, crate, pt.mPath, des_path)) {
+                            if (containsTrait(sp, crate, pt.mPath, desPath)) {
                                 return true;
                             }
                         }
                     } else if (const auto* t = ti.opt_TraitAlias()) {
                         for (const auto& pt : t->traits) {
-                            if (containsTrait(sp, crate, pt.mPath, des_path)) {
+                            if (containsTrait(sp, crate, pt.mPath, desPath)) {
                                 return true;
                             }
                         }
@@ -1408,13 +1408,13 @@ std::vector<HIR::TraitPath> ConvertHIRExpandAliasesGetTraitExpansion(const Span&
                     return false;
                 }
 
-                static HIR::TraitPath& find_entry(const Span& sp, const HIR::Crate& crate, const HIR::GenericPath& des_path, ::std::vector<::HIR::TraitPath>& rv) {
+                static HIR::TraitPath& find_entry(const Span& sp, const HIR::Crate& crate, const HIR::GenericPath& desPath, ::std::vector<::HIR::TraitPath>& rv) {
                     for (auto& p : rv) {
-                        if (containsTrait(sp, crate, p.mPath, des_path)) {
+                        if (containsTrait(sp, crate, p.mPath, desPath)) {
                             return p;
                         }
                     }
-                    BUG(sp, "Unable to find a trait in expansion list for " << des_path);
+                    BUG(sp, "Unable to find a trait in expansion list for " << desPath);
                 }
             };
 
@@ -1445,7 +1445,7 @@ public:
 
     HIR::TypeInterner& interner() const { return crate.types; }
 
-    void expand_trait_list(const Span& sp, ::std::vector<HIR::TraitPath>& list) {
+    void expandTraitList(const Span& sp, ::std::vector<HIR::TraitPath>& list) {
         for (auto it = list.begin(); it != list.end(); ++it) {
             auto n = ConvertHIRExpandAliasesGetTraitExpansion(sp, crate, *it, inExpr);
             if (!n.empty()) {
@@ -1462,7 +1462,7 @@ public:
         if (ty->is_ErasedType() || ty->is_TraitObject()) {
             auto data = ty->cloneData();
             if (auto* e = data.opt_ErasedType()) {
-                expand_trait_list(sp, e->traits);
+                expandTraitList(sp, e->traits);
             } else if (auto* e = data.opt_TraitObject(); e->mTrait.mPath != HIR::SimplePath()) {
                 auto n = ConvertHIRExpandAliasesGetTraitExpansion(sp, crate, e->mTrait, inExpr);
                 if (n.size() > 0) {
@@ -1507,14 +1507,14 @@ public:
         ASSERT_BUG(sp, crate.get_typeitem_by_path(sp, tp.mPath.mPath).is_Trait(), "Bad trait path - " << tp.mPath << " : " << crate.get_typeitem_by_path(sp, tp.mPath.mPath).tag_str());
         // 2. Handle AtyBounds
         for (auto& tb : tp.traitBounds) {
-            expand_trait_list(sp, tb.second.traits);
+            expandTraitList(sp, tb.second.traits);
         }
 
         // Finally. Recurse
         ::HIR::Visitor::visit_trait_path(tp);
     }
 
-    ::HIR::Path expand_alias_path(const Span& sp, const ::HIR::Path& path) {
+    ::HIR::Path expandAliasPath(const Span& sp, const ::HIR::Path& path) {
         const unsigned int MAX_RECURSIVE_TYPE_EXPANSIONS = 100;
 
         // If the path is already generic and points at an enum variant, skip
@@ -1667,7 +1667,7 @@ public:
         default:
             break;
             TU_ARMA(PathValue, e) {
-                auto new_path = expand_alias_path(sp, e.path);
+                auto new_path = expandAliasPath(sp, e.path);
                 if (new_path != ::HIR::GenericPath()) {
                     DEBUG("Replacing " << e.path << " with " << new_path);
                     e.path = mv$(new_path);
@@ -1675,7 +1675,7 @@ public:
                 e.binding = visitPatternPathBinding(sp, e.path);
             }
             TU_ARMA(PathTuple, e) {
-                auto new_path = expand_alias_path(sp, e.path);
+                auto new_path = expandAliasPath(sp, e.path);
                 if (new_path != ::HIR::GenericPath()) {
                     DEBUG("Replacing " << e.path << " with " << new_path);
                     e.path = mv$(new_path);
@@ -1683,7 +1683,7 @@ public:
                 e.binding = visitPatternPathBinding(sp, e.path);
             }
             TU_ARMA(PathNamed, e) {
-                auto new_path = expand_alias_path(sp, e.path);
+                auto new_path = expandAliasPath(sp, e.path);
                 if (new_path != ::HIR::GenericPath()) {
                     DEBUG("Replacing " << e.path << " with " << new_path);
                     e.path = mv$(new_path);
@@ -1760,19 +1760,19 @@ public:
 
     void visit_trait_alias(::HIR::ItemPath p, ::HIR::TraitAlias& item) override {
         //Span    sp(p);
-        expand_trait_list(Span(), item.traits);
+        expandTraitList(Span(), item.traits);
         ::HIR::Visitor::visit_trait_alias(p, item);
     }
 
     void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
         //Span    sp(p);
-        expand_trait_list(Span(), item.parentTraits);
+        expandTraitList(Span(), item.parentTraits);
         ::HIR::Visitor::visit_trait(p, item);
     }
 
     void visit_associatedtype(::HIR::ItemPath p, ::HIR::AssociatedType& item) override {
         //Span    sp(p);
-        expand_trait_list(Span(), item.traitBounds);
+        expandTraitList(Span(), item.traitBounds);
         ::HIR::Visitor::visit_associatedtype(p, item);
     }
 
@@ -2058,7 +2058,7 @@ namespace {
             std::vector<HIR::LifetimeRef> lifetimes;
             unsigned int nested_hrtb_depth = 0;
             bool only_created = false;
-            unsigned int created_level = 0;
+            unsigned int createdLevel = 0;
             unsigned int first_created_index = 0;
 
             ExplicitInputLifetimeCollector(HIR::TypeInterner& types)
@@ -2069,7 +2069,7 @@ namespace {
             ExplicitInputLifetimeCollector(HIR::TypeInterner& types, unsigned int level, unsigned int first_index)
                 : HIR::Visitor(nullptr, types)
                 , only_created(true)
-                , created_level(level)
+                , createdLevel(level)
                 , first_created_index(first_index)
             {
             }
@@ -2084,7 +2084,7 @@ namespace {
                     return;
                 }
                 if (only_created && (!lft.is_param()
-                        || (lft.binding >> 8) != created_level
+                        || (lft.binding >> 8) != createdLevel
                         || (lft.binding & 0xFF) < first_created_index)) {
                     return;
                 }
@@ -2438,10 +2438,10 @@ namespace {
                     parameter_lifetimes.visit_type(t);
                     const auto first_elided_lifetime_idx = e->hrls.mLifetimes.size();
                     this->visit_type(t);
-                    ExplicitInputLifetimeCollector created_lifetimes(
+                    ExplicitInputLifetimeCollector createdLifetimes(
                         crate.types, HIR::GENERICHrtb, first_elided_lifetime_idx);
-                    created_lifetimes.visit_type(t);
-                    parameter_lifetimes.merge(created_lifetimes);
+                    createdLifetimes.visit_type(t);
+                    parameter_lifetimes.merge(createdLifetimes);
                     input_lifetimes.addParameter(parameter_lifetimes);
                 }
                 createElided = false;
@@ -2795,8 +2795,8 @@ namespace {
                             // the pre-elision tree (and can reintroduce `'#omitted` from a
                             // parenthesised Fn bound).  Materialise the current copy before
                             // collecting the lifetimes captured by this opaque type.
-                            auto elided_ty = crate.types.intern(data.cloneData());
-                            v.visit_type(elided_ty);
+                            auto elidedTy = crate.types.intern(data.cloneData());
+                            v.visit_type(elidedTy);
                             // TODO: In 2024 edition, these rules change
                             // - Before: generics/lifetimes not mentioned in the `impl Foo` are omitted
                             // - After: All included
@@ -2879,14 +2879,14 @@ namespace {
                 tp.lifetimeElision = false;
                 currentLifetime.push_back(nullptr);
                 const auto first_elided_lifetime_idx = tp.hrtbs->mLifetimes.size();
-                std::vector<std::vector<HIR::LifetimeRef>> explicit_input_lifetimes;
+                std::vector<std::vector<HIR::LifetimeRef>> explicitInputLifetimes;
                 ASSERT_BUG(sp, tp.mPath.mParams.types.size() == 1
                     && tp.mPath.mParams.types.front()->is_Tuple(),
                     "Parenthesised Fn arguments aren't a tuple: " << tp.mPath);
                 for (auto input : *tp.mPath.mParams.types.front()->opt_Tuple()) {
                     ExplicitInputLifetimeCollector parameter_lifetimes(crate.types);
                     parameter_lifetimes.visit_type(input);
-                    explicit_input_lifetimes.push_back(mv$(parameter_lifetimes.lifetimes));
+                    explicitInputLifetimes.push_back(mv$(parameter_lifetimes.lifetimes));
                 }
 
                 // Visit the trait args (as inputs)
@@ -2900,15 +2900,15 @@ namespace {
 
                 InputLifetimeSelection input_lifetimes;
                 auto& inputs = *tp.mPath.mParams.types.front()->opt_Tuple();
-                ASSERT_BUG(sp, inputs.size() == explicit_input_lifetimes.size(), "Fn argument tuple changed size");
+                ASSERT_BUG(sp, inputs.size() == explicitInputLifetimes.size(), "Fn argument tuple changed size");
                 for (size_t i = 0; i < inputs.size(); i++) {
                     auto input = inputs[i];
                     ExplicitInputLifetimeCollector parameter_lifetimes(crate.types);
-                    parameter_lifetimes.lifetimes = mv$(explicit_input_lifetimes[i]);
-                    ExplicitInputLifetimeCollector created_lifetimes(
+                    parameter_lifetimes.lifetimes = mv$(explicitInputLifetimes[i]);
+                    ExplicitInputLifetimeCollector createdLifetimes(
                         crate.types, HIR::GENERICHrtb, first_elided_lifetime_idx);
-                    created_lifetimes.visit_type(input);
-                    parameter_lifetimes.merge(created_lifetimes);
+                    createdLifetimes.visit_type(input);
+                    parameter_lifetimes.merge(createdLifetimes);
                     input_lifetimes.addParameter(parameter_lifetimes);
                 }
                 HIR::LifetimeRef lft = input_lifetimes.get();
@@ -2941,7 +2941,7 @@ namespace {
                     {
                     }
 
-                    bool enum_supertraits(const Span& sp, const HIR::Trait& tr, const HIR::GenericPath& tr_path, ::std::function<bool(HIR::GenericPath)> cb) {
+                    bool enumSupertraits(const Span& sp, const HIR::Trait& tr, const HIR::GenericPath& tr_path, ::std::function<bool(HIR::GenericPath)> cb) {
                         const HIR::TypeRef self = crate.types.self();
                         MonomorphStatePtr ms(crate.types, self, &tr_path.mParams, nullptr);
 
@@ -2958,7 +2958,7 @@ namespace {
                             for (const auto& pt : tr.parentTraits) {
                                 auto m = ms.monomorph_genericpath(sp, pt.mPath, false);
                                 DEBUG("- " << m);
-                                if (enum_supertraits(sp, crate.get_trait_by_path(sp, m.mPath), m, cb)) {
+                                if (enumSupertraits(sp, crate.get_trait_by_path(sp, m.mPath), m, cb)) {
                                     return true;
                                 }
                                 if (cb(std::move(m))) {
@@ -2980,7 +2980,7 @@ namespace {
 
                                 auto m = ms.monomorph_genericpath(sp, pt.mPath, false);
                                 DEBUG("- " << m);
-                                if (enum_supertraits(sp, crate.get_trait_by_path(sp, m.mPath), m, cb)) {
+                                if (enumSupertraits(sp, crate.get_trait_by_path(sp, m.mPath), m, cb)) {
                                     return true;
                                 }
                                 if (cb(std::move(m))) {
@@ -2995,13 +2995,13 @@ namespace {
                 auto fix_source = [&](HIR::GenericPath& gp, const RcString& name) {
                     //fix_path(gp);
                     DEBUG("[fix_source] >> " << gp);
-                    if (gp.equals_ignoring_regions(tp.mPath)) {
+                    if (gp.equalsIgnoringRegions(tp.mPath)) {
                         gp = tp.mPath.clone();
                         return;
                     }
-                    if (h.enum_supertraits(sp, trait, tp.mPath, [&](HIR::GenericPath m) {
+                    if (h.enumSupertraits(sp, trait, tp.mPath, [&](HIR::GenericPath m) {
                         DEBUG("[fix_source] ?? " << m);
-                        if (m.equals_ignoring_regions(gp)) {
+                        if (m.equalsIgnoringRegions(gp)) {
                             gp = std::move(m);
                             return true;
                         }
@@ -3175,10 +3175,10 @@ namespace {
                 parameter_lifetimes.visit_type(arg.second);
                 const auto first_elided_lifetime_idx = item.mParams.mLifetimes.size();
                 visit_type(arg.second);
-                ExplicitInputLifetimeCollector created_lifetimes(
+                ExplicitInputLifetimeCollector createdLifetimes(
                     crate.types, HIR::GENERICItem, first_elided_lifetime_idx);
-                created_lifetimes.visit_type(arg.second);
-                parameter_lifetimes.merge(created_lifetimes);
+                createdLifetimes.visit_type(arg.second);
+                parameter_lifetimes.merge(createdLifetimes);
 
                 if (i == 0 && item.receiver != HIR::Function::Receiver::Free) {
                     SelfLifetimeCollector self_lifetimes(crate.types, mResolve.selfType);
@@ -3191,19 +3191,19 @@ namespace {
             createElided = false;
 
             // Get output lifetime
-            HIR::LifetimeRef elided_output_lifetime = input_lifetimes.get();
+            HIR::LifetimeRef elidedOutputLifetime = input_lifetimes.get();
             if (item.receiver != HIR::Function::Receiver::Free) {
                 if (item.receiver == HIR::Function::Receiver::Value) {
                     valueSelfType = mResolve.selfType;
                 }
             }
-            if (elided_output_lifetime != HIR::LifetimeRef()) {
-                DEBUG("Single input lifetime - " << elided_output_lifetime);
+            if (elidedOutputLifetime != HIR::LifetimeRef()) {
+                DEBUG("Single input lifetime - " << elidedOutputLifetime);
             }
             // If present, set it (push to the stack)
             assert(currentLifetime.empty());
-            if (elided_output_lifetime != HIR::LifetimeRef()) {
-                currentLifetime.push_back(&elided_output_lifetime);
+            if (elidedOutputLifetime != HIR::LifetimeRef()) {
+                currentLifetime.push_back(&elidedOutputLifetime);
             }
 
             // Visit return type (populates path for `impl Trait` in return position
@@ -3214,7 +3214,7 @@ namespace {
             // - Unset params for the expression
             saved_params.restore();
 
-            if (elided_output_lifetime != HIR::LifetimeRef()) {
+            if (elidedOutputLifetime != HIR::LifetimeRef()) {
                 currentLifetime.pop_back();
             }
             assert(currentLifetime.empty());
@@ -3381,19 +3381,19 @@ namespace {
                         if (impl.traitArgs.types.size() != 1) {
                             ERROR(sp, E0000, "Unexpected number of arguments for CoerceUnsized");
                         }
-                        const auto& dst_ty = impl.traitArgs.types[0];
+                        const auto& dstTy = impl.traitArgs.types[0];
                         // Determine which field is the one that does the coerce
                         if (!te.binding.is_Struct()) {
                             ERROR(sp, E0000, "Cannot implement CoerceUnsized on non-structs");
                         }
-                        if (!dst_ty->is_Path()) {
+                        if (!dstTy->is_Path()) {
                             ERROR(sp, E0000, "Cannot implement CoerceUnsized from non-structs");
                         }
-                        const auto& dst_te = dst_ty->as_Path();
-                        if (!dst_te.binding.is_Struct()) {
+                        const auto& dstTe = dstTy->as_Path();
+                        if (!dstTe.binding.is_Struct()) {
                             ERROR(sp, E0000, "Cannot implement CoerceUnsized from non-structs");
                         }
-                        if (dst_te.binding.as_Struct() != te.binding.as_Struct()) {
+                        if (dstTe.binding.as_Struct() != te.binding.as_Struct()) {
                             ERROR(sp, E0000, "CoerceUnsized can only be implemented between variants of the same struct");
                         }
 
@@ -3405,7 +3405,7 @@ namespace {
                         unsigned int field = ~0u;
                         const auto& str = te.binding.as_Struct();
 
-                        auto monomorph_cb_l = MonomorphStatePtr(crate.types, nullptr, &dst_te.path.mData.as_Generic().mParams, nullptr);
+                        auto monomorph_cb_l = MonomorphStatePtr(crate.types, nullptr, &dstTe.path.mData.as_Generic().mParams, nullptr);
                         auto monomorph_cb_r = MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr);
 
                     TU_MATCH_HDRA( (str->mData), {)
@@ -3566,7 +3566,7 @@ void ConvertHIRMarkings(::HIR::Crate& crate) {
 
 
 namespace resolve_ufcs {
-    void expand_trait_impl_type_defaults(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) {
+    void expandTraitImplTypeDefaults(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) {
         Span sp;
         const auto& trait = crate.get_trait_by_path(sp, trait_path);
         auto ms = MonomorphStatePtr(crate.types, impl.mType, &impl.traitArgs, nullptr);
@@ -3758,7 +3758,7 @@ namespace resolve_ufcs {
             auto _t = this->push_mod_traits(impl.srcModule, this->crate.get_mod_by_path(Span(), impl.srcModule));
             auto _g = mResolve.set_impl_generics(MetadataType::Unknown, impl.mParams);
 
-            expand_trait_impl_type_defaults(crate, trait_path, impl);
+            expandTraitImplTypeDefaults(crate, trait_path, impl);
 
             m_current_type = impl.mType;
             currentTrait = &crate.get_trait_by_path(Span(), trait_path);
@@ -3897,10 +3897,10 @@ namespace resolve_ufcs {
                             if (ent.is_Enum()) {
                                 DEBUG(&node << ": Tagging as an enum");
                                 node.isStruct = false;
-                                auto enum_path = std::move(gp);
-                                auto var_name = enum_path.mPath.pop_component();
-                                auto enum_ty = upper_visitor.crate.types.path(std::move(enum_path), &ent.as_Enum());
-                                p = ::HIR::Path(std::move(enum_ty), std::move(var_name));
+                                auto enumPath = std::move(gp);
+                                auto var_name = enumPath.mPath.pop_component();
+                                auto enumTy = upper_visitor.crate.types.path(std::move(enumPath), &ent.as_Enum());
+                                p = ::HIR::Path(std::move(enumTy), std::move(var_name));
                             }
                         }
                         node.mType = upper_visitor.crate.types.intern(std::move(data));
@@ -3946,7 +3946,7 @@ namespace resolve_ufcs {
                     // Bounds are keyed by the semantic HIR type. Binding
                     // metadata and erased regions can differ depending on
                     // which path was resolved first.
-                    if (e->type == tr || e->type->equals_ignoring_regions(tr)) {
+                    if (e->type == tr || e->type->equalsIgnoringRegions(tr)) {
                         DEBUG(" - Match");
                         if (locate_in_trait_and_set(pc, e->trait.mPath, crate.get_trait_by_path(sp, e->trait.mPath.mPath), pd)) {
                             return true;
@@ -4058,9 +4058,9 @@ namespace resolve_ufcs {
             };
 
             // Search supertraits (recursively)
-            static HIR::GenericParams empty_gp;
+            static HIR::GenericParams emptyGp;
             for (const auto& pt : trait.parentTraits) {
-                auto _ = monomorph_cb.push_hrb(pt.hrtbs ? *pt.hrtbs : empty_gp);
+                auto _ = monomorph_cb.push_hrb(pt.hrtbs ? *pt.hrtbs : emptyGp);
                 const auto& par_trait_path = monomorph_gp_if_needed(pt.mPath);
                 DEBUG("- Check " << par_trait_path);
                 if (locate_in_trait_and_set(pc, par_trait_path, *pt.traitPtr, pd)) {
@@ -4068,7 +4068,7 @@ namespace resolve_ufcs {
                 }
             }
             for (const auto& pt : trait.allParentTraits) {
-                auto _ = monomorph_cb.push_hrb(pt.hrtbs ? *pt.hrtbs : empty_gp);
+                auto _ = monomorph_cb.push_hrb(pt.hrtbs ? *pt.hrtbs : emptyGp);
                 const auto& par_trait_path = monomorph_gp_if_needed(pt.mPath);
                 DEBUG("- Check (all) " << par_trait_path);
                 if (locate_item_in_trait(pc, *pt.traitPtr, pd)) {
@@ -4116,12 +4116,12 @@ namespace resolve_ufcs {
                     // Compare all path params, and set different params to _
                     assert(pp.types.size() == inner_e->trait.mParams.types.size());
                     for (unsigned int i = 0; i < pp.types.size(); i++) {
-                        auto& e_ty = inner_e->trait.mParams.types[i];
+                        auto& eTy = inner_e->trait.mParams.types[i];
                         const auto& this_ty = pp.types[i];
-                        if (e_ty->is_Infer() && e_ty->as_Infer().index == ~0u) {
+                        if (eTy->is_Infer() && eTy->as_Infer().index == ~0u) {
                             // Already _, leave as is
-                        } else if (e_ty != this_ty) {
-                            e_ty = crate.types.infer();
+                        } else if (eTy != this_ty) {
+                            eTy = crate.types.infer();
                         } else {
                             // Equal, good
                         }
@@ -4289,7 +4289,7 @@ namespace resolve_ufcs {
                 if (ty->is_Path()) {
                     stack.push_back(ty);
                 }
-                while (mResolve.expand_associated_types_single(sp, ty)) {
+                while (mResolve.expandAssociatedTypesSingle(sp, ty)) {
                     if (::std::find(stack.begin(), stack.end(), ty) != stack.end()) {
                         ::std::sort(stack.begin(), stack.end());
                         DEBUG("Loop detected, picking " << ty);
@@ -4525,9 +4525,9 @@ namespace resolve_ufcs {
                     this->visitPatternValue(sp, pat, e.val);
                     if (e.val.is_Named() && e.val.as_Named().path.mData.is_Generic() && e.val.as_Named().path.mData.as_Generic().mPath.components().size() > 1) {
                         auto& gp = e.val.as_Named().path.mData.as_Generic();
-                        if (const auto* enm_p = crate.get_typeitem_by_path(sp, gp.mPath, false, true).opt_Enum()) {
-                            unsigned idx = enm_p->find_variant(gp.mPath.components().back());
-                            pat.mData = ::HIR::Pattern::Data::make_PathValue({mv$(gp), ::HIR::Pattern::PathBinding::make_Enum({enm_p, idx})});
+                        if (const auto* enmP = crate.get_typeitem_by_path(sp, gp.mPath, false, true).opt_Enum()) {
+                            unsigned idx = enmP->find_variant(gp.mPath.components().back());
+                            pat.mData = ::HIR::Pattern::Data::make_PathValue({mv$(gp), ::HIR::Pattern::PathBinding::make_Enum({enmP, idx})});
                         }
                     }
                 }
@@ -4687,16 +4687,16 @@ using namespace resolve_ufcs;
 
 void ConvertHIRResolveUFCSOuter(::HIR::Crate& crate) {
     for (auto& impl_group : crate.traitImpls) {
-        auto expand_list = [&](auto& impl_list) {
+        auto expandList = [&](auto& impl_list) {
             for (auto& impl : impl_list) {
-                expand_trait_impl_type_defaults(crate, impl_group.first, *impl);
+                expandTraitImplTypeDefaults(crate, impl_group.first, *impl);
             }
         };
         for (auto& named : impl_group.second.named) {
-            expand_list(named.second);
+            expandList(named.second);
         }
-        expand_list(impl_group.second.non_named);
-        expand_list(impl_group.second.generic);
+        expandList(impl_group.second.non_named);
+        expandList(impl_group.second.generic);
     }
 
     UfcsVisitor exp{crate, false};

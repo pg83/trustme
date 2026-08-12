@@ -214,13 +214,13 @@ namespace {
             auto _ = this->ms.set_item_generics(item.mParams);
 
             if (auto* e = item.mData.opt_Value()) {
-                auto enum_type = ::HIR::Enum::get_repr_type(item.tagRepr);
+                auto enumType = ::HIR::Enum::get_repr_type(item.tagRepr);
 
                 for (auto& var : e->variants) {
                     DEBUG("Enum value " << p << " - " << var.name);
                     if (var.expr) {
                         t_args tmp;
-                        TypecheckCode(ms, tmp, ms.crate.types.primitive(enum_type), var.expr);
+                        TypecheckCode(ms, tmp, ms.crate.types.primitive(enumType), var.expr);
                     }
                 }
             }

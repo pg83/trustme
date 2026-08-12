@@ -28,8 +28,8 @@ void memory_dump(const char* phase) {
             uint64_t v_end = 0;
             char flags_str[5];
             uint64_t file_ofs = 0;
-            int dev_maj = 0;
-            int dev_min = 0;
+            int devMaj = 0;
+            int devMin = 0;
             int inode = 0;
             ::std::string name;
             uint32_t first_chunk;
@@ -44,7 +44,7 @@ void memory_dump(const char* phase) {
             FILE* fp = ::std::fopen("/proc/self/maps", "r");
             while (!feof(fp)) {
                 RangeEnt e;
-                if (fscanf(fp, "%lx-%lx %4s %lx %d:%d %d", &e.v_start, &e.v_end, e.flags_str, &e.file_ofs, &e.dev_maj, &e.dev_min, &e.inode) != 7) {
+                if (fscanf(fp, "%lx-%lx %4s %lx %d:%d %d", &e.v_start, &e.v_end, e.flags_str, &e.file_ofs, &e.devMaj, &e.devMin, &e.inode) != 7) {
                     // Uh-oh
                 }
                 //::std::cout << "e.inode=" << e.inode << "\n";

@@ -4,11 +4,11 @@
 #include <set>
 
 int main() {
-    auto definition_context = Ident::Hygiene::new_scope();
-    auto expansion_context = Ident::Hygiene::new_scope_chained(definition_context);
+    auto definitionContext = Ident::Hygiene::new_scope();
+    auto expansionContext = Ident::Hygiene::new_scope_chained(definitionContext);
 
-    Ident definition(definition_context, RcString::new_interned("name"));
-    Ident expansion(expansion_context, RcString::new_interned("name"));
+    Ident definition(definitionContext, RcString::new_interned("name"));
+    Ident expansion(expansionContext, RcString::new_interned("name"));
 
     const bool ordering_equal = !(definition < expansion) && !(expansion < definition);
     assert((definition == expansion) == ordering_equal);

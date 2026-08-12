@@ -11,7 +11,7 @@ TAGGED_UNION_OUT_OF_LINE_IMPL(
     (Bang, struct {}),
     (Unit, struct {}),
     (Macro, struct { ::std::unique_ptr<::AST::MacroInvocation> inv; }),
-    (Primitive, struct { enum eCoreType core_type; }),
+    (Primitive, struct { enum eCoreType coreType; }),
     (Function, struct { TypeFunction info; }),
     (Tuple, struct { ::std::vector<TypeRef> inner_types; }),
     (Borrow,
@@ -100,7 +100,7 @@ TypeFunction::TypeFunction(AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::
 TypeFunction::~TypeFunction() = default;
 TypeFunction::TypeFunction(TypeFunction&&) = default;
 
-enum eCoreType coretype_fromstring(const char* name) {
+enum eCoreType coretypeFromstring(const char* name) {
     for (unsigned int i = 0; i < sizeof(CORETYPES) / sizeof(CORETYPES[0]); i++) {
         int cmp = strcmp(name, CORETYPES[i].name);
         if (cmp < 0) {
@@ -113,7 +113,7 @@ enum eCoreType coretype_fromstring(const char* name) {
     return CORETYPE_INVAL;
 }
 
-const char* coretype_name(const eCoreType ct) {
+const char* coretypeName(const eCoreType ct) {
     switch (ct) {
         case CORETYPE_INVAL:
             return "INVAL";
@@ -297,12 +297,12 @@ Ordering TypeRef::ord(const TypeRef& x) const {
         return rv;
     }
 
-    TU_MATCH(TypeData, (mData, x.mData), (ent, x_ent), (None, return OrdEqual;), (Macro, throw CompileError::BugCheck("TypeRef::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.core_type, (unsigned)x_ent.core_type);), (Function, return ent.info.ord(x_ent.info);), (Tuple, return ::ord(ent.inner_types, x_ent.inner_types);), (Borrow, rv = ::ord(ent.is_mut, x_ent.is_mut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*x_ent.inner);), (Pointer, rv = ::ord(ent.is_mut, x_ent.is_mut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*x_ent.inner);), (Array, rv = (*ent.inner).ord(*x_ent.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return (*ent.inner).ord(*x_ent.inner);), (Generic, return ::ord(ent.name, x_ent.name);), (Path, return ent->ord(*x_ent);), (TraitObject, return ::ord(ent.traits, x_ent.traits);), (ErasedType, ORD(ent->traits, x_ent->traits); ORD(ent->maybe_traits, x_ent->maybe_traits); ORD(ent->lifetimes, x_ent->lifetimes); ORD(ent->use != 0, x_ent->use != 0); if (ent->use) { ORD(*ent->use, *x_ent->use); } ORD(ent->is_edition_2024_or_later, x_ent->is_edition_2024_or_later); return OrdEqual;))
+    TU_MATCH(TypeData, (mData, x.mData), (ent, x_ent), (None, return OrdEqual;), (Macro, throw CompileError::BugCheck("TypeRef::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.coreType, (unsigned)x_ent.coreType);), (Function, return ent.info.ord(x_ent.info);), (Tuple, return ::ord(ent.inner_types, x_ent.inner_types);), (Borrow, rv = ::ord(ent.is_mut, x_ent.is_mut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*x_ent.inner);), (Pointer, rv = ::ord(ent.is_mut, x_ent.is_mut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*x_ent.inner);), (Array, rv = (*ent.inner).ord(*x_ent.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return (*ent.inner).ord(*x_ent.inner);), (Generic, return ::ord(ent.name, x_ent.name);), (Path, return ent->ord(*x_ent);), (TraitObject, return ::ord(ent.traits, x_ent.traits);), (ErasedType, ORD(ent->traits, x_ent->traits); ORD(ent->maybe_traits, x_ent->maybe_traits); ORD(ent->lifetimes, x_ent->lifetimes); ORD(ent->use != 0, x_ent->use != 0); if (ent->use) { ORD(*ent->use, *x_ent->use); } ORD(ent->is_edition_2024_or_later, x_ent->is_edition_2024_or_later); return OrdEqual;))
     throw ::std::runtime_error(FMT("BUGCHECK - Unhandled TypeRef class '" << mData.tag() << "'"));
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const eCoreType ct) {
-    return os << coretype_name(ct);
+    return os << coretypeName(ct);
 }
 
 void TypeRef::print(::std::ostream& os, bool is_debug /*=false*/) const {
@@ -325,7 +325,7 @@ void TypeRef::print(::std::ostream& os, bool is_debug /*=false*/) const {
             _(Bang, os << "!";)
             _(Macro, os << *ent.inv;)
             _(Unit, os << "()";)
-            _(Primitive, os << ent.core_type;)
+            _(Primitive, os << ent.coreType;)
             TU_ARM(mData, Function, ent) {
                 os << ent.info.hrbs;
                 if (ent.info.mAbi != "") {
