@@ -94,10 +94,10 @@ HIRGenericParams LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsS
         TU_ARMA(None, e) {
             }
             TU_ARMA(Lifetime, e) {
-                rv.bounds.push_back(HIRGenericBound::make_Lifetime({LowerHIRLifetimeRef(e.test), LowerHIRLifetimeRef(e.bound)}));
+                // Lifetimes are erased in HIR
             }
             TU_ARMA(TypeLifetime, e) {
-                rv.bounds.push_back(HIRGenericBound::make_TypeLifetime({LowerHIRType(e.type), LowerHIRLifetimeRef(e.bound)}));
+                // Lifetimes are erased in HIR
             }
             TU_ARMA(IsTrait, e) {
                 auto type = LowerHIRType(e.type);
@@ -1629,16 +1629,9 @@ HIRTrait LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, const ASTAttr
                 auto selfBounds = LowerHIRGenericParams(i.selfBounds, &isSized);
                 for (auto& b : selfBounds.bounds) {
                 TU_MATCH_HDRA( (b), {)
-                TU_ARMA(TypeLifetime, be) {
-                            ASSERT_BUG(item.span, be.type->as_Generic().binding == GENERICSelf, be.type);
-                            lifetimeBound = mv$(be.validFor);
-                        }
-                        TU_ARMA(TraitBound, be) {
+                TU_ARMA(TraitBound, be) {
                             ASSERT_BUG(item.span, be.type->as_Generic().binding == GENERICSelf, be.type);
                             traitBounds.push_back(mv$(be.trait));
-                        }
-                        TU_ARMA(Lifetime, be) {
-                            BUG(item.span, "Unexpected lifetime-lifetime bound on associated type");
                         }
                         TU_ARMA(TypeEquality, be) {
                             BUG(item.span, "Unexpected type equality bound on associated type");

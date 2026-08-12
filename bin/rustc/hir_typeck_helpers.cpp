@@ -3550,27 +3550,6 @@ TU_ARMA(Alias, ee) {
                             candidate->ambiguityBeyondHead = true;
                             result = Certainty::Ambiguous;
                         }
-                    } else if (const auto* lifetime = bound.opt_Lifetime()) {
-                        HIRLifetimeRef test;
-                        HIRLifetimeRef validFor;
-                        if (markerImpl) {
-                            auto ms = MonomorphStatePtr(crate.types, nullptr, &candidate->markerImplParams, nullptr);
-                            test = ms.monomorphLifetime(span(), lifetime->test);
-                            validFor = ms.monomorphLifetime(span(), lifetime->validFor);
-                        } else {
-                            auto ms = candidate->impl.getCbMonomorphTraitimpl(crate.types, span(), {});
-                            test = ms.monomorphLifetime(span(), lifetime->test);
-                            validFor = ms.monomorphLifetime(span(), lifetime->validFor);
-                        }
-
-                        // A higher-ranked placeholder is a fresh lifetime from a
-                        // new universe.  It cannot be required to outlive an
-                        // outer lifetime: accepting `for<'b> 'b: 'a` would let
-                        // the bound variable leak out of its binder.  Ordinary
-                        // region constraints stay deferred to lifetime inference.
-                        if (test.isHrl() && test != validFor) {
-                            return Certainty::NoSolution;
-                        }
                     }
                 }
                 return result;
@@ -6207,11 +6186,7 @@ TU_ARMA(Alias, ee) {
                 // - If a bound fails, then this can't be a valid impl
                 for (const auto& bound : implParamsDef.bounds) {
             TU_MATCH_HDRA( (bound), {)
-            TU_ARMA(Lifetime, be) {
-                }
-                TU_ARMA(TypeLifetime, be) {
-                }
-                TU_ARMA(TraitBound, be) {
+            TU_ARMA(TraitBound, be) {
                     DEBUG("Check bound " << be.type << " : " << be.trait);
                     static const HIRGenericParams emptyParams;
                     auto _ = matcher.pushHrb(be.hrtbs);

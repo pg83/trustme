@@ -2157,25 +2157,7 @@ namespace {
 
             bool boundNeeded(const Span& sp, const HIRGenericBound& b) const {
                 TU_MATCH_HDRA( (b), {)
-                TU_ARMA(Lifetime, e) {
-                        if (e.test.isParam() && !contains(constructorPathParams.mLifetimes, e.test)) {
-                            return false;
-                        }
-                        if (e.validFor.isParam() && !contains(constructorPathParams.mLifetimes, e.validFor)) {
-                            return false;
-                        }
-                        return true;
-                    }
-                    TU_ARMA(TypeLifetime, e) {
-                        if (typeBoundNeeded(sp, e.type) != TypeNeed::Required) {
-                            return false;
-                        }
-                        if (e.validFor.isParam() && !contains(constructorPathParams.mLifetimes, e.validFor)) {
-                            return false;
-                        }
-                        return true;
-                    }
-                    TU_ARMA(TraitBound, e) {
+                TU_ARMA(TraitBound, e) {
                         //if( type_bound_needed(sp, e.type) != TypeNeed::Required )
                         // Allows more complex type bounds
                         // e.g. `ty::Predicate<'tcx>: LowerInto<'tcx, std::option::Option<T>>,` (from 1.54 compiler/rustc_traits/src/chalk/db.rs:54)
@@ -2194,14 +2176,7 @@ namespace {
 
             HIRGenericBound monomorphBound(const Span& sp, const HIRGenericBound& b) const {
                 TU_MATCH_HDRA( (b), {)
-                TU_ARMA(Lifetime, e)
-                    return HIRGenericBound::make_Lifetime({
-                        this->monomorphLifetime(sp, e.test),
-                        this->monomorphLifetime(sp, e.validFor),
-                        });
-                    TU_ARMA(TypeLifetime, e)
-                    return HIRGenericBound::make_TypeLifetime({this->monomorphType(sp, e.type), this->monomorphLifetime(sp, e.validFor)});
-                    TU_ARMA(TraitBound, e) {
+                TU_ARMA(TraitBound, e) {
                         const static HIRGenericParams nullHrtbs;
                         auto _ = this->pushHrb(e.hrtbs ? *e.hrtbs : nullHrtbs);
                         return HIRGenericBound::make_TraitBound({(e.hrtbs ? box$(e.hrtbs->clone()) : nullptr), this->monomorphType(sp, e.type), this->monomorphTraitpath(sp, e.trait, false), e.constness});
@@ -4461,13 +4436,6 @@ public:
         // - Clone the bounds (from both levels)
         auto monomorphBound = [&](const HIRGenericBound& b) -> HIRGenericBound {
                 TU_MATCH_HDRA( (b), {)
-                TU_ARMA(Lifetime, e)
-                    return HIRGenericBound::make_Lifetime({
-                            monomorphCb.monomorphLifetime(sp, e.test),
-                            monomorphCb.monomorphLifetime(sp, e.validFor),
-                            });
-                TU_ARMA(TypeLifetime, e)
-                return HIRGenericBound::make_TypeLifetime({monomorphCb.monomorphType(sp, e.type), monomorphCb.monomorphLifetime(sp, e.validFor)});
                 TU_ARMA(TraitBound, e)
                 if (e.hrtbs) {
                     auto _h = monomorphCb.pushHrb(*e.hrtbs);

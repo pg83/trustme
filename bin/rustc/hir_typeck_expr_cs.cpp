@@ -8720,10 +8720,6 @@ void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams
     TRACE_FUNCTION;
     for (const auto& bound : paramsDef.bounds) {
             TU_MATCH_HDRA( (bound), {)
-            TU_ARMA(Lifetime, be) {
-            }
-            TU_ARMA(TypeLifetime, be) {
-            }
             TU_ARMA(TraitBound, be) {
                 static const HIRGenericParams emptyHrtb;
                 const auto& outerHrtb = be.hrtbs ? *be.hrtbs : emptyHrtb;

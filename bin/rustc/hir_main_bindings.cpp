@@ -1154,10 +1154,6 @@ HIRValueParamDef HirDeserialiser::deserialiseValueparamdef() {
 
 HIRGenericBound HirDeserialiser::deserialiseGenericbound() {
     switch (auto tag = in.readTag()) {
-        case 0:
-            return HIRGenericBound::make_Lifetime({deserialiseLifetimeref(), deserialiseLifetimeref()});
-        case 1:
-            return HIRGenericBound::make_TypeLifetime({deserialiseType(), deserialiseLifetimeref()});
         case 2: {
             auto hrtbs = in.readBool() ? box$(deserialiseGenericparams()) : nullptr;
             auto type = deserialiseType();
@@ -2849,16 +2845,6 @@ public:
     void serialise(const HIRGenericBound& b) {
         TRACE_FUNCTION_F(b);
             TU_MATCH_HDRA( (b), {)
-            TU_ARMA(Lifetime, e) {
-                out.writeTag(0);
-                serialise(e.test);
-                serialise(e.validFor);
-            }
-            TU_ARMA(TypeLifetime, e) {
-                out.writeTag(1);
-                serialiseType(e.type);
-                serialise(e.validFor);
-            }
             TU_ARMA(TraitBound, e) {
                 out.writeTag(2);
                 out.writeBool(static_cast<bool>(e.hrtbs));

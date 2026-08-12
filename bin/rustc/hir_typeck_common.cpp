@@ -543,22 +543,8 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
 }
 
 HIRLifetimeRef Monomorphiser::monomorphLifetime(const Span& sp, const HIRLifetimeRef& lft) const {
-    if (lft.isParam()) {
-        HIRGenericRef g{"", lft.binding};
-
-        // Have a flag/stack here for current defined HRL batches (trait paths and function pointers), if in one then do the hack
-        // - Otherwise, pass to `get_lifetime`
-        if (g.group() == GENERICHrtb) {
-            if (const auto* hrtb = hasHrb()) {
-                // TODO: Ensure that the param is in range (has some issues with nested?)
-                return lft;
-            }
-        }
-
-        return getLifetime(sp, g);
-    } else {
-        return lft;
-    }
+    // Lifetimes are erased
+    return HIRLifetimeRef();
 }
 
 HIRPath Monomorphiser::monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer /*=true*/) const {

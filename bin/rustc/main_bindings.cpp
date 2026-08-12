@@ -267,7 +267,6 @@ void initDebugList() {
 
          "HIR Lower",
 
-         "Lifetime Elision",
          "Resolve Type Aliases",
          "Resolve Bind",
          "Resolve UFCS Outer",
@@ -647,10 +646,6 @@ int main(int argc, char* argv[]) {
             });
         }
         memoryDump("HIR");
-
-        CompilePhaseV("Lifetime Elision", [&]() {
-            ConvertHIRLifetimeElision(*hirCrate);
-        });
 
         // Replace type aliases (`type`) into the actual type
         // - Does simple replacements

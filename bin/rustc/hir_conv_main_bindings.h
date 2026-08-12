@@ -22,7 +22,6 @@ struct HIRPathParams;
 class HIRConstGeneric;
 class HIRArraySize;
 
-extern void ConvertHIRLifetimeElision(HIRCrate& crate);
 extern HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& paramsDef, const HIRGenericPath& path, bool isExpr);
 extern void ConvertHIRExpandAliases(HIRCrate& crate);
 extern void ConvertHIRExpandAliasesSelf(HIRCrate& crate);

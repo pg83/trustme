@@ -3,7 +3,7 @@
 #include "hir_type.h"
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRGenericBound& x) {
-    TU_MATCH(HIRGenericBound, (x), (e), (Lifetime, os << e.test << ": " << e.validFor;), (TypeLifetime, os << e.type << ": " << e.validFor;), (TraitBound, os << e.type << ": " << e.trait /*.m_path*/;), (TypeEquality, os << e.type << " = " << e.otherType;))
+    TU_MATCH(HIRGenericBound, (x), (e), (TraitBound, os << e.type << ": " << e.trait /*.m_path*/;), (TypeEquality, os << e.type << " = " << e.otherType;))
     return os;
 }
 
@@ -56,7 +56,7 @@ Ordering HIRGenericBound::ord(const HIRGenericBound& b) const {
     if (this->tag() != b.tag()) {
         return this->tag() < b.tag() ? OrdLess : OrdGreater;
     }
-    TU_MATCHA((*this, b), (ae, be), (Lifetime, auto cmp = ::ord(ae.test, be.test); if (cmp != OrdEqual) return cmp; cmp = ::ord(ae.validFor, be.validFor); if (cmp != OrdEqual) return cmp;), (TypeLifetime, auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ::ord(ae.validFor, be.validFor); if (cmp != OrdEqual) return cmp;), (TraitBound, auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.trait.ord(be.trait); if (cmp != OrdEqual) return cmp;), (TypeEquality, auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.otherType->ordIgnoringRegions(be.otherType); if (cmp != OrdEqual) return cmp;))
+    TU_MATCHA((*this, b), (ae, be), (TraitBound, auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.trait.ord(be.trait); if (cmp != OrdEqual) return cmp;), (TypeEquality, auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.otherType->ordIgnoringRegions(be.otherType); if (cmp != OrdEqual) return cmp;))
     return OrdEqual;
 }
 
@@ -100,13 +100,7 @@ HIRGenericParams HIRGenericParams::clone() const {
 
 HIRGenericBound HIRGenericBound::clone() const {
     TU_MATCH_HDRA( (*this), {)
-    TU_ARMA(Lifetime, e) {
-            return HIRGenericBound::make_Lifetime(e);
-        }
-        TU_ARMA(TypeLifetime, e) {
-            return HIRGenericBound::make_TypeLifetime({e.type, e.validFor});
-        }
-        TU_ARMA(TraitBound, e) {
+    TU_ARMA(TraitBound, e) {
             return HIRGenericBound::make_TraitBound({e.hrtbs ? box$(e.hrtbs->clone()) : nullptr, e.type, e.trait.clone(), e.constness});
         }
         TU_ARMA(TypeEquality, e) {

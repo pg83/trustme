@@ -559,9 +559,7 @@ namespace {
             return false;
         }
         TU_MATCH_HDRA((a, b), {)
-        TU_ARMA(Lifetime, ae, be) return ae.test == be.test && ae.validFor == be.validFor;
-            TU_ARMA(TypeLifetime, ae, be) return ae.type == be.type && ae.validFor == be.validFor;
-            TU_ARMA(TraitBound, ae, be) {
+        TU_ARMA(TraitBound, ae, be) {
                 return exactOptionalGenericParamsEqual(ae.hrtbs, be.hrtbs) && ae.type == be.type && exactTraitPathEqual(ae.trait, be.trait);
             }
             TU_ARMA(TypeEquality, ae, be) return ae.type == be.type && ae.otherType == be.otherType;

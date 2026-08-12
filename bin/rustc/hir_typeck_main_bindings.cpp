@@ -860,11 +860,7 @@ namespace {
             for(const auto& bound : cache.fcnParams->bounds)
             {
                 TU_MATCH_HDRA( (bound), {)
-                TU_ARMA(Lifetime, be) {
-                    }
-                    TU_ARMA(TypeLifetime, be) {
-                    }
-                    TU_ARMA(TraitBound, be) {
+                TU_ARMA(TraitBound, be) {
                         HIRGenericParams emptyHrtb;
                         auto _ = cache.monomorph->pushHrb(be.hrtbs ? *be.hrtbs : emptyHrtb);
                         DEBUG("Bound " << be.type << ":  " << be.trait);
@@ -1650,8 +1646,6 @@ namespace {
                     HIRGenericBound,
                     (bound),
                     (e),
-                    (Lifetime, ),
-                    (TypeLifetime, ),
                     (TraitBound,
                      // TODO: Check for an implementation of this trait
                      DEBUG("TODO: Check bound " << e.type << " : " << e.trait.mPath);),
@@ -2042,12 +2036,7 @@ namespace {
 
             for (auto& bound : params.bounds) {
                 TU_MATCH_HDRA( (bound), {)
-                TU_ARMA(Lifetime, e) {
-                    }
-                    TU_ARMA(TypeLifetime, e) {
-                        this->visitType(e.type);
-                    }
-                    TU_ARMA(TraitBound, e) {
+                TU_ARMA(TraitBound, e) {
                         this->visitType(e.type);
                         selfTypes.push_back(e.type);
                         this->visitTraitPath(e.trait);
@@ -2143,14 +2132,7 @@ namespace {
                     DEBUG("TODO: Obtain bounds from " << ti.tagStr());
                 }
 
-                if (params) {
-                    MonomorphStatePtr ms(crate.types, nullptr, &gp.mParams, nullptr);
-                    for (const auto& b : params->bounds) {
-                        if (const auto* be = b.opt_Lifetime()) {
-                            dst.bounds.push_back(HIRGenericBound::make_Lifetime({ms.monomorphLifetime(sp, be->test), ms.monomorphLifetime(sp, be->validFor)}));
-                        }
-                    }
-                }
+                (void)params;
             }
         }
 
@@ -2359,32 +2341,6 @@ namespace {
                     // Update AFTER the checks
                     DEBUG("Replace generic block's lifetimes with " << traitFcn.mParams.fmtArgs());
                     implFcn.mParams.mLifetimes = traitFcn.mParams.mLifetimes;
-                    // Replace the lifetime bounds too (undoes some potential confusion from elision)
-                    {
-                        auto& bl = implFcn.mParams.bounds;
-                        bl.erase(
-                            std::remove_if(
-                                bl.begin(),
-                                bl.end(),
-                                [](const HIRGenericBound& b) {
-                            return b.is_Lifetime();
-                        }
-                            ),
-                            bl.end()
-                        );
-                    }
-                    for (const auto& b : traitFcn.mParams.bounds) {
-                        TU_MATCH_HDRA( (b), { )
-                        default:
-                            break;
-                            TU_ARMA(TypeLifetime, be) {
-                                implFcn.mParams.bounds.push_back(HIRGenericBound::make_TypeLifetime({ms.monomorphType(sp, be.type), ms.monomorphLifetime(sp, be.validFor)}));
-                            }
-                            TU_ARMA(Lifetime, be) {
-                                implFcn.mParams.bounds.push_back(HIRGenericBound::make_Lifetime({ms.monomorphLifetime(sp, be.test), ms.monomorphLifetime(sp, be.validFor)}));
-                            }
-                        }
-                    }
 
                     // HACK: Clone the expected type, so the lifetimes match.
                     DEBUG("Updating < " << impl.mType << " as " << traitPath << impl.traitArgs << " >::" << e.first);

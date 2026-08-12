@@ -35,18 +35,8 @@ class HIRGenericParams;
 TAGGED_UNION_EX(
     HIRGenericBound,
     (),
-    Lifetime,
-    ((Lifetime,
-      struct {
-          HIRLifetimeRef test;
-          HIRLifetimeRef validFor;
-      }),
-     (TypeLifetime,
-      struct {
-          HIRTypeRef type;
-          HIRLifetimeRef validFor;
-      }),
-     (TraitBound,
+    TypeEquality,
+    ((TraitBound,
       struct {
           ::std::unique_ptr<HIRGenericParams> hrtbs;
           HIRTypeRef type;

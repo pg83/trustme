@@ -391,12 +391,7 @@ void HIRVisitor::visitParams(HIRGenericParams& params) {
 
 void HIRVisitor::visitGenericBound(HIRGenericBound& bound) {
     TU_MATCH_HDRA((bound), {)
-    TU_ARMA(Lifetime, e) {
-        }
-        TU_ARMA(TypeLifetime, e) {
-            this->visitType(e.type);
-        }
-        TU_ARMA(TraitBound, e) {
+    TU_ARMA(TraitBound, e) {
             this->visitType(e.type);
             this->visitTraitPath(e.trait);
         }
