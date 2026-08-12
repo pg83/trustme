@@ -265,12 +265,17 @@ private:
     // cannot bind or append variables in the caller's type-checking context.
     mutable HMTypeInferrence m_coherence_ivars;
     mutable TraitResolution* m_coherence_resolve = nullptr;
+    ::std::function<void(const Span&, const ::HIR::TypeData*, const ::HIR::TypeData*)> m_inherent_type_constraint;
 
 public:
     TraitResolution(const HMTypeInferrence& ivars, const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params, const ::HIR::SimplePath& vis_path, const ::HIR::GenericPath* current_trait);
     ~TraitResolution();
 
     void set_generic_context(const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params);
+
+    void set_inherent_type_constraint(::std::function<void(const Span&, const ::HIR::TypeData*, const ::HIR::TypeData*)> constraint) {
+        m_inherent_type_constraint = mv$(constraint);
+    }
 
     const ::HIR::GenericPath* current_trait_path() const {
         return m_current_trait_path;
@@ -479,5 +484,6 @@ public:
 
 private:
     void expand_associated_types_inplace(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const;
+    bool expand_associated_types_inplace__UfcsInherent(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const;
     void expand_associated_types_inplace__UfcsKnown(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const;
 };

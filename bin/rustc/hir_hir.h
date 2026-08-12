@@ -625,6 +625,7 @@ namespace HIR {
 
         ::std::map<RcString, VisImplEnt<::HIR::Function>> m_methods;
         ::std::map<RcString, VisImplEnt<::HIR::Constant>> m_constants;
+        ::std::map<RcString, VisImplEnt<::HIR::TypeAlias>> m_types;
 
         ::HIR::SimplePath m_src_module;
 

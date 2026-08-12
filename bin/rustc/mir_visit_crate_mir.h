@@ -23,6 +23,7 @@ namespace MIR {
         void visit_expr(::HIR::ExprPtr& exp) override;
 
         void visit_type(::HIR::TypeRef& ty) override;
+        void visit_constgeneric(::HIR::ConstGeneric& value) override;
 
         // ------
         // Code-containing items
@@ -37,6 +38,7 @@ namespace MIR {
         // Boilerplate
         void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override;
         void visit_type_impl(::HIR::TypeImpl& impl) override;
+        void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override;
         void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override;
     };
 

@@ -1446,6 +1446,15 @@ namespace {
             }
         }
 
+        void visit_constgeneric(::HIR::ConstGeneric& value) override {
+            if (auto* unevaluated = value.opt_Unevaluated()) {
+                t_args tmp;
+                auto& expr = *(**unevaluated).expr;
+                ExprVisitor_Validate ev(m_resolve, tmp, expr->m_res_type);
+                ev.visit_root(expr);
+            }
+        }
+
         // ------
         // Code-containing items
         // ------
@@ -1798,7 +1807,7 @@ namespace {
             ty = crate.m_types.intern(mv$(data));
 
             if (const auto* e = ty->opt_Path()) {
-                TU_MATCH(::HIR::Path::Data, (e->path.m_data), (pe), (Generic, ), (UfcsUnknown, TODO(sp, "Should UfcsKnown be encountered here?");), (UfcsInherent, TODO(sp, "Locate impl block for UFCS Inherent");), (UfcsKnown, TRACE_FUNCTION_FR("UfcsKnown - " << ty, ty); m_resolve.expand_associated_types(sp, ty);))
+                TU_MATCH(::HIR::Path::Data, (e->path.m_data), (pe), (Generic, ), (UfcsUnknown, TODO(sp, "Should UfcsKnown be encountered here?");), (UfcsInherent, TRACE_FUNCTION_FR("UfcsInherent - " << ty, ty); m_resolve.expand_associated_types(sp, ty);), (UfcsKnown, TRACE_FUNCTION_FR("UfcsKnown - " << ty, ty); m_resolve.expand_associated_types(sp, ty);))
             }
         }
 
@@ -1960,8 +1969,12 @@ namespace {
                             // Found it, just keep going (don't care about details here)
                             break;
                         case ::HIR::Visitor::PathContext::TRAIT:
-                        case ::HIR::Visitor::PathContext::TYPE:
                             return false;
+                        case ::HIR::Visitor::PathContext::TYPE:
+                            if (impl.m_types.find(e.item) == impl.m_types.end()) {
+                                return false;
+                            }
+                            break;
                     }
 
                     return true;
@@ -2109,6 +2122,16 @@ namespace {
 
         void visit_type_alias(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
             // Ignore type aliases, they don't have to typecheck.
+        }
+
+        void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+            auto _ = m_resolve.set_item_generics(item.m_params);
+            auto saved_params = std::make_pair(m_cur_params, m_cur_params_level);
+            m_cur_params = &item.m_params;
+            m_cur_params_level = 1;
+            ::HIR::Visitor::visit_inherent_type(p, item);
+            m_cur_params = saved_params.first;
+            m_cur_params_level = saved_params.second;
         }
 
         void add_lifetime_bounds_for_impl_type(const Span& sp, HIR::GenericParams& dst, const ::HIR::TypeData* ty) {

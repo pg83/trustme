@@ -1590,11 +1590,15 @@ void StaticTraitResolve::expand_associated_types_path(const Span& sp, ::HIR::Pat
 
 bool StaticTraitResolve::expand_associated_types_single(const Span& sp, ::HIR::TypeRef& input) const {
     TRACE_FUNCTION_F(input);
-    if (input->is_Path() && input->as_Path().path.m_data.is_UfcsKnown()) {
-        return expand_associated_types__UfcsKnown(sp, input, /*recurse=*/false);
-    } else {
-        return false;
+    if (input->is_Path()) {
+        if (input->as_Path().path.m_data.is_UfcsInherent()) {
+            return expand_associated_types__UfcsInherent(sp, input);
+        }
+        if (input->as_Path().path.m_data.is_UfcsKnown()) {
+            return expand_associated_types__UfcsKnown(sp, input, /*recurse=*/false);
+        }
     }
+    return false;
 }
 
 bool StaticTraitResolve::types_equal_resolving_opaque(const Span& sp, const ::HIR::TypeData* left, const ::HIR::TypeData* right) const {
@@ -1666,10 +1670,14 @@ void StaticTraitResolve::expand_associated_types_inner(const Span& sp, ::HIR::Ty
                 TU_ARMA(UfcsInherent, e2) {
                     this->expand_associated_types_inner(sp, e2.type);
                     expand_associated_types_params(sp, e2.params);
-                    // TODO: impl params too?
                     for (auto& arg : e2.impl_params.m_types) {
                         this->expand_associated_types_inner(sp, arg);
                     }
+                    input = m_crate.m_types.intern(mv$(data));
+                    if (this->expand_associated_types__UfcsInherent(sp, input)) {
+                        this->expand_associated_types_inner(sp, input);
+                    }
+                    return;
                 }
                 TU_ARMA(UfcsKnown, e2) {
                     // An opaque associated type is not a resolved type. It only records
@@ -1785,6 +1793,93 @@ void StaticTraitResolve::expand_associated_types_inner(const Span& sp, ::HIR::Ty
         }
     }
     input = m_crate.m_types.intern(std::move(data));
+}
+
+bool StaticTraitResolve::expand_associated_types__UfcsInherent(const Span& sp, ::HIR::TypeRef& input) const {
+    TRACE_FUNCTION_FR(input, input);
+    ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.m_data.is_UfcsInherent(), input);
+
+    const auto& pe = input->as_Path().path.m_data.as_UfcsInherent();
+    if (visit_ty_with(pe.type, [](const ::HIR::TypeData* type) {
+        const auto* erased = type->opt_ErasedType();
+        const auto* opaque = erased ? erased->m_inner.opt_Alias() : nullptr;
+        return opaque && !opaque->inner->type;
+    })) {
+        DEBUG("Deferring inherent associated type with unresolved opaque receiver " << input);
+        return false;
+    }
+    const ::HIR::TypeAlias* alias = nullptr;
+    const ::HIR::GenericParams* impl_params_def = nullptr;
+    ::HIR::PathParams impl_params;
+    ::HIR::Compare best_match = ::HIR::Compare::Unequal;
+    static const ::HIR::PathParams no_trait_params;
+
+    m_crate.find_type_impls(pe.type, HIR::ResolvePlaceholdersNop(), [&](const auto& impl) {
+        const auto item_it = impl.m_types.find(pe.item);
+        if (item_it == impl.m_types.end()) {
+            return false;
+        }
+
+        bool selected = false;
+        this->find_impl__check_crate_raw(
+            sp,
+            ::HIR::SimplePath(),
+            nullptr,
+            pe.type,
+            impl.m_params,
+            no_trait_params,
+            impl.m_type,
+            [&](::HIR::PathParams candidate_params, ::HIR::Compare match) {
+                if (match != ::HIR::Compare::Unequal
+                    && (best_match == ::HIR::Compare::Unequal || match == ::HIR::Compare::Equal)) {
+                    alias = &item_it->second.data;
+                    impl_params_def = &impl.m_params;
+                    impl_params = mv$(candidate_params);
+                    best_match = match;
+                    selected = true;
+                }
+                return selected;
+            }
+        );
+        return selected && best_match == ::HIR::Compare::Equal;
+    });
+
+    if (!alias) {
+        DEBUG("No inherent associated type candidate for " << input);
+        return false;
+    }
+
+    ConvertHIR_ConstantEvaluate_MethodParams(
+        sp,
+        m_crate,
+        ::HIR::SimplePath(m_crate.m_crate_name, {}),
+        m_impl_generics,
+        m_item_generics,
+        impl_params_def,
+        impl_params
+    );
+
+    auto item_params = pe.params.clone();
+    if (item_params.m_lifetimes.empty()) {
+        item_params.m_lifetimes.resize(alias->m_params.m_lifetimes.size());
+    }
+    if (item_params.m_lifetimes.size() != alias->m_params.m_lifetimes.size()
+        || item_params.m_types.size() != alias->m_params.m_types.size()
+        || item_params.m_values.size() != alias->m_params.m_values.size()) {
+        ERROR(sp, E0000, "Incorrect generic arguments for inherent associated type " << input);
+    }
+    ConvertHIR_ConstantEvaluate_MethodParams(
+        sp,
+        m_crate,
+        ::HIR::SimplePath(m_crate.m_crate_name, {}),
+        m_impl_generics,
+        m_item_generics,
+        &alias->m_params,
+        item_params
+    );
+
+    input = MonomorphStatePtr(m_crate.m_types, pe.type, &impl_params, &item_params).monomorph_type(sp, alias->m_type);
+    return true;
 }
 
 namespace {

@@ -31,6 +31,7 @@ namespace HIR {
         virtual void visit_module(ItemPath p, ::HIR::Module& mod);
 
         virtual void visit_type_impl(::HIR::TypeImpl& impl);
+        virtual void visit_inherent_type(ItemPath p, ::HIR::TypeAlias& item);
         virtual void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl);
         virtual void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl);
 

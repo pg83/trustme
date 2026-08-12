@@ -245,6 +245,9 @@ struct Context {
         , next_rule_idx(0)
         , m_lang_Box(crate.get_lang_item_path_opt("owned_box"))
     {
+        m_resolve.set_inherent_type_constraint([this](const Span& sp, const ::HIR::TypeData* receiver, const ::HIR::TypeData* impl_type) {
+            this->equate_types_inner(sp, receiver, impl_type);
+        });
     }
 
     void dump() const;

@@ -1942,7 +1942,7 @@ namespace {
             //fix_fn_params(code, closure_type, args_argent.second);
             assert(code.m_bindings.size() > 0);
             code.m_bindings[0] = types.unit();
-            return ::HIR::TypeImpl{std::move(params), std::move(closure_type), make_map1(rcstring_call_free, ::HIR::TypeImpl::VisImplEnt<::HIR::Function>{::HIR::Publicity::new_global(), false, ::HIR::Function(::HIR::Function::Receiver::Free, ::HIR::GenericParams{}, mv$(args), ret_ty, mv$(code))}), {}, ::HIR::SimplePath()};
+            return ::HIR::TypeImpl{std::move(params), std::move(closure_type), make_map1(rcstring_call_free, ::HIR::TypeImpl::VisImplEnt<::HIR::Function>{::HIR::Publicity::new_global(), false, ::HIR::Function(::HIR::Function::Receiver::Free, ::HIR::GenericParams{}, mv$(args), ret_ty, mv$(code))}), {}, {}, ::HIR::SimplePath()};
         }
 
         static ::HIR::TraitImpl make_fnonce(::HIR::GenericParams params, ::HIR::PathParams trait_params, ::HIR::TypeRef closure_type, ::std::pair<::HIR::Pattern, ::HIR::TypeRef> args_argent, ::HIR::TypeRef ret_ty, ::HIR::ExprPtr code) {
@@ -3246,6 +3246,10 @@ namespace {
             }
         }
 
+        void visit_constgeneric(::HIR::ConstGeneric&) override {
+            // Const expressions cannot contain closures at type definition time.
+        }
+
         // ------
         // Code-containing items
         // ------
@@ -3440,6 +3444,11 @@ void HIR_Expand_Closures(::HIR::Crate& crate) {
 
         void visit_type_alias(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
             HIR::Visitor::visit_type_alias(p, item);
+            fix_type(item.m_type);
+        }
+
+        void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+            HIR::Visitor::visit_inherent_type(p, item);
             fix_type(item.m_type);
         }
 
@@ -6369,6 +6378,13 @@ namespace {
                 ty = m_resolve.m_crate.m_types.intern(mv$(data));
             } else {
                 ::HIR::Visitor::visit_type(ty);
+            }
+        }
+
+        void visit_constgeneric(::HIR::ConstGeneric& value) override {
+            if (auto* unevaluated = value.opt_Unevaluated()) {
+                auto& expr = *(**unevaluated).expr;
+                check(expr->m_res_type, ::HIR::Function::args_t{}, expr);
             }
         }
 

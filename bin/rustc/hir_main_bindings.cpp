@@ -289,6 +289,11 @@ public:
             auto name = m_in.read_istring();
             rv.m_constants.insert(::std::make_pair(mv$(name), ::HIR::TypeImpl::VisImplEnt<::HIR::Constant>{deserialise_pub(), m_in.read_bool(), deserialise_constant()}));
         }
+        size_t type_count = m_in.read_count();
+        for (size_t i = 0; i < type_count; i++) {
+            auto name = m_in.read_istring();
+            rv.m_types.insert(::std::make_pair(mv$(name), ::HIR::TypeImpl::VisImplEnt<::HIR::TypeAlias>{deserialise_pub(), m_in.read_bool(), deserialise_typealias()}));
+        }
         // m_src_module doesn't matter after typeck
         return rv;
     }
@@ -1715,6 +1720,10 @@ namespace {
             m_os << indent() << "type " << p.get_name() << item.m_params.fmt_args() << " = " << item.m_type << item.m_params.fmt_bounds() << "\n";
         }
 
+        void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+            this->visit_type_alias(p, item);
+        }
+
         void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
             m_os << indent() << "trait " << p.get_name() << item.m_params.fmt_args() << " : " << item.m_lifetime << "\n";
             if (!item.m_parent_traits.empty()) {
@@ -2988,6 +2997,13 @@ public:
         }
         m_out.write_count(impl.m_constants.size());
         for (const auto& v : impl.m_constants) {
+            m_out.write_string(v.first);
+            m_out.write_bool(v.second.publicity.is_global());
+            m_out.write_bool(v.second.is_specialisable);
+            serialise(v.second.data);
+        }
+        m_out.write_count(impl.m_types.size());
+        for (const auto& v : impl.m_types) {
             m_out.write_string(v.first);
             m_out.write_bool(v.second.publicity.is_global());
             m_out.write_bool(v.second.is_specialisable);

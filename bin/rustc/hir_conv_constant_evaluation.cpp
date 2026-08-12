@@ -3803,6 +3803,15 @@ namespace {
             m_mod_path = nullptr;
         }
 
+        void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+            auto pp_item = get_params_for_def(item.m_params, true);
+            m_monomorph_state.pp_method = &pp_item;
+            m_item_params = &item.m_params;
+            ::HIR::Visitor::visit_inherent_type(p, item);
+            m_item_params = nullptr;
+            m_monomorph_state.pp_method = nullptr;
+        }
+
         void visit_trait(::HIR::ItemPath ip, ::HIR::Trait& trait) override {
             auto pp_impl = get_params_for_def(trait.m_params);
             m_monomorph_state.self_ty = m_crate.m_types.self();
@@ -3818,17 +3827,8 @@ namespace {
 
         void evalulate_const_generic(const Span& sp, const ::HIR::TypeData* ty, ::HIR::ConstGeneric& v) {
             if (v.is_Unevaluated()) {
-                const auto& e = *v.as_Unevaluated()->expr;
-                auto name = FMT("param_" << &v << "#");
-                auto nvs = NewvalState{*m_mod, *m_mod_path, name};
-                TRACE_FUNCTION_FR(name, name);
-                auto eval = get_eval(e->span(), nvs);
-
-                // Need to look up the required type - to do that requires knowing the item it's for
-                // - Which, might not be known at this point - might be a UfcsInherent
                 try {
-                    auto val = eval.evaluate_constant(::HIR::ItemPath(*m_mod_path, name.c_str()), e, ty);
-                    v = ::HIR::ConstGeneric::make_Evaluated(std::move(val));
+                    v = ::HIR::ConstGeneric::make_Evaluated(evaluate_constgeneric(sp, m_crate, ty, *v.as_Unevaluated()));
                 } catch (const Defer&) {
                     // Deferred - no update
                 }

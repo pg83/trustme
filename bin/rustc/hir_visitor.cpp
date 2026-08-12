@@ -127,8 +127,24 @@ void ::HIR::Visitor::visit_type_impl(::HIR::TypeImpl& impl) {
         DEBUG("const " << ent.first);
         this->visit_constant(p + ent.first, ent.second.data);
     }
+    for (auto& ent : impl.m_types) {
+        DEBUG("type " << ent.first);
+        this->visit_inherent_type(p + ent.first, ent.second.data);
+    }
     if (m_resolve) {
         m_resolve->clear_impl_generics();
+    }
+}
+
+void ::HIR::Visitor::visit_inherent_type(ItemPath p, ::HIR::TypeAlias& item) {
+    TRACE_FUNCTION_F(p);
+    if (m_resolve) {
+        m_resolve->set_item_generics_raw(item.m_params);
+    }
+    this->visit_params(item.m_params);
+    this->visit_type(item.m_type);
+    if (m_resolve) {
+        m_resolve->clear_item_generics();
     }
 }
 

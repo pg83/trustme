@@ -201,6 +201,7 @@ public:
 private:
     void expand_associated_types_params(const Span& sp, ::HIR::PathParams& input) const;
     void expand_associated_types_inner(const Span& sp, ::HIR::TypeRef& input) const;
+    bool expand_associated_types__UfcsInherent(const Span& sp, ::HIR::TypeRef& input) const;
     bool expand_associated_types__UfcsKnown(const Span& sp, ::HIR::TypeRef& input, bool recurse = true) const;
 
 protected:

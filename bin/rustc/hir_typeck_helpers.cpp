@@ -5752,14 +5752,12 @@ bool TraitResolution::find_trait_impls(
                 TU_ARMA(UfcsInherent, pe) {
                     expand_associated_types_inplace(sp, pe.type, stack);
                     H::expand_associated_types_params(sp, *this, pe.params, stack);
+                    H::expand_associated_types_params(sp, *this, pe.impl_params, stack);
                     input = m_crate.m_types.intern(mv$(data));
-                    // TODO: only valid for enum variants? (and only in some contexts)
-                    const auto& rebuilt_path = input->as_Path().path;
-                    const auto& rebuilt_pe = rebuilt_path.m_data.as_UfcsInherent();
-                    if (TU_TEST1(*rebuilt_pe.type, Path, .binding.is_Enum())) {
-                        return;
+                    if (this->expand_associated_types_inplace__UfcsInherent(sp, input, stack)) {
+                        this->expand_associated_types_inplace(sp, input, stack);
                     }
-                    TODO(sp, "Path - UfcsInherent - " << rebuilt_path);
+                    return;
                 }
                 TU_ARMA(UfcsKnown, pe) {
                     struct D {
@@ -5885,6 +5883,88 @@ bool TraitResolution::find_trait_impls(
         }
     }
             input = m_crate.m_types.intern(mv$(data));
+        }
+
+        bool TraitResolution::expand_associated_types_inplace__UfcsInherent(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const {
+            TRACE_FUNCTION_FR(input, input);
+            ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.m_data.is_UfcsInherent(), input);
+
+            const auto& pe = input->as_Path().path.m_data.as_UfcsInherent();
+            const ::HIR::TypeAlias* alias = nullptr;
+            const ::HIR::GenericParams* impl_params_def = nullptr;
+            const ::HIR::TypeImpl* selected_impl = nullptr;
+            ::HIR::PathParams impl_params;
+            ::HIR::Compare best_match = ::HIR::Compare::Unequal;
+            static const ::HIR::PathParams no_trait_params;
+
+            m_crate.find_type_impls(pe.type, m_ivars.callback_resolve_infer(), [&](const auto& impl) {
+                const auto item_it = impl.m_types.find(pe.item);
+                if (item_it == impl.m_types.end()) {
+                    return false;
+                }
+
+                ::HIR::PathParams candidate_params;
+                const auto match = this->ftic_check_params(
+                    sp,
+                    ::HIR::SimplePath(),
+                    nullptr,
+                    pe.type,
+                    impl.m_params,
+                    no_trait_params,
+                    impl.m_type,
+                    candidate_params
+                );
+                if (match != ::HIR::Compare::Unequal
+                    && (best_match == ::HIR::Compare::Unequal || match == ::HIR::Compare::Equal)) {
+                    alias = &item_it->second.data;
+                    impl_params_def = &impl.m_params;
+                    selected_impl = &impl;
+                    impl_params = mv$(candidate_params);
+                    best_match = match;
+                }
+                return best_match == ::HIR::Compare::Equal;
+            });
+
+            if (!alias) {
+                DEBUG("No inherent associated type candidate for " << input);
+                return false;
+            }
+
+            ConvertHIR_ConstantEvaluate_MethodParams(
+                sp,
+                m_crate,
+                m_vis_path,
+                m_impl_generics,
+                m_item_generics,
+                impl_params_def,
+                impl_params
+            );
+            if (m_inherent_type_constraint) {
+                auto selected_type = MonomorphStatePtr(m_crate.m_types, nullptr, &impl_params, nullptr).monomorph_type(sp, selected_impl->m_type);
+                m_inherent_type_constraint(sp, pe.type, selected_type);
+            }
+
+            auto item_params = pe.params.clone();
+            if (item_params.m_lifetimes.empty()) {
+                item_params.m_lifetimes.resize(alias->m_params.m_lifetimes.size());
+            }
+            if (item_params.m_lifetimes.size() != alias->m_params.m_lifetimes.size()
+                || item_params.m_types.size() != alias->m_params.m_types.size()
+                || item_params.m_values.size() != alias->m_params.m_values.size()) {
+                ERROR(sp, E0000, "Incorrect generic arguments for inherent associated type " << input);
+            }
+            ConvertHIR_ConstantEvaluate_MethodParams(
+                sp,
+                m_crate,
+                m_vis_path,
+                m_impl_generics,
+                m_item_generics,
+                &alias->m_params,
+                item_params
+            );
+
+            input = MonomorphStatePtr(m_crate.m_types, pe.type, &impl_params, &item_params).monomorph_type(sp, alias->m_type);
+            return true;
         }
 
         void TraitResolution::expand_associated_types_inplace__UfcsKnown(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const {

@@ -2377,6 +2377,7 @@ void LowerHIR_Module_Impls(const ::AST::Module& ast_mod, ::HIR::Crate& hir_crate
 
             ::std::map<RcString, ::HIR::TypeImpl::VisImplEnt<::HIR::Function>> methods;
             ::std::map<RcString, ::HIR::TypeImpl::VisImplEnt<::HIR::Constant>> constants;
+            ::std::map<RcString, ::HIR::TypeImpl::VisImplEnt<::HIR::TypeAlias>> types;
 
             for (const auto& item : impl.items()) {
                 ::HIR::ItemPath item_path(path, item.name.c_str());
@@ -2394,6 +2395,21 @@ void LowerHIR_Module_Impls(const ::AST::Module& ast_mod, ::HIR::Crate& hir_crate
                             TODO(item.sp, "Associated statics in inherent impl");
                         }
                     }
+                    TU_ARMA(Type, e) {
+                        DEBUG("- type " << item.name);
+                        auto aty_params = LowerHIR_GenericParams(e.params(), nullptr);
+
+                        assert(!g_impl_trait_source.path);
+                        g_impl_trait_source = ImplTraitSource(&item_path, &params, &aty_params);
+                        auto aty_type = LowerHIR_Type(e.type());
+                        g_impl_trait_source = ImplTraitSource();
+
+                        types.insert(::std::make_pair(item.name, ::HIR::TypeImpl::VisImplEnt<::HIR::TypeAlias>{
+                            get_vis(item.vis),
+                            item.is_specialisable,
+                            ::HIR::TypeAlias{mv$(aty_params), mv$(aty_type)}
+                        }));
+                    }
                     TU_ARMA(Function, e) {
                         methods.insert(::std::make_pair(item.name, ::HIR::TypeImpl::VisImplEnt<::HIR::Function>{get_vis(item.vis), item.is_specialisable, LowerHIR_Function(item_path, item.attrs, e, type)}));
                     }
@@ -2407,6 +2423,7 @@ void LowerHIR_Module_Impls(const ::AST::Module& ast_mod, ::HIR::Crate& hir_crate
                     mv$(type),
                     mv$(methods),
                     mv$(constants),
+                    mv$(types),
 
                     mod_path
                 }

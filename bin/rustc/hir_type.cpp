@@ -1469,6 +1469,16 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
         }
     }
 
+    const auto unresolved_erased_alias = [](const ::HIR::TypeData* ty) {
+        const auto* erased = ty->opt_ErasedType();
+        const auto* alias = erased ? erased->m_inner.opt_Alias() : nullptr;
+        return alias && !alias->inner->type;
+    };
+    if (unresolved_erased_alias(v) || unresolved_erased_alias(x)) {
+        DEBUG("- Fuzzy match due to unresolved opaque alias - " << v << " = " << x);
+        return Compare::Fuzzy;
+    }
+
     // MatchGenerics is a relation, not plain type equality.  Its callbacks can
     // bind lifetimes and generic parameters while walking two identical
     // interned types, so pointer identity must not bypass the structural walk.

@@ -505,6 +505,11 @@ namespace {
             }
         }
 
+        void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+            auto _ = this->m_ms.set_item_generics(item.m_params);
+            ::HIR::Visitor::visit_inherent_type(p, item);
+        }
+
         void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
             TRACE_FUNCTION_F("impl " << trait_path << " for " << impl.m_type);
             auto trait_gpath = ::HIR::GenericPath(trait_path, impl.m_trait_args.clone());
@@ -1063,6 +1068,11 @@ namespace {
             if (mod) {
                 m_ms.pop_traits(*mod);
             }
+        }
+
+        void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+            auto _ = this->m_ms.set_item_generics(item.m_params);
+            ::HIR::Visitor::visit_inherent_type(p, item);
         }
 
         void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
@@ -3066,6 +3076,12 @@ namespace {
             ::HIR::Visitor::visit_type_impl(impl);
         }
 
+        void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+            auto _ = m_resolve.set_item_generics(item.m_params);
+            auto _2 = push_params(item.m_params, 1);
+            ::HIR::Visitor::visit_inherent_type(p, item);
+        }
+
         void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
             TRACE_FUNCTION_F("impl " << trait_path << impl.m_trait_args << " for " << impl.m_type);
             m_resolve.m_self_type = impl.m_type;
@@ -3705,7 +3721,7 @@ namespace resolve_ufcs {
         void visit_type_alias(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
             // NOTE: Disabled, because generics in type aliases are never checked
             // Re-enabled to resolve a UFCS properly (1.90.0 libcore)
-            auto _ = m_resolve.set_item_generics(item.m_params);
+            auto _ = m_resolve.set_impl_generics(MetadataType::Unknown, item.m_params);
             ::HIR::Visitor::visit_type_alias(p, item);
         }
 
@@ -3728,6 +3744,11 @@ namespace resolve_ufcs {
             m_current_type = impl.m_type;
             ::HIR::Visitor::visit_type_impl(impl);
             m_current_type = nullptr;
+        }
+
+        void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+            auto _ = m_resolve.set_item_generics(item.m_params);
+            ::HIR::Visitor::visit_inherent_type(p, item);
         }
 
         void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
@@ -4187,8 +4208,16 @@ namespace resolve_ufcs {
                         // Found it, just keep going (don't care about details here)
                         break;
                     case ::HIR::Visitor::PathContext::TRAIT:
-                    case ::HIR::Visitor::PathContext::TYPE:
                         return false;
+                    case ::HIR::Visitor::PathContext::TYPE:
+                        if (impl.m_types.find(e.item) == impl.m_types.end()) {
+                            return false;
+                        }
+                        if (!impl.m_types.at(e.item).publicity.is_visible(vis_path)) {
+                            DEBUG("Private");
+                            return false;
+                        }
+                        break;
                 }
 
                 auto new_data = ::HIR::Path::Data::make_UfcsInherent({mv$(e.type), mv$(e.item), mv$(e.params)});

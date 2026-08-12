@@ -23,6 +23,13 @@ void MIR::OuterVisitor::visit_type(::HIR::TypeRef& ty) {
     }
 }
 
+void MIR::OuterVisitor::visit_constgeneric(::HIR::ConstGeneric& value) {
+    if (auto* unevaluated = value.opt_Unevaluated()) {
+        auto& expr = *(**unevaluated).expr;
+        m_cb(m_resolve, ::HIR::ItemPath(""), expr, {}, expr->m_res_type);
+    }
+}
+
 void MIR::OuterVisitor::visit_function(::HIR::ItemPath p, ::HIR::Function& item) {
     auto _ = this->m_resolve.set_item_generics(item.m_params);
     if (item.m_code || item.m_code.m_mir) {
@@ -83,6 +90,11 @@ void MIR::OuterVisitor::visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) {
 void MIR::OuterVisitor::visit_type_impl(::HIR::TypeImpl& impl) {
     auto _ = this->m_resolve.set_impl_generics(impl.m_type, impl.m_params);
     ::HIR::Visitor::visit_type_impl(impl);
+}
+
+void MIR::OuterVisitor::visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) {
+    auto _ = this->m_resolve.set_item_generics(item.m_params);
+    ::HIR::Visitor::visit_inherent_type(p, item);
 }
 
 void MIR::OuterVisitor::visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) {
