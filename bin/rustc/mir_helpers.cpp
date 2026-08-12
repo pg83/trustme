@@ -60,12 +60,12 @@ const ::HIR::TypeData* ::MIR::TypeResolve::getStaticType(::HIR::TypeRef& tmp, co
     }
 }
 
-const ::HIR::TypeData* ::MIR::TypeResolve::getLvalueType(::HIR::TypeRef& tmp, const ::MIR::LValue& val, unsigned wrapper_skip_count /*=0*/) const {
+const ::HIR::TypeData* ::MIR::TypeResolve::getLvalueType(::HIR::TypeRef& tmp, const ::MIR::LValue& val, unsigned wrapperSkipCount /*=0*/) const {
     const ::HIR::TypeData* rv = nullptr;
     TU_MATCHA((val.root), (e), (Return, rv = monomorphedRettype ? monomorphedRettype : retType;), (Argument, MIR_ASSERT(*this, e < mArgs.size(), "Argument " << val << " out of range (" << mArgs.size() << ")"); rv = mArgs.at(e).second;), (Local, MIR_ASSERT(*this, e < fcn.locals.size(), "Local " << val << " out of range (" << fcn.locals.size() << ")"); rv = monomorphedLocals ? monomorphedLocals->at(e) : fcn.locals.at(e);), (Static, rv = getStaticType(tmp, e);))
     if (val.wrappers.size() > 0) {
-        assert(wrapper_skip_count <= val.wrappers.size());
-        const auto* stopWrapper = val.wrappers.data() + (val.wrappers.size() - wrapper_skip_count);
+        assert(wrapperSkipCount <= val.wrappers.size());
+        const auto* stopWrapper = val.wrappers.data() + (val.wrappers.size() - wrapperSkipCount);
         for (const auto& w : val.wrappers) {
             if (&w == stopWrapper) {
                 break;
@@ -73,7 +73,7 @@ const ::HIR::TypeData* ::MIR::TypeResolve::getLvalueType(::HIR::TypeRef& tmp, co
             rv = this->getUnwrappedType(tmp, w, rv);
         }
     } else {
-        assert(wrapper_skip_count == 0);
+        assert(wrapperSkipCount == 0);
     }
     return rv;
 }
@@ -147,7 +147,7 @@ const ::HIR::TypeData* ::MIR::TypeResolve::getUnwrappedType(::HIR::TypeRef& tmp,
                 }
         }
         }
-        TU_ARMA(Downcast, variant_index) {
+        TU_ARMA(Downcast, variantIndex) {
         TU_MATCH_HDRA( ((*ty)), {)
         default:
             MIR_BUG(*this, "Downcast on unexpected type - " << ty);
@@ -157,18 +157,18 @@ const ::HIR::TypeData* ::MIR::TypeResolve::getUnwrappedType(::HIR::TypeRef& tmp,
                         const auto& enm = *te.binding.as_Enum();
                         MIR_ASSERT(*this, enm.mData.is_Data(), "Downcast on non-data enum - " << ty);
                         const auto& variants = enm.mData.as_Data();
-                        MIR_ASSERT(*this, variant_index < variants.size(), "Variant index out of range for " << ty);
-                        const auto& variant = variants[variant_index];
+                        MIR_ASSERT(*this, variantIndex < variants.size(), "Variant index out of range for " << ty);
+                        const auto& variant = variants[variantIndex];
 
-                        const auto& var_ty = variant.type;
-                        return mResolve.monomorphExpandOpt(sp, tmp, var_ty, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
+                        const auto& varTy = variant.type;
+                        return mResolve.monomorphExpandOpt(sp, tmp, varTy, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
                     } else {
                         const auto& unm = *te.binding.as_Union();
-                        MIR_ASSERT(*this, variant_index < unm.mVariants.size(), "Variant index out of range");
-                        const auto& variant = unm.mVariants[variant_index];
-                        const auto& var_ty = variant.ty;
+                        MIR_ASSERT(*this, variantIndex < unm.mVariants.size(), "Variant index out of range");
+                        const auto& variant = unm.mVariants[variantIndex];
+                        const auto& varTy = variant.ty;
 
-                        return mResolve.monomorphExpandOpt(sp, tmp, var_ty, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
+                        return mResolve.monomorphExpandOpt(sp, tmp, varTy, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
                     }
                 }
         }
@@ -324,7 +324,7 @@ const ::HIR::TypeData* MIR::TypeResolve::getParamType(::HIR::TypeRef& tmp, const
 
 bool ::MIR::TypeResolve::lvalueIsCopy(const ::MIR::LValue& val) const {
     ::HIR::TypeRef tmp;
-    return mResolve.type_is_copy(this->sp, getLvalueType(tmp, val));
+    return mResolve.typeIsCopy(this->sp, getLvalueType(tmp, val));
 }
 
 const ::HIR::TypeData* ::MIR::TypeResolve::isTypeOwnedBox(const ::HIR::TypeData* ty) const {
@@ -354,8 +354,8 @@ size_t MIR::TypeResolve::intrinsicOffsetOf(const ::HIR::TypeData* ty, const ::st
                 if (end != fieldName.c_str() && *end == '\0') {
                     MIR_ASSERT(*this, numericIdx <= SIZE_MAX, "Invalid tuple field index " << fieldName);
                     idx = static_cast<size_t>(numericIdx);
-                } else if (const auto* ty_path = curTy->opt_Path()) {
-                    if (const auto* bep = ty_path->binding.opt_Struct()) {
+                } else if (const auto* tyPath = curTy->opt_Path()) {
+                    if (const auto* bep = tyPath->binding.opt_Struct()) {
                         const auto& str = **bep;
                     TU_MATCH_HDRA((str.mData), {)
                     TU_ARMA(Named, fields) {
@@ -370,13 +370,13 @@ size_t MIR::TypeResolve::intrinsicOffsetOf(const ::HIR::TypeData* ty, const ::st
                                 MIR_BUG(*this, "Empty struct: " << curTy << " ." << fieldName);
                             }
                     }
-                    } else if (const auto* bep = ty_path->binding.opt_Union()) {
+                    } else if (const auto* bep = tyPath->binding.opt_Union()) {
                         const auto& unm = **bep;
                         const auto& fields = unm.mVariants;
                         idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
                             return x.name == fieldName;
                         }) - fields.begin();
-                    } else if (const auto* bep = ty_path->binding.opt_Enum()) {
+                    } else if (const auto* bep = tyPath->binding.opt_Enum()) {
                         const auto& enm = **bep;
                         MIR_ASSERT(*this, enm.mData.is_Data(), "Non-Data enum: " << curTy << " ." << fieldName);
                         const auto& fields = enm.mData.as_Data();
@@ -424,37 +424,37 @@ namespace MIR {
             {
             }
 
-            bool visit_lvalue(const ::MIR::LValue& lv, ValUsage u) override {
+            bool visitLvalue(const ::MIR::LValue& lv, ValUsage u) override {
                 if (cb(lv, u)) {
                     return true;
                 }
-                return Visitor::visit_lvalue(lv, u);
+                return Visitor::visitLvalue(lv, u);
             }
         };
 
-        bool visit_mir_lvalue(const ::MIR::LValue& lv, ValUsage u, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
+        bool visitMirLvalue(const ::MIR::LValue& lv, ValUsage u, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
             LValueCbVisitor v{mv$(cb)};
-            return v.visit_lvalue(lv, u);
+            return v.visitLvalue(lv, u);
         }
 
-        bool visit_mir_lvalue(const ::MIR::Param& p, ValUsage u, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
+        bool visitMirLvalue(const ::MIR::Param& p, ValUsage u, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
             LValueCbVisitor v{mv$(cb)};
-            return v.visit_param(p, u);
+            return v.visitParam(p, u);
         }
 
-        bool visit_mir_lvalues(const ::MIR::RValue& rval, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
+        bool visitMirLvalues(const ::MIR::RValue& rval, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
             LValueCbVisitor v{mv$(cb)};
-            return v.visit_rvalue(rval);
+            return v.visitRvalue(rval);
         }
 
-        bool visit_mir_lvalues(const ::MIR::Statement& stmt, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
+        bool visitMirLvalues(const ::MIR::Statement& stmt, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
             LValueCbVisitor v{mv$(cb)};
-            return v.visit_stmt(stmt);
+            return v.visitStmt(stmt);
         }
 
-        bool visit_mir_lvalues(const ::MIR::Terminator& term, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
+        bool visitMirLvalues(const ::MIR::Terminator& term, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
             LValueCbVisitor v{mv$(cb)};
-            return v.visit_terminator(term);
+            return v.visitTerminator(term);
         }
 
         /*
@@ -480,22 +480,22 @@ namespace MIR {
     }
     */
 
-        void visit_terminator_target_mut(::MIR::Terminator& term, ::std::function<void(::MIR::BasicBlockId&)> cb) {
+        void visitTerminatorTargetMut(::MIR::Terminator& term, ::std::function<void(::MIR::BasicBlockId&)> cb) {
             struct TermCbVisitorMut: public VisitorMut {
                 ::std::function<void(::MIR::BasicBlockId&)> cb;
 
-                bool visit_block_id(::MIR::BasicBlockId& x) override {
+                bool visitBlockId(::MIR::BasicBlockId& x) override {
                     cb(x);
                     return false;
                 }
             } v;
 
             v.cb = std::move(cb);
-            v.visit_terminator(term);
+            v.visitTerminator(term);
         }
 
-        void visit_terminator_target(const ::MIR::Terminator& term, ::std::function<void(const ::MIR::BasicBlockId&)> cb) {
-            visit_terminator_target_mut(const_cast<::MIR::Terminator&>(term), cb);
+        void visitTerminatorTarget(const ::MIR::Terminator& term, ::std::function<void(const ::MIR::BasicBlockId&)> cb) {
+            visitTerminatorTargetMut(const_cast<::MIR::Terminator&>(term), cb);
         }
     } // namespace visit
 } // namespace MIR
@@ -539,7 +539,7 @@ namespace {
 }
 
 #if 1 // Alternate algorithm
-void MIRHelperGetLifetimesDetermineValueLifetime(::MIR::TypeResolve& state, const ::MIR::Function& fcn, size_t bbIdx, size_t stmtIdx, const ::MIR::LValue& lv, const ::std::vector<size_t>& block_offsets, const ::std::vector<bool>& use_bitmap, ValueLifetime& vl);
+void MIRHelperGetLifetimesDetermineValueLifetime(::MIR::TypeResolve& state, const ::MIR::Function& fcn, size_t bbIdx, size_t stmtIdx, const ::MIR::LValue& lv, const ::std::vector<size_t>& block_offsets, const ::std::vector<bool>& useBitmap, ValueLifetime& vl);
 
 // ----------
 // TODO: Improved algorithm
@@ -575,7 +575,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(::MIR::TypeResolve& state, cons
             b.resize(statementCount);
         }
         size_t pos = 0;
-        auto use_cb = [&](const ::MIR::LValue& tlv, ValUsage vu) {
+        auto useCb = [&](const ::MIR::LValue& tlv, ValUsage vu) {
             if (tlv.root.is_Local()) {
                 if (vu != ValUsage::Write) {
                     slotReadBitmaps[tlv.root.as_Local()][pos] = true;
@@ -590,10 +590,10 @@ void MIRHelperGetLifetimesDetermineValueLifetime(::MIR::TypeResolve& state, cons
         };
         for (const auto& bb : fcn.blocks) {
             for (const auto& stmt : bb.statements) {
-                visit_mir_lvalues(stmt, use_cb);
+                visitMirLvalues(stmt, useCb);
                 pos++;
             }
-            visit_mir_lvalues(bb.terminator, use_cb);
+            visitMirLvalues(bb.terminator, useCb);
             pos++;
         }
     }
@@ -653,7 +653,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
     size_t stmtIdx, // First statement in which the value is valid (after the assignment)
     const ::MIR::LValue& lv,
     const ::std::vector<size_t>& block_offsets,
-    const ::std::vector<bool>& use_bitmap,
+    const ::std::vector<bool>& useBitmap,
     ValueLifetime& vl
 ) {
     TRACE_FUNCTION_F(mir_res << lv << " assigned");
@@ -802,38 +802,38 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             visitedStatements(mLifetimes.stmtBitmap.size())
         {
             ::HIR::TypeRef tmp;
-            isCopy = mirRes.mResolve.type_is_copy(mir_res.sp, mirRes.getLvalueType(tmp, lv));
+            isCopy = mirRes.mResolve.typeIsCopy(mir_res.sp, mirRes.getLvalueType(tmp, lv));
         }
 
         void runBlock(size_t bbIdx, size_t stmtIdx, State state) {
             const auto& bb = fcn.blocks.at(bbIdx);
             assert(stmtIdx <= bb.statements.size());
 
-            bool was_moved = false;
-            bool was_updated = false;
-            auto visit_cb = [&](const auto& lv, auto vu) {
+            bool wasMoved = false;
+            bool wasUpdated = false;
+            auto visitCb = [&](const auto& lv, auto vu) {
                 if (lv.root == mLv.root) {
                     switch (vu) {
                         case ValUsage::Read:
                             DEBUG(mirRes << "Used");
                             state.markRead(stmtIdx);
-                            was_updated = true;
+                            wasUpdated = true;
                             break;
                         case ValUsage::Move:
                             if (lv.wrappers.size() == mLv.wrappers.size()) {
                                 DEBUG(mirRes << (isCopy ? "Read" : "Moved"));
                                 state.markRead(stmtIdx);
-                                was_moved = !isCopy;
+                                wasMoved = !isCopy;
                             } else {
                                 DEBUG(mirRes << "Used (partial)");
                                 state.markRead(stmtIdx);
-                                was_updated = true;
+                                wasUpdated = true;
                             }
                             break;
                         case ValUsage::Borrow:
                             DEBUG(mirRes << "Borrowed");
                             state.markBorrowed(stmtIdx);
-                            was_updated = true;
+                            wasUpdated = true;
                             break;
                         case ValUsage::Write:
                             // Don't care
@@ -844,7 +844,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     if (w.is_Index() && mLv.is_Local() && w.as_Index() == mLv.as_Local()) {
                         DEBUG(mirRes << "Index used");
                         state.markRead(stmtIdx);
-                        was_updated = true;
+                        wasUpdated = true;
                     }
                 }
                 return false;
@@ -856,13 +856,13 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 visitedStatements[blockOffsets.at(bbIdx) + stmtIdx] = true;
 
                 // Visit and see if the value is read (setting the read flag or end depending on if the value is Copy)
-                was_updated = false;
-                visit_mir_lvalues(stmt, visit_cb);
-                if (was_updated || was_moved) {
+                wasUpdated = false;
+                visitMirLvalues(stmt, visitCb);
+                if (wasUpdated || wasMoved) {
                     DEBUG(mirRes << stmt);
                 }
 
-                if (was_moved) {
+                if (wasMoved) {
                     // Moved: Update read position and apply
                     DEBUG(mirRes << "Moved, return");
                     state.markRead(stmtIdx);
@@ -927,11 +927,11 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             mirRes.setCurStmtTerm(bbIdx);
             visitedStatements[blockOffsets.at(bbIdx) + stmtIdx] = true;
 
-            was_updated = false;
-            visit_mir_lvalues(bb.terminator, visit_cb);
-            DEBUG(mirRes << bb.terminator << (was_updated ? " (used)" : ""));
+            wasUpdated = false;
+            visitMirLvalues(bb.terminator, visitCb);
+            DEBUG(mirRes << bb.terminator << (wasUpdated ? " (used)" : ""));
 
-            if (was_moved) {
+            if (wasMoved) {
                 // Moved: Update read position and apply
                 DEBUG(mirRes << "- Moved, return");
                 state.markRead(stmtIdx);
@@ -973,7 +973,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     for (size_t i = 0; i < te.targets.size(); i++) {
                         statesToDo.push_back(::std::make_pair(te.targets[i], state.clone()));
                     }
-                    if (te.valid_flag != ~0u) {
+                    if (te.validFlag != ~0u) {
                         statesToDo.push_back(::std::make_pair(te.invalidTarget, mv$(state)));
                     }
                 }
@@ -1141,11 +1141,11 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
 
         // if read, update. If set, save and update
         ::std::vector<ProtoLifetime> tmpEnds;
-        ::std::vector<ProtoLifetime> var_ends;
+        ::std::vector<ProtoLifetime> varEnds;
 
         State(const ::MIR::Function& fcn)
             : tmpEnds(fcn.temporaries.size(), ProtoLifetime())
-            , var_ends(fcn.namedVariables.size(), ProtoLifetime())
+            , varEnds(fcn.namedVariables.size(), ProtoLifetime())
         {
         }
 
@@ -1167,7 +1167,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
     }
 
     ::std::vector<ValueLifetime> temporaryLifetimes(fcn.temporaries.size(), ValueLifetime(statementCount));
-    ::std::vector<ValueLifetime> variable_lifetimes(fcn.namedVariables.size(), ValueLifetime(statementCount));
+    ::std::vector<ValueLifetime> variableLifetimes(fcn.namedVariables.size(), ValueLifetime(statementCount));
 
     struct BlockSeenLifetimes {
         bool hasState = false;
@@ -1186,7 +1186,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             return hasState;
         }
 
-        bool tryMerge(const State& val_state) const {
+        bool tryMerge(const State& valState) const {
             // TODO: This logic isn't quite correct. Just becase a value's existing end is already marked as valid,
             // doesn't mean that we have no new information.
             // - Wait, doesn't it?
@@ -1198,25 +1198,25 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 if (lft.is_borrowed()) {
                     return false;
                 }
-                auto endIdx = block_offsets.at(val_state.blockPath.at(lft.end.pathIndex)) + lft.end.stmtIdx;
+                auto endIdx = block_offsets.at(valState.blockPath.at(lft.end.pathIndex)) + lft.end.stmtIdx;
 
                 auto it = ::std::find(seen.begin(), seen.end(), endIdx);
                 return (it == seen.end());
             };
-            for (size_t i = 0; i < val_state.tmpEnds.size(); i++) {
-                if (tryMergeLft(val_state.tmpEnds[i], this->tmp[i])) {
+            for (size_t i = 0; i < valState.tmpEnds.size(); i++) {
+                if (tryMergeLft(valState.tmpEnds[i], this->tmp[i])) {
                     return true;
                 }
             }
-            for (size_t i = 0; i < val_state.var_ends.size(); i++) {
-                if (tryMergeLft(val_state.var_ends[i], this->var[i])) {
+            for (size_t i = 0; i < valState.varEnds.size(); i++) {
+                if (tryMergeLft(valState.varEnds[i], this->var[i])) {
                     return true;
                 }
             }
             return false;
         }
 
-        bool merge(const State& val_state) {
+        bool merge(const State& valState) {
             bool rv = false;
             auto mergeLft = [&](const ProtoLifetime& lft, ::std::vector<unsigned int>& seen) -> bool {
                 if (lft.is_empty()) {
@@ -1226,7 +1226,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 if (lft.end == Position{~0u, ~0u}) {
                     return false;
                 }
-                auto endIdx = block_offsets.at(val_state.blockPath.at(lft.end.pathIndex)) + lft.end.stmtIdx;
+                auto endIdx = block_offsets.at(valState.blockPath.at(lft.end.pathIndex)) + lft.end.stmtIdx;
 
                 auto it = ::std::find(seen.begin(), seen.end(), endIdx);
                 if (it == seen.end()) {
@@ -1236,11 +1236,11 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     return false;
                 }
             };
-            for (size_t i = 0; i < val_state.tmpEnds.size(); i++) {
-                rv |= mergeLft(val_state.tmpEnds[i], this->tmp[i]);
+            for (size_t i = 0; i < valState.tmpEnds.size(); i++) {
+                rv |= mergeLft(valState.tmpEnds[i], this->tmp[i]);
             }
-            for (size_t i = 0; i < val_state.var_ends.size(); i++) {
-                rv |= mergeLft(val_state.var_ends[i], this->var[i]);
+            for (size_t i = 0; i < valState.varEnds.size(); i++) {
+                rv |= mergeLft(valState.varEnds[i], this->var[i]);
             }
             hasState = true;
             return rv;
@@ -1256,13 +1256,13 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
 
     while (!todoQueue.empty()) {
         auto bbIdx = todoQueue.back().first;
-        auto val_state = mv$(todoQueue.back().second);
+        auto valState = mv$(todoQueue.back().second);
         todoQueue.pop_back();
         state.setCurStmt(bbIdx, 0);
 
         // Fill alive time in the bitmap
         // TODO: Maybe also store the range (as a sequence of {block,start,end})
-        auto addLifetimeS = [&](State& val_state, const ::MIR::LValue& lv, const Position& start, const Position& end) {
+        auto addLifetimeS = [&](State& valState, const ::MIR::LValue& lv, const Position& start, const Position& end) {
             assert(start.pathIndex <= end.pathIndex);
             assert(start.pathIndex < end.pathIndex || start.stmtIdx <= end.stmtIdx);
             if (start.pathIndex == end.pathIndex && start.stmtIdx == end.stmtIdx) {
@@ -1273,7 +1273,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             if (const auto* e = lv.opt_Temporary()) {
                 lft = &temporaryLifetimes[e->idx];
             } else if (const auto* e = lv.opt_Variable()) {
-                lft = &variable_lifetimes[*e];
+                lft = &variableLifetimes[*e];
             } else {
                 MIR_TODO(state, "[add_lifetime] " << lv);
                 return;
@@ -1283,8 +1283,8 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             bool didSet = false;
             unsigned int j = start.stmtIdx;
             unsigned int i = start.pathIndex;
-            while (i <= end.pathIndex && i < val_state.blockPath.size()) {
-                auto bbIdx = val_state.blockPath.at(i);
+            while (i <= end.pathIndex && i < valState.blockPath.size()) {
+                auto bbIdx = valState.blockPath.at(i);
                 const auto& bb = fcn.blocks[bbIdx];
                 MIR_ASSERT(state, j <= bb.statements.size(), "");
                 MIR_ASSERT(state, bbIdx < block_offsets.size(), "");
@@ -1312,11 +1312,11 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             // - If the above set a new bit, increment `val_state.cur_change_idx`
             if (didSet) {
                 DEBUG("[add_lifetime] " << lv << " (" << start.pathIndex << "," << start.stmtIdx << ") -- (" << end.pathIndex << "," << end.stmtIdx << ") - New information");
-                val_state.curChangeIdx += 1;
+                valState.curChangeIdx += 1;
             }
         };
         auto addLifetime = [&](const ::MIR::LValue& lv, const Position& start, const Position& end) {
-            addLifetimeS(val_state, lv, start, end);
+            addLifetimeS(valState, lv, start, end);
         };
 
         auto applyState = [&](State& state) {
@@ -1325,7 +1325,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 addLifetimeS(state, ::MIR::LValue::make_Temporary({i}), state.tmpEnds[i].start, state.tmpEnds[i].end);
             }
             for (unsigned i = 0; i < fcn.namedVariables.size(); i++) {
-                addLifetimeS(state, ::MIR::LValue::make_Variable({i}), state.var_ends[i].start, state.var_ends[i].end);
+                addLifetimeS(state, ::MIR::LValue::make_Variable({i}), state.varEnds[i].start, state.varEnds[i].end);
             }
         };
         auto addToVisit = [&](unsigned int newBbIdx, State newState) {
@@ -1344,7 +1344,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 // - If so, mark as valid at the end of the current block
                 auto bmIdx = block_offsets[newBbIdx];
                 Position cur_pos;
-                cur_pos.pathIndex = val_state.blockPath.size() - 1;
+                cur_pos.pathIndex = valState.blockPath.size() - 1;
                 cur_pos.stmtIdx = fcn.blocks[bbIdx].statements.size();
                 for (unsigned i = 0; i < fcn.temporaries.size(); i++) {
                     if (!newState.tmpEnds[i].is_empty() && temporaryLifetimes[i].stmtBitmap[bmIdx]) {
@@ -1353,9 +1353,9 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     }
                 }
                 for (unsigned i = 0; i < fcn.namedVariables.size(); i++) {
-                    if (!newState.var_ends[i].is_empty() && variable_lifetimes[i].stmtBitmap[bmIdx]) {
+                    if (!newState.varEnds[i].is_empty() && variableLifetimes[i].stmtBitmap[bmIdx]) {
                         DEBUG("- var$" << i << " - Active in target, assume active");
-                        newState.var_ends[i].end = cur_pos;
+                        newState.varEnds[i].end = cur_pos;
                     }
                 }
                 // - Apply whatever state was still active
@@ -1370,11 +1370,11 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
         {
             auto& bbMemoryEnt = blockSeenLifetimes[bbIdx];
             bool hadState = bbMemoryEnt.has_state();
-            bool hasNew = bbMemoryEnt.merge(val_state);
+            bool hasNew = bbMemoryEnt.merge(valState);
 
             if (!hasNew && hadState) {
-                DEBUG(state << " state" << val_state.index << " - No new entry state");
-                applyState(val_state);
+                DEBUG(state << " state" << valState.index << " - No new entry state");
+                applyState(valState);
 
                 continue;
             }
@@ -1382,32 +1382,32 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
 
         // Check if this state has visited this block before, and if anything changed since last time
         {
-            auto it = ::std::find(val_state.blockPath.rbegin(), val_state.blockPath.rend(), bbIdx);
-            if (it != val_state.blockPath.rend()) {
-                auto idx = &*it - &val_state.blockPath.front();
-                if (val_state.blockChangeIdx[idx] == val_state.curChangeIdx) {
-                    DEBUG(state << " " << val_state.index << " Loop and no change");
+            auto it = ::std::find(valState.blockPath.rbegin(), valState.blockPath.rend(), bbIdx);
+            if (it != valState.blockPath.rend()) {
+                auto idx = &*it - &valState.blockPath.front();
+                if (valState.blockChangeIdx[idx] == valState.curChangeIdx) {
+                    DEBUG(state << " " << valState.index << " Loop and no change");
                     continue;
                 } else {
-                    assert(val_state.blockChangeIdx[idx] < val_state.curChangeIdx);
-                    DEBUG(state << " " << val_state.index << " --- Loop, " << val_state.curChangeIdx - val_state.blockChangeIdx[idx] << " changes");
+                    assert(valState.blockChangeIdx[idx] < valState.curChangeIdx);
+                    DEBUG(state << " " << valState.index << " --- Loop, " << valState.curChangeIdx - valState.blockChangeIdx[idx] << " changes");
                 }
             } else {
-                DEBUG(state << " " << val_state.index << " ---");
+                DEBUG(state << " " << valState.index << " ---");
             }
-            val_state.blockPath.push_back(bbIdx);
-            val_state.blockChangeIdx.push_back(val_state.curChangeIdx);
+            valState.blockPath.push_back(bbIdx);
+            valState.blockChangeIdx.push_back(valState.curChangeIdx);
         }
 
         Position cur_pos;
-        cur_pos.pathIndex = val_state.blockPath.size() - 1;
+        cur_pos.pathIndex = valState.blockPath.size() - 1;
         cur_pos.stmtIdx = 0;
         auto lvalueRead = [&](const ::MIR::LValue& lv) {
             ProtoLifetime* slot;
             if (const auto* e = lv.opt_Temporary()) {
-                slot = &val_state.tmpEnds.at(e->idx);
+                slot = &valState.tmpEnds.at(e->idx);
             } else if (const auto* e = lv.opt_Variable()) {
-                slot = &val_state.var_ends.at(*e);
+                slot = &valState.varEnds.at(*e);
             } else {
                 return;
             }
@@ -1418,9 +1418,9 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
         auto lvalueSet = [&](const ::MIR::LValue& lv) {
             ProtoLifetime* slot;
             if (const auto* e = lv.opt_Temporary()) {
-                slot = &val_state.tmpEnds.at(e->idx);
+                slot = &valState.tmpEnds.at(e->idx);
             } else if (const auto* e = lv.opt_Variable()) {
-                slot = &val_state.var_ends.at(*e);
+                slot = &valState.varEnds.at(*e);
             } else {
                 return;
             }
@@ -1432,16 +1432,16 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
         auto lvalueBorrow = [&](const ::MIR::LValue& lv) {
             ProtoLifetime* slot;
             if (const auto* e = lv.opt_Temporary()) {
-                slot = &val_state.tmpEnds.at(e->idx);
+                slot = &valState.tmpEnds.at(e->idx);
             } else if (const auto* e = lv.opt_Variable()) {
-                slot = &val_state.var_ends.at(*e);
+                slot = &valState.varEnds.at(*e);
             } else {
                 return;
             }
             // TODO: Flag this value as currently being borrowed (a flag that never clears)
             slot->end = Position{~0u, ~0u};
         };
-        auto visit_lval_cb = [&](const auto& lv, ValUsage vu) -> bool {
+        auto visitLvalCb = [&](const auto& lv, ValUsage vu) -> bool {
             if (vu == ValUsage::Read) {
                 lvalueRead(lv);
             }
@@ -1462,7 +1462,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             DEBUG(state << " " << stmt);
 
             if (const auto* e = stmt.opt_Drop()) {
-                visit_mir_lvalues(stmt, [&](const auto& lv, ValUsage vu) -> bool {
+                visitMirLvalues(stmt, [&](const auto& lv, ValUsage vu) -> bool {
                     if (vu == ValUsage::Read) {
                         lvalueRead(lv);
                     }
@@ -1471,7 +1471,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 lvalueRead(e->slot);
                 lvalueSet(e->slot);
             } else {
-                visit_mir_lvalues(stmt, visit_lval_cb);
+                visitMirLvalues(stmt, visitLvalCb);
             }
         }
         cur_pos.stmtIdx = fcn.blocks[bbIdx].statements.size();
@@ -1488,33 +1488,33 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             ),
             (Return,
              // End all active lifetimes at their previous location.
-             applyState(val_state);),
-            (UnwindResume, applyState(val_state);),
-            (UnwindTerminate, applyState(val_state);),
-            (Unreachable, applyState(val_state);),
-            (Goto, addToVisit(e, mv$(val_state));),
-            (If, visit_mir_lvalue(e.cond, ValUsage::Read, visit_lval_cb);
+             applyState(valState);),
+            (UnwindResume, applyState(valState);),
+            (UnwindTerminate, applyState(valState);),
+            (Unreachable, applyState(valState);),
+            (Goto, addToVisit(e, mv$(valState));),
+            (If, visitMirLvalue(e.cond, ValUsage::Read, visitLvalCb);
 
              // Push blocks
-             addToVisit(e.bb0, val_state.clone());
-             addToVisit(e.bb1, mv$(val_state));),
+             addToVisit(e.bb0, valState.clone());
+             addToVisit(e.bb1, mv$(valState));),
             (
-                Switch, visit_mir_lvalue(e.val, ValUsage::Read, visit_lval_cb); ::std::set<unsigned int> tgts; for (const auto& tgt : e.targets) tgts.insert(tgt);
+                Switch, visitMirLvalue(e.val, ValUsage::Read, visitLvalCb); ::std::set<unsigned int> tgts; for (const auto& tgt : e.targets) tgts.insert(tgt);
 
                 for (const auto& tgt : tgts) {
-                    auto vs = (tgt == *tgts.rbegin() ? mv$(val_state) : val_state.clone());
+                    auto vs = (tgt == *tgts.rbegin() ? mv$(valState) : valState.clone());
                     addToVisit(tgt, mv$(vs));
                 }
             ),
-            (Drop, visit_mir_lvalue(e.slot, ValUsage::Move, visit_lval_cb); TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, addToVisit(target, val_state.clone());) addToVisit(e.target, mv$(val_state));),
-            (Call, if (const auto* f = e.fcn.opt_Value()) visit_mir_lvalue(*f, ValUsage::Read, visit_lval_cb); for (const auto& arg : e.args) if (const auto* e = arg.opt_LValue()) visit_mir_lvalue(*e, ValUsage::Read, visit_lval_cb);
+            (Drop, visitMirLvalue(e.slot, ValUsage::Move, visitLvalCb); TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, addToVisit(target, valState.clone());) addToVisit(e.target, mv$(valState));),
+            (Call, if (const auto* f = e.fcn.opt_Value()) visitMirLvalue(*f, ValUsage::Read, visitLvalCb); for (const auto& arg : e.args) if (const auto* e = arg.opt_LValue()) visitMirLvalue(*e, ValUsage::Read, visitLvalCb);
 
              // Push blocks (with return valid only in one)
-             TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, addToVisit(target, val_state.clone());)
+             TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, addToVisit(target, valState.clone());)
 
              // TODO: If the function returns !, don't follow the ret_block
              lvalueSet(e.retVal);
-             addToVisit(e.retBlock, mv$(val_state));)
+             addToVisit(e.retBlock, mv$(valState));)
         )
     }
 
@@ -1523,8 +1523,8 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
         for (unsigned int i = 0; i < temporaryLifetimes.size(); i++) {
             temporaryLifetimes[i].dumpDebug("tmp", i, block_offsets);
         }
-        for (unsigned int i = 0; i < variable_lifetimes.size(); i++) {
-            variable_lifetimes[i].dumpDebug("var", i, block_offsets);
+        for (unsigned int i = 0; i < variableLifetimes.size(); i++) {
+            variableLifetimes[i].dumpDebug("var", i, block_offsets);
         }
     }
 
@@ -1535,8 +1535,8 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
     for (auto& lft : temporaryLifetimes) {
         rv.temporaries.push_back(::MIR::ValueLifetime(mv$(lft.stmtBitmap)));
     }
-    rv.variables.reserve(variable_lifetimes.size());
-    for (auto& lft : variable_lifetimes) {
+    rv.variables.reserve(variableLifetimes.size());
+    for (auto& lft : variableLifetimes) {
         rv.variables.push_back(::MIR::ValueLifetime(mv$(lft.stmtBitmap)));
     }
 
@@ -1616,28 +1616,28 @@ void ValueLifetime::unify(const ValueLifetime& x) {
 
 namespace MIR { namespace visit {
 
-bool Visitor::visit_lvalue(const ::MIR::LValue& lv, ValUsage u) {
+bool Visitor::visitLvalue(const ::MIR::LValue& lv, ValUsage u) {
     if (lv.root.is_Static()) {
-        visit_path(lv.root.as_Static());
+        visitPath(lv.root.as_Static());
     }
 
     for (auto& w : lv.wrappers) {
         if (w.is_Index()) {
-            if (visit_lvalue(LValue::newLocal(w.as_Index()), ValUsage::Read)) {
+            if (visitLvalue(LValue::newLocal(w.as_Index()), ValUsage::Read)) {
                 return true;
             }
         }
     }
     return false;
 }
-bool VisitorMut::visit_lvalue(::MIR::LValue& lv, ValUsage u) {
+bool VisitorMut::visitLvalue(::MIR::LValue& lv, ValUsage u) {
     if (lv.root.is_Static()) {
-        visit_path(lv.root.as_Static());
+        visitPath(lv.root.as_Static());
     }
     for (auto& w : lv.wrappers) {
         if (w.is_Index()) {
             auto lv = LValue::newLocal(w.as_Index());
-            bool rv = visit_lvalue(lv, ValUsage::Read);
+            bool rv = visitLvalue(lv, ValUsage::Read);
             ASSERT_BUG(Span(), lv.is_Local(), "visit_lvalue on Index mutated the index to a non-local");
             w = ::MIR::LValue::Wrapper::newIndex(lv.as_Local());
             if (rv) {

@@ -454,10 +454,10 @@ namespace {
             // Prevent infinite recursion
             // - Includes the target name to only catch on nested lookups of the same name
             auto guardEnt = ::std::make_pair(&mod, name);
-            bool visit_use = true;
+            bool visitUse = true;
             if (std::count(antirecurseStack.begin(), antirecurseStack.end(), guardEnt) > 0) {
                 DEBUG("Recursion detected, not looking at `use` statements in " << mod.path());
-                visit_use = false;
+                visitUse = false;
             }
 
             struct Guard {
@@ -555,11 +555,11 @@ namespace {
                     }
                 }
 
-                if (const auto* use_stmt = i->data.opt_Use()) {
-                    if (!visit_use) {
+                if (const auto* useStmt = i->data.opt_Use()) {
+                    if (!visitUse) {
                         continue;
                     }
-                    for (const auto& e : use_stmt->entries) {
+                    for (const auto& e : useStmt->entries) {
                         if (e.name == name) {
                             DEBUG("Use " << e.name << " := " << e.path);
 
@@ -645,11 +645,11 @@ namespace {
                 }
             }
             for (const auto& i : mod.mItems) {
-                if (const auto* use_stmt = i->data.opt_Use()) {
-                    if (!visit_use) {
+                if (const auto* useStmt = i->data.opt_Use()) {
+                    if (!visitUse) {
                         continue;
                     }
-                    for (const auto& e : use_stmt->entries) {
+                    for (const auto& e : useStmt->entries) {
                         if (e.name == "") {
                             DEBUG("Glob use " << e.path);
 
@@ -705,8 +705,8 @@ namespace {
         }
 
         /// Locate the named item in HIR (resolving `Import` references too)
-        ResolveItemRef findItemHir(const HIR::Module& mod, const RcString& itemName, ResolveNamespace ns, ::AST::AbsolutePath* outPath = nullptr, const ::HIR::SimplePath* vis_path_p = nullptr) {
-            const auto& vis_path = vis_path_p ? *vis_path_p : ::HIR::SimplePath();
+        ResolveItemRef findItemHir(const HIR::Module& mod, const RcString& itemName, ResolveNamespace ns, ::AST::AbsolutePath* outPath = nullptr, const ::HIR::SimplePath* visPathP = nullptr) {
+            const auto& vis_path = visPathP ? *visPathP : ::HIR::SimplePath();
             TRACE_FUNCTION_F(itemName);
             if (outPath) {
                 ASSERT_BUG(sp, outPath->crate != "", "Crate not filled");

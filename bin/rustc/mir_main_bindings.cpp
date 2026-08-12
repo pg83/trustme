@@ -313,9 +313,9 @@ namespace {
                          os << "LE";
                          break;
                  } os << "(";
-                 fmtVal(os, e.val_l);
+                 fmtVal(os, e.valL);
                  os << ", ";
-                 fmtVal(os, e.val_r);
+                 fmtVal(os, e.valR);
                  os << ")";),
                 (UniOp,
                  switch (e.op) {
@@ -389,7 +389,7 @@ namespace {
         {
         }
 
-        void visit_type_impl(::HIR::TypeImpl& impl) override {
+        void visitTypeImpl(::HIR::TypeImpl& impl) override {
             shortItemName = true;
 
             os << indent() << "impl" << impl.mParams.fmtArgs() << " " << impl.mType << "\n";
@@ -398,14 +398,14 @@ namespace {
             }
             os << indent() << "{\n";
             incIndent();
-            ::HIR::Visitor::visit_type_impl(impl);
+            ::HIR::Visitor::visitTypeImpl(impl);
             decIndent();
             os << indent() << "}\n";
 
             shortItemName = false;
         }
 
-        virtual void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
+        virtual void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
             shortItemName = true;
 
             os << indent() << "impl" << impl.mParams.fmtArgs() << " " << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
@@ -414,14 +414,14 @@ namespace {
             }
             os << indent() << "{\n";
             incIndent();
-            ::HIR::Visitor::visit_trait_impl(trait_path, impl);
+            ::HIR::Visitor::visitTraitImpl(trait_path, impl);
             decIndent();
             os << indent() << "}\n";
 
             shortItemName = false;
         }
 
-        void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
+        void visitMarkerImpl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
             shortItemName = true;
 
             os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.isPositive ? "" : "!") << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
@@ -434,7 +434,7 @@ namespace {
         }
 
         // - Type Items
-        void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
+        void visitTrait(::HIR::ItemPath p, ::HIR::Trait& item) override {
             shortItemName = true;
 
             os << indent() << "trait " << p << item.mParams.fmtArgs() << "\n";
@@ -443,14 +443,14 @@ namespace {
             }
             os << indent() << "{\n";
             incIndent();
-            ::HIR::Visitor::visit_trait(p, item);
+            ::HIR::Visitor::visitTrait(p, item);
             decIndent();
             os << indent() << "}\n";
 
             shortItemName = false;
         }
 
-        void visit_function(::HIR::ItemPath p, ::HIR::Function& item) override {
+        void visitFunction(::HIR::ItemPath p, ::HIR::Function& item) override {
             os << indent();
             if (item.isConst) {
                 os << "const ";
@@ -490,7 +490,7 @@ namespace {
             }
         }
 
-        void visit_constant(::HIR::ItemPath p, ::HIR::Constant& item) override {
+        void visitConstant(::HIR::ItemPath p, ::HIR::Constant& item) override {
             os << indent();
             os << "const ";
             if (shortItemName) {
@@ -512,7 +512,7 @@ namespace {
             }
         }
 
-        void visit_static(::HIR::ItemPath p, ::HIR::Static& item) override {
+        void visitStatic(::HIR::ItemPath p, ::HIR::Static& item) override {
             os << indent();
             os << "static ";
             if (shortItemName) {
@@ -552,7 +552,7 @@ namespace {
 void MIRDump(::std::ostream& sink, const ::HIR::Crate& crate) {
     TreeVisitor tv{crate.types, sink};
 
-    tv.visit_crate(const_cast<::HIR::Crate&>(crate));
+    tv.visitCrate(const_cast<::HIR::Crate&>(crate));
 }
 
 void MIRDumpFcn(::std::ostream& sink, const ::MIR::Function& fcn, unsigned int il) {

@@ -16,7 +16,7 @@ namespace AST {
     {
     }
 
-    const char* ExprNodeP::type_name() const {
+    const char* ExprNodeP::typeName() const {
         return typeid(*ptr).name();
     }
 
@@ -35,13 +35,13 @@ namespace AST {
     {
     }
 
-    void Expr::visit_nodes(NodeVisitor& v) {
+    void Expr::visitNodes(NodeVisitor& v) {
         if (mNode) {
             mNode->visit(v);
         }
     }
 
-    void Expr::visit_nodes(NodeVisitor& v) const {
+    void Expr::visitNodes(NodeVisitor& v) const {
         if (mNode) {
             assert(v.is_const());
             //const_cast<const ExprNode*>(m_node.get())->visit(v);
@@ -255,14 +255,14 @@ namespace AST {
                 }
                 TU_ARMA(Reg, e) {
                     os << "reg(" << e.dir << " " << e.spec << ") ";
-                    if (e.val_in) {
-                        os << *e.val_in;
+                    if (e.valIn) {
+                        os << *e.valIn;
                     } else {
                         os << "_";
                     }
                     os << " => ";
-                    if (e.val_out) {
-                        os << *e.val_out;
+                    if (e.valOut) {
+                        os << *e.valOut;
                     } else {
                         os << "_";
                     }
@@ -287,7 +287,7 @@ namespace AST {
                     params.push_back(Param::make_RegSingle({e.dir, e.spec.clone(), e.val->clone()}));
                 }
                 TU_ARMA(Reg, e) {
-                    params.push_back(Param::make_Reg({e.dir, e.spec.clone(), e.val_in ? e.val_in->clone() : nullptr, e.val_out ? e.val_out->clone() : nullptr}));
+                    params.push_back(Param::make_Reg({e.dir, e.spec.clone(), e.valIn ? e.valIn->clone() : nullptr, e.valOut ? e.valOut->clone() : nullptr}));
                 }
         }
             }
@@ -834,8 +834,8 @@ namespace AST {
                     visit(e.val);
                 }
                 TU_ARMA(Reg, e) {
-                    visit(e.val_in);
-                    visit(e.val_out);
+                    visit(e.valIn);
+                    visit(e.valOut);
                 }
         }
         }
@@ -1176,7 +1176,7 @@ void NodeVisitor::visit(ExprNodeP& cnode) {
 }
 void NodeVisitorDef::visit(ExprNodeP& cnode) {
     if (cnode.isValid()) {
-        TRACE_FUNCTION_F(cnode.type_name());
+        TRACE_FUNCTION_F(cnode.typeName());
         cnode->visit(*this);
     }
 }

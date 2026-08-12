@@ -19,39 +19,39 @@ namespace HIR {
 
     protected:
         TypeInterner& type_interner() const { return types; }
-        void visit_type_data(TypeData& data);
+        void visitTypeData(TypeData& data);
 
     public:
-        virtual void visit_crate(::HIR::Crate& crate);
+        virtual void visitCrate(::HIR::Crate& crate);
 
-        virtual void visit_module(ItemPath p, ::HIR::Module& mod);
+        virtual void visitModule(ItemPath p, ::HIR::Module& mod);
 
-        virtual void visit_type_impl(::HIR::TypeImpl& impl);
-        virtual void visit_inherent_type(ItemPath p, ::HIR::TypeAlias& item);
-        virtual void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl);
-        virtual void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl);
+        virtual void visitTypeImpl(::HIR::TypeImpl& impl);
+        virtual void visitInherentType(ItemPath p, ::HIR::TypeAlias& item);
+        virtual void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl);
+        virtual void visitMarkerImpl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl);
 
         // - Type Items
-        virtual void visit_type_alias(ItemPath p, ::HIR::TypeAlias& item);
-        virtual void visit_trait_alias(::HIR::ItemPath p, ::HIR::TraitAlias& item);
-        virtual void visit_trait(ItemPath p, ::HIR::Trait& item);
-        virtual void visit_struct(ItemPath p, ::HIR::Struct& item);
-        virtual void visit_enum(ItemPath p, ::HIR::Enum& item);
-        virtual void visit_union(ItemPath p, ::HIR::Union& item);
-        virtual void visit_associatedtype(ItemPath p, ::HIR::AssociatedType& item);
+        virtual void visitTypeAlias(ItemPath p, ::HIR::TypeAlias& item);
+        virtual void visitTraitAlias(::HIR::ItemPath p, ::HIR::TraitAlias& item);
+        virtual void visitTrait(ItemPath p, ::HIR::Trait& item);
+        virtual void visitStruct(ItemPath p, ::HIR::Struct& item);
+        virtual void visitEnum(ItemPath p, ::HIR::Enum& item);
+        virtual void visitUnion(ItemPath p, ::HIR::Union& item);
+        virtual void visitAssociatedtype(ItemPath p, ::HIR::AssociatedType& item);
         // - Value Items
-        virtual void visit_function(ItemPath p, ::HIR::Function& item);
-        virtual void visit_static(ItemPath p, ::HIR::Static& item);
-        virtual void visit_constant(ItemPath p, ::HIR::Constant& item);
+        virtual void visitFunction(ItemPath p, ::HIR::Function& item);
+        virtual void visitStatic(ItemPath p, ::HIR::Static& item);
+        virtual void visitConstant(ItemPath p, ::HIR::Constant& item);
 
         // - Misc
-        virtual void visit_params(::HIR::GenericParams& params);
-        virtual void visit_generic_bound(::HIR::GenericBound& bound);
-        virtual void visit_pattern(::HIR::Pattern& pat);
-        virtual void visit_pattern_val(::HIR::Pattern::Value& val);
+        virtual void visitParams(::HIR::GenericParams& params);
+        virtual void visitGenericBound(::HIR::GenericBound& bound);
+        virtual void visitPattern(::HIR::Pattern& pat);
+        virtual void visitPatternVal(::HIR::Pattern::Value& val);
 
-        virtual void visit_type(::HIR::TypeRef& tr);
-        virtual void visit_constgeneric(::HIR::ConstGeneric& c);
+        virtual void visitType(::HIR::TypeRef& tr);
+        virtual void visitConstgeneric(::HIR::ConstGeneric& c);
 
         enum class PathContext {
             TYPE,
@@ -59,12 +59,12 @@ namespace HIR {
 
             VALUE,
         };
-        virtual void visit_trait_path(::HIR::TraitPath& p);
-        virtual void visit_path(::HIR::Path& p, PathContext);
-        virtual void visit_path_params(::HIR::PathParams& p);
-        virtual void visit_generic_path(::HIR::GenericPath& p, PathContext);
+        virtual void visitTraitPath(::HIR::TraitPath& p);
+        virtual void visitPath(::HIR::Path& p, PathContext);
+        virtual void visitPathParams(::HIR::PathParams& p);
+        virtual void visitGenericPath(::HIR::GenericPath& p, PathContext);
 
-        virtual void visit_expr(::HIR::ExprPtr& exp);
+        virtual void visitExpr(::HIR::ExprPtr& exp);
     };
 
 } // namespace HIR

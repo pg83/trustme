@@ -179,7 +179,7 @@ public:
         return pos;
     }
 
-    static bool type_is_rword(enum eTokenType type) {
+    static bool typeIsRword(enum eTokenType type) {
         return type >= TOK_RWORD_PUB && type <= TOK_RWORD_TRY;
     }
 

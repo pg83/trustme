@@ -94,19 +94,19 @@ bool operator==(const RegisterSpec& a, const RegisterSpec& b) {
 }
 const char* to_string(const RegisterClass& c) {
     switch (c) {
-        case RegisterClass::x86_reg:
+        case RegisterClass::x86Reg:
             return "reg";
-        case RegisterClass::x86_reg_abcd:
+        case RegisterClass::x86RegAbcd:
             return "reg_abcd";
-        case RegisterClass::x86_reg_byte:
+        case RegisterClass::x86RegByte:
             return "reg_byte";
-        case RegisterClass::x86_xmm:
+        case RegisterClass::x86Xmm:
             return "xmm_reg";
-        case RegisterClass::x86_ymm:
+        case RegisterClass::x86Ymm:
             return "ymm_reg";
-        case RegisterClass::x86_zmm:
+        case RegisterClass::x86Zmm:
             return "zmm_reg";
-        case RegisterClass::x86_kreg:
+        case RegisterClass::x86Kreg:
             return "kreg";
         case RegisterClass::riscvReg:
             return "reg";

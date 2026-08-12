@@ -122,8 +122,8 @@ namespace HIR {
         void operator+=(const RcString& s);
         RcString popComponent();
 
-        void update_crate_name(RcString v);
-        void update_last_component(RcString v);
+        void updateCrateName(RcString v);
+        void updateLastComponent(RcString v);
 
         bool operator==(const SimplePath& x) const {
             return ord(x) == OrdEqual;

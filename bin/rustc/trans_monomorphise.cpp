@@ -18,7 +18,7 @@ namespace {
         {
         }
 
-        const HIR::TypeData* value_generic_type(HIR::GenericRef g) const override {
+        const HIR::TypeData* valueGenericType(HIR::GenericRef g) const override {
             switch (g.group()) {
                 case 0:
                     ASSERT_BUG(sp, g.idx() < mResolve.impl_generics().values.size(), "Value generic " << g << " out of bounds in impl: " << mResolve.impl_generics().values.size());
@@ -184,7 +184,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
     for (auto& fcnEnt : list.functions) {
         const auto& fcn = *fcnEnt.second->ptr;
         // Trait methods (which are the only case where `Self` can exist in the argument list at this stage) always need to be monomorphised.
-        bool isMethod = (fcn.mArgs.size() > 0 && visit_ty_with(fcn.mArgs[0].second, [&](const auto& x) {
+        bool isMethod = (fcn.mArgs.size() > 0 && visitTyWith(fcn.mArgs[0].second, [&](const auto& x) {
             return x == crate.types.self();
         }));
         bool monomorphNeeded = fcnEnt.second->pp.hasTypes() || isMethod;

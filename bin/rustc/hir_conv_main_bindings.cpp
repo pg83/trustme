@@ -161,29 +161,29 @@ namespace {
 
         HIR::TypeInterner& interner() const { return crate.types; }
 
-        void visit_module(::HIR::ItemPath p, ::HIR::Module& mod) override {
+        void visitModule(::HIR::ItemPath p, ::HIR::Module& mod) override {
             auto parentMod = curModule;
             curModule.ptr = &mod;
             curModule.path = &p;
 
             ms.pushTraits(p, mod);
-            ::HIR::Visitor::visit_module(p, mod);
+            ::HIR::Visitor::visitModule(p, mod);
             ms.popTraits(mod);
 
             curModule = parentMod;
         }
 
-        void visit_trait_path(::HIR::TraitPath& p) override {
+        void visitTraitPath(::HIR::TraitPath& p) override {
             static Span sp;
             p.traitPtr = &crate.getTraitByPath(sp, p.mPath.mPath);
 
-            ::HIR::Visitor::visit_trait_path(p);
+            ::HIR::Visitor::visitTraitPath(p);
         }
 
-        void visit_literal(const Span& sp, EncodedLiteral& lit) {
+        void visitLiteral(const Span& sp, EncodedLiteral& lit) {
             for (auto& r : lit.relocations) {
                 if (r.p) {
-                    visit_path(*r.p, ::HIR::Visitor::PathContext::VALUE);
+                    visitPath(*r.p, ::HIR::Visitor::PathContext::VALUE);
                 }
             }
         }
@@ -251,11 +251,11 @@ namespace {
             }
         }
 
-        void visit_pattern(::HIR::Pattern& pat) override {
+        void visitPattern(::HIR::Pattern& pat) override {
             static Span _sp = Span();
             const Span& sp = _sp;
 
-            ::HIR::Visitor::visit_pattern(pat);
+            ::HIR::Visitor::visitPattern(pat);
 
             TU_MATCH_HDRA( (pat.mData), {)
             default:
@@ -280,8 +280,8 @@ namespace {
             }
         }
 
-        void visit_constgeneric(::HIR::ConstGeneric& value) override {
-            HIR::Visitor::visit_constgeneric(value);
+        void visitConstgeneric(::HIR::ConstGeneric& value) override {
+            HIR::Visitor::visitConstgeneric(value);
             if (auto* unevaluated = value.opt_Unevaluated()) {
                 if (ms.implGenerics) {
                     (*unevaluated)->paramsImpl = ms.implGenerics->makeNopParams(crate.types, 0);
@@ -292,7 +292,7 @@ namespace {
             }
         }
 
-        void visit_params(::HIR::GenericParams& params) override {
+        void visitParams(::HIR::GenericParams& params) override {
             static Span sp;
             for (auto& bound : params.bounds) {
                 if (auto* be = bound.opt_TraitBound()) {
@@ -313,12 +313,12 @@ namespace {
                 }
             }
 
-            ::HIR::Visitor::visit_params(params);
+            ::HIR::Visitor::visitParams(params);
         }
 
-        void visit_associatedtype(HIR::ItemPath p, ::HIR::AssociatedType& item) override {
+        void visitAssociatedtype(HIR::ItemPath p, ::HIR::AssociatedType& item) override {
             static Span sp;
-            HIR::Visitor::visit_associatedtype(p, item);
+            HIR::Visitor::visitAssociatedtype(p, item);
             HIR::TypeRef ty = crate.types.path(p.getFullPath(), {});
             for (auto& bound : item.traitBounds) {
                 const auto& trait = crate.getTraitByPath(sp, bound.mPath.mPath);
@@ -326,11 +326,11 @@ namespace {
             }
         }
 
-        void visit_type(::HIR::TypeRef& ty) override {
-            visit_type_inner(ty);
+        void visitType(::HIR::TypeRef& ty) override {
+            visitTypeInner(ty);
         }
 
-        void visit_type_inner(::HIR::TypeRef& ty, bool doBind = true) {
+        void visitTypeInner(::HIR::TypeRef& ty, bool doBind = true) {
             //TRACE_FUNCTION_F(ty);
             static Span sp;
             auto data = ty->cloneData();
@@ -388,10 +388,10 @@ namespace {
                     }
                 }
             } else if (auto* te = data.opt_ErasedType()) {
-                HIR::TypeRef ty_eself = crate.types.generic("ErasedSelf", GENERICErasedSelf);
+                HIR::TypeRef tyEself = crate.types.generic("ErasedSelf", GENERICErasedSelf);
                 for (auto& t : te->traits) {
                     const auto& trait = crate.getTraitByPath(sp, t.mPath.mPath);
-                    fixParamCount(crate.types, sp, t.mPath, trait.mParams, t.mPath.mParams, /*fill_infer=*/inExpr, ty_eself);
+                    fixParamCount(crate.types, sp, t.mPath, trait.mParams, t.mPath.mParams, /*fill_infer=*/inExpr, tyEself);
                 }
 
                 if (auto* ee = te->inner.opt_Fcn()) {
@@ -432,7 +432,7 @@ namespace {
                     // - Add a un-namable generic parameter (TODO: Prevent this from being explicitly set when called)
                     else if (fcnPtr) {
                         // Visit inner first, to handle nested
-                        visit_type_data(data);
+                        visitTypeData(data);
                         dataVisited = true;
 
                         size_t idx = fcnPtr->mParams.types.size();
@@ -486,12 +486,12 @@ namespace {
             }
 
             if (!dataVisited) {
-                visit_type_data(data);
+                visitTypeData(data);
             }
             ty = crate.types.intern(mv$(data));
         }
 
-        void visit_type_impl(::HIR::TypeImpl& impl) override {
+        void visitTypeImpl(::HIR::TypeImpl& impl) override {
             TRACE_FUNCTION_F("impl " << impl.mType << " - from " << impl.srcModule);
             auto _ = this->ms.setImplGenerics(impl.mParams);
 
@@ -502,18 +502,18 @@ namespace {
                 curModule.ptr = mod;
                 curModule.path = &modIp;
             }
-            ::HIR::Visitor::visit_type_impl(impl);
+            ::HIR::Visitor::visitTypeImpl(impl);
             if (mod) {
                 ms.popTraits(*mod);
             }
         }
 
-        void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+        void visitInherentType(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
             auto _ = this->ms.setItemGenerics(item.mParams);
-            ::HIR::Visitor::visit_inherent_type(p, item);
+            ::HIR::Visitor::visitInherentType(p, item);
         }
 
-        void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
+        void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
             TRACE_FUNCTION_F("impl " << trait_path << " for " << impl.mType);
             auto traitGpath = ::HIR::GenericPath(trait_path, impl.traitArgs.clone());
             auto _0 = this->ms.setCurrentTraitImpl(impl);
@@ -528,14 +528,14 @@ namespace {
                 curModule.path = &modIp;
             }
             ms.traits.push_back(::std::make_pair(&trait_path, &this->ms.crate.getTraitByPath(Span(), trait_path)));
-            ::HIR::Visitor::visit_trait_impl(trait_path, impl);
+            ::HIR::Visitor::visitTraitImpl(trait_path, impl);
             ms.traits.pop_back();
             if (mod) {
                 ms.popTraits(*mod);
             }
         }
 
-        void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
+        void visitMarkerImpl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
             TRACE_FUNCTION_F("impl " << trait_path << " for " << impl.mType << " { }");
             auto _ = this->ms.setImplGenerics(impl.mParams);
 
@@ -546,33 +546,33 @@ namespace {
                 curModule.ptr = mod;
                 curModule.path = &modIp;
             }
-            ::HIR::Visitor::visit_marker_impl(trait_path, impl);
+            ::HIR::Visitor::visitMarkerImpl(trait_path, impl);
             if (mod) {
                 ms.popTraits(*mod);
             }
         }
 
-        void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
+        void visitTrait(::HIR::ItemPath p, ::HIR::Trait& item) override {
             auto _ = this->ms.setImplGenerics(item.mParams);
-            ::HIR::Visitor::visit_trait(p, item);
+            ::HIR::Visitor::visitTrait(p, item);
         }
 
-        void visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) override {
+        void visitEnum(::HIR::ItemPath p, ::HIR::Enum& item) override {
             auto _ = this->ms.setImplGenerics(item.mParams);
-            ::HIR::Visitor::visit_enum(p, item);
+            ::HIR::Visitor::visitEnum(p, item);
         }
 
-        void visit_struct(::HIR::ItemPath p, ::HIR::Struct& item) override {
+        void visitStruct(::HIR::ItemPath p, ::HIR::Struct& item) override {
             auto _ = this->ms.setImplGenerics(item.mParams);
-            ::HIR::Visitor::visit_struct(p, item);
+            ::HIR::Visitor::visitStruct(p, item);
         }
 
-        void visit_union(::HIR::ItemPath p, ::HIR::Union& item) override {
+        void visitUnion(::HIR::ItemPath p, ::HIR::Union& item) override {
             auto _ = this->ms.setImplGenerics(item.mParams);
-            ::HIR::Visitor::visit_union(p, item);
+            ::HIR::Visitor::visitUnion(p, item);
         }
 
-        void visit_function(::HIR::ItemPath p, ::HIR::Function& item) override {
+        void visitFunction(::HIR::ItemPath p, ::HIR::Function& item) override {
             auto _ = this->ms.setItemGenerics(item.mParams);
             fcnPtr = &item;
 
@@ -583,7 +583,7 @@ namespace {
             //m_cur_params_level = 1;
             for (auto& arg : item.mArgs) {
                 TRACE_FUNCTION_F("ARG " << arg);
-                visit_type(arg.second);
+                visitType(arg.second);
             }
             //m_cur_params = nullptr;
 
@@ -592,80 +592,80 @@ namespace {
             fcnErasedCount = 0;
             {
                 TRACE_FUNCTION_F("RET " << item.returnType);
-                visit_type(item.returnType);
+                visitType(item.returnType);
             }
             fcnPath = nullptr;
             fcnPtr = nullptr;
 
-            ::HIR::Visitor::visit_function(p, item);
+            ::HIR::Visitor::visitFunction(p, item);
         }
 
-        void visit_static(::HIR::ItemPath p, ::HIR::Static& item) override {
+        void visitStatic(::HIR::ItemPath p, ::HIR::Static& item) override {
             //auto _ = this->m_ms.set_item_generics(item.m_params);
-            ::HIR::Visitor::visit_static(p, item);
-            visit_literal(Span(), item.valueRes);
+            ::HIR::Visitor::visitStatic(p, item);
+            visitLiteral(Span(), item.valueRes);
         }
 
-        void visit_constant(::HIR::ItemPath p, ::HIR::Constant& item) override {
+        void visitConstant(::HIR::ItemPath p, ::HIR::Constant& item) override {
             auto _ = this->ms.setItemGenerics(item.mParams);
-            ::HIR::Visitor::visit_constant(p, item);
-            visit_literal(Span(), item.valueRes);
+            ::HIR::Visitor::visitConstant(p, item);
+            visitLiteral(Span(), item.valueRes);
         }
 
         // Actual expressions
-        void visit_expr(::HIR::ExprPtr& expr) override {
+        void visitExpr(::HIR::ExprPtr& expr) override {
             struct ExprVisitor: public ::HIR::ExprVisitorDef {
-                BindVisitor& upper_visitor;
+                BindVisitor& upperVisitor;
 
                 ExprVisitor(BindVisitor& uv)
                     : ::HIR::ExprVisitorDef(uv.interner())
-                    , upper_visitor(uv)
+                    , upperVisitor(uv)
                 {
                 }
 
-                void visit_generic_path(::HIR::Visitor::PathContext pc, ::HIR::GenericPath& p) override {
-                    upper_visitor.visit_generic_path(p, pc);
+                void visitGenericPath(::HIR::Visitor::PathContext pc, ::HIR::GenericPath& p) override {
+                    upperVisitor.visitGenericPath(p, pc);
                 }
 
-                void visit_type(::HIR::TypeRef& ty) override {
-                    upper_visitor.visit_type_inner(ty, true);
+                void visitType(::HIR::TypeRef& ty) override {
+                    upperVisitor.visitTypeInner(ty, true);
                 }
 
-                void visit_node_ptr(::HIR::ExprNodeP& nodePtr) override {
-                    upper_visitor.visit_type(nodePtr->resType);
-                    ::HIR::ExprVisitorDef::visit_node_ptr(nodePtr);
+                void visitNodePtr(::HIR::ExprNodeP& nodePtr) override {
+                    upperVisitor.visitType(nodePtr->resType);
+                    ::HIR::ExprVisitorDef::visitNodePtr(nodePtr);
                 }
 
                 void visit(::HIR::ExprNodeLet& node) override {
-                    upper_visitor.visit_type(node.mType);
-                    upper_visitor.visit_pattern(node.pattern);
+                    upperVisitor.visitType(node.mType);
+                    upperVisitor.visitPattern(node.pattern);
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
                 void visit(::HIR::ExprNodeMatch& node) override {
                     for (auto& arm : node.arms) {
                         for (auto& pat : arm.patterns) {
-                            upper_visitor.visit_pattern(pat);
+                            upperVisitor.visitPattern(pat);
                         }
                         for (auto& g : arm.guards) {
-                            upper_visitor.visit_pattern(g.pat);
+                            upperVisitor.visitPattern(g.pat);
                         }
                     }
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
                 void visit(::HIR::ExprNodePathValue& node) override {
-                    upper_visitor.visit_path(node.mPath, ::HIR::Visitor::PathContext::VALUE);
+                    upperVisitor.visitPath(node.mPath, ::HIR::Visitor::PathContext::VALUE);
                 }
 
                 void visit(::HIR::ExprNodeCallPath& node) override {
-                    upper_visitor.visit_path(node.mPath, ::HIR::Visitor::PathContext::VALUE);
+                    upperVisitor.visitPath(node.mPath, ::HIR::Visitor::PathContext::VALUE);
                     ::HIR::ExprVisitorDef::visit(node);
 
                     // #[rustc_legacy_const_generics] - A backwards compatability hack added between 1.39 and 1.54 to be backwards compatible with the x86 intrinsics
                     // - Rewrites some literal arguments into const generics
                     if (auto* e = node.mPath.mData.opt_Generic()) {
-                        auto& fcn = upper_visitor.crate.getFunctionByPath(node.span(), e->mPath);
+                        auto& fcn = upperVisitor.crate.getFunctionByPath(node.span(), e->mPath);
                         if (!fcn.markings.rustcLegacyConstGenerics.empty()) {
                             if (node.mArgs.size() == fcn.mArgs.size()) {
                                 // Acceptable
@@ -680,7 +680,7 @@ namespace {
                                     HIR::ExprPtr ep{std::move(argNode)};
                                     e->mParams.values.push_back(HIR::ConstGeneric(std::make_unique<HIR::ConstGenericUnevaluated>(std::move(ep))));
                                     // - Visit to ensure that the expr state gets filled
-                                    upper_visitor.visit_constgeneric(e->mParams.values.back());
+                                    upperVisitor.visitConstgeneric(e->mParams.values.back());
                                 }
                                 auto newEnd = std::remove_if(node.mArgs.begin(), node.mArgs.end(), [](const HIR::ExprNodeP& np) {
                                     return !np;
@@ -694,12 +694,12 @@ namespace {
                 }
 
                 void visit(::HIR::ExprNodeCallMethod& node) override {
-                    upper_visitor.visit_path_params(node.mParams);
+                    upperVisitor.visitPathParams(node.mParams);
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
                 void visit(::HIR::ExprNodeStructLiteral& node) override {
-                    upper_visitor.visit_type_inner(node.mType, false);
+                    upperVisitor.visitTypeInner(node.mType, false);
 
                     ::HIR::ExprVisitorDef::visit(node);
                 }
@@ -707,23 +707,23 @@ namespace {
                 void visit(::HIR::ExprNodeArraySized& node) override {
                     auto& as = node.mSize;
                     if (as.is_Unevaluated()) {
-                        upper_visitor.visit_constgeneric(as.as_Unevaluated());
+                        upperVisitor.visitConstgeneric(as.as_Unevaluated());
                     }
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
                 void visit(::HIR::ExprNodeClosure& node) override {
-                    upper_visitor.visit_type(node.returnType);
+                    upperVisitor.visitType(node.returnType);
                     for (auto& arg : node.mArgs) {
-                        upper_visitor.visit_pattern(arg.first);
-                        upper_visitor.visit_type(arg.second);
+                        upperVisitor.visitPattern(arg.first);
+                        upperVisitor.visitType(arg.second);
                     }
                     ::HIR::ExprVisitorDef::visit(node);
                 }
             };
 
             for (auto& ty : expr.erasedTypes) {
-                visit_type(ty);
+                visitType(ty);
             }
 
             // Set up the module state
@@ -751,28 +751,28 @@ namespace {
             // External expression (has MIR)
             else if (auto* mir = expr.getExtMirMut()) {
                 for (auto& ty : mir->locals) {
-                    this->visit_type(ty);
+                    this->visitType(ty);
                 }
 
                 struct MirVisitor: public ::MIR::visit::VisitorMut {
-                    BindVisitor& upper_visitor;
+                    BindVisitor& upperVisitor;
 
-                    MirVisitor(BindVisitor& upper_visitor)
-                        : upper_visitor(upper_visitor)
+                    MirVisitor(BindVisitor& upperVisitor)
+                        : upperVisitor(upperVisitor)
                     {
                     }
 
-                    void visit_type(::HIR::TypeRef& t) override {
-                        upper_visitor.visit_type(t);
+                    void visitType(::HIR::TypeRef& t) override {
+                        upperVisitor.visitType(t);
                     }
 
-                    void visit_path(::HIR::Path& p) override {
-                        upper_visitor.visit_path(p, ::HIR::Visitor::PathContext::VALUE);
+                    void visitPath(::HIR::Path& p) override {
+                        upperVisitor.visitPath(p, ::HIR::Visitor::PathContext::VALUE);
                     }
 
-                    bool visit_lvalue(::MIR::LValue& lv, ::MIR::visit::ValUsage u) override {
+                    bool visitLvalue(::MIR::LValue& lv, ::MIR::visit::ValUsage u) override {
                         if (lv.root.is_Static()) {
-                            upper_visitor.visit_path(lv.root.as_Static(), ::HIR::Visitor::PathContext::VALUE);
+                            upperVisitor.visitPath(lv.root.as_Static(), ::HIR::Visitor::PathContext::VALUE);
                         }
                         return false;
                     }
@@ -781,9 +781,9 @@ namespace {
                 MirVisitor mv(*this);
                 for (auto& block : mir->blocks) {
                     for (auto& stmt : block.statements) {
-                        mv.visit_stmt(stmt);
+                        mv.visitStmt(stmt);
                     }
-                    mv.visit_terminator(block.terminator);
+                    mv.visitTerminator(block.terminator);
                 }
             } else {
             }
@@ -800,7 +800,7 @@ namespace {
         {
         }
 
-        void visit_trait(::HIR::ItemPath ip, ::HIR::Trait& tr) override {
+        void visitTrait(::HIR::ItemPath ip, ::HIR::Trait& tr) override {
             static Span sp;
             TRACE_FUNCTION_F(ip);
             const auto ty_self = crate.types.self();
@@ -938,7 +938,7 @@ namespace {
             };
 
             auto thisPath = ip.getSimplePath();
-            thisPath.update_crate_name(crate.crateName);
+            thisPath.updateCrateName(crate.crateName);
 
             Enumerate e{crate.types, ty_self};
             for (const auto& pt : tr.parentTraits) {
@@ -1017,17 +1017,17 @@ namespace {
 
         HIR::TypeInterner& interner() const { return crate.types; }
 
-        void visit_module(::HIR::ItemPath p, ::HIR::Module& mod) override {
+        void visitModule(::HIR::ItemPath p, ::HIR::Module& mod) override {
             ms.pushTraits(p, mod);
-            ::HIR::Visitor::visit_module(p, mod);
+            ::HIR::Visitor::visitModule(p, mod);
             ms.popTraits(mod);
         }
 
-        void visit_type(::HIR::TypeRef& ty) override {
-            visit_type_inner(ty);
+        void visitType(::HIR::TypeRef& ty) override {
+            visitTypeInner(ty);
         }
 
-        void visit_type_inner(::HIR::TypeRef& ty, bool doBind = true) {
+        void visitTypeInner(::HIR::TypeRef& ty, bool doBind = true) {
             //TRACE_FUNCTION_F(ty);
             static Span sp;
 
@@ -1036,8 +1036,8 @@ namespace {
                 if (te->def.is_Function() && te->def.as_Function() == nullptr) {
                     StaticTraitResolve resolve{crate};
                     resolve.setBothGenericsRaw(ms.implGenerics, ms.itemGenerics);
-                    MonomorphState unused_ms(crate.types);
-                    const auto& v = resolve.getValue(sp, te->path, unused_ms, true);
+                    MonomorphState unusedMs(crate.types);
+                    const auto& v = resolve.getValue(sp, te->path, unusedMs, true);
 
                     TU_MATCH_HDRA( (v), {)
                     default:
@@ -1055,11 +1055,11 @@ namespace {
                 }
             }
 
-            visit_type_data(data);
+            visitTypeData(data);
             ty = crate.types.intern(mv$(data));
         }
 
-        void visit_type_impl(::HIR::TypeImpl& impl) override {
+        void visitTypeImpl(::HIR::TypeImpl& impl) override {
             TRACE_FUNCTION_F("impl " << impl.mType << " - from " << impl.srcModule);
             auto _ = this->ms.setImplGenerics(impl.mParams);
 
@@ -1067,18 +1067,18 @@ namespace {
             if (mod) {
                 ms.pushTraits(impl.srcModule, *mod);
             }
-            ::HIR::Visitor::visit_type_impl(impl);
+            ::HIR::Visitor::visitTypeImpl(impl);
             if (mod) {
                 ms.popTraits(*mod);
             }
         }
 
-        void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+        void visitInherentType(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
             auto _ = this->ms.setItemGenerics(item.mParams);
-            ::HIR::Visitor::visit_inherent_type(p, item);
+            ::HIR::Visitor::visitInherentType(p, item);
         }
 
-        void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
+        void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
             TRACE_FUNCTION_F("impl " << trait_path << " for " << impl.mType);
             auto _ = this->ms.setImplGenerics(impl.mParams);
 
@@ -1087,14 +1087,14 @@ namespace {
                 ms.pushTraits(impl.srcModule, *mod);
             }
             ms.traits.push_back(::std::make_pair(&trait_path, &this->ms.crate.getTraitByPath(Span(), trait_path)));
-            ::HIR::Visitor::visit_trait_impl(trait_path, impl);
+            ::HIR::Visitor::visitTraitImpl(trait_path, impl);
             ms.traits.pop_back();
             if (mod) {
                 ms.popTraits(*mod);
             }
         }
 
-        void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
+        void visitMarkerImpl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
             TRACE_FUNCTION_F("impl " << trait_path << " for " << impl.mType << " { }");
             auto _ = this->ms.setImplGenerics(impl.mParams);
 
@@ -1102,105 +1102,105 @@ namespace {
             if (mod) {
                 ms.pushTraits(impl.srcModule, *mod);
             }
-            ::HIR::Visitor::visit_marker_impl(trait_path, impl);
+            ::HIR::Visitor::visitMarkerImpl(trait_path, impl);
             if (mod) {
                 ms.popTraits(*mod);
             }
         }
 
-        void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
+        void visitTrait(::HIR::ItemPath p, ::HIR::Trait& item) override {
             auto _ = this->ms.setImplGenerics(item.mParams);
-            ::HIR::Visitor::visit_trait(p, item);
+            ::HIR::Visitor::visitTrait(p, item);
         }
 
-        void visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) override {
+        void visitEnum(::HIR::ItemPath p, ::HIR::Enum& item) override {
             auto _ = this->ms.setImplGenerics(item.mParams);
-            ::HIR::Visitor::visit_enum(p, item);
+            ::HIR::Visitor::visitEnum(p, item);
         }
 
-        void visit_struct(::HIR::ItemPath p, ::HIR::Struct& item) override {
+        void visitStruct(::HIR::ItemPath p, ::HIR::Struct& item) override {
             auto _ = this->ms.setImplGenerics(item.mParams);
-            ::HIR::Visitor::visit_struct(p, item);
+            ::HIR::Visitor::visitStruct(p, item);
         }
 
-        void visit_union(::HIR::ItemPath p, ::HIR::Union& item) override {
+        void visitUnion(::HIR::ItemPath p, ::HIR::Union& item) override {
             auto _ = this->ms.setImplGenerics(item.mParams);
-            ::HIR::Visitor::visit_union(p, item);
+            ::HIR::Visitor::visitUnion(p, item);
         }
 
-        void visit_function(::HIR::ItemPath p, ::HIR::Function& item) override {
+        void visitFunction(::HIR::ItemPath p, ::HIR::Function& item) override {
             auto _ = this->ms.setItemGenerics(item.mParams);
-            ::HIR::Visitor::visit_function(p, item);
+            ::HIR::Visitor::visitFunction(p, item);
         }
 
-        void visit_static(::HIR::ItemPath p, ::HIR::Static& item) override {
+        void visitStatic(::HIR::ItemPath p, ::HIR::Static& item) override {
             //auto _ = this->m_ms.set_item_generics(item.m_params);
-            ::HIR::Visitor::visit_static(p, item);
+            ::HIR::Visitor::visitStatic(p, item);
         }
 
-        void visit_constant(::HIR::ItemPath p, ::HIR::Constant& item) override {
+        void visitConstant(::HIR::ItemPath p, ::HIR::Constant& item) override {
             auto _ = this->ms.setItemGenerics(item.mParams);
-            ::HIR::Visitor::visit_constant(p, item);
+            ::HIR::Visitor::visitConstant(p, item);
         }
 
         // Actual expressions
-        void visit_expr(::HIR::ExprPtr& expr) override {
+        void visitExpr(::HIR::ExprPtr& expr) override {
             struct ExprVisitor: public ::HIR::ExprVisitorDef {
-                VisitorPost& upper_visitor;
+                VisitorPost& upperVisitor;
 
                 ExprVisitor(VisitorPost& uv)
                     : ::HIR::ExprVisitorDef(uv.interner())
-                    , upper_visitor(uv)
+                    , upperVisitor(uv)
                 {
                 }
 
-                void visit_generic_path(::HIR::Visitor::PathContext pc, ::HIR::GenericPath& p) override {
-                    upper_visitor.visit_generic_path(p, pc);
+                void visitGenericPath(::HIR::Visitor::PathContext pc, ::HIR::GenericPath& p) override {
+                    upperVisitor.visitGenericPath(p, pc);
                 }
 
-                void visit_type(::HIR::TypeRef& ty) override {
-                    upper_visitor.visit_type_inner(ty, true);
+                void visitType(::HIR::TypeRef& ty) override {
+                    upperVisitor.visitTypeInner(ty, true);
                 }
 
-                void visit_node_ptr(::HIR::ExprNodeP& nodePtr) override {
-                    upper_visitor.visit_type(nodePtr->resType);
-                    ::HIR::ExprVisitorDef::visit_node_ptr(nodePtr);
+                void visitNodePtr(::HIR::ExprNodeP& nodePtr) override {
+                    upperVisitor.visitType(nodePtr->resType);
+                    ::HIR::ExprVisitorDef::visitNodePtr(nodePtr);
                 }
 
                 void visit(::HIR::ExprNodeLet& node) override {
-                    upper_visitor.visit_type(node.mType);
-                    upper_visitor.visit_pattern(node.pattern);
+                    upperVisitor.visitType(node.mType);
+                    upperVisitor.visitPattern(node.pattern);
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
                 void visit(::HIR::ExprNodeMatch& node) override {
                     for (auto& arm : node.arms) {
                         for (auto& pat : arm.patterns) {
-                            upper_visitor.visit_pattern(pat);
+                            upperVisitor.visitPattern(pat);
                         }
                         for (auto& g : arm.guards) {
-                            upper_visitor.visit_pattern(g.pat);
+                            upperVisitor.visitPattern(g.pat);
                         }
                     }
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
                 void visit(::HIR::ExprNodePathValue& node) override {
-                    upper_visitor.visit_path(node.mPath, ::HIR::Visitor::PathContext::VALUE);
+                    upperVisitor.visitPath(node.mPath, ::HIR::Visitor::PathContext::VALUE);
                 }
 
                 void visit(::HIR::ExprNodeCallPath& node) override {
-                    upper_visitor.visit_path(node.mPath, ::HIR::Visitor::PathContext::VALUE);
+                    upperVisitor.visitPath(node.mPath, ::HIR::Visitor::PathContext::VALUE);
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
                 void visit(::HIR::ExprNodeCallMethod& node) override {
-                    upper_visitor.visit_path_params(node.mParams);
+                    upperVisitor.visitPathParams(node.mParams);
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
                 void visit(::HIR::ExprNodeStructLiteral& node) override {
-                    upper_visitor.visit_type_inner(node.mType, false);
+                    upperVisitor.visitTypeInner(node.mType, false);
 
                     ::HIR::ExprVisitorDef::visit(node);
                 }
@@ -1208,23 +1208,23 @@ namespace {
                 void visit(::HIR::ExprNodeArraySized& node) override {
                     auto& as = node.mSize;
                     if (as.is_Unevaluated()) {
-                        upper_visitor.visit_constgeneric(as.as_Unevaluated());
+                        upperVisitor.visitConstgeneric(as.as_Unevaluated());
                     }
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
                 void visit(::HIR::ExprNodeClosure& node) override {
-                    upper_visitor.visit_type(node.returnType);
+                    upperVisitor.visitType(node.returnType);
                     for (auto& arg : node.mArgs) {
-                        upper_visitor.visit_pattern(arg.first);
-                        upper_visitor.visit_type(arg.second);
+                        upperVisitor.visitPattern(arg.first);
+                        upperVisitor.visitType(arg.second);
                     }
                     ::HIR::ExprVisitorDef::visit(node);
                 }
             };
 
             for (auto& ty : expr.erasedTypes) {
-                visit_type(ty);
+                visitType(ty);
             }
 
             // Local expression
@@ -1235,28 +1235,28 @@ namespace {
             // External expression (has MIR)
             else if (auto* mir = expr.getExtMirMut()) {
                 for (auto& ty : mir->locals) {
-                    this->visit_type(ty);
+                    this->visitType(ty);
                 }
 
                 struct MirVisitor: public ::MIR::visit::VisitorMut {
-                    VisitorPost& upper_visitor;
+                    VisitorPost& upperVisitor;
 
-                    MirVisitor(VisitorPost& upper_visitor)
-                        : upper_visitor(upper_visitor)
+                    MirVisitor(VisitorPost& upperVisitor)
+                        : upperVisitor(upperVisitor)
                     {
                     }
 
-                    void visit_type(::HIR::TypeRef& t) override {
-                        upper_visitor.visit_type(t);
+                    void visitType(::HIR::TypeRef& t) override {
+                        upperVisitor.visitType(t);
                     }
 
-                    void visit_path(::HIR::Path& p) override {
-                        upper_visitor.visit_path(p, ::HIR::Visitor::PathContext::VALUE);
+                    void visitPath(::HIR::Path& p) override {
+                        upperVisitor.visitPath(p, ::HIR::Visitor::PathContext::VALUE);
                     }
 
-                    bool visit_lvalue(::MIR::LValue& lv, ::MIR::visit::ValUsage u) override {
+                    bool visitLvalue(::MIR::LValue& lv, ::MIR::visit::ValUsage u) override {
                         if (lv.root.is_Static()) {
-                            upper_visitor.visit_path(lv.root.as_Static(), ::HIR::Visitor::PathContext::VALUE);
+                            upperVisitor.visitPath(lv.root.as_Static(), ::HIR::Visitor::PathContext::VALUE);
                         }
                         return false;
                     }
@@ -1265,9 +1265,9 @@ namespace {
                 MirVisitor mv(*this);
                 for (auto& block : mir->blocks) {
                     for (auto& stmt : block.statements) {
-                        mv.visit_stmt(stmt);
+                        mv.visitStmt(stmt);
                     }
-                    mv.visit_terminator(block.terminator);
+                    mv.visitTerminator(block.terminator);
                 }
             } else {
             }
@@ -1280,21 +1280,21 @@ void ConvertHIRBind(::HIR::Crate& crate) {
         BindVisitor exp{crate};
         // Also visit extern crates to update their pointers
         for (auto& ec : crate.extCrates) {
-            exp.visit_crate(*ec.second.mData);
+            exp.visitCrate(*ec.second.mData);
         }
-        exp.visit_crate(crate);
+        exp.visitCrate(crate);
     }
 
     {
         VisitorPost v{crate};
         for (auto& ec : crate.extCrates) {
-            v.visit_crate(*ec.second.mData);
+            v.visitCrate(*ec.second.mData);
         }
-        v.visit_crate(crate);
+        v.visitCrate(crate);
     }
 
     // Populate supertrait list
-    VisitorEnumSuperTraits(crate).visit_crate(crate);
+    VisitorEnumSuperTraits(crate).visitCrate(crate);
 }
 
 
@@ -1456,7 +1456,7 @@ public:
         }
     }
 
-    void visit_type(::HIR::TypeRef& ty) override {
+    void visitType(::HIR::TypeRef& ty) override {
         static Span sp;
 
         if (ty->is_ErasedType() || ty->is_TraitObject()) {
@@ -1472,7 +1472,7 @@ public:
             ty = crate.types.intern(std::move(data));
         }
 
-        ::HIR::Visitor::visit_type(ty);
+        ::HIR::Visitor::visitType(ty);
 
         if (const auto* e = ty->opt_Path()) {
             ::HIR::TypeRef new_type = ConvertHIRExpandAliasesGetExpansion(crate, e->path, inExpr);
@@ -1481,7 +1481,7 @@ public:
             const unsigned int MAX_RECURSIVE_TYPE_EXPANSIONS = 100;
             while (numExp < MAX_RECURSIVE_TYPE_EXPANSIONS) {
                 // NOTE: inner recurses
-                ::HIR::Visitor::visit_type(new_type);
+                ::HIR::Visitor::visitType(new_type);
                 if (const auto* e = new_type->opt_Path()) {
                     auto nt = ConvertHIRExpandAliasesGetExpansion(crate, e->path, inExpr);
                     if (nt->is_Infer()) {
@@ -1501,7 +1501,7 @@ public:
         }
     }
 
-    void visit_trait_path(::HIR::TraitPath& tp) override {
+    void visitTraitPath(::HIR::TraitPath& tp) override {
         static Span sp;
         // 1. Make sure that the trait path isn't pointing at an alias (should have been handled by the caller, which can expand to multiple items)
         ASSERT_BUG(sp, crate.getTypeitemByPath(sp, tp.mPath.mPath).is_Trait(), "Bad trait path - " << tp.mPath << " : " << crate.getTypeitemByPath(sp, tp.mPath.mPath).tagStr());
@@ -1511,7 +1511,7 @@ public:
         }
 
         // Finally. Recurse
-        ::HIR::Visitor::visit_trait_path(tp);
+        ::HIR::Visitor::visitTraitPath(tp);
     }
 
     ::HIR::Path expandAliasPath(const Span& sp, const ::HIR::Path& path) {
@@ -1539,7 +1539,7 @@ public:
             }
             rv = ty->as_Path().path.clone();
 
-            this->visit_path(rv, ::HIR::Visitor::PathContext::TYPE);
+            this->visitPath(rv, ::HIR::Visitor::PathContext::TYPE);
 
             cur = &rv;
         } while (++numExp < MAX_RECURSIVE_TYPE_EXPANSIONS);
@@ -1658,10 +1658,10 @@ public:
         return ::HIR::Pattern::PathBinding::make_Struct(&str);
     }
 
-    void visit_pattern(::HIR::Pattern& pat) override {
+    void visitPattern(::HIR::Pattern& pat) override {
         static Span sp;
 
-        ::HIR::Visitor::visit_pattern(pat);
+        ::HIR::Visitor::visitPattern(pat);
 
         TU_MATCH_HDRA( (pat.mData), {)
         default:
@@ -1694,7 +1694,7 @@ public:
         }
     }
 
-    void visit_params(::HIR::GenericParams& params) override {
+    void visitParams(::HIR::GenericParams& params) override {
         for (auto it = params.bounds.begin(); it != params.bounds.end(); ++it) {
             static Span sp;
             if (auto* be = it->opt_TraitBound()) {
@@ -1703,9 +1703,9 @@ public:
                     auto origType = std::move(be->type);
                     auto origHrtbs = std::move(be->hrtbs);
                     if (origHrtbs) {
-                        visit_params(*origHrtbs);
+                        visitParams(*origHrtbs);
                     }
-                    visit_type(origType);
+                    visitType(origType);
 
                     it = params.bounds.erase(it);
                     for (auto& t : n) {
@@ -1716,32 +1716,32 @@ public:
                 }
             }
         }
-        ::HIR::Visitor::visit_params(params);
+        ::HIR::Visitor::visitParams(params);
     }
 
-    void visit_expr(::HIR::ExprPtr& expr) override {
+    void visitExpr(::HIR::ExprPtr& expr) override {
         struct Visitor: public ::HIR::ExprVisitorDef {
-            Expander& upper_visitor;
+            Expander& upperVisitor;
 
             Visitor(Expander& uv)
                 : ::HIR::ExprVisitorDef(uv.interner())
-                , upper_visitor(uv)
+                , upperVisitor(uv)
             {
             }
 
-            void visit_type(::HIR::TypeRef& ty) override {
-                upper_visitor.visit_type(ty);
+            void visitType(::HIR::TypeRef& ty) override {
+                upperVisitor.visitType(ty);
             }
 
-            void visit_pattern(const Span& sp, ::HIR::Pattern& pat) override {
-                upper_visitor.visit_pattern(pat);
+            void visitPattern(const Span& sp, ::HIR::Pattern& pat) override {
+                upperVisitor.visitPattern(pat);
             }
 
             // Custom impl to visit the inner expression
             void visit(::HIR::ExprNodeArraySized& node) override {
                 auto& as = node.mSize;
                 if (as.is_Unevaluated() && as.as_Unevaluated().is_Unevaluated()) {
-                    upper_visitor.visit_expr(*as.as_Unevaluated().as_Unevaluated()->expr);
+                    upperVisitor.visitExpr(*as.as_Unevaluated().as_Unevaluated()->expr);
                 }
                 ::HIR::ExprVisitorDef::visit(node);
             }
@@ -1758,44 +1758,44 @@ public:
         }
     }
 
-    void visit_trait_alias(::HIR::ItemPath p, ::HIR::TraitAlias& item) override {
+    void visitTraitAlias(::HIR::ItemPath p, ::HIR::TraitAlias& item) override {
         //Span    sp(p);
         expandTraitList(Span(), item.traits);
-        ::HIR::Visitor::visit_trait_alias(p, item);
+        ::HIR::Visitor::visitTraitAlias(p, item);
     }
 
-    void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
+    void visitTrait(::HIR::ItemPath p, ::HIR::Trait& item) override {
         //Span    sp(p);
         expandTraitList(Span(), item.parentTraits);
-        ::HIR::Visitor::visit_trait(p, item);
+        ::HIR::Visitor::visitTrait(p, item);
     }
 
-    void visit_associatedtype(::HIR::ItemPath p, ::HIR::AssociatedType& item) override {
+    void visitAssociatedtype(::HIR::ItemPath p, ::HIR::AssociatedType& item) override {
         //Span    sp(p);
         expandTraitList(Span(), item.traitBounds);
-        ::HIR::Visitor::visit_associatedtype(p, item);
+        ::HIR::Visitor::visitAssociatedtype(p, item);
     }
 
-    void visit_type_impl(::HIR::TypeImpl& impl) override {
+    void visitTypeImpl(::HIR::TypeImpl& impl) override {
         implType = impl.mType;
-        ::HIR::Visitor::visit_type_impl(impl);
+        ::HIR::Visitor::visitTypeImpl(impl);
         implType = nullptr;
     }
 
-    void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
+    void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
         static Span sp;
         implType = impl.mType;
-        ::HIR::Visitor::visit_trait_impl(trait_path, impl);
+        ::HIR::Visitor::visitTraitImpl(trait_path, impl);
         implType = nullptr;
     }
 
-    void visit_function(HIR::ItemPath p, ::HIR::Function& item) override {
-        ::HIR::Visitor::visit_function(p, item);
+    void visitFunction(HIR::ItemPath p, ::HIR::Function& item) override {
+        ::HIR::Visitor::visitFunction(p, item);
         if (item.receiver == HIR::Function::Receiver::Custom) {
             //DEBUG("Updating reciever from " << item.m_receiver_type << " to " << item.m_args.at(0).second);
             //item.m_receiver_type = item.m_args.at(0).second.clone();
             ASSERT_BUG(Span(), item.receiverType, "Custom receiver without a receiver type");
-            this->visit_type(*item.receiverType);
+            this->visitType(*item.receiverType);
         }
     }
 };
@@ -1816,8 +1816,8 @@ public:
 
     HIR::TypeInterner& interner() const { return crate.types; }
 
-    void visit_type(::HIR::TypeRef& ty) override {
-        ::HIR::Visitor::visit_type(ty);
+    void visitType(::HIR::TypeRef& ty) override {
+        ::HIR::Visitor::visitType(ty);
 
         if (const auto* te = ty->opt_Generic()) {
             if (te->binding == GENERICSelf) {
@@ -1832,29 +1832,29 @@ public:
         }
     }
 
-    void visit_expr(::HIR::ExprPtr& expr) override {
+    void visitExpr(::HIR::ExprPtr& expr) override {
         struct Visitor: public ::HIR::ExprVisitorDef {
-            ExpanderSelf& upper_visitor;
+            ExpanderSelf& upperVisitor;
 
             Visitor(ExpanderSelf& uv)
                 : ::HIR::ExprVisitorDef(uv.interner())
-                , upper_visitor(uv)
+                , upperVisitor(uv)
             {
             }
 
-            void visit_type(::HIR::TypeRef& ty) override {
-                upper_visitor.visit_type(ty);
+            void visitType(::HIR::TypeRef& ty) override {
+                upperVisitor.visitType(ty);
             }
 
-            void visit_pattern(const Span& sp, ::HIR::Pattern& pat) override {
-                upper_visitor.visit_pattern(pat);
+            void visitPattern(const Span& sp, ::HIR::Pattern& pat) override {
+                upperVisitor.visitPattern(pat);
             }
 
             // Custom impl to visit the inner expression
             void visit(::HIR::ExprNodeArraySized& node) override {
                 auto& as = node.mSize;
                 if (as.is_Unevaluated() && as.as_Unevaluated().is_Unevaluated()) {
-                    upper_visitor.visit_expr(*as.as_Unevaluated().as_Unevaluated()->expr);
+                    upperVisitor.visitExpr(*as.as_Unevaluated().as_Unevaluated()->expr);
                 }
                 ::HIR::ExprVisitorDef::visit(node);
             }
@@ -1871,58 +1871,58 @@ public:
         }
     }
 
-    void visit_enum(HIR::ItemPath p, ::HIR::Enum& enm) override {
+    void visitEnum(HIR::ItemPath p, ::HIR::Enum& enm) override {
         HIR::TypeRef ty = crate.types.path(HIR::GenericPath(p.getSimplePath(), enm.mParams.makeNopParams(crate.types, 0)), &enm);
         implType = ty;
-        ::HIR::Visitor::visit_enum(p, enm);
+        ::HIR::Visitor::visitEnum(p, enm);
         implType = nullptr;
     }
 
-    void visit_struct(HIR::ItemPath p, ::HIR::Struct& str) override {
+    void visitStruct(HIR::ItemPath p, ::HIR::Struct& str) override {
         HIR::TypeRef ty = crate.types.path(HIR::GenericPath(p.getSimplePath(), str.mParams.makeNopParams(crate.types, 0)), &str);
         // HACK: If thre is a `#` in the path, it's en enum variant
         if (const auto* n = ::std::strchr(p.name, '#')) {
             if (n != p.name && n[1]) {
                 auto path = p.getSimplePath();
-                path.update_last_component(RcString::newInterned(p.name, n - p.name));
+                path.updateLastComponent(RcString::newInterned(p.name, n - p.name));
                 const auto& enm = crate.getEnumByPath(Span(), path);
                 ty = crate.types.path(HIR::GenericPath(std::move(path), str.mParams.makeNopParams(crate.types, 0)), &enm);
             }
         }
         implType = ty;
-        ::HIR::Visitor::visit_struct(p, str);
+        ::HIR::Visitor::visitStruct(p, str);
         implType = nullptr;
     }
 
-    void visit_union(HIR::ItemPath p, ::HIR::Union& unn) override {
+    void visitUnion(HIR::ItemPath p, ::HIR::Union& unn) override {
         HIR::TypeRef ty = crate.types.path(HIR::GenericPath(p.getSimplePath(), unn.mParams.makeNopParams(crate.types, 0)), &unn);
         implType = ty;
-        ::HIR::Visitor::visit_union(p, unn);
+        ::HIR::Visitor::visitUnion(p, unn);
         implType = nullptr;
     }
 
-    void visit_type_impl(::HIR::TypeImpl& impl) override {
+    void visitTypeImpl(::HIR::TypeImpl& impl) override {
         implType = impl.mType;
-        ::HIR::Visitor::visit_type_impl(impl);
+        ::HIR::Visitor::visitTypeImpl(impl);
         implType = nullptr;
     }
 
-    void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
+    void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
         static Span sp;
         implType = impl.mType;
-        ::HIR::Visitor::visit_trait_impl(trait_path, impl);
+        ::HIR::Visitor::visitTraitImpl(trait_path, impl);
         implType = nullptr;
     }
 };
 
 void ConvertHIRExpandAliases(::HIR::Crate& crate) {
     Expander exp{crate};
-    exp.visit_crate(crate);
+    exp.visitCrate(crate);
 }
 
 void ConvertHIRExpandAliasesSelf(::HIR::Crate& crate) {
     ExpanderSelf exp{crate};
-    exp.visit_crate(crate);
+    exp.visitCrate(crate);
 }
 
 void ConvertHIRExpandAliasesSelfExpr(
@@ -1935,11 +1935,11 @@ void ConvertHIRExpandAliasesSelfExpr(
 {
     ExpanderSelf exp{crate, impl_type};
     for (auto& arg : args) {
-        exp.visit_pattern(arg.first);
-        exp.visit_type(arg.second);
+        exp.visitPattern(arg.first);
+        exp.visitType(arg.second);
     }
-    exp.visit_type(ret_ty);
-    exp.visit_expr(expr);
+    exp.visitType(ret_ty);
+    exp.visitExpr(expr);
 }
 
 
@@ -2099,21 +2099,21 @@ namespace {
                 }
             }
 
-            void visit_path_params(HIR::PathParams& pp) override {
+            void visitPathParams(HIR::PathParams& pp) override {
                 for (const auto& lft : pp.mLifetimes) {
                     addLifetime(lft);
                 }
-                HIR::Visitor::visit_path_params(pp);
+                HIR::Visitor::visitPathParams(pp);
             }
 
-            void visit_trait_path(HIR::TraitPath& trait) override {
+            void visitTraitPath(HIR::TraitPath& trait) override {
                 const bool nestedHrtb = trait.hrtbs && !trait.hrtbs->mLifetimes.empty();
                 nestedHrtbDepth += nestedHrtb;
-                HIR::Visitor::visit_trait_path(trait);
+                HIR::Visitor::visitTraitPath(trait);
                 nestedHrtbDepth -= nestedHrtb;
             }
 
-            void visit_type(HIR::TypeRef& ty) override {
+            void visitType(HIR::TypeRef& ty) override {
                 // A nested function signature and an input-position impl Trait
                 // each resolve elision in their own scope. Neither contributes
                 // a candidate to the surrounding function parameter.
@@ -2126,7 +2126,7 @@ namespace {
                 if (const auto* e = ty->opt_TraitObject()) {
                     addLifetime(e->lifetime);
                 }
-                HIR::Visitor::visit_type(ty);
+                HIR::Visitor::visitType(ty);
             }
         };
 
@@ -2189,30 +2189,30 @@ namespace {
                     {
                     }
 
-                    void visit_type(HIR::TypeRef& ty) override {
+                    void visitType(HIR::TypeRef& ty) override {
                         if (ty == implSelf || (ty->is_Generic() && ty->as_Generic().binding == GENERICSelf)) {
                             found = true;
                             return;
                         }
-                        HIR::Visitor::visit_type(ty);
+                        HIR::Visitor::visitType(ty);
                     }
                 } finder(types, implSelf);
-                finder.visit_type(ty);
+                finder.visitType(ty);
                 return finder.found;
             }
 
-            void visit_type(HIR::TypeRef& ty) override {
+            void visitType(HIR::TypeRef& ty) override {
                 if (const auto* borrow = ty->opt_Borrow()) {
                     if (containsSelf(borrow->inner)) {
                         lifetimes.addLifetime(borrow->lifetime);
                     }
                 }
-                HIR::Visitor::visit_type(ty);
+                HIR::Visitor::visitType(ty);
             }
         };
 
     public:
-        void visit_lifetime(const Span& sp, HIR::LifetimeRef& lft) {
+        void visitLifetime(const Span& sp, HIR::LifetimeRef& lft) {
             if (!lft.isParam()) {
                 switch (lft.binding) {
                     case HIR::LifetimeRef::STATIC: // 'static
@@ -2258,7 +2258,7 @@ namespace {
                             // Only if not a duplicate
                             for (const auto& b : curParams->bounds) {
                                 if (const auto* be = b.opt_Lifetime()) {
-                                    if (be->test == lft && be->valid_for == outer) {
+                                    if (be->test == lft && be->validFor == outer) {
                                         found = true;
                                         break;
                                     }
@@ -2281,13 +2281,13 @@ namespace {
             }
         }
 
-        bool boundExists(const HIR::LifetimeRef& test, const HIR::LifetimeRef& valid_for) const {
+        bool boundExists(const HIR::LifetimeRef& test, const HIR::LifetimeRef& validFor) const {
             if (mResolve.implGenerics) {
                 for (const auto& b : mResolve.implGenerics->bounds) {
                     if (b.is_Lifetime()) {
                         DEBUG(b);
                     }
-                    if (b.is_Lifetime() && b.as_Lifetime().test == test && b.as_Lifetime().valid_for == valid_for) {
+                    if (b.is_Lifetime() && b.as_Lifetime().test == test && b.as_Lifetime().validFor == validFor) {
                         return true;
                     }
                 }
@@ -2297,7 +2297,7 @@ namespace {
                     if (b.is_Lifetime()) {
                         DEBUG(b);
                     }
-                    if (b.is_Lifetime() && b.as_Lifetime().test == test && b.as_Lifetime().valid_for == valid_for) {
+                    if (b.is_Lifetime() && b.as_Lifetime().test == test && b.as_Lifetime().validFor == validFor) {
                         return true;
                     }
                 }
@@ -2305,24 +2305,24 @@ namespace {
             return false;
         }
 
-        void visit_params(::HIR::GenericParams& params) override {
+        void visitParams(::HIR::GenericParams& params) override {
             TRACE_FUNCTION_F(params.fmtArgs() << params.fmtBounds());
             for (auto& tps : params.types) {
-                this->visit_type(tps.defaultValue);
+                this->visitType(tps.defaultValue);
             }
             for (auto& val : params.values) {
-                this->visit_type(val.mType);
+                this->visitType(val.mType);
             }
             // The bounds list can grow as inferred lifetime bounds are added, so iterate manually and move the bound in/out to maintain pointer stability
             for (size_t i = 0; i < params.bounds.size(); i++) {
                 auto bound = std::move(params.bounds[i]);
                 params.bounds[i] = HIR::GenericBound::make_Lifetime({HIR::LifetimeRef::new_static(), HIR::LifetimeRef::new_static()});
-                visit_generic_bound(bound);
+                visitGenericBound(bound);
                 params.bounds[i] = std::move(bound);
             }
         }
 
-        void visit_generic_path(::HIR::GenericPath& p, ::HIR::Visitor::PathContext pc) override {
+        void visitGenericPath(::HIR::GenericPath& p, ::HIR::Visitor::PathContext pc) override {
             const static Span sp;
             // Get the type definition and fill in omitted lifetimes
             const HIR::GenericParams* gp = nullptr;
@@ -2391,22 +2391,22 @@ namespace {
                 p.mParams.mLifetimes.resize(gp->mLifetimes.size());
                 DEBUG(p);
             }
-            HIR::Visitor::visit_generic_path(p, pc);
+            HIR::Visitor::visitGenericPath(p, pc);
         }
 
-        void visit_path_params(::HIR::PathParams& pp) override {
+        void visitPathParams(::HIR::PathParams& pp) override {
             DEBUG(pp);
             static Span _sp;
             const Span& sp = _sp;
 
             for (auto& lft : pp.mLifetimes) {
-                visit_lifetime(sp, lft);
+                visitLifetime(sp, lft);
             }
 
-            HIR::Visitor::visit_path_params(pp);
+            HIR::Visitor::visitPathParams(pp);
         }
 
-        void visit_type(::HIR::TypeRef& ty) override {
+        void visitType(::HIR::TypeRef& ty) override {
             static Span _sp;
             const Span& sp = _sp;
 
@@ -2423,7 +2423,7 @@ namespace {
             // Lifetime elision logic!
 
             if (auto* e = data.opt_Borrow()) {
-                visit_lifetime(sp, e->lifetime);
+                visitLifetime(sp, e->lifetime);
                 currentLifetime.push_back(&e->lifetime);
                 traitObjectRule.push_back(::std::make_pair(currentDepth, &e->lifetime));
             }
@@ -2435,12 +2435,12 @@ namespace {
                 createElided = true;
                 for (auto& t : e->argTypes) {
                     ExplicitInputLifetimeCollector parameterLifetimes(crate.types);
-                    parameterLifetimes.visit_type(t);
+                    parameterLifetimes.visitType(t);
                     const auto firstElidedLifetimeIdx = e->hrls.mLifetimes.size();
-                    this->visit_type(t);
+                    this->visitType(t);
                     ExplicitInputLifetimeCollector createdLifetimes(
                         crate.types, HIR::GENERICHrtb, firstElidedLifetimeIdx);
-                    createdLifetimes.visit_type(t);
+                    createdLifetimes.visitType(t);
                     parameterLifetimes.merge(createdLifetimes);
                     inputLifetimes.addParameter(parameterLifetimes);
                 }
@@ -2450,7 +2450,7 @@ namespace {
                     currentLifetime.pop_back();
                     currentLifetime.push_back(&outputLifetime);
                 }
-                this->visit_type(e->mRettype);
+                this->visitType(e->mRettype);
                 currentLifetime.pop_back();
                 createElided = savedCreate;
             }
@@ -2471,7 +2471,7 @@ namespace {
                         const HIR::Crate& crate;
                         std::vector<HIR::LifetimeRef> lifetimes;
 
-                        void visit_trait(const HIR::SimplePath& p, const HIR::PathParams& params) {
+                        void visitTrait(const HIR::SimplePath& p, const HIR::PathParams& params) {
                             const auto& t = crate.getTraitByPath(sp, p);
                             DEBUG(p << " " << t.lifetime);
                             if (t.lifetime != HIR::LifetimeRef()) {
@@ -2485,13 +2485,13 @@ namespace {
                             }
                             // TODO: Monomorph? (for lifetime parameters)
                             for (const auto& st : t.parentTraits) {
-                                visit_trait(st.mPath.mPath, st.mPath.mParams);
+                                visitTrait(st.mPath.mPath, st.mPath.mParams);
                             }
                         }
                     } h{sp, mResolve.crate};
 
                     if (e->mTrait.mPath.mPath != HIR::SimplePath()) {
-                        h.visit_trait(e->mTrait.mPath.mPath, e->mTrait.mPath.mParams);
+                        h.visitTrait(e->mTrait.mPath.mPath, e->mTrait.mPath.mParams);
                     }
                     std::sort(h.lifetimes.begin(), h.lifetimes.end());
                     auto newEnd = std::unique(h.lifetimes.begin(), h.lifetimes.end());
@@ -2515,7 +2515,7 @@ namespace {
                 // - If there is a unique bound from the containing type then that is the default
                 // - If there is more than one bound from the containing type then an explicit bound must be specified
 
-                bool was_static_rule = false;
+                bool wasStaticRule = false;
                 // If the lifetime is omitted, or '_
                 // ... AND this is within prototype (not in an expression)
                 if (
@@ -2530,14 +2530,14 @@ namespace {
                             if (traitObjectRule.back().second) {
                                 const auto& lft = *traitObjectRule.back().second;
                                 e->lifetime = lft;
-                                was_static_rule = (lft.binding == HIR::LifetimeRef::STATIC);
+                                wasStaticRule = (lft.binding == HIR::LifetimeRef::STATIC);
                                 DEBUG("TraitObject: Set lifetime " << e->lifetime << " - trait object rule");
                             }
                         }
                     }
                 }
                 if (
-                    (was_static_rule || e->lifetime.binding == HIR::LifetimeRef::UNKNOWN /*|| e->m_lifetime.binding == HIR::LifetimeRef::INFER*/) && !inExpr // Not in expression
+                    (wasStaticRule || e->lifetime.binding == HIR::LifetimeRef::UNKNOWN /*|| e->m_lifetime.binding == HIR::LifetimeRef::INFER*/) && !inExpr // Not in expression
                 ) {
                     // HACK: If the trait has a lifeime param, use that
                     if (!e->mTrait.hrtbs && e->mTrait.mPath.mParams.mLifetimes.size() == 1) {
@@ -2594,7 +2594,7 @@ namespace {
                             TRACE_FUNCTION_FR("INHERIT BOUNDS: " << *p, "INHERIT BOUNDS");
                             // Visit lifeitmes first - so they're un-elided
                             for (auto& l : p->mParams.mLifetimes) {
-                                visit_lifetime(sp, l);
+                                visitLifetime(sp, l);
                             }
                             // Then make a monomorph state, and find lifetime bounds
                             MonomorphStatePtr ms(crate.types, nullptr, &p->mParams, nullptr);
@@ -2602,13 +2602,13 @@ namespace {
                                 TU_MATCH_HDRA((b), {)
                                 TU_ARMA(Lifetime, be) {
                                         ASSERT_BUG(sp, be.test.isParam(), b);
-                                        ASSERT_BUG(sp, be.valid_for.binding != HIR::LifetimeRef::UNKNOWN, b);
-                                        curParams->bounds.push_back(HIR::GenericBound::make_Lifetime({ms.monomorphLifetime(sp, be.test), ms.monomorphLifetime(sp, be.valid_for)}));
+                                        ASSERT_BUG(sp, be.validFor.binding != HIR::LifetimeRef::UNKNOWN, b);
+                                        curParams->bounds.push_back(HIR::GenericBound::make_Lifetime({ms.monomorphLifetime(sp, be.test), ms.monomorphLifetime(sp, be.validFor)}));
                                         const auto& nbe = curParams->bounds.back().as_Lifetime();
                                         if (nbe.test.isParam()) {
                                             ASSERT_BUG(sp, nbe.test.isParam(), b << " -> " << curParams->bounds.back());
-                                            ASSERT_BUG(sp, nbe.valid_for.binding != HIR::LifetimeRef::UNKNOWN, b << " -> " << curParams->bounds.back());
-                                            if ((nbe.test.isParam() && nbe.test.asParam().group() == 3) || (nbe.valid_for.isParam() && nbe.valid_for.asParam().group() == 3)) {
+                                            ASSERT_BUG(sp, nbe.validFor.binding != HIR::LifetimeRef::UNKNOWN, b << " -> " << curParams->bounds.back());
+                                            if ((nbe.test.isParam() && nbe.test.asParam().group() == 3) || (nbe.validFor.isParam() && nbe.validFor.asParam().group() == 3)) {
                                                 curParams->bounds.pop_back();
                                             } else {
                                                 DEBUG("INHERIT " << curParams->bounds.back());
@@ -2656,7 +2656,7 @@ namespace {
                 }
             }
 
-            ::HIR::Visitor::visit_type_data(data);
+            ::HIR::Visitor::visitTypeData(data);
 
             savedParams.restore();
             while (currentLifetime.size() > savedLiftimeDepth) {
@@ -2693,7 +2693,7 @@ namespace {
                     // - `fn foo(&self) -> &(dyn Foo + '_)` -> `fn foo<'a>(&'a self) -> &'a (dyn Foo + 'a)`
                     // TODO: What about in structs?
 
-                    visit_lifetime(sp, e->lifetime);
+                    visitLifetime(sp, e->lifetime);
                     DEBUG("TraitObject: Final lifetime " << e->lifetime);
                 }
                 if (auto* e = data.opt_ErasedType()) {
@@ -2701,7 +2701,7 @@ namespace {
                     if ((!e->lifetimeBounds.empty() && e->lifetimeBounds.front().binding == HIR::LifetimeRef::UNKNOWN) && (curParams && createElided)) {
                     } else {
                         for (auto& lft : e->lifetimeBounds) {
-                            visit_lifetime(sp, lft);
+                            visitLifetime(sp, lft);
                         }
                     }
 
@@ -2748,12 +2748,12 @@ namespace {
                                 {
                                 }
 
-                                void visit_path_params(HIR::PathParams& pp) override {
+                                void visitPathParams(HIR::PathParams& pp) override {
                                     for (auto& lft : pp.mLifetimes) {
                                         addLifetime(lft);
                                     }
 
-                                    HIR::Visitor::visit_path_params(pp);
+                                    HIR::Visitor::visitPathParams(pp);
                                 }
 
                                 void addLifetime(const HIR::LifetimeRef& lft) {
@@ -2764,7 +2764,7 @@ namespace {
                                     this->lfts.insert(lft);
                                 }
 
-                                void visit_type(HIR::TypeRef& ty) override {
+                                void visitType(HIR::TypeRef& ty) override {
                                     TRACE_FUNCTION_F(ty);
                                     if (const auto* tep = ty->opt_Borrow()) {
                                         addLifetime(tep->lifetime);
@@ -2786,7 +2786,7 @@ namespace {
                                             }
                                         }
                                     }
-                                    HIR::Visitor::visit_type(ty);
+                                    HIR::Visitor::visitType(ty);
                                 }
                             } v(crate.types);
 
@@ -2796,7 +2796,7 @@ namespace {
                             // parenthesised Fn bound).  Materialise the current copy before
                             // collecting the lifetimes captured by this opaque type.
                             auto elidedTy = crate.types.intern(data.cloneData());
-                            v.visit_type(elidedTy);
+                            v.visitType(elidedTy);
                             // TODO: In 2024 edition, these rules change
                             // - Before: generics/lifetimes not mentioned in the `impl Foo` are omitted
                             // - After: All included
@@ -2808,7 +2808,7 @@ namespace {
                                 if (valueSelfType) {
                                     DEBUG("Check Self: " << valueSelfType);
                                     auto self_type = valueSelfType;
-                                    v.visit_type(self_type);
+                                    v.visitType(self_type);
                                 }
                             }
 
@@ -2870,7 +2870,7 @@ namespace {
             }
         }
 
-        void visit_trait_path(::HIR::TraitPath& tp) override {
+        void visitTraitPath(::HIR::TraitPath& tp) override {
             const Span sp;
             TRACE_FUNCTION_FR(tp, tp);
 
@@ -2885,14 +2885,14 @@ namespace {
                     "Parenthesised Fn arguments aren't a tuple: " << tp.mPath);
                 for (auto input : *tp.mPath.mParams.types.front()->opt_Tuple()) {
                     ExplicitInputLifetimeCollector parameterLifetimes(crate.types);
-                    parameterLifetimes.visit_type(input);
+                    parameterLifetimes.visitType(input);
                     explicitInputLifetimes.push_back(mv$(parameterLifetimes.lifetimes));
                 }
 
                 // Visit the trait args (as inputs)
                 auto savedParams = pushParams(tp.hrtbs.get(), 3);
 
-                this->visit_generic_path(tp.mPath, ::HIR::Visitor::PathContext::TYPE);
+                this->visitGenericPath(tp.mPath, ::HIR::Visitor::PathContext::TYPE);
                 DEBUG(tp.mPath);
                 if (tp.hrtbs) {
                     DEBUG("for " << tp.hrtbs->fmtArgs());
@@ -2907,7 +2907,7 @@ namespace {
                     parameterLifetimes.lifetimes = mv$(explicitInputLifetimes[i]);
                     ExplicitInputLifetimeCollector createdLifetimes(
                         crate.types, HIR::GENERICHrtb, firstElidedLifetimeIdx);
-                    createdLifetimes.visit_type(input);
+                    createdLifetimes.visitType(input);
                     parameterLifetimes.merge(createdLifetimes);
                     inputLifetimes.addParameter(parameterLifetimes);
                 }
@@ -2915,15 +2915,15 @@ namespace {
                 if (lft != HIR::LifetimeRef()) {
                     currentLifetime.push_back(&lft);
                     for (auto& assoc : tp.typeBounds) {
-                        this->visit_generic_path(assoc.second.sourceTrait, ::HIR::Visitor::PathContext::TYPE);
-                        this->visit_path_params(assoc.second.atyParams);
-                        this->visit_type(assoc.second.type);
+                        this->visitGenericPath(assoc.second.sourceTrait, ::HIR::Visitor::PathContext::TYPE);
+                        this->visitPathParams(assoc.second.atyParams);
+                        this->visitType(assoc.second.type);
                     }
                     for (auto& assoc : tp.traitBounds) {
-                        this->visit_generic_path(assoc.second.sourceTrait, ::HIR::Visitor::PathContext::TYPE);
-                        this->visit_path_params(assoc.second.atyParams);
+                        this->visitGenericPath(assoc.second.sourceTrait, ::HIR::Visitor::PathContext::TYPE);
+                        this->visitPathParams(assoc.second.atyParams);
                         for (auto& trait : assoc.second.traits) {
-                            this->visit_trait_path(trait);
+                            this->visitTraitPath(trait);
                         }
                     }
                     currentLifetime.pop_back();
@@ -3024,15 +3024,15 @@ namespace {
                 }
 
                 // Visit the rest (associated types mostly), using the output lifetime from above
-                ::HIR::Visitor::visit_trait_path(tp);
+                ::HIR::Visitor::visitTraitPath(tp);
 
                 currentLifetime.pop_back();
             } else {
-                ::HIR::Visitor::visit_trait_path(tp);
+                ::HIR::Visitor::visitTraitPath(tp);
             }
         }
 
-        void visit_expr(::HIR::ExprPtr& ep) override {
+        void visitExpr(::HIR::ExprPtr& ep) override {
             struct EV: public HIR::ExprVisitorDef {
                 LifetimeVisitor& parent;
 
@@ -3042,8 +3042,8 @@ namespace {
                 {
                 }
 
-                void visit_type(HIR::TypeRef& ty) {
-                    parent.visit_type(ty);
+                void visitType(HIR::TypeRef& ty) {
+                    parent.visitType(ty);
                 }
             } v{*this};
 
@@ -3055,7 +3055,7 @@ namespace {
             inExpr = s;
         }
 
-        void visit_type_impl(::HIR::TypeImpl& impl) override {
+        void visitTypeImpl(::HIR::TypeImpl& impl) override {
             TRACE_FUNCTION_F("impl " << impl.mType);
             mResolve.selfType = impl.mType;
             auto _ = mResolve.setImplGenerics(/*impl.m_type,*/ impl.mParams);
@@ -3063,19 +3063,19 @@ namespace {
             // Pre-visit so lifetime elision can work
             {
                 auto _ = pushParams(impl.mParams, 0);
-                this->visit_type(impl.mType);
+                this->visitType(impl.mType);
             }
 
-            ::HIR::Visitor::visit_type_impl(impl);
+            ::HIR::Visitor::visitTypeImpl(impl);
         }
 
-        void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+        void visitInherentType(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
             auto _ = mResolve.setItemGenerics(item.mParams);
             auto _2 = pushParams(item.mParams, 1);
-            ::HIR::Visitor::visit_inherent_type(p, item);
+            ::HIR::Visitor::visitInherentType(p, item);
         }
 
-        void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
+        void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
             TRACE_FUNCTION_F("impl " << trait_path << impl.traitArgs << " for " << impl.mType);
             mResolve.selfType = impl.mType;
             auto _ = mResolve.setImplGenerics(/*impl.m_type,*/ impl.mParams);
@@ -3083,14 +3083,14 @@ namespace {
             // Pre-visit so lifetime elision can work
             {
                 auto _ = pushParams(impl.mParams, 0);
-                this->visit_type(impl.mType);
-                this->visit_path_params(impl.traitArgs);
+                this->visitType(impl.mType);
+                this->visitPathParams(impl.traitArgs);
             }
 
-            ::HIR::Visitor::visit_trait_impl(trait_path, impl);
+            ::HIR::Visitor::visitTraitImpl(trait_path, impl);
         }
 
-        void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
+        void visitMarkerImpl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
             TRACE_FUNCTION_F("impl " << trait_path << impl.traitArgs << " for " << impl.mType << " { }");
             mResolve.selfType = impl.mType;
             auto _ = mResolve.setImplGenerics(/*impl.m_type,*/ impl.mParams);
@@ -3098,69 +3098,69 @@ namespace {
             // Pre-visit so lifetime elision can work
             {
                 auto _ = pushParams(impl.mParams, 0);
-                this->visit_type(impl.mType);
-                this->visit_path_params(impl.traitArgs);
+                this->visitType(impl.mType);
+                this->visitPathParams(impl.traitArgs);
             }
 
-            ::HIR::Visitor::visit_marker_impl(trait_path, impl);
+            ::HIR::Visitor::visitMarkerImpl(trait_path, impl);
         }
 
-        void visit_type_alias(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+        void visitTypeAlias(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
             auto _ = mResolve.setImplGenerics(/*impl.m_type,*/ item.mParams);
-            ::HIR::Visitor::visit_type_alias(p, item);
+            ::HIR::Visitor::visitTypeAlias(p, item);
         }
 
-        void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
+        void visitTrait(::HIR::ItemPath p, ::HIR::Trait& item) override {
             auto ty_self = crate.types.self();
             mResolve.selfType = ty_self;
             auto _ = mResolve.setImplGenerics(/*impl.m_type,*/ item.mParams);
-            ::HIR::Visitor::visit_trait(p, item);
+            ::HIR::Visitor::visitTrait(p, item);
         }
 
-        void visit_struct(::HIR::ItemPath p, ::HIR::Struct& item) override {
+        void visitStruct(::HIR::ItemPath p, ::HIR::Struct& item) override {
             auto _ = mResolve.setImplGenerics(/*item.m_struct_markings.dst_type,*/ item.mParams);
             auto _2 = pushParams(item.mParams, 0);
             createElided = false;
-            ::HIR::Visitor::visit_struct(p, item);
+            ::HIR::Visitor::visitStruct(p, item);
         }
 
-        void visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) override {
+        void visitEnum(::HIR::ItemPath p, ::HIR::Enum& item) override {
             auto _ = mResolve.setImplGenerics(/*MetadataType::None,*/ item.mParams);
             auto _2 = pushParams(item.mParams, 0);
             createElided = false;
-            ::HIR::Visitor::visit_enum(p, item);
+            ::HIR::Visitor::visitEnum(p, item);
         }
 
-        void visit_union(::HIR::ItemPath p, ::HIR::Union& item) override {
+        void visitUnion(::HIR::ItemPath p, ::HIR::Union& item) override {
             auto _ = mResolve.setImplGenerics(/*MetadataType::None,*/ item.mParams);
             auto _2 = pushParams(item.mParams, 0);
             createElided = false;
-            ::HIR::Visitor::visit_union(p, item);
+            ::HIR::Visitor::visitUnion(p, item);
         }
 
-        void visit_constant(::HIR::ItemPath p, ::HIR::Constant& item) override {
+        void visitConstant(::HIR::ItemPath p, ::HIR::Constant& item) override {
             auto lft = HIR::LifetimeRef::new_static();
             currentLifetime.push_back(&lft);
-            visit_type(item.mType);
+            visitType(item.mType);
             currentLifetime.pop_back(/*&lft*/);
 
-            ::HIR::Visitor::visit_constant(p, item);
+            ::HIR::Visitor::visitConstant(p, item);
         }
 
-        void visit_static(::HIR::ItemPath p, ::HIR::Static& item) override {
+        void visitStatic(::HIR::ItemPath p, ::HIR::Static& item) override {
             auto lft = HIR::LifetimeRef::new_static();
             currentLifetime.push_back(&lft);
-            visit_type(item.mType);
+            visitType(item.mType);
             currentLifetime.pop_back(/*&lft*/);
 
-            ::HIR::Visitor::visit_static(p, item);
+            ::HIR::Visitor::visitStatic(p, item);
         }
 
-        void visit_function(::HIR::ItemPath p, ::HIR::Function& item) override {
+        void visitFunction(::HIR::ItemPath p, ::HIR::Function& item) override {
             TRACE_FUNCTION_F(p);
             auto _ = mResolve.setItemGenerics(item.mParams);
             // NOTE: Superfluous... except that it makes the params valid for the return type.
-            visit_params(item.mParams);
+            visitParams(item.mParams);
 
             // TODO: Add lifetime bounds from argument types!
             // - While visiting the argument types, find path types and inherit the lifetime bounds
@@ -3172,17 +3172,17 @@ namespace {
                 auto& arg = item.mArgs[i];
                 TRACE_FUNCTION_FR("ARG " << arg, "ARG " << arg);
                 ExplicitInputLifetimeCollector parameterLifetimes(crate.types);
-                parameterLifetimes.visit_type(arg.second);
+                parameterLifetimes.visitType(arg.second);
                 const auto firstElidedLifetimeIdx = item.mParams.mLifetimes.size();
-                visit_type(arg.second);
+                visitType(arg.second);
                 ExplicitInputLifetimeCollector createdLifetimes(
                     crate.types, HIR::GENERICItem, firstElidedLifetimeIdx);
-                createdLifetimes.visit_type(arg.second);
+                createdLifetimes.visitType(arg.second);
                 parameterLifetimes.merge(createdLifetimes);
 
                 if (i == 0 && item.receiver != HIR::Function::Receiver::Free) {
                     SelfLifetimeCollector selfLifetimes(crate.types, mResolve.selfType);
-                    selfLifetimes.visit_type(arg.second);
+                    selfLifetimes.visitType(arg.second);
                     inputLifetimes.setSelf(selfLifetimes.lifetimes);
                 } else {
                     inputLifetimes.addParameter(parameterLifetimes);
@@ -3209,7 +3209,7 @@ namespace {
             // Visit return type (populates path for `impl Trait` in return position
             {
                 TRACE_FUNCTION_FR("RET " << item.returnType, "RET " << item.returnType);
-                visit_type(item.returnType);
+                visitType(item.returnType);
             }
             // - Unset params for the expression
             savedParams.restore();
@@ -3222,14 +3222,14 @@ namespace {
             DEBUG("Output: " << item.mParams.fmtArgs() << item.mParams.fmtBounds());
             valueSelfType = nullptr;
 
-            ::HIR::Visitor::visit_function(p, item);
+            ::HIR::Visitor::visitFunction(p, item);
         }
     };
 }
 
 void ConvertHIRLifetimeElision(::HIR::Crate& crate) {
     LifetimeVisitor v{crate};
-    v.visit_crate(crate);
+    v.visitCrate(crate);
 }
 
 
@@ -3258,12 +3258,12 @@ namespace {
         {
         }
 
-        void visit_struct(::HIR::ItemPath ip, ::HIR::Struct& str) override {
-            ::HIR::Visitor::visit_struct(ip, str);
+        void visitStruct(::HIR::ItemPath ip, ::HIR::Struct& str) override {
+            ::HIR::Visitor::visitStruct(ip, str);
 
             str.structMarkings.dst_type = getStructDstType(str, str.mParams, {});
             if (str.structMarkings.dst_type != ::HIR::StructMarkings::DstType::None) {
-                str.structMarkings.unsized_field = (str.mData.is_Tuple() ? str.mData.as_Tuple().size() - 1 : str.mData.as_Named().size() - 1);
+                str.structMarkings.unsizedField = (str.mData.is_Tuple() ? str.mData.as_Tuple().size() - 1 : str.mData.as_Named().size() - 1);
             }
 
             // Rules:
@@ -3278,15 +3278,15 @@ namespace {
                     const auto& param = str.mParams.types[i];
                     auto ty = crate.types.generic(param.mName, i);
                     if (!param.isSized) {
-                        if (visit_ty_with(lastFieldTy, [&](const auto& t) {
+                        if (visitTyWith(lastFieldTy, [&](const auto& t) {
                             return t == ty;
                         })) {
-                            ASSERT_BUG(Span(), str.structMarkings.unsized_param == ~0u, "Multiple unsized params to " << ip);
-                            str.structMarkings.unsized_param = i;
+                            ASSERT_BUG(Span(), str.structMarkings.unsizedParam == ~0u, "Multiple unsized params to " << ip);
+                            str.structMarkings.unsizedParam = i;
                         }
                     }
                 }
-                ASSERT_BUG(Span(), str.structMarkings.unsized_param != ~0u, "No unsized param for type " << ip);
+                ASSERT_BUG(Span(), str.structMarkings.unsizedParam != ~0u, "No unsized param for type " << ip);
                 str.structMarkings.canUnsize = true;
             }
         }
@@ -3355,10 +3355,10 @@ namespace {
         return ::HIR::StructMarkings::DstType::None;
         }
 
-        void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
+        void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
             static Span sp;
 
-            ::HIR::Visitor::visit_trait_impl(trait_path, impl);
+            ::HIR::Visitor::visitTraitImpl(trait_path, impl);
 
             if (impl.mType->is_Path()) {
                 const auto& te = impl.mType->as_Path();
@@ -3418,9 +3418,9 @@ namespace {
                                         continue;
                                     }
                                     if (monomorphiseTypeNeeded(se[i].ent)) {
-                                        auto ty_l = monomorphCbL.monomorphType(sp, se[i].ent, false);
-                                        auto ty_r = monomorphCbR.monomorphType(sp, se[i].ent, false);
-                                        if (ty_l != ty_r) {
+                                        auto tyL = monomorphCbL.monomorphType(sp, se[i].ent, false);
+                                        auto tyR = monomorphCbR.monomorphType(sp, se[i].ent, false);
+                                        if (tyL != tyR) {
                                             if (field != ~0u) {
                                                 ERROR(sp, E0000, "CoerceUnsized impls can only differ by one field");
                                             }
@@ -3436,9 +3436,9 @@ namespace {
                                         continue;
                                     }
                                     if (monomorphiseTypeNeeded(se[i].ty)) {
-                                        auto ty_l = monomorphCbL.monomorphType(sp, se[i].ty, false);
-                                        auto ty_r = monomorphCbR.monomorphType(sp, se[i].ty, false);
-                                        if (ty_l != ty_r) {
+                                        auto tyL = monomorphCbL.monomorphType(sp, se[i].ty, false);
+                                        auto tyR = monomorphCbR.monomorphType(sp, se[i].ty, false);
+                                        if (tyL != tyR) {
                                             if (field != ~0u) {
                                                 ERROR(sp, E0000, "CoerceUnsized impls can only differ by one field");
                                             }
@@ -3479,9 +3479,9 @@ namespace {
             } else if (const auto* te = pointee->opt_Path()) {
                 ASSERT_BUG(sp, te->binding.is_Struct(), "Pointer to non-Unsize type - " << pointee);
                 const auto& ism = te->binding.as_Struct()->structMarkings;
-                ASSERT_BUG(sp, ism.unsized_param != ~0u, "Pointer to non-Unsize type - " << pointee);
+                ASSERT_BUG(sp, ism.unsizedParam != ~0u, "Pointer to non-Unsize type - " << pointee);
                 const auto& gp = te->path.mData.as_Generic();
-                return getUnsizeParamIdx(sp, gp.mParams.types.at(ism.unsized_param));
+                return getUnsizeParamIdx(sp, gp.mParams.types.at(ism.unsizedParam));
             } else {
                 BUG(sp, "Pointer to non-Unsize type? - " << pointee);
             }
@@ -3538,7 +3538,7 @@ namespace {
             BUG(sp, "Reached end of get_coerce_type - " << fieldTy);
         }
 
-        void visit_struct(::HIR::ItemPath ip, ::HIR::Struct& str) override {
+        void visitStruct(::HIR::ItemPath ip, ::HIR::Struct& str) override {
             static Span sp;
 
             auto& struct_markings = str.structMarkings;
@@ -3557,11 +3557,11 @@ namespace {
 
 void ConvertHIRMarkings(::HIR::Crate& crate) {
     MarkingsVisitor exp{crate};
-    exp.visit_crate(crate);
+    exp.visitCrate(crate);
 
     // Visit again, visiting all structs and filling the coerce_unsized data
     Visitor2 exp2{crate.types};
-    exp2.visit_crate(crate);
+    exp2.visitCrate(crate);
 }
 
 
@@ -3596,11 +3596,11 @@ namespace resolveUfcs {
         HIR::SimplePath curModPath;
 
     public:
-        UfcsVisitor(const ::HIR::Crate& crate, bool visit_exprs)
+        UfcsVisitor(const ::HIR::Crate& crate, bool visitExprs)
             : ::HIR::Visitor(nullptr, crate.types)
             , crate(crate)
-            , mVisitExprs(visit_exprs)
-            , runEat(visit_exprs)
+            , mVisitExprs(visitExprs)
+            , runEat(visitExprs)
             , // Defaults to running when doing second-pass
             mResolve(crate)
         {
@@ -3646,93 +3646,93 @@ namespace resolveUfcs {
             return rv;
         }
 
-        void visit_module(::HIR::ItemPath p, ::HIR::Module& mod) override {
+        void visitModule(::HIR::ItemPath p, ::HIR::Module& mod) override {
             auto _ = this->pushModTraits(p.getSimplePath(), mod);
-            ::HIR::Visitor::visit_module(p, mod);
+            ::HIR::Visitor::visitModule(p, mod);
         }
 
-        void visit_params(::HIR::GenericParams& params) {
+        void visitParams(::HIR::GenericParams& params) {
             TRACE_FUNCTION_F(params.fmtArgs() << params.fmtBounds());
 
             // Custom visitor to prevent running of EAT on type paramerter defaults
             auto savedRunEat = runEat;
             runEat = false;
             for (auto& tps : params.types) {
-                this->visit_type(tps.defaultValue);
+                this->visitType(tps.defaultValue);
             }
             runEat = savedRunEat;
 
             for (auto& bound : params.bounds) {
-                visit_generic_bound(bound);
+                visitGenericBound(bound);
             }
 
             // Re-populate the resolve index, as the above has changed them
             mResolve.prepIndexes(Span());
         }
 
-        void visit_union(::HIR::ItemPath p, ::HIR::Union& item) override {
+        void visitUnion(::HIR::ItemPath p, ::HIR::Union& item) override {
             auto _ = mResolve.setImplGenerics(MetadataType::None, item.mParams);
             auto ty = crate.types.path(HIR::GenericPath(p.getSimplePath()), &item);
             mCurrentType = ty;
-            ::HIR::Visitor::visit_union(p, item);
+            ::HIR::Visitor::visitUnion(p, item);
             mCurrentType = nullptr;
         }
 
-        void visit_struct(::HIR::ItemPath p, ::HIR::Struct& item) override {
+        void visitStruct(::HIR::ItemPath p, ::HIR::Struct& item) override {
             auto _ = mResolve.setImplGenerics(item.structMarkings.dst_type, item.mParams);
             auto ty = crate.types.path(HIR::GenericPath(p.getSimplePath()), &item);
             mCurrentType = ty;
-            ::HIR::Visitor::visit_struct(p, item);
+            ::HIR::Visitor::visitStruct(p, item);
             mCurrentType = nullptr;
         }
 
-        void visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) override {
+        void visitEnum(::HIR::ItemPath p, ::HIR::Enum& item) override {
             auto _ = mResolve.setImplGenerics(MetadataType::None, item.mParams);
             auto ty = crate.types.path(HIR::GenericPath(p.getSimplePath()), &item);
             mCurrentType = ty;
-            ::HIR::Visitor::visit_enum(p, item);
+            ::HIR::Visitor::visitEnum(p, item);
             mCurrentType = nullptr;
         }
 
-        void visit_function(::HIR::ItemPath p, ::HIR::Function& item) override {
+        void visitFunction(::HIR::ItemPath p, ::HIR::Function& item) override {
             auto _ = mResolve.setItemGenerics(item.mParams);
-            ::HIR::Visitor::visit_function(p, item);
+            ::HIR::Visitor::visitFunction(p, item);
         }
 
-        void visit_type_alias(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+        void visitTypeAlias(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
             // NOTE: Disabled, because generics in type aliases are never checked
             // Re-enabled to resolve a UFCS properly (1.90.0 libcore)
             auto _ = mResolve.setImplGenerics(MetadataType::Unknown, item.mParams);
-            ::HIR::Visitor::visit_type_alias(p, item);
+            ::HIR::Visitor::visitTypeAlias(p, item);
         }
 
-        void visit_trait(::HIR::ItemPath p, ::HIR::Trait& trait) override {
+        void visitTrait(::HIR::ItemPath p, ::HIR::Trait& trait) override {
             //TRACE_FUNCTION_F("impl" << impl.m_params.fmt_args() << " " << impl.m_type << " (mod=" << impl.m_src_module << ")");
             mInTraitDef = true;
             currentTrait = &trait;
             currentTraitPath = &p;
             //auto _ = m_resolve.set_cur_trait(p, trait);
             auto _ = mResolve.setImplGenerics(MetadataType::TraitObject, trait.mParams);
-            ::HIR::Visitor::visit_trait(p, trait);
+            ::HIR::Visitor::visitTrait(p, trait);
             currentTrait = nullptr;
             mInTraitDef = false;
         }
 
-        void visit_type_impl(::HIR::TypeImpl& impl) override {
+        void visitTypeImpl(::HIR::TypeImpl& impl) override {
             TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << impl.mType << " (mod=" << impl.srcModule << ")");
             auto _t = this->pushModTraits(impl.srcModule, this->crate.getModByPath(Span(), impl.srcModule));
             auto _g = mResolve.setImplGenerics(impl.mType, impl.mParams);
             mCurrentType = impl.mType;
-            ::HIR::Visitor::visit_type_impl(impl);
+            ::HIR::Visitor::visitTypeImpl(impl);
             mCurrentType = nullptr;
         }
 
-        void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+        void visitInherentType(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
             auto _ = mResolve.setItemGenerics(item.mParams);
-            ::HIR::Visitor::visit_inherent_type(p, item);
+            ::HIR::Visitor::visitInherentType(p, item);
         }
 
-        void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
+        void visitMarkerImpl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
             ::HIR::ItemPath p(impl.mType, trait_path, impl.traitArgs);
             TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << trait_path << impl.traitArgs << " for " << impl.mType << " (mod=" << impl.srcModule << ")");
             auto _t = this->pushModTraits(impl.srcModule, this->crate.getModByPath(Span(), impl.srcModule));
@@ -3745,14 +3745,14 @@ namespace resolveUfcs {
 
             // The implemented trait is always in scope
             traits.push_back(::std::make_pair(&trait_path, currentTrait));
-            ::HIR::Visitor::visit_marker_impl(trait_path, impl);
+            ::HIR::Visitor::visitMarkerImpl(trait_path, impl);
             traits.pop_back();
 
             currentTrait = nullptr;
             mCurrentType = nullptr;
         }
 
-        void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
+        void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
             ::HIR::ItemPath p(impl.mType, trait_path, impl.traitArgs);
             TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << trait_path << impl.traitArgs << " for " << impl.mType << " (mod=" << impl.srcModule << ")");
             auto _t = this->pushModTraits(impl.srcModule, this->crate.getModByPath(Span(), impl.srcModule));
@@ -3765,53 +3765,53 @@ namespace resolveUfcs {
             currentTraitPath = &p;
             traits.push_back(::std::make_pair(&trait_path, currentTrait));
 
-            this->visit_type(impl.mType);
-            mResolve.update_impl_self_metadata(impl.mType);
+            this->visitType(impl.mType);
+            mResolve.updateImplSelfMetadata(impl.mType);
 
             // TODO: Handle resolution of all items in m_resolve.m_type_equalities
             // - params might reference each other, so `set_item_generics` has to have been called
             // - But `m_type_equalities` can end up with non-resolved UFCS paths
             for (auto& e : mResolve.typeEqualities) {
-                visit_type(e.second.ty);
+                visitType(e.second.ty);
             }
 
             // The implemented trait is always in scope
-            ::HIR::Visitor::visit_trait_impl(trait_path, impl);
+            ::HIR::Visitor::visitTraitImpl(trait_path, impl);
             traits.pop_back();
 
             currentTrait = nullptr;
             mCurrentType = nullptr;
         }
 
-        void visit_expr(::HIR::ExprPtr& expr) override {
+        void visitExpr(::HIR::ExprPtr& expr) override {
             struct ExprVisitor: public ::HIR::ExprVisitorDef {
-                UfcsVisitor& upper_visitor;
+                UfcsVisitor& upperVisitor;
                 ::HIR::ExprNodeP mReplacement;
 
                 ExprVisitor(UfcsVisitor& uv)
                     : ::HIR::ExprVisitorDef(uv.crate.types)
-                    , upper_visitor(uv)
+                    , upperVisitor(uv)
                 {
                 }
 
-                void visit_type(::HIR::TypeRef& ty) override {
-                    upper_visitor.visit_type(ty);
+                void visitType(::HIR::TypeRef& ty) override {
+                    upperVisitor.visitType(ty);
                 }
 
-                void visit_path_params(::HIR::PathParams& pp) override {
-                    upper_visitor.visit_path_params(pp);
+                void visitPathParams(::HIR::PathParams& pp) override {
+                    upperVisitor.visitPathParams(pp);
                 }
 
-                void visit_path(::HIR::Visitor::PathContext pc, ::HIR::Path& path) override {
-                    upper_visitor.visit_path(path, pc);
+                void visitPath(::HIR::Visitor::PathContext pc, ::HIR::Path& path) override {
+                    upperVisitor.visitPath(path, pc);
                 }
 
-                void visit_pattern(const Span& sp, ::HIR::Pattern& pat) override {
-                    upper_visitor.visit_pattern(pat);
+                void visitPattern(const Span& sp, ::HIR::Pattern& pat) override {
+                    upperVisitor.visitPattern(pat);
                 }
 
-                void visit_node_ptr(::HIR::ExprNodeP& nodePtr) {
-                    ::HIR::ExprVisitorDef::visit_node_ptr(nodePtr);
+                void visitNodePtr(::HIR::ExprNodeP& nodePtr) {
+                    ::HIR::ExprVisitorDef::visitNodePtr(nodePtr);
                     if (mReplacement) {
                         mReplacement->resType = nodePtr->resType;
                         mReplacement.swap(nodePtr);
@@ -3823,7 +3823,7 @@ namespace resolveUfcs {
                 void visit(::HIR::ExprNodeArraySized& node) override {
                     auto& as = node.mSize;
                     if (as.is_Unevaluated()) {
-                        upper_visitor.visit_constgeneric(as.as_Unevaluated());
+                        upperVisitor.visitConstgeneric(as.as_Unevaluated());
                     }
                     ::HIR::ExprVisitorDef::visit(node);
                 }
@@ -3836,10 +3836,10 @@ namespace resolveUfcs {
                         // If it points to an enum, rewrite
                         auto& gp = node.mPath.mData.as_Generic();
                         if (gp.mPath.components().size() > 1) {
-                            const auto& ent = upper_visitor.crate.getTypeitemByPath(sp, gp.mPath, /*ign_crate*/ false, true);
+                            const auto& ent = upperVisitor.crate.getTypeitemByPath(sp, gp.mPath, /*ign_crate*/ false, true);
                             if (ent.is_Enum() && ent.as_Enum().findVariant(gp.mPath.components().back()) != SIZE_MAX) {
                                 // Rewrite!
-                                mReplacement.reset(upper_visitor.crate.pool->make<::HIR::ExprNodeTupleVariant>(sp, mv$(gp), /*is_struct*/ false, mv$(node.mArgs)));
+                                mReplacement.reset(upperVisitor.crate.pool->make<::HIR::ExprNodeTupleVariant>(sp, mv$(gp), /*is_struct*/ false, mv$(node.mArgs)));
                                 DEBUG(&node << ": Replacing with TupleVariant " << mReplacement.get());
                                 return;
                             }
@@ -3847,12 +3847,12 @@ namespace resolveUfcs {
                     }
 
                     // If this is pointing at a constant/static/associated constant, change to CallValue
-                    MonomorphState discard(upper_visitor.crate.types);
-                    auto v = upper_visitor.mResolve.getValue(node.span(), node.mPath, discard, true);
+                    MonomorphState discard(upperVisitor.crate.types);
+                    auto v = upperVisitor.mResolve.getValue(node.span(), node.mPath, discard, true);
                     if (v.is_Constant() || v.is_Static()) {
-                        auto* value_node = upper_visitor.crate.pool->make<HIR::ExprNodePathValue>(sp, std::move(node.mPath), v.is_Constant() ? ::HIR::ExprNodePathValue::Target::CONSTANT : v.is_Static() ? ::HIR::ExprNodePathValue::Target::STATIC : ::HIR::ExprNodePathValue::Target::UNKNOWN);
-                        value_node->resType = upper_visitor.crate.types.infer();
-                        mReplacement.reset(upper_visitor.crate.pool->make<::HIR::ExprNodeCallValue>(sp, ::HIR::ExprNodeP(value_node), mv$(node.mArgs)));
+                        auto* value_node = upperVisitor.crate.pool->make<HIR::ExprNodePathValue>(sp, std::move(node.mPath), v.is_Constant() ? ::HIR::ExprNodePathValue::Target::CONSTANT : v.is_Static() ? ::HIR::ExprNodePathValue::Target::STATIC : ::HIR::ExprNodePathValue::Target::UNKNOWN);
+                        value_node->resType = upperVisitor.crate.types.infer();
+                        mReplacement.reset(upperVisitor.crate.pool->make<::HIR::ExprNodeCallValue>(sp, ::HIR::ExprNodeP(value_node), mv$(node.mArgs)));
                         DEBUG(&node << ": Replacing with CallValue " << mReplacement.get());
                         return;
                     }
@@ -3866,12 +3866,12 @@ namespace resolveUfcs {
                         // If it points to an enum, set binding
                         auto& gp = node.mPath.mData.as_Generic();
                         if (gp.mPath.components().size() > 1) {
-                            const auto& ent = upper_visitor.crate.getTypeitemByPath(sp, gp.mPath, /*ign_crate*/ false, true);
+                            const auto& ent = upperVisitor.crate.getTypeitemByPath(sp, gp.mPath, /*ign_crate*/ false, true);
                             if (ent.is_Enum()) {
                                 const auto& enm = ent.as_Enum();
                                 auto idx = enm.findVariant(gp.mPath.components().back());
-                                if (enm.mData.is_Value() || enm.mData.as_Data().at(idx).type == upper_visitor.crate.types.unit()) {
-                                    mReplacement.reset(upper_visitor.crate.pool->make<::HIR::ExprNodeUnitVariant>(sp, mv$(gp), /*is_struct*/ false));
+                                if (enm.mData.is_Value() || enm.mData.as_Data().at(idx).type == upperVisitor.crate.types.unit()) {
+                                    mReplacement.reset(upperVisitor.crate.pool->make<::HIR::ExprNodeUnitVariant>(sp, mv$(gp), /*is_struct*/ false));
                                     DEBUG(&node << ": Replacing with UnitVariant " << mReplacement.get());
                                 } else {
                                     node.target = ::HIR::ExprNodePathValue::ENUM_VAR_CONSTR;
@@ -3893,17 +3893,17 @@ namespace resolveUfcs {
                         auto& p = data.as_Path().path;
                         auto& gp = p.mData.as_Generic();
                         if (gp.mPath.components().size() > 1) {
-                            const auto& ent = upper_visitor.crate.getTypeitemByPath(sp, gp.mPath, /*ign_crate*/ false, true);
+                            const auto& ent = upperVisitor.crate.getTypeitemByPath(sp, gp.mPath, /*ign_crate*/ false, true);
                             if (ent.is_Enum()) {
                                 DEBUG(&node << ": Tagging as an enum");
                                 node.isStruct = false;
                                 auto enumPath = std::move(gp);
-                                auto var_name = enumPath.mPath.popComponent();
-                                auto enumTy = upper_visitor.crate.types.path(std::move(enumPath), &ent.as_Enum());
-                                p = ::HIR::Path(std::move(enumTy), std::move(var_name));
+                                auto varName = enumPath.mPath.popComponent();
+                                auto enumTy = upperVisitor.crate.types.path(std::move(enumPath), &ent.as_Enum());
+                                p = ::HIR::Path(std::move(enumTy), std::move(varName));
                             }
                         }
-                        node.mType = upper_visitor.crate.types.intern(std::move(data));
+                        node.mType = upperVisitor.crate.types.intern(std::move(data));
                     }
                 }
 #endif
@@ -3911,19 +3911,19 @@ namespace resolveUfcs {
                 // NOTE: Custom needed for trait scoping
                 void visit(::HIR::ExprNodeBlock& node) override {
                     if (node.traits.size() == 0 && node.localMod.components().size() > 0) {
-                        const auto& mod = upper_visitor.crate.getModByPath(node.span(), node.localMod);
+                        const auto& mod = upperVisitor.crate.getModByPath(node.span(), node.localMod);
                         for (const auto& trait_path : mod.traits) {
-                            node.traits.push_back(::std::make_pair(&trait_path, &upper_visitor.crate.getTraitByPath(node.span(), trait_path)));
+                            node.traits.push_back(::std::make_pair(&trait_path, &upperVisitor.crate.getTraitByPath(node.span(), trait_path)));
                         }
                     }
                     for (const auto& traitRef : node.traits) {
-                        upper_visitor.traits.push_back(traitRef);
+                        upperVisitor.traits.push_back(traitRef);
                     }
 
                     ::HIR::ExprVisitorDef::visit(node);
 
                     for (unsigned int i = 0; i < node.traits.size(); i++) {
-                        upper_visitor.traits.pop_back();
+                        upperVisitor.traits.pop_back();
                     }
                 }
             };
@@ -4275,11 +4275,11 @@ namespace resolveUfcs {
             return false;
         }
 
-        void visit_type(::HIR::TypeRef& ty) override {
+        void visitType(::HIR::TypeRef& ty) override {
             // TODO: Add a span parameter.
             static Span sp;
 
-            ::HIR::Visitor::visit_type(ty);
+            ::HIR::Visitor::visitType(ty);
 
             // TODO: If this an associated type, check for default trait params
 
@@ -4294,7 +4294,7 @@ namespace resolveUfcs {
                         ::std::sort(stack.begin(), stack.end());
                         DEBUG("Loop detected, picking " << ty);
                         ty = std::move(stack[0]);
-                        ::HIR::Visitor::visit_type(ty);
+                        ::HIR::Visitor::visitType(ty);
                         break;
                     }
                     // NOTE: Only need to clone if this is a Path, as that's the only way we could loop again
@@ -4312,19 +4312,19 @@ namespace resolveUfcs {
                     ASSERT_BUG(sp, stack.size() < 20, "Sanity limit exceeded when resolving UFCS in type " << ty);
                     // Invoke a special version of EAT that only processes a single item.
                     // - Keep recursing while this does replacements
-                    ::HIR::Visitor::visit_type(ty);
+                    ::HIR::Visitor::visitType(ty);
                 }
             }
         }
 
-        void visit_constgeneric(::HIR::ConstGeneric& val) override {
+        void visitConstgeneric(::HIR::ConstGeneric& val) override {
             auto savedVisitExprs = mVisitExprs;
             mVisitExprs = true;
-            ::HIR::Visitor::visit_constgeneric(val);
+            ::HIR::Visitor::visitConstgeneric(val);
             mVisitExprs = savedVisitExprs;
         }
 
-        void visit_path(::HIR::Path& p, ::HIR::Visitor::PathContext pc) override {
+        void visitPath(::HIR::Path& p, ::HIR::Visitor::PathContext pc) override {
             static Span sp;
 
             if (auto* pe = p.mData.opt_UfcsKnown()) {
@@ -4343,8 +4343,8 @@ namespace resolveUfcs {
                 auto& e = *pe;
                 TRACE_FUNCTION_FR("UfcsUnknown - p=" << p, p);
 
-                this->visit_type(e.type);
-                this->visit_path_params(e.params);
+                this->visitType(e.type);
+                this->visitPathParams(e.params);
 
                 // If processing a trait, and the type is 'Self', search for the type/method on the trait
                 // - Explicitly encoded because `Self::Type` has a different meaning to `MyType::Type` (the latter will search bounds first)
@@ -4508,15 +4508,15 @@ namespace resolveUfcs {
                 // Couldn't find it
                 ERROR(sp, E0000, "Failed to find impl with '" << e.item << "' for " << e.type << " (in " << p << ")");
             } else {
-                ::HIR::Visitor::visit_path(p, pc);
+                ::HIR::Visitor::visitPath(p, pc);
             }
         }
 
-        void visit_pattern(::HIR::Pattern& pat) override {
+        void visitPattern(::HIR::Pattern& pat) override {
             static Span _sp = Span();
             const Span& sp = _sp;
 
-            ::HIR::Visitor::visit_pattern(pat);
+            ::HIR::Visitor::visitPattern(pat);
 
             TU_MATCH_HDRA( (pat.mData), {)
             default:
@@ -4557,7 +4557,7 @@ namespace resolveUfcs {
             }
 
             auto ty = crate.types.path(path.clone(), {});
-            this->visit_type(ty);
+            this->visitType(ty);
             ASSERT_BUG(sp, ty->is_Path(), "Pattern associated type didn't resolve to a path - " << ty);
 
             const auto& te = ty->as_Path();
@@ -4619,17 +4619,17 @@ namespace resolveUfcs {
 
     template <typename T>
     void sortImplGroup(::HIR::Crate::ImplGroup<std::unique_ptr<T>>& ig, ::std::function<void(::std::ostream& os, const T&)> fmt) {
-        auto newEnd = ::std::remove_if(ig.generic.begin(), ig.generic.end(), [&ig, &fmt](::std::unique_ptr<T>& ty_impl) {
-            const auto& type = ty_impl->mType; // Using field accesses in templates feels so dirty
+        auto newEnd = ::std::remove_if(ig.generic.begin(), ig.generic.end(), [&ig, &fmt](::std::unique_ptr<T>& tyImpl) {
+            const auto& type = tyImpl->mType; // Using field accesses in templates feels so dirty
             const ::HIR::SimplePath* path = type->getSortPath();
 
             if (path) {
-                DEBUG(*path << " += " << FMT_CB(os, fmt(os, *ty_impl)));
-                ig.named[*path].push_back(mv$(ty_impl));
+                DEBUG(*path << " += " << FMT_CB(os, fmt(os, *tyImpl)));
+                ig.named[*path].push_back(mv$(tyImpl));
             } else if (type->is_Path() || type->is_Generic()) {
                 return false;
             } else {
-                ig.nonNamed.push_back(mv$(ty_impl));
+                ig.nonNamed.push_back(mv$(tyImpl));
             }
             return true;
         });
@@ -4700,19 +4700,19 @@ void ConvertHIRResolveUFCSOuter(::HIR::Crate& crate) {
     }
 
     UfcsVisitor exp{crate, false};
-    exp.visit_crate(crate);
+    exp.visitCrate(crate);
 }
 
 void ConvertHIRResolveUFCS(::HIR::Crate& crate) {
     UfcsVisitor exp{crate, true};
-    exp.visit_crate(crate);
+    exp.visitCrate(crate);
 }
 
 void ConvertHIRResolveUFCSExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& expr_ptr) {
     TRACE_FUNCTION_F(ip);
     // Check innards but NOT the value
     UfcsVisitor exp{crate, true};
-    exp.visit_expr(expr_ptr);
+    exp.visitExpr(expr_ptr);
 }
 
 void ConvertHIRResolveUFCSSortImpls(::HIR::Crate& crate) {

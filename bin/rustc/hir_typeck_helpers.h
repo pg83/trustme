@@ -6,7 +6,7 @@
 #include "hir_typeck_common.h"
 #include "hir_typeck_resolve_common.h"
 
-bool type_is_unbounded_infer(const ::HIR::TypeData* ty);
+bool typeIsUnboundedInfer(const ::HIR::TypeData* ty);
 
 class HMTypeInferrence {
 public:
@@ -136,9 +136,9 @@ public:
 
     // Helpers
     bool pathparamsContainIvars(const ::HIR::PathParams& pps, bool onlyUnbound) const;
-    bool type_contains_ivars(const ::HIR::TypeData* ty, bool onlyUnbound = false) const;
+    bool typeContainsIvars(const ::HIR::TypeData* ty, bool onlyUnbound = false) const;
     bool pathparamsEqual(const ::HIR::PathParams& ppsL, const ::HIR::PathParams& ppsR) const;
-    bool types_equal(const ::HIR::TypeData* l, const ::HIR::TypeData* r) const;
+    bool typesEqual(const ::HIR::TypeData* l, const ::HIR::TypeData* r) const;
 
 private:
     IVar& getPointedIvar(unsigned int slot) const;
@@ -218,8 +218,8 @@ public:
         return left->compareWithPlaceholders(sp, right, ivars.callbackResolveInfer());
     }
 
-    bool type_contains_ivars(const ::HIR::TypeData* type) const {
-        return ivars.type_contains_ivars(type, false);
+    bool typeContainsIvars(const ::HIR::TypeData* type) const {
+        return ivars.typeContainsIvars(type, false);
     }
 
     bool paramsContainIvars(const ::HIR::PathParams& params) const {
@@ -326,7 +326,7 @@ public:
         const Span& sp,
         const HIR::tTraitList& traits,
         const ::std::vector<unsigned>& ivars,
-        unsigned int type_ivar_count,
+        unsigned int typeIvarCount,
         const ::HIR::TypeData* top_ty,
         const RcString& method_name,
         /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, ::HIR::Path>>& possibilities
@@ -374,15 +374,15 @@ public:
         Box,
     };
     friend ::std::ostream& operator<<(::std::ostream& os, const AllowedReceivers& x);
-    bool findMethod(const Span& sp, const HIR::tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int type_ivar_count, const ::HIR::TypeData* ty, const RcString& method_name, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, ::HIR::Path>>& possibilities) const;
+    bool findMethod(const Span& sp, const HIR::tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const ::HIR::TypeData* ty, const RcString& method_name, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, ::HIR::Path>>& possibilities) const;
 
     /// Locates a named method in a trait, and returns the path of the trait that contains it (with fixed parameters)
     const ::HIR::Function* traitContainsMethod(const Span& sp, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait_ptr, const ::HIR::TypeData* self, const RcString& name, ::HIR::GenericPath& outPath) const;
     bool traitContainsType(const Span& sp, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait_ptr, const char* name, ::HIR::GenericPath& outPath) const;
 
-    ::HIR::Compare type_is_sized(const Span& sp, const ::HIR::TypeData* ty) const;
-    ::HIR::Compare type_is_copy(const Span& sp, const ::HIR::TypeData* ty) const;
-    ::HIR::Compare type_is_clone(const Span& sp, const ::HIR::TypeData* ty) const;
+    ::HIR::Compare typeIsSized(const Span& sp, const ::HIR::TypeData* ty) const;
+    ::HIR::Compare typeIsCopy(const Span& sp, const ::HIR::TypeData* ty) const;
+    ::HIR::Compare typeIsClone(const Span& sp, const ::HIR::TypeData* ty) const;
 
     // If `new_type_callback` is populated, it will be called with the actual/possible dst_type
     // If `infer_callback` is populated, it will be called when either side is an ivar
@@ -392,7 +392,7 @@ public:
 
     ::HIR::Compare canUnsize(const Span& sp, const ::HIR::TypeData* dstTy, const ::HIR::TypeData* srcTy, ::std::function<void(::HIR::TypeRef newDst)>* newTypeCallback, ::std::function<void(const ::HIR::TypeData* dst, const ::HIR::TypeData* src)>* inferCallback = nullptr) const;
 
-    const ::HIR::TypeData* type_is_owned_box(const Span& sp, const ::HIR::TypeData* ty) const;
+    const ::HIR::TypeData* typeIsOwnedBox(const Span& sp, const ::HIR::TypeData* ty) const;
 
 private:
     void expandAssociatedTypesInplace(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const;

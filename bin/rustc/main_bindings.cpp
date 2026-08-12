@@ -130,16 +130,16 @@ void ExpandTestHarness(::AST::Crate& crate) {
 
     // ---- module ----
     auto newmod = ::AST::Module{::AST::AbsolutePath("", {"test#"})};
-    auto vis_private = AST::Visibility::makeRestricted(AST::Visibility::Ty::Private, newmod.path());
+    auto visPrivate = AST::Visibility::makeRestricted(AST::Visibility::Ty::Private, newmod.path());
     // - TODO: These need to be loaded too.
     //  > They don't actually need to exist here, just be loaded (and use absolute paths)
     //newmod.add_ext_crate(Span(), false, "std", "std", {});
     //newmod.add_ext_crate(Span(), false, "test", "test", {});
 
-    newmod.addItem(Span(), vis_private, "main", mv$(mainFn), {});
-    newmod.addItem(Span(), vis_private, "TESTS", mv$(testsList), {});
+    newmod.addItem(Span(), visPrivate, "main", mv$(mainFn), {});
+    newmod.addItem(Span(), visPrivate, "TESTS", mv$(testsList), {});
 
-    crate.rootModule.addItem(Span(), vis_private, "test#", mv$(newmod), {});
+    crate.rootModule.addItem(Span(), visPrivate, "test#", mv$(newmod), {});
     crate.mLangItems["mrustc-main"] = ::AST::AbsolutePath("", {"test#", "main"});
 }
 
@@ -151,7 +151,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
     #define __has_feature(x) 0
 #endif
 
-#if __has_feature(addressSanitizer) || __has_feature(undefined_behavior_sanitizer)
+#if __has_feature(addressSanitizer) || __has_feature(undefinedBehaviorSanitizer)
     #define MRUSTC_SANITIZER_BUILD 1
 #else
     #define MRUSTC_SANITIZER_BUILD 0
@@ -577,7 +577,7 @@ int main(int argc, char* argv[]) {
             struct PathEnumerator {
                 ::std::vector<::std::string> out;
 
-                void visit_module(::AST::Module& mod) {
+                void visitModule(::AST::Module& mod) {
                     if (mod.fileInfo.path != "!" && mod.fileInfo.path.back() != '/') {
                         out.push_back(mod.fileInfo.path);
                     }
@@ -587,14 +587,14 @@ int main(int argc, char* argv[]) {
                     //}
                     for (auto& i : mod.mItems) {
                         if (i->data.is_Module()) {
-                            this->visit_module(i->data.as_Module());
+                            this->visitModule(i->data.as_Module());
                         }
                     }
                 }
             };
 
             PathEnumerator pe;
-            pe.visit_module(crate.rootModule);
+            pe.visitModule(crate.rootModule);
 
             ::std::ofstream of{params.emitDepfile};
             // TODO: Escape spaces and colons in these paths
@@ -1403,17 +1403,17 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 this->crate_name = nameStr;
             }
             // `--crate-type <name>`    - Specify the crate type (overrides `#![crate_type="<name>"]`)
-            else if (const char* type_str = checkWithArg("crate-type")) {
-                if (strcmp(type_str, "lib") == 0 || strcmp(type_str, "rlib") == 0) {
+            else if (const char* typeStr = checkWithArg("crate-type")) {
+                if (strcmp(typeStr, "lib") == 0 || strcmp(typeStr, "rlib") == 0) {
                     this->crate_type = ::AST::Crate::Type::RustLib;
-                } else if (strcmp(type_str, "dylib") == 0) {
+                } else if (strcmp(typeStr, "dylib") == 0) {
                     this->crate_type = ::AST::Crate::Type::RustDylib;
-                } else if (strcmp(type_str, "bin") == 0) {
+                } else if (strcmp(typeStr, "bin") == 0) {
                     this->crate_type = ::AST::Crate::Type::Executable;
-                } else if (strcmp(type_str, "proc-macro") == 0) {
+                } else if (strcmp(typeStr, "proc-macro") == 0) {
                     this->crate_type = ::AST::Crate::Type::ProcMacro;
                 } else {
-                    ::std::cerr << "Unknown value for --crate-type: " << type_str << ::std::endl;
+                    ::std::cerr << "Unknown value for --crate-type: " << typeStr << ::std::endl;
                     exit(1);
                 }
             }

@@ -25,14 +25,14 @@ namespace AsmCommon {
     std::ostream& operator<<(std::ostream& os, const Direction& d);
 
     enum class RegisterClass {
-        x86_reg,
-        x86_reg_abcd,
-        x86_reg_byte,
-        x86_xmm,
-        x86_ymm,
-        x86_zmm,
+        x86Reg,
+        x86RegAbcd,
+        x86RegByte,
+        x86Xmm,
+        x86Ymm,
+        x86Zmm,
         //x86_mm, // Requires
-        x86_kreg,
+        x86Kreg,
 
         //aarch64_reg,
         //aarch64_vreg,

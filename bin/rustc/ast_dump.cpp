@@ -12,13 +12,13 @@
 
 #define IS(v, c) (cast<c>(&v) != 0)
 #define WRAPIF_CMD(v, t) || IS(v, t)
-#define WRAPIF(uniq_ptr, class1, ...)                                   \
+#define WRAPIF(uniqPtr, class1, ...)                                   \
     do {                                                                \
-        auto& _v = *(uniq_ptr);                                         \
+        auto& _v = *(uniqPtr);                                         \
         if (IS(_v, class1) CC_ITERATE(WRAPIF_CMD, (_v), __VA_ARGS__)) { \
-            parenWrap(uniq_ptr);                                       \
+            parenWrap(uniqPtr);                                       \
         } else {                                                        \
-            AST::NodeVisitor::visit(uniq_ptr);                          \
+            AST::NodeVisitor::visit(uniqPtr);                          \
         }                                                               \
     } while (0)
 
@@ -180,14 +180,14 @@ public:
                 }
                 TU_ARMA(Reg, e) {
                     os << e.dir << "(" << e.spec << ") ";
-                    if (e.val_in) {
-                        AST::NodeVisitor::visit(e.val_in);
-                        if (e.val_out) {
+                    if (e.valIn) {
+                        AST::NodeVisitor::visit(e.valIn);
+                        if (e.valOut) {
                             os << " => ";
                         }
                     }
-                    if (e.val_out) {
-                        AST::NodeVisitor::visit(e.val_out);
+                    if (e.valOut) {
+                        AST::NodeVisitor::visit(e.valOut);
                     }
                 }
             }
@@ -376,7 +376,7 @@ public:
         AST::NodeVisitor::visit(n.mCode);
     }
 
-    void visit_iflet_conditions(std::vector<AST::IfLetCondition>& conds) {
+    void visitIfletConditions(std::vector<AST::IfLetCondition>& conds) {
         for (size_t i = 0; i < conds.size(); i++) {
             if (i != 0) {
                 os << " && ";
@@ -401,7 +401,7 @@ public:
         }
 
         os << "while ";
-        visit_iflet_conditions(n.conditions);
+        visitIfletConditions(n.conditions);
         if (expr_root) {
             os << "\n";
             os << indent();
@@ -438,7 +438,7 @@ public:
             }
             if (!arm.guard.empty()) {
                 os << " if ";
-                visit_iflet_conditions(arm.guard);
+                visitIfletConditions(arm.guard);
             }
             os << " => ";
             // Increase indent, but don't print. Causes nested blocks to be indented above the match
@@ -468,7 +468,7 @@ public:
             }
 
             os << "if ";
-            visit_iflet_conditions(arm.conditions);
+            visitIfletConditions(arm.conditions);
 
             bool isBlock = (cast<const AST::ExprNodeBlock>(&*arm.body) != nullptr);
             if (!isBlock) {
@@ -1060,7 +1060,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
                 break;
         }
         os << item.name << ": " << e.type() << " = ";
-        e.value().visit_nodes(*this);
+        e.value().visitNodes(*this);
         os << ";\n";
     }
 
@@ -1124,7 +1124,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
                             break;
                     } os << it.name
                            << ": " << e.type() << " = ";
-                    e.value().visit_nodes(*this);
+                    e.value().visitNodes(*this);
                     os << ";\n";
                 ),
                 (Type, os << indent() << "type " << it.name << " = " << e.type() << ";\n";),
@@ -1260,7 +1260,7 @@ void RustPrinter::printPattern(const AST::Pattern& p, bool isRefutable) {
          }),
         (Value, os << v.start; if (!v.end.is_Invalid()) { os << " ..= " << v.end; }),
         (ValueLeftInc, os << v.start << " .. " << v.end;),
-        (StructTuple, os << v.path << "("; this->printPatternTuple(v.tup_pat, isRefutable); os << ")";),
+        (StructTuple, os << v.path << "("; this->printPatternTuple(v.tupPat, isRefutable); os << ")";),
         (Struct,
          {
              const auto& v = p.data().as_Struct();
@@ -1437,7 +1437,7 @@ void RustPrinter::handleFunction(const AST::Visibility& vis, const RcString& nam
         printBounds(f.params());
 
         os << indent();
-        f.code().visit_nodes(*this);
+        f.code().visitNodes(*this);
         os << "\n";
         //m_os << indent() << f.data.code() << "\n";
     } else {

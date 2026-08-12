@@ -41,7 +41,7 @@ public:
     virtual void emitUnion(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Union& item) = 0;
     virtual void emitEnum(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Enum& item) = 0;
 
-    virtual void emitConstructorEnum(const Span& sp, const ::HIR::GenericPath& path, const ::HIR::Enum& item, size_t var_idx) = 0;
+    virtual void emitConstructorEnum(const Span& sp, const ::HIR::GenericPath& path, const ::HIR::Enum& item, size_t varIdx) = 0;
     virtual void emitConstructorStruct(const Span& sp, const ::HIR::GenericPath& path, const ::HIR::Struct& item) = 0;
 
     virtual void emitStaticExt(const ::HIR::Path& p, const ::HIR::Static& item, const TransParams& params) {

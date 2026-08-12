@@ -706,11 +706,11 @@ namespace {
         size_t align;
         HIR::TypeRef ty;
         /// `align` came from an explicit `repr(align(N))` somewhere inside `ty`.
-        bool user_align = false;
+        bool userAlign = false;
     };
 
     ::std::ostream& operator<<(std::ostream& os, const Ent& e) {
-        os << "Ent { #" << e.field << ": s=" << e.size << " a=" << e.align << (e.user_align ? "!" : "") << " : " << e.ty << " }";
+        os << "Ent { #" << e.field << ": s=" << e.size << " a=" << e.align << (e.userAlign ? "!" : "") << " : " << e.ty << " }";
         return os;
     }
 
@@ -721,7 +721,7 @@ namespace {
             return false;
         }
         out = Ent{idx, size, align, HIR::TypeRef(), false};
-        out.user_align = TargetTypeHasUserAlignment(sp, resolve, ty);
+        out.userAlign = TargetTypeHasUserAlignment(sp, resolve, ty);
         out.ty = mv$(ty);
         return true;
     }
@@ -831,14 +831,14 @@ namespace {
             // The cap is on natural alignment only: an explicitly aligned member keeps it, as in gcc.
             if (TargetCapsMemberAlignment()) {
                 if (e.size > 0) {
-                    if (!isFirstField && !e.user_align && align >= 4 && align <= 8) {
+                    if (!isFirstField && !e.userAlign && align >= 4 && align <= 8) {
                         align = 4;
                     }
                     isFirstField = false;
                 }
             }
-            if (e.user_align) {
-                rv.user_align = true;
+            if (e.userAlign) {
+                rv.userAlign = true;
             }
 
             // Increase offset to fit alignment
@@ -869,7 +869,7 @@ namespace {
         if (forced_alignment > 0) {
             maxAlign = std::max(maxAlign, static_cast<size_t>(forced_alignment));
             // `repr(align(N))` - this is the root of a user-alignment chain.
-            rv.user_align = true;
+            rv.userAlign = true;
         }
         // If not packing (and the size isn't infinite/unsized) then round the size up to the alignment
         if (curOfs != SIZE_MAX) {
@@ -1335,9 +1335,9 @@ namespace {
                                 hasExplcitValue = true;
                             }
 
-                            auto variant_type = monomorph(var.type);
-                            auto forced_alignment = variant_type->is_Path() && variant_type->as_Path().binding.is_Struct() ? variant_type->as_Path().binding.as_Struct()->forcedAlignment : 0;
-                            variants.push_back({mv$(variant_type), {}, forced_alignment});
+                            auto variantType = monomorph(var.type);
+                            auto forced_alignment = variantType->is_Path() && variantType->as_Path().binding.is_Struct() ? variantType->as_Path().binding.as_Struct()->forcedAlignment : 0;
+                            variants.push_back({mv$(variantType), {}, forced_alignment});
                             TRACE_FUNCTION_F("Variant #" << (&var - e.data()));
                             if (var.type == resolve.crate.types.unit()) {
                                 continue;
@@ -1411,21 +1411,21 @@ namespace {
                                 for (size_t i = 0; i < variants.size(); i++) {
                                     reprs.push_back(makeTypeReprStructInner(sp, e[i].type, variants[i].ents, StructSorting::All, variants[i].forced_alignment, 0));
                                     maxAlign = std::max(maxAlign, reprs.back()->align);
-                                    size_t var_size = reprs.back()->size;
+                                    size_t varSize = reprs.back()->size;
                                     // If larger than current max, update current max and reset
-                                    if (var_size > maxVarSize) {
+                                    if (varSize > maxVarSize) {
                                         minOffset = maxVarSize; // Downgrade the previous to min_offset
-                                        maxVarSize = var_size;
+                                        maxVarSize = varSize;
                                         biggestVar = i;
                                         nMatch = 1;
                                     }
                                     // If equal to current max, increment count
-                                    else if (var_size == maxVarSize) {
+                                    else if (varSize == maxVarSize) {
                                         nMatch += 1;
                                     }
                                     // Otherwise (smaller) update the min offset
                                     else {
-                                        minOffset = std::max(minOffset, var_size);
+                                        minOffset = std::max(minOffset, varSize);
                                     }
                                 }
                                 DEBUG("Niche optimisation: max_var_size=" << maxVarSize << " n_match=" << nMatch << " biggest_var=" << biggestVar << " min_offset=" << minOffset);
@@ -1699,10 +1699,10 @@ namespace {
                             // Sort all varaint fields (fully)
                             // Add the tag to the start of all variants
                             // Generate a struct repr (with sorting off)
-                            for (size_t var_i = 0; var_i < variants.size(); var_i++) {
-                                auto& ents = variants[var_i].ents;
-                                auto& var_ty = variants[var_i].type;
-                                if (e[var_i].type != resolve.crate.types.unit()) {
+                            for (size_t varI = 0; varI < variants.size(); varI++) {
+                                auto& ents = variants[varI].ents;
+                                auto& varTy = variants[varI].type;
+                                if (e[varI].type != resolve.crate.types.unit()) {
                                     if (enm.tagRepr == HIR::Enum::Repr::Auto) {
                                         ::std::sort(ents.begin(), ents.end(), sortfnEnumVariantFields);
                                     }
@@ -1714,14 +1714,14 @@ namespace {
                                     ents[0].ty = tagTy;
 
                                     // - Create repr and assign
-                                    auto repr = makeTypeReprStructInner(sp, var_ty, ents, StructSorting::None, variants[var_i].forced_alignment, 0);
+                                    auto repr = makeTypeReprStructInner(sp, varTy, ents, StructSorting::None, variants[varI].forced_alignment, 0);
                                     max_size = std::max(max_size, repr->size);
                                     maxAlign = std::max(maxAlign, repr->align);
-                                    setTypeRepr(sp, var_ty, std::move(repr));
+                                    setTypeRepr(sp, varTy, std::move(repr));
                                 }
 
                                 // - Push the field
-                                rv.fields.push_back(TypeRepr::Field{0, mv$(var_ty)});
+                                rv.fields.push_back(TypeRepr::Field{0, mv$(varTy)});
                             }
                             rv.fields.push_back(TypeRepr::Field{0, mv$(tagTy)});
 
@@ -1816,14 +1816,14 @@ namespace {
                 DEBUG("rv.variants = Values {" << " field=" << e.field << " values " << e.values << " }");
             }
             TU_ARMA(NonZero, e) {
-                DEBUG("rv.variants = NonZero {" << " field=" << e.field << " zero_variant=" << e.zero_variant << " }");
+                DEBUG("rv.variants = NonZero {" << " field=" << e.field << " zero_variant=" << e.zeroVariant << " }");
             }
         }
 
         // An enum inherits user-alignment from any variant, as in gcc; every variant repr is already cached here, so this cannot recurse.
         for(const auto& f : rv.fields) {
             if (TargetTypeHasUserAlignment(sp, resolve, f.ty)) {
-                rv.user_align = true;
+                rv.userAlign = true;
                 break;
             }
         }
@@ -1841,7 +1841,7 @@ namespace {
 
         TypeRepr rv;
         // codegen_c pins union alignment with an explicit `__attribute__((aligned))`, which gcc counts as user-alignment - so a union, and anything containing it, is exempt from the cap.
-        rv.user_align = true;
+        rv.userAlign = true;
         for (const auto& var : unn.mVariants) {
             rv.fields.push_back({0, monomorph(var.ty)});
             size_t size, align;
@@ -1857,7 +1857,7 @@ namespace {
             rv.align = ::std::max(rv.align, align);
             // A union inherits user-alignment from any member, as in gcc.
             if (TargetTypeHasUserAlignment(sp, resolve, rv.fields.back().ty)) {
-                rv.user_align = true;
+                rv.userAlign = true;
             }
         }
         // Round the size to be a multiple of align
@@ -1963,7 +1963,7 @@ bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolv
     // Aggregates cache it on their repr; everything else is naturally aligned by definition
     if (ty->is_Tuple() || (ty->is_Path() && (ty->as_Path().binding.is_Struct() || ty->as_Path().binding.is_Union() || ty->as_Path().binding.is_Enum()))) {
         const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
-        return repr && repr->user_align;
+        return repr && repr->userAlign;
     }
     return false;
 }
@@ -2044,7 +2044,7 @@ size_t TypeRepr::getOffset(const Span& sp, const StaticTraitResolve& resolve, co
 }
 
 std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticTraitResolve& resolve, const EncodedLiteralSlice& lit) const {
-    unsigned var_idx = 0;
+    unsigned varIdx = 0;
     bool subHasTag = false;
     TU_MATCH_HDRA( (this->variants), {)
     TU_ARMA(None, ve) {
@@ -2052,21 +2052,21 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
         TU_ARMA(Linear, ve) {
             auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).readUint(ve.field.size);
             if (v < ve.offset) {
-                var_idx = ve.field.index;
+                varIdx = ve.field.index;
                 subHasTag = false; // TODO: is this correct?
-                DEBUG("VariantMode::Linear - Niche #" << var_idx);
+                DEBUG("VariantMode::Linear - Niche #" << varIdx);
             } else {
-                var_idx = v.truncateU64() - ve.offset;
+                varIdx = v.truncateU64() - ve.offset;
                 subHasTag = true;
-                DEBUG("VariantMode::Linear - Other #" << var_idx);
+                DEBUG("VariantMode::Linear - Other #" << varIdx);
             }
         }
         TU_ARMA(Values, ve) {
             auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).readUint(ve.field.size);
             auto it = std::find(ve.values.begin(), ve.values.end(), v);
             ASSERT_BUG(sp, it != ve.values.end(), "Invalid enum tag: " << v);
-            var_idx = it - ve.values.begin();
-            DEBUG("VariantMode::Values - #" << var_idx);
+            varIdx = it - ve.values.begin();
+            DEBUG("VariantMode::Values - #" << varIdx);
         }
         TU_ARMA(NonZero, ve) {
             size_t ofs = this->getOffset(sp, resolve, ve.field);
@@ -2078,11 +2078,11 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
                 }
             }
 
-            var_idx = (isNonzero ? 1 - ve.zero_variant : ve.zero_variant);
-            DEBUG("VariantMode::NonZero - #" << var_idx);
+            varIdx = (isNonzero ? 1 - ve.zeroVariant : ve.zeroVariant);
+            DEBUG("VariantMode::NonZero - #" << varIdx);
         }
     }
-    return std::make_pair(var_idx, subHasTag);
+    return std::make_pair(varIdx, subHasTag);
 }
 
 TargetArch::Atomics::Atomics(bool u8, bool u16, bool u32, bool u64, bool ptr)

@@ -3158,7 +3158,7 @@ AST::Named<AST::Item> ParseTraitItem(TokenStream& lex) {
         case TOK_RWORD_TYPE: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
             name = tok.ident().name;
-            auto type_params = ParseGenericParamsOpt(lex);
+            auto typeParams = ParseGenericParamsOpt(lex);
             AST::GenericParams bounds;
             if (GET_TOK(tok, lex) == TOK_COLON) {
                 // Bounded associated type
@@ -3172,12 +3172,12 @@ AST::Named<AST::Item> ParseTraitItem(TokenStream& lex) {
                 GET_TOK(tok, lex);
             }
             if (tok.type() == TOK_RWORD_WHERE) {
-                ParseWhereClause(lex, type_params);
+                ParseWhereClause(lex, typeParams);
                 GET_TOK(tok, lex);
             }
 
             CHECK_TOK(tok, TOK_SEMICOLON);
-            rv = ::AST::TypeAlias::newAssociatedType(mv$(type_params), mv$(bounds), mv$(defaultType));
+            rv = ::AST::TypeAlias::newAssociatedType(mv$(typeParams), mv$(bounds), mv$(defaultType));
             break;
         }
 
@@ -3411,7 +3411,7 @@ namespace {
         if (tok.type() == TOK_IDENT) {
             return tok.ident().name;
         }
-        if (Token::type_is_rword(tok.type())) {
+        if (Token::typeIsRword(tok.type())) {
             return tok.toStr().c_str();
         }
         throw ParseError::Unexpected(lex, tok, TOK_IDENT);
@@ -3432,7 +3432,7 @@ AST::Attribute ParseMetaItem(TokenStream& lex) {
 
     AST::AttributeName name;
     // NOTE: After 1.19 mode, values can be present with no name
-    if (lex.lookahead(0) != TOK_IDENT && lex.lookahead(0) != TOK_DOUBLE_COLON && !Token::type_is_rword(lex.lookahead(0))) {
+    if (lex.lookahead(0) != TOK_IDENT && lex.lookahead(0) != TOK_DOUBLE_COLON && !Token::typeIsRword(lex.lookahead(0))) {
         // Put a fake equals token in the queue
         tok = Token(TOK_EQUAL);
     } else {

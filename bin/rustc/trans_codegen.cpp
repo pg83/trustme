@@ -65,8 +65,8 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput outTy, const Trans
         if (path.mPath.components().size() > 1) {
             const auto& nse = cratePtr->getTypeitemByPath(sp, path.mPath, false, true);
             if (const auto* e = nse.opt_Enum()) {
-                auto var_idx = e->findVariant(path.mPath.components().back());
-                codegen->emitConstructorEnum(sp, path, *e, var_idx);
+                auto varIdx = e->findVariant(path.mPath.components().back());
+                codegen->emitConstructorEnum(sp, path, *e, varIdx);
                 continue;
             }
             modPtr = &nse.as_Module();
@@ -148,7 +148,7 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput outTy, const Trans
             // `is_extern` is set if there's no HIR (i.e. this function is from an external crate)
             bool isExtern = !static_cast<bool>(fcn.mCode);
             // If this is a provided trait method, it needs to be monomorphised too.
-            bool isMethod = (fcn.mArgs.size() > 0 && visit_ty_with(fcn.mArgs[0].second, [&](const auto& x) {
+            bool isMethod = (fcn.mArgs.size() > 0 && visitTyWith(fcn.mArgs[0].second, [&](const auto& x) {
                 return x == cratePtr->types.self();
             }));
 
@@ -301,10 +301,10 @@ namespace {
             }
         }
         TU_MATCHA((x.e.root), (e), (Return, os << "RETURN";), (Local, os << "var" << e;), (Argument, os << "arg" << e;), (Static, os << fmt(e);))
-        bool was_num = false;
+        bool wasNum = false;
         for (const auto& w : x.e.wrappers) {
-            bool prevWasNum = was_num;
-            was_num = false;
+            bool prevWasNum = wasNum;
+            wasNum = false;
             switch (w.tag()) {
                 case ::MIR::LValue::Wrapper::TAGDEAD:
                     throw "";
@@ -317,16 +317,16 @@ namespace {
                             os << " ";
                         }
                         os << "." << fieldIndex;
-                        was_num = true;
+                        wasNum = true;
                     }
                     break;
                     TU_ARM(w, Index, e) {
                         os << "[" << fmt(::MIR::LValue::newLocal(e)) << "]";
                     }
                     break;
-                    TU_ARM(w, Downcast, variant_index) {
-                        os << "@" << variant_index;
-                        was_num = true;
+                    TU_ARM(w, Downcast, variantIndex) {
+                        os << "@" << variantIndex;
+                        wasNum = true;
                     }
                     break;
             }
@@ -511,7 +511,7 @@ namespace {
                     const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
                     MIR_ASSERT(*mirRes, repr, "No repr for tuple " << ty);
 
-                    bool hasDropGlue = mResolve.type_needs_drop_glue(sp, ty);
+                    bool hasDropGlue = mResolve.typeNeedsDropGlue(sp, ty);
                     auto dropGluePath = ::HIR::Path(ty, "#drop_glue");
 
                     of << "type " << fmt(ty) << " {\n";
@@ -600,8 +600,8 @@ namespace {
                         //auto vtp = t.m_data.as_TraitObject().m_trait.m_path;
 
                         const auto& trait = resolve.crate.getTraitByPath(sp, te.mTrait.mPath.mPath);
-                        auto vtable_ty = trait.getVtableType(sp, resolve.crate, te);
-                        return resolve.crate.types.pointer(::HIR::BorrowType::Shared, vtable_ty);
+                        auto vtableTy = trait.getVtableType(sp, resolve.crate, te);
+                        return resolve.crate.types.pointer(::HIR::BorrowType::Shared, vtableTy);
                     } else if (t->is_Path() && t->as_Path().binding.is_ExternType()) {
                         return resolve.crate.types.unit();
                     } else if (t->is_Path()) {
@@ -615,7 +615,7 @@ namespace {
             };
 
             // Generate the drop glue (and determine if there is any)
-            bool hasDropGlue = mResolve.type_needs_drop_glue(sp, ty);
+            bool hasDropGlue = mResolve.typeNeedsDropGlue(sp, ty);
 
             const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
             MIR_ASSERT(*mirRes, repr, "No repr for struct " << ty);
@@ -635,23 +635,23 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emitConstructorEnum(const Span& sp, const ::HIR::GenericPath& var_path, const ::HIR::Enum& item, size_t var_idx) override {
-            TRACE_FUNCTION_F(var_path);
+        void emitConstructorEnum(const Span& sp, const ::HIR::GenericPath& varPath, const ::HIR::Enum& item, size_t varIdx) override {
+            TRACE_FUNCTION_F(varPath);
 
             ::HIR::TypeRef tmp;
-            MonomorphStatePtr ms(crate.types, nullptr, &var_path.mParams, nullptr);
+            MonomorphStatePtr ms(crate.types, nullptr, &varPath.mParams, nullptr);
             auto monomorph = [&](const auto& x) {
                 return mResolve.monomorphExpandOpt(sp, tmp, x, ms);
             };
 
-            auto enumPath = var_path.clone();
+            auto enumPath = varPath.clone();
             enumPath.mPath.popComponent();
 
             // Create constructor function
-            const auto& var_ty = item.mData.as_Data().at(var_idx).type;
-            const auto& e = var_ty->as_Path().binding.as_Struct()->mData.as_Tuple();
-            of << "/* " << var_path << " */\n";
-            of << "fn " << fmt(var_path) << "(";
+            const auto& varTy = item.mData.as_Data().at(varIdx).type;
+            const auto& e = varTy->as_Path().binding.as_Struct()->mData.as_Tuple();
+            of << "/* " << varPath << " */\n";
+            of << "fn " << fmt(varPath) << "(";
             for (unsigned int i = 0; i < e.size(); i++) {
                 if (i != 0) {
                     of << ", ";
@@ -660,7 +660,7 @@ namespace {
             }
             of << "): " << fmt(enumPath) << " {\n";
             of << "\t0: {\n";
-            of << "\t\tASSIGN RETURN = ENUM " << fmt(enumPath) << " " << var_idx << " { ";
+            of << "\t\tASSIGN RETURN = ENUM " << fmt(enumPath) << " " << varIdx << " { ";
             for (unsigned int i = 0; i < e.size(); i++) {
                 if (i != 0) {
                     of << ", ";
@@ -715,7 +715,7 @@ namespace {
             TRACE_FUNCTION_F(p);
             ::HIR::TypeRef ty = crate.types.path(p.clone(), &item);
 
-            bool hasDropGlue = mResolve.type_needs_drop_glue(sp, ty);
+            bool hasDropGlue = mResolve.typeNeedsDropGlue(sp, ty);
             auto dropGluePath = ::HIR::Path(ty, "#drop_glue");
 
             const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
@@ -742,7 +742,7 @@ namespace {
             ::HIR::TypeRef ty = crate.types.path(p.clone(), &item);
 
             // Generate the drop glue (and determine if there is any)
-            bool hasDropGlue = mResolve.type_needs_drop_glue(sp, ty);
+            bool hasDropGlue = mResolve.typeNeedsDropGlue(sp, ty);
             auto dropGluePath = ::HIR::Path(ty, "#drop_glue");
 
             const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
@@ -813,7 +813,7 @@ namespace {
                                 of << ", ";
                             }
 
-                            if (e.zero_variant == i) {
+                            if (e.zeroVariant == i) {
                                 of << "\"";
                                 for (size_t i = 0; i < e.field.size; i++) {
                                     of << "\\0";
@@ -990,7 +990,7 @@ namespace {
                                         of << "CAST " << fmt(e.val) << " as " << fmt(e.type);
                                         break;
                                         TU_ARM(se.src, BinOp, e) {
-                                            of << "BINOP " << fmt(e.val_l) << " ";
+                                            of << "BINOP " << fmt(e.valL) << " ";
                                             switch (e.op) {
                                                 case ::MIR::eBinOp::ADD:
                                                     of << "+";
@@ -1053,7 +1053,7 @@ namespace {
                                                     of << "<=";
                                                     break;
                                             }
-                                            of << " " << fmt(e.val_r);
+                                            of << " " << fmt(e.valR);
                                         }
                                         break;
                                         TU_ARM(se.src, UniOp, e) {
@@ -1341,7 +1341,7 @@ namespace {
 
     private:
         const ::HIR::TypeData* monomorphiseFcnReturn(::HIR::TypeRef& tmp, const ::HIR::Function& item, const TransParams& params) {
-            bool hasErased = visit_ty_with(item.returnType, [&](const auto& x) {
+            bool hasErased = visitTyWith(item.returnType, [&](const auto& x) {
                 return x->is_ErasedType();
             });
 

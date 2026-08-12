@@ -70,7 +70,7 @@ namespace AST {
 
         void reset(ExprNode* n = nullptr);
 
-        const char* type_name() const;
+        const char* typeName() const;
     };
 
     class Expr {
@@ -95,8 +95,8 @@ namespace AST {
 
         ::std::shared_ptr<ExprNode> takeNode();
 
-        void visit_nodes(NodeVisitor& v);
-        void visit_nodes(NodeVisitor& v) const;
+        void visitNodes(NodeVisitor& v);
+        void visitNodes(NodeVisitor& v) const;
 
         Expr clone() const;
 

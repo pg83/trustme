@@ -592,9 +592,9 @@ namespace MIR {
             // Binary operation on primitives
             (BinOp,
              struct {
-                 Param val_l;
+                 Param valL;
                  eBinOp op;
-                 Param val_r;
+                 Param valR;
              }),
             // Unary operation on primitives
             (UniOp,
@@ -689,7 +689,7 @@ namespace MIR {
          struct {
              LValue val;
              ::std::vector<BasicBlockId> targets;
-             unsigned int valid_flag = ~0u;
+             unsigned int validFlag = ~0u;
              BasicBlockId invalidTarget = ~0u;
          }),
         (SwitchValue,
@@ -856,7 +856,7 @@ namespace MIR {
             return f;
         }
 
-        virtual const HIR::TypeData* value_generic_type(HIR::GenericRef ce) const;
+        virtual const HIR::TypeData* valueGenericType(HIR::GenericRef ce) const;
         virtual const Monomorphiser& monomorphiser() const;
 
         virtual const StaticTraitResolve* resolve() const {

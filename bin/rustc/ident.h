@@ -58,7 +58,7 @@ struct Ident {
 
         static Hygiene newScopeChained(const Hygiene& parent, unsigned int macroDefinition = 0);
 
-        Hygiene with_tail_scope(const Hygiene& scope, bool inheritModPath = false) const;
+        Hygiene withTailScope(const Hygiene& scope, bool inheritModPath = false) const;
 
         Hygiene getParent() const;
 

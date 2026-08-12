@@ -85,7 +85,7 @@ namespace HIR {
              (Enum,
               struct {
                   const Enum* ptr;
-                  unsigned var_idx;
+                  unsigned varIdx;
               })),
             (),
             (),

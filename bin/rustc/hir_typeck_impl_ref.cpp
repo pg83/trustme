@@ -32,7 +32,7 @@ bool ImplRef::overlapsWith(const ::HIR::Crate& crate, const ImplRef& other) cons
 bool ImplRef::hasMagicParams() const {
     if (const auto* e = mData.opt_TraitImpl()) {
         for (const auto& t : e->impl_params.types) {
-            if (visit_ty_with(t, [](const ::HIR::TypeData* t) {
+            if (visitTyWith(t, [](const ::HIR::TypeData* t) {
                 return t->is_Generic() && t->as_Generic().is_placeholder();
             })) {
                 return true;
@@ -47,7 +47,7 @@ bool ImplRef::hasMagicParams() const {
     return false;
 }
 
-bool ImplRef::type_is_specialisable(const char* name) const {
+bool ImplRef::typeIsSpecialisable(const char* name) const {
     TU_MATCH_HDRA( (this->mData), {)
     TU_ARMA(TraitImpl, e) {
             if (e.impl == nullptr) {
@@ -233,8 +233,8 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIR::TypeInterner& types, co
                     os << ",";
                 }
                 for (unsigned int i = 0; i < e.impl->mParams.types.size(); i++) {
-                    const auto& ty_d = e.impl->mParams.types[i];
-                    os << ty_d.mName << " = ";
+                    const auto& tyD = e.impl->mParams.types[i];
+                    os << tyD.mName << " = ";
                     if (e.impl_params.types[i] != HIR::TypeRef()) {
                         os << e.impl_params.types[i];
                     } else {

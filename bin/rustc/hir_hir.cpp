@@ -229,9 +229,9 @@ namespace HIR {
             // EVIL OPTION: Just compare the string representations
             // - The fmt() routine prints MIR blocks (when populated) or the source expression
             //   (when not) in a deterministic, pointer-free form, so this gives a stable order.
-            auto v_t = FMT(*this);
-            auto v_x = FMT(x);
-            return ::ord(v_t, v_x);
+            auto vT = FMT(*this);
+            auto vX = FMT(x);
+            return ::ord(vT, vX);
         }
         if (auto cmp = this->paramsImpl.ord(x.paramsImpl)) {
             return cmp;
@@ -679,7 +679,7 @@ void HIR::Crate::postLoadUpdate(const RcString& name) {
 namespace {
     bool isUnboundedInfer(const ::HIR::TypeData* type) {
         if (const auto* e = type->opt_Infer()) {
-            return e->ty_class == ::HIR::InferClass::None;
+            return e->tyClass == ::HIR::InferClass::None;
         } else {
             return false;
         }
@@ -711,7 +711,7 @@ namespace {
         }
     };
 
-    bool matchesTypeRoot(const ::HIR::GenericParams& params, const ::HIR::TypeData* implTy, const ::HIR::TypeData* matchType, ::HIR::tCbResolveType ty_res) {
+    bool matchesTypeRoot(const ::HIR::GenericParams& params, const ::HIR::TypeData* implTy, const ::HIR::TypeData* matchType, ::HIR::tCbResolveType tyRes) {
         // A nominal path deserialises without its pointer-valued binding
         // metadata. Its SimplePath is nevertheless complete and is exactly
         // what the impl index and matcher use. Only an unresolved UFCS path is
@@ -724,15 +724,15 @@ namespace {
         }
 #if 1
         ImplMatcher m{params};
-        auto cmp = implTy->matchTestGenericsFuzz(Span(), matchType, ty_res, m);
+        auto cmp = implTy->matchTestGenericsFuzz(Span(), matchType, tyRes, m);
         return cmp != HIR::Compare::Unequal;
 #else
-        return matchesTypeInt(implTy, matchType, ty_res, true);
+        return matchesTypeInt(implTy, matchType, tyRes, true);
 #endif
     }
 }
 
-bool ::HIR::TraitImpl::matchesType(const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res) const {
+bool ::HIR::TraitImpl::matchesType(const ::HIR::TypeData* type, ::HIR::tCbResolveType tyRes) const {
     // NOTE: Don't return any impls when the type is an unbouned ivar. Wouldn't be able to pick anything anyway
     // TODO: For `Unbound`, it could be valid, if the target is a generic.
     // - Pure infer could also be useful (for knowing if there's any other potential impls)
@@ -741,23 +741,23 @@ bool ::HIR::TraitImpl::matchesType(const ::HIR::TypeData* type, ::HIR::tCbResolv
     if (isUnboundedInfer(type)) {
         return true;
     }
-    return matchesTypeRoot(mParams, mType, type, ty_res);
+    return matchesTypeRoot(mParams, mType, type, tyRes);
 }
 
-bool ::HIR::TypeImpl::matchesType(const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res) const {
-    return matchesTypeRoot(mParams, mType, type, ty_res);
+bool ::HIR::TypeImpl::matchesType(const ::HIR::TypeData* type, ::HIR::tCbResolveType tyRes) const {
+    return matchesTypeRoot(mParams, mType, type, tyRes);
 }
 
-bool ::HIR::MarkerImpl::matchesType(const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res) const {
-    return matchesTypeRoot(mParams, mType, type, ty_res);
+bool ::HIR::MarkerImpl::matchesType(const ::HIR::TypeData* type, ::HIR::tCbResolveType tyRes) const {
+    return matchesTypeRoot(mParams, mType, type, tyRes);
 }
 
 namespace {
 
     struct TypeOrdSpecificMixedOrdering {};
 
-    ::Ordering typelist_ord_specific(const Span& sp, const ThinVector<::HIR::TypeRef>& left, const ThinVector<::HIR::TypeRef>& right);
-    ::Ordering typelist_ord_specific(const Span& sp, const ::std::vector<::HIR::TypeRef>& left, const ::std::vector<::HIR::TypeRef>& right);
+    ::Ordering typelistOrdSpecific(const Span& sp, const ThinVector<::HIR::TypeRef>& left, const ThinVector<::HIR::TypeRef>& right);
+    ::Ordering typelistOrdSpecific(const Span& sp, const ::std::vector<::HIR::TypeRef>& left, const ::std::vector<::HIR::TypeRef>& right);
 
     ::Ordering arraySizeOrdSpecific(
         const Span& sp,
@@ -791,7 +791,7 @@ namespace {
         throw TypeOrdSpecificMixedOrdering{};
     }
 
-    ::Ordering type_ord_specific(const Span& sp, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
+    ::Ordering typeOrdSpecific(const Span& sp, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
         // TODO: What happens if you get `impl<T> Foo<T> for T` vs `impl<T,U> Foo<U> for T`
 
         // A generic can't be more specific than any other type we can see
@@ -834,7 +834,7 @@ namespace {
                 if (!right->is_Path() || le.path.mData.tag() != right->as_Path().path.mData.tag()) {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
-                TU_MATCHA((le.path.mData, right->as_Path().path.mData), (lpe, rpe), (Generic, if (lpe.mPath != rpe.mPath) BUG(sp, "Mismatched types - " << left << " and " << right); return typelist_ord_specific(sp, lpe.mParams.types, rpe.mParams.types);), (UfcsUnknown, ), (UfcsKnown, ), (UfcsInherent, ))
+                TU_MATCHA((le.path.mData, right->as_Path().path.mData), (lpe, rpe), (Generic, if (lpe.mPath != rpe.mPath) BUG(sp, "Mismatched types - " << left << " and " << right); return typelistOrdSpecific(sp, lpe.mParams.types, rpe.mParams.types);), (UfcsUnknown, ), (UfcsKnown, ), (UfcsInherent, ))
                 TODO(sp, "Path - " << le.path << " and " << right);
             }
             TU_ARMA(TraitObject, le) {
@@ -843,13 +843,13 @@ namespace {
                 ASSERT_BUG(sp, le.mTrait.mPath.mPath == re.mTrait.mPath.mPath, "Mismatched types - " << left << " vs " << right);
                 ASSERT_BUG(sp, le.markers.size() == re.markers.size(), "Mismatched types - " << left << " vs " << right);
 
-                auto ord = typelist_ord_specific(sp, le.mTrait.mPath.mParams.types, re.mTrait.mPath.mParams.types);
+                auto ord = typelistOrdSpecific(sp, le.mTrait.mPath.mParams.types, re.mTrait.mPath.mParams.types);
                 if (ord != ::OrdEqual) {
                     return ord;
                 }
                 for (size_t i = 0; i < le.markers.size(); i++) {
                     ASSERT_BUG(sp, le.markers[i].mPath == re.markers[i].mPath, "Mismatched types - " << left << " vs " << right);
-                    ord = typelist_ord_specific(sp, le.markers[i].mParams.types, re.markers[i].mParams.types);
+                    ord = typelistOrdSpecific(sp, le.markers[i].mParams.types, re.markers[i].mParams.types);
                     if (ord != ::OrdEqual) {
                         return ord;
                     }
@@ -875,14 +875,14 @@ namespace {
             }
             TU_ARMA(Tuple, le) {
                 if (const auto* re = right->opt_Tuple()) {
-                    return typelist_ord_specific(sp, le, *re);
+                    return typelistOrdSpecific(sp, le, *re);
                 } else {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
             }
             TU_ARMA(Slice, le) {
                 if (const auto* re = right->opt_Slice()) {
-                    return type_ord_specific(sp, le.inner, re->inner);
+                    return typeOrdSpecific(sp, le.inner, re->inner);
                 } else {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
@@ -890,7 +890,7 @@ namespace {
             TU_ARMA(Array, le) {
                 if (const auto* re = right->opt_Array()) {
                     return combineSpecificity(
-                        type_ord_specific(sp, le.inner, re->inner),
+                        typeOrdSpecific(sp, le.inner, re->inner),
                         arraySizeOrdSpecific(sp, le.size, re->size)
                     );
                 } else {
@@ -902,7 +902,7 @@ namespace {
                     if (le.type != re->type) {
                         BUG(sp, "Mismatched types - " << left << " and " << right);
                     }
-                    return type_ord_specific(sp, le.inner, re->inner);
+                    return typeOrdSpecific(sp, le.inner, re->inner);
                 } else {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
@@ -912,7 +912,7 @@ namespace {
                     if (le.type != re->type) {
                         BUG(sp, "Mismatched types - " << left << " and " << right);
                     }
-                    return type_ord_specific(sp, le.inner, re->inner);
+                    return typeOrdSpecific(sp, le.inner, re->inner);
                 } else {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
@@ -921,11 +921,11 @@ namespace {
         throw "Fell off end of type_ord_specific";
     }
 
-    ::Ordering typelist_ord_specific(const Span& sp, const ThinVector<::HIR::TypeRef>& le, const ThinVector<::HIR::TypeRef>& re) {
+    ::Ordering typelistOrdSpecific(const Span& sp, const ThinVector<::HIR::TypeRef>& le, const ThinVector<::HIR::TypeRef>& re) {
         auto rv = ::OrdEqual;
         assert(le.size() == re.size());
         for (unsigned int i = 0; i < le.size(); i++) {
-            auto a = type_ord_specific(sp, le[i], re[i]);
+            auto a = typeOrdSpecific(sp, le[i], re[i]);
             if (a != ::OrdEqual) {
                 if (rv != ::OrdEqual && a != rv) {
                     DEBUG("Inconsistent ordering between type lists - i=" << i << " [" << le << "] vs [" << re << "]");
@@ -937,11 +937,11 @@ namespace {
         return rv;
     }
 
-    ::Ordering typelist_ord_specific(const Span& sp, const ::std::vector<::HIR::TypeRef>& le, const ::std::vector<::HIR::TypeRef>& re) {
+    ::Ordering typelistOrdSpecific(const Span& sp, const ::std::vector<::HIR::TypeRef>& le, const ::std::vector<::HIR::TypeRef>& re) {
         auto rv = ::OrdEqual;
         assert(le.size() == re.size());
         for (unsigned int i = 0; i < le.size(); i++) {
-            auto a = type_ord_specific(sp, le[i], re[i]);
+            auto a = typeOrdSpecific(sp, le[i], re[i]);
             if (a != ::OrdEqual) {
                 if (rv != ::OrdEqual && a != rv) {
                     DEBUG("Inconsistent ordering between type lists - i=" << i << " [" << le << "] vs [" << re << "]");
@@ -998,13 +998,13 @@ bool ::HIR::TraitImpl::moreSpecificThan(HIR::TypeInterner& types, const ::HIR::T
     // 1. If this->m_type is less specific than other.m_type: return false
     try {
         // If any in te.impl->m_params is less specific than oe.impl->m_params: return false
-        auto ord = typelist_ord_specific(sp, this->traitArgs.types, other.traitArgs.types);
+        auto ord = typelistOrdSpecific(sp, this->traitArgs.types, other.traitArgs.types);
         if (ord != ::OrdEqual) {
             DEBUG("- Trait arguments " << (ord == ::OrdLess ? "less" : "more") << " specific");
             return ord == ::OrdGreater;
         }
 
-        ord = type_ord_specific(sp, this->mType, other.mType);
+        ord = typeOrdSpecific(sp, this->mType, other.mType);
         // If `*this` < `other` : false
         if (ord != ::OrdEqual) {
             DEBUG("- Type " << this->mType << " " << (ord == ::OrdLess ? "less" : "more") << " specific than " << other.mType);
@@ -1052,7 +1052,7 @@ bool ::HIR::TraitImpl::moreSpecificThan(HIR::TypeInterner& types, const ::HIR::T
             if (bT.type == bO.type && bT.trait.mPath.mPath == bO.trait.mPath.mPath) {
                 const auto& paramsT = bT.trait.mPath.mParams;
                 const auto& paramsO = bO.trait.mPath.mParams;
-                switch (typelist_ord_specific(sp, paramsT.types, paramsO.types)) {
+                switch (typelistOrdSpecific(sp, paramsT.types, paramsO.types)) {
                     case ::OrdLess:
                         return false;
                     case ::OrdGreater:
@@ -1202,25 +1202,25 @@ namespace {
 bool ::HIR::TraitImpl::overlapsWith(const Crate& crate, const ::HIR::TraitImpl& other) const {
     // TODO: Pre-calculate impl trees (with pointers to parent impls)
     struct H {
-        static bool types_overlap(const ::HIR::PathParams& a, const ::HIR::PathParams& b) {
+        static bool typesOverlap(const ::HIR::PathParams& a, const ::HIR::PathParams& b) {
             for (unsigned int i = 0; i < ::std::min(a.types.size(), b.types.size()); i++) {
-                if (!H::types_overlap(a.types[i], b.types[i])) {
+                if (!H::typesOverlap(a.types[i], b.types[i])) {
                     return false;
                 }
             }
             return true;
         }
 
-        static bool types_overlap_path(const ::HIR::Path& a, const ::HIR::Path& b) {
+        static bool typesOverlapPath(const ::HIR::Path& a, const ::HIR::Path& b) {
             if (a.mData.tag() != b.mData.tag()) {
                 return false;
             }
-            TU_MATCHA((a.mData, b.mData), (ape, bpe), (Generic, if (ape.mPath != bpe.mPath) return false; return H::types_overlap(ape.mParams, bpe.mParams);), (UfcsUnknown, ), (UfcsKnown, ), (UfcsInherent, ))
+            TU_MATCHA((a.mData, b.mData), (ape, bpe), (Generic, if (ape.mPath != bpe.mPath) return false; return H::typesOverlap(ape.mParams, bpe.mParams);), (UfcsUnknown, ), (UfcsKnown, ), (UfcsInherent, ))
             DEBUG("TODO: Path - " << a << " and " << b);
             return false;
         }
 
-        static bool types_overlap(const ::HIR::TypeData* a, const ::HIR::TypeData* b) {
+        static bool typesOverlap(const ::HIR::TypeData* a, const ::HIR::TypeData* b) {
             static Span sp;
             if (a == b) {
                 return true;
@@ -1249,14 +1249,14 @@ bool ::HIR::TraitImpl::overlapsWith(const Crate& crate, const ::HIR::TraitImpl& 
                     }
                 }
                 TU_ARMA(Path, ae, be) {
-                    return types_overlap_path(ae.path, be.path);
+                    return typesOverlapPath(ae.path, be.path);
                     //TODO(sp, "Path - " << ae.path << " and " << be.path);
                 }
                 TU_ARMA(TraitObject, ae, be) {
                     if (ae.mTrait.mPath.mPath != be.mTrait.mPath.mPath) {
                         return false;
                     }
-                    if (!H::types_overlap(ae.mTrait.mPath.mParams, be.mTrait.mPath.mParams)) {
+                    if (!H::typesOverlap(ae.mTrait.mPath.mParams, be.mTrait.mPath.mParams)) {
                         return false;
                     }
                     // Marker traits only overlap if the lists are the same (with overlap)
@@ -1267,7 +1267,7 @@ bool ::HIR::TraitImpl::overlapsWith(const Crate& crate, const ::HIR::TraitImpl& 
                         if (ae.markers[i].mPath != be.markers[i].mPath) {
                             return false;
                         }
-                        if (!H::types_overlap(ae.markers[i].mParams, be.markers[i].mParams)) {
+                        if (!H::typesOverlap(ae.markers[i].mParams, be.markers[i].mParams)) {
                             return false;
                         }
                     }
@@ -1277,7 +1277,7 @@ bool ::HIR::TraitImpl::overlapsWith(const Crate& crate, const ::HIR::TraitImpl& 
                     TODO(sp, "ErasedType - " << a);
                 }
                 TU_ARMA(NamedFunction, ae, be) {
-                    return types_overlap_path(ae.path, be.path);
+                    return typesOverlapPath(ae.path, be.path);
                 }
                 TU_ARMA(Function, ae, be) {
                     if (ae.is_unsafe != be.is_unsafe) {
@@ -1290,11 +1290,11 @@ bool ::HIR::TraitImpl::overlapsWith(const Crate& crate, const ::HIR::TraitImpl& 
                         return false;
                     }
                     for (unsigned int i = 0; i < ae.argTypes.size(); i++) {
-                        if (!H::types_overlap(ae.argTypes[i], be.argTypes[i])) {
+                        if (!H::typesOverlap(ae.argTypes[i], be.argTypes[i])) {
                             return false;
                         }
                     }
-                    if (!H::types_overlap(ae.mRettype, be.mRettype)) {
+                    if (!H::typesOverlap(ae.mRettype, be.mRettype)) {
                         return false;
                     }
                 }
@@ -1303,31 +1303,31 @@ bool ::HIR::TraitImpl::overlapsWith(const Crate& crate, const ::HIR::TraitImpl& 
                         return false;
                     }
                     for (unsigned int i = 0; i < ae.size(); i++) {
-                        if (!H::types_overlap(ae[i], be[i])) {
+                        if (!H::typesOverlap(ae[i], be[i])) {
                             return false;
                         }
                     }
                 }
                 TU_ARMA(Slice, ae, be) {
-                    return H::types_overlap(ae.inner, be.inner);
+                    return H::typesOverlap(ae.inner, be.inner);
                 }
                 TU_ARMA(Array, ae, be) {
                     if (ae.size != be.size) {
                         return false;
                     }
-                    return H::types_overlap(ae.inner, be.inner);
+                    return H::typesOverlap(ae.inner, be.inner);
                 }
                 TU_ARMA(Pointer, ae, be) {
                     if (ae.type != be.type) {
                         return false;
                     }
-                    return H::types_overlap(ae.inner, be.inner);
+                    return H::typesOverlap(ae.inner, be.inner);
                 }
                 TU_ARMA(Borrow, ae, be) {
                     if (ae.type != be.type) {
                         return false;
                     }
-                    return H::types_overlap(ae.inner, be.inner);
+                    return H::typesOverlap(ae.inner, be.inner);
                 }
             }
             return true;
@@ -1340,10 +1340,10 @@ bool ::HIR::TraitImpl::overlapsWith(const Crate& crate, const ::HIR::TraitImpl& 
     }
 
     // 1. Are the impl types of the same form (or is one generic)
-    if (!H::types_overlap(this->mType, other.mType)) {
+    if (!H::typesOverlap(this->mType, other.mType)) {
         return false;
     }
-    if (!H::types_overlap(this->traitArgs, other.traitArgs)) {
+    if (!H::typesOverlap(this->traitArgs, other.traitArgs)) {
         return false;
     }
 
@@ -1353,8 +1353,8 @@ bool ::HIR::TraitImpl::overlapsWith(const Crate& crate, const ::HIR::TraitImpl& 
 
     // TODO: Use `type_ord_specific` but treat any case of mixed ordering as this returning `false`
     try {
-        type_ord_specific(sp, this->mType, other.mType);
-        typelist_ord_specific(sp, this->traitArgs.types, other.traitArgs.types);
+        typeOrdSpecific(sp, this->mType, other.mType);
+        typelistOrdSpecific(sp, this->traitArgs.types, other.traitArgs.types);
     } catch (const TypeOrdSpecificMixedOrdering& /*e*/) {
         return false;
     }
@@ -1514,9 +1514,9 @@ bool ::HIR::TraitImpl::overlapsWith(const Crate& crate, const ::HIR::TraitImpl& 
 
 namespace {
     template <typename ImplType>
-    bool findImplsList(const typename ::HIR::Crate::ImplGroup<::std::unique_ptr<ImplType>>::listT& implList, const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res, ::std::function<bool(const ImplType&)> callback) {
+    bool findImplsList(const typename ::HIR::Crate::ImplGroup<::std::unique_ptr<ImplType>>::listT& implList, const ::HIR::TypeData* type, ::HIR::tCbResolveType tyRes, ::std::function<bool(const ImplType&)> callback) {
         for (const auto& impl : implList) {
-            if (impl->matchesType(type, ty_res)) {
+            if (impl->matchesType(type, tyRes)) {
                 if (callback(*impl)) {
                     return true;
                 }
@@ -1526,9 +1526,9 @@ namespace {
     }
 
     template <typename ImplType>
-    bool findImplsList(const typename ::HIR::Crate::ImplGroup<const ImplType*>::listT& implList, const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res, ::std::function<bool(const ImplType&)> callback) {
+    bool findImplsList(const typename ::HIR::Crate::ImplGroup<const ImplType*>::listT& implList, const ::HIR::TypeData* type, ::HIR::tCbResolveType tyRes, ::std::function<bool(const ImplType&)> callback) {
         for (const auto& impl : implList) {
-            if (impl->matchesType(type, ty_res)) {
+            if (impl->matchesType(type, tyRes)) {
                 if (callback(*impl)) {
                     return true;
                 }
@@ -1539,12 +1539,12 @@ namespace {
 }
 
 namespace {
-    bool findTraitImplsInt(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) {
+    bool findTraitImplsInt(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, ::HIR::tCbResolveType tyRes, ::std::function<bool(const ::HIR::TraitImpl&)> callback) {
         auto it = crate.traitImpls.find(trait);
         if (it != crate.traitImpls.end()) {
             // 1. Find named impls (associated with named types)
             if (const auto* implList = it->second.getListForType(type)) {
-                if (findImplsList(*implList, type, ty_res, callback)) {
+                if (findImplsList(*implList, type, tyRes, callback)) {
                     return true;
                 }
             }
@@ -1552,14 +1552,14 @@ namespace {
             if (type->is_Infer() && !type->as_Infer().isLit()) {
                 DEBUG("Search all lists");
                 for (const auto& list : it->second.named) {
-                    if (findImplsList(list.second, type, ty_res, callback)) {
+                    if (findImplsList(list.second, type, tyRes, callback)) {
                         return true;
                     }
                 }
             }
 
             // 2. Search fully generic list.
-            if (findImplsList(it->second.generic, type, ty_res, callback)) {
+            if (findImplsList(it->second.generic, type, tyRes, callback)) {
                 return true;
             }
         }
@@ -1569,13 +1569,13 @@ namespace {
 
 }
 
-bool ::HIR::Crate::findTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, tCbResolveType ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const {
+bool ::HIR::Crate::findTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, tCbResolveType tyRes, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const {
     if (this->allTraitImpls.size() > 0) {
         auto it = this->allTraitImpls.find(trait);
         if (it != this->allTraitImpls.end()) {
             // 1. Find named impls (associated with named types)
             if (const auto* implList = it->second.getListForType(type)) {
-                if (findImplsList(*implList, type, ty_res, callback)) {
+                if (findImplsList(*implList, type, tyRes, callback)) {
                     return true;
                 }
             }
@@ -1583,14 +1583,14 @@ bool ::HIR::Crate::findTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::T
             if (type->is_Infer() && !type->as_Infer().isLit()) {
                 DEBUG("Search all lists");
                 for (const auto& list : it->second.named) {
-                    if (findImplsList(list.second, type, ty_res, callback)) {
+                    if (findImplsList(list.second, type, tyRes, callback)) {
                         return true;
                     }
                 }
             }
 
             // 2. Search fully generic list.
-            if (findImplsList(it->second.generic, type, ty_res, callback)) {
+            if (findImplsList(it->second.generic, type, tyRes, callback)) {
                 return true;
             }
         }
@@ -1599,11 +1599,11 @@ bool ::HIR::Crate::findTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::T
     }
 
     // TODO: Determine the source crates for this type and trait (coherence) and only search those
-    if (findTraitImplsInt(*this, trait, type, ty_res, callback)) {
+    if (findTraitImplsInt(*this, trait, type, tyRes, callback)) {
         return true;
     }
     for (const auto& ec : this->extCrates) {
-        if (findTraitImplsInt(*ec.second.mData, trait, type, ty_res, callback)) {
+        if (findTraitImplsInt(*ec.second.mData, trait, type, tyRes, callback)) {
             return true;
         }
     }
@@ -1611,18 +1611,18 @@ bool ::HIR::Crate::findTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::T
 }
 
 namespace {
-    bool findAutoTraitImplsInt(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) {
+    bool findAutoTraitImplsInt(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, ::HIR::tCbResolveType tyRes, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) {
         auto it = crate.markerImpls.find(trait);
         if (it != crate.markerImpls.end()) {
             // 1. Find named impls (associated with named types)
             if (const auto* implList = it->second.getListForType(type)) {
-                if (findImplsList(*implList, type, ty_res, callback)) {
+                if (findImplsList(*implList, type, tyRes, callback)) {
                     return true;
                 }
             }
 
             // 2. Search fully generic list.
-            if (findImplsList(it->second.generic, type, ty_res, callback)) {
+            if (findImplsList(it->second.generic, type, tyRes, callback)) {
                 return true;
             }
         }
@@ -1631,19 +1631,19 @@ namespace {
     }
 }
 
-bool ::HIR::Crate::findAutoTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, tCbResolveType ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const {
+bool ::HIR::Crate::findAutoTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, tCbResolveType tyRes, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const {
     if (this->allMarkerImpls.size() > 0) {
         auto it = this->allMarkerImpls.find(trait);
         if (it != this->allMarkerImpls.end()) {
             // 1. Find named impls (associated with named types)
             if (const auto* implList = it->second.getListForType(type)) {
-                if (findImplsList(*implList, type, ty_res, callback)) {
+                if (findImplsList(*implList, type, tyRes, callback)) {
                     return true;
                 }
             }
 
             // 2. Search fully generic list.
-            if (findImplsList(it->second.generic, type, ty_res, callback)) {
+            if (findImplsList(it->second.generic, type, tyRes, callback)) {
                 return true;
             }
         }
@@ -1651,11 +1651,11 @@ bool ::HIR::Crate::findAutoTraitImpls(const ::HIR::SimplePath& trait, const ::HI
         return false;
     }
 
-    if (findAutoTraitImplsInt(*this, trait, type, ty_res, callback)) {
+    if (findAutoTraitImplsInt(*this, trait, type, tyRes, callback)) {
         return true;
     }
     for (const auto& ec : this->extCrates) {
-        if (findAutoTraitImplsInt(*ec.second.mData, trait, type, ty_res, callback)) {
+        if (findAutoTraitImplsInt(*ec.second.mData, trait, type, tyRes, callback)) {
             return true;
         }
     }
@@ -1663,16 +1663,16 @@ bool ::HIR::Crate::findAutoTraitImpls(const ::HIR::SimplePath& trait, const ::HI
 }
 
 namespace {
-    bool findTypeImplsInt(const ::HIR::Crate& crate, const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) {
+    bool findTypeImplsInt(const ::HIR::Crate& crate, const ::HIR::TypeData* type, ::HIR::tCbResolveType tyRes, ::std::function<bool(const ::HIR::TypeImpl&)> callback) {
         // 1. Find named impls (associated with named types)
         if (const auto* implList = crate.typeImpls.getListForType(type)) {
-            if (findImplsList(*implList, type, ty_res, callback)) {
+            if (findImplsList(*implList, type, tyRes, callback)) {
                 return true;
             }
         }
 
         // 2. Search fully generic list?
-        if (findImplsList(crate.typeImpls.generic, type, ty_res, callback)) {
+        if (findImplsList(crate.typeImpls.generic, type, tyRes, callback)) {
             return true;
         }
 
@@ -1680,17 +1680,17 @@ namespace {
     }
 }
 
-bool ::HIR::Crate::findTypeImpls(const ::HIR::TypeData* type, tCbResolveType ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const {
+bool ::HIR::Crate::findTypeImpls(const ::HIR::TypeData* type, tCbResolveType tyRes, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const {
     if (allTraitImpls.size() > 0) {
         // 1. Find named impls (associated with named types)
         if (const auto* implList = this->allTypeImpls.getListForType(type)) {
-            if (findImplsList(*implList, type, ty_res, callback)) {
+            if (findImplsList(*implList, type, tyRes, callback)) {
                 return true;
             }
         }
 
         // 2. Search fully generic list?
-        if (findImplsList(this->allTypeImpls.generic, type, ty_res, callback)) {
+        if (findImplsList(this->allTypeImpls.generic, type, tyRes, callback)) {
             return true;
         }
 
@@ -1699,12 +1699,12 @@ bool ::HIR::Crate::findTypeImpls(const ::HIR::TypeData* type, tCbResolveType ty_
     // TODO: Determine the source crate for this type (coherence) and only search that
 
     // > Current crate
-    if (findTypeImplsInt(*this, type, ty_res, callback)) {
+    if (findTypeImplsInt(*this, type, tyRes, callback)) {
         return true;
     }
     for (const auto& ec : this->extCrates) {
         //DEBUG("- " << ec.first);
-        if (findTypeImplsInt(*ec.second.mData, type, ty_res, callback)) {
+        if (findTypeImplsInt(*ec.second.mData, type, tyRes, callback)) {
             return true;
         }
     }
@@ -1827,25 +1827,25 @@ const ::MIR::Function* HIR::Crate::getOrGenMir(const ::HIR::ItemPath& ip, const 
 ::HIR::TypeRef HIR::Trait::getVtableType(const Span& sp, const ::HIR::Crate& crate, const ::HIR::TypeData::Data_TraitObject& te) const {
     assert(te.mTrait.traitPtr == this);
 
-    const auto& vtable_ty_spath = this->vtablePath;
-    const auto& vtable_ref = crate.getStructByPath(sp, vtable_ty_spath);
+    const auto& vtableTySpath = this->vtablePath;
+    const auto& vtableRef = crate.getStructByPath(sp, vtableTySpath);
     HIR::PathParams ppHrls;
     if (te.mTrait.hrtbs) {
         ppHrls = te.mTrait.hrtbs->makeEmptyParams(true);
     }
     // Copy the param set from the trait in the trait object
-    ::HIR::PathParams vtable_params = MonomorphHrlsOnly(crate.types, ppHrls).monomorphPathParams(sp, te.mTrait.mPath.mParams, false);
-    vtable_params.types.resize(te.mTrait.mPath.mParams.types.size() + this->typeIndexes.size());
+    ::HIR::PathParams vtableParams = MonomorphHrlsOnly(crate.types, ppHrls).monomorphPathParams(sp, te.mTrait.mPath.mParams, false);
+    vtableParams.types.resize(te.mTrait.mPath.mParams.types.size() + this->typeIndexes.size());
     // - Include associated types on bound
-    for (const auto& ty_b : te.mTrait.typeBounds) {
-        if (this->typeIndexes.count(ty_b.first) == 0) {
+    for (const auto& tyB : te.mTrait.typeBounds) {
+        if (this->typeIndexes.count(tyB.first) == 0) {
             WARNING(sp, W0000, "Trait object path " << te.mTrait << " references a type with no vtable type index");
             continue;
         }
-        auto idx = this->typeIndexes.at(ty_b.first);
-        vtable_params.types.at(idx) = MonomorphHrlsOnly(crate.types, ppHrls).monomorphType(sp, ty_b.second.type);
+        auto idx = this->typeIndexes.at(tyB.first);
+        vtableParams.types.at(idx) = MonomorphHrlsOnly(crate.types, ppHrls).monomorphType(sp, tyB.second.type);
     }
-    return crate.types.path(::HIR::GenericPath(vtable_ty_spath, mv$(vtable_params)), &vtable_ref);
+    return crate.types.path(::HIR::GenericPath(vtableTySpath, mv$(vtableParams)), &vtableRef);
 }
 
 unsigned HIR::Trait::getVtableValueIndex(const HIR::GenericPath& trait_path, const RcString& name) const {
@@ -1907,13 +1907,13 @@ const ::HIR::Struct& HIR::patternGetStruct(const Span& sp, const ::HIR::Path& pa
                 ASSERT_BUG(sp, enm.mData.is_Data(), "PathNamed pattern with non-data enum - " << path);
             }
             const auto& enmD = enm.mData.as_Data();
-            ASSERT_BUG(sp, be.var_idx < enmD.size(), "Variant index " << be.var_idx << " out of range - " << path);
+            ASSERT_BUG(sp, be.varIdx < enmD.size(), "Variant index " << be.varIdx << " out of range - " << path);
             if (isTuple) {
-                ASSERT_BUG(sp, !enmD[be.var_idx].is_struct, "PathTuple pattern with brace enum variant - " << path);
+                ASSERT_BUG(sp, !enmD[be.varIdx].is_struct, "PathTuple pattern with brace enum variant - " << path);
             } else {
-                ASSERT_BUG(sp, enmD[be.var_idx].is_struct, "PathNamed pattern with non-brace enum variant - " << path);
+                ASSERT_BUG(sp, enmD[be.varIdx].is_struct, "PathNamed pattern with non-brace enum variant - " << path);
             }
-            strP = enmD[be.var_idx].type->as_Path().binding.as_Struct();
+            strP = enmD[be.varIdx].type->as_Path().binding.as_Struct();
         }
     }
     const auto& str = *strP;
@@ -1955,7 +1955,7 @@ namespace HIR {
 EncodedLiteral EncodedLiteral::makeUsize(uint64_t v) {
     EncodedLiteral rv;
     rv.bytes.resize(TargetGetPointerBits() / 8);
-    rv.write_usize(0, v);
+    rv.writeUsize(0, v);
     return rv;
 }
 
@@ -1973,7 +1973,7 @@ EncodedLiteral EncodedLiteral::clone() const {
     return rv;
 }
 
-void EncodedLiteral::write_uint(size_t ofs, size_t size, uint64_t v) {
+void EncodedLiteral::writeUint(size_t ofs, size_t size, uint64_t v) {
     assert(ofs + size <= bytes.size());
     for (size_t i = 0; i < size; i++) {
         size_t bit = (TargetGetCurSpec().arch.bigEndian ? (size - 1 - i) * 8 : i * 8);
@@ -1984,8 +1984,8 @@ void EncodedLiteral::write_uint(size_t ofs, size_t size, uint64_t v) {
     }
 }
 
-void EncodedLiteral::write_usize(size_t ofs, uint64_t v) {
-    this->write_uint(ofs, TargetGetPointerBits() / 8, v);
+void EncodedLiteral::writeUsize(size_t ofs, uint64_t v) {
+    this->writeUint(ofs, TargetGetPointerBits() / 8, v);
 }
 
 uint64_t EncodedLiteral::readUsize(size_t ofs) const {

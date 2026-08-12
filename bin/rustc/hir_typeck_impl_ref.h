@@ -91,7 +91,7 @@ struct ImplRef {
 
     ::HIR::TypeRef getTraitTyParam(HIR::TypeInterner& types, unsigned int) const;
 
-    bool type_is_specialisable(const char* name) const;
+    bool typeIsSpecialisable(const char* name) const;
     ::HIR::TypeRef getType(HIR::TypeInterner& types, const char* name, const HIR::PathParams& params) const;
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ImplRef& x);

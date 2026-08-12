@@ -288,7 +288,7 @@ namespace AST {
             return rv;
         }
 
-        TU_MATCH(Path::Class, (cls, x.cls), (ent, x_ent), (Invalid, return OrdEqual;), (Local, return ::ord(ent.name, x_ent.name);), (Relative, return ::ord(ent.nodes, x_ent.nodes);), (Self, return ::ord(ent.nodes, x_ent.nodes);), (Super, return ::ord(ent.nodes, x_ent.nodes);), (Absolute, rv = ::ord(ent.crate, x_ent.crate); if (rv != OrdEqual) return rv; return ::ord(ent.nodes, x_ent.nodes);), (UFCS, rv = ent.type->ord(*x_ent.type); if (rv != OrdEqual) return rv; rv = ent.trait->ord(*x_ent.trait); if (rv != OrdEqual) return rv; return ::ord(ent.nodes, x_ent.nodes);))
+        TU_MATCH(Path::Class, (cls, x.cls), (ent, xEnt), (Invalid, return OrdEqual;), (Local, return ::ord(ent.name, xEnt.name);), (Relative, return ::ord(ent.nodes, xEnt.nodes);), (Self, return ::ord(ent.nodes, xEnt.nodes);), (Super, return ::ord(ent.nodes, xEnt.nodes);), (Absolute, rv = ::ord(ent.crate, xEnt.crate); if (rv != OrdEqual) return rv; return ::ord(ent.nodes, xEnt.nodes);), (UFCS, rv = ent.type->ord(*xEnt.type); if (rv != OrdEqual) return rv; rv = ent.trait->ord(*xEnt.trait); if (rv != OrdEqual) return rv; return ::ord(ent.nodes, xEnt.nodes);))
 
         return OrdEqual;
     }

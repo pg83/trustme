@@ -93,8 +93,8 @@ void HIR::InherentCache::Inner::insert(const Span& sp, const HIR::TypeData* curT
     }
 }
 
-void HIR::InherentCache::Inner::find(const Span& sp, const HIR::TypeData* curTyAct, tCbResolveType ty_res, InherentCache::innerCallbackT& cb) const {
-    const auto& curTy = ty_res.getType(sp, curTyAct);
+void HIR::InherentCache::Inner::find(const Span& sp, const HIR::TypeData* curTyAct, tCbResolveType tyRes, InherentCache::innerCallbackT& cb) const {
+    const auto& curTy = tyRes.getType(sp, curTyAct);
     TRACE_FUNCTION_F("[Inner] " << curTy);
     byvalue.iterate(curTy, cb);
 
@@ -149,7 +149,7 @@ void HIR::InherentCache::Inner::find(const Span& sp, const HIR::TypeData* curTyA
     if(inner) {
         assert(innerTy);
         DEBUG("inner_ty = " << innerTy);
-        inner->find(sp, innerTy, ty_res, cb);
+        inner->find(sp, innerTy, tyRes, cb);
     }
     else {
         DEBUG("no wrapper");
@@ -202,7 +202,7 @@ void HIR::InherentCache::insertAll(const Span& sp, const HIR::TypeImpl& impl, co
     }
 }
 
-void HIR::InherentCache::find(const Span& sp, const RcString& name, const HIR::TypeData* ty, tCbResolveType ty_res, callbackT cb) const {
+void HIR::InherentCache::find(const Span& sp, const RcString& name, const HIR::TypeData* ty, tCbResolveType tyRes, callbackT cb) const {
     TRACE_FUNCTION_F(name << ", " << ty);
     // Callback that ensures that a potential impl fully matches the required receiver type
     innerCallbackT innerCb = [&](const HIR::TypeData* roughSelfTy, const HIR::TypeImpl& impl) {
@@ -234,6 +234,6 @@ void HIR::InherentCache::find(const Span& sp, const RcString& name, const HIR::T
     };
     auto it = items.find(name);
     if (it != items.end()) {
-        it->second.find(sp, ty, ty_res, innerCb);
+        it->second.find(sp, ty, tyRes, innerCb);
     }
 }

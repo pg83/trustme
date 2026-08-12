@@ -47,7 +47,7 @@ public:
 
     // Whether `handle` should receive the item's full attribute list instead of only the
     // attributes written after the invoking one (derive macros need the full set).
-    virtual bool wants_all_attrs() const {
+    virtual bool wantsAllAttrs() const {
         return false;
     }
 

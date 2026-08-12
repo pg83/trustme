@@ -54,7 +54,7 @@ struct TypeRepr {
     size_t align = 0;
     size_t size = 0;
     /// gcc's `TYPE_USER_ALIGN`: `align` came from an explicit `repr(align(N))` somewhere inside, so it's exempt from a member-alignment cap
-    bool user_align = false;
+    bool userAlign = false;
 
     struct FieldPath {
         static constexpr size_t ARRAY_ELEMENT = static_cast<size_t>(-1);
@@ -78,14 +78,14 @@ struct TypeRepr {
              size_t offset;
              size_t numVariants;
 
-             bool uses_niche() const {
+             bool usesNiche() const {
                  return !field.subFields.empty();
              }
-             bool isNiche(unsigned var_idx) const {
-                 return uses_niche() && var_idx == field.index;
+             bool isNiche(unsigned varIdx) const {
+                 return usesNiche() && varIdx == field.index;
              }
-             bool isTag(unsigned var_idx) const {
-                 return !uses_niche() && var_idx == field.index;
+             bool isTag(unsigned varIdx) const {
+                 return !usesNiche() && varIdx == field.index;
              }
          }),
         // Tag is a fixed set of values in a field.
@@ -95,8 +95,8 @@ struct TypeRepr {
              // NOTE: `field.sub_path` should always be empty?
              FieldPath field;
              ::std::vector<U128> values;
-             bool isTag(unsigned var_idx) const {
-                 return var_idx == field.index;
+             bool isTag(unsigned varIdx) const {
+                 return varIdx == field.index;
              }
          }),
         // Tag is based on a range of values
@@ -109,7 +109,7 @@ struct TypeRepr {
         // Only valid for two-element enums
         (NonZero, struct {
             FieldPath field;
-            unsigned zero_variant;
+            unsigned zeroVariant;
         })
     );
     VariantMode variants;

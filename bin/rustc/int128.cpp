@@ -8,7 +8,7 @@ U128::U128(uint64_t lo, uint64_t hi)
     : lo(lo)
     , hi(hi) {
 }
-uint64_t U128::encodeFloat(int bits, int zero_exp) const {
+uint64_t U128::encodeFloat(int bits, int zeroExp) const {
     // Adapted from https://blog.m-ou.se/floats/
     //int n = intrinsic_ctlz_u128(v).lo;
     int n;
@@ -26,7 +26,7 @@ uint64_t U128::encodeFloat(int bits, int zero_exp) const {
     int s = 64 - (bits + 1); // A shift required to move the bits removed in `a` into the low 64-bits
     uint64_t b = (y >> s).lo | (y.lo & ((1ull << s) - 1));
     uint64_t m = a + ((b - (b >> 63 & ~a)) >> 63);
-    uint64_t e = (*this == U128(0)) ? 0 : (127 - n) + zero_exp - 1;
+    uint64_t e = (*this == U128(0)) ? 0 : (127 - n) + zeroExp - 1;
     return (e << bits) + m;
 }
 double U128::toDouble() const {
@@ -296,21 +296,21 @@ void S128::fromBeBytes(const uint8_t* src, size_t maxLen) {
 }
 S128 S128::operator*(S128 x) const {
     auto retNeg = isNeg() != x.isNeg();
-    auto rvU = u_abs() * x.u_abs();
+    auto rvU = uAbs() * x.uAbs();
     return retNeg ? -S128(rvU) : S128(rvU);
 }
 S128 S128::operator/(S128 x) const {
     auto retNeg = isNeg() != x.isNeg();
-    auto rvU = u_abs() / x.u_abs();
+    auto rvU = uAbs() / x.uAbs();
     return retNeg ? -S128(rvU) : S128(rvU);
 }
 S128 S128::operator%(S128 x) const {
     auto retNeg = isNeg() != x.isNeg();
-    auto rvU = u_abs() % x.u_abs();
+    auto rvU = uAbs() % x.uAbs();
     return retNeg ? -S128(rvU) : S128(rvU);
 }
 /// Unsigned absolute value (handles MIN correctly)
-U128 S128::u_abs() const {
+U128 S128::uAbs() const {
     if (inner.hi == UINT64_MAX && inner.lo == 0) {
         return inner;
     }

@@ -174,8 +174,8 @@ namespace AST {
             (Reg, struct {
                 AsmCommon::Direction dir;
                 AsmCommon::RegisterSpec spec;
-                AST::ExprNodeP val_in;
-                AST::ExprNodeP val_out;
+                AST::ExprNodeP valIn;
+                AST::ExprNodeP valOut;
             })
         );
 

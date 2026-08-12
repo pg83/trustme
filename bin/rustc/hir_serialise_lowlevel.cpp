@@ -49,10 +49,10 @@ namespace HIR {
 
             inner = new WriterInner(filename);
             // 3. Reset m_istring_cache to use the same value
-            this->write_count(sorted.size());
+            this->writeCount(sorted.size());
             for (size_t i = 0; i < sorted.size(); i++) {
                 const auto& s = sorted[i].first;
-                this->write_string(s.size(), s.c_str());
+                this->writeString(s.size(), s.c_str());
                 DEBUG(i << " = " << istringCache[s] << " '" << s << "'");
                 istringCache[s] = i;
             }
@@ -70,10 +70,10 @@ namespace HIR {
             }
         }
 
-        void Writer::write_string(const RcString& v) {
+        void Writer::writeString(const RcString& v) {
             if (inner) {
                 // Emit ID from the cache
-                this->write_count(istringCache.at(v));
+                this->writeCount(istringCache.at(v));
             } else {
                 // Find/add in cache
                 istringCache.insert(::std::make_pair(v, 0)).first->second += 1;
@@ -140,9 +140,9 @@ namespace HIR {
                     throw ::std::runtime_error("zlib deflate stream error");
                 }
 
-                size_t used_this_time = lastAvailIn - zstream.avail_in;
+                size_t usedThisTime = lastAvailIn - zstream.avail_in;
                 lastAvailIn = zstream.avail_in;
-                byteInCount += used_this_time;
+                byteInCount += usedThisTime;
 
                 // If the entire input wasn't consumed, then it was likely due to a lack of output space
                 // - Flush the output buffer to the file
@@ -321,22 +321,22 @@ namespace HIR {
 
 namespace HIR { namespace serialise {
 
-void Writer::write_u16(uint16_t v) {
+void Writer::writeU16(uint16_t v) {
     uint8_t buf[] = {static_cast<uint8_t>(v & 0xFF), static_cast<uint8_t>(v >> 8)};
     this->write(buf, 2);
 }
-void Writer::write_u32(uint32_t v) {
+void Writer::writeU32(uint32_t v) {
     uint8_t buf[] = {static_cast<uint8_t>(v & 0xFF), static_cast<uint8_t>(v >> 8), static_cast<uint8_t>(v >> 16), static_cast<uint8_t>(v >> 24)};
     this->write(buf, 4);
 }
-void Writer::write_u64(uint64_t v) {
+void Writer::writeU64(uint64_t v) {
     uint8_t buf[] = {static_cast<uint8_t>(v & 0xFF), static_cast<uint8_t>(v >> 8), static_cast<uint8_t>(v >> 16), static_cast<uint8_t>(v >> 24), static_cast<uint8_t>(v >> 32), static_cast<uint8_t>(v >> 40), static_cast<uint8_t>(v >> 48), static_cast<uint8_t>(v >> 56)};
     this->write(buf, 8);
 }
 // Variable-length encoded u64 (for array sizes)
-void Writer::write_u64c(uint64_t v) {
+void Writer::writeU64c(uint64_t v) {
     if (v < (1 << 7)) {
-        write_u8(static_cast<uint8_t>(v));
+        writeU8(static_cast<uint8_t>(v));
     } else if (v < (1 << (6 + 16))) {
         uint8_t buf[] = {
             static_cast<uint8_t>(0x80 + (v >> 16)), // 0x80 -- 0xBF
@@ -358,65 +358,65 @@ void Writer::write_u64c(uint64_t v) {
         this->write(buf, sizeof buf);
     }
 }
-void Writer::write_i64c(int64_t v) {
+void Writer::writeI64c(int64_t v) {
     // Convert from 2's completement
     bool sign = (v < 0);
     uint64_t va = (v < 0 ? -v : v);
     va <<= 1;
     va |= (sign ? 1 : 0);
-    write_u64c(va);
+    writeU64c(va);
 }
-void Writer::write_u128(U128 v) {
-    write_u64(v.getLo());
-    write_u64(v.getHi());
+void Writer::writeU128(U128 v) {
+    writeU64(v.getLo());
+    writeU64(v.getHi());
 }
-void Writer::write_double(double v) {
+void Writer::writeDouble(double v) {
     // - Just raw-writes the double
     this->write(&v, sizeof v);
 }
-void Writer::write_float_value(FloatValue value) {
+void Writer::writeFloatValue(FloatValue value) {
     auto encoded = F128(value);
-    write_u64(encoded.lo);
-    write_u64(encoded.hi);
+    writeU64(encoded.lo);
+    writeU64(encoded.hi);
 }
-void Writer::write_tag(unsigned int t) {
+void Writer::writeTag(unsigned int t) {
     assert(t < 256);
-    write_u8(static_cast<uint8_t>(t));
+    writeU8(static_cast<uint8_t>(t));
 }
-void Writer::write_count(size_t c) {
+void Writer::writeCount(size_t c) {
     DEBUG(c);
     if (c < 0xFD) {
-        write_u8(static_cast<uint8_t>(c));
+        writeU8(static_cast<uint8_t>(c));
     } else if (c == ~0u) {
-        write_u8(0xFF);
+        writeU8(0xFF);
     } else if (c < (1u << 16)) {
-        write_u8(0xFD);
-        write_u16(static_cast<uint16_t>(c));
+        writeU8(0xFD);
+        writeU16(static_cast<uint16_t>(c));
     } else {
         assert(c < (1u << 31));
-        write_u8(0xFE);
-        write_u32(static_cast<uint32_t>(c));
+        writeU8(0xFE);
+        writeU32(static_cast<uint32_t>(c));
     }
 }
-void Writer::write_string(size_t len, const char* s) {
+void Writer::writeString(size_t len, const char* s) {
     TRACE_FUNCTION;
     if (len < 128) {
-        write_u8(static_cast<uint8_t>(len));
+        writeU8(static_cast<uint8_t>(len));
     } else {
         assert(len < (1u << (16 + 7)));
-        write_u8(static_cast<uint8_t>(128 + (len >> 16)));
-        write_u16(static_cast<uint16_t>(len & 0xFFFF));
+        writeU8(static_cast<uint8_t>(128 + (len >> 16)));
+        writeU16(static_cast<uint16_t>(len & 0xFFFF));
     }
     this->write(s, len);
 }
-void Writer::write_bool(bool v) {
+void Writer::writeBool(bool v) {
     TRACE_FUNCTION_F(v);
-    write_u8(v ? 0xFF : 0x00);
+    writeU8(v ? 0xFF : 0x00);
 }
 // Core protocol
 void Writer::rawWriteUint(uint64_t val) {
     if (val < 0xC0) {
-        write_u8(static_cast<uint8_t>(val));
+        writeU8(static_cast<uint8_t>(val));
     } else {
         uint8_t bytes[8];
         uint8_t len = 0;
@@ -426,15 +426,15 @@ void Writer::rawWriteUint(uint64_t val) {
             val >>= 8;
             len += 1;
         }
-        write_u8(0xC0 + len);
+        writeU8(0xC0 + len);
         this->write(bytes, len);
     }
 }
 void Writer::rawWriteLen(size_t len) {
     if (len < (0xFC - 0xC0)) {
-        write_u8(0xC0 + len);
+        writeU8(0xC0 + len);
     } else {
-        write_u8(0xFC);
+        writeU8(0xFC);
         rawWriteUint(len);
     }
 }
@@ -456,7 +456,7 @@ Writer::CloseOnDrop::~CloseOnDrop() {
     r = nullptr;
 }
 Writer::CloseOnDrop Writer::openObject(const char* name) {
-    write_u8(0xFD);
+    writeU8(0xFD);
     auto iv = objnameCache.insert(std::make_pair(name, static_cast<unsigned>(objnameCache.size())));
     rawWriteUint(iv.first->second);
     if (iv.second) {
@@ -465,7 +465,7 @@ Writer::CloseOnDrop Writer::openObject(const char* name) {
     return CloseOnDrop(*this);
 }
 Writer::CloseOnDrop Writer::openAnonObject() {
-    write_u8(0xFE);
+    writeU8(0xFE);
     return CloseOnDrop(*this);
 }
 uint8_t Reader::readU8() {

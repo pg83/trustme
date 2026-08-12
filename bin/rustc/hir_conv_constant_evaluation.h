@@ -55,7 +55,7 @@ namespace HIR {
         // All values and relocations created by one constant evaluation form a
         // single graph. Nothing in that graph escapes `evaluate_constant`:
         // `allocation_to_encoded` deep-copies the result into an EncodedLiteral.
-        stl::ObjPool::Ref value_pool;
+        stl::ObjPool::Ref valuePool;
         StaticTraitResolve resolve;
         Newval& nvs;
         unsigned int evalIndex;

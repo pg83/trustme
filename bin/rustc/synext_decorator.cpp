@@ -985,7 +985,7 @@ struct Deriver {
 
     void addFieldBoundFromTy(const AST::GenericParams& params, ::std::vector<TypeRef>& outList, const TypeRef& ty) const {
         struct H {
-            static void visit_nodes(const Deriver& self, const AST::GenericParams& params, ::std::vector<TypeRef>& outList, const ::std::vector<AST::PathNode>& nodes) {
+            static void visitNodes(const Deriver& self, const AST::GenericParams& params, ::std::vector<TypeRef>& outList, const ::std::vector<AST::PathNode>& nodes) {
                 for (const auto& node : nodes) {
                     for (const auto& e : node.args().entries) {
                         TU_MATCH_HDRA( (e), {)
@@ -1060,7 +1060,7 @@ struct Deriver {
                                 }
                             }
                         }
-                        H::visit_nodes(*this, params, outList, pe.nodes);
+                        H::visitNodes(*this, params, outList, pe.nodes);
                     }
                     TU_ARMA(Self, pe) {
                     }
@@ -1094,13 +1094,13 @@ struct Deriver {
 
 /// 'Debug' derive handler
 class DeriverDebug: public Deriver {
-    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
+    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, AST::ExprNodeP node) const {
         const AST::Path debugTrait = getPath(coreName, "fmt", "Debug");
 
         AST::Function fcn(sp, TypeRef(sp, getPath(coreName, "fmt", "Result")), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp))), AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstringF), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), true, TypeRef(sp, getPath(coreName, "fmt", "Formatter"))))));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = getParamsWithBounds(sp, p, debugTrait, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, debugTrait, mv$(typesToBound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), makeSpanned(sp, debugTrait), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::makeBarePrivate(), false, rcstringFmt, mv$(fcn));
@@ -1154,12 +1154,12 @@ public:
             AST::ExprNodeP code;
             AST::Pattern patA;
 
-            AST::Path variant_path = basePath + v.mName;
+            AST::Path variantPath = basePath + v.mName;
 
             TU_MATCH_HDRA( (v.mData), {)
             TU_ARMA(Unit, e) {
                     code = NEWNODE(CallMethod, NEWNODE(NamedValue, AST::Path(rcstringF)), AST::PathNode(rcstringWriteStr, {}), vec$(NEWNODE(String, v.mName.c_str())));
-                    patA = AST::Pattern(AST::Pattern::TagValue(), sp, AST::Pattern::Value::make_Named(variant_path));
+                    patA = AST::Pattern(AST::Pattern::TagValue(), sp, AST::Pattern::Value::make_Named(variantPath));
                 }
                 TU_ARMA(Tuple, e) {
                     ::std::vector<AST::Pattern> patsA;
@@ -1172,7 +1172,7 @@ public:
                     });
                     block->pushTailExpr(NEWNODE(CallMethod, mv$(sEnt), AST::PathNode(rcstringFinish, {}), {}));
                     code = mkExprnodep(block.release());
-                    patA = AST::Pattern(AST::Pattern::TagNamedTuple(), sp, variant_path, mv$(patsA));
+                    patA = AST::Pattern(AST::Pattern::TagNamedTuple(), sp, variantPath, mv$(patsA));
                 }
                 TU_ARMA(Struct, e) {
                     ::std::vector<AST::StructPatternEntry> patsA;
@@ -1186,7 +1186,7 @@ public:
                     block->pushTailExpr(NEWNODE(CallMethod, mv$(sEnt), AST::PathNode(rcstringFinish, {}), {}));
 
                     code = mkExprnodep(block.release());
-                    patA = AST::Pattern(AST::Pattern::TagStruct(), sp, variant_path, mv$(patsA), true);
+                    patA = AST::Pattern(AST::Pattern::TagStruct(), sp, variantPath, mv$(patsA), true);
                 }
             }
 
@@ -1210,7 +1210,7 @@ public:
 class DeriverInnerCompare: public Deriver {
 protected:
     /// Create a final output impl block
-    virtual AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const = 0;
+    virtual AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, AST::ExprNodeP node) const = 0;
     /// Compare two values, early returning if no more comparisons should happen
     virtual AST::ExprNodeP compareAndRet(Span sp, const RcString& coreName, AST::ExprNodeP v1, AST::ExprNodeP v2) const = 0;
     /// Get the return value for if `compare_and_ret` didn't return early
@@ -1241,13 +1241,13 @@ public:
             AST::ExprNodeP code;
             AST::Pattern patA;
             AST::Pattern patB;
-            auto variant_path = basePath + v.mName;
+            auto variantPath = basePath + v.mName;
 
             TU_MATCH_HDRA( (v.mData), {)
             TU_ARMA(Unit, e) {
                     code = this->equalValue(sp, opts.coreName);
-                    patA = AST::Pattern(AST::Pattern::TagValue(), sp, AST::Pattern::Value::make_Named(variant_path));
-                    patB = AST::Pattern(AST::Pattern::TagValue(), sp, AST::Pattern::Value::make_Named(variant_path));
+                    patA = AST::Pattern(AST::Pattern::TagValue(), sp, AST::Pattern::Value::make_Named(variantPath));
+                    patB = AST::Pattern(AST::Pattern::TagValue(), sp, AST::Pattern::Value::make_Named(variantPath));
                 }
                 TU_ARMA(Tuple, e) {
                     auto block = newBlock(sp);
@@ -1259,8 +1259,8 @@ public:
                     });
                     block->pushTailExpr(this->equalValue(sp, opts.coreName));
 
-                    patA = AST::Pattern(AST::Pattern::TagNamedTuple(), sp, variant_path, mv$(patsA));
-                    patB = AST::Pattern(AST::Pattern::TagNamedTuple(), sp, variant_path, mv$(patsB));
+                    patA = AST::Pattern(AST::Pattern::TagNamedTuple(), sp, variantPath, mv$(patsA));
+                    patB = AST::Pattern(AST::Pattern::TagNamedTuple(), sp, variantPath, mv$(patsB));
                     code = mkExprnodep(block.release());
                 }
                 TU_ARMA(Struct, e) {
@@ -1273,18 +1273,18 @@ public:
                     });
                     block->pushTailExpr(this->equalValue(sp, opts.coreName));
 
-                    patA = AST::Pattern(AST::Pattern::TagStruct(), sp, variant_path, mv$(patsA), true);
-                    patB = AST::Pattern(AST::Pattern::TagStruct(), sp, variant_path, mv$(patsB), true);
+                    patA = AST::Pattern(AST::Pattern::TagStruct(), sp, variantPath, mv$(patsA), true);
+                    patB = AST::Pattern(AST::Pattern::TagStruct(), sp, variantPath, mv$(patsB), true);
                     code = mkExprnodep(block.release());
                 }
             }
 
             ::std::vector< AST::Pattern>    pats;
             {
-                ::std::vector<AST::Pattern> tuple_pats;
-                tuple_pats.push_back(AST::Pattern(AST::Pattern::TagReference(), sp, false, mv$(patA)));
-                tuple_pats.push_back(AST::Pattern(AST::Pattern::TagReference(), sp, false, mv$(patB)));
-                pats.push_back(AST::Pattern(AST::Pattern::TagTuple(), sp, mv$(tuple_pats)));
+                ::std::vector<AST::Pattern> tuplePats;
+                tuplePats.push_back(AST::Pattern(AST::Pattern::TagReference(), sp, false, mv$(patA)));
+                tuplePats.push_back(AST::Pattern(AST::Pattern::TagReference(), sp, false, mv$(patB)));
+                pats.push_back(AST::Pattern(AST::Pattern::TagTuple(), sp, mv$(tuplePats)));
             }
 
             arms.push_back(AST::ExprNodeMatchArm(
@@ -1307,13 +1307,13 @@ public:
 };
 
 class DeriverPartialEq: public DeriverInnerCompare {
-    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const override {
+    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, AST::ExprNodeP node) const override {
         const AST::Path trait_path = getPath(coreName, "cmp", "PartialEq");
 
         AST::Function fcn(sp, TypeRef(sp, CORETYPE_BOOL), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp))), AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstringV), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp)))));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(typesToBound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), makeSpanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::makeBarePrivate(), false, RcString::newInterned("eq"), mv$(fcn));
@@ -1341,7 +1341,7 @@ public:
 } gDerivePartialeq;
 
 class DeriverPartialOrd: public DeriverInnerCompare {
-    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const override {
+    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, AST::ExprNodeP node) const override {
         const AST::Path trait_path = getPath(coreName, "cmp", "PartialOrd");
         const AST::Path pathOrdering = getPath(coreName, "cmp", "Ordering");
 
@@ -1351,7 +1351,7 @@ class DeriverPartialOrd: public DeriverInnerCompare {
         AST::Function fcn(sp, TypeRef(sp, pathOptionOrdering), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp))), AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstringV), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp)))));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(typesToBound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), makeSpanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::makeBarePrivate(), false, RcString::newInterned("partial_cmp"), mv$(fcn));
@@ -1381,13 +1381,13 @@ class DeriverEq: public Deriver {
         return getPath(coreName, "cmp", "Eq");
     }
 
-    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
+    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, AST::ExprNodeP node) const {
         const AST::Path trait_path = this->getTraitPath(coreName);
 
         AST::Function fcn(sp, TypeRef(TypeRef::TagUnit(), sp), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp)))));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(typesToBound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), makeSpanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::makeBarePrivate(), false, rcstringAssertReceiverIsTotalEq, mv$(fcn));
@@ -1432,12 +1432,12 @@ public:
         for (const auto& v : enm.variants()) {
             AST::ExprNodeP code;
             AST::Pattern patA;
-            auto variant_path = basePath + v.mName;
+            auto variantPath = basePath + v.mName;
 
             TU_MATCH_HDRA( (v.mData), {)
             TU_ARMA(Unit, e) {
                     code = NEWNODE(Block);
-                    patA = AST::Pattern(AST::Pattern::TagValue(), sp, AST::Pattern::Value::make_Named(variant_path));
+                    patA = AST::Pattern(AST::Pattern::TagValue(), sp, AST::Pattern::Value::make_Named(variantPath));
                 }
                 TU_ARMA(Tuple, e) {
                     auto block = newBlock(sp);
@@ -1446,7 +1446,7 @@ public:
                         return this->assertIsEq(assertMethodPath, mv$(a));
                     });
 
-                    patA = AST::Pattern(AST::Pattern::TagNamedTuple(), sp, variant_path, mv$(patsA));
+                    patA = AST::Pattern(AST::Pattern::TagNamedTuple(), sp, variantPath, mv$(patsA));
                     code = mkExprnodep(block.release());
                 }
                 TU_ARMA(Struct, e) {
@@ -1456,7 +1456,7 @@ public:
                         return this->assertIsEq(assertMethodPath, mv$(a));
                     });
 
-                    patA = AST::Pattern(AST::Pattern::TagStruct(), sp, variant_path, mv$(patsA), true);
+                    patA = AST::Pattern(AST::Pattern::TagStruct(), sp, variantPath, mv$(patsA), true);
                     code = mkExprnodep(block.release());
                 }
             }
@@ -1488,14 +1488,14 @@ public:
 } gDeriveEq;
 
 class DeriverOrd: public DeriverInnerCompare {
-    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const override {
+    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, AST::ExprNodeP node) const override {
         const AST::Path trait_path = getPath(coreName, "cmp", "Ord");
         const AST::Path pathOrdering = getPath(coreName, "cmp", "Ordering");
 
         AST::Function fcn(sp, TypeRef(sp, pathOrdering), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp))), AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstringV), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp)))));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(typesToBound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), makeSpanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::makeBarePrivate(), false, RcString::newInterned("cmp"), mv$(fcn));
@@ -1538,13 +1538,13 @@ class DeriverClone: public Deriver {
         return getTraitPath(coreName) + rcstring_clone;
     }
 
-    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
+    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, AST::ExprNodeP node) const {
         const AST::Path trait_path = this->getTraitPath(coreName);
 
         AST::Function fcn(sp, mktypeSelf(sp), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp)))));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(typesToBound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), makeSpanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::makeBarePrivate(), false, rcstring_clone, mv$(fcn));
@@ -1574,26 +1574,26 @@ public:
     }
 
     AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
-        const AST::Path& ty_path = *type.mData.as_Path();
+        const AST::Path& tyPath = *type.mData.as_Path();
 
         AST::ExprNodeP node;
         TU_MATCH_HDRA( (str.mData), {)
         TU_ARMA(Unit, e) {
-                node = NEWNODE(NamedValue, AST::Path(ty_path));
+                node = NEWNODE(NamedValue, AST::Path(tyPath));
             }
             TU_ARMA(Struct, e) {
                 ::AST::ExprNodeStructLiteral::tValues vals;
                 for (const auto& fld : e.ents) {
                     vals.push_back({{}, fld.mName, this->cloneValRef(opts.coreName, this->field(fld.mName))});
                 }
-                node = NEWNODE(StructLiteral, ty_path, nullptr, mv$(vals));
+                node = NEWNODE(StructLiteral, tyPath, nullptr, mv$(vals));
             }
             TU_ARMA(Tuple, e) {
                 ::std::vector<AST::ExprNodeP> vals;
                 for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
                     vals.push_back(this->cloneValRef(opts.coreName, this->field(FMT(idx))));
                 }
-                node = NEWNODE(CallPath, AST::Path(ty_path), mv$(vals));
+                node = NEWNODE(CallPath, AST::Path(tyPath), mv$(vals));
             }
         }
 
@@ -1682,10 +1682,10 @@ class DeriverCopy: public Deriver {
         return getPath(coreName, "marker", "Copy");
     }
 
-    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
+    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, AST::ExprNodeP node) const {
         const AST::Path trait_path = this->getTraitPath(coreName);
 
-        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(typesToBound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), makeSpanned(sp, trait_path), type.clone()));
         return mv$(rv);
@@ -1718,13 +1718,13 @@ class DeriverDefault: public Deriver {
         return AST::Path::newUfcsTrait(::TypeRef(Span()), getTraitPath(coreName), {AST::PathNode(RcString::newInterned("default"), {})});
     }
 
-    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
+    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, AST::ExprNodeP node) const {
         const AST::Path trait_path = this->getTraitPath(coreName);
 
         AST::Function fcn(sp, mktypeSelf(sp), {});
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(typesToBound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), makeSpanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::makeBarePrivate(), false, RcString::newInterned("default"), mv$(fcn));
@@ -1741,12 +1741,12 @@ public:
     }
 
     AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
-        const AST::Path& ty_path = *type.mData.as_Path();
+        const AST::Path& tyPath = *type.mData.as_Path();
         AST::ExprNodeP node;
 
         TU_MATCH_HDRA( (str.mData), {)
         TU_ARMA(Unit, e) {
-                node = NEWNODE(NamedValue, AST::Path(ty_path));
+                node = NEWNODE(NamedValue, AST::Path(tyPath));
             }
             TU_ARMA(Struct, e) {
                 ::AST::ExprNodeStructLiteral::tValues vals;
@@ -1759,9 +1759,9 @@ public:
                     }
                 }
                 if (has_default) {
-                    node = NEWNODE(StructLiteralPattern, ty_path, mv$(vals));
+                    node = NEWNODE(StructLiteralPattern, tyPath, mv$(vals));
                 } else {
-                    node = NEWNODE(StructLiteral, ty_path, nullptr, mv$(vals));
+                    node = NEWNODE(StructLiteral, tyPath, nullptr, mv$(vals));
                 }
             }
             TU_ARMA(Tuple, e) {
@@ -1769,7 +1769,7 @@ public:
                 for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
                     vals.push_back(this->defaultCall(opts.coreName));
                 }
-                node = NEWNODE(CallPath, AST::Path(ty_path), mv$(vals));
+                node = NEWNODE(CallPath, AST::Path(tyPath), mv$(vals));
             }
         }
 
@@ -1791,13 +1791,13 @@ public:
             ERROR(sp, E0000, "No #[default] attribute on enum with derive(Default)");
         }
 
-        AST::Path var_path = *type.mData.as_Path() + AST::PathNode(defaultVar->mName);
+        AST::Path varPath = *type.mData.as_Path() + AST::PathNode(defaultVar->mName);
 
         ::std::vector<TypeRef> boundTys;
         AST::ExprNodeP node;
         TU_MATCH_HDRA( (defaultVar->mData), { )
         TU_ARMA(Unit, e) {
-                node = NEWNODE(NamedValue, std::move(var_path));
+                node = NEWNODE(NamedValue, std::move(varPath));
             }
             TU_ARMA(Tuple, e) {
                 ::std::vector<AST::ExprNodeP> vals;
@@ -1805,7 +1805,7 @@ public:
                     addFieldBoundFromTy(enm.params(), boundTys, fld.mType);
                     vals.push_back(this->defaultCall(opts.coreName));
                 }
-                node = NEWNODE(CallPath, std::move(var_path), mv$(vals));
+                node = NEWNODE(CallPath, std::move(varPath), mv$(vals));
             }
             TU_ARMA(Struct, e) {
                 ::AST::ExprNodeStructLiteral::tValues vals;
@@ -1816,7 +1816,7 @@ public:
                         vals.push_back({{}, fld.mName, this->defaultCall(opts.coreName)});
                     }
                 }
-                node = NEWNODE(StructLiteralPattern, std::move(var_path), mv$(vals));
+                node = NEWNODE(StructLiteralPattern, std::move(varPath), mv$(vals));
             }
         }
         return this->makeRet(sp, opts.coreName, p, type, std::move(boundTys), std::move(node));
@@ -1836,7 +1836,7 @@ class DeriverHash: public Deriver {
         return getTraitPath(coreName) + RcString::newInterned("hash");
     }
 
-    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
+    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, AST::ExprNodeP node) const {
         const AST::Path trait_path = this->getTraitPath(coreName);
 
         AST::Function fcn(sp, TypeRef(TypeRef::TagUnit(), sp), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp))), AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstringState), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), true, TypeRef(sp, rcstringH, 0x100 | 0)))));
@@ -1844,7 +1844,7 @@ class DeriverHash: public Deriver {
         fcn.params().addBound(AST::GenericBound::make_IsTrait({sp, {}, TypeRef(sp, rcstringH, 0x100 | 0), {}, this->getTraitPathHasher(coreName)}));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(typesToBound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), makeSpanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::makeBarePrivate(), false, RcString::newInterned("hash"), mv$(fcn));
@@ -1898,32 +1898,32 @@ public:
         basePath.nodes().back().args() = ::AST::PathParams();
         ::std::vector<AST::ExprNodeMatchArm> arms;
 
-        for (unsigned int var_idx = 0; var_idx < enm.variants().size(); var_idx++) {
-            const auto& v = enm.variants()[var_idx];
+        for (unsigned int varIdx = 0; varIdx < enm.variants().size(); varIdx++) {
+            const auto& v = enm.variants()[varIdx];
             AST::Pattern patA;
 
-            auto var_path = basePath + v.mName;
-            auto var_idx_hash = enm.variants().size() > 1 ? this->hashValRef(opts.coreName, NEWNODE(Integer, U128(var_idx), CORETYPE_UINT)) : NEWNODE(Tuple, {});
+            auto varPath = basePath + v.mName;
+            auto varIdxHash = enm.variants().size() > 1 ? this->hashValRef(opts.coreName, NEWNODE(Integer, U128(varIdx), CORETYPE_UINT)) : NEWNODE(Tuple, {});
 
             auto block = newBlock(sp);
-            block->pushStmt(mv$(var_idx_hash));
+            block->pushStmt(mv$(varIdxHash));
             TU_MATCH_HDRA( (v.mData), {)
             TU_ARMA(Unit, e) {
-                    patA = AST::Pattern(AST::Pattern::TagValue(), sp, AST::Pattern::Value::make_Named(var_path));
+                    patA = AST::Pattern(AST::Pattern::TagValue(), sp, AST::Pattern::Value::make_Named(varPath));
                 }
                 TU_ARMA(Tuple, e) {
                     ::std::vector<AST::Pattern> patsA;
                     makeRefpatA(sp, *block, patsA, e.mItems, [&](size_t, auto a) {
                         return this->hashValDirect(opts.coreName, mv$(a));
                     });
-                    patA = AST::Pattern(AST::Pattern::TagNamedTuple(), sp, var_path, mv$(patsA));
+                    patA = AST::Pattern(AST::Pattern::TagNamedTuple(), sp, varPath, mv$(patsA));
                 }
                 TU_ARMA(Struct, e) {
                     ::std::vector<AST::StructPatternEntry> patsA;
                     makeRefpatA(sp, *block, patsA, e.fields, [&](size_t, auto a) {
                         return this->hashValDirect(opts.coreName, mv$(a));
                     });
-                    patA = AST::Pattern(AST::Pattern::TagStruct(), sp, var_path, mv$(patsA), true);
+                    patA = AST::Pattern(AST::Pattern::TagStruct(), sp, varPath, mv$(patsA), true);
                 }
             }
 
@@ -1955,7 +1955,7 @@ class DeriverRustcEncodable: public Deriver {
         return getTraitPath() + "encode";
     }
 
-    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
+    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, AST::ExprNodeP node) const {
         const AST::Path trait_path = this->getTraitPath();
 
         AST::Path resultPath = getPath(coreName, "result", "Result");
@@ -1967,7 +1967,7 @@ class DeriverRustcEncodable: public Deriver {
         fcn.params().addBound(AST::GenericBound::make_IsTrait({sp, {}, TypeRef(sp, "S", 0x100 | 0), {}, this->getTraitPathEncoder()}));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(typesToBound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), makeSpanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::makeBarePrivate(), false, "encode", mv$(fcn));
@@ -2050,14 +2050,14 @@ public:
 
         auto sEnt = NEWNODE(NamedValue, AST::Path(rcstringS));
 
-        for (unsigned int var_idx = 0; var_idx < enm.variants().size(); var_idx++) {
-            const auto& v = enm.variants()[var_idx];
+        for (unsigned int varIdx = 0; varIdx < enm.variants().size(); varIdx++) {
+            const auto& v = enm.variants()[varIdx];
             AST::ExprNodeP code;
             AST::Pattern patA;
 
             TU_MATCH_HDRA((v.mData), {)
             TU_ARMA(Unit, e) {
-                    code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_variant", vec$(sEnt->clone(), NEWNODE(String, v.mName.c_str()), NEWNODE(Integer, U128(var_idx), CORETYPE_UINT), NEWNODE(Integer, U128(0), CORETYPE_UINT), this->encClosure(sp, this->getValOk(opts.coreName))));
+                    code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_variant", vec$(sEnt->clone(), NEWNODE(String, v.mName.c_str()), NEWNODE(Integer, U128(varIdx), CORETYPE_UINT), NEWNODE(Integer, U128(0), CORETYPE_UINT), this->encClosure(sp, this->getValOk(opts.coreName))));
                     patA = AST::Pattern(AST::Pattern::TagValue(), sp, AST::Pattern::Value::make_Named(basePath + v.mName));
                 }
                 TU_ARMA(Tuple, e) {
@@ -2068,7 +2068,7 @@ public:
                     });
                     block->pushTailExpr(this->getValOk(opts.coreName));
 
-                    code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_variant", vec$(sEnt->clone(), NEWNODE(String, v.mName.c_str()), NEWNODE(Integer, U128(var_idx), CORETYPE_UINT), NEWNODE(Integer, U128(e.mItems.size()), CORETYPE_UINT), this->encClosure(sp, mkExprnodep(block.release()))));
+                    code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_variant", vec$(sEnt->clone(), NEWNODE(String, v.mName.c_str()), NEWNODE(Integer, U128(varIdx), CORETYPE_UINT), NEWNODE(Integer, U128(e.mItems.size()), CORETYPE_UINT), this->encClosure(sp, mkExprnodep(block.release()))));
                     patA = AST::Pattern(AST::Pattern::TagNamedTuple(), sp, basePath + v.mName, mv$(patsA));
                 }
                 TU_ARMA(Struct, e) {
@@ -2080,7 +2080,7 @@ public:
                     block->pushTailExpr(this->getValOk(opts.coreName));
 
                     patA = AST::Pattern(AST::Pattern::TagStruct(), sp, basePath + v.mName, mv$(patsA), true);
-                    code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_struct_variant", vec$(sEnt->clone(), NEWNODE(String, v.mName.c_str()), NEWNODE(Integer, U128(var_idx), CORETYPE_UINT), NEWNODE(Integer, U128(e.fields.size()), CORETYPE_UINT), this->encClosure(sp, mkExprnodep(block.release()))));
+                    code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_struct_variant", vec$(sEnt->clone(), NEWNODE(String, v.mName.c_str()), NEWNODE(Integer, U128(varIdx), CORETYPE_UINT), NEWNODE(Integer, U128(e.fields.size()), CORETYPE_UINT), this->encClosure(sp, mkExprnodep(block.release()))));
                 }
             }
 
@@ -2117,7 +2117,7 @@ class DeriverRustcDecodable: public Deriver {
         return getTraitPath() + "decode";
     }
 
-    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
+    AST::Impl makeRet(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, AST::ExprNodeP node) const {
         const AST::Path trait_path = this->getTraitPath();
 
         AST::Path resultPath = getPath(coreName, "result", "Result");
@@ -2136,7 +2136,7 @@ class DeriverRustcDecodable: public Deriver {
         fcn.params().addBound(AST::GenericBound::make_IsTrait({sp, {}, TypeRef(sp, "D", 0x100 | 0), {}, this->getTraitPathDecoder()}));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(typesToBound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), makeSpanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::makeBarePrivate(), false, "decode", mv$(fcn));
@@ -2228,11 +2228,11 @@ public:
         ::std::vector<AST::ExprNodeMatchArm> arms;
 
         // 1. Variant names
-        ::std::vector<AST::ExprNodeP> var_name_strs;
+        ::std::vector<AST::ExprNodeP> varNameStrs;
 
         // 2. Decoding arms
-        for (unsigned int var_idx = 0; var_idx < enm.variants().size(); var_idx++) {
-            const auto& v = enm.variants()[var_idx];
+        for (unsigned int varIdx = 0; varIdx < enm.variants().size(); varIdx++) {
+            const auto& v = enm.variants()[varIdx];
             AST::ExprNodeP code;
 
             TU_MATCH_HDRA( (v.mData), {)
@@ -2261,14 +2261,14 @@ public:
             }
 
             ::std::vector< AST::Pattern>    pats;
-            pats.push_back( AST::Pattern(AST::Pattern::TagValue(), sp, AST::Pattern::Value::make_Integer({CORETYPE_UINT, U128(var_idx)})) );
+            pats.push_back( AST::Pattern(AST::Pattern::TagValue(), sp, AST::Pattern::Value::make_Integer({CORETYPE_UINT, U128(varIdx)})) );
 
             arms.push_back(AST::ExprNodeMatchArm(
                 mv$(pats),
                 {},
                 this->getValOk(opts.coreName, mv$(code))
                 ));
-            var_name_strs.push_back( NEWNODE(String, v.mName.c_str()) );
+            varNameStrs.push_back( NEWNODE(String, v.mName.c_str()) );
         }
 
         // Default arm
@@ -2280,7 +2280,7 @@ public:
         auto nodeVarClosure = NEWNODE(Closure, vec$(::std::make_pair(AST::Pattern(AST::Pattern::TagBind(), sp, "d"), ::TypeRef(sp)), ::std::make_pair(AST::Pattern(AST::Pattern::TagBind(), sp, "idx"), ::TypeRef(sp))), ::TypeRef(sp), mv$(nodeMatch), false, false);
         ::std::string enumName = type.mData.as_Path()->nodes().back().name().c_str();
 
-        auto nodeRev = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum_variant", vec$(NEWNODE(NamedValue, AST::Path("d")), NEWNODE(UniOp, AST::ExprNodeUniOp::REF, NEWNODE(Array, mv$(var_name_strs))), mv$(nodeVarClosure)));
+        auto nodeRev = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum_variant", vec$(NEWNODE(NamedValue, AST::Path("d")), NEWNODE(UniOp, AST::ExprNodeUniOp::REF, NEWNODE(Array, mv$(varNameStrs))), mv$(nodeVarClosure)));
 
         auto node = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum", vec$(NEWNODE(NamedValue, AST::Path("d")), NEWNODE(String, enumName), this->decClosure(sp, mv$(nodeRev))));
 
@@ -2289,9 +2289,9 @@ public:
 } gDeriveRustcDecodable;
 
 class DeriverConstParamTy: public Deriver {
-    AST::Impl handleGeneric(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound) const {
+    AST::Impl handleGeneric(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound) const {
         const AST::Path trait_path = getPath(opts.coreName, "marker", "StructuralPartialEq");
-        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(typesToBound));
         AST::Impl rv(AST::ImplDef(mv$(params), makeSpanned(sp, trait_path), type.clone()));
         return mv$(rv);
     }
@@ -2372,14 +2372,14 @@ namespace {
 
     TypeRef makeType(const Span& sp, const AST::AbsolutePath& path, const AST::GenericParams& params) {
         TypeRef type(sp, path);
-        auto& types_args = type.path().nodes().back().args();
+        auto& typesArgs = type.path().nodes().back().args();
         for (const auto& param : params.mParams) {
             if (const auto* pe = param.opt_Type()) {
-                types_args.entries.push_back(TypeRef(TypeRef::TagArg(), sp, pe->name()));
+                typesArgs.entries.push_back(TypeRef(TypeRef::TagArg(), sp, pe->name()));
             }
             if (const auto* pe = param.opt_Value()) {
                 auto p = AST::Path(pe->name().name);
-                types_args.entries.push_back(AST::ExprNodeP(new AST::ExprNodeNamedValue(std::move(p))));
+                typesArgs.entries.push_back(AST::ExprNodeP(new AST::ExprNodeNamedValue(std::move(p))));
             }
         }
         return type;
@@ -2506,7 +2506,7 @@ public:
     // A derive macro must see every attribute on the item (e.g. a `#[repr(C)]` written
     // above the derive, which bytemuck's `Pod` checks for); the input serialiser strips
     // `derive` attributes themselves.
-    bool wants_all_attrs() const override {
+    bool wantsAllAttrs() const override {
         return true;
     }
 

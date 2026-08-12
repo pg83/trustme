@@ -96,8 +96,8 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
         DEBUG("Equality (TB) - <" << type << " as " << tb.second.sourceTrait << ">::" << tb.first << " = " << tb.second);
         pushType(tb.first, trait_path.hrtbs.get(), tb.second);
 
-        auto ty_l = crate.types.path(::HIR::Path(type, tb.second.sourceTrait.clone(), tb.first), ::HIR::TypePathBinding::make_Opaque({}));
-        prepIndexesAddEquality(sp, trait_path.hrtbs.get(), ty_l, tb.second.type);
+        auto tyL = crate.types.path(::HIR::Path(type, tb.second.sourceTrait.clone(), tb.first), ::HIR::TypePathBinding::make_Opaque({}));
+        prepIndexesAddEquality(sp, trait_path.hrtbs.get(), tyL, tb.second.type);
     }
 
     if (trait_path.hrtbs && !trait_path.hrtbs->is_empty()) {
@@ -110,9 +110,9 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
     // ATY Trait bounds
     for (const auto& tb : trait_path.traitBounds) {
         for (const auto& trait : tb.second.traits) {
-            auto ty_l = crate.types.path(::HIR::Path(type, tb.second.sourceTrait.clone(), tb.first), ::HIR::TypePathBinding::make_Opaque({}));
+            auto tyL = crate.types.path(::HIR::Path(type, tb.second.sourceTrait.clone(), tb.first), ::HIR::TypePathBinding::make_Opaque({}));
             DEBUG("Bound (TB) - <" << type << " as " << tb.second.sourceTrait << ">::" << tb.first << " : " << trait);
-            prepIndexesAddTraitBound(sp, outerHrtbs, std::move(ty_l), trait.clone());
+            prepIndexesAddTraitBound(sp, outerHrtbs, std::move(tyL), trait.clone());
         }
     }
 
@@ -126,20 +126,20 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
             continue;
         }
         ASSERT_BUG(sp, !aTy.second.generics.isGeneric(), "prep_indexes__add_trait_bound: Handle type generic ATYs - " << aTy.first << aTy.second.generics.fmtArgs() << " in " << trait_path);
-        auto ty_a = crate.types.path(
+        auto tyA = crate.types.path(
             // TODO: Empty params works for now, as there's no type generics (yet)
             ::HIR::Path(type, trait_path.mPath.clone(), aTy.first, aTy.second.generics.makeEmptyParams(true)),
             ::HIR::TypePathBinding::make_Opaque({})
         );
-        monomorph.ppMethod = &ty_a->as_Path().path.mData.as_UfcsKnown().params;
+        monomorph.ppMethod = &tyA->as_Path().path.mData.as_UfcsKnown().params;
 
         for (const auto& aTyB : aTy.second.traitBounds) {
             DEBUG("(Assoc) " << aTyB);
             auto traitMono = monomorph.monomorphTraitpath(sp, aTyB, false);
             for (auto& tb : traitMono.typeBounds) {
-                DEBUG("Equality (ATB) - <" << ty_a << " as " << tb.second.sourceTrait << ">::" << tb.first << " = " << tb.second);
+                DEBUG("Equality (ATB) - <" << tyA << " as " << tb.second.sourceTrait << ">::" << tb.first << " = " << tb.second);
 
-                auto ty_l = crate.types.path(::HIR::Path(ty_a, tb.second.sourceTrait.clone(), tb.first, tb.second.atyParams.clone()), ::HIR::TypePathBinding::make_Opaque({}));
+                auto tyL = crate.types.path(::HIR::Path(tyA, tb.second.sourceTrait.clone(), tb.first, tb.second.atyParams.clone()), ::HIR::TypePathBinding::make_Opaque({}));
 
                 if (outerHrtbs && outerHrtbs->is_empty()) {
                     outerHrtbs = nullptr;
@@ -150,7 +150,7 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
                     TODO(sp, "Double-layerd HRLs - outer=" << outerHrtbs->fmtArgs() << " and inner=" << traitMono.hrtbs->fmtArgs());
                 }
                 auto* innerHrtbs = outerHrtbs ? outerHrtbs : aTyB.hrtbs.get();
-                prepIndexesAddEquality(sp, innerHrtbs, mv$(ty_l), std::move(tb.second.type));
+                prepIndexesAddEquality(sp, innerHrtbs, mv$(tyL), std::move(tb.second.type));
             }
         }
 

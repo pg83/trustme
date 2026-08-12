@@ -34,7 +34,7 @@ namespace {
         bool exhaustiveNames = true;
         ::std::map<::std::string, ExpectedCfgValues> expected;
         LintSetting warnings;
-        LintSetting unexpected_cfgs;
+        LintSetting unexpectedCfgs;
         LintSetting cap;
     } gCheckCfg;
 
@@ -223,15 +223,15 @@ namespace {
                                     }
                                     rv.values.values.insert(stringLiteral());
                                 } else {
-                                    auto value_kind = ident();
+                                    auto valueKind = ident();
                                     expect('(', "`(` in `values()` special value");
                                     expect(')', "`)` in `values()` special value");
-                                    if (value_kind == "none") {
+                                    if (valueKind == "none") {
                                         if (sawAny) {
                                             fail("`values()` cannot combine `none()` with `any()`");
                                         }
                                         rv.values.none = true;
-                                    } else if (value_kind == "any") {
+                                    } else if (valueKind == "any") {
                                         if (sawAny || rv.values.none || !rv.values.values.empty()) {
                                             fail("`values()` cannot combine `any()` with other values");
                                         }
@@ -285,7 +285,7 @@ namespace {
         return level == CfgLintLevel::ForceWarn || level == CfgLintLevel::Forbid;
     }
 
-    void update_lint_setting(LintSetting& setting, CfgLintLevel level) {
+    void updateLintSetting(LintSetting& setting, CfgLintLevel level) {
         if (setting.isSet && isStickyLintLevel(setting.level)) {
             return;
         }
@@ -304,9 +304,9 @@ namespace {
         throw ::std::logic_error("invalid lint level");
     }
 
-    CfgLintLevel unexpected_cfg_level() {
-        auto level = gCheckCfg.unexpected_cfgs.isSet
-            ? gCheckCfg.unexpected_cfgs.level
+    CfgLintLevel unexpectedCfgLevel() {
+        auto level = gCheckCfg.unexpectedCfgs.isSet
+            ? gCheckCfg.unexpectedCfgs.level
             : (gCheckCfg.warnings.isSet ? gCheckCfg.warnings.level : CfgLintLevel::Warn);
         if (level != CfgLintLevel::ForceWarn && gCheckCfg.cap.isSet
             && lintLevelRank(level) > lintLevelRank(gCheckCfg.cap.level)) {
@@ -353,7 +353,7 @@ namespace {
     }
 
     void reportUnexpectedCfg(const Span& span, const ::std::string& name, const ::std::optional<::std::string>& value, bool badValue) {
-        const auto level = unexpected_cfg_level();
+        const auto level = unexpectedCfgLevel();
         if (level == CfgLintLevel::Allow) {
             return;
         }
@@ -368,7 +368,7 @@ namespace {
         }
     }
 
-    void validate_cfg_use(const Span& span, const ::std::string& name, const ::std::optional<::std::string>& value) {
+    void validateCfgUse(const Span& span, const ::std::string& name, const ::std::optional<::std::string>& value) {
         if (!gCheckCfg.active) {
             return;
         }
@@ -465,9 +465,9 @@ void CfgSetLintLevel(::std::string name, CfgLintLevel level) {
         }
     }
     if (name == "warnings") {
-        update_lint_setting(gCheckCfg.warnings, level);
+        updateLintSetting(gCheckCfg.warnings, level);
     } else if (name == "unexpected_cfgs") {
-        update_lint_setting(gCheckCfg.unexpected_cfgs, level);
+        updateLintSetting(gCheckCfg.unexpectedCfgs, level);
     }
 }
 
@@ -515,7 +515,7 @@ namespace {
                     GET_CHECK_TOK(tok, lex, TOK_STRING);
                     val = tok.str();
                 }
-                validate_cfg_use(conditionSpan, name.c_str(), val);
+                validateCfgUse(conditionSpan, name.c_str(), val);
                 // Equality
                 auto its = gCfgValues.equal_range(name.c_str());
                 for (auto it = its.first; it != its.second; ++it) {
@@ -596,7 +596,7 @@ namespace {
 
                 break;
             default:
-                validate_cfg_use(conditionSpan, name.c_str(), ::std::nullopt);
+                validateCfgUse(conditionSpan, name.c_str(), ::std::nullopt);
                 auto its = gCfgValues.equal_range(name.c_str());
                 for (auto it = its.first; it != its.second; ++it) {
                     return true;

@@ -40,12 +40,12 @@ namespace HIR {
         ((Lifetime,
           struct {
               LifetimeRef test;
-              LifetimeRef valid_for;
+              LifetimeRef validFor;
           }),
          (TypeLifetime,
           struct {
               ::HIR::TypeRef type;
-              LifetimeRef valid_for;
+              LifetimeRef validFor;
           }),
          (TraitBound,
           struct {

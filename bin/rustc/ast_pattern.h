@@ -95,7 +95,7 @@ namespace AST {
             (StructTuple,
              struct {
                  Path path;
-                 TuplePat tup_pat;
+                 TuplePat tupPat;
              }),
             (Struct,
              struct {

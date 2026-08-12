@@ -162,7 +162,7 @@ namespace HIR {
 } // namespace HIR
 
 namespace {
-    void visit_pattern_declaration_slots(const ::HIR::Pattern& pattern, ::std::vector<unsigned>& slots) {
+    void visitPatternDeclarationSlots(const ::HIR::Pattern& pattern, ::std::vector<unsigned>& slots) {
         for (const auto& binding : pattern.mBindings) {
             slots.push_back(binding.slot);
         }
@@ -171,43 +171,43 @@ namespace {
             (pattern.mData),
             (e),
             (Any, ),
-            (Box, visit_pattern_declaration_slots(*e.sub, slots);),
-            (Ref, visit_pattern_declaration_slots(*e.sub, slots);),
-            (Tuple, for (const auto& subpattern : e.subPatterns) { visit_pattern_declaration_slots(subpattern, slots); }),
-            (SplitTuple, for (const auto& subpattern : e.leading) visit_pattern_declaration_slots(subpattern, slots); for (const auto& subpattern : e.trailing) visit_pattern_declaration_slots(subpattern, slots);),
+            (Box, visitPatternDeclarationSlots(*e.sub, slots);),
+            (Ref, visitPatternDeclarationSlots(*e.sub, slots);),
+            (Tuple, for (const auto& subpattern : e.subPatterns) { visitPatternDeclarationSlots(subpattern, slots); }),
+            (SplitTuple, for (const auto& subpattern : e.leading) visitPatternDeclarationSlots(subpattern, slots); for (const auto& subpattern : e.trailing) visitPatternDeclarationSlots(subpattern, slots);),
             (PathValue, ),
-            (PathTuple, for (const auto& subpattern : e.leading) visit_pattern_declaration_slots(subpattern, slots); for (const auto& subpattern : e.trailing) visit_pattern_declaration_slots(subpattern, slots);),
-            (PathNamed, for (const auto& field : e.subPatterns) { visit_pattern_declaration_slots(field.second, slots); }),
+            (PathTuple, for (const auto& subpattern : e.leading) visitPatternDeclarationSlots(subpattern, slots); for (const auto& subpattern : e.trailing) visitPatternDeclarationSlots(subpattern, slots);),
+            (PathNamed, for (const auto& field : e.subPatterns) { visitPatternDeclarationSlots(field.second, slots); }),
             (Value, ),
             (Range, ),
-            (Slice, for (const auto& subpattern : e.subPatterns) { visit_pattern_declaration_slots(subpattern, slots); }),
-            (SplitSlice, for (const auto& subpattern : e.leading) { visit_pattern_declaration_slots(subpattern, slots); } if (e.extraBind.isValid()) { slots.push_back(e.extraBind.slot); } for (const auto& subpattern : e.trailing) { visit_pattern_declaration_slots(subpattern, slots); }),
-            (Or, assert(!e.empty()); visit_pattern_declaration_slots(e.front(), slots);)
+            (Slice, for (const auto& subpattern : e.subPatterns) { visitPatternDeclarationSlots(subpattern, slots); }),
+            (SplitSlice, for (const auto& subpattern : e.leading) { visitPatternDeclarationSlots(subpattern, slots); } if (e.extraBind.isValid()) { slots.push_back(e.extraBind.slot); } for (const auto& subpattern : e.trailing) { visitPatternDeclarationSlots(subpattern, slots); }),
+            (Or, assert(!e.empty()); visitPatternDeclarationSlots(e.front(), slots);)
         )
     }
 
-    void visit_pattern_candidate_slots(const ::HIR::Pattern& pattern, bool use_last_alternative, ::std::vector<unsigned>& slots) {
+    void visitPatternCandidateSlots(const ::HIR::Pattern& pattern, bool useLastAlternative, ::std::vector<unsigned>& slots) {
         ::std::vector<const ::HIR::Pattern*> deferredOrPatterns;
-        ::std::function<void(const ::HIR::Pattern&)> visit_immediate;
-        visit_immediate = [&](const ::HIR::Pattern& current) {
+        ::std::function<void(const ::HIR::Pattern&)> visitImmediate;
+        visitImmediate = [&](const ::HIR::Pattern& current) {
             TU_MATCHA(
                 (current.mData),
                 (e),
                 (Any, ),
-                (Box, visit_immediate(*e.sub);),
-                (Ref, visit_immediate(*e.sub);),
-                (Tuple, for (const auto& subpattern : e.subPatterns) { visit_immediate(subpattern); }),
-                (SplitTuple, for (const auto& subpattern : e.leading) visit_immediate(subpattern); for (const auto& subpattern : e.trailing) visit_immediate(subpattern);),
+                (Box, visitImmediate(*e.sub);),
+                (Ref, visitImmediate(*e.sub);),
+                (Tuple, for (const auto& subpattern : e.subPatterns) { visitImmediate(subpattern); }),
+                (SplitTuple, for (const auto& subpattern : e.leading) visitImmediate(subpattern); for (const auto& subpattern : e.trailing) visitImmediate(subpattern);),
                 (PathValue, ),
-                (PathTuple, for (const auto& subpattern : e.leading) visit_immediate(subpattern); for (const auto& subpattern : e.trailing) visit_immediate(subpattern);),
-                (PathNamed, for (const auto& field : e.subPatterns) { visit_immediate(field.second); }),
+                (PathTuple, for (const auto& subpattern : e.leading) visitImmediate(subpattern); for (const auto& subpattern : e.trailing) visitImmediate(subpattern);),
+                (PathNamed, for (const auto& field : e.subPatterns) { visitImmediate(field.second); }),
                 (Value, ),
                 (Range, ),
-                (Slice, for (const auto& subpattern : e.subPatterns) { visit_immediate(subpattern); }),
+                (Slice, for (const auto& subpattern : e.subPatterns) { visitImmediate(subpattern); }),
                 (SplitSlice,
-                 for (const auto& subpattern : e.leading) { visit_immediate(subpattern); }
+                 for (const auto& subpattern : e.leading) { visitImmediate(subpattern); }
                  if (e.extraBind.isValid()) { slots.push_back(e.extraBind.slot); }
-                 for (auto it = e.trailing.rbegin(); it != e.trailing.rend(); ++it) { visit_immediate(*it); }),
+                 for (auto it = e.trailing.rbegin(); it != e.trailing.rend(); ++it) { visitImmediate(*it); }),
                 (Or, assert(!e.empty()); deferredOrPatterns.push_back(&current);)
             )
 
@@ -218,12 +218,12 @@ namespace {
             }
         };
 
-        visit_immediate(pattern);
+        visitImmediate(pattern);
         for (const auto* orPattern : deferredOrPatterns) {
             const auto& alternatives = orPattern->mData.as_Or();
-            visit_pattern_candidate_slots(
-                use_last_alternative ? alternatives.back() : alternatives.front(),
-                use_last_alternative,
+            visitPatternCandidateSlots(
+                useLastAlternative ? alternatives.back() : alternatives.front(),
+                useLastAlternative,
                 slots
             );
         }
@@ -234,13 +234,13 @@ std::vector<unsigned> HIR::patternBindingSlots(const Pattern& pattern, PatternBi
     std::vector<unsigned> slots;
     switch (order) {
         case PatternBindingOrder::Declaration:
-            visit_pattern_declaration_slots(pattern, slots);
+            visitPatternDeclarationSlots(pattern, slots);
             break;
         case PatternBindingOrder::FirstCandidate:
-            visit_pattern_candidate_slots(pattern, false, slots);
+            visitPatternCandidateSlots(pattern, false, slots);
             break;
         case PatternBindingOrder::LastCandidate:
-            visit_pattern_candidate_slots(pattern, true, slots);
+            visitPatternCandidateSlots(pattern, true, slots);
             break;
     }
     return slots;

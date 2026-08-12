@@ -40,48 +40,48 @@ namespace HIR {
             void open(const ::std::string& filename);
             void write(const void* data, size_t count);
 
-            void write_u8(uint8_t v) {
+            void writeU8(uint8_t v) {
                 write(reinterpret_cast<const char*>(&v), 1);
             }
 
-            void write_u16(uint16_t v);
+            void writeU16(uint16_t v);
 
-            void write_u32(uint32_t v);
+            void writeU32(uint32_t v);
 
-            void write_u64(uint64_t v);
+            void writeU64(uint64_t v);
 
-            void write_i64(int64_t v) {
-                write_u64(static_cast<uint64_t>(v));
+            void writeI64(int64_t v) {
+                writeU64(static_cast<uint64_t>(v));
             }
 
             // Variable-length encoded u64 (for array sizes)
-            void write_u64c(uint64_t v);
+            void writeU64c(uint64_t v);
 
-            void write_i64c(int64_t v);
+            void writeI64c(int64_t v);
 
-            void write_u128(U128 v);
+            void writeU128(U128 v);
 
-            void write_i128(S128 v) {
-                write_u128(v.getInner());
+            void writeI128(S128 v) {
+                writeU128(v.getInner());
             }
 
-            void write_double(double v);
+            void writeDouble(double v);
 
-            void write_float_value(FloatValue value);
+            void writeFloatValue(FloatValue value);
 
-            void write_tag(unsigned int t);
+            void writeTag(unsigned int t);
 
-            void write_count(size_t c);
+            void writeCount(size_t c);
 
-            void write_string(const RcString& v);
+            void writeString(const RcString& v);
 
-            void write_string(size_t len, const char* s);
+            void writeString(size_t len, const char* s);
 
-            void write_string(const ::std::string& v) {
-                write_string(v.size(), v.c_str());
+            void writeString(const ::std::string& v) {
+                writeString(v.size(), v.c_str());
             }
 
-            void write_bool(bool v);
+            void writeBool(bool v);
 
             // Core protocol
             void rawWriteUint(uint64_t val);
@@ -107,7 +107,7 @@ namespace HIR {
             CloseOnDrop openAnonObject();
 
             void closeObject() {
-                write_u8(0xFF);
+                writeU8(0xFF);
             }
         };
 

@@ -36,7 +36,7 @@ namespace {
         if (tok.type() == TOK_IDENT) {
             return tok.ident().name;
         }
-        if (Token::type_is_rword(tok.type())) {
+        if (Token::typeIsRword(tok.type())) {
             return tok.toStr().c_str();
         }
         throw ParseError::Unexpected(lex, tok, TOK_IDENT);
@@ -174,25 +174,25 @@ public:
 namespace {
     AsmCommon::RegisterClass getRegClassX8664(const Span& sp, const RcString& str) {
         if (str == "reg") {
-            return AsmCommon::RegisterClass::x86_reg;
+            return AsmCommon::RegisterClass::x86Reg;
         }
         if (str == "reg_abcd") {
-            return AsmCommon::RegisterClass::x86_reg_abcd;
+            return AsmCommon::RegisterClass::x86RegAbcd;
         }
         if (str == "reg_byte") {
-            return AsmCommon::RegisterClass::x86_reg_byte;
+            return AsmCommon::RegisterClass::x86RegByte;
         }
         if (str == "kreg") {
-            return AsmCommon::RegisterClass::x86_kreg;
+            return AsmCommon::RegisterClass::x86Kreg;
         }
         if (str == "xmm_reg") {
-            return AsmCommon::RegisterClass::x86_xmm;
+            return AsmCommon::RegisterClass::x86Xmm;
         }
         if (str == "ymm_reg") {
-            return AsmCommon::RegisterClass::x86_ymm;
+            return AsmCommon::RegisterClass::x86Ymm;
         }
         if (str == "zmm_reg") {
-            return AsmCommon::RegisterClass::x86_zmm;
+            return AsmCommon::RegisterClass::x86Zmm;
         }
         ERROR(sp, E0000, "Unknown register for x86/x86-64 - `" << str << "`");
     }
@@ -598,7 +598,7 @@ class CExpanderAssert: public ExpandProcMacro {
                 while (lex.lookahead(0) != TOK_EOF) {
                     toks.push_back(TOK_COMMA);
 
-                    if ((lex.lookahead(0) == TOK_IDENT || Token::type_is_rword(lex.lookahead(0))) && lex.lookahead(1) == TOK_EQUAL) {
+                    if ((lex.lookahead(0) == TOK_IDENT || Token::typeIsRword(lex.lookahead(0))) && lex.lookahead(1) == TOK_EQUAL) {
                         toks.push_back(lex.getToken());
                         toks.push_back(lex.getToken());
                         toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
@@ -753,11 +753,11 @@ class CExpanderEnv: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         ::std::string varname = getString(sp, crate, mod, tt);
 
-        const char* var_val_cstr = getenv(varname.c_str());
-        if (!var_val_cstr) {
+        const char* varValCstr = getenv(varname.c_str());
+        if (!varValCstr) {
             ERROR(sp, E0000, "Environment variable '" << varname << "' not defined");
         }
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, ::std::string(var_val_cstr), {}))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, ::std::string(varValCstr), {}))));
     }
 };
 
@@ -766,8 +766,8 @@ class CExpanderOptionEnv: public ExpandProcMacro {
         ::std::string varname = getString(sp, crate, mod, tt);
         ::std::vector<TokenTree> rv;
 
-        const char* var_val_cstr = getenv(varname.c_str());
-        if (!var_val_cstr) {
+        const char* varValCstr = getenv(varname.c_str());
+        if (!varValCstr) {
             rv.reserve(7);
             rv.push_back(Token(TOK_IDENT, RcString::newInterned("None")));
             rv.push_back(Token(TOK_DOUBLE_COLON));
@@ -780,7 +780,7 @@ class CExpanderOptionEnv: public ExpandProcMacro {
             rv.reserve(4);
             rv.push_back(Token(TOK_IDENT, RcString::newInterned("Some")));
             rv.push_back(Token(TOK_PAREN_OPEN));
-            rv.push_back(Token(TOK_STRING, ::std::string(var_val_cstr), {}));
+            rv.push_back(Token(TOK_STRING, ::std::string(varValCstr), {}));
             rv.push_back(Token(TOK_PAREN_CLOSE));
         }
         return box$(TTStreamO(sp, ParseState(), TokenTree(AST::Edition::Rust2015, {}, mv$(rv))));
@@ -871,11 +871,11 @@ namespace {
 
         Sign sign = Sign::Unspec;
         bool alternate = false;
-        bool zero_pad = false;
+        bool zeroPad = false;
 
         Debug debugTy = Debug::Normal;
 
-        bool width_is_arg = false;
+        bool widthIsArg = false;
         unsigned int width = 0;
 
         bool precIsArg = false;
@@ -893,8 +893,8 @@ namespace {
             CMP(alignChar);
             CMP(sign);
             CMP(alternate);
-            CMP(zero_pad);
-            CMP(width_is_arg);
+            CMP(zeroPad);
+            CMP(widthIsArg);
             CMP(width);
             CMP(precIsArg);
             CMP(prec);
@@ -934,11 +934,11 @@ namespace {
             if (x.alternate) {
                 os << "#";
             }
-            if (x.zero_pad) {
+            if (x.zeroPad) {
                 os << "0";
             }
             os << ")";
-            os << "Width(" << (x.width_is_arg ? "$" : "") << x.width << ")";
+            os << "Width(" << (x.widthIsArg ? "$" : "") << x.width << ")";
             os << "Prec(" << (x.precIsArg ? "$" : "") << x.prec << ")";
             return os;
         }
@@ -1151,7 +1151,7 @@ namespace {
                     }
 
                     if (*s == '0' && s[1] != '$') { // Special case `0$` to be an argument index, instead of zero pad
-                        args.zero_pad = true;
+                        args.zeroPad = true;
                         s++;
                     } else {
                         //args.zero_pad = false;
@@ -1168,7 +1168,7 @@ namespace {
                         args.width = val;
 
                         if (*s == '$') {
-                            args.width_is_arg = true;
+                            args.widthIsArg = true;
                             s++;
                         } else {
                             //args.width_is_arg = false;
@@ -1183,7 +1183,7 @@ namespace {
                         }
                         if (*s == '$') {
                             args.width = getNamed(RcString::newInterned(start, s - start));
-                            args.width_is_arg = true;
+                            args.widthIsArg = true;
 
                             s++;
                         } else {
@@ -1398,7 +1398,7 @@ namespace {
             }
 
             // - Named parameters
-            if ((lex.lookahead(0) == TOK_IDENT || Token::type_is_rword(lex.lookahead(0))) && lex.lookahead(1) == TOK_EQUAL) {
+            if ((lex.lookahead(0) == TOK_IDENT || Token::typeIsRword(lex.lookahead(0))) && lex.lookahead(1) == TOK_EQUAL) {
                 GET_TOK(tok, lex);
                 auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
                 DEBUG("Named `" << name << "`");
@@ -1597,7 +1597,7 @@ namespace {
                         if (frag.args.alternate) {
                             flags |= 1 << Flag::Alternate;
                         }
-                        if (frag.args.zero_pad) {
+                        if (frag.args.zeroPad) {
                             flags |= 1 << Flag::SignAwareZeroPad;
                         }
                         switch (frag.args.debugTy) {
@@ -1617,7 +1617,7 @@ namespace {
                         flags |= frag.args.alignChar & 0x1FFFFF;
 
                         // Width and precision flags
-                        if (frag.args.width_is_arg || frag.args.width != 0) {
+                        if (frag.args.widthIsArg || frag.args.width != 0) {
                             flags |= 1 << 27;
                         }
                         if (frag.args.precIsArg || frag.args.prec != 0) {
@@ -1667,10 +1667,10 @@ namespace {
                         toks.push_back(TokenTree(TOK_COMMA));
 
                         pushToks(toks, ident("width"), TOK_COLON);
-                        if (frag.args.width_is_arg || frag.args.width != 0) {
+                        if (frag.args.widthIsArg || frag.args.width != 0) {
                             pushPathCount("Is");
                             pushToks(toks, TOK_PAREN_OPEN);
-                            if (frag.args.width_is_arg) {
+                            if (frag.args.widthIsArg) {
                                 pushToks(toks, TOK_STAR, ident(FMT("a" << frag.args.width).c_str()));
                                 pushToks(toks, TOK_RWORD_AS, ident("u16"));
                             } else {

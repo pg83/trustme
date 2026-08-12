@@ -123,13 +123,13 @@ F16::operator float() const {
             dc.i = sign;
             return dc.f;
         }
-        int unbiased_exponent = -14;
+        int unbiasedExponent = -14;
         while ((mantissa & 0x0400) == 0) {
             mantissa <<= 1;
-            unbiased_exponent--;
+            unbiasedExponent--;
         }
         mantissa &= 0x03FF;
-        exponent = static_cast<uint32_t>(unbiased_exponent + 127);
+        exponent = static_cast<uint32_t>(unbiasedExponent + 127);
     } else if (exponent == 0x1F) {
         dc.i = sign | 0x7F800000 | (mantissa << 13);
         return dc.f;

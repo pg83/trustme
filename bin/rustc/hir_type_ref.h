@@ -75,8 +75,8 @@ namespace HIR {
 
     class MatchGenerics: virtual public TrackHrbStack {
     public:
-        ::HIR::Compare cmpPath(const Span& sp, const ::HIR::Path& ty_l, const ::HIR::Path& ty_r, tCbResolveType resolveCb);
-        virtual ::HIR::Compare cmpType(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, tCbResolveType resolveCb);
+        ::HIR::Compare cmpPath(const Span& sp, const ::HIR::Path& tyL, const ::HIR::Path& tyR, tCbResolveType resolveCb);
+        virtual ::HIR::Compare cmpType(const Span& sp, const ::HIR::TypeData* tyL, const ::HIR::TypeData* tyR, tCbResolveType resolveCb);
 
         virtual ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, tCbResolveType resolveCb) = 0;
         virtual ::HIR::Compare matchVal(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) = 0;

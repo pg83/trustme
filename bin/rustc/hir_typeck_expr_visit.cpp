@@ -98,21 +98,21 @@ namespace {
         }
 
     public:
-        void visit_module(::HIR::ItemPath p, ::HIR::Module& mod) override {
+        void visitModule(::HIR::ItemPath p, ::HIR::Module& mod) override {
             ms.pushTraits(p, mod);
-            ::HIR::Visitor::visit_module(p, mod);
+            ::HIR::Visitor::visitModule(p, mod);
             ms.popTraits(mod);
         }
 
         // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
-        void visit_expr(::HIR::ExprPtr& exp) override {
+        void visitExpr(::HIR::ExprPtr& exp) override {
             if (exp.mir) {
                 return;
             }
             BUG(exp->mSpan, "Reached expression");
         }
 
-        void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
+        void visitTrait(::HIR::ItemPath p, ::HIR::Trait& item) override {
             HIR::GenericPath traitGpath;
             traitGpath.mPath = p.getSimplePath();
             for (size_t i = 0; i < item.mParams.types.size(); i++) {
@@ -123,20 +123,20 @@ namespace {
             }
             auto _1 = this->ms.setCurrentTrait(traitGpath);
             auto _ = this->ms.setImplGenerics(item.mParams);
-            ::HIR::Visitor::visit_trait(p, item);
+            ::HIR::Visitor::visitTrait(p, item);
         }
 
-        void visit_type_impl(::HIR::TypeImpl& impl) override {
+        void visitTypeImpl(::HIR::TypeImpl& impl) override {
             TRACE_FUNCTION_F("impl " << impl.mType);
             auto _ = this->ms.setImplGenerics(impl.mParams);
 
             const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
             ms.pushTraits(impl.srcModule, mod);
-            ::HIR::Visitor::visit_type_impl(impl);
+            ::HIR::Visitor::visitTypeImpl(impl);
             ms.popTraits(mod);
         }
 
-        void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
+        void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
             TRACE_FUNCTION_F("impl " << trait_path << impl.traitArgs << " for " << impl.mType);
             auto traitGpath = ::HIR::GenericPath(trait_path, impl.traitArgs.clone());
             auto _0 = this->ms.setCurrentTraitImpl(impl);
@@ -146,26 +146,26 @@ namespace {
             const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
             ms.pushTraits(impl.srcModule, mod);
             ms.traits.push_back(::std::make_pair(&trait_path, &this->ms.crate.getTraitByPath(Span(), trait_path)));
-            ::HIR::Visitor::visit_trait_impl(trait_path, impl);
+            ::HIR::Visitor::visitTraitImpl(trait_path, impl);
             ms.traits.pop_back();
             ms.popTraits(mod);
         }
 
-        void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
+        void visitMarkerImpl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
             TRACE_FUNCTION_F("impl " << trait_path << " for " << impl.mType << " { }");
             auto _ = this->ms.setImplGenerics(impl.mParams);
 
             const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
             ms.pushTraits(impl.srcModule, mod);
-            ::HIR::Visitor::visit_marker_impl(trait_path, impl);
+            ::HIR::Visitor::visitMarkerImpl(trait_path, impl);
             ms.popTraits(mod);
         }
 
-        void visit_type(::HIR::TypeRef& ty) override {
+        void visitType(::HIR::TypeRef& ty) override {
             if (ty->is_Array()) {
                 auto data = ty->cloneData();
                 auto& e = data.as_Array();
-                this->visit_type(e.inner);
+                this->visitType(e.inner);
                 DEBUG("Array size " << ty);
                 tArgs tmp;
                 if (auto* se = e.size.opt_Unevaluated()) {
@@ -175,14 +175,14 @@ namespace {
                 }
                 ty = ms.crate.types.intern(std::move(data));
             } else {
-                ::HIR::Visitor::visit_type(ty);
+                ::HIR::Visitor::visitType(ty);
             }
         }
 
         // ------
         // Code-containing items
         // ------
-        void visit_function(::HIR::ItemPath p, ::HIR::Function& item) override {
+        void visitFunction(::HIR::ItemPath p, ::HIR::Function& item) override {
             auto _ = this->ms.setItemGenerics(item.mParams);
             if (item.mCode) {
                 DEBUG("Function code " << p);
@@ -192,7 +192,7 @@ namespace {
             }
         }
 
-        void visit_static(::HIR::ItemPath p, ::HIR::Static& item) override {
+        void visitStatic(::HIR::ItemPath p, ::HIR::Static& item) override {
             //auto _ = this->m_ms.set_item_generics(item.m_params);
             if (item.mValue) {
                 DEBUG("Static value " << p);
@@ -201,7 +201,7 @@ namespace {
             }
         }
 
-        void visit_constant(::HIR::ItemPath p, ::HIR::Constant& item) override {
+        void visitConstant(::HIR::ItemPath p, ::HIR::Constant& item) override {
             auto _ = this->ms.setItemGenerics(item.mParams);
             if (item.mValue) {
                 DEBUG("Const value " << p);
@@ -210,7 +210,7 @@ namespace {
             }
         }
 
-        void visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) override {
+        void visitEnum(::HIR::ItemPath p, ::HIR::Enum& item) override {
             auto _ = this->ms.setItemGenerics(item.mParams);
 
             if (auto* e = item.mData.opt_Value()) {
@@ -230,7 +230,7 @@ namespace {
 
 void TypecheckExpressions(::HIR::Crate& crate) {
     OuterVisitor visitor{crate};
-    visitor.visit_crate(crate);
+    visitor.visitCrate(crate);
 }
 
 namespace typeck {

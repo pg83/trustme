@@ -60,11 +60,11 @@ struct Context {
         /// - But any type in an incoming set is accepted (even if it doesn't already exist)
         bool boundsIncludeSelf = false;
         // Target types for coercion/unsizing (these types are known to exist in the function)
-        ::std::vector<CoerceTy> types_coerce_to;
+        ::std::vector<CoerceTy> typesCoerceTo;
         // Source types for coercion/unsizing (these types are known to exist in the function)
-        ::std::vector<CoerceTy> types_coerce_from;
+        ::std::vector<CoerceTy> typesCoerceFrom;
         // Possible default types (from generic defaults)
-        ::std::set<::HIR::TypeRef> types_default;
+        ::std::set<::HIR::TypeRef> typesDefault;
 
         ::std::vector<::HIR::TypeRef> bounded;
 
@@ -251,7 +251,7 @@ struct Context {
     }
 
     /// Create an autoderef operation from val_node->m_res_type to ty_dst (handling implicit unsizing)
-    ::HIR::ExprNodeP createAutoderef(::HIR::ExprNodeP val_node, ::HIR::TypeRef ty_dst) const;
+    ::HIR::ExprNodeP createAutoderef(::HIR::ExprNodeP valNode, ::HIR::TypeRef tyDst) const;
 
 private:
     void addIvarsParams(::HIR::PathParams& params) {
@@ -260,7 +260,7 @@ private:
 };
 
 namespace typecheck {
-    extern bool visit_call_populate_cache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) __attribute__((warn_unused_result));
+    extern bool visitCallPopulateCache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) __attribute__((warnUnusedResult));
 }
 
 extern void TypecheckCodeCSEnumerateRules(Context& context, const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr);

@@ -271,7 +271,7 @@ public:
         return mData.is_Generic();
     }
 
-    const RcString& type_param() const {
+    const RcString& typeParam() const {
         return mData.as_Generic().name;
     }
 

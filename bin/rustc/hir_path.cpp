@@ -164,7 +164,7 @@ RcString HIR::SimplePath::popComponent() {
     }
 }
 
-void HIR::SimplePath::update_crate_name(RcString v) {
+void HIR::SimplePath::updateCrateName(RcString v) {
     if (members.empty()) {
         members.push_back(v);
     } else if (v.c_str()[0] == '\0' && members.size() == 1) {
@@ -174,7 +174,7 @@ void HIR::SimplePath::update_crate_name(RcString v) {
     }
 }
 
-void HIR::SimplePath::update_last_component(RcString v) {
+void HIR::SimplePath::updateLastComponent(RcString v) {
     assert(members.size() >= 2);
     members.back() = std::move(v);
 }
@@ -420,8 +420,8 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
             return Compare::Unequal;
         }
         for (unsigned int i = 0; i < x.values.size(); i++) {
-            const auto& val_t = resolvePlaceholder.getVal(sp, this->values[i]);
-            const auto& val_x = resolvePlaceholder.getVal(sp, x.values[i]);
+            const auto& valT = resolvePlaceholder.getVal(sp, this->values[i]);
+            const auto& valX = resolvePlaceholder.getVal(sp, x.values[i]);
             /*if( const auto* ge = val_t.opt_Generic() ) {
                 rv &= match.match_val(*ge, val_x);
                 if(rv == Compare::Unequal)
@@ -430,11 +430,11 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
             else*/
             {
                 // TODO: Look up the the ivars?
-                if (val_t.is_Infer() || val_x.is_Infer()) {
+                if (valT.is_Infer() || valX.is_Infer()) {
                     //return Compare::Fuzzy;
                     rv = Compare::Fuzzy;
-                } else if (val_t != val_x) {
-                    if (val_t.is_Unevaluated() || val_x.is_Unevaluated()) {
+                } else if (valT != valX) {
+                    if (valT.is_Unevaluated() || valX.is_Unevaluated()) {
                         //return Compare::Fuzzy;
                         rv = Compare::Fuzzy;
                     } else {
@@ -467,16 +467,16 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
         return Compare::Unequal;
     }
     for (unsigned int i = 0; i < x.values.size(); i++) {
-        const auto& val_t = resolvePlaceholder.getVal(sp, this->values[i]);
-        const auto& val_x = resolvePlaceholder.getVal(sp, x.values[i]);
-        if (const auto* ge = val_t.opt_Generic()) {
-            rv &= match.matchVal(*ge, val_x);
+        const auto& valT = resolvePlaceholder.getVal(sp, this->values[i]);
+        const auto& valX = resolvePlaceholder.getVal(sp, x.values[i]);
+        if (const auto* ge = valT.opt_Generic()) {
+            rv &= match.matchVal(*ge, valX);
             if (rv == Compare::Unequal) {
                 return Compare::Unequal;
             }
         } else {
             // TODO: Look up the the ivars?
-            if (val_t.is_Infer() || val_x.is_Infer()) {
+            if (valT.is_Infer() || valX.is_Infer()) {
                 return Compare::Fuzzy;
             }
 
@@ -511,13 +511,13 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
             };
 
             U128 litT, litX;
-            if (H2::getLiteral(val_t, litT) && H2::getLiteral(val_x, litX)) {
+            if (H2::getLiteral(valT, litT) && H2::getLiteral(valX, litX)) {
                 if (litT != litX) {
                     return Compare::Unequal;
                 }
                 // Equal literals: continue (leaves `rv` as-is)
-            } else if (val_t != val_x) {
-                if (val_t.is_Unevaluated() || val_x.is_Unevaluated()) {
+            } else if (valT != valX) {
+                if (valT.is_Unevaluated() || valX.is_Unevaluated()) {
                     return Compare::Fuzzy;
                 }
                 return Compare::Unequal;

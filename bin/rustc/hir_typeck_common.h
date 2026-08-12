@@ -8,9 +8,9 @@
 typedef ::std::function<bool(const ::HIR::TypeData*)> tCbVisitTy;
 /// Calls the provided callback on every type seen when recursing the type.
 /// If the callback returns `true`, no further types are visited and the function returns `true`.
-extern bool visit_ty_with(const ::HIR::TypeData*, tCbVisitTy callback);
-extern bool visit_trait_path_tys_with(const ::HIR::TraitPath&, tCbVisitTy callback);
-extern bool visit_path_tys_with(const ::HIR::Path&, tCbVisitTy callback);
+extern bool visitTyWith(const ::HIR::TypeData*, tCbVisitTy callback);
+extern bool visitTraitPathTysWith(const ::HIR::TraitPath&, tCbVisitTy callback);
+extern bool visitPathTysWith(const ::HIR::Path&, tCbVisitTy callback);
 
 typedef ::std::function<bool(::HIR::TypeRef& rewritten, ::HIR::TypeData& data)> tCbRewriteTy;
 extern bool rewriteTyWith(::HIR::TypeInterner& types, ::HIR::TypeRef& ty, tCbRewriteTy callback);

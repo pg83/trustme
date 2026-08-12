@@ -107,7 +107,7 @@ namespace AST {
                 os << "(" << ent << ")";
             }
             TU_ARMA(StructTuple, ent) {
-                os << ent.path << " (" << ent.tup_pat << ")";
+                os << ent.path << " (" << ent.tupPat << ")";
             }
             TU_ARMA(Struct, ent) {
                 os << ent.path << " {";
@@ -228,7 +228,7 @@ namespace AST {
                 rv.mData = Data::make_Tuple(H::cloneTup(e));
             }
             TU_ARMA(StructTuple, e) {
-                rv.mData = Data::make_StructTuple({::AST::Path(e.path), H::cloneTup(e.tup_pat)});
+                rv.mData = Data::make_StructTuple({::AST::Path(e.path), H::cloneTup(e.tupPat)});
             }
             TU_ARMA(Struct, e) {
                 ::std::vector<AST::StructPatternEntry> sps;

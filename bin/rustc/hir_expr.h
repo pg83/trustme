@@ -48,7 +48,7 @@ namespace HIR {
 
         virtual ~ExprNode();
 
-        const char* type_name() const;
+        const char* typeName() const;
     };
 
     struct ExprNodeBlock: public ExprNode {
@@ -120,8 +120,8 @@ namespace HIR {
             (Reg, struct {
                 AsmCommon::Direction dir;
                 AsmCommon::RegisterSpec spec;
-                HIR::ExprNodeP val_in;
-                HIR::ExprNodeP val_out;
+                HIR::ExprNodeP valIn;
+                HIR::ExprNodeP valOut;
             })
         );
 
@@ -829,8 +829,8 @@ namespace HIR {
     class ExprVisitor {
     public:
         virtual ~ExprVisitor() = default;
-        virtual void visit_node_ptr(::HIR::ExprNodeP& nodePtr);
-        virtual void visit_node(ExprNode& node);
+        virtual void visitNodePtr(::HIR::ExprNodeP& nodePtr);
+        virtual void visitNode(ExprNode& node);
 #define NV(nt) virtual void visit(nt& n) = 0;
 
         NV(ExprNodeBlock)
@@ -889,7 +889,7 @@ namespace HIR {
 
 #define NV(nt) virtual void visit(nt& n) override;
 
-        virtual void visit_node_ptr(::HIR::ExprNodeP& nodePtr) override;
+        virtual void visitNodePtr(::HIR::ExprNodeP& nodePtr) override;
 
         NV(ExprNodeBlock)
         NV(ExprNodeConstBlock)
@@ -938,12 +938,12 @@ namespace HIR {
         NV(ExprNodeAsyncBlock);
 #undef NV
 
-        virtual void visit_pattern(const Span& sp, ::HIR::Pattern& pat);
-        virtual void visit_type(::HIR::TypeRef& ty);
-        virtual void visit_trait_path(::HIR::TraitPath& p);
-        virtual void visit_path_params(::HIR::PathParams& ty);
-        virtual void visit_path(::HIR::Visitor::PathContext pc, ::HIR::Path& ty);
-        virtual void visit_generic_path(::HIR::Visitor::PathContext pc, ::HIR::GenericPath& ty);
+        virtual void visitPattern(const Span& sp, ::HIR::Pattern& pat);
+        virtual void visitType(::HIR::TypeRef& ty);
+        virtual void visitTraitPath(::HIR::TraitPath& p);
+        virtual void visitPathParams(::HIR::PathParams& ty);
+        virtual void visitPath(::HIR::Visitor::PathContext pc, ::HIR::Path& ty);
+        virtual void visitGenericPath(::HIR::Visitor::PathContext pc, ::HIR::GenericPath& ty);
     };
 
 }

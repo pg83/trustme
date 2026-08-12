@@ -50,7 +50,7 @@ public:
 
     NullOnDrop<const ::HIR::GenericParams> setImplGenerics(const ::HIR::TypeData* self_ty, const ::HIR::GenericParams& gps);
 
-    void update_impl_self_metadata(const ::HIR::TypeData* self_ty);
+    void updateImplSelfMetadata(const ::HIR::TypeData* self_ty);
 
     NullOnDrop<const ::HIR::GenericParams> setItemGenerics(const ::HIR::GenericParams& gps);
 
@@ -98,7 +98,7 @@ public:
     void evaluateConstGeneric(const Span& sp, ::HIR::ConstGeneric& value) const;
     void evaluatePathParams(const Span& sp, ::HIR::PathParams& params) const;
     bool expandAssociatedTypesSingle(const Span& sp, ::HIR::TypeRef& input) const;
-    bool types_equal_resolving_opaque(const Span& sp, const ::HIR::TypeData* left, const ::HIR::TypeData* right) const;
+    bool typesEqualResolvingOpaque(const Span& sp, const ::HIR::TypeData* left, const ::HIR::TypeData* right) const;
 
     // Helper: Run monomorphise+EAT if the type contains generics
     const ::HIR::TypeData* monomorphExpandOpt(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* input, const Monomorphiser& m) const;
@@ -128,22 +128,22 @@ public:
     // --------------
     // Common bounds
     // -------------
-    bool type_is_copy(const Span& sp, const ::HIR::TypeData* ty) const;
-    bool type_is_clone(const Span& sp, const ::HIR::TypeData* ty) const; // 1.29
-    bool type_is_sized(const Span& sp, const ::HIR::TypeData* ty) const;
-    bool type_is_impossible(const Span& sp, const ::HIR::TypeData* ty) const;
+    bool typeIsCopy(const Span& sp, const ::HIR::TypeData* ty) const;
+    bool typeIsClone(const Span& sp, const ::HIR::TypeData* ty) const; // 1.29
+    bool typeIsSized(const Span& sp, const ::HIR::TypeData* ty) const;
+    bool typeIsImpossible(const Span& sp, const ::HIR::TypeData* ty) const;
     bool canUnsize(const Span& sp, const ::HIR::TypeData* dst, const ::HIR::TypeData* src) const;
     /// Check if the passed type contains an UnsafeCell (i.e. is interior mutable)
     /// Returns:
     /// - `Fuzzy` if generic (can't know for sure yet)
     /// - `Equal` if it does contain an UnsafeCell
     //  - `Unequal` if it doesn't (shared=immutable)
-    HIR::Compare type_is_interior_mutable(const Span& sp, const ::HIR::TypeData* ty) const;
+    HIR::Compare typeIsInteriorMutable(const Span& sp, const ::HIR::TypeData* ty) const;
 
     MetadataType metadataType(const Span& sp, const ::HIR::TypeData* ty, bool errOnUnknown = false) const;
 
     /// Returns `true` if the passed type either implements Drop, or contains a type that implements Drop
-    bool type_needs_drop_glue(const Span& sp, const ::HIR::TypeData* ty) const;
+    bool typeNeedsDropGlue(const Span& sp, const ::HIR::TypeData* ty) const;
 
     const ::HIR::TypeData* isTypeOwnedBox(const ::HIR::TypeData* ty) const;
     const ::HIR::TypeData* isTypePhantomData(const ::HIR::TypeData* ty) const;

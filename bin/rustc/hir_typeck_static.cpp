@@ -170,18 +170,18 @@ bool StaticTraitResolve::findImpl(const Span& sp, const ::HIR::SimplePath& trait
 
     if (!dontHandoffToSpecialised) {
         if (trait_path == mLangCopy) {
-            if (this->type_is_copy(sp, type)) {
+            if (this->typeIsCopy(sp, type)) {
                 return foundCb(ImplRef(HIR::PathParams(), type, &nullParams, &nullAssoc), false);
             }
         } else if (trait_path == mLangClone) {
             // NOTE: Duplicated check for enumerate
             if (type->is_Tuple() || type->is_Array() || type->is_Function() || type->is_NodeType() || type->is_NamedFunction() || TU_TEST1(*type, Path, .isClosure())) {
-                if (this->type_is_clone(sp, type)) {
+                if (this->typeIsClone(sp, type)) {
                     return foundCb(ImplRef(HIR::PathParams(), type, &nullParams, &nullAssoc), false);
                 }
             }
         } else if (trait_path == mLangSized) {
-            if (this->type_is_sized(sp, type)) {
+            if (this->typeIsSized(sp, type)) {
                 return foundCb(ImplRef(HIR::PathParams(), type, &nullParams, &nullAssoc), false);
             }
         } else if (trait_path == mLangUnsize) {
@@ -226,7 +226,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const ::HIR::SimplePath& trait
             // Generics (or opaque ATYs)
             if (type->is_Generic() || (type->is_Path() && type->as_Path().binding.is_Opaque())) {
                 // If the type is `Sized` return `()` as the type
-                if (type_is_sized(sp, type)) {
+                if (typeIsSized(sp, type)) {
                     return foundCb(ImplRef(HIR::PathParams(), type, traitParams, &assocUnit), false);
                 } else {
                     // Return unbounded
@@ -820,7 +820,7 @@ bool StaticTraitResolve::findImplBounds(const Span& sp, const ::HIR::SimplePath&
         }
     };
 
-    const bool type_has_infer = visit_ty_with(type, [&](const HIR::TypeData* t) -> bool {
+    const bool typeHasInfer = visitTyWith(type, [&](const HIR::TypeData* t) -> bool {
         return t->is_Infer();
     });
     for (auto it = traitBounds.begin(); it != traitBounds.end(); ++it) {
@@ -830,7 +830,7 @@ bool StaticTraitResolve::findImplBounds(const Span& sp, const ::HIR::SimplePath&
         const auto& bType = it->first.first;
         const auto& bParams = it->first.second.mParams;
 
-        if (type_has_infer) {
+        if (typeHasInfer) {
             DEBUG("ivar present: type ?= " << bType);
             if (bType->compareWithPlaceholders(sp, type, HIR::ResolvePlaceholdersNop()) == ::HIR::Compare::Unequal) {
                 continue;
@@ -1020,27 +1020,27 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const ::HIR::Simp
         unsigned maxImplIdxTy = 0;
         unsigned maxImplIdxVal = 0;
         unsigned maxImplIdxLft = 0;
-        auto visit_lft = [&](const ::HIR::LifetimeRef& l) {
+        auto visitLft = [&](const ::HIR::LifetimeRef& l) {
             if (l.isParam() && l.asParam().is_placeholder()) {
                 maxImplIdxLft = ::std::max(maxImplIdxLft, l.asParam().idx());
             }
         };
         // TODO: Get a generic visitor (running the same way as `Monomorphiser`)
         for (const auto& r : desTraitParams->types) {
-            visit_ty_with(r, [&](const ::HIR::TypeData* t) -> bool {
+            visitTyWith(r, [&](const ::HIR::TypeData* t) -> bool {
                 if (t->is_Generic() && t->as_Generic().is_placeholder()) {
                     unsigned implIdx = t->as_Generic().idx();
                     maxImplIdxTy = ::std::max(maxImplIdxTy, implIdx);
                 }
                 if (const auto* te = t->opt_Borrow()) {
-                    visit_lft(te->lifetime);
+                    visitLft(te->lifetime);
                 }
                 // TODO: Path param lifetimes, etc
                 return false;
             });
         }
         for (const auto& l : desTraitParams->mLifetimes) {
-            visit_lft(l);
+            visitLft(l);
         }
         baseImplPlaceholderIdx.ty = maxImplIdxTy + 1;
         baseImplPlaceholderIdx.val = maxImplIdxVal + 1;
@@ -1319,7 +1319,7 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const ::HIR::Simp
                         return true;
                     });
                 }
-                if (!rv && visit_ty_with(bTyMono, [](const HIR::TypeData* ty) {
+                if (!rv && visitTyWith(bTyMono, [](const HIR::TypeData* ty) {
                     return ty->is_Generic() && ty->as_Generic().is_placeholder();
                 })) {
                     DEBUG("- Placeholder param within " << bTyMono << ", magic success");
@@ -1368,7 +1368,7 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const ::HIR::Simp
             // represented by a default-constructed TypeRef; the interned type
             // model represents that state explicitly as Infer.
             if (!impl_params.types[i]->is_Infer()) {
-                if (!type_is_sized(sp, impl_params.types[i])) {
+                if (!typeIsSized(sp, impl_params.types[i])) {
                     DEBUG("- Sized bound failed for " << impl_params.types[i]);
                     return false;
                 }
@@ -1394,7 +1394,7 @@ bool StaticTraitResolve::findImplCheckCrate(const Span& sp, const ::HIR::SimpleP
 ::HIR::Compare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* paramsPtr, const ::HIR::TypeData* type) const {
     TRACE_FUNCTION_F("trait = " << trait << ", type = " << type);
     // HELPER: Search for an impl of this trait for an inner type, and return the match type
-    auto type_impls_trait = [&](const auto& innerTy) -> ::HIR::Compare {
+    auto typeImplsTrait = [&](const auto& innerTy) -> ::HIR::Compare {
         auto lRes = ::HIR::Compare::Unequal;
         this->findImpl(sp, trait, *paramsPtr, innerTy, [&](auto, auto isFuzzy) {
             lRes = isFuzzy ? ::HIR::Compare::Fuzzy : ::HIR::Compare::Equal;
@@ -1439,7 +1439,7 @@ bool StaticTraitResolve::findImplCheckCrate(const Span& sp, const ::HIR::SimpleP
                              for (const auto& fld : se) {
                                  const auto& fldTyMono = monomorphGet(fld.ent);
                                  DEBUG("Struct::Tuple " << fldTyMono);
-                                 res &= type_impls_trait(fldTyMono);
+                                 res &= typeImplsTrait(fldTyMono);
                                  if (res == ::HIR::Compare::Unequal) {
                                      return ::HIR::Compare::Unequal;
                                  }
@@ -1448,7 +1448,7 @@ bool StaticTraitResolve::findImplCheckCrate(const Span& sp, const ::HIR::SimpleP
                                 const auto& fldTyMono = monomorphGet(fld.ty);
                                 DEBUG("Struct::Named '" << fld.name << "' " << fldTyMono);
 
-                                res &= type_impls_trait(fldTyMono);
+                                res &= typeImplsTrait(fldTyMono);
                                 if (res == ::HIR::Compare::Unequal) {
                                     return ::HIR::Compare::Unequal;
                                 }
@@ -1460,7 +1460,7 @@ bool StaticTraitResolve::findImplCheckCrate(const Span& sp, const ::HIR::SimpleP
                             for (const auto& var : *e) {
                                 const auto& fldTyMono = monomorphGet(var.type);
                                 DEBUG("Enum '" << var.name << "'" << fldTyMono);
-                                res &= type_impls_trait(fldTyMono);
+                                res &= typeImplsTrait(fldTyMono);
                                 if (res == ::HIR::Compare::Unequal) {
                                     return ::HIR::Compare::Unequal;
                                 }
@@ -1471,7 +1471,7 @@ bool StaticTraitResolve::findImplCheckCrate(const Span& sp, const ::HIR::SimpleP
                         for (const auto& fld : tpb->mVariants) {
                             const auto& fldTyMono = monomorphGet(fld.ty);
                             DEBUG("Union '" << fld.name << "' " << fldTyMono);
-                            res &= type_impls_trait(fldTyMono);
+                            res &= typeImplsTrait(fldTyMono);
                             if (res == ::HIR::Compare::Unequal) {
                                 return ::HIR::Compare::Unequal;
                             }
@@ -1498,14 +1498,14 @@ bool StaticTraitResolve::findImplCheckCrate(const Span& sp, const ::HIR::SimpleP
     } else if (const auto* ep = type->opt_Tuple()) {
         ::HIR::Compare res = ::HIR::Compare::Equal;
         for (const auto& sty : *ep) {
-            res &= type_impls_trait(sty);
+            res &= typeImplsTrait(sty);
             if (res == ::HIR::Compare::Unequal) {
                 return ::HIR::Compare::Unequal;
             }
         }
         return res;
     } else if (const auto* e = type->opt_Array()) {
-        return type_impls_trait(e->inner);
+        return typeImplsTrait(e->inner);
     }
     // Otherwise, there's no negative so it must be positive
     else {
@@ -1601,7 +1601,7 @@ bool StaticTraitResolve::expandAssociatedTypesSingle(const Span& sp, ::HIR::Type
     return false;
 }
 
-bool StaticTraitResolve::types_equal_resolving_opaque(const Span& sp, const ::HIR::TypeData* left, const ::HIR::TypeData* right) const {
+bool StaticTraitResolve::typesEqualResolvingOpaque(const Span& sp, const ::HIR::TypeData* left, const ::HIR::TypeData* right) const {
     auto reveal = [&](::HIR::TypeRef type) {
         for (unsigned depth = 0; depth < 64; depth++) {
             bool replaced = false;
@@ -1683,14 +1683,14 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, ::HIR::TypeR
                     // An opaque associated type is not a resolved type. It only records
                     // that an earlier normalization attempt couldn't make progress. In a
                     // later (static) context more bounds can be available, so retry it.
-                    const bool was_unbound = e.binding.is_Unbound();
-                    const bool was_opaque = e.binding.is_Opaque();
-                    if (!was_unbound && !was_opaque) {
+                    const bool wasUnbound = e.binding.is_Unbound();
+                    const bool wasOpaque = e.binding.is_Opaque();
+                    if (!wasUnbound && !wasOpaque) {
                         return;
                     }
 
                     input = crate.types.intern(data.cloneData());
-                    if (was_opaque) {
+                    if (wasOpaque) {
                         const auto opaque = input;
                         this->expandAssociatedTypesUfcsKnown(sp, input, false);
                         if (input != opaque) {
@@ -1800,7 +1800,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, ::HIR
     ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.mData.is_UfcsInherent(), input);
 
     const auto& pe = input->as_Path().path.mData.as_UfcsInherent();
-    if (visit_ty_with(pe.type, [](const ::HIR::TypeData* type) {
+    if (visitTyWith(pe.type, [](const ::HIR::TypeData* type) {
         const auto* erased = type->opt_ErasedType();
         const auto* opaque = erased ? erased->inner.opt_Alias() : nullptr;
         return opaque && !opaque->inner->type;
@@ -1883,8 +1883,8 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, ::HIR
 }
 
 namespace {
-    bool valid_for_opaque(const ::HIR::TypeData* ty) {
-        return monomorphiseTypeNeeded(ty) || visit_ty_with(ty, [](const HIR::TypeData* t) {
+    bool validForOpaque(const ::HIR::TypeData* ty) {
+        return monomorphiseTypeNeeded(ty) || visitTyWith(ty, [](const HIR::TypeData* t) {
             return t->is_ErasedType() || t->is_Infer();
         });
     }
@@ -2162,7 +2162,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, ::HIR::T
             DEBUG("[expand_associated_types] - Fuzzy - Actually matches");
         }
 
-        if (impl.type_is_specialisable(e2.item.c_str())) {
+        if (impl.typeIsSpecialisable(e2.item.c_str())) {
             if (impl.moreSpecificThan(crate.types, bestImpl)) {
                 bestImpl = mv$(impl);
                 DEBUG("- Still specialisable");
@@ -2182,7 +2182,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, ::HIR::T
                 DEBUG("Mark " << e.path << " as opaque");
                 e.binding = ::HIR::TypePathBinding::make_Opaque({});
                 publish();
-                ASSERT_BUG(sp, valid_for_opaque(input), "Set opaque on a non-generic type: " << input);
+                ASSERT_BUG(sp, validForOpaque(input), "Set opaque on a non-generic type: " << input);
                 replacementHappened = this->replaceEqualities(input);
             }
             return true;
@@ -2197,7 +2197,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, ::HIR::T
     if( bestImpl.isValid() ) {
         e.binding = ::HIR::TypePathBinding::make_Opaque({});
         publish();
-        ASSERT_BUG(sp, valid_for_opaque(input), "Set opaque on a non-generic type: " << input);
+        ASSERT_BUG(sp, validForOpaque(input), "Set opaque on a non-generic type: " << input);
         this->replaceEqualities(input);
         DEBUG("- Couldn't find a non-specialised impl of " << trait_path << " for " << e2.type << " - treating as opaque");
         return false;
@@ -2206,7 +2206,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, ::HIR::T
     if( assumeOpaque ) {
         e.binding = ::HIR::TypePathBinding::make_Opaque({});
         publish();
-        ASSERT_BUG(sp, valid_for_opaque(input), "Set opaque on a non-generic type: " << input);
+        ASSERT_BUG(sp, validForOpaque(input), "Set opaque on a non-generic type: " << input);
         DEBUG("Assuming that " << input << " is an opaque name");
 
         bool rv = this->replaceEqualities(input);
@@ -2350,7 +2350,7 @@ bool StaticTraitResolve::traitContainsType(const Span& sp, const ::HIR::GenericP
     return false;
 }
 
-bool StaticTraitResolve::type_is_copy(const Span& sp, const ::HIR::TypeData* ty) const {
+bool StaticTraitResolve::typeIsCopy(const Span& sp, const ::HIR::TypeData* ty) const {
     TU_MATCH_HDRA( (*ty), {)
     TU_ARMA(Generic, e) {
             {
@@ -2442,7 +2442,7 @@ bool StaticTraitResolve::type_is_copy(const Span& sp, const ::HIR::TypeData* ty)
             if (TU_TEST1(e.size, Known, == 0)) {
                 return true;
             }
-            return type_is_copy(sp, e.inner);
+            return typeIsCopy(sp, e.inner);
         }
         TU_ARMA(Slice, e) {
             // [T] isn't Sized, so isn't Copy ether
@@ -2464,7 +2464,7 @@ bool StaticTraitResolve::type_is_copy(const Span& sp, const ::HIR::TypeData* ty)
         }
         TU_ARMA(Tuple, e) {
             for (const auto& ty : e) {
-                if (!type_is_copy(sp, ty)) {
+                if (!typeIsCopy(sp, ty)) {
                     return false;
                 }
             }
@@ -2474,7 +2474,7 @@ bool StaticTraitResolve::type_is_copy(const Span& sp, const ::HIR::TypeData* ty)
     throw "";
 }
 
-bool StaticTraitResolve::type_is_clone(const Span& sp, const ::HIR::TypeData* ty) const {
+bool StaticTraitResolve::typeIsClone(const Span& sp, const ::HIR::TypeData* ty) const {
     TU_MATCH_HDRA( (*ty), {)
     TU_ARMA(Generic, e) {
             {
@@ -2552,7 +2552,7 @@ bool StaticTraitResolve::type_is_clone(const Span& sp, const ::HIR::TypeData* ty
             return e != ::HIR::CoreType::Str;
         }
         TU_ARMA(Array, e) {
-            return (e.size.is_Known() && e.size.as_Known() == 0) || type_is_clone(sp, e.inner);
+            return (e.size.is_Known() && e.size.as_Known() == 0) || typeIsClone(sp, e.inner);
         }
         TU_ARMA(Slice, e) {
             // [T] isn't Sized, so isn't Copy ether
@@ -2574,7 +2574,7 @@ bool StaticTraitResolve::type_is_clone(const Span& sp, const ::HIR::TypeData* ty
         }
         TU_ARMA(Tuple, e) {
             for (const auto& ty : e) {
-                if (!type_is_clone(sp, ty)) {
+                if (!typeIsClone(sp, ty)) {
                     return false;
                 }
             }
@@ -2584,7 +2584,7 @@ bool StaticTraitResolve::type_is_clone(const Span& sp, const ::HIR::TypeData* ty
     throw "";
 }
 
-bool StaticTraitResolve::type_is_sized(const Span& sp, const ::HIR::TypeData* ty) const {
+bool StaticTraitResolve::typeIsSized(const Span& sp, const ::HIR::TypeData* ty) const {
     switch (this->metadataType(sp, ty)) {
         case MetadataType::None:
             return true;
@@ -2593,7 +2593,7 @@ bool StaticTraitResolve::type_is_sized(const Span& sp, const ::HIR::TypeData* ty
     }
 }
 
-bool StaticTraitResolve::type_is_impossible(const Span& sp, const ::HIR::TypeData* ty) const {
+bool StaticTraitResolve::typeIsImpossible(const Span& sp, const ::HIR::TypeData* ty) const {
     TU_MATCH_HDRA( (*ty), {)
         break;
         default:
@@ -2620,7 +2620,7 @@ bool StaticTraitResolve::type_is_impossible(const Span& sp, const ::HIR::TypeDat
                                 for (const auto& fld : e) {
                                     ::HIR::TypeRef tmp;
                                     const auto& fieldTy = this->monomorphExpandOpt(sp, tmp, fld.ent, MonomorphStatePtr(crate.types, ty, &params, nullptr));
-                                    if (type_is_impossible(sp, fieldTy)) {
+                                    if (typeIsImpossible(sp, fieldTy)) {
                                         return true;
                                     }
                                 }
@@ -2630,7 +2630,7 @@ bool StaticTraitResolve::type_is_impossible(const Span& sp, const ::HIR::TypeDat
                                 for (const auto& fld : e) {
                                     ::HIR::TypeRef tmp;
                                     const auto& fieldTy = this->monomorphExpandOpt(sp, tmp, fld.ty, MonomorphStatePtr(crate.types, ty, &params, nullptr));
-                                    if (type_is_impossible(sp, fieldTy)) {
+                                    if (typeIsImpossible(sp, fieldTy)) {
                                         return true;
                                     }
                                 }
@@ -2651,7 +2651,7 @@ bool StaticTraitResolve::type_is_impossible(const Span& sp, const ::HIR::TypeDat
                                     ::HIR::TypeRef tmp;
                                     const auto& fieldTy = this->monomorphExpandOpt(sp, tmp, tpl, MonomorphStatePtr(crate.types, ty, &params, nullptr));
                                     // Not impossible, ergo the enum is possible
-                                    if (!type_is_impossible(sp, fieldTy)) {
+                                    if (!typeIsImpossible(sp, fieldTy)) {
                                         return false;
                                     }
                                 }
@@ -2672,7 +2672,7 @@ bool StaticTraitResolve::type_is_impossible(const Span& sp, const ::HIR::TypeDat
         return true;
             }
             TU_ARMA(Borrow, e)
-            return type_is_impossible(sp, e.inner);
+            return typeIsImpossible(sp, e.inner);
             TU_ARMA(Pointer, e) {
                 return false;
                 //return type_is_impossible(sp, e.inner);
@@ -2682,14 +2682,14 @@ bool StaticTraitResolve::type_is_impossible(const Span& sp, const ::HIR::TypeDat
                 return true;
             }
             TU_ARMA(Array, e) {
-                return type_is_impossible(sp, e.inner);
+                return typeIsImpossible(sp, e.inner);
             }
             TU_ARMA(Slice, e) {
-                return type_is_impossible(sp, e.inner);
+                return typeIsImpossible(sp, e.inner);
             }
             TU_ARMA(Tuple, e) {
                 for (const auto& ty : e) {
-                    if (type_is_impossible(sp, ty)) {
+                    if (typeIsImpossible(sp, ty)) {
                         return true;
                     }
                 }
@@ -2760,8 +2760,8 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const ::HIR::TypeData* dstTy,
             } else if (dstGp.mPath == srcGp.mPath) {
                 DEBUG("Checking for Unsize " << dstGp << " <- " << srcGp);
                 // Structures are equal, add the requirement that the ?Sized parameter also impl Unsize
-                const auto& dstInner = dstGp.mParams.types.at(str.structMarkings.unsized_param);
-                const auto& srcInner = srcGp.mParams.types.at(str.structMarkings.unsized_param);
+                const auto& dstInner = dstGp.mParams.types.at(str.structMarkings.unsizedParam);
+                const auto& srcInner = srcGp.mParams.types.at(str.structMarkings.unsizedParam);
                 return this->canUnsize(sp, dstInner, srcInner);
             } else {
                 DEBUG("Can't Unsize, destination and source are different structs");
@@ -2891,7 +2891,7 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const ::HIR::TypeData* dstTy,
 
 // Check if the passed type contains an UnsafeCell
 // Returns `Fuzzy` if generic, `Equal` if it does contain an UnsafeCell, and `Unequal` if it doesn't (shared=immutable)
-HIR::Compare StaticTraitResolve::type_is_interior_mutable(const Span& sp, const ::HIR::TypeData* ty) const {
+HIR::Compare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const ::HIR::TypeData* ty) const {
     TU_MATCH_HDRA( (*ty), {)
     TU_ARMA(Infer, e) {
             // Is this a bug?
@@ -2927,7 +2927,7 @@ HIR::Compare StaticTraitResolve::type_is_interior_mutable(const Span& sp, const 
             TU_ARMA(Unit, _)    return HIR::Compare::Unequal;
                         TU_ARMA(Tuple, e) {
                             for (const auto& v : e) {
-                                switch (this->type_is_interior_mutable(sp, monomorph(v.ent))) {
+                                switch (this->typeIsInteriorMutable(sp, monomorph(v.ent))) {
                                     case HIR::Compare::Equal:
                                         return HIR::Compare::Equal;
                                     case HIR::Compare::Fuzzy:
@@ -2940,7 +2940,7 @@ HIR::Compare StaticTraitResolve::type_is_interior_mutable(const Span& sp, const 
                         }
                         TU_ARMA(Named, e) {
                             for (const auto& v : e) {
-                                switch (this->type_is_interior_mutable(sp, monomorph(v.ty))) {
+                                switch (this->typeIsInteriorMutable(sp, monomorph(v.ty))) {
                                     case HIR::Compare::Equal:
                                         return HIR::Compare::Equal;
                                     case HIR::Compare::Fuzzy:
@@ -2958,7 +2958,7 @@ HIR::Compare StaticTraitResolve::type_is_interior_mutable(const Span& sp, const 
             TU_ARMA(Value, _)   return HIR::Compare::Unequal;
                         TU_ARMA(Data, ee) {
                             for (const auto& var : ee) {
-                                switch (this->type_is_interior_mutable(sp, monomorph(var.type))) {
+                                switch (this->typeIsInteriorMutable(sp, monomorph(var.type))) {
                                     case HIR::Compare::Equal:
                                         return HIR::Compare::Equal;
                                     case HIR::Compare::Fuzzy:
@@ -2973,7 +2973,7 @@ HIR::Compare StaticTraitResolve::type_is_interior_mutable(const Span& sp, const 
                 }
                 TU_ARMA(Union, pbe) {
                     for (const auto& var : pbe->mVariants) {
-                        switch (this->type_is_interior_mutable(sp, monomorph(var.ty))) {
+                        switch (this->typeIsInteriorMutable(sp, monomorph(var.ty))) {
                             case HIR::Compare::Equal:
                                 return HIR::Compare::Equal;
                             case HIR::Compare::Fuzzy:
@@ -2998,14 +2998,14 @@ HIR::Compare StaticTraitResolve::type_is_interior_mutable(const Span& sp, const 
             return HIR::Compare::Fuzzy;
         }
         TU_ARMA(Array, e) {
-            return this->type_is_interior_mutable(sp, e.inner);
+            return this->typeIsInteriorMutable(sp, e.inner);
         }
         TU_ARMA(Slice, e) {
-            return this->type_is_interior_mutable(sp, e.inner);
+            return this->typeIsInteriorMutable(sp, e.inner);
         }
         TU_ARMA(Tuple, e) {
             for (const auto& t : e) {
-                auto rv = this->type_is_interior_mutable(sp, t);
+                auto rv = this->typeIsInteriorMutable(sp, t);
                 if (rv != HIR::Compare::Unequal) {
                     return rv;
                 }
@@ -3025,7 +3025,7 @@ HIR::Compare StaticTraitResolve::type_is_interior_mutable(const Span& sp, const 
                     }
                     // Check all captures
                     for (const auto& c : nodeP->captures) {
-                        auto rv = this->type_is_interior_mutable(sp, c->resType);
+                        auto rv = this->typeIsInteriorMutable(sp, c->resType);
                         if (rv != HIR::Compare::Unequal) {
                             return rv;
                         }
@@ -3036,7 +3036,7 @@ HIR::Compare StaticTraitResolve::type_is_interior_mutable(const Span& sp, const 
                 TU_ARMA(Generator, nodeP) {
                     // Check all captures
                     for (const auto& c : nodeP->captures) {
-                        auto rv = this->type_is_interior_mutable(sp, c->resType);
+                        auto rv = this->typeIsInteriorMutable(sp, c->resType);
                         if (rv != HIR::Compare::Unequal) {
                             return rv;
                         }
@@ -3188,7 +3188,7 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const ::HIR::TypeD
     throw "bug";
 }
 
-bool StaticTraitResolve::type_needs_drop_glue(const Span& sp, const ::HIR::TypeData* ty) const {
+bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const ::HIR::TypeData* ty) const {
     // A crate without the Drop lang item cannot define a destructor.  In that
     // language mode no type can require compiler-generated drop glue, and in
     // particular the resolver must not try to look up an empty trait path.
@@ -3197,7 +3197,7 @@ bool StaticTraitResolve::type_needs_drop_glue(const Span& sp, const ::HIR::TypeD
     }
 
     // If `T: Copy`, then it can't need drop glue
-    if (type_is_copy(sp, ty)) {
+    if (typeIsCopy(sp, ty)) {
         return false;
     }
 
@@ -3250,14 +3250,14 @@ bool StaticTraitResolve::type_needs_drop_glue(const Span& sp, const ::HIR::TypeD
                      (Unit, ),
                      (Tuple,
                       for (const auto& e : se) {
-                          if (type_needs_drop_glue(sp, monomorph(e.ent))) {
+                          if (typeNeedsDropGlue(sp, monomorph(e.ent))) {
                               needsDropGlue = true;
                               break;
                           }
                       }),
                      (Named,
                       for (const auto& e : se) {
-                          if (type_needs_drop_glue(sp, monomorph(e.ty))) {
+                          if (typeNeedsDropGlue(sp, monomorph(e.ty))) {
                               needsDropGlue = true;
                               break;
                           }
@@ -3266,7 +3266,7 @@ bool StaticTraitResolve::type_needs_drop_glue(const Span& sp, const ::HIR::TypeD
                 (Enum,
                  if (const auto* e = pbe->mData.opt_Data()) {
                      for (const auto& var : *e) {
-                         if (type_needs_drop_glue(sp, monomorph(var.type))) {
+                         if (typeNeedsDropGlue(sp, monomorph(var.type))) {
                              needsDropGlue = true;
                              break;
                          }
@@ -3298,7 +3298,7 @@ bool StaticTraitResolve::type_needs_drop_glue(const Span& sp, const ::HIR::TypeD
             if (e.type != ::HIR::BorrowType::Owned) {
                 return false;
             }
-            return type_needs_drop_glue(sp, e.inner);
+            return typeNeedsDropGlue(sp, e.inner);
         }
         TU_ARMA(Pointer, e) {
             return false;
@@ -3313,10 +3313,10 @@ bool StaticTraitResolve::type_needs_drop_glue(const Span& sp, const ::HIR::TypeD
             return false;
         }
         TU_ARMA(Array, e) {
-            return type_needs_drop_glue(sp, e.inner);
+            return typeNeedsDropGlue(sp, e.inner);
         }
         TU_ARMA(Slice, e) {
-            return type_needs_drop_glue(sp, e.inner);
+            return typeNeedsDropGlue(sp, e.inner);
         }
         TU_ARMA(TraitObject, e) {
             return true;
@@ -3327,7 +3327,7 @@ bool StaticTraitResolve::type_needs_drop_glue(const Span& sp, const ::HIR::TypeD
         }
         TU_ARMA(Tuple, e) {
             for (const auto& ty : e) {
-                if (type_needs_drop_glue(sp, ty)) {
+                if (typeNeedsDropGlue(sp, ty)) {
                     return true;
                 }
             }
@@ -3697,7 +3697,7 @@ NullOnDrop<const ::HIR::GenericParams> StaticTraitResolve::setImplGenerics(const
     selfMetadata = metadataType(Span(), self_ty);
     return NullOnDrop<const ::HIR::GenericParams>(implGenerics);
 }
-void StaticTraitResolve::update_impl_self_metadata(const ::HIR::TypeData* self_ty) {
+void StaticTraitResolve::updateImplSelfMetadata(const ::HIR::TypeData* self_ty) {
     assert(implGenerics);
     selfMetadata = metadataType(Span(), self_ty);
 }

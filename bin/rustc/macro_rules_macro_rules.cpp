@@ -552,7 +552,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
         case MacroPatEnt::PAT_IDENT:
             // NOTE: Any reserved word is also valid as an ident
             GET_TOK(tok, lex);
-            if (Token::type_is_rword(tok.type())) {
+            if (Token::typeIsRword(tok.type())) {
                 return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
             } else {
                 CHECK_TOK(tok, TOK_IDENT);
@@ -831,7 +831,7 @@ namespace {
     }
 
     // Consume a path
-    bool consumePath(TokenStreamRO& lex, bool type_mode = false) {
+    bool consumePath(TokenStreamRO& lex, bool typeMode = false) {
         TRACE_FUNCTION;
         switch (lex.next()) {
             case TOK_INTERPOLATED_PATH:
@@ -859,7 +859,7 @@ namespace {
                 break;
             case TOK_IDENT:
                 lex.consume();
-                if (type_mode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT || lex.next() == TOK_PAREN_OPEN))
+                if (typeMode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT || lex.next() == TOK_PAREN_OPEN))
                     ;
                 // Allow a lone ident
                 else if (lex.next() != TOK_DOUBLE_COLON) {
@@ -880,7 +880,7 @@ namespace {
                 return false;
         }
 
-        if (type_mode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
+        if (typeMode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
             if (!consumeTtAngle(lex)) {
                 return false;
             }
@@ -890,13 +890,13 @@ namespace {
             lex.consume();
             if (lex.next() == TOK_STRING) {
                 lex.consume();
-            } else if (!type_mode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
+            } else if (!typeMode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
                 if (!consumeTtAngle(lex)) {
                     return false;
                 }
             } else if (lex.next() == TOK_IDENT) {
                 lex.consume();
-                if (type_mode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
+                if (typeMode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
                     if (!consumeTtAngle(lex)) {
                         return false;
                     }
@@ -906,7 +906,7 @@ namespace {
             }
         }
         // Handles `Fn()`
-        if (type_mode && lex.next() == TOK_PAREN_OPEN) {
+        if (typeMode && lex.next() == TOK_PAREN_OPEN) {
             if (!consumeTt(lex)) {
                 return false;
             }
@@ -1958,7 +1958,7 @@ namespace {
                 }
                 break;
             case MacroPatEnt::PAT_IDENT:
-                if (lex.next() == TOK_IDENT || Token::type_is_rword(lex.next())) {
+                if (lex.next() == TOK_IDENT || Token::typeIsRword(lex.next())) {
                     lex.consume();
                 } else {
                     return false;
@@ -2279,7 +2279,7 @@ Token MacroExpander::realGetToken() {
                     case TOK_IDENT:
                     case TOK_LIFETIME: {
                         auto ident = e.ident();
-                        ident.hygiene = ident.hygiene.with_tail_scope(mHygiene, isMacroItem);
+                        ident.hygiene = ident.hygiene.withTailScope(mHygiene, isMacroItem);
                         lastHygiene = ident.hygiene;
                         auto rv = Token(e.type(), std::move(ident));
                         DEBUG("[" << logIndex << "] Updated hygine: " << rv);
@@ -2289,7 +2289,7 @@ Token MacroExpander::realGetToken() {
                     case TOK_BYTESTRING:
                     case TOK_STRING: {
                         auto h = e.strHygiene();
-                        h = h.with_tail_scope(mHygiene, isMacroItem);
+                        h = h.withTailScope(mHygiene, isMacroItem);
                         lastHygiene = h;
                         auto rv = Token(e.type(), e.str(), std::move(h));
                         DEBUG("[" << logIndex << "] Updated hygine: " << rv);
@@ -2967,7 +2967,7 @@ public:
                         throw ParseError::Unexpected(lex, tok);
                     default:
                         // NOTE: Allow any reserved word
-                        if (!Token::type_is_rword(tok.type())) {
+                        if (!Token::typeIsRword(tok.type())) {
                             throw ParseError::Unexpected(lex, tok);
                         }
                     case TOK_UNDERSCORE:
@@ -3095,7 +3095,7 @@ struct ContentLoopVariableUse {
 };
 
 /// Parse the contents (replacement) of a macro_rules! arm
-::std::vector<MacroExpansionEnt> ParseMacroRulesCont(TokenStream& lex, enum eTokenType open, enum eTokenType close, const RuleParseState& state, unsigned loopDepth = 0, ::std::map<unsigned int, ContentLoopVariableUse>* var_usage_ptr = nullptr) {
+::std::vector<MacroExpansionEnt> ParseMacroRulesCont(TokenStream& lex, enum eTokenType open, enum eTokenType close, const RuleParseState& state, unsigned loopDepth = 0, ::std::map<unsigned int, ContentLoopVariableUse>* varUsagePtr = nullptr) {
     TRACE_FUNCTION;
 
     Token tok;
@@ -3130,10 +3130,10 @@ struct ContentLoopVariableUse {
 
             // `$(`
             if (tok.type() == TOK_PAREN_OPEN) {
-                ::std::map<unsigned int, ContentLoopVariableUse> var_usage;
-                auto content = ParseMacroRulesCont(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state, loopDepth + 1, &var_usage);
+                ::std::map<unsigned int, ContentLoopVariableUse> varUsage;
+                auto content = ParseMacroRulesCont(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state, loopDepth + 1, &varUsage);
                 // ^^ The above will eat the PAREN_CLOSE
-                DEBUG("var_usage = {" << var_usage << "}");
+                DEBUG("var_usage = {" << varUsage << "}");
 
                 GET_TOK(tok, lex);
                 enum eTokenType joiner = TOK_NULL;
@@ -3169,7 +3169,7 @@ struct ContentLoopVariableUse {
                 // Look up the variables used in `var_set` and determine the controlling loop(s) for this loop
                 // - Pull based on current depth
                 std::set<unsigned> controllingLoops;
-                for (const auto& v : var_usage) {
+                for (const auto& v : varUsage) {
                     // Empty stack: Doesn't control anything
                     if (v.second.loop_stack.size() == 0) {
                         DEBUG("Root variable");
@@ -3195,9 +3195,9 @@ struct ContentLoopVariableUse {
                 //{
                 //}
 
-                if (var_usage_ptr) {
-                    for (const auto& v : var_usage) {
-                        auto it = var_usage_ptr->insert(v).first;
+                if (varUsagePtr) {
+                    for (const auto& v : varUsage) {
+                        auto it = varUsagePtr->insert(v).first;
                         // If `is_optional`: Loop might not be expanded, so propagate the non-optionality of the variable
                         if (isOptional) {
                             it->second.isOptional = true;
@@ -3215,7 +3215,7 @@ struct ContentLoopVariableUse {
                     lex.getTokenCheck(TOK_PAREN_OPEN);
                     lex.getTokenIf(TOK_DOLLAR); // 1.90 (2024 edition?) requires a $
                     GET_TOK(tok, lex);
-                    if (!(tok.type() == TOK_IDENT || Token::type_is_rword(tok.type()))) {
+                    if (!(tok.type() == TOK_IDENT || Token::typeIsRword(tok.type()))) {
                         CHECK_TOK(tok, TOK_IDENT);
                     }
                     auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
@@ -3232,15 +3232,15 @@ struct ContentLoopVariableUse {
                         ERROR(lex.pointSpan(), E0000, "Variable $" << name << " is still repeating at this depth (" << loopDepth << " < " << ns->loops.size() << ")");
                     }
 
-                    if (var_usage_ptr) {
-                        var_usage_ptr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
+                    if (varUsagePtr) {
+                        varUsagePtr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
                     }
                     ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_IGNORE | ns->idx));
                 } else if (ident == "count") {
                     lex.getTokenCheck(TOK_PAREN_OPEN);
                     lex.getTokenIf(TOK_DOLLAR); // 1.90 (2024 edition?) requires a $
                     GET_TOK(tok, lex);
-                    if (!(tok.type() == TOK_IDENT || Token::type_is_rword(tok.type()))) {
+                    if (!(tok.type() == TOK_IDENT || Token::typeIsRword(tok.type()))) {
                         CHECK_TOK(tok, TOK_IDENT);
                     }
                     auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
@@ -3258,8 +3258,8 @@ struct ContentLoopVariableUse {
                     //    ERROR(lex.point_span(), E0000, "Variable $" << name << " is still repeating at this depth (" << loop_depth << " < " << ns->loops.size() << ")");
                     //}
 
-                    if (var_usage_ptr) {
-                        var_usage_ptr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
+                    if (varUsagePtr) {
+                        varUsagePtr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
                     }
                     ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_COUNT | ns->idx));
                 } else if (ident == "index") {
@@ -3288,8 +3288,8 @@ struct ContentLoopVariableUse {
                                         ERROR(lex.pointSpan(), E0000, "Variable $" << name << " is still repeating at this depth (" << loopDepth << " < " << ns->loops.size() << ")");
                                     }
 
-                                    if (var_usage_ptr) {
-                                        var_usage_ptr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
+                                    if (varUsagePtr) {
+                                        varUsagePtr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
                                     }
                                     ents.push_back(MacroExpansionConcatEnt(ns->idx));
                                 }
@@ -3313,7 +3313,7 @@ struct ContentLoopVariableUse {
                 lex.getTokenCheck(TOK_BRACE_CLOSE);
             } else if (tok.type() == TOK_RWORD_CRATE) {
                 ret.push_back(MacroExpansionEnt(NAMEDVALUE_MAGIC_CRATE));
-            } else if (tok.type() == TOK_IDENT || Token::type_is_rword(tok.type())) {
+            } else if (tok.type() == TOK_IDENT || Token::typeIsRword(tok.type())) {
                 // Look up the named parameter in the list of param names for this arm
                 auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
                 const auto* ns = state.findName(name);
@@ -3332,8 +3332,8 @@ struct ContentLoopVariableUse {
                         ERROR(lex.pointSpan(), E0000, "Variable $" << name << " is still repeating at this depth (" << loopDepth << " < " << ns->loops.size() << ")");
                     }
 
-                    if (var_usage_ptr) {
-                        var_usage_ptr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
+                    if (varUsagePtr) {
+                        varUsagePtr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
                     }
                     ret.push_back(MacroExpansionEnt(ns->idx));
                 }

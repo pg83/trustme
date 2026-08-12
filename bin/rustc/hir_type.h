@@ -228,11 +228,11 @@ namespace HIR {
         ((Infer,
          struct {
              unsigned int index;
-             InferClass ty_class;
+             InferClass tyClass;
 
              /// Returns true if the ivar is a literal
              bool isLit() const {
-                 switch (this->ty_class) {
+                 switch (this->tyClass) {
                      case InferClass::None:
                          return false;
                      case InferClass::Integer:
@@ -320,7 +320,7 @@ namespace HIR {
         explicit TypeInterner(stl::ObjPool& pool);
 
         TypeRef intern(TypeData data);
-        TypeRef infer(unsigned int idx = ~0u, InferClass ty_class = InferClass::None);
+        TypeRef infer(unsigned int idx = ~0u, InferClass tyClass = InferClass::None);
         TypeRef primitive(CoreType ct);
         TypeRef generic(RcString name, unsigned int slot);
         TypeRef self();

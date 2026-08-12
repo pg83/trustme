@@ -40,9 +40,9 @@ struct EncodedLiteral {
     static EncodedLiteral makeUsize(uint64_t v);
     EncodedLiteral clone() const;
 
-    void write_uint(size_t ofs, size_t size, uint64_t v);
+    void writeUint(size_t ofs, size_t size, uint64_t v);
 
-    void write_usize(size_t ofs, uint64_t v);
+    void writeUsize(size_t ofs, uint64_t v);
     uint64_t readUsize(size_t ofs) const;
 
     friend ::std::ostream& operator<<(std::ostream& os, const EncodedLiteral& x);

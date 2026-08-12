@@ -35,7 +35,7 @@ public:
         return lo;
     }
 
-    uint64_t encodeFloat(int bits, int zero_exp) const;
+    uint64_t encodeFloat(int bits, int zeroExp) const;
 
     double toDouble() const;
 
@@ -247,11 +247,11 @@ public:
     int64_t truncateI64() const;
 
     double toDouble() const {
-        return (*this < 0 ? -1.0 : 1.0) * this->u_abs().toDouble();
+        return (*this < 0 ? -1.0 : 1.0) * this->uAbs().toDouble();
     }
 
     float toFloat() const {
-        return (*this < 0 ? -1.0f : 1.0f) * this->u_abs().toFloat();
+        return (*this < 0 ? -1.0f : 1.0f) * this->uAbs().toFloat();
     }
 
     U128 getInner() const {
@@ -305,7 +305,7 @@ public:
     }
 
     /// Unsigned absolute value (handles MIN correctly)
-    U128 u_abs() const;
+    U128 uAbs() const;
 
     Ordering ord(const S128& x) const;
 

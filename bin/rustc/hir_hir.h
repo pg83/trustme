@@ -259,7 +259,7 @@ namespace HIR {
         /// This type has a <T: ?Sized> parameter that is used directly
         bool canUnsize = false;
         /// Index of the parameter that is ?Sized
-        unsigned int unsized_param = ~0u;
+        unsigned int unsizedParam = ~0u;
 
         // TODO: This would have to be changed for custom DSTs
         enum class DstType {
@@ -268,7 +268,7 @@ namespace HIR {
             Slice,       // [T]
             TraitObject, // (Trait)
         } dst_type = DstType::None;
-        unsigned int unsized_field = ~0u;
+        unsigned int unsizedField = ~0u;
 
         enum class Coerce {
             None,        // No CoerceUnsized impl
@@ -562,7 +562,7 @@ namespace HIR {
 
         ::HIR::SimplePath srcModule;
 
-        bool matchesType(const ::HIR::TypeData* tr, tCbResolveType ty_res) const;
+        bool matchesType(const ::HIR::TypeData* tr, tCbResolveType tyRes) const;
 
         bool matchesType(const ::HIR::TypeData* tr) const {
             return matchesType(tr, ResolvePlaceholdersNop());
@@ -593,7 +593,7 @@ namespace HIR {
         //
         //const TraitImpl*    m_parent_spec_impl;
 
-        bool matchesType(const ::HIR::TypeData* tr, tCbResolveType ty_res) const;
+        bool matchesType(const ::HIR::TypeData* tr, tCbResolveType tyRes) const;
 
         bool matchesType(const ::HIR::TypeData* tr) const {
             return matchesType(tr, ResolvePlaceholdersNop());
@@ -612,7 +612,7 @@ namespace HIR {
 
         ::HIR::SimplePath srcModule;
 
-        bool matchesType(const ::HIR::TypeData* tr, tCbResolveType ty_res) const;
+        bool matchesType(const ::HIR::TypeData* tr, tCbResolveType tyRes) const;
 
         bool matchesType(const ::HIR::TypeData* tr) const {
             return matchesType(tr, ResolvePlaceholdersNop());
@@ -761,9 +761,9 @@ namespace HIR {
 
         const ::HIR::Constant& getConstantByPath(const Span& sp, const ::HIR::SimplePath& path) const;
 
-        bool findTraitImpls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, tCbResolveType ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const;
-        bool findAutoTraitImpls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, tCbResolveType ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const;
-        bool findTypeImpls(const ::HIR::TypeData* type, tCbResolveType ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const;
+        bool findTraitImpls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, tCbResolveType tyRes, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const;
+        bool findAutoTraitImpls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, tCbResolveType tyRes, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const;
+        bool findTypeImpls(const ::HIR::TypeData* type, tCbResolveType tyRes, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const;
 
         const ::MIR::Function* getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::argsT& args, ::HIR::TypeRef& ret_ty) const;
 

@@ -527,7 +527,7 @@ namespace {
                         : nullptr;
                     for (size_t i = 0; i < NUM_ALLOCATOR_METHODS; i++) {
                         struct H {
-                            static void ty_args(::std::vector<const char*>& out, AllocatorDataTy t) {
+                            static void tyArgs(::std::vector<const char*>& out, AllocatorDataTy t) {
                                 switch (t) {
                                     case AllocatorDataTy::Unit:
                                     case AllocatorDataTy::ResultPtr: // (..., *mut i8) + *mut u8
@@ -546,7 +546,7 @@ namespace {
                                 }
                             }
 
-                            static const char* ty_ret(AllocatorDataTy t) {
+                            static const char* tyRet(AllocatorDataTy t) {
                                 switch (t) {
                                     case AllocatorDataTy::Unit:
                                         return "void";
@@ -562,7 +562,7 @@ namespace {
                             }
 
                             static void emitProto(::std::ostream& os, const AllocatorMethod& method, const char* namePrefix, const ::std::vector<const char*>& args) {
-                                os << H::ty_ret(method.ret) << " " << namePrefix << method.name << "(";
+                                os << H::tyRet(method.ret) << " " << namePrefix << method.name << "(";
                                 for (size_t j = 0; j < args.size(); j++) {
                                     if (j != 0) {
                                         os << ", ";
@@ -576,7 +576,7 @@ namespace {
                         const auto& method = ALLOCATOR_METHODS[i];
                         ::std::vector<const char*> args;
                         for (size_t j = 0; j < method.nArgs; j++) {
-                            H::ty_args(args, method.args[j]);
+                            H::tyArgs(args, method.args[j]);
                         }
                         H::emitProto(of, method, "__rust_", args);
                         of << " {\n";
@@ -1060,18 +1060,18 @@ namespace {
             if (getenv("MRUSTC_CCACHE")) {
                 cmdSs << "ccache ";
             }
-            bool use_arg_file = argFileStart > 0;
-            if (use_arg_file) {
+            bool useArgFile = argFileStart > 0;
+            if (useArgFile) {
                 commandFileStream.open(commandFile);
                 ASSERT_BUG(Span(), commandFileStream.is_open(), "Failed to open command file `" << commandFile << "` for writing");
             }
             size_t i = -1;
             for (const auto& arg : args.getVec()) {
                 i++;
-                auto& outSs = (use_arg_file && i >= argFileStart ? static_cast<::std::ostream&>(commandFileStream) : cmdSs);
+                auto& outSs = (useArgFile && i >= argFileStart ? static_cast<::std::ostream&>(commandFileStream) : cmdSs);
                 outSs << "\"" << FmtShell(arg) << "\" ";
             }
-            if (use_arg_file) {
+            if (useArgFile) {
                 cmdSs << "@\"" << FmtShell(commandFile) << "\"";
                 commandFileStream.close();
                 ASSERT_BUG(Span(), !commandFileStream.bad(), "Error set on output stream for: " << outfilePathC);
@@ -1120,7 +1120,7 @@ namespace {
             MIR_ASSERT(*mirRes, repr, "No repr for Box " << boxType);
             auto field = ::MIR::LValue::newField(slot.clone(), 0);
             for (const auto& fieldRepr : repr->fields) {
-                if (mResolve.type_needs_drop_glue(sp, fieldRepr.ty)) {
+                if (mResolve.typeNeedsDropGlue(sp, fieldRepr.ty)) {
                     emitDestructorCall(field, fieldRepr.ty, /*unsized_valid=*/false, indent_level);
                 }
                 field.incField();
@@ -1616,14 +1616,14 @@ namespace {
 
             // 1. Enumerate fields with the same offset as the first (these go into a union)
             // TODO: What if all data variants are zero-sized?
-            ::std::vector<unsigned> union_fields;
+            ::std::vector<unsigned> unionFields;
             for (size_t i = 1; i < repr->fields.size(); i++) {
                 if (repr->fields[i].offset == repr->fields[0].offset) {
-                    union_fields.push_back(i);
+                    unionFields.push_back(i);
                 }
             }
-            if (union_fields.size() > 0) {
-                union_fields.insert(union_fields.begin(), 0);
+            if (unionFields.size() > 0) {
+                unionFields.insert(unionFields.begin(), 0);
             }
 
             of << "// enum " << p << "\n";
@@ -1634,7 +1634,7 @@ namespace {
             if (const auto* ve = repr->variants.opt_NonZero()) {
                 of << "\tstruct {\n";
                 of << "\t\t";
-                unsigned idx = 1 - ve->zero_variant;
+                unsigned idx = 1 - ve->zeroVariant;
                 emitCtype(repr->fields.at(idx).ty, FMT_CB(os, os << "var_" << idx));
                 of << ";\n";
                 of << "\t} DATA;\n";
@@ -1657,13 +1657,13 @@ namespace {
                 }
             }
             // If there multiple fields with the same offset, they're the data variants
-            else if (union_fields.size() > 0) {
-                if (union_fields.size() == repr->fields.size()) {
+            else if (unionFields.size() > 0) {
+                if (unionFields.size() == repr->fields.size()) {
                     // Embedded tag
                     DEBUG("Untagged, nonzero or other");
                 } else {
                     // Leading & external tag: repr(C)
-                    assert(union_fields.size() + 1 == repr->fields.size());
+                    assert(unionFields.size() + 1 == repr->fields.size());
                     assert(isEnumTag(repr, repr->fields.size() - 1));
 
                     assert(repr->fields.back().offset == 0);
@@ -1681,15 +1681,15 @@ namespace {
                 // Make the union!
                 // NOTE: The way the structure generation works is that enum variants are always first, so the field index = the variant index
                 // NOTE: Only emit if there are non-empty fields
-                if (::std::any_of(union_fields.begin(), union_fields.end(), [this, repr](auto x) {
-                    return !this->type_is_bad_zst(repr->fields[x].ty);
+                if (::std::any_of(unionFields.begin(), unionFields.end(), [this, repr](auto x) {
+                    return !this->typeIsBadZst(repr->fields[x].ty);
                 })) {
                     of << "\tunion {\n";
-                    for (auto idx : union_fields) {
+                    for (auto idx : unionFields) {
                         of << "\t\t";
 
                         const auto& ty = repr->fields[idx].ty;
-                        if (this->type_is_bad_zst(ty)) {
+                        if (this->typeIsBadZst(ty)) {
                             of << "// ZST: " << ty << "\n";
                         } else {
                             if (isEnumTag(repr, idx)) {
@@ -1723,8 +1723,8 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emitConstructorEnum(const Span& sp, const ::HIR::GenericPath& path, const ::HIR::Enum& item, size_t var_idx) override {
-            TRACE_FUNCTION_F(path << " var_idx=" << var_idx);
+        void emitConstructorEnum(const Span& sp, const ::HIR::GenericPath& path, const ::HIR::Enum& item, size_t varIdx) override {
+            TRACE_FUNCTION_F(path << " var_idx=" << varIdx);
 
             auto p = path.clone();
             p.mPath.popComponent();
@@ -1737,7 +1737,7 @@ namespace {
             };
 
             ASSERT_BUG(sp, item.mData.is_Data(), "");
-            const auto& var = item.mData.as_Data().at(var_idx);
+            const auto& var = item.mData.as_Data().at(varIdx);
             ASSERT_BUG(sp, var.type->is_Path(), "");
             const auto& str = *var.type->as_Path().binding.as_Struct();
             ASSERT_BUG(sp, str.mData.is_Tuple(), "");
@@ -1773,7 +1773,7 @@ namespace {
 
             // Create the variant
             // - Use `emit_statement` to avoid re-writing the enum tag handling
-            emitStatement(*mirRes, ::MIR::Statement::make_Assign({::MIR::LValue::newReturn(), ::MIR::RValue::make_EnumVariant({p.clone(), static_cast<unsigned>(var_idx), mv$(vals)})}));
+            emitStatement(*mirRes, ::MIR::Statement::make_Assign({::MIR::LValue::newReturn(), ::MIR::RValue::make_EnumVariant({p.clone(), static_cast<unsigned>(varIdx), mv$(vals)})}));
             of << "\treturn rv;\n";
             of << "}\n";
             mirRes = nullptr;
@@ -1802,7 +1802,7 @@ namespace {
             bool emitted = false;
             for (unsigned int i = 0; i < e.size(); i++) {
                 const auto& ty = monomorph(e[i].ent);
-                if (this->type_is_bad_zst(ty)) {
+                if (this->typeIsBadZst(ty)) {
                     continue;
                 }
                 if (emitted) {
@@ -2370,7 +2370,7 @@ namespace {
             of << ";\n";
             for (unsigned int i = 0; i < code->locals.size(); i++) {
                 // If the type is a ZST, initialise it (to avoid warnings)
-                if (this->type_is_bad_zst(code->locals[i])) {
+                if (this->typeIsBadZst(code->locals[i])) {
                     continue;
                 }
                 DEBUG("var" << i << " : " << code->locals[i]);
@@ -2408,7 +2408,7 @@ namespace {
                 if (!cleanupBlocks.insert(blockIndex).second) {
                     continue;
                 }
-                ::MIR::visit::visit_terminator_target(code->blocks[blockIndex].terminator, [&](const auto& target) {
+                ::MIR::visit::visitTerminatorTarget(code->blocks[blockIndex].terminator, [&](const auto& target) {
                     pendingCleanupBlocks.push_back(target);
                 });
             }
@@ -2504,8 +2504,8 @@ namespace {
                     of << "; else goto " << (cleanup ? "cleanup_bb" : "bb") << e.bbFalse << ";\n";
                 }
                 TU_ARMA(Switch, e) {
-                    if (e.valid_flag != ~0u) {
-                        of << indent << "if(!df" << e.valid_flag << ") goto " << (cleanup ? "cleanup_bb" : "bb") << e.invalidTarget << ";\n";
+                    if (e.validFlag != ~0u) {
+                        of << indent << "if(!df" << e.validFlag << ") goto " << (cleanup ? "cleanup_bb" : "bb") << e.invalidTarget << ";\n";
                     }
                     emitTermSwitch(mir_res, e.val, e.targets.size(), indent_level, [&](size_t idx) {
                         of << "goto " << (cleanup ? "cleanup_bb" : "bb") << e.targets[idx] << ";";
@@ -2555,12 +2555,12 @@ namespace {
             }
             of << "\t};\n";
         }
-        bool type_is_emulated_i128(const ::HIR::TypeData* ty) const {
+        bool typeIsEmulatedI128(const ::HIR::TypeData* ty) const {
             return options.emulated_i128 && (ty == ::HIR::CoreType::I128 || ty == ::HIR::CoreType::U128);
         }
 
         // Returns true if the input type is a ZST and ZSTs are not being emitted
-        bool type_is_bad_zst(const ::HIR::TypeData* ty) const {
+        bool typeIsBadZst(const ::HIR::TypeData* ty) const {
             if (options.disallowEmptyStructs) {
                 // TODO: Extern types are also ZSTs?
                 size_t size, align;
@@ -2575,7 +2575,7 @@ namespace {
         bool lvalueIsBadZst(const ::MIR::LValue& lv) const {
             if (options.disallowEmptyStructs) {
                 HIR::TypeRef tmp;
-                return type_is_bad_zst(mirRes->getLvalueType(tmp, lv));
+                return typeIsBadZst(mirRes->getLvalueType(tmp, lv));
             } else {
                 return false;
             }
@@ -2586,7 +2586,7 @@ namespace {
         bool lvalueRootIsBadZst(const ::MIR::LValue& lv) const {
             if (options.disallowEmptyStructs) {
                 HIR::TypeRef tmp;
-                return type_is_bad_zst(mirRes->getLvalueType(tmp, lv, lv.wrappers.size()));
+                return typeIsBadZst(mirRes->getLvalueType(tmp, lv, lv.wrappers.size()));
             } else {
                 return false;
             }
@@ -2601,7 +2601,7 @@ namespace {
             while (::MIR::LValue::CRef(rv).is_Index()) {
                 auto inner = ::MIR::LValue::CRef(rv).innerRef();
                 HIR::TypeRef tmp;
-                if (!this->type_is_bad_zst(mirRes->getLvalueType(tmp, inner))) {
+                if (!this->typeIsBadZst(mirRes->getLvalueType(tmp, inner))) {
                     break;
                 }
                 rv.wrappers.pop_back();
@@ -2613,7 +2613,7 @@ namespace {
             ::HIR::TypeRef tmp;
             const auto& ty = mir_res.getLvalueType(tmp, val);
 
-            if (this->type_is_bad_zst(ty) && !this->lvalueRootIsBadZst(val)) {
+            if (this->typeIsBadZst(ty) && !this->lvalueRootIsBadZst(val)) {
                 auto backing = this->lvalueZstIndexBacking(val);
                 if (backing.wrappers.size() != val.wrappers.size()) {
                     emitBorrow(mir_res, bt, backing);
@@ -2692,9 +2692,9 @@ namespace {
 
             // NOTE: If disallow_empty_structs is set, structs don't include ZST fields
             // In this case, we need to avoid mentioning the removed fields
-            auto val_ref = ::MIR::LValue::CRef(val);
-            if (!special && options.disallowEmptyStructs && val_ref.is_Index() && this->type_is_bad_zst(ty)) {
-                auto inner = val_ref.innerRef();
+            auto valRef = ::MIR::LValue::CRef(val);
+            if (!special && options.disallowEmptyStructs && valRef.is_Index() && this->typeIsBadZst(ty)) {
+                auto inner = valRef.innerRef();
                 ::HIR::TypeRef tmp;
                 const auto& parentTy = mir_res.getLvalueType(tmp, inner);
                 const ::HIR::TypeData* elementTy = nullptr;
@@ -2719,27 +2719,27 @@ namespace {
                 special = true;
             }
 
-            if (!special && options.disallowEmptyStructs && val.is_Field() && this->type_is_bad_zst(ty)) {
+            if (!special && options.disallowEmptyStructs && val.is_Field() && this->typeIsBadZst(ty)) {
                 // Work backwards to the first non-ZST field
-                auto val_fp = ::MIR::LValue::CRef(val);
-                assert(val_fp.is_Field());
-                while (val_fp.innerRef().is_Field()) {
+                auto valFp = ::MIR::LValue::CRef(val);
+                assert(valFp.is_Field());
+                while (valFp.innerRef().is_Field()) {
                     ::HIR::TypeRef tmp;
-                    const auto& ty = mir_res.getLvalueType(tmp, val_fp.innerRef());
-                    if (!this->type_is_bad_zst(ty)) {
+                    const auto& ty = mir_res.getLvalueType(tmp, valFp.innerRef());
+                    if (!this->typeIsBadZst(ty)) {
                         break;
                     }
-                    val_fp.tryUnwrap();
+                    valFp.tryUnwrap();
                 }
-                assert(val_fp.is_Field());
+                assert(valFp.is_Field());
                 // Here, we have `val_fp` be a LValue::Field that refers to a ZST, but the inner of the field points to a non-ZST or a local
 
                 // If the index is zero, then the best option is to borrow the source
-                auto fieldInner = val_fp.innerRef();
+                auto fieldInner = valFp.innerRef();
                 if (fieldInner.is_Downcast()) {
                     of << "(void*)& ";
                     emitLvalue(fieldInner.innerRef());
-                } else if (val_fp.as_Field() == 0) {
+                } else if (valFp.as_Field() == 0) {
                     ::HIR::TypeRef tmp;
                     const auto& parentTy = mir_res.getLvalueType(tmp, fieldInner);
                     if (parentTy->is_Slice()) {
@@ -2774,21 +2774,21 @@ namespace {
                             of << "& ";
                             emitLvalue(fieldInner);
                         }
-                        of << " + " << elementSize * val_fp.as_Field() << ") /*ZST*/";
+                        of << " + " << elementSize * valFp.as_Field() << ") /*ZST*/";
                     } else {
                         // Get the number of fields in parent
                         auto* repr = TargetGetTypeRepr(sp, mResolve, parentTy);
                         assert(repr);
                         size_t nParentFields = repr->fields.size();
                         // Find next non-zero field
-                        auto tmpLv = ::MIR::LValue::newField(fieldInner.clone(), val_fp.as_Field() + 1);
+                        auto tmpLv = ::MIR::LValue::newField(fieldInner.clone(), valFp.as_Field() + 1);
                         bool found = false;
                         while (tmpLv.as_Field() < nParentFields) {
                             auto idx = tmpLv.as_Field();
                             const auto& ty = repr->fields[idx].ty;
                             if (ty->is_Path() && ty->as_Path().binding.is_ExternType()) {
                                 // Extern types aren't emitted
-                            } else if (this->type_is_bad_zst(ty)) {
+                            } else if (this->typeIsBadZst(ty)) {
                                 // ZSTs are't either
                             } else {
                                 found = true;
@@ -2801,7 +2801,7 @@ namespace {
                         if (!found) {
                             of << "(void*)( (uint8_t*)& ";
                             emitLvalue(fieldInner);
-                            of << " + " << repr->fields[val_fp.as_Field()].offset << ") /*ZST*/";
+                            of << " + " << repr->fields[valFp.as_Field()].offset << ") /*ZST*/";
                         }
                         // Otherwise, use the next non-zero field
                         else {
@@ -2834,7 +2834,7 @@ namespace {
                     }
 
                     // Or ZSTs
-                    if (this->type_is_bad_zst(ty)) {
+                    if (this->typeIsBadZst(ty)) {
                         continue;
                     }
                 }
@@ -2928,7 +2928,7 @@ namespace {
 
                     ::HIR::TypeRef tmp;
                     const auto& ty = mir_res.getLvalueType(tmp, e.dst);
-                    if (/*(e.dst.is_Deref() || e.dst.is_Field()) &&*/ this->type_is_bad_zst(ty)) {
+                    if (/*(e.dst.is_Deref() || e.dst.is_Field()) &&*/ this->typeIsBadZst(ty)) {
                         of << "/* ZST assign */\n";
                         break;
                     }
@@ -2942,7 +2942,7 @@ namespace {
                                 break;
                             }
 
-                            if (ve.is_Field() && this->type_is_bad_zst(ty)) {
+                            if (ve.is_Field() && this->typeIsBadZst(ty)) {
                                 of << "/* ZST field */";
                                 break;
                             }
@@ -3009,7 +3009,7 @@ namespace {
                                          : " = static_cast<");
                             emitCtype(ty);
                             of << ">(";
-                            if (this->type_is_bad_zst(mirRes->getLvalueType(tmp, ve.val, ve.val.wrappers.size()))) {
+                            if (this->typeIsBadZst(mirRes->getLvalueType(tmp, ve.val, ve.val.wrappers.size()))) {
                                 of << "(void*)&rv";
                             } else {
                                 emitBorrow(mir_res, ve.type, ve.val);
@@ -3023,13 +3023,13 @@ namespace {
                             emitLvalue(e.dst);
                             of << " = ";
                             ::HIR::TypeRef tmp, tmpR;
-                            const auto& ty = mir_res.getParamType(tmp, ve.val_l);
-                            const auto& ty_r = mir_res.getParamType(tmpR, ve.val_r);
+                            const auto& ty = mir_res.getParamType(tmp, ve.valL);
+                            const auto& tyR = mir_res.getParamType(tmpR, ve.valR);
                             if (ty->is_Borrow()) {
                                 of << "(slice_cmp(";
-                                emitParam(ve.val_l);
+                                emitParam(ve.valL);
                                 of << ", ";
-                                emitParam(ve.val_r);
+                                emitParam(ve.valR);
                                 of << ")";
                                 switch (ve.op) {
                                     case ::MIR::eBinOp::EQ:
@@ -3059,30 +3059,30 @@ namespace {
                                 if (isDst(te->inner)) {
                                     switch (ve.op) {
                                         case ::MIR::eBinOp::EQ:
-                                            emitParam(ve.val_l);
+                                            emitParam(ve.valL);
                                             of << ".PTR == ";
-                                            emitParam(ve.val_r);
+                                            emitParam(ve.valR);
                                             of << ".PTR && ";
-                                            emitParam(ve.val_l);
+                                            emitParam(ve.valL);
                                             of << ".META == ";
-                                            emitParam(ve.val_r);
+                                            emitParam(ve.valR);
                                             of << ".META";
                                             break;
                                         case ::MIR::eBinOp::NE:
-                                            emitParam(ve.val_l);
+                                            emitParam(ve.valL);
                                             of << ".PTR != ";
-                                            emitParam(ve.val_r);
+                                            emitParam(ve.valR);
                                             of << ".PTR || ";
-                                            emitParam(ve.val_l);
+                                            emitParam(ve.valL);
                                             of << ".META != ";
-                                            emitParam(ve.val_r);
+                                            emitParam(ve.valR);
                                             of << ".META";
                                             break;
                                         default:
                                             MIR_BUG(mir_res, "Unknown comparison of a *-ptr - " << e.src << " with " << ty);
                                     }
                                 } else {
-                                    emitParam(ve.val_l);
+                                    emitParam(ve.valL);
                                     switch (ve.op) {
                                         case ::MIR::eBinOp::EQ:
                                             of << " == ";
@@ -3105,7 +3105,7 @@ namespace {
                                         default:
                                             MIR_BUG(mir_res, "Unknown comparison of a *-ptr - " << e.src << " with " << ty);
                                     }
-                                    emitParam(ve.val_r);
+                                    emitParam(ve.valR);
                                 }
                                 break;
                             } else if (ve.op == ::MIR::eBinOp::MOD && (ty == ::HIR::CoreType::F32 || ty == ::HIR::CoreType::F64)) {
@@ -3116,13 +3116,13 @@ namespace {
                                     of << "remainder";
                                 }
                                 of << "(";
-                                emitParam(ve.val_l);
+                                emitParam(ve.valL);
                                 of << ", ";
-                                emitParam(ve.val_r);
+                                emitParam(ve.valR);
                                 of << ")";
                                 break;
                             } else if (ty == ::HIR::CoreType::F16 || ty == ::HIR::CoreType::F128) {
-                                auto ty_s = ty == ::HIR::CoreType::F16 ? "f16" : "f128";
+                                auto tyS = ty == ::HIR::CoreType::F16 ? "f16" : "f128";
                                 switch (ve.op) {
                                     case ::MIR::eBinOp::EQ:
                                         of << "0 == ";
@@ -3147,18 +3147,18 @@ namespace {
                                                 of << "0 <= ";
                                         }
                                         // NOTE: Reversed order due to reversed logic above
-                                        of << ty_s << "_cmp(";
-                                        emitParam(ve.val_r);
+                                        of << tyS << "_cmp(";
+                                        emitParam(ve.valR);
                                         of << ", ";
-                                        emitParam(ve.val_l);
+                                        emitParam(ve.valL);
                                         of << ")";
                                         break;
                                     default:
-                                        of << ty_s << "_disabled()";
+                                        of << tyS << "_disabled()";
                                         break;
                                 }
                                 break;
-                            } else if (type_is_emulated_i128(ty)) {
+                            } else if (typeIsEmulatedI128(ty)) {
                                 switch (ve.op) {
                                     case ::MIR::eBinOp::ADD:
                                         of << "add128";
@@ -3194,9 +3194,9 @@ namespace {
                                             of << "s";
                                         }
                                         of << "(";
-                                        emitParam(ve.val_l);
+                                        emitParam(ve.valL);
                                         of << ", ";
-                                        emitParam(ve.val_r);
+                                        emitParam(ve.valR);
                                         of << ")";
                                         break;
                                     case ::MIR::eBinOp::BIT_SHR:
@@ -3209,10 +3209,10 @@ namespace {
                                             of << "s";
                                         }
                                         of << "(";
-                                        emitParam(ve.val_l);
+                                        emitParam(ve.valL);
                                         of << ", ";
-                                        emitParam(ve.val_r);
-                                        if ((ty_r == ::HIR::CoreType::I128 || ty_r == ::HIR::CoreType::U128)) {
+                                        emitParam(ve.valR);
+                                        if ((tyR == ::HIR::CoreType::I128 || tyR == ::HIR::CoreType::U128)) {
                                             of << ".lo";
                                         }
                                         of << ")";
@@ -3246,9 +3246,9 @@ namespace {
                                             of << "s";
                                         }
                                         of << "(";
-                                        emitParam(ve.val_r);
+                                        emitParam(ve.valR);
                                         of << ", ";
-                                        emitParam(ve.val_l);
+                                        emitParam(ve.valL);
                                         of << ")";
                                         break;
 
@@ -3263,7 +3263,7 @@ namespace {
                             } else {
                             }
 
-                            emitParam(ve.val_l);
+                            emitParam(ve.valL);
                             switch (ve.op) {
                                 case ::MIR::eBinOp::ADD:
                                     of << " + ";
@@ -3322,8 +3322,8 @@ namespace {
                                     MIR_TODO(mir_res, "Overflow");
                                     break;
                             }
-                            emitParam(ve.val_r);
-                            if (type_is_emulated_i128(ty_r)) {
+                            emitParam(ve.valR);
+                            if (typeIsEmulatedI128(tyR)) {
                                 of << ".lo";
                             }
                         }
@@ -3331,7 +3331,7 @@ namespace {
                             ::HIR::TypeRef tmp;
                             const auto& ty = mir_res.getLvalueType(tmp, e.dst);
 
-                            if (type_is_emulated_i128(ty)) {
+                            if (typeIsEmulatedI128(ty)) {
                                 switch (ve.op) {
                                     case ::MIR::eUniOp::NEG:
                                         emitLvalue(e.dst);
@@ -3469,7 +3469,7 @@ namespace {
                         }
                         TU_ARMA(UnionVariant, ve) {
                             MIR_ASSERT(mir_res, crate.getTypeitemByPath(sp, ve.path.mPath).is_Union(), "");
-                            if (!this->type_is_bad_zst(mirRes->getParamType(tmp, ve.val))) {
+                            if (!this->typeIsBadZst(mirRes->getParamType(tmp, ve.val))) {
                                 emitLvalue(e.dst);
                                 of << ".var_" << ve.index << " = ";
                                 emitParam(ve.val);
@@ -3493,7 +3493,7 @@ namespace {
                                 }
                                 TU_ARMA(NonZero, re) {
                                     MIR_ASSERT(*mirRes, ve.index < 2, "");
-                                    if (ve.index == re.zero_variant) {
+                                    if (ve.index == re.zeroVariant) {
                                         // TODO: Use nonzero_path
                                         of << "memset(&";
                                         emitLvalue(e.dst);
@@ -3512,7 +3512,7 @@ namespace {
                                     if (!re.isNiche(ve.index)) {
                                         // Each variant has its own tag field, it will be the last numbered field in that variant slot
                                         // - Only use that if there isn't an explicit tag field in the enum
-                                        if (re.field.subFields.empty() || type_is_bad_zst(repr->fields[ve.index].ty)) {
+                                        if (re.field.subFields.empty() || typeIsBadZst(repr->fields[ve.index].ty)) {
                                             emitLvalue(e.dst);
                                             const auto& slotTy = emitEnumPath(repr, re.field);
                                             of << " = ";
@@ -3806,7 +3806,7 @@ namespace {
                     emitLvalue(val);
                     const auto& slotTy = emitEnumPath(repr, e.field);
                     MIR_ASSERT(mir_res, slotTy->is_Pointer() || slotTy->is_Function() || slotTy->is_Borrow() || slotTy->is_Primitive(), "Invalid niche type: " << slotTy << " in " << ty);
-                    if (type_is_emulated_i128(slotTy)) {
+                    if (typeIsEmulatedI128(slotTy)) {
                         of << ".lo == 0 && ";
                         emitLvalue(val);
                         emitEnumPath(repr, e.field);
@@ -3814,11 +3814,11 @@ namespace {
                     }
                     of << " != 0 )\n";
                     of << indent << "\t";
-                    cb(1 - e.zero_variant);
+                    cb(1 - e.zeroVariant);
                     of << "\n";
                     of << indent << "else\n";
                     of << indent << "\t";
-                    cb(e.zero_variant);
+                    cb(e.zeroVariant);
                     of << "\n";
                 }
                 TU_ARMA(Linear, e) {
@@ -3896,7 +3896,7 @@ namespace {
                             of << "break;\n";
                         }
                         of << indent << "default: ";
-                        if (e.uses_niche()) {
+                        if (e.usesNiche()) {
                             cb(e.field.index);
                             of << "break;";
                         } else {
@@ -3939,7 +3939,7 @@ namespace {
                     }
 
                     const bool is128 = tagTy == ::HIR::CoreType::I128 || tagTy == ::HIR::CoreType::U128;
-                    const bool emulated128 = type_is_emulated_i128(tagTy);
+                    const bool emulated128 = typeIsEmulatedI128(tagTy);
                     auto emitTag = [&]() {
                         emitLvalue(val);
                         emitEnumPath(repr, e.field);
@@ -4134,7 +4134,7 @@ namespace {
                 ::HIR::TypeRef tmp;
                 const auto& ty = mirRes->getParamType(tmp, e.args[j]);
                 if (options.disallowEmptyStructs /*&& TU_TEST1(e.args[j], LValue, .is_Field())*/) {
-                    if (this->type_is_bad_zst(ty)) {
+                    if (this->typeIsBadZst(ty)) {
                         if (!hasZst) {
                             of << "{\n";
                             indent.n++;
@@ -4159,7 +4159,7 @@ namespace {
                     omitAssign = true;
                 }
 
-                if (this->type_is_bad_zst(mirRes->getLvalueType(tmp, e.retVal))) {
+                if (this->typeIsBadZst(mirRes->getLvalueType(tmp, e.retVal))) {
                     omitAssign = true;
                 }
             }
@@ -4253,7 +4253,7 @@ namespace {
                 ::HIR::TypeRef tmp;
                 const auto& ty = mirRes->getParamType(tmp, e.args[j]);
 
-                if (this->type_is_bad_zst(ty)) {
+                if (this->typeIsBadZst(ty)) {
                     of << "zarg" << j;
                     continue;
                 }
@@ -4796,25 +4796,25 @@ namespace {
                         switch(c)
                         {
                             // x86
-                            case AsmCommon::RegisterClass::x86_reg:
+                            case AsmCommon::RegisterClass::x86Reg:
                                 of << "r";
                                 break;
-                            case AsmCommon::RegisterClass::x86_reg_abcd:
+                            case AsmCommon::RegisterClass::x86RegAbcd:
                                 of << "Q";
                                 break;
-                            case AsmCommon::RegisterClass::x86_reg_byte:
+                            case AsmCommon::RegisterClass::x86RegByte:
                                 of << "q";
                                 break;
-                            case AsmCommon::RegisterClass::x86_xmm:
+                            case AsmCommon::RegisterClass::x86Xmm:
                                 of << "x";
                                 break;
-                            case AsmCommon::RegisterClass::x86_ymm:
+                            case AsmCommon::RegisterClass::x86Ymm:
                                 of << "x";
                                 break;
-                            case AsmCommon::RegisterClass::x86_zmm:
+                            case AsmCommon::RegisterClass::x86Zmm:
                                 of << "v";
                                 break;
-                            case AsmCommon::RegisterClass::x86_kreg:
+                            case AsmCommon::RegisterClass::x86Kreg:
                                 of << "Yk";
                                 break;
                             // riscv
@@ -4856,25 +4856,25 @@ namespace {
                             switch(c)
                             {
                                     // x86
-                                    case AsmCommon::RegisterClass::x86_reg:
+                                    case AsmCommon::RegisterClass::x86Reg:
                                         of << "r";
                                         break;
-                                    case AsmCommon::RegisterClass::x86_reg_abcd:
+                                    case AsmCommon::RegisterClass::x86RegAbcd:
                                         of << "Q";
                                         break;
-                                    case AsmCommon::RegisterClass::x86_reg_byte:
+                                    case AsmCommon::RegisterClass::x86RegByte:
                                         of << "q";
                                         break;
-                                    case AsmCommon::RegisterClass::x86_xmm:
+                                    case AsmCommon::RegisterClass::x86Xmm:
                                         of << "x";
                                         break;
-                                    case AsmCommon::RegisterClass::x86_ymm:
+                                    case AsmCommon::RegisterClass::x86Ymm:
                                         of << "x";
                                         break;
-                                    case AsmCommon::RegisterClass::x86_zmm:
+                                    case AsmCommon::RegisterClass::x86Zmm:
                                         of << "v";
                                         break;
-                                    case AsmCommon::RegisterClass::x86_kreg:
+                                    case AsmCommon::RegisterClass::x86Kreg:
                                         of << "Yk";
                                         break;
                                     // riscv
@@ -4940,7 +4940,7 @@ namespace {
 
     private:
         const ::HIR::TypeData* monomorphiseFcnReturn(::HIR::TypeRef& tmp, const ::HIR::Function& item, const TransParams& params) {
-            bool hasErased = visit_ty_with(item.returnType, [&](const auto& x) {
+            bool hasErased = visitTyWith(item.returnType, [&](const auto& x) {
                 return x->is_ErasedType();
             });
 
@@ -5140,7 +5140,7 @@ namespace {
                     default:
                         break;
                 }
-                if (type_is_emulated_i128(params.types.at(0))) {
+                if (typeIsEmulatedI128(params.types.at(0))) {
                     emitCtype(params.types.at(0), FMT_CB(ss, ss << " mrustc_atomic_desired";));
                     of << " = ";
                     emitParam(e.args.at(2));
@@ -5151,14 +5151,14 @@ namespace {
                 emitParam(e.args.at(1));
                 of << ";\n\t";
                 emitLvalue(e.retVal);
-                of << "._1 = " << (type_is_emulated_i128(params.types.at(0)) ? "__atomic_compare_exchange(" : "__atomic_compare_exchange_n(");
+                of << "._1 = " << (typeIsEmulatedI128(params.types.at(0)) ? "__atomic_compare_exchange(" : "__atomic_compare_exchange_n(");
                 emitAtomicCast();
                 emitParam(e.args.at(0));
                 of << ", &";
                 emitLvalue(e.retVal);
                 of << "._0"; // Expected (i.e. the check value)
                 of << ", ";
-                if (type_is_emulated_i128(params.types.at(0))) {
+                if (typeIsEmulatedI128(params.types.at(0))) {
                     of << "&mrustc_atomic_desired";
                 } else {
                     emitParam(e.args.at(2)); // `desired` (the new value for the slot if equal)
@@ -5240,10 +5240,10 @@ namespace {
                     if (!ty->is_Slice() && !ty->is_Primitive()) {
                         // TODO: What if the wrapper has no other fields?
                         // Get the alignment and check if it's higher than the item alignment
-                        size_t wrapper_align = 0, wrapper_size_ignore = 0;
-                        MIR_ASSERT(mir_res, TargetGetSizeAndAlignOf(sp, mResolve, ty, wrapper_size_ignore, wrapper_align), "Can't get align of " << ty);
-                        if (wrapper_align > itemAlign) {
-                            itemAlign = wrapper_align;
+                        size_t wrapperAlign = 0, wrapperSizeIgnore = 0;
+                        MIR_ASSERT(mir_res, TargetGetSizeAndAlignOf(sp, mResolve, ty, wrapperSizeIgnore, wrapperAlign), "Can't get align of " << ty);
+                        if (wrapperAlign > itemAlign) {
+                            itemAlign = wrapperAlign;
                             alignNeeded = true;
                             of << "ALIGN_TO(";
                         }
@@ -5359,37 +5359,37 @@ namespace {
                 emitLvalue(e.retVal);
                 of << ".META = " << name.size() << "";
             } else if (name == "transmute" || name == "transmute_unchecked") {
-                const auto& ty_src = params.types.at(0);
-                const auto& ty_dst = params.types.at(1);
+                const auto& tySrc = params.types.at(0);
+                const auto& tyDst = params.types.at(1);
                 auto isPtr = [](const ::HIR::TypeData* ty) {
                     return ty->is_Borrow() || ty->is_Pointer();
                 };
-                if (this->type_is_bad_zst(ty_dst)) {
+                if (this->typeIsBadZst(tyDst)) {
                     of << "/* zst */";
                 } else if (e.args.at(0).is_Constant()) {
                     of << "{ ";
-                    emitCtype(ty_src, FMT_CB(s, s << "v";));
+                    emitCtype(tySrc, FMT_CB(s, s << "v";));
                     of << " = ";
                     emitParam(e.args.at(0));
                     of << "; ";
                     of << "memcpy( &";
                     emitLvalue(e.retVal);
                     of << ", &v, sizeof(";
-                    emitCtype(ty_dst);
+                    emitCtype(tyDst);
                     of << ")); ";
                     of << "}";
-                } else if (isPtr(ty_dst) && isPtr(ty_src)) {
-                    auto srcMeta = metadataType(ty_src->is_Pointer() ? ty_src->as_Pointer().inner : ty_src->as_Borrow().inner);
-                    auto dstMeta = metadataType(ty_dst->is_Pointer() ? ty_dst->as_Pointer().inner : ty_dst->as_Borrow().inner);
+                } else if (isPtr(tyDst) && isPtr(tySrc)) {
+                    auto srcMeta = metadataType(tySrc->is_Pointer() ? tySrc->as_Pointer().inner : tySrc->as_Borrow().inner);
+                    auto dstMeta = metadataType(tyDst->is_Pointer() ? tyDst->as_Pointer().inner : tyDst->as_Borrow().inner);
                     if (srcMeta == MetadataType::None || srcMeta == MetadataType::Zero) {
-                        MIR_ASSERT(*mirRes, dstMeta == MetadataType::None || dstMeta == MetadataType::Zero, "Transmuting to fat pointer from thin: " << ty_src << " -> " << ty_dst);
+                        MIR_ASSERT(*mirRes, dstMeta == MetadataType::None || dstMeta == MetadataType::Zero, "Transmuting to fat pointer from thin: " << tySrc << " -> " << tyDst);
                         emitLvalue(e.retVal);
                         of << " = (";
-                        emitCtype(ty_dst);
+                        emitCtype(tyDst);
                         of << ")";
                         emitParam(e.args.at(0));
                     } else if (dstMeta == MetadataType::None || dstMeta == MetadataType::Zero) {
-                        MIR_BUG(*mirRes, "Transmuting from fat pointer to thin: (" << srcMeta << "->" << dstMeta << ") " << ty_src << " -> " << ty_dst);
+                        MIR_BUG(*mirRes, "Transmuting from fat pointer to thin: (" << srcMeta << "->" << dstMeta << ") " << tySrc << " -> " << tyDst);
                     } else if (srcMeta != dstMeta) {
                         emitLvalue(e.retVal);
                         of << ".PTR = ";
@@ -5424,14 +5424,14 @@ namespace {
                     of << ", &";
                     emitParam(e.args.at(0));
                     of << ", sizeof(";
-                    emitCtype(ty_src);
+                    emitCtype(tySrc);
                     of << "))";
                 }
             } else if (name == "float_to_int_unchecked") {
                 const auto& srcTy = params.types.at(0);
                 const auto& dstTy = params.types.at(1);
                 // Unchecked (can return `undef`) cast from a float to an integer
-                if (this->type_is_emulated_i128(dstTy)) {
+                if (this->typeIsEmulatedI128(dstTy)) {
                     of << "abort()";
                     //emit_lvalue(e.ret_val); m_of << " = ("; emit_ctype(dst_ty); m_of << ")"; emit_param(e.args.at(0));
                 } else if (srcTy == HIR::CoreType::F16 || srcTy == HIR::CoreType::F128) {
@@ -5444,7 +5444,7 @@ namespace {
                     emitParam(e.args.at(0));
                 }
             } else if (name == "copy_nonoverlapping" || name == "copy") {
-                if (this->type_is_bad_zst(params.types.at(0))) {
+                if (this->typeIsBadZst(params.types.at(0))) {
                     of << "/* zst */";
                     return;
                 }
@@ -5467,7 +5467,7 @@ namespace {
             }
             // NOTE: This is generic, and fills count*sizeof(T) (unlike memset)
             else if (name == "write_bytes") {
-                if (this->type_is_bad_zst(params.types.at(0))) {
+                if (this->typeIsBadZst(params.types.at(0))) {
                     of << "/* zst */";
                     return;
                 }
@@ -5509,7 +5509,7 @@ namespace {
                 of << "))";
             } else if (name == "three_way_compare") {
                 const auto& t = params.types.at(0);
-                if (type_is_emulated_i128(t)) {
+                if (typeIsEmulatedI128(t)) {
                     emitLvalue(e.retVal);
                     of << ".TAG = ";
                     of << (t == ::HIR::CoreType::U128 ? "cmp128" : "cmp128s");
@@ -5544,7 +5544,7 @@ namespace {
                 const auto& ty = params.types.at(0);
                 emitLvalue(e.retVal);
                 of << " = ";
-                if (mResolve.type_needs_drop_glue(mir_res.sp, ty)) {
+                if (mResolve.typeNeedsDropGlue(mir_res.sp, ty)) {
                     of << "true";
                 } else {
                     of << "false";
@@ -5561,7 +5561,7 @@ namespace {
                 emitCtype(params.types.at(0));
                 of << "))";
             } else if (name == "move_val_init") {
-                if (!this->type_is_bad_zst(params.types.at(0))) {
+                if (!this->typeIsBadZst(params.types.at(0))) {
                     of << "*";
                     emitParam(e.args.at(0));
                     of << " = ";
@@ -5744,7 +5744,7 @@ namespace {
                                     of << ")";
                                     emitEnumPath(repr, ve.field);
                                 };
-                                if (ve.uses_niche()) {
+                                if (ve.usesNiche()) {
                                     of << "( ";
                                     emitTag();
                                     of << " < " << ve.offset;
@@ -5764,7 +5764,7 @@ namespace {
                                 of << ")";
                                 emitEnumPath(repr, ve.field);
                                 of << " ";
-                                of << (ve.zero_variant ? "==" : "!=");
+                                of << (ve.zeroVariant ? "==" : "!=");
                                 of << " 0";
                             }
                             break;
@@ -6117,7 +6117,7 @@ namespace {
             else if (name == "unchecked_div" || name == "exact_div") {
                 emitLvalue(e.retVal);
                 of << " = ";
-                if (type_is_emulated_i128(params.types.at(0))) {
+                if (typeIsEmulatedI128(params.types.at(0))) {
                     of << "div128";
                     if (params.types.at(0) == ::HIR::CoreType::I128) {
                         of << "s";
@@ -6135,7 +6135,7 @@ namespace {
             } else if (name == "unchecked_rem") {
                 emitLvalue(e.retVal);
                 of << " = ";
-                if (type_is_emulated_i128(params.types.at(0))) {
+                if (typeIsEmulatedI128(params.types.at(0))) {
                     of << "mod128";
                     if (params.types.at(0) == ::HIR::CoreType::I128) {
                         of << "s";
@@ -6153,7 +6153,7 @@ namespace {
             } else if (name == "unchecked_shl") {
                 emitLvalue(e.retVal);
                 of << " = ";
-                if (type_is_emulated_i128(params.types.at(0))) {
+                if (typeIsEmulatedI128(params.types.at(0))) {
                     of << "shl128";
                     if (params.types.at(0) == ::HIR::CoreType::I128) {
                         of << "s";
@@ -6177,7 +6177,7 @@ namespace {
             } else if (name == "unchecked_shr") {
                 emitLvalue(e.retVal);
                 of << " = ";
-                if (type_is_emulated_i128(params.types.at(0))) {
+                if (typeIsEmulatedI128(params.types.at(0))) {
                     of << "shr128";
                     if (params.types.at(0) == ::HIR::CoreType::I128) {
                         of << "s";
@@ -6504,7 +6504,7 @@ namespace {
                 emitLvalue(e.retVal);
                 of << " = ";
 
-                if (type_is_emulated_i128(params.types.at(0))) {
+                if (typeIsEmulatedI128(params.types.at(0))) {
                     of << "popcount128(";
                     emitParam(e.args.at(0));
                     of << ")";
@@ -6641,7 +6641,7 @@ namespace {
                 // A ZST has no bytes to access.  In particular, Rust permits
                 // these operations with a dangling ZST pointer, so emitting a
                 // C volatile dereference would invent an observable access.
-                if (!this->type_is_bad_zst(params.types.at(0))) {
+                if (!this->typeIsBadZst(params.types.at(0))) {
                     emitLvalue(e.retVal);
                     of << " = *(volatile ";
                     emitCtype(params.types.at(0));
@@ -6649,7 +6649,7 @@ namespace {
                     emitParam(e.args.at(0));
                 }
             } else if (name == "volatile_store") {
-                if (!this->type_is_bad_zst(params.types.at(0))) {
+                if (!this->typeIsBadZst(params.types.at(0))) {
                     of << "*(volatile ";
                     emitCtype(params.types.at(0));
                     of << "*)";
@@ -6660,7 +6660,7 @@ namespace {
             } else if (name == "nontemporal_store") {
                 // TODO: Actually do a non-temporal store
                 // GCC: _mm_stream_* (depending on input type, which must be `repr(simd)`)
-                if (!this->type_is_bad_zst(params.types.at(0))) {
+                if (!this->typeIsBadZst(params.types.at(0))) {
                     of << "*(volatile ";
                     emitCtype(params.types.at(0));
                     of << "*)";
@@ -6839,24 +6839,24 @@ namespace {
                     } ty;
 
                     static SimdInfo forTy(const CodeGeneratorC& self, const HIR::TypeData* ty) {
-                        const auto* ty_repr = TargetGetTypeRepr(self.sp, self.mirRes->mResolve, ty);
-                        MIR_ASSERT(*self.mirRes, ty_repr, "No repr for " << ty);
-                        size_t sizeSlot = ty_repr->size;
-                        const auto& ity = ty_repr->fields[0].ty;
+                        const auto* tyRepr = TargetGetTypeRepr(self.sp, self.mirRes->mResolve, ty);
+                        MIR_ASSERT(*self.mirRes, tyRepr, "No repr for " << ty);
+                        size_t sizeSlot = tyRepr->size;
+                        const auto& ity = tyRepr->fields[0].ty;
                         DEBUG("SimdInfo Type: " << ity);
-                        const auto& ty_val = ity->is_Primitive() ? ity : ty_repr->fields[0].ty->as_Array().inner;
-                        DEBUG("ty_val = " << ty_val);
+                        const auto& tyVal = ity->is_Primitive() ? ity : tyRepr->fields[0].ty->as_Array().inner;
+                        DEBUG("ty_val = " << tyVal);
                         size_t sizeVal = 0;
-                        MIR_ASSERT(*self.mirRes, TargetGetSizeOf(self.sp, self.mResolve, ty_val, sizeVal), ty_val);
+                        MIR_ASSERT(*self.mirRes, TargetGetSizeOf(self.sp, self.mResolve, tyVal, sizeVal), tyVal);
 
                         MIR_ASSERT(*self.mirRes, sizeSlot >= sizeVal, sizeSlot << " < " << sizeVal);
-                        MIR_ASSERT(*self.mirRes, sizeVal > 0, "SimdInfo::for_ty - Value type " << ty_val << " was a ZST");
+                        MIR_ASSERT(*self.mirRes, sizeVal > 0, "SimdInfo::for_ty - Value type " << tyVal << " was a ZST");
                         MIR_ASSERT(*self.mirRes, sizeSlot / sizeVal * sizeVal == sizeSlot, sizeSlot << " not a multiple of " << sizeVal);
 
                         SimdInfo rv;
                         rv.itemSize = sizeVal;
                         rv.count = sizeSlot == 0 ? 0 : sizeSlot / sizeVal;
-                        switch (ty_val->as_Primitive()) {
+                        switch (tyVal->as_Primitive()) {
                             case ::HIR::CoreType::I8:
                                 rv.ty = Signed;
                                 break;
@@ -6896,7 +6896,7 @@ namespace {
                                 rv.ty = Float;
                                 break;
                             default:
-                                MIR_BUG(*self.mirRes, "Invalid SIMD type inner - " << ty_val);
+                                MIR_BUG(*self.mirRes, "Invalid SIMD type inner - " << tyVal);
                         }
                         return rv;
                     }
@@ -7061,13 +7061,13 @@ namespace {
                     of << "))[j < " << nIn << " ? j : j - " << nIn << "];";
                     of << "}";
                 } else if (nameStrip == "simd_shuffle") {
-                    const auto& vec_ty = params.types.at(0);
+                    const auto& vecTy = params.types.at(0);
                     const auto& mapTy = params.types.at(1);
                     const auto& ret_ty = params.types.at(2);
                     size_t sizeVec = 0;
                     size_t sizeMap = 0;
                     size_t sizeRet = 0;
-                    TargetGetSizeOf(sp, mResolve, vec_ty, sizeVec);
+                    TargetGetSizeOf(sp, mResolve, vecTy, sizeVec);
                     TargetGetSizeOf(sp, mResolve, mapTy, sizeMap);
                     TargetGetSizeOf(sp, mResolve, ret_ty, sizeRet);
                     size_t div = sizeMap / 4; // map must be u32s
@@ -7109,11 +7109,11 @@ namespace {
                 // Select between two values
                 else if (nameStrip == "simd_select") {
                     auto maskInfo = SimdInfo::forTy(*this, params.types.at(0));
-                    auto val_info = SimdInfo::forTy(*this, params.types.at(1));
-                    MIR_ASSERT(mir_res, maskInfo.count == val_info.count, "Element counts must match for " << name);
-                    of << "for(int i = 0; i < " << val_info.count << "; i++) ";
+                    auto valInfo = SimdInfo::forTy(*this, params.types.at(1));
+                    MIR_ASSERT(mir_res, maskInfo.count == valInfo.count, "Element counts must match for " << name);
+                    of << "for(int i = 0; i < " << valInfo.count << "; i++) ";
                     of << "((";
-                    val_info.emitValTy(*this);
+                    valInfo.emitValTy(*this);
                     of << "*)&";
                     emitLvalue(e.retVal);
                     of << ")[i] ";
@@ -7123,21 +7123,21 @@ namespace {
                     emitParam(e.args.at(0));
                     of << ")[i]";
                     of << "? ((";
-                    val_info.emitValTy(*this);
+                    valInfo.emitValTy(*this);
                     of << "*)&";
                     emitParam(e.args.at(1));
                     of << ")[i]";
                     of << ": ((";
-                    val_info.emitValTy(*this);
+                    valInfo.emitValTy(*this);
                     of << "*)&";
                     emitParam(e.args.at(2));
                     of << ")[i]";
                     of << ";";
                 } else if (nameStrip == "simd_select_bitmask") {
-                    auto val_info = SimdInfo::forTy(*this, params.types.at(1));
-                    of << "for(int i = 0; i < " << val_info.count << "; i++) ";
+                    auto valInfo = SimdInfo::forTy(*this, params.types.at(1));
+                    of << "for(int i = 0; i < " << valInfo.count << "; i++) ";
                     of << "((";
-                    val_info.emitValTy(*this);
+                    valInfo.emitValTy(*this);
                     of << "*)&";
                     emitLvalue(e.retVal);
                     of << ")[i] ";
@@ -7145,12 +7145,12 @@ namespace {
                     emitParam(e.args.at(0));
                     of << ") >> i) != 0";
                     of << "? ((";
-                    val_info.emitValTy(*this);
+                    valInfo.emitValTy(*this);
                     of << "*)&";
                     emitParam(e.args.at(1));
                     of << ")[i]";
                     of << ": ((";
-                    val_info.emitValTy(*this);
+                    valInfo.emitValTy(*this);
                     of << "*)&";
                     emitParam(e.args.at(2));
                     of << ")[i]";
@@ -7278,7 +7278,7 @@ namespace {
         void emitTupleDestructor(
             const ::MIR::LValue& slot,
             const ::HIR::TypeData::Data_Tuple& tuple,
-            bool unsized_valid,
+            bool unsizedValid,
             unsigned indent_level
         ) {
             ::std::vector<::MIR::LValue> fields;
@@ -7286,10 +7286,10 @@ namespace {
             ::std::vector<bool> fieldUnsized;
             auto field = ::MIR::LValue::newField(slot.clone(), 0);
             for (size_t i = 0; i < tuple.size(); i++) {
-                if (mResolve.type_needs_drop_glue(sp, tuple[i])) {
+                if (mResolve.typeNeedsDropGlue(sp, tuple[i])) {
                     fields.push_back(field.clone());
                     fieldTypes.push_back(tuple[i]);
-                    fieldUnsized.push_back(unsized_valid && i == tuple.size() - 1);
+                    fieldUnsized.push_back(unsizedValid && i == tuple.size() - 1);
                 }
                 field.incField();
             }
@@ -7321,9 +7321,9 @@ namespace {
         /// ty :: Type of value to be dropped
         /// unsized_valid ::
         /// indent_level :: (formatting) Current amount of indenting
-        void emitDestructorCall(const ::MIR::LValue& slot, const ::HIR::TypeData* ty, bool unsized_valid, unsigned indent_level) {
+        void emitDestructorCall(const ::MIR::LValue& slot, const ::HIR::TypeData* ty, bool unsizedValid, unsigned indent_level) {
             // If the type doesn't need dropping, don't try.
-            if (!mResolve.type_needs_drop_glue(sp, ty)) {
+            if (!mResolve.typeNeedsDropGlue(sp, ty)) {
                 return;
             }
             auto indent = RepeatLitStr{"\t", static_cast<int>(indent_level)};
@@ -7366,7 +7366,7 @@ namespace {
                             MIR_BUG(*mirRes, ty << " unknown metadata");
                         case MetadataType::None:
                         case MetadataType::Zero:
-                            if (this->type_is_bad_zst(ty) && this->lvalueRootIsBadZst(slot)) {
+                            if (this->typeIsBadZst(ty) && this->lvalueRootIsBadZst(slot)) {
                                 // The C backend omits zero-sized locals, but Rust still
                                 // runs Drop for every logical ZST value.  Give Drop an
                                 // address with the ZST's own alignment instead of naming
@@ -7374,17 +7374,17 @@ namespace {
                                 of << indent << "{ ";
                                 emitCtype(ty);
                                 of << " mrustc_zst{}; " << TransMangle(p) << "(&mrustc_zst); }\n";
-                            } else if (this->type_is_bad_zst(ty) && ::MIR::LValue::CRef(slot).is_Index()) {
+                            } else if (this->typeIsBadZst(ty) && ::MIR::LValue::CRef(slot).is_Index()) {
                                 of << indent << TransMangle(p) << "((";
                                 emitCtype(ty);
                                 of << "*)";
                                 emitBorrow(*mirRes, ::HIR::BorrowType::Unique, slot);
                                 of << ");\n";
-                            } else if (this->type_is_bad_zst(ty) && (slot.is_Field() || slot.is_Downcast())) {
+                            } else if (this->typeIsBadZst(ty) && (slot.is_Field() || slot.is_Downcast())) {
                                 // May need to back the slot out too, as we might be dropping a ZST tuple
                                 auto v = ::MIR::LValue::CRef(slot).innerRef();
                                 ::HIR::TypeRef tmp;
-                                if (this->type_is_bad_zst(mirRes->getLvalueType(tmp, v)) && (v.is_Field() || v.is_Downcast())) {
+                                if (this->typeIsBadZst(mirRes->getLvalueType(tmp, v)) && (v.is_Field() || v.is_Downcast())) {
                                     v = v.innerRef();
                                 }
                                 of << indent << TransMangle(p) << "((";
@@ -7392,7 +7392,7 @@ namespace {
                                 of << "*)&";
                                 emitLvalue(v);
                                 of << ");\n";
-                            } else if (this->type_is_bad_zst(ty) && slot.wrappers.empty()) {
+                            } else if (this->typeIsBadZst(ty) && slot.wrappers.empty()) {
                                 of << indent << TransMangle(p) << "((";
                                 emitCtype(ty);
                                 of << "*)&rv);\n";
@@ -7435,10 +7435,10 @@ namespace {
                     }
                 }
                 TU_ARMA(Tuple, te) {
-                    emitTupleDestructor(slot, te, unsized_valid, indent_level);
+                    emitTupleDestructor(slot, te, unsizedValid, indent_level);
                 }
                 TU_ARMA(TraitObject, te) {
-                    MIR_ASSERT(*mirRes, unsized_valid, "Dropping TraitObject without an owned pointer");
+                    MIR_ASSERT(*mirRes, unsizedValid, "Dropping TraitObject without an owned pointer");
                     // Call destructor in vtable
                     auto lvr = ::MIR::LValue::CRef(slot);
                     while (lvr.is_Field()) {
@@ -7458,7 +7458,7 @@ namespace {
                     of << ");";
                 }
                 TU_ARMA(Slice, te) {
-                    MIR_ASSERT(*mirRes, unsized_valid, "Dropping Slice without an owned pointer");
+                    MIR_ASSERT(*mirRes, unsizedValid, "Dropping Slice without an owned pointer");
                     auto lvr = ::MIR::LValue::CRef(slot);
                     while (lvr.is_Field()) {
                         lvr.tryUnwrap();
@@ -7630,7 +7630,7 @@ namespace {
                     emitLvalue(::MIR::LValue::newLocal(indexLocal));
                     of << "]";
                 }
-                TU_ARMA(Downcast, variant_index) {
+                TU_ARMA(Downcast, variantIndex) {
                     auto inner = val.innerRef();
                     ::HIR::TypeRef tmp;
                     const auto& ty = mirRes->getLvalueType(tmp, inner);
@@ -7639,7 +7639,7 @@ namespace {
                     if (ty->as_Path().binding.is_Enum()) {
                         of << ".DATA";
                     }
-                    of << ".var_" << variant_index;
+                    of << ".var_" << variantIndex;
                 }
             }
         }
@@ -7781,7 +7781,7 @@ namespace {
             }
         }
 
-        void emitParam(const ::MIR::Param& p, bool type_bytes = true) {
+        void emitParam(const ::MIR::Param& p, bool typeBytes = true) {
             TU_MATCH_HDRA( (p), {)
             TU_ARMA(LValue, e) {
                     emitLvalue(e);
@@ -7790,7 +7790,7 @@ namespace {
                     emitBorrow(*mirRes, e.type, e.val);
                 }
                 TU_ARMA(Constant, e) {
-                    if (type_bytes && e.is_Bytes()) {
+                    if (typeBytes && e.is_Bytes()) {
                         ::HIR::TypeRef tmp;
                         of << "static_cast<";
                         emitCtype(mirRes->getParamType(tmp, p));

@@ -45,7 +45,7 @@ unsigned int ::HIR::ExprNodeAsyncBlock::nodeKind() const { return ::HIR::ExprNod
 
 #define DEF_VISIT_H(nt, n)                   \
     void ::HIR::nt::visit(ExprVisitor& nv) { \
-        nv.visit_node(*this);                \
+        nv.visitNode(*this);                \
         nv.visit(*this);                     \
     }                                        \
     void ::HIR::ExprVisitorDef::visit(::HIR::nt& n)
@@ -54,47 +54,47 @@ unsigned int ::HIR::ExprNodeAsyncBlock::nodeKind() const { return ::HIR::ExprNod
         code                   \
     }
 
-const char* ::HIR::ExprNode::type_name() const {
+const char* ::HIR::ExprNode::typeName() const {
     return typeid(*this).name();
 }
 
-void ::HIR::ExprVisitor::visit_node_ptr(::HIR::ExprNodeP& nodePtr) {
+void ::HIR::ExprVisitor::visitNodePtr(::HIR::ExprNodeP& nodePtr) {
     assert(nodePtr);
     nodePtr->visit(*this);
 }
 
-void ::HIR::ExprVisitor::visit_node(::HIR::ExprNode& node) {
+void ::HIR::ExprVisitor::visitNode(::HIR::ExprNode& node) {
 }
 
-void ::HIR::ExprVisitorDef::visit_node_ptr(::HIR::ExprNodeP& nodePtr) {
+void ::HIR::ExprVisitorDef::visitNodePtr(::HIR::ExprNodeP& nodePtr) {
     assert(nodePtr);
-    TRACE_FUNCTION_F(&*nodePtr << " " << nodePtr->type_name());
+    TRACE_FUNCTION_F(&*nodePtr << " " << nodePtr->typeName());
     nodePtr->visit(*this);
-    visit_type(nodePtr->resType);
+    visitType(nodePtr->resType);
 }
 
 DEF_VISIT_H(ExprNodeBlock, node) {
     TRACE_FUNCTION_F("_Block");
     for (auto& subnode : node.nodes) {
-        visit_node_ptr(subnode);
+        visitNodePtr(subnode);
     }
     if (node.valueNode) {
-        visit_node_ptr(node.valueNode);
+        visitNodePtr(node.valueNode);
     }
 }
 
 DEF_VISIT_H(ExprNodeConstBlock, node) {
     TRACE_FUNCTION_F("_ConstBlock");
-    visit_node_ptr(node.inner);
+    visitNodePtr(node.inner);
 }
 
 DEF_VISIT_H(ExprNodeAsm, node) {
     TRACE_FUNCTION_F("_Asm");
     for (auto& v : node.outputs) {
-        visit_node_ptr(v.value);
+        visitNodePtr(v.value);
     }
     for (auto& v : node.inputs) {
-        visit_node_ptr(v.value);
+        visitNodePtr(v.value);
     }
 }
 
@@ -103,20 +103,20 @@ DEF_VISIT_H(ExprNodeAsm2, node) {
     for (auto& v : node.mParams) {
         TU_MATCH_HDRA( (v), { )
         TU_ARMA(Const, e) {
-                visit_node_ptr(e);
+                visitNodePtr(e);
             }
             TU_ARMA(Sym, e) {
-                visit_path(::HIR::Visitor::PathContext::VALUE, e);
+                visitPath(::HIR::Visitor::PathContext::VALUE, e);
             }
             TU_ARMA(RegSingle, e) {
-                visit_node_ptr(e.val);
+                visitNodePtr(e.val);
             }
             TU_ARMA(Reg, e) {
-                if (e.val_in) {
-                    visit_node_ptr(e.val_in);
+                if (e.valIn) {
+                    visitNodePtr(e.valIn);
                 }
-                if (e.val_out) {
-                    visit_node_ptr(e.val_out);
+                if (e.valOut) {
+                    visitNodePtr(e.valOut);
                 }
             }
         }
@@ -125,188 +125,188 @@ DEF_VISIT_H(ExprNodeAsm2, node) {
 
 DEF_VISIT_H(ExprNodeReturn, node) {
     TRACE_FUNCTION_F("_Return");
-    visit_node_ptr(node.mValue);
+    visitNodePtr(node.mValue);
 }
 
 DEF_VISIT_H(ExprNodeYield, node) {
     TRACE_FUNCTION_F("_Yield");
-    visit_node_ptr(node.mValue);
+    visitNodePtr(node.mValue);
 }
 
 DEF_VISIT_H(ExprNodeAWait, node) {
     TRACE_FUNCTION_F("_AWait");
-    visit_node_ptr(node.mValue);
+    visitNodePtr(node.mValue);
 }
 
 DEF_VISIT_H(ExprNodeLet, node) {
     TRACE_FUNCTION_F("_Let: " << node.pattern);
     // Visit the value FIRST as it's evaluated before the variable is defined
     if (node.mValue) {
-        visit_node_ptr(node.mValue);
+        visitNodePtr(node.mValue);
     }
-    visit_pattern(node.span(), node.pattern);
-    visit_type(node.mType);
+    visitPattern(node.span(), node.pattern);
+    visitType(node.mType);
 }
 
 DEF_VISIT_H(ExprNodeLoop, node) {
     TRACE_FUNCTION_F("_Loop");
-    visit_node_ptr(node.mCode);
+    visitNodePtr(node.mCode);
 }
 
 DEF_VISIT_H(ExprNodeLoopControl, node) {
     TRACE_FUNCTION_F("_LoopControl");
     if (node.mValue) {
-        visit_node_ptr(node.mValue);
+        visitNodePtr(node.mValue);
     }
 }
 
 DEF_VISIT_H(ExprNodeMatch, node) {
     TRACE_FUNCTION_F("_Match");
-    visit_node_ptr(node.mValue);
+    visitNodePtr(node.mValue);
     for (auto& arm : node.arms) {
         for (auto& pat : arm.patterns) {
-            visit_pattern(node.span(), pat);
+            visitPattern(node.span(), pat);
         }
         for (auto& c : arm.guards) {
-            visit_pattern(node.span(), c.pat);
-            visit_node_ptr(c.val);
+            visitPattern(node.span(), c.pat);
+            visitNodePtr(c.val);
         }
-        visit_node_ptr(arm.mCode);
+        visitNodePtr(arm.mCode);
     }
 }
 
-DEF_VISIT(ExprNodeAssign, node, TRACE_FUNCTION_F("_Assign"); visit_node_ptr(node.slot); visit_node_ptr(node.mValue);)
-DEF_VISIT(ExprNodeBinOp, node, TRACE_FUNCTION_F("_BinOp"); visit_node_ptr(node.left); visit_node_ptr(node.right);)
-DEF_VISIT(ExprNodeUniOp, node, TRACE_FUNCTION_F("_UniOp"); visit_node_ptr(node.mValue);)
-DEF_VISIT(ExprNodeBorrow, node, TRACE_FUNCTION_F("_Borrow"); visit_node_ptr(node.mValue);)
-DEF_VISIT(ExprNodeRawBorrow, node, visit_node_ptr(node.mValue);)
+DEF_VISIT(ExprNodeAssign, node, TRACE_FUNCTION_F("_Assign"); visitNodePtr(node.slot); visitNodePtr(node.mValue);)
+DEF_VISIT(ExprNodeBinOp, node, TRACE_FUNCTION_F("_BinOp"); visitNodePtr(node.left); visitNodePtr(node.right);)
+DEF_VISIT(ExprNodeUniOp, node, TRACE_FUNCTION_F("_UniOp"); visitNodePtr(node.mValue);)
+DEF_VISIT(ExprNodeBorrow, node, TRACE_FUNCTION_F("_Borrow"); visitNodePtr(node.mValue);)
+DEF_VISIT(ExprNodeRawBorrow, node, visitNodePtr(node.mValue);)
 
 DEF_VISIT_H(ExprNodeCast, node) {
     TRACE_FUNCTION_F("_Cast " << node.dstType);
-    visit_type(node.dstType);
-    visit_node_ptr(node.mValue);
+    visitType(node.dstType);
+    visitNodePtr(node.mValue);
 }
 
 DEF_VISIT_H(ExprNodeUnsize, node) {
     TRACE_FUNCTION_F("_Unsize " << node.dstType);
-    visit_type(node.dstType);
-    visit_node_ptr(node.mValue);
+    visitType(node.dstType);
+    visitNodePtr(node.mValue);
 }
 
 DEF_VISIT_H(ExprNodeIndex, node) {
     TRACE_FUNCTION_F("_Index");
-    visit_node_ptr(node.mValue);
-    visit_node_ptr(node.index);
+    visitNodePtr(node.mValue);
+    visitNodePtr(node.index);
 }
 
 DEF_VISIT_H(ExprNodeDeref, node) {
     TRACE_FUNCTION_F("_Deref");
-    visit_node_ptr(node.mValue);
+    visitNodePtr(node.mValue);
 }
 
 DEF_VISIT_H(ExprNodeEmplace, node) {
     TRACE_FUNCTION_F("_Emplace");
     if (node.place) {
-        visit_node_ptr(node.place);
+        visitNodePtr(node.place);
     }
-    visit_node_ptr(node.mValue);
+    visitNodePtr(node.mValue);
 }
 
 DEF_VISIT_H(ExprNodeTupleVariant, node) {
     TRACE_FUNCTION_F("_TupleVariant: " << node.mPath);
-    visit_generic_path(::HIR::Visitor::PathContext::VALUE, node.mPath);
+    visitGenericPath(::HIR::Visitor::PathContext::VALUE, node.mPath);
 
     for (auto& ty : node.argTypes) {
         if (ty != HIR::TypeRef()) {
-            visit_type(ty);
+            visitType(ty);
         }
     }
 
     for (auto& arg : node.mArgs) {
-        visit_node_ptr(arg);
+        visitNodePtr(arg);
     }
 }
 
 DEF_VISIT_H(ExprNodeCallPath, node) {
     TRACE_FUNCTION_F("_CallPath: " << node.mPath);
     for (auto& ty : node.cache.argTypes) {
-        visit_type(ty);
+        visitType(ty);
     }
 
-    visit_path(::HIR::Visitor::PathContext::VALUE, node.mPath);
+    visitPath(::HIR::Visitor::PathContext::VALUE, node.mPath);
     for (auto& arg : node.mArgs) {
-        visit_node_ptr(arg);
+        visitNodePtr(arg);
     }
 }
 
 DEF_VISIT_H(ExprNodeCallValue, node) {
     TRACE_FUNCTION_F("_CallValue:");
     for (auto& ty : node.argTypes) {
-        visit_type(ty);
+        visitType(ty);
     }
 
-    visit_node_ptr(node.mValue);
+    visitNodePtr(node.mValue);
     for (auto& arg : node.mArgs) {
-        visit_node_ptr(arg);
+        visitNodePtr(arg);
     }
 }
 
 DEF_VISIT_H(ExprNodeCallMethod, node) {
     TRACE_FUNCTION_FR("_CallMethod: " << node.method, "_CallMethod: " << node.method);
-    visit_path_params(node.mParams);
+    visitPathParams(node.mParams);
     for (auto& ty : node.cache.argTypes) {
-        visit_type(ty);
+        visitType(ty);
     }
 
-    visit_path(::HIR::Visitor::PathContext::VALUE, node.methodPath);
+    visitPath(::HIR::Visitor::PathContext::VALUE, node.methodPath);
 
-    visit_node_ptr(node.mValue);
+    visitNodePtr(node.mValue);
     for (auto& arg : node.mArgs) {
-        visit_node_ptr(arg);
+        visitNodePtr(arg);
     }
 }
 
 DEF_VISIT_H(ExprNodeField, node) {
     TRACE_FUNCTION_F("_Field: " << node.field);
-    visit_node_ptr(node.mValue);
+    visitNodePtr(node.mValue);
 }
 
 DEF_VISIT(ExprNodeLiteral, node, TRACE_FUNCTION_F("_Literal");)
-DEF_VISIT(ExprNodeUnitVariant, node, TRACE_FUNCTION_F("_UnitVariant: " << node.mPath); visit_generic_path(::HIR::Visitor::PathContext::VALUE, node.mPath);)
-DEF_VISIT(ExprNodePathValue, node, TRACE_FUNCTION_F("_PathValue: " << node.mPath); visit_path(::HIR::Visitor::PathContext::VALUE, node.mPath);)
+DEF_VISIT(ExprNodeUnitVariant, node, TRACE_FUNCTION_F("_UnitVariant: " << node.mPath); visitGenericPath(::HIR::Visitor::PathContext::VALUE, node.mPath);)
+DEF_VISIT(ExprNodePathValue, node, TRACE_FUNCTION_F("_PathValue: " << node.mPath); visitPath(::HIR::Visitor::PathContext::VALUE, node.mPath);)
 DEF_VISIT(ExprNodeVariable, node, TRACE_FUNCTION_F("_Variable: #" << node.slot);)
 DEF_VISIT(ExprNodeConstParam, node, TRACE_FUNCTION_F("_ConstParam");)
 
 DEF_VISIT_H(ExprNodeStructLiteral, node) {
     TRACE_FUNCTION_F("_StructLiteral: " << node.realPath);
     if (node.mType != HIR::TypeRef()) {
-        visit_type(node.mType);
+        visitType(node.mType);
     }
     if (node.baseValue) {
-        visit_node_ptr(node.baseValue);
+        visitNodePtr(node.baseValue);
     }
     for (auto& val : node.values) {
-        visit_node_ptr(val.second);
+        visitNodePtr(val.second);
     }
 
-    visit_generic_path(::HIR::Visitor::PathContext::TYPE, node.realPath);
+    visitGenericPath(::HIR::Visitor::PathContext::TYPE, node.realPath);
 }
 
 DEF_VISIT_H(ExprNodeTuple, node) {
     TRACE_FUNCTION_F("_Tuple");
     for (auto& val : node.vals) {
-        visit_node_ptr(val);
+        visitNodePtr(val);
     }
 }
 
 DEF_VISIT_H(ExprNodeArrayList, node) {
     TRACE_FUNCTION_F("_ArrayList");
     for (auto& val : node.vals) {
-        visit_node_ptr(val);
+        visitNodePtr(val);
     }
 }
 DEF_VISIT(
-    ExprNodeArraySized, node, TRACE_FUNCTION_F("_ArraySized"); visit_node_ptr(node.val);
+    ExprNodeArraySized, node, TRACE_FUNCTION_F("_ArraySized"); visitNodePtr(node.val);
     //visit_arraysize(node.m_size); // Don't do this, array sizes are not part of the normal expression tree
 )
 
@@ -314,15 +314,15 @@ DEF_VISIT_H(ExprNodeClosure, node) {
     TRACE_FUNCTION_F("_Closure");
     if (node.objPath != HIR::GenericPath()) {
         for (auto& cap : node.captures) {
-            visit_node_ptr(cap);
+            visitNodePtr(cap);
         }
     } else {
         for (auto& arg : node.mArgs) {
-            visit_pattern(node.span(), arg.first);
-            visit_type(arg.second);
+            visitPattern(node.span(), arg.first);
+            visitType(arg.second);
         }
-        visit_type(node.returnType);
-        visit_node_ptr(node.mCode);
+        visitType(node.returnType);
+        visitNodePtr(node.mCode);
     }
 }
 
@@ -347,14 +347,14 @@ DEF_VISIT_H(ExprNodeGenerator, node) {
     //    visit_pattern(node.span(), arg.first);
     //    visit_type(arg.second);
     //}
-    visit_type(node.returnType);
-    visit_type(node.yieldTy);
-    visit_type(node.resumeTy);
+    visitType(node.returnType);
+    visitType(node.yieldTy);
+    visitType(node.resumeTy);
     if (node.mCode) {
-        visit_node_ptr(node.mCode);
+        visitNodePtr(node.mCode);
     } else {
         for (auto& cap : node.captures) {
-            visit_node_ptr(cap);
+            visitNodePtr(cap);
         }
     }
 }
@@ -364,17 +364,17 @@ DEF_VISIT_H(ExprNodeGeneratorWrapper, node) {
     //    visit_pattern(node.span(), arg.first);
     //    visit_type(arg.second);
     //}
-    visit_type(node.returnType);
-    visit_type(node.yieldTy);
+    visitType(node.returnType);
+    visitType(node.yieldTy);
     if (node.mCode) {
-        visit_node_ptr(node.mCode);
+        visitNodePtr(node.mCode);
     }
 }
 
 DEF_VISIT_H(ExprNodeAsyncBlock, node) {
     TRACE_FUNCTION_F("_AsyncBlock");
     if (node.mCode) {
-        visit_node_ptr(node.mCode);
+        visitNodePtr(node.mCode);
     } else {
     }
 }
@@ -383,46 +383,46 @@ DEF_VISIT_H(ExprNodeAsyncBlock, node) {
 #undef DEF_VISIT_H
 
 // TODO: Merge this with the stuff in ::HIR::Visitor
-void ::HIR::ExprVisitorDef::visit_pattern(const Span& sp, ::HIR::Pattern& pat) {
+void ::HIR::ExprVisitorDef::visitPattern(const Span& sp, ::HIR::Pattern& pat) {
     TU_MATCH_HDRA( (pat.mData), {)
     TU_ARMA(Any, e) {
         }
         TU_ARMA(Box, e) {
-            this->visit_pattern(sp, *e.sub);
+            this->visitPattern(sp, *e.sub);
         }
         TU_ARMA(Ref, e) {
-            this->visit_pattern(sp, *e.sub);
+            this->visitPattern(sp, *e.sub);
         }
         TU_ARMA(Tuple, e) {
             for (auto& subpat : e.subPatterns) {
-                this->visit_pattern(sp, subpat);
+                this->visitPattern(sp, subpat);
             }
         }
         TU_ARMA(SplitTuple, e) {
             for (auto& subpat : e.leading) {
-                this->visit_pattern(sp, subpat);
+                this->visitPattern(sp, subpat);
             }
             for (auto& subpat : e.trailing) {
-                this->visit_pattern(sp, subpat);
+                this->visitPattern(sp, subpat);
             }
         }
         TU_ARMA(PathValue, e) {
             // Nothing.
-            this->visit_path(HIR::Visitor::PathContext::VALUE, e.path);
+            this->visitPath(HIR::Visitor::PathContext::VALUE, e.path);
         }
         TU_ARMA(PathTuple, e) {
-            this->visit_path(HIR::Visitor::PathContext::VALUE, e.path);
+            this->visitPath(HIR::Visitor::PathContext::VALUE, e.path);
             for (auto& subpat : e.leading) {
-                this->visit_pattern(sp, subpat);
+                this->visitPattern(sp, subpat);
             }
             for (auto& subpat : e.trailing) {
-                this->visit_pattern(sp, subpat);
+                this->visitPattern(sp, subpat);
             }
         }
         TU_ARMA(PathNamed, e) {
-            this->visit_path(HIR::Visitor::PathContext::TYPE, e.path);
+            this->visitPath(HIR::Visitor::PathContext::TYPE, e.path);
             for (auto& fldPat : e.subPatterns) {
-                this->visit_pattern(sp, fldPat.second);
+                this->visitPattern(sp, fldPat.second);
             }
         }
         TU_ARMA(Value, e) {
@@ -431,26 +431,26 @@ void ::HIR::ExprVisitorDef::visit_pattern(const Span& sp, ::HIR::Pattern& pat) {
         }
         TU_ARMA(Slice, e) {
             for (auto& subpat : e.subPatterns) {
-                this->visit_pattern(sp, subpat);
+                this->visitPattern(sp, subpat);
             }
         }
         TU_ARMA(SplitSlice, e) {
             for (auto& subpat : e.leading) {
-                this->visit_pattern(sp, subpat);
+                this->visitPattern(sp, subpat);
             }
             for (auto& subpat : e.trailing) {
-                this->visit_pattern(sp, subpat);
+                this->visitPattern(sp, subpat);
             }
         }
         TU_ARMA(Or, e) {
             for (auto& subpat : e) {
-                this->visit_pattern(sp, subpat);
+                this->visitPattern(sp, subpat);
             }
         }
     }
 }
 
-void ::HIR::ExprVisitorDef::visit_type(::HIR::TypeRef& ty) {
+void ::HIR::ExprVisitorDef::visitType(::HIR::TypeRef& ty) {
     auto data = ty->cloneData();
     TU_MATCH(::HIR::TypeData, (data), (e),
     (Infer,
@@ -460,27 +460,27 @@ void ::HIR::ExprVisitorDef::visit_type(::HIR::TypeRef& ty) {
     (Primitive,
         ),
     (Path,
-        this->visit_path(::HIR::Visitor::PathContext::TYPE, e.path);
+        this->visitPath(::HIR::Visitor::PathContext::TYPE, e.path);
         ),
     (Generic,
         ),
     (TraitObject,
-        this->visit_trait_path(e.mTrait);
+        this->visitTraitPath(e.mTrait);
         for(auto& trait : e.markers) {
-        this->visit_generic_path(::HIR::Visitor::PathContext::TYPE, trait);
+        this->visitGenericPath(::HIR::Visitor::PathContext::TYPE, trait);
         }
         ),
     (ErasedType,
         for(auto& trait : e.traits) {
-        this->visit_trait_path(trait);
+        this->visitTraitPath(trait);
         }
         TU_MATCH_HDRA( (e.inner), {)
         TU_ARMA(Known, ee) {
-            this->visit_type(ee);
+            this->visitType(ee);
 }
 
 TU_ARMA(Fcn, ee) {
-    this->visit_path(::HIR::Visitor::PathContext::TYPE, ee.origin);
+    this->visitPath(::HIR::Visitor::PathContext::TYPE, ee.origin);
 }
 
 TU_ARMA(Alias, ee) {
@@ -488,30 +488,30 @@ TU_ARMA(Alias, ee) {
 }
         ),
     (Array,
-        this->visit_type( e.inner );
+        this->visitType( e.inner );
         ),
     (Slice,
-        this->visit_type( e.inner );
+        this->visitType( e.inner );
         ),
     (Tuple,
         for(auto& t : e) {
-    this->visit_type(t);
+    this->visitType(t);
         }
         ),
     (Borrow,
-        this->visit_type( e.inner );
+        this->visitType( e.inner );
         ),
     (Pointer,
-        this->visit_type( e.inner );
+        this->visitType( e.inner );
         ),
     (NamedFunction,
-        this->visit_path(::HIR::Visitor::PathContext::VALUE, e.path);
+        this->visitPath(::HIR::Visitor::PathContext::VALUE, e.path);
         ),
     (Function,
         for(auto& t : e.argTypes) {
-    this->visit_type(t);
+    this->visitType(t);
         }
-        this->visit_type(e.mRettype);
+        this->visitType(e.mRettype);
         ),
     (NodeType,
         )
@@ -519,30 +519,30 @@ TU_ARMA(Alias, ee) {
     ty = types.intern(std::move(data));
         }
 
-        void ::HIR::ExprVisitorDef::visit_path_params(::HIR::PathParams& pp) {
+        void ::HIR::ExprVisitorDef::visitPathParams(::HIR::PathParams& pp) {
             for (auto& ty : pp.types) {
-                visit_type(ty);
+                visitType(ty);
             }
         }
 
-        void ::HIR::ExprVisitorDef::visit_trait_path(::HIR::TraitPath& p) {
-            this->visit_generic_path(::HIR::Visitor::PathContext::TYPE, p.mPath);
+        void ::HIR::ExprVisitorDef::visitTraitPath(::HIR::TraitPath& p) {
+            this->visitGenericPath(::HIR::Visitor::PathContext::TYPE, p.mPath);
             for (auto& assoc : p.typeBounds) {
-                this->visit_type(assoc.second.type);
+                this->visitType(assoc.second.type);
             }
             for (auto& assoc : p.traitBounds) {
                 for (auto& t : assoc.second.traits) {
-                    this->visit_trait_path(t);
+                    this->visitTraitPath(t);
                 }
             }
         }
 
-        void ::HIR::ExprVisitorDef::visit_path(::HIR::Visitor::PathContext pc, ::HIR::Path& path) {
-            TU_MATCHA((path.mData), (e), (Generic, visit_generic_path(pc, e);), (UfcsKnown, visit_type(e.type); visit_generic_path(pc, e.trait); visit_path_params(e.params);), (UfcsUnknown, visit_type(e.type); visit_path_params(e.params);), (UfcsInherent, visit_type(e.type); visit_path_params(e.params); visit_path_params(e.impl_params);))
+        void ::HIR::ExprVisitorDef::visitPath(::HIR::Visitor::PathContext pc, ::HIR::Path& path) {
+            TU_MATCHA((path.mData), (e), (Generic, visitGenericPath(pc, e);), (UfcsKnown, visitType(e.type); visitGenericPath(pc, e.trait); visitPathParams(e.params);), (UfcsUnknown, visitType(e.type); visitPathParams(e.params);), (UfcsInherent, visitType(e.type); visitPathParams(e.params); visitPathParams(e.impl_params);))
         }
 
-        void ::HIR::ExprVisitorDef::visit_generic_path(::HIR::Visitor::PathContext pc, ::HIR::GenericPath& path) {
-            visit_path_params(path.mParams);
+        void ::HIR::ExprVisitorDef::visitGenericPath(::HIR::Visitor::PathContext pc, ::HIR::GenericPath& path) {
+            visitPathParams(path.mParams);
         }
 
 namespace HIR {

@@ -19,53 +19,53 @@ struct TyVisitor {
 
     virtual typename W<HIR::TypeData>::T& getTyData(const HIR::TypeData* ty) const = 0;
 
-    virtual bool visit_path_params(typename W<::HIR::PathParams>::T& tpl) {
+    virtual bool visitPathParams(typename W<::HIR::PathParams>::T& tpl) {
         for (auto& ty : tpl.types) {
-            if (visit_type(ty)) {
+            if (visitType(ty)) {
                 return true;
             }
         }
         return false;
     }
 
-    virtual bool visit_trait_path(typename W<::HIR::TraitPath>::T& tpl) {
-        if (visit_path_params(tpl.mPath.mParams)) {
+    virtual bool visitTraitPath(typename W<::HIR::TraitPath>::T& tpl) {
+        if (visitPathParams(tpl.mPath.mParams)) {
             return true;
         }
         for (auto& assoc : tpl.typeBounds) {
-            visit_path_params(assoc.second.sourceTrait.mParams);
-            if (visit_type(assoc.second.type)) {
+            visitPathParams(assoc.second.sourceTrait.mParams);
+            if (visitType(assoc.second.type)) {
                 return true;
             }
         }
         for (auto& assoc : tpl.traitBounds) {
-            visit_path_params(assoc.second.sourceTrait.mParams);
+            visitPathParams(assoc.second.sourceTrait.mParams);
             for (auto& t : assoc.second.traits) {
-                visit_trait_path(t);
+                visitTraitPath(t);
             }
         }
         return false;
     }
 
-    virtual bool visit_path(typename W<HIR::Path>::T& path) {
+    virtual bool visitPath(typename W<HIR::Path>::T& path) {
         TU_MATCH_HDRA((path.mData), {)
         TU_ARMA(Generic, e) {
-                return visit_path_params(e.mParams);
+                return visitPathParams(e.mParams);
             }
             TU_ARMA(UfcsInherent, e) {
-                return visit_type(e.type) || visit_path_params(e.params);
+                return visitType(e.type) || visitPathParams(e.params);
             }
             TU_ARMA(UfcsKnown, e) {
-                return visit_type(e.type) || visit_path_params(e.trait.mParams) || visit_path_params(e.params);
+                return visitType(e.type) || visitPathParams(e.trait.mParams) || visitPathParams(e.params);
             }
             TU_ARMA(UfcsUnknown, e) {
-                return visit_type(e.type) || visit_path_params(e.params);
+                return visitType(e.type) || visitPathParams(e.params);
             }
         }
         throw "";
     }
 
-    virtual bool visit_type(const HIR::TypeData* ty) {
+    virtual bool visitType(const HIR::TypeData* ty) {
         if (curRecurseStack) {
             for (const auto* p : *curRecurseStack) {
                 if (p == ty) {
@@ -101,14 +101,14 @@ struct TyVisitor {
             TU_ARMA(Generic, e) {
             }
             TU_ARMA(Path, e) {
-                return visit_path(e.path);
+                return visitPath(e.path);
             }
             TU_ARMA(TraitObject, e) {
-                if (visit_trait_path(e.mTrait)) {
+                if (visitTraitPath(e.mTrait)) {
                     return true;
                 }
                 for (auto& trait : e.markers) {
-                    if (visit_path_params(trait.mParams)) {
+                    if (visitPathParams(trait.mParams)) {
                         return true;
                     }
                 }
@@ -116,58 +116,58 @@ struct TyVisitor {
             }
             TU_ARMA(ErasedType, e) {
                 for (auto& trait : e.traits) {
-                    if (visit_trait_path(trait)) {
+                    if (visitTraitPath(trait)) {
                         return true;
                     }
                 }
-                visit_path_params(e.use);
+                visitPathParams(e.use);
             TU_MATCH_HDRA( (e.inner), {)
             TU_ARMA(Fcn, ee) {
-                        if (visit_path(ee.origin)) {
+                        if (visitPath(ee.origin)) {
                             return true;
                         }
                     }
                     TU_ARMA(Known, ee) {
-                        if (visit_type(ee)) {
+                        if (visitType(ee)) {
                             return true;
                         }
                     }
                     TU_ARMA(Alias, ee) {
-                        visit_path_params(ee.params);
+                        visitPathParams(ee.params);
                     }
             }
             return false;
             }
             TU_ARMA(Array, e) {
-                return visit_type(e.inner);
+                return visitType(e.inner);
             }
             TU_ARMA(Slice, e) {
-                return visit_type(e.inner);
+                return visitType(e.inner);
             }
             TU_ARMA(Tuple, e) {
                 for (auto& ty : e) {
-                    if (visit_type(ty)) {
+                    if (visitType(ty)) {
                         return true;
                     }
                 }
                 return false;
             }
             TU_ARMA(Borrow, e) {
-                return visit_type(e.inner);
+                return visitType(e.inner);
             }
             TU_ARMA(Pointer, e) {
-                return visit_type(e.inner);
+                return visitType(e.inner);
             }
             TU_ARMA(NamedFunction, e) {
-                return visit_path(e.path);
+                return visitPath(e.path);
             }
             TU_ARMA(Function, e) {
                 for (auto& ty : e.argTypes) {
-                    if (visit_type(ty)) {
+                    if (visitType(ty)) {
                         return true;
                     }
                 }
-                return visit_type(e.mRettype);
+                return visitType(e.mRettype);
             }
             TU_ARMA(NodeType, e) {
                 // These just have a node pointer, no visiting
@@ -184,30 +184,30 @@ struct TyVisitorCbConst: TyVisitor<WConst> {
         return *ty;
     }
 
-    bool visit_type(const ::HIR::TypeData* ty) override {
+    bool visitType(const ::HIR::TypeData* ty) override {
         if (callback(ty)) {
             return true;
         }
-        return TyVisitor::visit_type(ty);
+        return TyVisitor::visitType(ty);
     }
 };
 
-bool visit_ty_with(const ::HIR::TypeData* ty, tCbVisitTy callback) {
+bool visitTyWith(const ::HIR::TypeData* ty, tCbVisitTy callback) {
     TyVisitorCbConst v;
     v.callback = callback;
-    return v.visit_type(ty);
+    return v.visitType(ty);
 }
 
-bool visit_trait_path_tys_with(const ::HIR::TraitPath& path, tCbVisitTy callback) {
+bool visitTraitPathTysWith(const ::HIR::TraitPath& path, tCbVisitTy callback) {
     TyVisitorCbConst v;
     v.callback = callback;
-    return v.visit_trait_path(path);
+    return v.visitTraitPath(path);
 }
 
-bool visit_path_tys_with(const ::HIR::Path& path, tCbVisitTy callback) {
+bool visitPathTysWith(const ::HIR::Path& path, tCbVisitTy callback) {
     TyVisitorCbConst v;
     v.callback = callback;
-    return v.visit_path(path);
+    return v.visitPath(path);
 }
 
 namespace {
@@ -331,7 +331,7 @@ struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
         return lft.isParam() && (lft.binding >> 8) != 3;
     }
 
-    bool visit_path_params(const ::HIR::PathParams& pp) override {
+    bool visitPathParams(const ::HIR::PathParams& pp) override {
         if (!this->ignoreLifetimes) {
             for (const auto& lft : pp.mLifetimes) {
                 if (isGenericLft(lft)) {
@@ -344,10 +344,10 @@ struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
                 return true;
             }
         }
-        return TyVisitor::visit_path_params(pp);
+        return TyVisitor::visitPathParams(pp);
     }
 
-    bool visit_type(const ::HIR::TypeData* ty) override {
+    bool visitType(const ::HIR::TypeData* ty) override {
         if (ty->is_Generic()) {
             return true;
         }
@@ -369,23 +369,23 @@ struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
                 }
             }
         }
-        return TyVisitor::visit_type(ty);
+        return TyVisitor::visitType(ty);
     }
 };
 
 bool monomorphisePathparamsNeeded(const ::HIR::PathParams& tpl, bool ignoreLifetimes /*=false*/) {
     TyVisitorMonomorphNeeded v{ignoreLifetimes};
-    return v.visit_path_params(tpl);
+    return v.visitPathParams(tpl);
 }
 
 bool monomorphiseTraitpathNeeded(const ::HIR::TraitPath& tpl, bool ignoreLifetimes /*=false*/) {
     TyVisitorMonomorphNeeded v{ignoreLifetimes};
-    return v.visit_trait_path(tpl);
+    return v.visitTraitPath(tpl);
 }
 
 bool monomorphisePathNeeded(const ::HIR::Path& tpl, bool ignoreLifetimes /*=false*/) {
     TyVisitorMonomorphNeeded v{ignoreLifetimes};
-    return v.visit_path(tpl);
+    return v.visitPath(tpl);
 }
 
 bool monomorphiseTypeNeeded(const ::HIR::TypeData* tpl, bool ignoreLifetimes /*=false*/) {

@@ -94,7 +94,7 @@ Ident::Hygiene Ident::Hygiene::newScopeChained(const Hygiene& parent, unsigned i
     rv->macro_definitions.push_back(macroDefinition);
     return rv;
 }
-Ident::Hygiene Ident::Hygiene::with_tail_scope(const Hygiene& scope, bool inheritModPath) const {
+Ident::Hygiene Ident::Hygiene::withTailScope(const Hygiene& scope, bool inheritModPath) const {
     assert(!scope->contexts.empty());
     assert(scope->contexts.size() == scope->macro_definitions.size());
     Hygiene rv(*this);

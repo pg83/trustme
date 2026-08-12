@@ -222,8 +222,8 @@ class MirBuilder {
     ::std::vector<unsigned int> scopeStack;
     ScopeHandle fcnScope;
 
-    typedef std::pair<HIR::PatternBinding::Type, MIR::LValue> var_alias_t;
-    ::std::vector<var_alias_t> variableAliases;
+    typedef std::pair<HIR::PatternBinding::Type, MIR::LValue> varAliasT;
+    ::std::vector<varAliasT> variableAliases;
 
     // LValue used only for the condition of `if`
     // - Using a fixed temporary simplifies parts of lowering (scope related) and reduces load on
@@ -264,7 +264,7 @@ public:
     // Variable aliases (used for match guards)
     void addVariableAlias(const Span& sp, unsigned idx, HIR::PatternBinding::Type ty, MIR::LValue lv);
 
-    const var_alias_t* getVariableAlias(const Span& sp, unsigned idx) const;
+    const varAliasT* getVariableAlias(const Span& sp, unsigned idx) const;
 
     // - Values
     ::MIR::LValue getVariable(const Span& sp, unsigned idx) const;
@@ -300,7 +300,7 @@ public:
 
     // - Statements
     // Push an assignment. NOTE: This also marks the rvalue as moved
-    void pushStmtAssign(const Span& sp, ::MIR::LValue dst, ::MIR::RValue val, bool update_dest_state = true);
+    void pushStmtAssign(const Span& sp, ::MIR::LValue dst, ::MIR::RValue val, bool updateDestState = true);
     // Push a drop (likely only used by scope cleanup)
     void pushStmtDrop(const Span& sp, ::MIR::LValue val, unsigned int dropFlag = ~0u);
     // Push a shallow drop (for Box)
@@ -345,7 +345,7 @@ public:
 
     class CloneMapper {
     public:
-        virtual MIR::BasicBlockId update_bb_ref(MIR::BasicBlockId bbIdx) = 0;
+        virtual MIR::BasicBlockId updateBbRef(MIR::BasicBlockId bbIdx) = 0;
     };
 
     /// @brief Insert saved code, applying the supplied mapper
@@ -401,7 +401,7 @@ public:
     /// Terminates the current split condition clause (used for the conditional portion of a match arm)
     void endSplitCondition(const Span& sp, const ScopeHandle&);
     /// Allows mutation through a freeze scope (see `new_scope_freeze`)
-    void unfreeze_scope(const Span& sp, const ScopeHandle&);
+    void unfreezeScope(const Span& sp, const ScopeHandle&);
 
     const ScopeHandle& fcn_scope() const {
         return fcnScope;
@@ -448,7 +448,7 @@ private:
     void completeScope(ScopeDef& sd);
 
 public:
-    void with_val_type(const Span& sp, const ::MIR::LValue& val, ::std::function<void(const ::HIR::TypeData*)> cb, const ::MIR::LValue::Wrapper* stopWrapper = nullptr) const;
+    void withValType(const Span& sp, const ::MIR::LValue& val, ::std::function<void(const ::HIR::TypeData*)> cb, const ::MIR::LValue::Wrapper* stopWrapper = nullptr) const;
     bool lvalueIsCopy(const Span& sp, const ::MIR::LValue& lv) const;
 
     // Obtain the base fat poiner for a dst reference. Errors if it wasn't via a fat pointer
@@ -509,7 +509,7 @@ public:
     virtual void registerPatternVariables(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
     virtual void scheduleRegisteredPatternDrops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
 
-    virtual void destructureFromList(const Span& sp, const ::HIR::TypeData* ty, ::MIR::LValue lval, const ::std::vector<PatternBinding>& bindings, bool update_states = true) = 0;
+    virtual void destructureFromList(const Span& sp, const ::HIR::TypeData* ty, ::MIR::LValue lval, const ::std::vector<PatternBinding>& bindings, bool updateStates = true) = 0;
     virtual MIR::LValue getValueForBindingPath(const Span& sp, const ::HIR::TypeData* outer_ty, const ::MIR::LValue& outerLval, const PatternBinding& b) = 0;
     virtual const HIR::TypeData* getBindingType(const Span& sp, unsigned index) const = 0;
 
