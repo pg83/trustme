@@ -8,6 +8,7 @@
 #include "ast_crate.h"
 #include "parse_lex.h"
 #include "expand_cfg.h"
+#include "wire_board.h"
 #include "debug_inner.h"
 #include "memory_dump.h"
 #include "parse_common.h" // For edition checks
@@ -16,11 +17,10 @@
 #include "parse_parseerror.h"
 #include "hir_main_bindings.h"
 #include "mir_main_bindings.h"
+#include "hir_inherent_cache.h"
 #include "trans_main_bindings.h"
 #include "resolve_main_bindings.h"
 #include "hir_conv_main_bindings.h"
-#include "wire_board.h"
-#include "hir_inherent_cache.h"
 #include "hir_expand_main_bindings.h"
 #include "hir_typeck_main_bindings.h"
 

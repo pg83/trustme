@@ -1,8 +1,8 @@
 #include "trans_codegen.h"
-#include "wire_board.h"
 
 #include "hir_hir.h"
 #include "mir_mir.h"
+#include "wire_board.h"
 #include "mir_helpers.h"
 #include "trans_target.h"
 #include "mir_operations.h"
@@ -35,18 +35,7 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
             codegen->emitTypeProto(ty.first);
         } else {
             if (const auto* te = ty.first->opt_Path()) {
-                TU_MATCHA(
-                    (te->binding),
-                    (tpb),
-                    (Unbound, throw "";),
-                    (Opaque, throw "";),
-                    (
-                        ExternType,
-                    ),
-                    (Struct, codegen->emitStruct(sp, te->path.mData.as_Generic(), *tpb);),
-                    (Union, codegen->emitUnion(sp, te->path.mData.as_Generic(), *tpb);),
-                    (Enum, codegen->emitEnum(sp, te->path.mData.as_Generic(), *tpb);)
-                )
+                TU_MATCHA((te->binding), (tpb), (Unbound, throw "";), (Opaque, throw "";), (ExternType, ), (Struct, codegen->emitStruct(sp, te->path.mData.as_Generic(), *tpb);), (Union, codegen->emitUnion(sp, te->path.mData.as_Generic(), *tpb);), (Enum, codegen->emitEnum(sp, te->path.mData.as_Generic(), *tpb);))
             }
             codegen->emitType(ty.first);
         }

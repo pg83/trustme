@@ -1,7 +1,7 @@
 #include "mir_visit_crate_mir.h"
-#include "wire_board.h"
 
 #include "hir_expr.h"
+#include "wire_board.h"
 
 // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
 void MIROuterVisitor::visitExpr(HIRExprPtr& exp) {

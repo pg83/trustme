@@ -1,11 +1,11 @@
 #include "hir_conv_constant_evaluation.h"
-#include "wire_board.h"
 
 #include "floats.h"
 #include "int128.h" // 128 bit integer support
 #include "hir_hir.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
+#include "wire_board.h"
 #include "hir_visitor.h"
 #include "mir_helpers.h"
 #include "trans_target.h"

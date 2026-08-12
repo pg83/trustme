@@ -1,7 +1,6 @@
 #include "hir_typeck_resolve_common.h"
 
 #include "wire_board.h"
-
 #include "hir_typeck_monomorph.h" // MonomorphStatePtr
 
 void TraitResolveCommon::prepIndexes(const Span& sp) {

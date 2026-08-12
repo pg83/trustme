@@ -1,9 +1,8 @@
 #include "hir_typeck_expr_visit.h"
 
-#include "wire_board.h"
-
 #include "hir_hir.h"
 #include "hir_expr.h"
+#include "wire_board.h"
 #include "hir_visitor.h"
 #include "hir_expr_state.h"
 

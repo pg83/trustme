@@ -1,8 +1,7 @@
 #include "hir_typeck_common.h"
 
-#include "wire_board.h"
-
 #include "hir_path.h"
+#include "wire_board.h"
 #include "trans_target.h"
 #include "hir_conv_main_bindings.h"
 

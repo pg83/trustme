@@ -1,9 +1,9 @@
 #include "hir_typeck_main_bindings.h"
-#include "wire_board.h"
 #include "hir_typeck_main_bindings.h"
 
 #include "hir_hir.h"
 #include "hir_expr.h"
+#include "wire_board.h"
 #include "hir_visitor.h"
 #include "hir_typeck_static.h"
 
@@ -1652,11 +1652,9 @@ namespace {
                     (e),
                     (Lifetime, ),
                     (TypeLifetime, ),
-                    (
-                        TraitBound,
-                        // TODO: Check for an implementation of this trait
-                        DEBUG("TODO: Check bound " << e.type << " : " << e.trait.mPath);
-                    ),
+                    (TraitBound,
+                     // TODO: Check for an implementation of this trait
+                     DEBUG("TODO: Check bound " << e.type << " : " << e.trait.mPath);),
                     (TypeEquality,
                      // TODO: Check that two types are equal in this case
                      DEBUG("TODO: Check equality bound " << e.type << " == " << e.otherType);)

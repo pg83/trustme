@@ -140,7 +140,6 @@ struct MonomorphStatePtr: public MonomorphiserPP {
     }
 };
 
-
 struct MonomorphHrlsOnly: public Monomorphiser {
     const HIRPathParams* ppHrb;
 

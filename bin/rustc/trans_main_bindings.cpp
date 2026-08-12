@@ -1,9 +1,9 @@
 #include "trans_main_bindings.h"
-#include "wire_board.h"
 #include "trans_main_bindings.h"
 
 #include "hir_hir.h"
 #include "mir_mir.h"
+#include "wire_board.h"
 #include "hir_visitor.h"
 #include "mir_helpers.h"
 #include "trans_target.h"

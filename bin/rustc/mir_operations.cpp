@@ -1,9 +1,9 @@
 #include "mir_operations.h"
-#include "wire_board.h"
 #include "mir_operations.h"
 
 #include "mir_mir.h"
 #include "hir_expr.h" // The optimiser section accesses complete HIR expression nodes.
+#include "wire_board.h"
 #include "hir_visitor.h"
 #include "mir_helpers.h"
 #include "trans_target.h"
@@ -1269,18 +1269,14 @@ void MIRValidateValState(MIRTypeResolve& state, const MIRFunction& fcn) {
                         ),
                         (SizedArray, valState.moveVal(state, se.val);),
                         (Borrow, valState.ensureValid(state, se.val);),
-                        (
-                            Cast,
-                            // Well.. it's not exactly moved...
-                            valState.ensureValid(state, se.val);
-                        ),
+                        (Cast,
+                         // Well.. it's not exactly moved...
+                         valState.ensureValid(state, se.val);),
                         (BinOp, valState.moveVal(state, se.valL); valState.moveVal(state, se.valR);),
                         (UniOp, valState.moveVal(state, se.val);),
                         (DstMeta, valState.ensureValid(state, se.val);),
                         (DstPtr, valState.ensureValid(state, se.val);),
-                        (MakeDst,
-                         if (const auto* e = se.ptrVal.opt_LValue()) valState.ensureValid(state, *e);
-                         valState.moveVal(state, se.metaVal);),
+                        (MakeDst, if (const auto* e = se.ptrVal.opt_LValue()) valState.ensureValid(state, *e); valState.moveVal(state, se.metaVal);),
                         (Tuple, for (const auto& v : se.vals) valState.moveVal(state, v);),
                         (Array, for (const auto& v : se.vals) valState.moveVal(state, v);),
                         (UnionVariant, valState.moveVal(state, se.val);),
@@ -1738,7 +1734,6 @@ void MIRValidate(const StaticTraitResolve& resolve, const HIRItemPath& path, con
                         }
                             }
                             TU_ARMA(BinOp, e) {
-
                                 // TODO: Check return type
                             }
                             TU_ARMA(UniOp, e) {
@@ -2631,7 +2626,6 @@ void MIRValidateFullValState(MIRTypeResolve& localMirRes, const MIRFunction& fcn
         // Mask off any values which aren't valid in the first statement of this block
         {
             for (unsigned i = 0; i < state.locals.size(); i++) {
-
                 if (!state.locals[i].isValid()) {
                     // Already invalid
                 } else if (lifetimes.slotValid(i, curBlock, 0)) {
@@ -4287,7 +4281,6 @@ void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, 
     MIROptimiseBlockSimplify(state, fcn);
     MIROptimiseUnifyBlocks(state, fcn);
 
-
     // NOTE: No check here, this version of optimise is pretty reliable
     //}
     MIROptimiseGarbageCollect(state, fcn);
@@ -4581,7 +4574,6 @@ void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIR
     // GC pass on blocks and variables
     // - Find unused blocks, then delete and rewrite all references.
     MIROptimiseGarbageCollect(state, fcn);
-
 
     MIRSortBlocks(resolve, path, fcn);
     if (validate && checkMode() >= CHECKMODE_FINAL) {

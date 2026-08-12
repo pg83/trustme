@@ -1,10 +1,9 @@
 #include "hir_hir.h"
 
-#include "wire_board.h"
-
 #include "floats.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
+#include "wire_board.h"
 #include "trans_target.h"
 #include "hir_item_path.h"
 #include "hir_expr_state.h"

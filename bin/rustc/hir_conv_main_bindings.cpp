@@ -1,17 +1,16 @@
 #include "hir_conv_main_bindings.h"
-
-#include "wire_board.h"
-#include "hir_inherent_cache.h"
 #include "hir_conv_main_bindings.h"
 
 #include "hir_hir.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
+#include "wire_board.h"
 #include "hir_visitor.h"
 #include "mir_helpers.h"
 #include "hir_expr_state.h"
 #include "hir_typeck_common.h" // monomorphise_type_with
 #include "hir_typeck_static.h"
+#include "hir_inherent_cache.h"
 #include "hir_typeck_expr_visit.h" // For ModuleState
 
 #include <std/mem/obj_pool.h>
@@ -3849,6 +3848,7 @@ public:
                     // TODO: Struct?
                 }
             }
+
             void visit(HIRExprNodeStructLiteral& node) override {
                 HIRExprVisitorDef::visit(node);
                 const Span& sp = node.span();

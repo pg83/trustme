@@ -1,9 +1,9 @@
 #include "mir_from_hir.h"
-#include "wire_board.h"
 
 #include "hir_hir.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
+#include "wire_board.h"
 #include "hir_visitor.h"
 #include "mir_helpers.h"
 #include "mir_mir_ptr.h"
@@ -9031,16 +9031,7 @@ outOfLoop:
 VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool expectValid /*=false*/) {
     TRACE_FUNCTION_F(lv);
     VarState* vs = nullptr;
-    TU_MATCHA(
-        (lv.root),
-        (e),
-        (Return, BUG(sp, "Move of return value"); vs = &getSlotStateMut(sp, ~0u, SlotType::Local);),
-        (Argument, vs = &getSlotStateMut(sp, e, SlotType::Argument);),
-        (Local, vs = &getSlotStateMut(sp, e, SlotType::Local);),
-        (
-            Static, return nullptr;
-        )
-    )
+    TU_MATCHA((lv.root), (e), (Return, BUG(sp, "Move of return value"); vs = &getSlotStateMut(sp, ~0u, SlotType::Local);), (Argument, vs = &getSlotStateMut(sp, e, SlotType::Argument);), (Local, vs = &getSlotStateMut(sp, e, SlotType::Local);), (Static, return nullptr;))
     assert(vs);
 
     if (expectValid && vs->is_Valid()) {
@@ -9053,16 +9044,7 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
         TU_MATCH_HDRA( (w), { )
         TU_ARMA(Field, fieldIndex) {
                 VarState tpl;
-                TU_MATCHA(
-                    (ivs),
-                    (ivse),
-                    (Invalid,
-                     tpl = VarState::make_Valid({});),
-                    (MovedOut, BUG(sp, "Field on value with MovedOut state - " << lv);),
-                    (Partial, ),
-                    (Optional, tpl = ivs.clone();),
-                    (Valid, tpl = VarState::make_Valid({});)
-                )
+                TU_MATCHA((ivs), (ivse), (Invalid, tpl = VarState::make_Valid({});), (MovedOut, BUG(sp, "Field on value with MovedOut state - " << lv);), (Partial, ), (Optional, tpl = ivs.clone();), (Valid, tpl = VarState::make_Valid({});))
                 if (!ivs.is_Partial()) {
                     size_t nFlds = 0;
                     withValType(sp, lv, [&](const auto& ty) {

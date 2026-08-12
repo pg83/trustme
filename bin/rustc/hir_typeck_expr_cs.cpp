@@ -1,8 +1,8 @@
 #include "hir_typeck_expr_cs.h"
-#include "wire_board.h"
 
 #include "hir_hir.h"
 #include "hir_expr.h"
+#include "wire_board.h"
 #include "hir_visitor.h"
 #include "hir_typeck_static.h"
 #include "hir_typeck_helpers.h"
@@ -1061,19 +1061,7 @@ namespace {
 
                 node.methodPath = mv$(fcnPath);
                 // NOTE: Steals the params from the node
-                TU_MATCH(
-                    HIRPath::Data,
-                    (node.methodPath.mData),
-                    (e),
-                    (Generic, ),
-                    (UfcsUnknown, ),
-                    (
-                        UfcsKnown, e.params = mv$(node.mParams);
-                    ),
-                    (
-                        UfcsInherent, e.params = mv$(node.mParams);
-                    )
-                )
+                TU_MATCH(HIRPath::Data, (node.methodPath.mData), (e), (Generic, ), (UfcsUnknown, ), (UfcsKnown, e.params = mv$(node.mParams);), (UfcsInherent, e.params = mv$(node.mParams);))
 
                 // TODO: If this is ambigious, and it's an inherent, and in fallback mode - fall down to the next trait method.
                 if (!visitCallPopulateCache(this->context, node.span(), node.methodPath, node.cache)) {
@@ -2188,8 +2176,8 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                 return true;
             };
 
-// If either side is !, return early
-// TODO: Should ! end up in an ivar?
+            // If either side is !, return early
+            // TODO: Should ! end up in an ivar?
             if (lT->is_Diverge() && rT->is_Diverge()) {
                 return;
             }
@@ -7610,8 +7598,8 @@ namespace {
                 }
             }
 
-// If there's multiple destination types (which means that this ivar has to be a coercion from one of them)
-// Look for the least permissive of the available destination types and assign to that
+            // If there's multiple destination types (which means that this ivar has to be a coercion from one of them)
+            // Look for the least permissive of the available destination types and assign to that
             // NOTE: This only works for coercions (not usizings), so is restricted to all options being pointers
             if (::std::all_of(possibleTys.begin(), possibleTys.end(), PossibleType::isCoerceS)) {
                 // 1. Count distinct (and non-ivar) source types
@@ -7684,8 +7672,8 @@ namespace {
                 }
             }
 
-// If there's multiple source types (which means that this ivar has to be a coercion from one of them)
-// Look for the least permissive of the available destination types and assign to that
+            // If there's multiple source types (which means that this ivar has to be a coercion from one of them)
+            // Look for the least permissive of the available destination types and assign to that
             // NOTE: This only works for coercions (not usizings), so is restricted to all options being pointers
             if (
                 ::std::all_of(possibleTys.begin(), possibleTys.end(), PossibleType::isCoerceS)

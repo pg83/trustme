@@ -1,9 +1,9 @@
 #include "hir_expand_main_bindings.h"
-#include "wire_board.h"
 #include "hir_expand_main_bindings.h"
 
 #include "hir_hir.h"
 #include "hir_expr.h"
+#include "wire_board.h"
 #include "hir_visitor.h"
 #include "trans_target.h"
 #include "hir_expr_state.h"
@@ -3244,7 +3244,6 @@ namespace {
         }
 
         void visitEnum(HIRItemPath p, HIREnum& item) override {
-
         }
 
         void visitTrait(HIRItemPath p, HIRTrait& item) override {
@@ -6311,7 +6310,6 @@ namespace {
         }
 
         void visitEnum(HIRItemPath p, HIREnum& item) override {
-
             if (auto* e = item.mData.opt_Value()) {
                 auto enumType = HIREnum::getReprType(item.tagRepr);
                 for (auto& var : e->variants) {
@@ -7623,7 +7621,6 @@ public:
             // - (Currently) there shouldn't be any generics, need to solve that later on?
             auto staticTy = MonomorphLifetimesStatic(mResolve.crate.types).monomorphType(sp, valExpr->resType, /*allow_infer=*/false);
             resolve.expandAssociatedTypes(sp, staticTy);
-
 
             auto path = newStaticCb(sp, mv$(staticTy), mv$(valExpr), mv$(paramsDef), false);
             DEBUG("> " << path << constrParams);

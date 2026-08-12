@@ -1,8 +1,7 @@
 #include "hir_typeck_helpers.h"
 
-#include "hir_inherent_cache.h"
 #include "wire_board.h"
-
+#include "hir_inherent_cache.h"
 #include "hir_conv_main_bindings.h"
 
 #include <std/mem/obj_list.h>
@@ -284,6 +283,7 @@ void HMTypeInferrence::checkForLoops() {
             });
         }
     };
+
     unsigned int i = 0;
     for (const auto& v : ivars) {
         if (!v.isAlias() && !v.type->is_Infer()) {
@@ -1798,7 +1798,6 @@ TU_ARMA(Alias, ee) {
 
             const auto& type = this->ivars.getType(ty);
             TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
-
 
             if (magicTraitImpls) {
                 if (findTraitImplsMagic(sp, trait, params, ty, callback)) {
@@ -6505,9 +6504,7 @@ TU_ARMA(Alias, ee) {
             TU_MATCHA(
                 (e.binding),
                 (pb),
-                (
-                    Unbound,
-                ),
+                (Unbound, ),
                 (
                     Opaque,
                     // TODO: Check bounds

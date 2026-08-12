@@ -1,8 +1,8 @@
 #include "trans_codegen_c.h"
-#include "wire_board.h"
 
 #include "hir_hir.h"
 #include "mir_mir.h"
+#include "wire_board.h"
 #include "mir_helpers.h"
 #include "trans_target.h"
 #include "trans_codegen.h"
