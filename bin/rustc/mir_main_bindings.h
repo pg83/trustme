@@ -1,9 +1,10 @@
-struct WireBoard;
 #pragma once
 
 #include "hir_hir.h"
 
 #include <iostream>
+
+struct WireBoard;
 
 class TransList;
 

@@ -2,7 +2,6 @@
 
 #include "span.h"
 #include "hir_path.h"
-#include "hir_literal.h"
 #include "hir_expr_ptr.h"
 #include "hir_type_ref.h"
 #include "tagged_union.h"
