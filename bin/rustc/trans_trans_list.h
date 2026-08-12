@@ -143,7 +143,7 @@ public:
 
     TransListFunction* addFunction(HIR::TypeInterner& types, ::HIR::Path p);
     TransListStatic* addStatic(HIR::TypeInterner& types, ::HIR::Path p);
-    TransListConst* add_const(HIR::TypeInterner& types, ::HIR::Path p);
+    TransListConst* addConst(HIR::TypeInterner& types, ::HIR::Path p);
     TransListFunction* findFunction(const ::HIR::Path& p);
     const TransListFunction* findFunction(const ::HIR::Path& p) const;
     bool hasType(::HIR::TypeRef type, bool shallow) const;

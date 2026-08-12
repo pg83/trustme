@@ -118,7 +118,7 @@ TAGGED_UNION(
      }),
     // Compare the head of the input stream and poke the pattern stream
     (If, struct {
-        bool is_equal;
+        bool isEqual;
         size_t jumpTarget;
         ::std::vector<SimplePatIfCheck> ents;
     })

@@ -254,7 +254,7 @@ namespace HIR {
     struct StructMarkings {
         /// `#[fundamental]`: orphan checking may look through this type's
         /// generic arguments when searching for a local key parameter.
-        bool is_fundamental = false;
+        bool isFundamental = false;
 
         /// This type has a <T: ?Sized> parameter that is used directly
         bool canUnsize = false;

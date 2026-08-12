@@ -342,7 +342,7 @@ namespace AST {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const ImplDef& impl) {
-        return os << "impl " << (impl.isConst ? "const " : "") << "<" << impl.mParams << "> " << impl.mTrait.ent << " for " << impl.mType << "";
+        return os << "impl " << (impl.mIsConst ? "const " : "") << "<" << impl.mParams << "> " << impl.mTrait.ent << " for " << impl.mType << "";
     }
 
     void Impl::addFunction(Span sp, AttributeList attrs, AST::Visibility vis, bool isSpecialisable, RcString name, Function fcn) {
@@ -657,7 +657,7 @@ Function::Arg::Arg(::AST::Pattern pat, TypeRef ty, ::AST::AttributeList attrs)
     , ty(mv$(ty)) {
 }
 Function::Flags::Flags()
-    : is_const(false)
+    : isConst(false)
     , isUnsafe(false)
     , isAsync(false) {
 }
@@ -668,7 +668,7 @@ Function::Flags Function::Flags::setUnsafe() const {
 }
 Function::Flags Function::Flags::setConst() const {
     auto rv = *this;
-    rv.is_const = true;
+    rv.isConst = true;
     return rv;
 }
 Function::Flags Function::Flags::setAsync() const {
@@ -725,7 +725,7 @@ Union::Union(GenericParams params, ::std::vector<StructItem> fields)
 }
 ImplDef::ImplDef(GenericParams params, Spanned<Path> traitType, TypeRef implType)
     : mIsUnsafe(false)
-    , isConst(false)
+    , mIsConst(false)
     , mParams(mv$(params))
     , mTrait(mv$(traitType))
     , mType(mv$(implType)) {

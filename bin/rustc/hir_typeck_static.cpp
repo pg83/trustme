@@ -1021,14 +1021,14 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const ::HIR::Simp
         unsigned maxImplIdxVal = 0;
         unsigned maxImplIdxLft = 0;
         auto visitLft = [&](const ::HIR::LifetimeRef& l) {
-            if (l.isParam() && l.asParam().is_placeholder()) {
+            if (l.isParam() && l.asParam().isPlaceholder()) {
                 maxImplIdxLft = ::std::max(maxImplIdxLft, l.asParam().idx());
             }
         };
         // TODO: Get a generic visitor (running the same way as `Monomorphiser`)
         for (const auto& r : desTraitParams->types) {
             visitTyWith(r, [&](const ::HIR::TypeData* t) -> bool {
-                if (t->is_Generic() && t->as_Generic().is_placeholder()) {
+                if (t->is_Generic() && t->as_Generic().isPlaceholder()) {
                     unsigned implIdx = t->as_Generic().idx();
                     maxImplIdxTy = ::std::max(maxImplIdxTy, implIdx);
                 }
@@ -1126,7 +1126,7 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const ::HIR::Simp
             if (ty->is_Generic() && ty->as_Generic().binding == g.binding) {
                 return ::HIR::Compare::Equal;
             }
-            if (g.is_placeholder()) {
+            if (g.isPlaceholder()) {
                 if (g.idx() >= baseImplPlaceholderIdx.ty) {
                     auto i = g.idx() - baseImplPlaceholderIdx.ty;
                     ASSERT_BUG(sp, !paramsSet.types[i], "Placeholder to populated type returned. new " << ty << ", existing " << implParams.types[i]);
@@ -1157,7 +1157,7 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const ::HIR::Simp
                 }
             }
 
-            if (g.is_placeholder()) {
+            if (g.isPlaceholder()) {
                 if (g.idx() >= baseImplPlaceholderIdx.val) {
                     auto i = g.idx() - baseImplPlaceholderIdx.val;
                     ASSERT_BUG(sp, !paramsSet.values[i], "Placeholder to populated value returned. new " << val << ", existing " << implParams.values[i]);
@@ -1185,7 +1185,7 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const ::HIR::Simp
             if (lft.isParam() && lft.binding == g.binding) {
                 return HIR::Equal;
             }
-            if (g.is_placeholder()) {
+            if (g.isPlaceholder()) {
                 if (g.idx() >= baseImplPlaceholderIdx.lft) {
                     auto i = g.idx() - baseImplPlaceholderIdx.lft;
                     ASSERT_BUG(sp, !paramsSet.mLifetimes[i], "Placeholder to populated lifetime returned. new " << lft << ", existing " << implParams.mLifetimes[i]);
@@ -1218,7 +1218,7 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const ::HIR::Simp
                 //    return impl_type;
                 TODO(sp, "get_type Self");
             }
-            ASSERT_BUG(sp, !ge.is_placeholder(), "[find_impl__check_crate_raw] Placeholder param seen - " << ge);
+            ASSERT_BUG(sp, !ge.isPlaceholder(), "[find_impl__check_crate_raw] Placeholder param seen - " << ge);
             if (paramsSet.types.at(ge.binding)) {
                 return implParams.types.at(ge.binding);
             }
@@ -1280,7 +1280,7 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const ::HIR::Simp
                     traitContainsType(sp, bTpMono.mPath, *e.trait.traitPtr, atyName.c_str(), atySrcTrait);
 
                     bool rv = false;
-                    if (bTyMono->is_Generic() && bTyMono->as_Generic().is_placeholder()) {
+                    if (bTyMono->is_Generic() && bTyMono->as_Generic().isPlaceholder()) {
                         DEBUG("- Placeholder param " << bTyMono << ", magic success");
                         rv = true;
                     } else {
@@ -1311,7 +1311,7 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const ::HIR::Simp
             //else
             {
                 bool rv = false;
-                if (bTyMono->is_Generic() && bTyMono->as_Generic().is_placeholder()) {
+                if (bTyMono->is_Generic() && bTyMono->as_Generic().isPlaceholder()) {
                     DEBUG("- Placeholder param " << bTyMono << ", magic success");
                     rv = true;
                 } else {
@@ -1320,7 +1320,7 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const ::HIR::Simp
                     });
                 }
                 if (!rv && visitTyWith(bTyMono, [](const HIR::TypeData* ty) {
-                    return ty->is_Generic() && ty->as_Generic().is_placeholder();
+                    return ty->is_Generic() && ty->as_Generic().isPlaceholder();
                 })) {
                     DEBUG("- Placeholder param within " << bTyMono << ", magic success");
                     rv = true;
@@ -2229,7 +2229,7 @@ bool StaticTraitResolve::replaceEqualities(::HIR::TypeRef& input) const {
     });
     if (a != typeEqualities.end()) {
         // HACK: Shouldn't need this, but works around some missing cases
-        if (a->second.hrbs.is_empty()) {
+        if (a->second.hrbs.isEmpty()) {
             input = a->second.ty;
             return true;
         }
@@ -2296,7 +2296,7 @@ bool StaticTraitResolve::iterateAtyBounds(const Span& sp, const ::HIR::Path::Dat
 // -------------------------------------------------------------------------------------------------------------------
 //
 // -------------------------------------------------------------------------------------------------------------------
-bool StaticTraitResolve::findNamedTraitInTrait(const Span& sp, const ::HIR::SimplePath& des, const ::HIR::PathParams& desParams, const ::HIR::Trait& traitPtr, const ::HIR::SimplePath& traitPath, const ::HIR::PathParams& pp, const ::HIR::TypeData* target_type, ::std::function<bool(const ::HIR::PathParams&, ::HIR::TraitPath::assocListT)> callback) const {
+bool StaticTraitResolve::findNamedTraitInTrait(const Span& sp, const ::HIR::SimplePath& des, const ::HIR::PathParams& desParams, const ::HIR::Trait& traitPtr, const ::HIR::SimplePath& traitPath, const ::HIR::PathParams& pp, const ::HIR::TypeData* targetType, ::std::function<bool(const ::HIR::PathParams&, ::HIR::TraitPath::assocListT)> callback) const {
     TRACE_FUNCTION_F(des << desParams << " from " << traitPath << pp);
     if (pp.types.size() != traitPtr.mParams.types.size()) {
         BUG(sp, "Incorrect number of parameters for trait - " << traitPath << pp);
@@ -2310,7 +2310,7 @@ bool StaticTraitResolve::findNamedTraitInTrait(const Span& sp, const ::HIR::Simp
         }
     }
 
-    auto monomorph = MonomorphStatePtr(crate.types, target_type, &pp, nullptr);
+    auto monomorph = MonomorphStatePtr(crate.types, targetType, &pp, nullptr);
     for (const auto& pt : traitPtr.allParentTraits) {
         auto ptMono = monomorph.monomorphTraitpath(sp, pt, false);
         this->expandAssociatedTypesTp(sp, ptMono);
@@ -3100,7 +3100,7 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const ::HIR::TypeD
                 } else {
                     return MetadataType::Unknown;
                 }
-            } else if (e.is_placeholder()) {
+            } else if (e.isPlaceholder()) {
                 return MetadataType::None;
             } else {
                 BUG(sp, "Unknown generic binding on " << ty);

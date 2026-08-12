@@ -2769,11 +2769,11 @@ namespace {
             }
         };
 
-        void setStateType(const Span& sp, CrVars& vars, HIR::TypeRef state_type) const {
+        void setStateType(const Span& sp, CrVars& vars, HIR::TypeRef stateType) const {
             const auto& langMaybeUninit = mResolve.crate.getLangItemPath(sp, "maybe_uninit");
             const auto& unmMaybeUninit = mResolve.crate.getUnionByPath(sp, langMaybeUninit);
             auto wrapped = mResolve.crate.types.path(
-                ::HIR::GenericPath(langMaybeUninit, ::HIR::PathParams(state_type)),
+                ::HIR::GenericPath(langMaybeUninit, ::HIR::PathParams(stateType)),
                 &unmMaybeUninit
             );
             vars.structEnts.insert(
@@ -2882,9 +2882,9 @@ namespace {
             ::HIR::SimplePath stateStructPath;
             const ::HIR::TypeItem* stateStructPtr;
             ::std::tie(stateStructPath, stateStructPtr) = out.newType("gen_state#", newTypeSuffix, std::move(stateStr));
-            auto state_type = mResolve.crate.types.path(::HIR::GenericPath(stateStructPath, params.makeNopParams(mResolve.crate.types, 0)), &stateStructPtr->as_Struct());
-            DEBUG("state_type = " << state_type);
-            setStateType(sp, crVars, state_type);
+            auto stateType = mResolve.crate.types.path(::HIR::GenericPath(stateStructPath, params.makeNopParams(mResolve.crate.types, 0)), &stateStructPtr->as_Struct());
+            DEBUG("state_type = " << stateType);
+            setStateType(sp, crVars, stateType);
 
             auto genStr = ::HIR::Struct{params.clone(), ::HIR::Struct::Repr::Rust, ::HIR::Struct::Data::make_Tuple(mv$(crVars.structEnts))};
             genStr.markings.hasDropImpl = true;
@@ -2965,7 +2965,7 @@ namespace {
             v->captureUsages = std::move(crVars.captureUsages);
             v->resType = fcnResume.returnType;
             v->objPtr = node.objPtr;
-            v->stateDataType = mv$(state_type);
+            v->stateDataType = mv$(stateType);
             v->stateIdxEnum = mv$(stateIdxType.first);
             v->dropFcnPtr = fcnDropPtr;
             bodyNode.reset(v);
@@ -3021,10 +3021,10 @@ namespace {
             ::HIR::SimplePath stateStructPath;
             const ::HIR::TypeItem* stateStructPtr;
             ::std::tie(stateStructPath, stateStructPtr) = out.newType("async_state#", newTypeSuffix, std::move(stateStr));
-            auto state_type = mResolve.crate.types.path(::HIR::GenericPath(stateStructPath, params.makeNopParams(mResolve.crate.types, 0)), &stateStructPtr->as_Struct());
+            auto stateType = mResolve.crate.types.path(::HIR::GenericPath(stateStructPath, params.makeNopParams(mResolve.crate.types, 0)), &stateStructPtr->as_Struct());
 
             // Update the state type entry, now that it's known
-            setStateType(sp, crVars, state_type);
+            setStateType(sp, crVars, stateType);
 
             // NOTE: Most of async lowering is done in MIR lowering
             // - This is because it needs to rewrite the flow quite severely.
@@ -3110,7 +3110,7 @@ namespace {
             v->captureUsages = std::move(crVars.captureUsages);
             v->resType = fcnResume.returnType;
             v->objPtr = node.objPtr;
-            v->stateDataType = mv$(state_type);
+            v->stateDataType = mv$(stateType);
             v->stateIdxEnum = mv$(stateIdxType.first);
             v->dropFcnPtr = fcnDropPtr;
             fcnResume.mCode.reset(v);
@@ -6338,12 +6338,12 @@ namespace {
         {
         }
 
-        void check(const HIR::TypeData* retTy, const ::HIR::Function::argsT& args, HIR::ExprPtr& root, bool is_function = false) {
+        void check(const HIR::TypeData* retTy, const ::HIR::Function::argsT& args, HIR::ExprPtr& root, bool isFunction = false) {
             if (root.mir) {
                 DEBUG("MIR present, skipping");
                 return;
             }
-            HIRExpandLifetimeInferExprInner(mResolve, args, retTy, root, removeLocals, !is_function);
+            HIRExpandLifetimeInferExprInner(mResolve, args, retTy, root, removeLocals, !isFunction);
         }
 
         // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
@@ -6445,7 +6445,7 @@ namespace {
                 DEBUG("From " << a->first);
                 DEBUG("To " << a->second.ty);
                 // Then equate, matching lifetimes through
-                if (!a->second.hrbs.is_empty()) {
+                if (!a->second.hrbs.isEmpty()) {
                     // Match the HRLs, so they can propagate through to the output
                     struct Matcher: public HIR::MatchGenerics {
                         const Span& sp;
@@ -7782,7 +7782,7 @@ namespace staticBorrowConstants {
         struct NewStatic {
             HIR::SimplePath path;
             HIR::Static data;
-            bool is_const;
+            bool isConst;
         };
 
         std::map<const HIR::Module*, std::vector<NewStatic>> newStatics;
@@ -7797,12 +7797,12 @@ namespace staticBorrowConstants {
         }
 
         StaticBorrowExprVisitorMutate::tNewStaticCb getNewTyCb() {
-            return [this](Span sp, HIR::TypeRef ty, HIR::ExprPtr valExpr, HIR::GenericParams generics, bool is_const) -> HIR::SimplePath {
+            return [this](Span sp, HIR::TypeRef ty, HIR::ExprPtr valExpr, HIR::GenericParams generics, bool isConst) -> HIR::SimplePath {
                 ASSERT_BUG(sp, currentModule, "");
                 // Assign a path (based on the current list)
                 auto& list = newStatics[currentModule];
                 auto idx = list.size();
-                auto name = RcString::newInterned(FMT((is_const ? "lifted#" : "const#") << idx));
+                auto name = RcString::newInterned(FMT((isConst ? "lifted#" : "const#") << idx));
                 auto path = (*currentModulePath + name).getSimplePath();
                 auto newStatic = HIR::Static(
                     HIR::Linkage(),
@@ -7813,7 +7813,7 @@ namespace staticBorrowConstants {
                 newStatic.mParams = mv$(generics);
                 newStatic.saveLiteral = isConst;
                 DEBUG(path << " = " << newStatic.valueRes);
-                list.push_back(NewStatic{path, std::move(newStatic), is_const});
+                list.push_back(NewStatic{path, std::move(newStatic), isConst});
                 return path;
             };
         }
@@ -7897,7 +7897,7 @@ namespace staticBorrowConstants {
                         }
                     };
 
-                    auto newEnt = newStaticPair.is_const ? HIR::ValueItem(H::toConst(newStatic)) : HIR::ValueItem(std::move(newStaticPair.data));
+                    auto newEnt = newStaticPair.isConst ? HIR::ValueItem(H::toConst(newStatic)) : HIR::ValueItem(std::move(newStaticPair.data));
                     mod.valueItems.insert(
                         std::make_pair(
                             mv$(newStaticPair.path.components().back()),
@@ -8065,7 +8065,7 @@ void HIRExpandStaticBorrowConstantsExpr(const ::HIR::Crate& crate, const ::HIR::
         DEBUG("self_type = NONE");
     }
 
-    staticBorrowConstants::StaticBorrowExprVisitorMutate ev(resolve, selfType, [&](Span sp, HIR::TypeRef ty, HIR::ExprPtr valExpr, HIR::GenericParams generics, bool is_const) -> HIR::SimplePath {
+    staticBorrowConstants::StaticBorrowExprVisitorMutate ev(resolve, selfType, [&](Span sp, HIR::TypeRef ty, HIR::ExprPtr valExpr, HIR::GenericParams generics, bool isConst) -> HIR::SimplePath {
         auto name = RcString::newInterned(FMT("lifted#C_" << staticCount++));
 
         auto path = ::HIR::SimplePath(crate.crateName, {name});
@@ -8129,7 +8129,7 @@ void HIRExpandStaticBorrowConstantsExpr(const ::HIR::Crate& crate, const ::HIR::
         }
 
         DEBUG(path << " = ?");
-        auto vi = is_const ? HIR::ValueItem(HIR::Constant{std::move(newStatic.mParams), std::move(newStatic.mType), std::move(newStatic.mValue)}) : HIR::ValueItem(std::move(newStatic));
+        auto vi = isConst ? HIR::ValueItem(HIR::Constant{std::move(newStatic.mParams), std::move(newStatic.mType), std::move(newStatic.mValue)}) : HIR::ValueItem(std::move(newStatic));
         auto boxed = box$((::HIR::VisEnt<::HIR::ValueItem>{::HIR::Publicity::newNone(), std::move(vi)}));
         crate.newValues.push_back(::std::make_pair(name, mv$(boxed)));
         {

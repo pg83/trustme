@@ -342,7 +342,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const ::AST::Crate& crate, LList<
 MacroRef ExpandLookupMacro(const Span& miSpan, const ::AST::Crate& crate, LList<const AST::Module*> modstack, const AST::Path& path) {
     ASSERT_BUG(miSpan, path.size() > 0, "Path should have nodes: " << path);
 
-    if (path.is_trivial()) {
+    if (path.isTrivial()) {
         const auto& name = path.asTrivial();
 
         // Iterate up the module tree, using the first located macro
@@ -385,7 +385,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const ::AST::Crate& crate, LList<
     }
 
     // HACK: If the crate name is empty, look up builtins
-    if (path.is_absolute() && path.cls.as_Absolute().crate == "" && path.nodes().size() == 1) {
+    if (path.isAbsolute() && path.cls.as_Absolute().crate == "" && path.nodes().size() == 1) {
         const auto& name = path.nodes()[0].name();
         if (auto* pm = ExpandFindProcMacro(name)) {
             return MacroRef(pm);
@@ -441,7 +441,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const ::AST::Crate& crate, LList<
             }
 
             DEBUG("Invoking macro_rules " << path << " " << mrPtr);
-            rv = MacroInvokeRules(path.is_trivial() ? path.asTrivial() : RcString::newInterned(FMT(path).c_str()), *mrPtr, miSpan, mv$(inputTt), crate, mod);
+            rv = MacroInvokeRules(path.isTrivial() ? path.asTrivial() : RcString::newInterned(FMT(path).c_str()), *mrPtr, miSpan, mv$(inputTt), crate, mod);
             inputTt = TokenTree();
         }
     }
@@ -813,7 +813,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
             return ::AST::ExprNodeP();
         }
 
-        const bool definesMacro = node.mPath.is_trivial() && node.mPath.asTrivial() == "macro_rules";
+        const bool definesMacro = node.mPath.isTrivial() && node.mPath.asTrivial() == "macro_rules";
 
         ::AST::ExprNodeP rv;
         auto& mod = this->curMod();
@@ -1356,10 +1356,10 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         static const RcString rcstringIt = RcString::newInterned("it");
         const auto iteratorHygiene = Ident::Hygiene::newScope();
         auto coreCrate = crate.extCratenameCore;
-        auto path_Some = getPath(coreCrate, "option", "Option", "Some");
-        auto path_None = getPath(coreCrate, "option", "Option", "None");
-        auto path_IntoIterator = getPath(coreCrate, "iter", "IntoIterator");
-        auto path_Iterator = getPath(coreCrate, "iter", "Iterator");
+        auto pathSome = getPath(coreCrate, "option", "Option", "Some");
+        auto pathNone = getPath(coreCrate, "option", "Option", "None");
+        auto pathIntoIterator = getPath(coreCrate, "iter", "IntoIterator");
+        auto pathIterator = getPath(coreCrate, "iter", "Iterator");
         // Desugar into:
         // {
         //     match <_ as ::iter::IntoIterator>::into_iter(`m_cond`) {
@@ -1374,9 +1374,9 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         // }
         ::std::vector<::AST::ExprNodeMatchArm> arms;
         // - `Some(pattern ) => code`
-        arms.push_back(::AST::ExprNodeMatchArm(::makeVec1(::AST::Pattern(::AST::Pattern::TagNamedTuple(), node.span(), path_Some, ::makeVec1(mv$(node.pattern)))), {}, mv$(node.mCode)));
+        arms.push_back(::AST::ExprNodeMatchArm(::makeVec1(::AST::Pattern(::AST::Pattern::TagNamedTuple(), node.span(), pathSome, ::makeVec1(mv$(node.pattern)))), {}, mv$(node.mCode)));
         // - `None => break label`
-        arms.push_back(::AST::ExprNodeMatchArm(::makeVec1(::AST::Pattern(::AST::Pattern::TagValue(), node.span(), ::AST::Pattern::Value::make_Named(path_None))), {}, ::AST::ExprNodeP(new ::AST::ExprNodeFlow(::AST::ExprNodeFlow::BREAK, node.label, nullptr))));
+        arms.push_back(::AST::ExprNodeMatchArm(::makeVec1(::AST::Pattern(::AST::Pattern::TagValue(), node.span(), ::AST::Pattern::Value::make_Named(pathNone))), {}, ::AST::ExprNodeP(new ::AST::ExprNodeFlow(::AST::ExprNodeFlow::BREAK, node.label, nullptr))));
 
         auto nextReceiver = ::AST::ExprNodeP(new ::AST::ExprNodeNamedValue(::AST::Path::newRelative(
             iteratorHygiene,
@@ -1384,13 +1384,13 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         )));
         auto nextReceiverBorrow = ::AST::ExprNodeP(new ::AST::ExprNodeUniOp(::AST::ExprNodeUniOp::REFMUT, mv$(nextReceiver)));
         auto nextCall = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(
-            ::AST::Path::newUfcsTrait(::TypeRef(node.span()), path_Iterator, {::AST::PathNode(rcstringNext)}),
+            ::AST::Path::newUfcsTrait(::TypeRef(node.span()), pathIterator, {::AST::PathNode(rcstringNext)}),
             ::makeVec1(mv$(nextReceiverBorrow))));
         auto nextMatch = ::AST::ExprNodeP(new ::AST::ExprNodeMatch(mv$(nextCall), mv$(arms)));
         auto loop = ::AST::ExprNodeP(new ::AST::ExprNodeLoop(node.label, mv$(nextMatch)));
 
         auto intoIterCall = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(
-            ::AST::Path::newUfcsTrait(::TypeRef(node.span()), path_IntoIterator, {::AST::PathNode(rcstringIntoIter)}),
+            ::AST::Path::newUfcsTrait(::TypeRef(node.span()), pathIntoIterator, {::AST::PathNode(rcstringIntoIter)}),
             ::makeVec1(mv$(node.mValue))));
         auto outerMatch = ::AST::ExprNodeP(new ::AST::ExprNodeMatch(
             mv$(intoIterCall),
@@ -1596,24 +1596,24 @@ struct CExpandExpr: public ::AST::NodeVisitor {
             case ::AST::ExprNodeBinOp::RANGE: {
                 // NOTE: Not language items pre 1.39
                 auto coreCrate = crate.extCratenameCore;
-                auto path_Range = getPath(coreCrate, "ops", "Range");
-                auto path_RangeFrom = getPath(coreCrate, "ops", "RangeFrom");
-                auto path_RangeTo = getPath(coreCrate, "ops", "RangeTo");
-                auto path_RangeFull = getPath(coreCrate, "ops", "RangeFull");
+                auto pathRange = getPath(coreCrate, "ops", "Range");
+                auto pathRangeFrom = getPath(coreCrate, "ops", "RangeFrom");
+                auto pathRangeTo = getPath(coreCrate, "ops", "RangeTo");
+                auto pathRangeFull = getPath(coreCrate, "ops", "RangeFull");
 
                 ::AST::ExprNodeStructLiteral::tValues values;
                 if (node.left && node.right) {
                     values.push_back({{}, rcstringStart, mv$(node.left)});
                     values.push_back({{}, rcstringEnd, mv$(node.right)});
-                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(path_Range), nullptr, mv$(values)));
+                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(pathRange), nullptr, mv$(values)));
                 } else if (node.left) {
                     values.push_back({{}, rcstringStart, mv$(node.left)});
-                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(path_RangeFrom), nullptr, mv$(values)));
+                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(pathRangeFrom), nullptr, mv$(values)));
                 } else if (node.right) {
                     values.push_back({{}, rcstringEnd, mv$(node.right)});
-                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(path_RangeTo), nullptr, mv$(values)));
+                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(pathRangeTo), nullptr, mv$(values)));
                 } else {
-                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(path_RangeFull), nullptr, mv$(values)));
+                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(pathRangeFull), nullptr, mv$(values)));
                 }
                 replacement->setSpan(node.span());
                 break;
@@ -1621,19 +1621,19 @@ struct CExpandExpr: public ::AST::NodeVisitor {
             case ::AST::ExprNodeBinOp::RANGE_INC: {
                 // NOTE: Not language items pre 1.54
                 auto coreCrate = crate.extCratenameCore;
-                auto path_RangeInclusive_NonEmpty = getPath(coreCrate, "ops", "RangeInclusive");
-                auto path_RangeToInclusive = getPath(coreCrate, "ops", "RangeToInclusive");
+                auto pathRangeInclusiveNonEmpty = getPath(coreCrate, "ops", "RangeInclusive");
+                auto pathRangeToInclusive = getPath(coreCrate, "ops", "RangeToInclusive");
 
                 if (node.left) {
                     ::AST::ExprNodeStructLiteral::tValues values;
                     values.push_back({{}, rcstringStart, mv$(node.left)});
                     values.push_back({{}, rcstringEnd, mv$(node.right)});
                     values.push_back({{}, RcString::newInterned("exhausted"), ::AST::ExprNodeP(new ::AST::ExprNodeBool(false))});
-                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(path_RangeInclusive_NonEmpty), nullptr, mv$(values)));
+                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(pathRangeInclusiveNonEmpty), nullptr, mv$(values)));
                 } else {
                     ::AST::ExprNodeStructLiteral::tValues values;
                     values.push_back({{}, rcstringEnd, mv$(node.right)});
-                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(path_RangeToInclusive), nullptr, mv$(values)));
+                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(pathRangeToInclusive), nullptr, mv$(values)));
                 }
                 replacement->setSpan(node.span());
                 break;
@@ -1659,7 +1659,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
             static const RcString rcstringR = RcString::newInterned("r");
             // TryV2
             {
-                auto path_Try_branch = ::AST::Path::newUfcsTrait(::TypeRef(node.span()), pathTry, {::AST::PathNode(RcString::newInterned("branch"))});
+                auto pathTryBranch = ::AST::Path::newUfcsTrait(::TypeRef(node.span()), pathTry, {::AST::PathNode(RcString::newInterned("branch"))});
                 // Not a lang item
                 auto path_ControlFlow_Continue = getPath(coreCrate, "ops", "ControlFlow", "Continue");
                 auto path_ControlFlow_Break = getPath(coreCrate, "ops", "ControlFlow", "Break");
@@ -1681,7 +1681,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                     )
                 );
 
-                replacement.reset(new ::AST::ExprNodeMatch(::AST::ExprNodeP(new AST::ExprNodeCallPath(mv$(path_Try_branch), ::makeVec1(mv$(node.mValue)))), mv$(arms)));
+                replacement.reset(new ::AST::ExprNodeMatch(::AST::ExprNodeP(new AST::ExprNodeCallPath(mv$(pathTryBranch), ::makeVec1(mv$(node.mValue)))), mv$(arms)));
             }
         }
     }
@@ -1714,7 +1714,7 @@ void ExpandExpr(const ExpandState& es, AST::Expr& node) {
     }
 }
 
-void Expand_GenericParams(const ExpandState& es, ::AST::Module& mod, ::AST::GenericParams& params) {
+void ExpandGenericParams(const ExpandState& es, ::AST::Module& mod, ::AST::GenericParams& params) {
     for (auto& paramDef : params.mParams) {
         TU_MATCH_HDRA( (paramDef), {)
         TU_ARMA(None, e) {
@@ -1750,7 +1750,7 @@ void ExpandBareExpr(const ::AST::Crate& crate, const AST::Module& mod, ::AST::Ex
     return n;
 }
 
-void Expand_Function(const ExpandState& es, AST::Module& mod, AST::Function& e) {
+void ExpandFunction(const ExpandState& es, AST::Module& mod, AST::Function& e) {
     for (size_t i = 0; i < e.args().size(); i++) {
         auto& arg = e.args()[i];
         if (!ExpandAttrsCfgOnly(es, arg.attrs)) {
@@ -1770,7 +1770,7 @@ void Expand_Function(const ExpandState& es, AST::Module& mod, AST::Function& e) 
 
 void Expand_Impl(const ExpandState& es, ::AST::Path modpath, ::AST::Module& mod, ::AST::Impl& impl) {
     TRACE_FUNCTION_F(impl.def());
-    Expand_GenericParams(es, mod, impl.def().params());
+    ExpandGenericParams(es, mod, impl.def().params());
 
     ExpandType(es, mod, impl.def().type());
     ExpandPath(es, mod, impl.def().trait().ent);
@@ -1820,7 +1820,7 @@ void Expand_Impl(const ExpandState& es, ::AST::Path modpath, ::AST::Module& mod,
             }
             TU_ARMA(Function, e) {
                 TRACE_FUNCTION_F("fn " << i.name);
-                Expand_Function(es, mod, e);
+                ExpandFunction(es, mod, e);
             }
             TU_ARMA(Static, e) {
                 TRACE_FUNCTION_F("static " << i.name);
@@ -1847,7 +1847,7 @@ void Expand_Impl(const ExpandState& es, ::AST::Path modpath, ::AST::Module& mod,
 }
 
 void Expand_ImplDef(const ExpandState& es, ::AST::Path modpath, ::AST::Module& mod, ::AST::ImplDef& implDef) {
-    Expand_GenericParams(es, mod, implDef.params());
+    ExpandGenericParams(es, mod, implDef.params());
 
     ExpandType(es, mod, implDef.type());
     //Expand_Type(es, mod,  impl_def.trait());
@@ -1876,7 +1876,7 @@ void Expand_ExternBlock(const ExpandState& es, ::AST::Module& mod, ::AST::Extern
                 ExpandType(es, mod, e.type());
             }
             TU_ARMA(Function, e) {
-                Expand_Function(es, mod, e);
+                ExpandFunction(es, mod, e);
             }
             TU_ARMA(Static, e) {
                 ExpandExpr(es, e.value());
@@ -1976,7 +1976,7 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
         auto path = modpath + i.name;
 
         if (const auto* mi = i.data.opt_MacroInv()) {
-            if (mi->path().is_trivial() && mi->path().asTrivial() == "macro_rules") {
+            if (mi->path().isTrivial() && mi->path().asTrivial() == "macro_rules") {
                 i.vis = AST::Visibility::makeGlobal();
                 DEBUG("macro_rules made pub");
             }
@@ -2176,7 +2176,7 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
             }
 
             TU_ARMA(Struct, e) {
-                Expand_GenericParams(es, mod, e.params());
+                ExpandGenericParams(es, mod, e.params());
             TU_MATCH_HDRA( (e.mData), {)
             TU_ARMA(Unit, sd) {
                     }
@@ -2222,7 +2222,7 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
             }
             }
             TU_ARMA(Enum, e) {
-                Expand_GenericParams(es, mod, e.params());
+                ExpandGenericParams(es, mod, e.params());
                 for (auto& var : e.variants()) {
                     ExpandAttrsCfgAttr(var.mAttrs);
                     ExpandAttrs(es, var.mAttrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
@@ -2284,7 +2284,7 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
                 }
             }
             TU_ARMA(Union, e) {
-                Expand_GenericParams(es, mod, e.mParams);
+                ExpandGenericParams(es, mod, e.mParams);
                 for (auto it = e.mVariants.begin(); it != e.mVariants.end();) {
                     auto& si = *it;
                     ExpandAttrsCfgAttr(si.mAttrs);
@@ -2305,7 +2305,7 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
                 }
             }
             TU_ARMA(Trait, e) {
-                Expand_GenericParams(es, mod, e.params());
+                ExpandGenericParams(es, mod, e.params());
                 for (auto& p : e.supertraits()) {
                     ExpandPath(es, mod, *p.ent.path);
                 }
@@ -2349,7 +2349,7 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
                             }
                         }
                         TU_ARMA(Function, e) {
-                            Expand_Function(es, mod, e);
+                            ExpandFunction(es, mod, e);
                         }
                         TU_ARMA(Static, e) {
                             ExpandExpr(es, e.value());
@@ -2375,7 +2375,7 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
             }
 
             TU_ARMA(Function, e) {
-                Expand_Function(es, mod, e);
+                ExpandFunction(es, mod, e);
             }
             TU_ARMA(Static, e) {
                 ExpandExpr(es, e.value());
@@ -2407,13 +2407,13 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
     //    DEBUG("- Imports '" << mi.name << "'");
 }
 
-void Expand_Mod_IndexAnon(::AST::Crate& crate, ::AST::Module& mod) {
+void ExpandModIndexAnon(::AST::Crate& crate, ::AST::Module& mod) {
     TRACE_FUNCTION_F("mod=" << mod.path());
 
     for (auto& i : mod.mItems) {
         DEBUG("- " << i->data.tagStr() << " '" << i->name << "'");
         if (auto* e = i->data.opt_Module()) {
-            Expand_Mod_IndexAnon(crate, *e);
+            ExpandModIndexAnon(crate, *e);
 
             // TODO: Also ensure that all #[macro_export] macros end up in parent
         }
@@ -2424,7 +2424,7 @@ void Expand_Mod_IndexAnon(::AST::Crate& crate, ::AST::Module& mod) {
             DEBUG("- " << mp->path() << " dropped due to node destruction");
             mp.reset();
         } else {
-            Expand_Mod_IndexAnon(crate, *mp);
+            ExpandModIndexAnon(crate, *mp);
         }
     }
 }
@@ -2436,7 +2436,7 @@ void Expand_Mod_Early(::AST::Crate& crate, ::AST::Module& mod, std::vector<std::
     TRACE_FUNCTION_F(mod.path());
     for (auto& i : mod.mItems) {
         if (const auto* mi = i->data.opt_MacroInv()) {
-            if (mi->path().is_trivial() && mi->path().asTrivial() == "macro_rules") {
+            if (mi->path().isTrivial() && mi->path().asTrivial() == "macro_rules") {
                 i->vis = AST::Visibility::makeGlobal();
                 DEBUG("macro_rules made pub");
             }
@@ -2458,7 +2458,7 @@ void Expand_Mod_Early(::AST::Crate& crate, ::AST::Module& mod, std::vector<std::
         if (cfgFailed) {
             i->data = ::AST::Item::make_None({});
         } else if (isMacroExport) {
-            if (i->data.is_MacroInv() && i->data.as_MacroInv().path().is_trivial() && i->data.as_MacroInv().path().asTrivial() == "macro_rules") {
+            if (i->data.is_MacroInv() && i->data.as_MacroInv().path().isTrivial() && i->data.as_MacroInv().path().asTrivial() == "macro_rules") {
                 const auto& macInv = i->data.as_MacroInv();
                 DEBUG("macro_rules marked with #[macro_export] moved to the crate root - " << macInv.inputIdent());
                 newRootItems.push_back(box$(*i));
@@ -2483,7 +2483,7 @@ void Expand_Mod_Early(::AST::Crate& crate, ::AST::Module& mod, std::vector<std::
         auto& i = *mod.mItems[idx];
         if (auto* mi = i.data.opt_MacroInv()) {
             // 1.74 HACK - Parse `macro_rules` during the first pass, so they're present for `use` to refer to
-            if (mi->path().is_trivial() && mi->path().asTrivial() == "macro_rules") {
+            if (mi->path().isTrivial() && mi->path().asTrivial() == "macro_rules") {
                 // A #[rustc_builtin_macro] declaration only supplies the
                 // public signature of a compiler-provided macro.  Its
                 // macro_rules body is a placeholder and must never enter the
@@ -2614,7 +2614,7 @@ void Expand(::AST::Crate& crate) {
     //Expand_Attrs(es, crate.m_attrs, AttrStage::Post,  [&](const Span& sp, const auto& d, const auto& a){ d.handle(sp, a, crate); });
 
     // Post-process
-    Expand_Mod_IndexAnon(crate, crate.mRootModule);
+    ExpandModIndexAnon(crate, crate.mRootModule);
 
     // Extract exported macros
 

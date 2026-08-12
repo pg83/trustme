@@ -1259,7 +1259,7 @@ namespace {
                     // repr(C) enums - they have different rules
                     // - A data enum with `repr(C)` puts the tag before the data
                     if (enm.isCRepr) {
-                        size_t max_size = 0;
+                        size_t maxSize = 0;
                         size_t maxAlign = 0;
                         for (const auto& var : e) {
                             auto t = monomorph(var.type);
@@ -1271,13 +1271,13 @@ namespace {
                             if (size == SIZE_MAX) {
                                 BUG(sp, "Unsized type in enum - " << t);
                             }
-                            max_size = ::std::max(max_size, size);
+                            maxSize = ::std::max(maxSize, size);
                             maxAlign = ::std::max(maxAlign, align);
                             rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
 
                             ASSERT_BUG(sp, !var.discriminantExpr, "TODO: Handle explicit discriminants with repr(C) data");
                         }
-                        DEBUG("max_size = " << max_size << ", max_align = " << maxAlign);
+                        DEBUG("max_size = " << maxSize << ", max_align = " << maxAlign);
 
                         auto tagTy = enm.tagRepr == ::HIR::Enum::Repr::Auto ? ::HIR::CoreType::U32 : enm.getReprType(enm.tagRepr);
                         rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(tagTy)});
@@ -1292,7 +1292,7 @@ namespace {
                         for (size_t i = 0; i < e.size(); i++) {
                             rv.fields[i].offset = dataOfs;
                         }
-                        rv.size = dataOfs + max_size;
+                        rv.size = dataOfs + maxSize;
                         rv.align = std::max(tagAlign, maxAlign);
                         while (rv.size % rv.align != 0) {
                             rv.size++;
@@ -1362,9 +1362,9 @@ namespace {
                                 }
                                 DEBUG("sizes = {" << sizes[0] << "," << sizes[1] << "}");
                                 auto minSize = ::std::min(sizes[0], sizes[1]);
-                                auto max_size = ::std::max(sizes[0], sizes[1]);
+                                auto maxSize = ::std::max(sizes[0], sizes[1]);
                                 // If one is zero and one is non-zero
-                                if (minSize == 0 && max_size > 0) {
+                                if (minSize == 0 && maxSize > 0) {
                                     // Check for a non-zero path in any of those
                                     unsigned nzVar = (sizes[0] == 0 ? 1 : 0);
                                     DEBUG("Variant #" << nzVar << " is populated, checking for NonZero");
@@ -1533,9 +1533,9 @@ namespace {
                                 }
 
                                 // Fix overall size
-                                size_t max_size = maxVarSize;
-                                while (max_size % maxAlign != 0) {
-                                    max_size++;
+                                size_t maxSize = maxVarSize;
+                                while (maxSize % maxAlign != 0) {
+                                    maxSize++;
                                 }
 
                                 if (!rv.variants.is_None()) {
@@ -1587,7 +1587,7 @@ namespace {
                                                 // Create the new repr
                                                 reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forcedAlignment, 0);
                                                 // Make sure that the newly calculated repr doesn't change the size/alignment
-                                                assert(reprs[i]->size <= max_size);
+                                                assert(reprs[i]->size <= maxSize);
                                                 assert(reprs[i]->align <= maxAlign);
                                             } else {
                                                 auto tagFldIdx = variants[i].ents.size();
@@ -1617,7 +1617,7 @@ namespace {
                                                 // Create the new repr
                                                 reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forcedAlignment, 0);
                                                 // Make sure that the newly calculated repr doesn't change the size/alignment
-                                                assert(reprs[i]->size <= max_size);
+                                                assert(reprs[i]->size <= maxSize);
                                                 assert(reprs[i]->align <= maxAlign);
                                             }
                                             finalSize = std::max(finalSize, reprs[i]->size);
@@ -1634,7 +1634,7 @@ namespace {
                                         rv.fields.push_back(TypeRepr::Field{0, mv$(variants[i].type)});
                                     }
 
-                                    rv.size = max_size;
+                                    rv.size = maxSize;
                                     rv.align = maxAlign;
 
                                     // Under a capping ABI take size/align from the final variant layouts - `max_align` predates the tag field, so it over-states them
@@ -1694,7 +1694,7 @@ namespace {
                             size_t tagSize;
                             size_t tagAlign;
                             TargetGetSizeAndAlignOf(sp, resolve, tagTy, tagSize, tagAlign);
-                            size_t max_size = tagSize;
+                            size_t maxSize = tagSize;
                             size_t maxAlign = tagAlign;
                             // Sort all varaint fields (fully)
                             // Add the tag to the start of all variants
@@ -1715,7 +1715,7 @@ namespace {
 
                                     // - Create repr and assign
                                     auto repr = makeTypeReprStructInner(sp, varTy, ents, StructSorting::None, variants[varI].forcedAlignment, 0);
-                                    max_size = std::max(max_size, repr->size);
+                                    maxSize = std::max(maxSize, repr->size);
                                     maxAlign = std::max(maxAlign, repr->align);
                                     setTypeRepr(sp, varTy, std::move(repr));
                                 }
@@ -1726,7 +1726,7 @@ namespace {
                             rv.fields.push_back(TypeRepr::Field{0, mv$(tagTy)});
 
                             // Size must be a multiple of alignment
-                            rv.size = max_size;
+                            rv.size = maxSize;
                             while (rv.size % maxAlign != 0) {
                                 rv.size++;
                             }

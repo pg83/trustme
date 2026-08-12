@@ -2388,7 +2388,7 @@ namespace {
     std::vector<RcString> findMacro(const Span& sp, const AST::Crate& crate, const AST::Module& mod, const AST::Path& traitPath) {
         std::vector<RcString> macPath;
 
-        if (traitPath.is_trivial()) {
+        if (traitPath.isTrivial()) {
             //auto mac_name = RcString::new_interned( FMT("derive#" << trait.name().elems.back()) );
             auto macName = traitPath.asTrivial();
 
@@ -2450,7 +2450,7 @@ static void deriveItem(const Span& sp, const AST::Crate& crate, AST::Module& mod
     for (const auto& traitPath : deriveItems) {
         DEBUG("- " << traitPath);
 
-        if (traitPath.is_trivial()) {
+        if (traitPath.isTrivial()) {
             auto dp = findImpl(traitPath.asTrivial());
             if (dp) {
                 mod.addItem(sp, AST::Visibility::makeBarePrivate(), "", dp->handleItem(sp, opts, item.params(), type, item), {});
@@ -3519,7 +3519,7 @@ public:
             }
             const auto& p = e->entries.front().path;
             // TODO: Ensure that this statement is a glob (has a name of "")
-            if (p.is_relative()) {
+            if (p.isRelative()) {
                 crate.preludePath = AST::Path(path);
                 crate.preludePath.nodes().pop_back();
                 crate.preludePath += p;

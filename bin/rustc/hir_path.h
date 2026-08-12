@@ -141,7 +141,7 @@ namespace HIR {
             return ::ord(members, x.members);
         }
 
-        bool starts_with(const SimplePath& x, bool skipLast = false) const;
+        bool startsWith(const SimplePath& x, bool skipLast = false) const;
         friend ::std::ostream& operator<<(::std::ostream& os, const SimplePath& x);
     };
 

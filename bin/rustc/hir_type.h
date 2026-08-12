@@ -55,7 +55,7 @@ namespace HIR {
     };
     extern ::std::ostream& operator<<(::std::ostream& os, const CoreType& ct);
 
-    bool is_integer(const CoreType& v);
+    bool isInteger(const CoreType& v);
 
     bool isFloat(const CoreType& v);
 

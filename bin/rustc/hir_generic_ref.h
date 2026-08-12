@@ -42,7 +42,7 @@ namespace HIR {
             return binding >> 8;
         }
 
-        bool is_placeholder() const {
+        bool isPlaceholder() const {
             return (binding >> 8) == GENERICPlaceholder;
         }
 

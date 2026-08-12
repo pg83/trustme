@@ -134,9 +134,9 @@ TomlKeyValue TomlFile::getNextValue() {
                 currentBlock.clear();
 
                 t = mLexer.getToken();
-                bool is_array = false;
+                bool isArray = false;
                 if (t.mType == TomlToken::Type::SquareOpen) {
-                    is_array = true;
+                    isArray = true;
                     t = mLexer.getToken();
                 }
                 for (;;) {
@@ -151,7 +151,7 @@ TomlKeyValue TomlFile::getNextValue() {
                     }
                     t = mLexer.getToken();
                 }
-                if (is_array) {
+                if (isArray) {
                     currentBlock.push_back(::format(arrayCounts[currentBlock.back()]++));
                     if (t.mType != TomlToken::Type::SquareClose) {
                         throw ::std::runtime_error(::format(mLexer, ": Unexpected token after array name - ", t));

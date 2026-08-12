@@ -1073,7 +1073,7 @@ namespace {
 
         void visitPathNode(const AST::PathNode& e, bool isExpr) {
             pmi.sendIdent(e.name().c_str());
-            if (!e.args().is_empty()) {
+            if (!e.args().isEmpty()) {
                 if (e.args().isParen) {
                     auto& t = e.args().entries.at(0).as_Type();
                     this->visitType(t); // Should be a tuple
@@ -1414,11 +1414,11 @@ namespace {
                     this->visitAttr(na);
                 }
             }
-            if (this->skipDeriveAttrs && a.name().is_trivial() && (a.name().asTrivial() == "derive" || a.name().asTrivial() == "derive_const")) {
+            if (this->skipDeriveAttrs && a.name().isTrivial() && (a.name().asTrivial() == "derive" || a.name().asTrivial() == "derive_const")) {
                 DEBUG("Skip " << a << " (derive input)");
                 return;
             }
-            auto isLocal = (a.name().is_trivial() && pmi.attrIsUsed(a.name().asTrivial()));
+            auto isLocal = (a.name().isTrivial() && pmi.attrIsUsed(a.name().asTrivial()));
             if (this->emitAllAttrs || isLocal) {
                 if (isLocal) {
                     a.markInert();
@@ -1583,7 +1583,7 @@ namespace {
             if (fcn.isUnsafe()) {
                 pmi.sendRword("unsafe");
             }
-            if (fcn.is_const()) {
+            if (fcn.isConst()) {
                 pmi.sendRword("const");
             }
             if (fcn.isAsync()) {
@@ -1670,7 +1670,7 @@ namespace {
 
         void visitImplHdr(const ::AST::ImplDef& impl) {
             pmi.sendRword("impl");
-            if (impl.is_const()) {
+            if (impl.isConst()) {
                 pmi.sendRword("const");
             }
             visitParams(impl.params());

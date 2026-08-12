@@ -30,7 +30,7 @@ void TraitResolveCommon::prepIndexes(const Span& sp) {
     });
     DEBUG(traitBounds.size() << " trait bounds");
     for (const auto& tb : traitBounds) {
-        DEBUG(tb.first.first << " : " << (!tb.second.hrbs.is_empty() ? "for" : "") << tb.second.hrbs.fmtArgs() << tb.first.second << " - " << tb.second.assoc);
+        DEBUG(tb.first.first << " : " << (!tb.second.hrbs.isEmpty() ? "for" : "") << tb.second.hrbs.fmtArgs() << tb.first.second << " - " << tb.second.assoc);
     }
 }
 
@@ -65,10 +65,10 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
         }
         DEBUG("[get_or_add_trait_bound] Add " << FMT_CB(os, if (outerHrtbs) os << "for" << outerHrtbs->fmtArgs() << " ";) << " ?: " << FMT_CB(os, if (hrbs) os << "for" << hrbs->fmtArgs() << " ";) << genericPath);
         auto& rv = traitBounds[std::make_pair(type, genericPath.clone())];
-        if (outerHrtbs && !outerHrtbs->is_empty()) {
+        if (outerHrtbs && !outerHrtbs->isEmpty()) {
             rv.hrbs = outerHrtbs->clone();
         }
-        if (hrbs && !hrbs->is_empty()) {
+        if (hrbs && !hrbs->isEmpty()) {
             rv.hrbs = hrbs->clone();
         }
         rv.traitPtr = &crate.getTraitByPath(sp, genericPath.mPath);
@@ -100,8 +100,8 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
         prepIndexesAddEquality(sp, traitPath.hrtbs.get(), tyL, tb.second.type);
     }
 
-    if (traitPath.hrtbs && !traitPath.hrtbs->is_empty()) {
-        if (outerHrtbs && !outerHrtbs->is_empty()) {
+    if (traitPath.hrtbs && !traitPath.hrtbs->isEmpty()) {
+        if (outerHrtbs && !outerHrtbs->isEmpty()) {
             TODO(sp, "Handle multiple layers of HRTBs");
         }
         outerHrtbs = traitPath.hrtbs.get();
@@ -122,7 +122,7 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
             continue;
         }
 
-        if (aTy.second.generics.isGeneric() || !aTy.second.generics.is_empty()) {
+        if (aTy.second.generics.isGeneric() || !aTy.second.generics.isEmpty()) {
             continue;
         }
         ASSERT_BUG(sp, !aTy.second.generics.isGeneric(), "prep_indexes__add_trait_bound: Handle type generic ATYs - " << aTy.first << aTy.second.generics.fmtArgs() << " in " << traitPath);
@@ -141,7 +141,7 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
 
                 auto tyL = crate.types.path(::HIR::Path(tyA, tb.second.sourceTrait.clone(), tb.first, tb.second.atyParams.clone()), ::HIR::TypePathBinding::make_Opaque({}));
 
-                if (outerHrtbs && outerHrtbs->is_empty()) {
+                if (outerHrtbs && outerHrtbs->isEmpty()) {
                     outerHrtbs = nullptr;
                 }
 
@@ -191,19 +191,19 @@ const ::HIR::TypeData* TraitResolveCommon::getConstParamType(const Span& sp, uns
 }
 
 ::std::ostream& operator<<(::std::ostream& s, const TraitResolveCommon::CachedEquality& x) {
-    if (!x.hrbs.is_empty()) {
+    if (!x.hrbs.isEmpty()) {
         s << "for" << x.hrbs.fmtArgs() << " ";
     }
     s << x.ty;
     return s;
 }
 
-Ordering TraitResolveCommon::CachedBoundCmp::ord(const key_t& a, const refT& b) const {
+Ordering TraitResolveCommon::CachedBoundCmp::ord(const keyT& a, const refT& b) const {
     ORD(a.first, b.first);
     ORD(a.second, b.second);
     return OrdEqual;
 }
-Ordering TraitResolveCommon::CachedBoundCmp::ord(const key_t& a, const refSpT& b) const {
+Ordering TraitResolveCommon::CachedBoundCmp::ord(const keyT& a, const refSpT& b) const {
     ORD(a.first, b.first);
     ORD(a.second.mPath, b.second);
     return OrdEqual;

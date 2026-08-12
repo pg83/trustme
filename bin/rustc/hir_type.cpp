@@ -144,7 +144,7 @@ HIR::ArraySize HIR::ArraySize::clone() const {
 }
 
 bool ::HIR::TypeDataErasedTypeAliasInner::isPublicTo(const HIR::SimplePath& p) const {
-    return p.starts_with(this->path, /*skip_last=*/true);
+    return p.startsWith(this->path, /*skip_last=*/true);
 }
 
 ::HIR::TypeDataFunctionPointer HIR::TypeData::Data_NamedFunction::decay(TypeInterner& types, const Span& sp) const {
@@ -2141,7 +2141,7 @@ TypeInterner::TypeInterner(stl::ObjPool& pool): pool(pool) {}
 
 namespace HIR {
 
-bool is_integer(const CoreType& v) {
+bool isInteger(const CoreType& v) {
     switch (v) {
         case CoreType::Usize:
         case CoreType::Isize:

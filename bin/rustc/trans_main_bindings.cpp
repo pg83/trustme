@@ -2941,7 +2941,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, ::HIR::Path pathMono) {
                 case HIR::Constant::ValueState::Unknown:
                     BUG(sp, "Unevaluated constant: " << pathMono);
                 case HIR::Constant::ValueState::Generic:
-                    if (auto* slot = state.rv.add_const(state.crate.types, mv$(pathMono))) {
+                    if (auto* slot = state.rv.addConst(state.crate.types, mv$(pathMono))) {
                         MIR::EnumCache es;
                         TransEnumerateFillFromMIR(es, *e->mValue.mir);
                         es.apply(state, subPp);

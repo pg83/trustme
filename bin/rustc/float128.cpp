@@ -227,7 +227,7 @@ namespace {
             return static_cast<uint64_t>(remainder);
         }
 
-        void shift_left(size_t bits) {
+        void shiftLeft(size_t bits) {
             if (isZero() || bits == 0) {
                 return;
             }
@@ -411,7 +411,7 @@ namespace {
         }
         const int64_t shift2 = exponent2 + scale10;
         if (shift2 > 0) {
-            work.shift_left(static_cast<size_t>(shift2));
+            work.shiftLeft(static_cast<size_t>(shift2));
         }
         if (scale10 < 0) {
             dividePow5Sticky(work, static_cast<uint64_t>(-scale10), sticky);
@@ -1167,7 +1167,7 @@ Float128 Float128::parseDecimal(const char* text) {
     if (exponent10 >= 0) {
         // digits * 10^e = digits * 5^e << e: exact
         multiplyPow5(digits, static_cast<uint64_t>(exponent10));
-        digits.shift_left(static_cast<size_t>(exponent10));
+        digits.shiftLeft(static_cast<size_t>(exponent10));
     } else {
         // Divide by 10^-e = 5^-e * 2^-e with a sticky remainder. Scale up
         // first so the quotient keeps at least 116 bits and the round/sticky
@@ -1176,7 +1176,7 @@ Float128 Float128::parseDecimal(const char* text) {
         const size_t need = 116 + (static_cast<size_t>(power) * 3322 + 999) / 1000 + 1;
         const size_t have = digits.bitLength();
         scaledUp = need > have ? need - have : 0;
-        digits.shift_left(scaledUp);
+        digits.shiftLeft(scaledUp);
         dividePow5Sticky(digits, power, sticky);
         digits.shiftRightSticky(static_cast<size_t>(power), sticky);
     }

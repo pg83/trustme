@@ -54,6 +54,6 @@ namespace typeck {
 
 typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> tArgs;
 // Needs to mutate the pattern
-extern void TypecheckCode(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr);
-extern void TypecheckCodeCS(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr);
-extern void TypecheckCodeSimple(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr);
+extern void TypecheckCode(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr);
+extern void TypecheckCodeCS(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr);
+extern void TypecheckCodeSimple(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr);

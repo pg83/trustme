@@ -40,7 +40,7 @@ namespace {
         ::HIR::TypeRef getType(
             const Span&, const ::HIR::GenericRef& generic
         ) const override {
-            return generic.is_placeholder()
+            return generic.isPlaceholder()
                 ? types.generic(
                     canonicalPlaceholderName(generic.name), generic.binding
                 )
@@ -51,7 +51,7 @@ namespace {
             const Span&, const ::HIR::GenericRef& generic
         ) const override {
             return ::HIR::ConstGeneric(
-                generic.is_placeholder()
+                generic.isPlaceholder()
                     ? ::HIR::GenericRef(
                         canonicalPlaceholderName(generic.name), generic.binding
                     )
@@ -110,7 +110,7 @@ namespace {
             const Span&, const ::HIR::GenericRef& generic
         ) const override {
             return types.generic(
-                generic.is_placeholder()
+                generic.isPlaceholder()
                     ? instantiatePlaceholderName(generic.name)
                     : generic.name,
                 generic.binding
@@ -121,7 +121,7 @@ namespace {
             const Span&, const ::HIR::GenericRef& generic
         ) const override {
             return ::HIR::ConstGeneric(
-                generic.is_placeholder()
+                generic.isPlaceholder()
                     ? ::HIR::GenericRef(
                         instantiatePlaceholderName(generic.name),
                         generic.binding
@@ -172,7 +172,7 @@ namespace {
         ::HIR::TypeRef getType(
             const Span&, const ::HIR::GenericRef& generic
         ) const override {
-            if (!generic.is_placeholder() || isGoalPlaceholder(generic)) {
+            if (!generic.isPlaceholder() || isGoalPlaceholder(generic)) {
                 return Monomorphiser::types.generic(generic.name, generic.binding);
             }
             for (const auto& entry : typeValues) {
@@ -188,7 +188,7 @@ namespace {
         ::HIR::ConstGeneric getValue(
             const Span&, const ::HIR::GenericRef& generic
         ) const override {
-            if (!generic.is_placeholder() || isGoalPlaceholder(generic)) {
+            if (!generic.isPlaceholder() || isGoalPlaceholder(generic)) {
                 return ::HIR::ConstGeneric(generic);
             }
             for (const auto& entry : values) {
@@ -496,7 +496,7 @@ void HMTypeInferrence::printType(::std::ostream& os, const ::HIR::TypeData* tr, 
     auto stack = LList<const ::HIR::TypeData*>(&outerStack, ty);
 
     auto printTraitpath = [&](const HIR::TraitPath& tp) {
-        if (tp.hrtbs && !tp.hrtbs->is_empty()) {
+        if (tp.hrtbs && !tp.hrtbs->isEmpty()) {
             os << "for" << tp.hrtbs->fmtArgs() << " ";
         }
         this->printGenericpath(os, tp.mPath, stack);
@@ -1418,10 +1418,10 @@ TU_ARMA(Alias, ee) {
                 if (left.is_Infer() || right.is_Infer()) {
                     return ::HIR::Compare::Fuzzy;
                 }
-                if (left.is_Generic() && left.as_Generic().is_placeholder()) {
+                if (left.is_Generic() && left.as_Generic().isPlaceholder()) {
                     return ::HIR::Compare::Fuzzy;
                 }
-                if (right.is_Generic() && right.as_Generic().is_placeholder()) {
+                if (right.is_Generic() && right.as_Generic().isPlaceholder()) {
                     return ::HIR::Compare::Fuzzy;
                 }
                 //TODO(sp, "compare_value: " << left << " == " << right);
@@ -2119,7 +2119,7 @@ TU_ARMA(Alias, ee) {
                 auto rv = this->iterateAtyBounds(sp, pe, [&](const HIR::TraitPath& bound) {
                     DEBUG("Bound on ATY: " << bound);
                     static const HIR::GenericParams emptyParams;
-                    const auto& hrlsDef = (bound.hrtbs && !bound.hrtbs->is_empty()) ? *bound.hrtbs : emptyParams;
+                    const auto& hrlsDef = (bound.hrtbs && !bound.hrtbs->isEmpty()) ? *bound.hrtbs : emptyParams;
                     auto ppHrb = hrlsDef.makeEmptyParams(true);
                     monomorphCb.ppHrb = &ppHrb;
                     const auto& bParams = bound.mPath.mParams;
@@ -2870,7 +2870,7 @@ class NextTraitGoalEvaluator {
                 }
 
                 const auto* strPtr = path->binding.opt_Struct();
-                if (strPtr && (*strPtr)->structMarkings.is_fundamental) {
+                if (strPtr && (*strPtr)->structMarkings.isFundamental) {
                     for (const auto& param : generic->mParams.types) {
                         const auto result = orphanVisitType(param, perspective);
                         if (result != OrphanVisit::NonLocal) {
@@ -4230,7 +4230,7 @@ class NextTraitGoalEvaluator {
                     // goals cannot relocate this parent slot.
                     auto monomorphBound = [&](auto& ms) {
                         static const ::HIR::GenericParams noHrbs;
-                        const bool outerPresent = be->hrtbs && !be->hrtbs->is_empty();
+                        const bool outerPresent = be->hrtbs && !be->hrtbs->isEmpty();
                         auto hrbGuard = ms.pushHrb(outerPresent ? *be->hrtbs : noHrbs);
                         auto boundType = ms.monomorphType(span(), be->type);
                         auto boundTrait = ms.monomorphTraitpath(span(), be->trait, true);
@@ -5991,7 +5991,7 @@ bool TraitResolution::findTraitImpls(
                 return;
             }
             // ATYs of placeholders are kept as unknown
-            if (pe.type->is_Generic() && pe.type->as_Generic().is_placeholder()) {
+            if (pe.type->is_Generic() && pe.type->as_Generic().isPlaceholder()) {
                 return;
             }
 
@@ -5999,7 +5999,7 @@ bool TraitResolution::findTraitImpls(
             // TODO: There is still information available for placeholders (if the impl block is available)
             {
                 auto cb = [](const ::HIR::TypeData* ty) {
-                    return !(ty->is_Generic() && ty->as_Generic().is_placeholder());
+                    return !(ty->is_Generic() && ty->as_Generic().isPlaceholder());
                 };
                 bool hasImplPlaceholders = false;
                 if (!visitTyWith(pe.type, cb)) {
@@ -6171,7 +6171,7 @@ bool TraitResolution::findTraitImpls(
                 // - Check if the desired trait is a supertrait of this.
                 // NOTE: `params` (aka des_params) is not used (TODO)
                 bool isSupertrait = this->findNamedTraitInTrait(sp, traitPath.mPath, traitPath.mParams, *trait.traitPtr, traitGp.mPath, traitGp.mParams, pe.type, [&](const HIR::TraitPath& iTp) {
-                    if (iTp.hrtbs && !iTp.hrtbs->is_empty() && trait.hrtbs && !trait.hrtbs->is_empty()) {
+                    if (iTp.hrtbs && !iTp.hrtbs->isEmpty() && trait.hrtbs && !trait.hrtbs->isEmpty()) {
                         TODO(sp, "Nested HRTBs");
                     }
                     // The above is just the monomorphised params and associated set. Comparison is still needed.
@@ -6184,7 +6184,7 @@ bool TraitResolution::findTraitImpls(
                             it = trait.typeBounds.find(pe.item);
                         }
                         if (it != trait.typeBounds.end()) {
-                            auto hrls = getHrls(crate.types, sp, (trait.hrtbs && !trait.hrtbs->is_empty()) ? trait.hrtbs.get() : iTp.hrtbs.get(), iTp.mPath.mParams, traitPath.mParams);
+                            auto hrls = getHrls(crate.types, sp, (trait.hrtbs && !trait.hrtbs->isEmpty()) ? trait.hrtbs.get() : iTp.hrtbs.get(), iTp.mPath.mParams, traitPath.mParams);
                             DEBUG("hrls = " << hrls);
                             input = MonomorphHrlsOnly(crate.types, hrls).monomorphType(sp, it->second.type);
                             return true;
@@ -6207,7 +6207,7 @@ bool TraitResolution::findTraitImpls(
         Opaque,
         LeaveUnbound,
         Recurse,
-    } result_type = ResultType::Opaque;
+    } resultType = ResultType::Opaque;
 
     if(!rv)
     {
@@ -6218,7 +6218,7 @@ bool TraitResolution::findTraitImpls(
             });
         }
         if (it != typeEqualities.end()) {
-            result_type = ResultType::Recurse;
+            resultType = ResultType::Recurse;
             DEBUG("Equality: for" << it->second.hrbs.fmtArgs());
             MatchHrls m{crate.types, &it->second.hrbs};
             input->matchTestGenericsFuzz(sp, it->first, HIR::ResolvePlaceholdersNop(), m);
@@ -6245,13 +6245,13 @@ bool TraitResolution::findTraitImpls(
                     // Flag so if no impl was found by the lower checks, it gets correctly set to Opaque (or left unbound)
                     foundBoundWithNoType = true;
                     if (cmp == HIR::Compare::Fuzzy) {
-                        result_type = ResultType::LeaveUnbound;
+                        resultType = ResultType::LeaveUnbound;
                     } else {
-                        result_type = ResultType::Opaque;
+                        resultType = ResultType::Opaque;
                     }
                     return false;
                 } else {
-                    result_type = ResultType::Recurse;
+                    resultType = ResultType::Recurse;
                     DEBUG("TraitBound");
                     input = it->second.type;
                 }
@@ -6264,7 +6264,7 @@ bool TraitResolution::findTraitImpls(
     }
 
     if( rv ) {
-        assert(result_type == ResultType::Recurse); // Nothing else can happen without `rv` being false
+        assert(resultType == ResultType::Recurse); // Nothing else can happen without `rv` being false
         DEBUG("- Found replacement: " << input);
         this->expandAssociatedTypesInplace(sp, input, stack);
         return;
@@ -6527,7 +6527,7 @@ bool TraitResolution::findTraitImpls(
 
     if( foundBoundWithNoType )
     {
-        switch (result_type) {
+        switch (resultType) {
             case ResultType::Opaque: {
                 DEBUG("Assuming that " << input << " is an opaque name");
                 markOpaque();
@@ -6586,14 +6586,14 @@ bool TraitResolution::findTraitImpls(
         // -------------------------------------------------------------------------------------------------------------------
         //
         // -------------------------------------------------------------------------------------------------------------------
-        bool TraitResolution::findNamedTraitInTrait(const Span& sp, const ::HIR::SimplePath& des, const ::HIR::PathParams& desParams, const ::HIR::Trait& traitPtr, const ::HIR::SimplePath& traitPath, const ::HIR::PathParams& pp, const ::HIR::TypeData* target_type, tCbFindTrait callback) const {
+        bool TraitResolution::findNamedTraitInTrait(const Span& sp, const ::HIR::SimplePath& des, const ::HIR::PathParams& desParams, const ::HIR::Trait& traitPtr, const ::HIR::SimplePath& traitPath, const ::HIR::PathParams& pp, const ::HIR::TypeData* targetType, tCbFindTrait callback) const {
             TRACE_FUNCTION_F(des << desParams << " in " << traitPath << pp);
             if (pp.types.size() != traitPtr.mParams.types.size()) {
                 BUG(sp, "Incorrect number of parameters for trait " << traitPath);
             }
 
             DEBUG(traitPtr.allParentTraits);
-            auto monomorphCb = MonomorphStatePtr(crate.types, target_type, &pp, nullptr);
+            auto monomorphCb = MonomorphStatePtr(crate.types, targetType, &pp, nullptr);
             for (const auto& pt : traitPtr.allParentTraits) {
                 auto ptMono = monomorphCb.monomorphTraitpath(sp, pt, false);
                 for (auto& ty : ptMono.mPath.mParams.types) {
@@ -6787,7 +6787,7 @@ bool TraitResolution::findTraitImpls(
                 }
                 return visitTyWith(ty, [](const ::HIR::TypeData* inner) {
                     return inner->is_Generic()
-                        && inner->as_Generic().is_placeholder();
+                        && inner->as_Generic().isPlaceholder();
                 });
             };
             bool hasFreshInputs = !hasParams || typeIsFresh(type);
@@ -6802,7 +6802,7 @@ bool TraitResolution::findTraitImpls(
                     hasFreshInputs = hasFreshInputs
                         || param.is_Infer()
                         || (param.is_Generic()
-                            && param.as_Generic().is_placeholder());
+                            && param.as_Generic().isPlaceholder());
                 }
             }
 
@@ -7364,7 +7364,7 @@ bool TraitResolution::findTraitImpls(
                             return ::HIR::Compare::Equal;
                         }
                     }
-                    if (g.is_placeholder() && g.name == placeholderName) {
+                    if (g.isPlaceholder() && g.name == placeholderName) {
                         auto i = g.idx();
                         ASSERT_BUG(sp, implParams.types[i] == HIR::TypeRef(), "Placeholder to populated type returned - " << implParams.types[i] << " vs " << ty);
                         auto& ph = placeholders.types[i];
@@ -7380,7 +7380,7 @@ bool TraitResolution::findTraitImpls(
                             return ph->compareWithPlaceholders(sp, ty, resolveCb);
                         }
                     } else {
-                        if (g.is_placeholder()) {
+                        if (g.isPlaceholder()) {
                             DEBUG("[ftic_check_params:cb_match] External impl param " << g);
                             return ::HIR::Compare::Fuzzy;
                         }
@@ -7392,7 +7392,7 @@ bool TraitResolution::findTraitImpls(
                         if (ty->is_Path() && ty->as_Path().binding.is_Unbound()) {
                             return ::HIR::Compare::Fuzzy;
                         }
-                        if (ty->is_Generic() && ty->as_Generic().is_placeholder()) {
+                        if (ty->is_Generic() && ty->as_Generic().isPlaceholder()) {
                             return ::HIR::Compare::Fuzzy;
                         }
                         DEBUG("Unequal generic type - " << g << " != " << ty);
@@ -7406,7 +7406,7 @@ bool TraitResolution::findTraitImpls(
                             return ::HIR::Compare::Equal;
                         }
                     }
-                    if (g.is_placeholder() && g.name == placeholderName) {
+                    if (g.isPlaceholder() && g.name == placeholderName) {
                         auto i = g.idx();
                         ASSERT_BUG(sp, implParams.values[i] == HIR::ConstGeneric(), "Placeholder to populated value returned - " << implParams.values[i] << " vs " << v);
                         auto& ph = placeholders.values[i];
@@ -7420,7 +7420,7 @@ bool TraitResolution::findTraitImpls(
                             //return ph.compare_with_placeholders(sp, ty, resolve_cb);
                         }
                     } else {
-                        if (g.is_placeholder()) {
+                        if (g.isPlaceholder()) {
                             DEBUG("[ftic_check_params:cb_match] External impl param " << g);
                             return ::HIR::Compare::Fuzzy;
                         }
@@ -7440,7 +7440,7 @@ bool TraitResolution::findTraitImpls(
                     //    //TODO(sp, "[find_impl__check_crate_raw] Self - " << impl_type << " or " << des_type);
                     //    return impl_type;
                     //}
-                    ASSERT_BUG(sp, !ge.is_placeholder(), "[find_impl__check_crate_raw] Placeholder param seen - " << ge);
+                    ASSERT_BUG(sp, !ge.isPlaceholder(), "[find_impl__check_crate_raw] Placeholder param seen - " << ge);
                     if (implParams.types.at(ge.binding) != HIR::TypeRef()) {
                         return implParams.types.at(ge.binding);
                     }
@@ -7625,7 +7625,7 @@ bool TraitResolution::findTraitImpls(
                     } else if (TU_TEST1(*realType, Infer, .tyClass == ::HIR::InferClass::None)) {
                         DEBUG("- Bound " << realType << " : " << realTraitPath << " full infer type - make result fuzzy");
                         match = ::HIR::Compare::Fuzzy;
-                    } else if (TU_TEST1(*realType, Generic, .is_placeholder())) {
+                    } else if (TU_TEST1(*realType, Generic, .isPlaceholder())) {
                         DEBUG("- Bound " << realType << " : " << realTraitPath << " placeholder - make result fuzzy");
                         match = ::HIR::Compare::Fuzzy;
                     } else {

@@ -179,7 +179,7 @@ void HIR::SimplePath::updateLastComponent(RcString v) {
     members.back() = std::move(v);
 }
 
-bool HIR::SimplePath::starts_with(const HIR::SimplePath& p, bool skipLast /*=false*/) const {
+bool HIR::SimplePath::startsWith(const HIR::SimplePath& p, bool skipLast /*=false*/) const {
     if (p.members.empty()) {
         return crateName() == RcString();
     }
@@ -332,7 +332,7 @@ bool HIR::TraitPath::equalsIgnoringRegions(const TraitPath& x) const {
 Ordering HIR::TraitPath::ord(const TraitPath& x) const {
     // NOTE: An empty set is treated as the same as none
     if (gCompareHrls) {
-        ORD(hrtbs.get() && !hrtbs->is_empty(), x.hrtbs.get() && !x.hrtbs->is_empty());
+        ORD(hrtbs.get() && !hrtbs->isEmpty(), x.hrtbs.get() && !x.hrtbs->isEmpty());
         if (hrtbs && x.hrtbs) {
             ORD(hrtbs->mLifetimes.size(), x.hrtbs->mLifetimes.size());
             ORD(hrtbs->bounds, x.hrtbs->bounds);
@@ -586,7 +586,7 @@ namespace {
 
 #if 1
     if (gCompareHrls) {
-        if ((this->hrtbs && !this->hrtbs->is_empty()) != (x.hrtbs && !x.hrtbs->is_empty())) {
+        if ((this->hrtbs && !this->hrtbs->isEmpty()) != (x.hrtbs && !x.hrtbs->isEmpty())) {
             return Compare::Unequal;
         }
         if (this->hrtbs && x.hrtbs) {

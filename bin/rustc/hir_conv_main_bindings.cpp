@@ -154,9 +154,9 @@ namespace {
             , ms(crate)
             , inExpr(0)
         {
-            static ::HIR::ItemPath root_path("");
+            static ::HIR::ItemPath rootPath("");
             curModule.ptr = &crate.mRootModule;
-            curModule.path = &root_path;
+            curModule.path = &rootPath;
         }
 
         HIR::TypeInterner& interner() const { return crate.types; }
@@ -827,12 +827,12 @@ namespace {
                     auto monomorphCb = MonomorphStatePtr(types, tySelf, &params, nullptr);
                     auto monomorphTp = [&](const HIR::TraitPath& tp) -> HIR::TraitPath {
                         // TODO: if `path.m_path` has HRLs, then this needs HRLs (only if the HRLs get used?)
-                        if ((tp.hrtbs && !tp.hrtbs->is_empty()) && (path.hrtbs && !path.hrtbs->is_empty())) {
+                        if ((tp.hrtbs && !tp.hrtbs->isEmpty()) && (path.hrtbs && !path.hrtbs->isEmpty())) {
                             // TODO: How to determine which to use?
                             // - May need to combine them.
                             TODO(sp, "Trait path and outer path both have HRLs, how to handle?");
                             return monomorphCb.monomorphTraitpath(sp, tp, false);
-                        } else if (path.hrtbs && !path.hrtbs->is_empty()) {
+                        } else if (path.hrtbs && !path.hrtbs->isEmpty()) {
                             auto rv = monomorphCb.monomorphTraitpath(sp, tp, false);
                             rv.hrtbs = box$(path.hrtbs->clone());
                             return rv;
@@ -3239,7 +3239,7 @@ namespace {
     class MarkingsVisitor: public ::HIR::Visitor {
         const ::HIR::Crate& crate;
         const ::HIR::SimplePath& mLangUnsize;
-        const ::HIR::SimplePath& m_lang_CoerceUnsized;
+        const ::HIR::SimplePath& mLangCoerceUnsized;
         const ::HIR::SimplePath& mLangCopy;
         const ::HIR::SimplePath& mLangDeref;
         const ::HIR::SimplePath& mLangDrop;
@@ -3250,7 +3250,7 @@ namespace {
             : ::HIR::Visitor(nullptr, crate.types)
             , crate(crate)
             , mLangUnsize(crate.getLangItemPathOpt("unsize"))
-            , m_lang_CoerceUnsized(crate.getLangItemPathOpt("coerce_unsized"))
+            , mLangCoerceUnsized(crate.getLangItemPathOpt("coerce_unsized"))
             , mLangCopy(crate.getLangItemPathOpt("copy"))
             , mLangDeref(crate.getLangItemPathOpt("deref"))
             , mLangDrop(crate.getLangItemPathOpt("drop"))
@@ -3371,7 +3371,7 @@ namespace {
                     } else if (traitPath == mLangDrop) {
                         // TODO: Check that there's only one impl, and that it covers the same set as the type.
                         markings.hasDropImpl = true;
-                    } else if (traitPath == m_lang_CoerceUnsized) {
+                    } else if (traitPath == mLangCoerceUnsized) {
                         auto& structMarkings = const_cast<::HIR::Struct*>(te.binding.as_Struct())->structMarkings;
                         if (structMarkings.coerceUnsizedIndex != ~0u) {
                             ERROR(sp, E0000, "CoerceUnsized can only be implemented once per struct");
@@ -4094,13 +4094,13 @@ namespace resolveUfcs {
                     explicit KillPlaceholders(HIR::TypeInterner& types): Monomorphiser(types) {}
 
                     ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& ty) const override {
-                        if (ty.is_placeholder()) {
+                        if (ty.isPlaceholder()) {
                             return types.infer();
                         }
                         return types.generic(ty.name, ty.binding);
                     }
                     ::HIR::ConstGeneric getValue(const Span& sp, const ::HIR::GenericRef& val) const override {
-                        return val.is_placeholder()
+                        return val.isPlaceholder()
                             ? ::HIR::ConstGeneric()
                             : ::HIR::ConstGeneric(val);
                     }
@@ -4304,7 +4304,7 @@ namespace resolveUfcs {
                     DEBUG("counter = " << stack.size());
                     //ASSERT_BUG(sp, !visit_ty_with(ty, [&](const HIR::TypeData* ty)->bool { return TU_TEST1(ty.data(), Generic, .is_placeholder()); }), "Encountered placeholder - " << ty);
                     rewriteTyWith(crate.types, ty, [&](HIR::TypeRef& rewritten, HIR::TypeData& data) -> bool {
-                        if (TU_TEST1(data, Generic, .is_placeholder())) {
+                        if (TU_TEST1(data, Generic, .isPlaceholder())) {
                             rewritten = crate.types.infer();
                         }
                         return false;

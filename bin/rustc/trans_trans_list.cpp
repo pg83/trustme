@@ -101,7 +101,7 @@ TransListStatic* TransList::addStatic(HIR::TypeInterner& types, ::HIR::Path p) {
     }
 }
 
-TransListConst* TransList::add_const(HIR::TypeInterner& types, ::HIR::Path p) {
+TransListConst* TransList::addConst(HIR::TypeInterner& types, ::HIR::Path p) {
     auto rv = constants.insert(::std::make_pair(mv$(p), nullptr));
     if (rv.second) {
         DEBUG("Const " << rv.first->first);

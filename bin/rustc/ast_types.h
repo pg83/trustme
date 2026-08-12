@@ -275,11 +275,11 @@ public:
         return mData.as_Generic().name;
     }
 
-    bool is_reference() const {
+    bool isReference() const {
         return mData.is_Borrow();
     }
 
-    bool is_pointer() const {
+    bool isPointer() const {
         return mData.is_Pointer();
     }
 

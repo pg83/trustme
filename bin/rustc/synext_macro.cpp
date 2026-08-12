@@ -1020,7 +1020,7 @@ namespace {
     /// Parse a format string into a sequence of fragments.
     ///
     /// Returns a list of fragments, and the remaining free text after the last format sequence
-    ::std::tuple<::std::vector<FmtFrag>, ::std::string> parseFormatString(const Span& sp, const ::std::string& format_string, ::std::map<RcString, unsigned int>& named, unsigned int nFree, std::vector<TokenTree>& namedArgs, const Ident::Hygiene& hygiene) {
+    ::std::tuple<::std::vector<FmtFrag>, ::std::string> parseFormatString(const Span& sp, const ::std::string& formatString, ::std::map<RcString, unsigned int>& named, unsigned int nFree, std::vector<TokenTree>& namedArgs, const Ident::Hygiene& hygiene) {
         //unsigned int n_named = named.size();
         unsigned int nextFree = 0;
 
@@ -1043,8 +1043,8 @@ namespace {
             return nFree + it->second;
         };
 
-        const char* s = format_string.c_str();
-        const char* const sEnd = s + format_string.length();
+        const char* s = formatString.c_str();
+        const char* const sEnd = s + formatString.length();
         for (; s < sEnd; s++) {
             if (*s != '{') {
                 if (*s == '}') {
@@ -1088,7 +1088,7 @@ namespace {
                             s++;
                         } while (isdigit(*s));
                         if (argIdx >= nFree) {
-                            ERROR(sp, E0000, "Positional argument " << argIdx << " out of range in \"" << format_string << "\"");
+                            ERROR(sp, E0000, "Positional argument " << argIdx << " out of range in \"" << formatString << "\"");
                         }
                         index = argIdx;
                     } else {
@@ -1383,7 +1383,7 @@ namespace {
             ERROR(sp, E0000, "format_args! requires a string literal - got " << *formatStringNode);
         }
         const auto& formatStringSp = formatStringNp->span();
-        const auto& format_string = formatStringNp->mValue;
+        const auto& formatString = formatStringNp->mValue;
         auto h = formatStringNp->mHygiene;
 
         ::std::map<RcString, unsigned int> namedArgsIndex;
@@ -1425,7 +1425,7 @@ namespace {
         // - Parse the format string
         ::std::vector<FmtFrag> fragments;
         ::std::string tail;
-        ::std::tie(fragments, tail) = parseFormatString(formatStringSp, format_string, namedArgsIndex, freeArgs.size(), namedArgs, h);
+        ::std::tie(fragments, tail) = parseFormatString(formatStringSp, formatString, namedArgsIndex, freeArgs.size(), namedArgs, h);
         if (addNewline) {
             tail += "\n";
         }

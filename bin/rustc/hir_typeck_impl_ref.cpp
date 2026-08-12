@@ -33,13 +33,13 @@ bool ImplRef::hasMagicParams() const {
     if (const auto* e = mData.opt_TraitImpl()) {
         for (const auto& t : e->implParams.types) {
             if (visitTyWith(t, [](const ::HIR::TypeData* t) {
-                return t->is_Generic() && t->as_Generic().is_placeholder();
+                return t->is_Generic() && t->as_Generic().isPlaceholder();
             })) {
                 return true;
             }
         }
         for (const auto& v : e->implParams.values) {
-            if (v.is_Generic() && v.as_Generic().is_placeholder()) {
+            if (v.is_Generic() && v.as_Generic().isPlaceholder()) {
                 return true;
             }
         }

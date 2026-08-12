@@ -450,7 +450,7 @@ namespace {
     if (!allowFinalGeneric) {
         ASSERT_BUG(sp, path.cls.is_Absolute(), "Encountered non-Absolute path when creating ::HIR::SimplePath");
         if (path.cls.as_Absolute().nodes.size() > 0) {
-            ASSERT_BUG(sp, path.cls.as_Absolute().nodes.back().args().is_empty(), "Encountered path with parameters when creating ::HIR::SimplePath");
+            ASSERT_BUG(sp, path.cls.as_Absolute().nodes.back().args().isEmpty(), "Encountered path with parameters when creating ::HIR::SimplePath");
         }
     } else {
         ASSERT_BUG(sp, path.cls.is_Absolute(), "Encountered non-Absolute path when creating ::HIR::GenericPath");
@@ -545,7 +545,7 @@ namespace {
     }
     // TODO: Explicitly handle each expected variant... or add a proper consteval expression
     if (const auto* e = cast<const AST::ExprNodeNamedValue>(nodeP)) {
-        if (e->mPath.is_trivial()) {
+        if (e->mPath.isTrivial()) {
             const auto& b = e->mPath.mBindings.value.binding;
             ASSERT_BUG(sp, b.is_Generic(), "Trivial path not type parameter - " << e->mPath << " - " << b.tagStr());
             const auto& param = b.as_Generic();
@@ -1122,7 +1122,7 @@ namespace {
                     }
                 }
                 if (const auto* ptr = cast<const ::AST::ExprNodeNamedValue>(&*e.size)) {
-                    if (ptr->mPath.is_trivial()) {
+                    if (ptr->mPath.isTrivial()) {
                         auto gr = HIR::GenericRef(ptr->mPath.asTrivial(), ptr->mPath.mBindings.value.binding.as_Generic().index);
                         return gCratePtr->types.array(inner, HIR::ConstGeneric(mv$(gr)));
                     }
@@ -1337,7 +1337,7 @@ namespace {
         // In 1.90 this no longer marks wrappers as nonzero; scalar limits carry
         // the layout information instead.
     }
-    rv.structMarkings.is_fundamental = attrs.has("fundamental");
+    rv.structMarkings.isFundamental = attrs.has("fundamental");
     if(ent.markings.scalarValidStartSet)
     {
         if (ent.markings.scalarValidStart == U128(1)) {
@@ -1928,7 +1928,7 @@ namespace {
     }
     rv.mAbi = RcString::newInterned(f.abi());
     rv.unsafe = f.isUnsafe();
-    rv.isConst = f.is_const();
+    rv.isConst = f.isConst();
     rv.mParams = LowerHIRGenericParams(f.params(), nullptr); // TODO: If this is a method, then it can add the Self: Sized bound
     rv.mArgs = mv$(args);
     rv.variadic = f.isVariadic();
@@ -2330,7 +2330,7 @@ void LowerHIRModuleImpls(const ::AST::Module& astMod, ::HIR::Crate& hirCrate) {
                         TU_ARMA(Function, e) {
                             DEBUG("- method " << item.name);
                             auto fcn = LowerHIRFunction(itemPath, item.attrs, e, type);
-                            if (impl.def().is_const()) {
+                            if (impl.def().isConst()) {
                                 fcn.isConst = true;
                             }
                             methods.insert(::std::make_pair(item.name, ::HIR::TraitImpl::ImplEnt<::HIR::Function>{item.isSpecialisable, mv$(fcn)}));
@@ -2351,7 +2351,7 @@ void LowerHIRModuleImpls(const ::AST::Module& astMod, ::HIR::Crate& hirCrate) {
 
                         modPath
                     });
-                hirImpl->isConst = impl.def().is_const();
+                hirImpl->isConst = impl.def().isConst();
                 hirCrate.traitImpls[mv$(traitName)].generic.push_back(mv$(hirImpl));
             } else if (impl.def().type().mData.is_None()) {
                 // Ignore - These are encoded in the 'is_marker' field of the trait
@@ -3371,9 +3371,9 @@ struct LowerHIRExprNodeVisitor: public ::AST::NodeVisitor {
                     mv$( args )
                     ) );
                 TU_ARMA(Static, e) {
-                    bool is_const = e.static_ ? e.static_->sClass() == ::AST::Static::Class::CONST : (e.hir ? false : true) // If HIR Pointer is null, this is a HIR::Const
+                    bool isConst = e.static_ ? e.static_->sClass() == ::AST::Static::Class::CONST : (e.hir ? false : true) // If HIR Pointer is null, this is a HIR::Const
                         ;
-                    mRv.reset(gCratePtr->pool->make<::HIR::ExprNodeCallValue>(v.span(), ::HIR::ExprNodeP(gCratePtr->pool->make<::HIR::ExprNodePathValue>(v.span(), LowerHIRPath(v.span(), v.mPath, FromASTPathClass::Value), is_const ? ::HIR::ExprNodePathValue::CONSTANT : ::HIR::ExprNodePathValue::STATIC)), mv$(args)));
+                    mRv.reset(gCratePtr->pool->make<::HIR::ExprNodeCallValue>(v.span(), ::HIR::ExprNodeP(gCratePtr->pool->make<::HIR::ExprNodePathValue>(v.span(), LowerHIRPath(v.span(), v.mPath, FromASTPathClass::Value), isConst ? ::HIR::ExprNodePathValue::CONSTANT : ::HIR::ExprNodePathValue::STATIC)), mv$(args)));
                 }
                 //TU_ARMA(TypeAlias, e) {
                 //    TODO(v.span(), "CallPath -> TupleVariant TypeAlias");

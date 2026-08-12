@@ -38,4 +38,4 @@ extern const char GLOBAL_ALLOCATOR_LANG_ITEM[];
 HIR::SimplePath TransAllocatorTraitPath(const HIR::Crate& crate);
 const HIR::SimplePath& TransAllocatorLayoutPath(const HIR::Crate& crate);
 HIR::Path TransAllocatorLayoutCtorPath(const HIR::Crate& crate);
-HIR::Path TransAllocatorMethodPath(const HIR::Crate& crate, const HIR::TypeData* allocator_type, const AllocatorMethod& method);
+HIR::Path TransAllocatorMethodPath(const HIR::Crate& crate, const HIR::TypeData* allocatorType, const AllocatorMethod& method);

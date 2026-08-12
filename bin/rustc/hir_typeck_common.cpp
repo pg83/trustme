@@ -870,13 +870,13 @@ bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* le
     const auto* rightPrimitive = right->opt_Primitive();
 
     const auto sameNumeric = [&]() {
-        return left == right && leftPrimitive && (::HIR::is_integer(*leftPrimitive) || ::HIR::isFloat(*leftPrimitive));
+        return left == right && leftPrimitive && (::HIR::isInteger(*leftPrimitive) || ::HIR::isFloat(*leftPrimitive));
     };
     const auto sameBitwise = [&]() {
-        return left == right && leftPrimitive && (::HIR::is_integer(*leftPrimitive) || *leftPrimitive == ::HIR::CoreType::Bool);
+        return left == right && leftPrimitive && (::HIR::isInteger(*leftPrimitive) || *leftPrimitive == ::HIR::CoreType::Bool);
     };
     const auto shift = [&]() {
-        return leftPrimitive && rightPrimitive && ::HIR::is_integer(*leftPrimitive) && ::HIR::is_integer(*rightPrimitive);
+        return leftPrimitive && rightPrimitive && ::HIR::isInteger(*leftPrimitive) && ::HIR::isInteger(*rightPrimitive);
     };
     const auto comparison = [&]() {
         if (left != right) {
@@ -930,8 +930,8 @@ bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* le
 // and may have a different type.
 bool primitiveOperatorLhsDeterminesRhs(PrimitiveOperator op, const ::HIR::TypeData* left) {
     const auto* primitive = left->opt_Primitive();
-    const auto numeric = primitive && (::HIR::is_integer(*primitive) || ::HIR::isFloat(*primitive));
-    const auto bitwise = primitive && (::HIR::is_integer(*primitive) || *primitive == ::HIR::CoreType::Bool);
+    const auto numeric = primitive && (::HIR::isInteger(*primitive) || ::HIR::isFloat(*primitive));
+    const auto bitwise = primitive && (::HIR::isInteger(*primitive) || *primitive == ::HIR::CoreType::Bool);
     const auto comparison = left->is_Pointer() || (primitive && *primitive != ::HIR::CoreType::Str);
 
     switch (op) {
@@ -990,7 +990,7 @@ bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* va
 
     switch (op) {
         case PrimitiveOperator::Not:
-            return *primitive == ::HIR::CoreType::Bool || ::HIR::is_integer(*primitive);
+            return *primitive == ::HIR::CoreType::Bool || ::HIR::isInteger(*primitive);
         case PrimitiveOperator::Neg:
             if (::HIR::isFloat(*primitive)) {
                 return true;

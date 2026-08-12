@@ -752,7 +752,7 @@ namespace AST {
 
         void visit(ExprNodeP& cnode);
 
-        virtual bool is_const() const {
+        virtual bool isConst() const {
             return false;
         }
 

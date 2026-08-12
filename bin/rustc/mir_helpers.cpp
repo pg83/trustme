@@ -1122,7 +1122,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
         Position start;
         Position end;
 
-        bool is_empty() const {
+        bool isEmpty() const {
             return start == end;
         }
 
@@ -1191,7 +1191,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             // doesn't mean that we have no new information.
             // - Wait, doesn't it?
             auto tryMergeLft = [&](const ProtoLifetime& lft, const ::std::vector<unsigned int>& seen) -> bool {
-                if (lft.is_empty()) {
+                if (lft.isEmpty()) {
                     return false;
                 }
                 // TODO: What should be done for borrow flagged values
@@ -1219,7 +1219,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
         bool merge(const State& valState) {
             bool rv = false;
             auto mergeLft = [&](const ProtoLifetime& lft, ::std::vector<unsigned int>& seen) -> bool {
-                if (lft.is_empty()) {
+                if (lft.isEmpty()) {
                     return false;
                 }
                 // TODO: What should be done for borrow flagged values
@@ -1347,13 +1347,13 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 curPos.pathIndex = valState.blockPath.size() - 1;
                 curPos.stmtIdx = fcn.blocks[bbIdx].statements.size();
                 for (unsigned i = 0; i < fcn.temporaries.size(); i++) {
-                    if (!newState.tmpEnds[i].is_empty() && temporaryLifetimes[i].stmtBitmap[bmIdx]) {
+                    if (!newState.tmpEnds[i].isEmpty() && temporaryLifetimes[i].stmtBitmap[bmIdx]) {
                         DEBUG("- tmp$" << i << " - Active in target, assume active");
                         newState.tmpEnds[i].end = curPos;
                     }
                 }
                 for (unsigned i = 0; i < fcn.namedVariables.size(); i++) {
-                    if (!newState.varEnds[i].is_empty() && variableLifetimes[i].stmtBitmap[bmIdx]) {
+                    if (!newState.varEnds[i].isEmpty() && variableLifetimes[i].stmtBitmap[bmIdx]) {
                         DEBUG("- var$" << i << " - Active in target, assume active");
                         newState.varEnds[i].end = curPos;
                     }

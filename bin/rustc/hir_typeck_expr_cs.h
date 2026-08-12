@@ -263,4 +263,4 @@ namespace typecheck {
     extern bool visitCallPopulateCache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) __attribute__((warnUnusedResult));
 }
 
-extern void TypecheckCodeCSEnumerateRules(Context& context, const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr);
+extern void TypecheckCodeCSEnumerateRules(Context& context, const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr);

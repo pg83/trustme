@@ -327,7 +327,7 @@ bool HIR::Publicity::isVisible(const ::HIR::SimplePath& p) const {
         return false;
     }
     // `p` must be a child of vis_path (i.e. starts with it)
-    return p.starts_with(*visPath);
+    return p.startsWith(*visPath);
 }
 
 ::HIR::TypeRef HIR::Function::makePtrTy(const Span& sp, const Monomorphiser& ms) const {
@@ -1034,7 +1034,7 @@ bool ::HIR::TraitImpl::moreSpecificThan(HIR::TypeInterner& types, const ::HIR::T
 
     auto itT = boundsT.begin();
     auto itO = boundsO.begin();
-    bool is_equal = true;
+    bool isEqual = true;
     while (itT != boundsT.end() && itO != boundsO.end()) {
         auto cmp = ::ord(*itT, *itO);
         // Equal bounds? advance both
@@ -1071,7 +1071,7 @@ bool ::HIR::TraitImpl::moreSpecificThan(HIR::TypeInterner& types, const ::HIR::T
         }
 
         if (cmp == OrdLess) {
-            is_equal = false;
+            isEqual = false;
             ++itT;
         } else {
             //++ it_o;
@@ -1084,7 +1084,7 @@ bool ::HIR::TraitImpl::moreSpecificThan(HIR::TypeInterner& types, const ::HIR::T
         return true;
     } else {
         DEBUG("Out of local bounds, equal or less specific");
-        return !is_equal;
+        return !isEqual;
     }
 }
 

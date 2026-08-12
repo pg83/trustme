@@ -54,22 +54,22 @@ extern void debugInitPhases(const char* envVarName, std::initializer_list<const 
     }
 
     // Mutate this map using an environment variable
-    const char* debug_string = ::std::getenv(envVarName);
-    if (debug_string) {
-        while (debug_string[0]) {
-            if (strcmp(debug_string, "*") == 0) {
+    const char* debugString = ::std::getenv(envVarName);
+    if (debugString) {
+        while (debugString[0]) {
+            if (strcmp(debugString, "*") == 0) {
                 gDebugDisableMap.clear();
                 return;
             }
 
-            const char* end = strchr(debug_string, ':');
+            const char* end = strchr(debugString, ':');
 
             ::std::string s;
             if (end) {
-                s = ::std::string{debug_string, end};
-                debug_string = end + 1;
+                s = ::std::string{debugString, end};
+                debugString = end + 1;
             } else {
-                s = debug_string;
+                s = debugString;
             }
             if (gDebugDisableMap.erase(s) == 0) {
                 ::std::cerr << "WARN: Unknown compiler phase '" << s << "' in $" << envVarName << ::std::endl;

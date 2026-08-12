@@ -4,10 +4,10 @@
 #include "hir_visitor.h"
 #include "hir_expr_state.h"
 
-void TypecheckCode(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr) {
+void TypecheckCode(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr) {
     if (expr.state->stage < ::HIR::ExprState::Stage::Typecheck) {
         //Typecheck_Code_Simple(ms, args, result_type, expr);
-        TypecheckCodeCS(ms, args, result_type, expr);
+        TypecheckCodeCS(ms, args, resultType, expr);
         expr.state->stage = ::HIR::ExprState::Stage::Typecheck;
     }
 }

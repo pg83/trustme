@@ -851,18 +851,18 @@ namespace {
                     }
 
                     struct H {
-                        static bool file_exists(const std::string& path) {
+                        static bool fileExists(const std::string& path) {
                             return std::ifstream(path).is_open();
                         }
 
                         static std::string findLibraryOne(const std::string& path, const std::string& name) {
                             std::string libPath;
                             libPath = FMT(path << "/lib" << name << ".so");
-                            if (file_exists(libPath)) {
+                            if (fileExists(libPath)) {
                                 return libPath;
                             }
                             libPath = FMT(path << "/lib" << name << ".a");
-                            if (file_exists(libPath)) {
+                            if (fileExists(libPath)) {
                                 return libPath;
                             }
                             return "";
@@ -4319,7 +4319,7 @@ namespace {
                 }
             };
 
-            bool is_volatile = H::hasFlag(e.flags, "volatile");
+            bool isVolatile = H::hasFlag(e.flags, "volatile");
             bool isIntel = H::hasFlag(e.flags, "intel");
 
             // The following clobber overlaps with an output
@@ -4365,7 +4365,7 @@ namespace {
             }
 
             of << indent << "__asm__ ";
-            if (is_volatile) {
+            if (isVolatile) {
                 of << "__volatile__";
             }
             of << "(\"" << (isIntel ? ".intel_syntax noprefix; " : "");

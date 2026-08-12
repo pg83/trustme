@@ -141,7 +141,7 @@ Ordering ValueParamDef::ord(const ValueParamDef& x) const {
     //ORD(m_default, x.m_default);
     return OrdEqual;
 }
-bool GenericParams::is_empty() const {
+bool GenericParams::isEmpty() const {
     if (!types.empty()) {
         return false;
     }

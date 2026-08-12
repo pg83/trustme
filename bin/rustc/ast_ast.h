@@ -179,7 +179,7 @@ namespace AST {
         typedef ::std::vector<Arg> Arglist;
 
         struct Flags {
-            bool is_const;
+            bool isConst;
             bool isUnsafe;
             bool isAsync;
 
@@ -251,8 +251,8 @@ namespace AST {
             mAbi = std::move(s);
         }
 
-        bool is_const() const {
-            return flags.is_const;
+        bool isConst() const {
+            return flags.isConst;
         }
 
         bool isUnsafe() const {
@@ -513,7 +513,7 @@ namespace AST {
 
     class ImplDef {
         bool mIsUnsafe;
-        bool isConst;
+        bool mIsConst;
         GenericParams mParams;
         Spanned<Path> mTrait;
         TypeRef mType;
@@ -533,11 +533,11 @@ namespace AST {
         }
 
         void setIsConst() {
-            isConst = true;
+            mIsConst = true;
         }
 
-        bool is_const() const {
-            return isConst;
+        bool isConst() const {
+            return mIsConst;
         }
 
         const GenericParams& params() const {

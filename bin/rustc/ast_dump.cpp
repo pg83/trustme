@@ -41,7 +41,7 @@ public:
 
     void handleFunction(const AST::Visibility& vis, const RcString& name, const AST::Function& f);
 
-    virtual bool is_const() const override {
+    virtual bool isConst() const override {
         return true;
     }
 
@@ -1085,7 +1085,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
 
         os << "\n";
         os << indent() << "impl";
-        if (i.def().is_const()) {
+        if (i.def().isConst()) {
             os << " const";
         }
         printParams(i.def().params());
@@ -1402,7 +1402,7 @@ void RustPrinter::handleTrait(const AST::Trait& s) {
 void RustPrinter::handleFunction(const AST::Visibility& vis, const RcString& name, const AST::Function& f) {
     os << indent();
     os << vis;
-    if (f.is_const()) {
+    if (f.isConst()) {
         os << "const ";
     }
     if (f.isUnsafe()) {

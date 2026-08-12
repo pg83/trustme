@@ -209,7 +209,7 @@ class CMacroExportHandler: public ExpandDecorator {
         }
         // If on a `use` it's for a #[rustc_builtin_macro]
         else if (const auto* u = i.opt_Use()) {
-            if (u->entries.size() == 1 && u->entries.back().path.is_absolute() && u->entries.back().path.cls.as_Absolute().crate == CRATE_BUILTINS && u->entries.back().path.cls.as_Absolute().nodes.size() == 1)
+            if (u->entries.size() == 1 && u->entries.back().path.isAbsolute() && u->entries.back().path.cls.as_Absolute().crate == CRATE_BUILTINS && u->entries.back().path.cls.as_Absolute().nodes.size() == 1)
                 ;
             else {
                 ERROR(sp, E0000, "Use of #[macro_export] on non-macro - " << i.tagStr());
@@ -221,7 +221,7 @@ class CMacroExportHandler: public ExpandDecorator {
             crate.mRootModule.addItem(sp, AST::Visibility::makeGlobal(), name, i.clone(), {});
         } else if (i.is_MacroInv()) {
             const auto& mac = i.as_MacroInv();
-            if (!(mac.path().is_trivial() && mac.path().asTrivial() == "macro_rules")) {
+            if (!(mac.path().isTrivial() && mac.path().asTrivial() == "macro_rules")) {
                 ERROR(sp, E0000, "#[macro_export] is only valid on macro_rules!");
             }
             const auto& name = mac.inputIdent();
@@ -299,7 +299,7 @@ class CBuiltinMacroHandler: public ExpandDecorator {
         RcString name;
         if (i.is_MacroInv()) {
             const auto& e = i.as_MacroInv();
-            if (!(e.path().is_trivial() && e.path().asTrivial() == "macro_rules")) {
+            if (!(e.path().isTrivial() && e.path().asTrivial() == "macro_rules")) {
                 ERROR(sp, E0000, "Use of #[rustc_builtin_macro] on macro other than macro_rules! - " << i.tagStr());
             }
             name = e.inputIdent();

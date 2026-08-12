@@ -32,7 +32,7 @@ namespace helpers {
             return mStr != "";
         }
 
-        bool is_absolute() const {
+        bool isAbsolute() const {
             return mStr != "" && mStr[0] == '/';
         }
 

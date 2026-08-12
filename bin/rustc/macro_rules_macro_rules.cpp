@@ -2080,7 +2080,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
                         }
                     }
                 }
-                if (rv == e->is_equal) {
+                if (rv == e->isEqual) {
                     DEBUG("- Succeeded");
                     armStream.ifSucceeded();
                 }
@@ -2811,7 +2811,7 @@ MacroRulesPtr::~MacroRulesPtr() {
             os << "Expect($" << e.idx << " = " << e.type << ")";
         }
         TU_ARMA(If, e) {
-            os << "If(" << (e.is_equal ? "=" : "!=") << "[";
+            os << "If(" << (e.isEqual ? "=" : "!=") << "[";
             for (const auto& p : e.ents) {
                 if (p.ty == MacroPatEnt::PAT_TOKEN) {
                     os << p.tok;
@@ -3631,8 +3631,8 @@ namespace {
             DEBUG("[macro_pattern_to_simple_inner] rv[" << rv.size() << "] = " << spe);
             rv.push_back(::std::move(spe));
         };
-        auto pushIfv = [&push](bool is_equal, ::std::vector<SimplePatIfCheck> ents, size_t tgt) {
-            push(SimplePatEnt::make_If({is_equal, tgt, mv$(ents)}));
+        auto pushIfv = [&push](bool isEqual, ::std::vector<SimplePatIfCheck> ents, size_t tgt) {
+            push(SimplePatEnt::make_If({isEqual, tgt, mv$(ents)}));
         };
         for (size_t idx = 0; idx < pattern.size(); idx++) {
             const auto& ent = pattern[idx];

@@ -420,11 +420,11 @@ void CfgSetValueCb(::std::string name, ::std::function<bool(const ::std::string&
     gCfgValueFcns.insert(::std::make_pair(mv$(name), mv$(cb)));
 }
 
-bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool& has_value, ::std::string& value, ::std::string& error) {
+bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool& hasValue, ::std::string& value, ::std::string& error) {
     try {
         auto parsed = CfgSpecParser(spec).parseCfgOption();
         name = ::std::move(parsed.first);
-        has_value = parsed.second.has_value();
+        hasValue = parsed.second.has_value();
         value = parsed.second ? ::std::move(*parsed.second) : ::std::string();
         return true;
     } catch (const ::std::exception& e) {

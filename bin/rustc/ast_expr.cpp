@@ -43,7 +43,7 @@ namespace AST {
 
     void Expr::visitNodes(NodeVisitor& v) const {
         if (mNode) {
-            assert(v.is_const());
+            assert(v.isConst());
             //const_cast<const ExprNode*>(m_node.get())->visit(v);
             mNode->visit(v);
         }

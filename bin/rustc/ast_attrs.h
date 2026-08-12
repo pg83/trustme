@@ -50,7 +50,7 @@ namespace AST {
         bool hasLeading = false;
         ::std::vector<RcString> elems;
 
-        bool is_trivial() const {
+        bool isTrivial() const {
             return elems.size() == 1;
         }
 

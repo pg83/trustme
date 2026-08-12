@@ -868,7 +868,7 @@ void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ::AST
             }
             TU_ARMA(Type, t) {
                 // A trivial path type might be refering to a generic value (e.g. `Foo<T,N>` where `N` is a const generic)
-                if (t.mData.is_Path() && t.mData.as_Path()->is_trivial()) {
+                if (t.mData.is_Path() && t.mData.as_Path()->isTrivial()) {
                     auto p = t.mData.as_Path()->cls.as_Relative();
                     // If type lookup fails
                     auto newPath = context.lookupOpt(p.nodes[0].name(), p.hygiene, Context::LookupMode::Type);
@@ -1038,7 +1038,7 @@ namespace {
         auto& n = pathAbs.nodes[i];
 
         auto typePath = ::AST::Path(tyPathTpl);
-        if (!n.args().is_empty()) {
+        if (!n.args().isEmpty()) {
             typePath.nodes().back().args() = mv$(n.args());
         }
         auto newPath = ::AST::Path::newUfcsTy(::TypeRef(sp, mv$(typePath)));
@@ -1226,7 +1226,7 @@ namespace {
                         newpath.nodes().push_back(AST::PathNode(n));
                     }
                     if (newpath.nodes().empty()) {
-                        ASSERT_BUG(sp, n.args().is_empty(), "Params present, but name resolves to a crate root - " << path << " #" << i << " -> " << newpath);
+                        ASSERT_BUG(sp, n.args().isEmpty(), "Params present, but name resolves to a crate root - " << path << " #" << i << " -> " << newpath);
                     } else {
                         newpath.nodes().back().args() = mv$(path.nodes()[i].args());
                     }
@@ -1254,7 +1254,7 @@ namespace {
                         ap.nodes.push_back(pathAbs.nodes[j].name());
                     }
                     AST::PathParams pp;
-                    if (!n.args().is_empty()) {
+                    if (!n.args().isEmpty()) {
                         pp = mv$(n.args());
                     } else {
                         for (const auto& typ : e.mParams.types) {
@@ -1319,8 +1319,8 @@ namespace {
                                 }
 
                                 // NOTE: Type parameters for enums go after the _variant_
-                                if (!n.args().is_empty()) {
-                                    if (nextNode.args().is_empty()) {
+                                if (!n.args().isEmpty()) {
+                                    if (nextNode.args().isEmpty()) {
                                         DEBUG("Moving type params from on the enum to the variant");
                                         nextNode.args() = std::move(n.args());
                                     } else {
@@ -1494,7 +1494,7 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
         auto& n = pathAbs.nodes[i];
 
         if (n.name().c_str()[0] == '#') {
-            if (!n.args().is_empty()) {
+            if (!n.args().isEmpty()) {
                 ERROR(sp, E0000, "Type parameters were not expected here");
             }
 
@@ -1537,7 +1537,7 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                         auto lm = Context::LookupMode::Type;
                         ResolveAbsolutePathBindAbsolute(context, sp, lm, traitPath);
                     }
-                    if (!n.args().is_empty()) {
+                    if (!n.args().isEmpty()) {
                         traitPath.nodes().back().args() = mv$(n.args());
                     } else {
                         if (e.trait_) {
@@ -1620,8 +1620,8 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                                     ERROR(sp, E0000, "Unexpected enum in path " << path);
                                 }
                                 // NOTE: Type parameters for enums go after the _variant_
-                                if (!n.args().is_empty()) {
-                                    if (lastNode.args().is_empty()) {
+                                if (!n.args().isEmpty()) {
+                                    if (lastNode.args().isEmpty()) {
                                         DEBUG("Moving type params from on the enum to the variant");
                                         lastNode.args() = std::move(n.args());
                                     } else {
@@ -1792,9 +1792,9 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                     if (p.cls.is_Local()) {
                         p = ::AST::Path::newUfcsTy(TypeRef(sp, mv$(p)));
                     }
-                    if (!e.nodes[0].args().is_empty()) {
+                    if (!e.nodes[0].args().isEmpty()) {
                         assert(p.nodes().size() > 0);
-                        assert(p.nodes().back().args().is_empty());
+                        assert(p.nodes().back().args().isEmpty());
                         p.nodes().back().args() = mv$(e.nodes[0].args());
                     }
                     for (unsigned int i = 1; i < e.nodes.size(); i++) {
@@ -1807,14 +1807,14 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                 // Look up value
                 auto p = context.lookup(sp, e.nodes[0].name(), e.hygiene, mode);
                 //DEBUG("Found path " << p << " for " << path);
-                if (p.is_absolute()) {
+                if (p.isAbsolute()) {
                     assert(!p.nodes().empty());
                     p.nodes().back().args() = mv$(e.nodes.back().args());
                 }
                 path = mv$(p);
             }
 
-            if (!path.is_trivial()) {
+            if (!path.isTrivial()) {
                 ResolveAbsolutePathNodes(context, sp, path.nodes());
             }
         }
@@ -1838,7 +1838,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                 npNodes.push_back(mv$(en));
             }
 
-            if (!path.is_trivial()) {
+            if (!path.isTrivial()) {
                 ResolveAbsolutePathNodes(context, sp, npNodes);
             }
 
@@ -1866,7 +1866,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                 npNodes.push_back(mv$(en));
             }
 
-            if (!path.is_trivial()) {
+            if (!path.isTrivial()) {
                 ResolveAbsolutePathNodes(context, sp, npNodes);
             }
 

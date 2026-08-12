@@ -34,7 +34,7 @@ namespace {
             explicit V(HIR::TypeInterner& types): HIR::Visitor(nullptr, types) {}
 
             void visitConstgeneric(const HIR::ConstGeneric& v) {
-                if (v.is_Generic() && v.as_Generic().is_placeholder()) {
+                if (v.is_Generic() && v.as_Generic().isPlaceholder()) {
                     throw HasPlaceholder{};
                 }
             }
@@ -47,7 +47,7 @@ namespace {
             }
 
             void visitType(HIR::TypeRef& ty) override {
-                if (ty->is_Generic() && ty->as_Generic().is_placeholder()) {
+                if (ty->is_Generic() && ty->as_Generic().isPlaceholder()) {
                     throw HasPlaceholder{};
                 }
                 if (const auto* e = ty->opt_Array()) {
@@ -4541,7 +4541,7 @@ namespace {
                     // Literal infer, keep going (but remember how many times we dereferenced?)
                 }
 
-                if (TU_TEST1(*outTy, Generic, .is_placeholder())) {
+                if (TU_TEST1(*outTy, Generic, .isPlaceholder())) {
                     DEBUG("Src derefed to a placeholder generic type (" << outTy << "), return Unknown");
                     return CoerceResult::Unknown;
                 }
@@ -5539,7 +5539,7 @@ namespace {
                     DEBUG("New bound (pre-mono) " << bound);
                     auto ms = implRef.getCbMonomorphTraitimpl(context.crate.types, sp, {});
                     static const HIR::GenericParams emptyParams;
-                    bool outerPresent = be.hrtbs && !be.hrtbs->is_empty();
+                    bool outerPresent = be.hrtbs && !be.hrtbs->isEmpty();
                     auto _ = ms.pushHrb(outerPresent ? *be.hrtbs : emptyParams);
                     auto bTyMono = ms.monomorphType(sp, be.type);
                     auto bTpMono = ms.monomorphTraitpath(sp, be.trait, true);
@@ -8346,7 +8346,7 @@ namespace {
     }
 }
 
-void TypecheckCodeCS(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr) {
+void TypecheckCodeCS(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr) {
     TRACE_FUNCTION;
 
     auto rootPtr = expr.takeNode();
@@ -8354,7 +8354,7 @@ void TypecheckCodeCS(const typeck::ModuleState& ms, tArgs& args, const ::HIR::Ty
     Context context{ms.crate, ms.mImplGenerics, ms.mItemGenerics, ms.modPaths.back(), ms.currentTrait, ms.currentTraitImpl};
 
     // - Build up ruleset from node tree
-    TypecheckCodeCSEnumerateRules(context, ms, args, result_type, expr, rootPtr);
+    TypecheckCodeCSEnumerateRules(context, ms, args, resultType, expr, rootPtr);
 
     const unsigned int MAX_ITERATIONS = 5000;
     unsigned int count = 0;
@@ -8730,7 +8730,7 @@ void TypecheckCodeCS(const typeck::ModuleState& ms, tArgs& args, const ::HIR::Ty
         DEBUG("==== FINAL VALIDATE ====");
         StaticTraitResolve staticResolve(ms.crate);
         staticResolve.setBothGenericsRaw(ms.mImplGenerics, ms.mItemGenerics);
-        TypecheckExpressionsValidateOne(staticResolve, args, result_type, expr);
+        TypecheckExpressionsValidateOne(staticResolve, args, resultType, expr);
 
         DEBUG("=== Method const params ===");
 
@@ -8926,14 +8926,14 @@ namespace typecheck {
                     static const HIR::GenericParams emptyHrtb;
                     const auto& outerHrtb = be.hrtbs ? *be.hrtbs : emptyHrtb;
                     DEBUG("Bound for" << outerHrtb.fmtArgs() << " " << be.type << ":  " << be.trait);
-                    ASSERT_BUG(sp, int(!outerHrtb.is_empty()) + int(!(be.trait.hrtbs ? *be.trait.hrtbs : emptyHrtb).is_empty()) < 2, "Unexpected nested HRTBs: for" << outerHrtb.fmtArgs() << " " << be.type << ":  " << be.trait);
+                    ASSERT_BUG(sp, int(!outerHrtb.isEmpty()) + int(!(be.trait.hrtbs ? *be.trait.hrtbs : emptyHrtb).isEmpty()) < 2, "Unexpected nested HRTBs: for" << outerHrtb.fmtArgs() << " " << be.type << ":  " << be.trait);
 
                     auto _ = ms.pushHrb(outerHrtb);
                     auto realType = ms.monomorphType(sp, be.type);
                     auto realTrait = ms.monomorphTraitpath(sp, be.trait, false);
                     DEBUG("= (" << realType << ": " << realTrait << ")");
                     // Replace any HRLs with unbound/empty lifetimes
-                    auto ppHrl = (realTrait.hrtbs && !realTrait.hrtbs->is_empty()) ? realTrait.hrtbs->makeEmptyParams(true) : outerHrtb.makeEmptyParams(true);
+                    auto ppHrl = (realTrait.hrtbs && !realTrait.hrtbs->isEmpty()) ? realTrait.hrtbs->makeEmptyParams(true) : outerHrtb.makeEmptyParams(true);
                     DEBUG("outer_hrb = " << outerHrtb.fmtArgs() << ", pp_hrl = " << ppHrl);
                     auto msHrl = MonomorphHrlsOnly(context.crate.types, ppHrl);
                     applyBoundsAsRulesTrait(context, sp, realType, realTrait, msHrl);
@@ -10957,13 +10957,13 @@ namespace typecheck {
     };
 }
 
-void TypecheckCodeCSEnumerateRules(Context& context, const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr) {
+void TypecheckCodeCSEnumerateRules(Context& context, const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr) {
     TRACE_FUNCTION;
 
     const Span& sp = rootPtr->span();
 
     DEBUG("args = " << args);
-    DEBUG("result_type = " << result_type);
+    DEBUG("result_type = " << resultType);
     for (auto& arg : args) {
         context.handlePattern(Span(), arg.first, arg.second);
     }
@@ -11049,7 +11049,7 @@ void TypecheckCodeCSEnumerateRules(Context& context, const typeck::ModuleState& 
     };
 
     // If the result type contans an erased type, replace that with a new ivar and emit trait bounds for it.
-    ::HIR::TypeRef newResTy = M(context, expr).monomorphType(sp, result_type);
+    ::HIR::TypeRef newResTy = M(context, expr).monomorphType(sp, resultType);
     // - Final check to ensure that all erased type indexes are visited
     for (size_t i = 0; i < expr.erasedTypes.size(); i++) {
         ASSERT_BUG(sp, expr.erasedTypes[i] != HIR::TypeRef(), "Non-visited erased type #" << i);

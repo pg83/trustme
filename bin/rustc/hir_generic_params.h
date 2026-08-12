@@ -82,7 +82,7 @@ namespace HIR {
 
         GenericParams clone() const;
 
-        bool is_empty() const;
+        bool isEmpty() const;
 
         bool isGeneric() const;
 

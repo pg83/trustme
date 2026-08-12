@@ -30,35 +30,35 @@ struct TraitResolveCommon {
     };
 
     struct CachedBoundCmp {
-        typedef std::pair<::HIR::TypeRef, ::HIR::GenericPath> key_t;
+        typedef std::pair<::HIR::TypeRef, ::HIR::GenericPath> keyT;
         typedef std::pair<const ::HIR::TypeData*, const ::HIR::GenericPath&> refT;
         typedef std::pair<const ::HIR::TypeData*, const ::HIR::SimplePath&> refSpT;
 
-        Ordering ord(const key_t& a, const key_t& b) const {
+        Ordering ord(const keyT& a, const keyT& b) const {
             return ::ord(a, b);
         }
 
-        bool operator()(const key_t& a, const key_t& b) const {
+        bool operator()(const keyT& a, const keyT& b) const {
             return ord(a, b) == OrdLess;
         }
 
-        Ordering ord(const key_t& a, const refT& b) const;
+        Ordering ord(const keyT& a, const refT& b) const;
 
-        bool operator()(const key_t& a, const refT& b) const {
+        bool operator()(const keyT& a, const refT& b) const {
             return ord(a, b) == OrdLess;
         }
 
-        bool operator()(const refT& a, const key_t& b) const {
+        bool operator()(const refT& a, const keyT& b) const {
             return ord(b, a) == OrdGreater;
         }
 
-        Ordering ord(const key_t& a, const refSpT& b) const;
+        Ordering ord(const keyT& a, const refSpT& b) const;
 
-        bool operator()(const key_t& a, const refSpT& b) const {
+        bool operator()(const keyT& a, const refSpT& b) const {
             return ord(a, b) == OrdLess;
         }
 
-        bool operator()(const refSpT& a, const key_t& b) const {
+        bool operator()(const refSpT& a, const keyT& b) const {
             return ord(b, a) == OrdGreater;
         }
     };

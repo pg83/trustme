@@ -1201,7 +1201,7 @@ ExprNodeP ParseExprValInner(TokenStream& lex) {
 
     if (lex.lookahead(0) == TOK_INTERPOLATED_PATH && ((lex.lookahead(1) == TOK_RWORD_MOVE && lex.lookahead(2) == TOK_BRACE_OPEN) || lex.lookahead(1) == TOK_BRACE_OPEN)) {
         GET_TOK(tok, lex);
-        if (tok.fragPath().is_trivial() && tok.fragPath().asTrivial() == "gen") {
+        if (tok.fragPath().isTrivial() && tok.fragPath().asTrivial() == "gen") {
             // Generators!
             bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
             return NEWNODE(AST::ExprNodeGeneratorBlock, ParseExprBlockNode(lex, AST::ExprNodeBlock::Type::Bare), isMove);
@@ -1302,7 +1302,7 @@ ExprNodeP ParseExprValInner(TokenStream& lex) {
                 // - Only `builtin # offset_of( <ty>, <field>[, <subfield>]... )` is implemented
                 //   > mrustc translates this to an intrinsic call with the fields as string/integer arguments (simple to pass through)
                 case TOK_HASH:
-                    if (path.is_trivial() && path.asTrivial() == "builtin") {
+                    if (path.isTrivial() && path.asTrivial() == "builtin") {
                         GET_CHECK_TOK(tok, lex, TOK_IDENT);
                         if (tok.ident() == "offset_of") {
                             GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
@@ -1485,7 +1485,7 @@ ExprNodeP ParseExprMacro(TokenStream& lex, AST::Path path) {
         ident = tok.ident().name;
     }
 
-    bool isMacro = (path.is_trivial() && path.asTrivial() == "macro_rules");
+    bool isMacro = (path.isTrivial() && path.asTrivial() == "macro_rules");
 
     bool isBraced = lex.lookahead(0) == TOK_BRACE_OPEN;
 
@@ -3480,7 +3480,7 @@ AST::Attribute ParseMetaItem(TokenStream& lex) {
 
     Spanned<AST::Path> traitPath;
 
-    const bool is_const = lex.getTokenIf(TOK_RWORD_CONST);
+    const bool isConst = lex.getTokenIf(TOK_RWORD_CONST);
 
     // - Handle negative impls specially, which must be a trait
     // "impl !Trait for Type {}"
@@ -3535,7 +3535,7 @@ AST::Attribute ParseMetaItem(TokenStream& lex) {
     ParseParentAttrs(lex, attrs);
 
     auto impl = AST::Impl(AST::ImplDef(mv$(params), mv$(traitPath), mv$(implType)));
-    if (is_const) {
+    if (isConst) {
         impl.def().setIsConst();
     }
 
@@ -3639,7 +3639,7 @@ void ParseImplItem(TokenStream& lex, AST::Impl& impl) {
             fnFlags.isUnsafe = true;
             GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
         }
-        fnFlags.is_const = true;
+        fnFlags.isConst = true;
     }
     if (tok.type() == TOK_RWORD_EXTERN) {
         if (GET_TOK(tok, lex) == TOK_STRING) {
@@ -3964,7 +3964,7 @@ void ParseUseRoot(TokenStream& lex, ::std::vector<AST::UseItem::Ent>& entries) {
     } else {
         PUTBACK(tok, lex);
     }
-    bool isMacro = (name.is_trivial() && name.asTrivial() == "macro_rules");
+    bool isMacro = (name.isTrivial() && name.asTrivial() == "macro_rules");
 
     if (isMacro) {
         lex.pushHygine();

@@ -203,7 +203,7 @@ namespace AST {
 
     void PathNode::printPretty(::std::ostream& os, bool isTypeContext) const {
         os << mName;
-        if (!mParams.is_empty()) {
+        if (!mParams.isEmpty()) {
             if (!isTypeContext) {
                 os << "::";
             }

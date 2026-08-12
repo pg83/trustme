@@ -2655,7 +2655,7 @@ namespace {
             builder.setResult(node.span(), ::MIR::RValue::make_Struct({node.objPath.clone(), mv$(vals)}));
         }
 
-        void visitCommonCr(const Span& sp, const HIR::GenericPath& objPath, const HIR::TypeData* state_type, ::std::vector<::HIR::ExprNodeP>& captures) {
+        void visitCommonCr(const Span& sp, const HIR::GenericPath& objPath, const HIR::TypeData* stateType, ::std::vector<::HIR::ExprNodeP>& captures) {
             auto _ = saveAndEdit(borrowRaiseTarget, nullptr);
 
             ::std::vector<::MIR::Param> vals;
@@ -2665,7 +2665,7 @@ namespace {
             {
                 const auto& langMaybeUninit = builder.resolve().crate.getLangItemPath(sp, "maybe_uninit");
                 const auto& unmMaybeUninit = builder.resolve().crate.getUnionByPath(sp, langMaybeUninit);
-                auto slotType = builder.resolve().crate.types.path(::HIR::GenericPath(langMaybeUninit, ::HIR::PathParams(state_type)), &unmMaybeUninit);
+                auto slotType = builder.resolve().crate.types.path(::HIR::GenericPath(langMaybeUninit, ::HIR::PathParams(stateType)), &unmMaybeUninit);
 
                 auto resSlot = builder.newTemporary(slotType);
                 auto sizePanic = builder.newBbUnlinked();
@@ -9227,12 +9227,12 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, ::MIR::LValue 
             } else { TODO(sp, ""); }
         ),
         (
-            Partial, bool is_enum = false; bool is_union = false; withValType(
+            Partial, bool is_enum = false; bool isUnion = false; withValType(
                 sp,
                 lv,
                 [&](const auto& ty) {
         is_enum = ty->is_Path() && ty->as_Path().binding.is_Enum();
-        is_union = ty->is_Path() && ty->as_Path().binding.is_Union();
+        isUnion = ty->is_Path() && ty->as_Path().binding.is_Union();
     }
             );
             if (is_enum) {
@@ -9271,7 +9271,7 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, ::MIR::LValue 
                 }
                 vs = VarState::make_Invalid(InvalidType::Moved);
                 setCurBlock(nextBb);
-            } else if (is_union) {
+            } else if (isUnion) {
                 // NOTE: Unions don't drop inner items.
                 vs = VarState::make_Invalid(InvalidType::Moved);
             } else {

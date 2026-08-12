@@ -236,7 +236,7 @@ namespace AST {
         PathParams& operator=(PathParams&& x);
         PathParams& operator=(const PathParams& x) = delete;
 
-        bool is_empty() const {
+        bool isEmpty() const {
             return entries.empty();
         }
 
@@ -426,8 +426,8 @@ namespace AST {
         }
     #endif
 
-        bool is_trivial() const {
-            TU_MATCH_DEF(Class, (cls), (e), (return false;), (Local, return true;), (Relative, return e.nodes.size() == 1 && e.nodes[0].args().is_empty();))
+        bool isTrivial() const {
+            TU_MATCH_DEF(Class, (cls), (e), (return false;), (Local, return true;), (Relative, return e.nodes.size() == 1 && e.nodes[0].args().isEmpty();))
         }
 
         const RcString& asTrivial() const;
@@ -436,11 +436,11 @@ namespace AST {
             return !cls.is_Invalid();
         }
 
-        bool is_absolute() const {
+        bool isAbsolute() const {
             return cls.is_Absolute();
         }
 
-        bool is_relative() const {
+        bool isRelative() const {
             return cls.is_Relative() || cls.is_Super() || cls.is_Self();
         }
 

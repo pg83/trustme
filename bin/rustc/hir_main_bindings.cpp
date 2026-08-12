@@ -841,7 +841,7 @@ public:
         BIT(0, m.canUnsize)
         BIT(1, m.isNonzero)
         BIT(2, m.boundedMax)
-        BIT(3, m.is_fundamental)
+        BIT(3, m.isFundamental)
 #undef BIT
         m.dstType = static_cast<::HIR::StructMarkings::DstType>(in.readTag());
         m.coerceUnsized = static_cast<::HIR::StructMarkings::Coerce>(in.readTag());
@@ -3145,7 +3145,7 @@ public:
                 out.writeCount(e.idx);
             }
             TU_ARMA(If, e) {
-                out.writeBool(e.is_equal);
+                out.writeBool(e.isEqual);
                 out.writeCount(e.jumpTarget);
                 serialiseVec(e.ents);
             }
@@ -3648,7 +3648,7 @@ public:
         BIT(0, m.canUnsize)
         BIT(1, m.isNonzero)
         BIT(2, m.boundedMax)
-        BIT(3, m.is_fundamental)
+        BIT(3, m.isFundamental)
 #undef BIT
         out.writeU8(bitflag1);
 
