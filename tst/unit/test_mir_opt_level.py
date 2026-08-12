@@ -6,12 +6,15 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+import lib  # noqa: E402
+
 
 def compile_mir(rustc: str, src: str, work: str, name: str, flags: list[str]) -> str:
     output = os.path.join(work, name)
     env = dict(os.environ)
     result = subprocess.run(
-        [
+        lib.wrap_gdb([
             rustc,
             src,
             "--crate-name",
@@ -23,7 +26,7 @@ def compile_mir(rustc: str, src: str, work: str, name: str, flags: list[str]) ->
             "-Zdump-mir",
             "-Zstop-after=mir",
             *flags,
-        ],
+        ]),
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -58,7 +61,7 @@ def require_call(mir: str, function: str, callee: str, expected: bool) -> None:
 def expect_invalid(rustc: str, src: str, work: str) -> None:
     env = dict(os.environ)
     result = subprocess.run(
-        [
+        lib.wrap_gdb([
             rustc,
             src,
             "--crate-type",
@@ -67,7 +70,7 @@ def expect_invalid(rustc: str, src: str, work: str) -> None:
             os.path.join(work, "invalid"),
             "-Zmir-opt-level=not-a-number",
             "-Zstop-after=mir",
-        ],
+        ]),
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

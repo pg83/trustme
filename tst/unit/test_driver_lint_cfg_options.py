@@ -6,11 +6,14 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+import lib  # noqa: E402
+
 
 def invoke(rustc: str, src: str, work: str, name: str, args: list[str]) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     return subprocess.run(
-        [
+        lib.wrap_gdb([
             rustc,
             src,
             "--crate-name",
@@ -21,7 +24,7 @@ def invoke(rustc: str, src: str, work: str, name: str, args: list[str]) -> subpr
             os.path.join(work, name),
             "-Zstop-after=expand",
             *args,
-        ],
+        ]),
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

@@ -184,8 +184,10 @@ TOOLCHAIN_ENV = {
 }
 SYSTEM_TEST_ENV = {"TRUSTME_SYSTEM_RUSTC": "1"} if system_rustc_mode else {}
 
-# All node scripts are Python and share tst/lib.py.
-TESTS_LIB = ["$(S)/tst/lib.py"]
+# All node scripts are Python and share tst/lib.py. Compiler invocations are
+# prefixed with tst/wrap_gdb.py: a signal death is rerun under gdb (assumed
+# available) so the node's log ends with symbolised backtraces.
+TESTS_LIB = ["$(S)/tst/lib.py", "$(S)/tst/wrap_gdb.py"]
 # Bound the whole test node, including compilation performed by adapters.
 # The build engine resolves Nix's `timeout` symlink to the multicall binary,
 # so select its applet explicitly instead of relying on argv[0].
@@ -597,6 +599,7 @@ unit_tests.append(command(
     inputs=[
         "$(S)/tst/unit/test_mir_opt_level.py",
         "$(S)/tst/unit/mir_opt_level_input.rs",
+        *TESTS_LIB,
     ],
     outputs=["$(B)/tst/unit/mir_opt_level.stamp"],
     cmd=[
@@ -617,6 +620,7 @@ unit_tests.append(command(
         "$(S)/tst/unit/mir_opt_level_input.rs",
         "$(S)/tst/unit/codegen_options_cfg.rs",
         "$(S)/tst/unit/codegen_options_link.rs",
+        *TESTS_LIB,
     ],
     outputs=["$(B)/tst/unit/codegen_options.stamp"],
     cmd=[
@@ -660,6 +664,7 @@ unit_tests.append(command(
     inputs=[
         "$(S)/tst/unit/test_driver_lint_cfg_options.py",
         "$(S)/tst/unit/driver_lint_cfg_input.rs",
+        *TESTS_LIB,
     ],
     outputs=["$(B)/tst/unit/driver_lint_cfg_options.stamp"],
     cmd=[

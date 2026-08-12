@@ -27,6 +27,17 @@ def run(argv, *, cwd=None, env=None, timeout=None) -> None:
     subprocess.run(argv, cwd=cwd, env=env, timeout=timeout, check=True)
 
 
+def wrap_gdb(argv: list[str]) -> list[str]:
+    """Prefix a compiler invocation so a signal death is rerun under gdb.
+
+    The wrapper is transparent for normal exits; on SIGSEGV/SIGABRT/... it
+    reruns the command under gdb, prints all thread backtraces to stderr and
+    re-raises the signal. gdb is assumed to be available.
+    """
+    wrapper = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wrap_gdb.py")
+    return [sys.executable, wrapper, *argv]
+
+
 def require_env(name: str) -> str:
     val = os.environ.get(name)
     if not val:

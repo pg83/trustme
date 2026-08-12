@@ -31,7 +31,7 @@ def main() -> int:
         env.setdefault("CC", "cc")
 
         run(
-            [
+            lib.wrap_gdb([
                 rustc,
                 producer,
                 "--crate-name",
@@ -44,11 +44,11 @@ def main() -> int:
                 search,
                 "-o",
                 producer_rlib,
-            ],
+            ]),
             env,
         )
         run(
-            [
+            lib.wrap_gdb([
                 rustc,
                 consumer,
                 "--crate-type",
@@ -61,7 +61,7 @@ def main() -> int:
                 f"const_borrow_offset_producer={producer_rlib}",
                 "-o",
                 binary,
-            ],
+            ]),
             env,
         )
         run([binary], env)

@@ -56,8 +56,10 @@ def main() -> int:
             )
         binary = os.path.join(work, "t")
         mode = ["--test"] if test_harness else ["--crate-type", "bin"]
-        command = [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
-                   *mode, "--edition", edition, *dependency_args, *compile_flags]
+        command = lib.wrap_gdb(
+            [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
+             *mode, "--edition", edition, *dependency_args, *compile_flags]
+        )
         expected_failure = compile_fail_match is not None
         if expected_failure:
             result = subprocess.run(command, env=env, stdout=subprocess.PIPE,

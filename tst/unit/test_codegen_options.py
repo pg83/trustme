@@ -8,10 +8,13 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+import lib  # noqa: E402
+
 
 def invoke(rustc: str, src: str, output: str, args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [rustc, src, "--crate-type", "lib", "-o", output, *args],
+        lib.wrap_gdb([rustc, src, "--crate-type", "lib", "-o", output, *args]),
         env=dict(os.environ),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -90,7 +93,7 @@ def check_link_args(rustc: str, src: str, work: str) -> None:
     command_file = output + ".command"
     expected = ["trustme-link-arg-first", "trustme-link-arg-second"]
     result = subprocess.run(
-        [
+        lib.wrap_gdb([
             rustc,
             src,
             "--crate-type",
@@ -101,7 +104,7 @@ def check_link_args(rustc: str, src: str, work: str) -> None:
             f"-Clink-arg={expected[0]}",
             "-C",
             f"link-arg={expected[1]}",
-        ],
+        ]),
         env=dict(os.environ),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
