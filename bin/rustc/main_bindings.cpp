@@ -1233,8 +1233,11 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         // diagnostic and has no corresponding display limit.
                         noOptval();
                     } else {
-                        ::std::cerr << "Unknown -Z flag: '" << optname << "'" << ::std::endl;
-                        exit(1);
+                        // Unstable rustc switches are routinely attached to
+                        // upstream tests to select a rustc pass, diagnostic,
+                        // or pretty-printer.  They are not language input and
+                        // an unsupported one must not make an otherwise valid
+                        // crate unusable by this compiler.
                     }
                 }
                     continue;

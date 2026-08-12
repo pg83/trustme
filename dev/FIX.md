@@ -55,13 +55,8 @@ Typeck incompleteness (238):
 - assorted type mismatches, receiver-type limitations, erased-type
   restrictions ("Use of an erased type outside of a function return")
 
-## P3 — cheap wins or debatable (~185)
+## P3 — cheap wins or debatable (~80)
 
-- **`-Z` flag acceptance (105)**: `unpretty` (30), `validate-mir` (16),
-  `mir-enable-passes` (9), `inline-mir` (6), `crate-attr` (6),
-  `verbose-internals`, `print-type-sizes`, `lint-mir`, ... Most tests only
-  need the flag to be *accepted*; making unknown `-Z` a no-op (or adding
-  these as ignored) greens ~100 tests in a day. **Best ROI item overall.**
 - missing diagnostics (80): compile-fail tests for lints/attribute checks the
   fork never implemented; implement or re-baseline.
 
@@ -72,13 +67,12 @@ Pass when re-run in isolation; fail only under the parallel gate load
 
 ## Recommended order (by ROI)
 
-1. `-Z` no-op flag acceptance (~100 tests, trivial)
-2. f16 codegen (24 tests, single root, restores runtime trust)
-3. findImpl recursion guard for normalization cycles (14 tests)
-4. Top-5 crash clusters (~36 tests)
-5. Quiz miscompiles (deep dives: method resolution, macro hygiene)
-6. Parser features, largest-cluster first
-7. Typeck/TAIT epic (largest, hardest)
+1. f16 codegen (24 tests, single root, restores runtime trust)
+2. findImpl recursion guard for normalization cycles (14 tests)
+3. Top-5 crash clusters (~36 tests)
+4. Quiz miscompiles (deep dives: method resolution, macro hygiene)
+5. Parser features, largest-cluster first
+6. Typeck/TAIT epic (largest, hardest)
 
 Raw data: per-case signatures and per-bucket test lists were produced by the
 triage scripts in the session scratchpad (`fail-rows2.json`,
