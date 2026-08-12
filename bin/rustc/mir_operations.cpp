@@ -2180,7 +2180,7 @@ namespace {
     }
 
     MIRConstant createVtable(HIRTypeRef ty, const HIRTraitPath& trait) {
-        auto vtablePath = trait.hrtbs ? HIRPath(mv$(ty), trait.hrtbs->clone(), trait.mPath.clone(), rcstringVtable) : HIRPath(mv$(ty), trait.mPath.clone(), rcstringVtable);
+        auto vtablePath = HIRPath(mv$(ty), trait.mPath.clone(), rcstringVtable);
         return MIRConstant::make_ItemAddr(box$(vtablePath));
     }
 }
@@ -2619,7 +2619,7 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
     HIRTypeRef tmp;
     const auto& ty = state.getLvalueType(tmp, fcnLval);
     DEBUG("callable type " << ty);
-    auto receiver = MonomorphHrlsOnly(state.crate.types, HIRPathParams()).monomorphType(state.sp, ty->as_Function().argTypes.at(0));
+    auto receiver = ty->as_Function().argTypes.at(0);
 
     struct H {
         static MIRLValue getUnitPtr(const MIRTypeResolve& state, MirMutator& mutator, HIRTypeRef ty, MIRLValue lv, MIRLValue& outInnerPtr) {

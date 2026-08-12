@@ -107,7 +107,6 @@ TAGGED_UNION_EX(
 struct HIRTypeDataPath {
     HIRPath path;
     HIRTypePathBinding binding;
-    ::std::unique_ptr<HIRGenericParams> hrtbs; // HRTBs for vtable paths ONLY
 
     bool isClosure() const {
         return path.mData.is_Generic() && path.mData.as_Generic().mPath.components().back().size() > 8 && path.mData.as_Generic().mPath.components().back().compare(0, strlen(CLOSURE_PATH_PREFIX), CLOSURE_PATH_PREFIX) == 0;
@@ -179,7 +178,6 @@ struct HIRTypeDataErasedType {
 };
 
 struct HIRTypeDataFunctionPointer {
-    HIRGenericParams hrls; // Higher-ranked lifetimes
     bool isUnsafe;
     bool isVariadic;
     RcString mAbi; // RcString is usually used for identifiers, but ABI names also form a small interned set.
@@ -274,7 +272,6 @@ TAGGED_UNION_EX(
             enum HIRTypeFlags : uint32_t {
                 HAS_TYPE_INFER = 1u << 0,
                 HAS_TYPE_PARAM = 1u << 1,
-                HAS_LIFETIME_PARAM = 1u << 2,
                 HAS_UNEVALUATED_CONST = 1u << 3,
                 HAS_ASSOCIATED_TYPE = 1u << 4,
                 HAS_DEFERRED_CONST = 1u << 5,
@@ -284,9 +281,7 @@ TAGGED_UNION_EX(
 
             bool hasTypeInfer() const { return flags & HAS_TYPE_INFER; }
             bool needsMonomorphisation(bool ignoreLifetimes = false) const {
-                const auto mask = HAS_TYPE_PARAM | HAS_UNEVALUATED_CONST
-                    | (ignoreLifetimes ? 0u : HAS_LIFETIME_PARAM);
-                return flags & mask;
+                return flags & (HAS_TYPE_PARAM | HAS_UNEVALUATED_CONST);
             }
             bool mayHaveAssociatedType() const {
                 return flags & (HAS_ASSOCIATED_TYPE | HAS_TYPE_INFER);
@@ -326,7 +321,7 @@ public:
     HIRTypeRef array(HIRTypeRef inner, HIRArraySize size);
     HIRTypeRef array(HIRTypeRef inner, uint64_t size);
     HIRTypeRef array(HIRTypeRef inner, HIRConstGeneric size);
-    HIRTypeRef path(HIRPath path, HIRTypePathBinding binding, ::std::unique_ptr<HIRGenericParams> hrtbs = {});
+    HIRTypeRef path(HIRPath path, HIRTypePathBinding binding);
     HIRTypeRef function(HIRTypeDataFunctionPointer ft);
     HIRTypeRef closure(HIRExprNodeClosure* node);
     HIRTypeRef generator(HIRExprNodeGenerator* node);

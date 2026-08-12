@@ -17,7 +17,6 @@ struct TraitResolveCommon {
     const HIRGenericParams* mItemGenerics;
 
     struct CachedEquality {
-        HIRGenericParams hrbs;
         HIRTypeRef ty;
     };
 
@@ -25,7 +24,6 @@ struct TraitResolveCommon {
 
     // A pre-calculated list of trait bounds
     struct CachedBound {
-        HIRGenericParams hrbs;
         const HIRTrait* traitPtr;
         HIRTraitPath::assocListT assoc;
         HIRBoundConstness constness = HIRBoundConstness::Never;
@@ -105,8 +103,8 @@ struct TraitResolveCommon {
     void prepIndexes(const Span& sp);
 
 protected:
-    void prepIndexesAddEquality(const Span& sp, const HIRGenericParams* hrtbs, HIRTypeRef longTy, HIRTypeRef shortTy);
-    void prepIndexesAddTraitBound(const Span& sp, const HIRGenericParams* hrtbs, HIRTypeRef type, HIRTraitPath traitPath, bool addParents = true);
+    void prepIndexesAddEquality(const Span& sp, HIRTypeRef longTy, HIRTypeRef shortTy);
+    void prepIndexesAddTraitBound(const Span& sp, HIRTypeRef type, HIRTraitPath traitPath, bool addParents = true);
 
     /// Iterate over in-scope bounds (function then type)
     bool iterateBounds(::std::function<bool(const HIRGenericBound&)> cb) const;

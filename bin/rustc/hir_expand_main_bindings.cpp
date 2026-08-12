@@ -2167,9 +2167,7 @@ namespace {
             HIRGenericBound monomorphBound(const Span& sp, const HIRGenericBound& b) const {
                 TU_MATCH_HDRA( (b), {)
                 TU_ARMA(TraitBound, e) {
-                        const static HIRGenericParams nullHrtbs;
-                        auto _ = this->pushHrb(e.hrtbs ? *e.hrtbs : nullHrtbs);
-                        return HIRGenericBound::make_TraitBound({(e.hrtbs ? box$(e.hrtbs->clone()) : nullptr), this->monomorphType(sp, e.type), this->monomorphTraitpath(sp, e.trait, false), e.constness});
+                        return HIRGenericBound::make_TraitBound({this->monomorphType(sp, e.type), this->monomorphTraitpath(sp, e.trait, false), e.constness});
                     }
                     TU_ARMA(TypeEquality, e)
                     return HIRGenericBound::make_TypeEquality({this->monomorphType(sp, e.type), this->monomorphType(sp, e.otherType)});
@@ -4380,12 +4378,7 @@ public:
         auto monomorphBound = [&](const HIRGenericBound& b) -> HIRGenericBound {
                 TU_MATCH_HDRA( (b), {)
                 TU_ARMA(TraitBound, e)
-                if (e.hrtbs) {
-                    auto _h = monomorphCb.pushHrb(*e.hrtbs);
-                    return HIRGenericBound::make_TraitBound({box$(e.hrtbs->clone()), monomorphCb.monomorphType(sp, e.type), monomorphCb.monomorphTraitpath(sp, e.trait, false), e.constness});
-                } else {
-                    return HIRGenericBound::make_TraitBound({nullptr, monomorphCb.monomorphType(sp, e.type), monomorphCb.monomorphTraitpath(sp, e.trait, false), e.constness});
-                }
+                return HIRGenericBound::make_TraitBound({monomorphCb.monomorphType(sp, e.type), monomorphCb.monomorphTraitpath(sp, e.trait, false), e.constness});
                 TU_ARMA(TypeEquality, e)
                 return HIRGenericBound::make_TypeEquality({monomorphCb.monomorphType(sp, e.type), monomorphCb.monomorphType(sp, e.otherType)});
                 }

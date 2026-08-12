@@ -5,25 +5,19 @@
 
 #include <algorithm>
 
-namespace {
-    bool gCompareHrls = false;
-}
-
 HIRTraitPath::HIRTraitPath()
     : traitPtr(nullptr)
 {
 }
 
-HIRTraitPath::HIRTraitPath(::std::unique_ptr<HIRGenericParams> hrtbs, HIRGenericPath path)
-    : hrtbs(::std::move(hrtbs))
-    , mPath(::std::move(path))
+HIRTraitPath::HIRTraitPath(HIRGenericPath path)
+    : mPath(::std::move(path))
     , traitPtr(nullptr)
 {
 }
 
-HIRTraitPath::HIRTraitPath(::std::unique_ptr<HIRGenericParams> hrtbs, HIRGenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr, HIRBoundConstness constness)
-    : hrtbs(::std::move(hrtbs))
-    , mPath(::std::move(path))
+HIRTraitPath::HIRTraitPath(HIRGenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr, HIRBoundConstness constness)
+    : mPath(::std::move(path))
     , typeBounds(::std::move(typeBounds))
     , traitBounds(::std::move(traitBounds))
     , constness(constness)
@@ -77,9 +71,6 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
     } else if (x.constness == HIRBoundConstness::Maybe) {
         os << "[const] ";
     }
-    if (x.hrtbs) {
-        os << "for" << x.hrtbs->fmtArgs() << " ";
-    }
     os << x.mPath.mPath;
     bool hasArgs = (x.mPath.mParams.types.size() > 0 || x.typeBounds.size() > 0 || x.traitBounds.size() > 0);
 
@@ -107,7 +98,7 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRPath& x) {
-    TU_MATCH(HIRPath::Data, (x.mData), (e), (Generic, return os << e;), (UfcsInherent, return os << "<" << e.type << " /*- " << e.implParams << "*/>::" << e.item << e.params;), (UfcsKnown, os << "<" << e.type << " as "; if (e.hrtbs) { os << "for" << e.hrtbs->fmtArgs() << " "; } os << e.trait << ">::" << e.item << e.params; return os;), (UfcsUnknown, return os << "<" << e.type << " as _>::" << e.item << e.params;))
+    TU_MATCH(HIRPath::Data, (x.mData), (e), (Generic, return os << e;), (UfcsInherent, return os << "<" << e.type << " /*- " << e.implParams << "*/>::" << e.item << e.params;), (UfcsKnown, os << "<" << e.type << " as "; os << e.trait << ">::" << e.item << e.params; return os;), (UfcsUnknown, return os << "<" << e.type << " as _>::" << e.item << e.params;))
     return os;
 }
 
@@ -224,12 +215,6 @@ HIRGenericPath::HIRGenericPath(HIRSimplePath sp, HIRPathParams params)
 {
 }
 
-HIRGenericPath::HIRGenericPath(HIRGenericParams hrls, HIRSimplePath sp, HIRPathParams params)
-    : mPath(mv$(sp))
-    , mParams(mv$(params))
-{
-}
-
 HIRGenericPath HIRGenericPath::clone() const {
     return HIRGenericPath(mPath.clone(), mParams.clone());
 }
@@ -263,7 +248,7 @@ Ordering HIRGenericPath::ord(const HIRGenericPath& x) const {
 }
 
 HIRTraitPath HIRTraitPath::clone() const {
-    HIRTraitPath rv{hrtbs ? box$(hrtbs->clone()) : nullptr, mPath.clone(), {}, {}, traitPtr, constness};
+    HIRTraitPath rv{mPath.clone(), {}, {}, traitPtr, constness};
 
     for (const auto& assoc : typeBounds) {
         rv.typeBounds.insert(::std::make_pair(assoc.first, assoc.second.clone()));
@@ -309,13 +294,6 @@ bool HIRTraitPath::equalsIgnoringRegions(const HIRTraitPath& x) const {
 
 Ordering HIRTraitPath::ord(const HIRTraitPath& x) const {
     // NOTE: An empty set is treated as the same as none
-    if (gCompareHrls) {
-        ORD(hrtbs.get() && !hrtbs->isEmpty(), x.hrtbs.get() && !x.hrtbs->isEmpty());
-        if (hrtbs && x.hrtbs) {
-            ORD(hrtbs->bounds, x.hrtbs->bounds);
-        }
-    }
-
     ORD(mPath, x.mPath);
     ORD(traitBounds, x.traitBounds);
     ORD(typeBounds, x.typeBounds);
@@ -342,11 +320,6 @@ HIRPath::HIRPath(HIRTypeRef ty, HIRGenericPath trait, RcString item, HIRPathPara
 {
 }
 
-HIRPath::HIRPath(HIRTypeRef ty, HIRGenericParams hrtbs, HIRGenericPath trait, RcString item, HIRPathParams itemParams)
-    : mData(Data::make_UfcsKnown({mv$(ty), mv$(trait), mv$(item), mv$(itemParams), box$(hrtbs)}))
-{
-}
-
 HIRPath HIRPath::clone() const {
     TU_MATCH_HDRA((mData), {)
     TU_ARMA(Generic, e) {
@@ -362,7 +335,6 @@ HIRPath HIRPath::clone() const {
                     e.trait.clone(),
                     e.item,
                     e.params.clone(),
-                    e.hrtbs ? box$(e.hrtbs->clone()) : nullptr,
                 })
             );
         }
@@ -528,14 +500,6 @@ HIRCompare HIRTraitPath::compareWithPlaceholders(const Span& sp, const HIRTraitP
     auto rv = mPath.compareWithPlaceholders(sp, x.mPath, resolvePlaceholder);
     if (rv == HIRCompare::Unequal) {
         return rv;
-    }
-
-    // TODO: HRLs
-
-    if (gCompareHrls) {
-        if ((this->hrtbs && !this->hrtbs->isEmpty()) != (x.hrtbs && !x.hrtbs->isEmpty())) {
-            return HIRCompare::Unequal;
-        }
     }
 
     auto itL = typeBounds.begin();

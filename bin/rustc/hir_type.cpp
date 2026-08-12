@@ -176,7 +176,6 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
         MonomorphStatePtr   ms { types, tySelf, ppImpl, ppMethod };
         const auto& f = *fp;
         HIRTypeDataFunctionPointer ft {
-            HIRGenericParams(),   // TODO: Get HRLs
             f.unsafe,
             f.variadic,
             f.mAbi,
@@ -200,7 +199,6 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
             const auto& varData = str.mData.as_Tuple();
 
             HIRTypeDataFunctionPointer ft{
-                HIRGenericParams(), // TODO: Get HRLs
                 false,
                 false,
                 RcString::newInterned(ABI_RUST),
@@ -216,7 +214,6 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
             const auto& e = this->path.mData.as_Generic();
             MonomorphStatePtr ms{types, nullptr, &e.mParams, nullptr};
             HIRTypeDataFunctionPointer ft{
-                HIRGenericParams(), // TODO: Get HRLs
                 false,
                 false,
                 RcString::newInterned(ABI_RUST),
@@ -494,7 +491,7 @@ namespace {
                 return ae.type == be.type && ae.item == be.item && exactPathParamsEqual(ae.params, be.params) && exactPathParamsEqual(ae.implParams, be.implParams);
             }
             TU_ARMA(UfcsKnown, ae, be) {
-                return ae.type == be.type && exactGenericPathEqual(ae.trait, be.trait) && ae.item == be.item && exactPathParamsEqual(ae.params, be.params) && exactOptionalGenericParamsEqual(ae.hrtbs, be.hrtbs);
+                return ae.type == be.type && exactGenericPathEqual(ae.trait, be.trait) && ae.item == be.item && exactPathParamsEqual(ae.params, be.params);
             }
             TU_ARMA(UfcsUnknown, ae, be) {
                 return ae.type == be.type && ae.item == be.item && exactPathParamsEqual(ae.params, be.params);
@@ -504,7 +501,7 @@ namespace {
     }
 
     bool exactTraitPathEqual(const HIRTraitPath& a, const HIRTraitPath& b) {
-        if (!exactOptionalGenericParamsEqual(a.hrtbs, b.hrtbs) || !exactGenericPathEqual(a.mPath, b.mPath) || a.traitPtr != b.traitPtr || a.typeBounds.size() != b.typeBounds.size() || a.traitBounds.size() != b.traitBounds.size()) {
+        if (!exactGenericPathEqual(a.mPath, b.mPath) || a.traitPtr != b.traitPtr || a.typeBounds.size() != b.typeBounds.size() || a.traitBounds.size() != b.traitBounds.size()) {
             return false;
         }
         auto ai = a.typeBounds.begin();
@@ -535,7 +532,7 @@ namespace {
         }
         TU_MATCH_HDRA((a, b), {)
         TU_ARMA(TraitBound, ae, be) {
-                return exactOptionalGenericParamsEqual(ae.hrtbs, be.hrtbs) && ae.type == be.type && exactTraitPathEqual(ae.trait, be.trait);
+                return ae.type == be.type && exactTraitPathEqual(ae.trait, be.trait);
             }
             TU_ARMA(TypeEquality, ae, be) return ae.type == be.type && ae.otherType == be.otherType;
         }
@@ -611,7 +608,7 @@ namespace {
             TU_ARMA(Diverge, ae, be) return true;
             TU_ARMA(Primitive, ae, be) return ae == be;
             TU_ARMA(Path, ae, be) {
-                return exactPathEqual(ae.path, be.path) && exactBindingEqual(ae.binding, be.binding) && exactOptionalGenericParamsEqual(ae.hrtbs, be.hrtbs);
+                return exactPathEqual(ae.path, be.path) && exactBindingEqual(ae.binding, be.binding);
             }
             TU_ARMA(Generic, ae, be) return exactGenericRefEqual(ae, be);
             TU_ARMA(TraitObject, ae, be) {
@@ -653,7 +650,7 @@ namespace {
             throw "";
             }
             TU_ARMA(Function, ae, be) {
-                return exactGenericParamsEqual(ae.hrls, be.hrls) && ae.isUnsafe == be.isUnsafe && ae.isVariadic == be.isVariadic && ae.mAbi == be.mAbi && ae.mRettype == be.mRettype && ae.argTypes == be.argTypes;
+                return ae.isUnsafe == be.isUnsafe && ae.isVariadic == be.isVariadic && ae.mAbi == be.mAbi && ae.mRettype == be.mRettype && ae.argTypes == be.argTypes;
             }
             TU_ARMA(NodeType, ae, be) return ae == be;
         }
@@ -662,12 +659,6 @@ namespace {
 
     void addTypeFlags(uint32_t& flags, HIRTypeRef type) {
         flags |= type->flags;
-    }
-
-    void addLifetimeFlags(uint32_t& flags, HIRLifetimeRef lifetime) {
-        if (lifetime.isParam() && lifetime.asParam().group() != GENERICHrtb) {
-            flags |= HIRTypeData::HAS_LIFETIME_PARAM;
-        }
     }
 
     uint32_t typeFlags(const HIRPathParams& params);
@@ -874,7 +865,6 @@ namespace {
                 h = hashMix(h, hashGenericPath(e.trait));
                 h = hashMix(h, ::std::hash<RcString>()(e.item));
                 h = hashMix(h, hashPathParams(e.params));
-                h = hashMix(h, static_cast<bool>(e.hrtbs));
             }
             TU_ARMA(UfcsUnknown, e) {
                 h = hashMix(h, hashTypeRef(e.type));
@@ -921,7 +911,6 @@ namespace {
             TU_ARMA(Path, e) {
                 h = hashMix(h, hashPath(e.path));
                 h = hashMix(h, hashBinding(e.binding));
-                h = hashMix(h, static_cast<bool>(e.hrtbs));
             }
             TU_ARMA(Generic, e) {
                 h = hashMix(h, hashGenericRef(e));
@@ -1058,8 +1047,8 @@ HIRTypeRef HIRTypeInterner::array(HIRTypeRef inner, HIRConstGeneric size) {
     return intern(HIRTypeData::make_Array({inner, mv$(size)}));
 }
 
-HIRTypeRef HIRTypeInterner::path(HIRPath path, HIRTypePathBinding binding, ::std::unique_ptr<HIRGenericParams> hrtbs) {
-    return intern(HIRTypeData::make_Path({mv$(path), mv$(binding), mv$(hrtbs)}));
+HIRTypeRef HIRTypeInterner::path(HIRPath path, HIRTypePathBinding binding) {
+    return intern(HIRTypeData::make_Path({mv$(path), mv$(binding)}));
 }
 
 HIRTypeRef HIRTypeInterner::function(HIRTypeDataFunctionPointer ft) {
@@ -1310,10 +1299,6 @@ HIRCompare HIRTypeData::matchTestGenericsFuzz(const Span& sp, HIRTypeRef xIn, tC
     return callback.cmpType(sp, self, xIn, resolvePlaceholder);
 }
 
-HIRTrackHrbStack::PopOnDrop HIRTrackHrbStack::pushHrb(const std::unique_ptr<HIRGenericParams>& params) const {
-    static HIRGenericParams emptyParams;
-    return params ? pushHrb(*params) : PopOnDrop();
-}
 
 HIRCompare HIRMatchGenerics::cmpPath(const Span& sp, const HIRPath& pathL, const HIRPath& pathR, tCbResolveType resolvePlaceholder) {
     HIRCompare rv = HIRCompare::Unequal;
@@ -1550,8 +1535,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
             if (te.markers.size() != xe.markers.size()) {
                 return HIRCompare::Unequal;
             }
-            static const HIRGenericParams emptyParams;
-            auto _ = pushHrb(te.mTrait.hrtbs ? *te.mTrait.hrtbs : emptyParams);
             auto cmp = matchGenericsPp(sp, te.mTrait.mPath.mParams, xe.mTrait.mPath.mParams, resolvePlaceholder, *this);
             for (unsigned int i = 0; i < te.markers.size(); i++) {
                 if (te.markers[i].mPath != xe.markers[i].mPath) {
@@ -1660,7 +1643,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
             if (te.argTypes.size() != xe.argTypes.size()) {
                 return HIRCompare::Unequal;
             }
-            auto _ = pushHrb(te.hrls);
             auto rv = HIRCompare::Equal;
             for (unsigned int i = 0; i < te.argTypes.size(); i++) {
                 rv &= this->cmpType(sp, te.argTypes[i], xe.argTypes[i], resolvePlaceholder);
@@ -1735,7 +1717,7 @@ HIRTypeData HIRTypeData::cloneData() const {
             return HIRTypeData::make_Primitive(e);
         }
         TU_ARMA(Path, e) {
-            return HIRTypeData::make_Path({e.path.clone(), e.binding.clone(), e.hrtbs ? ::std::make_unique<HIRGenericParams>(e.hrtbs->clone()) : nullptr});
+            return HIRTypeData::make_Path({e.path.clone(), e.binding.clone()});
         }
         TU_ARMA(Generic, e) {
             return HIRTypeData::make_Generic(e);
@@ -1796,7 +1778,7 @@ HIRTypeData HIRTypeData::cloneData() const {
             return HIRTypeData::make_NamedFunction({e.path.clone(), e.def.clone()});
         }
         TU_ARMA(Function, e) {
-            HIRTypeDataFunctionPointer ft{e.hrls.clone(), e.isUnsafe, e.isVariadic, e.mAbi, e.mRettype, {}};
+            HIRTypeDataFunctionPointer ft{e.isUnsafe, e.isVariadic, e.mAbi, e.mRettype, {}};
             for (const auto& a : e.argTypes) {
                 ft.argTypes.push_back(a);
             }

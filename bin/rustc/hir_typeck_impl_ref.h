@@ -20,14 +20,12 @@ struct ImplRef {
          }),
         (BoundedPtr,
          struct {
-             HIRPathParams hrls;
              const HIRTypeData* type;
              const HIRPathParams* traitArgs;
              const HIRTraitPath::assocListT* assoc;
              HIRBoundConstness constness;
          }),
         (Bounded, struct {
-            HIRPathParams hrls;
             HIRTypeRef type;
             HIRPathParams traitArgs;
             HIRTraitPath::assocListT assoc;
@@ -44,11 +42,8 @@ struct ImplRef {
 
     ImplRef(const HIRTypeData* type, const HIRPathParams* args, const HIRTraitPath::assocListT* assoc, HIRBoundConstness constness = HIRBoundConstness::Never);
 
-    ImplRef(HIRPathParams hrls, const HIRTypeData* type, const HIRPathParams* args, const HIRTraitPath::assocListT* assoc, HIRBoundConstness constness = HIRBoundConstness::Never);
-
     ImplRef(HIRTypeRef type, HIRPathParams args, HIRTraitPath::assocListT assoc, HIRBoundConstness constness = HIRBoundConstness::Never);
 
-    ImplRef(HIRPathParams hrls, HIRTypeRef type, HIRPathParams args, HIRTraitPath::assocListT assoc, HIRBoundConstness constness = HIRBoundConstness::Never);
 
     bool isValid() const {
         return !(mData.is_TraitImpl() && mData.as_TraitImpl().impl == nullptr);

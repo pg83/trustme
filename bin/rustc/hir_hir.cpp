@@ -931,7 +931,7 @@ namespace {
 }
 
 namespace {
-    void addBoundFromTrait(HIRTypeInterner& types, ::std::vector<HIRGenericBound>& rv, const std::unique_ptr<HIRGenericParams>& hrtbs, const HIRTypeData* type, const HIRTraitPath& curTrait) {
+    void addBoundFromTrait(HIRTypeInterner& types, ::std::vector<HIRGenericBound>& rv, const HIRTypeData* type, const HIRTraitPath& curTrait) {
         static Span sp;
         assert(curTrait.traitPtr);
         const auto& tr = *curTrait.traitPtr;
@@ -941,7 +941,7 @@ namespace {
             // 1. Monomorph
             auto traitPathMono = monomorphCb.monomorphTraitpath(sp, traitPathRaw, false, false);
             // 2. Add
-            rv.push_back(HIRGenericBound::make_TraitBound({hrtbs ? box$(hrtbs->clone()) : nullptr, type, mv$(traitPathMono)}));
+            rv.push_back(HIRGenericBound::make_TraitBound({type, mv$(traitPathMono)}));
         }
 
         // TODO: Add traits from `Self: Foo` bounds?
@@ -953,7 +953,7 @@ namespace {
         for (const auto& b : bounds) {
             rv.push_back(b.clone());
             if (const auto* be = b.opt_TraitBound()) {
-                addBoundFromTrait(types, rv, be->hrtbs, be->type, be->trait);
+                addBoundFromTrait(types, rv, be->type, be->trait);
             }
         }
         ::std::sort(rv.begin(), rv.end(), [](const auto& a, const auto& b) {
@@ -1744,9 +1744,8 @@ HIRTypeRef HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, const 
 
     const auto& vtableTySpath = this->vtablePath;
     const auto& vtableRef = crate.getStructByPath(sp, vtableTySpath);
-    HIRPathParams ppHrls;
     // Copy the param set from the trait in the trait object
-    HIRPathParams vtableParams = MonomorphHrlsOnly(crate.types, ppHrls).monomorphPathParams(sp, te.mTrait.mPath.mParams, false);
+    HIRPathParams vtableParams = te.mTrait.mPath.mParams.clone();
     vtableParams.types.resize(te.mTrait.mPath.mParams.types.size() + this->typeIndexes.size());
     // - Include associated types on bound
     for (const auto& tyB : te.mTrait.typeBounds) {
@@ -1755,7 +1754,7 @@ HIRTypeRef HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, const 
             continue;
         }
         auto idx = this->typeIndexes.at(tyB.first);
-        vtableParams.types.at(idx) = MonomorphHrlsOnly(crate.types, ppHrls).monomorphType(sp, tyB.second.type);
+        vtableParams.types.at(idx) = tyB.second.type;
     }
     return crate.types.path(HIRGenericPath(vtableTySpath, mv$(vtableParams)), &vtableRef);
 }

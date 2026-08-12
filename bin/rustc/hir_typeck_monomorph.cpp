@@ -62,11 +62,6 @@ MonomorphStatePtr& MonomorphStatePtr::operator=(MonomorphStatePtr&& x) {
     return *this;
 }
 
-MonomorphHrlsOnly::MonomorphHrlsOnly(HIRTypeInterner& types, const HIRPathParams& paramsH)
-    : Monomorphiser(types)
-    , ppHrb(&paramsH)
-{
-}
 
 MonomorphState::MonomorphState(HIRTypeInterner& types)
     : MonomorphiserPP(types)
@@ -104,21 +99,7 @@ void MonomorphState::setImplParams(HIRPathParams pp) {
     ppImplData = std::move(pp);
 }
 
-HIRTypeRef MonomorphHrlsOnly::getType(const Span& sp, const HIRGenericRef& ty) const {
-    if (ty.group() == 3) {
-        ASSERT_BUG(sp, ty.idx() < ppHrb->types.size(), ty << " out of bounds (" << ppHrb->types.size() << ")");
-        return ppHrb->types.at(ty.idx());
-    }
-    return types.generic(ty.name, ty.binding);
-}
 
-HIRConstGeneric MonomorphHrlsOnly::getValue(const Span& sp, const HIRGenericRef& val) const {
-    if (val.group() == 3) {
-        ASSERT_BUG(sp, val.idx() < ppHrb->values.size(), val << " out of bounds (" << ppHrb->values.size() << ")");
-        return ppHrb->values.at(val.idx()).clone();
-    }
-    return HIRConstGeneric(val);
-}
 
 HIRTypeRef MonomorphiserNop::getType(const Span& sp, const HIRGenericRef& ty) const {
     return types.generic(ty.name, ty.binding);

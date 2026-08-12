@@ -90,7 +90,7 @@ HIRGenericParams HIRGenericParams::clone() const {
 HIRGenericBound HIRGenericBound::clone() const {
     TU_MATCH_HDRA( (*this), {)
     TU_ARMA(TraitBound, e) {
-            return HIRGenericBound::make_TraitBound({e.hrtbs ? box$(e.hrtbs->clone()) : nullptr, e.type, e.trait.clone(), e.constness});
+            return HIRGenericBound::make_TraitBound({e.type, e.trait.clone(), e.constness});
         }
         TU_ARMA(TypeEquality, e) {
             return HIRGenericBound::make_TypeEquality({e.type, e.otherType});

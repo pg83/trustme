@@ -16,7 +16,7 @@ struct WireBoard;
 extern bool monomorphiseTraitpathNeeded(const HIRTraitPath& tpl, bool ignoreLifetimes = false);
 extern bool monomorphiseTypeNeeded(const HIRTypeData* tpl, bool ignoreLifetimes = false);
 
-class Monomorphiser: virtual public HIRTrackHrbStack {
+class Monomorphiser {
 protected:
     HIRTypeInterner& types;
 
@@ -122,16 +122,6 @@ struct MonomorphStatePtr: public MonomorphiserPP {
     const HIRPathParams* getHrbParams() const override;
 };
 
-struct MonomorphHrlsOnly: public Monomorphiser {
-    const HIRPathParams* ppHrb;
-
-    MonomorphHrlsOnly(HIRTypeInterner& types, const HIRPathParams& paramsH);
-
-    HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override;
-
-    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
-
-};
 
 // Helper for passing a group of params around
 struct MonomorphState: public MonomorphiserPP {

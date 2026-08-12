@@ -861,8 +861,6 @@ namespace {
             {
                 TU_MATCH_HDRA( (bound), {)
                 TU_ARMA(TraitBound, be) {
-                        HIRGenericParams emptyHrtb;
-                        auto _ = cache.monomorph->pushHrb(be.hrtbs ? *be.hrtbs : emptyHrtb);
                         DEBUG("Bound " << be.type << ":  " << be.trait);
                         auto realType = cache.monomorph->monomorphType(sp, be.type);
                         mResolve.expandAssociatedTypes(sp, realType);
@@ -931,15 +929,13 @@ namespace {
                     mResolve.expandAssociatedTypes(node.span(), tmpFt);
                     e = &tmpFt->as_Function();
                 }
-                auto hrls = HIRPathParams();
-                auto m = MonomorphHrlsOnly(mResolve.crate.types, hrls);
                 if (e->isVariadic ? node.mArgs.size() < e->argTypes.size() : node.mArgs.size() != e->argTypes.size()) {
                     ERROR(node.span(), E0000, "Incorrect number of arguments to call via " << valTy);
                 }
                 for (unsigned int i = 0; i < e->argTypes.size(); i++) {
-                    checkTypesEqual(node.mArgs[i]->span(), m.monomorphType(node.span(), e->argTypes[i]), node.mArgs[i]->resType);
+                    checkTypesEqual(node.mArgs[i]->span(), e->argTypes[i], node.mArgs[i]->resType);
                 }
-                checkTypesEqual(node.span(), node.resType, m.monomorphType(node.span(), e->mRettype));
+                checkTypesEqual(node.span(), node.resType, e->mRettype);
             } else if (node.traitUsed == HIRExprNodeCallValue::TraitUsed::Unknown) {
             } else {
                 // 1. Look up the encoded trait
@@ -1228,8 +1224,6 @@ namespace {
             //{
             //}
             DEBUG(sp << " - " << l << " == " << r);
-            MonomorphHrlsOnly(mResolve.crate.types, HIRPathParams()).monomorphType(sp, l);
-            MonomorphHrlsOnly(mResolve.crate.types, HIRPathParams()).monomorphType(sp, r);
             if (/*l->is_Diverge() ||*/ r->is_Diverge()) {
                 // Diverge, matches everything.
                 // TODO: Is this always true?
@@ -1669,10 +1663,6 @@ namespace {
             }
 
             auto savedParams = std::make_pair(curParams, curParamsLevel);
-            if (auto* e = data.opt_Function()) {
-                curParams = &e->hrls;
-                curParamsLevel = 3;
-            }
 
             TU_MATCH_HDRA((data), {)
             TU_ARMA(Infer, e) {

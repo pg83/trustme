@@ -191,7 +191,6 @@ public:
     HIRGenericPath();
     HIRGenericPath(HIRSimplePath sp);
     HIRGenericPath(HIRSimplePath sp, HIRPathParams params);
-    HIRGenericPath(HIRGenericParams hrls, HIRSimplePath sp, HIRPathParams params);
 
     HIRGenericPath clone() const;
     HIRCompare compareWithPlaceholders(const Span& sp, const HIRGenericPath& x, tCbResolveType resolvePlaceholder) const;
@@ -244,7 +243,6 @@ public:
 
     typedef ::std::map<RcString, AtyEqual> assocListT;
 
-    ::std::unique_ptr<HIRGenericParams> hrtbs;
     HIRGenericPath mPath;
     assocListT typeBounds;
     ::std::map<RcString, AtyBound> traitBounds;
@@ -255,8 +253,8 @@ public:
     const HIRTrait* traitPtr;
 
     HIRTraitPath();
-    HIRTraitPath(::std::unique_ptr<HIRGenericParams> hrtbs, HIRGenericPath path);
-    HIRTraitPath(::std::unique_ptr<HIRGenericParams> hrtbs, HIRGenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr = nullptr, HIRBoundConstness constness = HIRBoundConstness::Never);
+    explicit HIRTraitPath(HIRGenericPath path);
+    HIRTraitPath(HIRGenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr = nullptr, HIRBoundConstness constness = HIRBoundConstness::Never);
     ~HIRTraitPath();
     HIRTraitPath(HIRTraitPath&&);
     HIRTraitPath& operator=(HIRTraitPath&&);
@@ -304,7 +302,6 @@ public:
              HIRGenericPath trait;
              RcString item;
              HIRPathParams params;
-             std::unique_ptr<HIRGenericParams> hrtbs;
          }),
         (UfcsUnknown, struct {
             HIRTypeRef type;
@@ -323,7 +320,6 @@ public:
 
     HIRPath(HIRTypeRef ty, RcString item, HIRPathParams itemParams = HIRPathParams());
     HIRPath(HIRTypeRef ty, HIRGenericPath trait, RcString item, HIRPathParams itemParams = HIRPathParams());
-    HIRPath(HIRTypeRef ty, HIRGenericParams hrtbs, HIRGenericPath trait, RcString item, HIRPathParams itemParams = HIRPathParams());
 
     HIRPath clone() const;
     HIRCompare compareWithPlaceholders(const Span& sp, const HIRPath& x, tCbResolveType resolvePlaceholder) const;

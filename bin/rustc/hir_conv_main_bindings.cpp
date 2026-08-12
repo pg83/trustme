@@ -347,7 +347,7 @@ namespace {
                             (Enum, fixParamCount(crate.types, sp, pe, e3.mParams, pe.mParams, /*fill_infer=*/inExpr != 0); e->binding = HIRTypePathBinding::make_Enum(&e3); DEBUG("- " << ty);),
                             (Trait,
                              // TODO: Should this reassign instead?
-                             data = HIRTypeData::make_TraitObject({HIRTraitPath{{}, mv$(pe), {}, {}}, {}});)
+                             data = HIRTypeData::make_TraitObject({HIRTraitPath{mv$(pe), {}, {}}, {}});)
                         )
                     }
                     TU_ARMA(UfcsUnknown, pe) {
@@ -445,7 +445,7 @@ namespace {
 
                             // TODO: Monomorph the trait to replace `Self` with this generic?
                             // - Except, that should it be?
-                            fcnPtr->mParams.bounds.push_back(HIRGenericBound::make_TraitBound({nullptr, newTy, m.monomorphTraitpath(sp, trait, false)}));
+                            fcnPtr->mParams.bounds.push_back(HIRGenericBound::make_TraitBound({newTy, m.monomorphTraitpath(sp, trait, false)}));
                         }
                         ty = ::std::move(newTy);
                         return;
@@ -806,19 +806,7 @@ namespace {
 
                     auto monomorphCb = MonomorphStatePtr(types, tySelf, &params, nullptr);
                     auto monomorphTp = [&](const HIRTraitPath& tp) -> HIRTraitPath {
-                        // TODO: if `path.m_path` has HRLs, then this needs HRLs (only if the HRLs get used?)
-                        if ((tp.hrtbs && !tp.hrtbs->isEmpty()) && (path.hrtbs && !path.hrtbs->isEmpty())) {
-                            // TODO: How to determine which to use?
-                            // - May need to combine them.
-                            TODO(sp, "Trait path and outer path both have HRLs, how to handle?");
-                            return monomorphCb.monomorphTraitpath(sp, tp, false);
-                        } else if (path.hrtbs && !path.hrtbs->isEmpty()) {
-                            auto rv = monomorphCb.monomorphTraitpath(sp, tp, false);
-                            rv.hrtbs = box$(path.hrtbs->clone());
-                            return rv;
-                        } else {
-                            return monomorphCb.monomorphTraitpath(sp, tp, false);
-                        }
+                        return monomorphCb.monomorphTraitpath(sp, tp, false);
                     };
                     if (tr.allParentTraits.size() > 0) {
                         for (const auto& pt : tr.allParentTraits) {
@@ -850,7 +838,6 @@ namespace {
 
                     // Build output path.
                     HIRTraitPath outPath;
-                    outPath.hrtbs = mv$(path.hrtbs);
                     outPath.mPath = mv$(path.mPath);
                     outPath.traitPtr = &tr;
                     fillTypeAliases(outPath);
@@ -1668,17 +1655,12 @@ public:
                 auto n = ConvertHIRExpandAliasesGetTraitExpansion(sp, crate, be->trait, inExpr);
                 if (!n.empty()) {
                     auto origType = std::move(be->type);
-                    auto origHrtbs = std::move(be->hrtbs);
-                    if (origHrtbs) {
-                        visitParams(*origHrtbs);
-                    }
                     visitType(origType);
 
                     it = params.bounds.erase(it);
                     for (auto& t : n) {
                         auto type = origType;
-                        auto hrtbs = origHrtbs ? (&t == &n.back() ? std::move(origHrtbs) : box$(origHrtbs->clone())) : nullptr;
-                        it = params.bounds.insert(it, HIRGenericBound::make_TraitBound({std::move(hrtbs), std::move(type), std::move(t)}));
+                        it = params.bounds.insert(it, HIRGenericBound::make_TraitBound({std::move(type), std::move(t)}));
                     }
                 }
             }
@@ -2712,7 +2694,6 @@ public:
         // Search supertraits (recursively)
         static HIRGenericParams emptyGp;
         for (const auto& pt : trait.parentTraits) {
-            auto _ = monomorphCb.pushHrb(pt.hrtbs ? *pt.hrtbs : emptyGp);
             const auto& parTraitPath = monomorphGpIfNeeded(pt.mPath);
             DEBUG("- Check " << parTraitPath);
             if (locateInTraitAndSet(pc, parTraitPath, *pt.traitPtr, pd)) {
@@ -2720,7 +2701,6 @@ public:
             }
         }
         for (const auto& pt : trait.allParentTraits) {
-            auto _ = monomorphCb.pushHrb(pt.hrtbs ? *pt.hrtbs : emptyGp);
             const auto& parTraitPath = monomorphGpIfNeeded(pt.mPath);
             DEBUG("- Check (all) " << parTraitPath);
             if (locateItemInTrait(pc, *pt.traitPtr, pd)) {

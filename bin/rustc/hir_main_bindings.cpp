@@ -1029,7 +1029,7 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
         _(Infer, {~0u, HIRInferClass::None})
         _(Diverge, {})
         _(Primitive, static_cast<HIRCoreType>(in.readTag()))
-        _(Path, {deserialisePath(), {}, in.readBool() ? box$(deserialiseGenericparams()) : nullptr})
+        _(Path, {deserialisePath(), {}})
         _(Generic, deserialiseGenericref())
         _(TraitObject, {deserialiseTraitpath(), deserialiseVec<HIRGenericPath>()})
         case HIRTypeData::TAG_ErasedType:
@@ -1040,7 +1040,7 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
             _(Borrow, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(Pointer, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(NamedFunction, {deserialisePath()})
-            _(Function, {deserialiseGenericparams(), in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVec<HIRTypeRef>()})
+            _(Function, {in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVec<HIRTypeRef>()})
 #undef _
         default:
             BUG(Span(), "Bad tag for HIR::TypeRef - " << tag);
@@ -1078,12 +1078,11 @@ HIRGenericPath HirDeserialiser::deserialiseGenericpath() {
 
 HIRTraitPath HirDeserialiser::deserialiseTraitpath() {
     auto _ = in.openObject("HIR::TraitPath");
-    auto hrls = in.readBool() ? box$(deserialiseGenericparams()) : std::unique_ptr<HIRGenericParams>();
     auto gpath = deserialiseGenericpath();
     auto tys = deserialiseIstrmap<HIRTraitPath::AtyEqual>();
     auto bounds = deserialiseIstrmap<HIRTraitPath::AtyBound>();
     auto constness = static_cast<HIRBoundConstness>(in.readU8());
-    return HIRTraitPath{std::move(hrls), mv$(gpath), mv$(tys), mv$(bounds), nullptr, constness};
+    return HIRTraitPath{mv$(gpath), mv$(tys), mv$(bounds), nullptr, constness};
 }
 
 HIRPath HirDeserialiser::deserialisePath() {
@@ -1095,14 +1094,9 @@ HIRPath HirDeserialiser::deserialisePath() {
         case 1:
             DEBUG("Inherent");
             return HIRPath(HIRPath::Data::Data_UfcsInherent{deserialiseType(), in.readIstring(), deserialisePathparams(), deserialisePathparams()});
-        case 2:
-        case 3: {
-            std::unique_ptr<HIRGenericParams> hrtbs;
-            if (tag == 3) {
-                hrtbs = std::make_unique<HIRGenericParams>(deserialiseGenericparams());
-            }
+        case 2: {
             DEBUG("Known");
-            return HIRPath(HIRPath::Data::Data_UfcsKnown{deserialiseType(), deserialiseGenericpath(), in.readIstring(), deserialisePathparams(), std::move(hrtbs)});
+            return HIRPath(HIRPath::Data::Data_UfcsKnown{deserialiseType(), deserialiseGenericpath(), in.readIstring(), deserialisePathparams()});
         }
         default:
             BUG(Span(), "Bad tag for HIR::Path - " << tag);
@@ -1135,11 +1129,10 @@ HIRValueParamDef HirDeserialiser::deserialiseValueparamdef() {
 HIRGenericBound HirDeserialiser::deserialiseGenericbound() {
     switch (auto tag = in.readTag()) {
         case 2: {
-            auto hrtbs = in.readBool() ? box$(deserialiseGenericparams()) : nullptr;
             auto type = deserialiseType();
             auto trait = deserialiseTraitpath();
             auto constness = static_cast<HIRBoundConstness>(in.readU8());
-            return HIRGenericBound::make_TraitBound({mv$(hrtbs), mv$(type), mv$(trait), constness});
+            return HIRGenericBound::make_TraitBound({mv$(type), mv$(trait), constness});
         }
         case 3:
             return HIRGenericBound::make_TypeEquality({deserialiseType(), deserialiseType()});
@@ -2653,10 +2646,6 @@ public:
             }
             TU_ARMA(Path, e) {
                 serialisePath(e.path);
-                out.writeBool(e.hrtbs.get() != nullptr);
-                if (e.hrtbs) {
-                    serialiseGenerics(*e.hrtbs);
-                }
             }
             TU_ARMA(Generic, e) {
                 serialise(e);
@@ -2694,7 +2683,6 @@ public:
                 serialisePath(e.path);
             }
             TU_ARMA(Function, e) {
-                serialiseGenerics(e.hrls);
                 out.writeBool(e.isUnsafe);
                 out.writeBool(e.isVariadic);
                 out.writeString(e.mAbi);
@@ -2732,10 +2720,6 @@ public:
 
     void serialiseTraitpath(const HIRTraitPath& path) {
         auto _ = out.openObject("HIR::TraitPath");
-        out.writeBool(static_cast<bool>(path.hrtbs));
-        if (path.hrtbs) {
-            serialiseGenerics(*path.hrtbs);
-        }
         serialiseGenericpath(path.mPath);
         serialiseStrmap(path.typeBounds);
         serialiseStrmap(path.traitBounds);
@@ -2769,12 +2753,7 @@ public:
                 serialisePathparams(e.implParams);
             }
             TU_ARMA(UfcsKnown, e) {
-                if (e.hrtbs) {
-                    out.writeTag(3);
-                    serialiseGenerics(*e.hrtbs);
-                } else {
-                    out.writeTag(2);
-                }
+                out.writeTag(2);
                 serialiseType(e.type);
                 serialiseGenericpath(e.trait);
                 out.writeString(e.item);
@@ -2811,10 +2790,6 @@ public:
             TU_MATCH_HDRA( (b), {)
             TU_ARMA(TraitBound, e) {
                 out.writeTag(2);
-                out.writeBool(static_cast<bool>(e.hrtbs));
-                if (e.hrtbs) {
-                    serialiseGenerics(*e.hrtbs);
-                }
                 serialiseType(e.type);
                 serialiseTraitpath(e.trait);
                 out.writeU8(static_cast<uint8_t>(e.constness));

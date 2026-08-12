@@ -32,7 +32,6 @@ TAGGED_UNION_EX(
     TypeEquality,
     ((TraitBound,
       struct {
-          ::std::unique_ptr<HIRGenericParams> hrtbs;
           HIRTypeRef type;
           HIRTraitPath trait;
           HIRBoundConstness constness = HIRBoundConstness::Never;

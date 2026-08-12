@@ -453,15 +453,13 @@ namespace {
                         }
                         TU_ARMA(NodeType, sE) {
                             if (const auto* const* snPp = sE.opt_Closure()) {
-                                auto pp = HIRPathParams();
-                                auto ms = MonomorphHrlsOnly(context.crate.types, pp);
                                 // Valid cast here, downstream code will check if its a non-capturing closure
                                 if ((*snPp)->mArgs.size() != e.argTypes.size()) {
                                     bad_cast(sp, srcTy, tgtTy, "fcn nargs");
                                 }
-                                this->context.equateTypes(sp, ms.monomorphType(sp, e.mRettype), (*snPp)->returnType);
+                                this->context.equateTypes(sp, e.mRettype, (*snPp)->returnType);
                                 for (size_t i = 0; i < e.argTypes.size(); i++) {
-                                    this->context.equateTypes(sp, ms.monomorphType(sp, e.argTypes[i]), (*snPp)->mArgs[i].second);
+                                    this->context.equateTypes(sp, e.argTypes[i], (*snPp)->mArgs[i].second);
                                 }
                                 this->completed = true;
                             } else {
@@ -759,18 +757,15 @@ namespace {
                         tmpFt = this->context.mResolve.expandAssociatedTypes(node.span(), tmpFt);
                         e = &tmpFt->as_Function();
                     }
-                    auto hrls = HIRPathParams();
-                    DEBUG("hrls=" << hrls);
-                    auto m = MonomorphHrlsOnly(context.crate.types, hrls);
                     for (const auto& arg : e->argTypes) {
-                        node.argTypes.push_back(m.monomorphType(node.span(), arg));
+                        node.argTypes.push_back(arg);
                     }
                     if (e->isVariadic) {
                         for (size_t i = e->argTypes.size(); i < node.mArgs.size(); i++) {
                             node.argTypes.push_back(node.argIvars[i]);
                         }
                     }
-                    node.argTypes.push_back(m.monomorphType(node.span(), e->mRettype));
+                    node.argTypes.push_back(e->mRettype);
                     node.traitUsed = HIRExprNodeCallValue::TraitUsed::Fn;
                 } else if (ty->is_Infer()) {
                     // No idea yet
@@ -803,7 +798,6 @@ namespace {
                         if (!tup->is_Tuple()) {
                             ERROR(node.span(), E0000, "FnOnce expects a tuple argument, got " << tup);
                         }
-                        MonomorphHrlsOnly(context.crate.types, HIRPathParams()).monomorphType(node.span(), tup);
                         fcnArgsTup = mv$(tup);
 
                         fcnRet = impl.getType(context.crate.types, "Output", {});
@@ -1573,7 +1567,6 @@ namespace {
         void checkTypeResolvedTop(const Span& sp, HIRTypeRef& ty) const {
             checkTypeResolved(sp, ty, ty);
             ty = this->context.mResolve.expandAssociatedTypes(sp, mv$(ty));
-            MonomorphHrlsOnly(context.crate.types, HIRPathParams()).monomorphType(sp, ty);
             DEBUG(ty);
         }
 
@@ -1923,8 +1916,6 @@ void Context::equateTypes(const Span& sp, const HIRTypeData* li, const HIRTypeDa
     const auto& rT = this->mResolve.expandAssociatedTypes(sp, this->ivars.getType(ri), rTmp);
 
     // Strip HRLs, just in case
-    MonomorphHrlsOnly(crate.types, HIRPathParams()).monomorphType(sp, lT);
-    MonomorphHrlsOnly(crate.types, HIRPathParams()).monomorphType(sp, rT);
 
     if (lT->is_Diverge() && !rT->is_Infer()) {
         return;
@@ -4572,13 +4563,11 @@ namespace {
                 if (trait.mPath != HIRSimplePath()) {
                     // Just call equate_types_assoc to add the required bounds.
                     if (contextMut) {
-                        auto pp = HIRPathParams();
-                        MonomorphHrlsOnly ms(context.crate.types, pp);
                         for (const auto& tyb : dep->mTrait.typeBounds) {
-                            contextMut->equateTypesAssoc(sp, tyb.second.type, trait.mPath, ms.monomorphPathParams(sp, trait.mParams, true), src, tyb.first.c_str(), tyb.second.atyParams, false);
+                            contextMut->equateTypesAssoc(sp, tyb.second.type, trait.mPath, trait.mParams.clone(), src, tyb.first.c_str(), tyb.second.atyParams, false);
                         }
                         if (dep->mTrait.typeBounds.empty()) {
-                            contextMut->addTraitBound(sp, src, trait.mPath, ms.monomorphPathParams(sp, trait.mParams, true));
+                            contextMut->addTraitBound(sp, src, trait.mPath, trait.mParams.clone());
                         }
                     } else {
                         // Check that the trait is implemented (so this only returns `Unsize` if the rule would be valid - use for check_ivar_poss)
@@ -5265,12 +5254,10 @@ namespace {
                         ERROR(span, E0000, "Mismatched argument count coercing closure to fn(...)");
                     }
                     if (contextMut) {
-                        auto pp = HIRPathParams();
-                        MonomorphHrlsOnly ms(context.crate.types, pp);
                         for (size_t i = 0; i < de.argTypes.size(); i++) {
-                            contextMut->equateTypes(sp, ms.monomorphType(sp, de.argTypes[i]), nodeP->mArgs[i].second);
+                            contextMut->equateTypes(sp, de.argTypes[i], nodeP->mArgs[i].second);
                         }
-                        contextMut->equateTypes(sp, ms.monomorphType(sp, de.mRettype), nodeP->returnType);
+                        contextMut->equateTypes(sp, de.mRettype, nodeP->returnType);
                         nodePtr = NEWNODE(dst, span, Cast, mv$(nodePtr), dst);
                     }
                 }
@@ -5313,14 +5300,10 @@ namespace {
                     auto& nodePtr = *nodePtrPtr;
                     auto span = nodePtr->span();
 
-                    auto sPp = HIRPathParams();
-                    MonomorphHrlsOnly sMs(context.crate.types, sPp);
-                    auto dPp = HIRPathParams();
-                    MonomorphHrlsOnly dMs(context.crate.types, dPp);
                     for (size_t i = 0; i < de->argTypes.size(); i++) {
-                        contextMut->equateTypes(sp, dMs.monomorphType(span, de->argTypes[i]), sMs.monomorphType(span, se->argTypes[i]));
+                        contextMut->equateTypes(sp, de->argTypes[i], se->argTypes[i]);
                     }
-                    contextMut->equateTypes(sp, dMs.monomorphType(span, de->mRettype), sMs.monomorphType(span, se->mRettype));
+                    contextMut->equateTypes(sp, de->mRettype, se->mRettype);
                     nodePtr = NEWNODE(dst, span, Cast, mv$(nodePtr), dst);
                 }
                 return CoerceResult::Custom;
@@ -5354,14 +5337,10 @@ namespace {
                     return CoerceResult::Equality;
                 }
                 if (contextMut) {
-                    auto sPp = HIRPathParams();
-                    MonomorphHrlsOnly sMs(context.crate.types, sPp);
-                    auto dPp = HIRPathParams();
-                    MonomorphHrlsOnly dMs(context.crate.types, dPp);
                     for (size_t i = 0; i < de->argTypes.size(); i++) {
-                        contextMut->equateTypes(sp, dMs.monomorphType(span, de->argTypes[i]), sMs.monomorphType(span, se->argTypes[i]));
+                        contextMut->equateTypes(sp, de->argTypes[i], se->argTypes[i]);
                     }
-                    contextMut->equateTypes(sp, dMs.monomorphType(span, de->mRettype), sMs.monomorphType(span, se->mRettype));
+                    contextMut->equateTypes(sp, de->mRettype, se->mRettype);
                     nodePtr = NEWNODE(dst, span, Cast, mv$(nodePtr), dst);
                 }
                 return CoerceResult::Custom;
@@ -5440,28 +5419,15 @@ namespace {
                 TU_ARMA(TraitBound, be) {
                     DEBUG("New bound (pre-mono) " << bound);
                     auto ms = implRef.getCbMonomorphTraitimpl(context.crate.types, sp, {});
-                    static const HIRGenericParams emptyParams;
-                    bool outerPresent = be.hrtbs && !be.hrtbs->isEmpty();
-                    auto _ = ms.pushHrb(outerPresent ? *be.hrtbs : emptyParams);
                     auto bTyMono = ms.monomorphType(sp, be.type);
                     auto bTpMono = ms.monomorphTraitpath(sp, be.trait, true);
                     DEBUG("- " << bTyMono << " : " << bTpMono);
-                    ASSERT_BUG(sp, !outerPresent || !static_cast<bool>(bTpMono.hrtbs), "Two layers of HRTBs not allowed (should have been disallowed in HIR lower)");
-                    auto ppHrl = outerPresent ? HIRPathParams() : (HIRPathParams());
-                    if (outerPresent) {
-                        DEBUG("be.hrtbs = " << be.hrtbs->fmtArgs());
-                    }
-                    if (bTpMono.hrtbs) {
-                        DEBUG("b_tp_mono.m_hrtbs = " << bTpMono.hrtbs->fmtArgs());
-                    }
-                    DEBUG("pp_hrl = " << ppHrl);
-                    auto msHrl = MonomorphHrlsOnly(context.crate.types, ppHrl);
                     if (bTpMono.typeBounds.size() > 0) {
                         for (const auto& atyBound : bTpMono.typeBounds) {
-                            context.equateTypesAssoc(sp, atyBound.second.type, bTpMono.mPath.mPath, msHrl.monomorphPathParams(sp, bTpMono.mPath.mParams, true), msHrl.monomorphType(sp, bTyMono, true), atyBound.first.c_str(), atyBound.second.atyParams, false);
+                            context.equateTypesAssoc(sp, atyBound.second.type, bTpMono.mPath.mPath, bTpMono.mPath.mParams.clone(), bTyMono, atyBound.first.c_str(), atyBound.second.atyParams, false);
                         }
                     } else {
-                        context.addTraitBound(sp, msHrl.monomorphType(sp, bTyMono, true), bTpMono.mPath.mPath, msHrl.monomorphPathParams(sp, bTpMono.mPath.mParams, true));
+                        context.addTraitBound(sp, bTyMono, bTpMono.mPath.mPath, bTpMono.mPath.mParams.clone());
                     }
                 }
         }
@@ -7898,7 +7864,7 @@ namespace {
                 if (const auto* te = (possibleTys[0].ty)->opt_NamedFunction()) {
                     newTy = context.crate.types.function(te->decay(context.crate.types, sp));
                 } else if (const auto* t1Nodep = TU_OPT1(*possibleTys[0].ty, NodeType, .opt_Closure())) {
-                    auto ft = HIRTypeDataFunctionPointer{HIRGenericParams(), false, false, RcString::newInterned(ABI_RUST), (*t1Nodep)->returnType, {}};
+                    auto ft = HIRTypeDataFunctionPointer{false, false, RcString::newInterned(ABI_RUST), (*t1Nodep)->returnType, {}};
                     for (const auto& t : (*t1Nodep)->mArgs) {
                         ft.argTypes.push_back(t.second);
                     }
@@ -8675,22 +8641,22 @@ void fixParamCount(const Span& sp, Context& context, const HIRTypeData* selfTy, 
     fix_param_count_(sp, context, selfTy, useDefaults, path, paramDefs, params);
 }
 
-void applyBoundsAsRulesTrait(Context& context, const Span& sp, const HIRTypeData* realType, const HIRTraitPath& traitPath, const MonomorphHrlsOnly& msHrl) {
+void applyBoundsAsRulesTrait(Context& context, const Span& sp, const HIRTypeData* realType, const HIRTraitPath& traitPath) {
     // If there's no type bounds, emit a trait bound
     // - Otherwise, the assocated type bounds will serve the same purpose
     if (traitPath.typeBounds.size() == 0) {
-        context.addTraitBound(sp, realType, traitPath.mPath.mPath, msHrl.monomorphPathParams(sp, traitPath.mPath.mParams, true));
+        context.addTraitBound(sp, realType, traitPath.mPath.mPath, traitPath.mPath.mParams.clone());
     }
 
     // Associated type equalities
     for (const auto& assoc : traitPath.typeBounds) {
-        context.equateTypesAssoc(sp, msHrl.monomorphType(sp, assoc.second.type, true), assoc.second.sourceTrait.mPath, msHrl.monomorphPathParams(sp, assoc.second.sourceTrait.mParams, true), realType, assoc.first.c_str(), msHrl.monomorphPathParams(sp, assoc.second.atyParams, true), false);
+        context.equateTypesAssoc(sp, assoc.second.type, assoc.second.sourceTrait.mPath, assoc.second.sourceTrait.mParams.clone(), realType, assoc.first.c_str(), assoc.second.atyParams.clone(), false);
     }
     // Associated type trait bounds:
     for (const auto& assoc : traitPath.traitBounds) {
         auto atyTy = context.crate.types.path(HIRPath(realType, assoc.second.sourceTrait.clone(), assoc.first, assoc.second.atyParams.clone()), {});
         for (const auto& tr : assoc.second.traits) {
-            applyBoundsAsRulesTrait(context, sp, atyTy, tr, msHrl);
+            applyBoundsAsRulesTrait(context, sp, atyTy, tr);
         }
     }
 }
@@ -8700,20 +8666,11 @@ void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams
     for (const auto& bound : paramsDef.bounds) {
             TU_MATCH_HDRA( (bound), {)
             TU_ARMA(TraitBound, be) {
-                static const HIRGenericParams emptyHrtb;
-                const auto& outerHrtb = be.hrtbs ? *be.hrtbs : emptyHrtb;
-                DEBUG("Bound for" << outerHrtb.fmtArgs() << " " << be.type << ":  " << be.trait);
-                ASSERT_BUG(sp, int(!outerHrtb.isEmpty()) + int(!(be.trait.hrtbs ? *be.trait.hrtbs : emptyHrtb).isEmpty()) < 2, "Unexpected nested HRTBs: for" << outerHrtb.fmtArgs() << " " << be.type << ":  " << be.trait);
-
-                auto _ = ms.pushHrb(outerHrtb);
+                DEBUG("Bound " << be.type << ":  " << be.trait);
                 auto realType = ms.monomorphType(sp, be.type);
                 auto realTrait = ms.monomorphTraitpath(sp, be.trait, false);
                 DEBUG("= (" << realType << ": " << realTrait << ")");
-                // Replace any HRLs with unbound/empty lifetimes
-                auto ppHrl = (realTrait.hrtbs && !realTrait.hrtbs->isEmpty()) ? HIRPathParams() : HIRPathParams();
-                DEBUG("outer_hrb = " << outerHrtb.fmtArgs() << ", pp_hrl = " << ppHrl);
-                auto msHrl = MonomorphHrlsOnly(context.crate.types, ppHrl);
-                applyBoundsAsRulesTrait(context, sp, realType, realTrait, msHrl);
+                applyBoundsAsRulesTrait(context, sp, realType, realTrait);
             }
             TU_ARMA(TypeEquality, be) {
                 auto realTypeLeft = context.mResolve.expandAssociatedTypes(sp, ms.monomorphType(sp, be.type));
@@ -8739,7 +8696,6 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
 
     const HIRFunction* fcnPtr = nullptr;
 
-    MonomorphHrlsOnly(context.crate.types, HIRPathParams()).monomorphPath(sp, path);
 
     struct Monomorph: public Monomorphiser {
         Context& context;

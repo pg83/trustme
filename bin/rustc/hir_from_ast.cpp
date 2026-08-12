@@ -29,7 +29,6 @@ HIRValueItem LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attrs, const 
 HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc);
 HIRConstGeneric LowerHIRConstGeneric(const ASTExprNode& nodeRef);
 HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool allowBounds = false, ASTBoundConstness constness = ASTBoundConstness::Never);
-HIRGenericParams LowerHIRHigherRankedBounds(const ASTHigherRankedBounds& hrbs);
 
 HIRSimplePath pathSized;
 HIRSimplePath pathPointeeSized;
@@ -54,14 +53,6 @@ namespace {
 }
 
 // --------------------------------------------------------------------
-HIRLifetimeRef LowerHIRLifetimeRef(const ASTLifetimeRef& r) {
-    assert(r.binding() >= 0xFFF0 || r.binding() < 1024);
-    return HIRLifetimeRef(
-        // TODO: names?
-        r.binding()
-    );
-}
-
 HIRPublicity LowerHIRVis(const HIRSimplePath& modPath, const ASTVisibility& vis) {
     if (vis.isGlobal()) {
         return HIRPublicity::newGlobal();
@@ -125,21 +116,14 @@ HIRGenericParams LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsS
                     }
                 }
 
-                rv.bounds.push_back(HIRGenericBound::make_TraitBound({box$(LowerHIRHigherRankedBounds(e.outerHrbs)), type, mv$(boundTraitPath), LowerHIRBoundConstness(e.constness)}));
+                rv.bounds.push_back(HIRGenericBound::make_TraitBound({type, mv$(boundTraitPath), LowerHIRBoundConstness(e.constness)}));
 
                 for (auto& bound : tpBounds) {
                     const auto& name = bound.first;
                     const auto& srcTrait = bound.second.sourceTrait;
                     const auto& params = bound.second.atyParams;
                     for (auto& trait : bound.second.traits) {
-                        std::unique_ptr<HIRGenericParams> hrls;
-                        if (!e.outerHrbs.empty()) {
-                            hrls = box$(LowerHIRHigherRankedBounds(e.outerHrbs));
-                        }
-                        if (!e.innerHrbs.empty()) {
-                            hrls = box$(LowerHIRHigherRankedBounds(e.innerHrbs));
-                        }
-                        rv.bounds.push_back(HIRGenericBound::make_TraitBound({std::move(hrls), gCratePtr->types.path(HIRPath(type, srcTrait.clone(), name, params.clone()), {}), std::move(trait)}));
+                        rv.bounds.push_back(HIRGenericBound::make_TraitBound({gCratePtr->types.path(HIRPath(type, srcTrait.clone(), name, params.clone()), {}), std::move(trait)}));
                     }
                     bound.second.traits.clear();
                 }
@@ -585,30 +569,15 @@ HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTP
     }
 }
 
-HIRGenericParams LowerHIRHigherRankedBounds(const ASTHigherRankedBounds& hrbs) {
-    return HIRGenericParams();
-}
-
 HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool ignoreBounds /*=false*/, ASTBoundConstness constness /*=Never*/) {
     DEBUG(hrbs << " " << path);
     HIRTraitPath rv{
-        hrbs.empty() ? nullptr : box$(LowerHIRHigherRankedBounds(hrbs)), // m_hrtbs
         LowerHIRGenericPath(sp, path, FromASTPathClass::Type, /*allow_assoc=*/true),
         {},
         {},
         nullptr,
         LowerHIRBoundConstness(constness)
     };
-    // Parenthesised Fn-trait syntax follows function lifetime-elision rules.
-    if (!rv.hrtbs && path.nodes().back().args().isParen) {
-        HIRGenericParams params;
-        rv.hrtbs = box$(params);
-    }
-    if (rv.hrtbs) {
-        DEBUG("HRLS = " << rv.hrtbs->fmtArgs());
-    } else {
-        DEBUG("No HRLS");
-    }
 
     struct H {
         static HIRGenericPath findSourceTraitHir(const Span& sp, const HIRGenericPath& path, const HIRTrait& trait, const RcString& name, const Monomorphiser& ms) {
@@ -708,7 +677,6 @@ HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHig
     };
 
     for (const auto& e : path.nodes().back().args().entries) {
-        ThinVector<HIRLifetimeRef> lfts;
         TU_MATCH_HDRA( (e), {)
         TU_ARMA(Null, _) {
             }
@@ -1110,12 +1078,11 @@ HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
             return gCratePtr->types.intern(HIRTypeData::make_ErasedType({isSized, mv$(traits), mv$(inner), e->use ? LowerHIRPathParams(ty.span(), *e->use, false) : HIRPathParams(), e->use ? HIRTypeDataErasedType::Use::Present : (e->isEdition2024OrLater ? HIRTypeDataErasedType::Use::Omitted2024 : HIRTypeDataErasedType::Use::OmittedOld)}));
         }
         TU_ARMA(Function, e) {
-            HIRGenericParams params;
             ::std::vector<HIRTypeRef> args;
             for (const auto& arg : e.info.argTypes) {
                 args.push_back(LowerHIRType(arg));
             }
-            HIRTypeDataFunctionPointer f{mv$(params), e.info.isUnsafe, e.info.isVariadic, RcString::newInterned(e.info.mAbi), LowerHIRType(*e.info.mRettype), mv$(args)};
+            HIRTypeDataFunctionPointer f{e.info.isUnsafe, e.info.isVariadic, RcString::newInterned(e.info.mAbi), LowerHIRType(*e.info.mRettype), mv$(args)};
             if (f.mAbi == "") {
                 f.mAbi = RcString::newInterned(ABI_RUST);
             }
@@ -1515,7 +1482,7 @@ HIRTrait LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, const ASTAttr
     {
         auto thisTrait = HIRGenericPath(traitPath);
         thisTrait.mParams = rv.mParams.makeNopParams(gCratePtr->types, 0);
-        rv.mParams.bounds.push_back(HIRGenericBound::make_TraitBound({{}, gCratePtr->types.self(), {{}, mv$(thisTrait)}}));
+        rv.mParams.bounds.push_back(HIRGenericBound::make_TraitBound({gCratePtr->types.self(), HIRTraitPath(mv$(thisTrait))}));
     }
 
     for (const auto& item : f.items()) {

@@ -130,10 +130,10 @@ HIRPathParams ImplRef::getTraitParams(HIRTypeInterner& types) const {
             return this->getCbMonomorphTraitimpl(types, sp, {}).monomorphPathParams(sp, e.impl->traitArgs, true);
         }
         TU_ARMA(BoundedPtr, e) {
-            return MonomorphHrlsOnly(types, e.hrls).monomorphPathParams(sp, *e.traitArgs, true);
+            return e.traitArgs->clone();
         }
         TU_ARMA(Bounded, e) {
-            return MonomorphHrlsOnly(types, e.hrls).monomorphPathParams(sp, e.traitArgs, true);
+            return e.traitArgs.clone();
         }
     }
     throw "";
@@ -155,13 +155,13 @@ HIRTypeRef ImplRef::getTraitTyParam(HIRTypeInterner& types, unsigned int idx) co
             if (idx >= e.traitArgs->types.size()) {
                 return HIRTypeRef();
             }
-            return MonomorphHrlsOnly(types, e.hrls).monomorphType(sp, e.traitArgs->types.at(idx), true);
+            return e.traitArgs->types.at(idx);
         }
         TU_ARMA(Bounded, e) {
             if (idx >= e.traitArgs.types.size()) {
                 return HIRTypeRef();
             }
-            return MonomorphHrlsOnly(types, e.hrls).monomorphType(sp, e.traitArgs.types.at(idx), true);
+            return e.traitArgs.types.at(idx);
         }
     }
     throw "";
@@ -194,7 +194,7 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
                 return HIRTypeRef();
             }
             ASSERT_BUG(Span(), !params.hasParams(), "TODO: BoundedPtr ATY with params?");
-            return MonomorphHrlsOnly(types, e.hrls).monomorphType(sp, it->second.type, true);
+            return it->second.type;
         }
         TU_ARMA(Bounded, e) {
             auto it = e.assoc.find(name);
@@ -202,7 +202,7 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
                 return HIRTypeRef();
             }
             ASSERT_BUG(Span(), !params.hasParams(), "TODO: Bounded ATY with params?");
-            return MonomorphHrlsOnly(types, e.hrls).monomorphType(sp, it->second.type, true);
+            return it->second.type;
         }
     }
     return HIRTypeRef();
@@ -249,10 +249,10 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
             assert(e.type);
             assert(e.traitArgs);
             assert(e.assoc);
-            os << "bound (ptr) for" << e.hrls << " " << e.type << " : ?" << *e.traitArgs << " + {" << *e.assoc << "}";
+            os << "bound (ptr) " << e.type << " : ?" << *e.traitArgs << " + {" << *e.assoc << "}";
         }
         TU_ARM(x.mData, Bounded, e) {
-            os << "bound for" << e.hrls << " " << e.type << " : ?" << e.traitArgs << " + {" << e.assoc << "}";
+            os << "bound " << e.type << " : ?" << e.traitArgs << " + {" << e.assoc << "}";
         }
     }
     return os;
@@ -269,22 +269,12 @@ ImplRef::ImplRef(HIRPathParams implParams, const HIRTrait& traitRef, const HIRSi
 }
 
 ImplRef::ImplRef(const HIRTypeData* type, const HIRPathParams* args, const HIRTraitPath::assocListT* assoc, HIRBoundConstness constness)
-    : mData(Data::make_BoundedPtr({HIRPathParams(), type, args, assoc, constness}))
-{
-}
-
-ImplRef::ImplRef(HIRPathParams hrls, const HIRTypeData* type, const HIRPathParams* args, const HIRTraitPath::assocListT* assoc, HIRBoundConstness constness)
-    : mData(Data::make_BoundedPtr({std::move(hrls), type, args, assoc, constness}))
+    : mData(Data::make_BoundedPtr({type, args, assoc, constness}))
 {
 }
 
 ImplRef::ImplRef(HIRTypeRef type, HIRPathParams args, HIRTraitPath::assocListT assoc, HIRBoundConstness constness)
-    : mData(Data::make_Bounded({HIRPathParams(), mv$(type), mv$(args), mv$(assoc), constness}))
-{
-}
-
-ImplRef::ImplRef(HIRPathParams hrls, HIRTypeRef type, HIRPathParams args, HIRTraitPath::assocListT assoc, HIRBoundConstness constness)
-    : mData(Data::make_Bounded({mv$(hrls), mv$(type), mv$(args), mv$(assoc), constness}))
+    : mData(Data::make_Bounded({mv$(type), mv$(args), mv$(assoc), constness}))
 {
 }
 

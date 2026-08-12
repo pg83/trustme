@@ -73,24 +73,24 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
     if (!dontHandoffToSpecialised) {
         if (traitPath == mLangCopy) {
             if (this->typeIsCopy(sp, type)) {
-                return foundCb(ImplRef(HIRPathParams(), type, &nullParams, &nullAssoc), false);
+                return foundCb(ImplRef(type, &nullParams, &nullAssoc), false);
             }
         } else if (traitPath == mLangClone) {
             // NOTE: Duplicated check for enumerate
             if (type->is_Tuple() || type->is_Array() || type->is_Function() || type->is_NodeType() || type->is_NamedFunction() || TU_TEST1(*type, Path, .isClosure())) {
                 if (this->typeIsClone(sp, type)) {
-                    return foundCb(ImplRef(HIRPathParams(), type, &nullParams, &nullAssoc), false);
+                    return foundCb(ImplRef(type, &nullParams, &nullAssoc), false);
                 }
             }
         } else if (traitPath == mLangSized) {
             if (this->typeIsSized(sp, type)) {
-                return foundCb(ImplRef(HIRPathParams(), type, &nullParams, &nullAssoc), false);
+                return foundCb(ImplRef(type, &nullParams, &nullAssoc), false);
             }
         } else if (traitPath == mLangUnsize) {
             ASSERT_BUG(sp, traitParams, "TODO: Support no params for Unsize");
             const auto& dstTy = traitParams->types.at(0);
             if (this->canUnsize(sp, dstTy, type)) {
-                return foundCb(ImplRef(HIRPathParams(), type, traitParams, &nullAssoc), false);
+                return foundCb(ImplRef(type, traitParams, &nullAssoc), false);
             }
         } else if (traitPath == mLangDiscriminantKind) {
             // If the type is generic, then don't populate the ATY
@@ -98,7 +98,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             // - Unit for non-enums
             // - Enum type (usize probably) for enums
             if (type->is_Generic() || (type->is_Path() && type->as_Path().binding.is_Opaque())) {
-                return foundCb(ImplRef(HIRPathParams(), type, traitParams, &nullAssoc), false);
+                return foundCb(ImplRef(type, traitParams, &nullAssoc), false);
             } else if (type->is_Path()) {
                 if (const auto* enmpp = type->as_Path().binding.opt_Enum()) {
                     const auto& enm = **enmpp;
@@ -114,7 +114,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             if (assocU8.empty()) {
                 assocU8.insert(std::make_pair(RcString::newInterned("Discriminant"), HIRTraitPath::AtyEqual{mLangDiscriminantKind, {}, crate.types.primitive(HIRCoreType::U8)}));
             }
-            return foundCb(ImplRef(HIRPathParams(), type, traitParams, &assocU8), false);
+            return foundCb(ImplRef(type, traitParams, &assocU8), false);
         } else if (traitPath == mLangPointee) {
             static HIRTraitPath::assocListT assocUnit;
             static HIRTraitPath::assocListT assocSlice;
@@ -129,10 +129,10 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             if (type->is_Generic() || (type->is_Path() && type->as_Path().binding.is_Opaque())) {
                 // If the type is `Sized` return `()` as the type
                 if (typeIsSized(sp, type)) {
-                    return foundCb(ImplRef(HIRPathParams(), type, traitParams, &assocUnit), false);
+                    return foundCb(ImplRef(type, traitParams, &assocUnit), false);
                 } else {
                     // Return unbounded
-                    return foundCb(ImplRef(HIRPathParams(), type, traitParams, &nullAssoc), false);
+                    return foundCb(ImplRef(type, traitParams, &nullAssoc), false);
                 }
             }
             // Trait object: `Metadata=DynMetadata<T>`
@@ -143,14 +143,14 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             }
             // Slice and str
             else if (type->is_Slice() || TU_TEST1(*type, Primitive, == HIRCoreType::Str)) {
-                return foundCb(ImplRef(HIRPathParams(), type, traitParams, &assocSlice), false);
+                return foundCb(ImplRef(type, traitParams, &assocSlice), false);
             }
             // Structs: Can delegate their metadata
             else if (type->is_Path() && type->as_Path().binding.is_Struct()) {
                 const auto& str = *type->as_Path().binding.as_Struct();
                 switch (str.structMarkings.dstType) {
                     case HIRStructMarkings::DstType::None:
-                        return foundCb(ImplRef(HIRPathParams(), type, traitParams, &assocUnit), false);
+                        return foundCb(ImplRef(type, traitParams, &assocUnit), false);
                     case HIRStructMarkings::DstType::Possible:
                     case HIRStructMarkings::DstType::TraitObject: {
                         const HIRTypeData* tailTpl = nullptr;
@@ -237,7 +237,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
     };
 
     if (type != HIRTypeRef() && H::getRootTy(type) == HIRTypeRef()) {
-        return foundCb(ImplRef(HIRPathParams(), type, traitParams, &nullAssoc), false);
+        return foundCb(ImplRef(type, traitParams, &nullAssoc), false);
     }
 
     // --- MAGIC IMPLS ---
@@ -271,7 +271,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 params.types.push_back(crate.types.tuple(std::move(argTypes)));
                 HIRTraitPath::assocListT assoc;
                 assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, params.clone()), {}, e.mRettype}));
-                                return foundCb(ImplRef(HIRPathParams(), type, mv$(params), mv$(assoc)), false);
+                                return foundCb(ImplRef(type, mv$(params), mv$(assoc)), false);
             }
             // 1.74: Magic impls of `eq` for function pointers
             if (traitPath == this->crate.getLangItemPathOpt("fn_ptr_trait")) {
@@ -300,7 +300,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 params.types.push_back(crate.types.tuple(std::move(argTypes)));
                 HIRTraitPath::assocListT assoc;
                 assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, params.clone()), {}, e.mRettype}));
-                                return foundCb(ImplRef(HIRPathParams(), type, mv$(params), mv$(assoc)), false);
+                                return foundCb(ImplRef(type, mv$(params), mv$(assoc)), false);
             }
         }
         TU_ARMA(NodeType, e) {
@@ -367,7 +367,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
         TU_ARMA(TraitObject, e) {
             if (traitPath == e.mTrait.mPath.mPath) {
                 if (H::checkParams(sp, e.mTrait.mPath.mParams, traitParams)) {
-                                        return foundCb(ImplRef(HIRPathParams(), type, &e.mTrait.mPath.mParams, &e.mTrait.typeBounds, e.mTrait.constness), false);
+                                        return foundCb(ImplRef(type, &e.mTrait.mPath.mParams, &e.mTrait.typeBounds, e.mTrait.constness), false);
                 }
             }
             // Markers too
@@ -394,7 +394,6 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 }
 
                 ImplRef ir{
-                    HIRPathParams(), // HRLs already handled
                     type,
                     iParams.clone(),
                     std::move(assocClone)
@@ -422,7 +421,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                     for (const auto& e2 : trait.typeBounds) {
                         assocClone.insert(::std::make_pair(e2.first, e2.second.clone()));
                     }
-                                        auto ir = ImplRef(HIRPathParams(), type, iParams.clone(), mv$(assocClone));
+                                        auto ir = ImplRef(type, iParams.clone(), mv$(assocClone));
                     DEBUG("[ErasedType] - ir = " << ir);
                     rv = foundCb(mv$(ir), false);
                     return true;
@@ -472,12 +471,12 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                                         atys.insert(::std::make_pair(tb.first, HIRTraitPath::AtyEqual{mv$(src), {}, mv$(aty)}));
                                     }
                                 }
-                                if (foundCb(ImplRef(HIRPathParams(), type, mv$(paramsMonoO), mv$(atys), bound.constness), false)) {
+                                if (foundCb(ImplRef(type, mv$(paramsMonoO), mv$(atys), bound.constness), false)) {
                                     return true;
                                 }
                                 paramsMonoO = monomorphCb.monomorphPathParams(sp, bParams, false);
                             } else {
-                                if (foundCb(ImplRef(HIRPathParams(), type, &bound.mPath.mParams, &bound.typeBounds, bound.constness), false)) {
+                                if (foundCb(ImplRef(type, &bound.mPath.mParams, &bound.typeBounds, bound.constness), false)) {
                                     return true;
                                 }
                             }
@@ -725,7 +724,7 @@ bool StaticTraitResolve::findImplBounds(const Span& sp, const HIRSimplePath& tra
         } else if (bType != type && !bType->equalsIgnoringRegions(type)) {
             continue;
         }
-        DEBUG(bType << ": " << "for" << it->second.hrbs.fmtArgs() << " " << traitPath << bParams);
+        DEBUG(bType << ": " << traitPath << bParams);
         // Check against `params`
         if (traitParams) {
             if (!H::comparePp(sp, *traitParams, bParams)) {
@@ -733,7 +732,7 @@ bool StaticTraitResolve::findImplBounds(const Span& sp, const HIRSimplePath& tra
             }
         }
         // Hand off to the closure, and return true if it does
-                if (foundCb(ImplRef(HIRPathParams(), bType, &bParams, &it->second.assoc, it->second.constness), false)) {
+                if (foundCb(ImplRef(bType, &bParams, &it->second.assoc, it->second.constness), false)) {
             return true;
         }
     }
@@ -765,7 +764,7 @@ bool StaticTraitResolve::findImplBounds(const Span& sp, const HIRSimplePath& tra
                         }
                         DEBUG("- tp_mono = " << tpMono);
                         // TODO: Instead of using `type` here, build the real type
-                                                if (foundCb(ImplRef(HIRPathParams(), type, mv$(tpMono.mPath.mParams), mv$(tpMono.typeBounds), tpMono.constness), false)) {
+                                                if (foundCb(ImplRef(type, mv$(tpMono.mPath.mParams), mv$(tpMono.typeBounds), tpMono.constness), false)) {
                             return true;
                         }
                     }

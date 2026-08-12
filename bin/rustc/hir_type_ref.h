@@ -12,7 +12,6 @@ using HIRTypeRef = const HIRTypeData*;
 class HIRTypeInterner;
 
 struct HIRGenericRef;
-struct HIRLifetimeRef;
 struct HIRSimplePath;
 class HIRPath;
 class HIRConstGeneric;
@@ -43,33 +42,8 @@ class HIRResolvePlaceholdersNop: public HIRResolvePlaceholders {
 
 using tCbResolveType = const HIRResolvePlaceholders&;
 
-class HIRTrackHrbStack {
-    mutable std::vector<const HIRGenericParams*> hrbStack;
 
-public:
-    class PopOnDrop {
-        friend class HIRTrackHrbStack;
-        std::vector<const HIRGenericParams*>* v;
-
-        PopOnDrop();
-        explicit PopOnDrop(std::vector<const HIRGenericParams*>& v);
-
-    public:
-        ~PopOnDrop();
-
-        PopOnDrop(const PopOnDrop&) = delete;
-        PopOnDrop(PopOnDrop&& x);
-    };
-
-    PopOnDrop pushHrb(const std::unique_ptr<HIRGenericParams>& params) const;
-    PopOnDrop pushHrb(const HIRGenericParams& params) const;
-
-    const HIRGenericParams* hasHrb() const {
-        return hrbStack.empty() ? nullptr : hrbStack.back();
-    }
-};
-
-class HIRMatchGenerics: virtual public HIRTrackHrbStack {
+class HIRMatchGenerics {
 public:
     HIRCompare cmpPath(const Span& sp, const HIRPath& tyL, const HIRPath& tyR, tCbResolveType resolveCb);
     virtual HIRCompare cmpType(const Span& sp, const HIRTypeData* tyL, const HIRTypeData* tyR, tCbResolveType resolveCb);
