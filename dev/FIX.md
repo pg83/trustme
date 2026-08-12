@@ -1,95 +1,85 @@
-# План исправлений
+# Full-gate failure triage and fix priorities
 
-В этом файле остаётся только незакрытая функциональная работа. История исправлений находится в git.
+Snapshot: 2026-08-12, commit 4bb1e6a5c, full gate `./build -j 24 -k test`
+(~14 500 tests). 999 failing cases, all verified pre-existing relative to the
+lifetime-erasure refactor (the identical gate on pre-erasure 526848ea8 fails
+the same set; the erasure itself cost 12 tests, all fixed/re-baselined).
 
-## Gate и приоритизация
+Classification method: per-case rerun of every failing test with the failure
+signature (assert/BUG location, first error, signal) clustered by root cause.
 
-```sh
-nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC=clang CXX=clang++ LDFLAGS='-fuse-ld=lld' ./build -B .build-clang -j "$(nproc)" -k test
-```
+## P0 — miscompiles: accepted code runs WRONG (~49)
 
-Приоритет определяется не краснотой отдельного unit и не размером каталога, а числом targets, которые снимает одно общее исправление. Одинаковый текст верхнеуровневой ошибки (`Unexpected token`, `Type mismatch`, `Failed to find an impl`) сам по себе не доказывает общую причину. Если минимизация показывает разные причины, группа делится и части реклассифицируются ниже.
+The compiler silently produces incorrect programs. Highest severity.
 
-Для compiler fix порядок строгий: минимальный `tst/unit/test_*.rs`, который сразу зелёный на системном Rust 1.90 и красный на `mrustc` → исправление общего пути → тот же unit остаётся зелёным на системном Rust 1.90 и становится зелёным на `mrustc` → исходный upstream trigger → соседние triggers той же сигнатуры → clang/lld build → commit и push. Промежуточные баги также фиксируются отдельными unit и сначала проверяются системным Rust 1.90. Тесты не подгоняются под текущее поведение компилятора.
+| cluster | tests | notes |
+|---|---|---|
+| f16 arithmetic | 24 | every `core/num/f16.rs` doctest aborts at runtime on `assert_eq`; single root in half-float codegen |
+| rust-quiz stdout | 3 | wrong semantics: #033 method resolution `RangeFull` vs `FnOnce` (prints "4" instead of "24"), #001 macro statement counting, #020 break-with-value in condition |
+| rust_lib runtime panics | 18 | std `error.rs` tests; partly blocked on missing backtrace support (borders P2 feature work) |
+| slice doctest | 1 | `core/src/slice/mod.rs` |
 
-## Измеренный baseline
+## P1 — compiler crashes on valid code (~243)
 
-Полный fast gate на `d8f40501`, 2026-08-12, `-j 78 -k`: **14 469 targets, 12 572 зелёных, 1 897 красных**.
+One cluster = one bug. Fixing the top 8 clusters greens ~50 tests.
 
-| Корпус | Красных |
-|---|---:|
-| `rust_ui_compile` | 856 |
-| `rust_1_90` | 460 |
-| `rust_lib` | 197 |
-| `rust_reference` | 125 |
-| `rust_doctest` | 124 |
-| `unit` | 31 |
-| `miri` | 30 |
-| `gccrs_compile` | 29 |
-| `gccrs` | 13 |
-| `nomicon` | 13 |
-| `rustsmith` | 8 |
-| `rust_book` | 3 |
-| `rust_quiz` | 3 |
-| `exercism_rust` | 2 |
-| `rust_by_example`, `rustlings`, `async_book` | 1 каждый |
+| location | tests | example |
+|---|---|---|
+| SEGV: unbounded `findImpl` bound recursion | 14 | `associated-types/normalize-cycle-in-eval.rs` (rustc #74868); needs a cycle guard |
+| `macro_rules_macro_rules.cpp:2116` "No arm matched" | 13 | `attributes/dont-dup-expr-attrs.rs` |
+| `trans_target.cpp:584` "sizeof on an erased type" | 7 | `impl-trait/in-ctfe/array-len.rs` |
+| `mir_from_hir.cpp:4422` | 6 | `consts/const-expr-addr-operator.rs` |
+| `trans_mangling.cpp:269` path-not-Generic | 5 | `const-generics/adt_const_params/116308.rs` |
+| `hir_conv_constant_evaluation.cpp:681` | 5 | `consts/const-eval/issue-47971.rs` |
+| `hir_typeck_helpers.cpp:5161` | 5 | `associated-types/issue-69398.rs` |
+| `hir_typeck_expr_cs.cpp:8467` "Spare rules left" | 5 | `nll/unexpected-inference-var-ice-116599.rs` |
+| `hir_typeck_resolve_common.cpp:160` | 5 | `const-generics/generic_const_exprs/issue-82268.rs` |
+| ~12 smaller clusters (2-4 each) | ~35 | mangling:98, expr_cs:1909 (TAIT placeholder), hir_hir:482, mir_from_hir:1866/1596/7386, typeck_common:653/397, expand:5452/1997, trans_main:575, mir_operations:640 |
+| unclassified aborts (miri/gccrs/rustlings/doctest categories, not re-run individually) | 81 | |
 
-По способу завершения: 1 304 `exit 250` (обычно `mrustc` завершился через `SIGABRT` после diagnostic/assert), 434 `exit 1`, 89 runtime/test `exit 101`, 53 прямых `SIGSEGV`, 12 timeout, 3 `SIGILL`, 2 ошибки декодирования adapter. Ещё два `SIGSEGV` скрыты обёрткой `unit/run_one.py`, поэтому фактический crash inventory — **55**.
+## P2 — missing language features (~475)
 
-В 513 красных targets первым внутренним маркером является явный assert/TODO из `bin/rustc`; это 125 разных `file.cpp:line`. Первые десять сигнатур дают 254 targets, первые двадцать — 315. Остальные большие классы (`Unexpected token` — 348, `Type mismatch` — 93, `Failed to find an impl` — 65) пока являются только симптомами и не считаются одним исправлением.
+Parser gaps (237):
+- lifetime syntax: raw `'r#a`, label forms (26)
+- `..`-related syntax in new positions (14)
+- fn delegation `reuse` (11)
+- `become` tail calls (7)
+- `gen` blocks, `pattern_type!` (5), inline-asm fragments (5), specialization
+  `default` items (5), C-string literals `c".."`/`cr".."`, misc (~160 spread
+  over many single-test syntaxes)
 
-## P2 — 10–24 targets одним общим исправлением
+Typeck incompleteness (238):
+- "Failed to find an impl" family (25+)
+- "type annotations needed" / "Failed to infer" (23)
+- "Method X doesn't match trait" — the type-alias-impl-trait epic (17)
+- assorted type mismatches, receiver-type limitations, erased-type
+  restrictions ("Use of an erased type outside of a function return")
 
-1. [ ] **Macro matcher: 20 targets.** Одна сигнатура `macro_rules_macro_rules.cpp:2113`, `Macro_InvokeRules_MatchPattern - No arm matched`, проходит через UI, Rust 1.90 и Reference tests. Минимизировать по одной matcher state transition; отдельно проверить interpolated block/type/visibility/meta fragments и statement boundaries. Первая попытка (`eff927717`) ревертнута: её экспансия ломала typeck `compiler-builtins/src/float/div.rs:497` при сборке libstd (детерминированный репро — `mrustc` на `compiler-builtins/src/lib.rs` c `--extern core`); этот кейс обязан стать unit до повторной посадки.
+## P3 — cheap wins or debatable (~185)
 
-2. [ ] **CTFE `simd_extract`: 16 targets.** Одна сигнатура `hir_conv_constant_evaluation.cpp:3408`; покрывает Rust 1.90, library, Miri и doctest. Реализовать bounds/type/layout semantics и unit для valid и out-of-bounds lane.
+- **`-Z` flag acceptance (105)**: `unpretty` (30), `validate-mir` (16),
+  `mir-enable-passes` (9), `inline-mir` (6), `crate-attr` (6),
+  `verbose-internals`, `print-type-sizes`, `lint-mir`, ... Most tests only
+  need the flag to be *accepted*; making unknown `-Z` a no-op (or adding
+  these as ignored) greens ~100 tests in a day. **Best ROI item overall.**
+- missing diagnostics (80): compile-fail tests for lints/attribute checks the
+  fork never implemented; implement or re-baseline.
 
-3. [ ] **Delegation `reuse`: 13 прямых parser failures.** Реализовать современный синтаксис delegation вместе с HIR/resolution, включая glob/list/rename/override и impl-trait cases.
+## X — environment flakes (27)
 
-4. [ ] **CTFE null relocation: 11 targets.** `hir_conv_constant_evaluation.cpp:1571`, `Null (<PTR_BASE) pointer deref`. Искать место потери relocation/provenance, а не ослаблять assert.
+Pass when re-run in isolation; fail only under the parallel gate load
+(timeouts etc.).
 
-5. [ ] **Const pattern literal borrow: 11 targets.** `mir_from_hir.cpp:4443`, `append_from_lit Match literal Borrow`. Добавить корректное MIR lowering и проверить custom equality/branch selection.
+## Recommended order (by ROI)
 
-## P3 — измеренные, но раздробленные группы
+1. `-Z` no-op flag acceptance (~100 tests, trivial)
+2. f16 codegen (24 tests, single root, restores runtime trust)
+3. findImpl recursion guard for normalization cycles (14 tests)
+4. Top-5 crash clusters (~36 tests)
+5. Quiz miscompiles (deep dives: method resolution, macro hygiene)
+6. Parser features, largest-cluster first
+7. Typeck/TAIT epic (largest, hardest)
 
-### Crash inventory
-
-- [ ] **53 upstream `SIGSEGV`: сначала stacks, затем реклассификация.** 26 прямых UI, 24 Rust 1.90, 2 doctest и 1 GCCRS. Снять серии stack traces по фазам и объединять только одинаковые причины. Не считать crashes одним compiler fix.
-
-### Driver options
-
-Всего **224 прямых отказа**: 134 неизвестных `-Z`, 84 неизвестных `-C`, 5 прочих driver options и 1 asm option. Это не одно исправление.
-
-- [ ] MIR control: `validate-mir` — 22, `mir-enable-passes` — 9, `inline-mir`/`inline_mir` — 8, `lint-mir` — 5. Связать с validator/pass selection; принятие без изменения pipeline не считается реализацией.
-- [ ] Codegen: `codegen-units` — 9, `link-dead-code` — 6, `debug_assertions` — 5, `no-prepopulate-passes` — 5, `overflow-checks=on` — 4, `target-feature` — 3, `lto` — 3, затем единичные LTO/mangling/coverage/link options. Группировать только по общему backend behavior.
-- [ ] Driver/front-end: `crate-attr` — 8, `verbose-internals` — 5, `print-type-sizes` — 5, `parse-crate-root-only` — 4 и оставшиеся `--print`, `--explain`, `--env-set`/`-Z` options. Diagnostic-only tests должны действительно проверять output, а не зеленеть от игнорирования флага.
-- [ ] `-Z unpretty` требует разных printer/stop-point реализаций: `expanded` — 8, `hir` — 7, `normal` — 4, `thir-tree` — 4, `hir,typed` — 2, `thir-flat` — 2, по одному `expanded,hygiene`, `hir-tree` и `mir-cfg`. Принятие option без соответствующего вывода не считается исправлением.
-
-### Parser, resolver и type system
-
-- [ ] После вынесенного выше `reuse` остаётся 281 `Unexpected token` target. Крупнейшие наблюдаемые формы — `fn` вместо `{` (включая семь `coretests/pin_macro`, остановившихся на вложенном `async fn`), lifetime/function modifiers, async closures, range/or-pattern syntax и interpolated macro fragments. Каждую форму минимизировать до grammar/expansion причины до назначения приоритета.
-- [ ] 94 `Type mismatch`, 66 `Failed to find an impl`, 23 `Unknown macro` и 17 `No applicable methods` сначала кластеризовать по semantic path. Trait objects, HRTB/binders, projections, const inference, TAIT/RPITIT и async lowering не объединять по тексту diagnostic.
-- [ ] Полный source-scoped lint store отсутствует: кроме CLI-level `unexpected_cfgs`, `allow/warn/deny/forbid/force-warn` пока не производят rustc diagnostics, а positive harness их не сравнивает. Добавить diagnostic-verifying nodes и измерить fan-out.
-- [ ] Настоящий check-only driver (`--emit=metadata`/stop after typeck) остаётся отдельной задачей. Перед повышением приоритета заново измерить текущие красные `check-pass`; `build-pass` обязан проходить полный pipeline.
-
-### CTFE, MIR и const generics
-
-- [ ] Остальные повторяющиеся явные сигнатуры: primitive operator против `Add::Output` — 9, unsized MIR local — 8, expanded generic `Infer` в CTFE — 8, erased `sizeof` — 7, higher-ranked lifetime assert — 6, spare typecheck rules — 6, CTFE slice out of range — 6, generic `Deref` path в trans — 2. Для каждой нужен unit на минимальный trigger до исправления.
-- [ ] Реализовать оставшиеся CTFE float `signum`, `three_way_compare`, `black_box` с relocations и invalid enum tag; не пропускать `f128` через host `double`.
-- [ ] Не возвращать path-copy алгоритмы и не ослаблять MIR validation ради зелёного теста.
-
-### Runtime correctness
-
-97 targets компилируются, но завершаются с `exit 101`: Rust 1.90 — 55, library — 35, Miri — 3, Reference — 3, GCCRS — 1. Это не одна задача.
-
-- [ ] В library-группе отдельно кластеризовать float formatting (4), numeric formatting (2), time formatting (2), `NonZero` bit operations (5), `std::error` multiline formatting (6), panic `Location` (4), `i128/u128` carrying arithmetic (2), saturating integer arithmetic (2), waker identity (2), C string formatting (2) и одиночные `MaybeUninit` formatting, `type_name`, `Any` и const string pointer cases.
-- [ ] Для остальных runtime failures сравнить полученное значение/bits/ABI, а не только panic text. Отдельно держать async-drop ordering (8), i128/u128, float/NaN/signed zero, derived traits, `track_caller`, `TypeId`/`Any`, process environment, SIMD и aggregate move/drop.
-- [ ] Добавить metadata encoding для cross-crate enum discriminants шире 64 бит и проверить producer/consumer crates.
-
-## P4 — crash/timeout и unit-регрессии после крупных групп
-
-- [ ] Три `SIGILL` остаются в `const-generics/issues/issue-74906.rs`, `layout/invalid-unsized-const-prop.rs`, `const_prop/issue-86351.rs`.
-- [ ] 12 timeout: три Rust Book, три UI, три RustSmith, по одному Rust 1.90 (`for-loop-while/label_break_value.rs`), doctest и Exercism. Для каждого снять stack/phase; лимит не увеличивать.
-- [ ] Медленная integration-группа (`resvg` и вынесенные тяжёлые upstream library tests) не входит в этот fast baseline. После серии fast fixes прогонять её отдельно; `resvg` по-прежнему требует минимального solver unit для `AsRef<Option<HuffmanTable>>`.
-
-Compile-fail tests, единственный ожидаемый эффект которых требует полноценного borrow checker, не должны вытеснять compile-pass, runtime и crash clusters. После каждого общего fix пересчитать fan-out затронутой группы; полный gate запускать после серии fixes на всех доступных ядрах.
+Raw data: per-case signatures and per-bucket test lists were produced by the
+triage scripts in the session scratchpad (`fail-rows2.json`,
+`priorities.json`); regenerate by re-mining a full-gate log if needed.
