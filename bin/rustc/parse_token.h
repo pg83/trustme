@@ -91,6 +91,7 @@ class Token {
     Data m_data;
     Position m_pos;
     Ident::Hygiene m_hygiene; // Only for strings, for formatting
+    RcString m_suffix;
 
     Token(enum eTokenType t, Data d, Position p)
         : m_type(t)
@@ -117,6 +118,7 @@ public:
         , m_data(::std::move(t.m_data))
         , m_pos(::std::move(t.m_pos))
         , m_hygiene(std::move(t.m_hygiene))
+        , m_suffix(std::move(t.m_suffix))
     {
         t.m_type = TOK_NULL;
     }
@@ -163,6 +165,23 @@ public:
 
     const Ident::Hygiene& str_hygiene() const {
         return m_hygiene;
+    }
+
+    const RcString& suffix() const {
+        return m_suffix;
+    }
+
+    void set_suffix(RcString suffix) {
+        m_suffix = std::move(suffix);
+    }
+
+    bool is_doc_comment() const {
+        return m_type == TOK_HASH && m_suffix == "doc-comment";
+    }
+
+    void mark_doc_comment() {
+        assert(m_type == TOK_HASH);
+        m_suffix = RcString::new_interned("doc-comment");
     }
 
     enum eCoreType datatype() const {
@@ -216,6 +235,20 @@ public:
     bool operator==(const Token& r) const {
         if (type() != r.type()) {
             return false;
+        }
+        switch (type()) {
+            case TOK_INTEGER:
+            case TOK_CHAR:
+            case TOK_FLOAT:
+            case TOK_STRING:
+            case TOK_BYTESTRING:
+            case TOK_CSTRING:
+                if (m_suffix != r.m_suffix) {
+                    return false;
+                }
+                break;
+            default:
+                break;
         }
         TU_MATCH(Data, (m_data, r.m_data), (e, re), (None, return true;), (Ident, return e.same_name(re);), (String, return e == re;), (Integer, return e.m_datatype == re.m_datatype && e.m_intval == re.m_intval;), (Float, return e.m_datatype == re.m_datatype && e.m_floatval == re.m_floatval;), (Fragment, assert(!"Token equality on Fragment");))
         throw "";

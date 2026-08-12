@@ -191,6 +191,7 @@ Token::Token(const Token& t)
     , m_data(Data::make_None({}))
     , m_pos(t.m_pos)
     , m_hygiene(t.m_hygiene)
+    , m_suffix(t.m_suffix)
 {
     assert(t.m_data.tag() != Data::TAGDEAD);
     TU_MATCH_HDRA( (t.m_data), {)
@@ -218,6 +219,7 @@ Token Token::clone() const {
     Token rv(m_type);
     rv.m_pos = m_pos;
     rv.m_hygiene = m_hygiene;
+    rv.m_suffix = m_suffix;
 
     assert(m_data.tag() != Data::TAGDEAD);
     TU_MATCH(Data, (m_data), (e), (None, ), (Ident, rv.m_data = Data::make_Ident(e);), (String, rv.m_data = Data::make_String(e);), (Integer, rv.m_data = Data::make_Integer(e);), (Float, rv.m_data = Data::make_Float(e);), (Fragment, assert(e); switch (m_type) {
@@ -354,6 +356,10 @@ struct EscapedString {
 
 ::std::string Token::to_str() const {
     ::std::stringstream ss;
+    auto with_suffix = [&](::std::string value) {
+        value += m_suffix.c_str();
+        return value;
+    };
     switch (m_type) {
         case TOK_NULL:
             return "/*null*/";
@@ -405,35 +411,35 @@ struct EscapedString {
                     if (v >= 0x20 && v < 128) {
                         switch (v.truncate_u64()) {
                             case '\'':
-                                return "'\\''";
+                                return with_suffix("'\\''");
                             case '\\':
-                                return "'\\\\'";
+                                return with_suffix("'\\\\'");
                             default:
-                                return FMT("'" << (char)v.truncate_u64() << "'");
+                                return with_suffix(FMT("'" << (char)v.truncate_u64() << "'"));
                         }
                     }
-                    return FMT("'\\u{" << ::std::hex << v << ::std::dec << "}'");
+                    return with_suffix(FMT("'\\u{" << ::std::hex << v << ::std::dec << "}'"));
                 case CORETYPE_ANY:
-                    return FMT(m_data.as_Integer().m_intval);
+                    return with_suffix(FMT(m_data.as_Integer().m_intval));
                 default:
-                    return FMT(m_data.as_Integer().m_intval << "_" << coretype_name(m_data.as_Integer().m_datatype));
+                    return with_suffix(FMT(m_data.as_Integer().m_intval << "_" << coretype_name(m_data.as_Integer().m_datatype)));
             }
             break;
         }
         case TOK_CHAR:
-            return FMT("'\\u{" << ::std::hex << m_data.as_Integer().m_intval << "}");
+            return with_suffix(FMT("'\\u{" << ::std::hex << m_data.as_Integer().m_intval << "}"));
         case TOK_FLOAT:
             if (m_data.as_Float().m_datatype == CORETYPE_ANY) {
-                return FMT(m_data.as_Float().m_floatval);
+                return with_suffix(FMT(m_data.as_Float().m_floatval));
             } else {
-                return FMT(m_data.as_Float().m_floatval << "_" << m_data.as_Float().m_datatype);
+                return with_suffix(FMT(m_data.as_Float().m_floatval << "_" << m_data.as_Float().m_datatype));
             }
         case TOK_STRING:
-            return FMT("\"" << EscapedString(m_data.as_String()) << "\"");
+            return with_suffix(FMT("\"" << EscapedString(m_data.as_String()) << "\""));
         case TOK_CSTRING:
-            return FMT("c\"" << EscapedString(m_data.as_String()) << "\"");
+            return with_suffix(FMT("c\"" << EscapedString(m_data.as_String()) << "\""));
         case TOK_BYTESTRING:
-            return FMT("b\"" << m_data.as_String() << "\"");
+            return with_suffix(FMT("b\"" << m_data.as_String() << "\""));
         case TOK_HASH:
             return "#";
         case TOK_UNDERSCORE:
@@ -728,6 +734,18 @@ struct EscapedString {
             const auto& named_item = *reinterpret_cast<const AST::Named<AST::Item>*>(tok.m_data.as_Fragment());
             os << ":" << named_item.data.tag_str() << "(" << named_item.name << ")";
         } break;
+        default:
+            break;
+    }
+    switch (tok.type()) {
+        case TOK_INTEGER:
+        case TOK_CHAR:
+        case TOK_FLOAT:
+        case TOK_STRING:
+        case TOK_BYTESTRING:
+        case TOK_CSTRING:
+            os << tok.m_suffix;
+            break;
         default:
             break;
     }

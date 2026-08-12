@@ -505,7 +505,9 @@ public:
     ::Token deserialise_token() {
         auto ty = static_cast<enum eTokenType>(m_in.read_tag());
         auto d = deserialise_tokendata();
-        return ::Token(ty, ::std::move(d), {});
+        auto rv = ::Token(ty, ::std::move(d), {});
+        rv.set_suffix(m_in.read_istring());
+        return rv;
     }
 
     ::Token::Data deserialise_tokendata() {
@@ -3205,6 +3207,7 @@ public:
     void serialise(const ::Token& tok) {
         m_out.write_tag(tok.m_type);
         serialise(tok.m_data);
+        m_out.write_string(tok.m_suffix);
         // TODO: Position information.
     }
 
