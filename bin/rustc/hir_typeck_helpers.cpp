@@ -1,7 +1,7 @@
 #include "hir_typeck_helpers.h"
 
-#include "wire_board.h"
 #include "settings.h"
+#include "wire_board.h"
 #include "hir_inherent_cache.h"
 #include "hir_conv_main_bindings.h"
 

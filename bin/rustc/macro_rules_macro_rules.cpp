@@ -2393,7 +2393,6 @@ Token MacroExpander::realGetToken() {
 }
 
 const MacroExpansionEnt* MacroExpandState::nextEnt() {
-
     // Check offset of lowest layer
     while (offsets.size() > 0) {
         unsigned int layer = offsets.size() - 1;

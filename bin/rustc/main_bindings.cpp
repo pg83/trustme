@@ -5,11 +5,11 @@
 #include "version.h"
 #include "ast_dump.h"
 #include "ast_expr.h"
+#include "settings.h"
 #include "ast_crate.h"
 #include "parse_lex.h"
 #include "expand_cfg.h"
 #include "wire_board.h"
-#include "settings.h"
 #include "debug_inner.h"
 #include "memory_dump.h"
 #include "parse_common.h" // For edition checks

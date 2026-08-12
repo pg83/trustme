@@ -1,17 +1,16 @@
 #include "parse_common.h"
-
-#include "settings.h"
-#include "wire_board.h"
 #include "parse_common.h"
 
 #include "path.h"
 #include "ast_ast.h"
 #include "hir_hir.h" // ABI_RUST - TODO: Move elsewhere?
 #include "ast_expr.h"
+#include "settings.h"
 #include "ast_crate.h"
 #include "ast_types.h"
 #include "parse_lex.h"  // New file lexer
 #include "expand_cfg.h" // check_cfg - for `mod nonexistant;`
+#include "wire_board.h"
 #include "parse_tokentree.h"
 #include "parse_parseerror.h"
 #include "macro_rules_macro_rules.h"
@@ -4411,7 +4410,6 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 }
             }
             DEBUG("path_attr = \"" << pathAttr << "\"");
-
 
             FsPath subPath;
             bool subFileControlsDir = true;

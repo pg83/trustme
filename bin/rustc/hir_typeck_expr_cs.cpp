@@ -2,8 +2,8 @@
 
 #include "hir_hir.h"
 #include "hir_expr.h"
-#include "wire_board.h"
 #include "settings.h"
+#include "wire_board.h"
 #include "hir_visitor.h"
 #include "hir_typeck_static.h"
 #include "hir_typeck_helpers.h"

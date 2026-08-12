@@ -27,7 +27,7 @@ public:
     bool noExpandMacros = false;
 
     const ASTCrate* crate = nullptr; // TODO: Remove this (needed for MetaItem)
-    const WireBoard* wb = nullptr; // cfg!() evaluation and expansion read components through the board
+    const WireBoard* wb = nullptr;   // cfg!() evaluation and expansion read components through the board
     ASTModule* module = nullptr;
     ASTAttributeList* parentAttrs = nullptr;
 

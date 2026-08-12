@@ -1,7 +1,4 @@
 #include "synext_macro.h"
-
-#include "settings.h"
-#include "wire_board.h"
 #include "synext_macro.h"
 
 #include "common.h"
@@ -9,9 +6,11 @@
 #include "hir_asm.h"
 #include "hir_hir.h"
 #include "ast_expr.h" // for ExprNode_*
+#include "settings.h"
 #include "ast_crate.h"
 #include "parse_lex.h" // For Codepoint
 #include "expand_cfg.h"
+#include "wire_board.h"
 #include "parse_common.h"
 #include "trans_target.h"
 #include "parse_ttstream.h"

@@ -137,4 +137,3 @@ public:
     ASTExternCrate(const ASTExternCrate&) = delete;
     ASTExternCrate& operator=(const ASTExternCrate&) = delete;
 };
-

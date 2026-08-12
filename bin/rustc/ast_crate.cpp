@@ -1,16 +1,14 @@
 #include "ast_crate.h"
 
-#include "settings.h"
-
 #include "ast_ast.h"
 #include "hir_hir.h" // HIR::Crate
+#include "settings.h"
 #include "expand_cfg.h"
 #include "parse_parseerror.h"
 #include "hir_main_bindings.h" // HIR_Deserialise
 
 #include <fstream>
 #include <dirent.h>
-
 
 namespace {
     bool checkItemCfg(const Settings& settings, const ASTAttributeList& attrs) {

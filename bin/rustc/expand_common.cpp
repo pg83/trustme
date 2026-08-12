@@ -1,15 +1,14 @@
 #include "expand_common.h"
-
-#include "settings.h"
-#include "wire_board.h"
 #include "expand_common.h"
 
 #include "synext.h"
 #include "ast_ast.h"
 #include "hir_hir.h" // For macro lookup
 #include "ast_expr.h"
+#include "settings.h"
 #include "ast_crate.h"
 #include "expand_cfg.h"
+#include "wire_board.h"
 #include "parse_common.h" // For reparse from macros
 #include "main_bindings.h"
 #include "parse_ttstream.h"
@@ -2376,7 +2375,6 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
     }
 
     // IGNORE m_anon_modules, handled as part of expressions
-
 }
 
 void ExpandModIndexAnon(ASTCrate& crate, ASTModule& mod) {
@@ -2575,7 +2573,6 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
     es.mode = ExpandMode::Final;
     ExpandMod(es, ASTAbsolutePath(), crate.mRootModule);
     ASSERT_BUG(Span(), !es.hasMissing, "Expand too too many attempts");
-
 
     // Post-process
     ExpandModIndexAnon(crate, crate.mRootModule);

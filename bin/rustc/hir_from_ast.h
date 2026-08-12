@@ -32,4 +32,3 @@ extern HIRSimplePath LowerHIRSimplePath(const Span& sp, const ASTPath& path, Fro
 extern HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc);
 extern HIRTypeRef LowerHIRType(const ::TypeRef& ty);
 extern HIRPattern LowerHIRPattern(const ASTPattern& pat);
-

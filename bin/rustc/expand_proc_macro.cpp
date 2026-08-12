@@ -1,17 +1,16 @@
 #include "expand_proc_macro.h"
 
-#include "settings.h"
-#include "wire_board.h"
-
 #include "common.h"
 #include "synext.h"
 #include "ast_ast.h"
 #include "hir_hir.h" // ABI_RUST
 #include "ast_dump.h"
 #include "ast_expr.h"
+#include "settings.h"
 #include "ast_crate.h"
 #include "parse_lex.h"
 #include "expand_cfg.h"
+#include "wire_board.h"
 #include "main_bindings.h"
 #include "parse_ttstream.h"
 

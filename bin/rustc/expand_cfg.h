@@ -8,6 +8,7 @@
 struct Span;
 struct Settings;
 struct CfgState;
+
 namespace stl {
     class ObjPool;
 }

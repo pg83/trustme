@@ -1,18 +1,17 @@
 #include "expand_cfg.h"
 
-#include "settings.h"
-#include "wire_board.h"
-
-#include <std/mem/obj_pool.h>
-
 #include "synext.h"
 #include "ast_expr.h" // Needed to clear a ExprNodeP
+#include "settings.h"
 #include "ast_attrs.h"
 #include "ast_crate.h"
+#include "wire_board.h"
 #include "parse_common.h"
 #include "parse_ttstream.h"
 #include "parse_tokentree.h"
 #include "parse_parseerror.h"
+
+#include <std/mem/obj_pool.h>
 
 #include <map>
 #include <set>

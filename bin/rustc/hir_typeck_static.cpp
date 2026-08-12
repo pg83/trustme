@@ -1,8 +1,8 @@
 #include "hir_typeck_static.h"
 
 #include "hir_expr.h"
-#include "wire_board.h"
 #include "settings.h"
+#include "wire_board.h"
 #include "hir_typeck_helpers.h"
 #include "hir_conv_main_bindings.h"
 

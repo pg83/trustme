@@ -1,14 +1,13 @@
 #include "hir_from_ast.h"
 
-#include "settings.h"
-#include "wire_board.h"
-
 #include "common.h"
 #include "ast_ast.h"
 #include "hir_hir.h"
 #include "ast_expr.h" // For shortcut in array size handling
 #include "hir_expr.h"
+#include "settings.h"
 #include "ast_crate.h"
+#include "wire_board.h"
 #include "hir_visitor.h"
 #include "hir_expr_ptr.h"
 #include "trans_target.h"

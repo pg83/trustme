@@ -1,11 +1,10 @@
 #include "resolve_common.h"
 
-#include "settings.h"
-
 #include "ast_ast.h"
 #include "hir_hir.h"
 #include "stdspan.h" // std::span
 #include "ast_expr.h"
+#include "settings.h"
 #include "ast_crate.h"
 #include "expand_cfg.h"
 #include "synext_macro.h"
@@ -509,7 +508,6 @@ namespace {
             }
 
             for (const auto& i : mod.mItems) {
-
                 // Note: Cache the result of `cfg()` resolution, as it doesn't change
                 // - Do the caching here (on the item level) instead of in `cfg.cpp` as that avoids needing to check
                 //   the attribute list multiple times.

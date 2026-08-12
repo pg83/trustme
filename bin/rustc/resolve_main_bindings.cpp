@@ -1,13 +1,12 @@
 #include "resolve_main_bindings.h"
 
-#include "settings.h"
-#include "wire_board.h"
-
 #include "ast_ast.h"
 #include "hir_hir.h"
 #include "stdspan.h" // std::span
 #include "ast_expr.h"
+#include "settings.h"
 #include "ast_crate.h"
+#include "wire_board.h"
 #include "pop_on_drop.h"
 #include "main_bindings.h"
 #include "macro_rules_macro_rules.h"
@@ -2360,13 +2359,7 @@ void ResolveAbsoluteGeneric(Context& context, ASTGenericParams& params) {
 
 // Locals shouldn't be possible, as they'd end up as MaybeBind. Will assert the path class.
 void ResolveAbsolutePatternValue(/*const*/ Context& context, const Span& sp, ASTPattern::Value& val) {
-    TU_IFLET(
-        ASTPattern::Value,
-        val,
-        Named,
-        e,
-        ResolveAbsolutePath(context, sp, Context::LookupMode::Constant, e);
-    )
+    TU_IFLET(ASTPattern::Value, val, Named, e, ResolveAbsolutePath(context, sp, Context::LookupMode::Constant, e);)
 }
 
 void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& pat) {
