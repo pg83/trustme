@@ -72,9 +72,9 @@ build.cxxflags += [
     "-g",
 ]
 
-# Keep the platform library in the same imported build graph as its consumers.
-# This mirrors shitty: libstd owns its source discovery and compile flags, while
-# the parent graph supplies reproducible paths and links the resulting archive.
+# Keep the platform library in the same imported build graph as its consumers:
+# libstd owns its source discovery and compile flags, while the parent graph
+# supplies reproducible paths and links the resulting archive.
 platform_libstd = import_build(
     "ext/libstd/build.py",
     "libstd.a",
