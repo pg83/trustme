@@ -8,9 +8,9 @@
 #include <std/mem/obj_pool.h>
 
 namespace MIR {
-        class MIREvalAllocationPtr;
-        class MIREvalAllocation;
-        class MIREvalCallStackEntry;
+    class MIREvalAllocationPtr;
+    class MIREvalAllocation;
+    class MIREvalCallStackEntry;
     class LValue;
     class Statement;
     class Terminator;

@@ -1,21 +1,22 @@
 #include "trans_main_bindings.h"
-
 #include "trans_main_bindings.h"
-#include "trans_trans_list.h"
+
 #include "hir_hir.h"
 #include "mir_mir.h"
+#include "hir_visitor.h"
+#include "mir_helpers.h"
+#include "trans_target.h"
+#include "hir_item_path.h"
+#include "mir_operations.h"
+#include "trans_mangling.h"
+#include "trans_allocator.h"
+#include "trans_trans_list.h"
 #include "hir_typeck_common.h" // monomorph
 #include "hir_typeck_static.h" // StaticTraitResolve
+#include "hir_conv_main_bindings.h"
+
 #include <deque>
 #include <algorithm> // find_if
-#include "trans_target.h"
-#include "mir_operations.h"
-#include "mir_helpers.h"
-#include "trans_allocator.h"
-#include "hir_conv_main_bindings.h"
-#include "hir_item_path.h"
-#include "hir_visitor.h"
-#include "trans_mangling.h"
 #include <unordered_set>
 
 namespace {
@@ -63,14 +64,7 @@ namespace {
         return mirFcn.blocks.back();
     }
 
-    ::MIR::Param cloneField(
-        const State& state,
-        const Span& sp,
-        ::MIR::Function& mirFcn,
-        CloneCleanupState& cleanup,
-        const ::HIR::TypeData* subty,
-        ::MIR::LValue fldLvalue
-    ) {
+    ::MIR::Param cloneField(const State& state, const Span& sp, ::MIR::Function& mirFcn, CloneCleanupState& cleanup, const ::HIR::TypeData* subty, ::MIR::LValue fldLvalue) {
         if (state.resolve.typeIsCopy(sp, subty)) {
             return ::std::move(fldLvalue);
         } else {
@@ -90,13 +84,7 @@ namespace {
             pp.mLifetimes.push_back(HIR::LifetimeRef(1 * 256 + 0)); // 'M:0
             const auto callBlock = static_cast<::MIR::BasicBlockId>(mirFcn.blocks.size() - 1);
             const auto retBlock = static_cast<::MIR::BasicBlockId>(mirFcn.blocks.size());
-            bb.terminator = ::MIR::Terminator::make_Call(
-                {retBlock,
-                 ::MIR::UnwindAction::make_Continue({}),
-                 resLv.clone(),
-                 ::MIR::CallTarget(::HIR::Path(subty, langClone, rcstringCloneLower, std::move(pp))),
-                 ::makeVec1<::MIR::Param>(::std::move(borrowLv))}
-            );
+            bb.terminator = ::MIR::Terminator::make_Call({retBlock, ::MIR::UnwindAction::make_Continue({}), resLv.clone(), ::MIR::CallTarget(::HIR::Path(subty, langClone, rcstringCloneLower, std::move(pp))), ::makeVec1<::MIR::Param>(::std::move(borrowLv))});
             cleanup.calls.push_back(callBlock);
             cleanup.values.push_back(::std::make_pair(resLv.clone(), dropFlag));
 
@@ -333,9 +321,7 @@ namespace {
             for (size_t i = 0; i < values.size(); i++) {
                 MIR::BasicBlock block;
                 const auto target = static_cast<MIR::BasicBlockId>(normalStart + i + 1);
-                auto unwind = i + 1 < values.size()
-                    ? MIR::UnwindAction::make_Cleanup(cleanupBlock(i + 1))
-                    : MIR::UnwindAction::make_Continue({});
+                auto unwind = i + 1 < values.size() ? MIR::UnwindAction::make_Cleanup(cleanupBlock(i + 1)) : MIR::UnwindAction::make_Continue({});
                 block.terminator = MIR::Terminator::make_Drop({
                     MIR::eDropKind::DEEP,
                     values[i].clone(),
@@ -370,13 +356,15 @@ namespace {
             ensureOpen();
             const auto callBlock = static_cast<MIR::BasicBlockId>(mir.blocks.size() - 1);
             const auto retBlock = static_cast<MIR::BasicBlockId>(mir.blocks.size());
-            this->terminateBlock(MIR::Terminator::make_Call({
-                retBlock,
-                MIR::UnwindAction::make_Continue({}),
-                MIR::LValue::newReturn(),
-                ::HIR::Path(ty, state.resolve.mLangDrop, rcstringDrop),
-                makeVec1<MIR::Param>(mv$(borrowLv)),
-            }));
+            this->terminateBlock(
+                MIR::Terminator::make_Call({
+                    retBlock,
+                    MIR::UnwindAction::make_Continue({}),
+                    MIR::LValue::newReturn(),
+                    ::HIR::Path(ty, state.resolve.mLangDrop, rcstringDrop),
+                    makeVec1<MIR::Param>(mv$(borrowLv)),
+                })
+            );
             mir.blocks.push_back(MIR::BasicBlock());
             return callBlock;
         }
@@ -1159,10 +1147,7 @@ void TransAutoImpls(::HIR::Crate& crate, TransList& transList) {
                                             const auto resume = static_cast<MIR::BasicBlockId>(builder.mir.blocks.size() + variants.size());
                                             ::std::vector<MIR::BasicBlockId> cleanupTargets;
                                             cleanupTargets.reserve(variants.size());
-                                            auto cleanupField = ::MIR::LValue::newDowncast(
-                                                ::MIR::LValue::newDeref(builder.self.clone()),
-                                                0
-                                            );
+                                            auto cleanupField = ::MIR::LValue::newDowncast(::MIR::LValue::newDeref(builder.self.clone()), 0);
                                             for (size_t idx = 0; idx < variants.size(); idx++) {
                                                 cleanupTargets.push_back(builder.mir.blocks.size());
                                                 MIR::BasicBlock block;
@@ -1227,10 +1212,12 @@ void TransAutoImpls(::HIR::Crate& crate, TransList& transList) {
                 const auto cleanupCall = static_cast<MIR::BasicBlockId>(builder.mir.blocks.size());
                 MIR::BasicBlock cleanupCallBlock;
                 cleanupCallBlock.isCleanup = true;
-                cleanupCallBlock.statements.push_back(MIR::Statement::make_Assign({
-                    cleanupBorrow.clone(),
-                    MIR::RValue::make_Borrow({HIR::BorrowType::Unique, false, ::MIR::LValue::newDeref(builder.self.clone())}),
-                }));
+                cleanupCallBlock.statements.push_back(
+                    MIR::Statement::make_Assign({
+                        cleanupBorrow.clone(),
+                        MIR::RValue::make_Borrow({HIR::BorrowType::Unique, false, ::MIR::LValue::newDeref(builder.self.clone())}),
+                    })
+                );
                 cleanupCallBlock.terminator = MIR::Terminator::make_Call({
                     afterCleanupCall,
                     MIR::UnwindAction::make_Terminate({}),
@@ -1264,7 +1251,6 @@ void TransAutoImpls(::HIR::Crate& crate, TransList& transList) {
     }
 }
 
-
 namespace {
     // Translation paths are assembled after inference and monomorphisation.
     // A nominal type can therefore arrive through an older, structurally
@@ -1293,18 +1279,18 @@ namespace {
                     TU_MATCH_HDRA((item), {)
                     default:
                         BUG(Span(), "Nominal translation type points to " << item.tagStr() << " - " << ty);
-                    TU_ARMA(ExternType, e) {
-                        pathTy->binding = ::HIR::TypePathBinding::make_ExternType(&e);
-                    }
-                    TU_ARMA(Struct, e) {
-                        pathTy->binding = ::HIR::TypePathBinding::make_Struct(&e);
-                    }
-                    TU_ARMA(Union, e) {
-                        pathTy->binding = ::HIR::TypePathBinding::make_Union(&e);
-                    }
-                    TU_ARMA(Enum, e) {
-                        pathTy->binding = ::HIR::TypePathBinding::make_Enum(&e);
-                    }
+                        TU_ARMA(ExternType, e) {
+                            pathTy->binding = ::HIR::TypePathBinding::make_ExternType(&e);
+                        }
+                        TU_ARMA(Struct, e) {
+                            pathTy->binding = ::HIR::TypePathBinding::make_Struct(&e);
+                        }
+                        TU_ARMA(Union, e) {
+                            pathTy->binding = ::HIR::TypePathBinding::make_Union(&e);
+                        }
+                        TU_ARMA(Enum, e) {
+                            pathTy->binding = ::HIR::TypePathBinding::make_Enum(&e);
+                        }
                     }
                 }
             }
@@ -1387,9 +1373,11 @@ namespace {
 }
 
 TransList TransEnumerateCommonPost(EnumState& state);
+
 namespace {
     void TransEnumerateExplicitLinkage(EnumState& state, const ::HIR::Module& mod, ::HIR::SimplePath modPath);
 }
+
 void TransEnumerateTypes(EnumState& state);
 void TransEnumerateFillFromPath(EnumState& state, const ::HIR::Path& path, const TransParams& pp);
 void TransEnumerateFillFromPathMono(EnumState& state, ::HIR::Path path);
@@ -1920,8 +1908,7 @@ namespace {
         for (const auto& entry : tpl) {
             auto symbol = FMT(TransMangle(entry.first));
             auto inserted = requiredSymbols.emplace(mv$(symbol), &entry.first);
-            ASSERT_BUG(Span(), inserted.second || inserted.first->second->equalsIgnoringRegions(entry.first),
-                "Distinct paths have the same mangled name: " << *inserted.first->second << " and " << entry.first);
+            ASSERT_BUG(Span(), inserted.second || inserted.first->second->equalsIgnoringRegions(entry.first), "Distinct paths have the same mangled name: " << *inserted.first->second << " and " << entry.first);
         }
 
         for (auto itIn = target.begin(); itIn != target.end();) {
@@ -1931,8 +1918,7 @@ namespace {
                 DEBUG("Remove " << itIn->first);
                 itIn = target.erase(itIn);
             } else {
-                ASSERT_BUG(Span(), required->second->equalsIgnoringRegions(itIn->first),
-                    "Distinct paths have the same mangled name: " << *required->second << " and " << itIn->first);
+                ASSERT_BUG(Span(), required->second->equalsIgnoringRegions(itIn->first), "Distinct paths have the same mangled name: " << *required->second << " and " << itIn->first);
                 DEBUG("Keep " << itIn->first);
                 ++itIn;
             }
@@ -2625,7 +2611,6 @@ void TransEnumerateTypes(EnumState& state) {
                 // NOTE: Save the params before visiting, as the TypeRef might move as types are added, but the inner data won't move
                 const auto& p = ty->as_Path().path.mData.as_Generic().mParams;
                 tv.visitType(ity);
-
             }
         }
         typesCount = state.rv.types.size();
@@ -3043,9 +3028,9 @@ void TransEnumerateFillFromMIR(MIR::EnumCache& state, const ::MIR::Function& cod
         }
         DEBUG("> " << bb.terminator);
         TU_MATCHA((bb.terminator), (e), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, ), (If, TransEnumerateFillFromMIRLValue(state, e.cond);), (Switch, TransEnumerateFillFromMIRLValue(state, e.val);), (SwitchValue, TransEnumerateFillFromMIRLValue(state, e.val);), (Drop, TransEnumerateFillFromMIRLValue(state, e.slot);), (Call, TransEnumerateFillFromMIRLValue(state, e.retVal); TU_MATCHA((e.fcn), (e2), (Value, TransEnumerateFillFromMIRLValue(state, e2);), (Path, state.insertPath(e2);), (Intrinsic, if (e2.name == "type_id") {
-                                                                                                                                                                                                                                                                                                                                                                              // Add <T>::#type_id to the enumerate list
-                                                                                                                                                                                                                                                                                                                                                                              state.insertTypeid(e2.params.types.at(0));
-                                                                                                                                                                                                                                                                                                                                                                          })) for (const auto& arg : e.args) TransEnumerateFillFromMIRParam(state, arg);))
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      // Add <T>::#type_id to the enumerate list
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      state.insertTypeid(e2.params.types.at(0));
+                                                                                                                                                                                                                                                                                                                                                                                                                                                  })) for (const auto& arg : e.args) TransEnumerateFillFromMIRParam(state, arg);))
     }
 }
 

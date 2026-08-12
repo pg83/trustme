@@ -1,335 +1,339 @@
 #include "hir_serialise_lowlevel.h"
+
 #include "debug.h"
+#include "common.h"
+
 #include <zlib.h>
 #include <fstream>
-#include <string.h> // memcpy
-#include "common.h"
-#include <algorithm>
 #include <iomanip>
+#include <string.h> // memcpy
+#include <algorithm>
 
 namespace HIR {
 
-        class HIRSerialiseWriterInner {
-            ::std::ofstream backing;
-            z_stream zstream;
-            ::std::vector<unsigned char> buffer;
+    class HIRSerialiseWriterInner {
+        ::std::ofstream backing;
+        z_stream zstream;
+        ::std::vector<unsigned char> buffer;
 
-            unsigned int byteOutCount = 0;
-            unsigned int byteInCount = 0;
+        unsigned int byteOutCount = 0;
+        unsigned int byteInCount = 0;
 
-        public:
-            HIRSerialiseWriterInner(const ::std::string& filename);
-            ~HIRSerialiseWriterInner();
-            void write(const void* buf, size_t len);
-        };
+    public:
+        HIRSerialiseWriterInner(const ::std::string& filename);
+        ~HIRSerialiseWriterInner();
+        void write(const void* buf, size_t len);
+    };
 
-        HIRSerialiseWriter::HIRSerialiseWriter()
-            : inner(nullptr)
-        {
+    HIRSerialiseWriter::HIRSerialiseWriter()
+        : inner(nullptr)
+    {
+    }
+
+    HIRSerialiseWriter::~HIRSerialiseWriter() {
+        delete inner, inner = nullptr;
+    }
+
+    void HIRSerialiseWriter::open(const ::std::string& filename) {
+        // 1. Sort strings by frequency
+        ::std::vector<::std::pair<RcString, unsigned>> sorted;
+        sorted.reserve(istringCache.size());
+        for (const auto& e : istringCache) {
+            sorted.push_back(e);
+        }
+        // 2. Write out string table
+        ::std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
+            return a.second > b.second;
+        });
+
+        objnameCache.clear();
+
+        inner = new HIRSerialiseWriterInner(filename);
+        // 3. Reset m_istring_cache to use the same value
+        this->writeCount(sorted.size());
+        for (size_t i = 0; i < sorted.size(); i++) {
+            const auto& s = sorted[i].first;
+            this->writeString(s.size(), s.c_str());
+            DEBUG(i << " = " << istringCache[s] << " '" << s << "'");
+            istringCache[s] = i;
+        }
+        for (const auto& e : istringCache) {
+            assert(e.second < sorted.size());
+        }
+    }
+
+    void HIRSerialiseWriter::write(const void* buf, size_t len) {
+        if (inner) {
+            DEBUG("write(" << FMT_CB(ss, for (size_t i = 0; i < len; i++) ss << std::setw(2) << std::setfill('0') << std::hex << unsigned(((const uint8_t*)buf)[i])) << ")");
+            inner->write(buf, len);
+        } else {
+            // No-op, pre caching
+        }
+    }
+
+    void HIRSerialiseWriter::writeString(const RcString& v) {
+        if (inner) {
+            // Emit ID from the cache
+            this->writeCount(istringCache.at(v));
+        } else {
+            // Find/add in cache
+            istringCache.insert(::std::make_pair(v, 0)).first->second += 1;
+        }
+    }
+
+    HIRSerialiseWriterInner::HIRSerialiseWriterInner(const ::std::string& filename)
+        : backing(filename, ::std::ios_base::out | ::std::ios_base::binary)
+        , zstream()
+        , buffer(16 * 1024)
+    //m_buffer( 4*1024 )
+    {
+        zstream.zalloc = Z_NULL;
+        zstream.zfree = Z_NULL;
+        zstream.opaque = Z_NULL;
+
+        const int COMPRESSION_LEVEL = Z_BEST_COMPRESSION;
+        int ret = deflateInit(&zstream, COMPRESSION_LEVEL);
+        if (ret != Z_OK) {
+            throw ::std::runtime_error("zlib init failure");
         }
 
-        HIRSerialiseWriter::~HIRSerialiseWriter() {
-            delete inner, inner = nullptr;
-        }
+        zstream.avail_out = buffer.size();
+        zstream.next_out = buffer.data();
+    }
 
-        void HIRSerialiseWriter::open(const ::std::string& filename) {
-            // 1. Sort strings by frequency
-            ::std::vector<::std::pair<RcString, unsigned>> sorted;
-            sorted.reserve(istringCache.size());
-            for (const auto& e : istringCache) {
-                sorted.push_back(e);
+    HIRSerialiseWriterInner::~HIRSerialiseWriterInner()
+    {
+        assert(zstream.avail_in == 0);
+
+        // Complete the compression
+        int ret;
+        do {
+            ret = deflate(&zstream, Z_FINISH);
+            if (ret == Z_STREAM_ERROR) {
+                ::std::cerr << "ERROR: zlib deflate stream error (cleanup)";
+                abort();
             }
-            // 2. Write out string table
-            ::std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
-                return a.second > b.second;
-            });
+            if (zstream.avail_out != buffer.size()) {
+                size_t rem = buffer.size() - zstream.avail_out;
+                byteOutCount += rem;
+                backing.write(reinterpret_cast<char*>(buffer.data()), rem);
 
-            objnameCache.clear();
-
-            inner = new HIRSerialiseWriterInner(filename);
-            // 3. Reset m_istring_cache to use the same value
-            this->writeCount(sorted.size());
-            for (size_t i = 0; i < sorted.size(); i++) {
-                const auto& s = sorted[i].first;
-                this->writeString(s.size(), s.c_str());
-                DEBUG(i << " = " << istringCache[s] << " '" << s << "'");
-                istringCache[s] = i;
+                zstream.avail_out = buffer.size();
+                zstream.next_out = buffer.data();
             }
-            for (const auto& e : istringCache) {
-                assert(e.second < sorted.size());
-            }
-        }
+        } while (ret == Z_OK);
+        deflateEnd(&zstream);
+    }
 
-        void HIRSerialiseWriter::write(const void* buf, size_t len) {
-            if (inner) {
-                DEBUG("write(" << FMT_CB(ss, for (size_t i = 0; i < len; i++) ss << std::setw(2) << std::setfill('0') << std::hex << unsigned(((const uint8_t*)buf)[i])) << ")");
-                inner->write(buf, len);
-            } else {
-                // No-op, pre caching
-            }
-        }
+    void HIRSerialiseWriterInner::write(const void* buf, size_t len) {
+        zstream.avail_in = len;
+        zstream.next_in = reinterpret_cast<unsigned char*>(const_cast<void*>(buf));
 
-        void HIRSerialiseWriter::writeString(const RcString& v) {
-            if (inner) {
-                // Emit ID from the cache
-                this->writeCount(istringCache.at(v));
-            } else {
-                // Find/add in cache
-                istringCache.insert(::std::make_pair(v, 0)).first->second += 1;
-            }
-        }
+        size_t lastAvailIn = zstream.avail_in;
 
-        HIRSerialiseWriterInner::HIRSerialiseWriterInner(const ::std::string& filename)
-            : backing(filename, ::std::ios_base::out | ::std::ios_base::binary)
-            , zstream()
-            , buffer(16 * 1024)
-        //m_buffer( 4*1024 )
-        {
-            zstream.zalloc = Z_NULL;
-            zstream.zfree = Z_NULL;
-            zstream.opaque = Z_NULL;
+        // While there's data to compress
+        while (zstream.avail_in > 0) {
+            assert(zstream.avail_out != 0);
 
-            const int COMPRESSION_LEVEL = Z_BEST_COMPRESSION;
-            int ret = deflateInit(&zstream, COMPRESSION_LEVEL);
-            if (ret != Z_OK) {
-                throw ::std::runtime_error("zlib init failure");
+            // Compress the data
+            int ret = deflate(&zstream, Z_NO_FLUSH);
+            if (ret == Z_STREAM_ERROR) {
+                throw ::std::runtime_error("zlib deflate stream error");
             }
 
-            zstream.avail_out = buffer.size();
-            zstream.next_out = buffer.data();
-        }
+            size_t usedThisTime = lastAvailIn - zstream.avail_in;
+            lastAvailIn = zstream.avail_in;
+            byteInCount += usedThisTime;
 
-        HIRSerialiseWriterInner::~HIRSerialiseWriterInner()
-        {
-            assert(zstream.avail_in == 0);
-
-            // Complete the compression
-            int ret;
-            do {
-                ret = deflate(&zstream, Z_FINISH);
-                if (ret == Z_STREAM_ERROR) {
-                    ::std::cerr << "ERROR: zlib deflate stream error (cleanup)";
-                    abort();
-                }
-                if (zstream.avail_out != buffer.size()) {
-                    size_t rem = buffer.size() - zstream.avail_out;
-                    byteOutCount += rem;
-                    backing.write(reinterpret_cast<char*>(buffer.data()), rem);
-
-                    zstream.avail_out = buffer.size();
-                    zstream.next_out = buffer.data();
-                }
-            } while (ret == Z_OK);
-            deflateEnd(&zstream);
-        }
-
-        void HIRSerialiseWriterInner::write(const void* buf, size_t len) {
-            zstream.avail_in = len;
-            zstream.next_in = reinterpret_cast<unsigned char*>(const_cast<void*>(buf));
-
-            size_t lastAvailIn = zstream.avail_in;
-
-            // While there's data to compress
-            while (zstream.avail_in > 0) {
-                assert(zstream.avail_out != 0);
-
-                // Compress the data
-                int ret = deflate(&zstream, Z_NO_FLUSH);
-                if (ret == Z_STREAM_ERROR) {
-                    throw ::std::runtime_error("zlib deflate stream error");
-                }
-
-                size_t usedThisTime = lastAvailIn - zstream.avail_in;
-                lastAvailIn = zstream.avail_in;
-                byteInCount += usedThisTime;
-
-                // If the entire input wasn't consumed, then it was likely due to a lack of output space
-                // - Flush the output buffer to the file
-                if (zstream.avail_in > 0) {
-                    size_t bytes = buffer.size() - zstream.avail_out;
-                    backing.write(reinterpret_cast<char*>(buffer.data()), bytes);
-                    byteOutCount += bytes;
-
-                    zstream.avail_out = buffer.size();
-                    zstream.next_out = buffer.data();
-                }
-            }
-
-            // Flush stream contents if the output buffer is full.
-            while (zstream.avail_out == 0) {
+            // If the entire input wasn't consumed, then it was likely due to a lack of output space
+            // - Flush the output buffer to the file
+            if (zstream.avail_in > 0) {
                 size_t bytes = buffer.size() - zstream.avail_out;
                 backing.write(reinterpret_cast<char*>(buffer.data()), bytes);
                 byteOutCount += bytes;
 
                 zstream.avail_out = buffer.size();
                 zstream.next_out = buffer.data();
-
-                int ret = deflate(&zstream, Z_NO_FLUSH);
-                if (ret == Z_STREAM_ERROR) {
-                    throw ::std::runtime_error("zlib deflate stream error");
-                }
             }
         }
 
-        // --------------------------------------------------------------------
-        class HIRSerialiseReaderInner {
-            ::std::ifstream backing;
-            z_stream zstream;
-            ::std::vector<unsigned char> buffer;
+        // Flush stream contents if the output buffer is full.
+        while (zstream.avail_out == 0) {
+            size_t bytes = buffer.size() - zstream.avail_out;
+            backing.write(reinterpret_cast<char*>(buffer.data()), bytes);
+            byteOutCount += bytes;
 
-            unsigned int byteOutCount = 0;
-            unsigned int byteInCount = 0;
+            zstream.avail_out = buffer.size();
+            zstream.next_out = buffer.data();
 
-        public:
-            HIRSerialiseReaderInner(const ::std::string& filename);
-            ~HIRSerialiseReaderInner();
-            size_t read(void* buf, size_t len);
-        };
-
-        HIRSerialiseReadBuffer::HIRSerialiseReadBuffer(size_t cap)
-            : ofs(0)
-        {
-            backing.reserve(cap);
-        }
-
-        size_t HIRSerialiseReadBuffer::read(void* dst, size_t len) {
-            size_t rem = backing.size() - ofs;
-            if (rem >= len) {
-                memcpy(dst, backing.data() + ofs, len);
-                ofs += len;
-                return len;
-            } else {
-                memcpy(dst, backing.data() + ofs, rem);
-                ofs = backing.size();
-                return rem;
+            int ret = deflate(&zstream, Z_NO_FLUSH);
+            if (ret == Z_STREAM_ERROR) {
+                throw ::std::runtime_error("zlib deflate stream error");
             }
         }
+    }
 
-        void HIRSerialiseReadBuffer::populate(HIRSerialiseReaderInner& is) {
-            backing.resize(backing.capacity(), 0);
-            auto len = is.read(backing.data(), backing.size());
-            backing.resize(len);
-            ofs = 0;
-        }
+    // --------------------------------------------------------------------
+    class HIRSerialiseReaderInner {
+        ::std::ifstream backing;
+        z_stream zstream;
+        ::std::vector<unsigned char> buffer;
 
-        HIRSerialiseReader::HIRSerialiseReader(const ::std::string& filename)
-            : inner(new HIRSerialiseReaderInner(filename))
-            , buffer(1024)
-            , pos(0)
-        {
-            size_t nStrings = readCount();
-            strings.reserve(nStrings);
-            DEBUG("n_strings = " << nStrings);
-            for (size_t i = 0; i < nStrings; i++) {
-                auto s = readString();
-                strings.push_back(RcString::newInterned(s));
-            }
-        }
+        unsigned int byteOutCount = 0;
+        unsigned int byteInCount = 0;
 
-        HIRSerialiseReader::~HIRSerialiseReader() {
-            delete inner, inner = nullptr;
-        }
+    public:
+        HIRSerialiseReaderInner(const ::std::string& filename);
+        ~HIRSerialiseReaderInner();
+        size_t read(void* buf, size_t len);
+    };
 
-        void HIRSerialiseReader::read(void* buf, size_t len) {
-            auto used = buffer.read(buf, len);
-            if (used == len) {
-                pos += len;
-                return;
-            }
-            buf = reinterpret_cast<uint8_t*>(buf) + used;
-            len -= used;
+    HIRSerialiseReadBuffer::HIRSerialiseReadBuffer(size_t cap)
+        : ofs(0)
+    {
+        backing.reserve(cap);
+    }
 
-            if (len >= buffer.capacity()) {
-                inner->read(buf, len);
-            } else {
-                buffer.populate(*inner);
-                used = buffer.read(buf, len);
-                if (used != len) {
-                    throw ::std::runtime_error(FMT("Reader::read - Requested " << len << " bytes from buffer, got " << used));
-                }
-            }
-
-            pos += len;
-        }
-
-        HIRSerialiseReaderInner::HIRSerialiseReaderInner(const ::std::string& filename)
-            : backing(filename, ::std::ios_base::in | ::std::ios_base::binary)
-            , zstream()
-            , buffer(16 * 1024)
-        {
-            if (!backing.is_open()) {
-                throw ::std::runtime_error("Unable to open file");
-            }
-
-            zstream.zalloc = Z_NULL;
-            zstream.zfree = Z_NULL;
-            zstream.opaque = Z_NULL;
-
-            int ret = inflateInit(&zstream);
-            if (ret != Z_OK) {
-                throw ::std::runtime_error("zlib init failure");
-            }
-
-            zstream.avail_in = 0;
-        }
-
-        HIRSerialiseReaderInner::~HIRSerialiseReaderInner() {
-            inflateEnd(&zstream);
-        }
-
-        size_t HIRSerialiseReaderInner::read(void* buf, size_t len) {
-            zstream.avail_out = len;
-            zstream.next_out = reinterpret_cast<unsigned char*>(buf);
-            do {
-                // Reset input buffer if empty
-                if (zstream.avail_in == 0) {
-                    backing.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
-                    zstream.avail_in = backing.gcount();
-                    if (zstream.avail_in == 0) {
-                        byteOutCount += len - zstream.avail_out;
-                        //::std::cerr << "Out of bytes, " << m_zstream.avail_out << " needed" << ::std::endl;
-                        return len - zstream.avail_out;
-                    }
-                    zstream.next_in = const_cast<unsigned char*>(buffer.data());
-
-                    byteInCount += zstream.avail_in;
-                }
-
-                int ret = inflate(&zstream, Z_NO_FLUSH);
-                if (ret == Z_STREAM_ERROR) {
-                    throw ::std::runtime_error("zlib inflate stream error");
-                }
-                switch (ret) {
-                    case Z_NEED_DICT:
-                        ret = Z_DATA_ERROR;
-                    case Z_DATA_ERROR:
-                    case Z_MEM_ERROR:
-                        throw ::std::runtime_error("zlib inflate error");
-                    default:
-                        break;
-                }
-
-            } while (zstream.avail_out > 0);
-            byteOutCount += len;
-
+    size_t HIRSerialiseReadBuffer::read(void* dst, size_t len) {
+        size_t rem = backing.size() - ofs;
+        if (rem >= len) {
+            memcpy(dst, backing.data() + ofs, len);
+            ofs += len;
             return len;
+        } else {
+            memcpy(dst, backing.data() + ofs, rem);
+            ofs = backing.size();
+            return rem;
         }
+    }
+
+    void HIRSerialiseReadBuffer::populate(HIRSerialiseReaderInner& is) {
+        backing.resize(backing.capacity(), 0);
+        auto len = is.read(backing.data(), backing.size());
+        backing.resize(len);
+        ofs = 0;
+    }
+
+    HIRSerialiseReader::HIRSerialiseReader(const ::std::string& filename)
+        : inner(new HIRSerialiseReaderInner(filename))
+        , buffer(1024)
+        , pos(0)
+    {
+        size_t nStrings = readCount();
+        strings.reserve(nStrings);
+        DEBUG("n_strings = " << nStrings);
+        for (size_t i = 0; i < nStrings; i++) {
+            auto s = readString();
+            strings.push_back(RcString::newInterned(s));
+        }
+    }
+
+    HIRSerialiseReader::~HIRSerialiseReader() {
+        delete inner, inner = nullptr;
+    }
+
+    void HIRSerialiseReader::read(void* buf, size_t len) {
+        auto used = buffer.read(buf, len);
+        if (used == len) {
+            pos += len;
+            return;
+        }
+        buf = reinterpret_cast<uint8_t*>(buf) + used;
+        len -= used;
+
+        if (len >= buffer.capacity()) {
+            inner->read(buf, len);
+        } else {
+            buffer.populate(*inner);
+            used = buffer.read(buf, len);
+            if (used != len) {
+                throw ::std::runtime_error(FMT("Reader::read - Requested " << len << " bytes from buffer, got " << used));
+            }
+        }
+
+        pos += len;
+    }
+
+    HIRSerialiseReaderInner::HIRSerialiseReaderInner(const ::std::string& filename)
+        : backing(filename, ::std::ios_base::in | ::std::ios_base::binary)
+        , zstream()
+        , buffer(16 * 1024)
+    {
+        if (!backing.is_open()) {
+            throw ::std::runtime_error("Unable to open file");
+        }
+
+        zstream.zalloc = Z_NULL;
+        zstream.zfree = Z_NULL;
+        zstream.opaque = Z_NULL;
+
+        int ret = inflateInit(&zstream);
+        if (ret != Z_OK) {
+            throw ::std::runtime_error("zlib init failure");
+        }
+
+        zstream.avail_in = 0;
+    }
+
+    HIRSerialiseReaderInner::~HIRSerialiseReaderInner() {
+        inflateEnd(&zstream);
+    }
+
+    size_t HIRSerialiseReaderInner::read(void* buf, size_t len) {
+        zstream.avail_out = len;
+        zstream.next_out = reinterpret_cast<unsigned char*>(buf);
+        do {
+            // Reset input buffer if empty
+            if (zstream.avail_in == 0) {
+                backing.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+                zstream.avail_in = backing.gcount();
+                if (zstream.avail_in == 0) {
+                    byteOutCount += len - zstream.avail_out;
+                    //::std::cerr << "Out of bytes, " << m_zstream.avail_out << " needed" << ::std::endl;
+                    return len - zstream.avail_out;
+                }
+                zstream.next_in = const_cast<unsigned char*>(buffer.data());
+
+                byteInCount += zstream.avail_in;
+            }
+
+            int ret = inflate(&zstream, Z_NO_FLUSH);
+            if (ret == Z_STREAM_ERROR) {
+                throw ::std::runtime_error("zlib inflate stream error");
+            }
+            switch (ret) {
+                case Z_NEED_DICT:
+                    ret = Z_DATA_ERROR;
+                case Z_DATA_ERROR:
+                case Z_MEM_ERROR:
+                    throw ::std::runtime_error("zlib inflate error");
+                default:
+                    break;
+            }
+
+        } while (zstream.avail_out > 0);
+        byteOutCount += len;
+
+        return len;
+    }
 
 } // namespace HIR
-
 
 void HIR::HIRSerialiseWriter::writeU16(uint16_t v) {
     uint8_t buf[] = {static_cast<uint8_t>(v & 0xFF), static_cast<uint8_t>(v >> 8)};
     this->write(buf, 2);
 }
+
 void HIR::HIRSerialiseWriter::writeU32(uint32_t v) {
     uint8_t buf[] = {static_cast<uint8_t>(v & 0xFF), static_cast<uint8_t>(v >> 8), static_cast<uint8_t>(v >> 16), static_cast<uint8_t>(v >> 24)};
     this->write(buf, 4);
 }
+
 void HIR::HIRSerialiseWriter::writeU64(uint64_t v) {
     uint8_t buf[] = {static_cast<uint8_t>(v & 0xFF), static_cast<uint8_t>(v >> 8), static_cast<uint8_t>(v >> 16), static_cast<uint8_t>(v >> 24), static_cast<uint8_t>(v >> 32), static_cast<uint8_t>(v >> 40), static_cast<uint8_t>(v >> 48), static_cast<uint8_t>(v >> 56)};
     this->write(buf, 8);
 }
+
 // Variable-length encoded u64 (for array sizes)
 void HIR::HIRSerialiseWriter::writeU64c(uint64_t v) {
     if (v < (1 << 7)) {
@@ -355,6 +359,7 @@ void HIR::HIRSerialiseWriter::writeU64c(uint64_t v) {
         this->write(buf, sizeof buf);
     }
 }
+
 void HIR::HIRSerialiseWriter::writeI64c(int64_t v) {
     // Convert from 2's completement
     bool sign = (v < 0);
@@ -363,23 +368,28 @@ void HIR::HIRSerialiseWriter::writeI64c(int64_t v) {
     va |= (sign ? 1 : 0);
     writeU64c(va);
 }
+
 void HIR::HIRSerialiseWriter::writeU128(U128 v) {
     writeU64(v.getLo());
     writeU64(v.getHi());
 }
+
 void HIR::HIRSerialiseWriter::writeDouble(double v) {
     // - Just raw-writes the double
     this->write(&v, sizeof v);
 }
+
 void HIR::HIRSerialiseWriter::writeFloatValue(FloatValue value) {
     auto encoded = F128(value);
     writeU64(encoded.lo);
     writeU64(encoded.hi);
 }
+
 void HIR::HIRSerialiseWriter::writeTag(unsigned int t) {
     assert(t < 256);
     writeU8(static_cast<uint8_t>(t));
 }
+
 void HIR::HIRSerialiseWriter::writeCount(size_t c) {
     DEBUG(c);
     if (c < 0xFD) {
@@ -395,6 +405,7 @@ void HIR::HIRSerialiseWriter::writeCount(size_t c) {
         writeU32(static_cast<uint32_t>(c));
     }
 }
+
 void HIR::HIRSerialiseWriter::writeString(size_t len, const char* s) {
     TRACE_FUNCTION;
     if (len < 128) {
@@ -406,10 +417,12 @@ void HIR::HIRSerialiseWriter::writeString(size_t len, const char* s) {
     }
     this->write(s, len);
 }
+
 void HIR::HIRSerialiseWriter::writeBool(bool v) {
     TRACE_FUNCTION_F(v);
     writeU8(v ? 0xFF : 0x00);
 }
+
 // Core protocol
 void HIR::HIRSerialiseWriter::rawWriteUint(uint64_t val) {
     if (val < 0xC0) {
@@ -427,6 +440,7 @@ void HIR::HIRSerialiseWriter::rawWriteUint(uint64_t val) {
         this->write(bytes, len);
     }
 }
+
 void HIR::HIRSerialiseWriter::rawWriteLen(size_t len) {
     if (len < (0xFC - 0xC0)) {
         writeU8(0xC0 + len);
@@ -435,23 +449,30 @@ void HIR::HIRSerialiseWriter::rawWriteLen(size_t len) {
         rawWriteUint(len);
     }
 }
+
 void HIR::HIRSerialiseWriter::rawWriteBytes(size_t len, const void* data) {
     rawWriteLen(len);
     this->write(data, len);
 }
+
 HIR::HIRSerialiseWriter::CloseOnDrop::CloseOnDrop(HIR::HIRSerialiseWriter& r)
-    : r(&r) {
+    : r(&r)
+{
 }
+
 HIR::HIRSerialiseWriter::CloseOnDrop::CloseOnDrop(CloseOnDrop&& x)
-    : r(x.r) {
+    : r(x.r)
+{
     x.r = nullptr;
 }
+
 HIR::HIRSerialiseWriter::CloseOnDrop::~CloseOnDrop() {
     if (r) {
         r->closeObject();
     }
     r = nullptr;
 }
+
 HIR::HIRSerialiseWriter::CloseOnDrop HIR::HIRSerialiseWriter::openObject(const char* name) {
     writeU8(0xFD);
     auto iv = objnameCache.insert(std::make_pair(name, static_cast<unsigned>(objnameCache.size())));
@@ -461,35 +482,42 @@ HIR::HIRSerialiseWriter::CloseOnDrop HIR::HIRSerialiseWriter::openObject(const c
     }
     return CloseOnDrop(*this);
 }
+
 HIR::HIRSerialiseWriter::CloseOnDrop HIR::HIRSerialiseWriter::openAnonObject() {
     writeU8(0xFE);
     return CloseOnDrop(*this);
 }
+
 uint8_t HIR::HIRSerialiseReader::readU8() {
     uint8_t v;
     read(&v, sizeof v);
     return v;
 }
+
 uint16_t HIR::HIRSerialiseReader::readU16() {
     uint8_t buf[2];
     read(buf, sizeof buf);
     return static_cast<uint16_t>(buf[0]) | (static_cast<uint16_t>(buf[1]) << 8);
 }
+
 uint32_t HIR::HIRSerialiseReader::readU32() {
     uint8_t buf[4];
     read(buf, sizeof buf);
     return static_cast<uint32_t>(buf[0]) | (static_cast<uint32_t>(buf[1]) << 8) | (static_cast<uint32_t>(buf[2]) << 16) | (static_cast<uint32_t>(buf[3]) << 24);
 }
+
 uint64_t HIR::HIRSerialiseReader::readU64() {
     uint8_t buf[8];
     read(buf, sizeof buf);
     return static_cast<uint64_t>(buf[0]) | (static_cast<uint64_t>(buf[1]) << 8) | (static_cast<uint64_t>(buf[2]) << 16) | (static_cast<uint64_t>(buf[3]) << 24) | (static_cast<uint64_t>(buf[4]) << 32) | (static_cast<uint64_t>(buf[5]) << 40) | (static_cast<uint64_t>(buf[6]) << 48) | (static_cast<uint64_t>(buf[7]) << 56);
 }
+
 U128 HIR::HIRSerialiseReader::readU128() {
     auto lo = readU64();
     auto hi = readU64();
     return U128(lo, hi);
 }
+
 // Variable-length encoded u64 (for array sizes)
 uint64_t HIR::HIRSerialiseReader::readU64c() {
     auto v = readU8();
@@ -511,6 +539,7 @@ uint64_t HIR::HIRSerialiseReader::readU64c() {
         return readU64();
     }
 }
+
 int64_t HIR::HIRSerialiseReader::readI64c() {
     uint64_t va = readU64c();
     bool sign = (va & 0x1) != 0;
@@ -524,17 +553,20 @@ int64_t HIR::HIRSerialiseReader::readI64c() {
         return static_cast<int64_t>(va);
     }
 }
+
 double HIR::HIRSerialiseReader::readDouble() {
     double v;
     read(reinterpret_cast<char*>(&v), sizeof v);
     return v;
 }
+
 FloatValue HIR::HIRSerialiseReader::readFloatValue() {
     F128 encoded;
     encoded.lo = readU64();
     encoded.hi = readU64();
     return encoded;
 }
+
 size_t HIR::HIRSerialiseReader::readCount() {
     size_t rv;
     auto v = readU8();
@@ -550,10 +582,12 @@ size_t HIR::HIRSerialiseReader::readCount() {
     DEBUG(rv);
     return rv;
 }
+
 RcString HIR::HIRSerialiseReader::readIstring() {
     size_t idx = readCount();
     return strings.at(idx);
 }
+
 ::std::string HIR::HIRSerialiseReader::readString() {
     size_t len = readU8();
     if (len < 128) {
@@ -565,6 +599,7 @@ RcString HIR::HIRSerialiseReader::readIstring() {
     read(const_cast<char*>(rv.data()), len);
     return rv;
 }
+
 bool HIR::HIRSerialiseReader::readBool() {
     auto v = readU8();
     switch (v) {
@@ -577,6 +612,7 @@ bool HIR::HIRSerialiseReader::readBool() {
             abort();
     }
 }
+
 // Core protocol
 uint64_t HIR::HIRSerialiseReader::rawReadUint() {
     auto v = readU8();
@@ -592,6 +628,7 @@ uint64_t HIR::HIRSerialiseReader::rawReadUint() {
         return rv;
     }
 }
+
 size_t HIR::HIRSerialiseReader::rawReadLen() {
     auto v = readU8();
     if (v < 0xC0) {
@@ -606,25 +643,32 @@ size_t HIR::HIRSerialiseReader::rawReadLen() {
         abort();
     }
 }
+
 std::string HIR::HIRSerialiseReader::rawReadBytesStdstring() {
     auto len = rawReadLen();
     std::string rv(len, '\0');
     read(const_cast<char*>(rv.data()), len);
     return rv;
 }
+
 HIR::HIRSerialiseReader::CloseOnDrop::CloseOnDrop(HIR::HIRSerialiseReader& r)
-    : r(&r) {
+    : r(&r)
+{
 }
+
 HIR::HIRSerialiseReader::CloseOnDrop::CloseOnDrop(CloseOnDrop&& x)
-    : r(x.r) {
+    : r(x.r)
+{
     x.r = nullptr;
 }
+
 HIR::HIRSerialiseReader::CloseOnDrop::~CloseOnDrop() {
     if (r) {
         r->closeObject();
     }
     r = nullptr;
 }
+
 HIR::HIRSerialiseReader::CloseOnDrop HIR::HIRSerialiseReader::openObject(const char* name) {
     auto v = readU8();
     if (v != 0xFD) {
@@ -644,6 +688,7 @@ HIR::HIRSerialiseReader::CloseOnDrop HIR::HIRSerialiseReader::openObject(const c
     }
     return CloseOnDrop(*this);
 }
+
 HIR::HIRSerialiseReader::CloseOnDrop HIR::HIRSerialiseReader::openAnonObject() {
     auto v = readU8();
     if (v != 0xFE) {
@@ -652,6 +697,7 @@ HIR::HIRSerialiseReader::CloseOnDrop HIR::HIRSerialiseReader::openAnonObject() {
     }
     return CloseOnDrop(*this);
 }
+
 void HIR::HIRSerialiseReader::closeObject() {
     auto v = readU8();
     if (v != 0xFF) {

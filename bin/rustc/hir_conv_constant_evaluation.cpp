@@ -95,866 +95,866 @@ namespace {
 }
 
 namespace MIR {
-        class MIREvalAllocation;
-        class MIREvalConstant;
-        class MIREvalStaticRef;
-        class MIREvalRelocPtr;
+    class MIREvalAllocation;
+    class MIREvalConstant;
+    class MIREvalStaticRef;
+    class MIREvalRelocPtr;
 
-        template <typename T>
-        class MIREvalPtr {
-            friend class MIREvalRelocPtr;
+    template <typename T>
+    class MIREvalPtr {
+        friend class MIREvalRelocPtr;
 
-        protected:
-            T* ptr;
+    protected:
+        T* ptr;
 
-        public:
-            MIREvalPtr()
-                : ptr(nullptr)
-            {
-            }
-
-            operator bool() const {
-                return ptr != 0;
-            }
-
-            T* operator->() {
-                return ptr;
-            }
-
-            const T* operator->() const {
-                return ptr;
-            }
-
-            T& operator*() {
-                return *ptr;
-            }
-
-            const T& operator*() const {
-                return *ptr;
-            }
-        };
-
-        /// "Statically allocated" constant data
-        class MIREvalConstantPtr final: public MIREvalPtr<MIREvalConstant> {
-        public:
-            static MIREvalConstantPtr allocate(stl::ObjPool* pool, const void* data, size_t len);
-        };
-
-        /// Mutable allocation
-        class MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
-        public:
-            static MIREvalAllocationPtr allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeData* ty);
-            static MIREvalAllocationPtr allocateRo(stl::ObjPool* pool, const void* data, size_t len);
-        };
-
-        /// Reference to a `static`
-        class MIREvalStaticRefPtr final: public MIREvalPtr<MIREvalStaticRef> {
-        public:
-            static MIREvalStaticRefPtr allocate(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit);
-        };
-
-        /// Common interface for data storage
-        class IValue {
-        public:
-            virtual void fmtIdent(std::ostream& os) const = 0;
-            virtual void fmt(::std::ostream& os, size_t ofs, size_t len) const = 0;
-
-            virtual size_t size() const = 0;
-            virtual const uint8_t* getBytes(size_t ofs, size_t len, bool checkMask) const = 0;
-            virtual void readMask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const = 0;
-
-            virtual bool isWritable() const = 0;
-            virtual uint8_t* extWriteBytes(size_t ofs, size_t len) = 0;
-
-            void writeBytes(size_t ofs, const void* data, size_t len) {
-                memcpy(extWriteBytes(ofs, len), data, len);
-            }
-
-            virtual void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) = 0;
-
-            virtual MIREvalRelocPtr getReloc(size_t ofs) const = 0;
-            virtual void setReloc(size_t ofs, MIREvalRelocPtr ptr) = 0;
-        };
-
-        /// Pointer wrapping a reference-counted allocation
-        class MIREvalRelocPtr {
-            uintptr_t ptr;
-
-            enum Tag {
-                TAG_Allocation = 0,
-                TAG_Constant,
-                TAG_StaticRef,
-            };
-
-        public:
-            ~MIREvalRelocPtr() = default;
-            MIREvalRelocPtr(const MIREvalRelocPtr&) = default;
-            MIREvalRelocPtr(MIREvalRelocPtr&&) = default;
-            MIREvalRelocPtr& operator=(const MIREvalRelocPtr&) = default;
-            MIREvalRelocPtr& operator=(MIREvalRelocPtr&&) = default;
-
-            MIREvalRelocPtr()
-                : ptr(0)
-            {
-            }
-
-            MIREvalRelocPtr(MIREvalAllocationPtr p)
-                : ptr(0)
-            {
-                set(reinterpret_cast<uintptr_t>(p.ptr), TAG_Allocation);
-            }
-
-            MIREvalRelocPtr(MIREvalConstantPtr p)
-                : ptr(0)
-            {
-                set(reinterpret_cast<uintptr_t>(p.ptr), TAG_Constant);
-            }
-
-            MIREvalRelocPtr(MIREvalStaticRefPtr p)
-                : ptr(0)
-            {
-                set(reinterpret_cast<uintptr_t>(p.ptr), TAG_StaticRef);
-            }
-
-            operator bool() const {
-                return ptr != 0;
-            }
-
-            bool operator==(const MIREvalRelocPtr& x) const {
-                return ptr == x.ptr;
-            }
-
-            IValue& asValue() {
-                return *asValuePtr();
-            }
-
-            const IValue& asValue() const {
-                return *asValuePtr();
-            }
-
-            MIREvalAllocation* asAllocation() const {
-                return (ptr != 0 && (ptr & 3) == TAG_Allocation) ? reinterpret_cast<MIREvalAllocation*>(ptr - TAG_Allocation) : nullptr;
-            }
-
-            MIREvalConstant* asConstant() const {
-                return (ptr != 0 && (ptr & 3) == TAG_Constant) ? reinterpret_cast<MIREvalConstant*>(ptr - TAG_Constant) : nullptr;
-            }
-
-            MIREvalStaticRef* asStaticref() const {
-                return (ptr != 0 && (ptr & 3) == TAG_StaticRef) ? reinterpret_cast<MIREvalStaticRef*>(ptr - TAG_StaticRef) : nullptr;
-            }
-
-            friend std::ostream& operator<<(std::ostream& os, const MIREvalRelocPtr& ptr) {
-                if (ptr.ptr) {
-                    ptr.asValuePtr()->fmtIdent(os);
-                } else {
-                    os << "NULL";
-                }
-                return os;
-            }
-
-        private:
-            IValue* asValuePtr() const;
-
-            void set(uintptr_t ptr, Tag tag) {
-                assert(this->ptr == 0);
-                assert((ptr & 3) == 0);
-                assert(tag < 4);
-                this->ptr = ptr | tag;
-            }
-        };
-
-        /// Helper: Print a 2-digit hex value (without updating the stream state)
-        void putbHex(std::ostream& os, uint8_t v) {
-            char tmp[3];
-            tmp[0] = "0123456789ABCDEF"[v >> 4];
-            tmp[1] = "0123456789ABCDEF"[v & 0xF];
-            tmp[2] = '\0';
-            os << tmp;
+    public:
+        MIREvalPtr()
+            : ptr(nullptr)
+        {
         }
 
-        /// Constant data
-        class MIREvalConstant final: public IValue {
-            friend struct stl::Embed<MIREvalConstant>;
-            friend class MIREvalConstantPtr;
-            unsigned const length;
-            const uint8_t* const data;
+        operator bool() const {
+            return ptr != 0;
+        }
 
-            MIREvalConstant(const void* data, size_t len)
-                : length(len)
-                , data(reinterpret_cast<const uint8_t*>(data))
-            {
-            }
+        T* operator->() {
+            return ptr;
+        }
 
-        public:
-            void fmtIdent(std::ostream& os) const override {
-                os << "C:" << (const void*)this->data;
-            }
+        const T* operator->() const {
+            return ptr;
+        }
 
-            void fmt(::std::ostream& os, size_t ofs, size_t len) const override {
-                assert(ofs <= length);
-                assert(ofs + len <= length);
-                for (size_t i = 0; i < len; i++) {
-                    if (i != 0 && (ofs + i) % 8 == 0) {
-                        os << " ";
-                    }
-                    putbHex(os, this->data[ofs + i]);
-                }
-            }
+        T& operator*() {
+            return *ptr;
+        }
 
-            size_t size() const {
-                return length;
-            }
+        const T& operator*() const {
+            return *ptr;
+        }
+    };
 
-            const uint8_t* getBytes(size_t ofs, size_t len, bool /*check_mask*/) const override {
-                if (!(ofs <= length) || !(len <= length) || !(ofs + len <= length)) {
-                    return nullptr;
-                }
-                return data + ofs;
-            }
+    /// "Statically allocated" constant data
+    class MIREvalConstantPtr final: public MIREvalPtr<MIREvalConstant> {
+    public:
+        static MIREvalConstantPtr allocate(stl::ObjPool* pool, const void* data, size_t len);
+    };
 
-            void readMask(uint8_t* dst, size_t dstOfs, size_t /*ofs*/, size_t len) const {
-                dst += dstOfs / 8;
-                dstOfs %= 8;
-                if (dstOfs != 0) {
-                    // Do a single-bit fill
-                    while (len--) {
-                        dst[dstOfs / 8] |= 1 << (dstOfs % 8);
-                    }
-                } else {
-                    memset(dst, 0xFF, len / 8);
-                    dst[len / 8] |= 0xFF >> (8 - len % 8);
-                }
-            }
+    /// Mutable allocation
+    class MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
+    public:
+        static MIREvalAllocationPtr allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeData* ty);
+        static MIREvalAllocationPtr allocateRo(stl::ObjPool* pool, const void* data, size_t len);
+    };
 
-            bool isWritable() const override {
-                return false;
-            }
+    /// Reference to a `static`
+    class MIREvalStaticRefPtr final: public MIREvalPtr<MIREvalStaticRef> {
+    public:
+        static MIREvalStaticRefPtr allocate(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit);
+    };
 
-            uint8_t* extWriteBytes(size_t ofs, size_t len) override {
-                abort();
-            }
+    /// Common interface for data storage
+    class IValue {
+    public:
+        virtual void fmtIdent(std::ostream& os) const = 0;
+        virtual void fmt(::std::ostream& os, size_t ofs, size_t len) const = 0;
 
-            void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override {
-                abort();
-            }
+        virtual size_t size() const = 0;
+        virtual const uint8_t* getBytes(size_t ofs, size_t len, bool checkMask) const = 0;
+        virtual void readMask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const = 0;
 
-            MIREvalRelocPtr getReloc(size_t ofs) const override {
-                return MIREvalRelocPtr();
-            }
+        virtual bool isWritable() const = 0;
+        virtual uint8_t* extWriteBytes(size_t ofs, size_t len) = 0;
 
-            void setReloc(size_t ofs, MIREvalRelocPtr ptr) override {
-                abort();
-            }
+        void writeBytes(size_t ofs, const void* data, size_t len) {
+            memcpy(extWriteBytes(ofs, len), data, len);
+        }
+
+        virtual void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) = 0;
+
+        virtual MIREvalRelocPtr getReloc(size_t ofs) const = 0;
+        virtual void setReloc(size_t ofs, MIREvalRelocPtr ptr) = 0;
+    };
+
+    /// Pointer wrapping a reference-counted allocation
+    class MIREvalRelocPtr {
+        uintptr_t ptr;
+
+        enum Tag {
+            TAG_Allocation = 0,
+            TAG_Constant,
+            TAG_StaticRef,
         };
 
-        class MIREvalAllocation final: public IValue {
-            friend struct stl::Embed<MIREvalAllocation>;
-            friend class MIREvalAllocationPtr;
-
-        public:
-            struct Reloc {
-                size_t offset;
-                MIREvalRelocPtr ptr;
-            };
-
-        private:
-            unsigned length;
-            bool isReadonly;
-            ::HIR::TypeRef mType;
-            std::vector<Reloc> relocations;
-            uint8_t* data;
-
-            MIREvalAllocation(uint8_t* data, size_t len, const ::HIR::TypeData* ty)
-                : length(len)
-                , isReadonly(false)
-                , mType(ty)
-                , data(data)
-            {
-                memset(data, 0, len + (len + 7) / 8);
-            }
-
-            MIREvalAllocation(const MIREvalAllocation&) = delete;
-            MIREvalAllocation& operator=(const MIREvalAllocation&) = delete;
-
-        public:
-            void fmtIdent(std::ostream& os) const override {
-                os << "A:" << this;
-            }
-
-            void fmt(::std::ostream& os, size_t ofs, size_t len) const override {
-                assert(ofs <= length);
-                assert(ofs + len <= length);
-                for (size_t i = 0; i < len; i++) {
-                    auto j = ofs + i;
-                    if (i != 0 && j % 8 == 0) {
-                        os << " ";
-                    }
-                    for (const auto& r : relocations) {
-                        if (r.offset == j) {
-                            os << "{" << r.ptr << "}";
-                        }
-                    }
-                    if (getMask()[j / 8] & (1 << j % 8)) {
-                        putbHex(os, data[j]);
-                    } else {
-                        os << "--";
-                    }
-                }
-            }
-
-            size_t size() const override {
-                return length;
-            }
-
-            const uint8_t* getBytes(size_t ofs, size_t len, bool checkMask) const override {
-                if (!(ofs <= length) || !(len <= length) || !(ofs + len <= length)) {
-                    return nullptr;
-                }
-
-                if (checkMask) {
-                    const auto* m = this->getMask();
-                    size_t mo = ofs, ml = len;
-                    for (; mo % 8 != 0 && ml > 0; mo++, ml--) {
-                        if (!(m[mo / 8] & (1 << (mo % 8)))) {
-                            return nullptr;
-                        }
-                    }
-                    for (; ml >= 8; mo += 8, ml -= 8) {
-                        if (!(m[mo / 8] == 0xFF)) {
-                            return nullptr;
-                        }
-                    }
-                    for (; ml % 8 != 0 && ml > 0; mo++, ml--) {
-                        if (!(m[mo / 8] & (1 << (mo % 8)))) {
-                            return nullptr;
-                        }
-                    }
-                }
-
-                return this->data + ofs;
-            }
-
-            void readMask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const {
-                assert(ofs <= length);
-                assert(len <= length);
-                assert(ofs + len <= length);
-
-                dst += dstOfs / 8;
-                const auto* src = getMask() + ofs / 8;
-                dstOfs %= 8;
-                ofs %= 8;
-                if (dstOfs != 0 || ofs != 0) {
-                    // If the entries are unaligned, then use a bit-by-bit copy
-                    for (size_t i = 0; i < len; i++) {
-                        size_t s = ofs + i;
-                        size_t d = dstOfs + i;
-                        if (src[s / 8] & (1 << s % 8)) {
-                            dst[d / 8] |= (1 << d % 8);
-                        } else {
-                            dst[d / 8] &= ~(1 << d % 8);
-                        }
-                    }
-                } else {
-                    for (; len >= 8; len -= 8) {
-                        *dst++ = *src++;
-                    }
-                    // Tail entires (partial byte)
-                    if (len > 0) {
-                        uint8_t mask = (0xFF >> (8 - len));
-                        *dst = (*dst & ~mask) | (*src & mask);
-                    }
-                }
-            }
-
-            bool isWritable() const override {
-                return !isReadonly;
-            }
-
-            uint8_t* extWriteBytes(size_t ofs, size_t len) override {
-                ASSERT_BUG(Span(), ofs <= length && len <= length && ofs + len <= length, "OOB write: " << ofs << "+" << len << " out of " << length);
-                // Set the mask
-                {
-                    auto* m = this->getMask();
-                    size_t mo = ofs, ml = len;
-                    for (; mo % 8 != 0 && ml > 0; mo++, ml--) {
-                        m[mo / 8] |= (1 << (mo % 8));
-                    }
-                    for (; ml >= 8; mo += 8, ml -= 8) {
-                        m[mo / 8] = 0xFF;
-                    }
-                    for (; ml % 8 != 0 && ml > 0; mo++, ml--) {
-                        m[mo / 8] |= (1 << (mo % 8));
-                    }
-                }
-                // Clear impacted relocations
-                auto it = std::remove_if(this->relocations.begin(), this->relocations.end(), [&](const Reloc& r) {
-                    return (ofs <= r.offset && r.offset < ofs + len);
-                });
-                this->relocations.resize(it - this->relocations.begin());
-                return this->data + ofs;
-            }
-
-            void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override {
-                assert(ofs <= length);
-                assert(len <= length);
-                assert(ofs + len <= length);
-                src.readMask(getMask(), ofs, srcOfs, len);
-            }
-
-            MIREvalRelocPtr getReloc(size_t ofs) const override {
-                for (const auto& r : this->relocations) {
-                    if (r.offset == ofs) {
-                        return r.ptr;
-                    }
-                }
-                return MIREvalRelocPtr();
-            }
-
-            void setReloc(size_t ofs, MIREvalRelocPtr ptr) override {
-                assert(ofs % (TargetGetPointerBits() / 8) == 0);
-                auto it = std::lower_bound(this->relocations.begin(), this->relocations.end(), ofs, [](const Reloc& r, size_t ofs) {
-                    return r.offset < ofs;
-                });
-                if (it != this->relocations.end() && it->offset == ofs) {
-                    if (ptr) {
-                        it->ptr = std::move(ptr);
-                    } else {
-                        this->relocations.erase(it);
-                    }
-                } else {
-                    if (ptr) {
-                        this->relocations.insert(it, Reloc{ofs, std::move(ptr)});
-                    } else
-                        ;
-                }
-            }
-
-            const ::HIR::TypeData* getType() const {
-                return mType;
-            }
-
-            const std::vector<Reloc>& getRelocations() const {
-                return relocations;
-            }
-
-        private:
-            uint8_t* getMask() {
-                return data + length;
-            }
-
-            const uint8_t* getMask() const {
-                return data + length;
-            }
-        };
-
-        class MIREvalStaticRef final: public IValue {
-            friend struct stl::Embed<MIREvalStaticRef>;
-            friend class MIREvalStaticRefPtr;
-
-            stl::ObjPool* pool;
-            ::HIR::Path mPath;
-            const EncodedLiteral* encoded;
-
-            MIREvalStaticRef(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit = nullptr)
-                : pool(pool)
-                , mPath(std::move(p))
-                , encoded(lit)
-            {
-            }
-
-        public:
-            void fmtIdent(std::ostream& os) const override {
-                os << this->mPath;
-            }
-
-            void fmt(::std::ostream& os, size_t ofs, size_t len) const override {
-                os << "[" << mPath << "]";
-                if (encoded) {
-                    os << EncodedLiteralSlice(*encoded).slice(ofs, len);
-                } else {
-                    os << "?";
-                }
-            }
-
-            size_t size() const {
-                return encoded ? encoded->bytes.size() : 0;
-            }
-
-            const uint8_t* getBytes(size_t ofs, size_t len, bool checkMask) const override {
-                if (encoded) {
-                    assert(ofs <= encoded->bytes.size());
-                    assert(len <= encoded->bytes.size());
-                    assert(ofs + len <= encoded->bytes.size());
-                    if (encoded->bytes.size() == 0) {
-                        // Empty vectors can have a null data pointer
-                        return reinterpret_cast<const uint8_t*>("");
-                    }
-                    return encoded->bytes.data() + ofs;
-                } else {
-                    if (len == 0 && ofs == 0) {
-                        static uint8_t null;
-                        return &null;
-                    }
-                    return nullptr;
-                }
-            }
-
-            void readMask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const override {
-                dst += dstOfs / 8;
-                dstOfs %= 8;
-                if (dstOfs != 0) {
-                    // Do a single-bit fill
-                    while (len--) {
-                        dst[dstOfs / 8] |= 1 << (dstOfs % 8);
-                    }
-                } else {
-                    memset(dst, 0xFF, len / 8);
-                    dst[len / 8] |= 0xFF >> (8 - len % 8);
-                }
-            }
-
-            bool isWritable() const override {
-                return false;
-            }
-
-            uint8_t* extWriteBytes(size_t ofs, size_t len) override {
-                abort();
-            }
-
-            void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override {
-                abort();
-            }
-
-            MIREvalRelocPtr getReloc(size_t ofs) const override {
-                if (encoded) {
-                    for (const auto& r : encoded->relocations) {
-                        if (r.ofs == ofs) {
-                            MIREvalRelocPtr reloc;
-                            if (r.p) {
-                                return MIREvalRelocPtr(MIREvalStaticRefPtr::allocate(pool, r.p->clone(), nullptr));
-                                TODO(Span(), "Convert relocation pointer - " << *r.p);
-                            } else {
-                                return MIREvalRelocPtr(MIREvalAllocationPtr::allocateRo(pool, r.bytes.data(), r.bytes.size()));
-                            }
-                        }
-                    }
-                }
-                return MIREvalRelocPtr();
-            }
-
-            void setReloc(size_t ofs, MIREvalRelocPtr ptr) override {
-                abort();
-            }
-
-            const ::HIR::Path& path() const {
-                return mPath;
-            }
-        };
-
-        /// Reference to a value
-        class MIREvalValueRef {
-            MIREvalRelocPtr storage;
-            uint32_t ofs;
-            uint32_t len;
-
-        public:
-            MIREvalValueRef()
-                : storage()
-                , ofs(0)
-                , len(0)
-            {
-            }
-
-            MIREvalValueRef(MIREvalRelocPtr alloc, size_t ofs = 0)
-                : storage(alloc)
-                , ofs(ofs)
-                , len(0)
-            {
-                if (alloc) {
-                    assert(ofs <= alloc.asValue().size());
-                    len = alloc.asValue().size() - ofs;
-                }
-            }
-
-            MIREvalValueRef slice(size_t ofs, size_t len) {
-                ASSERT_BUG(Span(), ofs <= this->len && ofs + len <= this->len, "ValueRef::slice: " << ofs << "+" << len << " out of range (" << this->len << ")");
-
-                MIREvalValueRef rv;
-                rv.storage = storage;
-                rv.ofs = this->ofs + ofs;
-                rv.len = len;
-                return rv;
-            }
-
-            MIREvalValueRef slice(size_t ofs) {
-                ASSERT_BUG(Span(), ofs <= this->len, "ValueRef::slice: " << ofs << " out of range (" << this->len << ")");
-                return slice(ofs, this->len - ofs);
-            }
-
-            bool isValid() const {
-                return storage;
-            }
-
-            MIREvalRelocPtr getStorage() const {
-                return storage;
-            }
-
-            size_t getOfs() const {
-                return ofs;
-            }
-
-            size_t getLen() const {
-                return len;
-            }
-
-            void copyFrom(const MIR::TypeResolve& state, const MIREvalValueRef& other) {
-                size_t len = std::min(this->len, other.len);
-                // Check that there's no overlap
-                if (this->storage == other.storage) {
-                    if (this->ofs < other.ofs) {
-                        MIR_ASSERT(state, this->ofs + len <= other.ofs, "Overlapping copy_from: " << other.ofs << "+" << len << " and " << this->ofs << "+" << len);
-                    } else {
-                        MIR_ASSERT(state, other.ofs + len <= this->ofs, "Overlapping copy_from: " << other.ofs << "+" << len << " and " << this->ofs << "+" << len);
-                    }
-                }
-                // Copy the data (don't check the source mask when getting the source pointer)
-                const auto* src = other.storage.asValue().getBytes(other.ofs, len, /*check_mask*/ false);
-                MIR_ASSERT(state, src, "Invalid read " << other.storage << " - " << other.ofs << "+" << len);
-                storage.asValue().writeBytes(this->ofs, src, len);
-                // Copy the mask data
-                storage.asValue().writeMaskFrom(this->ofs, other.storage.asValue(), other.ofs, len);
-                // Copy relocations
-                for (size_t i = 0; i < len; i++) {
-                    if (auto r = other.storage.asValue().getReloc(other.ofs + i)) {
-                        storage.asValue().setReloc(this->ofs + i, std::move(r));
-                    }
-                }
-            }
-
-            void writeBytes(const MIR::TypeResolve& state, const void* data, size_t len) {
-                MIR_ASSERT(state, storage, "Writing to invalid slot");
-                MIR_ASSERT(state, storage.asValue().isWritable(), "Writing to read-only slot");
-                if (len > 0) {
-                    storage.asValue().writeBytes(ofs, data, len);
-                }
-            }
-
-            uint8_t* extWriteBytes(const MIR::TypeResolve& state, size_t len) {
-                MIR_ASSERT(state, storage, "Writing to invalid slot");
-                MIR_ASSERT(state, storage.asValue().isWritable(), "Writing to read-only slot");
-                if (len > 0) {
-                    return storage.asValue().extWriteBytes(ofs, len);
-                } else {
-                    static uint8_t emptyBuf;
-                    return &emptyBuf;
-                }
-            }
-
-            void writeByte(const MIR::TypeResolve& state, uint8_t v) {
-                writeBytes(state, &v, 1);
-            }
-
-            void writeFloat(const MIR::TypeResolve& state, unsigned bits, FloatValue v) {
-                switch (bits) {
-                    case 16: {
-                        F16 vF = static_cast<float>(v);
-                        writeBytes(state, &vF, sizeof(vF));
-                    } break;
-                    case 32: {
-                        float vF32 = static_cast<float>(v);
-                        writeBytes(state, &vF32, sizeof(vF32));
-                    } break;
-                    case 64: {
-                        double vF64 = static_cast<double>(v);
-                        writeBytes(state, &vF64, sizeof(vF64));
-                    } break;
-                    case 128: {
-                        F128 vF128 = v;
-                        writeBytes(state, &vF128, 16);
-                    } break;
-                    default:
-                        MIR_BUG(state, "Unexpected float size (write): " << bits);
-                }
-            }
-
-            void writeUint(const MIR::TypeResolve& state, unsigned bits, uint64_t v) {
-                assert(bits <= 64);
-                writeUint(state, bits, U128(v));
-            }
-
-            void writeUint(const MIR::TypeResolve& state, unsigned bits, U128 v) {
-                auto nBytes = (bits + 7) / 8;
-                if (TargetGetCurSpec().arch.bigEndian) {
-                    v.toBeBytes(extWriteBytes(state, nBytes), nBytes);
-                } else {
-                    v.toLeBytes(extWriteBytes(state, nBytes), nBytes);
-                }
-            }
-
-            void writeSint(const MIR::TypeResolve& state, unsigned bits, S128 v) {
-                auto nBytes = (bits + 7) / 8;
-                if (TargetGetCurSpec().arch.bigEndian) {
-                    v.getInner().toBeBytes(extWriteBytes(state, nBytes), nBytes);
-                } else {
-                    v.getInner().toLeBytes(extWriteBytes(state, nBytes), nBytes);
-                }
-            }
-
-            void writePtr(const MIR::TypeResolve& state, uint64_t val, MIREvalRelocPtr reloc) {
-                writeUint(state, TargetGetPointerBits(), U128(val));
-                storage.asValue().setReloc(ofs, std::move(reloc));
-            }
-
-            void setReloc(MIREvalRelocPtr reloc) {
-                storage.asValue().setReloc(ofs, std::move(reloc));
-            }
-
-            const uint8_t* extReadBytes(const MIR::TypeResolve& state, size_t len) const {
-                MIR_ASSERT(state, storage, "");
-                MIR_ASSERT(state, len >= 1, "");
-                const auto* src = storage.asValue().getBytes(ofs, len, /*check_mask*/ true);
-                MIR_ASSERT(state, src, "Invalid read: " << ofs << "+" << len << " (in " << *this << ")");
-                return src;
-            }
-
-            void readBytes(const MIR::TypeResolve& state, void* data, size_t len) const {
-                const auto* src = extReadBytes(state, len);
-                assert(src);
-                memcpy(data, src, len);
-            }
-
-            FloatValue readFloat(const ::MIR::TypeResolve& state, unsigned bits) const {
-                switch (bits) {
-                    case 16: {
-                        F16 vF16;
-                        readBytes(state, &vF16, sizeof(vF16));
-                        return FloatValue(static_cast<float>(vF16));
-                    } break;
-                    case 32: {
-                        float vF32 = 0;
-                        readBytes(state, &vF32, sizeof(vF32));
-                        return vF32;
-                    } break;
-                    case 64: {
-                        double vF64 = 0;
-                        readBytes(state, &vF64, sizeof(vF64));
-                        return vF64;
-                    } break;
-                    case 128: {
-                        F128 vF;
-                        readBytes(state, &vF, sizeof(vF));
-                        return vF;
-                    } break;
-                    default:
-                        MIR_BUG(state, "Unexpected float size: " << bits);
-                }
-            }
-
-            U128 readUint(const ::MIR::TypeResolve& state, unsigned bits) const {
-                assert(bits <= 128);
-                auto nBytes = (bits + 7) / 8;
-                U128 rv;
-                if (TargetGetCurSpec().arch.bigEndian) {
-                    rv.fromBeBytes(extReadBytes(state, nBytes), nBytes);
-                } else {
-                    rv.fromLeBytes(extReadBytes(state, nBytes), nBytes);
-                }
-                return rv;
-            }
-
-            S128 readSint(const ::MIR::TypeResolve& state, unsigned bits) const {
-                auto nBytes = (bits + 7) / 8;
-                S128 rv;
-                if (TargetGetCurSpec().arch.bigEndian) {
-                    rv.fromBeBytes(extReadBytes(state, nBytes), nBytes);
-                } else {
-                    rv.fromLeBytes(extReadBytes(state, nBytes), nBytes);
-                }
-                return rv;
-            }
-
-            uint64_t readUsize(const ::MIR::TypeResolve& state) const {
-                return readUint(state, TargetGetPointerBits()).truncateU64();
-            }
-
-            std::pair<uint64_t, MIREvalRelocPtr> readPtr(const ::MIR::TypeResolve& state) const {
-                return std::make_pair(readUsize(state), storage.asValue().getReloc(ofs));
-            }
-
-            friend std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr);
-        };
-
-        std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr) {
-            if (!vr.storage) {
-                os << "ValueRef(null)";
+    public:
+        ~MIREvalRelocPtr() = default;
+        MIREvalRelocPtr(const MIREvalRelocPtr&) = default;
+        MIREvalRelocPtr(MIREvalRelocPtr&&) = default;
+        MIREvalRelocPtr& operator=(const MIREvalRelocPtr&) = default;
+        MIREvalRelocPtr& operator=(MIREvalRelocPtr&&) = default;
+
+        MIREvalRelocPtr()
+            : ptr(0)
+        {
+        }
+
+        MIREvalRelocPtr(MIREvalAllocationPtr p)
+            : ptr(0)
+        {
+            set(reinterpret_cast<uintptr_t>(p.ptr), TAG_Allocation);
+        }
+
+        MIREvalRelocPtr(MIREvalConstantPtr p)
+            : ptr(0)
+        {
+            set(reinterpret_cast<uintptr_t>(p.ptr), TAG_Constant);
+        }
+
+        MIREvalRelocPtr(MIREvalStaticRefPtr p)
+            : ptr(0)
+        {
+            set(reinterpret_cast<uintptr_t>(p.ptr), TAG_StaticRef);
+        }
+
+        operator bool() const {
+            return ptr != 0;
+        }
+
+        bool operator==(const MIREvalRelocPtr& x) const {
+            return ptr == x.ptr;
+        }
+
+        IValue& asValue() {
+            return *asValuePtr();
+        }
+
+        const IValue& asValue() const {
+            return *asValuePtr();
+        }
+
+        MIREvalAllocation* asAllocation() const {
+            return (ptr != 0 && (ptr & 3) == TAG_Allocation) ? reinterpret_cast<MIREvalAllocation*>(ptr - TAG_Allocation) : nullptr;
+        }
+
+        MIREvalConstant* asConstant() const {
+            return (ptr != 0 && (ptr & 3) == TAG_Constant) ? reinterpret_cast<MIREvalConstant*>(ptr - TAG_Constant) : nullptr;
+        }
+
+        MIREvalStaticRef* asStaticref() const {
+            return (ptr != 0 && (ptr & 3) == TAG_StaticRef) ? reinterpret_cast<MIREvalStaticRef*>(ptr - TAG_StaticRef) : nullptr;
+        }
+
+        friend std::ostream& operator<<(std::ostream& os, const MIREvalRelocPtr& ptr) {
+            if (ptr.ptr) {
+                ptr.asValuePtr()->fmtIdent(os);
             } else {
-                os << "ValueRef({" << vr.ofs << "+" << vr.len << "}";
-                vr.storage.asValue().fmt(os, vr.ofs, vr.len);
-                os << ")";
+                os << "NULL";
             }
             return os;
         }
 
-        std::ostream& operator<<(std::ostream& os, const MIREvalAllocationPtr& ap) {
-            os << MIREvalValueRef(ap);
-            return os;
+    private:
+        IValue* asValuePtr() const;
+
+        void set(uintptr_t ptr, Tag tag) {
+            assert(this->ptr == 0);
+            assert((ptr & 3) == 0);
+            assert(tag < 4);
+            this->ptr = ptr | tag;
+        }
+    };
+
+    /// Helper: Print a 2-digit hex value (without updating the stream state)
+    void putbHex(std::ostream& os, uint8_t v) {
+        char tmp[3];
+        tmp[0] = "0123456789ABCDEF"[v >> 4];
+        tmp[1] = "0123456789ABCDEF"[v & 0xF];
+        tmp[2] = '\0';
+        os << tmp;
+    }
+
+    /// Constant data
+    class MIREvalConstant final: public IValue {
+        friend struct stl::Embed<MIREvalConstant>;
+        friend class MIREvalConstantPtr;
+        unsigned const length;
+        const uint8_t* const data;
+
+        MIREvalConstant(const void* data, size_t len)
+            : length(len)
+            , data(reinterpret_cast<const uint8_t*>(data))
+        {
         }
 
-        // ---
-        MIREvalConstantPtr MIREvalConstantPtr::allocate(stl::ObjPool* pool, const void* data, size_t len) {
-            MIREvalConstantPtr rv;
-            rv.ptr = pool->make<MIREvalConstant>(data, len);
-            return rv;
+    public:
+        void fmtIdent(std::ostream& os) const override {
+            os << "C:" << (const void*)this->data;
         }
 
-        // ---
-        MIREvalAllocationPtr MIREvalAllocationPtr::allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeData* ty) {
-            size_t len;
-            if (!TargetGetSizeOf(Span(), resolve, ty, len)) {
-                throw Defer();
+        void fmt(::std::ostream& os, size_t ofs, size_t len) const override {
+            assert(ofs <= length);
+            assert(ofs + len <= length);
+            for (size_t i = 0; i < len; i++) {
+                if (i != 0 && (ofs + i) % 8 == 0) {
+                    os << " ";
+                }
+                putbHex(os, this->data[ofs + i]);
             }
-            auto* data = static_cast<uint8_t*>(pool->allocate(len + ((len + 7) / 8)));
-            MIREvalAllocationPtr rv;
-            // TODO: Include the current location from `state` in the allocation header
-            rv.ptr = pool->make<MIREvalAllocation>(data, len, ty);
-            return rv;
         }
 
-        MIREvalAllocationPtr MIREvalAllocationPtr::allocateRo(stl::ObjPool* pool, const void* dataIn, size_t len) {
-            auto* data = static_cast<uint8_t*>(pool->allocate(len + ((len + 7) / 8)));
-            MIREvalAllocationPtr rv;
-            rv.ptr = pool->make<MIREvalAllocation>(data, len, HIR::TypeRef());
-            rv->writeBytes(0, dataIn, len);
-            rv->isReadonly = true;
-            return rv;
+        size_t size() const {
+            return length;
         }
 
-        // ---
-        MIREvalStaticRefPtr MIREvalStaticRefPtr::allocate(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit) {
-            MIREvalStaticRefPtr rv;
-            rv.ptr = pool->make<MIREvalStaticRef>(pool, std::move(p), lit);
-            return rv;
-        }
-
-        // --- RelocPtr ---
-        IValue* MIREvalRelocPtr::asValuePtr() const {
-            assert(ptr);
-            switch (ptr & 3) {
-                case TAG_Allocation:
-                    assert(asAllocation());
-                    return asAllocation();
-                case TAG_Constant:
-                    assert(asConstant());
-                    return asConstant();
-                case TAG_StaticRef:
-                    assert(asStaticref());
-                    return asStaticref();
-                case 3:
-                    assert(!"Unexpected tag 3");
+        const uint8_t* getBytes(size_t ofs, size_t len, bool /*check_mask*/) const override {
+            if (!(ofs <= length) || !(len <= length) || !(ofs + len <= length)) {
+                return nullptr;
             }
+            return data + ofs;
+        }
+
+        void readMask(uint8_t* dst, size_t dstOfs, size_t /*ofs*/, size_t len) const {
+            dst += dstOfs / 8;
+            dstOfs %= 8;
+            if (dstOfs != 0) {
+                // Do a single-bit fill
+                while (len--) {
+                    dst[dstOfs / 8] |= 1 << (dstOfs % 8);
+                }
+            } else {
+                memset(dst, 0xFF, len / 8);
+                dst[len / 8] |= 0xFF >> (8 - len % 8);
+            }
+        }
+
+        bool isWritable() const override {
+            return false;
+        }
+
+        uint8_t* extWriteBytes(size_t ofs, size_t len) override {
             abort();
         }
+
+        void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override {
+            abort();
+        }
+
+        MIREvalRelocPtr getReloc(size_t ofs) const override {
+            return MIREvalRelocPtr();
+        }
+
+        void setReloc(size_t ofs, MIREvalRelocPtr ptr) override {
+            abort();
+        }
+    };
+
+    class MIREvalAllocation final: public IValue {
+        friend struct stl::Embed<MIREvalAllocation>;
+        friend class MIREvalAllocationPtr;
+
+    public:
+        struct Reloc {
+            size_t offset;
+            MIREvalRelocPtr ptr;
+        };
+
+    private:
+        unsigned length;
+        bool isReadonly;
+        ::HIR::TypeRef mType;
+        std::vector<Reloc> relocations;
+        uint8_t* data;
+
+        MIREvalAllocation(uint8_t* data, size_t len, const ::HIR::TypeData* ty)
+            : length(len)
+            , isReadonly(false)
+            , mType(ty)
+            , data(data)
+        {
+            memset(data, 0, len + (len + 7) / 8);
+        }
+
+        MIREvalAllocation(const MIREvalAllocation&) = delete;
+        MIREvalAllocation& operator=(const MIREvalAllocation&) = delete;
+
+    public:
+        void fmtIdent(std::ostream& os) const override {
+            os << "A:" << this;
+        }
+
+        void fmt(::std::ostream& os, size_t ofs, size_t len) const override {
+            assert(ofs <= length);
+            assert(ofs + len <= length);
+            for (size_t i = 0; i < len; i++) {
+                auto j = ofs + i;
+                if (i != 0 && j % 8 == 0) {
+                    os << " ";
+                }
+                for (const auto& r : relocations) {
+                    if (r.offset == j) {
+                        os << "{" << r.ptr << "}";
+                    }
+                }
+                if (getMask()[j / 8] & (1 << j % 8)) {
+                    putbHex(os, data[j]);
+                } else {
+                    os << "--";
+                }
+            }
+        }
+
+        size_t size() const override {
+            return length;
+        }
+
+        const uint8_t* getBytes(size_t ofs, size_t len, bool checkMask) const override {
+            if (!(ofs <= length) || !(len <= length) || !(ofs + len <= length)) {
+                return nullptr;
+            }
+
+            if (checkMask) {
+                const auto* m = this->getMask();
+                size_t mo = ofs, ml = len;
+                for (; mo % 8 != 0 && ml > 0; mo++, ml--) {
+                    if (!(m[mo / 8] & (1 << (mo % 8)))) {
+                        return nullptr;
+                    }
+                }
+                for (; ml >= 8; mo += 8, ml -= 8) {
+                    if (!(m[mo / 8] == 0xFF)) {
+                        return nullptr;
+                    }
+                }
+                for (; ml % 8 != 0 && ml > 0; mo++, ml--) {
+                    if (!(m[mo / 8] & (1 << (mo % 8)))) {
+                        return nullptr;
+                    }
+                }
+            }
+
+            return this->data + ofs;
+        }
+
+        void readMask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const {
+            assert(ofs <= length);
+            assert(len <= length);
+            assert(ofs + len <= length);
+
+            dst += dstOfs / 8;
+            const auto* src = getMask() + ofs / 8;
+            dstOfs %= 8;
+            ofs %= 8;
+            if (dstOfs != 0 || ofs != 0) {
+                // If the entries are unaligned, then use a bit-by-bit copy
+                for (size_t i = 0; i < len; i++) {
+                    size_t s = ofs + i;
+                    size_t d = dstOfs + i;
+                    if (src[s / 8] & (1 << s % 8)) {
+                        dst[d / 8] |= (1 << d % 8);
+                    } else {
+                        dst[d / 8] &= ~(1 << d % 8);
+                    }
+                }
+            } else {
+                for (; len >= 8; len -= 8) {
+                    *dst++ = *src++;
+                }
+                // Tail entires (partial byte)
+                if (len > 0) {
+                    uint8_t mask = (0xFF >> (8 - len));
+                    *dst = (*dst & ~mask) | (*src & mask);
+                }
+            }
+        }
+
+        bool isWritable() const override {
+            return !isReadonly;
+        }
+
+        uint8_t* extWriteBytes(size_t ofs, size_t len) override {
+            ASSERT_BUG(Span(), ofs <= length && len <= length && ofs + len <= length, "OOB write: " << ofs << "+" << len << " out of " << length);
+            // Set the mask
+            {
+                auto* m = this->getMask();
+                size_t mo = ofs, ml = len;
+                for (; mo % 8 != 0 && ml > 0; mo++, ml--) {
+                    m[mo / 8] |= (1 << (mo % 8));
+                }
+                for (; ml >= 8; mo += 8, ml -= 8) {
+                    m[mo / 8] = 0xFF;
+                }
+                for (; ml % 8 != 0 && ml > 0; mo++, ml--) {
+                    m[mo / 8] |= (1 << (mo % 8));
+                }
+            }
+            // Clear impacted relocations
+            auto it = std::remove_if(this->relocations.begin(), this->relocations.end(), [&](const Reloc& r) {
+                return (ofs <= r.offset && r.offset < ofs + len);
+            });
+            this->relocations.resize(it - this->relocations.begin());
+            return this->data + ofs;
+        }
+
+        void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override {
+            assert(ofs <= length);
+            assert(len <= length);
+            assert(ofs + len <= length);
+            src.readMask(getMask(), ofs, srcOfs, len);
+        }
+
+        MIREvalRelocPtr getReloc(size_t ofs) const override {
+            for (const auto& r : this->relocations) {
+                if (r.offset == ofs) {
+                    return r.ptr;
+                }
+            }
+            return MIREvalRelocPtr();
+        }
+
+        void setReloc(size_t ofs, MIREvalRelocPtr ptr) override {
+            assert(ofs % (TargetGetPointerBits() / 8) == 0);
+            auto it = std::lower_bound(this->relocations.begin(), this->relocations.end(), ofs, [](const Reloc& r, size_t ofs) {
+                return r.offset < ofs;
+            });
+            if (it != this->relocations.end() && it->offset == ofs) {
+                if (ptr) {
+                    it->ptr = std::move(ptr);
+                } else {
+                    this->relocations.erase(it);
+                }
+            } else {
+                if (ptr) {
+                    this->relocations.insert(it, Reloc{ofs, std::move(ptr)});
+                } else
+                    ;
+            }
+        }
+
+        const ::HIR::TypeData* getType() const {
+            return mType;
+        }
+
+        const std::vector<Reloc>& getRelocations() const {
+            return relocations;
+        }
+
+    private:
+        uint8_t* getMask() {
+            return data + length;
+        }
+
+        const uint8_t* getMask() const {
+            return data + length;
+        }
+    };
+
+    class MIREvalStaticRef final: public IValue {
+        friend struct stl::Embed<MIREvalStaticRef>;
+        friend class MIREvalStaticRefPtr;
+
+        stl::ObjPool* pool;
+        ::HIR::Path mPath;
+        const EncodedLiteral* encoded;
+
+        MIREvalStaticRef(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit = nullptr)
+            : pool(pool)
+            , mPath(std::move(p))
+            , encoded(lit)
+        {
+        }
+
+    public:
+        void fmtIdent(std::ostream& os) const override {
+            os << this->mPath;
+        }
+
+        void fmt(::std::ostream& os, size_t ofs, size_t len) const override {
+            os << "[" << mPath << "]";
+            if (encoded) {
+                os << EncodedLiteralSlice(*encoded).slice(ofs, len);
+            } else {
+                os << "?";
+            }
+        }
+
+        size_t size() const {
+            return encoded ? encoded->bytes.size() : 0;
+        }
+
+        const uint8_t* getBytes(size_t ofs, size_t len, bool checkMask) const override {
+            if (encoded) {
+                assert(ofs <= encoded->bytes.size());
+                assert(len <= encoded->bytes.size());
+                assert(ofs + len <= encoded->bytes.size());
+                if (encoded->bytes.size() == 0) {
+                    // Empty vectors can have a null data pointer
+                    return reinterpret_cast<const uint8_t*>("");
+                }
+                return encoded->bytes.data() + ofs;
+            } else {
+                if (len == 0 && ofs == 0) {
+                    static uint8_t null;
+                    return &null;
+                }
+                return nullptr;
+            }
+        }
+
+        void readMask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const override {
+            dst += dstOfs / 8;
+            dstOfs %= 8;
+            if (dstOfs != 0) {
+                // Do a single-bit fill
+                while (len--) {
+                    dst[dstOfs / 8] |= 1 << (dstOfs % 8);
+                }
+            } else {
+                memset(dst, 0xFF, len / 8);
+                dst[len / 8] |= 0xFF >> (8 - len % 8);
+            }
+        }
+
+        bool isWritable() const override {
+            return false;
+        }
+
+        uint8_t* extWriteBytes(size_t ofs, size_t len) override {
+            abort();
+        }
+
+        void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) override {
+            abort();
+        }
+
+        MIREvalRelocPtr getReloc(size_t ofs) const override {
+            if (encoded) {
+                for (const auto& r : encoded->relocations) {
+                    if (r.ofs == ofs) {
+                        MIREvalRelocPtr reloc;
+                        if (r.p) {
+                            return MIREvalRelocPtr(MIREvalStaticRefPtr::allocate(pool, r.p->clone(), nullptr));
+                            TODO(Span(), "Convert relocation pointer - " << *r.p);
+                        } else {
+                            return MIREvalRelocPtr(MIREvalAllocationPtr::allocateRo(pool, r.bytes.data(), r.bytes.size()));
+                        }
+                    }
+                }
+            }
+            return MIREvalRelocPtr();
+        }
+
+        void setReloc(size_t ofs, MIREvalRelocPtr ptr) override {
+            abort();
+        }
+
+        const ::HIR::Path& path() const {
+            return mPath;
+        }
+    };
+
+    /// Reference to a value
+    class MIREvalValueRef {
+        MIREvalRelocPtr storage;
+        uint32_t ofs;
+        uint32_t len;
+
+    public:
+        MIREvalValueRef()
+            : storage()
+            , ofs(0)
+            , len(0)
+        {
+        }
+
+        MIREvalValueRef(MIREvalRelocPtr alloc, size_t ofs = 0)
+            : storage(alloc)
+            , ofs(ofs)
+            , len(0)
+        {
+            if (alloc) {
+                assert(ofs <= alloc.asValue().size());
+                len = alloc.asValue().size() - ofs;
+            }
+        }
+
+        MIREvalValueRef slice(size_t ofs, size_t len) {
+            ASSERT_BUG(Span(), ofs <= this->len && ofs + len <= this->len, "ValueRef::slice: " << ofs << "+" << len << " out of range (" << this->len << ")");
+
+            MIREvalValueRef rv;
+            rv.storage = storage;
+            rv.ofs = this->ofs + ofs;
+            rv.len = len;
+            return rv;
+        }
+
+        MIREvalValueRef slice(size_t ofs) {
+            ASSERT_BUG(Span(), ofs <= this->len, "ValueRef::slice: " << ofs << " out of range (" << this->len << ")");
+            return slice(ofs, this->len - ofs);
+        }
+
+        bool isValid() const {
+            return storage;
+        }
+
+        MIREvalRelocPtr getStorage() const {
+            return storage;
+        }
+
+        size_t getOfs() const {
+            return ofs;
+        }
+
+        size_t getLen() const {
+            return len;
+        }
+
+        void copyFrom(const MIR::TypeResolve& state, const MIREvalValueRef& other) {
+            size_t len = std::min(this->len, other.len);
+            // Check that there's no overlap
+            if (this->storage == other.storage) {
+                if (this->ofs < other.ofs) {
+                    MIR_ASSERT(state, this->ofs + len <= other.ofs, "Overlapping copy_from: " << other.ofs << "+" << len << " and " << this->ofs << "+" << len);
+                } else {
+                    MIR_ASSERT(state, other.ofs + len <= this->ofs, "Overlapping copy_from: " << other.ofs << "+" << len << " and " << this->ofs << "+" << len);
+                }
+            }
+            // Copy the data (don't check the source mask when getting the source pointer)
+            const auto* src = other.storage.asValue().getBytes(other.ofs, len, /*check_mask*/ false);
+            MIR_ASSERT(state, src, "Invalid read " << other.storage << " - " << other.ofs << "+" << len);
+            storage.asValue().writeBytes(this->ofs, src, len);
+            // Copy the mask data
+            storage.asValue().writeMaskFrom(this->ofs, other.storage.asValue(), other.ofs, len);
+            // Copy relocations
+            for (size_t i = 0; i < len; i++) {
+                if (auto r = other.storage.asValue().getReloc(other.ofs + i)) {
+                    storage.asValue().setReloc(this->ofs + i, std::move(r));
+                }
+            }
+        }
+
+        void writeBytes(const MIR::TypeResolve& state, const void* data, size_t len) {
+            MIR_ASSERT(state, storage, "Writing to invalid slot");
+            MIR_ASSERT(state, storage.asValue().isWritable(), "Writing to read-only slot");
+            if (len > 0) {
+                storage.asValue().writeBytes(ofs, data, len);
+            }
+        }
+
+        uint8_t* extWriteBytes(const MIR::TypeResolve& state, size_t len) {
+            MIR_ASSERT(state, storage, "Writing to invalid slot");
+            MIR_ASSERT(state, storage.asValue().isWritable(), "Writing to read-only slot");
+            if (len > 0) {
+                return storage.asValue().extWriteBytes(ofs, len);
+            } else {
+                static uint8_t emptyBuf;
+                return &emptyBuf;
+            }
+        }
+
+        void writeByte(const MIR::TypeResolve& state, uint8_t v) {
+            writeBytes(state, &v, 1);
+        }
+
+        void writeFloat(const MIR::TypeResolve& state, unsigned bits, FloatValue v) {
+            switch (bits) {
+                case 16: {
+                    F16 vF = static_cast<float>(v);
+                    writeBytes(state, &vF, sizeof(vF));
+                } break;
+                case 32: {
+                    float vF32 = static_cast<float>(v);
+                    writeBytes(state, &vF32, sizeof(vF32));
+                } break;
+                case 64: {
+                    double vF64 = static_cast<double>(v);
+                    writeBytes(state, &vF64, sizeof(vF64));
+                } break;
+                case 128: {
+                    F128 vF128 = v;
+                    writeBytes(state, &vF128, 16);
+                } break;
+                default:
+                    MIR_BUG(state, "Unexpected float size (write): " << bits);
+            }
+        }
+
+        void writeUint(const MIR::TypeResolve& state, unsigned bits, uint64_t v) {
+            assert(bits <= 64);
+            writeUint(state, bits, U128(v));
+        }
+
+        void writeUint(const MIR::TypeResolve& state, unsigned bits, U128 v) {
+            auto nBytes = (bits + 7) / 8;
+            if (TargetGetCurSpec().arch.bigEndian) {
+                v.toBeBytes(extWriteBytes(state, nBytes), nBytes);
+            } else {
+                v.toLeBytes(extWriteBytes(state, nBytes), nBytes);
+            }
+        }
+
+        void writeSint(const MIR::TypeResolve& state, unsigned bits, S128 v) {
+            auto nBytes = (bits + 7) / 8;
+            if (TargetGetCurSpec().arch.bigEndian) {
+                v.getInner().toBeBytes(extWriteBytes(state, nBytes), nBytes);
+            } else {
+                v.getInner().toLeBytes(extWriteBytes(state, nBytes), nBytes);
+            }
+        }
+
+        void writePtr(const MIR::TypeResolve& state, uint64_t val, MIREvalRelocPtr reloc) {
+            writeUint(state, TargetGetPointerBits(), U128(val));
+            storage.asValue().setReloc(ofs, std::move(reloc));
+        }
+
+        void setReloc(MIREvalRelocPtr reloc) {
+            storage.asValue().setReloc(ofs, std::move(reloc));
+        }
+
+        const uint8_t* extReadBytes(const MIR::TypeResolve& state, size_t len) const {
+            MIR_ASSERT(state, storage, "");
+            MIR_ASSERT(state, len >= 1, "");
+            const auto* src = storage.asValue().getBytes(ofs, len, /*check_mask*/ true);
+            MIR_ASSERT(state, src, "Invalid read: " << ofs << "+" << len << " (in " << *this << ")");
+            return src;
+        }
+
+        void readBytes(const MIR::TypeResolve& state, void* data, size_t len) const {
+            const auto* src = extReadBytes(state, len);
+            assert(src);
+            memcpy(data, src, len);
+        }
+
+        FloatValue readFloat(const ::MIR::TypeResolve& state, unsigned bits) const {
+            switch (bits) {
+                case 16: {
+                    F16 vF16;
+                    readBytes(state, &vF16, sizeof(vF16));
+                    return FloatValue(static_cast<float>(vF16));
+                } break;
+                case 32: {
+                    float vF32 = 0;
+                    readBytes(state, &vF32, sizeof(vF32));
+                    return vF32;
+                } break;
+                case 64: {
+                    double vF64 = 0;
+                    readBytes(state, &vF64, sizeof(vF64));
+                    return vF64;
+                } break;
+                case 128: {
+                    F128 vF;
+                    readBytes(state, &vF, sizeof(vF));
+                    return vF;
+                } break;
+                default:
+                    MIR_BUG(state, "Unexpected float size: " << bits);
+            }
+        }
+
+        U128 readUint(const ::MIR::TypeResolve& state, unsigned bits) const {
+            assert(bits <= 128);
+            auto nBytes = (bits + 7) / 8;
+            U128 rv;
+            if (TargetGetCurSpec().arch.bigEndian) {
+                rv.fromBeBytes(extReadBytes(state, nBytes), nBytes);
+            } else {
+                rv.fromLeBytes(extReadBytes(state, nBytes), nBytes);
+            }
+            return rv;
+        }
+
+        S128 readSint(const ::MIR::TypeResolve& state, unsigned bits) const {
+            auto nBytes = (bits + 7) / 8;
+            S128 rv;
+            if (TargetGetCurSpec().arch.bigEndian) {
+                rv.fromBeBytes(extReadBytes(state, nBytes), nBytes);
+            } else {
+                rv.fromLeBytes(extReadBytes(state, nBytes), nBytes);
+            }
+            return rv;
+        }
+
+        uint64_t readUsize(const ::MIR::TypeResolve& state) const {
+            return readUint(state, TargetGetPointerBits()).truncateU64();
+        }
+
+        std::pair<uint64_t, MIREvalRelocPtr> readPtr(const ::MIR::TypeResolve& state) const {
+            return std::make_pair(readUsize(state), storage.asValue().getReloc(ofs));
+        }
+
+        friend std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr);
+    };
+
+    std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr) {
+        if (!vr.storage) {
+            os << "ValueRef(null)";
+        } else {
+            os << "ValueRef({" << vr.ofs << "+" << vr.len << "}";
+            vr.storage.asValue().fmt(os, vr.ofs, vr.len);
+            os << ")";
+        }
+        return os;
+    }
+
+    std::ostream& operator<<(std::ostream& os, const MIREvalAllocationPtr& ap) {
+        os << MIREvalValueRef(ap);
+        return os;
+    }
+
+    // ---
+    MIREvalConstantPtr MIREvalConstantPtr::allocate(stl::ObjPool* pool, const void* data, size_t len) {
+        MIREvalConstantPtr rv;
+        rv.ptr = pool->make<MIREvalConstant>(data, len);
+        return rv;
+    }
+
+    // ---
+    MIREvalAllocationPtr MIREvalAllocationPtr::allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeData* ty) {
+        size_t len;
+        if (!TargetGetSizeOf(Span(), resolve, ty, len)) {
+            throw Defer();
+        }
+        auto* data = static_cast<uint8_t*>(pool->allocate(len + ((len + 7) / 8)));
+        MIREvalAllocationPtr rv;
+        // TODO: Include the current location from `state` in the allocation header
+        rv.ptr = pool->make<MIREvalAllocation>(data, len, ty);
+        return rv;
+    }
+
+    MIREvalAllocationPtr MIREvalAllocationPtr::allocateRo(stl::ObjPool* pool, const void* dataIn, size_t len) {
+        auto* data = static_cast<uint8_t*>(pool->allocate(len + ((len + 7) / 8)));
+        MIREvalAllocationPtr rv;
+        rv.ptr = pool->make<MIREvalAllocation>(data, len, HIR::TypeRef());
+        rv->writeBytes(0, dataIn, len);
+        rv->isReadonly = true;
+        return rv;
+    }
+
+    // ---
+    MIREvalStaticRefPtr MIREvalStaticRefPtr::allocate(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit) {
+        MIREvalStaticRefPtr rv;
+        rv.ptr = pool->make<MIREvalStaticRef>(pool, std::move(p), lit);
+        return rv;
+    }
+
+    // --- RelocPtr ---
+    IValue* MIREvalRelocPtr::asValuePtr() const {
+        assert(ptr);
+        switch (ptr & 3) {
+            case TAG_Allocation:
+                assert(asAllocation());
+                return asAllocation();
+            case TAG_Constant:
+                assert(asConstant());
+                return asConstant();
+            case TAG_StaticRef:
+                assert(asStaticref());
+                return asStaticref();
+            case 3:
+                assert(!"Unexpected tag 3");
+        }
+        abort();
+    }
 } // namespace MIR::eval
 
 namespace {
@@ -1127,457 +1127,379 @@ namespace {
 
 namespace MIR {
 
-        class MIREvalCallStackEntry {
-        public:
-            stl::ObjPool* const valuePool;
-            const unsigned frameIndex;
-            const std::vector<std::pair<HIR::Pattern, HIR::TypeRef>> argDefs;
-            const HIR::TypeRef retType;
+    class MIREvalCallStackEntry {
+    public:
+        stl::ObjPool* const valuePool;
+        const unsigned frameIndex;
+        const std::vector<std::pair<HIR::Pattern, HIR::TypeRef>> argDefs;
+        const HIR::TypeRef retType;
 
-            // MIR Resolve Helper
-            const StaticTraitResolve& rootResolve;
-            StaticTraitResolve resolve;
-            ::MIR::TypeResolve state;
-            // Monomorphiser from the function
-            MonomorphState ms;
+        // MIR Resolve Helper
+        const StaticTraitResolve& rootResolve;
+        StaticTraitResolve resolve;
+        ::MIR::TypeResolve state;
+        // Monomorphiser from the function
+        MonomorphState ms;
 
-            ::MIR::MIREvalAllocationPtr retval;
+        ::MIR::MIREvalAllocationPtr retval;
 
-            ::std::vector<::MIR::MIREvalAllocationPtr> args;
+        ::std::vector<::MIR::MIREvalAllocationPtr> args;
 
-            ::std::vector<HIR::TypeRef> localTypes;
-            ::std::vector<::MIR::MIREvalAllocationPtr> locals;
-            ::std::vector<bool> dropFlags;
+        ::std::vector<HIR::TypeRef> localTypes;
+        ::std::vector<::MIR::MIREvalAllocationPtr> locals;
+        ::std::vector<bool> dropFlags;
 
-            // ---
-            MIREvalCallStackEntry(const MIREvalCallStackEntry&) = delete;
-            MIREvalCallStackEntry(MIREvalCallStackEntry&&) = delete;
+        // ---
+        MIREvalCallStackEntry(const MIREvalCallStackEntry&) = delete;
+        MIREvalCallStackEntry(MIREvalCallStackEntry&&) = delete;
 
-            MIREvalCallStackEntry(
-                stl::ObjPool* valuePool,
-                unsigned frameIndex,
-                const Span& rootSpan,
-                const StaticTraitResolve& resolve,
-                ::FmtLambda pathStr,
-                // Pre-monomorphised function signature (as this may be a `static`)
-                HIR::TypeRef expTy,
-                std::vector<std::pair<HIR::Pattern, HIR::TypeRef>> argDefs,
-                // Function/Body code
-                const MIR::Function& fcn,
-                // Monomorphisation rules
-                MonomorphState ms,
-                ::std::vector<MIREvalAllocationPtr> args,
-                const ::HIR::GenericParams* itemParamsDef,
-                const ::HIR::GenericParams* implParamsDef
-            )
-                : valuePool(valuePool)
-                , frameIndex(frameIndex)
-                , argDefs(std::move(argDefs))
-                , retType(std::move(expTy))
-                , rootResolve(resolve)
-                , resolve(resolve.crate)
-                , state{rootSpan, this->resolve, std::move(pathStr), this->retType, this->argDefs, fcn}
-                , ms(std::move(ms))
-                , retval(MIREvalAllocationPtr::allocate(valuePool, rootResolve, state, retType))
-                , args(args)
-                , dropFlags(fcn.dropFlags)
-            {
-                this->resolve.setBothGenericsRaw(implParamsDef, itemParamsDef);
-                localTypes.reserve(state.fcn.locals.size());
-                locals.reserve(state.fcn.locals.size());
-                for (size_t i = 0; i < state.fcn.locals.size(); i++) {
-                    localTypes.push_back(state.mResolve.monomorphExpand(state.sp, state.fcn.locals[i], this->ms));
-                    locals.push_back(MIREvalAllocationPtr::allocate(valuePool, rootResolve, state, localTypes.back()));
-                }
-
-                state.monomorphedRettype = retType;
-                state.monomorphedLocals = &localTypes;
+        MIREvalCallStackEntry(
+            stl::ObjPool* valuePool,
+            unsigned frameIndex,
+            const Span& rootSpan,
+            const StaticTraitResolve& resolve,
+            ::FmtLambda pathStr,
+            // Pre-monomorphised function signature (as this may be a `static`)
+            HIR::TypeRef expTy,
+            std::vector<std::pair<HIR::Pattern, HIR::TypeRef>> argDefs,
+            // Function/Body code
+            const MIR::Function& fcn,
+            // Monomorphisation rules
+            MonomorphState ms,
+            ::std::vector<MIREvalAllocationPtr> args,
+            const ::HIR::GenericParams* itemParamsDef,
+            const ::HIR::GenericParams* implParamsDef
+        )
+            : valuePool(valuePool)
+            , frameIndex(frameIndex)
+            , argDefs(std::move(argDefs))
+            , retType(std::move(expTy))
+            , rootResolve(resolve)
+            , resolve(resolve.crate)
+            , state{rootSpan, this->resolve, std::move(pathStr), this->retType, this->argDefs, fcn}
+            , ms(std::move(ms))
+            , retval(MIREvalAllocationPtr::allocate(valuePool, rootResolve, state, retType))
+            , args(args)
+            , dropFlags(fcn.dropFlags)
+        {
+            this->resolve.setBothGenericsRaw(implParamsDef, itemParamsDef);
+            localTypes.reserve(state.fcn.locals.size());
+            locals.reserve(state.fcn.locals.size());
+            for (size_t i = 0; i < state.fcn.locals.size(); i++) {
+                localTypes.push_back(state.mResolve.monomorphExpand(state.sp, state.fcn.locals[i], this->ms));
+                locals.push_back(MIREvalAllocationPtr::allocate(valuePool, rootResolve, state, localTypes.back()));
             }
 
-            HIR::TypeRef monomorphExpand(const HIR::TypeData* ty) const {
-                return this->resolve.monomorphExpand(this->state.sp, ty, this->ms);
-            }
+            state.monomorphedRettype = retType;
+            state.monomorphedLocals = &localTypes;
+        }
 
-            unsigned readEnumVariant(const HIR::TypeData* ty, MIREvalValueRef value) const {
-                auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
-                MIR_ASSERT(state, repr, "No representation for enum " << ty);
+        HIR::TypeRef monomorphExpand(const HIR::TypeData* ty) const {
+            return this->resolve.monomorphExpand(this->state.sp, ty, this->ms);
+        }
 
-                unsigned variant = 0;
+        unsigned readEnumVariant(const HIR::TypeData* ty, MIREvalValueRef value) const {
+            auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
+            MIR_ASSERT(state, repr, "No representation for enum " << ty);
+
+            unsigned variant = 0;
                 TU_MATCH_HDRA( (repr->variants), { )
                 TU_ARMA(None, ve) {
-                    }
-                    TU_ARMA(Linear, ve) {
-                        auto tag = value.slice(repr->getOffset(state.sp, rootResolve, ve.field), ve.field.size).readUint(state, 8 * ve.field.size);
-                        variant = tag < U128(ve.offset) ? ve.field.index : (tag - U128(ve.offset)).truncateU64();
-                    }
-                    TU_ARMA(Values, ve) {
-                        auto tag = value.slice(repr->getOffset(state.sp, rootResolve, ve.field), ve.field.size).readUint(state, 8 * ve.field.size).truncateU64();
-                        auto it = std::find(ve.values.begin(), ve.values.end(), tag);
-                        MIR_ASSERT(state, it != ve.values.end(), "Invalid enum tag " << tag << " for " << ty);
-                        variant = it - ve.values.begin();
-                    }
-                    TU_ARMA(NonZero, ve) {
-                        size_t offset = repr->getOffset(state.sp, rootResolve, ve.field);
-                        bool isNonzero = false;
-                        for (size_t i = 0; i < ve.field.size; i++) {
-                            if (value.slice(offset + i, 1).readUint(state, 8) != U128(0)) {
-                                isNonzero = true;
-                                break;
-                            }
+                }
+                TU_ARMA(Linear, ve) {
+                    auto tag = value.slice(repr->getOffset(state.sp, rootResolve, ve.field), ve.field.size).readUint(state, 8 * ve.field.size);
+                    variant = tag < U128(ve.offset) ? ve.field.index : (tag - U128(ve.offset)).truncateU64();
+                }
+                TU_ARMA(Values, ve) {
+                    auto tag = value.slice(repr->getOffset(state.sp, rootResolve, ve.field), ve.field.size).readUint(state, 8 * ve.field.size).truncateU64();
+                    auto it = std::find(ve.values.begin(), ve.values.end(), tag);
+                    MIR_ASSERT(state, it != ve.values.end(), "Invalid enum tag " << tag << " for " << ty);
+                    variant = it - ve.values.begin();
+                }
+                TU_ARMA(NonZero, ve) {
+                    size_t offset = repr->getOffset(state.sp, rootResolve, ve.field);
+                    bool isNonzero = false;
+                    for (size_t i = 0; i < ve.field.size; i++) {
+                        if (value.slice(offset + i, 1).readUint(state, 8) != U128(0)) {
+                            isNonzero = true;
+                            break;
                         }
-                        variant = isNonzero ? 1 - ve.zeroVariant : ve.zeroVariant;
                     }
+                    variant = isNonzero ? 1 - ve.zeroVariant : ve.zeroVariant;
+                }
                 }
                 return variant;
-            }
+        }
 
-            static bool allocationReachableFrom(const MIREvalAllocation* allocation, const MIREvalAllocation* target, ::std::set<const MIREvalAllocation*>& visited) {
-                if (allocation == target) {
-                    return true;
-                }
-                if (!visited.insert(allocation).second) {
-                    return false;
-                }
-                for (const auto& relocation : allocation->getRelocations()) {
-                    if (const auto* child = relocation.ptr.asAllocation()) {
-                        if (allocationReachableFrom(child, target, visited)) {
-                            return true;
-                        }
+        static bool allocationReachableFrom(const MIREvalAllocation* allocation, const MIREvalAllocation* target, ::std::set<const MIREvalAllocation*>& visited) {
+            if (allocation == target) {
+                return true;
+            }
+            if (!visited.insert(allocation).second) {
+                return false;
+            }
+            for (const auto& relocation : allocation->getRelocations()) {
+                if (const auto* child = relocation.ptr.asAllocation()) {
+                    if (allocationReachableFrom(child, target, visited)) {
+                        return true;
                     }
                 }
+            }
+            return false;
+        }
+
+        bool valueReachableFromReturn(MIREvalValueRef value) const {
+            const auto* target = value.getStorage().asAllocation();
+            if (!target) {
+                return false;
+            }
+            ::std::set<const MIREvalAllocation*> visited;
+            return allocationReachableFrom(retval.operator->(), target, visited);
+        }
+
+        bool valueNeedsNonConstDrop(const HIR::TypeData* ty, MIREvalValueRef value) const {
+            if (!rootResolve.typeNeedsDropGlue(state.sp, ty)) {
                 return false;
             }
 
-            bool valueReachableFromReturn(MIREvalValueRef value) const {
-                const auto* target = value.getStorage().asAllocation();
-                if (!target) {
-                    return false;
-                }
-                ::std::set<const MIREvalAllocation*> visited;
-                return allocationReachableFrom(retval.operator->(), target, visited);
-            }
-
-            bool valueNeedsNonConstDrop(const HIR::TypeData* ty, MIREvalValueRef value) const {
-                if (!rootResolve.typeNeedsDropGlue(state.sp, ty)) {
-                    return false;
-                }
-
                 TU_MATCH_HDRA( (*ty), { )
                 TU_ARMA(Diverge, te) {
-                        return false;
-                    }
-                    TU_ARMA(Infer, te) {
-                        return true;
-                    }
-                    TU_ARMA(ErasedType, te) {
-                        return true;
-                    }
-                    TU_ARMA(NodeType, te) {
-                        auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
-                        MIR_ASSERT(state, repr, "No representation for " << ty);
-                        for (const auto& field : repr->fields) {
-                            auto size = sizeOfOrBug(field.ty);
-                            if (valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size))) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    }
-                    TU_ARMA(Generic, te) {
-                        return true;
-                    }
-                    TU_ARMA(Primitive, te) {
-                        return false;
-                    }
-                    TU_ARMA(Pointer, te) {
-                        return false;
-                    }
-                    TU_ARMA(NamedFunction, te) {
-                        return false;
-                    }
-                    TU_ARMA(Function, te) {
-                        return false;
-                    }
-                    TU_ARMA(Borrow, te) {
-                        if (te.type != HIR::BorrowType::Owned) {
-                            return false;
-                        }
-                        auto pointer = value.readPtr(state);
-                        MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, "Invalid owned pointer while checking a constant drop");
-                        auto size = sizeOfOrBug(te.inner);
-                        auto inner = MIREvalValueRef(pointer.second, pointer.first - EncodedLiteral::PTR_BASE).slice(0, size);
-                        return valueNeedsNonConstDrop(te.inner, inner);
-                    }
-                    TU_ARMA(Path, te) {
-                        const auto* markings = te.binding.getTraitMarkings();
-                        if (!markings) {
+                    return false;
+                }
+                TU_ARMA(Infer, te) {
+                    return true;
+                }
+                TU_ARMA(ErasedType, te) {
+                    return true;
+                }
+                TU_ARMA(NodeType, te) {
+                    auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
+                    MIR_ASSERT(state, repr, "No representation for " << ty);
+                    for (const auto& field : repr->fields) {
+                        auto size = sizeOfOrBug(field.ty);
+                        if (valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size))) {
                             return true;
                         }
-                        if (markings->hasDropImpl) {
-                            return true;
-                        }
+                    }
+                    return false;
+                }
+                TU_ARMA(Generic, te) {
+                    return true;
+                }
+                TU_ARMA(Primitive, te) {
+                    return false;
+                }
+                TU_ARMA(Pointer, te) {
+                    return false;
+                }
+                TU_ARMA(NamedFunction, te) {
+                    return false;
+                }
+                TU_ARMA(Function, te) {
+                    return false;
+                }
+                TU_ARMA(Borrow, te) {
+                    if (te.type != HIR::BorrowType::Owned) {
+                        return false;
+                    }
+                    auto pointer = value.readPtr(state);
+                    MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, "Invalid owned pointer while checking a constant drop");
+                    auto size = sizeOfOrBug(te.inner);
+                    auto inner = MIREvalValueRef(pointer.second, pointer.first - EncodedLiteral::PTR_BASE).slice(0, size);
+                    return valueNeedsNonConstDrop(te.inner, inner);
+                }
+                TU_ARMA(Path, te) {
+                    const auto* markings = te.binding.getTraitMarkings();
+                    if (!markings) {
+                        return true;
+                    }
+                    if (markings->hasDropImpl) {
+                        return true;
+                    }
 
                         TU_MATCH_HDRA( (te.binding), { )
                         TU_ARMA(Unbound, pbe) {
-                                return true;
-                            }
-                            TU_ARMA(Opaque, pbe) {
-                                return true;
-                            }
-                            TU_ARMA(ExternType, pbe) {
-                                return false;
-                            }
-                            TU_ARMA(Union, pbe) {
-                                return false;
-                            }
-                            TU_ARMA(Struct, pbe) {
-                                auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
-                                MIR_ASSERT(state, repr, "No representation for struct " << ty);
-                                for (const auto& field : repr->fields) {
-                                    auto size = sizeOfOrBug(field.ty);
-                                    if (valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size))) {
-                                        return true;
-                                    }
-                                }
-                                return false;
-                            }
-                            TU_ARMA(Enum, pbe) {
-                                const auto* variants = pbe->mData.opt_Data();
-                                if (!variants) {
-                                    return false;
-                                }
-                                auto variant = readEnumVariant(ty, value);
-                                MIR_ASSERT(state, variant < variants->size(), "Enum variant " << variant << " out of range for " << ty);
-
-                                auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
-                                MIR_ASSERT(state, repr, "No representation for enum " << ty);
-                                MIR_ASSERT(state, variant < repr->fields.size(), "Enum representation has no variant " << variant << " for " << ty);
-                                const auto& field = repr->fields[variant];
-                                auto size = sizeOfOrBug(field.ty);
-                                return valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size));
-                            }
+                            return true;
                         }
-                        throw std::runtime_error("Unreachable path binding");
-                    }
-                    TU_ARMA(Array, te) {
-                        auto count = te.size.as_Known();
-                        if (count == 0) {
+                        TU_ARMA(Opaque, pbe) {
+                            return true;
+                        }
+                        TU_ARMA(ExternType, pbe) {
                             return false;
                         }
-                        auto size = sizeOfOrBug(te.inner);
-                        for (size_t i = 0; i < count; i++) {
-                            if (valueNeedsNonConstDrop(te.inner, value.slice(i * size, size))) {
-                                return true;
-                            }
+                        TU_ARMA(Union, pbe) {
+                            return false;
                         }
-                        return false;
-                    }
-                    TU_ARMA(Slice, te) {
-                        return true;
-                    }
-                    TU_ARMA(TraitObject, te) {
-                        return true;
-                    }
-                    TU_ARMA(Tuple, te) {
-                        auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
-                        MIR_ASSERT(state, repr, "No representation for tuple " << ty);
-                        for (const auto& field : repr->fields) {
+                        TU_ARMA(Struct, pbe) {
+                            auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
+                            MIR_ASSERT(state, repr, "No representation for struct " << ty);
+                            for (const auto& field : repr->fields) {
+                                auto size = sizeOfOrBug(field.ty);
+                                if (valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size))) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }
+                        TU_ARMA(Enum, pbe) {
+                            const auto* variants = pbe->mData.opt_Data();
+                            if (!variants) {
+                                return false;
+                            }
+                            auto variant = readEnumVariant(ty, value);
+                            MIR_ASSERT(state, variant < variants->size(), "Enum variant " << variant << " out of range for " << ty);
+
+                            auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
+                            MIR_ASSERT(state, repr, "No representation for enum " << ty);
+                            MIR_ASSERT(state, variant < repr->fields.size(), "Enum representation has no variant " << variant << " for " << ty);
+                            const auto& field = repr->fields[variant];
                             auto size = sizeOfOrBug(field.ty);
-                            if (valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size))) {
-                                return true;
-                            }
+                            return valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size));
                         }
+                        }
+                        throw std::runtime_error("Unreachable path binding");
+                }
+                TU_ARMA(Array, te) {
+                    auto count = te.size.as_Known();
+                    if (count == 0) {
                         return false;
                     }
+                    auto size = sizeOfOrBug(te.inner);
+                    for (size_t i = 0; i < count; i++) {
+                        if (valueNeedsNonConstDrop(te.inner, value.slice(i * size, size))) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                TU_ARMA(Slice, te) {
+                    return true;
+                }
+                TU_ARMA(TraitObject, te) {
+                    return true;
+                }
+                TU_ARMA(Tuple, te) {
+                    auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
+                    MIR_ASSERT(state, repr, "No representation for tuple " << ty);
+                    for (const auto& field : repr->fields) {
+                        auto size = sizeOfOrBug(field.ty);
+                        if (valueNeedsNonConstDrop(field.ty, value.slice(field.offset, size))) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
                 }
                 throw std::runtime_error("Unreachable type while checking a constant drop");
-            }
+        }
 
-            MIREvalStaticRefPtr getStaticrefMono(const ::HIR::Path& p, HIR::TypeRef* outTy = nullptr) const {
-                // NOTE: Value won't need to be monomorphed, as it shouldn't be generic
-                return getStaticref(ms.monomorphPath(state.sp, p), outTy);
-            }
+        MIREvalStaticRefPtr getStaticrefMono(const ::HIR::Path& p, HIR::TypeRef* outTy = nullptr) const {
+            // NOTE: Value won't need to be monomorphed, as it shouldn't be generic
+            return getStaticref(ms.monomorphPath(state.sp, p), outTy);
+        }
 
-            MIREvalStaticRefPtr getStaticref(::HIR::Path p, HIR::TypeRef* outTy = nullptr) const {
-                // If there's any mention of generics in this path, then return Literal::Defer
-                if (visitPathTysWith(p, [&](const auto& ty) -> bool {
-                    return ty->is_Generic();
-                })) {
-                    DEBUG("Return Literal::Defer for constastatic " << p << " which references a generic parameter");
-                    throw Defer();
+        MIREvalStaticRefPtr getStaticref(::HIR::Path p, HIR::TypeRef* outTy = nullptr) const {
+            // If there's any mention of generics in this path, then return Literal::Defer
+            if (visitPathTysWith(p, [&](const auto& ty) -> bool {
+                return ty->is_Generic();
+            })) {
+                DEBUG("Return Literal::Defer for constastatic " << p << " which references a generic parameter");
+                throw Defer();
+            }
+            MonomorphState constMs(rootResolve.crate.types);
+
+            const HIR::GenericParams* implParamsDef = nullptr;
+            auto ent = getEntFullpath(state.sp, rootResolve, p, EntNS::Value, constMs, &implParamsDef);
+            if (ent.is_Static()) {
+                const auto& s = *ent.as_Static();
+
+                if (!s.valueGenerated) {
+                    // If there's no MIR and no HIR then this is an external static (which can only be borrowed)
+                    if (!s.mValue && !s.mValue.mir) {
+                        DEBUG("No value and no mir");
+                        return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr);
+                    }
+
+                    auto& item = const_cast<::HIR::Static&>(s);
+
+                    static ::std::set<::HIR::Static*> sNonRecurse;
+                    if (sNonRecurse.count(&item) == 0) {
+                        sNonRecurse.insert(&item);
+                        ConvertHIRConstantEvaluateStatic(resolve.crate, implParamsDef, p, item);
+                        sNonRecurse.erase(sNonRecurse.find(&item));
+                    } else {
+                        DEBUG("Recursion detected");
+                    }
                 }
-                MonomorphState constMs(rootResolve.crate.types);
 
-                const HIR::GenericParams* implParamsDef = nullptr;
-                auto ent = getEntFullpath(state.sp, rootResolve, p, EntNS::Value, constMs, &implParamsDef);
-                if (ent.is_Static()) {
-                    const auto& s = *ent.as_Static();
+                if (!s.valueGenerated) {
+                    auto& item = const_cast<::HIR::Static&>(s);
 
-                    if (!s.valueGenerated) {
-                        // If there's no MIR and no HIR then this is an external static (which can only be borrowed)
-                        if (!s.mValue && !s.mValue.mir) {
-                            DEBUG("No value and no mir");
-                            return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr);
-                        }
-
-                        auto& item = const_cast<::HIR::Static&>(s);
-
-                        static ::std::set<::HIR::Static*> sNonRecurse;
-                        if (sNonRecurse.count(&item) == 0) {
-                            sNonRecurse.insert(&item);
-                            ConvertHIRConstantEvaluateStatic(resolve.crate, implParamsDef, p, item);
-                            sNonRecurse.erase(sNonRecurse.find(&item));
-                        } else {
-                            DEBUG("Recursion detected");
-                        }
+                    // Challenge: Adding items to the module might invalidate an iterator.
+                    ::HIR::ItemPath modIp{item.mValue.state->modPath};
+                    auto nvs = NewvalState(item.mValue.state->mModule, modIp, FMT("static" << &item << "#"));
+                    auto eval = ::HIR::Evaluator(item.mValue.span(), rootResolve.crate, nvs);
+                    DEBUG("- Evaluate " << p);
+                    try {
+                        item.valueGenerated = true;
+                        item.valueRes = eval.evaluateConstant(::HIR::ItemPath(p), item.mValue, item.mType, std::move(constMs));
+                        item.valueGenerated = true;
+                    } catch (const Defer&) {
+                        MIR_BUG(state, p << " Defer during value generation");
                     }
-
-                    if (!s.valueGenerated) {
-                        auto& item = const_cast<::HIR::Static&>(s);
-
-                        // Challenge: Adding items to the module might invalidate an iterator.
-                        ::HIR::ItemPath modIp{item.mValue.state->modPath};
-                        auto nvs = NewvalState(item.mValue.state->mModule, modIp, FMT("static" << &item << "#"));
-                        auto eval = ::HIR::Evaluator(item.mValue.span(), rootResolve.crate, nvs);
-                        DEBUG("- Evaluate " << p);
-                        try {
-                            item.valueGenerated = true;
-                            item.valueRes = eval.evaluateConstant(::HIR::ItemPath(p), item.mValue, item.mType, std::move(constMs));
-                            item.valueGenerated = true;
-                        } catch (const Defer&) {
-                            MIR_BUG(state, p << " Defer during value generation");
-                        }
-                        DEBUG(p << " = " << item.valueRes);
-                    }
-                    if (outTy) {
-                        // Does this need monomorph? No, becuase the value is known and thus not generic?
-                        *outTy = s.mType;
-                    }
-                    return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), &s.valueRes);
-                } else {
-                    DEBUG(ent.tagStr() << " " << p);
-                    if (outTy) {
-                        MIR_TODO(state, "Get type for " << ent.tagStr() << " (" << p << ")");
-                    }
-                    return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr);
+                    DEBUG(p << " = " << item.valueRes);
                 }
+                if (outTy) {
+                    // Does this need monomorph? No, becuase the value is known and thus not generic?
+                    *outTy = s.mType;
+                }
+                return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), &s.valueRes);
+            } else {
+                DEBUG(ent.tagStr() << " " << p);
+                if (outTy) {
+                    MIR_TODO(state, "Get type for " << ent.tagStr() << " (" << p << ")");
+                }
+                return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr);
             }
+        }
 
-            MIREvalValueRef getLval(const ::MIR::LValue& lv, MIREvalValueRef* meta = nullptr) {
-                ::HIR::TypeRef tmpTy;
-                const ::HIR::TypeData* typ = nullptr;
-                MIREvalValueRef metadata;
-                MIREvalValueRef val;
-                //TRACE_FUNCTION_FR(lv, val);
+        MIREvalValueRef getLval(const ::MIR::LValue& lv, MIREvalValueRef* meta = nullptr) {
+            ::HIR::TypeRef tmpTy;
+            const ::HIR::TypeData* typ = nullptr;
+            MIREvalValueRef metadata;
+            MIREvalValueRef val;
+            //TRACE_FUNCTION_FR(lv, val);
             TU_MATCH_HDRA( (lv.root), {)
             TU_ARMA(Return, e) {
-                        typ = retType;
-                        val = MIREvalValueRef(retval);
+                    typ = retType;
+                    val = MIREvalValueRef(retval);
+                }
+                TU_ARMA(Local, e) {
+                    MIR_ASSERT(state, e < locals.size(), "Local index out of range - " << e << " >= " << locals.size());
+                    typ = localTypes[e];
+                    val = MIREvalValueRef(locals[e]);
+                }
+                TU_ARMA(Argument, e) {
+                    MIR_ASSERT(state, e < args.size(), "Argument index out of range - " << e << " >= " << args.size());
+                    typ = state.mArgs[e].second;
+                    val = MIREvalValueRef(args[e]);
+                }
+                TU_ARMA(Static, e) {
+                    val = MIREvalValueRef(getStaticrefMono(e, lv.wrappers.empty() ? nullptr : &tmpTy));
+                    if (!lv.wrappers.empty()) {
+                        MIR_ASSERT(state, tmpTy != HIR::TypeRef(), "Type not set?");
                     }
-                    TU_ARMA(Local, e) {
-                        MIR_ASSERT(state, e < locals.size(), "Local index out of range - " << e << " >= " << locals.size());
-                        typ = localTypes[e];
-                        val = MIREvalValueRef(locals[e]);
-                    }
-                    TU_ARMA(Argument, e) {
-                        MIR_ASSERT(state, e < args.size(), "Argument index out of range - " << e << " >= " << args.size());
-                        typ = state.mArgs[e].second;
-                        val = MIREvalValueRef(args[e]);
-                    }
-                    TU_ARMA(Static, e) {
-                        val = MIREvalValueRef(getStaticrefMono(e, lv.wrappers.empty() ? nullptr : &tmpTy));
-                        if (!lv.wrappers.empty()) {
-                            MIR_ASSERT(state, tmpTy != HIR::TypeRef(), "Type not set?");
-                        }
-                        typ = tmpTy;
-                    }
+                    typ = tmpTy;
+                }
             }
 
             for(const auto& w : lv.wrappers)
             {
-                    MIR_ASSERT(state, typ, "Type not set when unwrapping - " << lv);
-                    DEBUG(w << " " << val << ": " << typ);
+                MIR_ASSERT(state, typ, "Type not set when unwrapping - " << lv);
+                DEBUG(w << " " << val << ": " << typ);
                 TU_MATCH_HDRA( (w), {)
                 TU_ARMA(Field, e) {
-                            if (typ->is_Slice() || typ->is_Array()) {
-                                // Check the inner type
-                                size_t size;
-                                if (const auto* te = typ->opt_Array()) {
-                                    typ = te->inner;
-                                    size = te->size.as_Known();
-                                } else if (const auto* te = typ->opt_Slice()) {
-                                    typ = te->inner;
-                                    // Get metadata
-                                    size = metadata.readUsize(state);
-                                } else {
-                                    throw "";
-                                }
-                                metadata = MIREvalValueRef();
-                                size_t sz, al;
-                                if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                                    throw Defer();
-                                }
-                                MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << typ);
-                                size_t index = e;
-                                // HACK: Allow one-past-end for `[foo, ref bar @ ...]` support
-                                if (index == size) {
-                                    val = val.slice(index * sz, 0);
-                                } else {
-                                    MIR_ASSERT(state, index < size, "LValue::Index index out of range - " << index << " >= " << size);
-                                    val = val.slice(index * sz, sz);
-                                }
-                                continue;
-                            }
-                            auto* repr = TargetGetTypeRepr(state.sp, this->rootResolve, typ);
-                            MIR_ASSERT(state, repr, "No repr for " << typ);
-                            MIR_ASSERT(state, e < repr->fields.size(), "LValue::Field index out of range");
-                            if (repr->size != SIZE_MAX) {
-                                metadata = MIREvalValueRef();
-                            }
-                            auto ofs = repr->fields[e].offset;
-                            typ = repr->fields[e].ty;
-
-                            size_t sz, al;
-                            if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                                throw Defer();
-                            }
-                            if (sz == SIZE_MAX) {
-                                val = val.slice(ofs);
-                            } else {
-                                val = val.slice(ofs, sz);
-                            }
-                        }
-                        TU_ARMA(Deref, e) {
-                            //
-                            if (const auto* te = typ->opt_Pointer()) {
-                                typ = te->inner;
-                            } else if (const auto* te = typ->opt_Borrow()) {
-                                typ = te->inner;
-                            } else {
-                                MIR_BUG(state, "Deref of unsupported type - " << typ);
-                            }
-                            // If the inner type is unsized
-                            size_t sz, al;
-                            if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                                throw Defer();
-                            }
-                            if (sz == SIZE_MAX) {
-                                // Read metadata
-                                DEBUG("Reading metadata");
-                                metadata = val.slice(TargetGetPointerBits() / 8);
-                            }
-                            auto p = val.readPtr(state);
-                            MIR_ASSERT(state, p.first >= EncodedLiteral::PTR_BASE, "Null (<PTR_BASE) pointer deref");
-                            MIR_ASSERT(state, p.first % al == 0, "Unaligned pointer deref");
-                            DEBUG("> " << MIREvalValueRef(p.second) << " - o=" << (p.first - EncodedLiteral::PTR_BASE) << " sz=" << sz << " " << typ);
-                            // TODO: Determine size using metadata?
-                            if (sz == SIZE_MAX) {
-                                val = MIREvalValueRef(p.second, p.first - EncodedLiteral::PTR_BASE);
-                            } else {
-                                val = MIREvalValueRef(p.second, p.first - EncodedLiteral::PTR_BASE).slice(0, sz);
-                            }
-                        }
-                        TU_ARMA(Index, e) {
+                        if (typ->is_Slice() || typ->is_Array()) {
                             // Check the inner type
                             size_t size;
                             if (const auto* te = typ->opt_Array()) {
@@ -1588,7 +1510,7 @@ namespace MIR {
                                 // Get metadata
                                 size = metadata.readUsize(state);
                             } else {
-                                MIR_BUG(state, "Index of unsupported type - " << typ);
+                                throw "";
                             }
                             metadata = MIREvalValueRef();
                             size_t sz, al;
@@ -1596,317 +1518,395 @@ namespace MIR {
                                 throw Defer();
                             }
                             MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << typ);
-                            MIR_ASSERT(state, e < locals.size(), "LValue::Index index local out of range");
-                            size_t index = MIREvalValueRef(locals[e]).readUsize(state);
-                            MIR_ASSERT(state, index < size, "LValue::Index index out of range - " << index << " >= " << size);
-                            val = val.slice(index * sz, sz);
-                        }
-                        TU_ARMA(Downcast, e) {
-                            auto* repr = TargetGetTypeRepr(state.sp, this->rootResolve, typ);
-                            MIR_ASSERT(state, repr, "No repr for " << typ);
-                            MIR_ASSERT(state, e < repr->fields.size(), "LValue::Downcast index out of range");
-                            if (repr->size != SIZE_MAX) {
-                                metadata = MIREvalValueRef();
+                            size_t index = e;
+                            // HACK: Allow one-past-end for `[foo, ref bar @ ...]` support
+                            if (index == size) {
+                                val = val.slice(index * sz, 0);
+                            } else {
+                                MIR_ASSERT(state, index < size, "LValue::Index index out of range - " << index << " >= " << size);
+                                val = val.slice(index * sz, sz);
                             }
-                            typ = repr->fields[e].ty;
-                            val = val.slice(repr->fields[e].offset, sizeOfOrBug(typ));
+                            continue;
                         }
+                        auto* repr = TargetGetTypeRepr(state.sp, this->rootResolve, typ);
+                        MIR_ASSERT(state, repr, "No repr for " << typ);
+                        MIR_ASSERT(state, e < repr->fields.size(), "LValue::Field index out of range");
+                        if (repr->size != SIZE_MAX) {
+                            metadata = MIREvalValueRef();
+                        }
+                        auto ofs = repr->fields[e].offset;
+                        typ = repr->fields[e].ty;
+
+                        size_t sz, al;
+                        if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
+                            throw Defer();
+                        }
+                        if (sz == SIZE_MAX) {
+                            val = val.slice(ofs);
+                        } else {
+                            val = val.slice(ofs, sz);
+                        }
+                    }
+                    TU_ARMA(Deref, e) {
+                        //
+                        if (const auto* te = typ->opt_Pointer()) {
+                            typ = te->inner;
+                        } else if (const auto* te = typ->opt_Borrow()) {
+                            typ = te->inner;
+                        } else {
+                            MIR_BUG(state, "Deref of unsupported type - " << typ);
+                        }
+                        // If the inner type is unsized
+                        size_t sz, al;
+                        if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
+                            throw Defer();
+                        }
+                        if (sz == SIZE_MAX) {
+                            // Read metadata
+                            DEBUG("Reading metadata");
+                            metadata = val.slice(TargetGetPointerBits() / 8);
+                        }
+                        auto p = val.readPtr(state);
+                        MIR_ASSERT(state, p.first >= EncodedLiteral::PTR_BASE, "Null (<PTR_BASE) pointer deref");
+                        MIR_ASSERT(state, p.first % al == 0, "Unaligned pointer deref");
+                        DEBUG("> " << MIREvalValueRef(p.second) << " - o=" << (p.first - EncodedLiteral::PTR_BASE) << " sz=" << sz << " " << typ);
+                        // TODO: Determine size using metadata?
+                        if (sz == SIZE_MAX) {
+                            val = MIREvalValueRef(p.second, p.first - EncodedLiteral::PTR_BASE);
+                        } else {
+                            val = MIREvalValueRef(p.second, p.first - EncodedLiteral::PTR_BASE).slice(0, sz);
+                        }
+                    }
+                    TU_ARMA(Index, e) {
+                        // Check the inner type
+                        size_t size;
+                        if (const auto* te = typ->opt_Array()) {
+                            typ = te->inner;
+                            size = te->size.as_Known();
+                        } else if (const auto* te = typ->opt_Slice()) {
+                            typ = te->inner;
+                            // Get metadata
+                            size = metadata.readUsize(state);
+                        } else {
+                            MIR_BUG(state, "Index of unsupported type - " << typ);
+                        }
+                        metadata = MIREvalValueRef();
+                        size_t sz, al;
+                        if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
+                            throw Defer();
+                        }
+                        MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << typ);
+                        MIR_ASSERT(state, e < locals.size(), "LValue::Index index local out of range");
+                        size_t index = MIREvalValueRef(locals[e]).readUsize(state);
+                        MIR_ASSERT(state, index < size, "LValue::Index index out of range - " << index << " >= " << size);
+                        val = val.slice(index * sz, sz);
+                    }
+                    TU_ARMA(Downcast, e) {
+                        auto* repr = TargetGetTypeRepr(state.sp, this->rootResolve, typ);
+                        MIR_ASSERT(state, repr, "No repr for " << typ);
+                        MIR_ASSERT(state, e < repr->fields.size(), "LValue::Downcast index out of range");
+                        if (repr->size != SIZE_MAX) {
+                            metadata = MIREvalValueRef();
+                        }
+                        typ = repr->fields[e].ty;
+                        val = val.slice(repr->fields[e].offset, sizeOfOrBug(typ));
+                    }
                 }
             }
             if(meta)
                 *meta = std::move(metadata);
             return val;
-            }
+        }
 
-            const EncodedLiteral& getConst(const ::HIR::Path& inP, ::HIR::TypeRef* outTy) const {
-                auto p = ms.monomorphPath(state.sp, inP);
-                rootResolve.expandAssociatedTypesPath(state.sp, p);
-                // If there's any mention of generics in this path, then return Literal::Defer
-                if (visitPathTysWith(p, [&](const auto& ty) -> bool {
-                    return ty->is_Generic();
-                })) {
-                    DEBUG("Return Literal::Defer for constant " << p << " which references a generic parameter");
-                    throw Defer();
+        const EncodedLiteral& getConst(const ::HIR::Path& inP, ::HIR::TypeRef* outTy) const {
+            auto p = ms.monomorphPath(state.sp, inP);
+            rootResolve.expandAssociatedTypesPath(state.sp, p);
+            // If there's any mention of generics in this path, then return Literal::Defer
+            if (visitPathTysWith(p, [&](const auto& ty) -> bool {
+                return ty->is_Generic();
+            })) {
+                DEBUG("Return Literal::Defer for constant " << p << " which references a generic parameter");
+                throw Defer();
+            }
+            MonomorphState constMs(rootResolve.crate.types);
+            const HIR::GenericParams* implParamsDef = nullptr;
+            auto ent = getEntFullpath(state.sp, rootResolve, p, EntNS::Value, constMs, &implParamsDef);
+            MIR_ASSERT(state, ent.is_Constant(), "MIR Constant::Const(" << p << ") didn't point to a Constant - " << ent.tagStr());
+            const auto& c = *ent.as_Constant();
+            if (c.valueState == HIR::Constant::ValueState::Unknown) {
+                auto& item = const_cast<::HIR::Constant&>(c);
+                // Challenge: Adding items to the module might invalidate an iterator.
+                ::HIR::ItemPath modIp{item.mValue.state->modPath};
+                auto nvs = NewvalState(item.mValue.state->mModule, modIp, FMT("const" << &c << "#"));
+                auto eval = ::HIR::Evaluator(item.mValue.span(), rootResolve.crate, nvs);
+                eval.resolve.setBothGenericsRaw(implParamsDef, &c.mParams);
+                auto tempPpImpl = implParamsDef ? implParamsDef->makeNopParams(rootResolve.crate.types, 0) : HIR::PathParams();
+                auto tempPpMethod = c.mParams.makeNopParams(rootResolve.crate.types, 1);
+                MonomorphState tempMs(rootResolve.crate.types);
+                tempMs.ppImpl = &tempPpImpl;
+                tempMs.ppMethod = &tempPpMethod;
+                DEBUG("- Evaluate " << p);
+                try {
+                    item.valueRes = eval.evaluateConstant(::HIR::ItemPath(p), item.mValue, item.mType, std::move(tempMs));
+                    item.valueState = HIR::Constant::ValueState::Known;
+                } catch (const Defer&) {
+                    item.valueState = HIR::Constant::ValueState::Generic;
                 }
-                MonomorphState constMs(rootResolve.crate.types);
-                const HIR::GenericParams* implParamsDef = nullptr;
-                auto ent = getEntFullpath(state.sp, rootResolve, p, EntNS::Value, constMs, &implParamsDef);
-                MIR_ASSERT(state, ent.is_Constant(), "MIR Constant::Const(" << p << ") didn't point to a Constant - " << ent.tagStr());
-                const auto& c = *ent.as_Constant();
-                if (c.valueState == HIR::Constant::ValueState::Unknown) {
+            }
+            if (outTy) {
+                *outTy = constMs.monomorphType(state.sp, c.mType);
+            }
+            if (c.valueState == HIR::Constant::ValueState::Generic) {
+                auto it = c.monomorphCache.find(p);
+                if (it == c.monomorphCache.end()) {
                     auto& item = const_cast<::HIR::Constant&>(c);
                     // Challenge: Adding items to the module might invalidate an iterator.
                     ::HIR::ItemPath modIp{item.mValue.state->modPath};
                     auto nvs = NewvalState(item.mValue.state->mModule, modIp, FMT("const" << &c << "#"));
                     auto eval = ::HIR::Evaluator(item.mValue.span(), rootResolve.crate, nvs);
                     eval.resolve.setBothGenericsRaw(implParamsDef, &c.mParams);
-                    auto tempPpImpl = implParamsDef ? implParamsDef->makeNopParams(rootResolve.crate.types, 0) : HIR::PathParams();
-                    auto tempPpMethod = c.mParams.makeNopParams(rootResolve.crate.types, 1);
-                    MonomorphState tempMs(rootResolve.crate.types);
-                    tempMs.ppImpl = &tempPpImpl;
-                    tempMs.ppMethod = &tempPpMethod;
-                    DEBUG("- Evaluate " << p);
-                    try {
-                        item.valueRes = eval.evaluateConstant(::HIR::ItemPath(p), item.mValue, item.mType, std::move(tempMs));
-                        item.valueState = HIR::Constant::ValueState::Known;
-                    } catch (const Defer&) {
-                        item.valueState = HIR::Constant::ValueState::Generic;
-                    }
-                }
-                if (outTy) {
-                    *outTy = constMs.monomorphType(state.sp, c.mType);
-                }
-                if (c.valueState == HIR::Constant::ValueState::Generic) {
-                    auto it = c.monomorphCache.find(p);
-                    if (it == c.monomorphCache.end()) {
-                        auto& item = const_cast<::HIR::Constant&>(c);
-                        // Challenge: Adding items to the module might invalidate an iterator.
-                        ::HIR::ItemPath modIp{item.mValue.state->modPath};
-                        auto nvs = NewvalState(item.mValue.state->mModule, modIp, FMT("const" << &c << "#"));
-                        auto eval = ::HIR::Evaluator(item.mValue.span(), rootResolve.crate, nvs);
-                        eval.resolve.setBothGenericsRaw(implParamsDef, &c.mParams);
 
-                        DEBUG("- Evaluate monomorphed " << p);
-                        DEBUG("> const_ms=" << constMs);
-                        auto ty = constMs.monomorphType(item.mValue.span(), item.mType);
-                        auto val = eval.evaluateConstant(::HIR::ItemPath(p), item.mValue, std::move(ty), std::move(constMs));
+                    DEBUG("- Evaluate monomorphed " << p);
+                    DEBUG("> const_ms=" << constMs);
+                    auto ty = constMs.monomorphType(item.mValue.span(), item.mType);
+                    auto val = eval.evaluateConstant(::HIR::ItemPath(p), item.mValue, std::move(ty), std::move(constMs));
 
-                        auto insertRes = item.monomorphCache.insert(std::make_pair(p.clone(), std::move(val)));
-                        it = insertRes.first;
-                    } else {
-                        DEBUG("Cached generic " << p);
-                    }
-
-                    return it->second;
+                    auto insertRes = item.monomorphCache.insert(std::make_pair(p.clone(), std::move(val)));
+                    it = insertRes.first;
                 } else {
-                    return c.valueRes;
+                    DEBUG("Cached generic " << p);
                 }
-            }
 
-            void writeEncoded(MIREvalValueRef dst, const EncodedLiteral& encoded) {
-                // Write the encoded value into the destination
-                dst.writeBytes(state, encoded.bytes.data(), encoded.bytes.size());
-                for (const auto& r : encoded.relocations) {
-                    MIREvalRelocPtr reloc;
-                    if (r.p) {
-                        reloc = MIREvalRelocPtr(getStaticref(r.p->clone()));
-                    } else {
-                        reloc = MIREvalRelocPtr(MIREvalAllocationPtr::allocateRo(valuePool, r.bytes.data(), r.bytes.size()));
-                    }
-                    dst.slice(r.ofs, r.len).setReloc(std::move(reloc));
+                return it->second;
+            } else {
+                return c.valueRes;
+            }
+        }
+
+        void writeEncoded(MIREvalValueRef dst, const EncodedLiteral& encoded) {
+            // Write the encoded value into the destination
+            dst.writeBytes(state, encoded.bytes.data(), encoded.bytes.size());
+            for (const auto& r : encoded.relocations) {
+                MIREvalRelocPtr reloc;
+                if (r.p) {
+                    reloc = MIREvalRelocPtr(getStaticref(r.p->clone()));
+                } else {
+                    reloc = MIREvalRelocPtr(MIREvalAllocationPtr::allocateRo(valuePool, r.bytes.data(), r.bytes.size()));
                 }
+                dst.slice(r.ofs, r.len).setReloc(std::move(reloc));
             }
+        }
 
-            void writeConst(MIREvalValueRef dst, const ::MIR::Constant& c) {
+        void writeConst(MIREvalValueRef dst, const ::MIR::Constant& c) {
             TU_MATCH_HDR( (c), {)
             TU_ARM(c, Int, e2) {
-                        dst.writeSint(state, dst.getLen() * 8, e2.v);
-                    }
-                    TU_ARM(c, Uint, e2) {
-                        dst.writeUint(state, dst.getLen() * 8, e2.v);
-                    }
-                    TU_ARM(c, Float, e2) {
-                        dst.writeFloat(state, dst.getLen() * 8, e2.v);
-                    }
-                    TU_ARM(c, Bool, e2) {
-                        dst.writeUint(state, 1, e2.v);
-                    }
-                    TU_ARM(c, Bytes, e2) {
-                        dst.writePtr(state, EncodedLiteral::PTR_BASE, MIREvalConstantPtr::allocate(valuePool, e2.data(), e2.size()));
-                    }
-                    TU_ARM(c, StaticString, e2) {
-                        dst.writePtr(state, EncodedLiteral::PTR_BASE, MIREvalConstantPtr::allocate(valuePool, e2.data(), e2.size()));
-                        dst.slice(TargetGetPointerBits() / 8).writeUint(state, TargetGetPointerBits(), e2.size());
-                    }
-                    TU_ARM(c, Const, e2) {
-                        ::HIR::TypeRef ty;
-                        assert(e2.p);
-                        const auto& encoded = getConst(*e2.p, &ty);
-                        DEBUG(*e2.p << " = " << encoded);
+                    dst.writeSint(state, dst.getLen() * 8, e2.v);
+                }
+                TU_ARM(c, Uint, e2) {
+                    dst.writeUint(state, dst.getLen() * 8, e2.v);
+                }
+                TU_ARM(c, Float, e2) {
+                    dst.writeFloat(state, dst.getLen() * 8, e2.v);
+                }
+                TU_ARM(c, Bool, e2) {
+                    dst.writeUint(state, 1, e2.v);
+                }
+                TU_ARM(c, Bytes, e2) {
+                    dst.writePtr(state, EncodedLiteral::PTR_BASE, MIREvalConstantPtr::allocate(valuePool, e2.data(), e2.size()));
+                }
+                TU_ARM(c, StaticString, e2) {
+                    dst.writePtr(state, EncodedLiteral::PTR_BASE, MIREvalConstantPtr::allocate(valuePool, e2.data(), e2.size()));
+                    dst.slice(TargetGetPointerBits() / 8).writeUint(state, TargetGetPointerBits(), e2.size());
+                }
+                TU_ARM(c, Const, e2) {
+                    ::HIR::TypeRef ty;
+                    assert(e2.p);
+                    const auto& encoded = getConst(*e2.p, &ty);
+                    DEBUG(*e2.p << " = " << encoded);
 
-                        writeEncoded(dst, encoded);
-                    }
-                    TU_ARM(c, Generic, e2) {
-                        auto v = ms.getValue(state.sp, e2);
+                    writeEncoded(dst, encoded);
+                }
+                TU_ARM(c, Generic, e2) {
+                    auto v = ms.getValue(state.sp, e2);
                 TU_MATCH_HDRA( (v), { )
                 default:
                     MIR_TODO(state, "Handle expanded generic: " << v);
-                            TU_ARMA(Generic, _) {
-                                throw Defer();
-                            }
-                            TU_ARMA(Evaluated, ve) {
-                                DEBUG(e2 << " = " << *ve);
-                                writeEncoded(dst, *ve);
-                            }
+                        TU_ARMA(Generic, _) {
+                            throw Defer();
+                        }
+                        TU_ARMA(Evaluated, ve) {
+                            DEBUG(e2 << " = " << *ve);
+                            writeEncoded(dst, *ve);
+                        }
                 }
-                    }
-                    TU_ARM(c, Function, e2) {
-                    }
-                    TU_ARM(c, ItemAddr, e2) {
-                        assert(e2);
-                        MIR_ASSERT(state, e2.offset.isU64(), "Item address offset is too large: " << e2.offset);
-                        dst.writePtr(state, EncodedLiteral::PTR_BASE + e2.offset.truncateU64(), getStaticrefMono(*e2));
-                    }
-            }
-            }
-
-            /// Write a borrow of the given lvalue
-            void writeBorrow(MIREvalValueRef dst, ::HIR::BorrowType bt, const ::MIR::LValue& lv) {
-                MIREvalValueRef meta;
-                auto val = this->getLval(lv, &meta);
-                dst.writePtr(state, EncodedLiteral::PTR_BASE + val.getOfs(), val.getStorage());
-                if (meta.isValid()) {
-                    auto ptrSize = TargetGetPointerBits() / 8;
-                    dst.slice(ptrSize).copyFrom(state, meta);
+                }
+                TU_ARM(c, Function, e2) {
+                }
+                TU_ARM(c, ItemAddr, e2) {
+                    assert(e2);
+                    MIR_ASSERT(state, e2.offset.isU64(), "Item address offset is too large: " << e2.offset);
+                    dst.writePtr(state, EncodedLiteral::PTR_BASE + e2.offset.truncateU64(), getStaticrefMono(*e2));
                 }
             }
+        }
 
-            void writeParam(MIREvalValueRef dst, const ::MIR::Param& p) {
+        /// Write a borrow of the given lvalue
+        void writeBorrow(MIREvalValueRef dst, ::HIR::BorrowType bt, const ::MIR::LValue& lv) {
+            MIREvalValueRef meta;
+            auto val = this->getLval(lv, &meta);
+            dst.writePtr(state, EncodedLiteral::PTR_BASE + val.getOfs(), val.getStorage());
+            if (meta.isValid()) {
+                auto ptrSize = TargetGetPointerBits() / 8;
+                dst.slice(ptrSize).copyFrom(state, meta);
+            }
+        }
+
+        void writeParam(MIREvalValueRef dst, const ::MIR::Param& p) {
             TU_MATCH_HDRA( (p), { )
             TU_ARMA(LValue, e)
                 dst.copyFrom( state, this->getLval(e) );
-                    TU_ARMA(Borrow, e)
-                    writeBorrow(dst, e.type, e.val);
-                    TU_ARMA(Constant, e)
-                    writeConst(dst, e);
+                TU_ARMA(Borrow, e)
+                writeBorrow(dst, e.type, e.val);
+                TU_ARMA(Constant, e)
+                writeConst(dst, e);
             }
-            }
+        }
 
-            const EncodedLiteral& getConst(const HIR::ConstGeneric& v, EncodedLiteral& tmp) const {
+        const EncodedLiteral& getConst(const HIR::ConstGeneric& v, EncodedLiteral& tmp) const {
             TU_MATCH_HDRA( (v), {)
             TU_ARMA(Infer, ve) {
-                        MIR_BUG(state, "Encountered Infer value in constant?");
-                    }
-                    TU_ARMA(Generic, ve) {
-                        throw Defer{};
-                    }
-                    TU_ARMA(Unevaluated, ve) {
-                        auto value = ve->monomorph(state.sp, ms, false);
-                        const auto& expr = *value.expr;
-                        MonomorphState valueMs(rootResolve.crate.types);
-                        valueMs.ppImpl = &value.paramsImpl;
-                        valueMs.ppMethod = &value.paramsItem;
-                        auto type = valueMs.monomorphType(state.sp, expr->resType);
-                        tmp = evaluateConstgeneric(state.sp, rootResolve.crate, type, value);
-                        return tmp;
-                    }
-                    TU_ARMA(Evaluated, ve) {
-                        return *ve;
-                    }
+                    MIR_BUG(state, "Encountered Infer value in constant?");
+                }
+                TU_ARMA(Generic, ve) {
+                    throw Defer{};
+                }
+                TU_ARMA(Unevaluated, ve) {
+                    auto value = ve->monomorph(state.sp, ms, false);
+                    const auto& expr = *value.expr;
+                    MonomorphState valueMs(rootResolve.crate.types);
+                    valueMs.ppImpl = &value.paramsImpl;
+                    valueMs.ppMethod = &value.paramsItem;
+                    auto type = valueMs.monomorphType(state.sp, expr->resType);
+                    tmp = evaluateConstgeneric(state.sp, rootResolve.crate, type, value);
+                    return tmp;
+                }
+                TU_ARMA(Evaluated, ve) {
+                    return *ve;
+                }
             }
             throw "";
-            }
+        }
 
-            /// Read a floating point value from a MIR::Param
-            FloatValue readParamFloat(unsigned bits, const ::MIR::Param& p) const {
+        /// Read a floating point value from a MIR::Param
+        FloatValue readParamFloat(unsigned bits, const ::MIR::Param& p) const {
             TU_MATCH_HDRA( (p), {)
             TU_ARMA(LValue, e)
                 return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readFloat(state, bits);
-                    TU_ARMA(Borrow, e)
-                    MIR_BUG(state, "Expected a float, got a MIR::Param::Borrow");
-                    TU_ARMA(Constant, e) {
-                        if (e.is_Const()) {
-                            const auto& val = getConst(*e.as_Const().p, nullptr);
-                            // TODO: Check the type from get_const
-                            return EncodedLiteralSlice(val).readFloat();
-                        }
-                        if (e.is_Generic()) {
-                            auto ve = ms.getValue(state.sp, e.as_Generic());
-                            EncodedLiteral elTmp;
-                            const auto& el = getConst(ve, elTmp);
-                            return EncodedLiteralSlice(el).readFloat();
-                        }
-                        MIR_ASSERT(state, e.is_Float(), "Expected a float, got " << e);
-                        return e.as_Float().v;
+                TU_ARMA(Borrow, e)
+                MIR_BUG(state, "Expected a float, got a MIR::Param::Borrow");
+                TU_ARMA(Constant, e) {
+                    if (e.is_Const()) {
+                        const auto& val = getConst(*e.as_Const().p, nullptr);
+                        // TODO: Check the type from get_const
+                        return EncodedLiteralSlice(val).readFloat();
                     }
+                    if (e.is_Generic()) {
+                        auto ve = ms.getValue(state.sp, e.as_Generic());
+                        EncodedLiteral elTmp;
+                        const auto& el = getConst(ve, elTmp);
+                        return EncodedLiteralSlice(el).readFloat();
+                    }
+                    MIR_ASSERT(state, e.is_Float(), "Expected a float, got " << e);
+                    return e.as_Float().v;
+                }
             }
             abort();
-            }
+        }
 
-            U128 readParamUint(unsigned bits, const ::MIR::Param& p) const {
+        U128 readParamUint(unsigned bits, const ::MIR::Param& p) const {
             TU_MATCH_HDRA( (p), { )
             TU_ARMA(LValue, e)
                 return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readUint(state, bits);
-                    TU_ARMA(Borrow, e)
-                    MIR_BUG(state, "Expected an integer, got a MIR::Param::Borrow");
-                    TU_ARMA(Constant, e) {
-                        if (e.is_Const()) {
-                            const auto& val = getConst(*e.as_Const().p, nullptr);
-                            // TODO: Check the type from get_const
-                            return EncodedLiteralSlice(val).readUint();
-                        }
-                        if (e.is_Generic()) {
-                            auto ve = ms.getValue(state.sp, e.as_Generic());
-                            EncodedLiteral elTmp;
-                            const auto& el = getConst(ve, elTmp);
-                            return EncodedLiteralSlice(el).readUint();
-                        }
-                        if (e.is_Int()) {
-                            return e.as_Int().v.getInner();
-                        }
-                        if (e.is_Bool()) {
-                            return U128(e.as_Bool().v ? 1 : 0);
-                        }
-                        MIR_ASSERT(state, e.is_Uint(), "Expected an integer, got " << e.tagStr() << " " << e);
-                        return U128(e.as_Uint().v);
+                TU_ARMA(Borrow, e)
+                MIR_BUG(state, "Expected an integer, got a MIR::Param::Borrow");
+                TU_ARMA(Constant, e) {
+                    if (e.is_Const()) {
+                        const auto& val = getConst(*e.as_Const().p, nullptr);
+                        // TODO: Check the type from get_const
+                        return EncodedLiteralSlice(val).readUint();
                     }
+                    if (e.is_Generic()) {
+                        auto ve = ms.getValue(state.sp, e.as_Generic());
+                        EncodedLiteral elTmp;
+                        const auto& el = getConst(ve, elTmp);
+                        return EncodedLiteralSlice(el).readUint();
+                    }
+                    if (e.is_Int()) {
+                        return e.as_Int().v.getInner();
+                    }
+                    if (e.is_Bool()) {
+                        return U128(e.as_Bool().v ? 1 : 0);
+                    }
+                    MIR_ASSERT(state, e.is_Uint(), "Expected an integer, got " << e.tagStr() << " " << e);
+                    return U128(e.as_Uint().v);
+                }
             }
             abort();
-            }
+        }
 
-            S128 readParamSint(unsigned bits, const ::MIR::Param& p) const {
+        S128 readParamSint(unsigned bits, const ::MIR::Param& p) const {
             TU_MATCH_HDRA( (p), { )
             TU_ARMA(LValue, e)
                 return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readSint(state, bits);
-                    TU_ARMA(Borrow, e)
-                    MIR_BUG(state, "Expected an integer, got a MIR::Param::Borrow");
-                    TU_ARMA(Constant, e) {
-                        if (e.is_Const()) {
-                            const auto& val = getConst(*e.as_Const().p, nullptr);
-                            // TODO: Check the type from get_const
-                            return EncodedLiteralSlice(val).readSint();
-                        }
-                        if (e.is_Generic()) {
-                            auto ve = ms.getValue(state.sp, e.as_Generic());
-                            EncodedLiteral elTmp;
-                            const auto& el = getConst(ve, elTmp);
-                            return EncodedLiteralSlice(el).readSint();
-                        }
-                        MIR_ASSERT(state, e.is_Int(), "Expected an integer, got " << e.tagStr() << " " << e);
-                        return S128(e.as_Int().v);
+                TU_ARMA(Borrow, e)
+                MIR_BUG(state, "Expected an integer, got a MIR::Param::Borrow");
+                TU_ARMA(Constant, e) {
+                    if (e.is_Const()) {
+                        const auto& val = getConst(*e.as_Const().p, nullptr);
+                        // TODO: Check the type from get_const
+                        return EncodedLiteralSlice(val).readSint();
                     }
+                    if (e.is_Generic()) {
+                        auto ve = ms.getValue(state.sp, e.as_Generic());
+                        EncodedLiteral elTmp;
+                        const auto& el = getConst(ve, elTmp);
+                        return EncodedLiteralSlice(el).readSint();
+                    }
+                    MIR_ASSERT(state, e.is_Int(), "Expected an integer, got " << e.tagStr() << " " << e);
+                    return S128(e.as_Int().v);
+                }
             }
             abort();
-            }
+        }
 
-            std::pair<uint64_t, MIREvalRelocPtr> readParamPtr(const ::MIR::Param& p) const {
+        std::pair<uint64_t, MIREvalRelocPtr> readParamPtr(const ::MIR::Param& p) const {
             TU_MATCH_HDRA( (p), {)
             TU_ARMA(LValue, e) {
-                        return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readPtr(state);
+                    return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readPtr(state);
+                }
+                TU_ARMA(Borrow, e) {
+                    MIR_TODO(state, "read_param_ptr - " << p);
+                }
+                TU_ARMA(Constant, e) {
+                    if (!e.is_ItemAddr()) {
+                        MIR_BUG(state, "Invalid argument for pointer: " << p);
                     }
-                    TU_ARMA(Borrow, e) {
-                        MIR_TODO(state, "read_param_ptr - " << p);
-                    }
-                    TU_ARMA(Constant, e) {
-                        if (!e.is_ItemAddr()) {
-                            MIR_BUG(state, "Invalid argument for pointer: " << p);
-                        }
-                        MIR_ASSERT(state, e.as_ItemAddr().offset.isU64(), "Item address offset is too large: " << e.as_ItemAddr().offset);
-                        // TODO: Look up the static
-                        return ::std::make_pair(EncodedLiteral::PTR_BASE + e.as_ItemAddr().offset.truncateU64(), MIREvalRelocPtr(getStaticrefMono(*e.as_ItemAddr())));
-                    }
+                    MIR_ASSERT(state, e.as_ItemAddr().offset.isU64(), "Item address offset is too large: " << e.as_ItemAddr().offset);
+                    // TODO: Look up the static
+                    return ::std::make_pair(EncodedLiteral::PTR_BASE + e.as_ItemAddr().offset.truncateU64(), MIREvalRelocPtr(getStaticrefMono(*e.as_ItemAddr())));
+                }
             }
             abort();
-            }
+        }
 
-            size_t sizeOfOrBug(const ::HIR::TypeData* ty) const {
-                size_t rv;
-                if (!TargetGetSizeOf(state.sp, rootResolve, ty, /*out*/ rv)) {
-                    MIR_BUG(state, "No size for " << ty);
-                }
-                return rv;
+        size_t sizeOfOrBug(const ::HIR::TypeData* ty) const {
+            size_t rv;
+            if (!TargetGetSizeOf(state.sp, rootResolve, ty, /*out*/ rv)) {
+                MIR_BUG(state, "No size for " << ty);
             }
-        };
+            return rv;
+        }
+    };
 
 } // namespace ::MIR::eval
 
@@ -2318,7 +2318,6 @@ namespace {
 }
 
 namespace HIR {
-
 
     unsigned int Evaluator::sNextEvalIndex = 0;
 
@@ -2956,9 +2955,9 @@ namespace HIR {
                         const auto* filename = caller ? caller->filename.c_str() : "";
                         const auto filenameLen = caller ? caller->filename.size() : 0;
                         rv.slice(repr->fields[0].offset + 0, pb).writePtr(state, EncodedLiteral::PTR_BASE, MIR::MIREvalConstantPtr::allocate(localState.valuePool, filename, filenameLen + 1)); // file.ptr, including trailing NUL
-                        rv.slice(repr->fields[0].offset + pb, pb).writeUint(state, TargetGetPointerBits(), filenameLen);                                                            // file.len
-                        rv.slice(repr->fields[1].offset, 4).writeUint(state, 32, caller ? caller->startLine : 0);                                                                   // line: u32
-                        rv.slice(repr->fields[2].offset, 4).writeUint(state, 32, 0);                                                                                                // col: u32 (expression AST stores only the end point)
+                        rv.slice(repr->fields[0].offset + pb, pb).writeUint(state, TargetGetPointerBits(), filenameLen);                                                                        // file.len
+                        rv.slice(repr->fields[1].offset, 4).writeUint(state, 32, caller ? caller->startLine : 0);                                                                               // line: u32
+                        rv.slice(repr->fields[2].offset, 4).writeUint(state, 32, 0);                                                                                                            // col: u32 (expression AST stores only the end point)
                     }
                     // ---
                     else if (te->name == "ctpop") {

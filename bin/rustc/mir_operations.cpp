@@ -1,21 +1,22 @@
 #include "mir_operations.h"
-
-#include "mir_main_bindings.h"
-#include "mir_mir.h"
-#include "hir_visitor.h"
-#include "hir_typeck_static.h"
-#include "mir_helpers.h"
 #include "mir_operations.h"
-#include "mir_visit_crate_mir.h"
-#include <algorithm>
-#include <iomanip>
+
+#include "mir_mir.h"
+#include "hir_expr.h" // The optimiser section accesses complete HIR expression nodes.
+#include "hir_visitor.h"
+#include "mir_helpers.h"
 #include "trans_target.h"
+#include "trans_trans_list.h" // Note: This is included for inlining after enumeration and monomorph
+#include "hir_typeck_static.h"
+#include "mir_main_bindings.h"
+#include "mir_visit_crate_mir.h"
+
 #include <cmath>
 #include <limits>
+#include <iomanip>
+#include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
-#include "trans_trans_list.h" // Note: This is included for inlining after enumeration and monomorph
-#include "hir_expr.h" // The optimiser section accesses complete HIR expression nodes.
 
 namespace {
     /// Value states
@@ -800,7 +801,6 @@ void MIRBorrowCheckCrate(::HIR::Crate& crate) {
     ov.visitCrate(crate);
 }
 
-
 namespace {
     ::HIR::TypeRef getMetadataType(const ::MIR::TypeResolve& state, const ::HIR::TypeData* unsizedTy) {
         static Span sp;
@@ -1372,9 +1372,7 @@ void MIRValidateValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn) 
                     MIR_ASSERT(state, e.flagIdx < fcn.dropFlags.size(), "");
                 }
                 valState.markValidity(state, e.slot, false);
-                TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target,
-                    addToVisit(target, valState);
-                )
+                TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, addToVisit(target, valState);)
                 addToVisit(e.target, valState);
             }
             TU_ARMA(Call, e) {
@@ -1384,9 +1382,7 @@ void MIRValidateValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn) 
                 for (const auto& arg : e.args) {
                     valState.moveVal(state, arg);
                 }
-                TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target,
-                    addToVisit(target, valState);
-                )
+                TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, addToVisit(target, valState);)
 
                 // TODO: If the function returns !, don't follow the ret_block
                 valState.markValidity(state, e.retVal, true);
@@ -1452,26 +1448,11 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
     do {                                                                       \
         if (!(idx < fcn.blocks.size()))                                        \
             MIR_BUG(state, "Invalid target block - " << desc << " bb" << idx); \
-        if (visitedBbs[idx] == false) {                                       \
-            toVisitBlocks.push_back(idx);                                    \
+        if (visitedBbs[idx] == false) {                                        \
+            toVisitBlocks.push_back(idx);                                      \
         }                                                                      \
     } while (0)
-            TU_MATCH(
-                ::MIR::Terminator,
-                (fcn.blocks[block].terminator),
-                (e),
-                (Incomplete, MIR_BUG(state, "Encounterd `Incomplete` block in control flow - BB" << block);),
-                (Return, returns = true;),
-                (UnwindResume, ),
-                (UnwindTerminate, ),
-                (Unreachable, ),
-                (Goto, PUSH_BB(e, "Goto");),
-                (If, PUSH_BB(e.bbTrue, "If true"); PUSH_BB(e.bbFalse, "If false");),
-                (Switch, for (unsigned int i = 0; i < e.targets.size(); i++) { PUSH_BB(e.targets[i], "Switch V" << i); }),
-                (SwitchValue, for (unsigned int i = 0; i < e.targets.size(); i++) { PUSH_BB(e.targets[i], "SwitchValue " << i); } PUSH_BB(e.defTarget, "SwitchValue def");),
-                (Drop, PUSH_BB(e.target, "Drop ret"); TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, PUSH_BB(target, "Drop cleanup");)),
-                (Call, PUSH_BB(e.retBlock, "Call ret"); TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, PUSH_BB(target, "Call cleanup");))
-            )
+            TU_MATCH(::MIR::Terminator, (fcn.blocks[block].terminator), (e), (Incomplete, MIR_BUG(state, "Encounterd `Incomplete` block in control flow - BB" << block);), (Return, returns = true;), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, PUSH_BB(e, "Goto");), (If, PUSH_BB(e.bbTrue, "If true"); PUSH_BB(e.bbFalse, "If false");), (Switch, for (unsigned int i = 0; i < e.targets.size(); i++) { PUSH_BB(e.targets[i], "Switch V" << i); }), (SwitchValue, for (unsigned int i = 0; i < e.targets.size(); i++) { PUSH_BB(e.targets[i], "SwitchValue " << i); } PUSH_BB(e.defTarget, "SwitchValue def");), (Drop, PUSH_BB(e.target, "Drop ret"); TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, PUSH_BB(target, "Drop cleanup");)), (Call, PUSH_BB(e.retBlock, "Call ret"); TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, PUSH_BB(target, "Call cleanup");)))
 #undef PUSH_BB
         }
         if (!returns) {
@@ -1661,7 +1642,7 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                         }
                             }
                             TU_ARMA(SizedArray, e) {
-                            // NOTE: Something in liballoc does this with `MaybeUninit`, which is kinda a special case?
+                                // NOTE: Something in liballoc does this with `MaybeUninit`, which is kinda a special case?
                                 // TODO: Check that return type is an array
                             }
                             TU_ARMA(Borrow, e) {
@@ -1727,8 +1708,9 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                                             }
                                             TU_ARMA(Primitive, dE) {
                                                 MIR_ASSERT(state, dE != HIR::CoreType::Str, "Casting to `str` is invalid");
-                                                if (dE == HIR::CoreType::Char)
+                                                if (dE == HIR::CoreType::Char) {
                                                     MIR_ASSERT(state, sE == HIR::CoreType::U8, "Invalid cast: " << dstTy << " from " << srcTy);
+                                                }
                                             }
                             }
                                     }
@@ -1736,10 +1718,7 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                                     TU_ARMA(Borrow, sE) {
                                         MIR_ASSERT(state, dstTy->is_Pointer(), "Casting borrow to invalid type: " << dstTy << " from " << srcTy);
                                         MIR_ASSERT(state, dstTy->as_Pointer().type <= sE.type, "Casting borrow to invalid type: " << dstTy << " from " << srcTy);
-                                        MIR_ASSERT(state,
-                                            dstTy->as_Pointer().inner == sE.inner
-                                                || dstTy->as_Pointer().inner->equalsIgnoringRegions(sE.inner),
-                                            "Casting borrow to invalid type: " << dstTy << " from " << srcTy);
+                                        MIR_ASSERT(state, dstTy->as_Pointer().inner == sE.inner || dstTy->as_Pointer().inner->equalsIgnoringRegions(sE.inner), "Casting borrow to invalid type: " << dstTy << " from " << srcTy);
                                     }
                                     // Pointers: Can either be casted to another pointer, or to integers
                                     TU_ARMA(Pointer, sE) {
@@ -1804,11 +1783,11 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                                 const ::HIR::TypeData* ity = nullptr;
                                 if ((ity = state.isTypeOwnedBox(ty)))
                                     ;
-                                else if (ty->is_Borrow())
+                                else if (ty->is_Borrow()) {
                                     ity = ty->as_Borrow().inner;
-                                else if (ty->is_Pointer())
+                                } else if (ty->is_Pointer()) {
                                     ity = ty->as_Pointer().inner;
-                                else {
+                                } else {
                                     MIR_BUG(state, "DstMeta requires a &-ptr as input, got " << ty);
                                 }
                                 HIR::TypeRef resTy;
@@ -1832,11 +1811,11 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                                 const ::HIR::TypeData* ity = nullptr;
                                 if ((ity = state.isTypeOwnedBox(ty)))
                                     ;
-                                else if (ty->is_Borrow())
+                                else if (ty->is_Borrow()) {
                                     ity = ty->as_Borrow().inner;
-                                else if (ty->is_Pointer())
+                                } else if (ty->is_Pointer()) {
                                     ity = ty->as_Pointer().inner;
-                                else {
+                                } else {
                                     MIR_BUG(state, "DstPtr requires a &-ptr as input, got " << ty);
                                 }
                                 if (ity->is_Slice() || (ity->is_Primitive() && ity->as_Primitive() == HIR::CoreType::Str))
@@ -1862,11 +1841,11 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                                     break;
                                 }
                                 const ::HIR::TypeData* ity = nullptr;
-                                if (const auto* te = dstTy->opt_Borrow())
+                                if (const auto* te = dstTy->opt_Borrow()) {
                                     ity = te->inner;
-                                else if (const auto* te = dstTy->opt_Pointer())
+                                } else if (const auto* te = dstTy->opt_Pointer()) {
                                     ity = te->inner;
-                                else {
+                                } else {
                                     MIR_BUG(state, "MakeDst requires a pointer as output, got " << dstTy);
                                 }
                                 assert(ity);
@@ -1875,17 +1854,19 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                                     // In 1.90, this gets used for thin pointers too
                                     meta = types.unit();
                                 }
-// TODO: Check metadata type?
-// > Borrows vs pointers are fun
+                                // TODO: Check metadata type?
+                                // > Borrows vs pointers are fun
 
                                 // NOTE: Output type checked above.
                             }
                             TU_ARMA(Tuple, e) {
-                                if (!dstTy->is_Tuple())
+                                if (!dstTy->is_Tuple()) {
                                     MIR_BUG(state, "Tuple assigned slot of invalid type, " << dstTy);
+                                }
                                 const auto& dstItys = dstTy->as_Tuple();
-                                if (dstItys.size() != e.vals.size())
+                                if (dstItys.size() != e.vals.size()) {
                                     MIR_BUG(state, "Tuple assigned slot of invalid type, " << dstTy << " - expected " << e.vals.size() << " elements");
+                                }
                                 for (size_t i = 0; i < e.vals.size(); i++) {
                                     ::HIR::TypeRef tmp2;
                                     checkTypes(dstItys[i], state.getParamType(tmp2, e.vals[i]));
@@ -1909,7 +1890,7 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                     case ::MIR::Statement::TAG_Asm2:
                         // TODO: Ensure that values are all thin pointers or integers?
                         break;
-                case ::MIR::Statement::TAG_ScopeEnd:
+                    case ::MIR::Statement::TAG_ScopeEnd:
                         // TODO: Mark listed values as descoped
                         break;
                 }
@@ -1962,9 +1943,7 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                     if (e.flagIdx != ~0u) {
                         MIR_ASSERT(state, e.flagIdx < fcn.dropFlags.size(), "Drop flag out of range");
                     }
-                    TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target,
-                        MIR_ASSERT(state, target < fcn.blocks.size(), "Drop cleanup target out of range");
-                    )
+                    TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, MIR_ASSERT(state, target < fcn.blocks.size(), "Drop cleanup target out of range");)
                 }
                 TU_ARMA(Call, e) {
                     if (e.fcn.is_Value()) {
@@ -2038,7 +2017,6 @@ void MIRCheckCrate(/*const*/ ::HIR::Crate& crate) {
     });
     ov.visitCrate(crate);
 }
-
 
 namespace {
     struct State {
@@ -2813,9 +2791,7 @@ void MIRValidateFullValState(::MIR::TypeResolve& localMirRes, const ::MIR::Funct
             (blk.terminator),
             (te),
             (Incomplete, ),
-            (
-                Return, state.ensureLvalueValid(localMirRes, ::MIR::LValue::newReturn());
-            ),
+            (Return, state.ensureLvalueValid(localMirRes, ::MIR::LValue::newReturn());),
             (UnwindResume, ),
             (UnwindTerminate, ),
             (Unreachable, ),
@@ -2829,30 +2805,25 @@ void MIRValidateFullValState(::MIR::TypeResolve& localMirRes, const ::MIR::Funct
                 }
             }),
             (SwitchValue, state.ensureLvalueValid(localMirRes, te.val); for (size_t i = 0; i < te.targets.size(); i++) { todoQueue.push_back(::std::make_pair(te.targets[i], state.clone())); } todoQueue.push_back(::std::make_pair(te.defTarget, mv$(state)));),
-            (Drop, if (te.flagIdx == ~0u || state.dropFlags.at(te.flagIdx)) {
-                if (te.kind == ::MIR::eDropKind::SHALLOW) {
-                    const auto& vs = state.getLvalueState(localMirRes, te.slot);
-                    MIR_ASSERT(localMirRes, vs.index != ~0u, "Shallow drop on fully-valid value - " << te.slot);
-                    MIR_ASSERT(localMirRes, vs.isComposite(), "Shallow drop on non-composite state - " << te.slot << " (state=" << StateFmt(state, vs) << ")");
-                    const auto& subStates = state.getComposite(localMirRes, vs);
-                    MIR_ASSERT(localMirRes, subStates.size() == 2, "Shallow drop of slot with incorrect state shape (state=" << StateFmt(state, vs) << ")");
-                    MIR_ASSERT(localMirRes, subStates[0].isValid(), "Shallow drop on deallocated Box - " << te.slot << " (state=" << StateFmt(state, vs) << ")");
-                    state.setLvalueState(localMirRes, te.slot, State(false));
-                } else {
-                    state.moveLvalue(localMirRes, te.slot);
-                }
-            }
-            TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target,
-                todoQueue.push_back(::std::make_pair(target, state.clone()));
-            )
-            todoQueue.push_back(::std::make_pair(te.target, mv$(state)));),
+            (Drop,
+             if (te.flagIdx == ~0u || state.dropFlags.at(te.flagIdx)) {
+                 if (te.kind == ::MIR::eDropKind::SHALLOW) {
+                     const auto& vs = state.getLvalueState(localMirRes, te.slot);
+                     MIR_ASSERT(localMirRes, vs.index != ~0u, "Shallow drop on fully-valid value - " << te.slot);
+                     MIR_ASSERT(localMirRes, vs.isComposite(), "Shallow drop on non-composite state - " << te.slot << " (state=" << StateFmt(state, vs) << ")");
+                     const auto& subStates = state.getComposite(localMirRes, vs);
+                     MIR_ASSERT(localMirRes, subStates.size() == 2, "Shallow drop of slot with incorrect state shape (state=" << StateFmt(state, vs) << ")");
+                     MIR_ASSERT(localMirRes, subStates[0].isValid(), "Shallow drop on deallocated Box - " << te.slot << " (state=" << StateFmt(state, vs) << ")");
+                     state.setLvalueState(localMirRes, te.slot, State(false));
+                 } else {
+                     state.moveLvalue(localMirRes, te.slot);
+                 }
+             } TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target, todoQueue.push_back(::std::make_pair(target, state.clone()));) todoQueue.push_back(::std::make_pair(te.target, mv$(state)));),
             (Call, if (const auto* e = te.fcn.opt_Value()) { state.ensureLvalueValid(localMirRes, *e); } for (auto& arg : te.args) {
                 if (const auto* e = arg.opt_LValue()) {
                     state.moveLvalue(localMirRes, *e);
                 }
-            } TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target,
-                todoQueue.push_back(::std::make_pair(target, state.clone()));
-            ) state.markLvalueValid(localMirRes, te.retVal);
+            } TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target, todoQueue.push_back(::std::make_pair(target, state.clone()));) state.markLvalueValid(localMirRes, te.retVal);
              todoQueue.push_back(::std::make_pair(te.retBlock, mv$(state)));)
         )
     }
@@ -2877,7 +2848,6 @@ void MIRCheckCrateFull(/*const*/ ::HIR::Crate& crate) {
     });
     ov.visitCrate(crate);
 }
-
 
 namespace {
     /// @brief Used to tell the constant replacement code that replacements should be available
@@ -3043,7 +3013,10 @@ namespace {
 
 ::MIR::RValue MIRCleanupLiteralToRValue(const ::MIR::TypeResolve& state, MirMutator& mutator, EncodedLiteralSlice lit, ::HIR::TypeRef ty, const MonomorphState& params, ::HIR::Path path) {
     struct M: Monomorphiser {
-        explicit M(HIR::TypeInterner& types): Monomorphiser(types) {}
+        explicit M(HIR::TypeInterner& types)
+            : Monomorphiser(types)
+        {
+        }
 
         ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& ty) const override {
             return types.generic(ty.name, ty.binding);
@@ -4254,7 +4227,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, 
 
         mutator.flushBlock();
     }
-
 }
 
 void MIRCleanupCrate(::HIR::Crate& crate) {
@@ -4270,8 +4242,6 @@ void MIRCleanupCrate(::HIR::Crate& crate) {
 void MIRCleanupSetPostMonomorph() {
     gIsPostMonomorph = true;
 }
-
-
 
 #define DUMP_BEFORE_ALL 1
 #define DUMP_BEFORE_CONSTPROPAGATE 0
@@ -5582,12 +5552,7 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
             if (src.is_Return()) {
                 return ::MIR::Terminator::make_Goto(this->te.retBlock);
             } else if (src.is_UnwindResume()) {
-                TU_MATCHA((this->te.unwind), (ue),
-                    (Continue, return ::MIR::Terminator::make_UnwindResume({});),
-                    (Cleanup, return ::MIR::Terminator::make_Goto(ue);),
-                    (Terminate, return ::MIR::Terminator::make_UnwindTerminate({});),
-                    (Unreachable, return ::MIR::Terminator::make_Unreachable({});)
-                )
+                TU_MATCHA((this->te.unwind), (ue), (Continue, return ::MIR::Terminator::make_UnwindResume({});), (Cleanup, return ::MIR::Terminator::make_Goto(ue);), (Terminate, return ::MIR::Terminator::make_UnwindTerminate({});), (Unreachable, return ::MIR::Terminator::make_Unreachable({});))
                 throw "";
             } else {
                 return ::MIR::Cloner::cloneTerm(src);
@@ -8845,11 +8810,7 @@ bool MIROptimisePropagateSingleAssignments(::MIR::TypeResolve& state, ::MIR::Fun
                             return found;
                         });
                     }
-                    TU_MATCHA((block.terminator), (e),
-                        (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ),
-                        (Goto, DEBUG("TODO: Chain");),
-                        (If, stop = true;), (Switch, stop = true;), (SwitchValue, stop = true;),
-                        (Drop, stop = true;), (Call, stop = true;))
+                    TU_MATCHA((block.terminator), (e), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, DEBUG("TODO: Chain");), (If, stop = true;), (Switch, stop = true;), (SwitchValue, stop = true;), (Drop, stop = true;), (Call, stop = true;))
                 }
                 // Schedule a replacement in a future pass
                 if (found) {
@@ -9862,7 +9823,6 @@ bool MIROptimiseGarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
     return false;
 }
 
-
 /// Sort basic blocks to approximate program flow (helps when reading MIR)
 void MIRSortBlocks(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn) {
     ::std::vector<bool> visited(fcn.blocks.size());
@@ -9889,14 +9849,7 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pat
         depths[info.bbIdx] = ::std::make_pair(info.branchCount, info.level);
         const auto& bb = fcn.blocks[info.bbIdx];
 
-        TU_MATCHA((bb.terminator), (te),
-            (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ),
-            (Goto, todo.push_back(Todo{te, info.branchCount, info.level + 1});),
-            (If, todo.push_back(Todo{te.bbTrue, ++branches, info.level + 1}); todo.push_back(Todo{te.bbFalse, ++branches, info.level + 1});),
-            (Switch, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); if (te.validFlag != ~0u) todo.push_back(Todo{te.invalidTarget, ++branches, info.level + 1});),
-            (SwitchValue, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.defTarget, info.branchCount, info.level + 1});),
-            (Drop, todo.push_back(Todo{te.target, info.branchCount, info.level + 1}); TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)),
-            (Call, todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)))
+        TU_MATCHA((bb.terminator), (te), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, todo.push_back(Todo{te, info.branchCount, info.level + 1});), (If, todo.push_back(Todo{te.bbTrue, ++branches, info.level + 1}); todo.push_back(Todo{te.bbFalse, ++branches, info.level + 1});), (Switch, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); if (te.validFlag != ~0u) todo.push_back(Todo{te.invalidTarget, ++branches, info.level + 1});), (SwitchValue, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.defTarget, info.branchCount, info.level + 1});), (Drop, todo.push_back(Todo{te.target, info.branchCount, info.level + 1}); TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)), (Call, todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)))
     }
 
     // Sort a list of block indexes by `depths`
@@ -10001,9 +9954,7 @@ void MIROptimiseCrateInlining(const ::HIR::Crate& crate, TransList& list, bool p
 
     // rustc level 4 removes analysis limits. Preserve a finite cap for normal
     // level-3 inlining, while level 4+ runs this monotonic pass to its fixed point.
-    const size_t maxIterations = optLevel >= 4
-        ? ::std::numeric_limits<size_t>::max()
-        : 5;
+    const size_t maxIterations = optLevel >= 4 ? ::std::numeric_limits<size_t>::max() : 5;
     size_t numIterations = 0;
     bool didInlineOnPass;
     do {
