@@ -6417,11 +6417,6 @@ void HIRExpandLifetimeInfer(const WireBoard& wb, HIRCrate& crate) {
     ov.visitCrate(crate);
 }
 
-void HIRExpandLifetimeInferValidate(const WireBoard& wb, HIRCrate& crate) {
-    // TODO: When running, clear all local lifetimes (replace with empty - to be turned into ivars)
-    LifetimeOuterVisitor ov(wb, true);
-    ov.visitCrate(crate);
-}
 
 void HIRExpandLifetimeInferExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, const HIRFunction::argsT& args, const HIRTypeData* retTy, HIRExprPtr& exp) {
     TRACE_FUNCTION_F("ip=" << ip << " ret_ty=" << retTy << ", args=" << args);

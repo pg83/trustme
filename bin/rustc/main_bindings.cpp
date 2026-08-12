@@ -193,7 +193,6 @@ struct ProgramParams {
     // NOTE: if true, no parse/compilation performed (target is loaded though)
     bool printCfgs = false;
 
-    bool runBorrowcheck = false;
 
     TraitSolverConfig traitSolver;
 
@@ -291,7 +290,6 @@ void initDebugList() {
          "Expand HIR Reborrows",
          "Expand HIR ErasedType",
          "Typecheck Expressions (validate)",
-         "Expand HIR Lifetimes (validate)",
 
          "Dump HIR",
          "Lower MIR",
@@ -299,7 +297,6 @@ void initDebugList() {
          "Dump MIR",
          "Constant Evaluate Full",
          "MIR Cleanup",
-         "MIR Borrowcheck",
          "MIR Optimise",
          "MIR Validate PO",
          "MIR Validate Full",
@@ -803,13 +800,6 @@ int main(int argc, char* argv[]) {
             });
         }
 
-        // Optional for now
-        if (params.runBorrowcheck) {
-            CompilePhaseV("MIR Borrowcheck", [&]() {
-                MIRBorrowCheckCrate(wb, *hirCrate);
-            });
-        }
-
         // Optimise the MIR
         CompilePhaseV("MIR Optimise", [&]() {
             MIROptimiseCrate(wb, *hirCrate, mirOptLevel, enableMirInlining);
@@ -1290,9 +1280,6 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         // prints in diagnostics.  mrustc emits a compact
                         // diagnostic and has no corresponding display limit.
                         noOptval();
-                    } else if (optname == "borrowcheck") {
-                        noOptval();
-                        this->runBorrowcheck = true;
                     } else {
                         ::std::cerr << "Unknown -Z flag: '" << optname << "'" << ::std::endl;
                         exit(1);
