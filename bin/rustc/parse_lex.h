@@ -88,7 +88,7 @@ private:
     };
     U128 parseInt(NumMode* num_mode);
     FloatValue parseFloat(U128 whole);
-    uint32_t parseEscape(char enclosing);
+    uint32_t parseEscape(char enclosing, bool* is_byte_escape = nullptr);
 
     void push_hygine() override {
         m_hygiene = Ident::Hygiene::new_scope_chained(m_hygiene);

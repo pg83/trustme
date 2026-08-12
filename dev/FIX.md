@@ -40,7 +40,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ## P1 — 25–99 targets одним общим исправлением
 
-1. [ ] **Macro matcher: 36 targets.** Одна сигнатура `macro_rules_macro_rules.cpp:2113`, `Macro_InvokeRules_MatchPattern - No arm matched`, проходит через UI, doctest, Rust 1.90, Reference и lib tests. Минимизировать по одной matcher state transition; отдельно проверить interpolated block/type/visibility/meta fragments и statement boundaries.
+1. [ ] **Macro matcher: 25 targets.** Одна сигнатура `macro_rules_macro_rules.cpp:2113`, `Macro_InvokeRules_MatchPattern - No arm matched`, проходит через UI, doctest, Rust 1.90, Reference и lib tests. Минимизировать по одной matcher state transition; отдельно проверить interpolated block/type/visibility/meta fragments и statement boundaries.
 
 2. [ ] **Conditional const bounds `[const]`: 28 targets.** Parser одинаково видит `TOK_SQUARE_OPEN, expected TOK_IDENT` в const-trait bounds. Реализовать синтаксис, HIR-представление и trait-selection semantics; простого принятия токенов недостаточно.
 

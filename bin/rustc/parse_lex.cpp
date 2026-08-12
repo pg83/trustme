@@ -834,9 +834,14 @@ Token Lexer::getTokenInt_Identifier(Codepoint leader, Codepoint leader2, bool pa
             str = "";
             while ((ch = this->getc()) != '"') {
                 if (ch == '\\') {
-                    auto v = this->parseEscape('"');
+                    bool is_byte_escape;
+                    auto v = this->parseEscape('"', &is_byte_escape);
                     if (v != ~0u) {
-                        str += Codepoint(v);
+                        if (is_byte_escape) {
+                            str += static_cast<char>(v);
+                        } else {
+                            str += Codepoint(v);
+                        }
                     }
                 } else {
                     str += ch;
@@ -1077,10 +1082,16 @@ FloatValue Lexer::parseFloat(U128 whole) {
     }
 }
 
-uint32_t Lexer::parseEscape(char enclosing) {
+uint32_t Lexer::parseEscape(char enclosing, bool* is_byte_escape) {
+    if (is_byte_escape) {
+        *is_byte_escape = false;
+    }
     auto ch = this->getc();
     switch (ch.v) {
         case 'x': {
+            if (is_byte_escape) {
+                *is_byte_escape = true;
+            }
             ch = this->getc();
             if (!ch.isxdigit()) {
                 throw ParseError::Generic(*this, FMT("Found invalid character '\\x" << ::std::hex << ch.v << "' in \\u sequence"));
@@ -1139,7 +1150,7 @@ uint32_t Lexer::parseEscape(char enclosing) {
                 ch = this->getc();
             }
             if (ch == '\\') {
-                return parseEscape(enclosing);
+                return parseEscape(enclosing, is_byte_escape);
             } else if (ch == enclosing) {
                 this->ungetc();
                 return ~0;
