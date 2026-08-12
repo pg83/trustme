@@ -1611,11 +1611,6 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, HIRTy
 }
 
 namespace {
-    bool validForOpaque(const HIRTypeData* ty) {
-        return monomorphiseTypeNeeded(ty) || visitTyWith(ty, [](const HIRTypeData* t) {
-            return t->is_ErasedType() || t->is_Infer();
-        });
-    }
 }
 
 bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeRef& input, bool recurse /*=true*/) const {
@@ -1899,7 +1894,6 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
                 DEBUG("Mark " << e.path << " as opaque");
                 e.binding = HIRTypePathBinding::make_Opaque({});
                 publish();
-                ASSERT_BUG(sp, validForOpaque(input), "Set opaque on a non-generic type: " << input);
                 replacementHappened = this->replaceEqualities(input);
             }
             return true;
@@ -1914,7 +1908,6 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
     if( bestImpl.isValid() ) {
         e.binding = HIRTypePathBinding::make_Opaque({});
         publish();
-        ASSERT_BUG(sp, validForOpaque(input), "Set opaque on a non-generic type: " << input);
         this->replaceEqualities(input);
         DEBUG("- Couldn't find a non-specialised impl of " << traitPath << " for " << e2.type << " - treating as opaque");
         return false;
@@ -1923,7 +1916,6 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
     if( assumeOpaque ) {
         e.binding = HIRTypePathBinding::make_Opaque({});
         publish();
-        ASSERT_BUG(sp, validForOpaque(input), "Set opaque on a non-generic type: " << input);
         DEBUG("Assuming that " << input << " is an opaque name");
 
         bool rv = this->replaceEqualities(input);

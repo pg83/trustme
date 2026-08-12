@@ -36,7 +36,7 @@ attributes__L194.rs	src/attributes.md:194	2024	pass
 comments__L85.rs	src/comments.md:85	2024	pass
 conditional-compilation__L447.rs	src/conditional-compilation.md:447	2024	pass
 const_eval__L82.rs	src/const_eval.md:82	2024	fail
-const_eval__L89.rs	src/const_eval.md:89	2024	fail
+const_eval__L89.rs	src/const_eval.md:89	2024	compile
 const_eval__L94.rs	src/const_eval.md:94	2024	fail
 const_eval__L101.rs	src/const_eval.md:101	2024	fail
 const_eval__L107.rs	src/const_eval.md:107	2024	pass
@@ -65,7 +65,7 @@ destructors__L470.rs	src/destructors.md:470	2024	pass
 destructors__L558.rs	src/destructors.md:558	2024	fail
 destructors__L566.rs	src/destructors.md:566	2024	fail
 destructors__L575.rs	src/destructors.md:575	2024	fail
-destructors__L582.rs	src/destructors.md:582	2024	fail
+destructors__L582.rs	src/destructors.md:582	2024	compile
 destructors__L589.rs	src/destructors.md:589	2024	fail
 destructors__L596.rs	src/destructors.md:596	2024	fail
 destructors__L603.rs	src/destructors.md:603	2024	fail
@@ -79,7 +79,7 @@ expressions/array-expr__L111.rs	src/expressions/array-expr.md:111	2024	panic
 expressions/block-expr__L54.rs	src/expressions/block-expr.md:54	2024	pass
 expressions/block-expr__L64.rs	src/expressions/block-expr.md:64	2024	pass
 expressions/block-expr__L74.rs	src/expressions/block-expr.md:74	2024	compile
-expressions/block-expr__L136.rs	src/expressions/block-expr.md:136	2024	fail
+expressions/block-expr__L136.rs	src/expressions/block-expr.md:136	2024	compile
 expressions/block-expr__L226.rs	src/expressions/block-expr.md:226	2024	fail
 expressions/block-expr__L251.rs	src/expressions/block-expr.md:251	2024	pass
 expressions/block-expr__L259.rs	src/expressions/block-expr.md:259	2024	pass
@@ -355,7 +355,7 @@ items/use-declarations__L288.rs	src/items/use-declarations.md:288	2024	pass
 items/use-declarations__L334.rs	src/items/use-declarations.md:334	2024	pass
 items/use-declarations__L358.rs	src/items/use-declarations.md:358	2024	pass
 lifetime-elision__L35.rs	src/lifetime-elision.md:35	2024	pass
-lifetime-elision__L73.rs	src/lifetime-elision.md:73	2024	fail
+lifetime-elision__L73.rs	src/lifetime-elision.md:73	2024	compile
 lifetime-elision__L119.rs	src/lifetime-elision.md:119	2024	pass
 lifetime-elision__L140.rs	src/lifetime-elision.md:140	2024	fail
 lifetime-elision__L156.rs	src/lifetime-elision.md:156	2024	pass
@@ -498,8 +498,8 @@ types/closure__L166.rs	src/types/closure.md:166	2024	pass
 types/closure__L189.rs	src/types/closure.md:189	2024	compile
 types/closure__L208.rs	src/types/closure.md:208	2024	compile
 types/closure__L250.rs	src/types/closure.md:250	2024	compile
-types/closure__L264.rs	src/types/closure.md:264	2024	fail
-types/closure__L276.rs	src/types/closure.md:276	2024	fail
+types/closure__L264.rs	src/types/closure.md:264	2024	compile
+types/closure__L276.rs	src/types/closure.md:276	2024	compile
 types/closure__L294.rs	src/types/closure.md:294	2024	fail
 types/closure__L327.rs	src/types/closure.md:327	2024	compile
 types/closure__L375.rs	src/types/closure.md:375	2024	fail

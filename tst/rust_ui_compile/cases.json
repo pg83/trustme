@@ -18380,15 +18380,6 @@
     ]
   },
   {
-    "path": "traits/next-solver/cycles/leak-check-coinductive-cycle.rs",
-    "mode": "check",
-    "edition": "2015",
-    "crate_type": "bin",
-    "flags": [
-      "-Znext-solver"
-    ]
-  },
-  {
     "path": "traits/next-solver/cycles/provisional-cache-impacts-behavior.rs",
     "mode": "check",
     "edition": "2015",

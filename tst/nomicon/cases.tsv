@@ -17,7 +17,7 @@ borrow-splitting__L153.rs	src/borrow-splitting.md:153	2024	pass
 borrow-splitting__L187.rs	src/borrow-splitting.md:187	2024	pass
 checked-uninit__L8.rs	src/checked-uninit.md:8	2024	fail
 checked-uninit__L30.rs	src/checked-uninit.md:30	2024	pass
-checked-uninit__L46.rs	src/checked-uninit.md:46	2024	fail
+checked-uninit__L46.rs	src/checked-uninit.md:46	2024	compile
 checked-uninit__L64.rs	src/checked-uninit.md:64	2024	pass
 checked-uninit__L80.rs	src/checked-uninit.md:80	2024	pass
 checked-uninit__L102.rs	src/checked-uninit.md:102	2024	pass
@@ -60,7 +60,7 @@ lifetime-mismatch__L6.rs	src/lifetime-mismatch.md:6	2024	fail
 lifetime-mismatch__L82.rs	src/lifetime-mismatch.md:82	2024	fail
 lifetimes__L40.rs	src/lifetimes.md:40	2024	pass
 lifetimes__L70.rs	src/lifetimes.md:70	2024	pass
-lifetimes__L97.rs	src/lifetimes.md:97	2024	fail
+lifetimes__L97.rs	src/lifetimes.md:97	2024	compile
 lifetimes__L161.rs	src/lifetimes.md:161	2024	pass
 lifetimes__L179.rs	src/lifetimes.md:179	2024	fail
 lifetimes__L236.rs	src/lifetimes.md:236	2024	pass
@@ -68,7 +68,7 @@ lifetimes__L248.rs	src/lifetimes.md:248	2024	fail
 lifetimes__L268.rs	src/lifetimes.md:268	2024	pass
 lifetimes__L288.rs	src/lifetimes.md:288	2024	pass
 other-reprs__L108.rs	src/other-reprs.md:108	2024	pass
-ownership__L21.rs	src/ownership.md:21	2024	fail
+ownership__L21.rs	src/ownership.md:21	2024	compile
 ownership__L50.rs	src/ownership.md:50	2024	fail
 phantom-data__L9.rs	src/phantom-data.md:9	2024	fail
 phantom-data__L33.rs	src/phantom-data.md:33	2024	pass
