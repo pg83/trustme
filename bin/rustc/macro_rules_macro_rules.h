@@ -164,7 +164,7 @@ public:
     /// Crate that defined this macro
     /// - Populated on deserialise if not already set
     RcString sourceCrate;
-    AST::Edition edition;
+    ASTEdition edition;
 
     Ident::Hygiene mHygiene;
     // Lexical context at the macro definition, before the parser enters the
@@ -174,13 +174,13 @@ public:
     /// Expansion rules
     ::std::vector<MacroRulesArm> rules;
 
-    MacroRules(RcString sourceCrate, AST::Edition edition);
+    MacroRules(RcString sourceCrate, ASTEdition edition);
 
     virtual ~MacroRules();
     MacroRules(MacroRules&&) = default;
 };
 
-extern ::std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, TokenTree input, const AST::Crate& crate, AST::Module& mod);
+extern ::std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, TokenTree input, const ASTCrate& crate, ASTModule& mod);
 
 /// Parse a full `macro_rules` block
 extern MacroRulesPtr ParseMacroRules(TokenStream& lex);

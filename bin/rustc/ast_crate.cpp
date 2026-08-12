@@ -7,12 +7,12 @@
 #include <fstream>
 #include <dirent.h>
 
-::std::vector<::std::string> AST::gCrateLoadDirs = {};
-::std::map<::std::string, ::std::string> AST::gCrateOverrides;
-::std::map<RcString, RcString> AST::gImplicitCrates;
+::std::vector<::std::string> gCrateLoadDirs = {};
+::std::map<::std::string, ::std::string> gCrateOverrides;
+::std::map<RcString, RcString> gImplicitCrates;
 
 namespace {
-    bool checkItemCfg(const ::AST::AttributeList& attrs) {
+    bool checkItemCfg(const ASTAttributeList& attrs) {
         for (const auto& at : attrs.mItems) {
             if (at.name() == "cfg" && !checkCfg(at.span(), at)) {
                 return false;
@@ -21,7 +21,7 @@ namespace {
         return true;
     }
 
-    void iterateModule(::AST::Module& mod, ::std::function<void(::AST::Module& mod)> fcn) {
+    void iterateModule(ASTModule& mod, ::std::function<void(ASTModule& mod)> fcn) {
         fcn(mod);
         for (auto& sm : mod.mItems) {
             if (auto* e = sm->data.opt_Module()) {
@@ -38,18 +38,17 @@ namespace {
     }
 }
 
-namespace AST {
 
-    Crate::Crate(stl::ObjPool* pool, HIR::TypeInterner& types)
+    ASTCrate::ASTCrate(stl::ObjPool* pool, HIR::TypeInterner& types)
         : pool(pool)
         , types(types)
-        , mRootModule(AST::AbsolutePath())
+        , mRootModule(ASTAbsolutePath())
         , loadStd(LOAD_STD)
     {
     }
 
-    void Crate::loadExterns() {
-        auto cb = [this](Module& mod) {
+    void ASTCrate::loadExterns() {
+        auto cb = [this](ASTModule& mod) {
             for (/*const*/ auto& it : mod.mItems) {
                 if (auto* c = it->data.opt_Crate()) {
                     if (checkItemCfg(it->attrs)) {
@@ -117,7 +116,7 @@ namespace AST {
 
     // TODO: Handle disambiguating crates with the same name (e.g. libc in std and crates.io libc)
     // - Crates recorded in rlibs should specify a hash/tag that's passed in to this function.
-    RcString Crate::loadExternCrate(Span sp, const RcString& name, const ::std::string& basename /*=""*/) {
+    RcString ASTCrate::loadExternCrate(Span sp, const RcString& name, const ::std::string& basename /*=""*/) {
         TRACE_FUNCTION_F("Loading crate '" << name << "' (basename='" << basename << "')");
 
         ::std::string path;
@@ -213,7 +212,7 @@ namespace AST {
         }
 
         // NOTE: Creating `ExternCrate` loads the crate from the specified path
-        auto ec = ExternCrate{pool, types, name, path};
+        auto ec = ASTExternCrate{pool, types, name, path};
         auto realName = ec.hir->crateName;
         assert(realName != "");
         auto res = externCrates.insert(::std::make_pair(realName, mv$(ec)));
@@ -266,7 +265,7 @@ namespace AST {
         return realName;
     }
 
-    ExternCrate::ExternCrate(stl::ObjPool* pool, HIR::TypeInterner& types, const RcString& name, const ::std::string& path)
+    ASTExternCrate::ASTExternCrate(stl::ObjPool* pool, HIR::TypeInterner& types, const RcString& name, const ::std::string& path)
         : mName(name)
         , shortName(name)
         , filename(path)
@@ -282,16 +281,13 @@ namespace AST {
         }
     }
 
-} // namespace AST
 
-namespace AST {
 
-void Crate::setCrateName(std::string name) {
+void ASTCrate::setCrateName(std::string name) {
     crateNameSet = name;
     if (crateType == Type::Executable) {
         crateNameReal = "";
     } else {
         crateNameReal = crateNameSuffix != "" ? RcString::newInterned(name + "-" + crateNameSuffix) : RcString::newInterned(name);
     }
-}
 }

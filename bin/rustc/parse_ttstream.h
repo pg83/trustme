@@ -7,7 +7,7 @@
 class TTStream: public TokenStream {
     ::std::vector<::std::pair<unsigned int, const TokenTree*>> stack;
     Span parentSpan;
-    AST::Edition edition = AST::Edition::Rust2015;
+    ASTEdition edition = ASTEdition::Rust2015;
     const Ident::Hygiene* hygienePtr = nullptr;
 
 public:
@@ -21,7 +21,7 @@ public:
     }
 
 protected:
-    AST::Edition realGetEdition() const override;
+    ASTEdition realGetEdition() const override;
     Ident::Hygiene realGetHygiene() const override;
     Token realGetToken() override;
 };
@@ -32,7 +32,7 @@ class TTStreamO: public TokenStream {
     Position lastPos;
     TokenTree inputTt;
     ::std::vector<::std::pair<unsigned int, TokenTree*>> stack;
-    AST::Edition edition = AST::Edition::Rust2015;
+    ASTEdition edition = ASTEdition::Rust2015;
     const Ident::Hygiene* hygienePtr = nullptr;
 
 public:
@@ -49,7 +49,7 @@ public:
     }
 
 protected:
-    AST::Edition realGetEdition() const override;
+    ASTEdition realGetEdition() const override;
     Ident::Hygiene realGetHygiene() const override;
     Token realGetToken() override;
 };

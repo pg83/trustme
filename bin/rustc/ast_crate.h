@@ -14,14 +14,13 @@ namespace stl {
     class ObjPool;
 }
 
-namespace AST {
 
-    class ExternCrate;
+    class ASTExternCrate;
 
-    class TestDesc {
+    class ASTTestDesc {
     public:
         Span span;
-        ::AST::AbsolutePath path;
+        ASTAbsolutePath path;
         ::std::string name;
         bool ignore = false;
         bool isBenchmark = false;
@@ -35,35 +34,35 @@ namespace AST {
         ::std::string expectedPanicMessage;
     };
 
-    enum class ProcMacroTy {
+    enum class ASTProcMacroTy {
         Function,
         Derive,
         Attribute,
     };
 
-    class ProcMacroDef {
+    class ASTProcMacroDef {
     public:
-        ProcMacroTy ty;
+        ASTProcMacroTy ty;
         RcString name;
-        ::AST::AbsolutePath path;
+        ASTAbsolutePath path;
         ::std::vector<::std::string> attributes;
     };
 
-    class Crate {
+    class ASTCrate {
     public:
         stl::ObjPool* pool;
         HIR::TypeInterner& types;
-        ::AST::AttributeList mAttrs;
+        ASTAttributeList mAttrs;
 
-        ::std::map<::std::string, ::AST::AbsolutePath> mLangItems;
+        ::std::map<::std::string, ASTAbsolutePath> mLangItems;
         ::std::set<RcString> features;
 
     public:
-        Module mRootModule;
+        ASTModule mRootModule;
 
         /// Loaded crates in load order
         ::std::vector<RcString> externCratesOrd;
-        ::std::map<RcString, ExternCrate> externCrates;
+        ::std::map<RcString, ASTExternCrate> externCrates;
         // Mapping filled by searching for (?visible) macros with is_pub=true
         ::std::map<RcString, const MacroRules*> exportedMacros;
 
@@ -75,15 +74,15 @@ namespace AST {
         // List of tests (populated in expand if --test is passed)
         bool testHarness = false;
         bool noMain = false;
-        ::std::vector<TestDesc> tests;
+        ::std::vector<ASTTestDesc> tests;
 
         /// Files loaded using things like include! and include_str!
         mutable ::std::vector<::std::string> extraFiles;
 
         // Procedural macros!
-        ::std::vector<ProcMacroDef> procMacros;
+        ::std::vector<ASTProcMacroDef> procMacros;
 
-        AST::Edition edition;
+        ASTEdition edition;
         enum class Type {
             Unknown,
             RustLib,
@@ -102,15 +101,15 @@ namespace AST {
         ::std::string crateNameSuffix; // Suffix (from command-line)
         ::std::string crateNameSet;    // Crate name as set by the user (or auto-detected)
         RcString crateNameReal;        // user name '-' suffix
-        AST::Path preludePath;
+        ASTPath preludePath;
 
-        Crate(stl::ObjPool* pool, HIR::TypeInterner& types);
+        ASTCrate(stl::ObjPool* pool, HIR::TypeInterner& types);
 
-        const Module& rootModule() const {
+        const ASTModule& rootModule() const {
             return mRootModule;
         }
 
-        Module& rootModule() {
+        ASTModule& rootModule() {
             return mRootModule;
         }
 
@@ -125,23 +124,22 @@ namespace AST {
     };
 
     /// Representation of an imported crate
-    class ExternCrate {
+    class ASTExternCrate {
     public:
         RcString mName;
         RcString shortName;
         ::std::string filename;
         ::HIR::Crate* hir = nullptr;
 
-        ExternCrate(stl::ObjPool* pool, HIR::TypeInterner& types, const RcString& name, const ::std::string& path);
+        ASTExternCrate(stl::ObjPool* pool, HIR::TypeInterner& types, const RcString& name, const ::std::string& path);
 
-        ExternCrate(ExternCrate&&) = default;
-        ExternCrate& operator=(ExternCrate&&) = default;
-        ExternCrate(const ExternCrate&) = delete;
-        ExternCrate& operator=(const ExternCrate&) = delete;
+        ASTExternCrate(ASTExternCrate&&) = default;
+        ASTExternCrate& operator=(ASTExternCrate&&) = default;
+        ASTExternCrate(const ASTExternCrate&) = delete;
+        ASTExternCrate& operator=(const ASTExternCrate&) = delete;
     };
 
     extern ::std::vector<::std::string> gCrateLoadDirs;
     extern ::std::map<::std::string, ::std::string> gCrateOverrides;
     extern ::std::map<RcString, RcString> gImplicitCrates;
 
-} // namespace AST

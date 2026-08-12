@@ -16,10 +16,8 @@ enum class CfgLintLevel {
     Forbid,
 };
 
-namespace AST {
-    class Attribute;
-    class AttributeList;
-}
+    class ASTAttribute;
+    class ASTAttributeList;
 
 extern void CfgDump(::std::ostream& os);
 extern void CfgSetFlag(::std::string name);
@@ -29,9 +27,9 @@ extern bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool&
 extern bool CfgSetCheckSpec(const ::std::string& spec, ::std::string& error);
 extern void CfgSetLintLevel(::std::string name, CfgLintLevel level);
 extern void CfgSetLintCap(CfgLintLevel level);
-extern bool checkCfgAttrs(const ::AST::AttributeList& attrs);
-extern bool checkCfg(const Span& sp, const ::AST::Attribute& mi);
+extern bool checkCfgAttrs(const ASTAttributeList& attrs);
+extern bool checkCfg(const Span& sp, const ASTAttribute& mi);
 /// Check a parenthesised list of cfg rules (treated as `all()`)
 extern bool checkCfgStream(TokenStream& lex);
 /// Parse an attribute from a `cfg_attr()` attribute. Returns with an empty name if check failed
-extern std::vector<AST::Attribute> checkCfgAttr(const ::AST::Attribute& mi);
+extern std::vector<ASTAttribute> checkCfgAttr(const ASTAttribute& mi);

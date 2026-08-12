@@ -7,19 +7,17 @@
 
 class TypeRef;
 
-namespace AST {
-    class Crate;
-    class Module;
-}
+    class ASTCrate;
+    class ASTModule;
 class TokenTree;
 class TokenStream;
 
 class ExpandProcMacro {
 public:
     virtual ~ExpandProcMacro() = default;
-    virtual ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) = 0;
+    virtual ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) = 0;
 
-    virtual ::std::unique_ptr<TokenStream> expandIdent(const Span& sp, const AST::Crate& crate, const RcString& ident, const TokenTree& tt, AST::Module& mod) {
+    virtual ::std::unique_ptr<TokenStream> expandIdent(const Span& sp, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) {
         ERROR(sp, E0000, "macro doesn't take an identifier");
     }
 };

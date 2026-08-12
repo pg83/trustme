@@ -11,13 +11,13 @@ TAGGED_UNION_OUT_OF_LINE_IMPL(
     (Any, struct {}),
     (Bang, struct {}),
     (Unit, struct {}),
-    (Macro, struct { ::std::unique_ptr<::AST::MacroInvocation> inv; }),
+    (Macro, struct { ::std::unique_ptr<ASTMacroInvocation> inv; }),
     (Primitive, struct { enum eCoreType coreType; }),
     (Function, struct { TypeFunction info; }),
     (Tuple, struct { ::std::vector<TypeRef> innerTypes; }),
     (Borrow,
      struct {
-         AST::LifetimeRef lifetime;
+         ASTLifetimeRef lifetime;
          bool isMut;
          ::std::unique_ptr<TypeRef> inner;
      }),
@@ -29,7 +29,7 @@ TAGGED_UNION_OUT_OF_LINE_IMPL(
     (Array,
      struct {
          ::std::unique_ptr<TypeRef> inner;
-         ::std::shared_ptr<AST::ExprNode> size;
+         ::std::shared_ptr<ASTExprNode> size;
      }),
     (Slice, struct { ::std::unique_ptr<TypeRef> inner; }),
     (Generic,
@@ -37,11 +37,11 @@ TAGGED_UNION_OUT_OF_LINE_IMPL(
          RcString name;
          unsigned int index;
      }),
-    (Path, ::std::unique_ptr<AST::Path>),
+    (Path, ::std::unique_ptr<ASTPath>),
     (TraitObject,
      struct {
          ::std::vector<TypeTraitPath> traits;
-         ::std::vector<AST::LifetimeRef> lifetimes;
+         ::std::vector<ASTLifetimeRef> lifetimes;
      }),
     (ErasedType, std::unique_ptr<TypeErasedType>)
 );
@@ -76,19 +76,19 @@ static const struct {
     {"usize", CORETYPE_UINT},
 };
 
-AST::HigherRankedBounds::HigherRankedBounds() = default;
-AST::HigherRankedBounds::~HigherRankedBounds() = default;
-AST::HigherRankedBounds::HigherRankedBounds(HigherRankedBounds&&) = default;
-AST::HigherRankedBounds& AST::HigherRankedBounds::operator=(HigherRankedBounds&&) = default;
-AST::HigherRankedBounds::HigherRankedBounds(const HigherRankedBounds&) = default;
+ASTHigherRankedBounds::ASTHigherRankedBounds() = default;
+ASTHigherRankedBounds::~ASTHigherRankedBounds() = default;
+ASTHigherRankedBounds::ASTHigherRankedBounds(ASTHigherRankedBounds&&) = default;
+ASTHigherRankedBounds& ASTHigherRankedBounds::operator=(ASTHigherRankedBounds&&) = default;
+ASTHigherRankedBounds::ASTHigherRankedBounds(const ASTHigherRankedBounds&) = default;
 
-bool AST::HigherRankedBounds::empty() const {
+bool ASTHigherRankedBounds::empty() const {
     return mLifetimes.empty();
 }
 
 TypeFunction::TypeFunction() = default;
 
-TypeFunction::TypeFunction(AST::HigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool isVariadic)
+TypeFunction::TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool isVariadic)
     : hrbs(mv$(hrbs))
     , isUnsafe(isUnsafe)
     , mAbi(mv$(abi))
@@ -192,19 +192,19 @@ Ordering TypeFunction::ord(const TypeFunction& x) const {
 TypeRef::~TypeRef() {
 }
 
-TypeRef::TypeRef(TagMacro, ::AST::MacroInvocation inv)
+TypeRef::TypeRef(TagMacro, ASTMacroInvocation inv)
     : mSpan(inv.span())
     , mData(TypeData::make_Macro({box$(inv)}))
 {
 }
 
-TypeRef::TypeRef(TagPath, Span sp, AST::Path path)
+TypeRef::TypeRef(TagPath, Span sp, ASTPath path)
     : mSpan(mv$(sp))
     , mData(TypeData::make_Path(box$(path)))
 {
 }
 
-TypeRef::TypeRef(Span sp, AST::Path path)
+TypeRef::TypeRef(Span sp, ASTPath path)
     : TypeRef(TagPath(), mv$(sp), mv$(path))
 {
 }
@@ -242,21 +242,21 @@ TypeRef TypeRef::clone() const {
             _COPY(Primitive)
             _COPY(Function)
             _CLONE(Tuple, {H::cloneTyVec(old.innerTypes)})
-            _CLONE(Borrow, {AST::LifetimeRef(old.lifetime), old.isMut, box$(old.inner->clone())})
+            _CLONE(Borrow, {ASTLifetimeRef(old.lifetime), old.isMut, box$(old.inner->clone())})
             _CLONE(Pointer, {old.isMut, box$(old.inner->clone())})
             _CLONE(Array, {box$(old.inner->clone()), old.size})
             _CLONE(Slice, {box$(old.inner->clone())})
             _COPY(Generic)
-            _CLONE(Path, std::make_unique<AST::Path>(*old))
+            _CLONE(Path, std::make_unique<ASTPath>(*old))
             _COPY(TraitObject)
-            _CLONE(ErasedType, std::make_unique<TypeErasedType>(TypeErasedType{old->traits, old->maybeTraits, old->lifetimes, old->use ? box$(*old->use) : ::std::unique_ptr<AST::PathParams>(), old->isEdition2024OrLater}))
+            _CLONE(ErasedType, std::make_unique<TypeErasedType>(TypeErasedType{old->traits, old->maybeTraits, old->lifetimes, old->use ? box$(*old->use) : ::std::unique_ptr<ASTPathParams>(), old->isEdition2024OrLater}))
 #undef _COPY
 #undef _CLONE
     }
     throw "";
 }
 
-TypeTraitPath::TypeTraitPath(AST::HigherRankedBounds hrbs, AST::Path path, AST::BoundConstness constness)
+TypeTraitPath::TypeTraitPath(ASTHigherRankedBounds hrbs, ASTPath path, ASTBoundConstness constness)
     : hrbs(mv$(hrbs))
     , path(box$(path))
     , constness(constness)
@@ -269,7 +269,7 @@ TypeTraitPath::TypeTraitPath(TypeTraitPath&&) = default;
 
 TypeTraitPath::TypeTraitPath(const TypeTraitPath& x)
     : hrbs(x.hrbs)
-    , path(std::make_unique<AST::Path>(*x.path))
+    , path(std::make_unique<ASTPath>(*x.path))
     , constness(x.constness)
 {
 }
@@ -352,7 +352,7 @@ void TypeRef::print(::std::ostream& os, bool isDebug /*=false*/) const {
             } os << ")";)
             TU_ARM(mData, Borrow, ent) {
                 os << "&";
-                if (ent.lifetime != AST::LifetimeRef()) {
+                if (ent.lifetime != ASTLifetimeRef()) {
                     os << ent.lifetime << " ";
                 }
                 os << (ent.isMut ? "mut " : "");
@@ -370,14 +370,14 @@ void TypeRef::print(::std::ostream& os, bool isDebug /*=false*/) const {
                 }
                 needsPlus = true;
                 os << it.hrbs;
-                if (it.constness == AST::BoundConstness::Always) {
+                if (it.constness == ASTBoundConstness::Always) {
                     os << "const ";
-                } else if (it.constness == AST::BoundConstness::Maybe) {
+                } else if (it.constness == ASTBoundConstness::Maybe) {
                     os << "[const] ";
                 }
                 it.path->printPretty(os, true, isDebug);
             } for (const auto& it : ent.lifetimes) {
-                if (it.binding() != AST::LifetimeRef::BINDING_UNSPECIFIED) {
+                if (it.binding() != ASTLifetimeRef::BINDING_UNSPECIFIED) {
                     if (needsPlus) {
                         os << "+";
                     }
@@ -391,9 +391,9 @@ void TypeRef::print(::std::ostream& os, bool isDebug /*=false*/) const {
                 }
                 needsPlus = true;
                 os << it.hrbs;
-                if (it.constness == AST::BoundConstness::Always) {
+                if (it.constness == ASTBoundConstness::Always) {
                     os << "const ";
-                } else if (it.constness == AST::BoundConstness::Maybe) {
+                } else if (it.constness == ASTBoundConstness::Maybe) {
                     os << "[const] ";
                 }
                 it.path->printPretty(os, true, isDebug);
@@ -426,23 +426,21 @@ void TypeRef::print(::std::ostream& os, bool isDebug /*=false*/) const {
     return os;
 }
 
-namespace AST {
-    ::std::ostream& operator<<(::std::ostream& os, const LifetimeRef& x) {
-        if (x.mBinding == LifetimeRef::BINDING_STATIC) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTLifetimeRef& x) {
+        if (x.mBinding == ASTLifetimeRef::BINDING_STATIC) {
             os << "'static";
-        } else if (x.mBinding == LifetimeRef::BINDING_INFER) {
+        } else if (x.mBinding == ASTLifetimeRef::BINDING_INFER) {
             os << "'_";
-        } else if (x.mBinding == LifetimeRef::BINDING_UNSPECIFIED) {
+        } else if (x.mBinding == ASTLifetimeRef::BINDING_UNSPECIFIED) {
             os << "/*'UNSPEC*/";
         } else {
             os << "'" << x.mName.name;
-            if (x.mBinding != LifetimeRef::BINDING_UNBOUND) {
+            if (x.mBinding != ASTLifetimeRef::BINDING_UNBOUND) {
                 os << "/*" << x.mBinding << "*/";
             }
         }
         return os;
     }
-}
 
 PrettyPrintType::PrettyPrintType(const TypeRef& ty)
     : mType(ty)
@@ -493,13 +491,13 @@ TypeRef::TypeRef(TagTuple, Span sp, ::std::vector<TypeRef> innerTypes)
 {
 }
 
-TypeRef::TypeRef(TagFunction, Span sp, AST::HigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<TypeRef> args, bool isVariadic, TypeRef ret)
+TypeRef::TypeRef(TagFunction, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<TypeRef> args, bool isVariadic, TypeRef ret)
     : mSpan(mv$(sp))
     , mData(TypeData::make_Function({TypeFunction(mv$(hrbs), isUnsafe, abi, box$(ret), mv$(args), isVariadic)}))
 {
 }
 
-TypeRef::TypeRef(TagReference, Span sp, AST::LifetimeRef lft, bool isMut, TypeRef innerType)
+TypeRef::TypeRef(TagReference, Span sp, ASTLifetimeRef lft, bool isMut, TypeRef innerType)
     : mSpan(mv$(sp))
     , mData(TypeData::make_Borrow({::std::move(lft), isMut, ::makeUniquePtr(mv$(innerType))}))
 {
@@ -511,7 +509,7 @@ TypeRef::TypeRef(TagPointer, Span sp, bool isMut, TypeRef innerType)
 {
 }
 
-TypeRef::TypeRef(TagSizedArray, Span sp, TypeRef innerType, ::std::shared_ptr<AST::ExprNode> size)
+TypeRef::TypeRef(TagSizedArray, Span sp, TypeRef innerType, ::std::shared_ptr<ASTExprNode> size)
     : mSpan(mv$(sp))
     , mData(TypeData::make_Array({::makeUniquePtr(mv$(innerType)), mv$(size)}))
 {
@@ -534,7 +532,7 @@ TypeRef::TypeRef(Span sp, RcString name, unsigned int binding)
 {
 }
 
-TypeRef::TypeRef(Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<AST::LifetimeRef> lifetimes)
+TypeRef::TypeRef(Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes)
     : mSpan(mv$(sp))
     , mData(TypeData::make_TraitObject({::std::move(traits), mv$(lifetimes)}))
 {

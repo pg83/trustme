@@ -5,9 +5,7 @@
 
 class RcString;
 
-namespace AST {
-    class Crate;
-}
+    class ASTCrate;
 
 namespace HIR {
     class Crate;
@@ -19,7 +17,7 @@ namespace stl {
 }
 
 extern void HIRDump(::std::ostream& sink, const ::HIR::Crate& crate);
-extern ::HIR::Crate* LowerHIRFromAST(stl::ObjPool* pool, ::AST::Crate& crate);
+extern ::HIR::Crate* LowerHIRFromAST(stl::ObjPool* pool, ASTCrate& crate);
 extern void HIRSerialise(const ::std::string& filename, const ::HIR::Crate& crate);
 
 extern ::HIR::Crate* HIRDeserialise(stl::ObjPool* pool, ::HIR::TypeInterner& types, const ::std::string& filename);

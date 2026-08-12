@@ -3,36 +3,35 @@
 #include <cassert>
 #include <memory>
 
-namespace AST {
 
-    class ExprNode;
-    class NodeVisitor;
+    class ASTExprNode;
+    class ASTNodeVisitor;
 
-    extern ::std::ostream& operator<<(::std::ostream& os, const ExprNode& node);
+    extern ::std::ostream& operator<<(::std::ostream& os, const ASTExprNode& node);
 
-    class ExprNodeP {
-        ExprNode* ptr;
+    class ASTExprNodeP {
+        ASTExprNode* ptr;
 
     public:
-        ~ExprNodeP();
+        ~ASTExprNodeP();
 
-        ExprNodeP();
+        ASTExprNodeP();
 
-        ExprNodeP(ExprNode* node);
+        ASTExprNodeP(ASTExprNode* node);
 
-        ExprNodeP(std::unique_ptr<ExprNode> node); //: m_ptr(node.release()) {}
+        ASTExprNodeP(std::unique_ptr<ASTExprNode> node); //: m_ptr(node.release()) {}
 
-        ExprNodeP(ExprNodeP&& x)
+        ASTExprNodeP(ASTExprNodeP&& x)
             : ptr(x.ptr)
         {
             x.ptr = nullptr;
         }
 
-        ExprNodeP(const ExprNodeP& x) = delete;
+        ASTExprNodeP(const ASTExprNodeP& x) = delete;
 
-        ExprNodeP& operator=(ExprNodeP&& x);
+        ASTExprNodeP& operator=(ASTExprNodeP&& x);
 
-        ExprNodeP& operator=(const ExprNodeP& x) = delete;
+        ASTExprNodeP& operator=(const ASTExprNodeP& x) = delete;
 
         operator bool() const {
             return isValid();
@@ -42,44 +41,44 @@ namespace AST {
             return ptr != nullptr;
         }
 
-        ExprNode& operator*() {
+        ASTExprNode& operator*() {
             return *ptr;
         }
 
-        const ExprNode& operator*() const {
+        const ASTExprNode& operator*() const {
             return *ptr;
         }
 
-        ExprNode* operator->() {
+        ASTExprNode* operator->() {
             return ptr;
         }
 
-        const ExprNode* operator->() const {
+        const ASTExprNode* operator->() const {
             return ptr;
         }
 
-        ExprNode* get() {
+        ASTExprNode* get() {
             return ptr;
         }
 
-        const ExprNode* get() const {
+        const ASTExprNode* get() const {
             return ptr;
         }
 
-        ExprNode* release();
+        ASTExprNode* release();
 
-        void reset(ExprNode* n = nullptr);
+        void reset(ASTExprNode* n = nullptr);
 
         const char* typeName() const;
     };
 
-    class Expr {
-        ::std::shared_ptr<ExprNode> mNode;
+    class ASTExpr {
+        ::std::shared_ptr<ASTExprNode> mNode;
 
     public:
-        Expr(ExprNodeP node);
-        Expr(ExprNode* node);
-        Expr();
+        ASTExpr(ASTExprNodeP node);
+        ASTExpr(ASTExprNode* node);
+        ASTExpr();
 
         operator bool() const {
             return isValid();
@@ -89,18 +88,17 @@ namespace AST {
             return mNode.get() != nullptr;
         }
 
-        const ExprNode& node() const;
+        const ASTExprNode& node() const;
 
-        ExprNode& node();
+        ASTExprNode& node();
 
-        ::std::shared_ptr<ExprNode> takeNode();
+        ::std::shared_ptr<ASTExprNode> takeNode();
 
-        void visitNodes(NodeVisitor& v);
-        void visitNodes(NodeVisitor& v) const;
+        void visitNodes(ASTNodeVisitor& v);
+        void visitNodes(ASTNodeVisitor& v) const;
 
-        Expr clone() const;
+        ASTExpr clone() const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const Expr& pat);
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTExpr& pat);
     };
 
-}

@@ -508,7 +508,7 @@ namespace {
                 std::string val;
                 if (lex.lookahead(0) == TOK_INTERPOLATED_EXPR) {
                     auto n = lex.getTokenCheck(TOK_INTERPOLATED_EXPR).takeFragNode();
-                    const auto* np = cast<AST::ExprNodeString>(n.get());
+                    const auto* np = cast<ASTExprNodeString>(n.get());
                     ASSERT_BUG(n->span(), np, "");
                     val = np->mValue;
                 } else {
@@ -623,12 +623,12 @@ bool checkCfgStream(TokenStream& lex) {
     return rv;
 }
 
-bool checkCfg(const Span& sp, const ::AST::Attribute& mi) {
+bool checkCfg(const Span& sp, const ASTAttribute& mi) {
     TTStream lex(sp, ParseState(), mi.data());
     return checkCfgStream(lex);
 }
 
-bool checkCfgAttrs(const ::AST::AttributeList& attrs) {
+bool checkCfgAttrs(const ASTAttributeList& attrs) {
     for (auto& a : attrs.mItems) {
         if (a.name() == rcstringCfg) {
             if (!checkCfg(a.span(), a)) {
@@ -639,11 +639,11 @@ bool checkCfgAttrs(const ::AST::AttributeList& attrs) {
     return true;
 }
 
-std::vector<AST::Attribute> checkCfgAttr(const ::AST::Attribute& mi) {
+std::vector<ASTAttribute> checkCfgAttr(const ASTAttribute& mi) {
     TTStream lex(mi.span(), ParseState(), mi.data());
 
     Token tok;
-    std::vector<AST::Attribute> rv;
+    std::vector<ASTAttribute> rv;
     lex.getTokenCheck(TOK_PAREN_OPEN);
     auto cfgRes = checkCfgInner(lex);
     while (lex.lookahead(0) == TOK_COMMA) {
@@ -655,23 +655,23 @@ std::vector<AST::Attribute> checkCfgAttr(const ::AST::Attribute& mi) {
     if (cfgRes) {
         return rv;
     } else {
-        return std::vector<AST::Attribute>();
+        return std::vector<ASTAttribute>();
     }
 }
 
 class CCfgExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         DEBUG("cfg!() - " << tt);
         auto lex = TTStream(sp, ParseState(), tt);
         bool rv = checkCfgInner(lex);
         lex.getTokenCheck(TOK_EOF);
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(AST::Edition::Rust2015, {}, rv ? TOK_RWORD_TRUE : TOK_RWORD_FALSE)));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, {}, rv ? TOK_RWORD_TRUE : TOK_RWORD_FALSE)));
     }
 };
 
 class CCfgSelectExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         DEBUG("cfg_select!() - " << tt);
         auto lex = TTStream(sp, ParseState(), tt);
         for (;;) {
@@ -693,7 +693,7 @@ class CCfgHandler: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate) const override {
         DEBUG("#[cfg] crate - " << mi);
         // Ignore, as #[cfg] on a crate is handled in expand/mod.cpp
         if (checkCfg(sp, mi)) {
@@ -703,34 +703,34 @@ class CCfgHandler: public ExpandDecorator {
         }
     }
 
-    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module&, size_t, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         TRACE_FUNCTION_FR("#[cfg] item - " << mi, (i.is_None() ? "Deleted" : ""));
         if (checkCfg(sp, mi)) {
             // Leave
         } else {
-            i = AST::Item::make_None({});
+            i = ASTItem::make_None({});
         }
     }
 
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, AST::Impl& impl, const RcString& name, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         TRACE_FUNCTION_FR("#[cfg] item - " << mi, (i.is_None() ? "Deleted" : ""));
         if (checkCfg(sp, mi)) {
             // Leave
         } else {
-            i = AST::Item::make_None({});
+            i = ASTItem::make_None({});
         }
     }
 
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, const AST::AbsolutePath& path, AST::Trait& trait, slice<const AST::Attribute> attrs, AST::Item& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
         TRACE_FUNCTION_FR("#[cfg] item - " << mi, (i.is_None() ? "Deleted" : ""));
         if (checkCfg(sp, mi)) {
             // Leave
         } else {
-            i = AST::Item::make_None({});
+            i = ASTItem::make_None({});
         }
     }
 
-    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, ::AST::ExprNodeP& expr) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeP& expr) const override {
         DEBUG("#[cfg] expr - " << mi);
         if (checkCfg(sp, mi)) {
             // Leave
@@ -739,35 +739,35 @@ class CCfgHandler: public ExpandDecorator {
         }
     }
 
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::StructItem& si) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTStructItem& si) const override {
         DEBUG("#[cfg] struct item - " << mi);
         if (!checkCfg(sp, mi)) {
             si.mName = RcString();
         }
     }
 
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::TupleItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTTupleItem& i) const override {
         DEBUG("#[cfg] tuple item - " << mi);
         if (!checkCfg(sp, mi)) {
             i.mType = ::TypeRef(sp);
         }
     }
 
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::EnumVariant& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTEnumVariant& i) const override {
         DEBUG("#[cfg] enum variant - " << mi);
         if (!checkCfg(sp, mi)) {
             i.mName = RcString();
         }
     }
 
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNodeMatchArm& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeMatchArm& i) const override {
         DEBUG("#[cfg] match arm - " << mi);
         if (!checkCfg(sp, mi)) {
             i.patterns.clear();
         }
     }
 
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNodeStructLiteral::Ent& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& i) const override {
         DEBUG("#[cfg] struct lit - " << mi);
         if (!checkCfg(sp, mi)) {
             i.value.reset();

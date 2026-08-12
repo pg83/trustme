@@ -4,5 +4,5 @@
 #include "synext_decorator.h"
 #include "synext_macro.h"
 
-extern ::AST::ExprNodeP ExpandParseAndExpandExprVal(const ::AST::Crate& crate, const AST::Module& mod, TokenStream& lex);
-extern void ExpandBareExpr(const ::AST::Crate& crate, const AST::Module& mod, AST::ExprNodeP& node);
+extern ASTExprNodeP ExpandParseAndExpandExprVal(const ASTCrate& crate, const ASTModule& mod, TokenStream& lex);
+extern void ExpandBareExpr(const ASTCrate& crate, const ASTModule& mod, ASTExprNodeP& node);

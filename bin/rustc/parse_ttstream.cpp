@@ -61,7 +61,7 @@ Position TTStream::getPosition() const {
     return Position(RcString(), 0, 0);
 }
 
-AST::Edition TTStream::realGetEdition() const {
+ASTEdition TTStream::realGetEdition() const {
     return edition;
 }
 
@@ -117,7 +117,7 @@ Token TTStreamO::realGetToken() {
     return Token(TOK_EOF);
 }
 
-AST::Edition TTStreamO::realGetEdition() const {
+ASTEdition TTStreamO::realGetEdition() const {
     return edition;
 }
 

@@ -13,15 +13,14 @@
 #include <iostream>
 #include <algorithm>
 
-namespace AST {
 
-    Trait::Trait()
+    ASTTrait::ASTTrait()
         : mIsMarker(false)
         , mIsUnsafe(false)
     {
     }
 
-    Trait::Trait(GenericParams params, ::std::vector<Spanned<TypeTraitPath>> supertraits, ::std::vector<Spanned<LifetimeRef>> lifetimes)
+    ASTTrait::ASTTrait(ASTGenericParams params, ::std::vector<Spanned<TypeTraitPath>> supertraits, ::std::vector<Spanned<ASTLifetimeRef>> lifetimes)
         : mParams(mv$(params))
         , mSupertraits(mv$(supertraits))
         , mLifetimes(mv$(lifetimes))
@@ -30,22 +29,22 @@ namespace AST {
     {
     }
 
-    Trait::~Trait() = default;
-    Trait::Trait(Trait&&) = default;
-    Trait& Trait::operator=(Trait&&) = default;
+    ASTTrait::~ASTTrait() = default;
+    ASTTrait::ASTTrait(ASTTrait&&) = default;
+    ASTTrait& ASTTrait::operator=(ASTTrait&&) = default;
 
-    Impl::Impl(ImplDef def)
+    ASTImpl::ASTImpl(ASTImplDef def)
         : mDef(mv$(def))
     {
     }
 
-    Impl::~Impl() = default;
-    Impl::Impl(Impl&&) = default;
-    Impl& Impl::operator=(Impl&&) = default;
+    ASTImpl::~ASTImpl() = default;
+    ASTImpl::ASTImpl(ASTImpl&&) = default;
+    ASTImpl& ASTImpl::operator=(ASTImpl&&) = default;
 
     namespace {
-        ::std::vector<Attribute> cloneMivec(const ::std::vector<Attribute>& v) {
-            ::std::vector<Attribute> ri;
+        ::std::vector<ASTAttribute> cloneMivec(const ::std::vector<ASTAttribute>& v) {
+            ::std::vector<ASTAttribute> ri;
             ri.reserve(v.size());
             for (const auto& i : v) {
                 ri.push_back(i.clone());
@@ -54,15 +53,15 @@ namespace AST {
         }
     }
 
-    AttributeList AttributeList::clone() const {
-        return AttributeList(cloneMivec(mItems));
+    ASTAttributeList ASTAttributeList::clone() const {
+        return ASTAttributeList(cloneMivec(mItems));
     }
 
-    void AttributeList::push_back(Attribute i) {
+    void ASTAttributeList::push_back(ASTAttribute i) {
         mItems.push_back(::std::move(i));
     }
 
-    const Attribute* AttributeList::get(const char* name) const {
+    const ASTAttribute* ASTAttributeList::get(const char* name) const {
         for (auto& i : mItems) {
             if (i.name() == name) {
                 //i.mark_used();
@@ -72,14 +71,14 @@ namespace AST {
         return nullptr;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const AttributeList& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTAttributeList& x) {
         for (const auto& i : x.mItems) {
             os << "#[" << i << "]";
         }
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const AttributeName& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTAttributeName& x) {
         if (x.elems.empty()) {
             os << "<empty>";
         } else {
@@ -93,7 +92,7 @@ namespace AST {
         return os;
     }
 
-    Attribute::Attribute(const Attribute& x)
+    ASTAttribute::ASTAttribute(const ASTAttribute& x)
         : mSpan(x.mSpan)
         , mName(x.mName)
         , mData(x.mData.clone())
@@ -101,22 +100,22 @@ namespace AST {
     {
     }
 
-    Attribute Attribute::clone() const {
-        return Attribute(*this);
+    ASTAttribute ASTAttribute::clone() const {
+        return ASTAttribute(*this);
     }
 
-    void Attribute::fmt(std::ostream& os) const {
+    void ASTAttribute::fmt(std::ostream& os) const {
         os << mName;
         os << mData;
     }
 
-    std::string Attribute::parseEqualsString(const AST::Crate& crate, const AST::Module& mod) const {
+    std::string ASTAttribute::parseEqualsString(const ASTCrate& crate, const ASTModule& mod) const {
         TTStream lex(this->mSpan, ParseState(), this->data());
         lex.getTokenCheck(TOK_EQUAL);
         auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
 
         std::string rv;
-        if (auto* v = cast<::AST::ExprNodeString>(&*n)) {
+        if (auto* v = cast<ASTExprNodeString>(&*n)) {
             rv = v->mValue;
         } else {
             throw ParseErrorUnexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);
@@ -125,7 +124,7 @@ namespace AST {
         return rv;
     }
 
-    std::string Attribute::parseParenString() const {
+    std::string ASTAttribute::parseParenString() const {
         TTStream lex(this->mSpan, ParseState(), this->data());
         lex.getTokenCheck(TOK_PAREN_OPEN);
         auto rv = lex.getTokenCheck(TOK_STRING).str();
@@ -133,7 +132,7 @@ namespace AST {
         return rv;
     }
 
-    void Attribute::parseParenIdentList(std::function<void(const Span& sp, RcString ident)> itemCb) const {
+    void ASTAttribute::parseParenIdentList(std::function<void(const Span& sp, RcString ident)> itemCb) const {
         TTStream lex(this->mSpan, ParseState(), this->data());
         lex.getTokenCheck(TOK_PAREN_OPEN);
         while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
@@ -147,26 +146,26 @@ namespace AST {
     }
 
     // ---
-    Visibility Visibility::makeGlobal() {
-        return Visibility();
+    ASTVisibility ASTVisibility::makeGlobal() {
+        return ASTVisibility();
     }
 
-    Visibility Visibility::makeRestricted(Ty ty, AST::AbsolutePath p) {
-        Visibility rv;
+    ASTVisibility ASTVisibility::makeRestricted(Ty ty, ASTAbsolutePath p) {
+        ASTVisibility rv;
         rv.mTy = ty;
-        rv.mVisPath = std::make_shared<AST::AbsolutePath>(std::move(p));
+        rv.mVisPath = std::make_shared<ASTAbsolutePath>(std::move(p));
         return rv;
     }
 
-    Visibility Visibility::makeRestricted(AST::AbsolutePath p, AST::Path inPath) {
-        Visibility rv;
+    ASTVisibility ASTVisibility::makeRestricted(ASTAbsolutePath p, ASTPath inPath) {
+        ASTVisibility rv;
         rv.mTy = Ty::PubIn;
-        rv.mVisPath = std::make_shared<AST::AbsolutePath>(std::move(p));
-        rv.mInPath = std::make_shared<AST::Path>(std::move(inPath));
+        rv.mVisPath = std::make_shared<ASTAbsolutePath>(std::move(p));
+        rv.mInPath = std::make_shared<ASTPath>(std::move(inPath));
         return rv;
     }
 
-    void Visibility::fmt(::std::ostream& os) const {
+    void ASTVisibility::fmt(::std::ostream& os) const {
         switch (mTy) {
             case Ty::Private:
                 break;
@@ -197,12 +196,12 @@ namespace AST {
         }
     }
 
-    std::ostream& operator<<(::std::ostream& os, const Visibility& x) {
+    std::ostream& operator<<(::std::ostream& os, const ASTVisibility& x) {
         x.fmt(os);
         return os;
     }
 
-    bool Visibility::isVisible(const ::AST::AbsolutePath& fromMod) const {
+    bool ASTVisibility::isVisible(const ASTAbsolutePath& fromMod) const {
         if (mVisPath) {
             if (mVisPath->crate != fromMod.crate) {
                 return false;
@@ -221,7 +220,7 @@ namespace AST {
         }
     }
 
-    bool Visibility::contains(const ::AST::Visibility& x) const {
+    bool ASTVisibility::contains(const ASTVisibility& x) const {
         if (mVisPath) {
             return x.isVisible(*mVisPath);
         } else {
@@ -229,7 +228,7 @@ namespace AST {
         }
     }
 
-    void Visibility::inplaceUnion(const Visibility& x) {
+    void ASTVisibility::inplaceUnion(const ASTVisibility& x) {
         if (this->contains(x)) {
         } else if (x.contains(*this)) {
             mVisPath = x.mVisPath;
@@ -240,23 +239,23 @@ namespace AST {
 
     // ---
 
-    StructItem StructItem::clone() const {
-        return StructItem(mAttrs.clone(), vis, mName, mType.clone(), defaultValue.clone());
+    ASTStructItem ASTStructItem::clone() const {
+        return ASTStructItem(mAttrs.clone(), vis, mName, mType.clone(), defaultValue.clone());
     }
 
-    TupleItem TupleItem::clone() const {
-        return TupleItem(mAttrs.clone(), vis, mType.clone());
+    ASTTupleItem ASTTupleItem::clone() const {
+        return ASTTupleItem(mAttrs.clone(), vis, mType.clone());
     }
 
-    TypeAlias TypeAlias::clone() const {
-        return TypeAlias(mParams.clone(), mType.clone());
+    ASTTypeAlias ASTTypeAlias::clone() const {
+        return ASTTypeAlias(mParams.clone(), mType.clone());
     }
 
-    Static Static::clone() const {
-        return Static(cls, mType.clone(), mValue.isValid() ? AST::Expr(mValue.node().clone()) : AST::Expr());
+    ASTStatic ASTStatic::clone() const {
+        return ASTStatic(cls, mType.clone(), mValue.isValid() ? ASTExpr(mValue.node().clone()) : ASTExpr());
     }
 
-    Function::Function(Span sp, ::std::string abi, Flags flags, GenericParams params, TypeRef retType, Arglist args, bool isVariadic)
+    ASTFunction::ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, TypeRef retType, Arglist args, bool isVariadic)
         : mSpan(sp)
         , mParams(mv$(params))
         , mRettype(mv$(retType))
@@ -267,40 +266,40 @@ namespace AST {
     {
     }
 
-    Function Function::clone() const {
+    ASTFunction ASTFunction::clone() const {
         decltype(mArgs) newArgs;
         for (const auto& arg : mArgs) {
-            newArgs.push_back(AST::Function::Arg(arg.pat.clone(), arg.ty.clone(), arg.attrs.clone()));
+            newArgs.push_back(ASTFunction::Arg(arg.pat.clone(), arg.ty.clone(), arg.attrs.clone()));
         }
 
-        auto rv = Function(mSpan, mAbi, flags, mParams.clone(), mRettype.clone(), mv$(newArgs), mIsVariadic);
+        auto rv = ASTFunction(mSpan, mAbi, flags, mParams.clone(), mRettype.clone(), mv$(newArgs), mIsVariadic);
         if (mCode.isValid()) {
-            rv.mCode = AST::Expr(mCode.node().clone());
+            rv.mCode = ASTExpr(mCode.node().clone());
         }
         return rv;
     }
 
-    void Trait::addType(Span sp, RcString name, AttributeList attrs, TypeRef type) {
-        mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::makeGlobal(), mv$(name), Item::make_Type({TypeAlias(GenericParams(), mv$(type))})));
+    void ASTTrait::addType(Span sp, RcString name, ASTAttributeList attrs, TypeRef type) {
+        mItems.push_back(ASTNamed<ASTItem>(sp, mv$(attrs), ASTVisibility::makeGlobal(), mv$(name), ASTItem::make_Type({ASTTypeAlias(ASTGenericParams(), mv$(type))})));
     }
 
-    void Trait::addFunction(Span sp, RcString name, AttributeList attrs, Function fcn) {
-        mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::makeGlobal(), mv$(name), Item::make_Function({mv$(fcn)})));
+    void ASTTrait::addFunction(Span sp, RcString name, ASTAttributeList attrs, ASTFunction fcn) {
+        mItems.push_back(ASTNamed<ASTItem>(sp, mv$(attrs), ASTVisibility::makeGlobal(), mv$(name), ASTItem::make_Function({mv$(fcn)})));
     }
 
-    void Trait::addStatic(Span sp, RcString name, AttributeList attrs, Static v) {
-        mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::makeGlobal(), mv$(name), Item::make_Static({mv$(v)})));
+    void ASTTrait::addStatic(Span sp, RcString name, ASTAttributeList attrs, ASTStatic v) {
+        mItems.push_back(ASTNamed<ASTItem>(sp, mv$(attrs), ASTVisibility::makeGlobal(), mv$(name), ASTItem::make_Static({mv$(v)})));
     }
 
-    void Trait::setIsMarker() {
+    void ASTTrait::setIsMarker() {
         mIsMarker = true;
     }
 
-    bool Trait::isMarker() const {
+    bool ASTTrait::isMarker() const {
         return mIsMarker;
     }
 
-    bool Trait::hasNamedItem(const RcString& name, bool& outIsFcn) const {
+    bool ASTTrait::hasNamedItem(const RcString& name, bool& outIsFcn) const {
         for (const auto& i : mItems) {
             if (i.name == name) {
                 outIsFcn = i.data.is_Function();
@@ -310,59 +309,59 @@ namespace AST {
         return false;
     }
 
-    Trait Trait::clone() const {
-        auto rv = Trait(mParams.clone(), mSupertraits, mLifetimes);
+    ASTTrait ASTTrait::clone() const {
+        auto rv = ASTTrait(mParams.clone(), mSupertraits, mLifetimes);
         for (const auto& item : mItems) {
-            rv.mItems.push_back(Named<Item>{item.span, item.attrs.clone(), item.vis, item.name, item.data.clone()});
+            rv.mItems.push_back(ASTNamed<ASTItem>{item.span, item.attrs.clone(), item.vis, item.name, item.data.clone()});
         }
         return rv;
     }
 
-    Enum Enum::clone() const {
+    ASTEnum ASTEnum::clone() const {
         decltype(mVariants) newVariants;
         for (const auto& var : mVariants) {
-            TU_MATCHA((var.mData), (e), (Unit, newVariants.push_back(EnumVariant(var.mAttrs.clone(), var.mName));), (Tuple, decltype(e.mItems) newSt; for (const auto& f : e.mItems) newSt.push_back(f.clone()); newVariants.push_back(EnumVariant(var.mAttrs.clone(), var.mName, mv$(newSt)));), (Struct, decltype(e.fields) newFields; for (const auto& f : e.fields) newFields.push_back(f.clone()); newVariants.push_back(EnumVariant(var.mAttrs.clone(), var.mName, mv$(newFields)));))
+            TU_MATCHA((var.mData), (e), (Unit, newVariants.push_back(ASTEnumVariant(var.mAttrs.clone(), var.mName));), (Tuple, decltype(e.mItems) newSt; for (const auto& f : e.mItems) newSt.push_back(f.clone()); newVariants.push_back(ASTEnumVariant(var.mAttrs.clone(), var.mName, mv$(newSt)));), (Struct, decltype(e.fields) newFields; for (const auto& f : e.fields) newFields.push_back(f.clone()); newVariants.push_back(ASTEnumVariant(var.mAttrs.clone(), var.mName, mv$(newFields)));))
             newVariants.back().discriminantValue = var.discriminantValue.clone();
         }
-        auto rv = Enum(mParams.clone(), mv$(newVariants));
+        auto rv = ASTEnum(mParams.clone(), mv$(newVariants));
         rv.markings = markings;
         return rv;
     }
 
-    Struct Struct::clone() const {
-        TU_MATCHA((mData), (e), (Unit, return Struct(mParams.clone());), (Tuple, decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return Struct(mParams.clone(), mv$(newFields));), (Struct, decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return Struct(mParams.clone(), mv$(newFields));))
+    ASTStruct ASTStruct::clone() const {
+        TU_MATCHA((mData), (e), (Unit, return ASTStruct(mParams.clone());), (Tuple, decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return ASTStruct(mParams.clone(), mv$(newFields));), (Struct, decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return ASTStruct(mParams.clone(), mv$(newFields));))
         throw "";
     }
 
-    Union Union::clone() const {
+    ASTUnion ASTUnion::clone() const {
         decltype(mVariants) newVars;
         for (const auto& f : mVariants) {
             newVars.push_back(f.clone());
         }
-        return Union(mParams.clone(), mv$(newVars));
+        return ASTUnion(mParams.clone(), mv$(newVars));
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const ImplDef& impl) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTImplDef& impl) {
         return os << "impl " << (impl.mIsConst ? "const " : "") << "<" << impl.mParams << "> " << impl.mTrait.ent << " for " << impl.mType << "";
     }
 
-    void Impl::addFunction(Span sp, AttributeList attrs, AST::Visibility vis, bool isSpecialisable, RcString name, Function fcn) {
-        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), box$(Item::make_Function(mv$(fcn)))});
+    void ASTImpl::addFunction(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTFunction fcn) {
+        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), box$(ASTItem::make_Function(mv$(fcn)))});
     }
 
-    void Impl::addType(Span sp, AttributeList attrs, AST::Visibility vis, bool isSpecialisable, RcString name, GenericParams params, TypeRef type) {
-        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), box$(Item::make_Type(TypeAlias(mv$(params), mv$(type))))});
+    void ASTImpl::addType(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTGenericParams params, TypeRef type) {
+        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), box$(ASTItem::make_Type(ASTTypeAlias(mv$(params), mv$(type))))});
     }
 
-    void Impl::addStatic(Span sp, AttributeList attrs, AST::Visibility vis, bool isSpecialisable, RcString name, Static v) {
-        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), box$(Item::make_Static(mv$(v)))});
+    void ASTImpl::addStatic(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTStatic v) {
+        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), box$(ASTItem::make_Static(mv$(v)))});
     }
 
-    void Impl::addMacroInvocation(MacroInvocation item) {
-        mItems.push_back(ImplItem{item.span(), {}, AST::Visibility::makeGlobal(), false, "", box$(Item::make_MacroInv(mv$(item)))});
+    void ASTImpl::addMacroInvocation(ASTMacroInvocation item) {
+        mItems.push_back(ImplItem{item.span(), {}, ASTVisibility::makeGlobal(), false, "", box$(ASTItem::make_MacroInv(mv$(item)))});
     }
 
-    bool Impl::hasNamedItem(const RcString& name) const {
+    bool ASTImpl::hasNamedItem(const RcString& name) const {
         for (const auto& it : this->items()) {
             if (it.name == name) {
                 return true;
@@ -371,57 +370,57 @@ namespace AST {
         return false;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Impl& impl) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTImpl& impl) {
         return os << impl.mDef;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const UseItem::Ent& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTUseItem::Ent& x) {
         return os << x.name << "=" << x.path;
     }
 
-    MacroInvocation MacroInvocation::clone() const {
-        return MacroInvocation(mSpan, AST::Path(macroPath), ident, input.clone());
+    ASTMacroInvocation ASTMacroInvocation::clone() const {
+        return ASTMacroInvocation(mSpan, ASTPath(macroPath), ident, input.clone());
     }
 
-    UseItem UseItem::clone() const {
+    ASTUseItem ASTUseItem::clone() const {
         decltype(this->entries) entries;
         for (const auto& e : this->entries) {
             entries.push_back({e.sp, e.path, e.name});
         }
-        return UseItem{this->sp, mv$(entries)};
+        return ASTUseItem{this->sp, mv$(entries)};
     }
 
-    ExternBlock::ExternBlock(::std::string abi)
+    ASTExternBlock::ASTExternBlock(::std::string abi)
         : mAbi(mv$(abi))
     {
     }
 
-    ExternBlock::~ExternBlock() = default;
-    ExternBlock::ExternBlock(ExternBlock&&) = default;
-    ExternBlock& ExternBlock::operator=(ExternBlock&&) = default;
+    ASTExternBlock::~ASTExternBlock() = default;
+    ASTExternBlock::ASTExternBlock(ASTExternBlock&&) = default;
+    ASTExternBlock& ASTExternBlock::operator=(ASTExternBlock&&) = default;
 
-    void ExternBlock::addItem(Named<Item> namedItem) {
+    void ASTExternBlock::addItem(ASTNamed<ASTItem> namedItem) {
         ASSERT_BUG(namedItem.span, namedItem.data.is_Function() || namedItem.data.is_Static() || namedItem.data.is_Type() || namedItem.data.is_MacroInv(), "Incorrect item type for ExternBlock - " << namedItem.data.tagStr());
         mItems.push_back(mv$(namedItem));
     }
 
-    ExternBlock ExternBlock::clone() const {
+    ASTExternBlock ASTExternBlock::clone() const {
         TODO(Span(), "Clone an extern block");
     }
 
-    Module::Module() = default;
+    ASTModule::ASTModule() = default;
 
-    Module::Module(::AST::AbsolutePath path)
+    ASTModule::ASTModule(ASTAbsolutePath path)
         : myPath(mv$(path))
     {
     }
 
-    Module::~Module() = default;
-    Module::Module(Module&&) = default;
-    Module& Module::operator=(Module&&) = default;
+    ASTModule::~ASTModule() = default;
+    ASTModule::ASTModule(ASTModule&&) = default;
+    ASTModule& ASTModule::operator=(ASTModule&&) = default;
 
-    ::std::shared_ptr<AST::Module> Module::addAnon() {
-        auto rv = ::std::shared_ptr<AST::Module>(new Module(myPath + RcString::newInterned(FMT("#" << anonModules.size()))));
+    ::std::shared_ptr<ASTModule> ASTModule::addAnon() {
+        auto rv = ::std::shared_ptr<ASTModule>(new ASTModule(myPath + RcString::newInterned(FMT("#" << anonModules.size()))));
         DEBUG("New anon " << rv->myPath);
         rv->fileInfo = fileInfo;
 
@@ -430,7 +429,7 @@ namespace AST {
         return rv;
     }
 
-    void Module::addItem(Named<Item> namedItem) {
+    void ASTModule::addItem(ASTNamed<ASTItem> namedItem) {
         mItems.push_back(box$(namedItem));
         const auto& i = mItems.back();
         if (i->name == "") {
@@ -439,60 +438,60 @@ namespace AST {
         }
     }
 
-    void Module::addItem(Span sp, Visibility vis, RcString name, Item it, AttributeList attrs) {
-        addItem(Named<Item>(mv$(sp), mv$(attrs), mv$(vis), mv$(name), mv$(it)));
+    void ASTModule::addItem(Span sp, ASTVisibility vis, RcString name, ASTItem it, ASTAttributeList attrs) {
+        addItem(ASTNamed<ASTItem>(mv$(sp), mv$(attrs), mv$(vis), mv$(name), mv$(it)));
     }
 
-    void Module::addExtCrate(Span sp, AST::Visibility vis, RcString extName, RcString impName, AttributeList attrs) {
-        this->addItem(mv$(sp), mv$(vis), impName, Item::make_Crate({mv$(extName)}), mv$(attrs));
+    void ASTModule::addExtCrate(Span sp, ASTVisibility vis, RcString extName, RcString impName, ASTAttributeList attrs) {
+        this->addItem(mv$(sp), mv$(vis), impName, ASTItem::make_Crate({mv$(extName)}), mv$(attrs));
     }
 
-    void Module::addMacroInvocation(MacroInvocation item) {
-        this->addItem(item.span(), AST::Visibility::makeGlobal(), "", Item(mv$(item)), ::AST::AttributeList{});
+    void ASTModule::addMacroInvocation(ASTMacroInvocation item) {
+        this->addItem(item.span(), ASTVisibility::makeGlobal(), "", ASTItem(mv$(item)), ASTAttributeList{});
     }
 
-    void Module::addMacro(bool isExported, RcString name, MacroRulesPtr macro) {
+    void ASTModule::addMacro(bool isExported, RcString name, MacroRulesPtr macro) {
         assert(macro);
         assert(macro->rules.size() > 0);
         mMacros.push_back(
-            Named<MacroRulesPtr>(
+            ASTNamed<MacroRulesPtr>(
                 Span(),
                 {},
-                /*is_pub=*/isExported ? AST::Visibility::makeGlobal() : AST::Visibility::makeRestricted(AST::Visibility::Ty::Private, myPath),
+                /*is_pub=*/isExported ? ASTVisibility::makeGlobal() : ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, myPath),
                 mv$(name),
                 mv$(macro)
             )
         );
     }
 
-    Item Item::clone() const {
+    ASTItem ASTItem::clone() const {
         TU_MATCHA(
             (*this),
             (e),
-            (None, return Item(e);),
+            (None, return ASTItem(e);),
             (MacroInv, TODO(Span(), "Clone on Item::MacroInv");),
             (Macro, TODO(Span(), "Clone on Item::Macro");),
-            (Use, return Item(e.clone());),
+            (Use, return ASTItem(e.clone());),
             (ExternBlock, TODO(Span(), "Clone on Item::" << this->tagStr());),
             (GlobalAsm, TODO(Span(), "Clone on Item::" << this->tagStr());),
             (Impl, TODO(Span(), "Clone on Item::" << this->tagStr());),
             (NegImpl, TODO(Span(), "Clone on Item::" << this->tagStr());),
             (Module, TODO(Span(), "Clone on Item::" << this->tagStr());),
-            (Crate, return Item(e);),
-            (Type, return AST::Item(e.clone());),
-            (Struct, return AST::Item(e.clone());),
-            (Enum, return AST::Item(e.clone());),
-            (Union, return AST::Item(e.clone());),
-            (Trait, return AST::Item(e.clone());),
-            (TraitAlias, return AST::Item(e.clone());),
+            (Crate, return ASTItem(e);),
+            (Type, return ASTItem(e.clone());),
+            (Struct, return ASTItem(e.clone());),
+            (Enum, return ASTItem(e.clone());),
+            (Union, return ASTItem(e.clone());),
+            (Trait, return ASTItem(e.clone());),
+            (TraitAlias, return ASTItem(e.clone());),
 
-            (Function, return AST::Item(e.clone());),
-            (Static, return AST::Item(e.clone());)
+            (Function, return ASTItem(e.clone());),
+            (Static, return ASTItem(e.clone());)
         )
         throw "";
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const TypeParam& tp) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTTypeParam& tp) {
         //os << "TypeParam(";
         os << tp.mName;
         os << " = ";
@@ -501,17 +500,17 @@ namespace AST {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const LifetimeParam& p) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTLifetimeParam& p) {
         os << "'" << p.mName;
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const ValueParam& p) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTValueParam& p) {
         os << "const " << p.mName << ": " << p.mType;
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const HigherRankedBounds& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTHigherRankedBounds& x) {
         if (!x.empty()) {
             os << "for<";
             for (const auto& l : x.mLifetimes) {
@@ -527,11 +526,11 @@ namespace AST {
     TU_ARMA(None, e)
         return e;
             TU_ARMA(Lifetime, e)
-            return LifetimeParam(e);
+            return ASTLifetimeParam(e);
             TU_ARMA(Type, e)
-            return TypeParam(e);
+            return ASTTypeParam(e);
             TU_ARMA(Value, e)
-            return ValueParam(e);
+            return ASTValueParam(e);
     }
     throw "";
     }
@@ -550,7 +549,7 @@ namespace AST {
     return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const GenericBound& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTGenericBound& x) {
     TU_MATCH_HDRA( (x), {)
     TU_ARMA(None, ent) {
                 os << "/*-*/";
@@ -563,9 +562,9 @@ namespace AST {
             }
             TU_ARMA(IsTrait, ent) {
                 os << ent.outerHrbs << ent.type << ": ";
-                if (ent.constness == BoundConstness::Always) {
+                if (ent.constness == ASTBoundConstness::Always) {
                     os << "const ";
-                } else if (ent.constness == BoundConstness::Maybe) {
+                } else if (ent.constness == ASTBoundConstness::Maybe) {
                     os << "[const] ";
                 }
                 os << ent.innerHrbs << ent.trait;
@@ -594,29 +593,27 @@ namespace AST {
     //    return -1;
     //}
 
-    ::std::ostream& operator<<(::std::ostream& os, const GenericParams& tps) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTGenericParams& tps) {
         return os << "<" << tps.mParams << "> where {" << tps.bounds << "}";
     }
 
-} // namespace AST
 
-AST::AttributeList::AttributeList() = default;
+ASTAttributeList::ASTAttributeList() = default;
 
-AST::AttributeList::AttributeList(::std::vector<AST::Attribute> items)
+ASTAttributeList::ASTAttributeList(::std::vector<ASTAttribute> items)
     : mItems(mv$(items))
 {
 }
 
-AST::AttributeList::~AttributeList() = default;
-AST::AttributeList::AttributeList(AttributeList&&) = default;
-AST::AttributeList& AST::AttributeList::operator=(AttributeList&&) = default;
-AST::AttributeList::AttributeList(const AttributeList&) = default;
+ASTAttributeList::~ASTAttributeList() = default;
+ASTAttributeList::ASTAttributeList(ASTAttributeList&&) = default;
+ASTAttributeList& ASTAttributeList::operator=(ASTAttributeList&&) = default;
+ASTAttributeList::ASTAttributeList(const ASTAttributeList&) = default;
 
-namespace AST {
 
     //StructItem() {}
 
-    StructItem::StructItem(::AST::AttributeList attrs, AST::Visibility vis, RcString name, TypeRef ty, Expr defaultValue)
+    ASTStructItem::ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, TypeRef ty, ASTExpr defaultValue)
         : mAttrs(mv$(attrs))
         , vis(mv$(vis))
         , mName(mv$(name))
@@ -627,7 +624,7 @@ namespace AST {
 
     //TupleItem() {}
 
-    TupleItem::TupleItem(::AST::AttributeList attrs, AST::Visibility vis, TypeRef ty)
+    ASTTupleItem::ASTTupleItem(ASTAttributeList attrs, ASTVisibility vis, TypeRef ty)
         : mAttrs(mv$(attrs))
         , vis(mv$(vis))
         , mType(mv$(ty))
@@ -635,135 +632,135 @@ namespace AST {
     }
 
     //TypeAlias() {}
-    TypeAlias::TypeAlias(GenericParams params, TypeRef type)
+    ASTTypeAlias::ASTTypeAlias(ASTGenericParams params, TypeRef type)
         : mParams(std::move(params))
         , mType(std::move(type))
     {
     }
 
-    TypeAlias TypeAlias::newAssociatedType(GenericParams params, GenericParams typeBounds, TypeRef defaultType) {
-        TypeAlias rv{std::move(params), std::move(defaultType)};
+    ASTTypeAlias ASTTypeAlias::newAssociatedType(ASTGenericParams params, ASTGenericParams typeBounds, TypeRef defaultType) {
+        ASTTypeAlias rv{std::move(params), std::move(defaultType)};
         rv.selfBounds = std::move(typeBounds);
         return rv;
     }
 
-    TraitAlias TraitAlias::clone() const {
-        TraitAlias rv;
+    ASTTraitAlias ASTTraitAlias::clone() const {
+        ASTTraitAlias rv;
         for (const auto& p : this->traits) {
             rv.traits.push_back(p);
         }
         return rv;
     }
 
-    Static::Static(Class sClass, TypeRef type, Expr value)
+    ASTStatic::ASTStatic(Class sClass, TypeRef type, ASTExpr value)
         : cls(sClass)
         , mType(std::move(type))
         , mValue(std::move(value))
     {
     }
 
-    Function::Arg::Arg(::AST::Pattern pat, TypeRef ty, ::AST::AttributeList attrs)
+    ASTFunction::Arg::Arg(ASTPattern pat, TypeRef ty, ASTAttributeList attrs)
         : attrs(mv$(attrs))
         , pat(mv$(pat))
         , ty(mv$(ty))
     {
     }
 
-    Function::Flags::Flags()
+    ASTFunction::Flags::Flags()
         : isConst(false)
         , isUnsafe(false)
         , isAsync(false)
     {
     }
 
-    Function::Flags Function::Flags::setUnsafe() const {
+    ASTFunction::Flags ASTFunction::Flags::setUnsafe() const {
         auto rv = *this;
         rv.isUnsafe = true;
         return rv;
     }
 
-    Function::Flags Function::Flags::setConst() const {
+    ASTFunction::Flags ASTFunction::Flags::setConst() const {
         auto rv = *this;
         rv.isConst = true;
         return rv;
     }
 
-    Function::Flags Function::Flags::setAsync() const {
+    ASTFunction::Flags ASTFunction::Flags::setAsync() const {
         auto rv = *this;
         rv.isAsync = true;
         return rv;
     }
 
     // Helper for derive, defines an ABI_RUST function with no generics
-    Function::Function(Span sp, TypeRef retType, Arglist args)
-        : Function(sp, ABI_RUST, Flags(), GenericParams(), std::move(retType), std::move(args), false)
+    ASTFunction::ASTFunction(Span sp, TypeRef retType, Arglist args)
+        : ASTFunction(sp, ABI_RUST, Flags(), ASTGenericParams(), std::move(retType), std::move(args), false)
     {
     }
 
-    EnumVariant::EnumVariant() {
+    ASTEnumVariant::ASTEnumVariant() {
     }
 
-    EnumVariant::EnumVariant(AttributeList attrs, RcString name)
+    ASTEnumVariant::ASTEnumVariant(ASTAttributeList attrs, RcString name)
         : mAttrs(mv$(attrs))
         , mName(mv$(name))
-        , mData(EnumVariantData::make_Unit({}))
+        , mData(ASTEnumVariantData::make_Unit({}))
     {
     }
 
-    EnumVariant::EnumVariant(AttributeList attrs, RcString name, ::std::vector<TupleItem> subTypes)
+    ASTEnumVariant::ASTEnumVariant(ASTAttributeList attrs, RcString name, ::std::vector<ASTTupleItem> subTypes)
         : mAttrs(mv$(attrs))
         , mName(::std::move(name))
-        , mData(EnumVariantData::make_Tuple({std::move(subTypes)}))
+        , mData(ASTEnumVariantData::make_Tuple({std::move(subTypes)}))
     {
     }
 
-    EnumVariant::EnumVariant(AttributeList attrs, RcString name, ::std::vector<StructItem> fields)
+    ASTEnumVariant::ASTEnumVariant(ASTAttributeList attrs, RcString name, ::std::vector<ASTStructItem> fields)
         : mAttrs(mv$(attrs))
         , mName(::std::move(name))
-        , mData(EnumVariantData::make_Struct({std::move(fields)}))
+        , mData(ASTEnumVariantData::make_Struct({std::move(fields)}))
     {
     }
 
-    Enum::Enum() {
+    ASTEnum::ASTEnum() {
     }
 
-    Enum::Enum(GenericParams params, ::std::vector<EnumVariant> variants)
+    ASTEnum::ASTEnum(ASTGenericParams params, ::std::vector<ASTEnumVariant> variants)
         : mParams(::std::move(params))
         , mVariants(::std::move(variants))
     {
     }
 
-    Struct::Markings::Markings() {
+    ASTStruct::Markings::Markings() {
     }
 
-    Struct::Struct() {
+    ASTStruct::ASTStruct() {
     }
 
-    Struct::Struct(GenericParams params)
+    ASTStruct::ASTStruct(ASTGenericParams params)
         : mParams(::std::move(params))
-        , mData(StructData::make_Unit({}))
+        , mData(ASTStructData::make_Unit({}))
     {
     }
 
-    Struct::Struct(GenericParams params, ::std::vector<StructItem> fields)
+    ASTStruct::ASTStruct(ASTGenericParams params, ::std::vector<ASTStructItem> fields)
         : mParams(::std::move(params))
-        , mData(StructData::make_Struct({mv$(fields)}))
+        , mData(ASTStructData::make_Struct({mv$(fields)}))
     {
     }
 
-    Struct::Struct(GenericParams params, ::std::vector<TupleItem> fields)
+    ASTStruct::ASTStruct(ASTGenericParams params, ::std::vector<ASTTupleItem> fields)
         : mParams(::std::move(params))
-        , mData(StructData::make_Tuple({mv$(fields)}))
+        , mData(ASTStructData::make_Tuple({mv$(fields)}))
     {
     }
 
-    Union::Union(GenericParams params, ::std::vector<StructItem> fields)
+    ASTUnion::ASTUnion(ASTGenericParams params, ::std::vector<ASTStructItem> fields)
         : mParams(::std::move(params))
         , mVariants(::std::move(fields))
     {
     }
 
-    ImplDef::ImplDef(GenericParams params, Spanned<Path> traitType, TypeRef implType)
+    ASTImplDef::ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, TypeRef implType)
         : mIsUnsafe(false)
         , mIsConst(false)
         , mParams(mv$(params))
@@ -771,16 +768,13 @@ namespace AST {
         , mType(mv$(implType))
     {
     }
-}
 
-namespace AST {
 
-    ::std::ostream& operator<<(::std::ostream& os, const EnumVariant& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTEnumVariant& x) {
         os << "EnumVariant(" << x.mName;
-        TU_MATCH(EnumVariantData, (x.mData), (e), (Unit, ), (Tuple, os << "(" << e.mItems << ")";), (Struct, os << " { " << e.fields << " }";))
+        TU_MATCH(ASTEnumVariantData, (x.mData), (e), (Unit, ), (Tuple, os << "(" << e.mItems << ")";), (Struct, os << " { " << e.fields << " }";))
         if (x.discriminantValue) {
             os << " = " << x.discriminantValue;
         }
         return os << ")";
     }
-}

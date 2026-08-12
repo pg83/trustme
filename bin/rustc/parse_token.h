@@ -34,17 +34,15 @@ extern ::std::ostream& operator<<(::std::ostream& os, const Position& p);
 class TypeRef;
 class TokenTree;
 
-namespace AST {
-    class Visibility;
-    class Pattern;
-    class Path;
-    class ExprNode;
-    class Attribute;
-    class Item;
+    class ASTVisibility;
+    class ASTPattern;
+    class ASTPath;
+    class ASTExprNode;
+    class ASTAttribute;
+    class ASTItem;
 
     template <typename T>
-    struct Named;
-};
+    struct ASTNamed;
 
 class InterpolatedFragment;
 
@@ -141,18 +139,18 @@ public:
     // TODO: Replace these with a way of getting a InterpolatedFragment&
     TypeRef& fragType();
 
-    AST::Path& fragPath();
+    ASTPath& fragPath();
 
-    AST::Pattern& fragPattern();
+    ASTPattern& fragPattern();
 
-    AST::Attribute& fragMeta();
+    ASTAttribute& fragMeta();
 
-    AST::ExprNode& fragNode();
+    ASTExprNode& fragNode();
 
-    ::std::unique_ptr<AST::ExprNode> takeFragNode();
-    ::AST::Named<AST::Item> takeFragItem();
-    ::AST::Named<AST::Item> takeFragStmtItem();
-    ::AST::Visibility takeFragVis();
+    ::std::unique_ptr<ASTExprNode> takeFragNode();
+    ASTNamed<ASTItem> takeFragItem();
+    ASTNamed<ASTItem> takeFragStmtItem();
+    ASTVisibility takeFragVis();
 
     bool operator==(eTokenType tty) const {
         return type() == tty;

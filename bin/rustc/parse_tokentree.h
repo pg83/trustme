@@ -4,12 +4,10 @@
 #include "ident.h"
 #include <vector>
 
-namespace AST {
-    enum class Edition;
-}
+    enum class ASTEdition;
 
 class TokenTree {
-    AST::Edition edition = (AST::Edition)0; // 2015
+    ASTEdition edition = (ASTEdition)0; // 2015
     Ident::Hygiene mHygiene;
     Token mTok;
     ::std::vector<TokenTree> subtrees;
@@ -26,11 +24,11 @@ public:
 
     TokenTree(Token tok);
 
-    TokenTree(AST::Edition edition, Token tok);
+    TokenTree(ASTEdition edition, Token tok);
 
-    TokenTree(AST::Edition edition, Ident::Hygiene hygiene, Token tok);
+    TokenTree(ASTEdition edition, Ident::Hygiene hygiene, Token tok);
 
-    TokenTree(AST::Edition edition, Ident::Hygiene hygiene, ::std::vector<TokenTree> subtrees);
+    TokenTree(ASTEdition edition, Ident::Hygiene hygiene, ::std::vector<TokenTree> subtrees);
 
     TokenTree clone() const;
 
@@ -58,7 +56,7 @@ public:
         return mHygiene;
     }
 
-    const AST::Edition& getEdition() const {
+    const ASTEdition& getEdition() const {
         return edition;
     }
 

@@ -170,7 +170,7 @@ public:
 };
 
 // === Prototypes ===
-unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rules, TokenTree input, const AST::Crate& crate, AST::Module& mod, ParameterMappings& boundTts);
+unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts);
 void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::vector<MacroExpansionEnt>& contents);
 
 // ------------------------------------
@@ -453,14 +453,14 @@ class MacroExpander: public TokenStream {
     Span thisSpan;
     const RcString crateName;
     Span invocationSpan;
-    AST::Edition invocationEdition;
+    ASTEdition invocationEdition;
 
     ParameterMappings mMappings;
     MacroExpandState state;
 
     Token nextToken; // used for inserting a single token into the stream
     ::std::unique_ptr<TTStreamO> ttstream;
-    AST::Edition sourceEdition;
+    ASTEdition sourceEdition;
     bool isMacroItem;
     Ident::Hygiene mHygiene;
     Ident::Hygiene lastHygiene;
@@ -468,7 +468,7 @@ class MacroExpander: public TokenStream {
 public:
     MacroExpander(const MacroExpander& x) = delete;
 
-    MacroExpander(const RcString& macroName, const Span& sp, AST::Edition edition, bool isMacroItem, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, AST::Edition sourceEdition)
+    MacroExpander(const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition)
         : TokenStream(ParseState())
         , logIndex(sNextLogIndex++)
         , thisSpan(sp, crateName, macroName)
@@ -491,7 +491,7 @@ public:
     }
 
     Ident::Hygiene realGetHygiene() const override;
-    AST::Edition realGetEdition() const override;
+    ASTEdition realGetEdition() const override;
     Token realGetToken() override;
 };
 
@@ -532,7 +532,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
                 }
                 assert(lex.parseState().module);
                 const auto& curMod = *lex.parseState().module;
-                return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, ParseModItemS(lex, curMod.fileInfo, curMod.path(), AST::AttributeList{}));
+                return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, ParseModItemS(lex, curMod.fileInfo, curMod.path(), ASTAttributeList{}));
             }
             return InterpolatedFragment(InterpolatedFragment::STMT, ParseStmt(lex).release());
         case MacroPatEnt::PAT_PATH:
@@ -548,7 +548,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
         case MacroPatEnt::PAT_ITEM: {
             assert(lex.parseState().module);
             const auto& curMod = *lex.parseState().module;
-            return InterpolatedFragment(ParseModItemS(lex, curMod.fileInfo, curMod.path(), AST::AttributeList{}));
+            return InterpolatedFragment(ParseModItemS(lex, curMod.fileInfo, curMod.path(), ASTAttributeList{}));
         } break;
         case MacroPatEnt::PAT_IDENT:
             // NOTE: Any reserved word is also valid as an ident
@@ -598,7 +598,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
 }
 
 /// Parse the input TokenTree according to the `macro_rules!` patterns and return a token stream of the replacement
-::std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, TokenTree input, const AST::Crate& crate, AST::Module& mod) {
+::std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, TokenTree input, const ASTCrate& crate, ASTModule& mod) {
     TRACE_FUNCTION_F("'" << name << "', " << input);
     DEBUG("rules.m_source_crate = " << rules.sourceCrate);
     DEBUG("rules.m_hygiene = " << rules.mHygiene);
@@ -2034,7 +2034,7 @@ namespace {
     }
 }
 
-unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rules, TokenTree input, const AST::Crate& crate, AST::Module& mod, ParameterMappings& boundTts) {
+unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts) {
     TRACE_FUNCTION_F(rules.rules.size() << " options");
     ASSERT_BUG(sp, rules.rules.size() > 0, "Empty macro_rules set");
 
@@ -2239,7 +2239,7 @@ Position MacroExpander::getPosition() const {
     return Position(thisSpan);
 }
 
-AST::Edition MacroExpander::realGetEdition() const {
+ASTEdition MacroExpander::realGetEdition() const {
     if (ttstream) {
         return ttstream->getEdition();
     } else {
@@ -2323,7 +2323,7 @@ Token MacroExpander::realGetToken() {
                             case NAMEDVALUE_MAGIC_CRATE:
                                 DEBUG("[" << logIndex << "] Crate name hack");
                                 if (crateName == "") {
-                                    if (this->editionAfter(AST::Edition::Rust2018)) {
+                                    if (this->editionAfter(ASTEdition::Rust2018)) {
                                         return Token(TOK_RWORD_CRATE);
                                     }
                                 } else {
@@ -3052,7 +3052,7 @@ public:
                                 // TODO: Can a `$()?` have a joiner?
                                 break;
                             default:
-                                if (lex.editionAfter(AST::Edition::Rust2018)) {
+                                if (lex.editionAfter(ASTEdition::Rust2018)) {
                                     throw ParseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
                                 } else {
                                     throw ParseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR});
@@ -3136,7 +3136,7 @@ struct ContentLoopVariableUse {
 
                 GET_TOK(tok, lex);
                 enum eTokenType joiner = TOK_NULL;
-                if (lex.editionAfter(AST::Edition::Rust2018) && tok.type() == TOK_QMARK) {
+                if (lex.editionAfter(ASTEdition::Rust2018) && tok.type() == TOK_QMARK) {
                     // 2018 added `?` repetition operator
                 } else if (tok.type() == TOK_PLUS || tok.type() == TOK_STAR) {
                     // `+` and `*` were present at 1.0 (2015)
@@ -3157,7 +3157,7 @@ struct ContentLoopVariableUse {
                         loopType = '?';
                         break;
                     default:
-                        if (lex.editionAfter(AST::Edition::Rust2018)) {
+                        if (lex.editionAfter(ASTEdition::Rust2018)) {
                             throw ParseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
                         } else {
                             throw ParseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR});
@@ -3946,7 +3946,7 @@ MacroRulesArm::MacroRulesArm(::std::vector<SimplePatEnt> pattern, ::std::vector<
 {
 }
 
-MacroRules::MacroRules(RcString sourceCrate, AST::Edition edition)
+MacroRules::MacroRules(RcString sourceCrate, ASTEdition edition)
     : definitionId(++gNextDefinitionId)
     , sourceCrate(std::move(sourceCrate))
     , edition(edition)

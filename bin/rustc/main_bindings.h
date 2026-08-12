@@ -4,10 +4,8 @@
 #include <memory>
 #include "ast_edition.h"
 
-namespace AST {
-    class Crate;
-    class ExprNode;
-}
+    class ASTCrate;
+    class ASTExprNode;
 
 namespace stl {
     class ObjPool;
@@ -18,9 +16,9 @@ namespace HIR {
 }
 
 /// Parse a crate from the given file
-extern AST::Crate* ParseCrate(stl::ObjPool* pool, HIR::TypeInterner& types, ::std::string mainfile, AST::Edition edition);
+extern ASTCrate* ParseCrate(stl::ObjPool* pool, HIR::TypeInterner& types, ::std::string mainfile, ASTEdition edition);
 
 extern void ExpandInit();
-extern void Expand(::AST::Crate& crate);
-extern void ExpandTestHarness(::AST::Crate& crate);
-extern void ExpandProcMacroHarness(::AST::Crate& crate);
+extern void Expand(ASTCrate& crate);
+extern void ExpandTestHarness(ASTCrate& crate);
+extern void ExpandProcMacroHarness(ASTCrate& crate);

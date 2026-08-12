@@ -637,7 +637,7 @@ namespace HIR {
         // types, so it must not live in process-global storage.
         mutable ValueItem intrinsicOffsetof;
         RcString crateName;
-        AST::Edition edition;
+        ASTEdition edition;
         // Compile-local crate configuration. This is not serialised because an
         // external crate can never provide this crate's executable entrypoint.
         bool isNoCore = false;

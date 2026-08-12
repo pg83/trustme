@@ -5,27 +5,26 @@
 #include "ast_attrs.h"
 #include "ast_path.h"
 
-namespace AST {
 
-    class MacroInvocation {
+    class ASTMacroInvocation {
         Span mSpan;
 
-        AST::Path macroPath;
+        ASTPath macroPath;
         RcString ident;
         TokenTree input;
         bool mIsExpanded = false;
 
     public:
-        MacroInvocation(MacroInvocation&&) = default;
-        MacroInvocation& operator=(MacroInvocation&&) = default;
-        MacroInvocation(const MacroInvocation&) = delete;
-        MacroInvocation& operator=(const MacroInvocation&) = delete;
+        ASTMacroInvocation(ASTMacroInvocation&&) = default;
+        ASTMacroInvocation& operator=(ASTMacroInvocation&&) = default;
+        ASTMacroInvocation(const ASTMacroInvocation&) = delete;
+        ASTMacroInvocation& operator=(const ASTMacroInvocation&) = delete;
 
-        MacroInvocation();
+        ASTMacroInvocation();
 
-        MacroInvocation(Span span, AST::Path macro, RcString ident, TokenTree input);
+        ASTMacroInvocation(Span span, ASTPath macro, RcString ident, TokenTree input);
 
-        MacroInvocation clone() const;
+        ASTMacroInvocation clone() const;
 
         void clear();
 
@@ -33,7 +32,7 @@ namespace AST {
             return mSpan;
         }
 
-        const AST::Path& path() const {
+        const ASTPath& path() const {
             return macroPath;
         }
 
@@ -57,7 +56,6 @@ namespace AST {
             return input;
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const MacroInvocation& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTMacroInvocation& x);
     };
 
-}

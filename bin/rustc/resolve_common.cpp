@@ -22,8 +22,8 @@
 
 namespace {
 
-    AST::AbsolutePath spToAp(const HIR::SimplePath& sp) {
-        return AST::AbsolutePath(sp.crateName(), sp.componentsVec());
+    ASTAbsolutePath spToAp(const HIR::SimplePath& sp) {
+        return ASTAbsolutePath(sp.crateName(), sp.componentsVec());
     }
 
     ResolveItemRefType as_Namespace(ResolveItemRef ir) {
@@ -35,12 +35,12 @@ namespace {
 
     struct ResolveState {
         const Span& sp;
-        const AST::Crate& crate;
+        const ASTCrate& crate;
 
-        typedef std::pair<const AST::Module*, RcString> antirecurseStackEntT;
+        typedef std::pair<const ASTModule*, RcString> antirecurseStackEntT;
         std::vector<antirecurseStackEntT> antirecurseStack;
 
-        ResolveState(const Span& span, const AST::Crate& crate)
+        ResolveState(const Span& span, const ASTCrate& crate)
             : sp(span)
             , crate(crate)
         {
@@ -49,7 +49,7 @@ namespace {
         /// <summary>
         /// Obtain a reference to the specified module
         /// </summary>
-        ResolveModuleRef getModule(const ::AST::Path& basePath, const AST::Path& path, bool ignoreLast, ::AST::AbsolutePath* outPath, bool ignoreHygiene = false) {
+        ResolveModuleRef getModule(const ASTPath& basePath, const ASTPath& path, bool ignoreLast, ASTAbsolutePath* outPath, bool ignoreHygiene = false) {
             TRACE_FUNCTION_F(path << " in " << basePath << (ignoreLast ? " (ignore last)" : ""));
             const auto& baseNodes = basePath.nodes();
             TU_MATCH_HDRA( (path.cls), {)
@@ -87,7 +87,7 @@ namespace {
                             }
                             return getModuleHir(*mod, path, 1, ignoreLast, outPath);
                         } else {
-                            AST::Path p("", {});
+                            ASTPath p("", {});
                             for (const auto& n : mp.ents) {
                                 p.nodes().push_back(n);
                             }
@@ -96,16 +96,16 @@ namespace {
                     }
                     if (e.nodes.size() == 1 && ignoreLast) {
                         // HACK: If the target path is a crate name, then return `ImplicitPrelude` instead of the current module
-                        if (crate.edition >= AST::Edition::Rust2018) {
+                        if (crate.edition >= ASTEdition::Rust2018) {
                             const auto& name = e.nodes.back().name();
                             DEBUG("Trying implicit externs for " << name);
                             DEBUG(FmtLambda([&](std::ostream& os) {
-                                for (const auto& v : AST::gImplicitCrates) {
+                                for (const auto& v : gImplicitCrates) {
                                     os << " " << v.first;
                                 }
                             }));
-                            auto ecIt = AST::gImplicitCrates.find(name);
-                            if (ecIt != AST::gImplicitCrates.end()) {
+                            auto ecIt = gImplicitCrates.find(name);
+                            if (ecIt != gImplicitCrates.end()) {
                                 return ResolveModuleRef::make_ImplicitPrelude({});
                             }
                         }
@@ -136,7 +136,7 @@ namespace {
                                     }
                                     TU_ARMA(Crate, c) {
                                         if (outPath) {
-                                            *outPath = AST::AbsolutePath(c.name, {});
+                                            *outPath = ASTAbsolutePath(c.name, {});
                                         }
                                         if (c.name == "") {
                                             return getModuleAst(crate.mRootModule, path, 1, ignoreLast, outPath);
@@ -151,7 +151,7 @@ namespace {
                             }
                             TU_ARMA(AstRoot, m) {
                                 if (outPath) {
-                                    *outPath = AST::AbsolutePath("", {});
+                                    *outPath = ASTAbsolutePath("", {});
                                 }
                                 return getModuleAst(*m, path, 1, ignoreLast, outPath);
                             }
@@ -184,15 +184,15 @@ namespace {
                     } while (i < baseNodes.size() && baseNodes[baseNodes.size() - i].name().c_str()[0] == '#');
 
                     // If not found, look for an implicit crate allowed in this edition.
-                    if (crate.edition >= AST::Edition::Rust2018 || name == "core") {
+                    if (crate.edition >= ASTEdition::Rust2018 || name == "core") {
                         DEBUG("Trying implicit externs for " << name);
                         DEBUG(FmtLambda([&](std::ostream& os) {
-                            for (const auto& v : AST::gImplicitCrates) {
+                            for (const auto& v : gImplicitCrates) {
                                 os << " " << v.first;
                             }
                         }));
-                        auto ecIt = AST::gImplicitCrates.find(name);
-                        if (ecIt != AST::gImplicitCrates.end()) {
+                        auto ecIt = gImplicitCrates.find(name);
+                        if (ecIt != gImplicitCrates.end()) {
                             if (ecIt->second == "") {
                                 // This crate!
                                 return getModuleAst(crate.mRootModule, path, 1, ignoreLast, outPath);
@@ -201,7 +201,7 @@ namespace {
                                 const auto& ec = crate.externCrates.at(ecIt->second);
                                 DEBUG("Implicitly imported crate");
                                 if (outPath) {
-                                    *outPath = AST::AbsolutePath(ecIt->second, {});
+                                    *outPath = ASTAbsolutePath(ecIt->second, {});
                                 }
                                 return getModuleHir(ec.hir->mRootModule, path, 1, ignoreLast, outPath);
                             }
@@ -248,8 +248,8 @@ namespace {
                         if (n == crate.crateNameSet) {
                             return getModuleAst(crate.mRootModule, path, 0, ignoreLast, outPath);
                         }
-                        auto ecIt = AST::gImplicitCrates.find(n);
-                        if (ecIt == AST::gImplicitCrates.end()) {
+                        auto ecIt = gImplicitCrates.find(n);
+                        if (ecIt == gImplicitCrates.end()) {
                             return ResolveModuleRef();
                         }
                         auto ecIt2 = crate.externCrates.find(ecIt->second);
@@ -258,7 +258,7 @@ namespace {
                             return ResolveModuleRef();
                         }
                         if (outPath) {
-                            *outPath = AST::AbsolutePath(ecIt->second, {});
+                            *outPath = ASTAbsolutePath(ecIt->second, {});
                         }
                         return getModuleHir(ecIt2->second.hir->mRootModule, path, 0, ignoreLast, outPath);
                     } else {
@@ -269,7 +269,7 @@ namespace {
                             return ResolveModuleRef();
                         }
                         if (outPath) {
-                            *outPath = AST::AbsolutePath(e.crate, {});
+                            *outPath = ASTAbsolutePath(e.crate, {});
                         }
                         return getModuleHir(ecIt->second.hir->mRootModule, path, 0, ignoreLast, outPath);
                     }
@@ -278,9 +278,9 @@ namespace {
             throw "";
         }
 
-        ResolveModuleRef getModuleAst(const AST::Module& startMod, const AST::Path& path, size_t startOffset, bool ignoreLast, ::AST::AbsolutePath* outPath) {
+        ResolveModuleRef getModuleAst(const ASTModule& startMod, const ASTPath& path, size_t startOffset, bool ignoreLast, ASTAbsolutePath* outPath) {
             TRACE_FUNCTION_F("start_offset=" << startOffset << ", ignore_last=" << ignoreLast);
-            const AST::Module* mod = &startMod;
+            const ASTModule* mod = &startMod;
             ASSERT_BUG(Span(), path.nodes().size() >= (ignoreLast ? 1 : 0), "" << path);
 
             for (size_t idx = startOffset; idx < path.nodes().size() - (ignoreLast ? 1 : 0); idx++) {
@@ -302,7 +302,7 @@ namespace {
                             mod = &e->as_Module();
                         } else if (const auto* i = e->opt_Crate()) {
                             if (outPath) {
-                                *outPath = AST::AbsolutePath(i->name, {});
+                                *outPath = ASTAbsolutePath(i->name, {});
                             }
                             if (i->name == "") {
                                 return getModuleAst(crate.mRootModule, path, idx + 1, ignoreLast, outPath);
@@ -341,7 +341,7 @@ namespace {
             return ResolveModuleRef(mod);
         }
 
-        ResolveModuleRef getModuleHir(const HIR::Module& startMod, const AST::Path& path, size_t startOffset, bool ignoreLast, ::AST::AbsolutePath* outPath) {
+        ResolveModuleRef getModuleHir(const HIR::Module& startMod, const ASTPath& path, size_t startOffset, bool ignoreLast, ASTAbsolutePath* outPath) {
             TRACE_FUNCTION_F("path=" << path << ", start_offset=" << startOffset << ", ignore_last=" << ignoreLast);
             const HIR::Module* mod = &startMod;
             ASSERT_BUG(Span(), path.nodes().size() >= (ignoreLast ? 1 : 0), "" << path);
@@ -385,8 +385,8 @@ namespace {
             return ResolveModuleRef(mod);
         }
 
-        const AST::Module& getModByTruePath(const std::vector<AST::PathNode>& baseNodes, size_t len) {
-            const AST::Module* mod = &crate.mRootModule;
+        const ASTModule& getModByTruePath(const std::vector<ASTPathNode>& baseNodes, size_t len) {
+            const ASTModule* mod = &crate.mRootModule;
             for (size_t i = 0; i < len; i++) {
                 const auto& tgtName = baseNodes[i].name();
                 if (tgtName.c_str()[0] == '#') {
@@ -394,7 +394,7 @@ namespace {
                     mod = &*mod->anonMods()[idx];
                     continue;
                 }
-                const AST::Module* nextMod = nullptr;
+                const ASTModule* nextMod = nullptr;
                 for (const auto& i : mod->mItems) {
                     if (const auto* m = i->data.opt_Module()) {
                         //DEBUG(i.name);
@@ -412,38 +412,38 @@ namespace {
             return *mod;
         }
 
-        static bool matchingNamespace(const AST::Item& i, ResolveNamespace ns) {
+        static bool matchingNamespace(const ASTItem& i, ResolveNamespace ns) {
             switch (i.tag()) {
-                case AST::Item::TAGDEAD:
+                case ASTItem::TAGDEAD:
                     return false;
-                case AST::Item::TAG_Crate:
-                case AST::Item::TAG_Module:
-                case AST::Item::TAG_Type:
-                case AST::Item::TAG_Enum:
-                case AST::Item::TAG_Union:
-                case AST::Item::TAG_Trait:
-                case AST::Item::TAG_TraitAlias:
+                case ASTItem::TAG_Crate:
+                case ASTItem::TAG_Module:
+                case ASTItem::TAG_Type:
+                case ASTItem::TAG_Enum:
+                case ASTItem::TAG_Union:
+                case ASTItem::TAG_Trait:
+                case ASTItem::TAG_TraitAlias:
                     return ns == ResolveNamespace::Namespace;
-                case AST::Item::TAG_Struct:
+                case ASTItem::TAG_Struct:
                     return ns == ResolveNamespace::Namespace || (ns == ResolveNamespace::Value && !i.as_Struct().mData.is_Struct());
-                case AST::Item::TAG_Function:
-                case AST::Item::TAG_Static:
+                case ASTItem::TAG_Function:
+                case ASTItem::TAG_Static:
                     return ns == ResolveNamespace::Value;
-                case AST::Item::TAG_Macro:
+                case ASTItem::TAG_Macro:
                     return ns == ResolveNamespace::Macro;
-                case AST::Item::TAG_NegImpl:
-                case AST::Item::TAG_Impl:
-                case AST::Item::TAG_ExternBlock:
-                case AST::Item::TAG_Use:
-                case AST::Item::TAG_MacroInv:
-                case AST::Item::TAG_GlobalAsm:
-                case AST::Item::TAG_None:
+                case ASTItem::TAG_NegImpl:
+                case ASTItem::TAG_Impl:
+                case ASTItem::TAG_ExternBlock:
+                case ASTItem::TAG_Use:
+                case ASTItem::TAG_MacroInv:
+                case ASTItem::TAG_GlobalAsm:
+                case ASTItem::TAG_None:
                     return false;
             }
             throw "";
         }
 
-        ResolveItemRef findItem(const AST::Module& mod, const RcString& name, ResolveNamespace ns, ::AST::AbsolutePath* outPath = nullptr)
+        ResolveItemRef findItem(const ASTModule& mod, const RcString& name, ResolveNamespace ns, ASTAbsolutePath* outPath = nullptr)
         //ResolveModuleRef get_source_module_for_name(const AST::Module& mod, const RcString& name, ResolveNamespace ns, ::AST::AbsolutePath* out_path=nullptr)
         {
             TRACE_FUNCTION_F("Looking for " << name << " in " << mod.path() << " (ns=" << ns << ")");
@@ -518,11 +518,11 @@ namespace {
                 // - Do the caching here (on the item level) instead of in `cfg.cpp` as that avoids needing to check
                 //   the attribute list multiple times.
                 switch (i->cachedCfg) {
-                    case AST::CachedCfg::Unknown:
-                        i->cachedCfg = checkCfgAttrs(i->attrs) ? AST::CachedCfg::Yes : AST::CachedCfg::No;
-                    case AST::CachedCfg::Yes:
-                    case AST::CachedCfg::No:
-                        if (i->cachedCfg == AST::CachedCfg::No) {
+                    case ASTCachedCfg::Unknown:
+                        i->cachedCfg = checkCfgAttrs(i->attrs) ? ASTCachedCfg::Yes : ASTCachedCfg::No;
+                    case ASTCachedCfg::Yes:
+                    case ASTCachedCfg::No:
+                        if (i->cachedCfg == ASTCachedCfg::No) {
                             continue;
                         }
                         break;
@@ -575,7 +575,7 @@ namespace {
                             }
                             if (e.path.cls.is_Absolute() && e.path.cls.as_Absolute().nodes.empty()) {
                                 if (ns == ResolveNamespace::Namespace) {
-                                    AST::AbsolutePath tmp;
+                                    ASTAbsolutePath tmp;
                                     auto tgtMod = this->getModule(mod.path(), e.path, false, &tmp);
                                     TU_MATCH_HDRA( (tgtMod), {)
                                     TU_ARMA(Ast, modPtr) {
@@ -624,8 +624,8 @@ namespace {
                                 }
                                 TU_ARMA(ImplicitPrelude, _e) {
                                     if (ns == ResolveNamespace::Namespace) {
-                                        auto ecIt = AST::gImplicitCrates.find(itemName);
-                                        if (ecIt != AST::gImplicitCrates.end()) {
+                                        auto ecIt = gImplicitCrates.find(itemName);
+                                        if (ecIt != gImplicitCrates.end()) {
                                             if (outPath) {
                                                 outPath->crate = ecIt->second;
                                                 outPath->nodes.clear();
@@ -688,7 +688,7 @@ namespace {
             }
             if (mod.isAnon()) {
                 DEBUG("Recurse to parent");
-                const AST::Module* m = &crate.mRootModule;
+                const ASTModule* m = &crate.mRootModule;
                 for (size_t i = 0; i < mod.path().nodes.size() - 1; i++) {
                     auto& tgtName = mod.path().nodes[i];
                     if (tgtName.c_str()[0] == '#') {
@@ -705,7 +705,7 @@ namespace {
         }
 
         /// Locate the named item in HIR (resolving `Import` references too)
-        ResolveItemRef findItemHir(const HIR::Module& mod, const RcString& itemName, ResolveNamespace ns, ::AST::AbsolutePath* outPath = nullptr, const ::HIR::SimplePath* visPathP = nullptr) {
+        ResolveItemRef findItemHir(const HIR::Module& mod, const RcString& itemName, ResolveNamespace ns, ASTAbsolutePath* outPath = nullptr, const ::HIR::SimplePath* visPathP = nullptr) {
             const auto& visPath = visPathP ? *visPathP : ::HIR::SimplePath();
             TRACE_FUNCTION_F(itemName);
             if (outPath) {
@@ -713,11 +713,11 @@ namespace {
             }
 
             struct H {
-                static const HIR::Crate& getCrate(const Span& sp, const AST::Crate& crate, const HIR::SimplePath& p) {
+                static const HIR::Crate& getCrate(const Span& sp, const ASTCrate& crate, const HIR::SimplePath& p) {
                     return *crate.externCrates.at(p.crateName()).hir;
                 }
 
-                static const HIR::Module& getModForHirPath(const Span& sp, const AST::Crate& crate, const HIR::SimplePath& p) {
+                static const HIR::Module& getModForHirPath(const Span& sp, const ASTCrate& crate, const HIR::SimplePath& p) {
                     const auto& hirCrate = *crate.externCrates.at(p.crateName()).hir;
                     return hirCrate.getModByPath(sp, p, /*ignore_last*/ true, /*ingore_crate*/ true);
                 }
@@ -845,13 +845,13 @@ namespace {
 // TODO: Function that turns a relative path into a canonical absolute path to the containing module
 // - This should check if the index has been populated, and use it if present.
 // - NOTE: Can only go to the containing module, not to the item itself - `use` can end up importing disparate paths for all three namespaces.
-ResolveModuleRef ResolveLookupGetModule(const Span& sp, const AST::Crate& crate, const ::AST::Path& basePath, ::AST::Path path, bool ignoreLast, ::AST::AbsolutePath* outPath) {
+ResolveModuleRef ResolveLookupGetModule(const Span& sp, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, bool ignoreLast, ASTAbsolutePath* outPath) {
     ResolveState rs(sp, crate);
 
     return rs.getModule(basePath, path, ignoreLast, outPath);
 }
 
-ResolveItemRefMacro ResolveLookupMacro(const Span& span, const AST::Crate& crate, const ::AST::Path& basePath, ::AST::Path path, ::AST::AbsolutePath* outPath) {
+ResolveItemRefMacro ResolveLookupMacro(const Span& span, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, ASTAbsolutePath* outPath) {
     TRACE_FUNCTION_F("path=" << path << " in " << basePath);
     ResolveState rs(span, crate);
 
@@ -900,14 +900,14 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const AST::Crate& crate
 
 /// Returns the source module for the specified name
 // NOTE: Name resolution
-ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const AST::Crate& crate, const ::AST::Path& basePath, const ::AST::Path& path, ResolveNamespace ns, ::AST::AbsolutePath* outPath) {
+ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const ASTCrate& crate, const ASTPath& basePath, const ASTPath& path, ResolveNamespace ns, ASTAbsolutePath* outPath) {
     TRACE_FUNCTION_F("path=" << path << " in " << basePath);
     ResolveState rs(sp, crate);
 
     auto mod = rs.getModule(basePath, path, true, outPath);
     TU_MATCH_HDRA( (mod), {)
     TU_ARMA(Ast, modPtr) {
-            AST::AbsolutePath tmp;
+            ASTAbsolutePath tmp;
             if (!outPath) {
                 outPath = &tmp;
             }

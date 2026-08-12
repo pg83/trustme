@@ -4,11 +4,10 @@
 #include <vector>
 #include "ast_attrs.h"
 
-namespace AST {
 
-    struct AbsolutePath;
+    struct ASTAbsolutePath;
 
-    class Visibility {
+    class ASTVisibility {
     public:
         enum class Ty {
             Private,
@@ -21,21 +20,21 @@ namespace AST {
         };
 
     private:
-        ::std::shared_ptr<AST::Path> mInPath;          // Only valid when
-        ::std::shared_ptr<AST::AbsolutePath> mVisPath; // if null, then global
+        ::std::shared_ptr<ASTPath> mInPath;          // Only valid when
+        ::std::shared_ptr<ASTAbsolutePath> mVisPath; // if null, then global
         Ty mTy;
 
-        Visibility();
+        ASTVisibility();
 
     public:
-        static Visibility makeBarePrivate();
+        static ASTVisibility makeBarePrivate();
 
-        static Visibility makeGlobal();
-        static Visibility makeRestricted(Ty ty, AST::AbsolutePath p);
-        static Visibility makeRestricted(AST::AbsolutePath p, AST::Path inPath);
+        static ASTVisibility makeGlobal();
+        static ASTVisibility makeRestricted(Ty ty, ASTAbsolutePath p);
+        static ASTVisibility makeRestricted(ASTAbsolutePath p, ASTPath inPath);
 
         void fmt(::std::ostream& os) const;
-        friend std::ostream& operator<<(::std::ostream& os, const Visibility& x);
+        friend std::ostream& operator<<(::std::ostream& os, const ASTVisibility& x);
 
         Ty ty() const {
             return mTy;
@@ -45,34 +44,34 @@ namespace AST {
             return mTy == Ty::Pub;
         }
 
-        const AST::Path& inPath() const;
+        const ASTPath& inPath() const;
 
-        const AST::AbsolutePath& visPath() const;
+        const ASTAbsolutePath& visPath() const;
 
-        bool isVisible(const ::AST::AbsolutePath& fromMod) const;
+        bool isVisible(const ASTAbsolutePath& fromMod) const;
         /// Returns true if this visibility is "more" than `x`
-        bool contains(const Visibility& x) const;
+        bool contains(const ASTVisibility& x) const;
 
         /// Updates this visibility such that `contains(x)` returns true
-        void inplaceUnion(const Visibility& x);
+        void inplaceUnion(const ASTVisibility& x);
     };
 
-    enum class CachedCfg {
+    enum class ASTCachedCfg {
         Unknown,
         Yes,
         No,
     };
 
     template <typename T>
-    struct Named {
+    struct ASTNamed {
         Span span;
-        AttributeList attrs;
-        Visibility vis;
+        ASTAttributeList attrs;
+        ASTVisibility vis;
         RcString name;
-        CachedCfg cachedCfg;
+        ASTCachedCfg cachedCfg;
         T data;
 
-        Named()
+        ASTNamed()
             : data()
         {
         }
@@ -80,18 +79,17 @@ namespace AST {
         //Named(Named&&) = default;
         //Named(const Named&) = default;
         //Named& operator=(Named&&) = default;
-        Named(Span sp, AttributeList attrs, Visibility vis, RcString name, T data)
+        ASTNamed(Span sp, ASTAttributeList attrs, ASTVisibility vis, RcString name, T data)
             : span(sp)
             , attrs(::std::move(attrs))
             , vis(::std::move(vis))
             , name(::std::move(name))
-            , cachedCfg(CachedCfg::Unknown)
+            , cachedCfg(ASTCachedCfg::Unknown)
             , data(::std::move(data))
         {
         }
     };
 
     template <typename T>
-    using NamedList = ::std::vector<Named<T>>;
+    using ASTNamedList = ::std::vector<ASTNamed<T>>;
 
-} // namespace AST

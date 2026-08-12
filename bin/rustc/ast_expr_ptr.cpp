@@ -1,38 +1,36 @@
 #include "ast_expr_ptr.h"
 
-namespace AST {
 
-ExprNodeP::ExprNodeP()
+ASTExprNodeP::ASTExprNodeP()
     : ptr(nullptr) {
 }
-ExprNodeP::ExprNodeP(ExprNode* node)
+ASTExprNodeP::ASTExprNodeP(ASTExprNode* node)
     : ptr(node) {
 }
-ExprNodeP& ExprNodeP::operator=(ExprNodeP&& x) {
-    this->~ExprNodeP();
+ASTExprNodeP& ASTExprNodeP::operator=(ASTExprNodeP&& x) {
+    this->~ASTExprNodeP();
     this->ptr = x.ptr;
     x.ptr = nullptr;
     return *this;
 }
-ExprNode* ExprNodeP::release() {
+ASTExprNode* ASTExprNodeP::release() {
     auto rv = ptr;
     ptr = nullptr;
     return rv;
 }
-void ExprNodeP::reset(ExprNode* n) {
-    this->~ExprNodeP();
+void ASTExprNodeP::reset(ASTExprNode* n) {
+    this->~ASTExprNodeP();
     ptr = n;
 }
-const ExprNode& Expr::node() const {
+const ASTExprNode& ASTExpr::node() const {
     assert(mNode.get());
     return *mNode;
 }
-ExprNode& Expr::node() {
+ASTExprNode& ASTExpr::node() {
     assert(mNode.get());
     return *mNode;
 }
-::std::shared_ptr<ExprNode> Expr::takeNode() {
+::std::shared_ptr<ASTExprNode> ASTExpr::takeNode() {
     assert(mNode.get());
     return ::std::move(mNode);
-}
 }

@@ -1,19 +1,15 @@
 #include "ast_attrs.h"
 
-namespace AST {
 
-Attribute::Attribute(Span sp, AttributeName name, TokenTree data)
+ASTAttribute::ASTAttribute(Span sp, ASTAttributeName name, TokenTree data)
     : mSpan(::std::move(sp))
     , mName(::std::move(name))
     , mData(::std::move(data))
     , mIsInert(false) {
 }
-}
 
-namespace AST {
 
-::std::ostream& operator<<(::std::ostream& os, const Attribute& x) {
+::std::ostream& operator<<(::std::ostream& os, const ASTAttribute& x) {
     x.fmt(os);
     return os;
-}
 }

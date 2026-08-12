@@ -15,7 +15,7 @@
 //#define TRACE_CHARS
 //#define TRACE_RAW_TOKENS
 
-Lexer::Lexer(const ::std::string& filename, AST::Edition edition, ParseState ps)
+Lexer::Lexer(const ::std::string& filename, ASTEdition edition, ParseState ps)
     : TokenStream(ps)
     , mPath(filename.c_str())
     , line(1)
@@ -45,7 +45,7 @@ Lexer::Lexer(const ::std::string& filename, AST::Edition edition, ParseState ps)
     }
 }
 
-Lexer::Lexer(::std::istringstream& ss, AST::Edition edition, ParseState ps)
+Lexer::Lexer(::std::istringstream& ss, ASTEdition edition, ParseState ps)
     : TokenStream(ps)
     , mPath("-")
     , line(1)
@@ -1359,17 +1359,17 @@ Token LexFindOperator(const ::std::string& s) {
     return TOK_NULL;
 }
 
-Token LexFindReservedWord(const ::std::string& s, AST::Edition edition) {
+Token LexFindReservedWord(const ::std::string& s, ASTEdition edition) {
     size_t len = 0;
     const sRWORD* RWORDS = nullptr;
     switch (edition) {
-        case AST::Edition::Rust2015:
+        case ASTEdition::Rust2015:
             len = LEN(RWORDS_2015);
             RWORDS = RWORDS_2015;
             break;
-        case AST::Edition::Rust2018:
-        case AST::Edition::Rust2021:
-        case AST::Edition::Rust2024:
+        case ASTEdition::Rust2018:
+        case ASTEdition::Rust2021:
+        case ASTEdition::Rust2024:
             len = LEN(RWORDS_2018);
             RWORDS = RWORDS_2018;
             break;

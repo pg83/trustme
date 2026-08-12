@@ -1,26 +1,22 @@
 #include "ast_macro.h"
 
-namespace AST {
 
-MacroInvocation::MacroInvocation() {
+ASTMacroInvocation::ASTMacroInvocation() {
 }
-MacroInvocation::MacroInvocation(Span span, AST::Path macro, RcString ident, TokenTree input)
+ASTMacroInvocation::ASTMacroInvocation(Span span, ASTPath macro, RcString ident, TokenTree input)
     : mSpan(mv$(span))
     , macroPath(mv$(macro))
     , ident(mv$(ident))
     , input(mv$(input)) {
 }
-void MacroInvocation::clear() {
-    macroPath = AST::Path();
+void ASTMacroInvocation::clear() {
+    macroPath = ASTPath();
     ident = "";
     input = TokenTree();
 }
-}
 
-namespace AST {
 
-::std::ostream& operator<<(::std::ostream& os, const MacroInvocation& x) {
+::std::ostream& operator<<(::std::ostream& os, const ASTMacroInvocation& x) {
     os << x.macroPath << "! " << x.ident << x.input;
     return os;
-}
 }

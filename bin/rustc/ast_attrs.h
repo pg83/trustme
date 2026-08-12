@@ -4,49 +4,48 @@
 #include "ast_expr_ptr.h"
 #include "parse_tokentree.h"
 
-namespace AST {
 
-    class Crate;
-    class Module;
+    class ASTCrate;
+    class ASTModule;
 
     //
-    class Attribute;
-    ::std::ostream& operator<<(::std::ostream& os, const Attribute& x);
+    class ASTAttribute;
+    ::std::ostream& operator<<(::std::ostream& os, const ASTAttribute& x);
 
     /// A list of attributes on an item (searchable by the attribute name)
-    class AttributeList {
+    class ASTAttributeList {
     public:
-        ::std::vector<Attribute> mItems;
+        ::std::vector<ASTAttribute> mItems;
 
-        AttributeList();
-        AttributeList(::std::vector<Attribute> items);
-        ~AttributeList();
+        ASTAttributeList();
+        ASTAttributeList(::std::vector<ASTAttribute> items);
+        ~ASTAttributeList();
 
         // Move present
-        AttributeList(AttributeList&&);
-        AttributeList& operator=(AttributeList&&);
+        ASTAttributeList(ASTAttributeList&&);
+        ASTAttributeList& operator=(ASTAttributeList&&);
         // No copy assign, but explicit copy
-        explicit AttributeList(const AttributeList&);
-        AttributeList& operator=(const AttributeList&) = delete;
+        explicit ASTAttributeList(const ASTAttributeList&);
+        ASTAttributeList& operator=(const ASTAttributeList&) = delete;
         // Explicit clone
-        AttributeList clone() const;
+        ASTAttributeList clone() const;
 
-        void push_back(Attribute i);
+        void push_back(ASTAttribute i);
 
-        const Attribute* get(const char* name) const;
+        const ASTAttribute* get(const char* name) const;
 
-        Attribute* get(const char* name) {
-            return const_cast<Attribute*>(const_cast<const AttributeList*>(this)->get(name));
+        ASTAttribute* get(const char* name) {
+            return const_cast<ASTAttribute*>(const_cast<const ASTAttributeList*>(this)->get(name));
         }
 
         bool has(const char* name) const {
             return get(name) != 0;
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const AttributeList& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTAttributeList& x);
     };
 
-    struct AttributeName {
+    struct ASTAttributeName {
         bool hasLeading = false;
         ::std::vector<RcString> elems;
 
@@ -71,7 +70,7 @@ namespace AST {
             return !(*this == x);
         }
 
-        friend std::ostream& operator<<(std::ostream& os, const AttributeName& x);
+        friend std::ostream& operator<<(std::ostream& os, const ASTAttributeName& x);
     };
 
     // An attribute can has a name, and optional data:
@@ -80,21 +79,21 @@ namespace AST {
     //   > In 1.19 this was actually just sub-attributes
     // - an associated (string) literal
 
-    class Attribute {
+    class ASTAttribute {
         Span mSpan;
-        AttributeName mName;
+        ASTAttributeName mName;
         TokenTree mData;
         /// @brief Indicates that this attribute has been used by a derive, and shouldn't be otherwise resolved
         mutable bool mIsInert;
         // TODO: Parse as a TT then expand?
     public:
-        Attribute(Span sp, AttributeName name, TokenTree data);
+        ASTAttribute(Span sp, ASTAttributeName name, TokenTree data);
 
-        explicit Attribute(const Attribute& x);
-        Attribute& operator=(const Attribute&) = delete;
-        Attribute(Attribute&&) = default;
-        Attribute& operator=(Attribute&&) = default;
-        Attribute clone() const;
+        explicit ASTAttribute(const ASTAttribute& x);
+        ASTAttribute& operator=(const ASTAttribute&) = delete;
+        ASTAttribute(ASTAttribute&&) = default;
+        ASTAttribute& operator=(ASTAttribute&&) = default;
+        ASTAttribute clone() const;
 
         void fmt(std::ostream& os) const;
 
@@ -110,7 +109,7 @@ namespace AST {
             return mSpan;
         }
 
-        const AttributeName& name() const {
+        const ASTAttributeName& name() const {
             return mName;
         }
 
@@ -123,15 +122,14 @@ namespace AST {
         }
 
         /// Parses the data as a `="string"` and returns the string
-        std::string parseEqualsString(const AST::Crate& crate, const AST::Module& mod) const;
+        std::string parseEqualsString(const ASTCrate& crate, const ASTModule& mod) const;
         /// Parses the data as a `("string")` and returns the string
         std::string parseParenString() const;
 
         void parseParenIdentList(std::function<void(const Span& sp, RcString ident)> itemCb) const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const Attribute& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTAttribute& x);
     };
 
-    TAGGED_UNION(AttributeData, None, (None, struct {}), (ValueUnexpanded, AST::ExprNodeP), (String, struct { ::std::string val; }), (List, struct { ::std::vector<Attribute> subItems; }));
+    TAGGED_UNION(ASTAttributeData, None, (None, struct {}), (ValueUnexpanded, ASTExprNodeP), (String, struct { ::std::string val; }), (List, struct { ::std::vector<ASTAttribute> subItems; }));
 
-} // namespace AST

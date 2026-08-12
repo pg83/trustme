@@ -36,7 +36,7 @@ extern ::std::string& operator+=(::std::string& s, const Codepoint& cp);
 extern ::std::ostream& operator<<(::std::ostream& s, const Codepoint& cp);
 
 extern Token LexFindOperator(const ::std::string& s);
-extern Token LexFindReservedWord(const ::std::string& s, AST::Edition edition);
+extern Token LexFindReservedWord(const ::std::string& s, ASTEdition edition);
 
 typedef Codepoint uchar;
 
@@ -51,17 +51,17 @@ class Lexer: public TokenStream {
     Codepoint lastChar;
     ::std::vector<Token> nextTokens;
 
-    AST::Edition edition;
+    ASTEdition edition;
     Ident::Hygiene mHygiene;
 
 public:
-    Lexer(::std::istringstream& ss, AST::Edition edition, ParseState ps);
-    Lexer(const ::std::string& filename, AST::Edition edition, ParseState ps);
+    Lexer(::std::istringstream& ss, ASTEdition edition, ParseState ps);
+    Lexer(const ::std::string& filename, ASTEdition edition, ParseState ps);
 
     Position getPosition() const override;
     Ident::Hygiene realGetHygiene() const override;
 
-    AST::Edition realGetEdition() const override {
+    ASTEdition realGetEdition() const override {
         return edition;
     }
 

@@ -19,7 +19,7 @@
 extern char** environ;
 #endif
 
-#define NEWNODE(ty, ...) ::AST::ExprNodeP(new ::AST::ExprNode##ty(__VA_ARGS__))
+#define NEWNODE(ty, ...) ASTExprNodeP(new ASTExprNode##ty(__VA_ARGS__))
 
 class DecoratorProcMacroDerive: public ExpandDecorator {
 public:
@@ -27,7 +27,7 @@ public:
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const AST::Attribute& attr, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module&, size_t, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
+    void handle(const Span& sp, const ASTAttribute& attr, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_None()) {
             return;
         }
@@ -60,7 +60,7 @@ public:
         }
         lex.getTokenCheck(TOK_PAREN_CLOSE);
 
-        crate.procMacros.push_back(AST::ProcMacroDef{AST::ProcMacroTy::Derive, RcString::newInterned(FMT(traitName)), path, mv$(attributes)});
+        crate.procMacros.push_back(ASTProcMacroDef{ASTProcMacroTy::Derive, RcString::newInterned(FMT(traitName)), path, mv$(attributes)});
     }
 };
 STATIC_DECORATOR("proc_macro_derive", DecoratorProcMacroDerive)
@@ -71,7 +71,7 @@ public:
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const AST::Attribute& attr, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module&, size_t, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
+    void handle(const Span& sp, const ASTAttribute& attr, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_None()) {
             return;
         }
@@ -80,7 +80,7 @@ public:
             TODO(sp, "Error for #[proc_macro_attribute] on non-Function");
         }
 
-        crate.procMacros.push_back(AST::ProcMacroDef{AST::ProcMacroTy::Attribute, path.nodes.back(), path, {}});
+        crate.procMacros.push_back(ASTProcMacroDef{ASTProcMacroTy::Attribute, path.nodes.back(), path, {}});
     }
 };
 STATIC_DECORATOR("proc_macro_attribute", DecoratorProcMacroAttribute)
@@ -91,7 +91,7 @@ public:
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const AST::Attribute& attr, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module&, size_t, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
+    void handle(const Span& sp, const ASTAttribute& attr, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_None()) {
             return;
         }
@@ -100,14 +100,14 @@ public:
             TODO(sp, "Error for #[proc_macro] on non-Function");
         }
 
-        crate.procMacros.push_back(AST::ProcMacroDef{AST::ProcMacroTy::Function, path.nodes.back(), path, {}});
+        crate.procMacros.push_back(ASTProcMacroDef{ASTProcMacroTy::Function, path.nodes.back(), path, {}});
     }
 };
 STATIC_DECORATOR("proc_macro", DecoratorProcMacro)
 
-void ExpandProcMacroHarness(::AST::Crate& crate) {
+void ExpandProcMacroHarness(ASTCrate& crate) {
     auto pmCrateName = RcString::newInterned("proc_macro");
-    AST::gImplicitCrates.insert(std::make_pair(pmCrateName, crate.loadExternCrate(Span(), pmCrateName)));
+    gImplicitCrates.insert(std::make_pair(pmCrateName, crate.loadExternCrate(Span(), pmCrateName)));
 
     // Create the following module:
     // ```
@@ -123,49 +123,49 @@ void ExpandProcMacroHarness(::AST::Crate& crate) {
     // ```
 
     // ---- main function ----
-    auto mainFn = ::AST::Function{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
+    auto mainFn = ASTFunction{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
     {
-        auto callNode = NEWNODE(CallPath, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("main")}), ::makeVec1(NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, NEWNODE(NamedValue, ::AST::Path("", {::AST::PathNode("proc_macro#"), ::AST::PathNode("MACROS")})))));
+        auto callNode = NEWNODE(CallPath, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("main")}), ::makeVec1(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(NamedValue, ASTPath("", {ASTPathNode("proc_macro#"), ASTPathNode("MACROS")})))));
         mainFn.setCode(mv$(callNode));
     }
 
     // ---- test list ----
-    ::std::vector<::AST::ExprNodeP> testNodes;
+    ::std::vector<ASTExprNodeP> testNodes;
 
     for (const auto& desc : crate.procMacros) {
         const char* typeName = "SingleStream";
         switch (desc.ty) {
-            case ::AST::ProcMacroTy::Attribute:
+            case ASTProcMacroTy::Attribute:
                 typeName = "Attribute";
                 break;
             default:
                 break;
         }
-        ::AST::ExprNodeStructLiteral::tValues descVals;
+        ASTExprNodeStructLiteral::tValues descVals;
         // `name: "foo",`
         descVals.push_back({{}, "name", NEWNODE(String, desc.name.c_str())});
         // `handler`: ::foo
-        descVals.push_back({{}, "handler", NEWNODE(CallPath, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroType"), ::AST::PathNode(typeName)}), ::makeVec1(NEWNODE(NamedValue, AST::Path(desc.path))))});
+        descVals.push_back({{}, "handler", NEWNODE(CallPath, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroType"), ASTPathNode(typeName)}), ::makeVec1(NEWNODE(NamedValue, ASTPath(desc.path))))});
 
-        testNodes.push_back(NEWNODE(StructLiteral, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroDesc")}), nullptr, mv$(descVals)));
+        testNodes.push_back(NEWNODE(StructLiteral, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")}), nullptr, mv$(descVals)));
     }
-    auto* testsArray = new ::AST::ExprNodeArray(mv$(testNodes));
+    auto* testsArray = new ASTExprNodeArray(mv$(testNodes));
 
     size_t testCount = testsArray->values.size();
-    auto testsList = ::AST::Static{::AST::Static::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), TypeRef(Span(), ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroDesc")})), ::std::shared_ptr<::AST::ExprNode>(new ::AST::ExprNodeInteger(U128(testCount), CORETYPE_UINT))), ::AST::Expr(mv$(testsArray))};
+    auto testsList = ASTStatic{ASTStatic::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), TypeRef(Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), ::std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
 
     // ---- module ----
-    auto newmod = ::AST::Module{::AST::AbsolutePath("", {"proc_macro#"})};
+    auto newmod = ASTModule{ASTAbsolutePath("", {"proc_macro#"})};
     // - TODO: These need to be loaded too.
     //  > They don't actually need to exist here, just be loaded (and use absolute paths)
-    auto visPrivate = AST::Visibility::makeRestricted(AST::Visibility::Ty::Private, newmod.path());
+    auto visPrivate = ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, newmod.path());
     newmod.addExtCrate(Span(), visPrivate, crate.extCratenameProcmacro, "proc_macro", {});
 
     newmod.addItem(Span(), visPrivate, "main", mv$(mainFn), {});
     newmod.addItem(Span(), visPrivate, "MACROS", mv$(testsList), {});
 
     crate.mRootModule.addItem(Span(), visPrivate, "proc_macro#", mv$(newmod), {});
-    crate.mLangItems["mrustc-main"] = ::AST::AbsolutePath("", {"proc_macro#", "main"});
+    crate.mLangItems["mrustc-main"] = ASTAbsolutePath("", {"proc_macro#", "main"});
 }
 
 enum class TokenClass {
@@ -199,7 +199,7 @@ struct ProcMacroInv: public TokenStream {
     Span parentSpan;
     Span thisSpan;
     const ::HIR::ProcMacro& procMacroDesc;
-    AST::Edition edition;
+    ASTEdition edition;
     ::std::ofstream dumpFileOut;
     ::std::ofstream dumpFileRes;
 
@@ -227,7 +227,7 @@ struct ProcMacroInv: public TokenStream {
     bool eofHit = false;
 
 public:
-    ProcMacroInv(const Span& sp, AST::Edition edition, const char* executable, const ::HIR::ProcMacro& procMacroDesc);
+    ProcMacroInv(const Span& sp, ASTEdition edition, const char* executable, const ::HIR::ProcMacro& procMacroDesc);
     ProcMacroInv(const ProcMacroInv&) = delete;
     ProcMacroInv(ProcMacroInv&&) = default;
     ProcMacroInv& operator=(const ProcMacroInv&) = delete;
@@ -408,7 +408,7 @@ public:
     virtual Position getPosition() const override;
     virtual Token realGetToken() override;
 
-    virtual AST::Edition realGetEdition() const override {
+    virtual ASTEdition realGetEdition() const override {
         return edition;
     }
 
@@ -429,7 +429,7 @@ private:
     U128 recvV128uU128();
 };
 
-ProcMacroInv ProcMacroInvokeInt(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath) {
+ProcMacroInv ProcMacroInvokeInt(const Span& sp, const ASTCrate& crate, const ::std::vector<RcString>& macPath) {
     TRACE_FUNCTION_F(macPath);
     // 1. Locate macro in HIR list
     const auto& crateName = macPath.front();
@@ -488,10 +488,10 @@ namespace {
         {
         }
 
-        void visitBoundConstness(AST::BoundConstness constness) {
-            if (constness == AST::BoundConstness::Always) {
+        void visitBoundConstness(ASTBoundConstness constness) {
+            if (constness == ASTBoundConstness::Always) {
                 pmi.sendRword("const");
-            } else if (constness == AST::BoundConstness::Maybe) {
+            } else if (constness == ASTBoundConstness::Maybe) {
                 pmi.sendSymbol("[");
                 pmi.sendRword("const");
                 pmi.sendSymbol("]");
@@ -898,18 +898,18 @@ namespace {
             }
         }
 
-        void visitPattern(const ::AST::Pattern& pat) {
+        void visitPattern(const ASTPattern& pat) {
             for (const auto& b : pat.bindings()) {
                 if (b.isMutable) {
                     pmi.sendRword("mut");
                 }
                 switch (b.mType) {
-                    case ::AST::PatternBinding::Type::MOVE:
+                    case ASTPatternBinding::Type::MOVE:
                         break;
-                    case ::AST::PatternBinding::Type::REF:
+                    case ASTPatternBinding::Type::REF:
                         pmi.sendRword("ref");
                         break;
-                    case ::AST::PatternBinding::Type::MUTREF:
+                    case ASTPatternBinding::Type::MUTREF:
                         pmi.sendRword("ref");
                         pmi.sendRword("mut");
                         break;
@@ -958,7 +958,7 @@ namespace {
             }
         }
 
-        void visitTuplePattern(const AST::Pattern::TuplePat& v) {
+        void visitTuplePattern(const ASTPattern::TuplePat& v) {
             for (const auto& p : v.start) {
                 visitPattern(p);
                 pmi.sendSymbol(",");
@@ -973,12 +973,12 @@ namespace {
             }
         }
 
-        void visitLifetime(const AST::LifetimeRef& x) {
-            if (x.binding() == AST::LifetimeRef::BINDING_STATIC) {
+        void visitLifetime(const ASTLifetimeRef& x) {
+            if (x.binding() == ASTLifetimeRef::BINDING_STATIC) {
                 pmi.sendLifetime("static");
-            } else if (x.binding() == AST::LifetimeRef::BINDING_INFER) {
+            } else if (x.binding() == ASTLifetimeRef::BINDING_INFER) {
                 pmi.sendLifetime("_");
-            } else if (x.binding() == AST::LifetimeRef::BINDING_UNSPECIFIED) {
+            } else if (x.binding() == ASTLifetimeRef::BINDING_UNSPECIFIED) {
                 // Nothing
             } else {
                 pmi.sendLifetime(x.name().name.c_str());
@@ -1023,7 +1023,7 @@ namespace {
                         this->visitBoundConstness(t.constness);
                         this->visitPath(*t.path);
                     } for (const auto& lft : te.lifetimes) {
-                        if (lft != AST::LifetimeRef()) {
+                        if (lft != ASTLifetimeRef()) {
                             if (needsPlus) {
                                 pmi.sendSymbol("+");
                             }
@@ -1059,7 +1059,7 @@ namespace {
             )
         }
 
-        void visitHrbs(const AST::HigherRankedBounds& hrbs) {
+        void visitHrbs(const ASTHigherRankedBounds& hrbs) {
             if (!hrbs.empty()) {
                 pmi.sendRword("for");
                 pmi.sendSymbol("<");
@@ -1071,7 +1071,7 @@ namespace {
             }
         }
 
-        void visitPathNode(const AST::PathNode& e, bool isExpr) {
+        void visitPathNode(const ASTPathNode& e, bool isExpr) {
             pmi.sendIdent(e.name().c_str());
             if (!e.args().isEmpty()) {
                 if (e.args().isParen) {
@@ -1128,8 +1128,8 @@ namespace {
             }
         }
 
-        void visitPath(const AST::Path& path, bool isExpr = false) {
-            const ::std::vector<AST::PathNode>* nodes = nullptr;
+        void visitPath(const ASTPath& path, bool isExpr = false) {
+            const ::std::vector<ASTPathNode>* nodes = nullptr;
             TU_MATCH_HDRA( (path.cls), {)
             TU_ARMA(Invalid, pe) {
                     BUG(sp, "Invalid path");
@@ -1196,7 +1196,7 @@ namespace {
             }
         }
 
-        void visitParams(const AST::GenericParams& params) {
+        void visitParams(const ASTGenericParams& params) {
             if (!params.mParams.empty()) {
                 bool isFirst = true;
                 pmi.sendSymbol("<");
@@ -1287,7 +1287,7 @@ namespace {
             }
         }
 
-        void visitHrb(const AST::HigherRankedBounds& hrb) {
+        void visitHrb(const ASTHigherRankedBounds& hrb) {
             if (!hrb.empty()) {
                 pmi.sendRword("for");
                 pmi.sendSymbol("<");
@@ -1299,7 +1299,7 @@ namespace {
             }
         }
 
-        void visitBounds(const AST::GenericParams& params) {
+        void visitBounds(const ASTGenericParams& params) {
             if (!params.bounds.empty()) {
                 bool whereSent = false;
 
@@ -1365,7 +1365,7 @@ namespace {
             }
         }
 
-        void visitNode(const ::AST::ExprNode& e) {
+        void visitNode(const ASTExprNode& e) {
             DEBUG("NODE: " << e);
             // TODO: Dump to a string, then re-parse into a TT and then send that TT
             // - Avoids needing to repeat logic
@@ -1380,7 +1380,7 @@ namespace {
 
         void parseString(const ::std::string& s) {
             ::std::istringstream iss{s};
-            Lexer l{iss, AST::Edition::Rust2021, {}};
+            Lexer l{iss, ASTEdition::Rust2021, {}};
             for (;;) {
                 auto t = l.getToken();
                 if (t == TOK_EOF) {
@@ -1391,23 +1391,23 @@ namespace {
             }
         }
 
-        void visitNodes(const ::AST::Expr& e) {
+        void visitNodes(const ASTExpr& e) {
             this->visitNode(e.node());
         }
 
-        void visitTopAttrs(slice<const ::AST::Attribute>& attrs) {
+        void visitTopAttrs(slice<const ASTAttribute>& attrs) {
             for (const auto& a : attrs) {
                 this->visitAttr(a);
             }
         }
 
-        void visitAttrs(const ::AST::AttributeList& attrs) {
+        void visitAttrs(const ASTAttributeList& attrs) {
             for (const auto& a : attrs.mItems) {
                 this->visitAttr(a);
             }
         }
 
-        void visitAttr(const ::AST::Attribute& a) {
+        void visitAttr(const ASTAttribute& a) {
             if (a.name() == "cfg_attr") {
                 auto newAttrs = checkCfgAttr(a);
                 for (const auto& na : newAttrs) {
@@ -1433,7 +1433,7 @@ namespace {
             }
         }
 
-        void visitMetaItem(const ::AST::Attribute& i) {
+        void visitMetaItem(const ASTAttribute& i) {
             if (i.name().hasLeading) {
                 pmi.sendSymbol("::");
             }
@@ -1447,35 +1447,35 @@ namespace {
             visitTokentree(i.data());
         }
 
-        void visitVis(const ::AST::Visibility& vis) {
+        void visitVis(const ASTVisibility& vis) {
             switch (vis.ty()) {
-                case ::AST::Visibility::Ty::Private:
+                case ASTVisibility::Ty::Private:
                     break;
-                case ::AST::Visibility::Ty::Pub:
+                case ASTVisibility::Ty::Pub:
                     pmi.sendRword("pub");
                     break;
-                case ::AST::Visibility::Ty::Crate:
+                case ASTVisibility::Ty::Crate:
                     pmi.sendRword("crate");
                     break;
-                case ::AST::Visibility::Ty::PubCrate:
+                case ASTVisibility::Ty::PubCrate:
                     pmi.sendRword("pub");
                     pmi.sendSymbol("(");
                     pmi.sendRword("crate");
                     pmi.sendSymbol(")");
                     break;
-                case ::AST::Visibility::Ty::PubSuper:
+                case ASTVisibility::Ty::PubSuper:
                     pmi.sendRword("pub");
                     pmi.sendSymbol("(");
                     pmi.sendRword("super");
                     pmi.sendSymbol(")");
                     break;
-                case ::AST::Visibility::Ty::PubSelf:
+                case ASTVisibility::Ty::PubSelf:
                     pmi.sendRword("pub");
                     pmi.sendSymbol("(");
                     pmi.sendRword("self");
                     pmi.sendSymbol(")");
                     break;
-                case ::AST::Visibility::Ty::PubIn:
+                case ASTVisibility::Ty::PubIn:
                     pmi.sendRword("pub");
                     pmi.sendSymbol("(");
                     pmi.sendRword("in");
@@ -1485,7 +1485,7 @@ namespace {
             }
         }
 
-        void visitStruct(const RcString& name, const AST::Visibility& vis, const ::AST::Struct& str) {
+        void visitStruct(const RcString& name, const ASTVisibility& vis, const ASTStruct& str) {
             this->visitVis(vis);
             pmi.sendRword("struct");
             pmi.sendIdent(name.c_str());
@@ -1528,7 +1528,7 @@ namespace {
             }
         }
 
-        void visitEnum(const RcString& name, const AST::Visibility& vis, const ::AST::Enum& enm) {
+        void visitEnum(const RcString& name, const ASTVisibility& vis, const ASTEnum& enm) {
             this->visitVis(vis);
 
             pmi.sendRword("enum");
@@ -1573,11 +1573,11 @@ namespace {
             pmi.sendSymbol("}");
         }
 
-        void visitUnion(const RcString& name, const AST::Visibility& vis, const ::AST::Union& unn) {
+        void visitUnion(const RcString& name, const ASTVisibility& vis, const ASTUnion& unn) {
             TODO(sp, "visit_union");
         }
 
-        void visitFunction(const RcString& name, const AST::Visibility& vis, const ::AST::Function& fcn) {
+        void visitFunction(const RcString& name, const ASTVisibility& vis, const ASTFunction& fcn) {
             this->visitVis(vis);
 
             if (fcn.isUnsafe()) {
@@ -1621,17 +1621,17 @@ namespace {
             }
         }
 
-        void visitStatic(const RcString& name, const AST::Visibility& vis, const ::AST::Static& i) {
+        void visitStatic(const RcString& name, const ASTVisibility& vis, const ASTStatic& i) {
             this->visitVis(vis);
             switch (i.sClass()) {
-                case ::AST::Static::CONST:
+                case ASTStatic::CONST:
                     pmi.sendRword("const");
                     break;
-                case ::AST::Static::MUT:
+                case ASTStatic::MUT:
                     pmi.sendRword("static");
                     pmi.sendRword("mut");
                     break;
-                case ::AST::Static::STATIC:
+                case ASTStatic::STATIC:
                     pmi.sendRword("static");
                     break;
             }
@@ -1648,7 +1648,7 @@ namespace {
             pmi.sendSymbol(";");
         }
 
-        void visitUse(const RcString& /*name*/, const AST::Visibility& vis, const ::AST::UseItem& item) {
+        void visitUse(const RcString& /*name*/, const ASTVisibility& vis, const ASTUseItem& item) {
             this->visitVis(vis);
             pmi.sendRword("use");
 
@@ -1668,7 +1668,7 @@ namespace {
             pmi.sendSymbol(";");
         }
 
-        void visitImplHdr(const ::AST::ImplDef& impl) {
+        void visitImplHdr(const ASTImplDef& impl) {
             pmi.sendRword("impl");
             if (impl.isConst()) {
                 pmi.sendRword("const");
@@ -1684,7 +1684,7 @@ namespace {
         }
 
         /// Send a trait definition to the proc macro.
-        void visitTrait(const RcString& name, const AST::Visibility& vis, const ::AST::Trait& trait) {
+        void visitTrait(const RcString& name, const ASTVisibility& vis, const ASTTrait& trait) {
             this->visitVis(vis);
             if (trait.isUnsafe()) {
                 pmi.sendRword("unsafe");
@@ -1711,7 +1711,7 @@ namespace {
 
             pmi.sendSymbol("{");
             // Trait items inherit the trait's visibility; mrustc records them as `pub`, which the plugin's parser rejects. Send them unqualified.
-            const auto itemVis = ::AST::Visibility::makeBarePrivate();
+            const auto itemVis = ASTVisibility::makeBarePrivate();
             for (const auto& i : trait.items()) {
                 this->visitAttrs(i.attrs);
                 TU_MATCH_HDRA((i.data), {)
@@ -1744,7 +1744,7 @@ namespace {
             pmi.sendSymbol("}");
         }
 
-        void visitImpl(const ::AST::Impl& impl) {
+        void visitImpl(const ASTImpl& impl) {
             visitImplHdr(impl.def());
             pmi.sendSymbol("{");
             for (const auto& i : impl.items()) {
@@ -1765,7 +1765,7 @@ namespace {
             pmi.sendSymbol("}");
         }
 
-        void visitItem(const RcString& name, const AST::Visibility& vis, const ::AST::Item& item) {
+        void visitItem(const RcString& name, const ASTVisibility& vis, const ASTItem& item) {
             TU_MATCH_HDRA((item), {)
             default:
                 TODO(sp, "visit_item - " << item.tagStr());
@@ -1799,7 +1799,7 @@ namespace {
     };
 }
 
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, const TokenTree* attrInput, std::function<void(Visitor& v)> cb) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree* attrInput, std::function<void(Visitor& v)> cb) {
     // 1. Create ProcMacroInv instance
     auto pmi = ProcMacroInvokeInt(sp, crate, macPath);
     if (!pmi.checkGood()) {
@@ -1828,7 +1828,7 @@ namespace {
 }
 
 // --- Derive inputs
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& itemName, const ::AST::Struct& i) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i) {
     return ProcMacroInvoke(sp, crate, macPath, nullptr, [&](Visitor& v) {
         DEBUG("derive on struct");
         v.skipDeriveAttrs = true;
@@ -1837,7 +1837,7 @@ namespace {
     });
 }
 
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& itemName, const ::AST::Enum& i) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTEnum& i) {
     return ProcMacroInvoke(sp, crate, macPath, nullptr, [&](Visitor& v) {
         DEBUG("derive on enum");
         v.skipDeriveAttrs = true;
@@ -1846,7 +1846,7 @@ namespace {
     });
 }
 
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& itemName, const ::AST::Union& i) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTUnion& i) {
     return ProcMacroInvoke(sp, crate, macPath, nullptr, [&](Visitor& v) {
         DEBUG("derive on union");
         v.skipDeriveAttrs = true;
@@ -1856,7 +1856,7 @@ namespace {
 }
 
 // --- attribute
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& itemName, const ::AST::Item& i) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTItem& i) {
     return ProcMacroInvoke(sp, crate, macPath, &tt, [&](Visitor& v) {
         v.emitAllAttrs = true;
         v.visitTopAttrs(attrs);
@@ -1865,13 +1865,13 @@ namespace {
 }
 
 // -- function-like input
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt) {
     return ProcMacroInvoke(sp, crate, macPath, nullptr, [&](Visitor& v) {
         v.visitTokentree(tt);
     });
 }
 
-ProcMacroInv::ProcMacroInv(const Span& sp, AST::Edition edition, const char* executable, const ::HIR::ProcMacro& procMacroDesc)
+ProcMacroInv::ProcMacroInv(const Span& sp, ASTEdition edition, const char* executable, const ::HIR::ProcMacro& procMacroDesc)
     : TokenStream(ParseState())
     , parentSpan(sp)
     , thisSpan(Span(parentSpan, procMacroDesc.path.crateName(), procMacroDesc.name))

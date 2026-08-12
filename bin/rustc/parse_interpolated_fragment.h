@@ -7,16 +7,14 @@ class TypeRef;
 class TokenTree;
 struct Ident;
 
-namespace AST {
-    class Visibility;
-    class Pattern;
-    class Path;
-    class ExprNode;
-    class Attribute;
+    class ASTVisibility;
+    class ASTPattern;
+    class ASTPath;
+    class ASTExprNode;
+    class ASTAttribute;
     template <typename T>
-    struct Named;
-    class Item;
-};
+    struct ASTNamed;
+    class ASTItem;
 
 class InterpolatedFragment {
 public:
@@ -44,15 +42,15 @@ public:
     //InterpolatedFragment(const InterpolatedFragment& );
 
     InterpolatedFragment(TokenTree);
-    InterpolatedFragment(::AST::Pattern);
-    InterpolatedFragment(::AST::Path);
+    InterpolatedFragment(ASTPattern);
+    InterpolatedFragment(ASTPath);
     InterpolatedFragment(::TypeRef);
-    InterpolatedFragment(::AST::Attribute);
-    InterpolatedFragment(::AST::Named<AST::Item>);
-    InterpolatedFragment(Type, ::AST::Named<AST::Item>);
+    InterpolatedFragment(ASTAttribute);
+    InterpolatedFragment(ASTNamed<ASTItem>);
+    InterpolatedFragment(Type, ASTNamed<ASTItem>);
     ~InterpolatedFragment();
-    InterpolatedFragment(Type, ::AST::ExprNode*);
-    InterpolatedFragment(AST::Visibility); // :vis
+    InterpolatedFragment(Type, ASTExprNode*);
+    InterpolatedFragment(ASTVisibility); // :vis
 
     TokenTree& asTt();
 

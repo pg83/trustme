@@ -3,8 +3,7 @@
 #include "common.h"
 #include "ident.h"
 
-namespace AST {
-    class LifetimeRef {
+    class ASTLifetimeRef {
     public:
         // NOTE: These (the first three) must match HIR::LifetimeRef's versions
         static const uint16_t BINDING_STATIC = 0xFFFF;      // 'static
@@ -16,19 +15,19 @@ namespace AST {
         Ident mName;
         uint16_t mBinding;
 
-        LifetimeRef(Ident name, uint32_t binding);
+        ASTLifetimeRef(Ident name, uint32_t binding);
 
     public:
-        LifetimeRef();
+        ASTLifetimeRef();
 
-        LifetimeRef(Ident name);
+        ASTLifetimeRef(Ident name);
 
-        static LifetimeRef newStatic() {
-            return LifetimeRef("static", BINDING_STATIC);
+        static ASTLifetimeRef newStatic() {
+            return ASTLifetimeRef("static", BINDING_STATIC);
         }
 
-        static LifetimeRef newInfer() {
-            return LifetimeRef("_", BINDING_INFER);
+        static ASTLifetimeRef newInfer() {
+            return ASTLifetimeRef("_", BINDING_INFER);
         }
 
         void setBinding(uint16_t b);
@@ -49,22 +48,21 @@ namespace AST {
             return mBinding;
         }
 
-        Ordering ord(const LifetimeRef& x) const {
+        Ordering ord(const ASTLifetimeRef& x) const {
             return ::ord(mName.name, x.mName.name);
         }
 
-        bool operator==(const LifetimeRef& x) const {
+        bool operator==(const ASTLifetimeRef& x) const {
             return ord(x) == OrdEqual;
         }
 
-        bool operator!=(const LifetimeRef& x) const {
+        bool operator!=(const ASTLifetimeRef& x) const {
             return ord(x) != OrdEqual;
         }
 
-        bool operator<(const LifetimeRef& x) const {
+        bool operator<(const ASTLifetimeRef& x) const {
             return ord(x) == OrdLess;
         };
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const LifetimeRef& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTLifetimeRef& x);
     };
-}

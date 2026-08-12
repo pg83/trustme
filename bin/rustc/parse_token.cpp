@@ -13,29 +13,29 @@ Token::~Token() {
             delete reinterpret_cast<TypeRef*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_PATTERN:
-            delete reinterpret_cast<AST::Pattern*>(mData.as_Fragment());
+            delete reinterpret_cast<ASTPattern*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_PATH:
-            delete reinterpret_cast<AST::Path*>(mData.as_Fragment());
+            delete reinterpret_cast<ASTPath*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_EXPR:
-            delete reinterpret_cast<AST::ExprNode*>(mData.as_Fragment());
+            delete reinterpret_cast<ASTExprNode*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_STMT:
-            delete reinterpret_cast<AST::ExprNode*>(mData.as_Fragment());
+            delete reinterpret_cast<ASTExprNode*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_STMT_ITEM:
         case TOK_INTERPOLATED_ITEM:
-            delete reinterpret_cast<AST::Named<AST::Item>*>(mData.as_Fragment());
+            delete reinterpret_cast<ASTNamed<ASTItem>*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_BLOCK:
-            delete reinterpret_cast<AST::ExprNode*>(mData.as_Fragment());
+            delete reinterpret_cast<ASTExprNode*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_META:
-            delete reinterpret_cast<AST::Attribute*>(mData.as_Fragment());
+            delete reinterpret_cast<ASTAttribute*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_VIS:
-            delete reinterpret_cast<AST::Visibility*>(mData.as_Fragment());
+            delete reinterpret_cast<ASTVisibility*>(mData.as_Fragment());
             break;
         default:
             break;
@@ -93,7 +93,7 @@ Token::Token(const InterpolatedFragment& frag) {
             throw "";
         case InterpolatedFragment::VIS:
             mType = TOK_INTERPOLATED_VIS;
-            mData = new AST::Visibility(*reinterpret_cast<const AST::Visibility*>(frag.ptr));
+            mData = new ASTVisibility(*reinterpret_cast<const ASTVisibility*>(frag.ptr));
             break;
         case InterpolatedFragment::TYPE:
             mType = TOK_INTERPOLATED_TYPE;
@@ -101,11 +101,11 @@ Token::Token(const InterpolatedFragment& frag) {
             break;
         case InterpolatedFragment::PAT:
             mType = TOK_INTERPOLATED_PATTERN;
-            mData = new AST::Pattern(reinterpret_cast<const AST::Pattern*>(frag.ptr)->clone());
+            mData = new ASTPattern(reinterpret_cast<const ASTPattern*>(frag.ptr)->clone());
             break;
         case InterpolatedFragment::PATH:
             mType = TOK_INTERPOLATED_PATH;
-            mData = new AST::Path(*reinterpret_cast<const AST::Path*>(frag.ptr));
+            mData = new ASTPath(*reinterpret_cast<const ASTPath*>(frag.ptr));
             break;
         case InterpolatedFragment::EXPR:
             mType = TOK_INTERPOLATED_EXPR;
@@ -118,18 +118,18 @@ Token::Token(const InterpolatedFragment& frag) {
                     mType = TOK_INTERPOLATED_BLOCK;
             }
 
-            mData = reinterpret_cast<const AST::ExprNode*>(frag.ptr)->clone().release();
+            mData = reinterpret_cast<const ASTExprNode*>(frag.ptr)->clone().release();
             break;
         case InterpolatedFragment::META:
             mType = TOK_INTERPOLATED_META;
-            mData = new AST::Attribute(reinterpret_cast<const AST::Attribute*>(frag.ptr)->clone());
+            mData = new ASTAttribute(reinterpret_cast<const ASTAttribute*>(frag.ptr)->clone());
             break;
         case InterpolatedFragment::STMT_ITEM:
         case InterpolatedFragment::ITEM: {
             mType = frag.mType == InterpolatedFragment::STMT_ITEM ? TOK_INTERPOLATED_STMT_ITEM : TOK_INTERPOLATED_ITEM;
-            const auto& named = *reinterpret_cast<const AST::Named<AST::Item>*>(frag.ptr);
+            const auto& named = *reinterpret_cast<const ASTNamed<ASTItem>*>(frag.ptr);
             auto item = named.data.clone();
-            mData = new AST::Named<AST::Item>(named.span, named.attrs.clone(), named.vis, named.name, mv$(item));
+            mData = new ASTNamed<ASTItem>(named.span, named.attrs.clone(), named.vis, named.name, mv$(item));
             break;
         }
     }
@@ -170,7 +170,7 @@ Token::Token(TagTakeIP, InterpolatedFragment frag) {
                     mType = TOK_INTERPOLATED_BLOCK;
             }
 
-            mData = reinterpret_cast<AST::ExprNode*>(frag.ptr);
+            mData = reinterpret_cast<ASTExprNode*>(frag.ptr);
             frag.ptr = nullptr;
             break;
         case InterpolatedFragment::STMT_ITEM:
@@ -226,28 +226,28 @@ Token Token::clone() const {
                      rv.mData = new TypeRef(reinterpret_cast<TypeRef*>(e)->clone());
                      break;
                  case TOK_INTERPOLATED_PATTERN:
-                     rv.mData = new AST::Pattern(reinterpret_cast<AST::Pattern*>(e)->clone());
+                     rv.mData = new ASTPattern(reinterpret_cast<ASTPattern*>(e)->clone());
                      break;
                  case TOK_INTERPOLATED_PATH:
-                     rv.mData = new AST::Path(*reinterpret_cast<AST::Path*>(e));
+                     rv.mData = new ASTPath(*reinterpret_cast<ASTPath*>(e));
                      break;
                  case TOK_INTERPOLATED_EXPR:
-                     rv.mData = reinterpret_cast<AST::ExprNode*>(e)->clone().release();
+                     rv.mData = reinterpret_cast<ASTExprNode*>(e)->clone().release();
                      break;
                  case TOK_INTERPOLATED_STMT:
-                     rv.mData = reinterpret_cast<AST::ExprNode*>(e)->clone().release();
+                     rv.mData = reinterpret_cast<ASTExprNode*>(e)->clone().release();
                      break;
                  case TOK_INTERPOLATED_BLOCK:
-                     rv.mData = reinterpret_cast<AST::ExprNode*>(e)->clone().release();
+                     rv.mData = reinterpret_cast<ASTExprNode*>(e)->clone().release();
                      break;
                  case TOK_INTERPOLATED_META:
-                     rv.mData = new AST::Attribute(reinterpret_cast<AST::Attribute*>(e)->clone());
+                     rv.mData = new ASTAttribute(reinterpret_cast<ASTAttribute*>(e)->clone());
                      break;
                  case TOK_INTERPOLATED_STMT_ITEM:
                  case TOK_INTERPOLATED_ITEM: {
-                     const auto& named = *reinterpret_cast<AST::Named<AST::Item>*>(e);
+                     const auto& named = *reinterpret_cast<ASTNamed<ASTItem>*>(e);
                      auto item = named.data.clone();
-                     rv.mData = new AST::Named<AST::Item>(named.span, named.attrs.clone(), named.vis, named.name, mv$(item));
+                     rv.mData = new ASTNamed<ASTItem>(named.span, named.attrs.clone(), named.vis, named.name, mv$(item));
                      break;
                  }
                  default:
@@ -257,40 +257,40 @@ Token Token::clone() const {
     return rv;
 }
 
-AST::ExprNode& Token::fragNode() {
+ASTExprNode& Token::fragNode() {
     assert(mType == TOK_INTERPOLATED_EXPR || mType == TOK_INTERPOLATED_STMT || mType == TOK_INTERPOLATED_BLOCK);
     auto ptr = mData.as_Fragment();
-    return *reinterpret_cast<AST::ExprNode*>(ptr);
+    return *reinterpret_cast<ASTExprNode*>(ptr);
 }
 
-::std::unique_ptr<AST::ExprNode> Token::takeFragNode() {
+::std::unique_ptr<ASTExprNode> Token::takeFragNode() {
     assert(mType == TOK_INTERPOLATED_EXPR || mType == TOK_INTERPOLATED_STMT || mType == TOK_INTERPOLATED_BLOCK);
     auto ptr = mData.as_Fragment();
     mData.as_Fragment() = nullptr;
-    return ::std::unique_ptr<AST::ExprNode>(reinterpret_cast<AST::ExprNode*>(ptr));
+    return ::std::unique_ptr<ASTExprNode>(reinterpret_cast<ASTExprNode*>(ptr));
 }
 
-::AST::Named<AST::Item> Token::takeFragItem() {
+ASTNamed<ASTItem> Token::takeFragItem() {
     assert(mType == TOK_INTERPOLATED_ITEM);
-    auto ptr = reinterpret_cast<AST::Named<AST::Item>*>(mData.as_Fragment());
+    auto ptr = reinterpret_cast<ASTNamed<ASTItem>*>(mData.as_Fragment());
     mData.as_Fragment() = nullptr;
     auto rv = mv$(*ptr);
     delete ptr;
     return mv$(rv);
 }
 
-::AST::Named<AST::Item> Token::takeFragStmtItem() {
+ASTNamed<ASTItem> Token::takeFragStmtItem() {
     assert(mType == TOK_INTERPOLATED_STMT_ITEM);
-    auto ptr = reinterpret_cast<AST::Named<AST::Item>*>(mData.as_Fragment());
+    auto ptr = reinterpret_cast<ASTNamed<ASTItem>*>(mData.as_Fragment());
     mData.as_Fragment() = nullptr;
     auto rv = mv$(*ptr);
     delete ptr;
     return mv$(rv);
 }
 
-::AST::Visibility Token::takeFragVis() {
+ASTVisibility Token::takeFragVis() {
     assert(mType == TOK_INTERPOLATED_VIS);
-    auto ptr = reinterpret_cast<AST::Visibility*>(mData.as_Fragment());
+    auto ptr = reinterpret_cast<ASTVisibility*>(mData.as_Fragment());
     mData.as_Fragment() = nullptr;
     auto rv = mv$(*ptr);
     delete ptr;
@@ -371,16 +371,16 @@ struct EscapedString {
             reinterpret_cast<const ::TypeRef*>(mData.as_Fragment())->print(ss, false);
             return ss.str();
         case TOK_INTERPOLATED_PATH:
-            reinterpret_cast<const ::AST::Path*>(mData.as_Fragment())->printPretty(ss, true);
+            reinterpret_cast<const ASTPath*>(mData.as_Fragment())->printPretty(ss, true);
             return ss.str();
         case TOK_INTERPOLATED_PATTERN:
             // TODO: Use a pretty printer too?
-            return FMT(*reinterpret_cast<const ::AST::Pattern*>(mData.as_Fragment()));
+            return FMT(*reinterpret_cast<const ASTPattern*>(mData.as_Fragment()));
         case TOK_INTERPOLATED_STMT:
         case TOK_INTERPOLATED_BLOCK:
         case TOK_INTERPOLATED_EXPR: {
             ::std::stringstream ss;
-            reinterpret_cast<const ::AST::ExprNode*>(mData.as_Fragment())->print(ss);
+            reinterpret_cast<const ASTExprNode*>(mData.as_Fragment())->print(ss);
             return ss.str();
         }
         case TOK_INTERPOLATED_META:
@@ -391,7 +391,7 @@ struct EscapedString {
             return "/*:item*/";
         case TOK_INTERPOLATED_VIS: {
             ::std::stringstream ss;
-            ss << *reinterpret_cast<const ::AST::Visibility*>(mData.as_Fragment());
+            ss << *reinterpret_cast<const ASTVisibility*>(mData.as_Fragment());
             return ss.str();
         }
         // Value tokens
@@ -704,29 +704,29 @@ struct EscapedString {
             os << ":" << *reinterpret_cast<TypeRef*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_PATTERN:
-            os << ":" << *reinterpret_cast<AST::Pattern*>(tok.mData.as_Fragment());
+            os << ":" << *reinterpret_cast<ASTPattern*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_PATH:
-            os << ":" << *reinterpret_cast<AST::Path*>(tok.mData.as_Fragment());
+            os << ":" << *reinterpret_cast<ASTPath*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_EXPR:
-            os << ":" << *reinterpret_cast<const AST::ExprNode*>(tok.mData.as_Fragment());
+            os << ":" << *reinterpret_cast<const ASTExprNode*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_STMT:
-            os << ":" << *reinterpret_cast<const AST::ExprNode*>(tok.mData.as_Fragment());
+            os << ":" << *reinterpret_cast<const ASTExprNode*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_STMT_ITEM: {
-            const auto& namedItem = *reinterpret_cast<const AST::Named<AST::Item>*>(tok.mData.as_Fragment());
+            const auto& namedItem = *reinterpret_cast<const ASTNamed<ASTItem>*>(tok.mData.as_Fragment());
             os << ":" << namedItem.data.tagStr() << "(" << namedItem.name << ")";
         } break;
         case TOK_INTERPOLATED_BLOCK:
-            os << ":" << *reinterpret_cast<const AST::ExprNode*>(tok.mData.as_Fragment());
+            os << ":" << *reinterpret_cast<const ASTExprNode*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_META:
-            os << ":" << *reinterpret_cast<AST::Attribute*>(tok.mData.as_Fragment());
+            os << ":" << *reinterpret_cast<ASTAttribute*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_ITEM: {
-            const auto& namedItem = *reinterpret_cast<const AST::Named<AST::Item>*>(tok.mData.as_Fragment());
+            const auto& namedItem = *reinterpret_cast<const ASTNamed<ASTItem>*>(tok.mData.as_Fragment());
             os << ":" << namedItem.data.tagStr() << "(" << namedItem.name << ")";
         } break;
         default:
@@ -800,19 +800,19 @@ TypeRef& Token::fragType() {
     return *reinterpret_cast<TypeRef*>(mData.as_Fragment());
 }
 
-AST::Path& Token::fragPath() {
+ASTPath& Token::fragPath() {
     assert(mType == TOK_INTERPOLATED_PATH);
-    return *reinterpret_cast<AST::Path*>(mData.as_Fragment());
+    return *reinterpret_cast<ASTPath*>(mData.as_Fragment());
 }
 
-AST::Pattern& Token::fragPattern() {
+ASTPattern& Token::fragPattern() {
     assert(mType == TOK_INTERPOLATED_PATTERN);
-    return *reinterpret_cast<AST::Pattern*>(mData.as_Fragment());
+    return *reinterpret_cast<ASTPattern*>(mData.as_Fragment());
 }
 
-AST::Attribute& Token::fragMeta() {
+ASTAttribute& Token::fragMeta() {
     assert(mType == TOK_INTERPOLATED_META);
-    return *reinterpret_cast<AST::Attribute*>(mData.as_Fragment());
+    return *reinterpret_cast<ASTAttribute*>(mData.as_Fragment());
 }
 
 bool Token::operator==(const Token& r) const {

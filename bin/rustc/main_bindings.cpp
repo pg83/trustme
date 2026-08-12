@@ -31,9 +31,9 @@
 #include "memory_dump.h"
 #include <std/mem/obj_pool.h>
 
-#define NEWNODE(ty, ...) ::AST::ExprNodeP(new ::AST::ExprNode##ty(__VA_ARGS__))
+#define NEWNODE(ty, ...) ASTExprNodeP(new ASTExprNode##ty(__VA_ARGS__))
 
-void ExpandTestHarness(::AST::Crate& crate) {
+void ExpandTestHarness(ASTCrate& crate) {
     ASSERT_BUG(Span(), crate.extCratenameTest != "", "Crate `test` not loaded");
     ASSERT_BUG(Span(), crate.extCratenameStd != "", "Crate `std` not loaded");
     auto cTest = crate.extCratenameTest;
@@ -52,33 +52,33 @@ void ExpandTestHarness(::AST::Crate& crate) {
     // ```
 
     // ---- main function ----
-    auto mainFn = ::AST::Function{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
+    auto mainFn = ASTFunction{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
     {
-        auto callNode = NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("test_main_static")}), ::makeVec1(NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, NEWNODE(NamedValue, ::AST::Path("", {::AST::PathNode("test#"), ::AST::PathNode("TESTS")})))));
+        auto callNode = NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("test_main_static")}), ::makeVec1(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(NamedValue, ASTPath("", {ASTPathNode("test#"), ASTPathNode("TESTS")})))));
         mainFn.setCode(mv$(callNode));
     }
 
     // ---- test list ----
-    ::std::vector<::AST::ExprNodeP> testNodes;
+    ::std::vector<ASTExprNodeP> testNodes;
 
     for (const auto& test : crate.tests) {
-        ::AST::ExprNodeStructLiteral::tValues descVals;
+        ASTExprNodeStructLiteral::tValues descVals;
         // `name: "foo",`
-        descVals.push_back({{}, "name", NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("StaticTestName")}), ::makeVec1(NEWNODE(String, test.name)))});
+        descVals.push_back({{}, "name", NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("StaticTestName")}), ::makeVec1(NEWNODE(String, test.name)))});
         // `ignore: false,`
         descVals.push_back({{}, "ignore", NEWNODE(Bool, test.ignore)});
         // `should_panic: ShouldPanic::No,`
         {
-            ::AST::ExprNodeP shouldPanicVal;
+            ASTExprNodeP shouldPanicVal;
             switch (test.panicType) {
-                case ::AST::TestDesc::ShouldPanic::No:
-                    shouldPanicVal = NEWNODE(NamedValue, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("No")}));
+                case ASTTestDesc::ShouldPanic::No:
+                    shouldPanicVal = NEWNODE(NamedValue, ASTPath(cTest, {ASTPathNode("ShouldPanic"), ASTPathNode("No")}));
                     break;
-                case ::AST::TestDesc::ShouldPanic::Yes:
-                    shouldPanicVal = NEWNODE(NamedValue, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("Yes")}));
+                case ASTTestDesc::ShouldPanic::Yes:
+                    shouldPanicVal = NEWNODE(NamedValue, ASTPath(cTest, {ASTPathNode("ShouldPanic"), ASTPathNode("Yes")}));
                     break;
-                case ::AST::TestDesc::ShouldPanic::YesWithMessage:
-                    shouldPanicVal = NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("YesWithMessage")}), makeVec1(NEWNODE(String, test.expectedPanicMessage)));
+                case ASTTestDesc::ShouldPanic::YesWithMessage:
+                    shouldPanicVal = NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("ShouldPanic"), ASTPathNode("YesWithMessage")}), makeVec1(NEWNODE(String, test.expectedPanicMessage)));
                     break;
             }
             descVals.push_back({{}, "should_panic", mv$(shouldPanicVal)});
@@ -87,10 +87,10 @@ void ExpandTestHarness(::AST::Crate& crate) {
             // TODO: Get this from attributes
             descVals.push_back({{}, "compile_fail", NEWNODE(Bool, false)});
             descVals.push_back({{}, "no_run", NEWNODE(Bool, false)});
-            descVals.push_back({{}, "test_type", NEWNODE(NamedValue, ::AST::Path(cTest, {AST::PathNode("TestType"), AST::PathNode("UnitTest")}))});
+            descVals.push_back({{}, "test_type", NEWNODE(NamedValue, ASTPath(cTest, {ASTPathNode("TestType"), ASTPathNode("UnitTest")}))});
         }
         {
-            descVals.push_back({{}, "ignore_message", NEWNODE(NamedValue, ::AST::Path(crate.extCratenameStd, {AST::PathNode("option"), AST::PathNode("Option"), AST::PathNode("None")}))});
+            descVals.push_back({{}, "ignore_message", NEWNODE(NamedValue, ASTPath(crate.extCratenameStd, {ASTPathNode("option"), ASTPathNode("Option"), ASTPathNode("None")}))});
             auto sp = test.span.getTopFileSpan();
             descVals.push_back({{}, "source_file", NEWNODE(String, sp.filename.c_str())});
             descVals.push_back({{}, "start_line", NEWNODE(Integer, U128(sp.startLine), CORETYPE_UINT)});
@@ -98,39 +98,39 @@ void ExpandTestHarness(::AST::Crate& crate) {
             descVals.push_back({{}, "end_line", NEWNODE(Integer, U128(sp.endLine), CORETYPE_UINT)});
             descVals.push_back({{}, "end_col", NEWNODE(Integer, U128(sp.endOfs), CORETYPE_UINT)});
         }
-        auto descExpr = NEWNODE(StructLiteral, ::AST::Path(cTest, {::AST::PathNode("TestDesc")}), nullptr, mv$(descVals));
+        auto descExpr = NEWNODE(StructLiteral, ASTPath(cTest, {ASTPathNode("TestDesc")}), nullptr, mv$(descVals));
 
-        ::AST::ExprNodeStructLiteral::tValues descandfnVals;
+        ASTExprNodeStructLiteral::tValues descandfnVals;
         descandfnVals.push_back({{}, RcString::newInterned("desc"), mv$(descExpr)});
 
-        auto testFcnNode = NEWNODE(NamedValue, AST::Path(test.path));
+        auto testFcnNode = NEWNODE(NamedValue, ASTPath(test.path));
         {
             // Convert `fn()` into `fn()->Result<(),String>`
             // Use `|| ::test::assert_test_result( fcn() )`
-            testFcnNode = NEWNODE(Closure, {}, TypeRef(Span()), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, AST::Path(test.path), {}))), false, false);
+            testFcnNode = NEWNODE(Closure, {}, TypeRef(Span()), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, ASTPath(test.path), {}))), false, false);
         }
         auto testTypeVarName = test.isBenchmark ? "StaticBenchFn" : "StaticTestFn";
-        descandfnVals.push_back({{}, RcString::newInterned("testfn"), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode(testTypeVarName)}), ::makeVec1(std::move(testFcnNode)))});
+        descandfnVals.push_back({{}, RcString::newInterned("testfn"), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode(testTypeVarName)}), ::makeVec1(std::move(testFcnNode)))});
 
-        testNodes.push_back(NEWNODE(StructLiteral, ::AST::Path(cTest, {::AST::PathNode("TestDescAndFn")}), nullptr, mv$(descandfnVals)));
+        testNodes.push_back(NEWNODE(StructLiteral, ASTPath(cTest, {ASTPathNode("TestDescAndFn")}), nullptr, mv$(descandfnVals)));
         // NOTE: 1.39+ needs &TestDescAndFn here
         {
-            testNodes.back() = NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, mv$(testNodes.back()));
+            testNodes.back() = NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(testNodes.back()));
         }
     }
-    auto* testsArray = new ::AST::ExprNodeArray(mv$(testNodes));
+    auto* testsArray = new ASTExprNodeArray(mv$(testNodes));
 
     size_t testCount = testsArray->values.size();
-    auto listItemTy = TypeRef(Span(), ::AST::Path(cTest, {::AST::PathNode("TestDescAndFn")}));
+    auto listItemTy = TypeRef(Span(), ASTPath(cTest, {ASTPathNode("TestDescAndFn")}));
     // NOTE: 1.39+ needs &TestDescAndFn here
     {
-        listItemTy = TypeRef(TypeRef::TagReference(), Span(), AST::LifetimeRef::newStatic(), false, mv$(listItemTy));
+        listItemTy = TypeRef(TypeRef::TagReference(), Span(), ASTLifetimeRef::newStatic(), false, mv$(listItemTy));
     }
-    auto testsList = ::AST::Static{::AST::Static::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), mv$(listItemTy), ::std::shared_ptr<::AST::ExprNode>(new ::AST::ExprNodeInteger(U128(testCount), CORETYPE_UINT))), ::AST::Expr(mv$(testsArray))};
+    auto testsList = ASTStatic{ASTStatic::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), mv$(listItemTy), ::std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
 
     // ---- module ----
-    auto newmod = ::AST::Module{::AST::AbsolutePath("", {"test#"})};
-    auto visPrivate = AST::Visibility::makeRestricted(AST::Visibility::Ty::Private, newmod.path());
+    auto newmod = ASTModule{ASTAbsolutePath("", {"test#"})};
+    auto visPrivate = ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, newmod.path());
     // - TODO: These need to be loaded too.
     //  > They don't actually need to exist here, just be loaded (and use absolute paths)
     //newmod.add_ext_crate(Span(), false, "std", "std", {});
@@ -140,7 +140,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
     newmod.addItem(Span(), visPrivate, "TESTS", mv$(testsList), {});
 
     crate.mRootModule.addItem(Span(), visPrivate, "test#", mv$(newmod), {});
-    crate.mLangItems["mrustc-main"] = ::AST::AbsolutePath("", {"test#", "main"});
+    crate.mLangItems["mrustc-main"] = ASTAbsolutePath("", {"test#", "main"});
 }
 
 #undef NEWNODE
@@ -176,8 +176,8 @@ struct ProgramParams {
 
     ::std::string emitDepfile;
 
-    AST::Edition edition = AST::Edition::Rust2015;
-    ::AST::Crate::Type crateType = ::AST::Crate::Type::Unknown;
+    ASTEdition edition = ASTEdition::Rust2015;
+    ASTCrate::Type crateType = ASTCrate::Type::Unknown;
     ::std::string crateName;
     ::std::string crateNameSuffix;
 
@@ -383,10 +383,10 @@ int main(int argc, char* argv[]) {
 
     try {
         // Parse the crate into AST
-        AST::Crate* cratePtr = CompilePhase<AST::Crate*>("Parse", [&]() {
+        ASTCrate* cratePtr = CompilePhase<ASTCrate*>("Parse", [&]() {
             return ParseCrate(pool, *types, params.infile, params.edition);
         });
-        AST::Crate& crate = *cratePtr;
+        ASTCrate& crate = *cratePtr;
         crate.testHarness = params.testHarness;
         crate.crateNameSuffix = params.crateNameSuffix;
         //crate.m_crate_name = params.crate_name;
@@ -399,31 +399,31 @@ int main(int argc, char* argv[]) {
         // Load external crates.
         CompilePhaseV("LoadCrates", [&]() {
             // Hacky!
-            AST::gCrateOverrides = params.crateOverrides;
+            gCrateOverrides = params.crateOverrides;
             for (const auto& ld : params.libSearchDirs) {
-                AST::gCrateLoadDirs.push_back(ld);
+                gCrateLoadDirs.push_back(ld);
             }
             crate.loadExterns();
             if (params.testHarness) {
                 auto testCrateName = RcString::newInterned("test");
-                AST::gImplicitCrates.insert(std::make_pair(testCrateName, crate.loadExternCrate(Span(), testCrateName)));
+                gImplicitCrates.insert(std::make_pair(testCrateName, crate.loadExternCrate(Span(), testCrateName)));
             }
         });
 
         if (params.crateName != "") {
             // Extract the crate type and name from the crate attributes
             auto crateType = params.crateType;
-            if (crateType == ::AST::Crate::Type::Unknown) {
+            if (crateType == ASTCrate::Type::Unknown) {
                 crateType = crate.crateType;
             }
-            if (crateType == ::AST::Crate::Type::Unknown) {
+            if (crateType == ASTCrate::Type::Unknown) {
                 // Assume to be executable
-                crateType = ::AST::Crate::Type::Executable;
+                crateType = ASTCrate::Type::Executable;
             }
             crate.crateType = crateType;
 
             crate.setCrateName(params.crateName);
-            crate.crateType = ::AST::Crate::Type::Unknown;
+            crate.crateType = ASTCrate::Type::Unknown;
         }
 
         // Iterate all items in the AST, applying syntax extensions
@@ -437,16 +437,16 @@ int main(int argc, char* argv[]) {
 
         // Extract the crate type and name from the crate attributes
         auto crateType = params.crateType;
-        if (crateType == ::AST::Crate::Type::Unknown) {
+        if (crateType == ASTCrate::Type::Unknown) {
             crateType = crate.crateType;
         }
-        if (crateType == ::AST::Crate::Type::Unknown) {
+        if (crateType == ASTCrate::Type::Unknown) {
             // Assume to be executable
-            crateType = ::AST::Crate::Type::Executable;
+            crateType = ASTCrate::Type::Executable;
         }
         crate.crateType = crateType;
 
-        if (crate.crateType == ::AST::Crate::Type::ProcMacro) {
+        if (crate.crateType == ASTCrate::Type::ProcMacro) {
             ExpandProcMacroHarness(crate);
         }
 
@@ -492,13 +492,13 @@ int main(int argc, char* argv[]) {
 
         if (params.outfile == "") {
             switch (crate.crateType) {
-                case ::AST::Crate::Type::RustLib:
+                case ASTCrate::Type::RustLib:
                     params.outfile = FMT(params.outputDir << "lib" << crate.crateNameSet << ".rlib");
                     break;
-                case ::AST::Crate::Type::Executable:
+                case ASTCrate::Type::Executable:
                     params.outfile = FMT(params.outputDir << crate.crateNameSet);
                     break;
-                case ::AST::Crate::Type::ProcMacro:
+                case ASTCrate::Type::ProcMacro:
                     params.outfile = FMT(params.outputDir << "lib" << crate.crateNameSet << "-plugin");
                     break;
                 default:
@@ -521,7 +521,7 @@ int main(int argc, char* argv[]) {
 
         // Allocator and panic strategies
         CompilePhaseV("Implicit Crates", [&]() {
-            if (crate.crateType == ::AST::Crate::Type::Executable || params.testHarness || crate.crateType == ::AST::Crate::Type::ProcMacro) {
+            if (crate.crateType == ASTCrate::Type::Executable || params.testHarness || crate.crateType == ASTCrate::Type::ProcMacro) {
                 bool allocatorCrateLoaded = false;
                 RcString allocCrateName;
                 bool panicRuntimeLoaded = false;
@@ -566,7 +566,7 @@ int main(int argc, char* argv[]) {
 
                 // - `mrustc-main` lang item default
                 if (!crate.noMain) {
-                    crate.mLangItems.insert(::std::make_pair(::std::string("mrustc-main"), ::AST::AbsolutePath("", {"main"})));
+                    crate.mLangItems.insert(::std::make_pair(::std::string("mrustc-main"), ASTAbsolutePath("", {"main"})));
                 }
             }
         });
@@ -577,7 +577,7 @@ int main(int argc, char* argv[]) {
             struct PathEnumerator {
                 ::std::vector<::std::string> out;
 
-                void visitModule(::AST::Module& mod) {
+                void visitModule(ASTModule& mod) {
                     if (mod.fileInfo.path != "!" && mod.fileInfo.path.back() != '/') {
                         out.push_back(mod.fileInfo.path);
                     }
@@ -863,11 +863,11 @@ int main(int argc, char* argv[]) {
         // Generate code for non-generic public items (if requested)
         if (params.testHarness) {
             // If the test harness is enabled, override crate type to "Executable"
-            crateType = ::AST::Crate::Type::Executable;
+            crateType = ASTCrate::Type::Executable;
         }
 
         // TODO: For 1.29 executables/dylibs, add oom/panic shims
-        if (crateType == ::AST::Crate::Type::ProcMacro) {
+        if (crateType == ASTCrate::Type::ProcMacro) {
             // - Save a very basic HIR dump, making sure that there's no lang items in it (e.g. `mrustc-main`)
             CompilePhaseV("HIR Serialise", [&]() {
                 HIR::Crate crateForSer(pool, *types);
@@ -887,16 +887,16 @@ int main(int argc, char* argv[]) {
         // Enumerate items to be passed to codegen
         TransList items = CompilePhase<TransList>("Trans Enumerate", [&]() {
             switch (crateType) {
-                case ::AST::Crate::Type::Unknown:
+                case ASTCrate::Type::Unknown:
                     ::std::cerr << "BUG? Unknown crate type" << ::std::endl;
                     exit(1);
                     break;
-                case ::AST::Crate::Type::RustLib:
-                case ::AST::Crate::Type::RustDylib:
-                case ::AST::Crate::Type::CDylib:
+                case ASTCrate::Type::RustLib:
+                case ASTCrate::Type::RustDylib:
+                case ASTCrate::Type::CDylib:
                     return TransEnumeratePublic(*hirCrate);
-                case ::AST::Crate::Type::ProcMacro:
-                case ::AST::Crate::Type::Executable:
+                case ASTCrate::Type::ProcMacro:
+                case ASTCrate::Type::Executable:
                     return TransEnumerateMain(*hirCrate);
             }
             throw ::std::runtime_error("Invalid crate_type value");
@@ -925,14 +925,14 @@ int main(int argc, char* argv[]) {
 
         std::string hirFile;
         switch (crateType) {
-            case ::AST::Crate::Type::RustLib:
+            case ASTCrate::Type::RustLib:
                 // Save a loadable HIR dump
                 hirFile = params.outfile + ".hir";
                 CompilePhaseV("HIR Serialise", [&]() {
                     HIRSerialise(hirFile, *hirCrate);
                 });
                 break;
-            case ::AST::Crate::Type::RustDylib:
+            case ASTCrate::Type::RustDylib:
                 // Save a loadable HIR dump
                 CompilePhaseV("HIR Serialise", [&]() {
                     //auto saved_ext_crates = ::std::move(hir_crate->m_ext_crates);
@@ -954,22 +954,22 @@ int main(int argc, char* argv[]) {
         });
 
         switch (crateType) {
-            case ::AST::Crate::Type::Unknown:
+            case ASTCrate::Type::Unknown:
                 throw "";
-            case ::AST::Crate::Type::RustLib:
+            case ASTCrate::Type::RustLib:
                 // Generate a linkable .o
                 CompilePhaseV("Trans Codegen", [&]() {
                     TransCodegen(params.outfile, CodegenOutput::StaticLibrary, transOpt, hirCrate, std::move(items), hirFile);
                 });
                 break;
-            case ::AST::Crate::Type::RustDylib:
-            case ::AST::Crate::Type::CDylib:
+            case ASTCrate::Type::RustDylib:
+            case ASTCrate::Type::CDylib:
                 // Generate a shared library
                 CompilePhaseV("Trans Codegen", [&]() {
                     TransCodegen(params.outfile, CodegenOutput::DynamicLibrary, transOpt, hirCrate, std::move(items), hirFile);
                 });
                 break;
-            case ::AST::Crate::Type::ProcMacro: {
+            case ASTCrate::Type::ProcMacro: {
                 // Needs: An executable (the actual macro handler), metadata (for `extern crate foo;`)
                 // - Metadata was done before enumerate
                 CompilePhaseV("Trans Codegen", [&]() {
@@ -977,7 +977,7 @@ int main(int argc, char* argv[]) {
                 });
                 break;
             }
-            case ::AST::Crate::Type::Executable:
+            case ASTCrate::Type::Executable:
                 CompilePhaseV("Trans Codegen", [&]() {
                     TransCodegen(params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), "");
                 });
@@ -1405,13 +1405,13 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
             // `--crate-type <name>`    - Specify the crate type (overrides `#![crate_type="<name>"]`)
             else if (const char* typeStr = checkWithArg("crate-type")) {
                 if (strcmp(typeStr, "lib") == 0 || strcmp(typeStr, "rlib") == 0) {
-                    this->crateType = ::AST::Crate::Type::RustLib;
+                    this->crateType = ASTCrate::Type::RustLib;
                 } else if (strcmp(typeStr, "dylib") == 0) {
-                    this->crateType = ::AST::Crate::Type::RustDylib;
+                    this->crateType = ASTCrate::Type::RustDylib;
                 } else if (strcmp(typeStr, "bin") == 0) {
-                    this->crateType = ::AST::Crate::Type::Executable;
+                    this->crateType = ASTCrate::Type::Executable;
                 } else if (strcmp(typeStr, "proc-macro") == 0) {
-                    this->crateType = ::AST::Crate::Type::ProcMacro;
+                    this->crateType = ASTCrate::Type::ProcMacro;
                 } else {
                     ::std::cerr << "Unknown value for --crate-type: " << typeStr << ::std::endl;
                     exit(1);
@@ -1480,13 +1480,13 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 this->testHarness = true;
             } else if (const char* editionStr = checkWithArg("edition")) {
                 if (strcmp(editionStr, "2015") == 0) {
-                    this->edition = AST::Edition::Rust2015;
+                    this->edition = ASTEdition::Rust2015;
                 } else if (strcmp(editionStr, "2018") == 0) {
-                    this->edition = AST::Edition::Rust2018;
+                    this->edition = ASTEdition::Rust2018;
                 } else if (strcmp(editionStr, "2021") == 0) {
-                    this->edition = AST::Edition::Rust2021;
+                    this->edition = ASTEdition::Rust2021;
                 } else if (strcmp(editionStr, "2024") == 0) {
-                    this->edition = AST::Edition::Rust2024;
+                    this->edition = ASTEdition::Rust2024;
                 } else {
                     ::std::cerr << "Unknown value for " << arg << " - '" << editionStr << "'" << ::std::endl;
                     exit(1);

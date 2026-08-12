@@ -3,25 +3,23 @@
 #include "parse_tokenstream.h"
 #include "slice.h"
 
-namespace AST {
-    class Attribute;
-    class Crate;
-    class Enum;
-    class ImplDef;
-    class Item;
-    class Struct;
-    class Union;
-    class Visibility;
-}
+    class ASTAttribute;
+    class ASTCrate;
+    class ASTEnum;
+    class ASTImplDef;
+    class ASTItem;
+    class ASTStruct;
+    class ASTUnion;
+    class ASTVisibility;
 
 // Derive macros
-extern ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& name, const ::AST::Struct& i);
-extern ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& name, const ::AST::Enum& i);
-extern ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& name, const ::AST::Union& i);
+extern ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& name, const ASTStruct& i);
+extern ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& name, const ASTEnum& i);
+extern ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& name, const ASTUnion& i);
 
 // Attribute macros
-extern ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& itemName, const ::AST::Item& i);
-extern ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt, slice<const AST::Attribute> attrs, const ::AST::ImplDef& i);
+extern ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTItem& i);
+extern ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt, slice<const ASTAttribute> attrs, const ASTImplDef& i);
 
 // Function-like macros
-extern ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt);
+extern ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt);

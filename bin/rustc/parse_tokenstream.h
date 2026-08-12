@@ -8,11 +8,9 @@
 #include "parse_token.h"
 #include "ast_edition.h"
 
-namespace AST {
-    class Module;
-    class Crate;
-    class AttributeList;
-}
+    class ASTModule;
+    class ASTCrate;
+    class ASTAttributeList;
 
 /// State the parser needs to pass down via a second channel.
 struct ParseState {
@@ -26,11 +24,11 @@ public:
     // A debugging hook that disables expansion of macros
     bool noExpandMacros = false;
 
-    const ::AST::Crate* crate = nullptr; // TODO: Remove this (needed for MetaItem)
-    ::AST::Module* module = nullptr;
-    ::AST::AttributeList* parentAttrs = nullptr;
+    const ASTCrate* crate = nullptr; // TODO: Remove this (needed for MetaItem)
+    ASTModule* module = nullptr;
+    ASTAttributeList* parentAttrs = nullptr;
 
-    ::AST::Module& getCurrentMod();
+    ASTModule& getCurrentMod();
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ParseState& ps);
 };
@@ -41,11 +39,11 @@ class TokenStream {
     bool cacheValid;
     Token cache;
     Ident::Hygiene mHygiene;
-    AST::Edition edition;
+    ASTEdition edition;
 
     struct LookaheadEnt {
         Token tok;
-        AST::Edition edition;
+        ASTEdition edition;
         Ident::Hygiene hygiene;
     };
 
@@ -80,15 +78,15 @@ public:
         return mParseState;
     }
 
-    AST::Edition getEdition() const {
+    ASTEdition getEdition() const {
         return edition;
     }
 
-    bool editionAfter(AST::Edition e) const {
+    bool editionAfter(ASTEdition e) const {
         return edition >= e;
     }
 
-    bool editionBefore(AST::Edition e) const {
+    bool editionBefore(ASTEdition e) const {
         return edition < e;
     }
 
@@ -108,7 +106,7 @@ protected:
     }
 
     virtual Token realGetToken() = 0;
-    virtual AST::Edition realGetEdition() const = 0;
+    virtual ASTEdition realGetEdition() const = 0;
     virtual Ident::Hygiene realGetHygiene() const = 0;
 
 private:

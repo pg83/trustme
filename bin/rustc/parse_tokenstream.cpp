@@ -144,7 +144,7 @@ Span TokenStream::pointSpan() const {
 ParseState::ParseState() {
 }
 
-::AST::Module& ParseState::getCurrentMod() {
+ASTModule& ParseState::getCurrentMod() {
     assert(this->module);
     return *this->module;
 }

@@ -1,46 +1,45 @@
 #include "ast_generics.h"
 
-namespace AST {
 
-TypeParam::TypeParam(const TypeParam& x)
+ASTTypeParam::ASTTypeParam(const ASTTypeParam& x)
     : mAttrs(x.mAttrs)
     , mSpan(x.mSpan)
     , mName(x.mName)
     , mDefaultValue(x.mDefaultValue.clone()) {
 }
-TypeParam::TypeParam(Span sp, ::AST::AttributeList attrs, RcString name)
+ASTTypeParam::ASTTypeParam(Span sp, ASTAttributeList attrs, RcString name)
     : mAttrs(::std::move(attrs))
     , mSpan(::std::move(sp))
     , mName(::std::move(name))
     , mDefaultValue(mSpan) {
 }
-void TypeParam::setDefault(TypeRef type) {
+void ASTTypeParam::setDefault(TypeRef type) {
     assert(mDefaultValue.isWildcard());
     mDefaultValue = ::std::move(type);
 }
-LifetimeParam::LifetimeParam(Span sp, ::AST::AttributeList attrs, Ident name)
+ASTLifetimeParam::ASTLifetimeParam(Span sp, ASTAttributeList attrs, Ident name)
     : mAttrs(::std::move(attrs))
     , mSpan(::std::move(sp))
     , mName(::std::move(name)) {
 }
-ValueParam::ValueParam(Span sp, ::AST::AttributeList attrs, Ident name, TypeRef type, Expr val)
+ASTValueParam::ASTValueParam(Span sp, ASTAttributeList attrs, Ident name, TypeRef type, ASTExpr val)
     : mAttrs(::std::move(attrs))
     , mSpan(::std::move(sp))
     , mName(::std::move(name))
     , mType(::std::move(type))
     , mDefaultValue(::std::move(val)) {
 }
-ValueParam::ValueParam(const ValueParam& x)
+ASTValueParam::ASTValueParam(const ASTValueParam& x)
     : mAttrs(x.mAttrs)
     , mSpan(x.mSpan)
     , mName(x.mName)
     , mType(x.mType.clone())
-    , mDefaultValue(x.mDefaultValue ? x.mDefaultValue.clone() : Expr()) {
+    , mDefaultValue(x.mDefaultValue ? x.mDefaultValue.clone() : ASTExpr()) {
 }
-GenericParams::GenericParams() {
+ASTGenericParams::ASTGenericParams() {
 }
-GenericParams GenericParams::clone() const {
-    GenericParams rv;
+ASTGenericParams ASTGenericParams::clone() const {
+    ASTGenericParams rv;
     rv.mParams.reserve(mParams.size());
     for (const auto& e : mParams) {
         rv.mParams.push_back(e.clone());
@@ -51,9 +50,8 @@ GenericParams GenericParams::clone() const {
     }
     return rv;
 }
-void GenericParams::addParam(GenericParam gp, size_t boundsStart, size_t boundsEnd) {
+void ASTGenericParams::addParam(GenericParam gp, size_t boundsStart, size_t boundsEnd) {
     mParams.push_back(::std::move(gp));
     mParams.back().boundsStart = boundsStart;
     mParams.back().boundsEnd = boundsEnd;
-}
 }

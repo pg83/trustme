@@ -2,11 +2,10 @@
 #include "common.h"
 #include "ast_ast.h"
 
-namespace AST {
 
-    ::std::ostream& operator<<(::std::ostream& os, const Pattern::Value& val) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTPattern::Value& val) {
         TU_MATCH(
-            Pattern::Value,
+            ASTPattern::Value,
             (val),
             (e),
             (Invalid, os << "/*BAD PAT VAL*/";),
@@ -44,7 +43,7 @@ namespace AST {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Pattern::TuplePat& val) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTPattern::TuplePat& val) {
         if (val.hasWildcard) {
             os << val.start;
             os << ".., ";
@@ -56,17 +55,17 @@ namespace AST {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const PatternBinding& pb) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTPatternBinding& pb) {
         if (pb.isMutable) {
             os << "mut ";
         }
         switch (pb.mType) {
-            case PatternBinding::Type::MOVE:
+            case ASTPatternBinding::Type::MOVE:
                 break;
-            case PatternBinding::Type::REF:
+            case ASTPatternBinding::Type::REF:
                 os << "ref ";
                 break;
-            case PatternBinding::Type::MUTREF:
+            case ASTPatternBinding::Type::MUTREF:
                 os << "ref mut ";
                 break;
         }
@@ -74,7 +73,7 @@ namespace AST {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Pattern& pat) {
+    ::std::ostream& operator<<(::std::ostream& os, const ASTPattern& pat) {
         for (const auto& pb : pat.mBindings) {
             os << pb << " @ ";
         }
@@ -162,29 +161,29 @@ namespace AST {
     return os;
     }
 
-    Pattern::~Pattern() {
+    ASTPattern::~ASTPattern() {
     }
 
-    AST::Pattern::Pattern(TagStruct, Span sp, Path path, ::std::vector<StructPatternEntry> subPatterns, bool isExhaustive)
+    ASTPattern::ASTPattern(TagStruct, Span sp, ASTPath path, ::std::vector<ASTStructPatternEntry> subPatterns, bool isExhaustive)
         : mSpan(mv$(sp))
         , mData(Data::make_Struct({::std::move(path), ::std::move(subPatterns), isExhaustive}))
     {
     }
 
-    AST::Pattern AST::Pattern::clone() const {
-        AST::Pattern rv;
+    ASTPattern ASTPattern::clone() const {
+        ASTPattern rv;
         rv.mSpan = mSpan;
         for (const auto& pb : mBindings) {
             rv.mBindings.push_back(pb);
         }
 
         struct H {
-            static ::std::unique_ptr<Pattern> cloneSp(const ::std::unique_ptr<Pattern>& p) {
-                return ::std::make_unique<Pattern>(p->clone());
+            static ::std::unique_ptr<ASTPattern> cloneSp(const ::std::unique_ptr<ASTPattern>& p) {
+                return ::std::make_unique<ASTPattern>(p->clone());
             }
 
-            static ::std::vector<Pattern> cloneList(const ::std::vector<Pattern>& list) {
-                ::std::vector<Pattern> rv;
+            static ::std::vector<ASTPattern> cloneList(const ::std::vector<ASTPattern>& list) {
+                ::std::vector<ASTPattern> rv;
                 rv.reserve(list.size());
                 for (const auto& p : list) {
                     rv.push_back(p.clone());
@@ -196,8 +195,8 @@ namespace AST {
                 return TuplePat{H::cloneList(p.start), p.hasWildcard, H::cloneList(p.end)};
             }
 
-            static AST::Pattern::Value cloneVal(const AST::Pattern::Value& v) {
-                TU_MATCH(::AST::Pattern::Value, (v), (e), (Invalid, return Value(e);), (Integer, return Value(e);), (Float, return Value(e);), (String, return Value(e);), (ByteString, return Value(e);), (Named, return Value::make_Named(AST::Path(e));))
+            static ASTPattern::Value cloneVal(const ASTPattern::Value& v) {
+                TU_MATCH(ASTPattern::Value, (v), (e), (Invalid, return Value(e);), (Integer, return Value(e);), (Float, return Value(e);), (String, return Value(e);), (ByteString, return Value(e);), (Named, return Value::make_Named(ASTPath(e));))
                 throw "";
             }
         };
@@ -210,7 +209,7 @@ namespace AST {
                 rv.mData = Data::make_MaybeBind(e);
             }
             TU_ARMA(Macro, e) {
-                rv.mData = Data::make_Macro({::std::make_unique<AST::MacroInvocation>(e.inv->clone())});
+                rv.mData = Data::make_Macro({::std::make_unique<ASTMacroInvocation>(e.inv->clone())});
             }
             TU_ARMA(Box, e) {
                 rv.mData = Data::make_Box({H::cloneSp(e.sub)});
@@ -228,14 +227,14 @@ namespace AST {
                 rv.mData = Data::make_Tuple(H::cloneTup(e));
             }
             TU_ARMA(StructTuple, e) {
-                rv.mData = Data::make_StructTuple({::AST::Path(e.path), H::cloneTup(e.tupPat)});
+                rv.mData = Data::make_StructTuple({ASTPath(e.path), H::cloneTup(e.tupPat)});
             }
             TU_ARMA(Struct, e) {
-                ::std::vector<AST::StructPatternEntry> sps;
+                ::std::vector<ASTStructPatternEntry> sps;
                 for (const auto& sp : e.subPatterns) {
-                    sps.push_back(AST::StructPatternEntry{sp.attrs.clone(), sp.name, sp.pat.clone()});
+                    sps.push_back(ASTStructPatternEntry{sp.attrs.clone(), sp.name, sp.pat.clone()});
                 }
-                rv.mData = Data::make_Struct({::AST::Path(e.path), mv$(sps)});
+                rv.mData = Data::make_Struct({ASTPath(e.path), mv$(sps)});
             }
             TU_ARMA(Slice, e) {
                 rv.mData = Data::make_Slice({H::cloneList(e.subPats)});
@@ -251,65 +250,62 @@ namespace AST {
     return rv;
     }
 
-} // namespace AST
 
-namespace AST {
 
-PatternBinding::PatternBinding()
+ASTPatternBinding::ASTPatternBinding()
     : mName({}, "")
     , mType(Type::MOVE)
     , isMutable(false)
     , slot(~0u) {
 }
-PatternBinding::PatternBinding(Ident name, Type ty, bool ismut)
+ASTPatternBinding::ASTPatternBinding(Ident name, Type ty, bool ismut)
     : mName(::std::move(name))
     , mType(ty)
     , isMutable(ismut)
     , slot(~0u) {
 }
-Pattern::Pattern() {
+ASTPattern::ASTPattern() {
 }
-Pattern::Pattern(Span sp, Data dat)
+ASTPattern::ASTPattern(Span sp, Data dat)
 : mSpan(mv$(sp))
 , mData(mv$(dat)) {}
-Pattern::Pattern(TagMaybeBind, Span sp, Ident name)
+ASTPattern::ASTPattern(TagMaybeBind, Span sp, Ident name)
     : mSpan(mv$(sp))
     , mData(Data::make_MaybeBind({mv$(name)})) {
 }
-Pattern::Pattern(TagMacro, Span sp, unique_ptr<::AST::MacroInvocation> inv)
+ASTPattern::ASTPattern(TagMacro, Span sp, unique_ptr<ASTMacroInvocation> inv)
     : mSpan(mv$(sp))
     , mData(Data::make_Macro({mv$(inv)})) {
 }
-Pattern::Pattern(TagBind, Span sp, Ident name, PatternBinding::Type ty, bool isMut)
+ASTPattern::ASTPattern(TagBind, Span sp, Ident name, ASTPatternBinding::Type ty, bool isMut)
     : mSpan(mv$(sp)) {
-    mBindings.push_back(PatternBinding(mv$(name), ty, isMut));
+    mBindings.push_back(ASTPatternBinding(mv$(name), ty, isMut));
 }
-Pattern::Pattern(TagBox, Span sp, Pattern sub)
+ASTPattern::ASTPattern(TagBox, Span sp, ASTPattern sub)
     : mSpan(mv$(sp))
-    , mData(Data::make_Box({unique_ptr<Pattern>(new Pattern(mv$(sub)))})) {
+    , mData(Data::make_Box({unique_ptr<ASTPattern>(new ASTPattern(mv$(sub)))})) {
 }
-Pattern::Pattern(TagValue, Span sp, Value val, Value end)
+ASTPattern::ASTPattern(TagValue, Span sp, Value val, Value end)
     : mSpan(mv$(sp))
     , mData(Data::make_Value({::std::move(val), ::std::move(end)})) {
 }
-Pattern::Pattern(TagReference, Span sp, bool isMutable, Pattern subPattern)
+ASTPattern::ASTPattern(TagReference, Span sp, bool isMutable, ASTPattern subPattern)
     : mSpan(mv$(sp))
-    , mData(Data::make_Ref(/*Data::Data_Ref */ {isMutable, unique_ptr<Pattern>(new Pattern(::std::move(subPattern)))})) {
+    , mData(Data::make_Ref(/*Data::Data_Ref */ {isMutable, unique_ptr<ASTPattern>(new ASTPattern(::std::move(subPattern)))})) {
 }
-Pattern::Pattern(TagTuple, Span sp, ::std::vector<Pattern> pats)
+ASTPattern::ASTPattern(TagTuple, Span sp, ::std::vector<ASTPattern> pats)
     : mSpan(mv$(sp))
     , mData(Data::make_Tuple(TuplePat{mv$(pats), false, {}})) {
 }
-Pattern::Pattern(TagTuple, Span sp, TuplePat pat)
+ASTPattern::ASTPattern(TagTuple, Span sp, TuplePat pat)
     : mSpan(mv$(sp))
     , mData(Data::make_Tuple(mv$(pat))) {
 }
-Pattern::Pattern(TagNamedTuple, Span sp, Path path, ::std::vector<Pattern> pats)
+ASTPattern::ASTPattern(TagNamedTuple, Span sp, ASTPath path, ::std::vector<ASTPattern> pats)
     : mSpan(mv$(sp))
     , mData(Data::make_StructTuple({mv$(path), TuplePat{mv$(pats), false, {}}})) {
 }
-Pattern::Pattern(TagNamedTuple, Span sp, Path path, TuplePat pat)
+ASTPattern::ASTPattern(TagNamedTuple, Span sp, ASTPath path, TuplePat pat)
     : mSpan(mv$(sp))
     , mData(Data::make_StructTuple({::std::move(path), ::std::move(pat)})) {
-}
 }

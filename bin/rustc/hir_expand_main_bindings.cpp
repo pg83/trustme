@@ -494,7 +494,7 @@ namespace {
 
             bool savedIgnoreVariableCapure = ignoreVariableCapture;
             // Rust 2021 - Closures (and I assume generators) capture fields separately
-            if (mResolve.crate.edition >= AST::Edition::Rust2021) {
+            if (mResolve.crate.edition >= ASTEdition::Rust2021) {
                 // Is there an active closure (or generator) AND this node isn't in a chain that has already been considered.
                 if (!closureStack.empty() && !ignoreVariableCapture) {
                     ::std::vector<RcString> fields;

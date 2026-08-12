@@ -7,14 +7,12 @@ struct Span;
 class ExpandProcMacro;
 class MacroRules;
 
-namespace AST {
-    class Crate;
-    class Module;
-    class Item;
-    class Path;
+    class ASTCrate;
+    class ASTModule;
+    class ASTItem;
+    class ASTPath;
 
-    struct AbsolutePath;
-};
+    struct ASTAbsolutePath;
 
 namespace HIR {
     class Crate;
@@ -24,11 +22,11 @@ namespace HIR {
     class ValueItem;
 };
 
-TAGGED_UNION(ResolveModuleRef, None, (None, struct {}), (ImplicitPrelude, struct {}), (Ast, const AST::Module*), (Hir, const HIR::Module*));
+TAGGED_UNION(ResolveModuleRef, None, (None, struct {}), (ImplicitPrelude, struct {}), (Ast, const ASTModule*), (Hir, const HIR::Module*));
 
 TAGGED_UNION(ResolveItemRefMacro, None, (None, struct {}), (InternalMacro, ExpandProcMacro*), (ProcMacro, const HIR::ProcMacro*), (MacroRules, const MacroRules*));
-TAGGED_UNION(ResolveItemRefType, None, (None, struct {}), (Ast, const AST::Item*), (Hir, const HIR::TypeItem*), (HirRoot, const HIR::Crate*), (AstRoot, const AST::Module*));
-TAGGED_UNION(ResolveItemRefValue, None, (None, struct {}), (Ast, const AST::Item*), (Hir, const HIR::ValueItem*));
+TAGGED_UNION(ResolveItemRefType, None, (None, struct {}), (Ast, const ASTItem*), (Hir, const HIR::TypeItem*), (HirRoot, const HIR::Crate*), (AstRoot, const ASTModule*));
+TAGGED_UNION(ResolveItemRefValue, None, (None, struct {}), (Ast, const ASTItem*), (Hir, const HIR::ValueItem*));
 
 TAGGED_UNION(ResolveItemRef, None, (None, struct {}), (Namespace, ResolveItemRefType), (Value, ResolveItemRefValue), (Macro, ResolveItemRefMacro));
 
@@ -49,7 +47,7 @@ extern ::std::ostream& operator<<(::std::ostream& os, ResolveNamespace ns);
 /// <param name="ignore_last">Ignore the last node of the path</param>
 /// <param name="out_path"></param>
 /// <returns></returns>
-extern ResolveModuleRef ResolveLookupGetModule(const Span& span, const AST::Crate& crate, const ::AST::Path& basePath, ::AST::Path path, bool ignoreLast, ::AST::AbsolutePath* outPath);
-extern ResolveItemRefMacro ResolveLookupMacro(const Span& span, const AST::Crate& crate, const ::AST::Path& basePath, ::AST::Path path, ::AST::AbsolutePath* outPath);
+extern ResolveModuleRef ResolveLookupGetModule(const Span& span, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, bool ignoreLast, ASTAbsolutePath* outPath);
+extern ResolveItemRefMacro ResolveLookupMacro(const Span& span, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, ASTAbsolutePath* outPath);
 // Returns the module that contains the provided name
-extern ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const AST::Crate& crate, const ::AST::Path& basePath, const ::AST::Path& path, ResolveNamespace ns, ::AST::AbsolutePath* outPath);
+extern ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const ASTCrate& crate, const ASTPath& basePath, const ASTPath& path, ResolveNamespace ns, ASTAbsolutePath* outPath);

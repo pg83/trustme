@@ -10,10 +10,10 @@ InterpolatedFragment::~InterpolatedFragment() {
                 delete reinterpret_cast<TokenTree*>(ptr);
                 break;
             case InterpolatedFragment::PAT:
-                delete reinterpret_cast<AST::Pattern*>(ptr);
+                delete reinterpret_cast<ASTPattern*>(ptr);
                 break;
             case InterpolatedFragment::PATH:
-                delete reinterpret_cast<AST::Path*>(ptr);
+                delete reinterpret_cast<ASTPath*>(ptr);
                 break;
             case InterpolatedFragment::TYPE:
                 delete reinterpret_cast<TypeRef*>(ptr);
@@ -21,17 +21,17 @@ InterpolatedFragment::~InterpolatedFragment() {
             case InterpolatedFragment::EXPR:
             case InterpolatedFragment::STMT:
             case InterpolatedFragment::BLOCK:
-                delete reinterpret_cast<AST::ExprNode*>(ptr);
+                delete reinterpret_cast<ASTExprNode*>(ptr);
                 break;
             case InterpolatedFragment::META:
-                delete reinterpret_cast<AST::Attribute*>(ptr);
+                delete reinterpret_cast<ASTAttribute*>(ptr);
                 break;
             case InterpolatedFragment::STMT_ITEM:
             case InterpolatedFragment::ITEM:
-                delete reinterpret_cast<AST::Named<AST::Item>*>(ptr);
+                delete reinterpret_cast<ASTNamed<ASTItem>*>(ptr);
                 break;
             case InterpolatedFragment::VIS:
-                delete reinterpret_cast<AST::Visibility*>(ptr);
+                delete reinterpret_cast<ASTVisibility*>(ptr);
                 break;
         }
     }
@@ -49,27 +49,27 @@ InterpolatedFragment& InterpolatedFragment::operator=(InterpolatedFragment&& x) 
     return *this;
 }
 
-InterpolatedFragment::InterpolatedFragment(InterpolatedFragment::Type type, AST::ExprNode* ptr)
+InterpolatedFragment::InterpolatedFragment(InterpolatedFragment::Type type, ASTExprNode* ptr)
     : mType(type)
     , ptr(ptr)
 {
 }
 
-InterpolatedFragment::InterpolatedFragment(AST::Attribute v)
+InterpolatedFragment::InterpolatedFragment(ASTAttribute v)
     : mType(InterpolatedFragment::META)
-    , ptr(new AST::Attribute(mv$(v)))
+    , ptr(new ASTAttribute(mv$(v)))
 {
 }
 
-InterpolatedFragment::InterpolatedFragment(::AST::Named<::AST::Item> v)
+InterpolatedFragment::InterpolatedFragment(ASTNamed<ASTItem> v)
     : mType(InterpolatedFragment::ITEM)
-    , ptr(new ::AST::Named<::AST::Item>(mv$(v)))
+    , ptr(new ASTNamed<ASTItem>(mv$(v)))
 {
 }
 
-InterpolatedFragment::InterpolatedFragment(InterpolatedFragment::Type type, ::AST::Named<::AST::Item> v)
+InterpolatedFragment::InterpolatedFragment(InterpolatedFragment::Type type, ASTNamed<ASTItem> v)
     : mType(type)
-    , ptr(new ::AST::Named<::AST::Item>(mv$(v)))
+    , ptr(new ASTNamed<ASTItem>(mv$(v)))
 {
     assert(type == InterpolatedFragment::STMT_ITEM || type == InterpolatedFragment::ITEM);
 }
@@ -80,15 +80,15 @@ InterpolatedFragment::InterpolatedFragment(TokenTree v)
 {
 }
 
-InterpolatedFragment::InterpolatedFragment(AST::Path v)
+InterpolatedFragment::InterpolatedFragment(ASTPath v)
     : mType(InterpolatedFragment::PATH)
-    , ptr(new AST::Path(mv$(v)))
+    , ptr(new ASTPath(mv$(v)))
 {
 }
 
-InterpolatedFragment::InterpolatedFragment(AST::Pattern v)
+InterpolatedFragment::InterpolatedFragment(ASTPattern v)
     : mType(InterpolatedFragment::PAT)
-    , ptr(new AST::Pattern(mv$(v)))
+    , ptr(new ASTPattern(mv$(v)))
 {
 }
 
@@ -98,9 +98,9 @@ InterpolatedFragment::InterpolatedFragment(TypeRef v)
 {
 }
 
-InterpolatedFragment::InterpolatedFragment(AST::Visibility v)
+InterpolatedFragment::InterpolatedFragment(ASTVisibility v)
     : mType(InterpolatedFragment::VIS)
-    , ptr(new AST::Visibility(mv$(v)))
+    , ptr(new ASTVisibility(mv$(v)))
 {
 }
 
@@ -110,38 +110,38 @@ InterpolatedFragment::InterpolatedFragment(AST::Visibility v)
             os << "tt[" << x.asTt() << "]";
             break;
         case InterpolatedFragment::PAT:
-            os << "pat[" << *reinterpret_cast<AST::Pattern*>(x.ptr) << "]";
+            os << "pat[" << *reinterpret_cast<ASTPattern*>(x.ptr) << "]";
             break;
         case InterpolatedFragment::PATH:
-            os << "path[" << *reinterpret_cast<AST::Path*>(x.ptr) << "]";
+            os << "path[" << *reinterpret_cast<ASTPath*>(x.ptr) << "]";
             break;
         case InterpolatedFragment::TYPE:
             os << "type[" << *reinterpret_cast<TypeRef*>(x.ptr) << "]";
             break;
 
         case InterpolatedFragment::EXPR:
-            os << "expr[" << *reinterpret_cast<const AST::ExprNode*>(x.ptr) << "]";
+            os << "expr[" << *reinterpret_cast<const ASTExprNode*>(x.ptr) << "]";
             break;
         case InterpolatedFragment::STMT:
-            os << "stmt[" << *reinterpret_cast<const AST::ExprNode*>(x.ptr) << "]";
+            os << "stmt[" << *reinterpret_cast<const ASTExprNode*>(x.ptr) << "]";
             break;
         case InterpolatedFragment::STMT_ITEM: {
-            const auto& namedItem = *reinterpret_cast<const AST::Named<AST::Item>*>(x.ptr);
+            const auto& namedItem = *reinterpret_cast<const ASTNamed<ASTItem>*>(x.ptr);
             os << "stmt-item[" << namedItem.data.tagStr() << "(" << namedItem.name << ")]";
         } break;
         case InterpolatedFragment::BLOCK:
-            os << "block[" << *reinterpret_cast<const AST::ExprNode*>(x.ptr) << "]";
+            os << "block[" << *reinterpret_cast<const ASTExprNode*>(x.ptr) << "]";
             break;
 
         case InterpolatedFragment::META:
-            os << "meta[" << *reinterpret_cast<const AST::Attribute*>(x.ptr) << "]";
+            os << "meta[" << *reinterpret_cast<const ASTAttribute*>(x.ptr) << "]";
             break;
         case InterpolatedFragment::ITEM: {
-            const auto& namedItem = *reinterpret_cast<const AST::Named<AST::Item>*>(x.ptr);
+            const auto& namedItem = *reinterpret_cast<const ASTNamed<ASTItem>*>(x.ptr);
             os << "item[" << namedItem.data.tagStr() << "(" << namedItem.name << ")]";
         } break;
         case InterpolatedFragment::VIS:
-            os << "vis[" << *reinterpret_cast<const AST::Visibility*>(x.ptr) << "]";
+            os << "vis[" << *reinterpret_cast<const ASTVisibility*>(x.ptr) << "]";
             break;
     }
     return os;

@@ -11,21 +11,20 @@
 #include <vector>
 #include <ostream>
 
-namespace AST {
 
-    class Pattern;
-    class NodeVisitor;
+    class ASTPattern;
+    class ASTNodeVisitor;
 
-    class ExprNode {
-        AttributeList mAttrs;
+    class ASTExprNode {
+        ASTAttributeList mAttrs;
         Span mSpan;
 
     public:
-        virtual ~ExprNode() = 0;
+        virtual ~ASTExprNode() = 0;
 
-        virtual void visit(NodeVisitor& nv) = 0;
+        virtual void visit(ASTNodeVisitor& nv) = 0;
         virtual void print(::std::ostream& os) const = 0;
-        virtual ExprNodeP clone() const = 0;
+        virtual ASTExprNodeP clone() const = 0;
         virtual unsigned int nodeKind() const = 0;
 
         void setSpan(Span s) {
@@ -36,14 +35,14 @@ namespace AST {
             return mSpan;
         }
 
-        void setAttrs(AttributeList&& mi);
+        void setAttrs(ASTAttributeList&& mi);
 
-        AttributeList& attrs() {
+        ASTAttributeList& attrs() {
             return mAttrs;
         }
     };
 
-    struct ExprNodeBlock: public ExprNode {
+    struct ASTExprNodeBlock: public ASTExprNode {
         enum class Type {
             Bare,
             Unsafe,
@@ -51,96 +50,96 @@ namespace AST {
         };
         Type blockType;
         Ident label;
-        ::std::shared_ptr<AST::Module> localMod;
+        ::std::shared_ptr<ASTModule> localMod;
 
         struct Line {
             bool hasSemicolon;
-            ExprNodeP node;
+            ASTExprNodeP node;
         };
 
         ::std::vector<Line> nodes;
 
-        ExprNodeBlock(::std::vector<Line> nodes = {});
+        ASTExprNodeBlock(::std::vector<Line> nodes = {});
 
         /// Shortcut for a block that returns a contained node
-        ExprNodeBlock(ExprNodeP value);
+        ASTExprNodeBlock(ASTExprNodeP value);
 
-        ExprNodeBlock(Type type, ::std::vector<Line> nodes, ::std::shared_ptr<AST::Module> localMod);
+        ASTExprNodeBlock(Type type, ::std::vector<Line> nodes, ::std::shared_ptr<ASTModule> localMod);
 
-        void pushStmt(AST::ExprNodeP node) {
+        void pushStmt(ASTExprNodeP node) {
             nodes.push_back({true, std::move(node)});
         }
 
-        void pushTailExpr(AST::ExprNodeP node) {
+        void pushTailExpr(ASTExprNodeP node) {
             nodes.push_back({false, std::move(node)});
         }
 
         static constexpr unsigned int kind = 1;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct ExprNodeAsyncBlock: public ExprNode {
-        ExprNodeP inner;
+    struct ASTExprNodeAsyncBlock: public ASTExprNode {
+        ASTExprNodeP inner;
         bool isMove;
 
-        ExprNodeAsyncBlock(ExprNodeP inner, bool isMove);
+        ASTExprNodeAsyncBlock(ASTExprNodeP inner, bool isMove);
 
         static constexpr unsigned int kind = 2;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct ExprNodeGeneratorBlock: public ExprNode {
-        ExprNodeP inner;
+    struct ASTExprNodeGeneratorBlock: public ASTExprNode {
+        ASTExprNodeP inner;
         bool isMove;
 
-        ExprNodeGeneratorBlock(ExprNodeP inner, bool isMove);
+        ASTExprNodeGeneratorBlock(ASTExprNodeP inner, bool isMove);
 
         static constexpr unsigned int kind = 3;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct ExprNodeTry: public ExprNode {
-        ExprNodeP inner;
+    struct ASTExprNodeTry: public ASTExprNode {
+        ASTExprNodeP inner;
 
-        ExprNodeTry(ExprNodeP inner);
+        ASTExprNodeTry(ASTExprNodeP inner);
 
         static constexpr unsigned int kind = 4;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct ExprNodeMacro: public ExprNode {
-        AST::Path mPath;
+    struct ASTExprNodeMacro: public ASTExprNode {
+        ASTPath mPath;
         RcString ident;
         ::TokenTree tokens;
         bool isBraced;
         Ident::Hygiene definitionHygiene;
 
-        ExprNodeMacro(AST::Path name, RcString ident, ::TokenTree&& tokens, bool isBraced = false, Ident::Hygiene definitionHygiene = {});
+        ASTExprNodeMacro(ASTPath name, RcString ident, ::TokenTree&& tokens, bool isBraced = false, Ident::Hygiene definitionHygiene = {});
 
         static constexpr unsigned int kind = 5;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // llvm_asm! macro
-    struct ExprNodeAsm: public ExprNode {
+    struct ASTExprNodeAsm: public ASTExprNode {
         struct ValRef {
             ::std::string name;
-            ExprNodeP value;
+            ASTExprNodeP value;
         };
 
         ::std::string text;
@@ -149,33 +148,33 @@ namespace AST {
         ::std::vector<::std::string> clobbers;
         ::std::vector<::std::string> flags;
 
-        ExprNodeAsm(::std::string text, ::std::vector<ValRef> output, ::std::vector<ValRef> input, ::std::vector<::std::string> clobbers, ::std::vector<::std::string> flags);
+        ASTExprNodeAsm(::std::string text, ::std::vector<ValRef> output, ::std::vector<ValRef> input, ::std::vector<::std::string> clobbers, ::std::vector<::std::string> flags);
 
         static constexpr unsigned int kind = 6;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // asm! macro
-    struct ExprNodeAsm2: public ExprNode {
+    struct ASTExprNodeAsm2: public ASTExprNode {
         TAGGED_UNION(
             Param,
             Const,
-            (Const, AST::ExprNodeP),
-            (Sym, AST::Path),
+            (Const, ASTExprNodeP),
+            (Sym, ASTPath),
             (RegSingle,
              struct {
                  AsmDirection dir;
                  AsmRegisterSpec spec;
-                 AST::ExprNodeP val;
+                 ASTExprNodeP val;
              }),
             (Reg, struct {
                 AsmDirection dir;
                 AsmRegisterSpec spec;
-                AST::ExprNodeP valIn;
-                AST::ExprNodeP valOut;
+                ASTExprNodeP valIn;
+                ASTExprNodeP valOut;
             })
         );
 
@@ -183,17 +182,17 @@ namespace AST {
         std::vector<AsmLine> lines;
         std::vector<Param> mParams;
 
-        ExprNodeAsm2(AsmOptions options, std::vector<AsmLine> lines, std::vector<Param> params);
+        ASTExprNodeAsm2(AsmOptions options, std::vector<AsmLine> lines, std::vector<Param> params);
 
         static constexpr unsigned int kind = 7;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Break/Continue/Return
-    struct ExprNodeFlow: public ExprNode {
+    struct ASTExprNodeFlow: public ASTExprNode {
         enum Type {
             RETURN,
             YIELD,
@@ -204,36 +203,36 @@ namespace AST {
         } mType;
 
         Ident target;
-        ExprNodeP mValue;
+        ASTExprNodeP mValue;
 
-        ExprNodeFlow(Type type, Ident target, ExprNodeP value);
+        ASTExprNodeFlow(Type type, Ident target, ASTExprNodeP value);
 
         static constexpr unsigned int kind = 8;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct ExprNodeLetBinding: public ExprNode {
-        Pattern pat;
+    struct ASTExprNodeLetBinding: public ASTExprNode {
+        ASTPattern pat;
         TypeRef mType;
-        ExprNodeP mValue;
-        ExprNodeP elseNode;
+        ASTExprNodeP mValue;
+        ASTExprNodeP elseNode;
         bool isSuper;
         /// Allocated binding slots/indexes for the pattern in `let-else`
         ::std::pair<unsigned, unsigned> letelseSlots;
 
-        ExprNodeLetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP elseArm = {}, bool isSuper = false);
+        ASTExprNodeLetBinding(ASTPattern pat, TypeRef type, ASTExprNodeP value, ASTExprNodeP elseArm = {}, bool isSuper = false);
 
         static constexpr unsigned int kind = 9;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct ExprNodeAssign: public ExprNode {
+    struct ASTExprNodeAssign: public ASTExprNode {
         enum Operation {
             NONE,
             ADD,
@@ -248,255 +247,255 @@ namespace AST {
             SHL,
         } op;
 
-        ExprNodeP slot;
-        ExprNodeP mValue;
+        ASTExprNodeP slot;
+        ASTExprNodeP mValue;
 
-        ExprNodeAssign();
+        ASTExprNodeAssign();
 
-        ExprNodeAssign(Operation op, ExprNodeP slot, ExprNodeP value);
+        ASTExprNodeAssign(Operation op, ASTExprNodeP slot, ASTExprNodeP value);
 
         static constexpr unsigned int kind = 10;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct ExprNodeCallPath: public ExprNode {
-        Path mPath;
-        ::std::vector<ExprNodeP> mArgs;
+    struct ASTExprNodeCallPath: public ASTExprNode {
+        ASTPath mPath;
+        ::std::vector<ASTExprNodeP> mArgs;
 
-        ExprNodeCallPath(Path&& path, ::std::vector<ExprNodeP>&& args);
+        ASTExprNodeCallPath(ASTPath&& path, ::std::vector<ASTExprNodeP>&& args);
 
         static constexpr unsigned int kind = 11;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct ExprNodeCallMethod: public ExprNode {
-        ExprNodeP val;
-        PathNode method;
-        ::std::vector<ExprNodeP> mArgs;
+    struct ASTExprNodeCallMethod: public ASTExprNode {
+        ASTExprNodeP val;
+        ASTPathNode method;
+        ::std::vector<ASTExprNodeP> mArgs;
 
-        ExprNodeCallMethod(ExprNodeP obj, PathNode method, ::std::vector<ExprNodeP> args);
+        ASTExprNodeCallMethod(ASTExprNodeP obj, ASTPathNode method, ::std::vector<ASTExprNodeP> args);
 
         static constexpr unsigned int kind = 12;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Call an object (Fn/FnMut/FnOnce)
-    struct ExprNodeCallObject: public ExprNode {
-        ExprNodeP val;
-        ::std::vector<ExprNodeP> mArgs;
+    struct ASTExprNodeCallObject: public ASTExprNode {
+        ASTExprNodeP val;
+        ::std::vector<ASTExprNodeP> mArgs;
 
-        ExprNodeCallObject(ExprNodeP val, ::std::vector<ExprNodeP>&& args);
+        ASTExprNodeCallObject(ASTExprNodeP val, ::std::vector<ASTExprNodeP>&& args);
 
         static constexpr unsigned int kind = 13;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct ExprNodeLoop: public ExprNode {
+    struct ASTExprNodeLoop: public ASTExprNode {
         Ident label;
-        ExprNodeP mCode;
+        ASTExprNodeP mCode;
 
-        ExprNodeLoop();
+        ASTExprNodeLoop();
 
-        ExprNodeLoop(Ident label, ExprNodeP code);
+        ASTExprNodeLoop(Ident label, ASTExprNodeP code);
 
         static constexpr unsigned int kind = 14;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct ExprNodeFor: public ExprNode {
+    struct ASTExprNodeFor: public ASTExprNode {
         Ident label;
-        AST::Pattern pattern;
-        ExprNodeP mValue;
-        ExprNodeP mCode;
+        ASTPattern pattern;
+        ASTExprNodeP mValue;
+        ASTExprNodeP mCode;
 
-        ExprNodeFor(Ident label, AST::Pattern pattern, ExprNodeP val, ExprNodeP code);
+        ASTExprNodeFor(Ident label, ASTPattern pattern, ASTExprNodeP val, ASTExprNodeP code);
 
         static constexpr unsigned int kind = 15;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct IfLetCondition {
-        ::std::unique_ptr<AST::Pattern> optPat;
-        ExprNodeP value;
+    struct ASTIfLetCondition {
+        ::std::unique_ptr<ASTPattern> optPat;
+        ASTExprNodeP value;
     };
 
-    struct ExprNodeWhile: public ExprNode {
+    struct ASTExprNodeWhile: public ASTExprNode {
         Ident label;
-        std::vector<IfLetCondition> conditions;
-        ExprNodeP mCode;
+        std::vector<ASTIfLetCondition> conditions;
+        ASTExprNodeP mCode;
 
-        ExprNodeWhile(Ident label, std::vector<IfLetCondition> conditions, ExprNodeP code);
+        ASTExprNodeWhile(Ident label, std::vector<ASTIfLetCondition> conditions, ASTExprNodeP code);
 
         static constexpr unsigned int kind = 16;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct ExprNodeMatchArm {
-        AttributeList mAttrs;
-        ::std::vector<Pattern> patterns;
-        std::vector<IfLetCondition> guard;
+    struct ASTExprNodeMatchArm {
+        ASTAttributeList mAttrs;
+        ::std::vector<ASTPattern> patterns;
+        std::vector<ASTIfLetCondition> guard;
 
-        ExprNodeP mCode;
+        ASTExprNodeP mCode;
 
-        ExprNodeMatchArm();
+        ASTExprNodeMatchArm();
 
-        ExprNodeMatchArm(::std::vector<Pattern> patterns, std::vector<IfLetCondition> guard, ExprNodeP code);
+        ASTExprNodeMatchArm(::std::vector<ASTPattern> patterns, std::vector<ASTIfLetCondition> guard, ASTExprNodeP code);
     };
 
-    struct ExprNodeMatch: public ExprNode {
-        ExprNodeP val;
-        ::std::vector<ExprNodeMatchArm> arms;
+    struct ASTExprNodeMatch: public ASTExprNode {
+        ASTExprNodeP val;
+        ::std::vector<ASTExprNodeMatchArm> arms;
 
-        ExprNodeMatch(ExprNodeP val, ::std::vector<ExprNodeMatchArm> arms);
+        ASTExprNodeMatch(ASTExprNodeP val, ::std::vector<ASTExprNodeMatchArm> arms);
 
         static constexpr unsigned int kind = 17;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct ExprNodeIf: public ExprNode {
+    struct ASTExprNodeIf: public ASTExprNode {
         struct Arm {
-            std::vector<IfLetCondition> conditions;
-            ExprNodeP body;
+            std::vector<ASTIfLetCondition> conditions;
+            ASTExprNodeP body;
         };
 
         std::vector<Arm> arms;
-        ExprNodeP elseNode;
+        ASTExprNodeP elseNode;
 
-        ExprNodeIf(std::vector<Arm> arms, ExprNodeP elseCode);
+        ASTExprNodeIf(std::vector<Arm> arms, ASTExprNodeP elseCode);
 
         static constexpr unsigned int kind = 18;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     /// Represents `_` in expression position
-    struct ExprNodeWildcardPattern: public ExprNode {
+    struct ASTExprNodeWildcardPattern: public ASTExprNode {
         static constexpr unsigned int kind = 19;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Literal integer
-    struct ExprNodeInteger: public ExprNode {
+    struct ASTExprNodeInteger: public ASTExprNode {
         enum eCoreType datatype;
         U128 mValue;
 
-        ExprNodeInteger(U128 value, enum eCoreType datatype);
+        ASTExprNodeInteger(U128 value, enum eCoreType datatype);
 
         static constexpr unsigned int kind = 20;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Literal float
-    struct ExprNodeFloat: public ExprNode {
+    struct ASTExprNodeFloat: public ASTExprNode {
         enum eCoreType datatype;
         FloatValue mValue;
 
-        ExprNodeFloat(FloatValue value, enum eCoreType datatype);
+        ASTExprNodeFloat(FloatValue value, enum eCoreType datatype);
 
         static constexpr unsigned int kind = 21;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Literal boolean
-    struct ExprNodeBool: public ExprNode {
+    struct ASTExprNodeBool: public ASTExprNode {
         bool mValue;
 
-        ExprNodeBool(bool value);
+        ASTExprNodeBool(bool value);
 
         static constexpr unsigned int kind = 22;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Literal string
-    struct ExprNodeString: public ExprNode {
+    struct ASTExprNodeString: public ASTExprNode {
         ::std::string mValue;
         /// Hygiene for format strings
         Ident::Hygiene mHygiene;
 
-        ExprNodeString(::std::string value, Ident::Hygiene h = {});
+        ASTExprNodeString(::std::string value, Ident::Hygiene h = {});
 
         static constexpr unsigned int kind = 23;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Literal byte string
-    struct ExprNodeByteString: public ExprNode {
+    struct ASTExprNodeByteString: public ASTExprNode {
         ::std::string mValue;
 
-        ExprNodeByteString(::std::string value);
+        ASTExprNodeByteString(::std::string value);
 
         static constexpr unsigned int kind = 24;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Literal C string
-    struct ExprNodeCString: public ExprNode {
+    struct ASTExprNodeCString: public ASTExprNode {
         ::std::string mValue;
 
-        ExprNodeCString(::std::string value);
+        ASTExprNodeCString(::std::string value);
 
         static constexpr unsigned int kind = 25;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Closure / Lambda
-    struct ExprNodeClosure: public ExprNode {
-        typedef ::std::vector<::std::pair<AST::Pattern, TypeRef>> argsT;
+    struct ASTExprNodeClosure: public ASTExprNode {
+        typedef ::std::vector<::std::pair<ASTPattern, TypeRef>> argsT;
 
         argsT mArgs;
         TypeRef returnType;
-        ExprNodeP mCode;
+        ASTExprNodeP mCode;
         bool isMove;   //< The closure takes ownership of all values
         bool isPinned; //< The closure cannot be moved (this is for generators)
 
-        ExprNodeClosure(argsT args, TypeRef rv, ExprNodeP code, bool isMove, bool isPinned)
+        ASTExprNodeClosure(argsT args, TypeRef rv, ASTExprNodeP code, bool isMove, bool isPinned)
             : mArgs(::std::move(args))
             , returnType(::std::move(rv))
             , mCode(::std::move(code))
@@ -507,161 +506,161 @@ namespace AST {
 
         static constexpr unsigned int kind = 26;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Literal structure
-    struct ExprNodeStructLiteral: public ExprNode {
+    struct ASTExprNodeStructLiteral: public ASTExprNode {
         struct Ent {
-            AttributeList attrs;
+            ASTAttributeList attrs;
             RcString name;
-            ExprNodeP value;
+            ASTExprNodeP value;
         };
 
         typedef ::std::vector<Ent> tValues;
-        Path mPath;
-        ExprNodeP baseValue;
+        ASTPath mPath;
+        ASTExprNodeP baseValue;
         tValues values;
 
-        ExprNodeStructLiteral(Path path, ExprNodeP baseValue, tValues&& values);
+        ASTExprNodeStructLiteral(ASTPath path, ASTExprNodeP baseValue, tValues&& values);
 
         static constexpr unsigned int kind = 27;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Struct literal pattern only
     // This implicitly has a `..` in it
-    struct ExprNodeStructLiteralPattern: public ExprNode {
-        typedef ::std::vector<ExprNodeStructLiteral::Ent> tValues;
-        Path mPath;
+    struct ASTExprNodeStructLiteralPattern: public ASTExprNode {
+        typedef ::std::vector<ASTExprNodeStructLiteral::Ent> tValues;
+        ASTPath mPath;
         tValues values;
 
-        ExprNodeStructLiteralPattern(Path path, tValues&& values);
+        ASTExprNodeStructLiteralPattern(ASTPath path, tValues&& values);
 
         static constexpr unsigned int kind = 28;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Array
-    struct ExprNodeArray: public ExprNode {
-        ExprNodeP mSize; // if non-NULL, it's a sized array
-        ::std::vector<ExprNodeP> values;
+    struct ASTExprNodeArray: public ASTExprNode {
+        ASTExprNodeP mSize; // if non-NULL, it's a sized array
+        ::std::vector<ASTExprNodeP> values;
 
-        ExprNodeArray(::std::vector<ExprNodeP> vals);
+        ASTExprNodeArray(::std::vector<ASTExprNodeP> vals);
 
-        ExprNodeArray(ExprNodeP val, ExprNodeP size);
+        ASTExprNodeArray(ASTExprNodeP val, ASTExprNodeP size);
 
         static constexpr unsigned int kind = 29;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Tuple
-    struct ExprNodeTuple: public ExprNode {
-        ::std::vector<ExprNodeP> values;
+    struct ASTExprNodeTuple: public ASTExprNode {
+        ::std::vector<ASTExprNodeP> values;
 
-        ExprNodeTuple(::std::vector<ExprNodeP> vals);
+        ASTExprNodeTuple(::std::vector<ASTExprNodeP> vals);
 
         static constexpr unsigned int kind = 30;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Variable / Constant
-    struct ExprNodeNamedValue: public ExprNode {
-        Path mPath;
+    struct ASTExprNodeNamedValue: public ASTExprNode {
+        ASTPath mPath;
 
-        ExprNodeNamedValue(Path path);
+        ASTExprNodeNamedValue(ASTPath path);
 
         static constexpr unsigned int kind = 31;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Field dereference
-    struct ExprNodeField: public ExprNode {
-        ExprNodeP obj;
+    struct ASTExprNodeField: public ASTExprNode {
+        ASTExprNodeP obj;
         RcString mName;
 
-        ExprNodeField(ExprNodeP obj, RcString name);
+        ASTExprNodeField(ASTExprNodeP obj, RcString name);
 
         static constexpr unsigned int kind = 32;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct ExprNodeIndex: public ExprNode {
-        ExprNodeP obj;
-        ExprNodeP idx;
+    struct ASTExprNodeIndex: public ASTExprNode {
+        ASTExprNodeP obj;
+        ASTExprNodeP idx;
 
-        ExprNodeIndex(ExprNodeP obj, ExprNodeP idx);
+        ASTExprNodeIndex(ASTExprNodeP obj, ASTExprNodeP idx);
 
         static constexpr unsigned int kind = 33;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Pointer dereference
-    struct ExprNodeDeref: public ExprNode {
-        ExprNodeP mValue;
+    struct ASTExprNodeDeref: public ASTExprNode {
+        ASTExprNodeP mValue;
 
-        ExprNodeDeref(ExprNodeP value);
+        ASTExprNodeDeref(ASTExprNodeP value);
 
         static constexpr unsigned int kind = 34;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Type cast ('as')
-    struct ExprNodeCast: public ExprNode {
-        ExprNodeP mValue;
+    struct ASTExprNodeCast: public ASTExprNode {
+        ASTExprNodeP mValue;
         TypeRef mType;
 
-        ExprNodeCast(ExprNodeP value, TypeRef&& dstType);
+        ASTExprNodeCast(ASTExprNodeP value, TypeRef&& dstType);
 
         static constexpr unsigned int kind = 35;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Type annotation (': _')
-    struct ExprNodeTypeAnnotation: public ExprNode {
-        ExprNodeP mValue;
+    struct ASTExprNodeTypeAnnotation: public ASTExprNode {
+        ASTExprNodeP mValue;
         TypeRef mType;
 
-        ExprNodeTypeAnnotation(ExprNodeP value, TypeRef&& dstType);
+        ASTExprNodeTypeAnnotation(ASTExprNodeP value, TypeRef&& dstType);
 
         static constexpr unsigned int kind = 36;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // Binary operation
-    struct ExprNodeBinOp: public ExprNode {
+    struct ASTExprNodeBinOp: public ASTExprNode {
         enum Type {
             CMPEQU,
             CMPNEQU,
@@ -692,19 +691,19 @@ namespace AST {
         };
 
         Type mType;
-        ExprNodeP left;
-        ExprNodeP right;
+        ASTExprNodeP left;
+        ASTExprNodeP right;
 
-        ExprNodeBinOp(Type type, ExprNodeP left, ExprNodeP right);
+        ASTExprNodeBinOp(Type type, ASTExprNodeP left, ASTExprNodeP right);
 
         static constexpr unsigned int kind = 37;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    struct ExprNodeUniOp: public ExprNode {
+    struct ASTExprNodeUniOp: public ASTExprNode {
         enum Type {
             REF,    // '& <expr>'
             REFMUT, // '&mut <expr>'
@@ -718,39 +717,39 @@ namespace AST {
         };
 
         enum Type mType;
-        ExprNodeP mValue;
+        ASTExprNodeP mValue;
 
-        ExprNodeUniOp(Type type, ExprNodeP value);
+        ASTExprNodeUniOp(Type type, ASTExprNodeP value);
 
         static constexpr unsigned int kind = 38;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
     // A lexical rib introduced by a block-local macro definition. Expansion
     // preserves it until local-variable and label resolution have crossed the
     // definition at the correct source position.
-    struct ExprNodeMacroDefinition: public ExprNode {
+    struct ASTExprNodeMacroDefinition: public ASTExprNode {
         unsigned int definitionId;
         Ident::Hygiene tokenHygiene;
         Ident::Hygiene definitionHygiene;
 
-        ExprNodeMacroDefinition(unsigned int definitionId, Ident::Hygiene tokenHygiene, Ident::Hygiene definitionHygiene);
+        ASTExprNodeMacroDefinition(unsigned int definitionId, Ident::Hygiene tokenHygiene, Ident::Hygiene definitionHygiene);
 
         static constexpr unsigned int kind = 39;
         unsigned int nodeKind() const override;
-        void visit(NodeVisitor& nv) override;
+        void visit(ASTNodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
-        ExprNodeP clone() const override;
+        ASTExprNodeP clone() const override;
     };
 
-    class NodeVisitor {
+    class ASTNodeVisitor {
     public:
-        virtual ~NodeVisitor() = default;
+        virtual ~ASTNodeVisitor() = default;
 
-        void visit(ExprNodeP& cnode);
+        void visit(ASTExprNodeP& cnode);
 
         virtual bool isConst() const {
             return false;
@@ -759,99 +758,98 @@ namespace AST {
 #define NT(nt) \
     virtual void visit(nt& node) = 0 /*; \
         virtual void visit(const nt& node) = 0*/
-        NT(ExprNodeBlock);
-        NT(ExprNodeAsyncBlock);
-        NT(ExprNodeGeneratorBlock);
-        NT(ExprNodeTry);
-        NT(ExprNodeMacro);
-        NT(ExprNodeAsm);
-        NT(ExprNodeAsm2);
-        NT(ExprNodeFlow);
-        NT(ExprNodeLetBinding);
-        NT(ExprNodeAssign);
-        NT(ExprNodeCallPath);
-        NT(ExprNodeCallMethod);
-        NT(ExprNodeCallObject);
-        NT(ExprNodeLoop);
-        NT(ExprNodeFor);
-        NT(ExprNodeWhile);
-        NT(ExprNodeMatch);
-        NT(ExprNodeIf);
+        NT(ASTExprNodeBlock);
+        NT(ASTExprNodeAsyncBlock);
+        NT(ASTExprNodeGeneratorBlock);
+        NT(ASTExprNodeTry);
+        NT(ASTExprNodeMacro);
+        NT(ASTExprNodeAsm);
+        NT(ASTExprNodeAsm2);
+        NT(ASTExprNodeFlow);
+        NT(ASTExprNodeLetBinding);
+        NT(ASTExprNodeAssign);
+        NT(ASTExprNodeCallPath);
+        NT(ASTExprNodeCallMethod);
+        NT(ASTExprNodeCallObject);
+        NT(ASTExprNodeLoop);
+        NT(ASTExprNodeFor);
+        NT(ASTExprNodeWhile);
+        NT(ASTExprNodeMatch);
+        NT(ASTExprNodeIf);
 
-        NT(ExprNodeWildcardPattern);
-        NT(ExprNodeInteger);
-        NT(ExprNodeFloat);
-        NT(ExprNodeBool);
-        NT(ExprNodeString);
-        NT(ExprNodeByteString);
-        NT(ExprNodeCString);
-        NT(ExprNodeClosure);
-        NT(ExprNodeStructLiteral);
-        NT(ExprNodeStructLiteralPattern);
-        NT(ExprNodeArray);
-        NT(ExprNodeTuple);
-        NT(ExprNodeNamedValue);
+        NT(ASTExprNodeWildcardPattern);
+        NT(ASTExprNodeInteger);
+        NT(ASTExprNodeFloat);
+        NT(ASTExprNodeBool);
+        NT(ASTExprNodeString);
+        NT(ASTExprNodeByteString);
+        NT(ASTExprNodeCString);
+        NT(ASTExprNodeClosure);
+        NT(ASTExprNodeStructLiteral);
+        NT(ASTExprNodeStructLiteralPattern);
+        NT(ASTExprNodeArray);
+        NT(ASTExprNodeTuple);
+        NT(ASTExprNodeNamedValue);
 
-        NT(ExprNodeField);
-        NT(ExprNodeIndex);
-        NT(ExprNodeDeref);
-        NT(ExprNodeCast);
-        NT(ExprNodeTypeAnnotation);
-        NT(ExprNodeBinOp);
-        NT(ExprNodeUniOp);
-        NT(ExprNodeMacroDefinition);
+        NT(ASTExprNodeField);
+        NT(ASTExprNodeIndex);
+        NT(ASTExprNodeDeref);
+        NT(ASTExprNodeCast);
+        NT(ASTExprNodeTypeAnnotation);
+        NT(ASTExprNodeBinOp);
+        NT(ASTExprNodeUniOp);
+        NT(ASTExprNodeMacroDefinition);
 #undef NT
     };
 
-    class NodeVisitorDef: public NodeVisitor {
+    class ASTNodeVisitorDef: public ASTNodeVisitor {
     public:
-        void visit(ExprNodeP& cnode);
+        void visit(ASTExprNodeP& cnode);
 
 #define NT(nt) \
     virtual void visit(nt& node) override; /* \
         virtual void visit(const nt& node) override*/
-        NT(ExprNodeBlock);
-        NT(ExprNodeAsyncBlock);
-        NT(ExprNodeGeneratorBlock);
-        NT(ExprNodeTry);
-        NT(ExprNodeMacro);
-        NT(ExprNodeAsm);
-        NT(ExprNodeAsm2);
-        NT(ExprNodeFlow);
-        NT(ExprNodeLetBinding);
-        NT(ExprNodeAssign);
-        NT(ExprNodeCallPath);
-        NT(ExprNodeCallMethod);
-        NT(ExprNodeCallObject);
-        NT(ExprNodeLoop);
-        NT(ExprNodeFor);
-        NT(ExprNodeWhile);
-        NT(ExprNodeMatch);
-        NT(ExprNodeIf);
+        NT(ASTExprNodeBlock);
+        NT(ASTExprNodeAsyncBlock);
+        NT(ASTExprNodeGeneratorBlock);
+        NT(ASTExprNodeTry);
+        NT(ASTExprNodeMacro);
+        NT(ASTExprNodeAsm);
+        NT(ASTExprNodeAsm2);
+        NT(ASTExprNodeFlow);
+        NT(ASTExprNodeLetBinding);
+        NT(ASTExprNodeAssign);
+        NT(ASTExprNodeCallPath);
+        NT(ASTExprNodeCallMethod);
+        NT(ASTExprNodeCallObject);
+        NT(ASTExprNodeLoop);
+        NT(ASTExprNodeFor);
+        NT(ASTExprNodeWhile);
+        NT(ASTExprNodeMatch);
+        NT(ASTExprNodeIf);
 
-        NT(ExprNodeWildcardPattern);
-        NT(ExprNodeInteger);
-        NT(ExprNodeFloat);
-        NT(ExprNodeBool);
-        NT(ExprNodeString);
-        NT(ExprNodeByteString);
-        NT(ExprNodeCString);
-        NT(ExprNodeClosure);
-        NT(ExprNodeStructLiteral);
-        NT(ExprNodeStructLiteralPattern);
-        NT(ExprNodeArray);
-        NT(ExprNodeTuple);
-        NT(ExprNodeNamedValue);
+        NT(ASTExprNodeWildcardPattern);
+        NT(ASTExprNodeInteger);
+        NT(ASTExprNodeFloat);
+        NT(ASTExprNodeBool);
+        NT(ASTExprNodeString);
+        NT(ASTExprNodeByteString);
+        NT(ASTExprNodeCString);
+        NT(ASTExprNodeClosure);
+        NT(ASTExprNodeStructLiteral);
+        NT(ASTExprNodeStructLiteralPattern);
+        NT(ASTExprNodeArray);
+        NT(ASTExprNodeTuple);
+        NT(ASTExprNodeNamedValue);
 
-        NT(ExprNodeField);
-        NT(ExprNodeIndex);
-        NT(ExprNodeDeref);
-        NT(ExprNodeCast);
-        NT(ExprNodeTypeAnnotation);
-        NT(ExprNodeBinOp);
-        NT(ExprNodeUniOp);
-        NT(ExprNodeMacroDefinition);
+        NT(ASTExprNodeField);
+        NT(ASTExprNodeIndex);
+        NT(ASTExprNodeDeref);
+        NT(ASTExprNodeCast);
+        NT(ASTExprNodeTypeAnnotation);
+        NT(ASTExprNodeBinOp);
+        NT(ASTExprNodeUniOp);
+        NT(ASTExprNodeMacroDefinition);
 #undef NT
     };
 
-}

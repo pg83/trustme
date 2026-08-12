@@ -20,10 +20,10 @@
 #include <string_view>
 
 namespace {
-    ::std::string getString(const Span& sp, TokenStream& lex, const ::AST::Crate& crate, AST::Module& mod) {
+    ::std::string getString(const Span& sp, TokenStream& lex, const ASTCrate& crate, ASTModule& mod) {
         auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
 
-        auto* formatStringNp = cast<AST::ExprNodeString>(&*n);
+        auto* formatStringNp = cast<ASTExprNodeString>(&*n);
         if (!formatStringNp) {
             ERROR(sp, E0000, "asm! requires a string literal - got " << *n);
         }
@@ -46,13 +46,13 @@ namespace {
 
 class CLlvmAsmExpander: public ExpandProcMacro {
 public:
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
         auto lex = TTStream(sp, ParseState(), tt);
 
         auto templateText = getString(sp, lex, crate, mod);
-        ::std::vector<::AST::ExprNodeAsm::ValRef> outputs;
-        ::std::vector<::AST::ExprNodeAsm::ValRef> inputs;
+        ::std::vector<ASTExprNodeAsm::ValRef> outputs;
+        ::std::vector<ASTExprNodeAsm::ValRef> inputs;
         ::std::vector<::std::string> clobbers;
         ::std::vector<::std::string> flags;
 
@@ -72,7 +72,7 @@ public:
                 auto val = ParseExpr0(lex);
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
-                outputs.push_back(::AST::ExprNodeAsm::ValRef{mv$(name), mv$(val)});
+                outputs.push_back(ASTExprNodeAsm::ValRef{mv$(name), mv$(val)});
 
                 if (lex.lookahead(0) != TOK_COMMA) {
                     break;
@@ -98,7 +98,7 @@ public:
                 auto val = ParseExpr0(lex);
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
-                inputs.push_back(::AST::ExprNodeAsm::ValRef{mv$(name), mv$(val)});
+                inputs.push_back(ASTExprNodeAsm::ValRef{mv$(name), mv$(val)});
 
                 if (lex.lookahead(0) != TOK_COMMA) {
                     break;
@@ -167,7 +167,7 @@ public:
         }
 
         // Convert this into an AST node and insert as an intepolated expression
-        ::AST::ExprNodeP rv = ::AST::ExprNodeP(new ::AST::ExprNodeAsm{mv$(templateText), mv$(outputs), mv$(inputs), mv$(clobbers), mv$(flags)});
+        ASTExprNodeP rv = ASTExprNodeP(new ASTExprNodeAsm{mv$(templateText), mv$(outputs), mv$(inputs), mv$(clobbers), mv$(flags)});
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
     }
 };
@@ -224,7 +224,7 @@ namespace {
 
 class CAsmExpander: public ExpandProcMacro {
 public:
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         // Stabilisation-path `asm!`
 
         Token tok;
@@ -247,7 +247,7 @@ public:
             GET_CHECK_TOK(tok, lex, TOK_COMMA);
         } while (lex.lookahead(0) == TOK_STRING || lex.lookahead(0) == TOK_HASH);
 
-        std::vector<AST::ExprNodeAsm2::Param> params;
+        std::vector<ASTExprNodeAsm2::Param> params;
         std::vector<RcString> names;
         AsmOptions options;
         while (tok.type() == TOK_COMMA) {
@@ -320,13 +320,13 @@ public:
                 v = getTokIdentRword(lex);
             }
 
-            AST::ExprNodeAsm2::Param paramSpec;
+            ASTExprNodeAsm2::Param paramSpec;
             if (v == "const") {
                 auto e = ParseExpr0(lex);
-                paramSpec = AST::ExprNodeAsm2::Param::make_Const(std::move(e));
+                paramSpec = ASTExprNodeAsm2::Param::make_Const(std::move(e));
             } else if (v == "sym") {
                 auto p = ParsePath(lex, PATH_GENERIC_EXPR);
-                paramSpec = AST::ExprNodeAsm2::Param::make_Sym(std::move(p));
+                paramSpec = ASTExprNodeAsm2::Param::make_Sym(std::move(p));
             } else {
                 AsmDirection dir;
                 if (v == "inlateout") {
@@ -366,7 +366,7 @@ public:
                         default:
                             ERROR(sp, E0000, "Invalid use of _ in asm!");
                     }
-                    paramSpec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), nullptr, nullptr});
+                    paramSpec = ASTExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), nullptr, nullptr});
                 } else {
                     auto e = ParseExpr0(lex);
 
@@ -382,14 +382,14 @@ public:
                         GET_TOK(tok, lex);
                         if (lex.lookahead(0) == TOK_UNDERSCORE) {
                             GET_TOK(tok, lex);
-                            paramSpec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), mv$(e), nullptr});
+                            paramSpec = ASTExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), mv$(e), nullptr});
                         } else {
                             auto e2 = ParseExpr0(lex);
-                            paramSpec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), mv$(e), mv$(e2)});
+                            paramSpec = ASTExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), mv$(e), mv$(e2)});
                         }
                     } else {
                         // Note: Different variant to handle `inout(reg) foo` without duplicating
-                        paramSpec = AST::ExprNodeAsm2::Param::make_RegSingle({dir, std::move(regSpec), mv$(e)});
+                        paramSpec = ASTExprNodeAsm2::Param::make_RegSingle({dir, std::move(regSpec), mv$(e)});
                     }
                 }
             }
@@ -515,22 +515,22 @@ public:
         }
 
         // Convert this into an AST node and insert as an intepolated expression
-        ::AST::ExprNodeP rv = ::AST::ExprNodeP(new ::AST::ExprNodeAsm2{mv$(options), mv$(lines), mv$(params)});
+        ASTExprNodeP rv = ASTExprNodeP(new ASTExprNodeAsm2{mv$(options), mv$(lines), mv$(params)});
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
     }
 };
 
 class CGlobalAsmExpander: public ExpandProcMacro {
 public:
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         auto o = CAsmExpander().expand(sp, crate, tt, mod);
 
         auto node = o->getToken().takeFragNode();
-        auto* nodeAp = cast<AST::ExprNodeAsm2>(node.get());
+        auto* nodeAp = cast<ASTExprNodeAsm2>(node.get());
         ASSERT_BUG(sp, nodeAp, "");
         auto& nodeA = *nodeAp;
 
-        auto globalAsm = AST::GlobalAsm{std::move(nodeA.lines), {}, nodeA.options};
+        auto globalAsm = ASTGlobalAsm{std::move(nodeA.lines), {}, nodeA.options};
         for (auto& param : nodeA.mParams) {
             if (!(param.is_Sym() || param.is_Const())) {
                 ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
@@ -538,18 +538,18 @@ public:
                 TODO(sp, "sym/const");
             }
         }
-        auto namedItem = AST::Named<AST::Item>(sp, {}, AST::Visibility::makeBarePrivate(), "", AST::Item(std::move(globalAsm)));
+        auto namedItem = ASTNamed<ASTItem>(sp, {}, ASTVisibility::makeBarePrivate(), "", ASTItem(std::move(globalAsm)));
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(Token::TagTakeIP(), InterpolatedFragment(std::move(namedItem))))));
     }
 };
 
 class CNakedAsmExpander: public ExpandProcMacro {
 public:
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         auto o = CAsmExpander().expand(sp, crate, tt, mod);
 
         auto node = o->getToken().takeFragNode();
-        auto* nodeAp = cast<AST::ExprNodeAsm2>(node.get());
+        auto* nodeAp = cast<ASTExprNodeAsm2>(node.get());
         ASSERT_BUG(sp, nodeAp, "");
         nodeAp->options.naked = true;
 
@@ -563,7 +563,7 @@ STATIC_MACRO("global_asm", CGlobalAsmExpander);
 STATIC_MACRO("naked_asm", CNakedAsmExpander);
 
 class CExpanderAssert: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
 
         auto lex = TTStream(sp, ParseState(), tt);
@@ -637,7 +637,7 @@ class CExpanderAssert: public ExpandProcMacro {
 
         toks.push_back(Token(TOK_BRACE_CLOSE));
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(AST::Edition::Rust2015, Ident::Hygiene::newScope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(), mv$(toks))));
     }
 };
 
@@ -646,7 +646,7 @@ void ExpandInitAssert() {
 }
 
 class CExpanderCompileError: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         ERROR(sp, E0000, "compile_error! " << tt);
     }
 };
@@ -654,7 +654,7 @@ class CExpanderCompileError: public ExpandProcMacro {
 STATIC_MACRO("compile_error", CExpanderCompileError);
 
 class CConcatExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
 
         auto lex = TTStream(sp, ParseState(), tt);
@@ -671,17 +671,17 @@ class CConcatExpander: public ExpandProcMacro {
             ExpandBareExpr(crate, mod, v);
             DEBUG("concat[pe] - v=" << *v);
             // TODO: Visitor instead
-            if (auto* vp = cast<AST::ExprNodeString>(v.get())) {
+            if (auto* vp = cast<ASTExprNodeString>(v.get())) {
                 rv += vp->mValue;
-            } else if (auto* vp = cast<AST::ExprNodeInteger>(v.get())) {
+            } else if (auto* vp = cast<ASTExprNodeInteger>(v.get())) {
                 if (vp->datatype == CORETYPE_CHAR) {
                     rv += Codepoint{static_cast<uint32_t>(vp->mValue.truncateU64())};
                 } else {
                     rv += FMT(vp->mValue);
                 }
-            } else if (auto* vp = cast<AST::ExprNodeFloat>(v.get())) {
+            } else if (auto* vp = cast<ASTExprNodeFloat>(v.get())) {
                 rv += FMT(vp->mValue);
-            } else if (auto* vp = cast<AST::ExprNodeBool>(v.get())) {
+            } else if (auto* vp = cast<ASTExprNodeBool>(v.get())) {
                 rv += (vp->mValue ? "true" : "false");
             } else {
                 ERROR(sp, E0000, "Unexpected expression type in concat! argument");
@@ -696,7 +696,7 @@ class CConcatExpander: public ExpandProcMacro {
 };
 
 class CConcatIdentsExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
         auto lex = TTStream(sp, ParseState(), tt);
 
@@ -725,7 +725,7 @@ STATIC_MACRO("concat_idents", CConcatIdentsExpander);
 
 namespace {
     // Read a string out of the input stream
-    ::std::string getString(const Span& sp, const AST::Crate& crate, AST::Module& mod, const TokenTree& tt) {
+    ::std::string getString(const Span& sp, const ASTCrate& crate, ASTModule& mod, const TokenTree& tt) {
         auto lex = TTStream(sp, ParseState(), tt);
 
         auto n = ParseExprVal(lex);
@@ -738,7 +738,7 @@ namespace {
         }
         ExpandBareExpr(crate, mod, n);
 
-        auto* stringNp = cast<AST::ExprNodeString>(&*n);
+        auto* stringNp = cast<ASTExprNodeString>(&*n);
         if (!stringNp) {
             ERROR(sp, E0000, "Expected a string literal - got " << *n);
         }
@@ -747,7 +747,7 @@ namespace {
 }
 
 class CExpanderEnv: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         ::std::string varname = getString(sp, crate, mod, tt);
 
         const char* varValCstr = getenv(varname.c_str());
@@ -759,7 +759,7 @@ class CExpanderEnv: public ExpandProcMacro {
 };
 
 class CExpanderOptionEnv: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         ::std::string varname = getString(sp, crate, mod, tt);
         ::std::vector<TokenTree> rv;
 
@@ -780,7 +780,7 @@ class CExpanderOptionEnv: public ExpandProcMacro {
             rv.push_back(Token(TOK_STRING, ::std::string(varValCstr), {}));
             rv.push_back(Token(TOK_PAREN_CLOSE));
         }
-        return box$(TTStreamO(sp, ParseState(), TokenTree(AST::Edition::Rust2015, {}, mv$(rv))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, {}, mv$(rv))));
     }
 };
 
@@ -794,19 +794,19 @@ namespace {
 }
 
 class CExpanderFile: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, ::std::string(getTopSpan(sp)->filename.c_str()), {}))));
     }
 };
 
 class CExpanderLine: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(getTopSpan(sp)->startLine), CORETYPE_U32))));
     }
 };
 
 class CExpanderColumn: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         const auto offset = getTopSpan(sp)->startOfs;
         ASSERT_BUG(sp, offset >= 10, "column! invocation span is too short");
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(offset - 10), CORETYPE_U32))));
@@ -814,7 +814,7 @@ class CExpanderColumn: public ExpandProcMacro {
 };
 
 class CExpanderUnstableColumn: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         const auto offset = getTopSpan(sp)->startOfs;
         constexpr unsigned macroWidth = sizeof("__rust_unstable_column!()") - 1 + 1;
         ASSERT_BUG(sp, offset >= macroWidth, "__rust_unstable_column! invocation span is too short");
@@ -823,7 +823,7 @@ class CExpanderUnstableColumn: public ExpandProcMacro {
 };
 
 class CExpanderModulePath: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         ::std::string pathStr;
         pathStr += crate.crateNameSet;
         for (const auto& comp : mod.path().nodes) {
@@ -1322,17 +1322,17 @@ namespace {
         return Token(TOK_IDENT, RcString::newInterned(s));
     }
 
-    void pushPath(::std::vector<TokenTree>& toks, const AST::Crate& crate, ::std::initializer_list<const char*> il) {
-        AST::AbsolutePath ap;
+    void pushPath(::std::vector<TokenTree>& toks, const ASTCrate& crate, ::std::initializer_list<const char*> il) {
+        ASTAbsolutePath ap;
         // TODO: Inject a path fragment (interpolated path), to avoid edition parsing quirks
         switch (crate.loadStd) {
-            case ::AST::Crate::LOAD_NONE:
+            case ASTCrate::LOAD_NONE:
                 break;
-            case ::AST::Crate::LOAD_CORE:
+            case ASTCrate::LOAD_CORE:
                 ASSERT_BUG(Span(), crate.extCratenameCore != "", "");
                 ap.crate = crate.extCratenameCore;
                 break;
-            case ::AST::Crate::LOAD_STD:
+            case ASTCrate::LOAD_STD:
                 //ap.crate = "=std";
                 ASSERT_BUG(Span(), crate.extCratenameCore != "", "");
                 ap.crate = crate.extCratenameCore;
@@ -1366,14 +1366,14 @@ namespace {
         toks.push_back(mv$(t4));
     }
 
-    ::std::unique_ptr<TokenStream> expandFormatArgs(const Span& sp, const ::AST::Crate& crate, TTStream& lex, bool addNewline) {
+    ::std::unique_ptr<TokenStream> expandFormatArgs(const Span& sp, const ASTCrate& crate, TTStream& lex, bool addNewline) {
         Token tok;
 
         auto formatStringNode = ParseExprVal(lex);
         ASSERT_BUG(sp, formatStringNode, "No expression returned");
         ExpandBareExpr(crate, lex.parseState().getCurrentMod(), formatStringNode);
 
-        auto* formatStringNp = cast<AST::ExprNodeString>(&*formatStringNode);
+        auto* formatStringNp = cast<ASTExprNodeString>(&*formatStringNode);
         if (!formatStringNp) {
             ERROR(sp, E0000, "format_args! requires a string literal - got " << *formatStringNode);
         }
@@ -1493,7 +1493,7 @@ namespace {
         }
 
         struct H {
-            static void argumentList(::std::vector<TokenTree>& toks, const ::std::vector<FmtFrag>& fragments, const AST::Crate& crate) {
+            static void argumentList(::std::vector<TokenTree>& toks, const ::std::vector<FmtFrag>& fragments, const ASTCrate& crate) {
                 toks.push_back(TokenTree(TOK_AMP));
                 toks.push_back(TokenTree(TOK_SQUARE_OPEN));
                 for (const auto& frag : fragments) {
@@ -1695,7 +1695,7 @@ namespace {
 }
 
 class CFormatArgsExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
 
         auto lex = TTStream(sp, ParseState(), tt);
@@ -1706,7 +1706,7 @@ class CFormatArgsExpander: public ExpandProcMacro {
 };
 
 class CConstFormatArgsExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
 
         auto lex = TTStream(sp, ParseState(), tt);
@@ -1717,7 +1717,7 @@ class CConstFormatArgsExpander: public ExpandProcMacro {
 };
 
 class CFormatArgsNlExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
 
         auto lex = TTStream(sp, ParseState(), tt);
@@ -1735,7 +1735,7 @@ STATIC_MACRO("format_args_nl", CFormatArgsNlExpander);
 
 namespace {
 
-    ::std::string includeGetString(const Span& sp, TokenStream& lex, const ::AST::Crate& crate, AST::Module& mod) {
+    ::std::string includeGetString(const Span& sp, TokenStream& lex, const ASTCrate& crate, ASTModule& mod) {
         auto n = ParseExprVal(lex);
         ASSERT_BUG(sp, n, "No expression returned");
         if (lex.lookahead(0) == TOK_COMMA) {
@@ -1743,7 +1743,7 @@ namespace {
         }
         ExpandBareExpr(crate, mod, n);
 
-        auto* stringNp = cast<AST::ExprNodeString>(&*n);
+        auto* stringNp = cast<ASTExprNodeString>(&*n);
         if (!stringNp) {
             ERROR(sp, E0000, "include! requires a string literal - got " << *n);
         }
@@ -1778,7 +1778,7 @@ namespace {
 };
 
 class CIncludeExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
         auto lex = TTStream(sp, ParseState(), tt);
 
@@ -1801,7 +1801,7 @@ class CIncludeExpander: public ExpandProcMacro {
 };
 
 class CIncludeBytesExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
         auto lex = TTStream(sp, ParseState(), tt);
 
@@ -1820,12 +1820,12 @@ class CIncludeBytesExpander: public ExpandProcMacro {
 
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_BYTESTRING, mv$(ss.str()), {}));
-        return box$(TTStreamO(sp, ParseState(), TokenTree(AST::Edition::Rust2015, Ident::Hygiene::newScope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(), mv$(toks))));
     }
 };
 
 class CIncludeStrExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
         auto lex = TTStream(sp, ParseState(), tt);
 
@@ -1844,7 +1844,7 @@ class CIncludeStrExpander: public ExpandProcMacro {
 
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_STRING, mv$(ss.str()), {}));
-        return box$(TTStreamO(sp, ParseState(), TokenTree(AST::Edition::Rust2015, Ident::Hygiene::newScope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(), mv$(toks))));
     }
 };
 
@@ -1855,7 +1855,7 @@ STATIC_MACRO("include_bytes", CIncludeBytesExpander);
 STATIC_MACRO("include_str", CIncludeStrExpander);
 
 class CExpanderPanic: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
 
         auto edition = crate.edition;
@@ -1869,12 +1869,12 @@ class CExpanderPanic: public ExpandProcMacro {
         toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
         toks.push_back(Token(TOK_DOUBLE_COLON));
         switch (crate.edition) {
-            case AST::Edition::Rust2015:
-            case AST::Edition::Rust2018:
+            case ASTEdition::Rust2015:
+            case ASTEdition::Rust2018:
                 toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic_2015")));
                 break;
-            case AST::Edition::Rust2021:
-            case AST::Edition::Rust2024:
+            case ASTEdition::Rust2021:
+            case ASTEdition::Rust2024:
                 toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic_2021")));
                 break;
         }
@@ -1890,7 +1890,7 @@ class CExpanderPanic: public ExpandProcMacro {
 };
 
 class CExpanderUnreachable: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
 
         auto edition = crate.edition;
@@ -1904,12 +1904,12 @@ class CExpanderUnreachable: public ExpandProcMacro {
         toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
         toks.push_back(Token(TOK_DOUBLE_COLON));
         switch (crate.edition) {
-            case AST::Edition::Rust2015:
-            case AST::Edition::Rust2018:
+            case ASTEdition::Rust2015:
+            case ASTEdition::Rust2018:
                 toks.push_back(Token(TOK_IDENT, RcString::newInterned("unreachable_2015")));
                 break;
-            case AST::Edition::Rust2021:
-            case AST::Edition::Rust2024:
+            case ASTEdition::Rust2021:
+            case ASTEdition::Rust2024:
                 toks.push_back(Token(TOK_IDENT, RcString::newInterned("unreachable_2021")));
                 break;
         }
@@ -1930,19 +1930,19 @@ void ExpandInitPanic() {
 }
 
 class CExpanderRegisterDiagnostic: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         return box$(TTStreamO(sp, ParseState(), TokenTree()));
     }
 };
 
 class CExpanderDiagnosticUsed: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         return box$(TTStreamO(sp, ParseState(), TokenTree()));
     }
 };
 
 class CExpanderBuildDiagnosticArray: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         auto lex = TTStream(sp, ParseState(), tt);
 
         Token tok;
@@ -1979,7 +1979,7 @@ class CExpanderBuildDiagnosticArray: public ExpandProcMacro {
         toks.push_back(TOK_SQUARE_CLOSE);
         toks.push_back(TOK_SEMICOLON);
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(AST::Edition::Rust2015, lex.getHygiene(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, lex.getHygiene(), mv$(toks))));
     }
 };
 
@@ -1988,7 +1988,7 @@ STATIC_MACRO("__diagnostic_used", CExpanderDiagnosticUsed)
 STATIC_MACRO("__build_diagnostic_array", CExpanderBuildDiagnosticArray)
 
 class CExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
         ::std::string rv;
 

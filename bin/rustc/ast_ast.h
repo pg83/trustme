@@ -22,69 +22,68 @@
 #include <stdexcept>
 #include <unordered_map>
 
-namespace AST {
 
-    class Crate;
+    class ASTCrate;
 
-    class Module;
-    class Item;
+    class ASTModule;
+    class ASTItem;
 
     using ::std::move;
     using ::std::unique_ptr;
 
-    struct StructItem {
-        ::AST::AttributeList mAttrs;
-        ::AST::Visibility vis;
+    struct ASTStructItem {
+        ASTAttributeList mAttrs;
+        ASTVisibility vis;
         RcString mName;
         TypeRef mType;
         // RFC3681
-        AST::Expr defaultValue;
+        ASTExpr defaultValue;
 
         //StructItem() {}
 
-        StructItem(::AST::AttributeList attrs, AST::Visibility vis, RcString name, TypeRef ty, Expr defaultValue);
+        ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, TypeRef ty, ASTExpr defaultValue);
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const StructItem& x) {
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTStructItem& x) {
             return os << x.vis << x.mName << ": " << x.mType;
         }
 
-        StructItem clone() const;
+        ASTStructItem clone() const;
     };
 
-    struct TupleItem {
-        ::AST::AttributeList mAttrs;
-        ::AST::Visibility vis;
+    struct ASTTupleItem {
+        ASTAttributeList mAttrs;
+        ASTVisibility vis;
         TypeRef mType;
 
         //TupleItem() {}
 
-        TupleItem(::AST::AttributeList attrs, AST::Visibility vis, TypeRef ty);
+        ASTTupleItem(ASTAttributeList attrs, ASTVisibility vis, TypeRef ty);
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const TupleItem& x) {
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTTupleItem& x) {
             return os << x.vis << x.mType;
         }
 
-        TupleItem clone() const;
+        ASTTupleItem clone() const;
     };
 
-    class TypeAlias {
+    class ASTTypeAlias {
     public:
         /// Normal generic parameter definitions
-        GenericParams mParams;
+        ASTGenericParams mParams;
         /// Holds bounds on this type, all bounds encoded as `Self: ...`
-        GenericParams selfBounds;
+        ASTGenericParams selfBounds;
         TypeRef mType;
 
         //TypeAlias() {}
-        TypeAlias(GenericParams params, TypeRef type);
+        ASTTypeAlias(ASTGenericParams params, TypeRef type);
 
-        static TypeAlias newAssociatedType(GenericParams params, GenericParams typeBounds, TypeRef defaultType);
+        static ASTTypeAlias newAssociatedType(ASTGenericParams params, ASTGenericParams typeBounds, TypeRef defaultType);
 
-        const GenericParams& params() const {
+        const ASTGenericParams& params() const {
             return mParams;
         }
 
-        GenericParams& params() {
+        ASTGenericParams& params() {
             return mParams;
         }
 
@@ -96,18 +95,18 @@ namespace AST {
             return mType;
         }
 
-        TypeAlias clone() const;
+        ASTTypeAlias clone() const;
     };
 
-    class TraitAlias {
+    class ASTTraitAlias {
     public:
-        GenericParams params;
+        ASTGenericParams params;
         std::vector<Spanned<TypeTraitPath>> traits;
 
-        TraitAlias clone() const;
+        ASTTraitAlias clone() const;
     };
 
-    enum class Linkage {
+    enum class ASTLinkage {
         // no `#[linkage]` specified
         Default,
         // "weak" - allow multiple definitions
@@ -117,7 +116,7 @@ namespace AST {
         ExternWeak,
     };
 
-    class Static {
+    class ASTStatic {
     public:
         enum Class {
             CONST,
@@ -128,16 +127,16 @@ namespace AST {
     private:
         Class cls;
         TypeRef mType;
-        Expr mValue;
+        ASTExpr mValue;
 
     public:
         struct Markings {
             std::string linkName;
             std::string linkSection;
-            Linkage linkage = Linkage::Default;
+            ASTLinkage linkage = ASTLinkage::Default;
         } markings;
 
-        Static(Class sClass, TypeRef type, Expr value);
+        ASTStatic(Class sClass, TypeRef type, ASTExpr value);
 
         const Class& sClass() const {
             return cls;
@@ -147,7 +146,7 @@ namespace AST {
             return mType;
         }
 
-        const Expr& value() const {
+        const ASTExpr& value() const {
             return mValue;
         }
 
@@ -155,21 +154,21 @@ namespace AST {
             return mType;
         }
 
-        Expr& value() {
+        ASTExpr& value() {
             return mValue;
         }
 
-        Static clone() const;
+        ASTStatic clone() const;
     };
 
-    class Function {
+    class ASTFunction {
     public:
         struct Arg {
-            ::AST::AttributeList attrs;
-            ::AST::Pattern pat;
+            ASTAttributeList attrs;
+            ASTPattern pat;
             TypeRef ty;
 
-            Arg(::AST::Pattern pat, TypeRef ty, ::AST::AttributeList attrs = {});
+            Arg(ASTPattern pat, TypeRef ty, ASTAttributeList attrs = {});
         };
 
         typedef ::std::vector<Arg> Arglist;
@@ -194,8 +193,8 @@ namespace AST {
 
     private:
         Span mSpan;
-        GenericParams mParams;
-        Expr mCode;
+        ASTGenericParams mParams;
+        ASTExpr mCode;
         TypeRef mRettype;
         Arglist mArgs;
         bool mIsVariadic; // extern only
@@ -218,20 +217,20 @@ namespace AST {
 
             std::string linkName;
             std::string linkSection;
-            Linkage linkage = Linkage::Default;
+            ASTLinkage linkage = ASTLinkage::Default;
         } markings;
 
-        Function(const Function&) = delete;
-        Function& operator=(const Function&) = delete;
-        Function(Function&&) = default;
-        Function& operator=(Function&&) = default;
+        ASTFunction(const ASTFunction&) = delete;
+        ASTFunction& operator=(const ASTFunction&) = delete;
+        ASTFunction(ASTFunction&&) = default;
+        ASTFunction& operator=(ASTFunction&&) = default;
 
-        Function(Span sp, ::std::string abi, Flags flags, GenericParams params, TypeRef retType, Arglist args, bool isVariadic);
+        ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, TypeRef retType, Arglist args, bool isVariadic);
 
         // Helper for derive, defines an ABI_RUST function with no generics
-        Function(Span sp, TypeRef retType, Arglist args);
+        ASTFunction(Span sp, TypeRef retType, Arglist args);
 
-        void setCode(Expr code) {
+        void setCode(ASTExpr code) {
             mCode = ::std::move(code);
         }
 
@@ -259,19 +258,19 @@ namespace AST {
             return flags.isAsync;
         }
 
-        const GenericParams& params() const {
+        const ASTGenericParams& params() const {
             return mParams;
         }
 
-        GenericParams& params() {
+        ASTGenericParams& params() {
             return mParams;
         }
 
-        const Expr& code() const {
+        const ASTExpr& code() const {
             return mCode;
         }
 
-        Expr& code() {
+        ASTExpr& code() {
             return mCode;
         }
 
@@ -295,30 +294,30 @@ namespace AST {
             return mIsVariadic;
         }
 
-        Function clone() const;
+        ASTFunction clone() const;
     };
 
-    class Trait {
-        GenericParams mParams;
+    class ASTTrait {
+        ASTGenericParams mParams;
         ::std::vector<Spanned<TypeTraitPath>> mSupertraits;
-        ::std::vector<Spanned<LifetimeRef>> mLifetimes;
+        ::std::vector<Spanned<ASTLifetimeRef>> mLifetimes;
 
         bool mIsMarker;
         bool mIsUnsafe;
-        NamedList<Item> mItems;
+        ASTNamedList<ASTItem> mItems;
 
     public:
-        Trait();
-        Trait(GenericParams params, ::std::vector<Spanned<TypeTraitPath>> supertraits, ::std::vector<Spanned<LifetimeRef>> lifetimes);
-        ~Trait();
-        Trait(Trait&&);
-        Trait& operator=(Trait&&);
+        ASTTrait();
+        ASTTrait(ASTGenericParams params, ::std::vector<Spanned<TypeTraitPath>> supertraits, ::std::vector<Spanned<ASTLifetimeRef>> lifetimes);
+        ~ASTTrait();
+        ASTTrait(ASTTrait&&);
+        ASTTrait& operator=(ASTTrait&&);
 
-        const GenericParams& params() const {
+        const ASTGenericParams& params() const {
             return mParams;
         }
 
-        GenericParams& params() {
+        ASTGenericParams& params() {
             return mParams;
         }
 
@@ -330,25 +329,25 @@ namespace AST {
             return mSupertraits;
         }
 
-        const ::std::vector<Spanned<LifetimeRef>>& lifetimes() const {
+        const ::std::vector<Spanned<ASTLifetimeRef>>& lifetimes() const {
             return mLifetimes;
         }
 
-        ::std::vector<Spanned<LifetimeRef>>& lifetimes() {
+        ::std::vector<Spanned<ASTLifetimeRef>>& lifetimes() {
             return mLifetimes;
         }
 
-        const NamedList<Item>& items() const {
+        const ASTNamedList<ASTItem>& items() const {
             return mItems;
         }
 
-        NamedList<Item>& items() {
+        ASTNamedList<ASTItem>& items() {
             return mItems;
         }
 
-        void addType(Span sp, RcString name, AttributeList attrs, TypeRef type);
-        void addFunction(Span sp, RcString name, AttributeList attrs, Function fcn);
-        void addStatic(Span sp, RcString name, AttributeList attrs, Static v);
+        void addType(Span sp, RcString name, ASTAttributeList attrs, TypeRef type);
+        void addFunction(Span sp, RcString name, ASTAttributeList attrs, ASTFunction fcn);
+        void addStatic(Span sp, RcString name, ASTAttributeList attrs, ASTStatic v);
 
         void setIsMarker();
         bool isMarker() const;
@@ -363,32 +362,32 @@ namespace AST {
 
         bool hasNamedItem(const RcString& name, bool& outIsFcn) const;
 
-        Trait clone() const;
+        ASTTrait clone() const;
     };
 
-    TAGGED_UNION_EX(EnumVariantData, (), Unit, ((Unit, struct {}), (Tuple, struct { ::std::vector<TupleItem> mItems; }), (Struct, struct { ::std::vector<StructItem> fields; })), (), (), (public:));
+    TAGGED_UNION_EX(ASTEnumVariantData, (), Unit, ((Unit, struct {}), (Tuple, struct { ::std::vector<ASTTupleItem> mItems; }), (Struct, struct { ::std::vector<ASTStructItem> fields; })), (), (), (public:));
 
-    struct EnumVariant {
-        AttributeList mAttrs;
+    struct ASTEnumVariant {
+        ASTAttributeList mAttrs;
         RcString mName;
-        EnumVariantData mData;
+        ASTEnumVariantData mData;
         /// Optional discriminant value
-        Expr discriminantValue;
+        ASTExpr discriminantValue;
 
-        EnumVariant();
+        ASTEnumVariant();
 
-        EnumVariant(AttributeList attrs, RcString name);
+        ASTEnumVariant(ASTAttributeList attrs, RcString name);
 
-        EnumVariant(AttributeList attrs, RcString name, ::std::vector<TupleItem> subTypes);
+        ASTEnumVariant(ASTAttributeList attrs, RcString name, ::std::vector<ASTTupleItem> subTypes);
 
-        EnumVariant(AttributeList attrs, RcString name, ::std::vector<StructItem> fields);
+        ASTEnumVariant(ASTAttributeList attrs, RcString name, ::std::vector<ASTStructItem> fields);
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const EnumVariant& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTEnumVariant& x);
     };
 
-    class Enum {
-        GenericParams mParams;
-        ::std::vector<EnumVariant> mVariants;
+    class ASTEnum {
+        ASTGenericParams mParams;
+        ::std::vector<ASTEnumVariant> mVariants;
 
     public:
         struct Markings {
@@ -411,36 +410,36 @@ namespace AST {
             uint64_t alignValue = 0;
         } markings;
 
-        Enum();
+        ASTEnum();
 
-        Enum(GenericParams params, ::std::vector<EnumVariant> variants);
+        ASTEnum(ASTGenericParams params, ::std::vector<ASTEnumVariant> variants);
 
-        const GenericParams& params() const {
+        const ASTGenericParams& params() const {
             return mParams;
         }
 
-        GenericParams& params() {
+        ASTGenericParams& params() {
             return mParams;
         }
 
-        const ::std::vector<EnumVariant>& variants() const {
+        const ::std::vector<ASTEnumVariant>& variants() const {
             return mVariants;
         }
 
-        ::std::vector<EnumVariant>& variants() {
+        ::std::vector<ASTEnumVariant>& variants() {
             return mVariants;
         }
 
-        Enum clone() const;
+        ASTEnum clone() const;
     };
 
-    TAGGED_UNION_EX(StructData, (), Struct, ((Unit, struct {}), (Tuple, struct { ::std::vector<TupleItem> ents; }), (Struct, struct { ::std::vector<StructItem> ents; })), (), (), (public:));
+    TAGGED_UNION_EX(ASTStructData, (), Struct, ((Unit, struct {}), (Tuple, struct { ::std::vector<ASTTupleItem> ents; }), (Struct, struct { ::std::vector<ASTStructItem> ents; })), (), (), (public:));
 
-    class Struct {
-        GenericParams mParams;
+    class ASTStruct {
+        ASTGenericParams mParams;
 
     public:
-        StructData mData;
+        ASTStructData mData;
 
         struct Markings {
             Markings();
@@ -462,29 +461,29 @@ namespace AST {
             U128 scalarValidEnd;
         } markings;
 
-        Struct();
+        ASTStruct();
 
-        Struct(GenericParams params);
+        ASTStruct(ASTGenericParams params);
 
-        Struct(GenericParams params, ::std::vector<StructItem> fields);
+        ASTStruct(ASTGenericParams params, ::std::vector<ASTStructItem> fields);
 
-        Struct(GenericParams params, ::std::vector<TupleItem> fields);
+        ASTStruct(ASTGenericParams params, ::std::vector<ASTTupleItem> fields);
 
-        const GenericParams& params() const {
+        const ASTGenericParams& params() const {
             return mParams;
         }
 
-        GenericParams& params() {
+        ASTGenericParams& params() {
             return mParams;
         }
 
-        Struct clone() const;
+        ASTStruct clone() const;
     };
 
-    class Union {
+    class ASTUnion {
     public:
-        GenericParams mParams;
-        ::std::vector<StructItem> mVariants;
+        ASTGenericParams mParams;
+        ::std::vector<ASTStructItem> mVariants;
 
         struct Markings {
             enum class Repr {
@@ -494,31 +493,31 @@ namespace AST {
             } repr = Repr::Rust;
         } markings;
 
-        Union(GenericParams params, ::std::vector<StructItem> fields);
+        ASTUnion(ASTGenericParams params, ::std::vector<ASTStructItem> fields);
 
-        const GenericParams& params() const {
+        const ASTGenericParams& params() const {
             return mParams;
         }
 
-        GenericParams& params() {
+        ASTGenericParams& params() {
             return mParams;
         }
 
-        Union clone() const;
+        ASTUnion clone() const;
     };
 
-    class ImplDef {
+    class ASTImplDef {
         bool mIsUnsafe;
         bool mIsConst;
-        GenericParams mParams;
-        Spanned<Path> mTrait;
+        ASTGenericParams mParams;
+        Spanned<ASTPath> mTrait;
         TypeRef mType;
 
     public:
-        ImplDef(GenericParams params, Spanned<Path> traitType, TypeRef implType);
+        ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, TypeRef implType);
 
-        ImplDef(ImplDef&&) /*noexcept*/ = default;
-        ImplDef& operator=(ImplDef&&) = default;
+        ASTImplDef(ASTImplDef&&) /*noexcept*/ = default;
+        ASTImplDef& operator=(ASTImplDef&&) = default;
 
         void setIsUnsafe() {
             mIsUnsafe = true;
@@ -536,19 +535,19 @@ namespace AST {
             return mIsConst;
         }
 
-        const GenericParams& params() const {
+        const ASTGenericParams& params() const {
             return mParams;
         }
 
-        GenericParams& params() {
+        ASTGenericParams& params() {
             return mParams;
         }
 
-        const Spanned<Path>& trait() const {
+        const Spanned<ASTPath>& trait() const {
             return mTrait;
         }
 
-        Spanned<Path>& trait() {
+        Spanned<ASTPath>& trait() {
             return mTrait;
         }
 
@@ -560,23 +559,23 @@ namespace AST {
             return mType;
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const ImplDef& impl);
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTImplDef& impl);
     };
 
-    class Impl {
+    class ASTImpl {
     public:
         struct ImplItem {
             Span sp;
-            AttributeList attrs;
-            AST::Visibility vis; // Ignored for trait impls
+            ASTAttributeList attrs;
+            ASTVisibility vis; // Ignored for trait impls
             bool isSpecialisable;
             RcString name;
 
-            ::std::unique_ptr<Item> data;
+            ::std::unique_ptr<ASTItem> data;
         };
 
     private:
-        ImplDef mDef;
+        ASTImplDef mDef;
 
         ::std::vector<ImplItem> mItems;
         //NamedList<TypeRef>   m_types;
@@ -584,21 +583,21 @@ namespace AST {
         //NamedList<Static>    m_statics;
 
     public:
-        Impl(Impl&&) /*noexcept*/;
-        Impl(ImplDef def);
-        ~Impl();
-        Impl& operator=(Impl&&);
+        ASTImpl(ASTImpl&&) /*noexcept*/;
+        ASTImpl(ASTImplDef def);
+        ~ASTImpl();
+        ASTImpl& operator=(ASTImpl&&);
 
-        void addFunction(Span sp, AttributeList attrs, AST::Visibility vis, bool isSpecialisable, RcString name, Function fcn);
-        void addType(Span sp, AttributeList attrs, AST::Visibility vis, bool isSpecialisable, RcString name, GenericParams params, TypeRef type);
-        void addStatic(Span sp, AttributeList attrs, AST::Visibility vis, bool isSpecialisable, RcString name, Static v);
-        void addMacroInvocation(MacroInvocation inv);
+        void addFunction(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTFunction fcn);
+        void addType(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTGenericParams params, TypeRef type);
+        void addStatic(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTStatic v);
+        void addMacroInvocation(ASTMacroInvocation inv);
 
-        const ImplDef& def() const {
+        const ASTImplDef& def() const {
             return mDef;
         }
 
-        ImplDef& def() {
+        ASTImplDef& def() {
             return mDef;
         }
 
@@ -612,30 +611,30 @@ namespace AST {
 
         bool hasNamedItem(const RcString& name) const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const Impl& impl);
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTImpl& impl);
 
     private:
     };
 
-    struct UseItem {
+    struct ASTUseItem {
         Span sp; // Span covering the entire `use foo;`
 
         struct Ent {
             Span sp; // Span covering just the path (final component)
-            ::AST::Path path;
+            ASTPath path;
             RcString name; // If "", this is a glob/wildcard use
-            friend ::std::ostream& operator<<(::std::ostream& os, const UseItem::Ent& x);
+            friend ::std::ostream& operator<<(::std::ostream& os, const ASTUseItem::Ent& x);
         };
 
         ::std::vector<Ent> entries;
 
-        UseItem clone() const;
+        ASTUseItem clone() const;
         //friend ::std::ostream& operator<<(::std::ostream& os, const UseItem& x);
     };
 
-    class ExternBlock {
+    class ASTExternBlock {
         ::std::string mAbi;
-        ::std::vector<Named<Item>> mItems;
+        ::std::vector<ASTNamed<ASTItem>> mItems;
 
     public:
         struct Link {
@@ -644,50 +643,50 @@ namespace AST {
 
         std::vector<Link> libraries;
 
-        ExternBlock(::std::string abi);
-        ~ExternBlock();
-        ExternBlock(ExternBlock&&);
-        ExternBlock& operator=(ExternBlock&&);
+        ASTExternBlock(::std::string abi);
+        ~ASTExternBlock();
+        ASTExternBlock(ASTExternBlock&&);
+        ASTExternBlock& operator=(ASTExternBlock&&);
 
         const ::std::string& abi() const {
             return mAbi;
         }
 
-        void addItem(Named<Item> namedItem);
+        void addItem(ASTNamed<ASTItem> namedItem);
 
         // NOTE: Only Function and Static are valid.
-        ::std::vector<Named<Item>>& items() {
+        ::std::vector<ASTNamed<ASTItem>>& items() {
             return mItems;
         }
 
-        const ::std::vector<Named<Item>>& items() const {
+        const ::std::vector<ASTNamed<ASTItem>>& items() const {
             return mItems;
         }
 
-        ExternBlock clone() const;
+        ASTExternBlock clone() const;
     };
 
-    class GlobalAsm {
+    class ASTGlobalAsm {
     public:
         ::std::vector<AsmLine> lines;
-        ::std::vector<AST::Path> symbols;
+        ::std::vector<ASTPath> symbols;
         AsmOptions options;
     };
 
     /// Representation of a parsed (and being converted) function
-    class Module {
-        ::AST::AbsolutePath myPath;
+    class ASTModule {
+        ASTAbsolutePath myPath;
 
         // Module-level items
         /// General items
     public:
-        ::std::vector<std::unique_ptr<Named<Item>>> mItems;
+        ::std::vector<std::unique_ptr<ASTNamed<ASTItem>>> mItems;
 
     private:
         // --- Runtime caches and state ---
-        ::std::vector<::std::shared_ptr<Module>> anonModules;
+        ::std::vector<::std::shared_ptr<ASTModule>> anonModules;
 
-        ::std::vector<Named<MacroRulesPtr>> mMacros;
+        ::std::vector<ASTNamed<MacroRulesPtr>> mMacros;
 
     public:
         struct FileInfo {
@@ -712,8 +711,8 @@ namespace AST {
 
         struct IndexEnt {
             bool isImport; // Set if this item has a path that isn't `mod->path() + name`
-            ::AST::Visibility vis;
-            ::AST::Path path;
+            ASTVisibility vis;
+            ASTPath path;
         };
 
         // TODO: Document difference between namespace and Type
@@ -723,14 +722,14 @@ namespace AST {
         ::std::unordered_map<RcString, IndexEnt> valueItems;
         ::std::unordered_map<RcString, IndexEnt> macroItems;
         // Imported traits are in a different list, because collisions still apply for method lookup
-        ::std::vector<::AST::AbsolutePath> traits;
+        ::std::vector<ASTAbsolutePath> traits;
 
         // List of macros imported from other modules (via #[macro_use], includes proc macros)
         // - First value is an absolute path to the macro (including crate name)
         struct MacroImport {
             bool isPub;
             RcString name; // Can be different, if `use foo as bar` is used
-            AST::AbsolutePath path;
+            ASTAbsolutePath path;
             MacroRef ref;
 
             MacroImport clone() const {
@@ -743,88 +742,87 @@ namespace AST {
         struct Import {
             bool isPub;
             RcString name;
-            ::AST::Path path; // If `name` is "", then this is a module/enum to glob
+            ASTPath path; // If `name` is "", then this is a module/enum to glob
         };
 
         ::std::vector<Import> itemImports;
 
     public:
-        Module();
-        Module(::AST::AbsolutePath path);
-        ~Module();
-        Module(Module&&);
-        Module& operator=(Module&&);
+        ASTModule();
+        ASTModule(ASTAbsolutePath path);
+        ~ASTModule();
+        ASTModule(ASTModule&&);
+        ASTModule& operator=(ASTModule&&);
 
         bool isAnon() const {
             return myPath.nodes.size() > 0 && myPath.nodes.back().c_str()[0] == '#';
         }
 
         /// Create an anon module (for use inside expressions)
-        ::std::shared_ptr<AST::Module> addAnon();
+        ::std::shared_ptr<ASTModule> addAnon();
 
-        void addItem(Named<Item> item);
-        void addItem(Span sp, Visibility vis, RcString name, Item it, AttributeList attrs);
-        void addExtCrate(Span sp, Visibility vis, RcString extName, RcString impName, AttributeList attrs);
-        void addMacroInvocation(MacroInvocation item);
+        void addItem(ASTNamed<ASTItem> item);
+        void addItem(Span sp, ASTVisibility vis, RcString name, ASTItem it, ASTAttributeList attrs);
+        void addExtCrate(Span sp, ASTVisibility vis, RcString extName, RcString impName, ASTAttributeList attrs);
+        void addMacroInvocation(ASTMacroInvocation item);
 
         void addMacro(bool isExported, RcString name, MacroRulesPtr macro);
 
-        const ::AST::AbsolutePath& path() const {
+        const ASTAbsolutePath& path() const {
             return myPath;
         }
 
         //      ::std::vector<Named<Item>>& items()       { return m_items; }
         //const ::std::vector<Named<Item>>& items() const { return m_items; }
 
-        ::std::vector<::std::shared_ptr<Module>>& anonMods() {
+        ::std::vector<::std::shared_ptr<ASTModule>>& anonMods() {
             return anonModules;
         }
 
-        const ::std::vector<::std::shared_ptr<Module>>& anonMods() const {
+        const ::std::vector<::std::shared_ptr<ASTModule>>& anonMods() const {
             return anonModules;
         }
 
-        NamedList<MacroRulesPtr>& macros() {
+        ASTNamedList<MacroRulesPtr>& macros() {
             return mMacros;
         }
 
-        const NamedList<MacroRulesPtr>& macros() const {
+        const ASTNamedList<MacroRulesPtr>& macros() const {
             return mMacros;
         }
     };
 
     TAGGED_UNION_EX(
-        Item,
+        ASTItem,
         (),
         None,
         ((None, struct {}),
-         (MacroInv, MacroInvocation),
+         (MacroInv, ASTMacroInvocation),
          // TODO: MacroDefinition
-         (Use, UseItem),
+         (Use, ASTUseItem),
 
          // Nameless items
-         (ExternBlock, ExternBlock),
-         (GlobalAsm, GlobalAsm),
-         (Impl, Impl),
-         (NegImpl, ImplDef),
+         (ExternBlock, ASTExternBlock),
+         (GlobalAsm, ASTGlobalAsm),
+         (Impl, ASTImpl),
+         (NegImpl, ASTImplDef),
 
          (Macro, MacroRulesPtr),
-         (Module, Module),
+         (Module, ASTModule),
          (Crate, struct { RcString name; }),
 
-         (Type, TypeAlias),
-         (Struct, Struct),
-         (Enum, Enum),
-         (Union, Union),
-         (Trait, Trait),
-         (TraitAlias, TraitAlias),
+         (Type, ASTTypeAlias),
+         (Struct, ASTStruct),
+         (Enum, ASTEnum),
+         (Union, ASTUnion),
+         (Trait, ASTTrait),
+         (TraitAlias, ASTTraitAlias),
 
-         (Function, Function),
-         (Static, Static)),
+         (Function, ASTFunction),
+         (Static, ASTStatic)),
 
         (),
         (),
-        (Item clone() const;)
+        (ASTItem clone() const;)
     );
 
-} // namespace AST

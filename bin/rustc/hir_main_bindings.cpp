@@ -379,7 +379,7 @@ public:
 
     ::MacroRules deserialiseMacrorules() {
         auto crateName = in.readIstring();
-        auto edition = static_cast<AST::Edition>(in.readTag());
+        auto edition = static_cast<ASTEdition>(in.readTag());
         ::MacroRules rv(crateName, edition);
         // NOTE: This is set after loading.
         //rv.m_exported = true;
@@ -1575,7 +1575,7 @@ void HirDeserialiser::deserialiseCrate(::HIR::Crate& rv) {
     assert(this->crateName != "" && "Empty crate name loaded from metadata");
     gVisPrivate = ::HIR::Publicity::newPriv(::HIR::SimplePath(this->crateName));
     rv.crateName = this->crateName;
-    rv.edition = static_cast<AST::Edition>(in.readTag());
+    rv.edition = static_cast<ASTEdition>(in.readTag());
     rv.mRootModule = deserialiseModule();
 
     rv.typeImpls = D<::HIR::Crate::ImplGroup<std::unique_ptr<::HIR::TypeImpl>>>::des(*this);

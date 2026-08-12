@@ -5,26 +5,25 @@
 #include "ast_types.h"
 #include "ast_path.h"
 
-namespace AST {
 
-    class TypeParam {
-        ::AST::AttributeList mAttrs;
+    class ASTTypeParam {
+        ASTAttributeList mAttrs;
         Span mSpan;
         // TODO: use an Ident?
         RcString mName;
         ::TypeRef mDefaultValue;
 
     public:
-        TypeParam(TypeParam&& x) = default;
-        TypeParam& operator=(TypeParam&& x) = default;
+        ASTTypeParam(ASTTypeParam&& x) = default;
+        ASTTypeParam& operator=(ASTTypeParam&& x) = default;
 
-        explicit TypeParam(const TypeParam& x);
+        explicit ASTTypeParam(const ASTTypeParam& x);
 
-        TypeParam(Span sp, ::AST::AttributeList attrs, RcString name);
+        ASTTypeParam(Span sp, ASTAttributeList attrs, RcString name);
 
         void setDefault(TypeRef type);
 
-        const ::AST::AttributeList& attrs() const {
+        const ASTAttributeList& attrs() const {
             return mAttrs;
         }
 
@@ -44,22 +43,22 @@ namespace AST {
             return mDefaultValue;
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const TypeParam& tp);
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTTypeParam& tp);
     };
 
-    class LifetimeParam {
-        ::AST::AttributeList mAttrs;
+    class ASTLifetimeParam {
+        ASTAttributeList mAttrs;
         Span mSpan;
         Ident mName;
 
     public:
-        LifetimeParam(Span sp, ::AST::AttributeList attrs, Ident name);
+        ASTLifetimeParam(Span sp, ASTAttributeList attrs, Ident name);
 
-        LifetimeParam(LifetimeParam&&) = default;
-        LifetimeParam& operator=(LifetimeParam&&) = default;
-        explicit LifetimeParam(const LifetimeParam&) = default;
+        ASTLifetimeParam(ASTLifetimeParam&&) = default;
+        ASTLifetimeParam& operator=(ASTLifetimeParam&&) = default;
+        explicit ASTLifetimeParam(const ASTLifetimeParam&) = default;
 
-        const ::AST::AttributeList& attrs() const {
+        const ASTAttributeList& attrs() const {
             return mAttrs;
         }
 
@@ -71,25 +70,25 @@ namespace AST {
             return mName;
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const LifetimeParam& p);
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTLifetimeParam& p);
     };
 
-    class ValueParam {
-        ::AST::AttributeList mAttrs;
+    class ASTValueParam {
+        ASTAttributeList mAttrs;
         Span mSpan;
         Ident mName;
         TypeRef mType;
-        Expr mDefaultValue;
+        ASTExpr mDefaultValue;
 
     public:
-        ValueParam(Span sp, ::AST::AttributeList attrs, Ident name, TypeRef type, Expr val);
+        ASTValueParam(Span sp, ASTAttributeList attrs, Ident name, TypeRef type, ASTExpr val);
 
-        ValueParam(ValueParam&&) = default;
-        ValueParam& operator=(ValueParam&&) = default;
+        ASTValueParam(ASTValueParam&&) = default;
+        ASTValueParam& operator=(ASTValueParam&&) = default;
 
-        explicit ValueParam(const ValueParam& x);
+        explicit ASTValueParam(const ASTValueParam& x);
 
-        const ::AST::AttributeList& attrs() const {
+        const ASTAttributeList& attrs() const {
             return mAttrs;
         }
 
@@ -109,22 +108,22 @@ namespace AST {
             return mType;
         }
 
-        const Expr& defaultValue() const {
+        const ASTExpr& defaultValue() const {
             return mDefaultValue;
         }
 
-        Expr& defaultValue() {
+        ASTExpr& defaultValue() {
             return mDefaultValue;
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const ValueParam& p);
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTValueParam& p);
     };
 
     TAGGED_UNION_EX(
         GenericParam,
         (),
         None,
-        ((None, struct {}), (Lifetime, LifetimeParam), (Type, TypeParam), (Value, ValueParam)),
+        ((None, struct {}), (Lifetime, ASTLifetimeParam), (Type, ASTTypeParam), (Value, ASTValueParam)),
         (, boundsStart(x.boundsStart), boundsEnd(x.boundsEnd)),
         (boundsStart = x.boundsStart; boundsEnd = x.boundsEnd;),
         (size_t boundsStart = 0; size_t boundsEnd = 0; GenericParam clone() const;
@@ -135,43 +134,43 @@ namespace AST {
     // HigherRankedBounds is defined in `types.h`
 
     TAGGED_UNION_EX(
-        GenericBound,
+        ASTGenericBound,
         (),
         None,
         ((None, struct {}),
          // Lifetime bound: 'test must be valid for 'bound
          (Lifetime,
           struct {
-              LifetimeRef test;
-              LifetimeRef bound;
+              ASTLifetimeRef test;
+              ASTLifetimeRef bound;
           }),
          // Type lifetime bound
          (TypeLifetime,
           struct {
               TypeRef type;
-              LifetimeRef bound;
+              ASTLifetimeRef bound;
           }),
          // Standard trait bound: "Type: [for<'a>] Trait"
          (IsTrait,
           struct {
               Span span;
-              HigherRankedBounds outerHrbs;
+              ASTHigherRankedBounds outerHrbs;
               TypeRef type;
-              HigherRankedBounds innerHrbs;
-              AST::Path trait;
-              BoundConstness constness = BoundConstness::Never;
+              ASTHigherRankedBounds innerHrbs;
+              ASTPath trait;
+              ASTBoundConstness constness = ASTBoundConstness::Never;
           }),
          // Removed trait bound: "Type: ?Trait"
          (MaybeTrait,
           struct {
               TypeRef type;
-              AST::Path trait;
+              ASTPath trait;
           }),
          // Negative trait bound: "Type: !Trait"
          (NotTrait,
           struct {
               TypeRef type;
-              AST::Path trait;
+              ASTPath trait;
           }),
          // Type equality: "Type = Replacement"
          (Equality,
@@ -186,56 +185,55 @@ namespace AST {
 
          Span span;
 
-         GenericBound clone() const {
-             TU_MATCH(GenericBound, ((*this)), (ent), (None, return make_None({});), (Lifetime, return make_Lifetime({ent.test, ent.bound});), (TypeLifetime, return make_TypeLifetime({ent.type.clone(), ent.bound});), (IsTrait, return make_IsTrait({ent.span, ent.outerHrbs, ent.type.clone(), ent.innerHrbs, ent.trait, ent.constness});), (MaybeTrait, return make_MaybeTrait({ent.type.clone(), ent.trait});), (NotTrait, return make_NotTrait({ent.type.clone(), ent.trait});), (Equality, return make_Equality({ent.type.clone(), ent.replacement.clone()});))
-             return GenericBound();
+         ASTGenericBound clone() const {
+             TU_MATCH(ASTGenericBound, ((*this)), (ent), (None, return make_None({});), (Lifetime, return make_Lifetime({ent.test, ent.bound});), (TypeLifetime, return make_TypeLifetime({ent.type.clone(), ent.bound});), (IsTrait, return make_IsTrait({ent.span, ent.outerHrbs, ent.type.clone(), ent.innerHrbs, ent.trait, ent.constness});), (MaybeTrait, return make_MaybeTrait({ent.type.clone(), ent.trait});), (NotTrait, return make_NotTrait({ent.type.clone(), ent.trait});), (Equality, return make_Equality({ent.type.clone(), ent.replacement.clone()});))
+             return ASTGenericBound();
          })
     );
 
-    ::std::ostream& operator<<(::std::ostream& os, const GenericBound& x);
+    ::std::ostream& operator<<(::std::ostream& os, const ASTGenericBound& x);
 
-    class GenericParams {
+    class ASTGenericParams {
     public:
         ::std::vector<GenericParam> mParams;
-        ::std::vector<GenericBound> bounds;
+        ::std::vector<ASTGenericBound> bounds;
 
-        GenericParams();
+        ASTGenericParams();
 
-        GenericParams(GenericParams&& x) = default;
-        GenericParams& operator=(GenericParams&& x) = default;
-        GenericParams(const GenericParams& x) = delete;
+        ASTGenericParams(ASTGenericParams&& x) = default;
+        ASTGenericParams& operator=(ASTGenericParams&& x) = default;
+        ASTGenericParams(const ASTGenericParams& x) = delete;
 
-        GenericParams clone() const;
+        ASTGenericParams clone() const;
 
         void addParam(GenericParam gp, size_t boundsStart, size_t boundsEnd);
 
-        void addLftParam(LifetimeParam lft) {
+        void addLftParam(ASTLifetimeParam lft) {
             addParam(::std::move(lft), SIZE_MAX, SIZE_MAX);
         }
 
-        void addLftParam(LifetimeParam lft, size_t boundsStart, size_t boundsEnd) {
+        void addLftParam(ASTLifetimeParam lft, size_t boundsStart, size_t boundsEnd) {
             addParam(::std::move(lft), boundsStart, boundsEnd);
         }
 
-        void addTyParam(TypeParam param) {
+        void addTyParam(ASTTypeParam param) {
             addParam(::std::move(param), SIZE_MAX, SIZE_MAX);
         }
 
-        void addTyParam(TypeParam param, size_t boundsStart, size_t boundsEnd) {
+        void addTyParam(ASTTypeParam param, size_t boundsStart, size_t boundsEnd) {
             addParam(::std::move(param), boundsStart, boundsEnd);
         }
 
-        void addValueParam(Span sp, AttributeList attrs, Ident name, TypeRef ty, Expr val) {
-            mParams.push_back(ValueParam(mv$(sp), mv$(attrs), mv$(name), mv$(ty), mv$(val)));
+        void addValueParam(Span sp, ASTAttributeList attrs, Ident name, TypeRef ty, ASTExpr val) {
+            mParams.push_back(ASTValueParam(mv$(sp), mv$(attrs), mv$(name), mv$(ty), mv$(val)));
         }
 
-        void addBound(GenericBound bound) {
+        void addBound(ASTGenericBound bound) {
             bounds.push_back(::std::move(bound));
         }
 
         int findName(const char* name) const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const GenericParams& tp);
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTGenericParams& tp);
     };
 
-}

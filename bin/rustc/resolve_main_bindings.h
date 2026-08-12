@@ -1,9 +1,7 @@
 #pragma once
 
-namespace AST {
-    class Crate;
-}
+    class ASTCrate;
 
-extern void ResolveUse(::AST::Crate& crate);
-extern void ResolveIndex(::AST::Crate& crate);
-extern void ResolveAbsolutise(::AST::Crate& crate);
+extern void ResolveUse(ASTCrate& crate);
+extern void ResolveIndex(ASTCrate& crate);
+extern void ResolveAbsolutise(ASTCrate& crate);

@@ -11,44 +11,40 @@
 //#include "ast/path.h"
 #include "tagged_union.h"
 
-namespace AST {
-    class ExprNode;
-    class Expr;
-    class LifetimeParam;
+    class ASTExprNode;
+    class ASTExpr;
+    class ASTLifetimeParam;
 
-    class Path;
-    struct PathParams;
-    class MacroInvocation;
-}
+    class ASTPath;
+    struct ASTPathParams;
+    class ASTMacroInvocation;
 class TypeRef;
 
-namespace AST {
 
-    enum class BoundConstness : uint8_t {
+    enum class ASTBoundConstness : uint8_t {
         Never,
         Always,
         Maybe,
     };
 
     // Defined here for dependency reasons
-    class HigherRankedBounds {
+    class ASTHigherRankedBounds {
     public:
-        ::std::vector<LifetimeParam> mLifetimes;
+        ::std::vector<ASTLifetimeParam> mLifetimes;
         //::std::vector<TypeParam>    m_types;
         //::std::vector<GenericBound>    m_bounds;
 
-        HigherRankedBounds();
-        ~HigherRankedBounds();
-        HigherRankedBounds(HigherRankedBounds&&);
-        HigherRankedBounds& operator=(HigherRankedBounds&&);
-        HigherRankedBounds(const HigherRankedBounds&);
+        ASTHigherRankedBounds();
+        ~ASTHigherRankedBounds();
+        ASTHigherRankedBounds(ASTHigherRankedBounds&&);
+        ASTHigherRankedBounds& operator=(ASTHigherRankedBounds&&);
+        ASTHigherRankedBounds(const ASTHigherRankedBounds&);
 
         bool empty() const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const HigherRankedBounds& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const ASTHigherRankedBounds& x);
     };
 
-}
 
 class PrettyPrintType {
     const TypeRef& mType;
@@ -62,7 +58,7 @@ public:
 };
 
 struct TypeFunction {
-    AST::HigherRankedBounds hrbs;
+    ASTHigherRankedBounds hrbs;
     bool isUnsafe;
     ::std::string mAbi;
     ::std::unique_ptr<TypeRef> mRettype;
@@ -70,7 +66,7 @@ struct TypeFunction {
     bool isVariadic;
 
     TypeFunction();
-    TypeFunction(AST::HigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool isVariadic);
+    TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool isVariadic);
     ~TypeFunction();
     TypeFunction(TypeFunction&& other);
     TypeFunction(const TypeFunction& other);
@@ -79,12 +75,12 @@ struct TypeFunction {
 };
 
 struct TypeTraitPath {
-    AST::HigherRankedBounds hrbs;
-    ::std::unique_ptr<AST::Path> path;
-    AST::BoundConstness constness = AST::BoundConstness::Never;
+    ASTHigherRankedBounds hrbs;
+    ::std::unique_ptr<ASTPath> path;
+    ASTBoundConstness constness = ASTBoundConstness::Never;
 
     TypeTraitPath();
-    TypeTraitPath(AST::HigherRankedBounds hrbs, AST::Path path, AST::BoundConstness constness = AST::BoundConstness::Never);
+    TypeTraitPath(ASTHigherRankedBounds hrbs, ASTPath path, ASTBoundConstness constness = ASTBoundConstness::Never);
     ~TypeTraitPath();
     TypeTraitPath(TypeTraitPath&&);
     TypeTraitPath(const TypeTraitPath&);
@@ -95,8 +91,8 @@ struct TypeTraitPath {
 struct TypeErasedType {
     ::std::vector<TypeTraitPath> traits;
     ::std::vector<TypeTraitPath> maybeTraits;
-    ::std::vector<AST::LifetimeRef> lifetimes;
-    ::std::unique_ptr<AST::PathParams> use;
+    ::std::vector<ASTLifetimeRef> lifetimes;
+    ::std::unique_ptr<ASTPathParams> use;
     /// Was this `impl` from 2024 or later edition? This changes the behaviour if `use` is not present
     bool isEdition2024OrLater;
 };
@@ -108,13 +104,13 @@ TAGGED_UNION_OUT_OF_LINE(
     (Any, struct {}),
     (Bang, struct {}),
     (Unit, struct {}),
-    (Macro, struct { ::std::unique_ptr<::AST::MacroInvocation> inv; }),
+    (Macro, struct { ::std::unique_ptr<ASTMacroInvocation> inv; }),
     (Primitive, struct { enum eCoreType coreType; }),
     (Function, struct { TypeFunction info; }),
     (Tuple, struct { ::std::vector<TypeRef> innerTypes; }),
     (Borrow,
      struct {
-         AST::LifetimeRef lifetime;
+         ASTLifetimeRef lifetime;
          bool isMut;
          ::std::unique_ptr<TypeRef> inner;
      }),
@@ -127,7 +123,7 @@ TAGGED_UNION_OUT_OF_LINE(
      struct {
          ::std::unique_ptr<TypeRef> inner;
          // If `nullptr` - this is an inferred size
-         ::std::shared_ptr<AST::ExprNode> size;
+         ::std::shared_ptr<ASTExprNode> size;
      }),
     (Slice, struct { ::std::unique_ptr<TypeRef> inner; }),
     (Generic,
@@ -135,11 +131,11 @@ TAGGED_UNION_OUT_OF_LINE(
          RcString name;
          unsigned int index;
      }),
-    (Path, ::std::unique_ptr<AST::Path>),
+    (Path, ::std::unique_ptr<ASTPath>),
     (TraitObject,
      struct {
          ::std::vector<TypeTraitPath> traits;
-         ::std::vector<AST::LifetimeRef> lifetimes;
+         ::std::vector<ASTLifetimeRef> lifetimes;
      }),
     (ErasedType, std::unique_ptr<TypeErasedType>)
 );
@@ -182,7 +178,7 @@ public:
 
     struct TagMacro {};
 
-    TypeRef(TagMacro, ::AST::MacroInvocation inv);
+    TypeRef(TagMacro, ASTMacroInvocation inv);
 
     struct TagUnit {}; // unit maps to a zero-length tuple, just easier to type
 
@@ -200,11 +196,11 @@ public:
 
     struct TagFunction {};
 
-    TypeRef(TagFunction, Span sp, AST::HigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<TypeRef> args, bool isVariadic, TypeRef ret);
+    TypeRef(TagFunction, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<TypeRef> args, bool isVariadic, TypeRef ret);
 
     struct TagReference {};
 
-    TypeRef(TagReference, Span sp, AST::LifetimeRef lft, bool isMut, TypeRef innerType);
+    TypeRef(TagReference, Span sp, ASTLifetimeRef lft, bool isMut, TypeRef innerType);
 
     struct TagPointer {};
 
@@ -212,7 +208,7 @@ public:
 
     struct TagSizedArray {};
 
-    TypeRef(TagSizedArray, Span sp, TypeRef innerType, ::std::shared_ptr<AST::ExprNode> size);
+    TypeRef(TagSizedArray, Span sp, TypeRef innerType, ::std::shared_ptr<ASTExprNode> size);
 
     struct TagUnsizedArray {};
 
@@ -226,10 +222,10 @@ public:
 
     struct TagPath {};
 
-    TypeRef(TagPath, Span sp, AST::Path path);
-    TypeRef(Span sp, AST::Path path);
+    TypeRef(TagPath, Span sp, ASTPath path);
+    TypeRef(Span sp, ASTPath path);
 
-    TypeRef(Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<AST::LifetimeRef> lifetimes);
+    TypeRef(Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes);
 
     const Span& span() const {
         return mSpan;
@@ -259,11 +255,11 @@ public:
         return mData.is_Path();
     }
 
-    const AST::Path& path() const {
+    const ASTPath& path() const {
         return *mData.as_Path();
     }
 
-    AST::Path& path() {
+    ASTPath& path() {
         return *mData.as_Path();
     }
 
