@@ -2,7 +2,7 @@
 
 #include "span.h"
 #include "common.h"
-#include "stdspan.h"
+#include <span>
 #include "hir_expr_ptr.h"
 #include "hir_type_ref.h"
 #include "tagged_union.h"

@@ -2,7 +2,7 @@
 
 #include "ast_ast.h"
 #include "hir_hir.h"
-#include "stdspan.h" // std::span
+#include <span> // std::span
 #include "ast_expr.h"
 #include "settings.h"
 #include "ast_crate.h"
