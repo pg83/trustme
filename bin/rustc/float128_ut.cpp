@@ -15,9 +15,9 @@ namespace {
         uint64_t bHi, bLo;
         uint64_t addHi, addLo;
         uint64_t sub_hi, sub_lo;
-        uint64_t mul_hi, mul_lo;
+        uint64_t mulHi, mulLo;
         uint64_t divHi, divLo;
-        uint64_t mod_hi, mod_lo;
+        uint64_t modHi, modLo;
     };
 
     struct ConvertVector {
@@ -87,10 +87,10 @@ STD_TEST_SUITE(Float128Vectors) {
             STD_INSIST(same_bits(a + b, v.addHi, v.addLo));
             STD_INSIST(same_bits(b + a, v.addHi, v.addLo));
             STD_INSIST(same_bits(a - b, v.sub_hi, v.sub_lo));
-            STD_INSIST(same_bits(a * b, v.mul_hi, v.mul_lo));
-            STD_INSIST(same_bits(b * a, v.mul_hi, v.mul_lo));
+            STD_INSIST(same_bits(a * b, v.mulHi, v.mulLo));
+            STD_INSIST(same_bits(b * a, v.mulHi, v.mulLo));
             STD_INSIST(same_bits(a / b, v.divHi, v.divLo));
-            STD_INSIST(same_bits(Float128::remainder(a, b), v.mod_hi, v.mod_lo));
+            STD_INSIST(same_bits(Float128::remainder(a, b), v.modHi, v.modLo));
         }
     }
 
@@ -174,9 +174,9 @@ STD_TEST_SUITE(Float128Specials) {
         STD_INSIST((one / Float128()).isInfinite());
         STD_INSIST(same_bits(one / Float128(), inf.bitsHi(), inf.bitsLo()));
         // Overflow rounds to infinity
-        const auto max_normal = Float128::fromBits(0x7ffe'ffff'ffff'ffffull, 0xffff'ffff'ffff'ffffull);
-        STD_INSIST((max_normal + max_normal).isInfinite());
-        STD_INSIST((max_normal * Float128(2.0)).isInfinite());
+        const auto maxNormal = Float128::fromBits(0x7ffe'ffff'ffff'ffffull, 0xffff'ffff'ffff'ffffull);
+        STD_INSIST((maxNormal + maxNormal).isInfinite());
+        STD_INSIST((maxNormal * Float128(2.0)).isInfinite());
     }
 
     STD_TEST(testZeroSigns) {
@@ -212,24 +212,24 @@ STD_TEST_SUITE(Float128Specials) {
         STD_INSIST(!(one >= nan));
         // Infinities order beyond every finite value
         const auto inf = Float128::infinity(false);
-        const auto neg_inf = Float128::infinity(true);
+        const auto negInf = Float128::infinity(true);
         STD_INSIST(one < inf);
         STD_INSIST(one <= inf);
         STD_INSIST(!(inf < one));
         STD_INSIST(inf > one);
-        STD_INSIST(neg_inf < one);
-        STD_INSIST(neg_inf < Float128(-1.0));
-        STD_INSIST(neg_inf < inf);
+        STD_INSIST(negInf < one);
+        STD_INSIST(negInf < Float128(-1.0));
+        STD_INSIST(negInf < inf);
         STD_INSIST(!(inf < inf));
         STD_INSIST(inf <= inf);
         STD_INSIST(inf == inf);
-        STD_INSIST(!(neg_inf > neg_inf));
-        STD_INSIST(neg_inf >= neg_inf);
+        STD_INSIST(!(negInf > negInf));
+        STD_INSIST(negInf >= negInf);
         STD_INSIST(Float128() < inf);
-        STD_INSIST(neg_inf < Float128());
-        const auto max_normal = Float128::fromBits(0x7ffe'ffff'ffff'ffffull, 0xffff'ffff'ffff'ffffull);
-        STD_INSIST(max_normal < inf);
-        STD_INSIST(neg_inf < -max_normal);
+        STD_INSIST(negInf < Float128());
+        const auto maxNormal = Float128::fromBits(0x7ffe'ffff'ffff'ffffull, 0xffff'ffff'ffff'ffffull);
+        STD_INSIST(maxNormal < inf);
+        STD_INSIST(negInf < -maxNormal);
         STD_INSIST(!(nan < inf));
         STD_INSIST(!(inf < nan));
     }
@@ -238,15 +238,15 @@ STD_TEST_SUITE(Float128Specials) {
         const auto one = Float128(1.0);
         const auto two = Float128(2.0);
         const auto nan = Float128::quiet_nan();
-        STD_INSIST(same_bits(Float128::minimum_number(one, two), one.bitsHi(), one.bitsLo()));
-        STD_INSIST(same_bits(Float128::maximum_number(one, two), two.bitsHi(), two.bitsLo()));
+        STD_INSIST(same_bits(Float128::minimumNumber(one, two), one.bitsHi(), one.bitsLo()));
+        STD_INSIST(same_bits(Float128::maximumNumber(one, two), two.bitsHi(), two.bitsLo()));
         // A single NaN operand loses
-        STD_INSIST(same_bits(Float128::minimum_number(nan, two), two.bitsHi(), two.bitsLo()));
-        STD_INSIST(same_bits(Float128::maximum_number(one, nan), one.bitsHi(), one.bitsLo()));
-        STD_INSIST(Float128::minimum_number(nan, nan).isNan());
+        STD_INSIST(same_bits(Float128::minimumNumber(nan, two), two.bitsHi(), two.bitsLo()));
+        STD_INSIST(same_bits(Float128::maximumNumber(one, nan), one.bitsHi(), one.bitsLo()));
+        STD_INSIST(Float128::minimumNumber(nan, nan).isNan());
         // Signed zeros are distinguished
-        STD_INSIST(same_bits(Float128::minimum_number(Float128(), -Float128()), 0x8000'0000'0000'0000ull, 0));
-        STD_INSIST(same_bits(Float128::maximum_number(Float128(), -Float128()), 0, 0));
+        STD_INSIST(same_bits(Float128::minimumNumber(Float128(), -Float128()), 0x8000'0000'0000'0000ull, 0));
+        STD_INSIST(same_bits(Float128::maximumNumber(Float128(), -Float128()), 0, 0));
     }
 
     STD_TEST(testIntegerSaturation) {

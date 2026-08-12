@@ -22,7 +22,7 @@ enum class AllocatorDataTy {
 struct AllocatorMethod {
     const char* name;
     AllocatorDataTy ret;
-    size_t n_args;
+    size_t nArgs;
     const AllocatorDataTy* args; // Terminated by Never
 };
 enum class AllocatorKind {

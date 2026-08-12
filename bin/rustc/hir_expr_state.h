@@ -39,7 +39,7 @@ namespace HIR {
         };
         mutable Stage stage;
 
-        ExprState(::HIR::TypeInterner& types, const ::HIR::Module& mod_ptr, ::HIR::SimplePath mod_path);
+        ExprState(::HIR::TypeInterner& types, const ::HIR::Module& modPtr, ::HIR::SimplePath mod_path);
     };
 
 }

@@ -37,11 +37,11 @@ ItemPath::ItemPath(const ::HIR::SimplePath& path)
         return trait->clone();
     } else if (parent) {
         assert(name);
-        return parent->getSimplePath() + RcString::new_interned(name);
+        return parent->getSimplePath() + RcString::newInterned(name);
     } else {
         assert(!name);
         assert(crate_name);
-        return ::HIR::SimplePath(RcString::new_interned(crate_name));
+        return ::HIR::SimplePath(RcString::newInterned(crate_name));
     }
 }
 ::HIR::Path ItemPath::getFullPath() const {
@@ -57,10 +57,10 @@ ItemPath::ItemPath(const ::HIR::SimplePath& path)
     } else if (parent->trait) {
         assert(parent->ty);
         assert(parent->trait_params);
-        return ::HIR::Path(parent->ty, ::HIR::GenericPath(parent->trait->clone(), parent->trait_params->clone()), RcString::new_interned(name));
+        return ::HIR::Path(parent->ty, ::HIR::GenericPath(parent->trait->clone(), parent->trait_params->clone()), RcString::newInterned(name));
     } else {
         assert(parent->ty);
-        return ::HIR::Path(parent->ty, RcString::new_interned(name));
+        return ::HIR::Path(parent->ty, RcString::newInterned(name));
     }
 }
 const ItemPath& ItemPath::getTopIp() const {

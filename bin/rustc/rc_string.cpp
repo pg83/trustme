@@ -119,29 +119,29 @@ namespace {
             }
 
             // Find the block that starts with an element after this string
-            auto maybe_after = ::std::lower_bound(blocks.begin(), blocks.end(), sv, [](const Block& b, const StringView& sv) {
+            auto maybeAfter = ::std::lower_bound(blocks.begin(), blocks.end(), sv, [](const Block& b, const StringView& sv) {
                 return b.ents.front().ord(sv.p, sv.l) == OrdLess;
             });
 
-            if (maybe_after != blocks.end() && maybe_after->ents.front().ord(sv.p, sv.l) == OrdEqual) {
-                return std::make_pair(&maybe_after->ents.front(), false);
+            if (maybeAfter != blocks.end() && maybeAfter->ents.front().ord(sv.p, sv.l) == OrdEqual) {
+                return std::make_pair(&maybeAfter->ents.front(), false);
             }
             // Special case: The first block sorts after this string, so we need to add the new string to the start of it (or to a new block before)
-            else if (maybe_after == blocks.begin()) {
-                return insertIntoBlock(maybe_after, maybe_after->ents.begin(), RcString(sv));
+            else if (maybeAfter == blocks.begin()) {
+                return insertIntoBlock(maybeAfter, maybeAfter->ents.begin(), RcString(sv));
             }
             // Since the string sorts before the beginning of `maybe_after`, it should be in (or be added to) the previous block
             else {
-                auto maybe_block = maybe_after - 1;
-                auto& ents = maybe_block->ents;
-                auto maybe_pos = std::lower_bound(ents.begin(), ents.end(), sv, [](const RcString& s, const StringView& sv) {
+                auto maybeBlock = maybeAfter - 1;
+                auto& ents = maybeBlock->ents;
+                auto maybePos = std::lower_bound(ents.begin(), ents.end(), sv, [](const RcString& s, const StringView& sv) {
                     return s.ord(sv.p, sv.l) == OrdLess;
                 });
-                if (maybe_pos != ents.end() && maybe_pos->ord(sv.p, sv.l) == OrdEqual) {
-                    return std::make_pair(&*maybe_pos, false);
+                if (maybePos != ents.end() && maybePos->ord(sv.p, sv.l) == OrdEqual) {
+                    return std::make_pair(&*maybePos, false);
                 } else {
                     // Not equal, so it has to be above - so insert
-                    return insertIntoBlock(maybe_block, maybe_pos, RcString(sv));
+                    return insertIntoBlock(maybeBlock, maybePos, RcString(sv));
                 }
             }
         }
@@ -194,18 +194,18 @@ namespace {
             if (block->ents.size() == block->ents.capacity()) {
                 // Block is full, so create a new block and split the contents between the two
                 // - The new block should go after the current one, and get half of its contents
-                auto new_block = blocks.insert(block + 1, Block());
-                block = new_block - 1;
+                auto newBlock = blocks.insert(block + 1, Block());
+                block = newBlock - 1;
                 const auto split_point = block->ents.size() / 2;
                 if (static_cast<size_t>(slot - block->ents.begin()) >= split_point) {
                     // The target location is in the second half of the range, so we're inserting into the new block
-                    new_block->ents.insert(new_block->ents.end(), block->ents.begin() + split_point, slot);
-                    new_block->ents.push_back(rv);
-                    slot = new_block->ents.insert(new_block->ents.end(), slot, block->ents.end()) - 1;
+                    newBlock->ents.insert(newBlock->ents.end(), block->ents.begin() + split_point, slot);
+                    newBlock->ents.push_back(rv);
+                    slot = newBlock->ents.insert(newBlock->ents.end(), slot, block->ents.end()) - 1;
                     block->ents.resize(split_point);
                 } else {
                     // Target is in the lower half, so copy the entities and then insert
-                    new_block->ents.insert(new_block->ents.end(), block->ents.begin() + split_point, block->ents.end());
+                    newBlock->ents.insert(newBlock->ents.end(), block->ents.begin() + split_point, block->ents.end());
                     block->ents.resize(split_point);
                     slot = block->ents.insert(slot, rv);
                 }
@@ -243,7 +243,7 @@ namespace {
 TieredSet* RcStringInternedStrings;
 bool RcStringInternedOrderingValid;
 
-RcString RcString::new_interned(const char* s, size_t len) {
+RcString RcString::newInterned(const char* s, size_t len) {
     if (len == 0) {
         return RcString();
     }
@@ -260,7 +260,7 @@ RcString RcString::new_interned(const char* s, size_t len) {
     return *ret.first;
 }
 
-Ordering RcString::ord_interned(const RcString& s) const {
+Ordering RcString::ordInterned(const RcString& s) const {
     assert(s.isInterned() && this->isInterned());
     if (!RcStringInternedOrderingValid) {
         // Populate cache
@@ -341,7 +341,7 @@ Ordering RcString::ord(const RcString& s) const {
     }
     // If both are interned, then use stored sorting
     if (isInterned() && s.isInterned()) {
-        return ord_interned(s);
+        return ordInterned(s);
     }
     return ord(s.c_str(), s.size());
 }

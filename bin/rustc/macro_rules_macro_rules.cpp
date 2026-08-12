@@ -19,8 +19,8 @@ typedef std::map<unsigned, std::map<std::vector<unsigned>, unsigned>> loopCounts
 class ParameterMappings {
     /// A particular captured fragment
     struct CapturedVal {
-        unsigned int num_uses; // Number of times this var will be used
-        unsigned int num_used; // Number of times it has been used
+        unsigned int numUses; // Number of times this var will be used
+        unsigned int numUsed; // Number of times it has been used
         InterpolatedFragment frag;
     };
 
@@ -69,12 +69,12 @@ public:
         loopCounts = std::move(loop_counts);
     }
 
-    void insert(unsigned int name_index, const ::std::vector<unsigned int>& iterations, InterpolatedFragment data);
+    void insert(unsigned int nameIndex, const ::std::vector<unsigned int>& iterations, InterpolatedFragment data);
 
     /// <summary>
     /// Get the replacement fragment for a given loop iteration (or `nullptr`) if out of bounds
     /// </summary>
-    InterpolatedFragment* get(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx);
+    InterpolatedFragment* get(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
 
     /// <summary>
     /// Given a current iteration and a loop index, return how many times this loop will run
@@ -84,12 +84,12 @@ public:
     /// <summary>
     /// Return the number of times this level of a given name/variable will loop
     /// </summary>
-    unsigned int getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) const;
+    unsigned int getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) const;
 
     /// Increment the number of times a particular fragment will be used
-    void incCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx);
+    void incCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
     /// Decrement the number of times a particular fragment is used (returns true if there are still usages remaining)
-    bool decCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx);
+    bool decCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
 
     friend ::std::ostream& operator<<(::std::ostream& os, const CapturedVal& x) {
         os << x.frag;
@@ -102,7 +102,7 @@ public:
     }
 
 private:
-    CapturedVal& getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx);
+    CapturedVal& getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
 };
 
 class MacroPatternStream {
@@ -176,12 +176,12 @@ void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::ve
 // ParameterMappings
 // ------------------------------------
 
-void ParameterMappings::insert(unsigned int name_index, const ::std::vector<unsigned int>& iterations, InterpolatedFragment data) {
-    DEBUG("index=" << name_index << ", iterations=[" << iterations << "], data=" << data);
-    if (name_index >= mMappings.size()) {
-        mMappings.resize(name_index + 1);
+void ParameterMappings::insert(unsigned int nameIndex, const ::std::vector<unsigned int>& iterations, InterpolatedFragment data) {
+    DEBUG("index=" << nameIndex << ", iterations=[" << iterations << "], data=" << data);
+    if (nameIndex >= mMappings.size()) {
+        mMappings.resize(nameIndex + 1);
     }
-    auto* layer = &mMappings[name_index].top_layer;
+    auto* layer = &mMappings[nameIndex].top_layer;
     if (iterations.size() > 0) {
         for (unsigned int i = 0; i < iterations.size() - 1; i++) {
             auto iter = iterations[i];
@@ -212,9 +212,9 @@ void ParameterMappings::insert(unsigned int name_index, const ::std::vector<unsi
     layer->as_Vals().push_back(CapturedVal{0, 0, mv$(data)});
 }
 
-ParameterMappings::CapturedVal& ParameterMappings::getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) {
-    DEBUG("(iterations=[" << iterations << "], name_idx=" << name_idx << ")");
-    auto& e = mMappings.at(name_idx);
+ParameterMappings::CapturedVal& ParameterMappings::getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) {
+    DEBUG("(iterations=[" << iterations << "], name_idx=" << nameIdx << ")");
+    auto& e = mMappings.at(nameIdx);
     //DEBUG("- e = " << e);
     auto* layer = &e.top_layer;
 
@@ -224,7 +224,7 @@ ParameterMappings::CapturedVal& ParameterMappings::getCap(const Span& sp, const 
             return (*e)[0];
         }
         if (e->size() == 0) {
-            BUG(sp, "Attempting to get binding for empty capture - #" << name_idx);
+            BUG(sp, "Attempting to get binding for empty capture - #" << nameIdx);
         }
     }
 
@@ -241,11 +241,11 @@ ParameterMappings::CapturedVal& ParameterMappings::getCap(const Span& sp, const 
         }
     }
 
-    ERROR(sp, E0000, "Variable #" << name_idx << " is still repeating at this level (" << iterations.size() << ")");
+    ERROR(sp, E0000, "Variable #" << nameIdx << " is still repeating at this level (" << iterations.size() << ")");
 }
 
-InterpolatedFragment* ParameterMappings::get(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) {
-    return &getCap(sp, iterations, name_idx).frag;
+InterpolatedFragment* ParameterMappings::get(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) {
+    return &getCap(sp, iterations, nameIdx).frag;
 }
 
 unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int loopIdx) const {
@@ -262,9 +262,9 @@ unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const ::std::vect
     BUG(sp, "Loop " << loopIdx << " cannot find an iteration count for path [" << iterations << "]");
 }
 
-unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) const {
-    DEBUG("(iterations=[" << iterations << "], name_idx=" << name_idx << ")");
-    auto& e = mMappings.at(name_idx);
+unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) const {
+    DEBUG("(iterations=[" << iterations << "], name_idx=" << nameIdx << ")");
+    auto& e = mMappings.at(nameIdx);
     //DEBUG("- e = " << e);
     auto* layer = &e.top_layer;
 
@@ -274,7 +274,7 @@ unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::ve
             return 1;
         }
         if (e->size() == 0) {
-            BUG(sp, "Attempting to get binding for empty capture - #" << name_idx);
+            BUG(sp, "Attempting to get binding for empty capture - #" << nameIdx);
         }
     }
 
@@ -301,17 +301,17 @@ unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::ve
     throw "";
 }
 
-void ParameterMappings::incCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) {
-    auto& cap = getCap(sp, iterations, name_idx);
-    assert(cap.num_used == 0);
-    cap.num_uses += 1;
+void ParameterMappings::incCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) {
+    auto& cap = getCap(sp, iterations, nameIdx);
+    assert(cap.numUsed == 0);
+    cap.numUses += 1;
 }
 
-bool ParameterMappings::decCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) {
-    auto& cap = getCap(sp, iterations, name_idx);
-    assert(cap.num_used < cap.num_uses);
-    cap.num_used += 1;
-    return (cap.num_used < cap.num_uses);
+bool ParameterMappings::decCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) {
+    auto& cap = getCap(sp, iterations, nameIdx);
+    assert(cap.numUsed < cap.numUses);
+    cap.numUsed += 1;
+    return (cap.numUsed < cap.numUses);
 }
 
 // ------------------------------------
@@ -370,13 +370,13 @@ const SimplePatEnt& MacroPatternStream::next() {
                 assert(!loopIterations.empty());
                 assert(!currentLoops.empty());
                 auto loopIndex = currentLoops.back();
-                auto num_iter = loopIterations.back();
+                auto numIter = loopIterations.back();
                 loopIterations.pop_back();
                 currentLoops.pop_back();
 
                 // Save this iteration count if replaying
                 if (conditionReplay) {
-                    loopCounts[loopIndex].insert(std::make_pair(loopIterations, num_iter));
+                    loopCounts[loopIndex].insert(std::make_pair(loopIterations, numIter));
                 }
             }
         }
@@ -404,7 +404,7 @@ class MacroExpandState {
     struct t_offset {
         unsigned read_pos;
         unsigned loopIndex;
-        unsigned max_index;
+        unsigned maxIndex;
     };
 
     /// Layer states : Index and Iteration
@@ -425,7 +425,7 @@ public:
 
     // Returns a pointer to the next entry to expand, or nullptr if the end is reached
     // - NOTE: When a Loop entry is returned, the separator token should be emitted
-    const MacroExpansionEnt* next_ent();
+    const MacroExpansionEnt* nextEnt();
 
     const ::std::vector<unsigned int> iterations() const {
         return mIterations;
@@ -478,7 +478,7 @@ public:
         , state(contents, mMappings)
         , sourceEdition(source_edition)
         , isMacroItem(is_macro_item)
-        , mHygiene(Ident::Hygiene::new_scope_chained(parent_hygiene, definition_id))
+        , mHygiene(Ident::Hygiene::newScopeChained(parent_hygiene, definition_id))
         , lastHygiene(mHygiene)
     {
     }
@@ -652,7 +652,7 @@ namespace {
                 assert(offsets.size() > 0);
                 offsets.pop_back();
                 activeOffset = 0;
-                DEBUG(next_tok());
+                DEBUG(nextTok());
             }
         }
 
@@ -661,10 +661,10 @@ namespace {
         }
 
         enum eTokenType next() const {
-            return next_tok().type();
+            return nextTok().type();
         }
 
-        const Token& next_tok() const {
+        const Token& nextTok() const {
             static Token eofToken = TOK_EOF;
 
             if (fakedNext.type() != TOK_NULL) {
@@ -694,7 +694,7 @@ namespace {
             if (offsets.empty() && activeOffset == tt.size()) {
                 throw ::std::runtime_error("Attempting to consume EOS");
             }
-            DEBUG(consumeCount << " " << next_tok());
+            DEBUG(consumeCount << " " << nextTok());
             consumeCount++;
             for (;;) {
                 const auto* curTree = &tt;
@@ -719,7 +719,7 @@ namespace {
                         offsets.push_back(activeOffset);
                         activeOffset = 0;
                     }
-                    DEBUG("-> " << next_tok());
+                    DEBUG("-> " << nextTok());
                     return;
                 }
             }
@@ -948,7 +948,7 @@ namespace {
                 lex.consume();
                 return consumeTypeTraitList(lex);
             case TOK_IDENT:
-                if (lex.next_tok().ident().name == "dyn") {
+                if (lex.nextTok().ident().name == "dyn") {
                     lex.consume();
                     return consumeTypeTraitList(lex);
                 }
@@ -1144,7 +1144,7 @@ namespace {
     }
 
     // Consume an expression
-    bool consumeExpr(TokenStreamRO& lex, bool no_struct_lit = false) {
+    bool consumeExpr(TokenStreamRO& lex, bool noStructLit = false) {
         TRACE_FUNCTION;
         bool cont;
 
@@ -1243,7 +1243,7 @@ namespace {
                     if (!consumePath(lex)) {
                         return false;
                     }
-                    if (lex.next() == TOK_BRACE_OPEN && !no_struct_lit) {
+                    if (lex.next() == TOK_BRACE_OPEN && !noStructLit) {
                         consumeTt(lex);
                     } else if (lex.consumeIf(TOK_EXCLAM)) {
                         if (lex.consumeIf(TOK_IDENT)) {
@@ -1276,7 +1276,7 @@ namespace {
                 case TOK_RWORD_ASYNC:
                     lex.consume();
                     lex.consumeIf(TOK_RWORD_MOVE);
-                    return consumeExpr(lex, no_struct_lit);
+                    return consumeExpr(lex, noStructLit);
 
                 case TOK_RWORD_UNSAFE:
                     lex.consume();
@@ -1482,17 +1482,17 @@ namespace {
         return true;
     }
 
-    bool consumeStmt(TokenStreamRO& lex, bool* out_is_item = nullptr) {
+    bool consumeStmt(TokenStreamRO& lex, bool* outIsItem = nullptr) {
         TRACE_FUNCTION;
-        if (out_is_item) {
-            *out_is_item = false;
+        if (outIsItem) {
+            *outIsItem = false;
         }
         if (lex.consumeIf(TOK_INTERPOLATED_STMT)) {
             return true;
         }
         if (lex.consumeIf(TOK_INTERPOLATED_STMT_ITEM)) {
-            if (out_is_item) {
-                *out_is_item = true;
+            if (outIsItem) {
+                *outIsItem = true;
             }
             return true;
         }
@@ -1506,8 +1506,8 @@ namespace {
             while (lex.position() < itemLex.position()) {
                 lex.consume();
             }
-            if (out_is_item) {
-                *out_is_item = true;
+            if (outIsItem) {
+                *outIsItem = true;
             }
             return true;
         }
@@ -1559,7 +1559,7 @@ namespace {
         TRACE_FUNCTION;
 
         struct H {
-            static bool maybe_generics(TokenStreamRO& lex) {
+            static bool maybeGenerics(TokenStreamRO& lex) {
                 if (lex.next() == TOK_LT) {
                     if (!consumeTtAngle(lex)) {
                         return false;
@@ -1568,7 +1568,7 @@ namespace {
                 return true;
             }
 
-            static bool maybe_where(TokenStreamRO& lex) {
+            static bool maybeWhere(TokenStreamRO& lex) {
                 if (lex.consumeIf(TOK_RWORD_WHERE)) {
                     do {
                         if (lex.next() == TOK_BRACE_OPEN || lex.next() == TOK_SEMICOLON) {
@@ -1620,7 +1620,7 @@ namespace {
         }
         // Macro invocation
         // TODO: What about `union!` as a macro? Needs to be handled below
-        if (mode == ItemConsumeMode::ItemFragment && ((lex.next() == TOK_IDENT && lex.next_tok().ident().name != "union") || lex.next() == TOK_RWORD_SELF || lex.next() == TOK_RWORD_SUPER || lex.next() == TOK_DOUBLE_COLON)) {
+        if (mode == ItemConsumeMode::ItemFragment && ((lex.next() == TOK_IDENT && lex.nextTok().ident().name != "union") || lex.next() == TOK_RWORD_SELF || lex.next() == TOK_RWORD_SUPER || lex.next() == TOK_DOUBLE_COLON)) {
             if (!consumePath(lex)) {
                 return false;
             }
@@ -1628,9 +1628,9 @@ namespace {
                 return false;
             }
             lex.consumeIf(TOK_IDENT);
-            bool need_semicolon = (lex.next() != TOK_BRACE_OPEN);
+            bool needSemicolon = (lex.next() != TOK_BRACE_OPEN);
             consumeTt(lex);
-            if (need_semicolon) {
+            if (needSemicolon) {
                 if (!lex.consumeIf(TOK_SEMICOLON)) {
                     return false;
                 }
@@ -1644,7 +1644,7 @@ namespace {
         if (lex.next() == TOK_RWORD_UNSAFE) {
             lex.consume();
         }
-        DEBUG("Check item: " << lex.next_tok());
+        DEBUG("Check item: " << lex.nextTok());
         switch (lex.next()) {
             case TOK_RWORD_USE:
                 // Lazy mode
@@ -1671,7 +1671,7 @@ namespace {
             // impl [Foo for] Bar { ... }
             case TOK_RWORD_IMPL:
                 lex.consume();
-                if (!H::maybe_generics(lex)) {
+                if (!H::maybeGenerics(lex)) {
                     return false;
                 }
                 if (!consumeType(lex)) {
@@ -1682,7 +1682,7 @@ namespace {
                         return false;
                     }
                 }
-                if (!H::maybe_where(lex)) {
+                if (!H::maybeWhere(lex)) {
                     return false;
                 }
                 if (lex.next() != TOK_BRACE_OPEN) {
@@ -1695,7 +1695,7 @@ namespace {
                 if (!lex.consumeIf(TOK_IDENT)) {
                     return false;
                 }
-                if (!H::maybe_generics(lex)) {
+                if (!H::maybeGenerics(lex)) {
                     return false;
                 }
 
@@ -1737,10 +1737,10 @@ namespace {
                 if (!lex.consumeIf(TOK_IDENT)) {
                     return false;
                 }
-                if (!H::maybe_generics(lex)) {
+                if (!H::maybeGenerics(lex)) {
                     return false;
                 }
-                if (!H::maybe_where(lex)) {
+                if (!H::maybeWhere(lex)) {
                     return false;
                 }
                 if (lex.consumeIf(TOK_SEMICOLON))
@@ -1765,10 +1765,10 @@ namespace {
                 if (!lex.consumeIf(TOK_IDENT)) {
                     return false;
                 }
-                if (!H::maybe_generics(lex)) {
+                if (!H::maybeGenerics(lex)) {
                     return false;
                 }
-                if (!H::maybe_where(lex)) {
+                if (!H::maybeWhere(lex)) {
                     return false;
                 }
                 if (lex.next() != TOK_BRACE_OPEN) {
@@ -1776,15 +1776,15 @@ namespace {
                 }
                 return consumeTt(lex);
             case TOK_IDENT:
-                if (lex.next_tok().ident().name == "union") {
+                if (lex.nextTok().ident().name == "union") {
                     lex.consume();
                     if (lex.next() == TOK_EXCLAM) {
                         if (mode != ItemConsumeMode::ItemFragment) {
                             return false;
                         }
-                        bool need_semicolon = (lex.next() != TOK_BRACE_OPEN);
+                        bool needSemicolon = (lex.next() != TOK_BRACE_OPEN);
                         consumeTt(lex);
-                        if (need_semicolon) {
+                        if (needSemicolon) {
                             if (!lex.consumeIf(TOK_SEMICOLON)) {
                                 return false;
                             }
@@ -1794,10 +1794,10 @@ namespace {
                         if (!lex.consumeIf(TOK_IDENT)) {
                             return false;
                         }
-                        if (!H::maybe_generics(lex)) {
+                        if (!H::maybeGenerics(lex)) {
                             return false;
                         }
-                        if (!H::maybe_where(lex)) {
+                        if (!H::maybeWhere(lex)) {
                             return false;
                         }
                         if (lex.next() != TOK_BRACE_OPEN) {
@@ -1805,7 +1805,7 @@ namespace {
                         }
                         return consumeTt(lex);
                     }
-                } else if (lex.next_tok().ident().name == "auto") {
+                } else if (lex.nextTok().ident().name == "auto") {
                     lex.consume();
                     if (lex.consumeIf(TOK_RWORD_TRAIT)) {
                         goto trait;
@@ -1852,7 +1852,7 @@ namespace {
                     return false;
                 }
 
-                if (!H::maybe_generics(lex)) {
+                if (!H::maybeGenerics(lex)) {
                     return false;
                 }
                 if (lex.consumeIf(TOK_COLON)) {
@@ -1904,7 +1904,7 @@ namespace {
                     return false;
                 }
 
-                if (!H::maybe_generics(lex)) {
+                if (!H::maybeGenerics(lex)) {
                     return false;
                 }
                 if (lex.next() != TOK_PAREN_OPEN) {
@@ -1920,7 +1920,7 @@ namespace {
                     }
                 }
 
-                if (!H::maybe_where(lex)) {
+                if (!H::maybeWhere(lex)) {
                     return false;
                 }
 
@@ -1941,7 +1941,7 @@ namespace {
         return true;
     }
 
-    bool consumeFromFrag(TokenStreamRO& lex, MacroPatEnt::Type type, bool* out_stmt_is_item = nullptr) {
+    bool consumeFromFrag(TokenStreamRO& lex, MacroPatEnt::Type type, bool* outStmtIsItem = nullptr) {
         TRACE_FUNCTION_F(type);
         switch (type) {
             case MacroPatEnt::PAT_TOKEN:
@@ -1973,7 +1973,7 @@ namespace {
             case MacroPatEnt::PAT_EXPR:
                 return consumeExpr(lex);
             case MacroPatEnt::PAT_STMT:
-                return consumeStmt(lex, out_stmt_is_item);
+                return consumeStmt(lex, outStmtIsItem);
             case MacroPatEnt::PAT_PAT:
                 //return consume_pat(lex, lex.edition_after(AST::Edition::Rust2021));
                 return consumePat(lex, true);
@@ -2057,7 +2057,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
             DEBUG("Arm " << i << " @" << pos << " " << pat);
             if (pat.is_End()) {
                 if (lex.next() != TOK_EOF) {
-                    DEBUG("Expeced EOF, got " << lex.next_tok());
+                    DEBUG("Expeced EOF, got " << lex.nextTok());
                     fail = true;
                 }
                 break;
@@ -2071,11 +2071,11 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
                             break;
                         }
                     } else {
-                        if (lc.next_tok() != check.tok) {
+                        if (lc.nextTok() != check.tok) {
                             rv = false;
                             break;
                         }
-                        if (lc.next_tok() != TOK_EOF) {
+                        if (lc.nextTok() != TOK_EOF) {
                             lc.consume();
                         }
                     }
@@ -2085,7 +2085,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
                     armStream.ifSucceeded();
                 }
             } else if (const auto* e = pat.opt_ExpectTok()) {
-                const auto& tok = lex.next_tok();
+                const auto& tok = lex.nextTok();
                 DEBUG("Arm " << i << " @" << pos << " ExpectTok(" << *e << ") == " << tok);
                 if (tok != *e) {
                     fail = true;
@@ -2189,7 +2189,7 @@ void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::ve
     TRACE_FUNCTION;
     MacroExpandState state(contents, boundTts);
 
-    while (const auto* entPtr = state.next_ent()) {
+    while (const auto* entPtr = state.nextEnt()) {
         DEBUG(*entPtr);
         TU_MATCH_HDRA( (*entPtr), { )
         TU_ARMA(Token, e) {
@@ -2271,8 +2271,8 @@ Token MacroExpander::realGetToken() {
     }
 
     // Loop to handle case where $crate expands to nothing
-    while (const auto* next_ent_ptr = state.next_ent()) {
-        const auto& ent = *next_ent_ptr;
+    while (const auto* nextEntPtr = state.nextEnt()) {
+        const auto& ent = *nextEntPtr;
         TU_MATCH_HDRA( (ent), {)
         TU_ARMA(Token, e) {
                 switch (e.type()) {
@@ -2358,7 +2358,7 @@ Token MacroExpander::realGetToken() {
                 }
             }
             TU_ARMA(Concat, e) {
-                std::string new_ident;
+                std::string newIdent;
                 for (const auto& ent : e) {
                 TU_MATCH_HDRA( (ent), { )
                 TU_ARMA(Named, v) {
@@ -2377,14 +2377,14 @@ Token MacroExpander::realGetToken() {
                             if (tok != TOK_IDENT) {
                                 ERROR(this->point_span(), E0000, "concat with non-ident: " << tok);
                             }
-                            new_ident += tok.ident().name.c_str();
+                            newIdent += tok.ident().name.c_str();
                         }
                         TU_ARMA(Ident, v) {
-                            new_ident += v.name.c_str();
+                            newIdent += v.name.c_str();
                         }
                 }
                 }
-                return Token(TOK_IDENT, Ident(realGetHygiene(), RcString::new_interned(new_ident)));
+                return Token(TOK_IDENT, Ident(realGetHygiene(), RcString::newInterned(newIdent)));
             }
             TU_ARMA(Loop, e) {
                 //assert( e.joiner.tok() != TOK_NULL );
@@ -2398,7 +2398,7 @@ Token MacroExpander::realGetToken() {
     return Token(TOK_EOF);
 }
 
-const MacroExpansionEnt* MacroExpandState::next_ent() {
+const MacroExpansionEnt* MacroExpandState::nextEnt() {
     //DEBUG("ofs " << m_offsets << " < " << m_root_contents.size());
 
     // Check offset of lowest layer
@@ -2425,22 +2425,22 @@ const MacroExpansionEnt* MacroExpandState::next_ent() {
                 }
                 TU_ARMA(Loop, e) {
                     assert(!e.controllingInputLoops.empty());
-                    unsigned int num_repeats = mMappings.getLoopRepeats(Span(), mIterations, *e.controllingInputLoops.begin());
+                    unsigned int numRepeats = mMappings.getLoopRepeats(Span(), mIterations, *e.controllingInputLoops.begin());
                     for (auto loopIdent : e.controllingInputLoops) {
                         if (loopIdent == *e.controllingInputLoops.begin()) {
                             continue;
                         }
 
                         unsigned int this_repeats = mMappings.getLoopRepeats(Span(), mIterations, loopIdent);
-                        if (this_repeats != num_repeats) {
+                        if (this_repeats != numRepeats) {
                             // TODO: Get the variables involved, or the pattern+output spans
-                            ERROR(Span(), E0000, "Mismatch in loop iterations: " << this_repeats << " != " << num_repeats);
+                            ERROR(Span(), E0000, "Mismatch in loop iterations: " << this_repeats << " != " << numRepeats);
                         }
                     }
-                    DEBUG("Looping " << num_repeats << " times based on {" << e.controllingInputLoops << "}");
+                    DEBUG("Looping " << numRepeats << " times based on {" << e.controllingInputLoops << "}");
                     // 2. If it's going to repeat, start the loop
-                    if (num_repeats > 0) {
-                        offsets.push_back({0, 0, num_repeats});
+                    if (numRepeats > 0) {
+                        offsets.push_back({0, 0, numRepeats});
                         mIterations.push_back(0);
                         curEnts = getCurLayer();
                     }
@@ -2451,8 +2451,8 @@ const MacroExpansionEnt* MacroExpandState::next_ent() {
             // - Otherwise, restart/end loop and fall through
             DEBUG("layer = " << layer << ", m_iterations = " << mIterations);
             auto& curOfs = offsets.back();
-            DEBUG("Layer #" << layer << " Cur: " << curOfs.loopIndex << ", Max: " << curOfs.max_index);
-            if (curOfs.loopIndex + 1 < curOfs.max_index) {
+            DEBUG("Layer #" << layer << " Cur: " << curOfs.loopIndex << ", Max: " << curOfs.maxIndex);
+            if (curOfs.loopIndex + 1 < curOfs.maxIndex) {
                 mIterations.back()++;
 
                 DEBUG("Restart layer");
@@ -2690,7 +2690,7 @@ MacroRulesPtr::~MacroRulesPtr() {
             os << "=" << x.tok;
             break;
         case MacroPatEnt::PAT_LOOP:
-            os << "loop #" << x.name_index << x.name << " w/ " << x.tok << " [" << x.subpats << "]";
+            os << "loop #" << x.nameIndex << x.name << " w/ " << x.tok << " [" << x.subpats << "]";
             break;
         default:
             os << "$" << x.name << ":";
@@ -2893,14 +2893,14 @@ private:
     std::map<RcString, NameState> names;
 
     /// Next loop identifier
-    unsigned next_loop_index;
+    unsigned nextLoopIndex;
     // Stack of current loops (indexes)
     std::vector<unsigned> loop_stack;
 
 public:
     RuleParseState()
         : names()
-        , next_loop_index(0)
+        , nextLoopIndex(0)
         , loop_stack()
     {
     }
@@ -2923,8 +2923,8 @@ public:
         return &it->second;
     }
 
-    unsigned open_loop() {
-        auto rv = next_loop_index++;
+    unsigned openLoop() {
+        auto rv = nextLoopIndex++;
         loop_stack.push_back(rv);
         return rv;
     }
@@ -2972,7 +2972,7 @@ public:
                         }
                     case TOK_UNDERSCORE:
                     case TOK_IDENT: {
-                        auto name = tok.type() == TOK_IDENT ? tok.ident().name : (tok.type() == TOK_UNDERSCORE ? RcString() : RcString::new_interned(tok.to_str()));
+                        auto name = tok.type() == TOK_IDENT ? tok.ident().name : (tok.type() == TOK_UNDERSCORE ? RcString() : RcString::newInterned(tok.to_str()));
                         GET_CHECK_TOK(tok, lex, TOK_COLON);
                         GET_CHECK_TOK(tok, lex, TOK_IDENT);
                         RcString type = tok.ident().name;
@@ -3018,7 +3018,7 @@ public:
                         break;
                     }
                     case TOK_PAREN_OPEN: {
-                        auto loopIdx = state.open_loop();
+                        auto loopIdx = state.openLoop();
                         auto subpat = ParseMacroRulesPat(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state);
                         state.closeLoop();
 
@@ -3218,7 +3218,7 @@ struct ContentLoopVariableUse {
                     if (!(tok.type() == TOK_IDENT || Token::type_is_rword(tok.type()))) {
                         CHECK_TOK(tok, TOK_IDENT);
                     }
-                    auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::new_interned(tok.to_str());
+                    auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.to_str());
                     lex.getTokenCheck(TOK_PAREN_CLOSE);
                     const auto* ns = state.findName(name);
                     if (!ns) {
@@ -3243,7 +3243,7 @@ struct ContentLoopVariableUse {
                     if (!(tok.type() == TOK_IDENT || Token::type_is_rword(tok.type()))) {
                         CHECK_TOK(tok, TOK_IDENT);
                     }
-                    auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::new_interned(tok.to_str());
+                    auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.to_str());
                     lex.getTokenCheck(TOK_PAREN_CLOSE);
                     const auto* ns = state.findName(name);
                     if (!ns) {
@@ -3276,7 +3276,7 @@ struct ContentLoopVariableUse {
                                 ents.push_back(MacroExpansionConcatEnt(NAMEDVALUE_MAGIC_CRATE));
                             } else {
                                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                                auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::new_interned(tok.to_str());
+                                auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.to_str());
                                 const auto* ns = state.findName(name);
                                 if (!ns) {
                                     TODO(lex.point_span(), "concat - unmapped name");
@@ -3315,7 +3315,7 @@ struct ContentLoopVariableUse {
                 ret.push_back(MacroExpansionEnt(NAMEDVALUE_MAGIC_CRATE));
             } else if (tok.type() == TOK_IDENT || Token::type_is_rword(tok.type())) {
                 // Look up the named parameter in the list of param names for this arm
-                auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::new_interned(tok.to_str());
+                auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.to_str());
                 const auto* ns = state.findName(name);
                 if (!ns) {
                     // NOTE: `error-chain`'s quick_error macro has an arm which refers to an undefined metavar.
@@ -3756,7 +3756,7 @@ namespace {
 
                     // If the loop is a $()+ loop, then just recurse into it
                     if (ent.name == "+") {
-                        push(SimplePatEnt::make_LoopStart({ent.name_index}));
+                        push(SimplePatEnt::make_LoopStart({ent.nameIndex}));
                         size_t start = rv.size();
                         macroPatternToSimpleInner(sp, rv, ent.subpats);
                         push(SimplePatEnt::make_LoopNext({/*ent.name_index*/}));
@@ -3798,7 +3798,7 @@ namespace {
                         }
                         push(SimplePatEnt::make_LoopEnd({/*ent.name_index*/}));
                     } else if (ent.name == "*" || ent.name == "?") {
-                        push(SimplePatEnt::make_LoopStart({ent.name_index}));
+                        push(SimplePatEnt::make_LoopStart({ent.nameIndex}));
 
                         // Options:
                         // - Enter the loop (if the next token is one of the head set of the loop)
@@ -3876,7 +3876,7 @@ namespace {
                     push(SimplePatEnt::make_ExpectTok(ent.tok));
                     break;
                 default:
-                    push(SimplePatEnt::make_ExpectPat({ent.type, ent.name_index}));
+                    push(SimplePatEnt::make_ExpectPat({ent.type, ent.nameIndex}));
                     break;
             }
         }
@@ -3914,10 +3914,10 @@ MacroPatEnt::MacroPatEnt(Span sp, Token tok)
     , type(PAT_TOKEN) {
 }
 // Variable reference
-MacroPatEnt::MacroPatEnt(Span sp, RcString name, unsigned int name_index, Type type)
+MacroPatEnt::MacroPatEnt(Span sp, RcString name, unsigned int nameIndex, Type type)
     : sp(mv$(sp))
     , name(mv$(name))
-    , name_index(name_index)
+    , nameIndex(nameIndex)
     , tok()
     , type(type) {
 }
@@ -3925,7 +3925,7 @@ MacroPatEnt::MacroPatEnt(Span sp, RcString name, unsigned int name_index, Type t
 MacroPatEnt::MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, ::std::vector<MacroPatEnt> ents)
     : sp(mv$(sp))
     , name(op)
-    , name_index(index)
+    , nameIndex(index)
     , tok(mv$(sep))
     , subpats(mv$(ents))
     , type(PAT_LOOP) {

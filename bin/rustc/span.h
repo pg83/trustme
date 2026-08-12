@@ -91,7 +91,7 @@ public:
     virtual ~SpanInner() = 0;
     virtual void fmt(::std::ostream& os) const = 0;
     virtual RcString crate_name() const = 0;
-    virtual unsigned int node_kind() const = 0;
+    virtual unsigned int nodeKind() const = 0;
 };
 
 struct SpanInnerSource: public SpanInner {
@@ -99,7 +99,7 @@ struct SpanInnerSource: public SpanInner {
 
 public:
     static constexpr unsigned int kind = 1;
-    unsigned int node_kind() const override;
+    unsigned int nodeKind() const override;
     RcString filename;
 
     unsigned int start_line;
@@ -121,7 +121,7 @@ private:
 struct SpanInnerMacro: public SpanInner {
     friend struct Span;
     static constexpr unsigned int kind = 2;
-    unsigned int node_kind() const override;
+    unsigned int nodeKind() const override;
     RcString crate;
     RcString macro;
 

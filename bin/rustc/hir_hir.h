@@ -45,21 +45,21 @@ namespace HIR {
     class ItemPath;
 
     class Publicity {
-        static ::std::shared_ptr<::HIR::SimplePath> none_path;
+        static ::std::shared_ptr<::HIR::SimplePath> nonePath;
         ::std::shared_ptr<::HIR::SimplePath> vis_path;
 
         Publicity(::std::shared_ptr<::HIR::SimplePath> p);
 
     public:
-        static Publicity new_global() {
+        static Publicity newGlobal() {
             return Publicity({});
         }
 
-        static Publicity new_none() {
-            return Publicity(none_path);
+        static Publicity newNone() {
+            return Publicity(nonePath);
         }
 
-        static Publicity new_priv(::HIR::SimplePath p);
+        static Publicity newPriv(::HIR::SimplePath p);
 
         bool isGlobal() const {
             return !vis_path;
@@ -168,7 +168,7 @@ namespace HIR {
 
         Receiver receiver = Receiver::Free;
         ::std::optional<HIR::TypeRef> receiverType; // Present only for a custom receiver
-        RcString mAbi = RcString::new_interned(ABI_RUST);
+        RcString mAbi = RcString::newInterned(ABI_RUST);
         bool unsafe = false;
         bool isConst = false;
 
@@ -342,7 +342,7 @@ namespace HIR {
 
         TraitMarkings markings;
 
-        size_t num_variants() const {
+        size_t numVariants() const {
             return (mData.is_Data() ? mData.as_Data().size() : mData.as_Value().variants.size());
         }
 
@@ -599,7 +599,7 @@ namespace HIR {
             return matchesType(tr, ResolvePlaceholdersNop());
         }
 
-        bool more_specific_than(TypeInterner& types, const TraitImpl& x) const;
+        bool moreSpecificThan(TypeInterner& types, const TraitImpl& x) const;
         bool overlaps_with(const Crate& crate, const TraitImpl& other) const;
     };
 
@@ -665,7 +665,7 @@ namespace HIR {
         struct ImplGroup {
             typedef ::std::vector<T> listT;
             ::std::map<::HIR::SimplePath, listT> named;
-            listT non_named; // TODO: use a map of HIR::TypeRef::Data::Tag
+            listT nonNamed; // TODO: use a map of HIR::TypeRef::Data::Tag
             listT generic;
 
             const listT* getListForType(const ::HIR::TypeData* ty) const {
@@ -679,7 +679,7 @@ namespace HIR {
                     }
                 } else {
                     // TODO: Sort these by type tag, use the `Primitive` group if `ty` is Infer
-                    return &non_named;
+                    return &nonNamed;
                 }
             }
 
@@ -688,7 +688,7 @@ namespace HIR {
                     return named[*p];
                 } else {
                     // TODO: Ivars match with core types
-                    return non_named;
+                    return nonNamed;
                 }
             }
         };
@@ -740,7 +740,7 @@ namespace HIR {
         const ::HIR::SimplePath& getLangItemPathOpt(const char* name) const;
 
         bool featureEnabled(const char* name) const {
-            return features.count(RcString::new_interned(name)) != 0;
+            return features.count(RcString::newInterned(name)) != 0;
         }
 
         const ::HIR::MacroItem& getMacroitemByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignoreCrateName = false, bool ignoreLastNode = false) const;

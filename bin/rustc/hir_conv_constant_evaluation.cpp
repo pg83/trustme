@@ -56,21 +56,21 @@ namespace {
     struct NewvalState: public HIR::Evaluator::Newval {
         const ::HIR::Module& mod;
         const ::HIR::ItemPath& mod_path;
-        ::std::string name_prefix;
-        unsigned int next_item_idx;
+        ::std::string namePrefix;
+        unsigned int nextItemIdx;
 
         NewvalState(const ::HIR::Module& mod, const ::HIR::ItemPath& mod_path, ::std::string prefix)
             : mod(mod)
             , mod_path(mod_path)
-            , name_prefix(prefix)
-            , next_item_idx(0)
+            , namePrefix(prefix)
+            , nextItemIdx(0)
         {
         }
 
         ::HIR::Path new_static(::HIR::TypeRef type, EncodedLiteral value) override {
             ASSERT_BUG(Span(), type != HIR::TypeRef(), "");
-            auto name = RcString::new_interned(FMT(name_prefix << next_item_idx));
-            next_item_idx++;
+            auto name = RcString::newInterned(FMT(namePrefix << nextItemIdx));
+            nextItemIdx++;
             auto rv = mod_path.getSimplePath() + name.c_str();
             auto s = ::HIR::Static(::HIR::Linkage(), false, mv$(type), ::HIR::ExprPtr());
             s.valueRes = ::std::move(value);
@@ -784,20 +784,20 @@ namespace MIR {
             }
 
             void write_uint(const MIR::TypeResolve& state, unsigned bits, U128 v) {
-                auto n_bytes = (bits + 7) / 8;
+                auto nBytes = (bits + 7) / 8;
                 if (TargetGetCurSpec().arch.bigEndian) {
-                    v.to_be_bytes(extWriteBytes(state, n_bytes), n_bytes);
+                    v.to_be_bytes(extWriteBytes(state, nBytes), nBytes);
                 } else {
-                    v.to_le_bytes(extWriteBytes(state, n_bytes), n_bytes);
+                    v.to_le_bytes(extWriteBytes(state, nBytes), nBytes);
                 }
             }
 
             void write_sint(const MIR::TypeResolve& state, unsigned bits, S128 v) {
-                auto n_bytes = (bits + 7) / 8;
+                auto nBytes = (bits + 7) / 8;
                 if (TargetGetCurSpec().arch.bigEndian) {
-                    v.getInner().to_be_bytes(extWriteBytes(state, n_bytes), n_bytes);
+                    v.getInner().to_be_bytes(extWriteBytes(state, nBytes), nBytes);
                 } else {
-                    v.getInner().to_le_bytes(extWriteBytes(state, n_bytes), n_bytes);
+                    v.getInner().to_le_bytes(extWriteBytes(state, nBytes), nBytes);
                 }
             }
 
@@ -853,23 +853,23 @@ namespace MIR {
 
             U128 read_uint(const ::MIR::TypeResolve& state, unsigned bits) const {
                 assert(bits <= 128);
-                auto n_bytes = (bits + 7) / 8;
+                auto nBytes = (bits + 7) / 8;
                 U128 rv;
                 if (TargetGetCurSpec().arch.bigEndian) {
-                    rv.fromBeBytes(extReadBytes(state, n_bytes), n_bytes);
+                    rv.fromBeBytes(extReadBytes(state, nBytes), nBytes);
                 } else {
-                    rv.fromLeBytes(extReadBytes(state, n_bytes), n_bytes);
+                    rv.fromLeBytes(extReadBytes(state, nBytes), nBytes);
                 }
                 return rv;
             }
 
             S128 read_sint(const ::MIR::TypeResolve& state, unsigned bits) const {
-                auto n_bytes = (bits + 7) / 8;
+                auto nBytes = (bits + 7) / 8;
                 S128 rv;
                 if (TargetGetCurSpec().arch.bigEndian) {
-                    rv.fromBeBytes(extReadBytes(state, n_bytes), n_bytes);
+                    rv.fromBeBytes(extReadBytes(state, nBytes), nBytes);
                 } else {
-                    rv.fromLeBytes(extReadBytes(state, n_bytes), n_bytes);
+                    rv.fromLeBytes(extReadBytes(state, nBytes), nBytes);
                 }
                 return rv;
             }
@@ -960,12 +960,12 @@ namespace MIR {
 
 namespace {
     /// Get the offset for a given field path
-    size_t getOffset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr* r, const TypeRepr::FieldPath& out_path) {
-        assert(out_path.index < r->fields.size());
-        size_t ofs = r->fields[out_path.index].offset;
+    size_t getOffset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr* r, const TypeRepr::FieldPath& outPath) {
+        assert(outPath.index < r->fields.size());
+        size_t ofs = r->fields[outPath.index].offset;
 
-        const auto* ty = &r->fields[out_path.index].ty;
-        for (const auto& f : out_path.sub_fields) {
+        const auto* ty = &r->fields[outPath.index].ty;
+        for (const auto& f : outPath.sub_fields) {
             if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
                 const auto* array = (*ty)->opt_Array();
                 if (!array || !array->size.is_Known() || array->size.as_Known() == 0) {
@@ -986,7 +986,7 @@ namespace {
         return ofs;
     }
 
-    EntPtr getEntFullpath(const Span& sp, const ::StaticTraitResolve& resolve, const ::HIR::Path& path, EntNS ns, MonomorphState& out_ms, const ::HIR::GenericParams** out_impl_params_def = nullptr) {
+    EntPtr getEntFullpath(const Span& sp, const ::StaticTraitResolve& resolve, const ::HIR::Path& path, EntNS ns, MonomorphState& outMs, const ::HIR::GenericParams** outImplParamsDef = nullptr) {
         if (const auto* gp = path.mData.opt_Generic()) {
             const auto& name = gp->mPath.components().back();
             const auto* mod = (gp->mPath.components().size() > 1) ? resolve.crate.getTypeitemByPath(sp, gp->mPath, false, /*ignore_last*/ true).opt_Module() : &resolve.crate.getModByPath(sp, gp->mPath, true);
@@ -999,7 +999,7 @@ namespace {
                 }
             }
         }
-        auto v = resolve.getValue(sp, path, out_ms, false, out_impl_params_def);
+        auto v = resolve.getValue(sp, path, outMs, false, outImplParamsDef);
         TU_MATCH_HDRA( (v), { )
         TU_ARMA(NotFound, e)
             return EntPtr();
@@ -1188,7 +1188,7 @@ namespace MIR {
                 localTypes.reserve(state.fcn.locals.size());
                 locals.reserve(state.fcn.locals.size());
                 for (size_t i = 0; i < state.fcn.locals.size(); i++) {
-                    localTypes.push_back(state.mResolve.monomorph_expand(state.sp, state.fcn.locals[i], this->ms));
+                    localTypes.push_back(state.mResolve.monomorphExpand(state.sp, state.fcn.locals[i], this->ms));
                     locals.push_back(AllocationPtr::allocate(value_pool, root_resolve, state, localTypes.back()));
                 }
 
@@ -1196,8 +1196,8 @@ namespace MIR {
                 state.monomorphedLocals = &localTypes;
             }
 
-            HIR::TypeRef monomorph_expand(const HIR::TypeData* ty) const {
-                return this->resolve.monomorph_expand(this->state.sp, ty, this->ms);
+            HIR::TypeRef monomorphExpand(const HIR::TypeData* ty) const {
+                return this->resolve.monomorphExpand(this->state.sp, ty, this->ms);
             }
 
             unsigned read_enum_variant(const HIR::TypeData* ty, ValueRef value) const {
@@ -1395,12 +1395,12 @@ namespace MIR {
                 throw std::runtime_error("Unreachable type while checking a constant drop");
             }
 
-            StaticRefPtr getStaticrefMono(const ::HIR::Path& p, HIR::TypeRef* out_ty = nullptr) const {
+            StaticRefPtr getStaticrefMono(const ::HIR::Path& p, HIR::TypeRef* outTy = nullptr) const {
                 // NOTE: Value won't need to be monomorphed, as it shouldn't be generic
-                return getStaticref(ms.monomorph_path(state.sp, p), out_ty);
+                return getStaticref(ms.monomorphPath(state.sp, p), outTy);
             }
 
-            StaticRefPtr getStaticref(::HIR::Path p, HIR::TypeRef* out_ty = nullptr) const {
+            StaticRefPtr getStaticref(::HIR::Path p, HIR::TypeRef* outTy = nullptr) const {
                 // If there's any mention of generics in this path, then return Literal::Defer
                 if (visit_path_tys_with(p, [&](const auto& ty) -> bool {
                     return ty->is_Generic();
@@ -1438,8 +1438,8 @@ namespace MIR {
                         auto& item = const_cast<::HIR::Static&>(s);
 
                         // Challenge: Adding items to the module might invalidate an iterator.
-                        ::HIR::ItemPath mod_ip{item.mValue.state->modPath};
-                        auto nvs = NewvalState(item.mValue.state->mModule, mod_ip, FMT("static" << &item << "#"));
+                        ::HIR::ItemPath modIp{item.mValue.state->modPath};
+                        auto nvs = NewvalState(item.mValue.state->mModule, modIp, FMT("static" << &item << "#"));
                         auto eval = ::HIR::Evaluator(item.mValue.span(), root_resolve.crate, nvs);
                         DEBUG("- Evaluate " << p);
                         try {
@@ -1451,14 +1451,14 @@ namespace MIR {
                         }
                         DEBUG(p << " = " << item.valueRes);
                     }
-                    if (out_ty) {
+                    if (outTy) {
                         // Does this need monomorph? No, becuase the value is known and thus not generic?
-                        *out_ty = s.mType;
+                        *outTy = s.mType;
                     }
                     return StaticRefPtr::allocate(value_pool, std::move(p), &s.valueRes);
                 } else {
                     DEBUG(ent.tag_str() << " " << p);
-                    if (out_ty) {
+                    if (outTy) {
                         MIR_TODO(state, "Get type for " << ent.tag_str() << " (" << p << ")");
                     }
                     return StaticRefPtr::allocate(value_pool, std::move(p), nullptr);
@@ -1620,8 +1620,8 @@ namespace MIR {
             return val;
             }
 
-            const EncodedLiteral& getConst(const ::HIR::Path& inP, ::HIR::TypeRef* out_ty) const {
-                auto p = ms.monomorph_path(state.sp, inP);
+            const EncodedLiteral& getConst(const ::HIR::Path& inP, ::HIR::TypeRef* outTy) const {
+                auto p = ms.monomorphPath(state.sp, inP);
                 root_resolve.expandAssociatedTypesPath(state.sp, p);
                 // If there's any mention of generics in this path, then return Literal::Defer
                 if (visit_path_tys_with(p, [&](const auto& ty) -> bool {
@@ -1638,8 +1638,8 @@ namespace MIR {
                 if (c.valueState == HIR::Constant::ValueState::Unknown) {
                     auto& item = const_cast<::HIR::Constant&>(c);
                     // Challenge: Adding items to the module might invalidate an iterator.
-                    ::HIR::ItemPath mod_ip{item.mValue.state->modPath};
-                    auto nvs = NewvalState(item.mValue.state->mModule, mod_ip, FMT("const" << &c << "#"));
+                    ::HIR::ItemPath modIp{item.mValue.state->modPath};
+                    auto nvs = NewvalState(item.mValue.state->mModule, modIp, FMT("const" << &c << "#"));
                     auto eval = ::HIR::Evaluator(item.mValue.span(), root_resolve.crate, nvs);
                     eval.resolve.set_both_generics_raw(implParamsDef, &c.mParams);
                     auto temp_pp_impl = implParamsDef ? implParamsDef->makeNopParams(root_resolve.crate.types, 0) : HIR::PathParams();
@@ -1655,22 +1655,22 @@ namespace MIR {
                         item.valueState = HIR::Constant::ValueState::Generic;
                     }
                 }
-                if (out_ty) {
-                    *out_ty = constMs.monomorph_type(state.sp, c.mType);
+                if (outTy) {
+                    *outTy = constMs.monomorphType(state.sp, c.mType);
                 }
                 if (c.valueState == HIR::Constant::ValueState::Generic) {
                     auto it = c.monomorphCache.find(p);
                     if (it == c.monomorphCache.end()) {
                         auto& item = const_cast<::HIR::Constant&>(c);
                         // Challenge: Adding items to the module might invalidate an iterator.
-                        ::HIR::ItemPath mod_ip{item.mValue.state->modPath};
-                        auto nvs = NewvalState(item.mValue.state->mModule, mod_ip, FMT("const" << &c << "#"));
+                        ::HIR::ItemPath modIp{item.mValue.state->modPath};
+                        auto nvs = NewvalState(item.mValue.state->mModule, modIp, FMT("const" << &c << "#"));
                         auto eval = ::HIR::Evaluator(item.mValue.span(), root_resolve.crate, nvs);
                         eval.resolve.set_both_generics_raw(implParamsDef, &c.mParams);
 
                         DEBUG("- Evaluate monomorphed " << p);
                         DEBUG("> const_ms=" << constMs);
-                        auto ty = constMs.monomorph_type(item.mValue.span(), item.mType);
+                        auto ty = constMs.monomorphType(item.mValue.span(), item.mType);
                         auto val = eval.evaluateConstant(::HIR::ItemPath(p), item.mValue, std::move(ty), std::move(constMs));
 
                         auto insertRes = item.monomorphCache.insert(std::make_pair(p.clone(), std::move(val)));
@@ -1788,7 +1788,7 @@ namespace MIR {
                         MonomorphState value_ms(root_resolve.crate.types);
                         value_ms.pp_impl = &value.params_impl;
                         value_ms.pp_method = &value.params_item;
-                        auto type = value_ms.monomorph_type(state.sp, expr->resType);
+                        auto type = value_ms.monomorphType(state.sp, expr->resType);
                         tmp = evaluateConstgeneric(state.sp, root_resolve.crate, type, value);
                         return tmp;
                     }
@@ -2334,18 +2334,18 @@ namespace HIR {
     }
 
     void Evaluator::push_stack_entry(::FmtLambda print_path, const ::MIR::Function& fcn, MonomorphState ms, ::HIR::TypeRef exp, ::HIR::Function::argsT argDefs, ::std::vector<::MIR::eval::AllocationPtr> args, const ::HIR::GenericParams* itemParamsDef, const ::HIR::GenericParams* implParamsDef) {
-        this->callStack.push_back(new CallStackEntry(this->value_pool.mutPtr(), this->num_frames, this->root_span, this->resolve, std::move(print_path), std::move(exp), std::move(argDefs), fcn, std::move(ms), std::move(args), itemParamsDef, implParamsDef));
-        this->num_frames += 1;
+        this->callStack.push_back(new CallStackEntry(this->value_pool.mutPtr(), this->numFrames, this->root_span, this->resolve, std::move(print_path), std::move(exp), std::move(argDefs), fcn, std::move(ms), std::move(args), itemParamsDef, implParamsDef));
+        this->numFrames += 1;
     }
 
     AllocationPtr Evaluator::run_until_stack_empty() {
         const unsigned MAX_BLOCK_COUNT = 4'000'000;
         const unsigned MAX_STMT_COUNT = 8'000'000;
         assert(!this->callStack.empty());
-        unsigned int num_stmts_run = 0;
+        unsigned int numStmtsRun = 0;
         unsigned int idx;
         for (idx = 0; idx < MAX_BLOCK_COUNT; idx += 1) {
-            if (num_stmts_run > MAX_STMT_COUNT) {
+            if (numStmtsRun > MAX_STMT_COUNT) {
                 break;
             }
 
@@ -2354,12 +2354,12 @@ namespace HIR {
             for (const auto& stmt : bb.statements) {
                 state.set_cur_stmt(state.getCurBlock(), &stmt - bb.statements.data());
                 this->run_statement(*this->callStack.back(), stmt);
-                num_stmts_run += 1;
+                numStmtsRun += 1;
             }
             state.set_cur_stmt_term(state.getCurBlock());
-            auto next_block = run_terminator(*this->callStack.back(), bb.terminator);
-            num_stmts_run += 1;
-            switch (next_block) {
+            auto nextBlock = run_terminator(*this->callStack.back(), bb.terminator);
+            numStmtsRun += 1;
+            switch (nextBlock) {
                 case TERM_RET_PUSHED:
                     continue;
                 case TERM_RET_RETURN: {
@@ -2368,20 +2368,20 @@ namespace HIR {
                     if (this->callStack.empty() == 1) {
                         return rv;
                     } else {
-                        auto& next_state = *this->callStack.back();
-                        const auto& term = next_state.state.fcn.blocks[next_state.state.getCurBlock()].terminator;
+                        auto& nextState = *this->callStack.back();
+                        const auto& term = nextState.state.fcn.blocks[nextState.state.getCurBlock()].terminator;
                         const auto& te = term.as_Call();
-                        auto dst = next_state.getLval(te.ret_val);
-                        dst.copyFrom(next_state.state, ValueRef(rv));
-                        next_state.state.set_cur_stmt(te.ret_block, 0);
+                        auto dst = nextState.getLval(te.ret_val);
+                        dst.copyFrom(nextState.state, ValueRef(rv));
+                        nextState.state.set_cur_stmt(te.ret_block, 0);
                     }
                     break;
                 }
                 default:
-                    state.set_cur_stmt(next_block, 0);
+                    state.set_cur_stmt(nextBlock, 0);
             }
         }
-        ERROR(this->root_span, E0000, "Constant evaluation ran for too long - " << num_stmts_run << " statements, " << idx << " blocks");
+        ERROR(this->root_span, E0000, "Constant evaluation ran for too long - " << numStmtsRun << " statements, " << idx << " blocks");
     }
 
     void Evaluator::run_statement(::MIR::eval::CallStackEntry& localState, const ::MIR::Statement& stmt) {
@@ -2399,10 +2399,10 @@ namespace HIR {
             TU_ARMA(SetDropFlag, se) {
                 MIR_ASSERT(state, se.idx < localState.dropFlags.size(), "Drop flag " << se.idx << " out of range");
                 if (se.other == UINT_MAX) {
-                    localState.dropFlags[se.idx] = se.new_val;
+                    localState.dropFlags[se.idx] = se.newVal;
                 } else {
                     MIR_ASSERT(state, se.other < localState.dropFlags.size(), "Drop flag " << se.other << " out of range");
-                    localState.dropFlags[se.idx] = se.new_val != localState.dropFlags[se.other];
+                    localState.dropFlags[se.idx] = se.newVal != localState.dropFlags[se.other];
                 }
                 return;
             }
@@ -2588,7 +2588,7 @@ namespace HIR {
                 dst.copyFrom(state, v.slice(0, ptr_size));
             }
             TU_ARMA(MakeDst, e) {
-                if (TU_TEST2(e.meta_val, Constant, , ItemAddr, .get() == nullptr)) {
+                if (TU_TEST2(e.metaVal, Constant, , ItemAddr, .get() == nullptr)) {
                     ::HIR::TypeRef tmp;
                     const auto& src_ty = state.getParamType(tmp, e.ptr_val);
                     ::HIR::TypeRef tmp2;
@@ -2629,7 +2629,7 @@ namespace HIR {
                             // TODO: What can cast TO a borrow? - Non-converted dyn unsizes .. but they require vtables,
                             // which aren't available yet!
                             if (const auto* tep = (*dynamicTypeD)->opt_TraitObject()) {
-                                static const RcString rcstring_vtable = RcString::new_interned("vtable#");
+                                static const RcString rcstring_vtable = RcString::newInterned("vtable#");
                                 auto vtable_path = ::HIR::Path(*dynamicTypeS, tep->mTrait.mPath.clone(), rcstring_vtable);
                                 dst.slice(TargetGetPointerBits() / 8).write_ptr(state, EncodedLiteral::PTR_BASE, localState.getStaticref(std::move(vtable_path)));
                             } else if (/*const auto* tep =*/(*dynamicTypeD)->opt_Slice()) {
@@ -2654,7 +2654,7 @@ namespace HIR {
                 } else {
                     size_t ptr_size = TargetGetPointerBits() / 8;
                     localState.write_param(dst.slice(0, ptr_size), e.ptr_val);
-                    localState.write_param(dst.slice(ptr_size), e.meta_val);
+                    localState.write_param(dst.slice(ptr_size), e.metaVal);
                 }
             }
             TU_ARMA(Tuple, e) {
@@ -2877,7 +2877,7 @@ namespace HIR {
                 if (const auto* te = e.fcn.opt_Intrinsic()) {
                     auto dst = localState.getLval(e.ret_val);
                     if (te->name == "size_of") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t size_val;
                         if (TargetGetSizeOf(state.sp, this->resolve, ty, size_val)) {
                             dst.write_uint(state, TargetGetPointerBits(), U128(size_val));
@@ -2885,7 +2885,7 @@ namespace HIR {
                             throw Defer();
                         }
                     } else if (te->name == "size_of_val") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t size_val;
                         size_t alignVal;
                         if (!TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, size_val, alignVal)) {
@@ -2909,7 +2909,7 @@ namespace HIR {
                         }
                         dst.write_uint(state, TargetGetPointerBits(), U128(size_val));
                     } else if (te->name == "align_of" || te->name == "min_align_of") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t alignVal;
                         if (TargetGetAlignOf(state.sp, this->resolve, ty, alignVal)) {
                             dst.write_uint(state, TargetGetPointerBits(), U128(alignVal));
@@ -2917,7 +2917,7 @@ namespace HIR {
                             throw Defer();
                         }
                     } else if (te->name == "align_of_val" || te->name == "min_align_of_val") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t size_val;
                         size_t alignVal;
                         if (TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, size_val, alignVal) && alignVal > 0) {
@@ -2926,19 +2926,19 @@ namespace HIR {
                             throw Defer();
                         }
                     } else if (te->name == "offset_of") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t val = state.intrinsicOffsetOf(ty, e.args);
                         dst.write_uint(state, TargetGetPointerBits(), U128(val));
                     } else if (te->name == "type_name") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         auto name = state.intrinsicTypeName(ty);
                         dst.write_ptr(state, EncodedLiteral::PTR_BASE, AllocationPtr::allocateRo(localState.value_pool, name.data(), name.size()));
                         dst.slice(TargetGetPointerBits() / 8).write_uint(state, TargetGetPointerBits(), name.size());
                     } else if (te->name == "type_id") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         dst.write_ptr(state, EncodedLiteral::PTR_BASE, StaticRefPtr::allocate(localState.value_pool, HIR::Path(mv$(ty), "#type_id"), nullptr));
                     } else if (te->name == "needs_drop") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         dst.write_uint(state, 8, resolve.type_needs_drop_glue(state.sp, ty) ? 1 : 0);
                     } else if (te->name == "caller_location") {
                         auto ty_path = resolve.crate.getLangItemPath(state.sp, "panic_location");
@@ -2966,7 +2966,7 @@ namespace HIR {
                     }
                     // ---
                     else if (te->name == "ctpop") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "ctpop with non-primitive " << ty);
                         auto ti = TypeInfo::forType(ty);
                         auto val = ti.mask(localState.read_param_uint(ti.bits, e.args.at(0)));
@@ -2975,7 +2975,7 @@ namespace HIR {
                     }
                     // - CounT Trailing Zeros
                     else if (te->name == "cttz" || te->name == "cttz_nonzero") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`cttz` with non-primitive " << ty);
                         auto ti = TypeInfo::forType(ty);
                         auto val = ti.mask(localState.read_param_uint(ti.bits, e.args.at(0)));
@@ -2992,7 +2992,7 @@ namespace HIR {
                     }
                     // - CounT Lrailing Zeros
                     else if (te->name == "ctlz" || te->name == "ctlz_nonzero") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`ctlz` with non-primitive " << ty);
                         auto ti = TypeInfo::forType(ty);
                         auto val = ti.mask(localState.read_param_uint(ti.bits, e.args.at(0)));
@@ -3005,7 +3005,7 @@ namespace HIR {
                         // Then subtract from the total bit count (no shift needed = max bits)
                         dst.write_uint(state, 32, U128(ti.bits - rv));
                     } else if (te->name == "bswap") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "bswap with non-primitive " << ty);
                         auto ti = TypeInfo::forType(ty);
                         auto val = localState.read_param_uint(ti.bits, e.args.at(0));
@@ -3050,7 +3050,7 @@ namespace HIR {
                         }
                         dst.write_uint(state, ti.bits, rv);
                     } else if (te->name == "bitreverse") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "bswap with non-primitive " << ty);
                         auto ti = TypeInfo::forType(ty);
 
@@ -3068,7 +3068,7 @@ namespace HIR {
                         }
                         dst.write_uint(state, ti.bits, rv);
                     } else if (te->name == "rotate_left" || te->name == "rotate_right") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), te->name << " with non-primitive " << ty);
                         auto ti = TypeInfo::forType(ty);
 
@@ -3094,19 +3094,19 @@ namespace HIR {
                     }
                     // ---
                     else if (te->name == "add_with_overflow") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                         auto dstTup = getTupleTBool(localState, dst, ty);
                         bool overflowed = doArithChecked(localState, ty, dstTup.first, e.args.at(0), ::MIR::eBinOp::ADD, e.args.at(1));
                         dstTup.second.write_uint(state, 8, U128(overflowed ? 1 : 0));
                     } else if (te->name == "sub_with_overflow") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                         auto dstTup = getTupleTBool(localState, dst, ty);
                         bool overflowed = doArithChecked(localState, ty, dstTup.first, e.args.at(0), ::MIR::eBinOp::SUB, e.args.at(1));
                         dstTup.second.write_uint(state, 8, U128(overflowed ? 1 : 0));
                     } else if (te->name == "mul_with_overflow") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                         auto dstTup = getTupleTBool(localState, dst, ty);
                         bool overflowed = doArithChecked(localState, ty, dstTup.first, e.args.at(0), ::MIR::eBinOp::MUL, e.args.at(1));
@@ -3114,52 +3114,52 @@ namespace HIR {
                     }
                     // Unchecked and wrapping are the same
                     else if (te->name == "wrapping_add" || te->name == "unchecked_add") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                         doArithChecked(localState, ty, dst, e.args.at(0), ::MIR::eBinOp::ADD, e.args.at(1));
                     } else if (te->name == "wrapping_sub" || te->name == "unchecked_sub") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                         doArithChecked(localState, ty, dst, e.args.at(0), ::MIR::eBinOp::SUB, e.args.at(1));
                     } else if (te->name == "wrapping_mul" || te->name == "unchecked_mul") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                         doArithChecked(localState, ty, dst, e.args.at(0), ::MIR::eBinOp::MUL, e.args.at(1));
                     } else if (te->name == "unchecked_shl") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                         doArithChecked(localState, ty, dst, e.args.at(0), ::MIR::eBinOp::BIT_SHL, e.args.at(1));
                     } else if (te->name == "unchecked_shr") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                         doArithChecked(localState, ty, dst, e.args.at(0), ::MIR::eBinOp::BIT_SHR, e.args.at(1));
                     }
                     // - Except for div/rem, which add checking just in case
                     else if (te->name == "unchecked_rem") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                         bool was_overflow = doArithChecked(localState, ty, dst, e.args.at(0), ::MIR::eBinOp::MOD, e.args.at(1));
                         MIR_ASSERT(state, !was_overflow, "`" << te->name << "` overflowed");
                     } else if (te->name == "unchecked_div") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                         bool was_overflow = doArithChecked(localState, ty, dst, e.args.at(0), ::MIR::eBinOp::DIV, e.args.at(1));
                         MIR_ASSERT(state, !was_overflow, "`" << te->name << "` overflowed");
                     }
                     // `exact_div` is UB if the division results in a non-zero remainder (or if the division overflows)
                     else if (te->name == "exact_div") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                         bool was_overflow = doArithChecked(localState, ty, dst, e.args.at(0), ::MIR::eBinOp::DIV, e.args.at(1));
                         MIR_ASSERT(state, !was_overflow, "`" << te->name << "` overflowed");
                     }
                     // Saturating operations
                     else if (te->name == "saturating_add") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                         doArithChecked(localState, ty, dst, e.args.at(0), ::MIR::eBinOp::ADD, e.args.at(1), true);
                     } else if (te->name == "saturating_sub") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                         doArithChecked(localState, ty, dst, e.args.at(0), ::MIR::eBinOp::SUB, e.args.at(1), true);
                     }
@@ -3221,7 +3221,7 @@ namespace HIR {
                         auto val = localState.read_param_uint(8, e.args.at(0));
                         MIR_ASSERT(state, val != 0, "`assume` failed");
                     } else if (te->name == "assert_inhabited") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         // TODO: Determine if the type is inhabited (i.e. isn't diverge)
                         bool isUninhabited = resolve.type_is_impossible(state.sp, ty);
                         MIR_ASSERT(state, !isUninhabited, "assert_inhabited " << ty << " failed");
@@ -3230,7 +3230,7 @@ namespace HIR {
                     else if (te->name == "const_eval_select") {
                         // "Selects which function to call depending on the context."
                         // `fn const_eval_select<ARG, F, G, RET>(arg: ARG, called_in_const: F, called_at_rt: G ) -> RET`
-                        auto argTy = localState.monomorph_expand(te->params.types.at(0));
+                        auto argTy = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, argTy->is_Tuple(), "`" << te->name << "` requires a tuple for ARG, got " << argTy);
                         auto* repr = TargetGetTypeRepr(state.sp, resolve, argTy);
                         if (!repr) {
@@ -3254,10 +3254,10 @@ namespace HIR {
                             }
                             TU_ARMA(Constant, e) {
                                 if (const auto* ce = e.opt_Function()) {
-                                    fcn_path = std::make_shared<HIR::Path>(ms.monomorph_path(state.sp, *ce->p));
+                                    fcn_path = std::make_shared<HIR::Path>(ms.monomorphPath(state.sp, *ce->p));
                                 } else if (const auto* ce = e.opt_ItemAddr()) {
                                     MIR_ASSERT(state, ce->offset == U128(0), "Function pointer has a non-zero offset: " << ce->offset);
-                                    fcn_path = std::make_shared<HIR::Path>(ms.monomorph_path(state.sp, **ce));
+                                    fcn_path = std::make_shared<HIR::Path>(ms.monomorphPath(state.sp, **ce));
                                 } else {
                                     MIR_BUG(state, "Invalid argument for function pointer to `const_eval_select`: " << fcnArg);
                                 }
@@ -3280,7 +3280,7 @@ namespace HIR {
                     }
                     // ---
                     else if (te->name == "copy_nonoverlapping") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize))
                             throw Defer();
@@ -3296,7 +3296,7 @@ namespace HIR {
                         auto vr_dst = ValueRef(ptr_dst.second, ptr_dst.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
                         vr_dst.copyFrom(state, vr_src);
                     } else if (te->name == "offset") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0)->as_Pointer().inner);
+                        auto ty = localState.monomorphExpand(te->params.types.at(0)->as_Pointer().inner);
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize))
                             throw Defer();
@@ -3306,7 +3306,7 @@ namespace HIR {
                     }
                     // `arith_offset` is the wrapping form of `offset`; identical arithmetic here, and the type parameter is the *pointee*.
                     else if (te->name == "arith_offset") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize))
                             throw Defer();
@@ -3321,7 +3321,7 @@ namespace HIR {
                         uint8_t rv = (a.second == b.second) ? (a.first == b.first ? 1 : 0) : 2;
                         dst.write_uint(state, 8, rv);
                     } else if (te->name == "write_bytes") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize))
                             throw Defer();
@@ -3341,7 +3341,7 @@ namespace HIR {
                         auto vr_src = ValueRef(ptr_src.second, ptr_src.first - EncodedLiteral::PTR_BASE);
                         dst.copyFrom(state, vr_src);
                     } else if (te->name == "discriminant_value") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         if (!(ty->is_Path() && ty->as_Path().binding.is_Enum())) {
                             dst.write_uint(state, dst.getLen() * 8, U128(0));
                         } else {
@@ -3393,13 +3393,13 @@ namespace HIR {
                         }
                         }
                     } else if (te->name == "variant_count") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Path(), "`variant_count` on non-enum - " << ty);
                         MIR_ASSERT(state, ty->as_Path().binding.is_Enum(), "`variant_count` on non-enum - " << ty);
                         const auto* enm = ty->as_Path().binding.as_Enum();
-                        dst.write_uint(state, TargetGetPointerBits(), enm->num_variants());
+                        dst.write_uint(state, TargetGetPointerBits(), enm->numVariants());
                     } else if (te->name == "assert_zero_valid") {
-                        auto ty = localState.monomorph_expand(te->params.types.at(0));
+                        auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, !ty->is_Borrow(), "`assert_zero_valid`: Borrow cannot be zero");
                         // TODO: Other cases?
                     } else if (te->name == "is_val_statically_known") {
@@ -3412,7 +3412,7 @@ namespace HIR {
                 } else if (const auto* te = e.fcn.opt_Path()) {
                     const auto& fcnpRaw = *te;
                     DEBUG("ms=" << ms);
-                    auto fcnp = std::make_shared<HIR::Path>(ms.monomorph_path(state.sp, fcnpRaw));
+                    auto fcnp = std::make_shared<HIR::Path>(ms.monomorphPath(state.sp, fcnpRaw));
 
                     // Argument values
                     ::std::vector<AllocationPtr> callArgs;
@@ -3493,7 +3493,7 @@ namespace HIR {
                         hasConstBound |= impl.boundConstness() != HIR::BoundConstness::Never;
                         return false;
                     }
-                    if (!bestImpl.isValid() || impl.more_specific_than(resolve.crate.types, bestImpl)) {
+                    if (!bestImpl.isValid() || impl.moreSpecificThan(resolve.crate.types, bestImpl)) {
                         bestImpl = mv$(impl);
                     }
                     return false;
@@ -3534,9 +3534,9 @@ namespace HIR {
             // Monomorphised argument types
             ::HIR::Function::argsT argDefs;
             for (const auto& a : fcn.mArgs) {
-                argDefs.push_back(::std::make_pair(::HIR::Pattern(), this->resolve.monomorph_expand(this->root_span, a.second, fcnMs)));
+                argDefs.push_back(::std::make_pair(::HIR::Pattern(), this->resolve.monomorphExpand(this->root_span, a.second, fcnMs)));
             }
-            auto ret_ty = this->resolve.monomorph_expand(this->root_span, fcn.returnType, fcnMs);
+            auto ret_ty = this->resolve.monomorphExpand(this->root_span, fcn.returnType, fcnMs);
 
             push_stack_entry(
                 ::FmtLambda([=](std::ostream& os) {
@@ -3551,7 +3551,7 @@ namespace HIR {
                 implParamsDef
             );
             return true;
-        } else if (rv.is_NotFound() && monomorphise_path_needed(path, true)) {
+        } else if (rv.is_NotFound() && monomorphisePathNeeded(path, true)) {
             throw Defer();
         } else if (rv.is_Struct()) {
             // Set destination, same way as `RValue::Struct` does
@@ -3592,28 +3592,28 @@ namespace HIR {
                     struct M: MonomorphiserNop {
                         using MonomorphiserNop::MonomorphiserNop;
 
-                        ::HIR::LifetimeRef monomorph_lifetime(const Span& sp, const ::HIR::LifetimeRef& tpl) const override {
+                        ::HIR::LifetimeRef monomorphLifetime(const Span& sp, const ::HIR::LifetimeRef& tpl) const override {
                             return ::HIR::LifetimeRef::new_static();
                         }
                     };
 
-                    auto itemPath = nvs.new_static(M(resolve.crate.types).monomorph_type(Span(), innerAlloc->getType()), mv$(innerVal));
+                    auto itemPath = nvs.new_static(M(resolve.crate.types).monomorphType(Span(), innerAlloc->getType()), mv$(innerVal));
 
-                    rv.relocations.push_back(Reloc::new_named(r.offset, TargetGetPointerBits() / 8, mv$(itemPath)));
+                    rv.relocations.push_back(Reloc::newNamed(r.offset, TargetGetPointerBits() / 8, mv$(itemPath)));
                 } else {
                     // string
                     auto size = innerAlloc->size();
                     auto ptr = innerAlloc->getBytes(0, size, true);
-                    rv.relocations.push_back(Reloc::new_bytes(r.offset, TargetGetPointerBits() / 8, ::std::string(ptr, ptr + size)));
+                    rv.relocations.push_back(Reloc::newBytes(r.offset, TargetGetPointerBits() / 8, ::std::string(ptr, ptr + size)));
                 }
             } else if (const auto* sr = r.ptr.asStaticref()) {
                 // Just emit a path
-                rv.relocations.push_back(Reloc::new_named(r.offset, TargetGetPointerBits() / 8, sr->path().clone()));
+                rv.relocations.push_back(Reloc::newNamed(r.offset, TargetGetPointerBits() / 8, sr->path().clone()));
             } else if (const auto* c = r.ptr.asConstant()) {
                 // string
                 auto size = c->size();
                 auto ptr = c->getBytes(0, size, true);
-                rv.relocations.push_back(Reloc::new_bytes(r.offset, TargetGetPointerBits() / 8, ::std::string(ptr, ptr + size)));
+                rv.relocations.push_back(Reloc::newBytes(r.offset, TargetGetPointerBits() / 8, ::std::string(ptr, ptr + size)));
             } else {
                 BUG(this->root_span, "");
             }
@@ -3643,7 +3643,7 @@ namespace HIR {
                         nullptr,
                         &alias->params,
                         nullptr
-                    ).monomorph_type(expr.span(), alias->inner->type);
+                    ).monomorphType(expr.span(), alias->inner->type);
                     resolve.expandAssociatedTypes(expr.span(), exp);
                 }
             }
@@ -3658,14 +3658,14 @@ namespace HIR {
 
         // If `ms` is empty, but `resolve` has impl/item generics, then re-make `ms` as a nop set of params
         // - This is a lazy hack, isntead of doing this creation in the caller
-        ::HIR::PathParams nop_params_impl;
-        ::HIR::PathParams nop_params_method;
+        ::HIR::PathParams nopParamsImpl;
+        ::HIR::PathParams nopParamsMethod;
         if (!ms.pp_impl && !ms.pp_method) {
             if (resolve.itemGenerics) {
-                ms.pp_method = &(nop_params_method = resolve.itemGenerics->makeNopParams(resolve.crate.types, 1));
+                ms.pp_method = &(nopParamsMethod = resolve.itemGenerics->makeNopParams(resolve.crate.types, 1));
             }
             if (resolve.implGenerics) {
-                ms.pp_impl = &(nop_params_impl = resolve.implGenerics->makeNopParams(resolve.crate.types, 0));
+                ms.pp_impl = &(nopParamsImpl = resolve.implGenerics->makeNopParams(resolve.crate.types, 0));
             }
             DEBUG("(was empty) ms = " << ms);
         }
@@ -3679,7 +3679,7 @@ namespace HIR {
             }
 
             assert(this->callStack.empty());
-            this->num_frames = 0;
+            this->numFrames = 0;
             // Note: Since this is the entrypoint, `this->resolve` has the correct GenericParams
             this->push_stack_entry(FMT_CB(os, os << ip), *mir, std::move(ms), std::move(exp), {}, {}, resolve.itemGenerics, resolve.implGenerics);
             auto rv_raw = this->run_until_stack_empty();
@@ -3844,7 +3844,7 @@ namespace {
                         auto idx = static_cast<size_t>(&v - &p.values.front());
                         ASSERT_BUG(sp, idx < params_def.values.size(), "");
                         const auto& ty = params_def.values[idx].mType;
-                        ASSERT_BUG(sp, !monomorphise_type_needed(ty), "" << ty);
+                        ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), "" << ty);
                         evalulateConstGeneric(sp, ty, v);
                     } catch (const Defer&) {
                         // Deferred - no update
@@ -4241,7 +4241,7 @@ namespace {
                 for (auto& v : mod.inlineStatics) {
                     // ::std::unique_ptr<VisEnt<ValueItem>>
                     ::std::unique_ptr<::HIR::VisEnt<::HIR::ValueItem>> iv;
-                    iv.reset(new ::HIR::VisEnt<::HIR::ValueItem>{::HIR::Publicity::new_none(), ::HIR::ValueItem::make_Static(mv$(*v.second))});
+                    iv.reset(new ::HIR::VisEnt<::HIR::ValueItem>{::HIR::Publicity::newNone(), ::HIR::ValueItem::make_Static(mv$(*v.second))});
                     mod.valueItems.insert(::std::make_pair(v.first, mv$(iv)));
                 }
                 mod.inlineStatics.clear();
@@ -4323,13 +4323,13 @@ void ConvertHIRConstantEvaluate(::HIR::Crate& crate) {
     exp.visit_crate(crate);
 
     ExpanderApply(crate.types).visit_crate(crate);
-    for (auto& new_ty_pair : crate.newTypes) {
-        auto res = crate.rootModule.modItems.insert(mv$(new_ty_pair));
+    for (auto& newTyPair : crate.newTypes) {
+        auto res = crate.rootModule.modItems.insert(mv$(newTyPair));
         ASSERT_BUG(Span(), res.second, "Duplicate type in consteval?");
     }
     crate.newTypes.clear();
-    for (auto& new_val_pair : crate.newValues) {
-        auto res = crate.rootModule.valueItems.insert(mv$(new_val_pair));
+    for (auto& newValPair : crate.newValues) {
+        auto res = crate.rootModule.valueItems.insert(mv$(newValPair));
         ASSERT_BUG(Span(), res.second, "Duplicate value in consteval?");
     }
     crate.newValues.clear();
@@ -4376,7 +4376,7 @@ void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const ::HIR::Crate& 
         MonomorphState ms(crate.types);
         ms.pp_impl = &(*value)->params_impl;
         ms.pp_method = &(*value)->params_item;
-        auto type = ms.monomorph_type(sp, expr->resType);
+        auto type = ms.monomorphType(sp, expr->resType);
         if (visit_ty_with(type, [](const HIR::TypeData* t) {
             return t->is_Infer();
         })) {
@@ -4439,7 +4439,7 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const ::HIR::Crate& 
                 auto idx = static_cast<size_t>(&v - &params.values.front());
                 ASSERT_BUG(sp, idx < params_def->values.size(), "");
                 const auto& ty = params_def->values[idx].mType;
-                ASSERT_BUG(sp, !monomorphise_type_needed(ty), "" << ty);
+                ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), "" << ty);
                 MonomorphState ms(crate.types);
                 ms.pp_impl = &ue.params_impl;
                 ms.pp_method = &ue.params_item;
@@ -4474,7 +4474,7 @@ Evaluator::Evaluator(const Span& sp, const ::HIR::Crate& crate, Newval& nvs)
     , resolve(crate)
     , nvs(nvs)
     , evalIndex(s_next_eval_index++)
-    , num_frames(0)
+    , numFrames(0)
     , require_const_calls(false) {
 }
 }

@@ -94,7 +94,7 @@ struct TypeTraitPath {
 
 struct TypeErasedType {
     ::std::vector<TypeTraitPath> traits;
-    ::std::vector<TypeTraitPath> maybe_traits;
+    ::std::vector<TypeTraitPath> maybeTraits;
     ::std::vector<AST::LifetimeRef> lifetimes;
     ::std::unique_ptr<AST::PathParams> use;
     /// Was this `impl` from 2024 or later edition? This changes the behaviour if `use` is not present

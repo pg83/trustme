@@ -269,7 +269,7 @@ public:
     // - Values
     ::MIR::LValue getVariable(const Span& sp, unsigned idx) const;
 
-    ::MIR::LValue new_temporary(const ::HIR::TypeData* ty);
+    ::MIR::LValue newTemporary(const ::HIR::TypeData* ty);
     ::MIR::LValue lvalueOrTemp(const Span& sp, const ::HIR::TypeData* ty, ::MIR::RValue val);
     size_t localCount() const {
         return output.locals.size();
@@ -362,31 +362,31 @@ private:
     std::vector<CodeSaveStackEnt> codeSaveStack;
 
 public:
-    void set_cur_block(unsigned int new_block);
+    void set_cur_block(unsigned int newBlock);
     ::MIR::BasicBlockId pause_cur_block();
 
     void endBlock(::MIR::Terminator term);
 
-    ::MIR::BasicBlockId new_bb_linked();
-    ::MIR::BasicBlockId new_bb_unlinked();
+    ::MIR::BasicBlockId newBbLinked();
+    ::MIR::BasicBlockId newBbUnlinked();
 
-    unsigned int new_drop_flag(bool defaultState);
-    unsigned int new_drop_flag_and_set(const Span& sp, bool set_state);
+    unsigned int newDropFlag(bool defaultState);
+    unsigned int newDropFlagAndSet(const Span& sp, bool set_state);
     bool getDropFlagDefault(const Span& sp, unsigned int index);
     /// Add a drop flag to be set when another is also set (used to rewrite drop flags after the fact)
-    void dropFlagAlias(unsigned int old_idx, unsigned int new_idx);
+    void dropFlagAlias(unsigned int oldIdx, unsigned int newIdx);
 
     // --- Scopes ---
     /// Scope controlling the state of defined variables
-    ScopeHandle new_scope_var(const Span& sp);
+    ScopeHandle newScopeVar(const Span& sp);
     /// Scope controlling the state of temporaries created within it
-    ScopeHandle new_scope_temp(const Span& sp);
+    ScopeHandle newScopeTemp(const Span& sp);
     /// Scope for split code paths (e.g. `if`)
-    ScopeHandle new_scope_split(const Span& sp);
+    ScopeHandle newScopeSplit(const Span& sp);
     /// Scope for escapable code paths (e.g. `loop`)
-    ScopeHandle new_scope_loop(const Span& sp);
+    ScopeHandle newScopeLoop(const Span& sp);
     /// Prevent any mutation of states above this scope until `unfreeze_scope` is called
-    ScopeHandle new_scope_freeze(const Span& sp);
+    ScopeHandle newScopeFreeze(const Span& sp);
 
     /// Raises every variable defined in the source scope into the target scope
     void raise_all(const Span& sp, ScopeHandle src, const ScopeHandle& target);
@@ -416,13 +416,13 @@ public:
     /// Schedule an argument's value drop in the current variable scope.
     void schedule_argument_drop(unsigned int idx);
     /// Move a temporary's drop entry from `source` into the nearest variable scope.
-    void move_temporary_drop_to_variable_scope(const Span& sp, const ::MIR::LValue& value, const ScopeHandle& source);
+    void moveTemporaryDropToVariableScope(const Span& sp, const ::MIR::LValue& value, const ScopeHandle& source);
     /// Move a local binding from its lexical block into the scope selected for a `super let`.
-    void move_variable_to_scope(const Span& sp, unsigned int idx, const ScopeHandle& target);
+    void moveVariableToScope(const Span& sp, unsigned int idx, const ScopeHandle& target);
     /// Drop a live value on the current control-flow path and mark it invalid.
     void dropLvalue(const Span& sp, const ::MIR::LValue& value);
     // Helper - Marks a variable/... as moved (and checks if the move is valid)
-    void moved_lvalue(const Span& sp, const ::MIR::LValue& lv);
+    void movedLvalue(const Span& sp, const ::MIR::LValue& lv);
 
 private:
     enum class SlotType {
@@ -436,7 +436,7 @@ private:
 
     VarState* getValStateMutP(const Span& sp, const ::MIR::LValue& lv, bool expectValid = false);
 
-    void merge_split_lists(const Span& sp, const ScopeHandle& handle, const ::std::map<unsigned int, VarState>& states, ::std::map<unsigned int, VarState>& endStates, MirBuilder::SlotType type);
+    void mergeSplitLists(const Span& sp, const ScopeHandle& handle, const ::std::map<unsigned int, VarState>& states, ::std::map<unsigned int, VarState>& endStates, MirBuilder::SlotType type);
 
     void terminate_loop_early(const Span& sp, ScopeType::Data_Loop& sd_loop);
 
@@ -525,6 +525,6 @@ extern void MIRLowerHIRGetTypeValueForPath(
     const ::HIR::TypeData* top_ty,
     const ::MIR::LValue& top_val,
     const fieldPathT& field_path, // unsigned int field_path_ofs,
-    /*Out ->*/ ::HIR::TypeRef& out_ty,
+    /*Out ->*/ ::HIR::TypeRef& outTy,
     ::MIR::LValue& out_val
 );

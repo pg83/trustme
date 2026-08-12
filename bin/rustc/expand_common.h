@@ -33,8 +33,8 @@ TAGGED_UNION_EX(MacroRef, (), None, ((None, struct {}), (MacroRules, const Macro
                     }
                     abort();
                 }));
-extern MacroRef ExpandLookupMacro(const Span& mi_span, const ::AST::Crate& crate, LList<const AST::Module*> modstack, const AST::AttributeName& path);
-extern MacroRef ExpandLookupMacro(const Span& mi_span, const ::AST::Crate& crate, LList<const AST::Module*> modstack, const AST::Path& path);
+extern MacroRef ExpandLookupMacro(const Span& miSpan, const ::AST::Crate& crate, LList<const AST::Module*> modstack, const AST::AttributeName& path);
+extern MacroRef ExpandLookupMacro(const Span& miSpan, const ::AST::Crate& crate, LList<const AST::Module*> modstack, const AST::Path& path);
 
 extern ExpandProcMacro* ExpandFindProcMacro(const RcString& name);
 extern ExpandDecorator* ExpandFindDecorator(const RcString& name);

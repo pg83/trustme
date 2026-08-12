@@ -55,7 +55,7 @@ public:
         unexpected(sp, mi, "crate");
     }
 
-    virtual void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t mod_idx, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const {
+    virtual void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, size_t modIdx, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const {
         unexpected(sp, mi, "item");
     }
 

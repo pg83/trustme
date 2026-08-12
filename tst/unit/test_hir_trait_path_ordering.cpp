@@ -24,8 +24,8 @@ namespace {
         }
 
         std::vector<RcString> components;
-        components.push_back(RcString::new_interned(name));
-        HIR::GenericPath path(HIR::SimplePath(RcString::new_interned("test"), std::move(components)));
+        components.push_back(RcString::newInterned(name));
+        HIR::GenericPath path(HIR::SimplePath(RcString::newInterned("test"), std::move(components)));
         HIR::TraitPath trait(std::move(hrtbs), std::move(path));
         trait.lifetimeElision = applyElision;
         return trait;

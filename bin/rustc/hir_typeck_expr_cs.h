@@ -72,7 +72,7 @@ struct Context {
 
         bool hasRules() const;
 
-        void merge_from(const IVarPossible& source);
+        void mergeFrom(const IVarPossible& source);
     };
 
     struct Associated {
@@ -98,7 +98,7 @@ struct Context {
 
         // HACK: operators are special - the result when both types are primitives is ALWAYS the lefthand side
         bool isOperator;
-        typeck::PrimitiveOperator operator_kind;
+        typeck::PrimitiveOperator operatorKind;
         bool isAmbiguous = false;
 
         ::std::vector<StallDependency> stalled_on;
@@ -114,7 +114,7 @@ struct Context {
     HMTypeInferrence ivars;
     TraitResolution mResolve;
 
-    unsigned next_rule_idx;
+    unsigned nextRuleIdx;
     // NOTE: unique_ptr used to reduce copy costs of the list
     ::std::vector<::std::unique_ptr<Coercion>> linkCoerce;
     // Expected types are available while aggregate fields are enumerated,
@@ -136,7 +136,7 @@ struct Context {
 
     struct TaitEntry {
         HIR::PathParams params;
-        HIR::TypeRef our_type;
+        HIR::TypeRef ourType;
 
         TaitEntry(const HIR::PathParams& p, HIR::TypeRef t);
     };
@@ -167,12 +167,12 @@ struct Context {
     void equateTypes(const Span& sp, const ::HIR::TypeData* l, const ::HIR::TypeData* r);
     void equateTypesInner(const Span& sp, const ::HIR::TypeData* l, const ::HIR::TypeData* r);
     // - Equate two types, allowing inferrence
-    void equateTypesCoerce(const Span& sp, const ::HIR::TypeData* l, ::HIR::ExprNodeP& node_ptr);
-    void record_coercion_hint(const ::HIR::TypeData* type, ::HIR::ExprNodeP& node_ptr);
+    void equateTypesCoerce(const Span& sp, const ::HIR::TypeData* l, ::HIR::ExprNodeP& nodePtr);
+    void record_coercion_hint(const ::HIR::TypeData* type, ::HIR::ExprNodeP& nodePtr);
 
     const ::HIR::TypeData* coercionHint(const ::HIR::ExprNode& node) const;
     // - Equate a type to an associated type (if name == "", no equation is done, but trait is searched)
-    void equateTypesAssoc(const Span& sp, const ::HIR::TypeData* l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeData* implTy, const char* name, const ::HIR::PathParams& atyPp, bool isOp = false, typeck::PrimitiveOperator operator_kind = typeck::PrimitiveOperator::None);
+    void equateTypesAssoc(const Span& sp, const ::HIR::TypeData* l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeData* implTy, const char* name, const ::HIR::PathParams& atyPp, bool isOp = false, typeck::PrimitiveOperator operatorKind = typeck::PrimitiveOperator::None);
 
     bool isCurrentOperatorImpl(const ImplRef& impl) const;
 

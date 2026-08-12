@@ -52,11 +52,11 @@ struct Ident {
 
         Hygiene& operator=(Hygiene&& x);
 
-        static Hygiene new_scope() {
+        static Hygiene newScope() {
             return Hygiene(++gNextScope);
         }
 
-        static Hygiene new_scope_chained(const Hygiene& parent, unsigned int macroDefinition = 0);
+        static Hygiene newScopeChained(const Hygiene& parent, unsigned int macroDefinition = 0);
 
         Hygiene with_tail_scope(const Hygiene& scope, bool inheritModPath = false) const;
 

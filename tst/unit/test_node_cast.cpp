@@ -5,17 +5,17 @@
 namespace {
     struct Node {
         virtual ~Node() = default;
-        virtual unsigned int node_kind() const = 0;
+        virtual unsigned int nodeKind() const = 0;
     };
 
     struct First: Node {
         static constexpr unsigned int kind = 1;
-        unsigned int node_kind() const override { return kind; }
+        unsigned int nodeKind() const override { return kind; }
     };
 
     struct Second: Node {
         static constexpr unsigned int kind = 2;
-        unsigned int node_kind() const override { return kind; }
+        unsigned int nodeKind() const override { return kind; }
     };
 }
 

@@ -248,7 +248,7 @@ TypeRef TypeRef::clone() const {
             _COPY(Generic)
             _CLONE(Path, std::make_unique<AST::Path>(*old))
             _COPY(TraitObject)
-            _CLONE(ErasedType, std::make_unique<TypeErasedType>(TypeErasedType{old->traits, old->maybe_traits, old->lifetimes, old->use ? box$(*old->use) : ::std::unique_ptr<AST::PathParams>(), old->isEdition2024OrLater}))
+            _CLONE(ErasedType, std::make_unique<TypeErasedType>(TypeErasedType{old->traits, old->maybeTraits, old->lifetimes, old->use ? box$(*old->use) : ::std::unique_ptr<AST::PathParams>(), old->isEdition2024OrLater}))
 #undef _COPY
 #undef _CLONE
     }
@@ -297,7 +297,7 @@ Ordering TypeRef::ord(const TypeRef& x) const {
         return rv;
     }
 
-    TU_MATCH(TypeData, (mData, x.mData), (ent, x_ent), (None, return OrdEqual;), (Macro, throw CompileError::BugCheck("TypeRef::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.coreType, (unsigned)x_ent.coreType);), (Function, return ent.info.ord(x_ent.info);), (Tuple, return ::ord(ent.innerTypes, x_ent.innerTypes);), (Borrow, rv = ::ord(ent.is_mut, x_ent.is_mut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*x_ent.inner);), (Pointer, rv = ::ord(ent.is_mut, x_ent.is_mut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*x_ent.inner);), (Array, rv = (*ent.inner).ord(*x_ent.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return (*ent.inner).ord(*x_ent.inner);), (Generic, return ::ord(ent.name, x_ent.name);), (Path, return ent->ord(*x_ent);), (TraitObject, return ::ord(ent.traits, x_ent.traits);), (ErasedType, ORD(ent->traits, x_ent->traits); ORD(ent->maybe_traits, x_ent->maybe_traits); ORD(ent->lifetimes, x_ent->lifetimes); ORD(ent->use != 0, x_ent->use != 0); if (ent->use) { ORD(*ent->use, *x_ent->use); } ORD(ent->isEdition2024OrLater, x_ent->isEdition2024OrLater); return OrdEqual;))
+    TU_MATCH(TypeData, (mData, x.mData), (ent, x_ent), (None, return OrdEqual;), (Macro, throw CompileError::BugCheck("TypeRef::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.coreType, (unsigned)x_ent.coreType);), (Function, return ent.info.ord(x_ent.info);), (Tuple, return ::ord(ent.innerTypes, x_ent.innerTypes);), (Borrow, rv = ::ord(ent.is_mut, x_ent.is_mut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*x_ent.inner);), (Pointer, rv = ::ord(ent.is_mut, x_ent.is_mut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*x_ent.inner);), (Array, rv = (*ent.inner).ord(*x_ent.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return (*ent.inner).ord(*x_ent.inner);), (Generic, return ::ord(ent.name, x_ent.name);), (Path, return ent->ord(*x_ent);), (TraitObject, return ::ord(ent.traits, x_ent.traits);), (ErasedType, ORD(ent->traits, x_ent->traits); ORD(ent->maybeTraits, x_ent->maybeTraits); ORD(ent->lifetimes, x_ent->lifetimes); ORD(ent->use != 0, x_ent->use != 0); if (ent->use) { ORD(*ent->use, *x_ent->use); } ORD(ent->isEdition2024OrLater, x_ent->isEdition2024OrLater); return OrdEqual;))
     throw ::std::runtime_error(FMT("BUGCHECK - Unhandled TypeRef class '" << mData.tag() << "'"));
 }
 
@@ -363,43 +363,43 @@ void TypeRef::print(::std::ostream& os, bool isDebug /*=false*/) const {
             _(Slice, os << "["; ent.inner->print(os, isDebug); os << "]";)
             _(Generic, if (isDebug) os << "/* arg */ "; os << ent.name; if (isDebug) os << "/*" << ent.index << "*/";)
             _(Path, ent->print_pretty(os, true, isDebug);)
-            _(TraitObject, os << "("; bool needs_plus = false; for (const auto& it : ent.traits) {
-                if (needs_plus) {
+            _(TraitObject, os << "("; bool needsPlus = false; for (const auto& it : ent.traits) {
+                if (needsPlus) {
                     os << "+";
                 }
-                needs_plus = true;
+                needsPlus = true;
                 os << it.hrbs;
                 if (it.constness == AST::BoundConstness::Always) os << "const "; else if (it.constness == AST::BoundConstness::Maybe) os << "[const] ";
                 it.path->print_pretty(os, true, isDebug);
             } for (const auto& it : ent.lifetimes) {
                 if (it.binding() != AST::LifetimeRef::BINDING_UNSPECIFIED) {
-                    if (needs_plus) {
+                    if (needsPlus) {
                         os << "+";
                     }
-                    needs_plus = true;
+                    needsPlus = true;
                     os << it;
                 }
             } os << ")";)
-            _(ErasedType, os << "impl "; bool needs_plus = false; for (const auto& it : ent->traits) {
-                if (needs_plus) {
+            _(ErasedType, os << "impl "; bool needsPlus = false; for (const auto& it : ent->traits) {
+                if (needsPlus) {
                     os << "+";
                 }
-                needs_plus = true;
+                needsPlus = true;
                 os << it.hrbs;
                 if (it.constness == AST::BoundConstness::Always) os << "const "; else if (it.constness == AST::BoundConstness::Maybe) os << "[const] ";
                 it.path->print_pretty(os, true, isDebug);
-            } for (const auto& it : ent->maybe_traits) {
-                if (needs_plus) {
+            } for (const auto& it : ent->maybeTraits) {
+                if (needsPlus) {
                     os << "+";
                 }
-                needs_plus = true;
+                needsPlus = true;
                 os << it.hrbs;
                 it.path->print_pretty(os, true, isDebug);
             } for (const auto& it : ent->lifetimes) {
-                if (needs_plus) {
+                if (needsPlus) {
                     os << "+";
                 }
-                needs_plus = true;
+                needsPlus = true;
                 os << it;
             } if (ent->use) { os << "use" << *ent->use; } os << "";)
     }

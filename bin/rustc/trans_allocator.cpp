@@ -31,7 +31,7 @@ HIR::Path TransAllocatorLayoutCtorPath(const HIR::Crate& crate) {
         HIR::GenericPath(layoutPath),
         HIR::TypePathBinding(&layoutStruct)
     );
-    return HIR::Path(layoutType, RcString::new_interned("from_size_align_unchecked"));
+    return HIR::Path(layoutType, RcString::newInterned("from_size_align_unchecked"));
 }
 
 HIR::Path TransAllocatorMethodPath(const HIR::Crate& crate, const HIR::TypeData* allocator_type, const AllocatorMethod& method) {
@@ -41,7 +41,7 @@ HIR::Path TransAllocatorMethodPath(const HIR::Crate& crate, const HIR::TypeData*
     return HIR::Path(
         allocator_type,
         HIR::GenericPath(trait_path),
-        RcString::new_interned(method.name),
+        RcString::newInterned(method.name),
         function.mParams.makeEmptyParams(true)
     );
 }

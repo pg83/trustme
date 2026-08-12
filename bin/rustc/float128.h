@@ -69,8 +69,8 @@ public:
     // C `fmod` semantics: exact, result has the dividend's sign
     static Float128 remainder(const Float128& numerator, const Float128& denominator);
     // C `fmin`/`fmax` semantics: a single NaN operand loses
-    static Float128 minimum_number(const Float128& a, const Float128& b);
-    static Float128 maximum_number(const Float128& a, const Float128& b);
+    static Float128 minimumNumber(const Float128& a, const Float128& b);
+    static Float128 maximumNumber(const Float128& a, const Float128& b);
 
     // Honours the stream's `scientific` flag and precision; correctly
     // rounded decimal output (`printf` %e / %g shapes)

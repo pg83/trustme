@@ -9,9 +9,9 @@ void Monomorphiser::set_consteval_state(const HIR::Crate& crate, HIR::ItemPath i
     this->constevalCrate = &crate;
     this->constevalPath = ip;
 }
-const ::HIR::TypeData* Monomorphiser::maybe_monomorph_type(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* ty, bool allowInfer) const {
-    if (monomorphise_type_needed(ty)) {
-        return tmp = monomorph_type(sp, ty, allowInfer);
+const ::HIR::TypeData* Monomorphiser::maybeMonomorphType(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* ty, bool allowInfer) const {
+    if (monomorphiseTypeNeeded(ty)) {
+        return tmp = monomorphType(sp, ty, allowInfer);
     } else {
         return ty;
     }

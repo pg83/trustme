@@ -78,7 +78,7 @@ class JobServerServer: public JobServer {
         int rdFd;
 
     public:
-        ServerInner(size_t max_jobs)
+        ServerInner(size_t maxJobs)
             : mPath()
             , wrFd(-1)
             , rdFd(-1)
@@ -105,7 +105,7 @@ class JobServerServer: public JobServer {
             rdFd = pipe_fds[0];
             wrFd = pipe_fds[1];
     #endif
-            for (size_t i = 0; i < max_jobs; i++) {
+            for (size_t i = 0; i < maxJobs; i++) {
                 uint8_t t = 100;
                 if (write(wrFd, &t, 1) != 1) {
                     perror("ServerInner() write");
@@ -149,8 +149,8 @@ class JobServerServer: public JobServer {
     JobServerClient client;
 
 public:
-    JobServerServer(size_t max_jobs)
-        : server(max_jobs)
+    JobServerServer(size_t maxJobs)
+        : server(maxJobs)
         , client(server.getClientReadFd(), server.getClientWriteFd())
     {
         ::std::stringstream ss;

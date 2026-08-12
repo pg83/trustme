@@ -180,20 +180,20 @@ bool ::HIR::TypeDataErasedTypeAliasInner::isPublicTo(const HIR::SimplePath& p) c
             f.unsafe,
             f.variadic,
             f.mAbi,
-            ms.monomorph_type(sp, f.returnType),
+            ms.monomorphType(sp, f.returnType),
             {}
         };
-        HIR::PathParams method_pp_trimmed;
+        HIR::PathParams methodPpTrimmed;
         if( !f.mParams.mLifetimes.empty() )
         {
                 ft.hrls.mLifetimes = f.mParams.mLifetimes;
-                method_pp_trimmed = ms.pp_method->clone();
-                method_pp_trimmed.mLifetimes = std::move(ft.hrls.makeNopParams(types, 3, /*lifetimes_only*/ true).mLifetimes);
-                ms.pp_method = &method_pp_trimmed;
+                methodPpTrimmed = ms.pp_method->clone();
+                methodPpTrimmed.mLifetimes = std::move(ft.hrls.makeNopParams(types, 3, /*lifetimes_only*/ true).mLifetimes);
+                ms.pp_method = &methodPpTrimmed;
         }
         for( const auto& arg : f.mArgs )
         {
-                ft.argTypes.push_back(ms.monomorph_type(sp, arg.second));
+                ft.argTypes.push_back(ms.monomorphType(sp, arg.second));
         }
         return mv$(ft);
         }
@@ -211,12 +211,12 @@ bool ::HIR::TypeDataErasedTypeAliasInner::isPublicTo(const HIR::SimplePath& p) c
                 HIR::GenericParams(), // TODO: Get HRLs
                 false,
                 false,
-                RcString::new_interned(ABI_RUST),
+                RcString::newInterned(ABI_RUST),
                 types.path(::HIR::Path(::HIR::GenericPath(mv$(enumPath), e.mParams.clone())), ::HIR::TypePathBinding::make_Enum(&enm)),
                 {}
             };
             for (const auto& arg : var_data) {
-                ft.argTypes.push_back(ms.monomorph_type(sp, arg.ent));
+                ft.argTypes.push_back(ms.monomorphType(sp, arg.ent));
             }
             return ft;
         }
@@ -227,12 +227,12 @@ bool ::HIR::TypeDataErasedTypeAliasInner::isPublicTo(const HIR::SimplePath& p) c
                 HIR::GenericParams(), // TODO: Get HRLs
                 false,
                 false,
-                RcString::new_interned(ABI_RUST),
+                RcString::newInterned(ABI_RUST),
                 types.path(this->path.clone(), ::HIR::TypePathBinding::make_Struct(p)),
                 {}
             };
             for (const auto& arg : p->mData.as_Tuple()) {
-                ft.argTypes.push_back(ms.monomorph_type(sp, arg.ent));
+                ft.argTypes.push_back(ms.monomorphType(sp, arg.ent));
             }
             return ft;
         }
@@ -570,7 +570,7 @@ namespace {
             return exactOptionalGenericParamsEqual(ae.hrtbs, be.hrtbs)
                 && ae.type == be.type && exactTraitPathEqual(ae.trait, be.trait);
         }
-        TU_ARMA(TypeEquality, ae, be) return ae.type == be.type && ae.other_type == be.other_type;
+        TU_ARMA(TypeEquality, ae, be) return ae.type == be.type && ae.otherType == be.otherType;
         }
         throw "";
     }
@@ -1013,7 +1013,7 @@ namespace {
 }
 
 ::HIR::TypeRef HIR::TypeInterner::self() {
-    return generic(RcString::new_interned("Self"), GENERICSelf);
+    return generic(RcString::newInterned("Self"), GENERICSelf);
 }
 
 ::HIR::TypeRef HIR::TypeInterner::unit() {
@@ -1196,7 +1196,7 @@ Ordering ord(const HIR::TypeDataErasedTypeInner& l, const HIR::TypeDataErasedTyp
     ORD(static_cast<unsigned int>(l.tag()), static_cast<unsigned int>(r.tag()));
     TU_MATCH_HDRA( (l, r), {)
     TU_ARMA(Known, le, re) {
-            return le->ord_ignoring_regions(re);
+            return le->ordIgnoringRegions(re);
         }
         TU_ARMA(Alias, le, re) {
             if (le.inner.get() != re.inner.get()) {
@@ -1216,7 +1216,7 @@ Ordering ord(const HIR::TypeDataErasedTypeInner& l, const HIR::TypeDataErasedTyp
     return OrdEqual;
 }
 
-Ordering HIR::TypeData::ord_ignoring_regions(::HIR::TypeRef x) const {
+Ordering HIR::TypeData::ordIgnoringRegions(::HIR::TypeRef x) const {
     Ordering rv;
 
     if (this == x) {

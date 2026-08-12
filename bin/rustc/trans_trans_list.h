@@ -33,9 +33,9 @@ struct TransParams: public MonomorphiserPP {
     TransParams(const TransParams&) = delete;
     TransParams& operator=(const TransParams&) = delete;
 
-    static TransParams new_impl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams impl_params);
+    static TransParams newImpl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams impl_params);
 
-    const ::HIR::TypeData* maybe_monomorph(const ::StaticTraitResolve& resolve, ::HIR::TypeRef& tmp, const ::HIR::TypeData* p) const;
+    const ::HIR::TypeData* maybeMonomorph(const ::StaticTraitResolve& resolve, ::HIR::TypeRef& tmp, const ::HIR::TypeData* p) const;
 
     ::HIR::TypeRef monomorph(const ::StaticTraitResolve& resolve, const ::HIR::TypeData* p) const;
     ::HIR::Path monomorph(const ::StaticTraitResolve& resolve, const ::HIR::Path& p) const;

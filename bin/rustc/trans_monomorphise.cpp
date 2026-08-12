@@ -90,7 +90,7 @@ namespace {
 }
 
 /// Monomorphise all functions in a TransList
-void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned mir_opt_level) {
+void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned mirOptLevel) {
     ::StaticTraitResolve resolve{crate};
 
     struct Nvs: public ::HIR::Evaluator::Newval {
@@ -109,10 +109,10 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         ::HIR::Path new_static(::HIR::TypeRef type, EncodedLiteral value) override {
             // Ensure that the type is in enumeration (it should have been, but maybe not?)
             out.addType(type, false);
-            auto name = RcString::new_interned(FMT("ConstEvalMonomorph#" << count));
+            auto name = RcString::newInterned(FMT("ConstEvalMonomorph#" << count));
             count++;
             auto p = ::HIR::SimplePath(crate.crateName, {name});
-            auto ent = std::make_unique<HIR::VisEnt<HIR::ValueItem>>(HIR::VisEnt<HIR::ValueItem>{HIR::Publicity::new_global(), HIR::ValueItem(::HIR::Static(HIR::Linkage(), false, std::move(type), HIR::ExprPtr()))});
+            auto ent = std::make_unique<HIR::VisEnt<HIR::ValueItem>>(HIR::VisEnt<HIR::ValueItem>{HIR::Publicity::newGlobal(), HIR::ValueItem(::HIR::Static(HIR::Linkage(), false, std::move(type), HIR::ExprPtr()))});
 
             {
                 auto& s = ent->ent.as_Static();
@@ -143,9 +143,9 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         ms.pp_method = &pp.pp_method;
         DEBUG("ms = " << ms);
         try {
-            auto new_lit = eval.evaluateConstant(path, c.mValue, ::std::move(ty), ::std::move(ms));
+            auto newLit = eval.evaluateConstant(path, c.mValue, ::std::move(ty), ::std::move(ms));
             // 2. Store evaluated HIR::Literal in c.m_monomorph_cache
-            c.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(new_lit)));
+            c.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
         } catch (...) {
             // Deferred - no update
             BUG(Span(), "Exception thrown during evaluation of: " << path);
@@ -172,9 +172,9 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         ms.pp_method = &pp.pp_method;
         DEBUG("ms = " << ms);
         try {
-            auto new_lit = eval.evaluateConstant(path, s.mValue, ::std::move(ty), ::std::move(ms));
+            auto newLit = eval.evaluateConstant(path, s.mValue, ::std::move(ty), ::std::move(ms));
             // 2. Store evaluated HIR::Literal in s.m_monomorph_cache
-            s.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(new_lit)));
+            s.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
         } catch (...) {
             // Deferred - no update
             BUG(Span(), "Exception thrown during evaluation of: " << path);
@@ -187,9 +187,9 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         bool isMethod = (fcn.mArgs.size() > 0 && visit_ty_with(fcn.mArgs[0].second, [&](const auto& x) {
             return x == crate.types.self();
         }));
-        bool monomorph_needed = fcnEnt.second->pp.hasTypes() || isMethod;
+        bool monomorphNeeded = fcnEnt.second->pp.hasTypes() || isMethod;
 
-        if (monomorph_needed) {
+        if (monomorphNeeded) {
             const auto& path = fcnEnt.first;
             const auto& pp = fcnEnt.second->pp;
             TRACE_FUNCTION_FR("FUNCTION " << path, "FUNCTION " << path);
@@ -214,10 +214,10 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
             ::HIR::ItemPath ip(path);
             MIRValidate(resolve, ip, *mir, args, ret_type);
             MIRCleanup(resolve, ip, *mir, args, ret_type);
-            if (mir_opt_level == 0) {
+            if (mirOptLevel == 0) {
                 MIROptimiseMin(resolve, ip, *mir, args, ret_type);
             } else {
-                MIROptimise(resolve, ip, *mir, args, ret_type, mir_opt_level, /*do_inline*/ false);
+                MIROptimise(resolve, ip, *mir, args, ret_type, mirOptLevel, /*do_inline*/ false);
             }
             MIRValidate(resolve, ip, *mir, args, ret_type);
 

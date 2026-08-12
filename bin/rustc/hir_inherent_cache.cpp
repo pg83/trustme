@@ -12,7 +12,7 @@ void HIR::InherentCache::Lowest::insert(const Span& sp, const HIR::TypeImpl& imp
         this->generic.push_back(&impl);
     } else {
         //DEBUG(this->name << " non_named += impl" << impl.m_params.fmt_args() << " " << impl.m_type);
-        this->non_named.push_back(&impl);
+        this->nonNamed.push_back(&impl);
     }
 }
 
@@ -33,7 +33,7 @@ void HIR::InherentCache::Lowest::iterate(const HIR::TypeData* type, InherentCach
     } else if (type->is_Path() || type->is_Generic()) {
         // Already handled by the unconditional generic
     } else {
-        visit(this->non_named);
+        visit(this->nonNamed);
     }
 }
 

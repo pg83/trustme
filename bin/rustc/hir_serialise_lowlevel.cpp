@@ -218,12 +218,12 @@ namespace HIR {
             , buffer(1024)
             , pos(0)
         {
-            size_t n_strings = read_count();
-            strings.reserve(n_strings);
-            DEBUG("n_strings = " << n_strings);
-            for (size_t i = 0; i < n_strings; i++) {
+            size_t nStrings = read_count();
+            strings.reserve(nStrings);
+            DEBUG("n_strings = " << nStrings);
+            for (size_t i = 0; i < nStrings; i++) {
                 auto s = read_string();
-                strings.push_back(RcString::new_interned(s));
+                strings.push_back(RcString::newInterned(s));
             }
         }
 
@@ -455,7 +455,7 @@ Writer::CloseOnDrop::~CloseOnDrop() {
     }
     r = nullptr;
 }
-Writer::CloseOnDrop Writer::open_object(const char* name) {
+Writer::CloseOnDrop Writer::openObject(const char* name) {
     write_u8(0xFD);
     auto iv = objnameCache.insert(std::make_pair(name, static_cast<unsigned>(objnameCache.size())));
     raw_write_uint(iv.first->second);
@@ -464,7 +464,7 @@ Writer::CloseOnDrop Writer::open_object(const char* name) {
     }
     return CloseOnDrop(*this);
 }
-Writer::CloseOnDrop Writer::open_anon_object() {
+Writer::CloseOnDrop Writer::openAnonObject() {
     write_u8(0xFE);
     return CloseOnDrop(*this);
 }
@@ -628,7 +628,7 @@ Reader::CloseOnDrop::~CloseOnDrop() {
     }
     r = nullptr;
 }
-Reader::CloseOnDrop Reader::open_object(const char* name) {
+Reader::CloseOnDrop Reader::openObject(const char* name) {
     auto v = read_u8();
     if (v != 0xFD) {
         std::cerr << "Expected OpenNamed(" << name << "), got " << unsigned(v) << "u8" << ::std::endl;
@@ -647,7 +647,7 @@ Reader::CloseOnDrop Reader::open_object(const char* name) {
     }
     return CloseOnDrop(*this);
 }
-Reader::CloseOnDrop Reader::open_anon_object() {
+Reader::CloseOnDrop Reader::openAnonObject() {
     auto v = read_u8();
     if (v != 0xFE) {
         std::cerr << "Expected OpenAnon, got " << unsigned(v) << ::std::endl;

@@ -25,7 +25,7 @@ enum class DebugInfoLevel : unsigned {
 
 struct TransOptions {
     ::std::string mode = "c";
-    OptimizationLevel opt_level = OptimizationLevel::None;
+    OptimizationLevel optLevel = OptimizationLevel::None;
     DebugInfoLevel debugInfo = DebugInfoLevel::None;
     ::std::string buildCommandFile;
     ::std::vector<::std::string> linkerArgs;
@@ -52,6 +52,6 @@ extern void TransEnumerateCleanup(const ::HIR::Crate& crate, TransList& list);
 
 extern void TransAutoImpls(::HIR::Crate& crate, TransList& trans_list);
 
-extern void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned mir_opt_level);
+extern void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned mirOptLevel);
 
-extern void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* crate, TransList list, const ::std::string& hirFile);
+extern void TransCodegen(const ::std::string& outfile, CodegenOutput outTy, const TransOptions& opt, ::HIR::Crate* crate, TransList list, const ::std::string& hirFile);

@@ -42,7 +42,7 @@ namespace HIR {
         }
 
         virtual void visit(ExprVisitor& v) = 0;
-        virtual unsigned int node_kind() const = 0;
+        virtual unsigned int nodeKind() const = 0;
 
         ExprNode(Span sp);
 
@@ -64,7 +64,7 @@ namespace HIR {
         ExprNodeBlock(Span sp, bool is_unsafe, ::std::vector<ExprNodeP> nodes, ExprNodeP value_node);
 
         static constexpr unsigned int kind = 1;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -74,7 +74,7 @@ namespace HIR {
         ExprNodeConstBlock(Span sp, ExprNodeP inner);
 
         static constexpr unsigned int kind = 2;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -101,7 +101,7 @@ namespace HIR {
         }
 
         static constexpr unsigned int kind = 3;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -132,7 +132,7 @@ namespace HIR {
         ExprNodeAsm2(Span sp, AsmCommon::Options options, std::vector<AsmCommon::Line> lines, std::vector<Param> params);
 
         static constexpr unsigned int kind = 4;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -142,7 +142,7 @@ namespace HIR {
         ExprNodeReturn(Span sp, ::HIR::ExprNodeP value);
 
         static constexpr unsigned int kind = 5;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -153,7 +153,7 @@ namespace HIR {
         ExprNodeYield(Span sp, ::HIR::ExprNodeP value);
 
         static constexpr unsigned int kind = 6;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -164,7 +164,7 @@ namespace HIR {
         ExprNodeAWait(Span sp, ::HIR::ExprNodeP value);
 
         static constexpr unsigned int kind = 7;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -177,7 +177,7 @@ namespace HIR {
         ExprNodeLoop(Span sp, RcString label, ::HIR::ExprNodeP code, bool require_label = false);
 
         static constexpr unsigned int kind = 8;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -191,7 +191,7 @@ namespace HIR {
         ExprNodeLoopControl(Span sp, RcString label, bool cont, ::HIR::ExprNodeP value = {});
 
         static constexpr unsigned int kind = 9;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -204,7 +204,7 @@ namespace HIR {
         ExprNodeLet(Span sp, ::HIR::Pattern pat, ::HIR::TypeRef ty, ::HIR::ExprNodeP val, bool is_super = false);
 
         static constexpr unsigned int kind = 10;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -234,7 +234,7 @@ namespace HIR {
         ExprNodeMatch(Span sp, ::HIR::ExprNodeP val, ::std::vector<Arm> arms, bool is_let_else = false);
 
         static constexpr unsigned int kind = 11;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -262,7 +262,7 @@ namespace HIR {
         ExprNodeAssign(Span sp, Op op, ::HIR::ExprNodeP slot, ::HIR::ExprNodeP value);
 
         static constexpr unsigned int kind = 12;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -299,7 +299,7 @@ namespace HIR {
         ExprNodeBinOp(Span sp, Op op, ::HIR::ExprNodeP left, ::HIR::ExprNodeP right);
 
         static constexpr unsigned int kind = 13;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -317,7 +317,7 @@ namespace HIR {
         ExprNodeUniOp(Span sp, Op op, ::HIR::ExprNodeP value);
 
         static constexpr unsigned int kind = 14;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -333,7 +333,7 @@ namespace HIR {
         ExprNodeBorrow(Span sp, ::HIR::BorrowType bt, ::HIR::ExprNodeP value);
 
         static constexpr unsigned int kind = 15;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -344,7 +344,7 @@ namespace HIR {
         ExprNodeRawBorrow(Span sp, ::HIR::BorrowType bt, ::HIR::ExprNodeP value);
 
         static constexpr unsigned int kind = 16;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -355,7 +355,7 @@ namespace HIR {
         ExprNodeCast(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dst_type);
 
         static constexpr unsigned int kind = 17;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -372,7 +372,7 @@ namespace HIR {
         ExprNodeUnsize(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dst_type);
 
         static constexpr unsigned int kind = 18;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -387,7 +387,7 @@ namespace HIR {
         ExprNodeIndex(Span sp, ::HIR::ExprNodeP val, ::HIR::ExprNodeP index);
 
         static constexpr unsigned int kind = 19;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -408,7 +408,7 @@ namespace HIR {
         ExprNodeDeref(Span sp, ::HIR::ExprNodeP val);
 
         static constexpr unsigned int kind = 20;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -428,7 +428,7 @@ namespace HIR {
         ExprNodeEmplace(Span sp, Type ty, ::HIR::ExprNodeP place, ::HIR::ExprNodeP val);
 
         static constexpr unsigned int kind = 21;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -444,7 +444,7 @@ namespace HIR {
         ExprNodeTupleVariant(Span sp, ::HIR::GenericPath path, bool is_struct, ::std::vector<::HIR::ExprNodeP> args);
 
         static constexpr unsigned int kind = 22;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -467,7 +467,7 @@ namespace HIR {
         ExprNodeCallPath(Span sp, ::HIR::Path path, ::std::vector<::HIR::ExprNodeP> args);
 
         static constexpr unsigned int kind = 23;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -495,7 +495,7 @@ namespace HIR {
         ExprNodeCallValue(Span sp, ::HIR::ExprNodeP val, ::std::vector<::HIR::ExprNodeP> args);
 
         static constexpr unsigned int kind = 24;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -525,7 +525,7 @@ namespace HIR {
         ExprNodeCallMethod(Span sp, ::HIR::ExprNodeP val, RcString method_name, ::HIR::PathParams params, ::std::vector<::HIR::ExprNodeP> args);
 
         static constexpr unsigned int kind = 25;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -536,7 +536,7 @@ namespace HIR {
         ExprNodeField(Span sp, ::HIR::ExprNodeP val, RcString field);
 
         static constexpr unsigned int kind = 26;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -565,7 +565,7 @@ namespace HIR {
         ExprNodeLiteral(Span sp, Data data);
 
         static constexpr unsigned int kind = 27;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -577,7 +577,7 @@ namespace HIR {
         ExprNodeUnitVariant(Span sp, ::HIR::GenericPath path, bool is_struct);
 
         static constexpr unsigned int kind = 28;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -597,7 +597,7 @@ namespace HIR {
         ExprNodePathValue(Span sp, ::HIR::Path path, Target target);
 
         static constexpr unsigned int kind = 29;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -608,7 +608,7 @@ namespace HIR {
         ExprNodeVariable(Span sp, RcString name, unsigned int slot);
 
         static constexpr unsigned int kind = 30;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -619,7 +619,7 @@ namespace HIR {
         ExprNodeConstParam(Span sp, RcString name, unsigned int binding);
 
         static constexpr unsigned int kind = 31;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -644,7 +644,7 @@ namespace HIR {
         ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, bool, t_values values);
 
         static constexpr unsigned int kind = 32;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -654,7 +654,7 @@ namespace HIR {
         ExprNodeTuple(Span sp, ::std::vector<::HIR::ExprNodeP> vals);
 
         static constexpr unsigned int kind = 33;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -664,7 +664,7 @@ namespace HIR {
         ExprNodeArrayList(Span sp, ::std::vector<::HIR::ExprNodeP> vals);
 
         static constexpr unsigned int kind = 34;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -676,7 +676,7 @@ namespace HIR {
         ExprNodeArraySized(Span sp, ::HIR::ExprNodeP val, ::HIR::ExprPtr size);
 
         static constexpr unsigned int kind = 35;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -723,7 +723,7 @@ namespace HIR {
         ExprNodeClosure(Span sp, argsT args, ::HIR::TypeRef rv, ::HIR::ExprNodeP code, bool is_move);
 
         static constexpr unsigned int kind = 36;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -765,7 +765,7 @@ namespace HIR {
         );
 
         static constexpr unsigned int kind = 37;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -799,7 +799,7 @@ namespace HIR {
         );
 
         static constexpr unsigned int kind = 38;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
@@ -822,14 +822,14 @@ namespace HIR {
         ExprNodeAsyncBlock(Span sp, ::HIR::ExprNodeP code, bool is_move);
 
         static constexpr unsigned int kind = 39;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(ExprVisitor& nv) override;
     };
 
     class ExprVisitor {
     public:
         virtual ~ExprVisitor() = default;
-        virtual void visit_node_ptr(::HIR::ExprNodeP& node_ptr);
+        virtual void visit_node_ptr(::HIR::ExprNodeP& nodePtr);
         virtual void visit_node(ExprNode& node);
 #define NV(nt) virtual void visit(nt& n) = 0;
 
@@ -889,7 +889,7 @@ namespace HIR {
 
 #define NV(nt) virtual void visit(nt& n) override;
 
-        virtual void visit_node_ptr(::HIR::ExprNodeP& node_ptr) override;
+        virtual void visit_node_ptr(::HIR::ExprNodeP& nodePtr) override;
 
         NV(ExprNodeBlock)
         NV(ExprNodeConstBlock)

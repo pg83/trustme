@@ -18,7 +18,7 @@ namespace HIR {
     ::std::ostream& operator<<(::std::ostream& os, const Publicity& x) {
         if (!x.vis_path) {
             os << "pub";
-        } else if (*x.vis_path == *Publicity::none_path) {
+        } else if (*x.vis_path == *Publicity::nonePath) {
             os << "priv";
         } else {
             os << "pub(" << *x.vis_path << ")";
@@ -110,8 +110,8 @@ namespace HIR {
 
     ConstGenericUnevaluated ConstGenericUnevaluated::monomorph(const Span& sp, const Monomorphiser& ms, bool allowInfer /*=true*/) const {
         ConstGenericUnevaluated rv;
-        rv.params_impl = ms.monomorph_path_params(sp, params_impl, allowInfer);
-        rv.params_item = ms.monomorph_path_params(sp, params_item, allowInfer);
+        rv.params_impl = ms.monomorphPathParams(sp, params_impl, allowInfer);
+        rv.params_item = ms.monomorphPathParams(sp, params_item, allowInfer);
         rv.expr = this->expr;
         return rv;
     }
@@ -314,7 +314,7 @@ HIR::ConstGeneric HIR::ConstGeneric::clone() const {
     throw "";
 }
 
-::std::shared_ptr<::HIR::SimplePath> HIR::Publicity::none_path = ::std::make_shared<HIR::SimplePath>(::HIR::SimplePath{"#", {}});
+::std::shared_ptr<::HIR::SimplePath> HIR::Publicity::nonePath = ::std::make_shared<HIR::SimplePath>(::HIR::SimplePath{"#", {}});
 
 bool HIR::Publicity::isVisible(const ::HIR::SimplePath& p) const {
     DEBUG(*this << " " << p);
@@ -323,7 +323,7 @@ bool HIR::Publicity::isVisible(const ::HIR::SimplePath& p) const {
         return true;
     }
     // Empty simple path = full private
-    if (*vis_path == *none_path) {
+    if (*vis_path == *nonePath) {
         return false;
     }
     // `p` must be a child of vis_path (i.e. starts with it)
@@ -335,10 +335,10 @@ bool HIR::Publicity::isVisible(const ::HIR::SimplePath& p) const {
     ft.is_unsafe = this->unsafe;
     ft.is_variadic = this->variadic;
     ft.mAbi = this->mAbi;
-    ft.mRettype = ms.monomorph_type(sp, this->returnType);
+    ft.mRettype = ms.monomorphType(sp, this->returnType);
     ft.argTypes.reserve(this->mArgs.size());
     for (const auto& arg : this->mArgs) {
-        ft.argTypes.push_back(ms.monomorph_type(sp, arg.second));
+        ft.argTypes.push_back(ms.monomorphType(sp, arg.second));
     }
     return ms.type_interner().function(std::move(ft));
 }
@@ -347,11 +347,11 @@ bool HIR::Publicity::isVisible(const ::HIR::SimplePath& p) const {
     ::HIR::TypeDataFunctionPointer ft;
     ft.is_unsafe = false;
     ft.is_variadic = false;
-    ft.mAbi = RcString::new_interned(ABI_RUST);
+    ft.mAbi = RcString::newInterned(ABI_RUST);
     ft.mRettype = std::move(ret_ty);
     ft.argTypes.reserve(fields.size());
     for (const auto& fld : fields) {
-        ft.argTypes.push_back(ms.monomorph_type(sp, fld.ent));
+        ft.argTypes.push_back(ms.monomorphType(sp, fld.ent));
     }
     return ms.type_interner().function(std::move(ft));
 }
@@ -612,7 +612,7 @@ const ::HIR::ValueItem& ::HIR::Crate::getValitemByPath(const Span& sp, const ::H
             if (!intrinsicOffsetof.as_Function().variadic) {
                 auto& v = intrinsicOffsetof.as_Function();
                 v.variadic = true;
-                v.mParams.types.push_back(HIR::TypeParamDef{RcString::new_interned("T"), types.infer(), false});
+                v.mParams.types.push_back(HIR::TypeParamDef{RcString::newInterned("T"), types.infer(), false});
             }
             return intrinsicOffsetof;
         }
@@ -959,11 +959,11 @@ namespace {
         static Span sp;
         assert(curTrait.traitPtr);
         const auto& tr = *curTrait.traitPtr;
-        auto monomorph_cb = MonomorphStatePtr(types, type, &curTrait.mPath.mParams, nullptr);
+        auto monomorphCb = MonomorphStatePtr(types, type, &curTrait.mPath.mParams, nullptr);
 
         for (const auto& trait_path_raw : tr.allParentTraits) {
             // 1. Monomorph
-            auto trait_path_mono = monomorph_cb.monomorph_traitpath(sp, trait_path_raw, false, false);
+            auto trait_path_mono = monomorphCb.monomorphTraitpath(sp, trait_path_raw, false, false);
             // 2. Add
             rv.push_back(::HIR::GenericBound::make_TraitBound({hrtbs ? box$(hrtbs->clone()) : nullptr, type, mv$(trait_path_mono)}));
         }
@@ -987,7 +987,7 @@ namespace {
     }
 }
 
-bool ::HIR::TraitImpl::more_specific_than(HIR::TypeInterner& types, const ::HIR::TraitImpl& other) const {
+bool ::HIR::TraitImpl::moreSpecificThan(HIR::TypeInterner& types, const ::HIR::TraitImpl& other) const {
     static const Span _sp;
     const Span& sp = _sp;
     TRACE_FUNCTION;
@@ -1398,20 +1398,20 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
 
     struct H2 {
         static const ::HIR::TypeData* monomorph(const Span& sp, const ::HIR::TypeData* inTy, const Monomorphiser& ms, ::HIR::TypeRef& tmp) {
-            if (!monomorphise_type_needed(inTy)) {
+            if (!monomorphiseTypeNeeded(inTy)) {
                 return inTy;
             } else {
-                tmp = ms.monomorph_type(sp, inTy);
+                tmp = ms.monomorphType(sp, inTy);
                 // TODO: EAT?
                 return tmp;
             }
         }
 
         static const ::HIR::TraitPath& monomorph(const Span& sp, const ::HIR::TraitPath& in, const Monomorphiser& ms, ::HIR::TraitPath& tmp) {
-            if (!monomorphise_traitpath_needed(in)) {
+            if (!monomorphiseTraitpathNeeded(in)) {
                 return in;
             } else {
-                tmp = ms.monomorph_traitpath(sp, in, true, false);
+                tmp = ms.monomorphTraitpath(sp, in, true, false);
                 // TODO: EAT?
                 return tmp;
             }
@@ -1834,7 +1834,7 @@ const ::MIR::Function* HIR::Crate::getOrGenMir(const ::HIR::ItemPath& ip, const 
         pp_hrls = te.mTrait.hrtbs->makeEmptyParams(true);
     }
     // Copy the param set from the trait in the trait object
-    ::HIR::PathParams vtable_params = MonomorphHrlsOnly(crate.types, pp_hrls).monomorph_path_params(sp, te.mTrait.mPath.mParams, false);
+    ::HIR::PathParams vtable_params = MonomorphHrlsOnly(crate.types, pp_hrls).monomorphPathParams(sp, te.mTrait.mPath.mParams, false);
     vtable_params.types.resize(te.mTrait.mPath.mParams.types.size() + this->typeIndexes.size());
     // - Include associated types on bound
     for (const auto& ty_b : te.mTrait.typeBounds) {
@@ -1843,7 +1843,7 @@ const ::MIR::Function* HIR::Crate::getOrGenMir(const ::HIR::ItemPath& ip, const 
             continue;
         }
         auto idx = this->typeIndexes.at(ty_b.first);
-        vtable_params.types.at(idx) = MonomorphHrlsOnly(crate.types, pp_hrls).monomorph_type(sp, ty_b.second.type);
+        vtable_params.types.at(idx) = MonomorphHrlsOnly(crate.types, pp_hrls).monomorphType(sp, ty_b.second.type);
     }
     return crate.types.path(::HIR::GenericPath(vtable_ty_spath, mv$(vtable_params)), &vtable_ref);
 }
@@ -1864,7 +1864,7 @@ unsigned HIR::Trait::getVtableValueIndex(const HIR::GenericPath& trait_path, con
 unsigned HIR::Trait::getVtableParentIndex(HIR::TypeInterner& types, const Span& sp, const HIR::PathParams& this_params, const HIR::GenericPath& trait_path) const {
     for (const auto& pt : this->allParentTraits) {
         if (pt.mPath.mPath == trait_path.mPath) {
-            auto p = MonomorphStatePtr(types, nullptr, &this_params, nullptr).monomorph_genericpath(sp, pt.mPath);
+            auto p = MonomorphStatePtr(types, nullptr, &this_params, nullptr).monomorphGenericpath(sp, pt.mPath);
             if (p == trait_path) {
                 return vtableParentTraitsStart + (&pt - this->allParentTraits.data());
             }
@@ -1965,9 +1965,9 @@ EncodedLiteral EncodedLiteral::clone() const {
     rv.relocations.reserve(relocations.size());
     for (const auto& r : relocations) {
         if (r.p) {
-            rv.relocations.push_back(Reloc::new_named(r.ofs, r.len, r.p->clone()));
+            rv.relocations.push_back(Reloc::newNamed(r.ofs, r.len, r.p->clone()));
         } else {
-            rv.relocations.push_back(Reloc::new_bytes(r.ofs, r.len, r.bytes));
+            rv.relocations.push_back(Reloc::newBytes(r.ofs, r.len, r.bytes));
         }
     }
     return rv;
@@ -2101,8 +2101,8 @@ bool EncodedLiteralSlice::operator==(const EncodedLiteralSlice& x) const {
 
 Ordering EncodedLiteralSlice::ord(const EncodedLiteralSlice& x) const {
     // NOTE: Check the data first (to maintain some level of lexical ordering)
-    auto min_size = std::min(mSize, x.mSize);
-    for (size_t i = 0; i < min_size; i++) {
+    auto minSize = std::min(mSize, x.mSize);
+    for (size_t i = 0; i < minSize; i++) {
         if (auto cmp = ::ord(base.bytes[ofs + i], x.base.bytes[x.ofs + i])) {
             return cmp;
         }
@@ -2171,12 +2171,12 @@ namespace HIR {
 Publicity::Publicity(::std::shared_ptr<::HIR::SimplePath> p)
     : vis_path(p) {
 }
-Publicity Publicity::new_priv(::HIR::SimplePath p) {
-    size_t n_comp = p.components().size();
-    while (n_comp > 0 && p.components()[n_comp - 1].c_str()[0] == '#') {
-        n_comp--;
+Publicity Publicity::newPriv(::HIR::SimplePath p) {
+    size_t nComp = p.components().size();
+    while (nComp > 0 && p.components()[nComp - 1].c_str()[0] == '#') {
+        nComp--;
     }
-    auto s = std::span<const RcString>(p.components().data(), n_comp);
+    auto s = std::span<const RcString>(p.components().data(), nComp);
     return Publicity(::std::make_shared<HIR::SimplePath>(p.crate_name(), s));
 }
 Static::Static(Linkage linkage, bool is_mut, TypeRef type, ExprPtr value)

@@ -26,8 +26,8 @@ namespace HIR {
 
         GenericRef(RcString name, GenericGroup group, uint16_t idx);
 
-        static GenericRef new_self() {
-            return GenericRef(RcString::new_interned("Self"), GENERICSelf);
+        static GenericRef newSelf() {
+            return GenericRef(RcString::newInterned("Self"), GENERICSelf);
         }
 
         bool isSelf() const {

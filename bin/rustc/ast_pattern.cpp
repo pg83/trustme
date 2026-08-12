@@ -128,23 +128,23 @@ namespace AST {
             }
             TU_ARMA(SplitSlice, ent) {
                 os << "[";
-                bool needs_comma = false;
+                bool needsComma = false;
                 if (ent.leading.size()) {
                     os << ent.leading;
-                    needs_comma = true;
+                    needsComma = true;
                 }
 
-                if (needs_comma) {
+                if (needsComma) {
                     os << ", ";
                 }
                 if (ent.extraBind.isValid()) {
                     os << ent.extraBind;
                 }
                 os << "..";
-                needs_comma = true;
+                needsComma = true;
 
                 if (ent.trailing.size()) {
-                    if (needs_comma) {
+                    if (needsComma) {
                         os << ", ";
                     }
                     os << ent.trailing;

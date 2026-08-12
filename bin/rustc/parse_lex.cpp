@@ -22,7 +22,7 @@ Lexer::Lexer(const ::std::string& filename, AST::Edition edition, ParseState ps)
     , istream(filename != "-" ? *istreamFp : std::cin)
     , lastCharValid(false)
     , edition(edition)
-    , mHygiene(Ident::Hygiene::new_scope())
+    , mHygiene(Ident::Hygiene::newScope())
 {
     if (istreamFp) {
         if (!istreamFp->is_open()) {
@@ -52,7 +52,7 @@ Lexer::Lexer(::std::istringstream& ss, AST::Edition edition, ParseState ps)
     , istream(ss)
     , lastCharValid(false)
     , edition(edition)
-    , mHygiene(Ident::Hygiene::new_scope())
+    , mHygiene(Ident::Hygiene::newScope())
 {
 }
 
@@ -381,12 +381,12 @@ Token Lexer::getTokenInt() {
             // No match at all, check for symbol
             auto ch = this->getc();
             if (ch.isdigit()) {
-                enum eCoreType num_type = CORETYPE_ANY;
-                NumMode num_mode = NumMode::DEC;
+                enum eCoreType numType = CORETYPE_ANY;
+                NumMode numMode = NumMode::DEC;
 
                 // Handle integers/floats
                 this->ungetc();
-                auto val = this->parseInt(&num_mode);
+                auto val = this->parseInt(&numMode);
                 ch = this->getc();
 
                 if (ch == 'e' || ch == 'E' || ch == '.') {
@@ -428,7 +428,7 @@ Token Lexer::getTokenInt() {
                             // - Thus, continuing here and letting the below 'ungetc' push a digit back is correct.
                         }
                     }
-                    if (num_mode != NumMode::DEC) {
+                    if (numMode != NumMode::DEC) {
                         TODO(this->point_span(), "Non-decimal floats");
                     }
 
@@ -451,20 +451,20 @@ Token Lexer::getTokenInt() {
                         if (0)
                             ;
                         else if (suffix == "f16") {
-                            num_type = CORETYPE_F16;
+                            numType = CORETYPE_F16;
                         } else if (suffix == "f32") {
-                            num_type = CORETYPE_F32;
+                            numType = CORETYPE_F32;
                         } else if (suffix == "f64") {
-                            num_type = CORETYPE_F64;
+                            numType = CORETYPE_F64;
                         } else if (suffix == "f128") {
-                            num_type = CORETYPE_F128;
+                            numType = CORETYPE_F128;
                         } else {
                             ERROR(this->point_span(), E0000, "Unknown float suffix " << suffix);
                         }
                     } else {
                         this->ungetc();
                     }
-                    return Token::makeFloat(fval, num_type);
+                    return Token::makeFloat(fval, numType);
 
                 } else if (issym(ch)) {
                     // Unsigned
@@ -478,46 +478,46 @@ Token Lexer::getTokenInt() {
                     if (0)
                         ;
                     else if (suffix == "i8") {
-                        num_type = CORETYPE_I8;
+                        numType = CORETYPE_I8;
                     } else if (suffix == "i16") {
-                        num_type = CORETYPE_I16;
+                        numType = CORETYPE_I16;
                     } else if (suffix == "i32") {
-                        num_type = CORETYPE_I32;
+                        numType = CORETYPE_I32;
                     } else if (suffix == "i64") {
-                        num_type = CORETYPE_I64;
+                        numType = CORETYPE_I64;
                     } else if (suffix == "i128") {
-                        num_type = CORETYPE_I128;
+                        numType = CORETYPE_I128;
                     } else if (suffix == "isize") {
-                        num_type = CORETYPE_INT;
+                        numType = CORETYPE_INT;
                     } else if (suffix == "u8") {
-                        num_type = CORETYPE_U8;
+                        numType = CORETYPE_U8;
                     } else if (suffix == "u16") {
-                        num_type = CORETYPE_U16;
+                        numType = CORETYPE_U16;
                     } else if (suffix == "u32") {
-                        num_type = CORETYPE_U32;
+                        numType = CORETYPE_U32;
                     } else if (suffix == "u64") {
-                        num_type = CORETYPE_U64;
+                        numType = CORETYPE_U64;
                     } else if (suffix == "u128") {
-                        num_type = CORETYPE_U128;
+                        numType = CORETYPE_U128;
                     } else if (suffix == "usize") {
-                        num_type = CORETYPE_UINT;
+                        numType = CORETYPE_UINT;
                     } else if (suffix == "f16") {
-                        num_type = CORETYPE_F16;
+                        numType = CORETYPE_F16;
                     } else if (suffix == "f32") {
-                        num_type = CORETYPE_F32;
+                        numType = CORETYPE_F32;
                     } else if (suffix == "f64") {
-                        num_type = CORETYPE_F64;
+                        numType = CORETYPE_F64;
                     } else if (suffix == "f128") {
-                        num_type = CORETYPE_F128;
+                        numType = CORETYPE_F128;
                     } else {
                         // Not a numeric type suffix - rustc allows any identifier here, so emit it as a following ident token
-                        nextTokens.push_back(Token(TOK_IDENT, Ident(this->realGetHygiene(), RcString::new_interned(suffix))));
+                        nextTokens.push_back(Token(TOK_IDENT, Ident(this->realGetHygiene(), RcString::newInterned(suffix))));
                         return Token(val, CORETYPE_ANY);
                     }
-                    return Token(val, num_type);
+                    return Token(val, numType);
                 } else {
                     this->ungetc();
-                    return Token(val, num_type);
+                    return Token(val, numType);
                 }
             }
             // Byte/Raw strings
@@ -621,7 +621,7 @@ Token Lexer::getTokenInt() {
                         nextTokens.push_back(TOK_SQUARE_CLOSE);
                         nextTokens.push_back(Token(TOK_STRING, mv$(str), realGetHygiene()));
                         nextTokens.push_back(TOK_EQUAL);
-                        nextTokens.push_back(Token(TOK_IDENT, RcString::new_interned("doc")));
+                        nextTokens.push_back(Token(TOK_IDENT, RcString::newInterned("doc")));
                         nextTokens.push_back(TOK_SQUARE_OPEN);
                         if (isPdoc) {
                             nextTokens.push_back(TOK_EXCLAM);
@@ -685,7 +685,7 @@ Token Lexer::getTokenInt() {
                         nextTokens.push_back(TOK_SQUARE_CLOSE);
                         nextTokens.push_back(Token(TOK_STRING, mv$(str), realGetHygiene()));
                         nextTokens.push_back(TOK_EQUAL);
-                        nextTokens.push_back(Token(TOK_IDENT, RcString::new_interned("doc")));
+                        nextTokens.push_back(Token(TOK_IDENT, RcString::newInterned("doc")));
                         nextTokens.push_back(TOK_SQUARE_OPEN);
                         if (isPdoc) {
                             nextTokens.push_back(TOK_EXCLAM);
@@ -719,7 +719,7 @@ Token Lexer::getTokenInt() {
                                 ch = this->getc();
                             }
                             this->ungetc();
-                            return Token(TOK_LIFETIME, Ident(this->realGetHygiene(), RcString::new_interned(str)));
+                            return Token(TOK_LIFETIME, Ident(this->realGetHygiene(), RcString::newInterned(str)));
                         } else {
                             TODO(this->point_span(), "Lex Fail - Expected ' after character constant");
                         }
@@ -858,12 +858,12 @@ Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool par
             return Token(v);
         }
     }
-    return Token(TOK_IDENT, Ident(this->realGetHygiene(), RcString::new_interned(str)));
+    return Token(TOK_IDENT, Ident(this->realGetHygiene(), RcString::newInterned(str)));
 }
 
 /// Parse an integer from the input stream
-U128 Lexer::parseInt(NumMode* num_mode_out) {
-    auto num_mode = NumMode::DEC;
+U128 Lexer::parseInt(NumMode* numModeOut) {
+    auto numMode = NumMode::DEC;
 
     U128 val(0);
     auto ch = this->getc();
@@ -875,7 +875,7 @@ U128 Lexer::parseInt(NumMode* num_mode_out) {
     if (ch == '0') {
         ch = this->getcNum();
         if (ch == 'x') {
-            num_mode = NumMode::HEX;
+            numMode = NumMode::HEX;
             while ((ch = this->getcNum()).isxdigit()) {
                 val *= 16;
                 if (ch.v <= '9') {
@@ -887,7 +887,7 @@ U128 Lexer::parseInt(NumMode* num_mode_out) {
                 }
             }
         } else if (ch == 'b') {
-            num_mode = NumMode::BIN;
+            numMode = NumMode::BIN;
             while ((ch = this->getcNum()).isdigit()) {
                 val *= 2;
                 if (ch.v == '0') {
@@ -899,7 +899,7 @@ U128 Lexer::parseInt(NumMode* num_mode_out) {
                 }
             }
         } else if (ch == 'o') {
-            num_mode = NumMode::OCT;
+            numMode = NumMode::OCT;
             while ((ch = this->getcNum()).isdigit()) {
                 val *= 8;
                 if ('0' <= ch.v && ch.v <= '7') {
@@ -909,7 +909,7 @@ U128 Lexer::parseInt(NumMode* num_mode_out) {
                 }
             }
         } else {
-            num_mode = NumMode::DEC;
+            numMode = NumMode::DEC;
             while (ch.isdigit()) {
                 val *= 10;
                 val += U128(ch.v - '0');
@@ -917,7 +917,7 @@ U128 Lexer::parseInt(NumMode* num_mode_out) {
             }
         }
     } else {
-        num_mode = NumMode::DEC;
+        numMode = NumMode::DEC;
         while (ch.isdigit()) {
             val *= 10;
             val += U128(ch.v - '0');
@@ -926,8 +926,8 @@ U128 Lexer::parseInt(NumMode* num_mode_out) {
     }
 
     this->ungetc();
-    if (num_mode_out) {
-        *num_mode_out = num_mode;
+    if (numModeOut) {
+        *numModeOut = numMode;
     }
     return val;
 }
@@ -1393,7 +1393,7 @@ Codepoint::Codepoint(uint32_t v)
     : v(v) {
 }
 void Lexer::push_hygine() {
-    mHygiene = Ident::Hygiene::new_scope_chained(mHygiene);
+    mHygiene = Ident::Hygiene::newScopeChained(mHygiene);
     DEBUG(">> " << mHygiene);
 }
 void Lexer::pop_hygine() {

@@ -312,7 +312,7 @@ class CBuiltinMacroHandler: public ExpandDecorator {
         AST::UseItem ui;
         ui.entries.push_back(AST::UseItem::Ent{});
         ui.entries.back().name = name;
-        ui.entries.back().path = AST::Path(RcString::new_interned(CRATE_BUILTINS), {name});
+        ui.entries.back().path = AST::Path(RcString::newInterned(CRATE_BUILTINS), {name});
         DEBUG("Convert macro_rules tagged #[rustc_builtin_macro] with use - " << name);
         i = AST::Item::make_Use(mv$(ui));
     }

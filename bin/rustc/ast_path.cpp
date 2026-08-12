@@ -66,16 +66,16 @@ namespace AST {
             os << rv.second;
             return os;
         }
-        bool needs_comma = false;
+        bool needsComma = false;
         os << (x.isParen ? "(" : "<");
         for (const auto& e : x.entries) {
             if (e.is_Null()) {
                 continue;
             }
-            if (needs_comma) {
+            if (needsComma) {
                 os << ", ";
             }
-            needs_comma = true;
+            needsComma = true;
 
             e.fmt(os);
         }
@@ -228,11 +228,11 @@ namespace AST {
     AST::Path::~Path() {
     }
 
-    AST::Path AST::Path::new_ufcs_ty(TypeRef type, ::std::vector<AST::PathNode> nodes) {
+    AST::Path AST::Path::newUfcsTy(TypeRef type, ::std::vector<AST::PathNode> nodes) {
         return AST::Path(AST::Path::Class::make_UFCS({box$(type), nullptr, nodes}));
     }
 
-    AST::Path AST::Path::new_ufcs_trait(TypeRef type, Path trait, ::std::vector<AST::PathNode> nodes) {
+    AST::Path AST::Path::newUfcsTrait(TypeRef type, Path trait, ::std::vector<AST::PathNode> nodes) {
         return AST::Path(AST::Path::Class::make_UFCS({box$(type), box$(trait), nodes}));
     }
 
@@ -450,7 +450,7 @@ bool AbsolutePath::isParentOf(const AbsolutePath& other) const {
 }
 PathNode::PathNode() {
 }
-void Path::Bindings::merge_from(const Bindings& x) {
+void Path::Bindings::mergeFrom(const Bindings& x) {
     if (value.is_Unbound()) {
         value = x.value.clone();
     }

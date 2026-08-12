@@ -9,7 +9,7 @@
     #include <zlib.h>
 #endif
 
-void memory_dump(const char* phase) {
+void memoryDump(const char* phase) {
     if (getenv("MRUSTC_DUMPMEM")) {
         static unsigned s_count;
         auto idx = s_count++;
@@ -109,21 +109,21 @@ void memory_dump(const char* phase) {
         // - zlib-compressed memory contents, chunked by `chunk_size` and omitting completely empty regions
         //   - Each chunk starts with the virtual address (64-bits)
         // - Finally, register dump (PC, then x86 dwarf ordering)
-        FILE* out_fp = fopen(filename, "wb");
+        FILE* outFp = fopen(filename, "wb");
 
         // - Header
         struct DumpFileHdr {
             char magic[12];
-            uint32_t n_ranges;
-            uint32_t n_chunks;
+            uint32_t nRanges;
+            uint32_t nChunks;
             uint32_t chunkSize;
         } fileHdr;
 
         strcpy(fileHdr.magic, "FullDump\x97\r\n");
-        fileHdr.n_ranges = range_ents.size();
-        fileHdr.n_chunks = chunkCount;
+        fileHdr.nRanges = range_ents.size();
+        fileHdr.nChunks = chunkCount;
         fileHdr.chunkSize = chunkSize;
-        fwrite(&fileHdr, sizeof(fileHdr), 1, out_fp);
+        fwrite(&fileHdr, sizeof(fileHdr), 1, outFp);
 
         // - Write out the parsed maps
         struct DumpRangeHdr {
@@ -131,7 +131,7 @@ void memory_dump(const char* phase) {
             uint64_t size;
             uint64_t fileOfs;
 
-            uint16_t name_length;
+            uint16_t nameLength;
             uint16_t _flags;
             uint16_t _pad[2];
         };
@@ -141,12 +141,12 @@ void memory_dump(const char* phase) {
             hdr.v_start = r.v_start;
             hdr.size = r.v_end - r.v_start;
             hdr.fileOfs = r.fileOfs;
-            hdr.name_length = r.name.size();
+            hdr.nameLength = r.name.size();
             hdr._flags = 0 | (r.flagsStr[0] == 'r' ? 1 : 0);
             hdr._pad[0] = 0;
             hdr._pad[1] = 0;
-            fwrite(&hdr, sizeof(hdr), 1, out_fp);
-            fwrite(r.name.c_str(), 1, r.name.size(), out_fp);
+            fwrite(&hdr, sizeof(hdr), 1, outFp);
+            fwrite(r.name.c_str(), 1, r.name.size(), outFp);
         }
         // - Write out the content of the maps
         ::std::vector<unsigned char> zlib_buffer(16 * 1024);
@@ -154,9 +154,9 @@ void memory_dump(const char* phase) {
         size_t chunkCountFlushed = 0;
         auto flushChunk = [&](uint64_t chunkAddr) {
     #if DEBUG_MEM_DUMP
-            printf("FLUSH %zi @ %li (0x%lx)\n", chunkCountFlushed, ftell(out_fp), chunkAddr);
+            printf("FLUSH %zi @ %li (0x%lx)\n", chunkCountFlushed, ftell(outFp), chunkAddr);
     #endif
-            fwrite(&chunkAddr, sizeof(chunkAddr), 1, out_fp);
+            fwrite(&chunkAddr, sizeof(chunkAddr), 1, outFp);
             chunkCountFlushed += 1;
             z_stream zstream;
             zstream.zalloc = Z_NULL;
@@ -187,7 +187,7 @@ void memory_dump(const char* phase) {
                 // - Flush the output buffer to the file
                 if (zstream.avail_out < zlib_buffer.size()) {
                     size_t bytes = zlib_buffer.size() - zstream.avail_out;
-                    fwrite(zlib_buffer.data(), bytes, 1, out_fp);
+                    fwrite(zlib_buffer.data(), bytes, 1, outFp);
 
                     zstream.avail_out = zlib_buffer.size();
                     zstream.next_out = zlib_buffer.data();
@@ -203,7 +203,7 @@ void memory_dump(const char* phase) {
                 }
                 if (zstream.avail_out != zlib_buffer.size()) {
                     size_t bytes = zlib_buffer.size() - zstream.avail_out;
-                    fwrite(zlib_buffer.data(), bytes, 1, out_fp);
+                    fwrite(zlib_buffer.data(), bytes, 1, outFp);
 
                     zstream.avail_out = zlib_buffer.size();
                     zstream.next_out = zlib_buffer.data();
@@ -299,8 +299,8 @@ void memory_dump(const char* phase) {
                      :
                      : "r"(&regs)
                      : "rax");
-        fwrite(&regs, sizeof(regs), 1, out_fp);
-        fclose(out_fp);
+        fwrite(&regs, sizeof(regs), 1, outFp);
+        fclose(outFp);
 #else
         std::cerr << "NOTE: No memory dump supported on this platform" << std::endl;
 #endif

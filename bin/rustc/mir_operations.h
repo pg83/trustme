@@ -10,7 +10,7 @@ extern void MIRValidateFull(const StaticTraitResolve& resolve, const ::HIR::Item
 // Perform needed changes to the generated MIR (virtualisation, Unsize/CoerceUnsize, ...)
 extern void MIRCleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::argsT& args, const ::HIR::TypeData* ret_type);
 // Optimise the MIR
-extern void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::argsT& args, const ::HIR::TypeData* ret_type, unsigned opt_level, bool doInline = true, bool validate = true);
+extern void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::argsT& args, const ::HIR::TypeData* ret_type, unsigned optLevel, bool doInline = true, bool validate = true);
 extern void MIROptimiseMin(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::argsT& args, const ::HIR::TypeData* ret_type);
 extern void MIRSortBlocks(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn);
 

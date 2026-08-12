@@ -41,17 +41,17 @@ float U128::to_float() const {
     memcpy(&rv, &vi, sizeof(rv));
     return rv;
 }
-void U128::to_be_bytes(uint8_t* dst, size_t max_len) {
-    max_len = max_len > 16 ? 16 : max_len;
-    for (size_t i = 0; i < max_len; i++) {
-        dst[max_len - 1 - i] = static_cast<uint8_t>((*this >> static_cast<unsigned>(i * 8)).truncate_u64());
+void U128::to_be_bytes(uint8_t* dst, size_t maxLen) {
+    maxLen = maxLen > 16 ? 16 : maxLen;
+    for (size_t i = 0; i < maxLen; i++) {
+        dst[maxLen - 1 - i] = static_cast<uint8_t>((*this >> static_cast<unsigned>(i * 8)).truncate_u64());
     }
 }
-void U128::fromBeBytes(const uint8_t* src, size_t max_len) {
-    max_len = max_len > 16 ? 16 : max_len;
+void U128::fromBeBytes(const uint8_t* src, size_t maxLen) {
+    maxLen = maxLen > 16 ? 16 : maxLen;
     *this = U128();
-    for (size_t i = 0; i < max_len; i++) {
-        *this |= U128(src[max_len - 1 - i]) << static_cast<unsigned>(i * 8);
+    for (size_t i = 0; i < maxLen; i++) {
+        *this |= U128(src[maxLen - 1 - i]) << static_cast<unsigned>(i * 8);
     }
 }
 U128 U128::operator+(U128 x) const {
@@ -66,7 +66,7 @@ U128 U128::operator-(U128 x) const {
 }
 U128 U128::operator*(U128 x) const {
     U128 rv(0);
-    mul128_o(*this, x, &rv);
+    mul128O(*this, x, &rv);
     return rv;
 }
 U128 U128::operator/(U128 x) const {
@@ -193,7 +193,7 @@ bool U128::sub128_o(U128 a, U128 b, U128* o) {
     o->hi = a.hi - b.hi - (o->lo > a.lo ? 1 : 0);
     return (o->hi > a.hi);
 }
-bool U128::mul128_o(U128 a, U128 b, U128* o) {
+bool U128::mul128O(U128 a, U128 b, U128* o) {
     bool of = false;
     o->hi = 0;
     o->lo = 0;
@@ -280,19 +280,19 @@ S128::S128(U128 v)
 int64_t S128::truncate_i64() const { /*assert(inner.hi == 0 || inner.hi == UINT64_MAX);*/
     return inner.lo;
 }
-void S128::sign_extend(size_t n_bytes) {
-    if (n_bytes < 16 && inner.bit(static_cast<unsigned>(n_bytes * 8 - 1))) {
+void S128::sign_extend(size_t nBytes) {
+    if (nBytes < 16 && inner.bit(static_cast<unsigned>(nBytes * 8 - 1))) {
         // Apply sign extension mask - shift in nbits from an all-ones value
-        inner |= U128::max() << static_cast<unsigned>(n_bytes * 8);
+        inner |= U128::max() << static_cast<unsigned>(nBytes * 8);
     }
 }
-void S128::fromLeBytes(const uint8_t* src, size_t max_len) {
-    inner.fromLeBytes(src, max_len);
-    sign_extend(max_len);
+void S128::fromLeBytes(const uint8_t* src, size_t maxLen) {
+    inner.fromLeBytes(src, maxLen);
+    sign_extend(maxLen);
 }
-void S128::fromBeBytes(const uint8_t* src, size_t max_len) {
-    inner.fromBeBytes(src, max_len);
-    sign_extend(max_len);
+void S128::fromBeBytes(const uint8_t* src, size_t maxLen) {
+    inner.fromBeBytes(src, maxLen);
+    sign_extend(maxLen);
 }
 S128 S128::operator*(S128 x) const {
     auto ret_neg = isNeg() != x.isNeg();

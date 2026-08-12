@@ -788,12 +788,12 @@ Ordering TraitPath::AtyBound::ord(const AtyBound& x) const {
     return OrdEqual;
 }
 TraitPath::AtyBound TraitPath::AtyBound::clone() const {
-    std::vector<::HIR::TraitPath> new_traits;
-    new_traits.reserve(traits.size());
+    std::vector<::HIR::TraitPath> newTraits;
+    newTraits.reserve(traits.size());
     for (const auto& t : traits) {
-        new_traits.push_back(t.clone());
+        newTraits.push_back(t.clone());
     }
-    return AtyBound{source_trait.clone(), atyParams.clone(), ::std::move(new_traits)};
+    return AtyBound{source_trait.clone(), atyParams.clone(), ::std::move(newTraits)};
 }
 Path::Path(Data data)
     : mData(mv$(data)) {

@@ -50,8 +50,8 @@ extern AST::Pattern ParsePattern(TokenStream& lex, AllowOrPattern allowOr = Allo
 
 extern void ParseImplItem(TokenStream& lex, AST::Impl& impl);
 extern AST::Named<AST::Item> ParseTraitItem(TokenStream& lex);
-extern void ParseModItem(TokenStream& lex, AST::Module& mod, AST::AttributeList meta_items);
-extern ::AST::Named<::AST::Item> ParseModItemS(TokenStream& lex, const AST::Module::FileInfo& mod_fileinfo, const ::AST::AbsolutePath& mod_path, AST::AttributeList meta_items);
+extern void ParseModItem(TokenStream& lex, AST::Module& mod, AST::AttributeList metaItems);
+extern ::AST::Named<::AST::Item> ParseModItemS(TokenStream& lex, const AST::Module::FileInfo& modFileinfo, const ::AST::AbsolutePath& mod_path, AST::AttributeList metaItems);
 extern void ParseModRootItems(TokenStream& lex, AST::Module& mod);
 extern ::AST::Named<::AST::Item> ParseExternBlockItem(TokenStream& lex, const std::string& abi);
 

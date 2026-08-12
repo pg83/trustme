@@ -21,14 +21,14 @@ public:
 
     explicit RcString(const ::std::string& s);
 
-    static RcString new_interned(const char* s, size_t len);
+    static RcString newInterned(const char* s, size_t len);
 
-    static RcString new_interned(const ::std::string& s) {
-        return new_interned(s.data(), s.size());
+    static RcString newInterned(const ::std::string& s) {
+        return newInterned(s.data(), s.size());
     }
 
-    static RcString new_interned(const char* s) {
-        return new_interned(s, ::std::strlen(s));
+    static RcString newInterned(const char* s) {
+        return newInterned(s, ::std::strlen(s));
     }
 
     RcString(const RcString& x);
@@ -62,7 +62,7 @@ public:
     char back() const;
 
     Ordering ord(const char* s, size_t l) const;
-    Ordering ord_interned(const RcString& s) const;
+    Ordering ordInterned(const RcString& s) const;
 
     Ordering ord(const RcString& s) const;
 

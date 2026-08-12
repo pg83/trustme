@@ -13,7 +13,7 @@ namespace {
                 cb(*impl);
             }
         }
-        for (auto& impl : g.non_named) {
+        for (auto& impl : g.nonNamed) {
             cb(*impl);
         }
         for (auto& impl : g.generic) {
@@ -405,7 +405,7 @@ void ::HIR::Visitor::visit_generic_bound(::HIR::GenericBound& bound) {
         //    }
         TU_ARMA(TypeEquality, e) {
             this->visit_type(e.type);
-            this->visit_type(e.other_type);
+            this->visit_type(e.otherType);
         }
     }
 }

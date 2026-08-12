@@ -82,7 +82,7 @@ namespace AST {
         //TypeAlias() {}
         TypeAlias(GenericParams params, TypeRef type);
 
-        static TypeAlias new_associated_type(GenericParams params, GenericParams type_bounds, TypeRef defaultType);
+        static TypeAlias newAssociatedType(GenericParams params, GenericParams type_bounds, TypeRef defaultType);
 
         const GenericParams& params() const {
             return mParams;
@@ -365,7 +365,7 @@ namespace AST {
             return isUnsafe;
         }
 
-        bool hasNamedItem(const RcString& name, bool& out_is_fcn) const;
+        bool hasNamedItem(const RcString& name, bool& outIsFcn) const;
 
         Trait clone() const;
     };
@@ -457,7 +457,7 @@ namespace AST {
             } repr = Repr::Rust;
             uint64_t alignValue = 0;
             // Indicates packing
-            uint64_t max_field_align = 0;
+            uint64_t maxFieldAlign = 0;
 
             // 1.39 nonzero etc
             bool scalar_valid_start_set = false;
@@ -657,7 +657,7 @@ namespace AST {
             return mAbi;
         }
 
-        void addItem(Named<Item> named_item);
+        void addItem(Named<Item> namedItem);
 
         // NOTE: Only Function and Static are valid.
         ::std::vector<Named<Item>>& items() {

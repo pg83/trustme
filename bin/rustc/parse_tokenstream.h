@@ -24,7 +24,7 @@ public:
     // Used for match arms to disallow `foo => if false {} (bar) => ...`
     bool disallowCallOrIndex = false;
     // A debugging hook that disables expansion of macros
-    bool no_expand_macros = false;
+    bool noExpandMacros = false;
 
     const ::AST::Crate* crate = nullptr; // TODO: Remove this (needed for MetaItem)
     ::AST::Module* module = nullptr;

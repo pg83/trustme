@@ -83,7 +83,7 @@ Ident::Hygiene& Ident::Hygiene::operator=(Hygiene&& x) {
     //assert(m_inner);
     return *this;
 }
-Ident::Hygiene Ident::Hygiene::new_scope_chained(const Hygiene& parent, unsigned int macroDefinition) {
+Ident::Hygiene Ident::Hygiene::newScopeChained(const Hygiene& parent, unsigned int macroDefinition) {
     Hygiene rv;
     rv->search_module = parent->search_module;
     rv->contexts.reserve(parent->contexts.size() + 1);

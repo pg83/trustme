@@ -219,8 +219,8 @@ namespace {
         };
 
         visit_immediate(pattern);
-        for (const auto* or_pattern : deferredOrPatterns) {
-            const auto& alternatives = or_pattern->mData.as_Or();
+        for (const auto* orPattern : deferredOrPatterns) {
+            const auto& alternatives = orPattern->mData.as_Or();
             visit_pattern_candidate_slots(
                 use_last_alternative ? alternatives.back() : alternatives.front(),
                 use_last_alternative,

@@ -101,7 +101,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
         auto descExpr = NEWNODE(StructLiteral, ::AST::Path(cTest, {::AST::PathNode("TestDesc")}), nullptr, mv$(descVals));
 
         ::AST::ExprNodeStructLiteral::t_values descandfnVals;
-        descandfnVals.push_back({{}, RcString::new_interned("desc"), mv$(descExpr)});
+        descandfnVals.push_back({{}, RcString::newInterned("desc"), mv$(descExpr)});
 
         auto test_fcn_node = NEWNODE(NamedValue, AST::Path(test.path));
         {
@@ -110,7 +110,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
             test_fcn_node = NEWNODE(Closure, {}, TypeRef(Span()), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, AST::Path(test.path), {}))), false, false);
         }
         auto test_type_var_name = test.isBenchmark ? "StaticBenchFn" : "StaticTestFn";
-        descandfnVals.push_back({{}, RcString::new_interned("testfn"), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode(test_type_var_name)}), ::makeVec1(std::move(test_fcn_node)))});
+        descandfnVals.push_back({{}, RcString::newInterned("testfn"), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode(test_type_var_name)}), ::makeVec1(std::move(test_fcn_node)))});
 
         test_nodes.push_back(NEWNODE(StructLiteral, ::AST::Path(cTest, {::AST::PathNode("TestDescAndFn")}), nullptr, mv$(descandfnVals)));
         // NOTE: 1.39+ needs &TestDescAndFn here
@@ -181,14 +181,14 @@ struct ProgramParams {
     ::std::string crate_name;
     ::std::string crate_name_suffix;
 
-    OptimizationLevel opt_level = OptimizationLevel::None;
+    OptimizationLevel optLevel = OptimizationLevel::None;
     bool debugAssertions = false;
     bool debugAssertionsExplicit = false;
     // rustc defaults MIR optimisation to 1 at -O0 and to 2 otherwise.
     // Keep the explicit bit separate so `-Zmir-opt-level=0` is distinguishable
     // from the implicit default.
-    unsigned mir_opt_level = 0;
-    bool mir_opt_level_explicit = false;
+    unsigned mirOptLevel = 0;
+    bool mirOptLevelExplicit = false;
     DebugInfoLevel debugInfo = DebugInfoLevel::None;
 
     bool test_harness = false;
@@ -231,14 +231,14 @@ struct ProgramParams {
     ProgramParams(int argc, char* argv[]);
 
     unsigned effectiveMirOptLevel() const {
-        return mir_opt_level_explicit ? mir_opt_level : (opt_level == OptimizationLevel::None ? 1 : 2);
+        return mirOptLevelExplicit ? mirOptLevel : (optLevel == OptimizationLevel::None ? 1 : 2);
     }
     bool enableMirInlining() const {
         const auto level = effectiveMirOptLevel();
-        return level >= 3 || (level == 2 && opt_level != OptimizationLevel::None && opt_level != OptimizationLevel::Less);
+        return level >= 3 || (level == 2 && optLevel != OptimizationLevel::None && optLevel != OptimizationLevel::Less);
     }
     bool debugAssertionsEnabled() const {
-        return debugAssertionsExplicit ? debugAssertions : opt_level == OptimizationLevel::None;
+        return debugAssertionsExplicit ? debugAssertions : optLevel == OptimizationLevel::None;
     }
 
     void show_help() const;
@@ -325,7 +325,7 @@ int main(int argc, char* argv[]) {
     initDebugList();
     ProgramParams params(argc, argv);
     gTraitSolverConfig = params.trait_solver;
-    const auto mir_opt_level = params.effectiveMirOptLevel();
+    const auto mirOptLevel = params.effectiveMirOptLevel();
     const auto enableMirInlining = params.enableMirInlining();
     if (params.codegen.panic_type.empty()) {
         params.codegen.panic_type = "unwind";
@@ -394,7 +394,7 @@ int main(int argc, char* argv[]) {
         if (params.lastStage == ProgramParams::STAGE_PARSE) {
             return 0;
         }
-        memory_dump("Parsed");
+        memoryDump("Parsed");
 
         // Load external crates.
         CompilePhaseV("LoadCrates", [&]() {
@@ -405,7 +405,7 @@ int main(int argc, char* argv[]) {
             }
             crate.loadExterns();
             if (params.test_harness) {
-                auto test_crate_name = RcString::new_interned("test");
+                auto test_crate_name = RcString::newInterned("test");
                 AST::gImplicitCrates.insert(std::make_pair(test_crate_name, crate.loadExternCrate(Span(), test_crate_name)));
             }
         });
@@ -517,7 +517,7 @@ int main(int argc, char* argv[]) {
         if (params.lastStage == ProgramParams::STAGE_EXPAND) {
             return 0;
         }
-        memory_dump("Expanded");
+        memoryDump("Expanded");
 
         // Allocator and panic strategies
         CompilePhaseV("Implicit Crates", [&]() {
@@ -624,7 +624,7 @@ int main(int argc, char* argv[]) {
         CompilePhaseV("Resolve Absolute", [&]() {
             ResolveAbsolutise(crate); // - Convert all paths to Absolute or UFCS, and resolve variables
         });
-        memory_dump("Resolved");
+        memoryDump("Resolved");
 
         if (params.debug.dumpAst) {
             CompilePhaseV("Temp output - Resolved", [&]() {
@@ -643,14 +643,14 @@ int main(int argc, char* argv[]) {
         ::HIR::Crate* hirCrate = CompilePhase<::HIR::Crate*>("HIR Lower", [&]() {
             return LowerHIRFromAST(pool, crate);
         });
-        memory_dump("HIR Gen");
+        memoryDump("HIR Gen");
         if (params.debug.dumpHir) {
             CompilePhaseV("Dump HIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
                 HIRDump(os, *hirCrate);
             });
         }
-        memory_dump("HIR");
+        memoryDump("HIR");
 
         CompilePhaseV("Lifetime Elision", [&]() {
             ConvertHIRLifetimeElision(*hirCrate);
@@ -777,7 +777,7 @@ int main(int argc, char* argv[]) {
         if (params.lastStage == ProgramParams::STAGE_TYPECK) {
             return 0;
         }
-        memory_dump("Typecheck");
+        memoryDump("Typecheck");
 
         // Lower expressions into MIR
         CompilePhaseV("Lower MIR", [&]() {
@@ -791,7 +791,7 @@ int main(int argc, char* argv[]) {
                 MIRDump(os, *hirCrate);
             });
         }
-        memory_dump("MIR Gen");
+        memoryDump("MIR Gen");
 
         // LowerMIR validates every function before returning. The next validation is
         // performed after MIR_Cleanup has actually changed the crate.
@@ -815,7 +815,7 @@ int main(int argc, char* argv[]) {
 
         // Optimise the MIR
         CompilePhaseV("MIR Optimise", [&]() {
-            MIROptimiseCrate(*hirCrate, mir_opt_level, enableMirInlining);
+            MIROptimiseCrate(*hirCrate, mirOptLevel, enableMirInlining);
         });
 
         if (params.debug.dumpMir) {
@@ -839,7 +839,7 @@ int main(int argc, char* argv[]) {
         if (params.lastStage == ProgramParams::STAGE_MIR) {
             return 0;
         }
-        memory_dump("MIR Opt");
+        memoryDump("MIR Opt");
 
         // TODO: Pass to mark items that are..
         // - Signature Exportable (public)
@@ -849,7 +849,7 @@ int main(int argc, char* argv[]) {
         trans_opt.mode = params.codegen.codegenType == "" ? "c" : params.codegen.codegenType;
         trans_opt.buildCommandFile = params.codegen.emitBuildCommand;
         trans_opt.linkerArgs = params.codegen.linkerArgs;
-        trans_opt.opt_level = params.opt_level;
+        trans_opt.optLevel = params.optLevel;
         trans_opt.panic_crate = "panic_" + params.codegen.panic_type;
         for (const char* libdir : params.libSearchDirs) {
             // Store these paths for use in final linking.
@@ -908,11 +908,11 @@ int main(int argc, char* argv[]) {
         });
         // - Generate monomorphised versions of all functions
         CompilePhaseV("Trans Monomorph", [&]() {
-            TransMonomorphiseList(*hirCrate, items, mir_opt_level);
+            TransMonomorphiseList(*hirCrate, items, mirOptLevel);
         });
         // - Do post-monomorph inlining
         CompilePhaseV("MIR Optimise Inline", [&]() {
-            MIROptimiseCrateInlining(*hirCrate, items, false, mir_opt_level, enableMirInlining);
+            MIROptimiseCrateInlining(*hirCrate, items, false, mirOptLevel, enableMirInlining);
         });
 
         // - Expand constants in HIR (using ones that were monomorphised above)
@@ -921,7 +921,7 @@ int main(int argc, char* argv[]) {
             MIRCleanupCrate(*hirCrate);
         });
 
-        memory_dump("Trans");
+        memoryDump("Trans");
 
         std::string hirFile;
         switch (crate_type) {
@@ -946,7 +946,7 @@ int main(int argc, char* argv[]) {
 
         // - Do post-monomorph inlining
         CompilePhaseV("MIR Optimise Inline PostSave", [&]() {
-            MIROptimiseCrateInlining(*hirCrate, items, true, mir_opt_level, enableMirInlining);
+            MIROptimiseCrateInlining(*hirCrate, items, true, mirOptLevel, enableMirInlining);
         });
         // - Clean up ununused functions
         CompilePhaseV("Trans Enumerate Cleanup", [&]() {
@@ -1148,17 +1148,17 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     } else if (optname == "opt-level") {
                         getOptval();
                         if (optval == "0") {
-                            this->opt_level = OptimizationLevel::None;
+                            this->optLevel = OptimizationLevel::None;
                         } else if (optval == "1") {
-                            this->opt_level = OptimizationLevel::Less;
+                            this->optLevel = OptimizationLevel::Less;
                         } else if (optval == "2") {
-                            this->opt_level = OptimizationLevel::More;
+                            this->optLevel = OptimizationLevel::More;
                         } else if (optval == "3") {
-                            this->opt_level = OptimizationLevel::Aggressive;
+                            this->optLevel = OptimizationLevel::Aggressive;
                         } else if (optval == "s") {
-                            this->opt_level = OptimizationLevel::Size;
+                            this->optLevel = OptimizationLevel::Size;
                         } else if (optval == "z") {
-                            this->opt_level = OptimizationLevel::SizeMin;
+                            this->optLevel = OptimizationLevel::SizeMin;
                         } else {
                             ::std::cerr << "optimization level needs to be between 0-3, s or z (instead was '" << optval << "')" << ::std::endl;
                             exit(1);
@@ -1218,7 +1218,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                             exit(1);
                         }
                     };
-                    auto no_optval = [&]() {
+                    auto noOptval = [&]() {
                         if (eqPos != ::std::string::npos) {
                             ::std::cerr << "Flag -Z " << optname << " doesn't take an argument" << ::std::endl;
                             exit(1);
@@ -1226,9 +1226,9 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     };
 
                     if (optname == "disable-mir-opt") {
-                        no_optval();
-                        this->mir_opt_level = 0;
-                        this->mir_opt_level_explicit = true;
+                        noOptval();
+                        this->mirOptLevel = 0;
+                        this->mirOptLevelExplicit = true;
                     } else if (optname == "mir-opt-level") {
                         getOptval();
                         if (optval.empty()) {
@@ -1248,8 +1248,8 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                             }
                             value = value * 10 + digit;
                         }
-                        this->mir_opt_level = value;
-                        this->mir_opt_level_explicit = true;
+                        this->mirOptLevel = value;
+                        this->mirOptLevelExplicit = true;
                     } else if (optname == "next-solver") {
                         if (eqPos == ::std::string::npos || optval == "globally") {
                             this->trait_solver.coherence = true;
@@ -1267,19 +1267,19 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                             exit(1);
                         }
                     } else if (optname == "full-validate") {
-                        no_optval();
+                        noOptval();
                         this->debug.fullValidate = true;
                     } else if (optname == "full-validate-early") {
-                        no_optval();
+                        noOptval();
                         this->debug.fullValidateEarly = true;
                     } else if (optname == "dump-ast") {
-                        no_optval();
+                        noOptval();
                         this->debug.dumpAst = true;
                     } else if (optname == "dump-hir") {
-                        no_optval();
+                        noOptval();
                         this->debug.dumpHir = true;
                     } else if (optname == "dump-mir") {
-                        no_optval();
+                        noOptval();
                         this->debug.dumpMir = true;
                     } else if (optname == "stop-after") {
                         getOptval();
@@ -1300,15 +1300,15 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     } else if (optname == "pause-after-start") {
                         this->debug.pause = true;
                     } else if (optname == "print-cfgs") {
-                        no_optval();
+                        noOptval();
                         this->print_cfgs = true;
                     } else if (optname == "check-cfg-all-expected") {
                         // This only controls how many expected cfg values rustc
                         // prints in diagnostics.  mrustc emits a compact
                         // diagnostic and has no corresponding display limit.
-                        no_optval();
+                        noOptval();
                     } else if (optname == "borrowcheck") {
-                        no_optval();
+                        noOptval();
                         this->run_borrowcheck = true;
                     } else {
                         ::std::cerr << "Unknown -Z flag: '" << optname << "'" << ::std::endl;
@@ -1333,7 +1333,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         this->outfile = argv[++i];
                         break;
                     case 'O':
-                        this->opt_level = OptimizationLevel::Aggressive;
+                        this->optLevel = OptimizationLevel::Aggressive;
                         break;
                     case 'g':
                         this->debugInfo = DebugInfoLevel::Full;
@@ -1371,8 +1371,8 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 exit(0);
             }
             // --out-dir <dir>  >> Set the output directory for automatically-named files
-            else if (const char* out_dir = checkWithArg("out-dir")) {
-                this->output_dir = out_dir;
+            else if (const char* outDir = checkWithArg("out-dir")) {
+                this->output_dir = outDir;
                 if (this->output_dir != "" && this->output_dir.back() != '/') {
                     this->output_dir += '/';
                 }
@@ -1395,12 +1395,12 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 this->crateOverrides.insert(::std::make_pair(mv$(name), mv$(path)));
             }
             // --crate-tag <name>  >> Specify a version/identifier suffix for the crate
-            else if (const auto* name_str = checkWithArg("crate-tag")) {
-                this->crate_name_suffix = name_str;
+            else if (const auto* nameStr = checkWithArg("crate-tag")) {
+                this->crate_name_suffix = nameStr;
             }
             // --crate-name <name>  >> Specify the crate name (overrides `#![crate_name="<name>"]`)
-            else if (const auto* name_str = checkWithArg("crate-name")) {
-                this->crate_name = name_str;
+            else if (const auto* nameStr = checkWithArg("crate-name")) {
+                this->crate_name = nameStr;
             }
             // `--crate-type <name>`    - Specify the crate type (overrides `#![crate_type="<name>"]`)
             else if (const char* type_str = checkWithArg("crate-type")) {

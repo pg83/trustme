@@ -41,32 +41,32 @@ public:
 
     float to_float() const;
 
-    void to_le_bytes(uint8_t* dst, size_t max_len) {
-        max_len = max_len > 16 ? 16 : max_len;
+    void to_le_bytes(uint8_t* dst, size_t maxLen) {
+        maxLen = maxLen > 16 ? 16 : maxLen;
 #if __LITTLE_ENDIAN__
-        memcpy(dst, this, max_len);
+        memcpy(dst, this, maxLen);
 #else
-        for (size_t i = 0; i < max_len; i++) {
+        for (size_t i = 0; i < maxLen; i++) {
             dst[i] = static_cast<uint8_t>((*this >> static_cast<unsigned>(i * 8)).truncate_u64());
         }
 #endif
     }
 
-    void to_be_bytes(uint8_t* dst, size_t max_len);
+    void to_be_bytes(uint8_t* dst, size_t maxLen);
 
-    void fromLeBytes(const uint8_t* src, size_t max_len) {
-        max_len = max_len > 16 ? 16 : max_len;
+    void fromLeBytes(const uint8_t* src, size_t maxLen) {
+        maxLen = maxLen > 16 ? 16 : maxLen;
         *this = U128();
 #if __LITTLE_ENDIAN__
-        memcpy(this, src, max_len);
+        memcpy(this, src, maxLen);
 #else
-        for (size_t i = 0; i < max_len; i++) {
+        for (size_t i = 0; i < maxLen; i++) {
             *this |= U128(src[i]) << static_cast<unsigned>(i * 8);
         }
 #endif
     }
 
-    void fromBeBytes(const uint8_t* src, size_t max_len);
+    void fromBeBytes(const uint8_t* src, size_t maxLen);
 
     U128 operator~() const {
         return U128(~lo, ~hi);
@@ -216,7 +216,7 @@ private:
 
     static bool sub128_o(U128 a, U128 b, U128* o);
 
-    static bool mul128_o(U128 a, U128 b, U128* o);
+    static bool mul128O(U128 a, U128 b, U128* o);
 
     // Long division
     static bool div128O(U128 a, U128 b, U128* q, U128* r);
@@ -259,12 +259,12 @@ public:
     }
 
 private:
-    void sign_extend(size_t n_bytes);
+    void sign_extend(size_t nBytes);
 
 public:
-    void fromLeBytes(const uint8_t* src, size_t max_len);
+    void fromLeBytes(const uint8_t* src, size_t maxLen);
 
-    void fromBeBytes(const uint8_t* src, size_t max_len);
+    void fromBeBytes(const uint8_t* src, size_t maxLen);
 
     S128 operator~() const {
         return S128(~inner);

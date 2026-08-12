@@ -4,14 +4,14 @@
 #include <set>
 
 int main() {
-    auto definitionContext = Ident::Hygiene::new_scope();
-    auto expansionContext = Ident::Hygiene::new_scope_chained(definitionContext);
+    auto definitionContext = Ident::Hygiene::newScope();
+    auto expansionContext = Ident::Hygiene::newScopeChained(definitionContext);
 
-    Ident definition(definitionContext, RcString::new_interned("name"));
-    Ident expansion(expansionContext, RcString::new_interned("name"));
+    Ident definition(definitionContext, RcString::newInterned("name"));
+    Ident expansion(expansionContext, RcString::newInterned("name"));
 
-    const bool ordering_equal = !(definition < expansion) && !(expansion < definition);
-    assert((definition == expansion) == ordering_equal);
+    const bool orderingEqual = !(definition < expansion) && !(expansion < definition);
+    assert((definition == expansion) == orderingEqual);
 
     std::set<Ident> names;
     names.insert(definition);

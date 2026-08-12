@@ -60,7 +60,7 @@ public:
         }
         lex.getTokenCheck(TOK_PAREN_CLOSE);
 
-        crate.procMacros.push_back(AST::ProcMacroDef{AST::ProcMacroTy::Derive, RcString::new_interned(FMT(trait_name)), path, mv$(attributes)});
+        crate.procMacros.push_back(AST::ProcMacroDef{AST::ProcMacroTy::Derive, RcString::newInterned(FMT(trait_name)), path, mv$(attributes)});
     }
 };
 STATIC_DECORATOR("proc_macro_derive", DecoratorProcMacroDerive)
@@ -106,7 +106,7 @@ public:
 STATIC_DECORATOR("proc_macro", DecoratorProcMacro)
 
 void ExpandProcMacroHarness(::AST::Crate& crate) {
-    auto pm_crate_name = RcString::new_interned("proc_macro");
+    auto pm_crate_name = RcString::newInterned("proc_macro");
     AST::gImplicitCrates.insert(std::make_pair(pm_crate_name, crate.loadExternCrate(Span(), pm_crate_name)));
 
     // Create the following module:
@@ -207,7 +207,7 @@ struct ProcMacroInv: public TokenStream {
     ::std::unordered_map<const SpanInner*, size_t> knownSpans;
     /// Span indexes that have been sent
     ::std::unordered_set<size_t> sent_spans;
-    size_t next_span_index = 2;
+    size_t nextSpanIndex = 2;
 
     struct Handles {
         //~Handles();
@@ -1014,45 +1014,45 @@ namespace {
                  pmi.send_ident(te.name.c_str());),
                 (Path, this->visit_path(*te);),
                 (
-                    TraitObject, pmi.send_symbol("("); pmi.send_rword("dyn"); bool needs_plus = false; for (const auto& t : te.traits) {
-                        if (needs_plus) {
+                    TraitObject, pmi.send_symbol("("); pmi.send_rword("dyn"); bool needsPlus = false; for (const auto& t : te.traits) {
+                        if (needsPlus) {
                             pmi.send_symbol("+");
                         }
-                        needs_plus = true;
+                        needsPlus = true;
                         this->visit_hrbs(t.hrbs);
                         this->visit_bound_constness(t.constness);
                         this->visit_path(*t.path);
                     } for (const auto& lft : te.lifetimes) {
                         if (lft != AST::LifetimeRef()) {
-                            if (needs_plus) {
+                            if (needsPlus) {
                                 pmi.send_symbol("+");
                             }
-                            needs_plus = true;
+                            needsPlus = true;
                             this->visit_lifetime(lft);
                         }
                     } pmi.send_symbol(")");
                 ),
-                (ErasedType, pmi.send_rword("impl"); bool needs_plus = false; for (const auto& t : te->traits) {
-                    if (needs_plus) {
+                (ErasedType, pmi.send_rword("impl"); bool needsPlus = false; for (const auto& t : te->traits) {
+                    if (needsPlus) {
                         pmi.send_symbol("+");
                     }
-                    needs_plus = true;
+                    needsPlus = true;
                     this->visit_hrbs(t.hrbs);
                     this->visit_bound_constness(t.constness);
                     this->visit_path(*t.path);
-                } for (const auto& t : te->maybe_traits) {
-                    if (needs_plus) {
+                } for (const auto& t : te->maybeTraits) {
+                    if (needsPlus) {
                         pmi.send_symbol("+");
                     }
-                    needs_plus = true;
+                    needsPlus = true;
                     pmi.send_symbol("?");
                     this->visit_hrbs(t.hrbs);
                     this->visit_path(*t.path);
                 } for (const auto& lft : te->lifetimes) {
-                    if (needs_plus) {
+                    if (needsPlus) {
                         pmi.send_symbol("+");
                     }
-                    needs_plus = true;
+                    needsPlus = true;
                     pmi.send_symbol("+");
                     this->visit_lifetime(lft);
                 } if (te->use) { TODO(Span(), "`use`"); })
@@ -1409,8 +1409,8 @@ namespace {
 
         void visit_attr(const ::AST::Attribute& a) {
             if (a.name() == "cfg_attr") {
-                auto new_attrs = checkCfgAttr(a);
-                for (const auto& na : new_attrs) {
+                auto newAttrs = checkCfgAttr(a);
+                for (const auto& na : newAttrs) {
                     this->visit_attr(na);
                 }
             }
@@ -1881,11 +1881,11 @@ ProcMacroInv::ProcMacroInv(const Span& sp, AST::Edition edition, const char* exe
     if (getenv("MRUSTC_DUMP_PROCMACRO") && getenv("MRUSTC_DUMP_PROCMACRO")[0]) {
         // TODO: Dump both input and output, AND (optionally) dump each invocation
         static unsigned int dumpCount = 0;
-        std::string name_prefix;
-        name_prefix = FMT(getenv("MRUSTC_DUMP_PROCMACRO") << "-" << dumpCount);
-        DEBUG("Dumping to " << name_prefix);
-        dumpFileOut.open(FMT(name_prefix << "-out.bin"), ::std::ios::out | ::std::ios::binary);
-        dumpFileRes.open(FMT(name_prefix << "-res.bin"), ::std::ios::out | ::std::ios::binary);
+        std::string namePrefix;
+        namePrefix = FMT(getenv("MRUSTC_DUMP_PROCMACRO") << "-" << dumpCount);
+        DEBUG("Dumping to " << namePrefix);
+        dumpFileOut.open(FMT(namePrefix << "-out.bin"), ::std::ios::out | ::std::ios::binary);
+        dumpFileRes.open(FMT(namePrefix << "-res.bin"), ::std::ios::out | ::std::ios::binary);
         dumpCount++;
     } else {
         DEBUG("Set MRUSTC_DUMP_PROCMACRO=procmacro_dump to dump to `procmacro_dump-NNN-{out,res}.bin`");
@@ -2113,13 +2113,13 @@ Token ProcMacroInv::realGetToken_() {
                 return t;
             }
             if (val[0] == 'r' && val[1] == '#') {
-                return Token(TOK_IDENT, RcString::new_interned(val.c_str() + 2));
+                return Token(TOK_IDENT, RcString::newInterned(val.c_str() + 2));
             }
-            return Token(TOK_IDENT, RcString::new_interned(val));
+            return Token(TOK_IDENT, RcString::newInterned(val));
         }
         case TokenClass::Lifetime: {
             auto val = this->recv_bytes();
-            return Token(TOK_LIFETIME, RcString::new_interned(val));
+            return Token(TOK_LIFETIME, RcString::newInterned(val));
         }
         case TokenClass::String: {
             auto val = this->recv_bytes();

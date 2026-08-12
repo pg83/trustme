@@ -412,7 +412,7 @@ public:
         //if( options.noreturn && /* has outputs */ ) {
         //}
 
-        unsigned next_index = 0;
+        unsigned nextIndex = 0;
         std::vector<AsmCommon::Line> lines;
         for (const auto& e : raw_lines) {
             const auto& sp = e.first;
@@ -454,11 +454,11 @@ public:
                     }
                     AsmCommon::LineFragment frag;
                     if (name.empty()) {
-                        frag.index = next_index;
+                        frag.index = nextIndex;
                         if (frag.index >= params.size()) {
                             ERROR(sp, E0000, "asm! format doesn't have enough arguments");
                         }
-                        next_index++;
+                        nextIndex++;
                     } else if (std::isdigit(name[0])) {
                         frag.index = std::stoul(name);
                         if (frag.index >= params.size()) {
@@ -525,20 +525,20 @@ public:
         auto o = CAsmExpander().expand(sp, crate, tt, mod);
 
         auto node = o->getToken().take_frag_node();
-        auto* node_ap = cast<AST::ExprNodeAsm2>(node.get());
-        ASSERT_BUG(sp, node_ap, "");
-        auto& node_a = *node_ap;
+        auto* nodeAp = cast<AST::ExprNodeAsm2>(node.get());
+        ASSERT_BUG(sp, nodeAp, "");
+        auto& nodeA = *nodeAp;
 
-        auto global_asm = AST::GlobalAsm{std::move(node_a.lines), {}, node_a.options};
-        for (auto& param : node_a.mParams) {
+        auto global_asm = AST::GlobalAsm{std::move(nodeA.lines), {}, nodeA.options};
+        for (auto& param : nodeA.mParams) {
             if (!(param.is_Sym() || param.is_Const())) {
                 ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
             } else {
                 TODO(sp, "sym/const");
             }
         }
-        auto named_item = AST::Named<AST::Item>(sp, {}, AST::Visibility::makeBarePrivate(), "", AST::Item(std::move(global_asm)));
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(Token::TagTakeIP(), InterpolatedFragment(std::move(named_item))))));
+        auto namedItem = AST::Named<AST::Item>(sp, {}, AST::Visibility::makeBarePrivate(), "", AST::Item(std::move(global_asm)));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(Token::TagTakeIP(), InterpolatedFragment(std::move(namedItem))))));
     }
 };
 
@@ -548,9 +548,9 @@ public:
         auto o = CAsmExpander().expand(sp, crate, tt, mod);
 
         auto node = o->getToken().take_frag_node();
-        auto* node_ap = cast<AST::ExprNodeAsm2>(node.get());
-        ASSERT_BUG(sp, node_ap, "");
-        node_ap->options.naked = true;
+        auto* nodeAp = cast<AST::ExprNodeAsm2>(node.get());
+        ASSERT_BUG(sp, nodeAp, "");
+        nodeAp->options.naked = true;
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())))));
     }
@@ -586,7 +586,7 @@ class CExpanderAssert: public ExpandProcMacro {
             toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
             toks.push_back(Token(TOK_BRACE_OPEN));
             // User-provided message
-            toks.push_back(Token(TOK_IDENT, RcString::new_interned("panic")));
+            toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
             toks.push_back(Token(TOK_EXCLAM));
             toks.push_back(Token(TOK_PAREN_OPEN));
 
@@ -624,7 +624,7 @@ class CExpanderAssert: public ExpandProcMacro {
 
             toks.push_back(Token(TOK_BRACE_OPEN));
             // Auto-generated message
-            toks.push_back(Token(TOK_IDENT, RcString::new_interned("panic")));
+            toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
             toks.push_back(Token(TOK_EXCLAM));
             toks.push_back(Token(TOK_PAREN_OPEN));
             toks.push_back(Token(TOK_STRING, std::string("assertion failed: {}"), {}));
@@ -637,7 +637,7 @@ class CExpanderAssert: public ExpandProcMacro {
 
         toks.push_back(Token(TOK_BRACE_CLOSE));
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(AST::Edition::Rust2015, Ident::Hygiene::new_scope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(AST::Edition::Rust2015, Ident::Hygiene::newScope(), mv$(toks))));
     }
 };
 
@@ -718,7 +718,7 @@ class CConcatIdentsExpander: public ExpandProcMacro {
             throw ParseError::Unexpected(lex, tok, {TOK_COMMA, TOK_EOF});
         }
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(tt.getEdition(), Token(TOK_IDENT, Ident(lex.getHygiene(), RcString::new_interned(rv))))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(tt.getEdition(), Token(TOK_IDENT, Ident(lex.getHygiene(), RcString::newInterned(rv))))));
     }
 };
 
@@ -769,16 +769,16 @@ class CExpanderOptionEnv: public ExpandProcMacro {
         const char* var_val_cstr = getenv(varname.c_str());
         if (!var_val_cstr) {
             rv.reserve(7);
-            rv.push_back(Token(TOK_IDENT, RcString::new_interned("None")));
+            rv.push_back(Token(TOK_IDENT, RcString::newInterned("None")));
             rv.push_back(Token(TOK_DOUBLE_COLON));
             rv.push_back(Token(TOK_LT));
             rv.push_back(Token(TOK_AMP));
-            rv.push_back(Token(TOK_LIFETIME, RcString::new_interned("static")));
-            rv.push_back(Token(TOK_IDENT, RcString::new_interned("str")));
+            rv.push_back(Token(TOK_LIFETIME, RcString::newInterned("static")));
+            rv.push_back(Token(TOK_IDENT, RcString::newInterned("str")));
             rv.push_back(Token(TOK_GT));
         } else {
             rv.reserve(4);
-            rv.push_back(Token(TOK_IDENT, RcString::new_interned("Some")));
+            rv.push_back(Token(TOK_IDENT, RcString::newInterned("Some")));
             rv.push_back(Token(TOK_PAREN_OPEN));
             rv.push_back(Token(TOK_STRING, ::std::string(var_val_cstr), {}));
             rv.push_back(Token(TOK_PAREN_CLOSE));
@@ -960,18 +960,18 @@ namespace {
         FmtArgs args;
     };
 
-    uint32_t parse_utf8(const char* s, int& out_len) {
+    uint32_t parse_utf8(const char* s, int& outLen) {
         uint8_t v1 = s[0];
         if (v1 < 0x80) {
-            out_len = 1;
+            outLen = 1;
             return v1;
         } else if ((v1 & 0xC0) == 0x80) {
             // Invalid (continuation)
-            out_len = 1;
+            outLen = 1;
             return 0xFFFE;
         } else if ((v1 & 0xE0) == 0xC0) {
             // Two bytes
-            out_len = 2;
+            outLen = 2;
 
             uint8_t e1 = s[1];
             if ((e1 & 0xC0) != 0x80) {
@@ -982,7 +982,7 @@ namespace {
             return outval;
         } else if ((v1 & 0xF0) == 0xE0) {
             // Three bytes
-            out_len = 3;
+            outLen = 3;
             uint8_t e1 = s[1];
             if ((e1 & 0xC0) != 0x80) {
                 return 0xFFFE;
@@ -996,7 +996,7 @@ namespace {
             return outval;
         } else if ((v1 & 0xF8) == 0xF0) {
             // Four bytes
-            out_len = 4;
+            outLen = 4;
             uint8_t e1 = s[1];
             if ((e1 & 0xC0) != 0x80) {
                 return 0xFFFE;
@@ -1020,9 +1020,9 @@ namespace {
     /// Parse a format string into a sequence of fragments.
     ///
     /// Returns a list of fragments, and the remaining free text after the last format sequence
-    ::std::tuple<::std::vector<FmtFrag>, ::std::string> parse_format_string(const Span& sp, const ::std::string& format_string, ::std::map<RcString, unsigned int>& named, unsigned int n_free, std::vector<TokenTree>& named_args, const Ident::Hygiene& hygiene) {
+    ::std::tuple<::std::vector<FmtFrag>, ::std::string> parse_format_string(const Span& sp, const ::std::string& format_string, ::std::map<RcString, unsigned int>& named, unsigned int nFree, std::vector<TokenTree>& namedArgs, const Ident::Hygiene& hygiene) {
         //unsigned int n_named = named.size();
-        unsigned int next_free = 0;
+        unsigned int nextFree = 0;
 
         ::std::vector<FmtFrag> frags;
         ::std::string curLiteral;
@@ -1031,16 +1031,16 @@ namespace {
             auto it = named.find(ident);
             if (it == named.end()) {
                 // Add an implicit named argument
-                it = named.insert(std::make_pair(ident, static_cast<unsigned>(named_args.size()))).first;
+                it = named.insert(std::make_pair(ident, static_cast<unsigned>(namedArgs.size()))).first;
                 // TODO: Create a token with span information pointing to this location in the string.
                 if (ident == "self") {
                     // Technically, `self` needs hygiene, but mrustc doesn't do that
-                    named_args.push_back(Token(TOK_RWORD_SELF));
+                    namedArgs.push_back(Token(TOK_RWORD_SELF));
                 } else {
-                    named_args.push_back(Token(TOK_IDENT, Ident(hygiene, ident)));
+                    namedArgs.push_back(Token(TOK_IDENT, Ident(hygiene, ident)));
                 }
             }
-            return n_free + it->second;
+            return nFree + it->second;
         };
 
         const char* s = format_string.c_str();
@@ -1087,7 +1087,7 @@ namespace {
                             argIdx += *s - '0';
                             s++;
                         } while (isdigit(*s));
-                        if (argIdx >= n_free) {
+                        if (argIdx >= nFree) {
                             ERROR(sp, E0000, "Positional argument " << argIdx << " out of range in \"" << format_string << "\"");
                         }
                         index = argIdx;
@@ -1096,7 +1096,7 @@ namespace {
                         while (isalnum(*s) || *s == '_' || (*s < 0 || *s > 127)) {
                             s++;
                         }
-                        index = getNamed(RcString::new_interned(start, s - start));
+                        index = getNamed(RcString::newInterned(start, s - start));
                     }
                 } else {
                     // Leave (for now)
@@ -1111,12 +1111,12 @@ namespace {
                     // Alignment
                     // - Padding character, a single unicode codepoint followed by '<'/'^'/'>'
                     {
-                        int next_c_i;
-                        uint32_t ch = parse_utf8(s, next_c_i);
-                        char next_c = s[next_c_i];
-                        if (s + next_c_i <= s_end && ch != '}' && (next_c == '<' || next_c == '^' || next_c == '>')) {
+                        int nextCI;
+                        uint32_t ch = parse_utf8(s, nextCI);
+                        char nextC = s[nextCI];
+                        if (s + nextCI <= s_end && ch != '}' && (nextC == '<' || nextC == '^' || nextC == '>')) {
                             args.alignChar = ch;
-                            s += next_c_i;
+                            s += nextCI;
                         }
                     }
                     if (*s == '<') {
@@ -1182,7 +1182,7 @@ namespace {
                             s++;
                         }
                         if (*s == '$') {
-                            args.width = getNamed(RcString::new_interned(start, s - start));
+                            args.width = getNamed(RcString::newInterned(start, s - start));
                             args.width_is_arg = true;
 
                             s++;
@@ -1197,11 +1197,11 @@ namespace {
                         // '*' - Use next argument
                         if (*s == '*') {
                             args.prec_is_arg = true;
-                            if (next_free == n_free) {
-                                ERROR(sp, E0000, "Not enough arguments passed, expected at least " << n_free + 1);
+                            if (nextFree == nFree) {
+                                ERROR(sp, E0000, "Not enough arguments passed, expected at least " << nFree + 1);
                             }
-                            args.prec = next_free;
-                            next_free++;
+                            args.prec = nextFree;
+                            nextFree++;
                         } else if (::std::isdigit(*s)) {
                             unsigned int val = 0;
                             while (::std::isdigit(*s)) {
@@ -1226,7 +1226,7 @@ namespace {
                                 s++;
                             }
                             if (*s == '$') {
-                                args.prec = getNamed(RcString::new_interned(start, s - start));
+                                args.prec = getNamed(RcString::newInterned(start, s - start));
                                 args.prec_is_arg = true;
 
                                 s++;
@@ -1307,11 +1307,11 @@ namespace {
 
                 // Set index if unspecified
                 if (index == ~0u) {
-                    if (next_free == n_free) {
-                        ERROR(sp, E0000, "Not enough arguments passed, expected at least " << n_free + 1);
+                    if (nextFree == nFree) {
+                        ERROR(sp, E0000, "Not enough arguments passed, expected at least " << nFree + 1);
                     }
-                    index = next_free;
-                    next_free++;
+                    index = nextFree;
+                    nextFree++;
                 }
 
                 frags.push_back(FmtFrag{mv$(curLiteral), index, trait_name, mv$(args)});
@@ -1324,7 +1324,7 @@ namespace {
 
 namespace {
     Token ident(const char* s) {
-        return Token(TOK_IDENT, RcString::new_interned(s));
+        return Token(TOK_IDENT, RcString::newInterned(s));
     }
 
     void push_path(::std::vector<TokenTree>& toks, const AST::Crate& crate, ::std::initializer_list<const char*> il) {
@@ -1345,7 +1345,7 @@ namespace {
         }
         for (auto ent : il) {
             // TODO: This could be slow (looking up the interned string), but most of these are repeated a LOT
-            ap.nodes.push_back(RcString::new_interned(ent));
+            ap.nodes.push_back(RcString::newInterned(ent));
         }
         toks.push_back(Token(InterpolatedFragment(std::move(ap))));
     }
@@ -1386,8 +1386,8 @@ namespace {
         const auto& format_string = formatStringNp->mValue;
         auto h = formatStringNp->mHygiene;
 
-        ::std::map<RcString, unsigned int> named_args_index;
-        ::std::vector<TokenTree> named_args;
+        ::std::map<RcString, unsigned int> namedArgsIndex;
+        ::std::vector<TokenTree> namedArgs;
         ::std::vector<TokenTree> freeArgs;
 
         // - Parse the arguments
@@ -1400,18 +1400,18 @@ namespace {
             // - Named parameters
             if ((lex.lookahead(0) == TOK_IDENT || Token::type_is_rword(lex.lookahead(0))) && lex.lookahead(1) == TOK_EQUAL) {
                 GET_TOK(tok, lex);
-                auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::new_interned(tok.to_str());
+                auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.to_str());
                 DEBUG("Named `" << name << "`");
 
                 GET_CHECK_TOK(tok, lex, TOK_EQUAL);
 
                 auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
 
-                auto insRv = named_args_index.insert(::std::make_pair(mv$(name), static_cast<unsigned>(named_args.size())));
+                auto insRv = namedArgsIndex.insert(::std::make_pair(mv$(name), static_cast<unsigned>(namedArgs.size())));
                 if (insRv.second == false) {
                     ERROR(sp, E0000, "Duplicate definition of named argument `" << insRv.first->first << "`");
                 }
-                named_args.push_back(mv$(exprTt));
+                namedArgs.push_back(mv$(exprTt));
             }
             // - Free parameters
             else {
@@ -1425,7 +1425,7 @@ namespace {
         // - Parse the format string
         ::std::vector<FmtFrag> fragments;
         ::std::string tail;
-        ::std::tie(fragments, tail) = parse_format_string(formatStringSp, format_string, named_args_index, freeArgs.size(), named_args, h);
+        ::std::tie(fragments, tail) = parse_format_string(formatStringSp, format_string, namedArgsIndex, freeArgs.size(), namedArgs, h);
         if (addNewline) {
             tail += "\n";
         }
@@ -1452,7 +1452,7 @@ namespace {
             toks.push_back(mv$(arg));
             toks.push_back(TokenTree(TOK_COMMA));
         }
-        for (auto& arg : named_args) {
+        for (auto& arg : namedArgs) {
             toks.push_back(TokenTree(TOK_AMP));
             toks.push_back(mv$(arg));
             toks.push_back(TokenTree(TOK_COMMA));
@@ -1460,7 +1460,7 @@ namespace {
         toks.push_back(TokenTree(TOK_PAREN_CLOSE));
         toks.push_back(TokenTree(TOK_BRACE_OPEN));
         toks.push_back(TokenTree(TOK_PAREN_OPEN));
-        for (unsigned int i = 0; i < freeArgs.size() + named_args.size(); i++) {
+        for (unsigned int i = 0; i < freeArgs.size() + namedArgs.size(); i++) {
             toks.push_back(ident(FMT("a" << i).c_str()));
             toks.push_back(TokenTree(TOK_COMMA));
         }
@@ -1478,7 +1478,7 @@ namespace {
 
             toks.push_back(TokenTree(TOK_SQUARE_OPEN));
             toks.push_back(Token(TOK_AMP));
-            toks.push_back(Token(TOK_LIFETIME, RcString::new_interned("static")));
+            toks.push_back(Token(TOK_LIFETIME, RcString::newInterned("static")));
             toks.push_back(ident("str"));
             toks.push_back(Token(TOK_SEMICOLON));
             toks.push_back(Token(U128(fragments.size() + 1), CORETYPE_UINT));
@@ -1504,16 +1504,16 @@ namespace {
                 for (const auto& frag : fragments) {
                     // In 1.90.0, there's a collection of functions like `new_display`, one for each trait
                     // Hacky option: Convert `LowerHex` into `_lower_hex`
-                    ::std::stringstream new_fn_ss;
-                    new_fn_ss << "new";
+                    ::std::stringstream newFnSs;
+                    newFnSs << "new";
                     for (const char* s = frag.trait_name; *s; s++) {
                         if (isupper(*s)) {
-                            new_fn_ss << "_" << char(tolower(*s));
+                            newFnSs << "_" << char(tolower(*s));
                         } else {
-                            new_fn_ss << *s;
+                            newFnSs << *s;
                         }
                     }
-                    push_path(toks, crate, {"fmt", "rt", "Argument", new_fn_ss.str().c_str()});
+                    push_path(toks, crate, {"fmt", "rt", "Argument", newFnSs.str().c_str()});
                     toks.push_back(Token(TOK_PAREN_OPEN));
                     toks.push_back(ident(FMT("a" << frag.argIndex).c_str()));
                     toks.push_back(Token(TOK_PAREN_CLOSE));
@@ -1695,7 +1695,7 @@ namespace {
         toks.push_back(TokenTree(TOK_BRACE_CLOSE));
         toks.push_back(TokenTree(TOK_BRACE_CLOSE));
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(lex.getEdition(), Ident::Hygiene::new_scope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(lex.getEdition(), Ident::Hygiene::newScope(), mv$(toks))));
     }
 }
 
@@ -1826,7 +1826,7 @@ class CIncludeBytesExpander: public ExpandProcMacro {
 
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_BYTESTRING, mv$(ss.str()), {}));
-        return box$(TTStreamO(sp, ParseState(), TokenTree(AST::Edition::Rust2015, Ident::Hygiene::new_scope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(AST::Edition::Rust2015, Ident::Hygiene::newScope(), mv$(toks))));
     }
 };
 
@@ -1850,7 +1850,7 @@ class CIncludeStrExpander: public ExpandProcMacro {
 
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_STRING, mv$(ss.str()), {}));
-        return box$(TTStreamO(sp, ParseState(), TokenTree(AST::Edition::Rust2015, Ident::Hygiene::new_scope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(AST::Edition::Rust2015, Ident::Hygiene::newScope(), mv$(toks))));
     }
 };
 
@@ -1873,16 +1873,16 @@ class CExpanderPanic: public ExpandProcMacro {
         toks.push_back(Token(TOK_DOUBLE_COLON));
         toks.push_back(Token(TOK_STRING, std::string(crate.extCratenameCore.c_str()), {}));
         toks.push_back(Token(TOK_DOUBLE_COLON));
-        toks.push_back(Token(TOK_IDENT, RcString::new_interned("panic")));
+        toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
         toks.push_back(Token(TOK_DOUBLE_COLON));
         switch (crate.edition) {
             case AST::Edition::Rust2015:
             case AST::Edition::Rust2018:
-                toks.push_back(Token(TOK_IDENT, RcString::new_interned("panic_2015")));
+                toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic_2015")));
                 break;
             case AST::Edition::Rust2021:
             case AST::Edition::Rust2024:
-                toks.push_back(Token(TOK_IDENT, RcString::new_interned("panic_2021")));
+                toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic_2021")));
                 break;
         }
         toks.push_back(Token(TOK_EXCLAM));
@@ -1892,7 +1892,7 @@ class CExpanderPanic: public ExpandProcMacro {
         }
         toks.push_back(Token(TOK_PAREN_CLOSE));
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(edition, Ident::Hygiene::new_scope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(edition, Ident::Hygiene::newScope(), mv$(toks))));
     }
 };
 
@@ -1908,16 +1908,16 @@ class CExpanderUnreachable: public ExpandProcMacro {
         toks.push_back(Token(TOK_DOUBLE_COLON));
         toks.push_back(Token(TOK_STRING, std::string(crate.extCratenameCore.c_str()), {}));
         toks.push_back(Token(TOK_DOUBLE_COLON));
-        toks.push_back(Token(TOK_IDENT, RcString::new_interned("panic")));
+        toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
         toks.push_back(Token(TOK_DOUBLE_COLON));
         switch (crate.edition) {
             case AST::Edition::Rust2015:
             case AST::Edition::Rust2018:
-                toks.push_back(Token(TOK_IDENT, RcString::new_interned("unreachable_2015")));
+                toks.push_back(Token(TOK_IDENT, RcString::newInterned("unreachable_2015")));
                 break;
             case AST::Edition::Rust2021:
             case AST::Edition::Rust2024:
-                toks.push_back(Token(TOK_IDENT, RcString::new_interned("unreachable_2021")));
+                toks.push_back(Token(TOK_IDENT, RcString::newInterned("unreachable_2021")));
                 break;
         }
         toks.push_back(Token(TOK_EXCLAM));
@@ -1927,7 +1927,7 @@ class CExpanderUnreachable: public ExpandProcMacro {
         }
         toks.push_back(Token(TOK_PAREN_CLOSE));
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(edition, Ident::Hygiene::new_scope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(edition, Ident::Hygiene::newScope(), mv$(toks))));
     }
 };
 
@@ -1971,12 +1971,12 @@ class CExpanderBuildDiagnosticArray: public ExpandProcMacro {
         toks.push_back(TOK_SQUARE_OPEN);
         toks.push_back(TOK_PAREN_OPEN);
         toks.push_back(TOK_AMP);
-        toks.push_back(Token(TOK_LIFETIME, RcString::new_interned("static")));
-        toks.push_back(Token(TOK_IDENT, RcString::new_interned("str")));
+        toks.push_back(Token(TOK_LIFETIME, RcString::newInterned("static")));
+        toks.push_back(Token(TOK_IDENT, RcString::newInterned("str")));
         toks.push_back(TOK_COMMA);
         toks.push_back(TOK_AMP);
-        toks.push_back(Token(TOK_LIFETIME, RcString::new_interned("static")));
-        toks.push_back(Token(TOK_IDENT, RcString::new_interned("str")));
+        toks.push_back(Token(TOK_LIFETIME, RcString::newInterned("static")));
+        toks.push_back(Token(TOK_IDENT, RcString::newInterned("str")));
         toks.push_back(TOK_PAREN_CLOSE);
         toks.push_back(TOK_SEMICOLON);
         toks.push_back(Token(U128(0), CORETYPE_UINT));

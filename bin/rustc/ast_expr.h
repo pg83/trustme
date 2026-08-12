@@ -26,7 +26,7 @@ namespace AST {
         virtual void visit(NodeVisitor& nv) = 0;
         virtual void print(::std::ostream& os) const = 0;
         virtual ExprNodeP clone() const = 0;
-        virtual unsigned int node_kind() const = 0;
+        virtual unsigned int nodeKind() const = 0;
 
         void set_span(Span s) {
             mSpan = ::std::move(s);
@@ -76,7 +76,7 @@ namespace AST {
         }
 
         static constexpr unsigned int kind = 1;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -89,7 +89,7 @@ namespace AST {
         ExprNodeAsyncBlock(ExprNodeP inner, bool is_move);
 
         static constexpr unsigned int kind = 2;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -102,7 +102,7 @@ namespace AST {
         ExprNodeGeneratorBlock(ExprNodeP inner, bool is_move);
 
         static constexpr unsigned int kind = 3;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -114,7 +114,7 @@ namespace AST {
         ExprNodeTry(ExprNodeP inner);
 
         static constexpr unsigned int kind = 4;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -130,7 +130,7 @@ namespace AST {
         ExprNodeMacro(AST::Path name, RcString ident, ::TokenTree&& tokens, bool is_braced = false, Ident::Hygiene definition_hygiene = {});
 
         static constexpr unsigned int kind = 5;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -152,7 +152,7 @@ namespace AST {
         ExprNodeAsm(::std::string text, ::std::vector<ValRef> output, ::std::vector<ValRef> input, ::std::vector<::std::string> clobbers, ::std::vector<::std::string> flags);
 
         static constexpr unsigned int kind = 6;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -186,7 +186,7 @@ namespace AST {
         ExprNodeAsm2(AsmCommon::Options options, std::vector<AsmCommon::Line> lines, std::vector<Param> params);
 
         static constexpr unsigned int kind = 7;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -209,7 +209,7 @@ namespace AST {
         ExprNodeFlow(Type type, Ident target, ExprNodeP value);
 
         static constexpr unsigned int kind = 8;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -227,7 +227,7 @@ namespace AST {
         ExprNodeLetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP elseArm = {}, bool is_super = false);
 
         static constexpr unsigned int kind = 9;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -256,7 +256,7 @@ namespace AST {
         ExprNodeAssign(Operation op, ExprNodeP slot, ExprNodeP value);
 
         static constexpr unsigned int kind = 10;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -269,7 +269,7 @@ namespace AST {
         ExprNodeCallPath(Path&& path, ::std::vector<ExprNodeP>&& args);
 
         static constexpr unsigned int kind = 11;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -283,7 +283,7 @@ namespace AST {
         ExprNodeCallMethod(ExprNodeP obj, PathNode method, ::std::vector<ExprNodeP> args);
 
         static constexpr unsigned int kind = 12;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -297,7 +297,7 @@ namespace AST {
         ExprNodeCallObject(ExprNodeP val, ::std::vector<ExprNodeP>&& args);
 
         static constexpr unsigned int kind = 13;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -312,7 +312,7 @@ namespace AST {
         ExprNodeLoop(Ident label, ExprNodeP code);
 
         static constexpr unsigned int kind = 14;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -327,14 +327,14 @@ namespace AST {
         ExprNodeFor(Ident label, AST::Pattern pattern, ExprNodeP val, ExprNodeP code);
 
         static constexpr unsigned int kind = 15;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
     };
 
     struct IfLetCondition {
-        ::std::unique_ptr<AST::Pattern> opt_pat;
+        ::std::unique_ptr<AST::Pattern> optPat;
         ExprNodeP value;
     };
 
@@ -346,7 +346,7 @@ namespace AST {
         ExprNodeWhile(Ident label, std::vector<IfLetCondition> conditions, ExprNodeP code);
 
         static constexpr unsigned int kind = 16;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -371,7 +371,7 @@ namespace AST {
         ExprNodeMatch(ExprNodeP val, ::std::vector<ExprNodeMatchArm> arms);
 
         static constexpr unsigned int kind = 17;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -389,7 +389,7 @@ namespace AST {
         ExprNodeIf(std::vector<Arm> arms, ExprNodeP elseCode);
 
         static constexpr unsigned int kind = 18;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -398,7 +398,7 @@ namespace AST {
     /// Represents `_` in expression position
     struct ExprNodeWildcardPattern: public ExprNode {
         static constexpr unsigned int kind = 19;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -412,7 +412,7 @@ namespace AST {
         ExprNodeInteger(U128 value, enum eCoreType datatype);
 
         static constexpr unsigned int kind = 20;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -426,7 +426,7 @@ namespace AST {
         ExprNodeFloat(FloatValue value, enum eCoreType datatype);
 
         static constexpr unsigned int kind = 21;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -439,7 +439,7 @@ namespace AST {
         ExprNodeBool(bool value);
 
         static constexpr unsigned int kind = 22;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -454,7 +454,7 @@ namespace AST {
         ExprNodeString(::std::string value, Ident::Hygiene h = {});
 
         static constexpr unsigned int kind = 23;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -467,7 +467,7 @@ namespace AST {
         ExprNodeByteString(::std::string value);
 
         static constexpr unsigned int kind = 24;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -480,7 +480,7 @@ namespace AST {
         ExprNodeCString(::std::string value);
 
         static constexpr unsigned int kind = 25;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -506,7 +506,7 @@ namespace AST {
         }
 
         static constexpr unsigned int kind = 26;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -528,7 +528,7 @@ namespace AST {
         ExprNodeStructLiteral(Path path, ExprNodeP base_value, t_values&& values);
 
         static constexpr unsigned int kind = 27;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -544,7 +544,7 @@ namespace AST {
         ExprNodeStructLiteralPattern(Path path, t_values&& values);
 
         static constexpr unsigned int kind = 28;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -560,7 +560,7 @@ namespace AST {
         ExprNodeArray(ExprNodeP val, ExprNodeP size);
 
         static constexpr unsigned int kind = 29;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -573,7 +573,7 @@ namespace AST {
         ExprNodeTuple(::std::vector<ExprNodeP> vals);
 
         static constexpr unsigned int kind = 30;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -586,7 +586,7 @@ namespace AST {
         ExprNodeNamedValue(Path path);
 
         static constexpr unsigned int kind = 31;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -600,7 +600,7 @@ namespace AST {
         ExprNodeField(ExprNodeP obj, RcString name);
 
         static constexpr unsigned int kind = 32;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -613,7 +613,7 @@ namespace AST {
         ExprNodeIndex(ExprNodeP obj, ExprNodeP idx);
 
         static constexpr unsigned int kind = 33;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -626,7 +626,7 @@ namespace AST {
         ExprNodeDeref(ExprNodeP value);
 
         static constexpr unsigned int kind = 34;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -640,7 +640,7 @@ namespace AST {
         ExprNodeCast(ExprNodeP value, TypeRef&& dst_type);
 
         static constexpr unsigned int kind = 35;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -654,7 +654,7 @@ namespace AST {
         ExprNodeTypeAnnotation(ExprNodeP value, TypeRef&& dst_type);
 
         static constexpr unsigned int kind = 36;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -698,7 +698,7 @@ namespace AST {
         ExprNodeBinOp(Type type, ExprNodeP left, ExprNodeP right);
 
         static constexpr unsigned int kind = 37;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -723,7 +723,7 @@ namespace AST {
         ExprNodeUniOp(Type type, ExprNodeP value);
 
         static constexpr unsigned int kind = 38;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;
@@ -740,7 +740,7 @@ namespace AST {
         ExprNodeMacroDefinition(unsigned int definition_id, Ident::Hygiene token_hygiene, Ident::Hygiene definition_hygiene);
 
         static constexpr unsigned int kind = 39;
-        unsigned int node_kind() const override;
+        unsigned int nodeKind() const override;
         void visit(NodeVisitor& nv) override;
         void print(::std::ostream& os) const override;
         ExprNodeP clone() const override;

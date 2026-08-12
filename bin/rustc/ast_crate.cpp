@@ -67,31 +67,31 @@ namespace AST {
         // Check for no_std or no_core, and load libstd/libcore
         // - Duplicates some of the logic in "Expand", but also helps keep crate loading separate to most of expand
         // NOTE: Not all crates are loaded here, any crates loaded by macro invocations will be done during expand.
-        bool no_std = false;
-        bool no_core = false;
+        bool noStd = false;
+        bool noCore = false;
 
         for (const auto& a : this->mAttrs.mItems) {
             if (a.name() == "no_std") {
-                no_std = true;
+                noStd = true;
             }
             if (a.name() == "no_core") {
-                no_core = true;
+                noCore = true;
             }
             if (a.name() == "cfg_attr") {
                 for (const auto& a2 : checkCfgAttr(a)) {
                     if (a2.name() == "no_std") {
-                        no_std = true;
+                        noStd = true;
                     }
                     if (a2.name() == "no_core") {
-                        no_core = true;
+                        noCore = true;
                     }
                 }
             }
         }
 
-        if (no_core) {
+        if (noCore) {
             // Don't load anything
-        } else if (no_std) {
+        } else if (noStd) {
             auto n = this->loadExternCrate(Span(), "core");
             //if( n != "core" ) {
             //    WARNING(Span(), W0000, "libcore wasn't loaded as `core`, instead `" << n << "`");
@@ -106,12 +106,12 @@ namespace AST {
         // Ensure that all crates passed on the command line are loaded.
         DEBUG("Load from --crate");
         for (const auto& c : gCrateOverrides) {
-            auto n = RcString::new_interned(c.first);
+            auto n = RcString::newInterned(c.first);
             auto real_name = this->loadExternCrate(Span(), n);
             gImplicitCrates.insert(std::make_pair(n, real_name));
         }
         if (this->extCratenameCore != "") {
-            gImplicitCrates.insert(std::make_pair(RcString::new_interned("core"), this->extCratenameCore));
+            gImplicitCrates.insert(std::make_pair(RcString::newInterned("core"), this->extCratenameCore));
         }
     }
 
@@ -156,7 +156,7 @@ namespace AST {
 #define PLUGIN_SUFFIX "-plugin"
             auto directFilename = FMT("lib" << name << RLIB_SUFFIX);
             auto directFilenameSo = FMT("lib" << name << RDYLIB_SUFFIX);
-            auto name_prefix = FMT("lib" << name << "-");
+            auto namePrefix = FMT("lib" << name << "-");
             // Search a list of load paths for the crate
             for (const auto& p : gCrateLoadDirs) {
                 DEBUG("Searching in " << p);
@@ -189,9 +189,9 @@ namespace AST {
                         continue;
                     }
 
-                    DEBUG(fname << " vs " << name_prefix);
+                    DEBUG(fname << " vs " << namePrefix);
                     // Check if the entry ends with .rlib
-                    if (strncmp(name_prefix.c_str(), fname, name_prefix.size()) != 0) {
+                    if (strncmp(namePrefix.c_str(), fname, namePrefix.size()) != 0) {
                         continue;
                     }
 
@@ -277,7 +277,7 @@ namespace AST {
         hir->post_load_update(name);
         mName = hir->crateName;
         if (const auto* e = strchr(mName.c_str(), '-')) {
-            shortName = RcString::new_interned(mName.c_str(), e - mName.c_str());
+            shortName = RcString::newInterned(mName.c_str(), e - mName.c_str());
         } else {
         }
     }
@@ -291,7 +291,7 @@ void Crate::set_crate_name(std::string name) {
     if (crateType == Type::Executable) {
         crateNameReal = "";
     } else {
-        crateNameReal = crateNameSuffix != "" ? RcString::new_interned(name + "-" + crateNameSuffix) : RcString::new_interned(name);
+        crateNameReal = crateNameSuffix != "" ? RcString::newInterned(name + "-" + crateNameSuffix) : RcString::newInterned(name);
     }
 }
 }

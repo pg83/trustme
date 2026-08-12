@@ -79,7 +79,7 @@ private:
         DEC,
         HEX,
     };
-    U128 parseInt(NumMode* num_mode);
+    U128 parseInt(NumMode* numMode);
     FloatValue parseFloat(U128 whole);
     uint32_t parseEscape(char enclosing, bool* isByteEscape = nullptr);
 

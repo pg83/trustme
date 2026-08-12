@@ -2,10 +2,10 @@
 
 namespace HIR {
 
-ExprState::ExprState(::HIR::TypeInterner& types, const ::HIR::Module& mod_ptr, ::HIR::SimplePath mod_path)
+ExprState::ExprState(::HIR::TypeInterner& types, const ::HIR::Module& modPtr, ::HIR::SimplePath mod_path)
     : types(types)
     , modPath(::std::move(mod_path))
-    , mModule(mod_ptr)
+    , mModule(modPtr)
     , implGenerics(nullptr)
     , itemGenerics(nullptr)
     , currentTraitImpl(nullptr)

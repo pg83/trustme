@@ -115,7 +115,7 @@ TransListConst* TransList::add_const(HIR::TypeInterner& types, ::HIR::Path p) {
 
 ::HIR::Path TransParams::monomorph(const ::StaticTraitResolve& resolve, const ::HIR::Path& p) const {
     TRACE_FUNCTION_F(p);
-    auto rv = this->monomorph_path(sp, p, false);
+    auto rv = this->monomorphPath(sp, p, false);
 
     TU_MATCH_HDRA( (rv.mData), {)
     TU_ARMA(Generic, e2) {
@@ -154,7 +154,7 @@ TransListConst* TransList::add_const(HIR::TypeInterner& types, ::HIR::Path p) {
 }
 
 ::HIR::PathParams TransParams::monomorph(const ::StaticTraitResolve& resolve, const ::HIR::PathParams& p) const {
-    auto rv = this->monomorph_path_params(sp, p, false);
+    auto rv = this->monomorphPathParams(sp, p, false);
     for (auto& arg : rv.types) {
         resolve.expandAssociatedTypes(sp, arg);
     }
@@ -162,7 +162,7 @@ TransListConst* TransList::add_const(HIR::TypeInterner& types, ::HIR::Path p) {
 }
 
 ::HIR::TypeRef TransParams::monomorph(const ::StaticTraitResolve& resolve, const ::HIR::TypeData* ty) const {
-    return resolve.monomorph_expand(sp, ty, *this);
+    return resolve.monomorphExpand(sp, ty, *this);
 }
 
 TransParams::TransParams(HIR::TypeInterner& types)
@@ -189,14 +189,14 @@ TransParams& TransParams::operator=(TransParams&& x) {
     forceMonomorphisation = x.forceMonomorphisation;
     return *this;
 }
-TransParams TransParams::new_impl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams impl_params) {
+TransParams TransParams::newImpl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams impl_params) {
     TransParams tp(types, sp);
     tp.self_type = std::move(ty);
     tp.pp_impl = std::move(impl_params);
     return tp;
 }
-const ::HIR::TypeData* TransParams::maybe_monomorph(const ::StaticTraitResolve& resolve, ::HIR::TypeRef& tmp, const ::HIR::TypeData* p) const {
-    if (monomorphise_type_needed(p)) {
+const ::HIR::TypeData* TransParams::maybeMonomorph(const ::StaticTraitResolve& resolve, ::HIR::TypeRef& tmp, const ::HIR::TypeData* p) const {
+    if (monomorphiseTypeNeeded(p)) {
         return tmp = this->monomorph(resolve, p);
     } else {
         return p;

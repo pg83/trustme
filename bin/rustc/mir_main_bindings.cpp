@@ -102,8 +102,8 @@ namespace {
                         TU_ARMA(SetDropFlag, e) {
                             os << "df$" << e.idx << " = ";
                             if (e.other == ~0u) {
-                                os << e.new_val;
-                            } else if (!e.new_val) {
+                                os << e.newVal;
+                            } else if (!e.newVal) {
                                 os << "df$" << e.other;
                             } else {
                                 os << "! df$" << e.other;
@@ -330,7 +330,7 @@ namespace {
                  os << ")";),
                 (DstMeta, os << "META("; fmtVal(os, e.val); os << ")";),
                 (DstPtr, os << "PTR("; fmtVal(os, e.val); os << ")";),
-                (MakeDst, os << "DST("; fmtVal(os, e.ptr_val); os << ", "; fmtVal(os, e.meta_val); os << ")";),
+                (MakeDst, os << "DST("; fmtVal(os, e.ptr_val); os << ", "; fmtVal(os, e.metaVal); os << ")";),
                 (
                     Tuple, os << "("; for (const auto& v : e.vals) {
                         fmtVal(os, v);

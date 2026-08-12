@@ -178,7 +178,7 @@ SavedParseState::~SavedParseState() {
     if (ps.disallowStructLiteral) {
         os << " disallow_struct_literal";
     }
-    if (ps.no_expand_macros) {
+    if (ps.noExpandMacros) {
         os << " no_expand_macros";
     }
     os << " }";

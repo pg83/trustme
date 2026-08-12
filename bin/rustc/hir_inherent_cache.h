@@ -19,7 +19,7 @@ namespace HIR {
             // Same as HIR::Crate::ImplGroup
             typedef ::std::vector<const HIR::TypeImpl*> listT;
             ::std::map<::HIR::SimplePath, listT> named;
-            listT non_named; // TODO: use a map of HIR::TypeRef::Data::Tag
+            listT nonNamed; // TODO: use a map of HIR::TypeRef::Data::Tag
             listT generic;
 
             void insert(const Span& sp, const HIR::TypeImpl& impl);

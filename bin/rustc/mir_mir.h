@@ -612,7 +612,7 @@ namespace MIR {
             (MakeDst,
              struct {
                  Param ptr_val;
-                 Param meta_val;
+                 Param metaVal;
              }),
             (Tuple, struct { ::std::vector<Param> vals; }),
             // Array literal
@@ -758,7 +758,7 @@ namespace MIR {
         (SetDropFlag,
          struct {
              unsigned int idx;
-             bool new_val; // If `other` is populated, this indicates that the other value should be negated
+             bool newVal; // If `other` is populated, this indicates that the other value should be negated
              /// Other drop flag, used for copying/inverting another flag. If `~0u`, then the value of `new_val` is stored
              unsigned int other;
          }),

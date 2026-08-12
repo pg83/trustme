@@ -209,7 +209,7 @@ namespace MIR {
             ),
             (DstMeta, os << "DstMeta(" << e.val << ")";),
             (DstPtr, os << "DstPtr(" << e.val << ")";),
-            (MakeDst, os << "MakeDst(" << e.ptr_val << ", " << e.meta_val << ")";),
+            (MakeDst, os << "MakeDst(" << e.ptr_val << ", " << e.metaVal << ")";),
             (Tuple, os << "Tuple(" << e.vals << ")";),
             (Array, os << "Array(" << e.vals << ")";),
             (UnionVariant, os << "UnionVariant(" << e.path << " #" << e.index << ", " << e.val << ")";),
@@ -223,7 +223,7 @@ namespace MIR {
         if (a.tag() != b.tag()) {
             return false;
         }
-        TU_MATCHA((a, b), (are, bre), (Use, return are == bre;), (Constant, return are == bre;), (SizedArray, if (are.val != bre.val) return false; if (are.count != bre.count) return false; return true;), (Borrow, if (are.type != bre.type) return false; if (are.val != bre.val) return false; return true;), (Cast, if (are.type != bre.type) return false; if (are.val != bre.val) return false; return true;), (BinOp, if (are.val_l != bre.val_l) return false; if (are.op != bre.op) return false; if (are.val_r != bre.val_r) return false; return true;), (UniOp, if (are.op != bre.op) return false; if (are.val != bre.val) return false; return true;), (DstPtr, return are.val == bre.val;), (DstMeta, return are.val == bre.val;), (MakeDst, if (are.meta_val != bre.meta_val) return false; if (are.ptr_val != bre.ptr_val) return false; return true;), (Tuple, return are.vals == bre.vals;), (Array, return are.vals == bre.vals;), (UnionVariant, if (are.path != bre.path) return false; if (are.index != bre.index) return false; return are.val == bre.val;), (EnumVariant, if (are.path != bre.path) return false; if (are.index != bre.index) return false; return are.vals == bre.vals;), (Struct, if (are.path != bre.path) return false; return are.vals == bre.vals;))
+        TU_MATCHA((a, b), (are, bre), (Use, return are == bre;), (Constant, return are == bre;), (SizedArray, if (are.val != bre.val) return false; if (are.count != bre.count) return false; return true;), (Borrow, if (are.type != bre.type) return false; if (are.val != bre.val) return false; return true;), (Cast, if (are.type != bre.type) return false; if (are.val != bre.val) return false; return true;), (BinOp, if (are.val_l != bre.val_l) return false; if (are.op != bre.op) return false; if (are.val_r != bre.val_r) return false; return true;), (UniOp, if (are.op != bre.op) return false; if (are.val != bre.val) return false; return true;), (DstPtr, return are.val == bre.val;), (DstMeta, return are.val == bre.val;), (MakeDst, if (are.metaVal != bre.metaVal) return false; if (are.ptr_val != bre.ptr_val) return false; return true;), (Tuple, return are.vals == bre.vals;), (Array, return are.vals == bre.vals;), (UnionVariant, if (are.path != bre.path) return false; if (are.index != bre.index) return false; return are.val == bre.val;), (EnumVariant, if (are.path != bre.path) return false; if (are.index != bre.index) return false; return are.vals == bre.vals;), (Struct, if (are.path != bre.path) return false; return are.vals == bre.vals;))
         throw "";
     }
 
@@ -359,9 +359,9 @@ namespace MIR {
             TU_ARMA(SetDropFlag, e) {
                 os << "df$" << e.idx << " = ";
                 if (e.other == ~0u) {
-                    os << e.new_val;
+                    os << e.newVal;
                 } else {
-                    os << (e.new_val ? "!" : "") << "df$" << e.other;
+                    os << (e.newVal ? "!" : "") << "df$" << e.other;
                 }
             }
             TU_ARMA(SaveDropFlag, e) {
@@ -397,7 +397,7 @@ namespace MIR {
                 return ae.lines == be.lines && ae.options == be.options && ae.params == be.params;
             }
             TU_ARMA(SetDropFlag, ae, be) {
-                return ae.idx == be.idx && ae.other == be.other && ae.new_val == be.new_val;
+                return ae.idx == be.idx && ae.other == be.other && ae.newVal == be.newVal;
             }
             TU_ARMA(SaveDropFlag, ae, be) {
                 return ae.idx == be.idx && ae.slot == be.slot && ae.bitIndex == be.bitIndex;
@@ -445,7 +445,7 @@ namespace MIR {
         (DstMeta, return ::MIR::RValue::make_DstMeta({e.val.clone()});),
         (DstPtr, return ::MIR::RValue::make_DstPtr({e.val.clone()});),
         // Construct a DST pointer from a thin pointer and metadata
-        (MakeDst, return ::MIR::RValue::make_MakeDst({e.ptr_val.clone(), e.meta_val.clone()});),
+        (MakeDst, return ::MIR::RValue::make_MakeDst({e.ptr_val.clone(), e.metaVal.clone()});),
         (Tuple, decltype(e.vals) ret; ret.reserve(e.vals.size()); for (const auto& v : e.vals) ret.push_back(v.clone()); return ::MIR::RValue::make_Tuple({mv$(ret)});),
         // Array literal
         (Array, decltype(e.vals) ret; ret.reserve(e.vals.size()); for (const auto& v : e.vals) ret.push_back(v.clone()); return ::MIR::RValue::make_Array({mv$(ret)});),
@@ -490,7 +490,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
 
 ::HIR::TypeRef MIR::Cloner::monomorph(const ::HIR::TypeData* ty) const {
     TRACE_FUNCTION_F(ty);
-    auto rv = monomorphiser().monomorph_type(sp, ty);
+    auto rv = monomorphiser().monomorphType(sp, ty);
     if (auto* r = resolve()) {
         r->expandAssociatedTypes(sp, rv);
     }
@@ -499,7 +499,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
 
 ::HIR::GenericPath MIR::Cloner::monomorph(const ::HIR::GenericPath& ty) const {
     TRACE_FUNCTION_F(ty);
-    auto rv = monomorphiser().monomorph_genericpath(sp, ty, false);
+    auto rv = monomorphiser().monomorphGenericpath(sp, ty, false);
     if (const auto* r = resolve()) {
         r->evaluatePathParams(sp, rv.mParams);
         for (auto& arg : rv.mParams.types) {
@@ -511,7 +511,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
 
 ::HIR::Path MIR::Cloner::monomorph(const ::HIR::Path& ty) const {
     TRACE_FUNCTION_F(ty);
-    auto rv = monomorphiser().monomorph_path(sp, ty, false);
+    auto rv = monomorphiser().monomorphPath(sp, ty, false);
     if (const auto* r = resolve()) {
         TU_MATCH(
             ::HIR::Path::Data,
@@ -530,7 +530,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
 
 ::HIR::PathParams MIR::Cloner::monomorph(const ::HIR::PathParams& ty) const {
     TRACE_FUNCTION_F(ty);
-    auto rv = monomorphiser().monomorph_path_params(sp, ty, false);
+    auto rv = monomorphiser().monomorphPathParams(sp, ty, false);
     if (const auto* r = resolve()) {
         r->evaluatePathParams(sp, rv);
         for (auto& arg : rv.types) {
@@ -567,7 +567,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             return ::MIR::Statement::make_Asm2({se.options, se.lines, this->cloneAsmParams(se.params)});
         }
         TU_ARMA(SetDropFlag, se) {
-            return ::MIR::Statement::make_SetDropFlag({mapDropFlag(se.idx), se.new_val, se.other == ~0u ? ~0u : mapDropFlag(se.other)});
+            return ::MIR::Statement::make_SetDropFlag({mapDropFlag(se.idx), se.newVal, se.other == ~0u ? ~0u : mapDropFlag(se.other)});
         }
         TU_ARMA(SaveDropFlag, se) {
             TODO(Span(), "clone_bb SaveDropFlag");
@@ -576,12 +576,12 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             TODO(Span(), "clone_bb LoadDropFlag");
         }
         TU_ARMA(ScopeEnd, se) {
-            ::MIR::Statement::Data_ScopeEnd new_se;
-            new_se.slots.reserve(se.slots.size());
+            ::MIR::Statement::Data_ScopeEnd newSe;
+            newSe.slots.reserve(se.slots.size());
             for (auto idx : se.slots) {
-                new_se.slots.push_back(mapLocal(idx));
+                newSe.slots.push_back(mapLocal(idx));
             }
-            return ::MIR::Statement(mv$(new_se));
+            return ::MIR::Statement(mv$(newSe));
         }
     }
     throw "";
@@ -782,7 +782,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             return this->cloneConstant(se);
         }
         TU_ARMA(SizedArray, se) {
-            auto count = monomorphiser().monomorph_arraysize(sp, se.count);
+            auto count = monomorphiser().monomorphArraysize(sp, se.count);
             if (const auto* resolver = resolve()) {
                 resolver->evaluateArraySize(sp, count);
             }
@@ -807,7 +807,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             return ::MIR::RValue::make_DstPtr({this->cloneLval(se.val)});
         }
         TU_ARMA(MakeDst, se) {
-            return ::MIR::RValue::make_MakeDst({this->cloneParam(se.ptr_val), this->cloneParam(se.meta_val)});
+            return ::MIR::RValue::make_MakeDst({this->cloneParam(se.ptr_val), this->cloneParam(se.metaVal)});
         }
         TU_ARMA(Tuple, se) {
             return ::MIR::RValue::make_Tuple({this->cloneParamVec(se.vals)});
@@ -1092,10 +1092,10 @@ LValue::MRef LValue::MRef::innerRef() {
     return rv;
 }
 void LValue::MRef::replace(LValue x) {
-    auto& mut_lv = const_cast<LValue&>(*mLv);
+    auto& mutLv = const_cast<LValue&>(*mLv);
     // Shortcut: No wrappers on source/destination (just assign the slot/root)
     if (wrapperCount == 0 && x.wrappers.empty()) {
-        mut_lv.root = ::std::move(x.root);
+        mutLv.root = ::std::move(x.root);
         return;
     }
     // If there's wrappers on this value (assigning over inner portion)
@@ -1104,7 +1104,7 @@ void LValue::MRef::replace(LValue x) {
         x.wrappers.insert(x.wrappers.end(), mLv->wrappers.begin() + wrapperCount, mLv->wrappers.end());
     }
     // Overwrite
-    mut_lv = ::std::move(x);
+    mutLv = ::std::move(x);
 }
 ItemAddress::ItemAddress(::std::unique_ptr<::HIR::Path> p, U128 offset)
     : p(::std::move(p))

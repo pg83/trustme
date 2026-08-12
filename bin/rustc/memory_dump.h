@@ -1,3 +1,3 @@
 #pragma once
 
-extern void memory_dump(const char* phase);
+extern void memoryDump(const char* phase);

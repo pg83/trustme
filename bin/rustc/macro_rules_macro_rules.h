@@ -43,7 +43,7 @@ static const unsigned int NAMEDVALUE_TY_COUNT = 3 << 30;
 struct MacroPatEnt {
     Span sp;
     RcString name;
-    unsigned int name_index = 0;
+    unsigned int nameIndex = 0;
     // TODO: Include a point span for the token?
     Token tok;
 
@@ -74,7 +74,7 @@ struct MacroPatEnt {
     MacroPatEnt(Span sp, Token tok);
 
     // Variable reference
-    MacroPatEnt(Span sp, RcString name, unsigned int name_index, Type type);
+    MacroPatEnt(Span sp, RcString name, unsigned int nameIndex, Type type);
 
     // Loop/optional
     MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, ::std::vector<MacroPatEnt> ents);

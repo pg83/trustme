@@ -102,9 +102,9 @@ namespace HIR {
                 ~CloseOnDrop();
             };
 
-            CloseOnDrop open_object(const char* name);
+            CloseOnDrop openObject(const char* name);
 
-            CloseOnDrop open_anon_object();
+            CloseOnDrop openAnonObject();
 
             void closeObject() {
                 write_u8(0xFF);
@@ -206,9 +206,9 @@ namespace HIR {
                 ~CloseOnDrop();
             };
 
-            CloseOnDrop open_object(const char* name);
+            CloseOnDrop openObject(const char* name);
 
-            CloseOnDrop open_anon_object();
+            CloseOnDrop openAnonObject();
 
             void closeObject();
         };

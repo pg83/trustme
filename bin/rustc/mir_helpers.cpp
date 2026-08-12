@@ -52,7 +52,7 @@ const ::HIR::TypeData* ::MIR::TypeResolve::getStaticType(::HIR::TypeRef& tmp, co
     MIR_ASSERT(*this, v.is_Static(), "LValue::Static not a static - " << path << " : " << v.tag_str());
     MIR_ASSERT(*this, v.as_Static(), "LValue::Static is null? - " << path << " : " << v.tag_str());
     if (ms.hasTypes()) {
-        tmp = ms.monomorph_type(sp, v.as_Static()->mType);
+        tmp = ms.monomorphType(sp, v.as_Static()->mType);
         mResolve.expandAssociatedTypes(this->sp, tmp);
         return tmp;
     } else {
@@ -99,17 +99,17 @@ const ::HIR::TypeData* ::MIR::TypeResolve::getUnwrappedType(::HIR::TypeRef& tmp,
                     // TODO: Cache result (to avoid needing to re-monomorph)
                     if (const auto* tep = te.binding.opt_Struct()) {
                         const auto& str = **tep;
-                        auto maybe_monomorph = [&](const auto& ty) {
-                            return mResolve.monomorph_expand_opt(sp, tmp, ty, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
+                        auto maybeMonomorph = [&](const auto& ty) {
+                            return mResolve.monomorphExpandOpt(sp, tmp, ty, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
                         };
-                        TU_MATCHA((str.mData), (se), (Unit, MIR_BUG(*this, "Field on unit-like struct - " << ty);), (Tuple, MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in tuple-struct " << te.path); return maybe_monomorph(se[fieldIndex].ent);), (Named, MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in struct " << te.path); return maybe_monomorph(se[fieldIndex].ty);))
+                        TU_MATCHA((str.mData), (se), (Unit, MIR_BUG(*this, "Field on unit-like struct - " << ty);), (Tuple, MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in tuple-struct " << te.path); return maybeMonomorph(se[fieldIndex].ent);), (Named, MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in struct " << te.path); return maybeMonomorph(se[fieldIndex].ty);))
                     } else if (const auto* tep = te.binding.opt_Union()) {
                         const auto& unm = **tep;
-                        auto maybe_monomorph = [&](const ::HIR::TypeData* t) -> const ::HIR::TypeData* {
-                            return mResolve.monomorph_expand_opt(sp, tmp, t, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
+                        auto maybeMonomorph = [&](const ::HIR::TypeData* t) -> const ::HIR::TypeData* {
+                            return mResolve.monomorphExpandOpt(sp, tmp, t, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
                         };
                         MIR_ASSERT(*this, fieldIndex < unm.mVariants.size(), "Field index out of range for union");
-                        return maybe_monomorph(unm.mVariants.at(fieldIndex).ty);
+                        return maybeMonomorph(unm.mVariants.at(fieldIndex).ty);
                     } else {
                         MIR_BUG(*this, "Field access on invalid type - " << ty);
                     }
@@ -161,14 +161,14 @@ const ::HIR::TypeData* ::MIR::TypeResolve::getUnwrappedType(::HIR::TypeRef& tmp,
                         const auto& variant = variants[variant_index];
 
                         const auto& var_ty = variant.type;
-                        return mResolve.monomorph_expand_opt(sp, tmp, var_ty, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
+                        return mResolve.monomorphExpandOpt(sp, tmp, var_ty, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
                     } else {
                         const auto& unm = *te.binding.as_Union();
                         MIR_ASSERT(*this, variant_index < unm.mVariants.size(), "Variant index out of range");
                         const auto& variant = unm.mVariants[variant_index];
                         const auto& var_ty = variant.ty;
 
-                        return mResolve.monomorph_expand_opt(sp, tmp, var_ty, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
+                        return mResolve.monomorphExpandOpt(sp, tmp, var_ty, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
                     }
                 }
         }
@@ -218,8 +218,8 @@ const ::HIR::TypeData* MIR::TypeResolve::getParamType(::HIR::TypeRef& tmp, const
             auto v = mResolve.getValue(this->sp, *e.p, p, /*signature_only=*/true);
             if (const auto* ve = v.opt_Constant()) {
                 const auto& ty = (*ve)->mType;
-                if (monomorphise_type_needed(ty)) {
-                    auto rv = p.monomorph_type(this->sp, ty);
+                if (monomorphiseTypeNeeded(ty)) {
+                    auto rv = p.monomorphType(this->sp, ty);
                     mResolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 } else {
@@ -276,8 +276,8 @@ const ::HIR::TypeData* MIR::TypeResolve::getParamType(::HIR::TypeRef& tmp, const
                 TU_ARMA(Constant, ve) {
                     const auto& ty = ve->mType;
                     HIR::TypeRef rv;
-                    if (monomorphise_type_needed(ty)) {
-                        rv = p.monomorph_type(this->sp, ty);
+                    if (monomorphiseTypeNeeded(ty)) {
+                        rv = p.monomorphType(this->sp, ty);
                         mResolve.expandAssociatedTypes(this->sp, rv);
                     } else {
                         rv = ty;
@@ -287,8 +287,8 @@ const ::HIR::TypeData* MIR::TypeResolve::getParamType(::HIR::TypeRef& tmp, const
                 TU_ARMA(Static, ve) {
                     const auto& ty = ve->mType;
                     HIR::TypeRef rv;
-                    if (monomorphise_type_needed(ty)) {
-                        rv = p.monomorph_type(this->sp, ty);
+                    if (monomorphiseTypeNeeded(ty)) {
+                        rv = p.monomorphType(this->sp, ty);
                         mResolve.expandAssociatedTypes(this->sp, rv);
                     } else {
                         rv = ty;
@@ -350,10 +350,10 @@ size_t MIR::TypeResolve::intrinsicOffsetOf(const ::HIR::TypeData* ty, const ::st
             }
             TU_ARMA(StaticString, fieldName) {
                 char* end = nullptr;
-                auto numeric_idx = ::std::strtoul(fieldName.c_str(), &end, 10);
+                auto numericIdx = ::std::strtoul(fieldName.c_str(), &end, 10);
                 if (end != fieldName.c_str() && *end == '\0') {
-                    MIR_ASSERT(*this, numeric_idx <= SIZE_MAX, "Invalid tuple field index " << fieldName);
-                    idx = static_cast<size_t>(numeric_idx);
+                    MIR_ASSERT(*this, numericIdx <= SIZE_MAX, "Invalid tuple field index " << fieldName);
+                    idx = static_cast<size_t>(numericIdx);
                 } else if (const auto* ty_path = curTy->opt_Path()) {
                     if (const auto* bep = ty_path->binding.opt_Struct()) {
                         const auto& str = **bep;
@@ -1145,7 +1145,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
 
         State(const ::MIR::Function& fcn)
             : tmp_ends(fcn.temporaries.size(), ProtoLifetime())
-            , var_ends(fcn.named_variables.size(), ProtoLifetime())
+            , var_ends(fcn.namedVariables.size(), ProtoLifetime())
         {
         }
 
@@ -1167,7 +1167,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
     }
 
     ::std::vector<ValueLifetime> temporary_lifetimes(fcn.temporaries.size(), ValueLifetime(statement_count));
-    ::std::vector<ValueLifetime> variable_lifetimes(fcn.named_variables.size(), ValueLifetime(statement_count));
+    ::std::vector<ValueLifetime> variable_lifetimes(fcn.namedVariables.size(), ValueLifetime(statement_count));
 
     struct BlockSeenLifetimes {
         bool hasState = false;
@@ -1178,7 +1178,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
         BlockSeenLifetimes(const ::std::vector<size_t>& block_offsets, const ::MIR::Function& fcn)
             : block_offsets(block_offsets)
             , tmp(fcn.temporaries.size())
-            , var(fcn.named_variables.size())
+            , var(fcn.namedVariables.size())
         {
         }
 
@@ -1218,7 +1218,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
 
         bool merge(const State& val_state) {
             bool rv = false;
-            auto merge_lft = [&](const ProtoLifetime& lft, ::std::vector<unsigned int>& seen) -> bool {
+            auto mergeLft = [&](const ProtoLifetime& lft, ::std::vector<unsigned int>& seen) -> bool {
                 if (lft.is_empty()) {
                     return false;
                 }
@@ -1237,10 +1237,10 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 }
             };
             for (size_t i = 0; i < val_state.tmp_ends.size(); i++) {
-                rv |= merge_lft(val_state.tmp_ends[i], this->tmp[i]);
+                rv |= mergeLft(val_state.tmp_ends[i], this->tmp[i]);
             }
             for (size_t i = 0; i < val_state.var_ends.size(); i++) {
-                rv |= merge_lft(val_state.var_ends[i], this->var[i]);
+                rv |= mergeLft(val_state.var_ends[i], this->var[i]);
             }
             hasState = true;
             return rv;
@@ -1324,45 +1324,45 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             for (unsigned i = 0; i < fcn.temporaries.size(); i++) {
                 addLifetimeS(state, ::MIR::LValue::make_Temporary({i}), state.tmp_ends[i].start, state.tmp_ends[i].end);
             }
-            for (unsigned i = 0; i < fcn.named_variables.size(); i++) {
+            for (unsigned i = 0; i < fcn.namedVariables.size(); i++) {
                 addLifetimeS(state, ::MIR::LValue::make_Variable({i}), state.var_ends[i].start, state.var_ends[i].end);
             }
         };
-        auto addToVisit = [&](unsigned int new_bb_idx, State new_state) {
-            auto& bbMemoryEnt = blockSeenLifetimes[new_bb_idx];
+        auto addToVisit = [&](unsigned int newBbIdx, State newState) {
+            auto& bbMemoryEnt = blockSeenLifetimes[newBbIdx];
             if (!bbMemoryEnt.has_state()) {
                 // No recorded state, needs to be visited
-                DEBUG(state << " state" << new_state.index << " -> bb" << new_bb_idx << " (no existing state)");
-            } else if (bbMemoryEnt.try_merge(new_state)) {
+                DEBUG(state << " state" << newState.index << " -> bb" << newBbIdx << " (no existing state)");
+            } else if (bbMemoryEnt.try_merge(newState)) {
                 // This state has new information, needs to be visited
-                DEBUG(state << " state" << new_state.index << " -> bb" << new_bb_idx << " (new info)");
+                DEBUG(state << " state" << newState.index << " -> bb" << newBbIdx << " (new info)");
             } else {
                 // Skip
                 // TODO: Acquire from the target block the actual end of any active lifetimes, then apply them.
-                DEBUG(state << " state" << new_state.index << " -> bb" << new_bb_idx << " - No new state, no push");
+                DEBUG(state << " state" << newState.index << " -> bb" << newBbIdx << " - No new state, no push");
                 // - For all variables currently active, check if they're valid in the first statement of the target block.
                 // - If so, mark as valid at the end of the current block
-                auto bmIdx = block_offsets[new_bb_idx];
+                auto bmIdx = block_offsets[newBbIdx];
                 Position cur_pos;
                 cur_pos.path_index = val_state.blockPath.size() - 1;
                 cur_pos.stmt_idx = fcn.blocks[bbIdx].statements.size();
                 for (unsigned i = 0; i < fcn.temporaries.size(); i++) {
-                    if (!new_state.tmp_ends[i].is_empty() && temporary_lifetimes[i].stmt_bitmap[bmIdx]) {
+                    if (!newState.tmp_ends[i].is_empty() && temporary_lifetimes[i].stmt_bitmap[bmIdx]) {
                         DEBUG("- tmp$" << i << " - Active in target, assume active");
-                        new_state.tmp_ends[i].end = cur_pos;
+                        newState.tmp_ends[i].end = cur_pos;
                     }
                 }
-                for (unsigned i = 0; i < fcn.named_variables.size(); i++) {
-                    if (!new_state.var_ends[i].is_empty() && variable_lifetimes[i].stmt_bitmap[bmIdx]) {
+                for (unsigned i = 0; i < fcn.namedVariables.size(); i++) {
+                    if (!newState.var_ends[i].is_empty() && variable_lifetimes[i].stmt_bitmap[bmIdx]) {
                         DEBUG("- var$" << i << " - Active in target, assume active");
-                        new_state.var_ends[i].end = cur_pos;
+                        newState.var_ends[i].end = cur_pos;
                     }
                 }
                 // - Apply whatever state was still active
-                applyState(new_state);
+                applyState(newState);
                 return;
             }
-            todo_queue.push_back(::std::make_pair(new_bb_idx, mv$(new_state)));
+            todo_queue.push_back(::std::make_pair(newBbIdx, mv$(newState)));
         };
 
         // Compare this state to a composite list of lifetimes seen in this block

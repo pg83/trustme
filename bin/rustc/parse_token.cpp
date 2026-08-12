@@ -715,8 +715,8 @@ struct EscapedString {
             os << ":" << *reinterpret_cast<const AST::ExprNode*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_STMT_ITEM: {
-            const auto& named_item = *reinterpret_cast<const AST::Named<AST::Item>*>(tok.mData.as_Fragment());
-            os << ":" << named_item.data.tag_str() << "(" << named_item.name << ")";
+            const auto& namedItem = *reinterpret_cast<const AST::Named<AST::Item>*>(tok.mData.as_Fragment());
+            os << ":" << namedItem.data.tag_str() << "(" << namedItem.name << ")";
         } break;
         case TOK_INTERPOLATED_BLOCK:
             os << ":" << *reinterpret_cast<const AST::ExprNode*>(tok.mData.as_Fragment());
@@ -725,8 +725,8 @@ struct EscapedString {
             os << ":" << *reinterpret_cast<AST::Attribute*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_ITEM: {
-            const auto& named_item = *reinterpret_cast<const AST::Named<AST::Item>*>(tok.mData.as_Fragment());
-            os << ":" << named_item.data.tag_str() << "(" << named_item.name << ")";
+            const auto& namedItem = *reinterpret_cast<const AST::Named<AST::Item>*>(tok.mData.as_Fragment());
+            os << ":" << namedItem.data.tag_str() << "(" << namedItem.name << ")";
         } break;
         default:
             break;

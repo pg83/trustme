@@ -59,7 +59,7 @@ namespace HIR {
         StaticTraitResolve resolve;
         Newval& nvs;
         unsigned int evalIndex;
-        unsigned int num_frames;
+        unsigned int numFrames;
         bool require_const_calls;
         // Note: Pointer is needed to maintain internal reference stability
         ::std::vector<CsePtr> callStack;

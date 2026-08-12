@@ -381,9 +381,9 @@ public:
             if (i != 0) {
                 os << " && ";
             }
-            if (conds[i].opt_pat) {
+            if (conds[i].optPat) {
                 os << "let ";
-                print_pattern(*conds[i].opt_pat, true);
+                print_pattern(*conds[i].optPat, true);
                 os << " = ";
             }
             os << "(";
@@ -899,7 +899,7 @@ void RustPrinter::print_attrs(const AST::AttributeList& attrs) {
 }
 
 void RustPrinter::handleModule(const AST::Module& mod) {
-    bool need_nl = true;
+    bool needNl = true;
 
     for (const auto& ip : mod.mItems) {
         const auto& i = *ip;
@@ -935,7 +935,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
         }
         os << ";\n";
     }
-    need_nl = true;
+    needNl = true;
 
     for (const auto& ip : mod.mItems) {
         const auto& item = *ip;
@@ -983,9 +983,9 @@ void RustPrinter::handleModule(const AST::Module& mod) {
         }
         const auto& e = item.data.as_Type();
 
-        if (need_nl) {
+        if (needNl) {
             os << "\n";
-            need_nl = false;
+            needNl = false;
         }
         print_attrs(item.attrs);
         os << indent() << item.vis << "type " << item.name;
@@ -994,7 +994,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
         print_bounds(e.params());
         os << ";\n";
     }
-    need_nl = true;
+    needNl = true;
 
     for (const auto& ip : mod.mItems) {
         const auto& item = *ip;
@@ -1042,9 +1042,9 @@ void RustPrinter::handleModule(const AST::Module& mod) {
         }
         const auto& e = item.data.as_Static();
 
-        if (need_nl) {
+        if (needNl) {
             os << "\n";
-            need_nl = false;
+            needNl = false;
         }
         print_attrs(item.attrs);
         os << indent() << item.vis;
@@ -1283,7 +1283,7 @@ void RustPrinter::print_pattern(const AST::Pattern& p, bool isRefutable) {
             } os << "]";
         ),
         (
-            SplitSlice, os << "["; bool needs_comma = false; for (const auto& sp : v.leading) {
+            SplitSlice, os << "["; bool needsComma = false; for (const auto& sp : v.leading) {
                 print_pattern(sp, isRefutable);
                 os << ", ";
             }
@@ -1306,10 +1306,10 @@ void RustPrinter::print_pattern(const AST::Pattern& p, bool isRefutable) {
                                                                    os << b.mName << "/*" << b.slot << "*/";
                                                                } os
                                                                << "..";
-            needs_comma = true;
+            needsComma = true;
 
             if (v.trailing.size()) {
-                if (needs_comma) {
+                if (needsComma) {
                     os << ", ";
                 }
                 for (const auto& sp : v.trailing) {

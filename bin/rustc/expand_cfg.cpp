@@ -322,7 +322,7 @@ namespace {
     };
 
     BuiltinExpectation checkBuiltinCfg(const ::std::string& name, const ::std::optional<::std::string>& value) {
-        static const ::std::set<::std::string> no_value_names = {
+        static const ::std::set<::std::string> noValueNames = {
             "debug_assertions", "clippy", "doc", "doctest", "miri", "rustfmt",
             "overflow_checks", "proc_macro", "sanitizer_cfi_generalize_pointers",
             "sanitizer_cfi_normalize_integers", "target_thread_local", "ub_checks",
@@ -336,7 +336,7 @@ namespace {
         static const ::std::set<::std::string> atomicNames = {
             "target_has_atomic", "target_has_atomic_equal_alignment", "target_has_atomic_load_store",
         };
-        if (no_value_names.count(name) != 0) {
+        if (noValueNames.count(name) != 0) {
             return value ? BuiltinExpectation::UnexpectedValue : BuiltinExpectation::Expected;
         }
         if (anyValueNames.count(name) != 0) {
@@ -396,7 +396,7 @@ namespace {
     }
 }
 
-static const RcString rcstring_cfg = RcString::new_interned("cfg");
+static const RcString rcstring_cfg = RcString::newInterned("cfg");
 
 void CfgDump(::std::ostream& os) {
     for (const auto& v : gCfgValues) {
@@ -540,10 +540,10 @@ namespace {
             case TOK_PAREN_OPEN:
                 GET_TOK(tok, lex);
 
-                static const RcString rcstring_any = RcString::new_interned("any");
-                static const RcString rcstring_not = RcString::new_interned("not");
-                static const RcString rcstring_all = RcString::new_interned("all");
-                static const RcString rcstring_target = RcString::new_interned("target");
+                static const RcString rcstring_any = RcString::newInterned("any");
+                static const RcString rcstring_not = RcString::newInterned("not");
+                static const RcString rcstring_all = RcString::newInterned("all");
+                static const RcString rcstring_target = RcString::newInterned("target");
                 if (name == rcstring_any || name == rcstring_cfg) {
                     bool rv = false;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
@@ -580,7 +580,7 @@ namespace {
                     bool rv = true;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
                         const auto field = lex.getTokenCheck(TOK_IDENT).ident().name;
-                        const auto canonical = RcString::new_interned(FMT("target_" << field));
+                        const auto canonical = RcString::newInterned(FMT("target_" << field));
                         rv &= checkCfgInner1(canonical, lex);
                         if (lex.lookahead(0) != TOK_COMMA) {
                             break;

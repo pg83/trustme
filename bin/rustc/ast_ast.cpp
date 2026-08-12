@@ -267,12 +267,12 @@ namespace AST {
     }
 
     Function Function::clone() const {
-        decltype(mArgs) new_args;
+        decltype(mArgs) newArgs;
         for (const auto& arg : mArgs) {
-            new_args.push_back(AST::Function::Arg(arg.pat.clone(), arg.ty.clone(), arg.attrs.clone()));
+            newArgs.push_back(AST::Function::Arg(arg.pat.clone(), arg.ty.clone(), arg.attrs.clone()));
         }
 
-        auto rv = Function(mSpan, mAbi, flags, mParams.clone(), mRettype.clone(), mv$(new_args), isVariadic);
+        auto rv = Function(mSpan, mAbi, flags, mParams.clone(), mRettype.clone(), mv$(newArgs), isVariadic);
         if (mCode.isValid()) {
             rv.mCode = AST::Expr(mCode.node().clone());
         }
@@ -299,10 +299,10 @@ namespace AST {
         return isMarker;
     }
 
-    bool Trait::hasNamedItem(const RcString& name, bool& out_is_fcn) const {
+    bool Trait::hasNamedItem(const RcString& name, bool& outIsFcn) const {
         for (const auto& i : mItems) {
             if (i.name == name) {
-                out_is_fcn = i.data.is_Function();
+                outIsFcn = i.data.is_Function();
                 return true;
             }
         }
@@ -318,27 +318,27 @@ namespace AST {
     }
 
     Enum Enum::clone() const {
-        decltype(mVariants) new_variants;
+        decltype(mVariants) newVariants;
         for (const auto& var : mVariants) {
-            TU_MATCHA((var.mData), (e), (Unit, new_variants.push_back(EnumVariant(var.mAttrs.clone(), var.mName));), (Tuple, decltype(e.mItems) new_st; for (const auto& f : e.mItems) new_st.push_back(f.clone()); new_variants.push_back(EnumVariant(var.mAttrs.clone(), var.mName, mv$(new_st)));), (Struct, decltype(e.fields) new_fields; for (const auto& f : e.fields) new_fields.push_back(f.clone()); new_variants.push_back(EnumVariant(var.mAttrs.clone(), var.mName, mv$(new_fields)));))
-            new_variants.back().discriminantValue = var.discriminantValue.clone();
+            TU_MATCHA((var.mData), (e), (Unit, newVariants.push_back(EnumVariant(var.mAttrs.clone(), var.mName));), (Tuple, decltype(e.mItems) newSt; for (const auto& f : e.mItems) newSt.push_back(f.clone()); newVariants.push_back(EnumVariant(var.mAttrs.clone(), var.mName, mv$(newSt)));), (Struct, decltype(e.fields) newFields; for (const auto& f : e.fields) newFields.push_back(f.clone()); newVariants.push_back(EnumVariant(var.mAttrs.clone(), var.mName, mv$(newFields)));))
+            newVariants.back().discriminantValue = var.discriminantValue.clone();
         }
-        auto rv = Enum(mParams.clone(), mv$(new_variants));
+        auto rv = Enum(mParams.clone(), mv$(newVariants));
         rv.markings = markings;
         return rv;
     }
 
     Struct Struct::clone() const {
-        TU_MATCHA((mData), (e), (Unit, return Struct(mParams.clone());), (Tuple, decltype(e.ents) new_fields; for (const auto& f : e.ents) new_fields.push_back(f.clone()); return Struct(mParams.clone(), mv$(new_fields));), (Struct, decltype(e.ents) new_fields; for (const auto& f : e.ents) new_fields.push_back(f.clone()); return Struct(mParams.clone(), mv$(new_fields));))
+        TU_MATCHA((mData), (e), (Unit, return Struct(mParams.clone());), (Tuple, decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return Struct(mParams.clone(), mv$(newFields));), (Struct, decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return Struct(mParams.clone(), mv$(newFields));))
         throw "";
     }
 
     Union Union::clone() const {
-        decltype(mVariants) new_vars;
+        decltype(mVariants) newVars;
         for (const auto& f : mVariants) {
-            new_vars.push_back(f.clone());
+            newVars.push_back(f.clone());
         }
-        return Union(mParams.clone(), mv$(new_vars));
+        return Union(mParams.clone(), mv$(newVars));
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const ImplDef& impl) {
@@ -399,9 +399,9 @@ namespace AST {
     ExternBlock::ExternBlock(ExternBlock&&) = default;
     ExternBlock& ExternBlock::operator=(ExternBlock&&) = default;
 
-    void ExternBlock::addItem(Named<Item> named_item) {
-        ASSERT_BUG(named_item.span, named_item.data.is_Function() || named_item.data.is_Static() || named_item.data.is_Type() || named_item.data.is_MacroInv(), "Incorrect item type for ExternBlock - " << named_item.data.tag_str());
-        mItems.push_back(mv$(named_item));
+    void ExternBlock::addItem(Named<Item> namedItem) {
+        ASSERT_BUG(namedItem.span, namedItem.data.is_Function() || namedItem.data.is_Static() || namedItem.data.is_Type() || namedItem.data.is_MacroInv(), "Incorrect item type for ExternBlock - " << namedItem.data.tag_str());
+        mItems.push_back(mv$(namedItem));
     }
 
     ExternBlock ExternBlock::clone() const {
@@ -420,7 +420,7 @@ namespace AST {
     Module& Module::operator=(Module&&) = default;
 
     ::std::shared_ptr<AST::Module> Module::addAnon() {
-        auto rv = ::std::shared_ptr<AST::Module>(new Module(myPath + RcString::new_interned(FMT("#" << anonModules.size()))));
+        auto rv = ::std::shared_ptr<AST::Module>(new Module(myPath + RcString::newInterned(FMT("#" << anonModules.size()))));
         DEBUG("New anon " << rv->myPath);
         rv->fileInfo = fileInfo;
 
@@ -429,8 +429,8 @@ namespace AST {
         return rv;
     }
 
-    void Module::addItem(Named<Item> named_item) {
-        mItems.push_back(box$(named_item));
+    void Module::addItem(Named<Item> namedItem) {
+        mItems.push_back(box$(namedItem));
         const auto& i = mItems.back();
         if (i->name == "") {
         } else {
@@ -634,7 +634,7 @@ TypeAlias::TypeAlias(GenericParams params, TypeRef type)
     : mParams(std::move(params))
     , mType(std::move(type)) {
 }
-TypeAlias TypeAlias::new_associated_type(GenericParams params, GenericParams type_bounds, TypeRef defaultType) {
+TypeAlias TypeAlias::newAssociatedType(GenericParams params, GenericParams type_bounds, TypeRef defaultType) {
     TypeAlias rv{std::move(params), std::move(defaultType)};
     rv.selfBounds = std::move(type_bounds);
     return rv;

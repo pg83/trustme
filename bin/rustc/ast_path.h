@@ -343,7 +343,7 @@ namespace AST {
                 return !value.is_Unbound() || !type.is_Unbound() || !macro.is_Unbound();
             }
 
-            void merge_from(const Bindings& x);
+            void mergeFrom(const Bindings& x);
         };
 
     public:
@@ -383,8 +383,8 @@ namespace AST {
         }
 
         // UFCS
-        static Path new_ufcs_ty(TypeRef type, ::std::vector<PathNode> nodes = {});
-        static Path new_ufcs_trait(TypeRef type, Path trait, ::std::vector<PathNode> nodes = {});
+        static Path newUfcsTy(TypeRef type, ::std::vector<PathNode> nodes = {});
+        static Path newUfcsTrait(TypeRef type, Path trait, ::std::vector<PathNode> nodes = {});
 
         // VARIABLE
         static Path new_local(RcString name) {
@@ -392,15 +392,15 @@ namespace AST {
         }
 
         // RELATIVE
-        static Path new_relative(Ident::Hygiene hygiene, ::std::vector<PathNode> nodes) {
+        static Path newRelative(Ident::Hygiene hygiene, ::std::vector<PathNode> nodes) {
             return Path(Class::make_Relative({mv$(hygiene), mv$(nodes)}));
         }
 
-        static Path new_self(::std::vector<PathNode> nodes) {
+        static Path newSelf(::std::vector<PathNode> nodes) {
             return Path(Class::make_Self({mv$(nodes)}));
         }
 
-        static Path new_super(unsigned int count, ::std::vector<PathNode> nodes) {
+        static Path newSuper(unsigned int count, ::std::vector<PathNode> nodes) {
             return Path(Class::make_Super({count, mv$(nodes)}));
         }
 

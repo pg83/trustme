@@ -99,7 +99,7 @@ SpanInner::~SpanInner() {
 SpanInnerSource::~SpanInnerSource() {
 }
 
-unsigned int SpanInnerSource::node_kind() const {
+unsigned int SpanInnerSource::nodeKind() const {
     return SpanInnerSource::kind;
 }
 
@@ -117,7 +117,7 @@ void SpanInnerSource::fmt(::std::ostream& os) const {
 SpanInnerMacro::~SpanInnerMacro() {
 }
 
-unsigned int SpanInnerMacro::node_kind() const {
+unsigned int SpanInnerMacro::nodeKind() const {
     return SpanInnerMacro::kind;
 }
 

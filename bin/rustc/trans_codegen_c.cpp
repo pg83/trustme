@@ -479,13 +479,13 @@ namespace {
         ~CodeGeneratorC() {
         }
 
-        void finalise(const TransOptions& opt, CodegenOutput out_ty, const ::std::string& hirFile) override {
-            const bool createShims = (out_ty == CodegenOutput::Executable);
+        void finalise(const TransOptions& opt, CodegenOutput outTy, const ::std::string& hirFile) override {
+            const bool createShims = (outTy == CodegenOutput::Executable);
 
             // TODO: Support dynamic libraries too
             // - No main, but has the rest.
             // - Well... for cdylibs that's the case, for rdylibs it's not
-            if (out_ty == CodegenOutput::Executable && !crate.noMain) {
+            if (outTy == CodegenOutput::Executable && !crate.noMain) {
                 // TODO: Define this function in MIR?
                 of << "}\n";
                 of << "int main(int argc, const char* argv[]) {\n";
@@ -561,8 +561,8 @@ namespace {
                                 throw "";
                             }
 
-                            static void emitProto(::std::ostream& os, const AllocatorMethod& method, const char* name_prefix, const ::std::vector<const char*>& args) {
-                                os << H::ty_ret(method.ret) << " " << name_prefix << method.name << "(";
+                            static void emitProto(::std::ostream& os, const AllocatorMethod& method, const char* namePrefix, const ::std::vector<const char*>& args) {
+                                os << H::ty_ret(method.ret) << " " << namePrefix << method.name << "(";
                                 for (size_t j = 0; j < args.size(); j++) {
                                     if (j != 0) {
                                         os << ", ";
@@ -575,7 +575,7 @@ namespace {
 
                         const auto& method = ALLOCATOR_METHODS[i];
                         ::std::vector<const char*> args;
-                        for (size_t j = 0; j < method.n_args; j++) {
+                        for (size_t j = 0; j < method.nArgs; j++) {
                             H::ty_args(args, method.args[j]);
                         }
                         H::emitProto(of, method, "__rust_", args);
@@ -600,7 +600,7 @@ namespace {
                         } else {
                             size_t flatArg = 0;
                             size_t layoutArg = 0;
-                            for (size_t j = 0; j < method.n_args; j++) {
+                            for (size_t j = 0; j < method.nArgs; j++) {
                                 switch (method.args[j]) {
                                     case AllocatorDataTy::Layout:
                                         of << "\tauto layout" << layoutArg << " = "
@@ -628,7 +628,7 @@ namespace {
                             of << TransMangle(method_path) << "(&" << TransMangle(static_path) << ".val";
                             flatArg = 0;
                             layoutArg = 0;
-                            for (size_t j = 0; j < method.n_args; j++) {
+                            for (size_t j = 0; j < method.nArgs; j++) {
                                 of << ", ";
                                 switch (method.args[j]) {
                                     case AllocatorDataTy::Layout:
@@ -661,23 +661,23 @@ namespace {
                     of << "void __rust_no_alloc_shim_is_unstable_v2() {}\n";
 
                     {
-                        auto oom_method = crate.getLangItemPathOpt("mrustc-alloc_error_handler");
+                        auto oomMethod = crate.getLangItemPathOpt("mrustc-alloc_error_handler");
                         of << "uint8_t __rust_alloc_error_handler_should_panic = 0;\n";
                         of << "uint8_t __rust_no_alloc_shim_is_unstable = 0;\n";
 
                         auto layoutPath = ::HIR::SimplePath("core", {"alloc", "Layout"});
-                        if (oom_method != HIR::SimplePath()) {
+                        if (oomMethod != HIR::SimplePath()) {
                             of << "struct s_" << TransMangle(layoutPath) << "_A { uintptr_t a, b; };\n";
                             of << "void oom_impl(struct s_" << TransMangle(layoutPath) << "_A l) {"
-                                 << " extern void " << TransMangle(oom_method) << "(struct s_" << TransMangle(layoutPath) << "_A l);"
-                                 << " " << TransMangle(oom_method) << "(l);"
+                                 << " extern void " << TransMangle(oomMethod) << "(struct s_" << TransMangle(layoutPath) << "_A l);"
+                                 << " " << TransMangle(oomMethod) << "(l);"
                                  << " }\n";
                         }
 
                         // Force abort on alloc error, rustc uses `-Zoom={panic,abort}` to select this
                         of << "uint8_t __rust_alloc_error_handler_should_panic_v2() { return 0; }";
                         of << "void __rust_alloc_error_handler(uintptr_t s, uintptr_t a) {\n";
-                        if (oom_method == HIR::SimplePath()) {
+                        if (oomMethod == HIR::SimplePath()) {
                             of << "\tvoid __rdl_oom(uintptr_t, uintptr_t);\n";
                             of << "\t__rdl_oom(s,a);\n";
                         } else {
@@ -799,7 +799,7 @@ namespace {
 
             StringList ext_crates;
             StringList extCratesDylib;
-            switch (out_ty) {
+            switch (outTy) {
                 case CodegenOutput::Executable:
                 case CodegenOutput::DynamicLibrary:
                     for (const auto& crate_name : crate.extCratesOrdered) {
@@ -950,7 +950,7 @@ namespace {
             for (const auto& a : TargetGetCurSpec().backendC.compilerOpts) {
                 args.push_back(a.c_str());
             }
-            switch (opt.opt_level) {
+            switch (opt.optLevel) {
                 case OptimizationLevel::None:
                     // Do not inherit an optimisation level from the C compiler's
                     // environment (e.g. Nix's cc-wrapper adds -O2). rustc's
@@ -976,7 +976,7 @@ namespace {
 #if defined(__GNUC__) && !defined(__clang__)
     #if __GNUC__ < 16 && !(__GNUC__ == 15 && __GNUC_MINOR__ > 1)
             // HACK: Work around [https://gcc.gnu.org/bugzilla/show_bug.cgi?id=117423] by disabling an optimisation stage
-            if (opt.opt_level != OptimizationLevel::None) {
+            if (opt.optLevel != OptimizationLevel::None) {
                 args.push_back("-fno-tree-sra");
             }
     #endif
@@ -996,7 +996,7 @@ namespace {
             // TODO: Why?
             args.push_back("-fPIC");
             args.push_back("-o");
-            switch (out_ty) {
+            switch (outTy) {
                 case CodegenOutput::DynamicLibrary:
                 case CodegenOutput::Executable:
                 case CodegenOutput::Object:
@@ -1007,7 +1007,7 @@ namespace {
                     break;
             }
             args.push_back(outfilePathC.c_str());
-            switch (out_ty) {
+            switch (outTy) {
                 case CodegenOutput::DynamicLibrary:
                     args.push_back("-shared");
                 case CodegenOutput::Executable:
@@ -1068,8 +1068,8 @@ namespace {
             size_t i = -1;
             for (const auto& arg : args.getVec()) {
                 i++;
-                auto& out_ss = (use_arg_file && i >= argFileStart ? static_cast<::std::ostream&>(commandFileStream) : cmdSs);
-                out_ss << "\"" << FmtShell(arg) << "\" ";
+                auto& outSs = (use_arg_file && i >= argFileStart ? static_cast<::std::ostream&>(commandFileStream) : cmdSs);
+                outSs << "\"" << FmtShell(arg) << "\" ";
             }
             if (use_arg_file) {
                 cmdSs << "@\"" << FmtShell(commandFile) << "\"";
@@ -1094,7 +1094,7 @@ namespace {
             }
 
             // Custom Cargo treats `.rlib` as the metadata/completion marker and links the sibling object file.
-            if (out_ty == CodegenOutput::StaticLibrary) {
+            if (outTy == CodegenOutput::StaticLibrary) {
                 ::std::ofstream of(outfilePath);
                 if (!of.good()) {
                     // TODO: Error?
@@ -1733,7 +1733,7 @@ namespace {
             MonomorphStatePtr ms(crate.types, nullptr, &path.mParams, nullptr);
             ::HIR::TypeRef tmp;
             auto monomorph = [&](const auto& x) {
-                return mResolve.monomorph_expand_opt(sp, tmp, x, ms);
+                return mResolve.monomorphExpandOpt(sp, tmp, x, ms);
             };
 
             ASSERT_BUG(sp, item.mData.is_Data(), "");
@@ -1784,7 +1784,7 @@ namespace {
             ::HIR::TypeRef tmp;
             MonomorphStatePtr ms(crate.types, nullptr, &p.mParams, nullptr);
             auto monomorph = [&](const auto& x) {
-                return mResolve.monomorph_expand_opt(sp, tmp, x, ms);
+                return mResolve.monomorphExpandOpt(sp, tmp, x, ms);
             };
 
             // Crate constructor function
@@ -2055,7 +2055,7 @@ namespace {
         void print_escaped_string_inner(const char* start, const char* end) {
             const unsigned MAX_STRING_LEN = 16380 / 3 - 10;
             of << "\"" << ::std::hex;
-            unsigned n_ch = 0;
+            unsigned nCh = 0;
             while (start != end) {
                 const char v = *start++;
                 switch (v) {
@@ -2074,7 +2074,7 @@ namespace {
                                 // Trigraph! Needs an escape in it.
                                 of << v;
                                 of << "\"\"";
-                                n_ch = 0;
+                                nCh = 0;
                                 break;
                             }
                         }
@@ -2091,14 +2091,14 @@ namespace {
                             // If the next character is a hex digit, close/reopen the string.
                             if (start != end && isxdigit(static_cast<unsigned char>(*start))) {
                                 of << "\"\"";
-                                n_ch = 0;
+                                nCh = 0;
                             }
                         }
                 }
-                n_ch++;
-                if (n_ch == MAX_STRING_LEN) {
+                nCh++;
+                if (nCh == MAX_STRING_LEN) {
                     of << "\"\"";
-                    n_ch = 0;
+                    nCh = 0;
                 }
             }
             of << "\"" << ::std::dec;
@@ -2348,7 +2348,7 @@ namespace {
             }
 
             ::HIR::TypeRef ret_type_tmp;
-            const auto& ret_type = monomorphise_fcn_return(ret_type_tmp, item, params);
+            const auto& ret_type = monomorphiseFcnReturn(ret_type_tmp, item, params);
 
             ::MIR::TypeResolve mir_res {
                 sp, mResolve, FMT_CB(ss, ss << p;), ret_type, arg_types, *code
@@ -2518,14 +2518,14 @@ namespace {
                     });
                 }
                 TU_ARMA(Drop, e) {
-                    emitOperationWithUnwind(e.unwind, indent_level, [&](unsigned operation_indent) {
-                        emitDropOperation(mir_res, e, operation_indent);
+                    emitOperationWithUnwind(e.unwind, indent_level, [&](unsigned operationIndent) {
+                        emitDropOperation(mir_res, e, operationIndent);
                     });
                     emitTarget(e.target);
                 }
                 TU_ARMA(Call, e) {
-                    emitOperationWithUnwind(e.unwind, indent_level, [&](unsigned operation_indent) {
-                        emitTermCall(mir_res, e, operation_indent);
+                    emitOperationWithUnwind(e.unwind, indent_level, [&](unsigned operationIndent) {
+                        emitTermCall(mir_res, e, operationIndent);
                     });
                     emitTarget(e.ret_block);
                 }
@@ -2630,8 +2630,8 @@ namespace {
             // Magic for taking a &-ptr to unsized field of a struct.
             // - Needs to get metadata from bottom-level pointer.
             else if (val.is_Field()) {
-                auto meta_ty = metadata_type(ty);
-                if (meta_ty != MetadataType::None) {
+                auto metaTy = metadataType(ty);
+                if (metaTy != MetadataType::None) {
                     auto baseVal = ::MIR::LValue::CRef(val).innerRef();
                     while (baseVal.is_Field()) {
                         baseVal.try_unwrap();
@@ -2640,7 +2640,7 @@ namespace {
                     const auto basePtr = baseVal.innerRef();
 
                     // Construct the new DST
-                    switch (meta_ty) {
+                    switch (metaTy) {
                         case MetadataType::None:
                             throw "";
                         case MetadataType::Unknown:
@@ -2654,7 +2654,7 @@ namespace {
                             of << "make_traitobjptr(";
                             break;
                     }
-                    if (meta_ty == MetadataType::TraitObject) {
+                    if (metaTy == MetadataType::TraitObject) {
                         ::HIR::TypeRef baseTmp;
                         const auto& baseTy = mir_res.getLvalueType(baseTmp, baseVal.clone());
                         const auto baseParam = ::MIR::Param::make_LValue(basePtr.clone());
@@ -2779,11 +2779,11 @@ namespace {
                         // Get the number of fields in parent
                         auto* repr = TargetGetTypeRepr(sp, mResolve, parent_ty);
                         assert(repr);
-                        size_t n_parent_fields = repr->fields.size();
+                        size_t nParentFields = repr->fields.size();
                         // Find next non-zero field
                         auto tmp_lv = ::MIR::LValue::newField(fieldInner.clone(), val_fp.as_Field() + 1);
                         bool found = false;
-                        while (tmp_lv.as_Field() < n_parent_fields) {
+                        while (tmp_lv.as_Field() < nParentFields) {
                             auto idx = tmp_lv.as_Field();
                             const auto& ty = repr->fields[idx].ty;
                             if (ty->is_Path() && ty->as_Path().binding.is_ExternType()) {
@@ -2887,9 +2887,9 @@ namespace {
                     const auto& e = stmt.as_SetDropFlag();
                     of << indent << "df" << e.idx << " = ";
                     if (e.other == ~0u) {
-                        of << e.new_val;
+                        of << e.newVal;
                     } else {
-                        of << (e.new_val ? "!" : "") << "df" << e.other;
+                        of << (e.newVal ? "!" : "") << "df" << e.other;
                     }
                     of << ";\n";
                     break;
@@ -3003,7 +3003,7 @@ namespace {
                             } else {
                                 MIR_BUG(mir_res, "Borrow rvalue has non-pointer result type " << ty);
                             }
-                            const auto pointer_metadata = metadata_type(pointee_ty);
+                            const auto pointer_metadata = metadataType(pointee_ty);
                             of << (pointer_metadata == MetadataType::None || pointer_metadata == MetadataType::Zero
                                          ? " = reinterpret_cast<"
                                          : " = static_cast<");
@@ -3425,14 +3425,14 @@ namespace {
                             of << " = static_cast<";
                             emitCtype(ty);
                             of << ">(";
-                            auto meta = metadata_type(ty->is_Pointer() ? ty->as_Pointer().inner : ty->as_Borrow().inner);
+                            auto meta = metadataType(ty->is_Pointer() ? ty->as_Pointer().inner : ty->as_Borrow().inner);
                             switch (meta) {
                                 case MetadataType::Slice:
                                     of << "make_sliceptr";
                                     of << "(";
                                     emitParam(ve.ptr_val, false);
                                     of << ", ";
-                                    emitParam(ve.meta_val);
+                                    emitParam(ve.metaVal);
                                     of << ")";
                                     break;
                                 case MetadataType::TraitObject:
@@ -3440,7 +3440,7 @@ namespace {
                                     of << "(";
                                     emitParam(ve.ptr_val);
                                     of << ", ";
-                                    emitTraitMetadataParam(mir_res, ve.meta_val);
+                                    emitTraitMetadataParam(mir_res, ve.metaVal);
                                     of << ")";
                                     break;
                                 case MetadataType::Zero:
@@ -3764,7 +3764,7 @@ namespace {
             }
         }
 
-        void emitTermSwitch(const ::MIR::TypeResolve& mir_res, const ::MIR::LValue& val, size_t n_arms, unsigned indent_level, ::std::function<void(size_t)> cb, size_t odd_arm = -1) {
+        void emitTermSwitch(const ::MIR::TypeResolve& mir_res, const ::MIR::LValue& val, size_t nArms, unsigned indent_level, ::std::function<void(size_t)> cb, size_t oddArm = -1) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indent_level)};
 
             ::HIR::TypeRef tmp;
@@ -3800,7 +3800,7 @@ namespace {
 
             TU_MATCH_HDRA( (repr->variants), {)
             TU_ARMA(NonZero, e) {
-                    MIR_ASSERT(mir_res, n_arms == 2, "NonZero optimised switch without two arms");
+                    MIR_ASSERT(mir_res, nArms == 2, "NonZero optimised switch without two arms");
                     // If this is an emulated i128, check both fields
                     of << indent << "if( ";
                     emitLvalue(val);
@@ -3869,24 +3869,24 @@ namespace {
                     };
 
                     // Optimisation: If there's only one arm with a different value, then emit an `if` isntead of a `switch`
-                    if (odd_arm != static_cast<size_t>(-1)) {
+                    if (oddArm != static_cast<size_t>(-1)) {
                         of << indent << "if( ";
                         emitVariant();
-                        if (e.isNiche(odd_arm)) {
+                        if (e.isNiche(oddArm)) {
                             of << " < " << e.offset;
                         } else {
-                            of << " == " << (e.offset + odd_arm);
+                            of << " == " << (e.offset + oddArm);
                         }
                         of << ") {";
-                        cb(odd_arm);
+                        cb(oddArm);
                         of << "} else {";
-                        cb(odd_arm == 0 ? 1 : 0);
+                        cb(oddArm == 0 ? 1 : 0);
                         of << "}\n";
                     } else {
                         of << indent << "switch(";
                         emitVariant();
                         of << ") {\n";
-                        for (size_t j = 0; j < n_arms; j++) {
+                        for (size_t j = 0; j < nArms; j++) {
                             if (e.isNiche(j)) {
                                 continue;
                             }
@@ -3959,19 +3959,19 @@ namespace {
                     };
 
                     // Optimisation: If there's only one arm with a different value, then emit an `if` isntead of a `switch`
-                    if (odd_arm != static_cast<size_t>(-1)) {
+                    if (oddArm != static_cast<size_t>(-1)) {
                         of << indent << "if(";
-                        emitEqual(odd_arm);
+                        emitEqual(oddArm);
                         of << ") {";
-                        cb(odd_arm);
+                        cb(oddArm);
                         of << "} else {";
-                        cb(odd_arm == 0 ? 1 : 0);
+                        cb(oddArm == 0 ? 1 : 0);
                         of << "}\n";
                         return;
                     }
 
                     if (is128) {
-                        for (size_t j = 0; j < n_arms; j++) {
+                        for (size_t j = 0; j < nArms; j++) {
                             of << indent << (j == 0 ? "if(" : "else if(");
                             emitEqual(j);
                             of << ") {";
@@ -3985,7 +3985,7 @@ namespace {
                     of << indent << "switch(";
                     emitTag();
                     of << ") {\n";
-                    for (size_t j = 0; j < n_arms; j++) {
+                    for (size_t j = 0; j < nArms; j++) {
                         // Handle signed values
                         if (is_signed) {
                             of << indent << "case " << S128(e.values[j]).truncate_i64() << "ll: ";
@@ -4149,18 +4149,18 @@ namespace {
                 }
             }
 
-            bool omit_assign = false;
+            bool omitAssign = false;
 
             // If the return type is `()`, omit the assignment (all `()` returning functions are marked as returning
             // void)
             {
                 ::HIR::TypeRef tmp;
                 if (mirRes->getLvalueType(tmp, e.ret_val) == crate.types.unit()) {
-                    omit_assign = true;
+                    omitAssign = true;
                 }
 
                 if (this->type_is_bad_zst(mirRes->getLvalueType(tmp, e.ret_val))) {
-                    omit_assign = true;
+                    omitAssign = true;
                 }
             }
 
@@ -4172,8 +4172,8 @@ namespace {
                         MIR_ASSERT(mir_res, ty->is_Function(), "Call::Value on non-function - " << ty);
 
                         const auto& ret_ty = ty->as_Function().mRettype;
-                        omit_assign |= ret_ty->is_Diverge();
-                        if (!omit_assign) {
+                        omitAssign |= ret_ty->is_Diverge();
+                        if (!omitAssign) {
                             emitLvalue(e.ret_val);
                             of << " = ";
                         }
@@ -4187,14 +4187,14 @@ namespace {
                     TU_MATCH_HDRA( (e2.mData), {)
                     TU_ARMA(Generic, pe) {
                                 const auto& fcn = crate.getFunctionByPath(sp, pe.mPath);
-                                omit_assign |= fcn.returnType->is_Diverge();
+                                omitAssign |= fcn.returnType->is_Diverge();
                                 // TODO: Monomorph.
                             }
                             TU_ARMA(UfcsUnknown, pe) {
                             }
                             TU_ARMA(UfcsInherent, pe) {
                                 // Check if the return type is !
-                                omit_assign |= mResolve.crate.findTypeImpls(pe.type, HIR::ResolvePlaceholdersNop(), [&](const auto& impl) {
+                                omitAssign |= mResolve.crate.findTypeImpls(pe.type, HIR::ResolvePlaceholdersNop(), [&](const auto& impl) {
                                     // Associated functions
                                     {
                                         auto it = impl.methods.find(pe.item);
@@ -4212,7 +4212,7 @@ namespace {
                                 const auto& fcn = tr.values.find(pe.item)->second.as_Function();
                                 const auto& rv_tpl = fcn.returnType;
                                 if (rv_tpl->is_Diverge() || rv_tpl == crate.types.unit()) {
-                                    omit_assign |= true;
+                                    omitAssign |= true;
                                 } else if (const auto* te = rv_tpl->opt_Generic()) {
                                     (void)te;
                                     // TODO: Generic lookup
@@ -4225,7 +4225,7 @@ namespace {
                                 }
                             }
                     }
-                    if(!omit_assign)
+                    if(!omitAssign)
                     {
                             emitLvalue(e.ret_val);
                             of << " = ";
@@ -4939,12 +4939,12 @@ namespace {
         }
 
     private:
-        const ::HIR::TypeData* monomorphise_fcn_return(::HIR::TypeRef& tmp, const ::HIR::Function& item, const TransParams& params) {
+        const ::HIR::TypeData* monomorphiseFcnReturn(::HIR::TypeRef& tmp, const ::HIR::Function& item, const TransParams& params) {
             bool hasErased = visit_ty_with(item.returnType, [&](const auto& x) {
                 return x->is_ErasedType();
             });
 
-            if (hasErased || monomorphise_type_needed(item.returnType)) {
+            if (hasErased || monomorphiseTypeNeeded(item.returnType)) {
                 // If there's an erased type, make a copy with the erased type expanded
                 if (hasErased) {
                     tmp = cloneTyWith(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
@@ -4956,9 +4956,9 @@ namespace {
                         }
                         return false;
                     });
-                    tmp = params.monomorph_type(Span(), tmp);
+                    tmp = params.monomorphType(Span(), tmp);
                 } else {
-                    tmp = params.monomorph_type(Span(), item.returnType);
+                    tmp = params.monomorphType(Span(), item.returnType);
                 }
                 mResolve.expandAssociatedTypes(Span(), tmp);
                 return tmp;
@@ -4969,7 +4969,7 @@ namespace {
 
         void emitFunctionHeader(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params) {
             ::HIR::TypeRef tmp;
-            const auto& ret_ty = monomorphise_fcn_return(tmp, item, params);
+            const auto& ret_ty = monomorphiseFcnReturn(tmp, item, params);
             if (item.markings.isNaked) {
                 of << "__attribute__((naked)) ";
 
@@ -5129,13 +5129,13 @@ namespace {
                 }
                 emitParam(param);
             };
-            auto emitAtomicCxchg = [&](const auto& e, Ordering o_succ, Ordering o_fail, bool isWeak) {
-                switch (o_fail) {
+            auto emitAtomicCxchg = [&](const auto& e, Ordering oSucc, Ordering oFail, bool isWeak) {
+                switch (oFail) {
                     case Ordering::Release:
-                        o_fail = Ordering::Relaxed;
+                        oFail = Ordering::Relaxed;
                         break;
                     case Ordering::AcqRel:
-                        o_fail = Ordering::Acquire;
+                        oFail = Ordering::Acquire;
                         break;
                     default:
                         break;
@@ -5164,7 +5164,7 @@ namespace {
                     emitParam(e.args.at(2)); // `desired` (the new value for the slot if equal)
                 }
                 of << ", " << (isWeak ? "true" : "false");
-                of << ", " << getAtomicTyGcc(o_succ) << ", " << getAtomicTyGcc(o_fail) << ")";
+                of << ", " << getAtomicTyGcc(oSucc) << ", " << getAtomicTyGcc(oFail) << ")";
 
             };
             auto emitAtomicArith = [&](AtomicOp op, Ordering ordering) {
@@ -5295,7 +5295,7 @@ namespace {
                     MIR_BUG(mir_res, "Unknown inner unsized type " << innerTy << " for " << ty);
                 }
 #else
-                switch (metadata_type(ty)) {
+                switch (metadataType(ty)) {
                     case MetadataType::None:
                         of << "ALIGNOF(";
                         emitCtype(ty);
@@ -5379,8 +5379,8 @@ namespace {
                     of << ")); ";
                     of << "}";
                 } else if (isPtr(ty_dst) && isPtr(ty_src)) {
-                    auto src_meta = metadata_type(ty_src->is_Pointer() ? ty_src->as_Pointer().inner : ty_src->as_Borrow().inner);
-                    auto dstMeta = metadata_type(ty_dst->is_Pointer() ? ty_dst->as_Pointer().inner : ty_dst->as_Borrow().inner);
+                    auto src_meta = metadataType(ty_src->is_Pointer() ? ty_src->as_Pointer().inner : ty_src->as_Borrow().inner);
+                    auto dstMeta = metadataType(ty_dst->is_Pointer() ? ty_dst->as_Pointer().inner : ty_dst->as_Borrow().inner);
                     if (src_meta == MetadataType::None || src_meta == MetadataType::Zero) {
                         MIR_ASSERT(*mirRes, dstMeta == MetadataType::None || dstMeta == MetadataType::Zero, "Transmuting to fat pointer from thin: " << ty_src << " -> " << ty_dst);
                         emitLvalue(e.ret_val);
@@ -6826,7 +6826,7 @@ namespace {
             }
             // -- Platform Intrinsics (and SIMD) --
             else if (name.compare(0, 9, "platform:") == 0 || name.compare(0, 5, "simd_") == 0) {
-                auto name_strip = ::std::string_view(name.c_str() + (name.compare(0, 9, "platform:") == 0 ? 9 : 0));
+                auto nameStrip = ::std::string_view(name.c_str() + (name.compare(0, 9, "platform:") == 0 ? 9 : 0));
 
                 struct SimdInfo {
                     unsigned count;
@@ -6980,7 +6980,7 @@ namespace {
 
                 // dst: T, index: usize, val: U
                 // Insert a value at position
-                if (name_strip == "simd_insert") {
+                if (nameStrip == "simd_insert") {
                     size_t size_slot = 0, size_val = 0;
                     TargetGetSizeOf(sp, mResolve, params.types.at(0), size_slot);
                     TargetGetSizeOf(sp, mResolve, params.types.at(1), size_val);
@@ -7000,7 +7000,7 @@ namespace {
                     emitParam(e.args.at(1));
                     of << "] = ";
                     emitParam(e.args.at(2));
-                } else if (name_strip == "simd_extract") {
+                } else if (nameStrip == "simd_extract") {
                     size_t size_slot = 0, size_val = 0;
                     TargetGetSizeOf(sp, mResolve, params.types.at(0), size_slot);
                     TargetGetSizeOf(sp, mResolve, params.types.at(1), size_val);
@@ -7018,7 +7018,7 @@ namespace {
                     of << "]";
                 }
                 // Truncate into a bitmask - Converts a collection of [0,!0] into bits
-                else if (name_strip == "simd_bitmask") {
+                else if (nameStrip == "simd_bitmask") {
                     auto src_info = SimdInfo::forTy(*this, params.types.at(0));
                     size_t size_out = 0;
                     TargetGetSizeOf(sp, mResolve, params.types.at(1), size_out);
@@ -7033,11 +7033,11 @@ namespace {
                         of << ")[" << i << "] == 0 ? 0 : (1 << " << (i % 8) << "); ";
                     }
                     of << "}";
-                } else if (name_strip == "simd_shuffle128" || name_strip == "simd_shuffle64" || name_strip == "simd_shuffle32" || name_strip == "simd_shuffle16" || name_strip == "simd_shuffle8" || name_strip == "simd_shuffle4" || name_strip == "simd_shuffle2") {
+                } else if (nameStrip == "simd_shuffle128" || nameStrip == "simd_shuffle64" || nameStrip == "simd_shuffle32" || nameStrip == "simd_shuffle16" || nameStrip == "simd_shuffle8" || nameStrip == "simd_shuffle4" || nameStrip == "simd_shuffle2") {
                     // Shuffle in 8 entries
                     size_t size_slot = 0;
                     TargetGetSizeOf(sp, mResolve, params.types.at(1), size_slot);
-                    size_t div = name_strip == "simd_shuffle128" ? 128 : name_strip == "simd_shuffle64" ? 64 : name_strip == "simd_shuffle32" ? 32 : name_strip == "simd_shuffle16" ? 16 : name_strip == "simd_shuffle8" ? 8 : name_strip == "simd_shuffle4" ? 4 : name_strip == "simd_shuffle2" ? 2 : throw "";
+                    size_t div = nameStrip == "simd_shuffle128" ? 128 : nameStrip == "simd_shuffle64" ? 64 : nameStrip == "simd_shuffle32" ? 32 : nameStrip == "simd_shuffle16" ? 16 : nameStrip == "simd_shuffle8" ? 8 : nameStrip == "simd_shuffle4" ? 4 : nameStrip == "simd_shuffle2" ? 2 : throw "";
                     size_t size_val = size_slot / div;
                     MIR_ASSERT(mir_res, size_val > 0, size_slot << " / " << div << " == 0?");
                     MIR_ASSERT(mir_res, size_slot >= size_val, size_slot << " < " << size_val);
@@ -7046,21 +7046,21 @@ namespace {
                     // point is the INPUT element count, not the index count.
                     size_t size_in = 0;
                     TargetGetSizeOf(sp, mResolve, params.types.at(0), size_in);
-                    size_t n_in = size_in / size_val;
-                    MIR_ASSERT(mir_res, n_in > 0, "Zero-sized shuffle input");
+                    size_t nIn = size_in / size_val;
+                    MIR_ASSERT(mir_res, nIn > 0, "Zero-sized shuffle input");
                     of << "for(int i = 0; i < " << div << "; i++) { int j = ";
                     emitParam(e.args.at(2));
                     of << ".DATA[i];";
                     of << "((uint" << (size_val * 8) << "_t*)&";
                     emitLvalue(e.ret_val);
                     of << ")[i]";
-                    of << " = ((uint" << (size_val * 8) << "_t*)(j < " << n_in << " ? &";
+                    of << " = ((uint" << (size_val * 8) << "_t*)(j < " << nIn << " ? &";
                     emitParam(e.args.at(0));
                     of << " : &";
                     emitParam(e.args.at(1));
-                    of << "))[j < " << n_in << " ? j : j - " << n_in << "];";
+                    of << "))[j < " << nIn << " ? j : j - " << nIn << "];";
                     of << "}";
-                } else if (name_strip == "simd_shuffle") {
+                } else if (nameStrip == "simd_shuffle") {
                     const auto& vec_ty = params.types.at(0);
                     const auto& mapTy = params.types.at(1);
                     const auto& ret_ty = params.types.at(2);
@@ -7074,8 +7074,8 @@ namespace {
                     size_t size_val = size_ret / div;
                     // Indices address the concatenation of both inputs; split on the input
                     // element count (an extract's map can be shorter than the vector).
-                    size_t n_in = size_vec / size_val;
-                    MIR_ASSERT(mir_res, n_in > 0, "Zero-sized shuffle input");
+                    size_t nIn = size_vec / size_val;
+                    MIR_ASSERT(mir_res, nIn > 0, "Zero-sized shuffle input");
                     of << "for(int i = 0; i < " << div << "; i++) {";
                     of << " int j = ";
                     emitParam(e.args.at(2));
@@ -7084,13 +7084,13 @@ namespace {
                     of << " ((uint" << (size_val * 8) << "_t*)&";
                     emitLvalue(e.ret_val);
                     of << ")[i]";
-                    of << " = ((uint" << (size_val * 8) << "_t*)(j < " << n_in << " ? &";
+                    of << " = ((uint" << (size_val * 8) << "_t*)(j < " << nIn << " ? &";
                     emitParam(e.args.at(0));
                     of << " : &";
                     emitParam(e.args.at(1));
-                    of << "))[j < " << n_in << " ? j : j - " << n_in << "];";
+                    of << "))[j < " << nIn << " ? j : j - " << nIn << "];";
                     of << "}";
-                } else if (name_strip == "simd_cast") {
+                } else if (nameStrip == "simd_cast") {
                     auto src_info = SimdInfo::forTy(*this, params.types.at(0));
                     auto dstInfo = SimdInfo::forTy(*this, params.types.at(1));
                     MIR_ASSERT(mir_res, src_info.count == dstInfo.count, "Element counts must match for " << name);
@@ -7107,7 +7107,7 @@ namespace {
                     of << ")[i];";
                 }
                 // Select between two values
-                else if (name_strip == "simd_select") {
+                else if (nameStrip == "simd_select") {
                     auto maskInfo = SimdInfo::forTy(*this, params.types.at(0));
                     auto val_info = SimdInfo::forTy(*this, params.types.at(1));
                     MIR_ASSERT(mir_res, maskInfo.count == val_info.count, "Element counts must match for " << name);
@@ -7133,7 +7133,7 @@ namespace {
                     emitParam(e.args.at(2));
                     of << ")[i]";
                     of << ";";
-                } else if (name_strip == "simd_select_bitmask") {
+                } else if (nameStrip == "simd_select_bitmask") {
                     auto val_info = SimdInfo::forTy(*this, params.types.at(1));
                     of << "for(int i = 0; i < " << val_info.count << "; i++) ";
                     of << "((";
@@ -7157,39 +7157,39 @@ namespace {
                     of << ";";
                 }
                 // Comparisons
-                else if (name_strip == "simd_eq") {
+                else if (nameStrip == "simd_eq") {
                     simd_cmp("==");
-                } else if (name_strip == "simd_ne") {
+                } else if (nameStrip == "simd_ne") {
                     simd_cmp("!=");
-                } else if (name_strip == "simd_lt") {
+                } else if (nameStrip == "simd_lt") {
                     simd_cmp("<");
-                } else if (name_strip == "simd_le") {
+                } else if (nameStrip == "simd_le") {
                     simd_cmp("<=");
-                } else if (name_strip == "simd_gt") {
+                } else if (nameStrip == "simd_gt") {
                     simd_cmp(">");
-                } else if (name_strip == "simd_ge") {
+                } else if (nameStrip == "simd_ge") {
                     simd_cmp(">=");
                 }
                 // Arithmetic
-                else if (name_strip == "simd_add") {
+                else if (nameStrip == "simd_add") {
                     simd_arith("+");
-                } else if (name_strip == "simd_sub") {
+                } else if (nameStrip == "simd_sub") {
                     simd_arith("-");
-                } else if (name_strip == "simd_mul") {
+                } else if (nameStrip == "simd_mul") {
                     simd_arith("*");
-                } else if (name_strip == "simd_div") {
+                } else if (nameStrip == "simd_div") {
                     simd_arith("/");
-                } else if (name_strip == "simd_and") {
+                } else if (nameStrip == "simd_and") {
                     simd_arith("&");
-                } else if (name_strip == "simd_or") {
+                } else if (nameStrip == "simd_or") {
                     simd_arith("|");
-                } else if (name_strip == "simd_xor") {
+                } else if (nameStrip == "simd_xor") {
                     simd_arith("^");
-                } else if (name_strip == "simd_xor") {
+                } else if (nameStrip == "simd_xor") {
                     simd_arith("^");
-                } else if (name_strip == "simd_shr") {
+                } else if (nameStrip == "simd_shr") {
                     simd_arith(">>");
-                } else if (name_strip == "simd_shl") {
+                } else if (nameStrip == "simd_shl") {
                     simd_arith("<<");
                 }
                 // platform:simd_reduce_and
@@ -7200,15 +7200,15 @@ namespace {
                 // platform:simd_reduce_or
                 // platform:simd_saturating_add
                 // platform:simd_saturating_sub
-                else if (name_strip == "simd_ceil") {
+                else if (nameStrip == "simd_ceil") {
                     simd_call("ceil");
-                } else if (name_strip == "simd_floor") {
+                } else if (nameStrip == "simd_floor") {
                     simd_call("floor");
-                } else if (name_strip == "simd_fsqrt") {
+                } else if (nameStrip == "simd_fsqrt") {
                     simd_call("sqrt");
                 }
                 // platform:simd_fma
-                else if (name_strip == "simd_fma") {
+                else if (nameStrip == "simd_fma") {
                     auto info = SimdInfo::forTy(*this, params.types.at(0));
                     // Emulate!
                     of << "for(int i = 0; i < " << info.count << "; i++)";
@@ -7361,7 +7361,7 @@ namespace {
                     // - TODO: If the destructor is known to do nothing, don't call it.
                     auto p = ::HIR::Path(ty, "#drop_glue");
                     const char* makeFcn = nullptr;
-                    switch (metadata_type(ty)) {
+                    switch (metadataType(ty)) {
                         case MetadataType::Unknown:
                             MIR_BUG(*mirRes, ty << " unknown metadata");
                         case MetadataType::None:
@@ -7571,7 +7571,7 @@ namespace {
                         emitLvalue(inner);
                         of << ".DATA[" << fieldIndex << "]";
                     } else if (inner.is_Deref()) {
-                        auto dst_type = metadata_type(ty);
+                        auto dst_type = metadataType(ty);
                         if (dst_type != MetadataType::None) {
                             of << "((";
                             emitCtype(ty);
@@ -7591,7 +7591,7 @@ namespace {
                     auto inner = val.innerRef();
                     ::HIR::TypeRef tmp;
                     const auto& ty = mirRes->getLvalueType(tmp, val);
-                    auto dst_type = metadata_type(ty);
+                    auto dst_type = metadataType(ty);
                     // If the type is unsized, then this pointer is a fat pointer, so we need to cast the data pointer.
                     if (dst_type != MetadataType::None) {
                         of << "(*(";
@@ -7762,8 +7762,8 @@ namespace {
                         of << "(void*)&__typeid_" << TransMangle(c->mData.as_UfcsInherent().type);
                     } else {
                         bool isFcn = false;
-                        MonomorphState ms_tmp(crate.types);
-                        auto v = mResolve.getValue(sp, *c, ms_tmp, /*signature_only=*/true);
+                        MonomorphState msTmp(crate.types);
+                        auto v = mResolve.getValue(sp, *c, msTmp, /*signature_only=*/true);
                         isFcn = v.is_Function() || v.is_EnumConstructor() || v.is_StructConstructor();
                         MIR_ASSERT(*mirRes, !isFcn || !hasOffset, "Function address has a non-zero offset: " << c.offset);
                         if (!isFcn) {
@@ -7985,7 +7985,7 @@ namespace {
                                 const auto& path = ty->as_Path().path.mData.as_Generic();
                                 const auto& str = *ty->as_Path().binding.as_Struct();
                                 auto monomorph = [&](const auto& tpl) {
-                                    return mResolve.monomorph_expand(sp, tpl, MonomorphStatePtr(crate.types, nullptr, &path.mParams, nullptr));
+                                    return mResolve.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, nullptr, &path.mParams, nullptr));
                                 };
                         TU_MATCH_HDRA( (str.mData), { )
                         TU_ARMA(Unit, se) MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");
@@ -8081,8 +8081,8 @@ namespace {
             of << ")";
         }
 
-        MetadataType metadata_type(const ::HIR::TypeData* ty) const {
-            return mResolve.metadata_type(mirRes ? mirRes->sp : sp, ty);
+        MetadataType metadataType(const ::HIR::TypeData* ty) const {
+            return mResolve.metadataType(mirRes ? mirRes->sp : sp, ty);
         }
 
         void emitCtypePtr(const ::HIR::TypeData* innerTy, ::FmtLambda inner) {
@@ -8091,7 +8091,7 @@ namespace {
             //}
             //else
             {
-                switch (this->metadata_type(innerTy)) {
+                switch (this->metadataType(innerTy)) {
                     case MetadataType::Unknown:
                         BUG(sp, innerTy << " unknown metadata type");
                     case MetadataType::None:
@@ -8109,7 +8109,7 @@ namespace {
         }
 
         bool isDst(const ::HIR::TypeData* ty) const {
-            switch (this->metadata_type(ty)) {
+            switch (this->metadataType(ty)) {
                 case MetadataType::Unknown:
                     BUG(sp, ty << " unknown metadata type");
                 case MetadataType::None:

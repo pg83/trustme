@@ -3,7 +3,7 @@
 
 namespace HIR {
     ::std::ostream& operator<<(::std::ostream& os, const GenericBound& x) {
-        TU_MATCH(::HIR::GenericBound, (x), (e), (Lifetime, os << e.test << ": " << e.valid_for;), (TypeLifetime, os << e.type << ": " << e.valid_for;), (TraitBound, os << e.type << ": " << e.trait /*.m_path*/;), (TypeEquality, os << e.type << " = " << e.other_type;))
+        TU_MATCH(::HIR::GenericBound, (x), (e), (Lifetime, os << e.test << ": " << e.valid_for;), (TypeLifetime, os << e.type << ": " << e.valid_for;), (TraitBound, os << e.type << ": " << e.trait /*.m_path*/;), (TypeEquality, os << e.type << " = " << e.otherType;))
         return os;
     }
 
@@ -57,7 +57,7 @@ Ordering HIR::GenericBound::ord(const HIR::GenericBound& b) const {
     if (this->tag() != b.tag()) {
         return this->tag() < b.tag() ? OrdLess : OrdGreater;
     }
-    TU_MATCHA((*this, b), (ae, be), (Lifetime, auto cmp = ::ord(ae.test, be.test); if (cmp != OrdEqual) return cmp; cmp = ::ord(ae.valid_for, be.valid_for); if (cmp != OrdEqual) return cmp;), (TypeLifetime, auto cmp = ae.type->ord_ignoring_regions(be.type); if (cmp != OrdEqual) return cmp; cmp = ::ord(ae.valid_for, be.valid_for); if (cmp != OrdEqual) return cmp;), (TraitBound, auto cmp = ae.type->ord_ignoring_regions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.trait.ord(be.trait); if (cmp != OrdEqual) return cmp;), (TypeEquality, auto cmp = ae.type->ord_ignoring_regions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.other_type->ord_ignoring_regions(be.other_type); if (cmp != OrdEqual) return cmp;))
+    TU_MATCHA((*this, b), (ae, be), (Lifetime, auto cmp = ::ord(ae.test, be.test); if (cmp != OrdEqual) return cmp; cmp = ::ord(ae.valid_for, be.valid_for); if (cmp != OrdEqual) return cmp;), (TypeLifetime, auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ::ord(ae.valid_for, be.valid_for); if (cmp != OrdEqual) return cmp;), (TraitBound, auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.trait.ord(be.trait); if (cmp != OrdEqual) return cmp;), (TypeEquality, auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.otherType->ordIgnoringRegions(be.otherType); if (cmp != OrdEqual) return cmp;))
     return OrdEqual;
 }
 
@@ -117,7 +117,7 @@ HIR::PathParams HIR::GenericParams::makeNopParams(TypeInterner& types, unsigned 
             });
         }*/
         TU_ARMA(TypeEquality, e) {
-            return ::HIR::GenericBound::make_TypeEquality({e.type, e.other_type});
+            return ::HIR::GenericBound::make_TypeEquality({e.type, e.otherType});
         }
     }
     throw "Unreachable";

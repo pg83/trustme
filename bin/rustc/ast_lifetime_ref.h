@@ -27,7 +27,7 @@ namespace AST {
             return LifetimeRef("static", BINDING_STATIC);
         }
 
-        static LifetimeRef new_infer() {
+        static LifetimeRef newInfer() {
             return LifetimeRef("_", BINDING_INFER);
         }
 

@@ -62,7 +62,7 @@ namespace HIR {
          (TypeEquality,
           struct {
               ::HIR::TypeRef type;
-              ::HIR::TypeRef other_type;
+              ::HIR::TypeRef otherType;
           })),
         (),
         (),

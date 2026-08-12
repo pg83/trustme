@@ -14,7 +14,7 @@
 #include <iomanip>
 #include <fstream>
 
-void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* cratePtr, TransList list, const ::std::string& hirFile) {
+void TransCodegen(const ::std::string& outfile, CodegenOutput outTy, const TransOptions& opt, ::HIR::Crate* cratePtr, TransList list, const ::std::string& hirFile) {
     static Span sp;
 
     ::std::unique_ptr<CodeGenerator> codegen;
@@ -61,7 +61,7 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
         // - Function (must be an intrinsic)
         // - Struct (must be a tuple struct)
         // - Enum variant (must be a tuple variant)
-        const ::HIR::Module* mod_ptr = nullptr;
+        const ::HIR::Module* modPtr = nullptr;
         if (path.mPath.components().size() > 1) {
             const auto& nse = cratePtr->getTypeitemByPath(sp, path.mPath, false, true);
             if (const auto* e = nse.opt_Enum()) {
@@ -69,13 +69,13 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
                 codegen->emitConstructorEnum(sp, path, *e, var_idx);
                 continue;
             }
-            mod_ptr = &nse.as_Module();
+            modPtr = &nse.as_Module();
         } else {
-            mod_ptr = &cratePtr->getModByPath(sp, path.mPath, true);
+            modPtr = &cratePtr->getModByPath(sp, path.mPath, true);
         }
 
         // Not an enum, currently must be a struct
-        const auto& te = mod_ptr->modItems.at(path.mPath.components().back())->ent;
+        const auto& te = modPtr->modItems.at(path.mPath.components().back())->ent;
         codegen->emitConstructorStruct(sp, path, te.as_Struct());
     }
     list.constructors.clear();
@@ -173,7 +173,7 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
     // - This can save several GB of working set
     list = TransList();
     // Would drop the entire crate, but finalise tends to need it
-    codegen->finalise(opt, out_ty, hirFile);
+    codegen->finalise(opt, outTy, hirFile);
 }
 
 
@@ -439,8 +439,8 @@ namespace {
             }
         }
 
-        void finalise(const TransOptions& opt, CodegenOutput out_ty, const ::std::string& hirFile) override {
-            if (out_ty == CodegenOutput::Executable) {
+        void finalise(const TransOptions& opt, CodegenOutput outTy, const ::std::string& hirFile) override {
+            if (outTy == CodegenOutput::Executable) {
                 if (!crate.noMain) {
                     of << "fn main#(isize, *const *const i8): isize {\n";
                     auto cStartPath = mResolve.crate.getLangItemPathOpt("mrustc-start");
@@ -531,7 +531,7 @@ namespace {
         }
 
         // TODO: Move this to a more common location
-        MetadataType metadata_type(const ::HIR::TypeData* ty) const {
+        MetadataType metadataType(const ::HIR::TypeData* ty) const {
             if ((ty->is_Primitive() && ty->as_Primitive() == ::HIR::CoreType::Str) || ty->is_Slice()) {
                 return MetadataType::Slice;
             } else if (ty->is_TraitObject()) {
@@ -548,9 +548,9 @@ namespace {
                                 const auto& path = ty->as_Path().path.mData.as_Generic();
                                 const auto& str = *ty->as_Path().binding.as_Struct();
                                 auto monomorph = [&](const auto& tpl) {
-                                    return mResolve.monomorph_expand(sp, tpl, MonomorphStatePtr(crate.types, nullptr, &path.mParams, nullptr));
+                                    return mResolve.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, nullptr, &path.mParams, nullptr));
                                 };
-                                TU_MATCHA((str.mData), (se), (Unit, MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");), (Tuple, return metadata_type(monomorph(se.back().ent));), (Named, return metadata_type(monomorph(se.back().ty));))
+                                TU_MATCHA((str.mData), (se), (Unit, MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");), (Tuple, return metadataType(monomorph(se.back().ent));), (Named, return metadataType(monomorph(se.back().ty));))
                                 //MIR_TODO(*m_mir_res, "Determine DST type when ::Possible - " << ty);
                                 return MetadataType::None;
                             }
@@ -641,7 +641,7 @@ namespace {
             ::HIR::TypeRef tmp;
             MonomorphStatePtr ms(crate.types, nullptr, &var_path.mParams, nullptr);
             auto monomorph = [&](const auto& x) {
-                return mResolve.monomorph_expand_opt(sp, tmp, x, ms);
+                return mResolve.monomorphExpandOpt(sp, tmp, x, ms);
             };
 
             auto enumPath = var_path.clone();
@@ -678,7 +678,7 @@ namespace {
             ::HIR::TypeRef tmp;
             MonomorphStatePtr ms(crate.types, nullptr, &p.mParams, nullptr);
             auto monomorph = [&](const auto& x) {
-                return mResolve.monomorph_expand_opt(sp, tmp, x, ms);
+                return mResolve.monomorphExpandOpt(sp, tmp, x, ms);
             };
             // Create constructor function
             const auto& e = item.mData.as_Tuple();
@@ -776,7 +776,7 @@ namespace {
                     }
                     TU_ARM(repr->variants, Linear, e) {
                         of << "\t@[" << e.field.index << ", " << e.field.sub_fields << "] = {\n";
-                        for (size_t i = 0; i < e.num_variants; i++) {
+                        for (size_t i = 0; i < e.numVariants; i++) {
                             of << "\t\t";
 
                             if (e.isNiche(i)) {
@@ -890,7 +890,7 @@ namespace {
             // If the function is a C external, emit as such
             if (item.linkage.name != "") {
                 ::HIR::TypeRef ret_type_tmp;
-                const auto& ret_type = monomorphise_fcn_return(ret_type_tmp, item, params);
+                const auto& ret_type = monomorphiseFcnReturn(ret_type_tmp, item, params);
 
                 of << "/* " << p << " */\n";
                 of << "fn " << fmt(p) << "(";
@@ -915,7 +915,7 @@ namespace {
             }
 
             ::HIR::TypeRef ret_type_tmp;
-            const auto& ret_type = monomorphise_fcn_return(ret_type_tmp, item, params);
+            const auto& ret_type = monomorphiseFcnReturn(ret_type_tmp, item, params);
 
             ::MIR::TypeResolve mir_res {
                 sp, mResolve, FMT_CB(ss, ss << p;), ret_type, arg_types, *code
@@ -1076,7 +1076,7 @@ namespace {
                                         of << "DSTPTR " << fmt(e.val);
                                         break;
                                         TU_ARM(se.src, MakeDst, e)
-                                        of << "MAKEDST " << fmt(e.ptr_val) << ", " << fmt(e.meta_val);
+                                        of << "MAKEDST " << fmt(e.ptr_val) << ", " << fmt(e.metaVal);
                                         break;
                                         TU_ARM(se.src, UnionVariant, e)
                                         of << "UNION " << fmt(e.path) << " " << e.index << " " << fmt(e.val);
@@ -1119,9 +1119,9 @@ namespace {
                             TU_ARM(stmt, SetDropFlag, se) {
                                 of << "SETFLAG df" << se.idx << " = ";
                                 if (se.other == ~0u) {
-                                    of << se.new_val;
+                                    of << se.newVal;
                                 } else {
-                                    of << (se.new_val ? "" : "!") << "df" << se.other;
+                                    of << (se.newVal ? "" : "!") << "df" << se.other;
                                 }
                             }
                             break;
@@ -1340,12 +1340,12 @@ namespace {
         }
 
     private:
-        const ::HIR::TypeData* monomorphise_fcn_return(::HIR::TypeRef& tmp, const ::HIR::Function& item, const TransParams& params) {
+        const ::HIR::TypeData* monomorphiseFcnReturn(::HIR::TypeRef& tmp, const ::HIR::Function& item, const TransParams& params) {
             bool hasErased = visit_ty_with(item.returnType, [&](const auto& x) {
                 return x->is_ErasedType();
             });
 
-            if (hasErased || monomorphise_type_needed(item.returnType)) {
+            if (hasErased || monomorphiseTypeNeeded(item.returnType)) {
                 // If there's an erased type, make a copy with the erased type expanded
                 if (hasErased) {
                     tmp = cloneTyWith(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
@@ -1357,9 +1357,9 @@ namespace {
                         }
                         return false;
                     });
-                    tmp = params.monomorph_type(Span(), tmp);
+                    tmp = params.monomorphType(Span(), tmp);
                 } else {
-                    tmp = params.monomorph_type(Span(), item.returnType);
+                    tmp = params.monomorphType(Span(), item.returnType);
                 }
                 mResolve.expandAssociatedTypes(Span(), tmp);
                 return tmp;

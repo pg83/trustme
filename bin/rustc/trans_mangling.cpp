@@ -112,10 +112,10 @@ public:
             } else {
                 // <pos:base26> <len:int> <body1> <body2>
                 fmtBase26Int(pre_hash_len);
-                bool needs_leading_escape = (isdigit(static_cast<unsigned char>(name[0])) || name[0] == '_');
-                os << size - 1 + (needs_leading_escape ? 1 : 0);
+                bool needsLeadingEscape = (isdigit(static_cast<unsigned char>(name[0])) || name[0] == '_');
+                os << size - 1 + (needsLeadingEscape ? 1 : 0);
                 // If the string starts with a digit or underscrore, then escape it with another underscore.
-                if (needs_leading_escape) {
+                if (needsLeadingEscape) {
                     os << '_';
                 }
                 for (const char* c = name; c != hashPos; ++c) {
@@ -128,9 +128,9 @@ public:
                 os << hashPos + 1;
             }
         } else {
-            bool needs_leading_escape = (isdigit(static_cast<unsigned char>(name[0])) || name[0] == '_');
-            os << size + (needs_leading_escape ? 1 : 0);
-            if (needs_leading_escape) {
+            bool needsLeadingEscape = (isdigit(static_cast<unsigned char>(name[0])) || name[0] == '_');
+            os << size + (needsLeadingEscape ? 1 : 0);
+            if (needsLeadingEscape) {
                 os << '_';
             }
             os << name;
@@ -419,7 +419,7 @@ public:
 }
 
 namespace {
-    ::FmtLambda max_len(::FmtLambda v) {
+    ::FmtLambda maxLen(::FmtLambda v) {
         std::stringstream ss;
         ss << v;
         auto s = ss.str();
@@ -441,12 +441,12 @@ namespace {
 // TODO: If the mangled name exceeds a limit, stop emitting the real name and start hashing the rest.
 #define DO_MANGLE(ty)                              \
     ::FmtLambda TransMangle(const ::HIR::ty& v) { \
-        return max_len(TransMangle##ty(v));       \
+        return maxLen(TransMangle##ty(v));       \
     }
 DO_MANGLE(SimplePath)
 DO_MANGLE(GenericPath)
 DO_MANGLE(Path)
 
 ::FmtLambda TransMangle(const ::HIR::TypeData* v) {
-    return max_len(TransMangleTypeRef(v));
+    return maxLen(TransMangleTypeRef(v));
 }

@@ -41,11 +41,11 @@ FloatValue floatValueRemainder(FloatValue lhs, FloatValue rhs) {
 }
 
 FloatValue floatValueMinimumNumber(FloatValue lhs, FloatValue rhs) {
-    return Float128::minimum_number(lhs, rhs);
+    return Float128::minimumNumber(lhs, rhs);
 }
 
 FloatValue floatValueMaximumNumber(FloatValue lhs, FloatValue rhs) {
-    return Float128::maximum_number(lhs, rhs);
+    return Float128::maximumNumber(lhs, rhs);
 }
 
 FloatValue positive_nan_float_value() {

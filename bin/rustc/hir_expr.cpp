@@ -3,45 +3,45 @@
 ::HIR::ExprNode::~ExprNode() {
 }
 
-unsigned int ::HIR::ExprNodeBlock::node_kind() const { return ::HIR::ExprNodeBlock::kind; }
-unsigned int ::HIR::ExprNodeConstBlock::node_kind() const { return ::HIR::ExprNodeConstBlock::kind; }
-unsigned int ::HIR::ExprNodeAsm::node_kind() const { return ::HIR::ExprNodeAsm::kind; }
-unsigned int ::HIR::ExprNodeAsm2::node_kind() const { return ::HIR::ExprNodeAsm2::kind; }
-unsigned int ::HIR::ExprNodeReturn::node_kind() const { return ::HIR::ExprNodeReturn::kind; }
-unsigned int ::HIR::ExprNodeYield::node_kind() const { return ::HIR::ExprNodeYield::kind; }
-unsigned int ::HIR::ExprNodeAWait::node_kind() const { return ::HIR::ExprNodeAWait::kind; }
-unsigned int ::HIR::ExprNodeLoop::node_kind() const { return ::HIR::ExprNodeLoop::kind; }
-unsigned int ::HIR::ExprNodeLoopControl::node_kind() const { return ::HIR::ExprNodeLoopControl::kind; }
-unsigned int ::HIR::ExprNodeLet::node_kind() const { return ::HIR::ExprNodeLet::kind; }
-unsigned int ::HIR::ExprNodeMatch::node_kind() const { return ::HIR::ExprNodeMatch::kind; }
-unsigned int ::HIR::ExprNodeAssign::node_kind() const { return ::HIR::ExprNodeAssign::kind; }
-unsigned int ::HIR::ExprNodeBinOp::node_kind() const { return ::HIR::ExprNodeBinOp::kind; }
-unsigned int ::HIR::ExprNodeUniOp::node_kind() const { return ::HIR::ExprNodeUniOp::kind; }
-unsigned int ::HIR::ExprNodeBorrow::node_kind() const { return ::HIR::ExprNodeBorrow::kind; }
-unsigned int ::HIR::ExprNodeRawBorrow::node_kind() const { return ::HIR::ExprNodeRawBorrow::kind; }
-unsigned int ::HIR::ExprNodeCast::node_kind() const { return ::HIR::ExprNodeCast::kind; }
-unsigned int ::HIR::ExprNodeUnsize::node_kind() const { return ::HIR::ExprNodeUnsize::kind; }
-unsigned int ::HIR::ExprNodeIndex::node_kind() const { return ::HIR::ExprNodeIndex::kind; }
-unsigned int ::HIR::ExprNodeDeref::node_kind() const { return ::HIR::ExprNodeDeref::kind; }
-unsigned int ::HIR::ExprNodeEmplace::node_kind() const { return ::HIR::ExprNodeEmplace::kind; }
-unsigned int ::HIR::ExprNodeTupleVariant::node_kind() const { return ::HIR::ExprNodeTupleVariant::kind; }
-unsigned int ::HIR::ExprNodeCallPath::node_kind() const { return ::HIR::ExprNodeCallPath::kind; }
-unsigned int ::HIR::ExprNodeCallValue::node_kind() const { return ::HIR::ExprNodeCallValue::kind; }
-unsigned int ::HIR::ExprNodeCallMethod::node_kind() const { return ::HIR::ExprNodeCallMethod::kind; }
-unsigned int ::HIR::ExprNodeField::node_kind() const { return ::HIR::ExprNodeField::kind; }
-unsigned int ::HIR::ExprNodeLiteral::node_kind() const { return ::HIR::ExprNodeLiteral::kind; }
-unsigned int ::HIR::ExprNodeUnitVariant::node_kind() const { return ::HIR::ExprNodeUnitVariant::kind; }
-unsigned int ::HIR::ExprNodePathValue::node_kind() const { return ::HIR::ExprNodePathValue::kind; }
-unsigned int ::HIR::ExprNodeVariable::node_kind() const { return ::HIR::ExprNodeVariable::kind; }
-unsigned int ::HIR::ExprNodeConstParam::node_kind() const { return ::HIR::ExprNodeConstParam::kind; }
-unsigned int ::HIR::ExprNodeStructLiteral::node_kind() const { return ::HIR::ExprNodeStructLiteral::kind; }
-unsigned int ::HIR::ExprNodeTuple::node_kind() const { return ::HIR::ExprNodeTuple::kind; }
-unsigned int ::HIR::ExprNodeArrayList::node_kind() const { return ::HIR::ExprNodeArrayList::kind; }
-unsigned int ::HIR::ExprNodeArraySized::node_kind() const { return ::HIR::ExprNodeArraySized::kind; }
-unsigned int ::HIR::ExprNodeClosure::node_kind() const { return ::HIR::ExprNodeClosure::kind; }
-unsigned int ::HIR::ExprNodeGenerator::node_kind() const { return ::HIR::ExprNodeGenerator::kind; }
-unsigned int ::HIR::ExprNodeGeneratorWrapper::node_kind() const { return ::HIR::ExprNodeGeneratorWrapper::kind; }
-unsigned int ::HIR::ExprNodeAsyncBlock::node_kind() const { return ::HIR::ExprNodeAsyncBlock::kind; }
+unsigned int ::HIR::ExprNodeBlock::nodeKind() const { return ::HIR::ExprNodeBlock::kind; }
+unsigned int ::HIR::ExprNodeConstBlock::nodeKind() const { return ::HIR::ExprNodeConstBlock::kind; }
+unsigned int ::HIR::ExprNodeAsm::nodeKind() const { return ::HIR::ExprNodeAsm::kind; }
+unsigned int ::HIR::ExprNodeAsm2::nodeKind() const { return ::HIR::ExprNodeAsm2::kind; }
+unsigned int ::HIR::ExprNodeReturn::nodeKind() const { return ::HIR::ExprNodeReturn::kind; }
+unsigned int ::HIR::ExprNodeYield::nodeKind() const { return ::HIR::ExprNodeYield::kind; }
+unsigned int ::HIR::ExprNodeAWait::nodeKind() const { return ::HIR::ExprNodeAWait::kind; }
+unsigned int ::HIR::ExprNodeLoop::nodeKind() const { return ::HIR::ExprNodeLoop::kind; }
+unsigned int ::HIR::ExprNodeLoopControl::nodeKind() const { return ::HIR::ExprNodeLoopControl::kind; }
+unsigned int ::HIR::ExprNodeLet::nodeKind() const { return ::HIR::ExprNodeLet::kind; }
+unsigned int ::HIR::ExprNodeMatch::nodeKind() const { return ::HIR::ExprNodeMatch::kind; }
+unsigned int ::HIR::ExprNodeAssign::nodeKind() const { return ::HIR::ExprNodeAssign::kind; }
+unsigned int ::HIR::ExprNodeBinOp::nodeKind() const { return ::HIR::ExprNodeBinOp::kind; }
+unsigned int ::HIR::ExprNodeUniOp::nodeKind() const { return ::HIR::ExprNodeUniOp::kind; }
+unsigned int ::HIR::ExprNodeBorrow::nodeKind() const { return ::HIR::ExprNodeBorrow::kind; }
+unsigned int ::HIR::ExprNodeRawBorrow::nodeKind() const { return ::HIR::ExprNodeRawBorrow::kind; }
+unsigned int ::HIR::ExprNodeCast::nodeKind() const { return ::HIR::ExprNodeCast::kind; }
+unsigned int ::HIR::ExprNodeUnsize::nodeKind() const { return ::HIR::ExprNodeUnsize::kind; }
+unsigned int ::HIR::ExprNodeIndex::nodeKind() const { return ::HIR::ExprNodeIndex::kind; }
+unsigned int ::HIR::ExprNodeDeref::nodeKind() const { return ::HIR::ExprNodeDeref::kind; }
+unsigned int ::HIR::ExprNodeEmplace::nodeKind() const { return ::HIR::ExprNodeEmplace::kind; }
+unsigned int ::HIR::ExprNodeTupleVariant::nodeKind() const { return ::HIR::ExprNodeTupleVariant::kind; }
+unsigned int ::HIR::ExprNodeCallPath::nodeKind() const { return ::HIR::ExprNodeCallPath::kind; }
+unsigned int ::HIR::ExprNodeCallValue::nodeKind() const { return ::HIR::ExprNodeCallValue::kind; }
+unsigned int ::HIR::ExprNodeCallMethod::nodeKind() const { return ::HIR::ExprNodeCallMethod::kind; }
+unsigned int ::HIR::ExprNodeField::nodeKind() const { return ::HIR::ExprNodeField::kind; }
+unsigned int ::HIR::ExprNodeLiteral::nodeKind() const { return ::HIR::ExprNodeLiteral::kind; }
+unsigned int ::HIR::ExprNodeUnitVariant::nodeKind() const { return ::HIR::ExprNodeUnitVariant::kind; }
+unsigned int ::HIR::ExprNodePathValue::nodeKind() const { return ::HIR::ExprNodePathValue::kind; }
+unsigned int ::HIR::ExprNodeVariable::nodeKind() const { return ::HIR::ExprNodeVariable::kind; }
+unsigned int ::HIR::ExprNodeConstParam::nodeKind() const { return ::HIR::ExprNodeConstParam::kind; }
+unsigned int ::HIR::ExprNodeStructLiteral::nodeKind() const { return ::HIR::ExprNodeStructLiteral::kind; }
+unsigned int ::HIR::ExprNodeTuple::nodeKind() const { return ::HIR::ExprNodeTuple::kind; }
+unsigned int ::HIR::ExprNodeArrayList::nodeKind() const { return ::HIR::ExprNodeArrayList::kind; }
+unsigned int ::HIR::ExprNodeArraySized::nodeKind() const { return ::HIR::ExprNodeArraySized::kind; }
+unsigned int ::HIR::ExprNodeClosure::nodeKind() const { return ::HIR::ExprNodeClosure::kind; }
+unsigned int ::HIR::ExprNodeGenerator::nodeKind() const { return ::HIR::ExprNodeGenerator::kind; }
+unsigned int ::HIR::ExprNodeGeneratorWrapper::nodeKind() const { return ::HIR::ExprNodeGeneratorWrapper::kind; }
+unsigned int ::HIR::ExprNodeAsyncBlock::nodeKind() const { return ::HIR::ExprNodeAsyncBlock::kind; }
 
 #define DEF_VISIT_H(nt, n)                   \
     void ::HIR::nt::visit(ExprVisitor& nv) { \
@@ -58,19 +58,19 @@ const char* ::HIR::ExprNode::type_name() const {
     return typeid(*this).name();
 }
 
-void ::HIR::ExprVisitor::visit_node_ptr(::HIR::ExprNodeP& node_ptr) {
-    assert(node_ptr);
-    node_ptr->visit(*this);
+void ::HIR::ExprVisitor::visit_node_ptr(::HIR::ExprNodeP& nodePtr) {
+    assert(nodePtr);
+    nodePtr->visit(*this);
 }
 
 void ::HIR::ExprVisitor::visit_node(::HIR::ExprNode& node) {
 }
 
-void ::HIR::ExprVisitorDef::visit_node_ptr(::HIR::ExprNodeP& node_ptr) {
-    assert(node_ptr);
-    TRACE_FUNCTION_F(&*node_ptr << " " << node_ptr->type_name());
-    node_ptr->visit(*this);
-    visit_type(node_ptr->resType);
+void ::HIR::ExprVisitorDef::visit_node_ptr(::HIR::ExprNodeP& nodePtr) {
+    assert(nodePtr);
+    TRACE_FUNCTION_F(&*nodePtr << " " << nodePtr->type_name());
+    nodePtr->visit(*this);
+    visit_type(nodePtr->resType);
 }
 
 DEF_VISIT_H(ExprNodeBlock, node) {

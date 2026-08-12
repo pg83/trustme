@@ -19,7 +19,7 @@
 
 template <typename Y, typename X>
 Y* cast(X* x) noexcept {
-    if (x && x->node_kind() == Y::kind) {
+    if (x && x->nodeKind() == Y::kind) {
         return static_cast<Y*>(x);
     }
     return nullptr;
@@ -540,10 +540,10 @@ public:
         return *this;
     }
 
-    void reserve(size_t new_cap) {
-        if (new_cap > this->capacity()) {
+    void reserve(size_t newCap) {
+        if (newCap > this->capacity()) {
             auto saved = std::move(*this);
-            this->reserve_init(new_cap);
+            this->reserve_init(newCap);
             for (auto& v : saved) {
                 this->push_back(std::move(v));
             }
@@ -570,12 +570,12 @@ public:
             throw std::runtime_error("Initialising an initialised ThinVector");
         }
         if (cap > 0) {
-            auto* p = static_cast<T*>(malloc(sizeof(T) * (cap + metadata_len())));
+            auto* p = static_cast<T*>(malloc(sizeof(T) * (cap + metadataLen())));
             if (!p) {
                 throw ::std::bad_alloc();
             }
             auto* meta = (Meta*)p;
-            ptr = p + metadata_len();
+            ptr = p + metadataLen();
             meta->cap = cap;
             meta->len = 0;
         }
@@ -722,17 +722,17 @@ public:
     }
 
 private:
-    static size_t metadata_len() {
+    static size_t metadataLen() {
         //static_assert(sizeof(T) > 0, "");
         return (sizeof(Meta) + sizeof(T) - 1) / sizeof(T);
     }
 
     const Meta* meta() const {
-        return ptr ? (const Meta*)(ptr - metadata_len()) : nullptr;
+        return ptr ? (const Meta*)(ptr - metadataLen()) : nullptr;
     }
 
     Meta* meta() {
-        return ptr ? (Meta*)(ptr - metadata_len()) : nullptr;
+        return ptr ? (Meta*)(ptr - metadataLen()) : nullptr;
     }
 };
 

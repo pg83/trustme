@@ -101,9 +101,9 @@ public:
     bool types_equal_resolving_opaque(const Span& sp, const ::HIR::TypeData* left, const ::HIR::TypeData* right) const;
 
     // Helper: Run monomorphise+EAT if the type contains generics
-    const ::HIR::TypeData* monomorph_expand_opt(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* input, const Monomorphiser& m) const;
+    const ::HIR::TypeData* monomorphExpandOpt(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* input, const Monomorphiser& m) const;
 
-    ::HIR::TypeRef monomorph_expand(const Span& sp, const ::HIR::TypeData* input, const Monomorphiser& m) const;
+    ::HIR::TypeRef monomorphExpand(const Span& sp, const ::HIR::TypeData* input, const Monomorphiser& m) const;
 
     void expandAssociatedTypesTp(const Span& sp, ::HIR::TraitPath& input) const;
 
@@ -122,7 +122,7 @@ public:
     /// Locate a named trait in the provied trait (either itself or as a parent trait)
     bool findNamedTraitInTrait(const Span& sp, const ::HIR::SimplePath& des, const ::HIR::PathParams& params, const ::HIR::Trait& trait_ptr, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& pp, const ::HIR::TypeData* self_type, ::std::function<bool(const ::HIR::PathParams&, ::HIR::TraitPath::assocListT)> callback) const;
     ///
-    bool trait_contains_type(const Span& sp, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait_ptr, const char* name, ::HIR::GenericPath& out_path) const;
+    bool trait_contains_type(const Span& sp, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait_ptr, const char* name, ::HIR::GenericPath& outPath) const;
     bool iterateAtyBounds(const Span& sp, const ::HIR::Path::Data::Data_UfcsKnown& pe, ::std::function<bool(const ::HIR::TraitPath&)> cb) const;
 
     // --------------
@@ -140,7 +140,7 @@ public:
     //  - `Unequal` if it doesn't (shared=immutable)
     HIR::Compare type_is_interior_mutable(const Span& sp, const ::HIR::TypeData* ty) const;
 
-    MetadataType metadata_type(const Span& sp, const ::HIR::TypeData* ty, bool errOnUnknown = false) const;
+    MetadataType metadataType(const Span& sp, const ::HIR::TypeData* ty, bool errOnUnknown = false) const;
 
     /// Returns `true` if the passed type either implements Drop, or contains a type that implements Drop
     bool type_needs_drop_glue(const Span& sp, const ::HIR::TypeData* ty) const;
@@ -180,5 +180,5 @@ public:
     );
 
     /// `signature_only` - Returns a pointer to an item with the correct signature, not the actual implementation (faster)
-    ValuePtr getValue(const Span& sp, const ::HIR::Path& p, MonomorphState& out_params, bool signature_only = false, const HIR::GenericParams** out_impl_params_def = nullptr) const;
+    ValuePtr getValue(const Span& sp, const ::HIR::Path& p, MonomorphState& outParams, bool signature_only = false, const HIR::GenericParams** outImplParamsDef = nullptr) const;
 };

@@ -22,8 +22,8 @@ void TraitResolveCommon::prep_indexes(const Span& sp) {
                 this->prepIndexesAddTraitBound(sp, be.hrtbs.get(), be.type, be.trait.clone());
             }
             TU_ARMA(TypeEquality, be) {
-                DEBUG("Equality - " << be.type << " = " << be.other_type);
-                this->prepIndexesAddEquality(sp, nullptr, be.type, be.other_type);
+                DEBUG("Equality - " << be.type << " = " << be.otherType);
+                this->prepIndexesAddEquality(sp, nullptr, be.type, be.otherType);
             }
         }
         return false;
@@ -86,7 +86,7 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
     const auto& trait = crate.getTraitByPath(sp, trait_path.mPath.mPath);
 #if 1
     while (trait_params.types.size() < trait.mParams.types.size()) {
-        trait_params.types.push_back(monomorph.monomorph_type(sp, trait.mParams.types[trait_params.types.size()].defaultValue));
+        trait_params.types.push_back(monomorph.monomorphType(sp, trait.mParams.types[trait_params.types.size()].defaultValue));
     }
 #endif
 
@@ -135,7 +135,7 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
 
         for (const auto& aTyB : aTy.second.traitBounds) {
             DEBUG("(Assoc) " << aTyB);
-            auto trait_mono = monomorph.monomorph_traitpath(sp, aTyB, false);
+            auto trait_mono = monomorph.monomorphTraitpath(sp, aTyB, false);
             for (auto& tb : trait_mono.typeBounds) {
                 DEBUG("Equality (ATB) - <" << ty_a << " as " << tb.second.source_trait << ">::" << tb.first << " = " << tb.second);
 
@@ -159,7 +159,7 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
 
     for (const auto& st : trait.allParentTraits) {
         DEBUG("(Parent) " << st);
-        prepIndexesAddTraitBound(sp, outer_hrtbs, type, monomorph.monomorph_traitpath(sp, st, false), /*add_parents*/ false);
+        prepIndexesAddTraitBound(sp, outer_hrtbs, type, monomorph.monomorphTraitpath(sp, st, false), /*add_parents*/ false);
     }
 }
 

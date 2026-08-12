@@ -319,9 +319,9 @@ namespace MIR {
                     }
                     TU_ARMA(MakeDst, se) {
                         rv |= visit_param(se.ptr_val, ValUsage::Move);
-                        if (TU_TEST2(se.meta_val, Constant, , ItemAddr, .get() == nullptr)) {
+                        if (TU_TEST2(se.metaVal, Constant, , ItemAddr, .get() == nullptr)) {
                         } else {
-                            rv |= visit_param(se.meta_val, ValUsage::Move);
+                            rv |= visit_param(se.metaVal, ValUsage::Move);
                         }
                     }
                     TU_ARMA(Tuple, se) {

@@ -154,7 +154,7 @@ namespace {
     }
 
     // 128x128 -> 256 bit product as four 64-bit limbs (little-endian)
-    static void multiply_full(u128 a, u128 b, uint64_t out[4]) {
+    static void multiplyFull(u128 a, u128 b, uint64_t out[4]) {
         const uint64_t a0 = static_cast<uint64_t>(a);
         const uint64_t a1 = static_cast<uint64_t>(a >> 64);
         const uint64_t b0 = static_cast<uint64_t>(b);
@@ -200,7 +200,7 @@ namespace {
             return limbs_.empty();
         }
 
-        void multiply_add_small(uint64_t factor, uint64_t addend) {
+        void multiplyAddSmall(uint64_t factor, uint64_t addend) {
             u128 carry = addend;
             for (auto& limb : limbs_) {
                 const u128 v = u128(limb) * factor + carry;
@@ -233,9 +233,9 @@ namespace {
             }
             const size_t whole = bits / 64;
             const unsigned rest = bits % 64;
-            const size_t old_size = limbs_.size();
-            limbs_.resize(old_size + whole + (rest != 0 ? 1 : 0), 0);
-            for (size_t i = old_size; i-- > 0;) {
+            const size_t oldSize = limbs_.size();
+            limbs_.resize(oldSize + whole + (rest != 0 ? 1 : 0), 0);
+            for (size_t i = oldSize; i-- > 0;) {
                 const uint64_t limb = limbs_[i];
                 if (rest != 0) {
                     limbs_[i + whole + 1] |= limb >> (64 - rest);
@@ -247,7 +247,7 @@ namespace {
                     limbs_[i] = 0;
                 }
             }
-            for (size_t i = 0; i < whole && i < old_size; i++) {
+            for (size_t i = 0; i < whole && i < oldSize; i++) {
                 limbs_[i] = 0;
             }
             trim();
@@ -271,15 +271,15 @@ namespace {
             if (rest != 0) {
                 sticky |= (limbs_[whole] & ((uint64_t(1) << rest) - 1)) != 0;
             }
-            const size_t new_size = limbs_.size() - whole;
-            for (size_t i = 0; i < new_size; i++) {
+            const size_t newSize = limbs_.size() - whole;
+            for (size_t i = 0; i < newSize; i++) {
                 uint64_t v = limbs_[i + whole] >> rest;
                 if (rest != 0 && i + whole + 1 < limbs_.size()) {
                     v |= limbs_[i + whole + 1] << (64 - rest);
                 }
                 limbs_[i] = v;
             }
-            limbs_.resize(new_size);
+            limbs_.resize(newSize);
             trim();
         }
 
@@ -328,9 +328,9 @@ namespace {
     // 5^27 is the largest power of five below 2^63
     constexpr uint64_t fivePow27 = 7'450'580'596'923'828'125ull;
 
-    static void multiply_pow5(BigUint& v, uint64_t power) {
+    static void multiplyPow5(BigUint& v, uint64_t power) {
         while (power >= 27) {
-            v.multiply_add_small(fivePow27, 0);
+            v.multiplyAddSmall(fivePow27, 0);
             power -= 27;
         }
         uint64_t factor = 1;
@@ -338,7 +338,7 @@ namespace {
             factor *= 5;
         }
         if (factor != 1) {
-            v.multiply_add_small(factor, 0);
+            v.multiplyAddSmall(factor, 0);
         }
     }
 
@@ -407,7 +407,7 @@ namespace {
         bool sticky = false;
         BigUint work = BigUint::fromU128(value.significand);
         if (scale10 > 0) {
-            multiply_pow5(work, static_cast<uint64_t>(scale10));
+            multiplyPow5(work, static_cast<uint64_t>(scale10));
         }
         const int64_t shift2 = exponent2 + scale10;
         if (shift2 > 0) {
@@ -815,7 +815,7 @@ Float128 Float128::operator*(const Float128& other) const {
         return pack_zero(negative);
     }
     uint64_t product[4];
-    multiply_full(a.significand, b.significand, product);
+    multiplyFull(a.significand, b.significand, product);
     // product = sig_a * sig_b in [2^224, 2^226);
     // value = product * 2^(ea + eb - 224)
     u128 high = (u128(product[3]) << 64) | product[2];
@@ -1081,7 +1081,7 @@ Float128 Float128::remainder(const Float128& numerator, const Float128& denomina
     return pack_finite(a.negative, exponent, rem << shortfall);
 }
 
-Float128 Float128::minimum_number(const Float128& a, const Float128& b) {
+Float128 Float128::minimumNumber(const Float128& a, const Float128& b) {
     if (a.isNan()) {
         return b;
     }
@@ -1095,7 +1095,7 @@ Float128 Float128::minimum_number(const Float128& a, const Float128& b) {
     return a < b ? a : b;
 }
 
-Float128 Float128::maximum_number(const Float128& a, const Float128& b) {
+Float128 Float128::maximumNumber(const Float128& a, const Float128& b) {
     if (a.isNan()) {
         return b;
     }
@@ -1116,7 +1116,7 @@ Float128 Float128::parse_decimal(const char* text) {
     int64_t significant_digits = 0;
     assert(*cursor == '.' || ('0' <= *cursor && *cursor <= '9'));
     for (; '0' <= *cursor && *cursor <= '9'; cursor++) {
-        digits.multiply_add_small(10, static_cast<uint64_t>(*cursor - '0'));
+        digits.multiplyAddSmall(10, static_cast<uint64_t>(*cursor - '0'));
         if (!digits.isZero()) {
             significant_digits += 1;
         }
@@ -1124,7 +1124,7 @@ Float128 Float128::parse_decimal(const char* text) {
     if (*cursor == '.') {
         cursor++;
         for (; '0' <= *cursor && *cursor <= '9'; cursor++) {
-            digits.multiply_add_small(10, static_cast<uint64_t>(*cursor - '0'));
+            digits.multiplyAddSmall(10, static_cast<uint64_t>(*cursor - '0'));
             fractionDigits += 1;
             if (!digits.isZero()) {
                 significant_digits += 1;
@@ -1166,7 +1166,7 @@ Float128 Float128::parse_decimal(const char* text) {
     size_t scaled_up = 0;
     if (exponent10 >= 0) {
         // digits * 10^e = digits * 5^e << e: exact
-        multiply_pow5(digits, static_cast<uint64_t>(exponent10));
+        multiplyPow5(digits, static_cast<uint64_t>(exponent10));
         digits.shift_left(static_cast<size_t>(exponent10));
     } else {
         // Divide by 10^-e = 5^-e * 2^-e with a sticky remainder. Scale up

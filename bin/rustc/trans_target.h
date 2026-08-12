@@ -76,7 +76,7 @@ struct TypeRepr {
              FieldPath field;
              // Offset for variants (when in a niche)
              size_t offset;
-             size_t num_variants;
+             size_t numVariants;
 
              bool uses_niche() const {
                  return !field.sub_fields.empty();
@@ -150,9 +150,9 @@ static inline unsigned TargetGetPointerBits() {
     return TargetGetCurSpec().arch.pointerBits;
 }
 
-extern bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size);
-extern bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_align);
-extern bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size, size_t& out_align);
+extern bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& outSize);
+extern bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& outAlign);
+extern bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& outSize, size_t& outAlign);
 
 /// Does this target's C ABI cap the alignment of a non-first struct member? (Darwin/PowerPC "power" alignment)
 extern bool TargetCapsMemberAlignment();
