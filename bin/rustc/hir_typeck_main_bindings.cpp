@@ -434,7 +434,6 @@ namespace {
             TRACE_FUNCTION_F(&node << " " << node.mValue->resType << " as " << node.dstType);
             const Span& sp = node.span();
             DEBUG("Cast res type " << node.resType);
-            //ASSERT_BUG(node.span(), node.m_res_type == node.m_dst_type, node.m_res_type << " != " << node.m_dst_type);
 
             const auto& srcTy = node.mValue->resType;
             const auto& dstTy = node.resType;
@@ -454,8 +453,6 @@ namespace {
                     ERROR(sp, E0000, "Invalid cast to " << dstTy << " from " << srcTy);
                         TU_ARMA(Pointer, se) {
                             // TODO: Sized check - can't cast to a fat pointer from a thin one
-                            //if( ! this->m_resolve.type_is_sized(*de.inner) ) {
-                            //    ERROR(sp, E0000, "Invalid cast to fat pointer " << dst_ty << " from " << src_ty);
                             //}
                         }
                         TU_ARMA(Primitive, se) {
@@ -469,8 +466,6 @@ namespace {
                                 default:
                                     break;
                             }
-                            //if( ! this->m_resolve.type_is_sized(*de.inner) ) {
-                            //    ERROR(sp, E0000, "Invalid cast to fat pointer " << dst_ty << " from " << src_ty);
                             //}
                         }
                         break;
@@ -1030,7 +1025,6 @@ namespace {
                 ASSERT_BUG(sp, strTy->is_Path(), "Value type of _Field isn't Path - " << strTy);
                 const auto& tyE = strTy->as_Path();
                 if (tyE.binding.is_Struct()) {
-                    //const auto& str = *ty_e.binding.as_Struct();
                     // TODO: Triple-check result, but that probably isn't needed
                 } else if (tyE.binding.is_Union()) {
                 } else {
@@ -1072,7 +1066,6 @@ namespace {
         void visit(HIRExprNodeArraySized& node) override {
             TRACE_FUNCTION_F(&node << " [...; " << node.mSize << "]");
 
-            //check_types_equal(node.m_size->span(), ::HIR::TypeRef(::HIR::Primitive::Usize), node.m_size->m_res_type);
             const auto& innerTy = node.resType->as_Array().inner;
             checkTypesEqual(node.val->span(), innerTy, node.val->resType);
 
@@ -1215,7 +1208,6 @@ namespace {
                 }
 
                 const HIRTypeData* getType(const Span& sp, const HIRTypeData* ty) const override {
-                    //ASSERT_BUG(sp, ty->is_Infer(), "Unexpected ivar");
                     if (const auto* e = ty->opt_ErasedType()) {
                         if (const auto* ee = e->inner.opt_Alias()) {
                             if (ee->inner->type != HIRTypeRef()) {
@@ -1234,11 +1226,9 @@ namespace {
             // TODO: Recurse when an erased type is encountered
             //if( const auto* e = l->opt_ErasedType() )
             //{
-            //    return check_types_equal(sp, m_cur_expr->m_erased_types.at(e->m_index), r);
             //}
             //if( const auto* e = r->opt_ErasedType() )
             //{
-            //    return check_types_equal(sp, l, m_cur_expr->m_erased_types.at(e->m_index));
             //}
             DEBUG(sp << " - " << l << " == " << r);
             MonomorphHrlsOnly(mResolve.crate.types, HIRPathParams()).monomorphType(sp, l);
@@ -1381,7 +1371,6 @@ namespace {
                 }
                 TU_ARMA(ByteString, e) {
                     // Can either be a slice or an array
-                    //check_types_equal(sp, ty, ::HIR::TypeRef::new_borrow(::HIR::BorrowType::Shared, ::HIR::TypeRef::new_slice(::HIR::CoreType::U8)));
                 }
                 TU_ARMA(Named, e) {
                     MonomorphState ms(mResolve.crate.types);
@@ -1648,7 +1637,6 @@ namespace {
                     // TODO: Why is this pulling in the default? Why not just leave it as-is
 
                     //if( param_def.m_types[i].m_default == ::HIR::TypeRef() )
-                    //    ERROR(sp, E0000, "Unspecified parameter with no default");
                     // TODO: Monomorphise?
                     paramVals.types[i] = ms.monomorphType(sp, paramDef.types[i].defaultValue);
                     DEBUG("Update `_` param (using default): " << paramDef.types[i].defaultValue << " -> " << paramVals.types[i]);
@@ -1667,7 +1655,6 @@ namespace {
                         TraitBound,
                         // TODO: Check for an implementation of this trait
                         DEBUG("TODO: Check bound " << e.type << " : " << e.trait.mPath);
-                        //DEBUG("- " << monomorph_type_with(sp, e.type, monomorph_cb) << " : " << monomorphise_traitpath_with(sp, e.trait, monomorph_cb));
                     ),
                     (TypeEquality,
                      // TODO: Check that two types are equal in this case
@@ -1684,7 +1671,6 @@ namespace {
                         break;
                     case HIRLifetimeRef::INFER: // '_
                         //TODO(sp, "Handle explicitly elided lifetimes");
-                        //break;
                     case HIRLifetimeRef::UNKNOWN: // <none>
                         // If there's a current liftime (i.e. we're within a borrow), then use that
                         if (!currentLifetime.empty() && currentLifetime.back()) {
@@ -1696,7 +1682,6 @@ namespace {
                             curParams->mLifetimes.push_back(HIRLifetimeDef{RcString::newInterned(FMT("elided#" << idx))});
                             lft.binding = curParamsLevel * 256 + idx;
                         } else {
-                            //ERROR(sp, E0000, "Unspecified lifetime in outer context");
                             // TODO: Would error here, but don't fully support HKTs (e.g. `Fn(&i32)`)
                         }
                         break;
@@ -1832,7 +1817,6 @@ namespace {
 
     private:
         bool locateTraitItemInBounds(const Span& sp, HIRVisitor::PathContext pc, const HIRTypeData* tr, const HIRGenericParams& params, HIRPath::Data& pd) {
-            //const auto& name = pd.as_UfcsUnknown().item;
             for (const auto& b : params.bounds) {
                 TU_IFLET(HIRGenericBound, b, TraitBound, e, DEBUG("- " << e.type << " : " << e.trait.mPath); if (e.type == tr) {
                     DEBUG(" - Match");
@@ -2034,7 +2018,6 @@ namespace {
         }
 
         void visitPath(HIRPath& p, HIRVisitor::PathContext pc) override {
-            //assert(pc == ::HIR::Visitor::PathContext::TYPE);
             TU_MATCH(
                 HIRPath::Data,
                 (p.mData),
@@ -2246,7 +2229,6 @@ namespace {
                     // - Includes fixing incorrectly elided lifetimes
                     // ```
                     // trait Foo<T> {
-                    //   fn foo(&self, bar: T);
                     // }
                     // impl Foo<&Bar> for Baz {
                     //   fn foo(&self, bar: &Bar) { }
@@ -2333,8 +2315,6 @@ namespace {
                         return false;
                     }));
 
-                    //if( impl_fcn.m_params.m_lifetimes.size() != trait_fcn.m_params.m_lifetimes.size() ) {
-                    //    failures.push_back(FMT("Mismatched lifetime param count (expected " << trait_fcn.m_params.m_lifetimes.size() << ", got " << impl_fcn.m_params.m_lifetimes.size() << ")"));
                     //}
 
                     if (!failures.empty()) {

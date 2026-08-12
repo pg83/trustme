@@ -257,7 +257,6 @@ class CMacroExportHandler: public ExpandDecorator {
                 i.as_Macro()->exported = true;
                 ASSERT_BUG(sp, path.nodes.size() == 1, "");
                 DEBUG("- Export macro (item) " << name << "!");
-                //crate.m_root_module.macros().push_back( mv$(*i.as_Macro()) );
             }
         } else {
             ERROR(sp, E0000, "Use of #[macro_export] on non-macro - " << i.tagStr());
@@ -285,7 +284,6 @@ class CMacroReexportHandler: public ExpandDecorator {
             }
             // TODO: Do this differently.
             extCrate.mRootModule.macroItems.at(name)->ent.as_MacroRules()->exported = true;
-            //ext_crate.m_root_module.m_macro_items.at(name)->publicity = AST::Publicity::new_global();
         });
     }
 };

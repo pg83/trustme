@@ -550,7 +550,6 @@ HIRLifetimeRef Monomorphiser::monomorphLifetime(const Span& sp, const HIRLifetim
         if (g.group() == GENERICHrtb) {
             if (const auto* hrtb = hasHrb()) {
                 // TODO: Ensure that the param is in range (has some issues with nested?)
-                //ASSERT_BUG(sp, g.idx() < hrtb->m_lifetimes.size(), "Found HRTB out of range - " << g << " from for" << hrtb->fmt_args());
                 return lft;
             }
         }
@@ -701,7 +700,6 @@ struct CloneTyWithMonomorph: Monomorphiser {
         HIRTypeRef rv;
 
         if (callback(ty, rv)) {
-            //DEBUG(tpl << " => " << rv);
             return rv;
         }
         return Monomorphiser::monomorphType(sp, ty, allowInfer);
@@ -832,8 +830,6 @@ HIRLifetimeRef MonomorphiserPP::getLifetime(const Span& sp, const HIRGenericRef&
                 return p->mLifetimes[lftRef.idx()];
             } else {
                 BUG(sp, "Higher-ranked lifetime parameters were not expected (got " << lftRef << ")");
-                //DEBUG("No HRBs " << lft_ref);
-                //return HIR::LifetimeRef(lft_ref.binding);
             }
             break;
         default:
@@ -843,7 +839,6 @@ HIRLifetimeRef MonomorphiserPP::getLifetime(const Span& sp, const HIRGenericRef&
 
 //t_cb_generic MonomorphState::get_cb(const Span& sp) const
 //{
-//    return monomorphise_type_get_cb(sp, this->self_ty, this->pp_impl, this->pp_method);
 //}
 ::std::ostream& operator<<(::std::ostream& os, const MonomorphState& ms) {
     os << "MonomorphState {";
@@ -856,8 +851,6 @@ HIRLifetimeRef MonomorphiserPP::getLifetime(const Span& sp, const HIRGenericRef&
     if (ms.ppMethod) {
         os << " M=" << *ms.ppMethod;
     }
-    //if(ms.pp_hrb)
-    //    os << " H=" << *ms.pp_hrb;
     os << " }";
     return os;
 }

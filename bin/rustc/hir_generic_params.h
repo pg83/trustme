@@ -52,11 +52,7 @@ TAGGED_UNION_EX(
           HIRTypeRef type;
           HIRTraitPath trait;
           HIRBoundConstness constness = HIRBoundConstness::Never;
-      }) /*,
-    (NotTrait, struct {
-        ::HIR::TypeRef  type;
-        ::HIR::GenricPath    trait;
-        })*/
+      })
      ,
      (TypeEquality,
       struct {

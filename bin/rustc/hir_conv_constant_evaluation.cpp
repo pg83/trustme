@@ -1464,7 +1464,6 @@ public:
         const HIRTypeData* typ = nullptr;
         MIREvalValueRef metadata;
         MIREvalValueRef val;
-        //TRACE_FUNCTION_FR(lv, val);
             TU_MATCH_HDRA( (lv.root), {)
             TU_ARMA(Return, e) {
                 typ = retType;
@@ -2508,7 +2507,6 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
         TU_ARMA(BinOp, e) {
             HIRTypeRef tmp;
             const auto& tyL = state.getParamType(tmp, e.valL);
-            //auto ti = TypeInfo::for_type(ty_l);
             bool didOverflow = doArithChecked(localState, tyL, dst, e.valL, e.op, e.valR);
             switch (e.op) {
                 case MIRBinOp::DIV:
@@ -3569,7 +3567,6 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
 }
 
 EncodedLiteral HIREvaluator::allocationToEncoded(const HIRTypeData* ty, const MIREvalAllocation& a) {
-    //const auto* a_bytes = a.get_bytes(0, a.size(), true);
     const auto* aBytes = a.getBytes(0, a.size(), false); // NOTE: Read the uninitialised bytes (they _should_ be zeroes)
     ASSERT_BUG(this->rootSpan, aBytes, "Unable to get entire allocation - " << FMT_CB(ss, a.fmt(ss, 0, a.size())));
     EncodedLiteral rv;
@@ -3920,7 +3917,6 @@ namespace {
                     }
                     case HIRVisitor::PathContext::TYPE:
                     case HIRVisitor::PathContext::TRAIT: {
-                        //const auto& vi = tr.m_types.at(pe->item);
                         BUG(sp, "type - " << p);
                         break;
                     }
@@ -3941,7 +3937,6 @@ namespace {
                 try {
                     auto val = eval.evaluateConstant(*modPath + name, exprPtr, crate.types.primitive(HIRCoreType::Usize), monomorphState.clone());
                     as = val.readUsize(0);
-                    //DEBUG("Array size = " << as);
                 } catch (const Defer&) {
                     const auto* tn = cast<const HIRExprNodeConstParam>(&*exprPtr);
                     if (tn) {
@@ -4008,7 +4003,6 @@ namespace {
                 auto eval = getEval(item.mValue.span(), nvs);
                 try {
                     item.valueRes = eval.evaluateConstant(p, item.mValue, item.mType, monomorphState.clone());
-                    //check_lit_type(item.m_value.span(), item.m_type, item.m_value_res);
                     item.valueState = HIRConstant::ValueState::Known;
                 } catch (const Defer&) {
                     item.valueState = HIRConstant::ValueState::Generic;
@@ -4120,9 +4114,7 @@ namespace {
 
             if (expr.get() != nullptr) {
                 Visitor v{*this};
-                //m_recurse_types = true;
                 (*expr).visit(v);
-                //m_recurse_types = false;
             }
         }
 

@@ -696,8 +696,6 @@ namespace {
 
         HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override {
             // TODO
-            //assert( g.binding < impl_params.m_values.size() );
-            //impl_params.m_values[g.binding] = sz.clone();
             return HIRCompare::Equal;
         }
     };
@@ -711,13 +709,9 @@ namespace {
         if (isUnboundedInfer(matchType) || (matchPath && matchPath->binding.is_Unbound() && !matchPath->path.mData.is_Generic())) {
             return false;
         }
-#if 1
         ImplMatcher m{params};
         auto cmp = implTy->matchTestGenericsFuzz(Span(), matchType, tyRes, m);
         return cmp != HIRCompare::Unequal;
-#else
-        return matchesTypeInt(implTy, matchType, tyRes, true);
-#endif
     }
 }
 
@@ -853,7 +847,6 @@ namespace {
                         return ::OrdEqual;
                     }
                     TODO(sp, "Function - " << left << " vs " << right);
-                    //return typelist_ord_specific(sp, le.arg_types, re->arg_types);
                 } else {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
@@ -973,8 +966,6 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     static const Span _sp;
     const Span& sp = _sp;
     TRACE_FUNCTION;
-    //DEBUG("this  = " << *this);
-    //DEBUG("other = " << other);
 
     // >> https://github.com/rust-lang/rfcs/blob/master/text/1210-impl-specialization.md#defining-the-precedence-rules
     // 1. If this->m_type is less specific than other.m_type: return false
@@ -996,9 +987,6 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
         BUG(sp, "Mixed ordering in more_specific_than");
     }
 
-    //if( other.m_params.m_bounds.size() == 0 ) {
-    //    DEBUG("- Params (none in other, some in this)");
-    //    return m_params.m_bounds.size() > 0;
     //}
     // 3. Compare bound set, if there is a rule in oe that is missing from te; return false
     // TODO: Cache these lists (calculate after outer typecheck?)
@@ -1207,7 +1195,6 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
             if (a == b) {
                 return true;
             }
-            //DEBUG("(" << a << "," << b << ")");
             if (a->is_Generic() || b->is_Generic()) {
                 return true;
             }
@@ -1330,7 +1317,6 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
     }
 
     DEBUG("TODO: Handle potential overlap (when not exactly equal)");
-    //return this->m_type == other.m_type && this->m_trait_args == other.m_trait_args;
     Span sp;
 
     // TODO: Use `type_ord_specific` but treat any case of mixed ordering as this returning `false`
@@ -1685,7 +1671,6 @@ bool HIRCrate::findTypeImpls(const HIRTypeData* type, tCbResolveType tyRes, ::st
         return true;
     }
     for (const auto& ec : this->extCrates) {
-        //DEBUG("- " << ec.first);
         if (findTypeImplsInt(*ec.second.mData, type, tyRes, callback)) {
             return true;
         }
@@ -1734,7 +1719,6 @@ const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRExprPtr
                 ep.state->stage = HIRExprState::Stage::TypecheckRequest;
 
                 // TODO: Set debug/timing stage
-                //Debug_SetStagePre("HIR Typecheck");
                 // - Can store that on the Expr, OR get it from the item path
                 TypeckModuleState ms{const_cast<HIRCrate&>(*this)};
                 //ms.prepare_from_path( ip );   // <- Ideally would use this, but it's a lot of code for one usage
@@ -1749,13 +1733,10 @@ const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRExprPtr
                 ASSERT_BUG(Span(), ep.state->stage == HIRExprState::Stage::Typecheck, "Typecheck_Code didn't set stage");
             }
             if (ep.state->stage < HIRExprState::Stage::PostTypecheck) {
-                //Debug_SetStagePre("Expand HIR Annotate");
                 HIRExpandAnnotateUsageExpr(*this, ip, epMut);
-                //Debug_SetStagePre("Expand HIR Statics Mark");
                 HIRExpandStaticBorrowConstantsMarkExpr(*this, ip, epMut);
             }
             if (ep.state->stage < HIRExprState::Stage::Lifetimes) {
-                //Debug_SetStagePre("Expand HIR Lifetimes");
                 HIRExpandLifetimeInferExpr(*this, ip, args, retTy, epMut);
                 ep.state->stage = HIRExprState::Stage::Lifetimes;
             }
@@ -1764,9 +1745,7 @@ const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRExprPtr
                     ERROR(Span(), E0000, "Loop in constant evaluation");
                 }
                 ep.state->stage = HIRExprState::Stage::SbcRequest;
-                //Debug_SetStagePre("Expand HIR Closures");
                 HIRExpandClosuresExpr(*this, retTy, epMut);
-                //Debug_SetStagePre("Expand HIR Statics");
                 HIRExpandStaticBorrowConstantsExpr(*this, ip, epMut);
             }
             if (ep.state->stage < HIRExprState::Stage::Expand) {
@@ -1774,13 +1753,9 @@ const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRExprPtr
                     ERROR(Span(), E0000, "Loop in constant evaluation");
                 }
                 ep.state->stage = HIRExprState::Stage::ExpandRequest;
-                //Debug_SetStagePre("Expand HIR Calls");
                 HIRExpandUfcsEverythingExpr(*this, epMut, ep.state->currentTraitImpl);
-                //Debug_SetStagePre("Expand HIR Reborrows");
                 HIRExpandReborrowsExpr(*this, epMut);
-                //Debug_SetStagePre("Expand HIR ErasedType");
                 //HIR_Expand_ErasedType(*this, ep_mut);    // - Maybe?
-                //Typecheck_Expressions_Validate(*hir_crate);
 
                 ep.state->stage = HIRExprState::Stage::Expand;
             }
@@ -1790,7 +1765,6 @@ const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRExprPtr
                     ERROR(Span(), E0000, "Loop in constant evaluation");
                 }
                 ep.state->stage = HIRExprState::Stage::MirRequest;
-                //Debug_SetStage("Lower MIR");
                 HIRGenerateMIRExpr(*this, ip, epMut, args, retTy);
                 ep.state->stage = HIRExprState::Stage::Mir;
             }

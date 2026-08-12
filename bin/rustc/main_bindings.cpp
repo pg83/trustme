@@ -44,8 +44,6 @@ void ExpandTestHarness(ASTCrate& crate) {
     // mod `#test` {
     //   extern crate std;
     //   extern crate test;
-    //   fn main() {
-    //     self::test::test_main_static(&::`#test`::TESTS);
     //   }
     //   static TESTS: [test::TestDescAndFn; _] = [
     //     test::TestDescAndFn { desc: test::TestDesc { name: "foo", ignore: false, should_panic: test::ShouldPanic::No }, testfn: ::path::to::foo },
@@ -134,9 +132,6 @@ void ExpandTestHarness(ASTCrate& crate) {
     auto newmod = ASTModule{ASTAbsolutePath("", {"test#"})};
     auto visPrivate = ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, newmod.path());
     // - TODO: These need to be loaded too.
-    //  > They don't actually need to exist here, just be loaded (and use absolute paths)
-    //newmod.add_ext_crate(Span(), false, "std", "std", {});
-    //newmod.add_ext_crate(Span(), false, "test", "test", {});
 
     newmod.addItem(Span(), visPrivate, "main", mv$(mainFn), {});
     newmod.addItem(Span(), visPrivate, "TESTS", mv$(testsList), {});
@@ -389,7 +384,6 @@ int main(int argc, char* argv[]) {
         ASTCrate& crate = *cratePtr;
         crate.testHarness = params.testHarness;
         crate.crateNameSuffix = params.crateNameSuffix;
-        //crate.m_crate_name = params.crate_name;
 
         if (params.lastStage == ProgramParams::STAGE_PARSE) {
             return 0;
@@ -542,7 +536,6 @@ int main(int argc, char* argv[]) {
                     }
                     if (ec.second.hir->mLangItems.count("mrustc-panic_runtime")) {
                         if (panicRuntimeLoaded) {
-                            //ERROR(Span(), E0000, "Multiple panic_runtime crates loaded - " << panic_crate_name << " and " << ec.first);
                             WARNING(Span(), W0000, "Multiple panic_runtime crates loaded - " << panicCrateName << " and " << ec.first);
                         } else {
                             panicCrateName = ec.first;
@@ -582,8 +575,6 @@ int main(int argc, char* argv[]) {
                         out.push_back(mod.fileInfo.path);
                     }
                     // TODO: Should we check anon modules?
-                    //for(auto& amod : mod.anon_mods()) {
-                    //    this->visit_module(*amod);
                     //}
                     for (auto& i : mod.mItems) {
                         if (i->data.is_Module()) {
@@ -770,9 +761,6 @@ int main(int argc, char* argv[]) {
         });
         // HACK?: Run lifetime inference again, so that bad closures are caught
         // - Doesn't quite work, can't seem to run this twice?
-        //CompilePhaseV("Expand HIR Lifetimes (validate)", [&]() {
-        //    HIR_Expand_LifetimeInfer_Validate(*hir_crate);
-        //    });
 
         if (params.lastStage == ProgramParams::STAGE_TYPECK) {
             return 0;
@@ -935,9 +923,7 @@ int main(int argc, char* argv[]) {
             case ASTCrate::Type::RustDylib:
                 // Save a loadable HIR dump
                 CompilePhaseV("HIR Serialise", [&]() {
-                    //auto saved_ext_crates = ::std::move(hir_crate->m_ext_crates);
                     HIRSerialise(hirFile, *hirCrate);
-                    //hir_crate->m_ext_crates = ::std::move(saved_ext_crates);
                 });
                 break;
             default:
@@ -988,17 +974,14 @@ int main(int argc, char* argv[]) {
     //catch(const CompileError::Base& e)
     //{
     //    ::std::cerr << "Parser Error: " << e.what() << ::std::endl;
-    //    return 2;
     //}
     //catch(const ::std::exception& e)
     //{
     //    ::std::cerr << "Misc Error: " << e.what() << ::std::endl;
-    //    return 2;
     //}
     //catch(const char* e)
     //{
     //    ::std::cerr << "Internal Compiler Error: " << e << ::std::endl;
-    //    return 2;
     //}
 
     return 0;
@@ -1108,12 +1091,8 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                             exit(1);
                         }
                     };
-                    //auto no_optval = [&]() {
-                    //    if(eq_pos != ::std::string::npos) {
                     //        ::std::cerr << "Flag -C " << optname << " doesn't take an argument" << ::std::endl;
-                    //        exit(1);
                     //    }
-                    //    };
 
                     if (optname == "emit-build-command") {
                         getOptval();

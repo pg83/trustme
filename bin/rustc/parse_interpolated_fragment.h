@@ -39,7 +39,6 @@ public:
 
     InterpolatedFragment(InterpolatedFragment&&);
     InterpolatedFragment& operator=(InterpolatedFragment&&);
-    //InterpolatedFragment(const InterpolatedFragment& );
 
     InterpolatedFragment(TokenTree);
     InterpolatedFragment(ASTPattern);

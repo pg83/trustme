@@ -34,8 +34,6 @@ namespace {
         }
         // TODO: What about if an anon mod has been #[cfg]-d out?
         // - For now, disable
-        //for(const auto& anon : mod.anon_mods() ) {
-        //    iterate_module(*anon, fcn);
         //}
     }
 }
@@ -93,13 +91,9 @@ void ASTCrate::loadExterns() {
         // Don't load anything
     } else if (noStd) {
         auto n = this->loadExternCrate(Span(), "core");
-        //if( n != "core" ) {
-        //    WARNING(Span(), W0000, "libcore wasn't loaded as `core`, instead `" << n << "`");
         //}
     } else {
         auto n = this->loadExternCrate(Span(), "std");
-        //if( n != "std" ) {
-        //    WARNING(Span(), W0000, "libstd wasn't loaded as `std`, instead `" << n << "`");
         //}
     }
 
@@ -224,8 +218,6 @@ RcString ASTCrate::loadExternCrate(Span sp, const RcString& name, const ::std::s
     } else {
     }
     auto& extCrate = res.first->second;
-    // Move the external list out (doesn't need to be kept in the nested crate)
-    //auto crate_ext_list = mv$( ext_crate.m_hir->m_ext_crates );
     const auto& crateExtList = extCrate.hir->extCrates;
 
     // Load referenced crates

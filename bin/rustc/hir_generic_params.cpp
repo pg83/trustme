@@ -108,13 +108,7 @@ HIRGenericBound HIRGenericBound::clone() const {
         }
         TU_ARMA(TraitBound, e) {
             return HIRGenericBound::make_TraitBound({e.hrtbs ? box$(e.hrtbs->clone()) : nullptr, e.type, e.trait.clone(), e.constness});
-        } /*
-    TU_ARMA(NotTrait, e) {
-        return ::HIR::GenericBound::make_NotTrait({
-            e.type.clone(),
-            e.trait.clone()
-            });
-        }*/
+        }
         TU_ARMA(TypeEquality, e) {
             return HIRGenericBound::make_TypeEquality({e.type, e.otherType});
         }
@@ -137,7 +131,6 @@ Ordering HIRLifetimeDef::ord(const HIRLifetimeDef& x) const {
 Ordering HIRValueParamDef::ord(const HIRValueParamDef& x) const {
     ORD(mName, x.mName);
     ORD(mType, x.mType);
-    //ORD(m_default, x.m_default);
     return OrdEqual;
 }
 

@@ -73,14 +73,11 @@ Ident::Hygiene& Ident::Hygiene::operator=(const Hygiene& x) {
     assert(this->inner);
     return *this;
 }
-//Hygiene(Hygiene&& x) = default;
 Ident::Hygiene::Hygiene(Hygiene&& x)
     : inner(std::move(x.inner)) {
-    //assert(m_inner);
 }
 Ident::Hygiene& Ident::Hygiene::operator=(Hygiene&& x) {
     inner.reset(x.inner.release());
-    //assert(m_inner);
     return *this;
 }
 Ident::Hygiene Ident::Hygiene::newScopeChained(const Hygiene& parent, unsigned int macroDefinition) {
@@ -106,7 +103,6 @@ Ident::Hygiene Ident::Hygiene::withTailScope(const Hygiene& scope, bool inheritM
     return rv;
 }
 Ident::Hygiene Ident::Hygiene::getParent() const {
-    //assert(this->contexts.size() > 1);
     Hygiene rv;
     rv->contexts.insert(rv->contexts.begin(), inner->contexts.begin(), inner->contexts.end() - 1);
     rv->macroDefinitions.insert(rv->macroDefinitions.begin(), inner->macroDefinitions.begin(), inner->macroDefinitions.end() - 1);

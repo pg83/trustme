@@ -77,7 +77,6 @@ public:
         TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
         size_t n = in.readCount();
         ::std::map<::std::string, V> rv;
-        //rv.reserve(n);
         for (size_t i = 0; i < n; i++) {
             auto s = in.readString();
             rv.insert(::std::make_pair(mv$(s), D<V>::des(*this)));
@@ -90,7 +89,6 @@ public:
         TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
         size_t n = in.readCount();
         ::std::unordered_map<::std::string, V> rv;
-        //rv.reserve(n);
         for (size_t i = 0; i < n; i++) {
             auto s = in.readString();
             DEBUG("- " << s);
@@ -104,7 +102,6 @@ public:
         TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
         size_t n = in.readCount();
         ::std::unordered_multimap<::std::string, V> rv;
-        //rv.reserve(n);
         for (size_t i = 0; i < n; i++) {
             auto s = in.readString();
             DEBUG("- " << s);
@@ -118,7 +115,6 @@ public:
         TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
         size_t n = in.readCount();
         ::std::map<RcString, V> rv;
-        //rv.reserve(n);
         for (size_t i = 0; i < n; i++) {
             auto s = in.readIstring();
             rv.insert(::std::make_pair(mv$(s), D<V>::des(*this)));
@@ -131,7 +127,6 @@ public:
         TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
         size_t n = in.readCount();
         ::std::unordered_map<RcString, V> rv;
-        //rv.reserve(n);
         for (size_t i = 0; i < n; i++) {
             auto s = in.readIstring();
             DEBUG("- " << s);
@@ -145,7 +140,6 @@ public:
         TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
         size_t n = in.readCount();
         ::std::unordered_multimap<RcString, V> rv;
-        //rv.reserve(n);
         for (size_t i = 0; i < n; i++) {
             auto s = in.readIstring();
             DEBUG("- " << s);
@@ -159,7 +153,6 @@ public:
         TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
         size_t n = in.readCount();
         ::std::map<HIRSimplePath, V> rv;
-        //rv.reserve(n);
         for (size_t i = 0; i < n; i++) {
             auto s = deserialiseSimplepath();
             rv.insert(::std::make_pair(mv$(s), D<V>::des(*this)));
@@ -216,7 +209,6 @@ public:
         size_t n = in.readCount();
         DEBUG("n = " << n);
         ::std::set<T> rv;
-        //rv.reserve(n);
         for (size_t i = 0; i < n; i++) {
             rv.insert(D<T>::des(*this));
         }
@@ -382,7 +374,6 @@ public:
         auto edition = static_cast<ASTEdition>(in.readTag());
         ::MacroRules rv(crateName, edition);
         // NOTE: This is set after loading.
-        //rv.m_exported = true;
         rv.isMacroItem = in.readBool();
         rv.rules = deserialiseVecC<::MacroRulesArm>([&]() {
             return deserialiseMacrorulesarm();
@@ -1061,12 +1052,6 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
         _(TraitObject, {deserialiseTraitpath(), deserialiseVec<HIRGenericPath>(), deserialiseLifetimeref()})
         case HIRTypeData::TAG_ErasedType:
             TODO(Span(), "ErasedType");
-            //_(ErasedType, {
-            //    m_in.read_bool(),
-            //    deserialise_vec< ::HIR::TraitPath>(),
-            //    deserialise_vec< ::HIR::LifetimeRef>(),
-            //    deserialise_type()
-            //    })
             _(Array, {deserialiseType(), deserialiseArraysize()})
             _(Slice, {deserialiseType()})
             _(Tuple, deserialiseVec<HIRTypeRef>())
@@ -1348,7 +1333,6 @@ MIRFunctionPointer HirDeserialiser::deserialiseMir() {
     MIRFunction rv;
 
     rv.locals = deserialiseVec<HIRTypeRef>();
-    //rv.local_names = deserialise_vec< ::std::string>( );
     rv.dropFlags = deserialiseVec<bool>();
     rv.blocks = deserialiseVec<MIRBasicBlock>();
 
@@ -1583,8 +1567,6 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
     rv.markerImpls = deserialisePathmap<HIRCrate::ImplGroup<std::unique_ptr<HIRMarkerImpl>>>();
 
     rv.exportedMacroNames = deserialiseVec<::RcString>();
-    //rv.m_exported_macros = deserialise_istrumap< ::MacroRulesPtr>();
-    //rv.m_proc_macro_reexports = deserialise_istrumap< ::HIR::Crate::MacroImport>();
     rv.mLangItems = deserialiseStrumap<HIRSimplePath>();
 
     {
@@ -1602,7 +1584,6 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
     rv.extLibs = deserialiseVec<HIRExternLibrary>();
     rv.linkPaths = deserialiseVec<::std::string>();
 
-    //rv.m_proc_macros = deserialise_vec< ::HIR::ProcMacro>();
 }
 
 //}
@@ -1763,7 +1744,6 @@ namespace {
                         isFirst = false;
                     }
                 }
-                //this->visit_type(i.second.m_default);
                 os << ";\n";
             }
 
@@ -2409,8 +2389,6 @@ namespace {
                     os << " move";
                 }
                 os << "|";
-                //for(const auto& arg : node.m_args)
-                //    m_os << arg.first << ": " << arg.second << ", ";
                 os << "| -> " << node.returnType << " ";
                 this->visitNodePtr(node.mCode);
             } else {
@@ -2426,8 +2404,6 @@ namespace {
         void visit(HIRExprNodeGeneratorWrapper& node) override {
             os << "/*gen body*/";
             os << "|";
-            //for(const auto& arg : node.m_args)
-            //    m_os << arg.first << ": " << arg.second << ", ";
             os << "| -> " << node.returnType << " ";
             this->visitNodePtr(node.mCode);
         }
@@ -2634,8 +2610,6 @@ public:
         serialise(e.second);
     }
 
-    //void serialise(::MIR::BasicBlockId val) {
-    //    m_out.write_count(val);
     //}
 
     void serialise(bool v) {
@@ -2728,8 +2702,6 @@ public:
             }
             TU_ARMA(ErasedType, e) {
                 TODO(Span(), "Serialse ErasedType?");
-                //serialise_path(e.m_origin);
-                //m_out.write_count(e.m_index);
 
                 out.writeBool(e.isSized);
                 serialiseVec(e.traits);
@@ -2955,7 +2927,6 @@ public:
         for (const auto& ext : crate.extCrates) {
             out.writeString(ext.first);
             out.writeString(ext.second.basename);
-            //m_out.write_string(ext.second.m_path);
         }
         serialiseVec(crate.extLibs);
         serialiseVec(crate.linkPaths);
@@ -3284,7 +3255,6 @@ public:
     void serialise(const MIRFunction& mir) {
         // Write out MIR.
         serialiseVec(mir.locals);
-        //serialise_vec( mir.slot_names );
         serialiseVec(mir.dropFlags);
         serialiseVec(mir.blocks);
     }
@@ -3417,7 +3387,6 @@ public:
             (
                 Incomplete,
                 // NOTE: loops that diverge (don't break) leave a dangling bb
-                //assert(!"Entountered Incomplete MIR block");
             ),
             (Return, ),
             (UnwindResume, ),
@@ -3512,7 +3481,6 @@ public:
     }
 
     void serialise(const HIRLinkage& linkage) {
-        //m_out.write_tag( static_cast<int>(linkage.type) );
         out.writeString(linkage.name);
     }
 

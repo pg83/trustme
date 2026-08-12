@@ -131,7 +131,6 @@ namespace {
             case '\n':
                 os << "\\n\"\n\"";
                 break;
-            //case '\r':  os << "\\r";   break;
             case '\"':
                 os << "\\\"";
                 break;
@@ -721,7 +720,6 @@ namespace {
 
             public:
                 void pushDir(const char* s) {
-#if 1
                     // Don't de-dup since there's the push/pop rules
                     auto it = ::std::find_if(StringList::begin(), StringList::end(), [&](const char* es) {
                         return ::std::strcmp(es, s) == 0;
@@ -729,7 +727,6 @@ namespace {
                     if (it != StringList::end()) {
                         return;
                     }
-#endif
                     mTy.push_back(Ty::Directory);
                     this->push_back(s);
                 }
@@ -961,7 +958,6 @@ namespace {
                     break;
                 case OptimizationLevel::More:
                 case OptimizationLevel::Aggressive:
-                    //args.push_back("-O2");
                     args.push_back("-O1"); // HACK: Work around mrustc #347 by reducing the optimisation level
                     break;
                 case OptimizationLevel::Size:
@@ -1074,7 +1070,6 @@ namespace {
                 commandFileStream.close();
                 ASSERT_BUG(Span(), !commandFileStream.bad(), "Error set on output stream for: " << outfilePathC);
             }
-            //DEBUG("- " << cmd_ss.str());
             ::std::cout << "Running command - " << cmdSs.str() << ::std::endl;
             if (opt.buildCommandFile != "") {
                 ::std::cerr << "INVOKE CC: " << cmdSs.str() << ::std::endl;
@@ -3512,11 +3507,6 @@ namespace {
                                             of << (re.offset + ve.index);
                                         } else {
                                             auto vr = TargetGetTypeRepr(sp, mResolve, repr->fields[ve.index].ty);
-                                            //m_of << "assert(&";
-                                            //emit_lvalue(e.dst); m_of << ".DATA.var_" << ve.index << "._" << (vr->fields.size() - 1);
-                                            //m_of << " == &";
-                                            //emit_lvalue(e.dst); emit_enum_path(repr, re.field);
-                                            //m_of << "); ";
                                             emitLvalue(e.dst);
                                             of << ".DATA.var_" << ve.index << "._" << (vr->fields.size() - 1) << " = ";
                                             const auto& slotTy = vr->fields.back().ty;
@@ -3780,9 +3770,6 @@ namespace {
                     }
                 }
 
-                //friend std::ostream& operator<<(std::ostream& os, const MaybeSigned64& x) {
-                //    x.fmt(os);
-                //    return os;
                 //}
             };
 
@@ -3833,27 +3820,11 @@ namespace {
                     }
 
                     auto emitVariant = [&]() {
-#if 1
                         if (pointerTag) {
                             of << "(uintptr_t)";
                         }
                         emitLvalue(val);
                         emitEnumPath(repr, e.field);
-#else
-                        // Emit using a pointer manipulation, to avoid `union` "active member" rule
-                        // - Technically not type punning, as the type is the same in all cases
-                        // Get the offset
-                        size_t offset = repr->getOffset(sp, mResolve, e.field);
-                        ;
-                        // Emit
-                        of << " *(";
-                        emitCtype(tagTy);
-                        of << "*)(";
-                        of << "(const char*)&";
-                        emitLvalue(val);
-                        of << " + " << offset;
-                        _of << ")";
-#endif
                     };
 
                     // Optimisation: If there's only one arm with a different value, then emit an `if` isntead of a `switch`
@@ -4073,7 +4044,6 @@ namespace {
                 of << "\n";
                 of << indent << "}\n";
             } else if (const auto* ve = values.opt_Signed()) {
-                //assert(ve->size() == e.targets.size());
                 const bool emulatedI128 = options.emulatedI128 && ty == HIRCoreType::I128;
                 if (emulatedI128) {
                     of << indent << "if(";
@@ -4311,7 +4281,6 @@ namespace {
             bool isIntel = H::hasFlag(e.flags, "intel");
 
             // The following clobber overlaps with an output
-            // __asm__ ("cpuid": "=a" (var0), "=b" (var1), "=c" (var2), "=d" (var3): "a" (arg0), "c" (var4): "rbx");
             if (asmMatchesTemplate(e, "cpuid", {"{eax}", "{ecx}"}, {"={eax}", "={ebx}", "={ecx}", "={edx}"})) {
                 if (e.clobbers.size() == 1 && e.clobbers[0] == "rbx") {
                     of << indent << "__asm__(\"cpuid\"";
@@ -4547,9 +4516,7 @@ namespace {
             const auto& se = stmt.as_Asm2();
 
             // The following clobber overlaps with an output
-            // __asm__ ("cpuid": "=a" (var0), "=b" (var1), "=c" (var2), "=d" (var3): "a" (arg0), "c" (var4): "rbx");
             if (m.matchesTemplate({"movq %rbx, {0:r}", "cpuid", "xchgq %rbx, {0:r}"}, {"lateout:reg", "inlateout=eax", "inlateout=ecx", "lateout=edx"})) {
-                //if( e.clobbers.size() == 1 && e.clobbers[0] == "rbx" ) {
                 of << indent << "__asm__(\"cpuid\"";
                 of << " : ";
                 of << "\"=a\" (";
@@ -5251,7 +5218,6 @@ namespace {
                 emitLvalue(e.retVal);
                 of << " = ";
                 const auto& ty = params.types.at(0);
-#if 1
                 auto innerTy = getInnerUnsizedType(ty);
                 if (innerTy == HIRTypeRef()) {
                     of << "ALIGNOF(";
@@ -5278,28 +5244,6 @@ namespace {
                 } else {
                     MIR_BUG(localMirRes, "Unknown inner unsized type " << innerTy << " for " << ty);
                 }
-#else
-                switch (metadataType(ty)) {
-                    case MetadataType::None:
-                        of << "ALIGNOF(";
-                        emitCtype(ty);
-                        of << ")";
-                        break;
-                    case MetadataType::Slice: {
-                        // TODO: Have a function that fetches the inner type for types like `Path` or `str`
-                        const auto& ity = *ty->as_Slice().inner;
-                        of << "ALIGNOF(";
-                        emitCtype(ity);
-                        of << ")";
-                        break;
-                    }
-                    case MetadataType::TraitObject:
-                        of << "((VTABLE_HDR*)";
-                        emitParam(e.args.at(0));
-                        of << ".META)->align";
-                        break;
-                }
-#endif
             }
             // --- Type assertions ---
             else if (name == "panic_if_uninhabited" || name == "assert_inhabited") {
@@ -5417,7 +5361,6 @@ namespace {
                 // Unchecked (can return `undef`) cast from a float to an integer
                 if (this->typeIsEmulatedI128(dstTy)) {
                     of << "abort()";
-                    //emit_lvalue(e.ret_val); m_of << " = ("; emit_ctype(dst_ty); m_of << ")"; emit_param(e.args.at(0));
                 } else if (srcTy == HIRCoreType::F16 || srcTy == HIRCoreType::F128) {
                     of << "abort()";
                 } else {
@@ -5570,7 +5513,6 @@ namespace {
             }
             // --- #[track_caller]
             else if (name == "caller_location") {
-                //m_of << "abort()";
                 auto p = crate.getLangItemPathOpt("panic_location");
                 of << "static struct ";
                 if (p == HIRSimplePath()) {
@@ -6846,7 +6788,6 @@ namespace {
                             case HIRCoreType::I64:
                                 rv.ty = Signed;
                                 break;
-                            //case ::HIR::CoreType::I128: rv.ty = Signed; break;
                             case HIRCoreType::U8:
                                 rv.ty = Unsigned;
                                 break;
@@ -6859,7 +6800,6 @@ namespace {
                             case HIRCoreType::U64:
                                 rv.ty = Unsigned;
                                 break;
-                            //case ::HIR::CoreType::U128: rv.ty = Unsigned; break;
                             case HIRCoreType::F16:
                                 rv.ty = Float;
                                 break;
@@ -7860,9 +7800,6 @@ namespace {
                     of << " " << inner;
                 }
                 TU_ARMA(Path, te) {
-                    //if( const auto* ity = m_resolve.is_type_owned_box(ty) ) {
-                    //    emit_ctype_ptr(*ity, inner);
-                    //    return ;
                     //}
                 TU_MATCH_HDRA( (te.binding), { )
                 TU_ARMA(Struct, tpb) {
@@ -7897,8 +7834,6 @@ namespace {
                 }
                 TU_ARMA(Array, te) {
                     of << "t_" << TransMangle(ty) << " " << inner;
-                    //emit_ctype(te.inner, inner);
-                    //m_of << "[" << te.size.as_Known() << "]";
                 }
                 TU_ARMA(Slice, te) {
                     MIR_BUG(*mirRes, "Raw slice object - " << ty);
@@ -8055,8 +7990,6 @@ namespace {
         }
 
         void emitCtypePtr(const HIRTypeData* innerTy, ::FmtLambda inner) {
-            //if( inner_ty->is_Array() ) {
-            //    emit_ctype(inner_ty, FMT_CB(ss, ss << "(*" << inner << ")";));
             //}
             //else
             {

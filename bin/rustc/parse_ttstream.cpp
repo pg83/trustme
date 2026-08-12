@@ -53,7 +53,6 @@ Token TTStream::realGetToken() {
             }
         }
     }
-    //m_hygiene = nullptr;
     return Token(TOK_EOF);
 }
 

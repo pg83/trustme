@@ -351,7 +351,6 @@ void ASTPath::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) 
             }
         }
         TU_ARMA(UFCS, ent) {
-            //os << "/*ufcs*/";
             if (ent.trait) {
                 os << "<" << *ent.type << " as ";
                 if (ent.trait->cls.is_Invalid()) {

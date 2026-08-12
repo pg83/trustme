@@ -195,8 +195,6 @@ public:
         }
         if (n.options.any()) {
             n.options.fmt(os);
-            //m_os << "options(";
-            //m_os << ")";
         }
         os << ")";
     }
@@ -536,7 +534,6 @@ public:
                 os << "0x" << ::std::hex << n.mValue << ::std::dec << "_/*bool/str*/";
                 break;
             case CORETYPE_CHAR:
-                //if( 0x20 <= n.m_value && n.m_value < 128 ) {
                 if (n.mValue >= 0x20 && n.mValue < 128) {
                     switch (n.mValue.truncateU64()) {
                         case '\'':
@@ -907,9 +904,6 @@ void RustPrinter::handleModule(const ASTModule& mod) {
             continue;
         }
         const auto& iData = i.data.as_Use();
-        //if(need_nl) {
-        //    m_os << "\n";
-        //    need_nl = false;
         //}
         if (iData.entries.empty()) {
             continue;
@@ -1438,7 +1432,6 @@ void RustPrinter::handleFunction(const ASTVisibility& vis, const RcString& name,
         os << indent();
         f.code().visitNodes(*this);
         os << "\n";
-        //m_os << indent() << f.data.code() << "\n";
     } else {
         printBounds(f.params());
         os << ";\n";

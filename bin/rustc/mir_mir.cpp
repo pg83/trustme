@@ -100,7 +100,6 @@ Ordering MIRLValue::ord(const MIRLValue& x) const {
 
 Ordering MIRLValue::RefCommon::ord(const MIRLValue::RefCommon& x) const {
     Ordering rv;
-    //TRACE_FUNCTION_FR(FMT_CB(ss, this->fmt(ss); ss << " ? "; x.fmt(ss);), rv);
     rv = mLv->root.ord(x.mLv->root);
     if (rv != OrdEqual) {
         return rv;
@@ -765,7 +764,6 @@ MIRRValue MIRCloner::cloneRval(const MIRRValue& src) const {
     TU_ARMA(Use, se) {
             //if( const auto* ae = se.opt_Argument() )
             //    if( const auto* e = this->te.args.at(ae->idx).opt_Constant() )
-            //        return e->clone();
             return MIRRValue(this->cloneLval(se));
         }
         TU_ARMA(Constant, se) {

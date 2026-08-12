@@ -628,7 +628,6 @@ struct ASTUseItem {
     ::std::vector<Ent> entries;
 
     ASTUseItem clone() const;
-    //friend ::std::ostream& operator<<(::std::ostream& os, const UseItem& x);
 };
 
 class ASTExternBlock {
@@ -691,7 +690,6 @@ public:
     struct FileInfo {
         bool controlsDir = false;
         ////
-        //bool    force_no_load = false;
         // Is this module disabled (i.e. it's tagged with a failing `#[cfg]`)?
         // Disables down-stream file loading (as that might fail)
         bool isDisabled = false;

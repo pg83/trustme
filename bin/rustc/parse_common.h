@@ -61,7 +61,6 @@ extern ASTExpr ParseExprBlock(TokenStream& lex);
 extern ASTExprNodeP ParseExpr0(TokenStream& lex);
 extern ASTExprNodeP ParseExpr13(TokenStream& lex); // Unaries
 extern ASTExprNodeP ParseExprVal(TokenStream& lex);
-//extern AST::ExprNodeP Parse_ExprBlockNode(TokenStream& lex, AST::ExprNodeBlock::Type ty=AST::ExprNodeBlock::Type::Bare, Ident label=Ident(""));
 extern ASTExprNodeP ParseExprBlockNode(TokenStream& lex);
 extern ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence);
 extern ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<ASTModule>& localMod, bool& addSilenceIfEnd);

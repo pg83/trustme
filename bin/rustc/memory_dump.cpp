@@ -64,7 +64,6 @@ void memoryDump(const char* phase) {
                     continue;
                 }
 
-                //printf("%i : %s\n", chunk_count, e.name.c_str());
                 // Chunk count
                 if (e.flagsStr[0] != 'r') {
                     continue;
@@ -242,25 +241,21 @@ void memoryDump(const char* phase) {
                     const auto tailPos = r.vEnd - tailSize;
                     uint64_t va = r.vStart + headSize;
                     while (va < tailPos) {
-                        //printf("%lx+%lx (mid)\n", va, chunk_size);
                         memcpy(buf.data(), (const void*)va, chunkSize);
                         flushChunk(va / chunkSize * chunkSize);
                         va += chunkSize;
                     }
                     // Fill tail chunk (no flush)
-                    //printf("%lx+%lx (tail)\n", tail_pos, tail_size);
                     memcpy(buf.data(), (const void*)tailPos, tailSize);
                     // - No flush, next push will do that
                 }
                 lastVaddr = r.vEnd;
-                //printf("> last_vaddr=%li\n", last_vaddr);
             }
         }
         if (lastVaddr % chunkSize != 0) {
             flushChunk(lastVaddr / chunkSize * chunkSize);
         }
         if (chunkCountFlushed != chunkCount) {
-            //printf("BUG: flushed %i chunks, but expected %i\n", chunk_count_flushed, chunk_count);
             assert(false);
         }
 

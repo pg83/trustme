@@ -41,7 +41,6 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput outTy, const Trans
                     (Opaque, throw "";),
                     (
                         ExternType,
-                        //codegen->emit_extern_type(sp, te->path.m_data.as_Generic(), *tpb);
                     ),
                     (Struct, codegen->emitStruct(sp, te->path.mData.as_Generic(), *tpb);),
                     (Union, codegen->emitUnion(sp, te->path.mData.as_Generic(), *tpb);),
@@ -94,7 +93,6 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput outTy, const Trans
     }
     // - External functions
     for (const auto& ent : list.functions) {
-        //DEBUG("FUNCTION " << ent.first);
         assert(ent.second->ptr);
         const auto& fcn = *ent.second->ptr;
         if (fcn.mCode.mir && !ent.second->forcePrototype) {
@@ -596,7 +594,6 @@ namespace {
                         return resolve.crate.types.primitive(HIRCoreType::Usize);
                     } else if (t->is_TraitObject()) {
                         const auto& te = t->as_TraitObject();
-                        //auto vtp = t.m_data.as_TraitObject().m_trait.m_path;
 
                         const auto& trait = resolve.crate.getTraitByPath(sp, te.mTrait.mPath.mPath);
                         auto vtableTy = trait.getVtableType(sp, resolve.crate, te);
@@ -1276,7 +1273,6 @@ namespace {
                             // TODO: Values.
                             //if( e.values.size() > 0 )
                             //{
-                            //    m_of << ", ";
                             //}
                             of << "_ = " << e.defTarget;
                             of << " }\n";

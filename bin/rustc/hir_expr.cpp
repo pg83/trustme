@@ -457,9 +457,6 @@ DEF_VISIT_H(HIRExprNodeClosure, node) {
 
 DEF_VISIT_H(HIRExprNodeGenerator, node) {
     TRACE_FUNCTION_F("_Generator");
-    //for(auto& arg : node.m_args) {
-    //    visit_pattern(node.span(), arg.first);
-    //    visit_type(arg.second);
     //}
     visitType(node.returnType);
     visitType(node.yieldTy);
@@ -474,9 +471,6 @@ DEF_VISIT_H(HIRExprNodeGenerator, node) {
 }
 
 DEF_VISIT_H(HIRExprNodeGeneratorWrapper, node) {
-    //for(auto& arg : node.m_args) {
-    //    visit_pattern(node.span(), arg.first);
-    //    visit_type(arg.second);
     //}
     visitType(node.returnType);
     visitType(node.yieldTy);

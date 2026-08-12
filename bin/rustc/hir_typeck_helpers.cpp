@@ -228,7 +228,6 @@ void HMTypeInferrence::dump() const {
     for (const auto& v : ivars) {
         auto i = &v - &ivars.front();
         if (v.isAlias()) {
-            //DEBUG("#" << i << " = " << v.alias);
         } else {
             DEBUG("#" << i << " = " << v.type << FMT_CB(os, bool open = false; unsigned int i2 = 0; for (const auto& v2 : ivars) {
                       if (v2.isAlias() && v2.alias == i) {
@@ -261,7 +260,6 @@ void HMTypeInferrence::dump() const {
 }
 
 void HMTypeInferrence::checkForLoops() {
-#if 1
     struct LoopChecker {
         ::std::vector<unsigned int> indexes;
 
@@ -284,92 +282,6 @@ void HMTypeInferrence::checkForLoops() {
             });
         }
     };
-#else
-    struct LoopChecker {
-        ::std::vector<unsigned int> indexes;
-
-        void checkPathparams(const HMTypeInferrence& ivars, const HIRPathParams& pp) {
-            for (const auto& ty : pp.types) {
-                this->checkTy(ivars, ty);
-            }
-        }
-
-        void checkPath(const HMTypeInferrence& ivars, const HIRPath& path) {
-            TU_MATCH(HIRPath::Data, (path.mData), (pe), (Generic, this->checkPathparams(ivars, pe.mParams);), (UfcsKnown, this->checkTy(ivars, pe.type); this->checkPathparams(ivars, pe.trait.mParams); this->checkPathparams(ivars, pe.params);), (UfcsInherent, this->checkTy(ivars, pe.type); this->checkPathparams(ivars, pe.params);), (UfcsUnknown, BUG(Span(), "UfcsUnknown");))
-        }
-
-        void checkTy(const HMTypeInferrence& ivars, const HIRTypeData* ty) {
-            TU_MATCH_HDRA( (*ty), {)
-            TU_ARMA(Infer, e) {
-                    for (auto idx : indexes) {
-                        ASSERT_BUG(Span(), e.index != idx, "Recursion in ivar #" << indexes.front() << " " << *ivars.ivars[indexes.front()].type << " - loop with " << idx << " " << *ivars.ivars[idx].type);
-                    }
-                    const auto& ivd = ivars.getPointedIvar(e.index);
-                    assert(!ivd.isAlias());
-                    if (!ivd.type->data().is_Infer()) {
-                        indexes.push_back(e.index);
-                        this->checkTy(ivars, *ivd.type);
-                        indexes.pop_back();
-                    }
-                }
-                TU_ARMA(Primitive, e) {
-                }
-                TU_ARMA(Diverge, e) {
-                }
-                TU_ARMA(Generic, e) {
-                }
-                TU_ARMA(Path, e) {
-                    this->checkPath(ivars, e.path);
-                }
-                TU_ARMA(Borrow, e) {
-                    this->checkTy(ivars, e.inner);
-                }
-                TU_ARMA(Pointer, e) {
-                    this->checkTy(ivars, e.inner);
-                }
-                TU_ARMA(Slice, e) {
-                    this->checkTy(ivars, e.inner);
-                }
-                TU_ARMA(Array, e) {
-                    this->checkTy(ivars, e.inner);
-                }
-                TU_ARMA(Closure, e) {
-                }
-                TU_ARMA(Generator, e) {
-                }
-                TU_ARMA(Function, e) {
-                    for (const auto& arg : e.argTypes) {
-                        this->checkTy(ivars, arg);
-                    }
-                    this->checkTy(ivars, e.mRettype);
-                }
-                TU_ARMA(TraitObject, e) {
-                    this->checkPathparams(ivars, e.mTrait.mPath.mParams);
-                    for (const auto& aty : e.mTrait.typeBounds) {
-                        this->checkTy(ivars, aty.second.type);
-                    }
-                    for (const auto& marker : e.markers) {
-                        this->checkPathparams(ivars, marker.mParams);
-                    }
-                }
-                TU_ARMA(ErasedType, e) {
-                    this->checkPath(ivars, e.origin);
-                    for (const auto& trait : e.traits) {
-                        this->checkPathparams(ivars, trait.mPath.mParams);
-                        for (const auto& aty : trait.typeBounds) {
-                            this->checkTy(ivars, aty.second.type);
-                        }
-                    }
-                }
-                TU_ARMA(Tuple, e) {
-                    for (const auto& st : e) {
-                        this->checkTy(ivars, st);
-                    }
-                }
-            }
-        }
-    };
-#endif
     unsigned int i = 0;
     for (const auto& v : ivars) {
         if (!v.isAlias() && !v.type->is_Infer()) {
@@ -872,7 +784,6 @@ void HMTypeInferrence::setIvarValTo(unsigned int slot, HIRConstGeneric val) {
     ASSERT_BUG(Span(), slot < values.size(), "slot " << slot << " >= " << values.size());
     ASSERT_BUG(Span(), !values[slot].isAlias(), "slot " << slot);
     if (*values[slot].val == val) {
-        //DEBUG("Set ValIVar " << slot << " == " << val);
     } else {
         DEBUG("Set ValIVar " << slot << " = " << val);
         ASSERT_BUG(Span(), values[slot].val->is_Infer(), "slot " << slot << " - " << *values[slot].val);
@@ -901,12 +812,7 @@ void HMTypeInferrence::ivarValUnify(unsigned int leftSlot, unsigned int rightSlo
 
 //::HIR::TypeRef& HMTypeInferrence::get_type(::HIR::TypeRef& type)
 //{
-//    if(const auto* e = type->opt_Infer()) {
-//        assert(e->index != ~0u);
-//        return *get_pointed_ivar(e->index).type;
 //    }
-//    else {
-//        return type;
 //    }
 //}
 
@@ -986,22 +892,15 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
             )
         }
 
-#if 1
         // Alias `l_e.index` to this slot
         DEBUG("Set IVar " << lE->index << " = @" << slot);
         auto& rIvar = this->getPointedIvar(lE->index);
         rIvar.alias = slot;
         rIvar.type = nullptr;
-#else
-        DEBUG("Set IVar " << slot << " = @" << lE->index);
-        rootIvar.alias = lE->index;
-        rootIvar.type = nullptr;
-#endif
     } else if (rootIvar.type == type) {
         return;
     } else {
         // Erase (replace with blank) lifetimes
-#if 1
         // TODO: Avoid needing to clone in all cases?
         struct MonomorphAddLifetimes: public Monomorphiser {
             explicit MonomorphAddLifetimes(HIRTypeInterner& types)
@@ -1030,12 +929,6 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
         };
 
         type = MonomorphAddLifetimes(types).monomorphType(sp, type, true);
-#else
-        if (type->is_Borrow() && type->as_Borrow().lifetime != HIRLifetimeRef()) {
-            auto& t = type.getUnique();
-            t.as_Borrow().lifetime = HIRLifetimeRef();
-        }
-#endif
 
         // Otherwise, store left in right's slot
         DEBUG("Set IVar " << slot << " = " << type);
@@ -1547,7 +1440,6 @@ TU_ARMA(Alias, ee) {
                     HIRTraitPath::assocListT assocList;
                     assocList.insert(std::make_pair(nameDiscriminant, HIRTraitPath::AtyEqual{trait, {}, crate.types.path(HIRPath(type, trait.clone(), nameDiscriminant), HIRTypePathBinding::make_Opaque({}))}));
                     return callback(ImplRef(type, HIRPathParams(), HIRTraitPath::assocListT()), HIRCompare::Equal);
-                    //return false;
                 } else if (type->is_Path() && type->as_Path().binding.is_Enum()) {
                     const auto& enm = *type->as_Path().binding.as_Enum();
                     HIRTypeRef tagTy = crate.types.primitive(enm.getReprType(enm.tagRepr));
@@ -1664,8 +1556,6 @@ TU_ARMA(Alias, ee) {
                 };
                 //if( dst_ty->is_Infer() || type->is_Infer() )
                 //{
-                //    rv = callback( ImplRef(type.clone(), params.clone(), {}), ::HIR::Compare::Fuzzy );
-                //    return rv;
                 //}
                 auto cmp = this->canUnsize(sp, dstTy, type, cb);
                 if (cmp == HIRCompare::Equal) {
@@ -1710,12 +1600,10 @@ TU_ARMA(Alias, ee) {
                 //switch( this->metadata_type(sp, type) )
                 //{
                 //case MetadataType::Unknown:
-                //    break;
                 //case MetadataType::None:
                 //case MetadataType::Slice:
                 //case MetadataType::TraitObject:
                 //case MetadataType::Zero:    // TODO: Does zero apply here?
-                //    return found_cb( ImplRef(&null_hrls, type, &null_params, &null_assoc), false );
                 //}
             }
 
@@ -1909,8 +1797,6 @@ TU_ARMA(Alias, ee) {
             const auto& type = this->ivars.getType(ty);
             TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
 
-            //const auto& trait_index = this->m_crate.get_lang_item_path(sp, "index");
-            //const auto& trait_indexmut = this->m_crate.get_lang_item_path(sp, "index_mut");
 
             if (magicTraitImpls) {
                 if (findTraitImplsMagic(sp, trait, params, ty, callback)) {
@@ -1942,7 +1828,6 @@ TU_ARMA(Alias, ee) {
                 if (trait == mt.mPath) {
                     auto cmp = comparePp(sp, mt.mParams, params);
                     if (cmp != HIRCompare::Unequal) {
-                        //auto hrls = get_hrls(sp, e.m_trait.m_hrtbs, e.m_trait.m_path.m_params, params);
                         return callback(ImplRef(HIRPathParams(), type, &mt.mParams, &nullAssoc), cmp);
                     }
                 }
@@ -4503,7 +4388,6 @@ TU_ARMA(Alias, ee) {
         void TraitResolution::compactIvars(HMTypeInferrence& ivars) {
             ivars.checkForLoops();
 
-            //m_ivars.compact_ivars([&](const ::HIR::TypeData* t)->auto{ return this->expand_associated_types(Span(), t.clone); });
             unsigned int i = 0;
             for (auto& v : ivars.ivars) {
                 if (!v.isAlias()) {
@@ -4554,7 +4438,6 @@ TU_ARMA(Alias, ee) {
                 }
             };
 
-            //TRACE_FUNCTION_F(input);
     TU_MATCH_HDRA( (*input), {)
     TU_ARMA(Infer, e) {
             const auto& ty = this->ivars.getType(input);
@@ -4678,7 +4561,6 @@ TU_ARMA(Alias, ee) {
                     return;
                 }
             }
-            //TRACE_FUNCTION_F(input);
             auto data = input->cloneData();
     TU_MATCH_HDRA( (data), {)
     TU_ARMA(Infer, e) {
@@ -4802,7 +4684,6 @@ TU_ARMA(Alias, ee) {
         TU_ARMA(NamedFunction, e) {
         TU_MATCH_HDRA( (e.path.mData), {)
         TU_ARMA(Generic, pe) {
-                    //ConvertHIR_ConstantEvaluate_MethodParams(sp, m_crate, m_vis_path, m_impl_generics, m_item_generics, *e.binding.get_generics(), pe.m_params);
                     H::expandAssociatedTypesParams(sp, *this, pe.mParams, stack);
                 }
                 TU_ARMA(UfcsInherent, pe) {
@@ -4933,8 +4814,6 @@ TU_ARMA(Alias, ee) {
                 if (hasImplPlaceholders) {
                     DEBUG("Has placeholder, skip");
                     // TODO: Why opaque? Like ivars, these could resolve in the future.
-                    //DEBUG("Has placeholder, mark opaque.");
-                    //e.binding = ::HIR::TypePathBinding::make_Opaque({});
                     return;
                 }
             }
@@ -4944,7 +4823,6 @@ TU_ARMA(Alias, ee) {
             if (!this->traitContainsType(sp, pe.trait, this->crate.getTraitByPath(sp, pe.trait.mPath), pe.item.c_str(), traitPath)) {
                 BUG(sp, "Cannot find associated type " << pe.item << " anywhere in trait " << pe.trait);
             }
-            //pe.trait = mv$(trait_path);
 
             // Special type-specific rules
     TU_MATCH_HDRA( (*pe.type), {)
@@ -5097,7 +4975,6 @@ TU_ARMA(Alias, ee) {
                     // The above is just the monomorphised params and associated set. Comparison is still needed.
                     auto cmp = this->comparePp(sp, iTp.mPath.mParams, pe.trait.mParams);
                     if (cmp != HIRCompare::Unequal) {
-                        //auto hrls = get_hrls(sp, trait.m_hrtbs, i_tp.m_path.m_params, trait_path.m_params);
                         auto it = iTp.typeBounds.find(pe.item);
                         if (it == iTp.typeBounds.end()) {
                             // NOTE: (currently) there can only be one trait with this name, so if we found this trait and the item is present - good.
@@ -5153,7 +5030,6 @@ TU_ARMA(Alias, ee) {
             // 2. Check if the trait (or any supertrait) includes pe.trait
             // TODO: If fuzzy, bail and leave unresolved?
             cmp &= boundTrait.compareWithPlaceholders(sp, traitPath, this->ivars.callbackResolveInfer());
-            //if( cmp != HIR::Compare::Unequal ) {
             if (cmp == HIRCompare::Equal) {
                 auto it = boundInfo.assoc.find(pe.item);
                 // 1. Check if the bounds include the desired item
@@ -5414,7 +5290,6 @@ TU_ARMA(Alias, ee) {
                     DEBUG("Derferring - best impl didn't have ATY (ivars present)");
                 }
                 return;
-                //ERROR(sp, E0000, "Couldn't find assocated type " << pe.item << " in impl of " << pe.trait << " for " << pe.type);
             }
 
             // Try again later?
@@ -5510,11 +5385,9 @@ TU_ARMA(Alias, ee) {
                     ty.second.type = this->expandAssociatedTypes(sp, mv$(ty.second.type));
                 }
 
-                //DEBUG(pt << " => " << pt_mono);
                 if (pt.mPath.mPath == des) {
                     DEBUG("Found potential " << ptMono);
                     // NOTE: Doesn't quite work...
-                    //auto cmp = this->compare_pp(sp, pt_mono.m_path.m_params, des_params);
                     //if( cmp != ::HIR::Compare::Unequal )
                     //{
                     if (callback(ptMono)) {
@@ -5833,19 +5706,9 @@ TU_ARMA(Alias, ee) {
 
             // TODO: Don't search if ALL types are unbounded ivar (what about a tuple of unbounded?)
             // If the type is an unbounded ivar, don't search.
-#if 1
             if (type->is_Infer() && !type->as_Infer().isLit()) {
                 return false;
             }
-#elif 0
-            if (type->is_Infer() && !type->as_Infer().isLit()) {
-                return this->crate.findTraitImpls(trait, type, this->ivars.callbackResolveInfer(), [&](const auto& impl) {
-                    HIRPathParams implParams;
-                    // Fill all params with placeholders?
-                    return callback(ImplRef(mv$(implParams), trait, impl), HIRCompare::Fuzzy);
-                });
-            }
-#endif
 
             return this->crate.findTraitImpls(trait, type, this->ivars.callbackResolveInfer(), [&](const HIRTraitImpl& impl) {
                 DEBUG("[find_trait_impls_crate] Found impl" << impl.mParams.fmtArgs() << " " << trait << impl.traitArgs << " for " << impl.mType << " " << impl.mParams.fmtBounds());
@@ -6282,7 +6145,6 @@ TU_ARMA(Alias, ee) {
                         } else {
                             DEBUG("[ftic_check_params:cb_match] Compare placeholder " << i << " " << ph << " == " << v);
                             TODO(Span(), "[ftic_check_params:cb_match] Compare placeholder " << i << " " << ph << " == " << v);
-                            //return ph.compare_with_placeholders(sp, ty, resolve_cb);
                         }
                     } else {
                         if (g.isPlaceholder()) {
@@ -6299,11 +6161,8 @@ TU_ARMA(Alias, ee) {
                 }
 
                 HIRTypeRef getType(const Span& sp, const HIRGenericRef& ge) const override {
-                    //if( ge.is_self() ) {
                     //    // TODO: `impl_type` or `des_type`
-                    //    DEBUG("[find_impl__check_crate_raw] Self - " << impl_type << " or " << des_type);
                     //    //TODO(sp, "[find_impl__check_crate_raw] Self - " << impl_type << " or " << des_type);
-                    //    return impl_type;
                     //}
                     ASSERT_BUG(sp, !ge.isPlaceholder(), "[find_impl__check_crate_raw] Placeholder param seen - " << ge);
                     if (implParams.types.at(ge.binding) != HIRTypeRef()) {
@@ -6333,8 +6192,6 @@ TU_ARMA(Alias, ee) {
             Matcher matcher{crate.types, sp, outImplParams, placeholderName, placeholders};
 
             //::std::vector<::HIR::TypeRef> saved_ph;
-            //for(const auto& t : placeholders)
-            //    saved_ph.push_back(t.clone());
 
             // Keep looping while placeholders are updated
             int loops = 0;
@@ -6497,8 +6354,6 @@ TU_ARMA(Alias, ee) {
                         return HIRCompare::Unequal;
                     }
 
-                    //if( !rv ) {
-                    //    placeholders = ::std::move(saved_ph);
                     //}
                 }
                 TU_ARMA(TypeEquality, be) {
@@ -7710,7 +7565,6 @@ TU_ARMA(Alias, ee) {
                         // Use the set of ivars we were given to populate the trait parameters
                         const auto& trait = crate.getTraitByPath(sp, finalTraitPath.mPath);
                         auto traitParams = getIvaredParams(trait.mParams);
-                        //auto trait_params = std::move(final_trait_path.m_params);
 
                         try {
                             bool crateImplFound = false;
@@ -7721,7 +7575,6 @@ TU_ARMA(Alias, ee) {
                             // decide calls whose arguments would otherwise disambiguate them.
                             findTraitImplsCrate(sp, finalTraitPath.mPath, nullptr, *selfTy, [&](auto impl, auto cmp) {
                                 DEBUG("[find_method] " << impl << ", cmp = " << cmp);
-                                //magic_found = true;
                                 crateImplFound = true;
                                 return true;
                             });

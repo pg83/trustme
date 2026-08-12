@@ -5,7 +5,6 @@
 #include "parse_parseerror.h"
 
 const bool DEBUG_PRINT_TOKENS = false;
-//const bool DEBUG_PRINT_TOKENS = true;
 //#define DEBUG_PRINT_TOKENS  debug_enabled("Lexer Tokens")
 #define FULL_TRACE
 
@@ -23,7 +22,6 @@ Token TokenStream::innerGetToken() {
     if (ret != TOK_EOF && ret.getPos().filename == "") {
         ret.setPos(this->getPosition());
     }
-    //DEBUG("ret.get_pos() = " << ret.get_pos());
     return ret;
 }
 

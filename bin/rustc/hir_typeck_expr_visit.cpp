@@ -7,7 +7,6 @@
 
 void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr) {
     if (expr.state->stage < HIRExprState::Stage::Typecheck) {
-        //Typecheck_Code_Simple(ms, args, result_type, expr);
         TypecheckCodeCS(ms, args, resultType, expr);
         expr.state->stage = HIRExprState::Stage::Typecheck;
     }
@@ -43,8 +42,6 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
         TODO(sp, "prepare_from_path - Trait impl " << ip);
     } else if (ip.parent->trait) {
         // Trait definition
-        //const auto& trait_mod = H::get_mod_for_ip(m_crate, *ip.parent->trait->parent);
-        //const auto& trait = trait_mod.m_mod_items.at(ip.parent->trait->name).ent.as_Trait();
         const auto& trait = crate.getTraitByPath(sp, *ip.parent->trait);
         const auto& item = trait.values.at(ip.name);
             TU_MATCH_HDRA( (item), { )
@@ -72,7 +69,6 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
                 mItemGenerics = &e.mParams;
             }
             TU_ARMA(Static, e) {
-                //m_item_generics = &e.m_params;
             }
             TU_ARMA(Function, e) {
                 mItemGenerics = &e.mParams;
@@ -192,7 +188,6 @@ namespace {
         }
 
         void visitStatic(HIRItemPath p, HIRStatic& item) override {
-            //auto _ = this->m_ms.set_item_generics(item.m_params);
             if (item.mValue) {
                 DEBUG("Static value " << p);
                 tArgs tmp;

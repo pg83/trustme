@@ -76,9 +76,6 @@ struct ASTNamed {
     {
     }
 
-    //Named(Named&&) = default;
-    //Named(const Named&) = default;
-    //Named& operator=(Named&&) = default;
     ASTNamed(Span sp, ASTAttributeList attrs, ASTVisibility vis, RcString name, T data)
         : span(sp)
         , attrs(::std::move(attrs))

@@ -887,10 +887,7 @@ namespace {
                 ASSERT_BUG(node.span(), !node.isContinue, "Continue with a value isn't valid");
                 DEBUG("break value;");
                 this->visitNodePtr(node.mValue);
-                //if( m_builder.resolve().type_is_impossible(node.span(), node.m_value->m_res_type) ) {
                 if (node.mValue->resType->is_Diverge()) {
-                    //ASSERT_BUG(node.span(), !m_builder.has_result(), "Result present when value type is uninhabited - " << node.m_value->m_res_type);
-                    //ASSERT_BUG(node.span(), !m_builder.block_active(), "Result present when value type is uninhabited - " << node.m_value->m_res_type);
                 }
             }
             if (!builder.blockActive()) {
@@ -942,13 +939,10 @@ namespace {
 
             if (node.arms.size() == 0) {
                 // Nothing
-                //const auto& ty = node.m_value->m_res_type;
                 // TODO: Ensure that the type is a zero-variant enum or !
                 builder.endSplitArmEarly(node.span());
                 builder.endBlock(MIRTerminator::make_Unreachable({}));
                 // Push an "diverge" result
-                //m_builder.set_cur_block( m_builder.new_bb_unlinked() );
-                //m_builder.set_result(node.span(), ::MIR::LValue::make_Invalid({}) );
             } else {
                 MIRLowerHIRMatch(builder, *this, node, mv$(matchVal), letElseInitializerTemps);
             }
@@ -957,12 +951,9 @@ namespace {
                 const auto& sp = node.span();
 
                 auto res = builder.getResult(sp);
-                //m_builder.raise_variables(sp, res, stmt_scope, /*to_above=*/true);
                 builder.setResult(sp, mv$(res));
 
-                //m_builder.terminate_scope( node.span(), mv$(stmt_scope) );
             } else {
-                //m_builder.terminate_scope( node.span(), mv$(stmt_scope), false );
             }
         } // ExprNodeMatch
 
@@ -1905,7 +1896,6 @@ namespace {
 
         void boxNew(HIRExprNode& node, const HIRTypeData* dataTy, MIRRValue val) {
             const auto& langExchangeMalloc = builder.crate().getLangItemPath(node.span(), "exchange_malloc");
-            //const auto& lang_owned_box = m_builder.crate().get_lang_item_path(node.span(), "owned_box");
 
             HIRPathParams traitParamsData;
             traitParamsData.types.push_back(dataTy);
@@ -2381,7 +2371,6 @@ namespace {
             if (node.resType->is_NamedFunction() && node.target != HIRExprNodePathValue::STATIC && node.target != HIRExprNodePathValue::CONSTANT) {
                 auto tmp = builder.newTemporary(node.resType);
                 builder.pushStmtAssign(sp, tmp.clone(), MIRConstant::make_Function({box$(node.mPath.clone())}));
-                //m_builder.push_stmt_assign( sp, tmp.clone(), ::MIR::Constant::make_ItemAddr({ box$(node.m_path.clone()) }) );
                 builder.setResult(sp, mv$(tmp));
                 return;
             }
@@ -2435,7 +2424,6 @@ namespace {
                         {
                             auto it = impl.methods.find(pe.item);
                             if (it != impl.methods.end()) {
-                                //BUG(node.span(), "Should have produced a NamedFunction type and have been handled above: ");
                                 builder.setResult(sp, MIRConstant::make_ItemAddr({box$(node.mPath.clone())}));
                                 return true;
                             }
@@ -2460,7 +2448,6 @@ namespace {
 
         void visit(HIRExprNodeVariable& node) override {
             TRACE_FUNCTION_F("_Variable - " << node.mName << " #" << node.slot);
-#if 1
             // If there's an alias active, emit that
             if (const auto* a = builder.getVariableAlias(node.span(), node.slot)) {
                 switch (a->first) {
@@ -2476,7 +2463,6 @@ namespace {
                 }
                 return;
             }
-#endif
             builder.setResult(node.span(), builder.getVariable(node.span(), node.slot));
         }
 
@@ -3001,8 +2987,6 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
     }
 
     // NOTE: Can't clean up yet, as consteval isn't done
-    //MIR_Cleanup(resolve, path, fcn, args, ret_ty);
-    //DEBUG("MIR Dump:" << ::std::endl << FMT_CB(ss, MIR_Dump_Fcn(ss, fcn, 1);));
     MIRValidate(resolve, path, fcn, args, retTy);
 
     if (getenv("MRUSTC_VALIDATE_FULL_EARLY")) {
@@ -3022,7 +3006,6 @@ void HIRGenerateMIRExpr(const HIRCrate& crate, const HIRItemPath& path, HIRExprP
         exprPtr.setMir(LowerMIR(resolve, path, exprPtr, resTy, args));
         // Run cleanup to simplify consteval?
         // - This ends up running before things like vtable generation, so parts of cleanup won't work.
-        //MIR_Cleanup(resolve, path, *expr_ptr.m_mir, args, res_ty);
         // This path prepares an on-demand body for the constant evaluator, not
         // the runtime MIR selected by the driver. Keep normal inlining disabled,
         // but retain the local simplification that CTFE historically required.
@@ -3363,20 +3346,10 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
     // NOTE: Lowers to the following pattern:
     // ```
     // loop {   // `match_scope`
-    //     let _value = foo;
-    //     if let Ok(_) = _value {
-    //         if bar() {
-    //             break { 1 };
     //         }
     //     }
-    //     if let Ok(v) = _value {
-    //         if true {
-    //             break v;
     //         }
     //     }
-    //     if let Err(_) = _value {
-    //         if true {
-    //             break panic();
     //         }
     //     }
     //     diverge()
@@ -4221,7 +4194,6 @@ void PatternRulesetBuilder::multiplyRulesets(size_t n, std::function<void(size_t
         return a.orPath < b.orPath;
     });
     // NOTE: Can't asser that the end is as-expected, as there might be inner subsets created that makes this assumption no longer valid
-    //ASSERT_BUG(Span(), this->subset_end == new_subset_end, this->subset_end << " == " << new_subset_end);
     for (size_t i = this->subsetStart; i < this->subsetEnd; i += 1) {
         DEBUG("#" << i << " rules=[" << rulesets[i].rules << "], bindings=[" << rulesets[i].mBindings << "]");
     }
@@ -4318,7 +4290,6 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                 }
                 TU_ARMA(Opaque, pbe) {
                     TODO(sp, "Can an opaque path type be matched with a literal?");
-                    //ASSERT_BUG(sp, lit.as_List().size() == 0 , "Matching unit struct with non-empty list - " << lit);
                     this->pushRule(PatternRule::make_Any({}));
                 }
                 TU_ARMA(Struct, pbe) {
@@ -4662,7 +4633,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
         TU_ARMA(Diverge, e) {
             // Since ! can never exist, mark this arm as impossible.
             // TODO: Marking as impossible (and not emitting) leads to exhuaustiveness failure.
-            //this->m_is_impossible = true;
         }
         TU_ARMA(Primitive, e) {
         TU_MATCH_HDR( (pat.mData), {)
@@ -5328,13 +5298,10 @@ namespace {
                     return true;
                 }
 
-                //auto check_ends = []( const PatternRule::Data_ValueRange& lo, const PatternRule::Data_ValueRange& hi)->bool {
                 //    return lo.is_inclusive == hi.is_inclusive ? lo.last <= hi.last
                 //        : (lo.is_inclusive
                 //            ? lo.last < hi.last // Lower side is inclusive, higher side exlusive - must be less than higher side
                 //            : throw "TODO" // Lower side is excl, higher side incl - lower+1 < higher = lower < higher-1 = lower
-                //            );
-                //    };
                 ASSERT_BUG(Span(), ae->isInclusive && be->isInclusive, "TODO: Handle overlap with exclusive ranges: " << ae->first << ".." << (ae->isInclusive ? "=" : "") << ae->last << " and " << be->first << ".." << (be->isInclusive ? "=" : "") << be->last);
                 assert(ae->isInclusive && "TODO: Exclusive ranges");
                 assert(be->isInclusive && "TODO: Exclusive ranges");
@@ -5405,7 +5372,6 @@ void sortRulesets(RulesetRef rulesets, size_t idx) {
 
     // NOTE: Assumption kinda breaks with byte string literals
     //for(size_t i = 0; i < rulesets.size(); i ++)
-    //    assert(rulesets[i].size() == rulesets[0].size());
 
     // Multiple rules, but no checks within then (can happen with `match () { _ if foo => ..., _ => ... }`)
     if (rulesets[0].size() == 0) {
@@ -5615,9 +5581,7 @@ namespace {
                 }
                 TU_ARMA(Borrow, e) {
                     ASSERT_BUG(sp, idx == FIELD_DEREF, "Destructure of borrow doesn't correspond to a deref in the path");
-                    //DEBUG(i << " " << *cur_ty << " - " << cur_ty << " " << &tmp_ty);
                     curTy = e.inner;
-                    //DEBUG(i << " " << *cur_ty);
                     lval = MIRLValue::newDeref(mv$(lval));
                 }
                 TU_ARMA(Pointer, e) {
@@ -6337,7 +6301,6 @@ void MatchGenGrouped::genForSlice(tRulesSubset armRules, size_t ofs, MIRBasicBlo
     for (size_t idx = 0; idx < armRules.size();) {
         // Completed arms
         while (idx < armRules.size() && armRules[idx].size() <= ofs) {
-            //auto next = idx+1 == arm_rules.size() ? default_arm : m_builder.new_bb_unlinked();
             ASSERT_BUG(sp, armRules[idx].size() == ofs, "Offset too large for rule - ofs=" << ofs << ", rules=" << armRules[idx]);
             DEBUG(idx << ": Complete");
             // Emit jump to either arm code, or arm condition
@@ -7108,7 +7071,6 @@ void MirBuilder::finalCleanup() {
         if (retTy->is_Diverge()) {
             terminateScopeEarly(sp, fcnScope());
             // Validation fails if this is reachable.
-            //end_block( ::MIR::Terminator::make_Incomplete({}) );
             endBlock(MIRTerminator::make_Unreachable({}));
         } else {
             if (hasResult()) {
@@ -7447,7 +7409,6 @@ MIRParam MirBuilder::getResultInParam(const Span& sp, const HIRTypeData* ty, boo
     }
     //else if( auto* e = rv.opt_Use() )
     //{
-    //    return mv$(*e);
     //}
     else {
         auto temp = newTemporary(ty);
@@ -7621,11 +7582,6 @@ void MirBuilder::raiseTemporaries(const Span& sp, const MIRLValue& val, const Sc
     }
     const auto idx = val.root.as_Local();
     bool isTemp = (idx >= firstTempIdx);
-    /*
-    if( !is_temp ) {
-        return ;
-    }
-    */
 
     // Find controlling scope
     auto scopeIt = scopeStack.rbegin();
@@ -7988,8 +7944,6 @@ void MirBuilder::terminateScope(const Span& sp, ScopeHandle scope, bool emitClea
     }
 
     auto& scopeDef = scopes.at(scope.idx);
-    //if( emit_cleanup ) {
-    //    ASSERT_BUG( sp, scope_def.complete == false, "Terminating scope which is already terminated" );
     //}
 
     if (emitCleanup && scopeDef.complete == false) {
@@ -8813,7 +8767,6 @@ void MirBuilder::completeScope(ScopeDef& sd) {
             TRACE_FUNCTION_F("Split - " << (e.arms.size() - 1) << " arms");
 
             // TODO: if not set, then end the current state as unreachable?
-            //ASSERT_BUG(sd.span, e.end_state_valid, "Completing split scope with no end state set?");
             if (e.endStateValid) {
                 H::applyEndState(sd.span, *this, e.endState);
             }
@@ -8833,7 +8786,6 @@ void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::functi
         }
         const auto* currentTy = ty;
         ty = nullptr;
-        //DEBUG(ty << " " << w);
         auto maybeMonomorph = [&](const HIRGenericParams& paramsDef, const HIRPath& p, const HIRTypeData* t) -> const HIRTypeData* {
             if (monomorphiseTypeNeeded(t)) {
                 tmp = MonomorphStatePtr(mResolve.crate.types, nullptr, &p.mData.as_Generic().mParams, nullptr).monomorphType(sp, t);
@@ -9086,7 +9038,6 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
         (Local, vs = &getSlotStateMut(sp, e, SlotType::Local);),
         (
             Static, return nullptr;
-            //BUG(sp, "Attempting to mutate state of a static");
         )
     )
     assert(vs);
@@ -9105,7 +9056,6 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                     (ivs),
                     (ivse),
                     (Invalid,
-                     //BUG(sp, "Mutating inner state of an invalidated composite - " << lv);
                      tpl = VarState::make_Valid({});),
                     (MovedOut, BUG(sp, "Field on value with MovedOut state - " << lv);),
                     (Partial, ),

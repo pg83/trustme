@@ -103,7 +103,6 @@ public:
 
     FsPath normalise() const;
 
-    //void normalise_in_place();
 
     friend ::std::ostream& operator<<(::std::ostream& os, const FsPath& p) {
         return os << p.mStr;

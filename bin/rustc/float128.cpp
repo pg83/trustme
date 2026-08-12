@@ -816,7 +816,6 @@ Float128 Float128::operator*(const Float128& other) const {
     }
     uint64_t product[4];
     multiplyFull(a.significand, b.significand, product);
-    // product = sig_a * sig_b in [2^224, 2^226);
     // value = product * 2^(ea + eb - 224)
     u128 high = (u128(product[3]) << 64) | product[2];
     const u128 low = (u128(product[1]) << 64) | product[0];

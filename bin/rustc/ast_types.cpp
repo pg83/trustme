@@ -237,7 +237,6 @@ TypeRef TypeRef::clone() const {
             _COPY(Any)
             _COPY(Bang)
             _CLONE(Macro, {box$(old.inv->clone())})
-            //case TypeData::TAG_Macro:   assert( !"Copying an unexpanded type macro" );
             _COPY(Unit)
             _COPY(Primitive)
             _COPY(Function)
@@ -307,7 +306,6 @@ Ordering TypeRef::ord(const TypeRef& x) const {
 }
 
 void TypeRef::print(::std::ostream& os, bool isDebug /*=false*/) const {
-//os << "TypeRef(";
 #define _(VAR, ...)                               \
     case TypeData::TAG_##VAR: {                   \
         const auto& ent = this->mData.as_##VAR(); \

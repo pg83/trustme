@@ -120,7 +120,6 @@ namespace {
             auto& data = e.as_Generic();
 
             if (hasSelf) {
-                //assert( level == GenericSlot::Level::Top );
                 data.types.push_back(Named<GenericSlot>{rcstringSelf, GenericSlot{level, GENERICSelf}});
                 nameContext.push_back(Ent::make_ConcreteSelf(nullptr));
             }
@@ -1551,7 +1550,6 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                                         traitPath.nodes().back().args().entries.push_back(::TypeRef(sp));
                                     }
                                     TU_ARMA(Value, val) {
-                                        //trait_path.nodes().back().args().m_entries.push_back( ::TypeRef(sp) );
                                     }
                             }
                             }
@@ -1803,7 +1801,6 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
             } else {
                 // Look up value
                 auto p = context.lookup(sp, e.nodes[0].name(), e.hygiene, mode);
-                //DEBUG("Found path " << p << " for " << path);
                 if (p.isAbsolute()) {
                     assert(!p.nodes().empty());
                     p.nodes().back().args() = mv$(e.nodes.back().args());
@@ -2240,7 +2237,6 @@ void ResolveAbsoluteExprNode(Context& context, ASTExprNode& node) {
             this->context.endPatbind();
             auto nVars = this->context.varCount - count;
             if (node.elseNode) {
-                //auto& vb = this->context.m_name_context.back().as_VarBlock();
                 node.letelseSlots = std::make_pair(this->context.varCount, nVars);
                 this->context.varCount += nVars;
             }
@@ -2363,7 +2359,6 @@ void ResolveAbsolutePatternValue(/*const*/ Context& context, const Span& sp, AST
         val,
         Named,
         e,
-        //assert( ! e.is_trivial() );
         ResolveAbsolutePath(context, sp, Context::LookupMode::Constant, e);
     )
 }
@@ -2410,7 +2405,6 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
             //if( ! allow_refutable )
             //{
             //    // TODO: If this is a single value of a unit-like struct, accept
-            //    BUG(pat.span(), "Resolve_Absolute_Pattern - Encountered refutable pattern where only irrefutable allowed - " << pat);
             //}
             ResolveAbsolutePatternValue(context, pat.span(), e.start);
             ResolveAbsolutePatternValue(context, pat.span(), e.end);
@@ -2485,7 +2479,6 @@ void ResolveAbsoluteImplItems(Context& itemContext, ASTNamedList<ASTItem>& items
         TU_ARMA(None, e) {
             }
             TU_ARMA(MacroInv, e) {
-                //BUG(i.span, "Resolve_Absolute_ImplItems - MacroInv");
             }
             TU_ARMA(ExternBlock, e) BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
             TU_ARMA(Impl, e) BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
@@ -2934,7 +2927,6 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
     for (const auto& i : mod.mItems) {
         auto ap = mod.path() + i->name;
         auto p = ASTPath(ap);
-        //DEBUG("- p = " << p << " : " << ::AST::Item::tag_to_str(i.data.tag()));
 
         TU_MATCH_HDRA( (i->data), {)
         TU_ARMA(None, e) {
@@ -2953,8 +2945,6 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
 
             TU_ARMA(Macro, e) {
                 // Handled by `for(const auto& item : mod.macros())` below
-                //p.m_bindings.macro = ::AST::PathBinding_Macro::make_MacroRules({nullptr, e ? &*e : nullptr});
-                //_add_item(i->span, mod, IndexName::Macro, i->name, i->vis, mv$(p));
             }
 
             TU_ARMA(Use, e) {
@@ -3461,10 +3451,6 @@ void ResolveIndexModuleNormalisePathExt(const ASTCrate& crate, const Span& sp, A
     const HIRModule* hmod = &ext.hir->mRootModule;
 
     // TODO: Mangle path into being absolute into the crate
-    //info.crate = ext.m_name;
-    //do {
-    //    path.nodes().erase( path.nodes().begin() + i );
-    //} while( --i > 0 );
 
     info.crate = ext.mName;
     info.nodes.erase(info.nodes.begin(), info.nodes.begin() + start);
@@ -3642,7 +3628,6 @@ bool ResolveIndexModuleNormalisePath(const ASTCrate& crate, const Span& sp, ASTP
                 // Workaround for `use` on an exporter macro
                 const ASTModule::MacroImport* found = nullptr;
                 for (const auto& a : mod->macroImports) {
-                    //DEBUG("MI " << a.name << " = " << a.ref.tag_str() << " " << a.path);
                     if (a.name == node.name()) {
                         found = &a;
                     }
@@ -4090,7 +4075,6 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                     BUG(span, "Hit GlobalAsm in use resolution");
                 }
                 TU_ARMA(Macro, e) {
-                    //rv.macro = ::AST::PathBinding_Macro::make_MacroRules({nullptr, e.get()});
                 }
                 TU_ARMA(Use, e) {
                     continue; // Skip for now
@@ -4253,7 +4237,6 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                         DEBUG("Recursion on path " << &impE.path << " " << impE.path);
                     }
                 } else {
-                    //out_path = imp_e.path;
                     rv.mergeFrom(impE.path.mBindings.clone());
                 }
                 continue;
@@ -4305,13 +4288,11 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                         continue;
                     }
                 } else {
-                    //out_path = imp_e.path;
                 }
 
                 TU_MATCH_HDRA( (bindings->type.binding), {)
                 TU_ARMA(Crate, e) {
                         assert(e.crate_);
-                        //const ::HIR::Module& hmod = e.crate_->m_hir->m_root_module;
                         rv.mergeFrom(ResolveUseGetBindingExt(sp2, crate, ASTPath("", {ASTPathNode(desItemName, {})}), *e.crate_, 0));
                     }
                     TU_ARMA(Module, e) {
@@ -4385,7 +4366,6 @@ ASTPath::Bindings ResolveUseGetBindingMod(
         return ResolveUseGetBindingMod(span, crate, sourceModPath, *parentModules.back(), desItemName, parentModules.subspan(0, parentModules.size() - 1));
     } else {
         //if( allow == Lookup::Any )
-        //    ERROR(span, E0000, "Could not find node '" << des_item_name << "' in module " << mod.path());
         return ASTPath::Bindings();
     }
 }
@@ -4432,13 +4412,11 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
     }
 
     ASTPath::Bindings rv;
-    //TRACE_FUNCTION_FR(path << " offset " << start, rv.value << rv.type << rv.macro);
     TRACE_FUNCTION_F(path << " offset " << start << " [" << ap << "]");
     const auto& nodes = path.nodes();
     const HIRModule* hmod = &hmodr;
 
     //for(unsigned int i = start; i < nodes.size(); i ++)
-    //    ap.nodes.push_back( nodes[i].name() );
 
     if (nodes.size() == start) {
         rv.type.set(ap, ASTPathBindingType::make_Module({nullptr, {&hcrate, hmod}}));
@@ -4736,8 +4714,6 @@ ASTPath::Bindings ResolveUseGetBinding(
         DEBUG("Component " << nodes.at(i).name());
         // TODO: If this came from an import, return the real path?
 
-        //rv = Resolve_Use_CanoniseAndBind_Mod(span, crate, *mod, mv$(rv), nodes[i].name(), parent_modules, Lookup::Type);
-        //const auto& b = rv.binding();
         assert(mod);
         auto b = ResolveUseGetBindingMod(span, crate, sourceModPath, *mod, nodes.at(i).name(), innerParentModules, /*types_only=*/true);
         TU_MATCH_HDRA( (b.type.binding), {)

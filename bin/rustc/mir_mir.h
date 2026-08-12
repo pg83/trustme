@@ -251,7 +251,6 @@ struct MIRLValue {
 
     MIRLValue monomorphise(const MonomorphState& ms, unsigned localOffset = 0);
 
-    //LValue monomorphise(const TransParams& ms, unsigned local_offset=0);
     MIRLValue clone() const {
         return MIRLValue(root.clone(), wrappers);
     }

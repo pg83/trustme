@@ -10,7 +10,6 @@ U128::U128(uint64_t lo, uint64_t hi)
 }
 uint64_t U128::encodeFloat(int bits, int zeroExp) const {
     // Adapted from https://blog.m-ou.se/floats/
-    //int n = intrinsic_ctlz_u128(v).lo;
     int n;
     {
         int nset = 0;
@@ -373,8 +372,6 @@ std::ostream& operator<<(::std::ostream& os, const U128& x) {
     if (x.hi == 0) {
         os << x.lo;
     }
-    //else if( (os.flags() & std::ios_base::hex) != 0 && true ) {
-    //    os << x.hi << "_" << x.lo;
     //}
     else {
         char output[40 + 1];

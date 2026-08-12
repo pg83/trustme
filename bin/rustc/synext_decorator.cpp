@@ -57,7 +57,6 @@ class CHandlerInline: public CommonFunction {
 public:
     void handle(const ASTAttribute& mi, ASTFunction& fcn) const override {
         TTStream lex(mi.span(), ParseState(), mi.data());
-        //ASSERT_BUG(mi.span(), fcn.m_markings.inline_type == AST::Function::Markings::Inline::Auto, "Duplicate #[inline] attributes");
         if (lex.getTokenIf(TOK_PAREN_OPEN)) {
             auto attr = lex.getTokenCheck(TOK_IDENT).ident().name;
             if (attr == "never") {
@@ -82,7 +81,6 @@ public:
     void handle(const ASTAttribute& mi, ASTFunction& fcn) const override {
         TTStream lex(mi.span(), ParseState(), mi.data());
         lex.getTokenCheck(TOK_EOF);
-        //ASSERT_BUG(mi.span(), !fcn.m_markings.is_cold, "Duplicate #[cold] attributes");
         fcn.markings.isCold = true;
     }
 };
@@ -259,12 +257,9 @@ class CHandlerRepr: public ExpandDecorator {
                     //{
                     //case AST::Struct::Markings::Repr::C:
                     //case AST::Struct::Markings::Repr::Rust:
-                    //    break;
                     //default:
                     //    // TODO: Error
-                    //    break;
                     //}
-                    //if( e->m_markings.max_field_align != 0 ) {
                     //    // TODO: Error
                     //}
                     if (lex.getTokenIf(TOK_PAREN_OPEN)) {
@@ -274,12 +269,9 @@ class CHandlerRepr: public ExpandDecorator {
                         auto v = val->mValue;
                         ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(packed(" << v << "))] - alignment must be non-zero");
                         ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(packed(" << v << "))] - alignment must be a power of two");
-                        //ASSERT_BUG(lex.point_span(), e->m_markings.align_value == 0, "#[repr(packed(" << v << "))] - conflicts with previous alignment");
                         // TODO: I believe this should change the internal aligment too?
-                        //e->m_markings.max_field_align = v.truncate_u64();
                         lex.getTokenCheck(TOK_PAREN_CLOSE);
                     } else {
-                        //e->m_markings.max_field_align = 1;
                     }
                 } else {
                     ERROR(lex.pointSpan(), E0000, "Unknown union repr '" << reprStr << "'");
@@ -493,7 +485,6 @@ class CHandlerLinkage: public ExpandDecorator {
         } else if (linkageStr == "weak") {
             linkage = ASTLinkage::Weak;
         } else if (linkageStr == "external") {
-            //linkage = AST::Linkage::External;
         } else {
             TODO(sp, "#[linkage=\"" << linkageStr << "\"]");
         }
@@ -590,7 +581,6 @@ class CHandlerTrackCaller: public ExpandDecorator {
 
     void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeP& expr) const override {
         if (auto* n = cast<ASTExprNodeClosure>(expr.get())) {
-            //n->m_track_caller = true;
             (void)n;
         } else {
             ERROR(sp, E0000, "#[track_caller] on non-function");
@@ -2387,7 +2377,6 @@ namespace {
         std::vector<RcString> macPath;
 
         if (traitPath.isTrivial()) {
-            //auto mac_name = RcString::new_interned( FMT("derive#" << trait.name().elems.back()) );
             auto macName = traitPath.asTrivial();
 
             for (const auto& macImport : mod.macroImports) {
@@ -2434,7 +2423,6 @@ template <typename T>
 static void deriveItem(const Span& sp, const ASTCrate& crate, ASTModule& mod, const ASTAttribute& attr, const ASTAbsolutePath& path, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const T& item) {
     auto deriveItems = getDeriveItems(attr);
     if (deriveItems.empty()) {
-        //ERROR(sp, E0000, "#[derive()] requires a list of known traits to derive");
         return;
     }
 
@@ -3475,7 +3463,6 @@ public:
 //{
 //public:
 //    AttrStage stage() const override { return AttrStage::Pre; }
-//};
 
 class DecoratorNoPrelude: public ExpandDecorator {
 public:
@@ -3527,7 +3514,6 @@ void ExpandInitStdPrelude() {
     RegisterSynextDecoratorG<DecoratorNoStd>("no_std");
     RegisterSynextDecoratorG<DecoratorNoCore>("no_core");
     RegisterSynextDecoratorG<DecoratorNoMain>("no_main");
-    //Register_Synext_Decorator_G<Decorator_Prelude>("prelude");
     RegisterSynextDecoratorG<DecoratorPreludeImport>("prelude_import");
     RegisterSynextDecoratorG<DecoratorNoPrelude>("no_prelude");
 }

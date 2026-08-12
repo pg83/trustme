@@ -132,7 +132,6 @@ namespace {
                                 // TODO: What about an enum?
                         TU_MATCH_HDRA( (*iData), {)
                         default: {
-                                        //ASSERT_BUG(sp, i->data.is_Module(), "Front of " << path << " not a module-alike (" << i->data.tag_str() << ")");
                                         // Ignore, keep going
                                     }
                                     TU_ARMA(Crate, c) {
@@ -166,11 +165,7 @@ namespace {
                                     return ResolveModuleRef();
                                 }
 
-                                //if( const auto* imp = i.ent.opt_Import() ) {
-                                //    ASSERT_BUG(sp, imp->path.m_components.empty(), "Expected crate path, got " << imp->path);
-                                //    return get_module_hir(crate.m_extern_crates.at(imp->path.m_crate_name).m_hir->m_root_module, path, 1, ignore_last, out_path);
                                 //}
-                                //else {
                                 ASSERT_BUG(sp, iEntPtr->is_Module(), "Expected Module, got " << iEntPtr->tagStr() << " for " << name << " in [" << baseNodes << "]");
                                 return getModuleHir(iEntPtr->as_Module(), path, 1, ignoreLast, outPath);
                                 //}
@@ -215,7 +210,6 @@ namespace {
                 // Simple logic
                 TU_ARMA(Self, e) {
                     DEBUG("Self " << path);
-                    //ASSERT_BUG(sp, !base_nodes.empty(), "");
                     // Look up within the non-anon module
                     size_t i = 0;
                     while (i < baseNodes.size() && baseNodes[baseNodes.size() - i - 1].name().c_str()[0] == '#') {
@@ -226,7 +220,6 @@ namespace {
                 }
                 TU_ARMA(Super, e) {
                     DEBUG("Super " << path);
-                    //ASSERT_BUG(sp, !base_nodes.empty(), "Super in empty path");
                     // Pop current non-anon module, then look up in anon modules
                     size_t i = 0;
                     while (i < baseNodes.size() && baseNodes[baseNodes.size() - i - 1].name().c_str()[0] == '#') {
@@ -398,7 +391,6 @@ namespace {
                 const ASTModule* nextMod = nullptr;
                 for (const auto& i : mod->mItems) {
                     if (const auto* m = i->data.opt_Module()) {
-                        //DEBUG(i.name);
                         if (i->name == tgtName) {
                             nextMod = m;
                             break;
@@ -513,7 +505,6 @@ namespace {
             }
 
             for (const auto& i : mod.mItems) {
-                //DEBUG(i.name << " " << i.data.tag_str());
 
                 // Note: Cache the result of `cfg()` resolution, as it doesn't change
                 // - Do the caching here (on the item level) instead of in `cfg.cpp` as that avoids needing to check
@@ -543,7 +534,6 @@ namespace {
                                     }
                                     // HACK: Ignore, as there's references to the `Debug` macro... but mrustc doesn't do things that way
                                     // - Probably should have derives be in the same namespace as macros
-                                    //ASSERT_BUG(sp, rv, "Unable to find rustc_builtin_macro: " << name);
                                 }
                                 return ResolveItemRefMacro(&**mac);
                             }
@@ -637,7 +627,6 @@ namespace {
                                     }
                                 }
                                 TU_ARMA(None, _e) {
-                                    //BUG(sp, "Unable to find " << e.path << " (starting from " << mod.path() << ")");
                                     // Ignore for now?
                                 }
                             }
@@ -659,7 +648,6 @@ namespace {
                             auto srcMod = this->getModule(mod.path(), e.path, /*ignore_last=*/false, outPath);
                             TU_MATCH_HDRA( (srcMod), {)
                             TU_ARMA(None, _) {
-                                    //BUG(use_stmt->sp, "Unable to resolve use statement path " << e.path);
                                     DEBUG("Unable to find " << e.path);
                                     continue;
                                 }
@@ -790,7 +778,6 @@ namespace {
                                     if (auto* pm = ExpandFindProcMacro(name)) {
                                         return ResolveItemRefMacro(pm);
                                     }
-                                    //if( /*auto* pm =*/ Expand_FindDecorator(name) ) {
                                     //    TODO(sp, "Resolve HIR import to decorator");
                                     //    //return ResolveItemRef_Macro(pm);
                                     //}
@@ -918,7 +905,6 @@ ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const ASTCrate& c
             }
 
             TODO(sp, "");
-            //return rv;
         }
         TU_ARMA(Hir, modPtr) {
             // If `get_module` provided a HIR module, then this is right?

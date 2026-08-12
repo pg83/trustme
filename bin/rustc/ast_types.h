@@ -151,21 +151,8 @@ public:
     TypeRef(TypeRef&& other) = default;
     TypeRef& operator=(TypeRef&& other) = default;
 
-#if 1
     TypeRef(const TypeRef& other) = delete;
     TypeRef& operator=(const TypeRef& other) = delete;
-#else
-    TypeRef(const TypeRef& other)
-        : mSpan(other.mSpan)
-    {
-        *this = other.clone();
-    }
-
-    TypeRef& operator=(const TypeRef& other) {
-        mData = mv$(other.clone().mData);
-        return *this;
-    }
-#endif
 
     TypeRef(Span sp);
 

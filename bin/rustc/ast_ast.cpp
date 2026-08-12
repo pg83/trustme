@@ -63,7 +63,6 @@ void ASTAttributeList::push_back(ASTAttribute i) {
 const ASTAttribute* ASTAttributeList::get(const char* name) const {
     for (auto& i : mItems) {
         if (i.name() == name) {
-            //i.mark_used();
             return &i;
         }
     }
@@ -491,11 +490,9 @@ ASTItem ASTItem::clone() const {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTTypeParam& tp) {
-    //os << "TypeParam(";
     os << tp.mName;
     os << " = ";
     os << tp.mDefaultValue;
-    //os << ")";
     return os;
 }
 
@@ -586,10 +583,7 @@ std::ostream& operator<<(std::ostream& os, const GenericParam& x) {
 //    for( unsigned int i = 0; i < m_type_params.size(); i ++ )
 //    {
 //        if( m_type_params[i].name() == name )
-//            return i;
 //    }
-//    DEBUG("Type param '" << name << "' not in list");
-//    return -1;
 //}
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTGenericParams& tps) {

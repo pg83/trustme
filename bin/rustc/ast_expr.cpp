@@ -44,7 +44,6 @@ void ASTExpr::visitNodes(ASTNodeVisitor& v) {
 void ASTExpr::visitNodes(ASTNodeVisitor& v) const {
     if (mNode) {
         assert(v.isConst());
-        //const_cast<const ExprNode*>(m_node.get())->visit(v);
         mNode->visit(v);
     }
 }
@@ -758,7 +757,6 @@ NODE(
     ASTExprNodeNamedValue,
     {
         mPath.printPretty(os, false);
-        //os << m_path;
     },
     { return NEWNODE(ASTExprNodeNamedValue, ASTPath(mPath)); }
 )
@@ -913,11 +911,9 @@ NODE(ASTExprNodeMacroDefinition, { os << "/* macro definition #" << definitionId
 //  void NodeVisitorDef::visit(const type& node) { DEBUG("DEF - "#type" (const)"); actions }
 
 NV(ASTExprNodeBlock, {
-    //INDENT();
     for (auto& child : node.nodes) {
         visit(child.node);
     }
-    //UNINDENT();
 })
 NV(ASTExprNodeAsyncBlock, { visit(node.inner); })
 NV(ASTExprNodeGeneratorBlock, { visit(node.inner); })
@@ -938,7 +934,6 @@ NV(ASTExprNodeAsm2, {
                 visit(e);
             }
             TU_ARMA(Sym, e) {
-                //visit(e);
             }
             TU_ARMA(RegSingle, e) {
                 visit(e.val);

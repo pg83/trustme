@@ -83,11 +83,9 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const HIRGener
     auto monomorph = MonomorphStatePtr(crate.types, type, &traitParams, nullptr);
 
     const auto& trait = crate.getTraitByPath(sp, traitPath.mPath.mPath);
-#if 1
     while (traitParams.types.size() < trait.mParams.types.size()) {
         traitParams.types.push_back(monomorph.monomorphType(sp, trait.mParams.types[traitParams.types.size()].defaultValue));
     }
-#endif
 
     getOrAddTraitBound(traitPath.hrtbs.get(), traitPath.mPath);
 

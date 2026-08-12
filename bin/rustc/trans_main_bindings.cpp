@@ -446,7 +446,6 @@ void TransAutoImpls(HIRCrate& crate, TransList& transList) {
             // TODO: Find a way of turning a set into a vector so items can be erased.
 
             auto p = HIRPath(ty, HIRGenericPath(state.langClone), "clone");
-            //DEBUG("add_function(" << p << ")");
             auto e = transList.addFunction(crate.types, ::std::move(p));
 
             const auto* implList = implListIt->second.getListForType(ty);
@@ -1183,7 +1182,6 @@ void TransAutoImpls(HIRCrate& crate, TransList& transList) {
                                 ASSERT_BUG(sp, !params.hasTypes(), "Generic drop impl encountered during auto_impls (should have been populated during enum)");
                                 e->forcePrototype = true;
                                 e->ptr = fcnE.as_Function();
-                                //e->pp = mv$(params);
                             }
                     }
                     }
@@ -1330,11 +1328,9 @@ namespace {
 
         void enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp) {
             if (auto* e = rv.addFunction(crate.types, mv$(p))) {
-#if 1
                 auto name = FMT(TransMangle(*e->path));
                 auto inserted = emittedFunctions.insert(name).second;
                 ASSERT_BUG(Span(), inserted, "Duplicated mangled name - " << *e->path);
-#endif
                 fcnsToTypeVisit.push_back(e);
                 e->ptr = &fcn;
                 e->pp = mv$(pp);
@@ -1480,7 +1476,6 @@ TransList TransEnumerateMain(const HIRCrate& crate) {
                 langStartPp.ppMethod.types.push_back(mainFcn.returnType);
                 HIRPath p = HIRGenericPath(startPath, langStartPp.ppMethod.clone());
                 state.rv.roots.push_back(p.clone());
-                //state.enum_fcn( start_path, fcn, mv$(lang_start_pp) );
                 state.enumFcn(std::move(p), fcn, mv$(langStartPp));
             } else if (!crate.isNoCore) {
                 // Preserve the usual diagnostic for crates that rely on the
@@ -1580,7 +1575,6 @@ namespace {
                         if (e.mType->is_Infer()) {
                             continue;
                         }
-                        //state.enum_static(mod_path + vi.first, *e);
                         auto* ptr = state.rv.addStatic(state.crate.types, getPath());
                         if (ptr) {
                             TransEnumerateFillFromStatic(state, e, *ptr, TransParams(state.crate.types));
@@ -1762,7 +1756,6 @@ namespace {
                     auto path = HIRPath(cbMonomorph2.monomorphType(sp, implTy), HIRGenericPath(traitPath, cbMonomorph2.monomorphPathParams(sp, impl.traitArgs, false)), vi.first, mv$(pp));
                     state.rv.roots.push_back(path.clone());
                     TransEnumerateFillFromPathMono(state, mv$(path));
-                    //state.enum_fcn(mv$(path), fcn.second.data, {});
                 }
             }
             for (auto& m : impl.methods) {
@@ -1925,7 +1918,6 @@ namespace {
 }
 
 void TransEnumerateCleanup(const HIRCrate& crate, TransList& list) {
-#if 1
     // Clear the function enum cache and re-generate
     // - This is called after optimisation, so the cache may point to functions that have been optimised out
     for (const auto& fcnE : list.functions) {
@@ -1958,8 +1950,6 @@ void TransEnumerateCleanup(const HIRCrate& crate, TransList& list) {
                 TU_ARMA(Generic, e) {
                     e.mParams.mLifetimes.resize((*f)->mParams.mLifetimes.size());
                 }
-                //TU_ARMA(Generic, e) {
-                //    e.m_params.m_lifetimes.resize( (*f)->m_params.m_lifetimes.size() );
                 //    }
             }
         } else {
@@ -2063,7 +2053,6 @@ void TransEnumerateCleanup(const HIRCrate& crate, TransList& list) {
 
     removeMissing(list.functions, newList.functions);
     removeMissing(list.statics, newList.statics);
-#endif
 }
 
 /// Common post-processing
@@ -2209,7 +2198,6 @@ namespace {
                         BUG(sp, "Generic type hit in enumeration - " << ty);
                     }
                     TU_ARMA(ErasedType, te) {
-                        //BUG(sp, "ErasedType hit in enumeration - " << ty);
                     }
                     TU_ARMA(NodeType, te) {
                         BUG(sp, "NodeType type hit in enumeration - " << ty);
@@ -2840,8 +2828,6 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             else if (pathMono.mData.is_UfcsKnown() && pathMono.mData.as_UfcsKnown().type->is_Function() && (pathMono.mData.as_UfcsKnown().trait.mPath == state.crate.getLangItemPathOpt("fn") || pathMono.mData.as_UfcsKnown().trait.mPath == state.crate.getLangItemPathOpt("fn_mut") || pathMono.mData.as_UfcsKnown().trait.mPath == state.crate.getLangItemPathOpt("fn_once"))) {
                 // Must have been a dynamic dispatch request, just leave as-is
                 // - However, ensure that all arguments are visited?
-                //const auto& fcn_ty = path_mono.m_data.as_UfcsKnown().type->as_Function();
-                //for(const auto& ty : fcn_ty.m_arg_types)
                 //    state.rv.vi
             }
             // - <fn{...} as Fn*>::call*

@@ -479,7 +479,6 @@ void TargetSetCfg(const ::std::string& targetName) {
 }
 
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign) {
-    //TRACE_FUNCTION_FR(ty, "size=" << out_size << ", align=" << out_align);
     TU_MATCH_HDRA( (*ty), {)
     TU_ARMA(Infer, te) {
             BUG(sp, "sizeof on _ type");
@@ -673,7 +672,6 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             return true;
         }
         TU_ARMA(NodeType, te) {
-            //BUG(sp, "Encountered NodeType type at trans stage - " << ty);
             return false;
         }
     }
@@ -1042,15 +1040,12 @@ namespace {
             break;
             TU_ARM(*ty, Borrow, _te) {
                 (void)_te;
-                //out_path.sub_fields.push_back(0);
                 // TODO: Only return a single-pointer size
-                //Target_GetSizeOf(sp, resolve, ty, out_path.size);
                 outPath.size = TargetGetPointerBits() / 8;
                 return true;
             }
             break;
             TU_ARM(*ty, Function, _te)(void) _te;
-            //out_path.sub_fields.push_back(0);
             TargetGetSizeOf(sp, resolve, ty, outPath.size);
             return true;
             default:
@@ -1316,7 +1311,6 @@ namespace {
                             rv.align = 0;
                         }
                         // Just leave it as None
-                        //rv.variants = TypeRepr::VariantMode::make_None({});
                     } else {
                         TRACE_FUNCTION_F("repr(Rust)");
 
@@ -1480,7 +1474,6 @@ namespace {
                                         }
 
                                         // Note: rustc doesn't do this.
-#if 1
                                         // 2. Look for a possible tag at the start?
                                         // - Prepending the tag might change the next-largest variant too much?
                                         if (fld.offset == 0) {
@@ -1529,7 +1522,6 @@ namespace {
                                                 }
                                             }
                                         }
-#endif
                                     }
                                 }
 
@@ -1668,7 +1660,6 @@ namespace {
                         //   struct {
                         //      TagType tag;
                         //      ...data
-                        //   } var1;
                         // }
                         // ```
                         if (rv.variants.is_None()) {

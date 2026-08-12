@@ -505,7 +505,6 @@ using PatternDropOrder = HIRPatternBindingOrder;
 /// Wrapper interfae
 class MirConverter: public HIRExprVisitor {
 public:
-    //virtual void destructure_from(const Span& sp, const ::HIR::Pattern& pat, ::MIR::LValue lval, bool allow_refutable=false) = 0;
     virtual void schedulePatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) = 0;
     virtual void registerPatternVariables(const Span& sp, const HIRPattern& pat, PatternDropOrder order) = 0;
     virtual void scheduleRegisteredPatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) = 0;

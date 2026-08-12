@@ -246,12 +246,10 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             //switch( this->metadata_type(sp, type) )
             //{
             //case MetadataType::Unknown:
-            //    break;
             //case MetadataType::None:
             //case MetadataType::Slice:
             //case MetadataType::TraitObject:
             //case MetadataType::Zero:
-            //    return found_cb( ImplRef(&null_hrls, type, &null_params, &null_assoc), false );
             //}
         } else if (traitPath == mLangMetaSized) {
             // Next level of sizedness: There's metadata that allows getting the size
@@ -574,12 +572,10 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                         for (const auto& pt : bound.traitPtr->allParentTraits) {
                             auto ptMono = monomorph.monomorphTraitpath(sp, pt, false);
 
-                            //DEBUG(pt << " => " << pt_mono);
                             // TODO: When in pre-typecheck mode, this needs to be a fuzzy match (because there might be a UfcsUnknown in the
                             // monomorphed version) OR, there may be placeholders
                             if (pt.mPath.mPath == traitPath) {
                                 // TODO: Monomorphse trait params
-                                //DEBUG("impl " << trait_path << i_params << " for " << type << " -- desired " << trait_path << *trait_params);
                                 return foundCb(ImplRef(type, mv$(ptMono.mPath.mParams), {}, ptMono.constness), false);
                             }
                         }
@@ -695,7 +691,6 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 DEBUG("- Auto " << (impl.isPositive ? "Pos" : "Neg") << " impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType << " " << impl.mParams.fmtBounds());
                 if (impl.isPositive) {
                     return self.findImplCheckCrateRaw(sp, traitPath, traitParams, type, impl.mParams, impl.traitArgs, impl.mType, [&](auto implParams, auto cmp) -> bool {
-                        //rv = found_cb( ImplRef(impl_params, trait_path, impl, mv$(placeholders)), (cmp == ::HIR::Compare::Fuzzy) );
                         outRv = foundCb(ImplRef(type, traitParams, &nullAssoc), cmp == HIRCompare::Fuzzy);
                         return outRv;
                     });
@@ -757,7 +752,6 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
         }
     }
 
-
     // TODO: A bound can imply something via its associated types. How deep can this go?
     // E.g. `T: IntoIterator<Item=&u8>` implies `<T as IntoIterator>::IntoIter : Iterator<Item=&u8>`
     if( this->findImplBounds(sp, traitPath, traitParams, type, foundCb) )
@@ -780,7 +774,6 @@ bool StaticTraitResolve::findImplBounds(const Span& sp, const HIRSimplePath& tra
             for (unsigned int i = 0; i < left.types.size(); i++) {
                 // TODO: Permits fuzzy comparison to handle placeholder params, should instead do a match/test/assign
                 if (left.types[i]->compareWithPlaceholders(sp, right.types[i], HIRResolvePlaceholdersNop()) == HIRCompare::Unequal) {
-                    //if( left.m_types[i] != right.m_types[i] ) {
                     return false;
                 }
             }
@@ -1180,9 +1173,7 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
         HIRTypeRef getType(const Span& sp, const HIRGenericRef& ge) const override {
             if (ge.isSelf()) {
                 // TODO: `impl_type` or `des_type`
-                //    DEBUG("[find_impl__check_crate_raw] Self - " << impl_type << " or " << des_type);
                 //TODO(sp, "[find_impl__check_crate_raw] Self - " << impl_type << " or " << des_type);
-                //    return impl_type;
                 TODO(sp, "get_type Self");
             }
             ASSERT_BUG(sp, !ge.isPlaceholder(), "[find_impl__check_crate_raw] Placeholder param seen - " << ge);
@@ -1258,7 +1249,6 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
                             this->expandAssociatedTypes(sp, have);
 
                             DEBUG("[find_impl__check_crate_raw] ATY ::" << atyName << " - " << have << " ?= " << exp);
-                            //auto cmp = have .match_test_generics_fuzz(sp, exp, cb_ident, matcher);
                             auto cmp = exp->matchTestGenericsFuzz(sp, have, cbIdent, matcher);
                             if (cmp == HIRCompare::Unequal) {
                                 DEBUG("Assoc ty " << atyName << " mismatch, " << have << " != des " << exp);
@@ -1307,17 +1297,14 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
     for (size_t i = 0; i < implParams.types.size(); i++) {
         if (!paramsSet.types[i]) {
             if (!placeholdersSet.types[i]) {
-                //BUG(sp, "Placeholder types shouldn't leak :( - " << placeholders.m_types[i]);
             }
             implParams.types[i] = std::move(placeholders.types[i]);
         }
-        //ASSERT_BUG(sp, impl_params.m_types[i] != HIR::TypeRef(), "Impl type parameter #" << i << " wasn't set (or even a placeholder)");
     }
     for (size_t i = 0; i < implParams.mLifetimes.size(); i++) {
         if (!paramsSet.mLifetimes[i]) {
             if (desTraitParams) {
                 if (!placeholdersSet.mLifetimes[i]) {
-                    //BUG(sp, "Placeholder lifetimes shouldn't leak :( - " << placeholders.m_lifetimes[i]);
                     implParams.mLifetimes[i] = HIRLifetimeRef();
                     continue;
                 }
@@ -1618,8 +1605,6 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
     auto data = input->cloneData();
     TU_MATCH_HDRA( (data), {)
     TU_ARMA(Infer, e) {
-            //if( m_treat_ivars_as_bugs ) {
-            //    BUG(sp, "Encountered inferrence variable in static context");
             //}
         }
         TU_ARMA(Diverge, e) {
@@ -1726,7 +1711,6 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
         TU_ARMA(NamedFunction, e) {
         TU_MATCH_HDRA( (e.path.mData), { )
         TU_ARMA(Generic, e2) {
-                    //ConvertHIR_ConstantEvaluate_MethodParams(sp, m_crate, HIR::SimplePath(m_crate.m_crate_name, {}), m_impl_generics, m_item_generics, *e.binding.get_generics(), e2.m_params);
                     expandAssociatedTypesParams(sp, e2.mParams);
                 }
                 TU_ARMA(UfcsInherent, e2) {
@@ -1936,18 +1920,12 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
         }
         // If it's a TraitObject, then maybe we're asking for a bound
         TU_ARMA(TraitObject, te) {
-            //const auto& data_trait = te.m_trait.m_path;
-            //if( e2.trait.m_path == data_trait.m_path ) {
             //    if( e2.trait.m_params == data_trait.m_params )
             //    {
-            //        auto it = te.m_trait.m_type_bounds.find( e2.item );
-            //        if( it == te.m_trait.m_type_bounds.end() ) {
             //            // TODO: Mark as opaque and return.
             //            // - Why opaque? It's not bounded, don't even bother
             //            TODO(sp, "Handle unconstrained associate type " << e2.item << " from " << e2.type);
             //        }
-            //        input = it->second.type.clone();
-            //        return true;
             //    }
             //}
         }
@@ -2063,7 +2041,6 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
     HIRGenericPath  traitPath;
     if( !this->traitContainsType(sp, e2.trait, this->crate.getTraitByPath(sp, e2.trait.mPath), e2.item.c_str(), traitPath) )
         BUG(sp, "Cannot find associated type " << e2.item << " anywhere in trait " << e2.trait);
-    //e2.trait = mv$(trait_path);
 
     bool replacementHappened = true;
     ::ImplRef  bestImpl;
@@ -2606,7 +2583,6 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRTypeData* ty)
             return typeIsImpossible(sp, e.inner);
             TU_ARMA(Pointer, e) {
                 return false;
-                //return type_is_impossible(sp, e.inner);
             }
             TU_ARMA(Function, e) {
                 // TODO: Check all arguments?
@@ -2637,7 +2613,6 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
     ASSERT_BUG(sp, !srcTy->is_Infer(), "_ seen after inferrence - " << srcTy);
 
     {
-        //ASSERT_BUG(sp, dst_ty != src_ty, "Equal types for can_unsize - " << dst_ty << " <-" << src_ty );
         if (dstTy == srcTy) {
             return true;
         }
@@ -2764,7 +2739,6 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
         } else {
             good = false;
             findImpl(sp, de->mTrait.mPath.mPath, de->mTrait.mPath.mParams, srcTy, [&](const auto impl, auto fuzz) {
-                //ASSERT_BUG(sp, !fuzz, "Fuzzy match in can_unsize - " << dst_ty << " <- " << src_ty << " - " << impl);
                 good = true;
                 for (const auto& aty : de->mTrait.typeBounds) {
                     // TODO: Can ATY bounds have generics
@@ -3051,10 +3025,7 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
                     return MetadataType::Unknown;
                 }
                 TU_ARMA(Opaque, pbe) {
-                    //auto pp = ::HIR::PathParams();
-                    //return this->find_impl(sp, m_lang_Sized, &pp, ty, [&](auto , bool){ return true; }, true);
                     // TODO: This can only be with UfcsKnown, so check if the trait specifies ?Sized
-                    //return MetadataType::Unknown;
                     return MetadataType::None;
                 }
                 TU_ARMA(Struct, pbe) {
@@ -3087,7 +3058,6 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
         }
         TU_ARMA(Infer, e) {
             // Shouldn't be hit? but can early on
-            //BUG(sp, "metadata_type: Found ivar? " << ty);
             return MetadataType::Unknown;
         }
         TU_ARMA(Diverge, e) {
@@ -3112,7 +3082,6 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
             // TODO: Unsized tuples? are they a thing?
             //for(const auto& ty : e)
             //    if( !type_is_sized(sp, ty) )
-            //        return false;
             return MetadataType::None;
         }
     }
@@ -3454,7 +3423,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                         bestImpl = mv$(impl);
                         rv = std::move(thisRv);
                         // NOTE: There could be an overlapping and more-specific impl without `default` being involved
-                        //return !is_spec;
                         return false;
                     }
                 });
@@ -3514,7 +3482,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
         }
         TU_ARM(p.mData, UfcsInherent, pe) {
             outParams.selfTy = pe.type;
-            //out_params.pp_impl = &out_params.pp_impl_data;
             outParams.ppImpl = &pe.implParams;
             outParams.ppMethod = &pe.params;
             ValuePtr rv;
@@ -3533,21 +3500,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     }
 
                     const auto& implParams = outParams.ppImplData;
-                    /*for(size_t i = 0; i < impl_params.m_types.size(); i ++ ) {
-                    if( !params_set.m_types[i] ) {
-                        // TODO: Error when there's a type param that can't be determined?
-                    }
-                }
-                for(size_t i = 0; i < impl_params.m_values.size(); i ++ ) {
-                    if( !params_set.m_values[i] ) {
-                        // TODO: Error when there's a value param that can't be determined?
-                    }
-                }
-                for(size_t i = 0; i < impl_params.m_lifetimes.size(); i ++ ) {
-                    if( !params_set.m_lifetimes[i] ) {
-                        // TODO: Error when there's a lifetime param that can't be determined?
-                    }
-                }*/
 
                     outParams.ppImpl = &outParams.ppImplData;
                     DEBUG("PP impl = " << *outParams.ppImpl);

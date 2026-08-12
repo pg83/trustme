@@ -400,9 +400,6 @@ void HIRVisitor::visitGenericBound(HIRGenericBound& bound) {
             this->visitType(e.type);
             this->visitTraitPath(e.trait);
         }
-        //TU_ARMA(NotTrait, e) {
-        //    this->visit_type(e.type);
-        //    this->visit_trait_path(e.trait);
         //    }
         TU_ARMA(TypeEquality, e) {
             this->visitType(e.type);

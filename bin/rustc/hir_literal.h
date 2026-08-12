@@ -13,4 +13,3 @@
 //    Call,
 //    // First argument is the binding index, second is the name
 //    ConstGeneric,
-//};

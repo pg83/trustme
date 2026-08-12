@@ -145,7 +145,6 @@ public:
         return &*node;
     }
 
-    //void ensure_typechecked(const ::HIR::Crate& crate) const;
     /// Get MIR (checks if the MIR should be available)
     const MIRFunction* getMirOpt() const;
     const MIRFunction& getMirOrError(const Span& sp) const;

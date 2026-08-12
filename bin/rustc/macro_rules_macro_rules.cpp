@@ -216,7 +216,6 @@ void ParameterMappings::insert(unsigned int nameIndex, const ::std::vector<unsig
 ParameterMappings::CapturedVal& ParameterMappings::getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) {
     DEBUG("(iterations=[" << iterations << "], name_idx=" << nameIdx << ")");
     auto& e = mMappings.at(nameIdx);
-    //DEBUG("- e = " << e);
     auto* layer = &e.topLayer;
 
     // - If the top layer is a 1-sized set of values, unconditionally return it
@@ -253,7 +252,6 @@ unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const ::std::vect
     const auto& list = loopCounts.at(loopIdx);
     // Iterate the list, find the first prefix match of `iterations`
     // - `iterations` should always be longer or equal in length to every entry in `list`
-    //auto ranges = list.equal_range(iterations);
     for (const auto& e : list) {
         ASSERT_BUG(Span(), e.first.size() <= iterations.size(), "Loop " << loopIdx << " iteration path [" << e.first << "] larger than query path [" << iterations << "]");
         if (std::equal(e.first.begin(), e.first.end(), iterations.begin())) {
@@ -266,7 +264,6 @@ unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const ::std::vect
 unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) const {
     DEBUG("(iterations=[" << iterations << "], name_idx=" << nameIdx << ")");
     auto& e = mMappings.at(nameIdx);
-    //DEBUG("- e = " << e);
     auto* layer = &e.topLayer;
 
     // - If the top layer is a 1-sized set of values, unconditionally return it
@@ -518,7 +515,6 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
             return InterpolatedFragment(ParseTT(lex, false));
         case MacroPatEnt::PAT_PAT:
             // TODO: Is this edition check correct? Or should it be uncondiitonally "Yes"?
-            //return InterpolatedFragment( Parse_Pattern(lex, lex.edition_after(AST::Edition::Rust2021) ? AllowOrPattern::Yes : AllowOrPattern::No) );
             return InterpolatedFragment(ParsePattern(lex, AllowOrPattern::Yes));
         case MacroPatEnt::PAT_TYPE:
             return InterpolatedFragment(ParseType(lex));
@@ -612,7 +608,6 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
     for (unsigned int i = 0; i < ::std::min(boundTts.mappings().size(), rule.paramNames.size()); i++) {
         DEBUG("- #" << i << " " << rule.paramNames.at(i) << " = [" << boundTts.mappings()[i] << "]");
     }
-    //bound_tts.dump();
 
     // Run through the expansion counting the number of times each fragment is used
     MacroInvokeRulesCountSubstUses(boundTts, rule.contents);
@@ -673,7 +668,6 @@ namespace {
             }
 
             if (offsets.empty() && activeOffset == tt.size()) {
-                //DEBUG(m_consume_count << " " << eof_token << "(EOF)");
                 return eofToken;
             } else {
                 const auto* curTree = &tt;
@@ -681,7 +675,6 @@ namespace {
                     curTree = &(*curTree)[idx];
                 }
                 const auto& rv = (*curTree)[activeOffset].tok();
-                //DEBUG(m_consume_count << " " << rv);
                 return rv;
             }
         }
@@ -1976,7 +1969,6 @@ namespace {
             case MacroPatEnt::PAT_STMT:
                 return consumeStmt(lex, outStmtIsItem);
             case MacroPatEnt::PAT_PAT:
-                //return consume_pat(lex, lex.edition_after(AST::Edition::Rust2021));
                 return consumePat(lex, true);
             case MacroPatEnt::PAT_META:
                 if (lex.next() == TOK_INTERPOLATED_META) {
@@ -2389,7 +2381,6 @@ Token MacroExpander::realGetToken() {
                 return Token(TOK_IDENT, Ident(realGetHygiene(), RcString::newInterned(newIdent)));
             }
             TU_ARMA(Loop, e) {
-                //assert( e.joiner.tok() != TOK_NULL );
                 DEBUG("[" << logIndex << "] Loop joiner " << e.joiner);
                 return e.joiner;
             }
@@ -2401,7 +2392,6 @@ Token MacroExpander::realGetToken() {
 }
 
 const MacroExpansionEnt* MacroExpandState::nextEnt() {
-    //DEBUG("ofs " << m_offsets << " < " << m_root_contents.size());
 
     // Check offset of lowest layer
     while (offsets.size() > 0) {
@@ -2505,10 +2495,8 @@ const ::std::vector<MacroExpansionEnt>* MacroExpandState::getCurLayer() const {
     const auto* ents = &rootContents;
     for (unsigned int i = 0; i < offsets.size() - 1; i++) {
         unsigned int ofs = offsets[i].readPos;
-        //DEBUG(i << " ofs=" << ofs << " / " << ents->size());
         assert(ofs > 0 && ofs <= ents->size());
         ents = &(*ents)[ofs - 1].as_Loop().entries;
-        //DEBUG("ents = " << ents);
     }
     return ents;
 }
@@ -3177,7 +3165,6 @@ struct ContentLoopVariableUse {
                     else if (loopDepth >= v.second.loopStack.size()) {
                         DEBUG("Above this loop (" << loopDepth << " >= " << v.second.loopStack.size() << ")");
                         // Don't take anything
-                        //controlling_loops.insert( v.second.loop_stack.back() );
                     } else {
                         // Take the current point in the stack
                         controllingLoops.insert(v.second.loopStack[loopDepth]);
@@ -3253,8 +3240,6 @@ struct ContentLoopVariableUse {
 
                     // Can still be repeating
                     //// If the current loop depth is smaller than the stack for this variable, then error
-                    //if( loop_depth < ns->loops.size() ) {
-                    //    ERROR(lex.point_span(), E0000, "Variable $" << name << " is still repeating at this depth (" << loop_depth << " < " << ns->loops.size() << ")");
                     //}
 
                     if (varUsagePtr) {

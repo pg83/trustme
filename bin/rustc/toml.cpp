@@ -378,7 +378,6 @@ TomlToken TomlLexer::getToken() {
 
 TomlToken TomlToken::lexFrom(::std::ifstream& is, unsigned& line) {
     auto rv = TomlToken::lexFromInner(is, line);
-    //DEBUG("lex_from: " << rv);
     return rv;
 }
 

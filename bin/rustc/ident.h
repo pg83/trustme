@@ -47,7 +47,6 @@ struct Ident {
 
         Hygiene& operator=(const Hygiene& x);
 
-        //Hygiene(Hygiene&& x) = default;
         Hygiene(Hygiene&& x);
 
         Hygiene& operator=(Hygiene&& x);

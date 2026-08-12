@@ -723,7 +723,6 @@ public:
 
 private:
     static size_t metadataLen() {
-        //static_assert(sizeof(T) > 0, "");
         return (sizeof(Meta) + sizeof(T) - 1) / sizeof(T);
     }
 

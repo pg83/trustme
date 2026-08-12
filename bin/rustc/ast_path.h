@@ -413,15 +413,11 @@ public:
 
     ASTPath& operator+=(ASTPathNode pn);
 
-#if 1
     void append(ASTPathNode node) {
         assert(!cls.is_Invalid());
-        //if( m_class.is_Invalid() )
-        //    m_class = Class::make_Relative({});
         nodes().push_back(mv$(node));
         mBindings = Bindings();
     }
-#endif
 
     bool isTrivial() const {
         TU_MATCH_DEF(Class, (cls), (e), (return false;), (Local, return true;), (Relative, return e.nodes.size() == 1 && e.nodes[0].args().isEmpty();))
@@ -476,9 +472,6 @@ private:
     void checkParamCounts(const ASTGenericParams& params, bool expectParams, ASTPathNode& node);
 
 public:
-    //void bind_enum_var(const Enum& ent, const RcString& name);
-    //void bind_function(const Function& ent) {
-    //    m_bindings.value = PathBinding_Value::make_Function({&ent});
     //}
 };
 

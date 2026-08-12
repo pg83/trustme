@@ -138,7 +138,6 @@ struct MonomorphStatePtr: public MonomorphiserPP {
     }
 };
 
-//extern ::std::ostream& operator<<(::std::ostream& os, const MonomorphStatePtr& ms);
 
 struct MonomorphHrlsOnly: public Monomorphiser {
     const HIRPathParams* ppHrb;

@@ -115,8 +115,6 @@ void ExpandProcMacroHarness(ASTCrate& crate) {
     // ```
     // mod `proc_macro#` {
     //   extern crate proc_macro;
-    //   fn main() {
-    //     self::proc_macro::main(&::`proc_macro#`::MACROS);
     //   }
     //   static TESTS: [proc_macro::MacroDesc; _] = [
     //     proc_macro::MacroDesc { name: "deriving_Foo", handler: ::path::to::foo }
@@ -470,7 +468,6 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const ASTCrate& crate, const ::s
     return rv;
 
     // NOTE: 1.39 failure_derive (2015) emits `::failure::foo` but `libcargo` doesn't have `failure` in root (it's a 2018 crate)
-    //return ProcMacroInv(sp, ext_crate.m_hir->m_edition, proc_macro_exe_name.c_str(), *pmp);
 }
 
 namespace {
@@ -1168,7 +1165,6 @@ namespace {
                         pmi.sendRword("crate");
                     } else {
                         pmi.sendSymbol("::");
-                        //m_pmi.send_string(pe.crate.c_str());
                         assert(pe.crate.c_str()[0] == '=');
                         pmi.sendIdent(pe.crate.c_str() + 1);
                     }
@@ -1376,7 +1372,6 @@ namespace {
             ss << " ";
             DEBUG("STRING: " << ss.str());
 
-            //const_cast<::AST::ExprNode&>(e).visit(*this);
             parseString(ss.str());
         }
 
@@ -1610,7 +1605,6 @@ namespace {
                 pmi.sendSymbol("...");
             }
             pmi.sendSymbol(")");
-            //if( fcn.rettype() != TypeRef() ) {
             pmi.sendSymbol("->");
             this->visitType(fcn.rettype());
             //}
@@ -1638,7 +1632,6 @@ namespace {
                     break;
             }
             pmi.sendIdent(name.c_str());
-            //this->visit_params(i.params());
             pmi.sendSymbol(":");
             this->visitType(i.type());
 
@@ -1646,7 +1639,6 @@ namespace {
                 pmi.sendSymbol("=");
                 this->visitNode(i.value().node());
             }
-            //this->visit_bounds(i.params());
             pmi.sendSymbol(";");
         }
 
@@ -2070,8 +2062,6 @@ U128 ProcMacroInv::recvV128uU128() {
 }
 
 Position ProcMacroInv::getPosition() const {
-    //DEBUG("" << m_this_span);
-    //return Position(m_this_span);
     return Position(parentSpan);
 }
 

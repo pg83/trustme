@@ -31,7 +31,6 @@ namespace {
 #define FMT_M(x) FMT_CB(os, this->fmtVal(os, x);)
             for (unsigned int i = 0; i < fcn.blocks.size(); i++) {
                 const auto& block = fcn.blocks[i];
-                //DEBUG("BB" << i);
 
                 os << indent() << "bb" << i << ": {\n";
                 incIndent();
@@ -40,11 +39,9 @@ namespace {
 
                     TU_MATCH_HDRA( (stmt), {)
                     TU_ARMA(Assign, e) {
-                            //DEBUG("- Assign " << e.dst << " = " << e.src);
                             os << FMT_M(e.dst) << " = " << FMT_M(e.src) << ";\n";
                         }
                         TU_ARMA(Asm, e) {
-                            //DEBUG("- Asm");
                             os << "(";
                             for (const auto& v : e.outputs) {
                                 os << "\"" << ::FmtEscaped(v.first) << "\"=" << FMT_M(v.second) << ",";
@@ -226,7 +223,6 @@ namespace {
                 (SizedArray, os << "["; fmtVal(os, e.val); os << ";" << e.count << "]";),
                 (
                     Borrow, os << "&";
-                    //os << e.region;
                     switch (e.type) {
                         case HIRBorrowType::Shared:
                             break;
@@ -271,7 +267,6 @@ namespace {
                      case MIRBinOp::DIV_OV:
                          os << "DIV_OV";
                          break;
-                         //case ::MIR::eBinOp::MOD_OV: os << "MOD_OV"; break;
 
                      case MIRBinOp::BIT_OR:
                          os << "BIT_OR";

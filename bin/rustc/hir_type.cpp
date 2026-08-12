@@ -1174,7 +1174,6 @@ bool HIRTypeData::equalsIgnoringRegions(HIRTypeRef x) const {
                     return false;
                 }
             }
-            //return te.m_lifetime == xe.m_lifetime;
             return true;
         }
         TU_ARMA(ErasedType, te, xe) {
@@ -1208,7 +1207,6 @@ bool HIRTypeData::equalsIgnoringRegions(HIRTypeRef x) const {
                 return false;
             }
             //if( te.lifetime != xe.lifetime )
-            //    return false;
             return te.inner->equalsIgnoringRegions(xe.inner);
         }
         TU_ARMA(Pointer, te, xe) {
@@ -1287,14 +1285,11 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
         (Primitive, return ::ord(static_cast<unsigned>(te), static_cast<unsigned>(xe));),
         (Path, return ::ord(te.path, xe.path);),
         (Generic,
-         //ORD(te.name, xe.name);
          if ((rv = ::ord(te.binding, xe.binding)) != OrdEqual) return rv;
          return OrdEqual;),
         (TraitObject, ORD(te.mTrait, xe.mTrait); ORD(te.markers, xe.markers);
-         //ORD(te.m_lifetime, xe.m_lifetime);
          return OrdEqual;),
         (ErasedType,
-         //ORD(te.m_traits, xe.m_traits);
          ORD(te.inner, xe.inner);
          return OrdEqual;),
         (Array, ORD(te.inner, xe.inner); ORD(te.size, xe.size); return OrdEqual;),
@@ -1447,7 +1442,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
                         case HIRCoreType::Isize:
                         case HIRCoreType::Usize:
                             return HIRCompare::Fuzzy;
-                            //return true;
                         default:
                             DEBUG("- Fuzz fail");
                             return HIRCompare::Unequal;
@@ -1462,7 +1456,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
                         case HIRCoreType::F64:
                         case HIRCoreType::F128:
                             return HIRCompare::Fuzzy;
-                            //return true;
                         default:
                             DEBUG("- Fuzz fail");
                             return HIRCompare::Unequal;
@@ -1706,7 +1699,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
                 /*rv &=*/this->matchLft(te.lifetime.asParam(), xe.lifetime);
             } else {
                 //if( te.lifetime != xe.lifetime )
-                //    return Compare::Unequal;
             }
             rv &= this->cmpType(sp, te.inner, xe.inner, resolvePlaceholder);
             return rv;
@@ -1876,10 +1868,8 @@ HIRTypeData HIRTypeData::cloneData() const {
 }
 
 HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tCbResolveType resolvePlaceholder) const {
-    //TRACE_FUNCTION_F(*this << " ?= " << x);
     const HIRTypeRef self = this;
     const auto& left = resolvePlaceholder.getType(sp, self);
-    //const auto& left = *this;
     const auto& right = resolvePlaceholder.getType(sp, x);
 
     // If the two types are the same ivar, return equal

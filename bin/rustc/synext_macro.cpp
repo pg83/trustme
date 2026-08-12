@@ -27,7 +27,6 @@ namespace {
         if (!formatStringNp) {
             ERROR(sp, E0000, "asm! requires a string literal - got " << *n);
         }
-        //const auto& format_string_sp = format_string_np->span();
         return mv$(formatStringNp->mValue);
     }
 
@@ -64,7 +63,6 @@ public:
             GET_TOK(tok, lex);
 
             while (lex.lookahead(0) == TOK_STRING) {
-                //auto name = get_string(sp, lex);
                 GET_CHECK_TOK(tok, lex, TOK_STRING);
                 auto name = mv$(tok.str());
 
@@ -408,9 +406,7 @@ public:
         if (options.pure && !(options.nomem || options.readonly)) {
             ERROR(sp, E0000, "asm! marked `pure` without `nomem` or `readonly`");
         }
-        //if( options.pure && /* has no saved outputs */ ) {
         //}
-        //if( options.noreturn && /* has outputs */ ) {
         //}
 
         unsigned nextIndex = 0;
@@ -1016,7 +1012,6 @@ namespace {
     ///
     /// Returns a list of fragments, and the remaining free text after the last format sequence
     ::std::tuple<::std::vector<FmtFrag>, ::std::string> parseFormatString(const Span& sp, const ::std::string& formatString, ::std::map<RcString, unsigned int>& named, unsigned int nFree, std::vector<TokenTree>& namedArgs, const Ident::Hygiene& hygiene) {
-        //unsigned int n_named = named.size();
         unsigned int nextFree = 0;
 
         ::std::vector<FmtFrag> frags;
@@ -1124,7 +1119,6 @@ namespace {
                         args.align = FmtArgs::Align::Right;
                         s++;
                     } else {
-                        //args.align = FmtArgs::Align::Unspec;
                     }
 
                     // Sign
@@ -1142,14 +1136,12 @@ namespace {
                         args.alternate = true;
                         s++;
                     } else {
-                        //args.alternate = false;
                     }
 
                     if (*s == '0' && s[1] != '$') { // Special case `0$` to be an argument index, instead of zero pad
                         args.zeroPad = true;
                         s++;
                     } else {
-                        //args.zero_pad = false;
                     }
 
                     // Padded width
@@ -1166,7 +1158,6 @@ namespace {
                             args.widthIsArg = true;
                             s++;
                         } else {
-                            //args.width_is_arg = false;
                         }
                     } else if (::std::isalpha(*s)) {
                         // Parse an ident and if the next character is $, convert to named
@@ -1210,7 +1201,6 @@ namespace {
                                 args.precIsArg = true;
                                 s++;
                             } else {
-                                //args.prec_is_arg = false;
                             }
                         } else if (::std::isalpha(*s)) {
                             // Parse an ident and if the next character is $, convert to named
@@ -1227,7 +1217,6 @@ namespace {
                                 s++;
                             } else {
                                 s = start;
-                                //ERROR(sp, E0000, "Unexpected character in precision");
                             }
                         } else {
                             // Wut?
@@ -1333,7 +1322,6 @@ namespace {
                 ap.crate = crate.extCratenameCore;
                 break;
             case ASTCrate::LOAD_STD:
-                //ap.crate = "=std";
                 ASSERT_BUG(Span(), crate.extCratenameCore != "", "");
                 ap.crate = crate.extCratenameCore;
                 break;
@@ -1354,10 +1342,6 @@ namespace {
         toks.push_back(mv$(t2));
     }
 
-    //void push_toks(::std::vector<TokenTree>& toks, Token t1, Token t2, Token t3) {
-    //    toks.push_back( mv$(t1) );
-    //    toks.push_back( mv$(t2) );
-    //    toks.push_back( mv$(t3) );
     //}
     void pushToks(::std::vector<TokenTree>& toks, Token t1, Token t2, Token t3, Token t4) {
         toks.push_back(mv$(t1));
@@ -1948,7 +1932,6 @@ class CExpanderBuildDiagnosticArray: public ExpandProcMacro {
         Token tok;
 
         GET_CHECK_TOK(tok, lex, TOK_IDENT);
-        //auto crate_name = mv$(tok.str());
         GET_CHECK_TOK(tok, lex, TOK_COMMA);
         GET_CHECK_TOK(tok, lex, TOK_IDENT);
         auto itemName = tok.ident();

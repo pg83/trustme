@@ -256,7 +256,6 @@ RcString RcString::newInterned(const char* s, size_t len) {
         ret.first->ptr->ordering = 1;
         RcStringInternedOrderingValid = false;
     }
-    //assert( ret.first->ord(s, len) == 0 );
     return *ret.first;
 }
 
@@ -281,7 +280,6 @@ size_t std::hash<RcString>::operator()(const RcString& s) const noexcept {
         h = h * 33 + (unsigned)c;
     }
     return h;
-    //return hash<std::string_view>(s.c_str(), s.size());
 }
 
 RcString::RcString()

@@ -362,7 +362,6 @@ Token Lexer::getTokenInt() {
                     return Token(TOK_HASH);
                 default:
                     this->ungetc();
-                    //return Token(TOK_HASH);
                     throw ParseErrorBadChar(*this, ch.v);
             }
         }
@@ -937,10 +936,7 @@ U128 Lexer::parseInt(NumMode* numModeOut) {
 // Takes the VERY lazy way of reading the float into a string then passing to strtod
 FloatValue Lexer::parseFloat(U128 whole) {
     std::string sbuf = FMT(whole << ".");
-    //const int MAX_LEN = 63;
-    //const int MAX_SIG = MAX_LEN - 1 - 4;
     //char buf[MAX_LEN+1];
-    //int ofs = snprintf(buf, MAX_LEN+1, "%llu.", (unsigned long long)whole);
 
     auto ch = this->getcNum();
 #define PUTC(ch)                                                                                                                          \
@@ -1019,8 +1015,6 @@ FloatValue Lexer::parseFloat(U128 whole) {
                     nextTokens.push_back(TOK_DOUBLE_DOT);
                     break;
             }
-            //buf[ofs] = 0;
-            //m_next_tokens.push_back(Token::make_float(::std::strtod(buf, NULL), CORETYPE_ANY));
             nextTokens.push_back(Token::makeFloat(parseFloatValue(sbuf.c_str()), CORETYPE_ANY));
 
             return std::numeric_limits<double>::quiet_NaN();
@@ -1075,11 +1069,8 @@ FloatValue Lexer::parseFloat(U128 whole) {
             } while (ch.isdigit());
         }
         this->ungetc();
-        //buf[ofs] = 0;
-        //DEBUG("buf = " << buf << ", ch = '" << ch << "'");
         DEBUG("buf = " << sbuf << ", ch = '" << ch << "'");
 
-        //return ::std::strtod(buf, NULL);
         return parseFloatValue(sbuf.c_str());
     }
 }

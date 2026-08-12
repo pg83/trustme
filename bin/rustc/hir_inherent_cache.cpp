@@ -6,13 +6,10 @@
 void HIRInherentCache::Lowest::insert(const Span& sp, const HIRTypeImpl& impl) {
     const auto& type = impl.mType;
     if (const auto* path = type->getSortPath()) {
-        //DEBUG(this->name << " named[" << *path << "] += impl" << impl.m_params.fmt_args() << " " << impl.m_type);
         this->named[*path].push_back(&impl);
     } else if (type->is_Path() || type->is_Generic()) {
-        //DEBUG(this->name << " generic += impl" << impl.m_params.fmt_args() << " " << impl.m_type);
         this->generic.push_back(&impl);
     } else {
-        //DEBUG(this->name << " non_named += impl" << impl.m_params.fmt_args() << " " << impl.m_type);
         this->nonNamed.push_back(&impl);
     }
 }

@@ -453,29 +453,6 @@ bool visitMirLvalues(const MIRTerminator& term, ::std::function<bool(const MIRLV
     return v.visitTerminator(term);
 }
 
-/*
-    void visit_mir_lvalues_mut(::MIR::TypeResolve& state, ::MIR::Function& fcn, ::std::function<bool(::MIR::LValue& , ValUsage)> cb)
-    {
-        for(unsigned int block_idx = 0; block_idx < fcn.blocks.size(); block_idx ++)
-        {
-            auto& block = fcn.blocks[block_idx];
-            for(auto& stmt : block.statements)
-            {
-                state.set_cur_stmt(block_idx, (&stmt - &block.statements.front()));
-                visit_mir_lvalues_mut(stmt, cb);
-            }
-            if( block.terminator.tag() == ::MIR::Terminator::TAGDEAD )
-                continue ;
-            state.set_cur_stmt_term(block_idx);
-            visit_mir_lvalues_mut(block.terminator, cb);
-        }
-    }
-    void visit_mir_lvalues(::MIR::TypeResolve& state, const ::MIR::Function& fcn, ::std::function<bool(const ::MIR::LValue& , ValUsage)> cb)
-    {
-        visit_mir_lvalues_mut(state, const_cast<::MIR::Function&>(fcn), [&](auto& lv, auto im){ return cb(lv, im); });
-    }
-    */
-
 void visitTerminatorTargetMut(MIRTerminator& term, ::std::function<void(MIRBasicBlockId&)> cb) {
     struct TermCbVisitorMut: public MIRVisitorMut {
         ::std::function<void(MIRBasicBlockId&)> cb;
@@ -1399,7 +1376,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
                 return;
             }
             // Update the last read location
-            //DEBUG("Update END " << lv << " to " << cur_pos);
             slot->end = curPos;
         };
         auto lvalueSet = [&](const MIRLValue& lv) {

@@ -442,7 +442,6 @@ namespace {
 
         void visit(HIRExprNodeUnsize& node) override {
             // TODO: Why does Unsize have a usage of Move?
-            //auto _ = push_usage( ::HIR::ValueUsage::Move );
             this->visitNodePtr(node.mValue);
         }
 
@@ -1292,10 +1291,6 @@ namespace {
                     if (cap.second.usage == HIRValueUsage::Borrow) {
                         HIRTypeRef tmpTy;
                         const auto* capTyP = &variableTypes.at(cap.first);
-                        //for(const auto& n : cap.fields) {
-                        //    tmp_ty = m_resolve.get_field_type(node.span(), *cap_ty_p, n);
-                        //    m_resolve.expand_associated_types(node.span(), tmp_ty);
-                        //    cap_ty_p = &tmp_ty;
                         //}
                         if ((*capTyP)->is_Borrow() && (*capTyP)->as_Borrow().type == HIRBorrowType::Shared) {
                             DEBUG("> Upgrade capture #" << cap.first << " to Move, as it's a shared borrow");
@@ -1786,7 +1781,6 @@ namespace {
                 ASSERT_BUG(sp, srcNodep, "");
                 const auto& srcNode = *srcNodep;
                 ASSERT_BUG(sp, node.resType->is_Function(), "Cannot convert closure to non-fn type");
-                //const auto& dte = node.m_res_type.m_data.as_Function();
                 if (srcNode.cls != HIRExprNodeClosure::Class::NoCapture) {
                     ERROR(sp, E0000, "Cannot cast a closure with captures to a fn() type");
                 }
@@ -1921,7 +1915,6 @@ namespace {
 
         static HIRTypeImpl makeFnfree(HIRTypeInterner& types, HIRGenericParams params, HIRTypeRef closureType, ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> args, HIRTypeRef retTy, HIRExprPtr code) {
             // NOTE: Fixup isn't needed, there's no self
-            //fix_fn_params(code, closure_type, args_argent.second);
             assert(code.mBindings.size() > 0);
             code.mBindings[0] = types.unit();
             return HIRTypeImpl{std::move(params), std::move(closureType), makeMap1(rcstringCallFree, HIRTypeImpl::VisImplEnt<HIRFunction>{HIRPublicity::newGlobal(), false, HIRFunction(HIRFunction::Receiver::Free, HIRGenericParams{}, mv$(args), retTy, mv$(code))}), {}, {}, HIRSimplePath()};
@@ -2074,14 +2067,11 @@ namespace {
                     constructorPathParams.mLifetimes.push_back(ge.binding);
                     DEBUG("ADD lifetime 'I:" << rv << " = " << constructorPathParams.mLifetimes.back());
                     params.mLifetimes.push_back(HIRLifetimeDef());
-                    //params.m_values.back().m_name = ge.name;
                 }
                 return HIRLifetimeRef(rv);
             }
 
             HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* tpl, bool allowInfer = true) const override {
-                //if( const auto* te = tpl->opt_Closure() ) {
-                //    this->monomorph_genericpath(sp, te->node->m_obj_path, allow_infer);
                 //}
                 return Monomorphiser::monomorphType(sp, tpl, allowInfer);
             }
@@ -2250,7 +2240,6 @@ namespace {
                     }
                     TU_ARMA(TraitBound, e) {
                         //if( type_bound_needed(sp, e.type) != TypeNeed::Required )
-                        //    return false;
                         // Allows more complex type bounds
                         // e.g. `ty::Predicate<'tcx>: LowerInto<'tcx, std::option::Option<T>>,` (from 1.54 compiler/rustc_traits/src/chalk/db.rs:54)
                         if (typeBoundNeeded(sp, e.type) != TypeNeed::Required && typeBoundNeeded(sp, e.trait) != TypeNeed::Required) {
@@ -2445,7 +2434,6 @@ namespace {
             {
                 ClosureExprVisitorFixup fixup{mResolve.crate, &params, monomorphCb, &out};
                 for (size_t i = 0; i < captureTypes.size(); i++) {
-                    //auto binding_type = node.m_avu_cache.captured_vars[i].usage;
                     HIRTypeRef& tyMono = captureTypes[i].ent;
                     fixup.mResolve.expandAssociatedTypes(sp, tyMono);
                     fixup.visitType(tyMono);
@@ -2482,7 +2470,6 @@ namespace {
             node.objPath = HIRGenericPath(closureStructPath, monomorphCb.freeze());
             node.objPathBase = node.objPath.clone();
             node.captures = mv$(captureNodes);
-            //node.m_res_type = ::HIR::TypeRef( node.m_obj_path.clone() );
             DEBUG("-- Object name: " << node.objPath);
             HIRTypeRef closureType = mResolve.crate.types.path(HIRGenericPath(node.objPath.mPath.clone(), mv$(implPathParams)), HIRTypePathBinding::make_Struct(&closureStructRef));
             ::std::vector<HIRPattern> argsPatInner;
@@ -3199,8 +3186,6 @@ namespace {
                 DEBUG("Array size " << ty);
                 if (e.size.is_Unevaluated()) {
                     //::std::vector< ::HIR::TypeRef>  tmp;
-                    //ClosureExprVisitorExtract    ev(m_resolve, tmp, m_new_trait_impls);
-                    //ev.visit_root( *e.size );
                 }
                 ty = mResolve.crate.types.intern(std::move(data));
             } else {
@@ -3254,27 +3239,11 @@ namespace {
         void visitConstant(HIRItemPath p, HIRConstant& item) override {
             if (item.mValue) {
                 //::std::vector< ::HIR::TypeRef>  tmp;
-                //ClosureExprVisitorExtract    ev(m_resolve, m_self_type, tmp, m_new_trait_impls);
-                //ev.visit_root(*item.m_value);
             }
         }
 
         void visitEnum(HIRItemPath p, HIREnum& item) override {
-            //auto _ = this->m_ms.set_item_generics(item.m_params);
 
-            /*
-            if(const auto* e = item.m_data.opt_Value())
-            {
-                auto enum_type = ::HIR::TypeRef(::HIR::CoreType::Isize);
-                for(auto& var : e->variants)
-                {
-                    DEBUG("Enum value " << p << " - " << var.name);
-                    ::std::vector< ::HIR::TypeRef>  tmp;
-                    ClosureExprVisitorExtract    ev(m_resolve, tmp, m_new_trait_impls);
-                    ev.visit_root(var.expr);
-                }
-            }
-            */
         }
 
         void visitTrait(HIRItemPath p, HIRTrait& item) override {
@@ -3439,7 +3408,6 @@ namespace {
         }
 
         HIRLifetimeRef monomorphLifetime(const Span& sp, const HIRLifetimeRef& lft) const override {
-            //ASSERT_BUG(sp, lft.binding <= ::HIR::LifetimeRef::STATIC, "Found local/ivar lifetime - " << lft << "\n in " << tpl);
             return lft;
         }
     };
@@ -3903,7 +3871,6 @@ namespace {
         /// Check that `rhs` is valid for `lhs` (assignment ordering)
         /// Stores the root RHS lifetimes that failed bounds in `fails`
         bool checkLifetimes(const Span& sp, const HIRLifetimeRef& lhs, const HIRLifetimeRef& rhs, std::vector<HIRLifetimeRef>& fails) const {
-            //TRACE_FUNCTION_F(lhs << " = " << rhs);
             assert(!optIvar(sp, lhs));
             assert(!optIvar(sp, rhs));
 
@@ -3969,7 +3936,6 @@ namespace {
                     // Check for an outlives relationship (this param must be bounded to `'static`)
                     bool rv = iterateLftBounds(rhs, [&](const HIRLifetimeRef& validFor) -> bool {
                         if (validFor == lhs) {
-                            //if( check_lifetimes(sp, lhs, valid_for, fails) ) {
                             return true;
                         }
                         return false;
@@ -4135,7 +4101,6 @@ namespace {
 
         void sanityCheckLft(const Span& sp, const HIRLifetimeRef& lft) const {
             ASSERT_BUG(sp, lft != HIRLifetimeRef() && lft.binding != HIRLifetimeRef::INFER, "Unspecified lifetime - " << lft);
-            //ASSERT_BUG(sp, !lft.is_hrl(), "Encountered HRL - " << lft);
             if (lft.isParam()) {
                 if (lft.asParam().group() == 0) {
                     ASSERT_BUG(sp, mResolve.mImplGenerics && lft.asParam().idx() < mResolve.mImplGenerics->mLifetimes.size(), "Unexpected generic: " << lft);
@@ -4190,9 +4155,7 @@ namespace {
         }
 
         void equateTraitpath(const Span& sp, const HIRTraitPath& lhs, const HIRTraitPath& rhs) {
-            //if( le.m_hrtbs && re.m_hrtbs ) {
             //}
-            //else if( le.m_hrtbs || re.m_hrtbs ) {
             //    TODO(sp, lhs << " == " << rhs);
             //}
             auto ppL = lhs.hrtbs ? lhs.hrtbs->makeEmptyParams(true) : HIRPathParams();
@@ -4547,12 +4510,7 @@ namespace {
         void visitPath(HIRVisitor::PathContext pc, HIRPath& p) override {
             Span sp;
             TRACE_FUNCTION_FR(p, p);
-            //if( auto* pe = p.m_data.opt_UfcsKnown() ) {
-            //    if( pe->trait.m_hrls && !pe->trait.m_hrls->is_empty() ) {
             //        // Remove this level of HRL
-            //        auto pp = pe->trait.m_hrls->make_empty_params(true);
-            //        pe->trait.m_hrls.reset();
-            //        pe->trait = MonomorphHrlsOnly(pp).monomorph_genericpath(sp, pe->trait);
             //    }
             //}
             p = getMonomorphAdd().monomorphPath(sp, p, false);
@@ -4880,7 +4838,6 @@ namespace {
                 void equateLifetime(const HIRLifetimeRef& src) {
                     if (src.isHrl()) {
                         ASSERT_BUG(sp, hrls.size() > 0, "Encountered HRL with no HRL in the stack - " << dstLft << " = " << src);
-                        //parent.equate_lifetimes(sp, dst_lft, m_hrls.back().m_lifetimes[src.binding & 0xFF]);
                     } else {
                         parent.equateLifetimes(sp, dstLft, src);
                     }
@@ -4906,8 +4863,6 @@ namespace {
                     auto pushHrls = [&](const HIRGenericParams& hrlsDef) {
                         hrlPushed = true;
                         hrls.push_back(hrlsDef.makeEmptyParams(true));
-                        //for(auto& l : m_hrls.back().m_lifetimes)
-                        //    l = parent.m_state.allocate_ivar(sp);
                     };
 
                     if (isOpaque(t)) {
@@ -4922,8 +4877,6 @@ namespace {
                             for (const auto& lft : e->lifetimeBounds) {
                                 equateLifetime(lft);
                             }
-                            //if( e->m_trait.m_hrls ) {
-                            //    push_hrls(*e->m_trait.m_hrls);
                             //}
                         } else {
                             TODO(sp, "Get lifetime (from bounds) for opaque type - " << t);
@@ -5273,7 +5226,6 @@ namespace {
                 argTy = ms2.monomorphType(n->span(), argTy);
                 DEBUG("ARG " << argTy);
                 this->equateTypes(n->span(), argTy, n->resType);
-                //this->equate_types(n->span(), node.m_cache.m_arg_types[i], arg_ty);
                 node.cache.argTypes[i] = std::move(argTy);
             }
             DEBUG("Raw Ret " << fcn.returnType);
@@ -5281,7 +5233,6 @@ namespace {
             retMono = ms2.monomorphType(node.span(), retMono);
             DEBUG("RET " << retMono);
             this->equateTypes(node.span(), node.resType, retMono);
-            //this->equate_types(node.span(), node.m_cache.m_arg_types.back(), ret_mono);
             node.cache.argTypes.back() = std::move(retMono);
         }
 
@@ -5771,7 +5722,6 @@ namespace {
 
                     if (iv.sources.size() == 1) {
                         auto lft = state.getFinalLft(iv.sp, iv.sources[0]);
-                        //auto lft = iv.sources[0];
                         if (!state.optIvar(iv.sp, lft)) {
                             set(iv, lft, "Only source");
                             continue;
@@ -5910,7 +5860,6 @@ namespace {
                             const auto& srcReal = state.getFinalLft(sp, src);
                             if (srcReal.isHrl()) {
                                 ASSERT_BUG(sp, hrls.size() > 0, "Encountered HRL with no HRL in the stack");
-                                //parent.equate_lifetimes(sp, dst_lft, m_hrls.back().m_lifetimes[src.binding & 0xFF]);
                             } else if (srcReal.binding == HIRLifetimeRef::STATIC) {
                                 // Ignore `'static`, it's always valid
                             } else {
@@ -6272,7 +6221,6 @@ namespace {
                     }
 
                     HIRLifetimeRef monomorphLifetime(const Span& sp, const HIRLifetimeRef& lft) const override {
-                        //ASSERT_BUG(sp, lft.binding <= ::HIR::LifetimeRef::STATIC, "Found local/ivar lifetime - " << lft << "\n in " << tpl);
                         return lft;
                     }
                 };
@@ -6362,7 +6310,6 @@ namespace {
         }
 
         void visitEnum(HIRItemPath p, HIREnum& item) override {
-            //auto _ = this->m_ms.set_item_generics(item.m_params);
 
             if (auto* e = item.mData.opt_Value()) {
                 auto enumType = HIREnum::getReprType(item.tagRepr);
@@ -6665,7 +6612,6 @@ namespace {
         // Code-containing items
         // ------
         void visitFunction(HIRItemPath p, HIRFunction& item) override {
-            //auto _ = this->m_ms.set_item_generics(item.m_params);
             if (item.mCode) {
                 DEBUG("Function code " << p);
                 ReborrowExprVisitorMutate ev(crate);
@@ -6810,7 +6756,6 @@ public:
                 }
             }
             auto& valuePtr = *valuePtrPtr;
-            //auto usage = value_ptr->m_usage;
 
             bool isUnsized = false;
             bool isZst = ([&]() -> bool {
@@ -7035,7 +6980,6 @@ public:
     void visit(HIRExprNodeConstBlock& node) override {
         HIRExprVisitorDef::visit(node);
         // TODO: Separate the const-valid and const-promotable flags
-        //ASSERT_BUG(node.span(), m_all_constant, "const block wasn't constant");
 
         // NOTE: The second pass will lift this into a `const`, which will then be evaluated
         // - Evaluation will fail if it's not constant
@@ -7052,7 +6996,6 @@ public:
     void visit(HIRExprNodeConstParam& node) override {
         HIRExprVisitorDef::visit(node);
         // While yes, it is constant, don't want to turn it into a static borrow
-        //m_is_constant = true;
     }
 
     void visit(HIRExprNodeUnitVariant& node) override {
@@ -7265,7 +7208,6 @@ public:
             ev.visitNodePtr(item.mCode);
             if (item.isConst) {
                 if (!ev.allConstant()) {
-                    //ERROR(item.m_code->span(), E0000, "`const fn " << p << "` is not constant");
                     // - Todo: Constant blocks?
                 }
             }
@@ -7279,8 +7221,6 @@ public:
             StaticBorrowExprVisitorMark ev(mResolve, selfType, item.mValue);
             ev.visitNodePtr(item.mValue);
             if (!ev.allConstant()) {
-                //ERROR(item.m_value->span(), E0000, "`static " << p << "` is not constant");
-                //WARNING(item.m_value->span(), W0000, "`static " << p << "` is not constant");
             }
         }
     }
@@ -7292,7 +7232,6 @@ public:
             if (!ev.allConstant()) {
                 // TODO: The set of operations valid in a `static`/`const` is different to the set that is valid to promote.
                 // - Just trust the evaluator to detect invalid operations.
-                //WARNING(item.m_value->span(), W0000, "`const " << p << "` is not constant");
             }
         }
     }
@@ -7684,9 +7623,6 @@ public:
             auto staticTy = MonomorphLifetimesStatic(mResolve.crate.types).monomorphType(sp, valExpr->resType, /*allow_infer=*/false);
             resolve.expandAssociatedTypes(sp, staticTy);
 
-            //auto m2 = MonomorphStatePtr(nullptr, nullptr, &constr_params);
-            //auto new_res_ty = m2.monomorph_type(sp, static_ty, false);
-            //DEBUG("new_res_ty = " << new_res_ty);
 
             auto path = newStaticCb(sp, mv$(staticTy), mv$(valExpr), mv$(paramsDef), false);
             DEBUG("> " << path << constrParams);
@@ -7997,8 +7933,6 @@ void HIRExpandStaticBorrowConstantsMarkExpr(const HIRCrate& crate, const HIRItem
     StaticBorrowExprVisitorMark evm(resolve, nullptr, exp);
     evm.visitNodePtr(exp);
     if (!evm.allConstant()) {
-        //WARNING(exp->span(), W0000, "`static`/`const` " << ip << " is not constant?");
-        //ERROR(exp->span(), E0000, "`static`/`const` " << ip << " is not constant");
         // TODO: How to determine if this is a static/const instead of a function?
         // - For a function, maybe could also check?
     }
@@ -8747,7 +8681,6 @@ namespace {
         // Code-containing items
         // ------
         void visitFunction(HIRItemPath p, HIRFunction& item) override {
-            //auto _ = this->m_ms.set_item_generics(item.m_params);
             if (item.mCode) {
                 DEBUG("Function code " << p);
                 UfcsExprVisitorMutate ev(crate, currentTraitImpl);
@@ -9007,7 +8940,6 @@ namespace {
                                 this->hasConflict = true;
                             } else {
                                 paramsDef.types.push_back(HIRTypeParamDef{RcString::newInterned(FMT("a#" << ty.first)), types.infer(), ty.second.isSized});
-                                //params_use.m_types.push_back( ::HIR::TypeRef(tp.m_name, &tp - tr.m_params.m_types.data()) );
                             }
                         }
                     }
@@ -9251,7 +9183,6 @@ namespace {
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
             static Span sp;
             TRACE_FUNCTION_F("impl " << traitPath << " for " << impl.mType);
-            //auto _ = this->m_resolve.set_impl_generics(impl.m_params);
 
             HIRVisitor::visitTraitImpl(traitPath, impl);
         }

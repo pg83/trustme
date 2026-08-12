@@ -269,7 +269,6 @@ bool HIRGenericPath::equalsIgnoringRegions(const HIRGenericPath& x) const {
 
 Ordering HIRGenericPath::ord(const HIRGenericPath& x) const {
     ORD(mPath, x.mPath);
-    //DEBUG("\n  " << *this << "\n  " << x);
     ORD(mParams, x.mParams);
 
     return OrdEqual;
@@ -404,7 +403,6 @@ HIRCompare HIRPathParams::compareWithPlaceholders(const Span& sp, const HIRPathP
             }
         }
     }
-#if 1
     if (this->values.size() > 0 || x.values.size() > 0) {
         if (this->values.size() != x.values.size()) {
             return HIRCompare::Unequal;
@@ -412,20 +410,13 @@ HIRCompare HIRPathParams::compareWithPlaceholders(const Span& sp, const HIRPathP
         for (unsigned int i = 0; i < x.values.size(); i++) {
             const auto& valT = resolvePlaceholder.getVal(sp, this->values[i]);
             const auto& valX = resolvePlaceholder.getVal(sp, x.values[i]);
-            /*if( const auto* ge = val_t.opt_Generic() ) {
-                rv &= match.match_val(*ge, val_x);
-                if(rv == Compare::Unequal)
-                    return Compare::Unequal;
-            }
-            else*/
+
             {
                 // TODO: Look up the the ivars?
                 if (valT.is_Infer() || valX.is_Infer()) {
-                    //return Compare::Fuzzy;
                     rv = HIRCompare::Fuzzy;
                 } else if (valT != valX) {
                     if (valT.is_Unevaluated() || valX.is_Unevaluated()) {
-                        //return Compare::Fuzzy;
                         rv = HIRCompare::Fuzzy;
                     } else {
                         return HIRCompare::Unequal;
@@ -434,7 +425,6 @@ HIRCompare HIRPathParams::compareWithPlaceholders(const Span& sp, const HIRPathP
             }
         }
     }
-#endif
     return rv;
 }
 
@@ -514,22 +504,16 @@ HIRCompare HIRPathParams::matchTestGenericsFuzz(const Span& sp, const HIRPathPar
         }
     }
 
-#if 1
     if (this->mLifetimes.size() != x.mLifetimes.size()) {
-        //return Compare::Unequal;
     }
     for (unsigned int i = 0; i < std::min(this->mLifetimes.size(), x.mLifetimes.size()); i++) {
         if (this->mLifetimes[i].isParam()) {
             /*rv &=*/match.matchLft(this->mLifetimes[i].asParam(), x.mLifetimes[i]);
             //if(rv == Compare::Unequal)
-            //    return Compare::Unequal;
         } else {
-            //if( this->m_lifetimes[i] != x.m_lifetimes[i] ) {
-            //    return Compare::Unequal;
             //}
         }
     }
-#endif
 
     return rv;
 }
@@ -573,7 +557,6 @@ HIRCompare HIRTraitPath::compareWithPlaceholders(const Span& sp, const HIRTraitP
 
     // TODO: HRLs
 
-#if 1
     if (gCompareHrls) {
         if ((this->hrtbs && !this->hrtbs->isEmpty()) != (x.hrtbs && !x.hrtbs->isEmpty())) {
             return HIRCompare::Unequal;
@@ -584,7 +567,6 @@ HIRCompare HIRTraitPath::compareWithPlaceholders(const Span& sp, const HIRTraitP
             }
         }
     }
-#endif
 
     auto itL = typeBounds.begin();
     auto itR = x.typeBounds.begin();
@@ -767,7 +749,6 @@ const RcString& HIRSimplePath::crateName() const {
 }
 
 Ordering HIRPathParams::ord(const HIRPathParams& x) const {
-    //if(auto cmp = ::ord(m_lifetimes, x.m_lifetimes)) return cmp;
     if (auto cmp = ::ord(types, x.types)) {
         return cmp;
     }

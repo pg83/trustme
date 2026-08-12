@@ -221,7 +221,6 @@ struct Context {
     };
 
     /// Default type
-    //void possible_equate_ivar_def(unsigned int ivar_index, const ::HIR::TypeData* t);
 
     /// Record that the IVar may be this type (and what the source is)
     void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRTypeData* t, PossibleTypeSource srcTy);

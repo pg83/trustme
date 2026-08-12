@@ -29,8 +29,6 @@ static inline ASTExprNodeP mkExprnodep(const TokenStream& lex, ASTExprNode* en) 
 #define NEWNODE(type, ...) mkExprnodep(lex, new type(__VA_ARGS__))
 
 ASTExprNodeP ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty, Ident label = Ident(""));
-//ASTExprNodeP Parse_ExprBlockLine_WithItems(TokenStream& lex, ::std::shared_ptr<AST::Module>& local_mod, bool& add_silence_if_end);
-//ASTExprNodeP Parse_ExprBlockLine(TokenStream& lex, bool *add_silence);
 ASTExprNodeP ParseExprBlockLineStmt(TokenStream& lex, bool& hasSemicolon);
 //ASTExprNodeP Parse_Stmt(TokenStream& lex);   // common.h
 ASTExprNodeP ParseStmtLet(TokenStream& lex, bool isSuper = false);
@@ -261,9 +259,7 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                 return ret;
                 // TODO: Can these have labels?
                 //case TOK_RWORD_IF:
-                //    return Parse_IfStmt(lex);
                 //case TOK_RWORD_MATCH:
-                //    return Parse_Expr_Match(lex);
 
             default:
                 throw ParseErrorUnexpected(lex, tok);
@@ -369,9 +365,6 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                 // Otherwise, interpret as normal expression
                 // HACK: Just treat a leading `:expr` as a statement (rust-lang/rust #78829) (ref: rustc-1.39.0-src\vendor\indexmap\src\map.rs:1139)
                 //case TOK_INTERPOLATED_EXPR:
-                //    DEBUG(":expr");
-                //    PUTBACK(tok, lex);
-                //    return Parse_Stmt(lex);
 
             default:
                 PUTBACK(tok, lex);
@@ -554,7 +547,6 @@ ASTExprNodeP ParseExprMatch(TokenStream& lex) {
         SET_PARSE_FLAG(lex, disallowStructLiteral);
         switchVal = ParseExpr1(lex);
     }
-    //ASSERT(lex, !CHECK_PARSE_FLAG(lex, disallow_struct_literal) );
     GET_CHECK_TOK(tok, lex, TOK_BRACE_OPEN);
 
     ::std::vector<ASTExprNodeMatchArm> arms;
@@ -673,8 +665,6 @@ ASTExprNodeP ParseStmt(TokenStream& lex) {
             return ParseExprFC(lex);
         }
         //case TOK_RWORD_DO:
-        //    if( lex.lookahead(0) == "yeet" ) {
-        //        return Parse_FlowControl(lex, AST::ExprNodeFlow::YEET);
         //    }
         default:
             PUTBACK(tok, lex);
@@ -1603,8 +1593,6 @@ ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode) {
             return ParsePath(lex, true, genericMode);
 
         //case TOK_THINARROW_LEFT:
-        //    lex.putback( Token(TOK_DASH) );
-        //    if(0)
         case TOK_DOUBLE_LT:
             lex.putback(Token(TOK_LT));
         case TOK_LT: {
@@ -1620,7 +1608,6 @@ ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode) {
                 // TODO: Terminating the "path" here is sometimes valid?
                 GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
                 // NOTE: <Foo>::BAR is actually `<Foo as _>::BAR` (in mrustc parleance)
-                //return AST::Path(AST::Path::TagUfcs(), mv$(ty), Parse_PathNodes(lex, generic_mode));
                 return ASTPath::newUfcsTy(mv$(ty), ParsePathNodes(lex, genericMode));
             }
             throw "";
@@ -1925,7 +1912,6 @@ ASTPattern ParsePattern1(TokenStream& lex, AllowOrPattern allowOr) {
         binding = ASTPatternBinding(mv$(bindName), bindType, isMut);
 
         // '@' consumed, move on to next token
-        //GET_TOK(tok, lex);
         pat = ParsePattern1(lex, allowOr);
     }
     // Otherwise, handle MaybeBind
@@ -2088,7 +2074,6 @@ ASTPattern ParsePatternReal1(TokenStream& lex, AllowOrPattern allowOr) {
         case TOK_UNDERSCORE:
             return ASTPattern(lex.endSpan(ps), ASTPattern::Data());
         //case TOK_DOUBLE_DOT:
-        //    return AST::Pattern( AST::Pattern::TagWildcard() );
         case TOK_RWORD_BOX:
             return ASTPattern(ASTPattern::TagBox(), lex.endSpan(ps), ParsePattern1(lex, allowOr));
         case TOK_DOUBLE_AMP:
@@ -2826,7 +2811,6 @@ ASTFunction ParseFunctionDef(TokenStream& lex, bool allowSelf, bool canBePrototy
             auto sp = lex.endSpan(ps);
             args.push_back(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), TypeRef(TypeRef::TagReference(), sp, ::std::move(lifetime), isMut, TypeRef(sp, rcstringSelf, 0xFFFF))));
             //if( allow_self == false )
-            //    ERROR(lex.point_span(), E0000, "Self binding not expected here");
 
             // Prime tok for next step
             GET_TOK(tok, lex);
@@ -2837,7 +2821,6 @@ ASTFunction ParseFunctionDef(TokenStream& lex, bool allowSelf, bool canBePrototy
         if (LOOK_AHEAD(lex) == TOK_RWORD_SELF) {
             GET_TOK(tok, lex);
             //if( allow_self == false )
-            //    throw ParseError::Generic(lex, "Self binding not expected");
             auto bindingSp = lex.endSpan(ps);
             TypeRef ty = TypeRef(lex.pointSpan(), rcstringSelf, 0xFFFF);
             if (GET_TOK(tok, lex) == TOK_COLON) {
@@ -2852,7 +2835,6 @@ ASTFunction ParseFunctionDef(TokenStream& lex, bool allowSelf, bool canBePrototy
     } else if (tok.type() == TOK_RWORD_SELF) {
         // By-value method
         //if( allow_self == false )
-        //    throw ParseError::Generic(lex, "Self binding not expected");
         auto bindingSp = lex.endSpan(ps);
         TypeRef ty = TypeRef(lex.pointSpan(), rcstringSelf, 0xFFFF);
         if (GET_TOK(tok, lex) == TOK_COLON) {
@@ -2994,7 +2976,6 @@ ASTStruct ParseStruct(TokenStream& lex, const ASTAttributeList& metaItems) {
         }
         GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
         //if( refs.size() == 0 )
-        //    WARNING( , W000, "Use 'struct Name;' instead of 'struct Name();' ... ning-nong");
         return ASTStruct(mv$(params), mv$(refs));
     } else {
         // Unit-like struct
@@ -3027,7 +3008,6 @@ ASTStruct ParseStruct(TokenStream& lex, const ASTAttributeList& metaItems) {
                 CHECK_TOK(tok, TOK_COMMA);
             }
             //if( items.size() == 0 )
-            //    WARNING( , W000, "Use 'struct Name;' instead of 'struct Nam { };' ... ning-nong");
             return ASTStruct(mv$(params), mv$(items));
         } else {
             throw ParseErrorUnexpected(lex, tok);
@@ -3224,7 +3204,6 @@ ASTTrait ParseTraitDef(TokenStream& lex, const ASTAttributeList& metaItems, ASTG
 
     if (tok.type() == TOK_RWORD_WHERE) {
         //if( params.ty_params().size() == 0 )
-        //    throw ParseError::Generic("Where clause with no generic params");
         ParseWhereClause(lex, params);
         tok = lex.getToken();
     }
@@ -3566,8 +3545,6 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
                 TU_ARMA(Static, e) {
                     impl.addStatic(item.span, std::move(item.attrs), item.vis, false, item.name, std::move(e));
                 }
-                //TU_ARMA(Type, e) {
-                //    impl.add_type(item.span, std::move(item.attrs), item.vis, false, item.name, std::move(e.m_params), std::move(e.m_type));
                 //    }
             }
             return ;
@@ -3742,7 +3719,6 @@ RcString getOptionalIdent(TokenStream& lex) {
     if (tok.type() == TOK_UNDERSCORE) {
         static unsigned anonIndex = 0;
         return RcString::newInterned(FMT(" " << anonIndex++));
-        //return RcString::new_interned(FMT(" " << lex.parse_state().module->m_anon_ident_index++));
     } else if (tok.type() == TOK_IDENT) {
         return tok.ident().name;
     } else {
@@ -3906,7 +3882,6 @@ void ParseUseRoot(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries) {
             break;
         default:
             if (lex.editionAfter(ASTEdition::Rust2018)) {
-                //path = AST::Path(lex.parse_state().module->path());
                 path = ASTPath::newRelative(/*hygine=*/{}, {});
             }
             PUTBACK(tok, lex);
@@ -4434,7 +4409,6 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             }
             DEBUG("path_attr = \"" << pathAttr << "\"");
 
-            //submod.m_file_info = get_submod_file(lex.end_span(ps), mod_fileinfo,  name, path_attr, LOOK_AHEAD(lex) == TOK_SEMICOLON, H::check_item_cfg(meta_items));
 
             FsPath subPath;
             bool subFileControlsDir = true;
@@ -4458,7 +4432,6 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 subPath = dirname(modFileinfo.path) / name.c_str();
             } else {
                 subPath = dirname(modFileinfo.path) / modPath.nodes.back().c_str() / name.c_str();
-                //sub_path = mod_fileinfo.path;
                 subFileControlsDir = false;
             }
             DEBUG("Mod '" << name << "', sub_path = " << subPath);
@@ -4614,7 +4587,6 @@ ASTCrate* ParseCrate(stl::ObjPool* pool, HIRTypeInterner& types, ::std::string m
     auto* crate = pool->make<ASTCrate>(pool, types);
     crate->edition = edition;
 
-    //crate.root_module().m_file_info.file_path = mainfile;
     crate->rootModule().fileInfo.path = mainpath;
     crate->rootModule().fileInfo.controlsDir = true;
 
@@ -4628,7 +4600,6 @@ ASTCrate* ParseCrate(stl::ObjPool* pool, HIRTypeInterner& types, ::std::string m
 #undef LOOKAHEAD2
 
 // === PROTOTYPES ===
-//TypeRef Parse_Type(TokenStream& lex, bool allow_trait_list);
 TypeRef ParseTypeInt(TokenStream& lex, bool allowTraitList);
 TypeRef ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs = {});
 TypeRef ParseTypePath(TokenStream& lex, ASTHigherRankedBounds hrbs, bool allowTraitList);
@@ -4637,9 +4608,7 @@ TypeRef ParseTypeErasedType(TokenStream& lex, bool allowTraitList);
 
 // === CODE ===
 TypeRef ParseType(TokenStream& lex, bool allowTraitList) {
-    //ProtoSpan ps = lex.start_span();
     TypeRef rv = ParseTypeInt(lex, allowTraitList);
-    //rv.set_span(lex.end_span(ps));
     return rv;
 }
 
@@ -4704,7 +4673,6 @@ TypeRef ParseTypeInt(TokenStream& lex, bool allowTraitList) {
             // or a primitive
             //if( auto ct = coretype_fromstring(tok.str()) )
             //{
-            //    return TypeRef(TypeRef::TagPrimitive(), Span(tok.get_pos()), ct);
             //}
             PUTBACK(tok, lex);
             return ParseTypePath(lex, {}, allowTraitList);

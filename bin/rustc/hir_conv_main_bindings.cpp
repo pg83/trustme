@@ -55,7 +55,6 @@ namespace {
     }
 
     void fixTypeParams(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& paramsDef, HIRPathParams& params) {
-#if 1
         if (params.mLifetimes.size() == 0) {
             params.mLifetimes.resize(paramsDef.mLifetimes.size());
         }
@@ -79,7 +78,6 @@ namespace {
         if (params.values.size() != paramsDef.values.size()) {
             ERROR(sp, E0000, "Incorrect value parameter count, expected " << paramsDef.values.size() << ", got " << params.values.size());
         }
-#endif
     }
 
     void fixParamCount(HIRTypeInterner& types, const Span& sp, const HIRGenericPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params, bool fillInfer = true, const HIRTypeData* selfTy = nullptr) {
@@ -333,7 +331,6 @@ namespace {
         }
 
         void visitTypeInner(HIRTypeRef& ty, bool doBind = true) {
-            //TRACE_FUNCTION_F(ty);
             static Span sp;
             auto data = ty->cloneData();
             bool dataVisited = false;
@@ -379,11 +376,7 @@ namespace {
                             // - Generic type, opaque resut. (TODO: Sometimes these are known - via generic bounds)
                             e->binding = HIRTypePathBinding::make_Opaque({});
                         } else {
-                            //bool found = find_impl(sp, m_crate, pe.trait.m_path, pe.trait.m_params, *pe.type, [&](const auto& impl_params, const auto& impl) {
                             //    DEBUG("TODO");
-                            //    return false;
-                            //    });
-                            //if( found ) {
                             //}
                             //TODO(sp, "Resolve known UfcsKnown - " << ty);
                         }
@@ -581,13 +574,10 @@ namespace {
             // Visit arguments
             // - Used to convert `impl Trait` in argument position into generics
             // - Done first so the path in return-position `impl Trait` is valid
-            //m_cur_params = &item.m_params;
-            //m_cur_params_level = 1;
             for (auto& arg : item.mArgs) {
                 TRACE_FUNCTION_F("ARG " << arg);
                 visitType(arg.second);
             }
-            //m_cur_params = nullptr;
 
             // Visit return type (populates path for `impl Trait` in return position
             fcnPath = &p;
@@ -603,7 +593,6 @@ namespace {
         }
 
         void visitStatic(HIRItemPath p, HIRStatic& item) override {
-            //auto _ = this->m_ms.set_item_generics(item.m_params);
             HIRVisitor::visitStatic(p, item);
             visitLiteral(Span(), item.valueRes);
         }
@@ -678,7 +667,6 @@ namespace {
                                     // TODO: Check that the expression is a valid const (no locals referenced, no function calls?)
                                     // - Allow: Arithmatic, casts, literals
                                     //if( !cast<const HIR::ExprNodeLiteral>(arg_node.get()) )
-                                    //    ERROR(arg_node->span(), E0000, "Argument " << idx << " must be a literal for #[rustc_legacy_const_generics] tagged function");
                                     HIRExprPtr ep{std::move(argNode)};
                                     e->mParams.values.push_back(HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(std::move(ep))));
                                     // - Visit to ensure that the expr state gets filled
@@ -1034,7 +1022,6 @@ namespace {
         }
 
         void visitTypeInner(HIRTypeRef& ty, bool doBind = true) {
-            //TRACE_FUNCTION_F(ty);
             static Span sp;
 
             auto data = ty->cloneData();
@@ -1140,7 +1127,6 @@ namespace {
         }
 
         void visitStatic(HIRItemPath p, HIRStatic& item) override {
-            //auto _ = this->m_ms.set_item_generics(item.m_params);
             HIRVisitor::visitStatic(p, item);
         }
 
@@ -1765,19 +1751,16 @@ public:
     }
 
     void visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) override {
-        //Span    sp(p);
         expandTraitList(Span(), item.traits);
         HIRVisitor::visitTraitAlias(p, item);
     }
 
     void visitTrait(HIRItemPath p, HIRTrait& item) override {
-        //Span    sp(p);
         expandTraitList(Span(), item.parentTraits);
         HIRVisitor::visitTrait(p, item);
     }
 
     void visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) override {
-        //Span    sp(p);
         expandTraitList(Span(), item.traitBounds);
         HIRVisitor::visitAssociatedtype(p, item);
     }
@@ -1798,8 +1781,6 @@ public:
     void visitFunction(HIRItemPath p, HIRFunction& item) override {
         HIRVisitor::visitFunction(p, item);
         if (item.receiver == HIRFunction::Receiver::Custom) {
-            //DEBUG("Updating reciever from " << item.m_receiver_type << " to " << item.m_args.at(0).second);
-            //item.m_receiver_type = item.m_args.at(0).second.clone();
             ASSERT_BUG(Span(), item.receiverType, "Custom receiver without a receiver type");
             this->visitType(*item.receiverType);
         }
@@ -2217,7 +2198,6 @@ namespace {
                         break;
                     case HIRLifetimeRef::INFER: // '_
                         //TODO(sp, "Handle explicitly elided lifetimes");
-                        //break;
                     case HIRLifetimeRef::UNKNOWN: // <none>
                         // If there's a current liftime (i.e. we're within a borrow), then use that
                         if (!currentLifetime.empty() && currentLifetime.back()) {
@@ -2246,7 +2226,6 @@ namespace {
                 if (curParams) {
                     if (!currentLifetime.empty() && currentLifetime.back() && currentLifetime.back()->isParam()) {
                         const auto& outer = *currentLifetime.back();
-                        //DEBUG("maybe add " << lft << ": " << outer);
                         if (lft != outer && lft.asParam().group() < 2 // I.e. an impl or method param, not HRL or placeholder
                             && outer.asParam().group() < 2
                             // One of the two lifetimes must be from this block?
@@ -2270,9 +2249,7 @@ namespace {
                     } else {
                         if (currentLifetime.empty()) {
                         } else if (currentLifetime.back()) {
-                            //DEBUG("No bound " << lft << ": " << *m_current_lifetime.back());
                         } else {
-                            //DEBUG("No bound " << lft << ": nullptr");
                         }
                     }
                 }
@@ -2987,7 +2964,6 @@ namespace {
                 } h(mResolve.crate);
 
                 auto fixSource = [&](HIRGenericPath& gp, const RcString& name) {
-                    //fix_path(gp);
                     DEBUG("[fix_source] >> " << gp);
                     if (gp.equalsIgnoringRegions(tp.mPath)) {
                         gp = tp.mPath.clone();
@@ -3696,11 +3672,9 @@ public:
     }
 
     void visitTrait(HIRItemPath p, HIRTrait& trait) override {
-        //TRACE_FUNCTION_F("impl" << impl.m_params.fmt_args() << " " << impl.m_type << " (mod=" << impl.m_src_module << ")");
         mInTraitDef = true;
         currentTrait = &trait;
         mCurrentTraitPath = &p;
-        //auto _ = m_resolve.set_cur_trait(p, trait);
         auto _ = mResolve.setImplGenerics(MetadataType::TraitObject, trait.mParams);
         HIRVisitor::visitTrait(p, trait);
         currentTrait = nullptr;
@@ -3872,7 +3846,6 @@ public:
                     // TODO: Struct?
                 }
             }
-#if 1
             void visit(HIRExprNodeStructLiteral& node) override {
                 HIRExprVisitorDef::visit(node);
                 const Span& sp = node.span();
@@ -3895,7 +3868,6 @@ public:
                     node.mType = upperVisitor.crate.types.intern(std::move(data));
                 }
             }
-#endif
 
             // NOTE: Custom needed for trait scoping
             void visit(HIRExprNodeBlock& node) override {
@@ -3928,7 +3900,6 @@ public:
 
     bool locateTraitItemInBounds(HIRVisitor::PathContext pc, const HIRTypeData* tr, const HIRGenericParams& params, HIRPath::Data& pd) {
         static Span sp;
-        //const auto& name = pd.as_UfcsUnknown().item;
         for (const auto& b : params.bounds) {
             if (const auto* e = b.opt_TraitBound()) {
                 DEBUG("- " << e->type << " : " << e->trait.mPath);
@@ -4295,7 +4266,6 @@ public:
                     stack.push_back(ty);
                 }
                 DEBUG("counter = " << stack.size());
-                //ASSERT_BUG(sp, !visit_ty_with(ty, [&](const HIR::TypeData* ty)->bool { return TU_TEST1(ty.data(), Generic, .is_placeholder()); }), "Encountered placeholder - " << ty);
                 rewriteTyWith(crate.types, ty, [&](HIRTypeRef& rewritten, HIRTypeData& data) -> bool {
                     if (TU_TEST1(data, Generic, .isPlaceholder())) {
                         rewritten = crate.types.infer();

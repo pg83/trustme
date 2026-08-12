@@ -150,7 +150,6 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
                                 continue;
                             }
                             break;
-                            //continue ;
                         case ExpandMode::Final:
                             if (stage != AttrStage::Post) {
                                 DEBUG("#[" << d.first << "] m=" << (int)es.mode);
@@ -244,7 +243,6 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
     if (!found) {
         // TODO: Create no-op handlers for a whole heap of attributes
         // - There's a LOT
-        //WARNING(sp, W0000, "Unknown attribute #[" << a.name() << "]");
         //TODO(sp, "Unknown attribute #[" << a.name() << "]");
     }
 }
@@ -364,7 +362,6 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const ASTCrate& crate, LList<cons
             // Find the last macro of this name (allows later #[macro_use] definitions to override)
             MacroRef rv;
             for (const auto& mri : macMod.macroImports) {
-                //DEBUG("- " << mri.name);
                 if (mri.name == name) {
                     DEBUG("?::" << mri.name << " - Imported");
                     rv = mri.ref.clone();
@@ -504,12 +501,8 @@ void ExpandPattern(const ExpandState& es, ASTModule& mod, ASTPattern& pat, bool 
             ExpandPattern(es, mod, *e.sub, isRefutable);
         }
         TU_ARMA(Value, e) {
-            //Expand_Expr(crate, modstack, e.start);
-            //Expand_Expr(crate, modstack, e.end);
         }
         TU_ARMA(ValueLeftInc, e) {
-            //Expand_Expr(crate, modstack, e.start);
-            //Expand_Expr(crate, modstack, e.end);
         }
         TU_ARMA(Tuple, e) {
             for (auto& sp : e.start) {
@@ -1359,10 +1352,7 @@ struct CExpandExpr: public ASTNodeVisitor {
         auto pathIterator = getPath(coreCrate, "iter", "Iterator");
         // Desugar into:
         // {
-        //     match <_ as ::iter::IntoIterator>::into_iter(`m_cond`) {
-        //     mut it => {
         //         `m_label`: loop {
-        //             match ::iter::Iterator::next(&mut it) {
         //             Some(`m_pattern`) => `m_code`,
         //             None => break `m_label`,
         //             }
@@ -1636,9 +1626,6 @@ struct CExpandExpr: public ASTNodeVisitor {
 
             // TODO: Find a way of creating bindings during HIR lower instead (so lang items are available)
 
-            //auto it = crate.m_lang_items.find("try");
-            //ASSERT_BUG(node.span(), it != crate.m_lang_items.end(), "Can't find the `try` lang item");
-            //auto path_Try = it->second;
             auto pathTry = getPath(coreCrate, "ops", "Try");
             static const RcString rcstringV = RcString::newInterned("v");
             static const RcString rcstringR = RcString::newInterned("r");
@@ -1722,7 +1709,6 @@ void ExpandBareExpr(const ASTCrate& crate, const ASTModule& mod, ASTExprNodeP& n
     ExpandState es{const_cast<ASTCrate&>(crate), LList<const ASTModule*>(nullptr, &mod), ExpandMode::FirstPass};
     ExpandExpr(es, node);
     es.mode = ExpandMode::Final;
-    //Expand_Expr(es, node);
 }
 
 ASTExprNodeP ExpandParseAndExpandExprVal(const ASTCrate& crate, const ASTModule& mod, TokenStream& lex) {
@@ -1833,7 +1819,6 @@ void Expand_ImplDef(const ExpandState& es, ASTPath modpath, ASTModule& mod, ASTI
     ExpandGenericParams(es, mod, implDef.params());
 
     ExpandType(es, mod, implDef.type());
-    //Expand_Type(es, mod,  impl_def.trait());
 }
 
 void Expand_ExternBlock(const ExpandState& es, ASTModule& mod, ASTExternBlock& block) {
@@ -2386,8 +2371,6 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
 
     // IGNORE m_anon_modules, handled as part of expressions
 
-    //for( const auto& mi: mod.macro_imports_res() )
-    //    DEBUG("- Imports '" << mi.name << "'");
 }
 
 void ExpandModIndexAnon(ASTCrate& crate, ASTModule& mod) {
@@ -2487,9 +2470,6 @@ void Expand_Mod_Early(ASTCrate& crate, ASTModule& mod, std::vector<std::unique_p
                     DEBUG("-- Parsing as mod items");
                     ParseModRootItemsInto(mod, idx, *ttl);
 
-                    //auto next_non_macro_item = idx + 1 + new_item_count;
-                    //macro_recursion_stack.push_back(next_non_macro_item == mod.m_items.size() ? nullptr : &*mod.m_items[next_non_macro_item]);
-                    //mod.m_items[idx]->data = AST::Item::make_None({});
                 } else {
                 }
                 mod.mItems[idx]->data.as_MacroInv() = mv$(miOwned);
@@ -2567,7 +2547,6 @@ void Expand(ASTCrate& crate) {
     for (auto& a : crate.mAttrs.mItems) {
         for (auto& d : gDecorators) {
             if (a.name() == d.first && d.second->stage() == AttrStage::Pre) {
-                //d.second->handle(a, crate, ::AST::Path(), crate.m_root_module, crate.m_root_module);
             }
         }
     }
@@ -2585,14 +2564,12 @@ void Expand(ASTCrate& crate) {
             ExpandMod(es, ASTAbsolutePath(), crate.mRootModule);
             DEBUG("?(Iter) es.change = " << es.change << ", es.has_missing=" << es.hasMissing);
         }
-        //ASSERT_BUG(Span(), !es.has_missing, "Expand too too many attempts");
         es.hasMissing = false;
     }
     es.mode = ExpandMode::Final;
     ExpandMod(es, ASTAbsolutePath(), crate.mRootModule);
     ASSERT_BUG(Span(), !es.hasMissing, "Expand too too many attempts");
 
-    //Expand_Attrs(es, crate.m_attrs, AttrStage::Post,  [&](const Span& sp, const auto& d, const auto& a){ d.handle(sp, a, crate); });
 
     // Post-process
     ExpandModIndexAnon(crate, crate.mRootModule);
