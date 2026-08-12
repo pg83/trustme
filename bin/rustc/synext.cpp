@@ -1,13 +1,13 @@
 #include "synext.h"
-
 #include "synext.h"
-#include "ast_expr.h"
+
 #include "ast_ast.h"
+#include "hir_hir.h" // for HIR::Crate
+#include "ast_expr.h"
+#include "ast_crate.h"
 #include "parse_common.h"
 #include "parse_ttstream.h"
-#include "ast_crate.h"
 #include "macro_rules_macro_rules.h"
-#include "hir_hir.h" // for HIR::Crate
 
 class CMacroRulesExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {

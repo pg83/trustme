@@ -1,13 +1,14 @@
 #pragma once
 
+#include "span.h"
+#include "ident.h"
+#include "floats.h"
+#include "int128.h"
+#include "coretypes.h"
 #include "rc_string.h"
 #include "tagged_union.h"
-#include "coretypes.h"
-#include "ident.h"
+
 #include <memory>
-#include "int128.h"
-#include "floats.h"
-#include "span.h"
 
 enum eTokenType {
 #define _(t) t,
@@ -34,15 +35,15 @@ extern ::std::ostream& operator<<(::std::ostream& os, const Position& p);
 class TypeRef;
 class TokenTree;
 
-    class ASTVisibility;
-    class ASTPattern;
-    class ASTPath;
-    class ASTExprNode;
-    class ASTAttribute;
-    class ASTItem;
+class ASTVisibility;
+class ASTPattern;
+class ASTPath;
+class ASTExprNode;
+class ASTAttribute;
+class ASTItem;
 
-    template <typename T>
-    struct ASTNamed;
+template <typename T>
+struct ASTNamed;
 
 class InterpolatedFragment;
 

@@ -1,16 +1,17 @@
 #pragma once
 
-#include <iostream>
-#include <vector>
 #include "span.h"
 #include "debug.h"
 #include "ident.h"
-#include "parse_token.h"
 #include "ast_edition.h"
+#include "parse_token.h"
 
-    class ASTModule;
-    class ASTCrate;
-    class ASTAttributeList;
+#include <vector>
+#include <iostream>
+
+class ASTModule;
+class ASTCrate;
+class ASTAttributeList;
 
 /// State the parser needs to pass down via a second channel.
 struct ParseState {
@@ -123,20 +124,20 @@ public:
     ~SavedParseState();
 };
 
-#define SET_MODULE(lex, mod)                      \
+#define SET_MODULE(lex, mod)                     \
     SavedParseState _sps(lex, lex.parseState()); \
     lex.parseState().module = &(mod)
-#define SET_ATTRS(lex, attrs)                     \
+#define SET_ATTRS(lex, attrs)                    \
     SavedParseState _sps(lex, lex.parseState()); \
     lex.parseState().parentAttrs = &(attrs)
-#define SET_PARSE_FLAG(lex, flag)                 \
+#define SET_PARSE_FLAG(lex, flag)                \
     SavedParseState _sps(lex, lex.parseState()); \
     lex.parseState().flag = true
-#define CLEAR_PARSE_FLAG(lex, flag)               \
+#define CLEAR_PARSE_FLAG(lex, flag)              \
     SavedParseState _sps(lex, lex.parseState()); \
     lex.parseState().flag = false
-#define CLEAR_PARSE_FLAGS_EXPR(lex)                    \
-    SavedParseState _sps(lex, lex.parseState());      \
+#define CLEAR_PARSE_FLAGS_EXPR(lex)                 \
+    SavedParseState _sps(lex, lex.parseState());    \
     lex.parseState().disallowStructLiteral = false; \
     lex.parseState().disallowCallOrIndex = false
 #define CHECK_PARSE_FLAG(lex, flag) (lex.parseState().flag == true)

@@ -1,35 +1,37 @@
 #include "main_bindings.h"
+#include "main_bindings.h"
 
-#include "ast_dump.h"
 #include "ast_ast.h"
+#include "hir_hir.h" // ABI_RUST
+#include "version.h"
+#include "ast_dump.h"
 #include "ast_expr.h"
 #include "ast_crate.h"
-#include "main_bindings.h"
-#include "hir_hir.h" // ABI_RUST
-#include <iostream>
-#include <iomanip>
-#include <string>
-#include <set>
-#include <climits>
-#include "version.h"
 #include "parse_lex.h"
-#include "parse_parseerror.h"
-#include "parse_common.h" // For edition checks
-#include <cstring>
-#include "resolve_main_bindings.h"
-#include "hir_main_bindings.h"
-#include "hir_conv_main_bindings.h"
-#include "hir_typeck_main_bindings.h"
-#include "hir_expand_main_bindings.h"
-#include "mir_main_bindings.h"
-#include "trans_main_bindings.h"
-#include "trans_target.h"
-#include "trait_solver_mode.h"
 #include "expand_cfg.h"
-#include "target_detect.h" // tools/common/target_detect.h
 #include "debug_inner.h"
 #include "memory_dump.h"
+#include "parse_common.h" // For edition checks
+#include "trans_target.h"
+#include "target_detect.h" // tools/common/target_detect.h
+#include "parse_parseerror.h"
+#include "hir_main_bindings.h"
+#include "mir_main_bindings.h"
+#include "trait_solver_mode.h"
+#include "trans_main_bindings.h"
+#include "resolve_main_bindings.h"
+#include "hir_conv_main_bindings.h"
+#include "hir_expand_main_bindings.h"
+#include "hir_typeck_main_bindings.h"
+
 #include <std/mem/obj_pool.h>
+
+#include <set>
+#include <string>
+#include <climits>
+#include <cstring>
+#include <iomanip>
+#include <iostream>
 
 #define NEWNODE(ty, ...) ASTExprNodeP(new ASTExprNode##ty(__VA_ARGS__))
 
@@ -145,8 +147,6 @@ void ExpandTestHarness(ASTCrate& crate) {
 
 #undef NEWNODE
 
-
-
 #ifndef __has_feature
     #define __has_feature(x) 0
 #endif
@@ -156,7 +156,6 @@ void ExpandTestHarness(ASTCrate& crate) {
 #else
     #define MRUSTC_SANITIZER_BUILD 0
 #endif
-
 
 struct ProgramParams {
     enum eLastStage {
@@ -233,10 +232,12 @@ struct ProgramParams {
     unsigned effectiveMirOptLevel() const {
         return mirOptLevelExplicit ? mirOptLevel : (optLevel == OptimizationLevel::None ? 1 : 2);
     }
+
     bool enableMirInlining() const {
         const auto level = effectiveMirOptLevel();
         return level >= 3 || (level == 2 && optLevel != OptimizationLevel::None && optLevel != OptimizationLevel::Less);
     }
+
     bool debugAssertionsEnabled() const {
         return debugAssertionsExplicit ? debugAssertions : optLevel == OptimizationLevel::None;
     }
@@ -1081,10 +1082,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         ::std::cerr << "Option -" << flag << " requires an argument" << ::std::endl;
                         exit(1);
                     }
-                    const auto level = flag == 'A' ? CfgLintLevel::Allow
-                        : flag == 'W' ? CfgLintLevel::Warn
-                        : flag == 'D' ? CfgLintLevel::Deny
-                        : CfgLintLevel::Forbid;
+                    const auto level = flag == 'A' ? CfgLintLevel::Allow : flag == 'W' ? CfgLintLevel::Warn : flag == 'D' ? CfgLintLevel::Deny : CfgLintLevel::Forbid;
                     CfgSetLintLevel(lintName, level);
                     continue;
                 }
@@ -1261,9 +1259,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                             this->traitSolver.coherence = false;
                             this->traitSolver.globally = false;
                         } else {
-                            ::std::cerr << "Invalid value for -Z next-solver: '" << optval
-                                       << "' (expected 'no', 'coherence', or 'globally')"
-                                       << ::std::endl;
+                            ::std::cerr << "Invalid value for -Z next-solver: '" << optval << "' (expected 'no', 'coherence', or 'globally')" << ::std::endl;
                             exit(1);
                         }
                     } else if (optname == "full-validate") {

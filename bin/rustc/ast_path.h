@@ -1,19 +1,20 @@
 #pragma once
 
-#include "common.h"
-#include <cstdint>
-#include <string>
-#include <stdexcept>
-#include <vector>
-#include <initializer_list>
-#include <cassert>
-#include "tagged_union.h"
-#include <string>
 #include "span.h"
 #include "ident.h"
-#include "ast_lifetime_ref.h"
+#include "common.h"
 #include "ast_types.h"
 #include "ast_expr_ptr.h"
+#include "tagged_union.h"
+#include "ast_lifetime_ref.h"
+
+#include <string>
+#include <string>
+#include <vector>
+#include <cassert>
+#include <cstdint>
+#include <stdexcept>
+#include <initializer_list>
 
 class MacroRules;
 
@@ -27,253 +28,252 @@ namespace HIR {
     class Static;
 } // namespace HIR
 
+class ASTLifetimeRef;
+class ASTGenericParams;
+class ASTCrate;
+class ASTModule;
+class ASTTypeAlias;
+class ASTEnum;
+class ASTStruct;
+class ASTUnion;
+class ASTTrait;
+class ASTTraitAlias;
+class ASTStatic;
+class ASTFunction;
+class ASTExternCrate;
 
-    class ASTLifetimeRef;
-    class ASTGenericParams;
-    class ASTCrate;
-    class ASTModule;
-    class ASTTypeAlias;
-    class ASTEnum;
-    class ASTStruct;
-    class ASTUnion;
-    class ASTTrait;
-    class ASTTraitAlias;
-    class ASTStatic;
-    class ASTFunction;
-    class ASTExternCrate;
+struct ASTAbsolutePath {
+    RcString crate;
+    ::std::vector<RcString> nodes;
 
-    struct ASTAbsolutePath {
-        RcString crate;
-        ::std::vector<RcString> nodes;
+    ASTAbsolutePath();
 
-        ASTAbsolutePath();
+    ASTAbsolutePath(RcString crate, ::std::vector<RcString> nodes);
 
-        ASTAbsolutePath(RcString crate, ::std::vector<RcString> nodes);
+    ASTAbsolutePath operator+(RcString n) const;
 
-        ASTAbsolutePath operator+(RcString n) const;
+    bool operator==(const ASTAbsolutePath& x) const;
 
-        bool operator==(const ASTAbsolutePath& x) const;
+    bool operator!=(const ASTAbsolutePath& x) const {
+        return !(*this == x);
+    }
 
-        bool operator!=(const ASTAbsolutePath& x) const {
-            return !(*this == x);
+    friend ::std::ostream& operator<<(::std::ostream& os, const ASTAbsolutePath& x);
+
+    // Returns true if this path is a prefix of the other path (or equal)
+    bool isParentOf(const ASTAbsolutePath& other) const;
+};
+
+TAGGED_UNION_EX(
+    ASTPathBindingValue,
+    (),
+    Unbound,
+    ((Unbound, struct {}),
+     (Struct,
+      struct {
+          const ASTStruct* struct_;
+          const ::HIR::Struct* hir;
+      }),
+     (Static,
+      struct {
+          const ASTStatic* static_;
+          const ::HIR::Static* hir; // if nullptr and static_ == nullptr, points to a `const`
+      }),
+     (Function, struct { const ASTFunction* func_; }),
+     (EnumVar,
+      struct {
+          const ASTEnum* enum_;
+          unsigned int idx;
+          const ::HIR::Enum* hir;
+      }),
+     (Generic, struct { unsigned int index; }),
+     (Variable, struct { unsigned int slot; })),
+    (),
+    (),
+    (public : ASTPathBindingValue clone() const;)
+);
+TAGGED_UNION_EX(
+    ASTPathBindingType,
+    (),
+    Unbound,
+    ((Unbound, struct {}),
+     (Primitive, eCoreType),
+     (Crate, struct { const ASTExternCrate* crate_; }),
+     (Module,
+      struct {
+          const ASTModule* module_;
+          struct Hir {
+              const ASTExternCrate* crate;
+              const ::HIR::Module* mod;
+          } hir;
+      }),
+     (Struct,
+      struct {
+          const ASTStruct* struct_;
+          const ::HIR::Struct* hir;
+      }),
+     (Enum,
+      struct {
+          const ASTEnum* enum_;
+          const ::HIR::Enum* hir;
+      }),
+     (Union,
+      struct {
+          const ASTUnion* union_;
+          const ::HIR::Union* hir;
+      }),
+     (Trait,
+      struct {
+          const ASTTrait* trait_;
+          const ::HIR::Trait* hir;
+      }),
+     (TraitAlias,
+      struct {
+          const ASTTraitAlias* trait_;
+          const ::HIR::TraitAlias* hir;
+      }),
+
+     (EnumVar,
+      struct {
+          const ASTEnum* enum_;
+          unsigned int idx;
+          const ::HIR::Enum* hir;
+      }),
+     (TypeAlias, struct { const ASTTypeAlias* alias_; }),
+
+     (TypeParameter, struct { unsigned int slot; })),
+    (),
+    (),
+    (public : ASTPathBindingType clone() const;)
+);
+TAGGED_UNION_EX(
+    ASTPathBindingMacro,
+    (),
+    Unbound,
+    ((Unbound, struct {}),
+     (ProcMacroDerive,
+      struct {
+          const ASTExternCrate* crate_;
+          RcString macName;
+      }),
+     (ProcMacroAttribute,
+      struct {
+          const ASTExternCrate* crate_;
+          RcString macName;
+      }),
+     (ProcMacro,
+      struct {
+          const ASTExternCrate* crate_;
+          RcString macName;
+      }),
+     (MacroRules,
+      struct {
+          const ASTExternCrate* crate_; // Can be NULL
+          const MacroRules* mac;
+      })),
+    (),
+    (),
+    (public : ASTPathBindingMacro clone() const;)
+);
+
+extern ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingValue& x);
+extern ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingType& x);
+extern ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingMacro& x);
+
+/// <summary>
+/// Wrapper for PathBinding_* that also includes an item path
+/// </summary>
+/// <typeparam name="T">PathBinding_*</typeparam>
+template <typename T>
+struct ASTPathBinding {
+    ASTAbsolutePath path;
+    T binding;
+
+    ASTPathBinding() {
+    }
+
+    ASTPathBinding(ASTAbsolutePath p, T b)
+        : path(::std::move(p))
+        , binding(::std::move(b))
+    {
+    }
+
+    void set(ASTAbsolutePath p, T b) {
+        path = ::std::move(p);
+        binding = ::std::move(b);
+    }
+
+    bool is_Unbound() const {
+        return this->binding.is_Unbound();
+    }
+
+    ASTPathBinding<T> clone() const {
+        return ASTPathBinding(path, binding.clone());
+    }
+
+    friend ::std::ostream& operator<<(::std::ostream& os, const ASTPathBinding<T>& x) {
+        if (!x.is_Unbound()) {
+            os << x.binding << "[" << x.path << "]";
+        } else {
+            os << "Unbound";
         }
+        return os;
+    }
+};
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const ASTAbsolutePath& x);
+class ASTPathParamEnt;
 
-        // Returns true if this path is a prefix of the other path (or equal)
-        bool isParentOf(const ASTAbsolutePath& other) const;
-    };
+struct ASTPathParams {
+    ::std::vector<ASTPathParamEnt> entries;
+    bool isParen = false;
 
-    TAGGED_UNION_EX(
-        ASTPathBindingValue,
-        (),
-        Unbound,
-        ((Unbound, struct {}),
-         (Struct,
-          struct {
-              const ASTStruct* struct_;
-              const ::HIR::Struct* hir;
-          }),
-         (Static,
-          struct {
-              const ASTStatic* static_;
-              const ::HIR::Static* hir; // if nullptr and static_ == nullptr, points to a `const`
-          }),
-         (Function, struct { const ASTFunction* func_; }),
-         (EnumVar,
-          struct {
-              const ASTEnum* enum_;
-              unsigned int idx;
-              const ::HIR::Enum* hir;
-          }),
-         (Generic, struct { unsigned int index; }),
-         (Variable, struct { unsigned int slot; })),
-        (),
-        (),
-        (public : ASTPathBindingValue clone() const;)
-    );
-    TAGGED_UNION_EX(
-        ASTPathBindingType,
-        (),
-        Unbound,
-        ((Unbound, struct {}),
-         (Primitive, eCoreType),
-         (Crate, struct { const ASTExternCrate* crate_; }),
-         (Module,
-          struct {
-              const ASTModule* module_;
-              struct Hir {
-                  const ASTExternCrate* crate;
-                  const ::HIR::Module* mod;
-              } hir;
-          }),
-         (Struct,
-          struct {
-              const ASTStruct* struct_;
-              const ::HIR::Struct* hir;
-          }),
-         (Enum,
-          struct {
-              const ASTEnum* enum_;
-              const ::HIR::Enum* hir;
-          }),
-         (Union,
-          struct {
-              const ASTUnion* union_;
-              const ::HIR::Union* hir;
-          }),
-         (Trait,
-          struct {
-              const ASTTrait* trait_;
-              const ::HIR::Trait* hir;
-          }),
-         (TraitAlias,
-          struct {
-              const ASTTraitAlias* trait_;
-              const ::HIR::TraitAlias* hir;
-          }),
+    ASTPathParams(ASTPathParams&& x);
+    ASTPathParams(const ASTPathParams& x);
+    ASTPathParams();
+    ~ASTPathParams();
 
-         (EnumVar,
-          struct {
-              const ASTEnum* enum_;
-              unsigned int idx;
-              const ::HIR::Enum* hir;
-          }),
-         (TypeAlias, struct { const ASTTypeAlias* alias_; }),
+    ASTPathParams& operator=(ASTPathParams&& x);
+    ASTPathParams& operator=(const ASTPathParams& x) = delete;
 
-         (TypeParameter, struct { unsigned int slot; })),
-        (),
-        (),
-        (public : ASTPathBindingType clone() const;)
-    );
-    TAGGED_UNION_EX(
-        ASTPathBindingMacro,
-        (),
-        Unbound,
-        ((Unbound, struct {}),
-         (ProcMacroDerive,
-          struct {
-              const ASTExternCrate* crate_;
-              RcString macName;
-          }),
-         (ProcMacroAttribute,
-          struct {
-              const ASTExternCrate* crate_;
-              RcString macName;
-          }),
-         (ProcMacro,
-          struct {
-              const ASTExternCrate* crate_;
-              RcString macName;
-          }),
-         (MacroRules,
-          struct {
-              const ASTExternCrate* crate_; // Can be NULL
-              const MacroRules* mac;
-          })),
-        (),
-        (),
-        (public : ASTPathBindingMacro clone() const;)
-    );
+    bool isEmpty() const {
+        return entries.empty();
+    }
 
-    extern ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingValue& x);
-    extern ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingType& x);
-    extern ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingMacro& x);
+    Ordering ord(const ASTPathParams& x) const;
 
-    /// <summary>
-    /// Wrapper for PathBinding_* that also includes an item path
-    /// </summary>
-    /// <typeparam name="T">PathBinding_*</typeparam>
-    template <typename T>
-    struct ASTPathBinding {
-        ASTAbsolutePath path;
-        T binding;
+    friend ::std::ostream& operator<<(::std::ostream& os, const ASTPathParams& x);
+};
 
-        ASTPathBinding() {
-        }
+class ASTPathNode {
+    RcString mName;
+    ASTPathParams mParams;
 
-        ASTPathBinding(ASTAbsolutePath p, T b)
-            : path(::std::move(p))
-            , binding(::std::move(b))
-        {
-        }
+public:
+    ASTPathNode();
 
-        void set(ASTAbsolutePath p, T b) {
-            path = ::std::move(p);
-            binding = ::std::move(b);
-        }
+    ASTPathNode(RcString name, ASTPathParams args = {});
 
-        bool is_Unbound() const {
-            return this->binding.is_Unbound();
-        }
+    const RcString& name() const {
+        return mName;
+    }
 
-        ASTPathBinding<T> clone() const {
-            return ASTPathBinding(path, binding.clone());
-        }
+    const ASTPathParams& args() const {
+        return mParams;
+    }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const ASTPathBinding<T>& x) {
-            if (!x.is_Unbound()) {
-                os << x.binding << "[" << x.path << "]";
-            } else {
-                os << "Unbound";
-            }
-            return os;
-        }
-    };
+    ASTPathParams& args() {
+        return mParams;
+    }
 
-    class ASTPathParamEnt;
+    Ordering ord(const ASTPathNode& x) const;
+    void printPretty(::std::ostream& os, bool isTypeContext) const;
 
-    struct ASTPathParams {
-        ::std::vector<ASTPathParamEnt> entries;
-        bool isParen = false;
+    bool operator==(const ASTPathNode& x) const {
+        return ord(x) == OrdEqual;
+    }
 
-        ASTPathParams(ASTPathParams&& x);
-        ASTPathParams(const ASTPathParams& x);
-        ASTPathParams();
-        ~ASTPathParams();
-
-        ASTPathParams& operator=(ASTPathParams&& x);
-        ASTPathParams& operator=(const ASTPathParams& x) = delete;
-
-        bool isEmpty() const {
-            return entries.empty();
-        }
-
-        Ordering ord(const ASTPathParams& x) const;
-
-        friend ::std::ostream& operator<<(::std::ostream& os, const ASTPathParams& x);
-    };
-
-    class ASTPathNode {
-        RcString mName;
-        ASTPathParams mParams;
-
-    public:
-        ASTPathNode();
-
-        ASTPathNode(RcString name, ASTPathParams args = {});
-
-        const RcString& name() const {
-            return mName;
-        }
-
-        const ASTPathParams& args() const {
-            return mParams;
-        }
-
-        ASTPathParams& args() {
-            return mParams;
-        }
-
-        Ordering ord(const ASTPathNode& x) const;
-        void printPretty(::std::ostream& os, bool isTypeContext) const;
-
-        bool operator==(const ASTPathNode& x) const {
-            return ord(x) == OrdEqual;
-        }
-
-        friend ::std::ostream& operator<<(::std::ostream& os, const ASTPathNode& pn);
-    };
+    friend ::std::ostream& operator<<(::std::ostream& os, const ASTPathNode& pn);
+};
 
 /*
 * TODO: New Path structure:
@@ -293,198 +293,195 @@ namespace HIR {
 * - Resolve uses append methods etc
 */
 
-    class ASTPath {
-    public:
-        TAGGED_UNION(
-            Class,
-            Invalid,
-            (Invalid, struct {}),
-            (Local,
-             struct { // Variable / Type param (resolved)
-                 RcString name;
-             }),
-            (Relative,
-             struct { // General relative
-                 Ident::Hygiene hygiene;
-                 ::std::vector<ASTPathNode> nodes;
-             }),
-            (Self,
-             struct { // Module-relative
-                 ::std::vector<ASTPathNode> nodes;
-             }),
-            (Super,
-             struct {                // Parent-relative
-                 unsigned int count; // Number of `super` keywords, must be >= 1
-                 ::std::vector<ASTPathNode> nodes;
-             }),
-            (Absolute,
-             struct { // Absolute
-                 RcString crate;
-                 ::std::vector<ASTPathNode> nodes;
-             }),
-            (UFCS, struct {                      // Type-relative
-                ::std::unique_ptr<TypeRef> type; // always non-null
-                ::std::unique_ptr<ASTPath> trait;   // nullptr = inherent, Invalid = unknown trait
-                ::std::vector<ASTPathNode> nodes;
-            })
-        );
+class ASTPath {
+public:
+    TAGGED_UNION(
+        Class,
+        Invalid,
+        (Invalid, struct {}),
+        (Local,
+         struct { // Variable / Type param (resolved)
+             RcString name;
+         }),
+        (Relative,
+         struct { // General relative
+             Ident::Hygiene hygiene;
+             ::std::vector<ASTPathNode> nodes;
+         }),
+        (Self,
+         struct { // Module-relative
+             ::std::vector<ASTPathNode> nodes;
+         }),
+        (Super,
+         struct {                // Parent-relative
+             unsigned int count; // Number of `super` keywords, must be >= 1
+             ::std::vector<ASTPathNode> nodes;
+         }),
+        (Absolute,
+         struct { // Absolute
+             RcString crate;
+             ::std::vector<ASTPathNode> nodes;
+         }),
+        (UFCS, struct {                       // Type-relative
+            ::std::unique_ptr<TypeRef> type;  // always non-null
+            ::std::unique_ptr<ASTPath> trait; // nullptr = inherent, Invalid = unknown trait
+            ::std::vector<ASTPathNode> nodes;
+        })
+    );
 
-        struct Bindings {
-            ASTPathBinding<ASTPathBindingValue> value;
-            ASTPathBinding<ASTPathBindingType> type;
-            ASTPathBinding<ASTPathBindingMacro> macro;
+    struct Bindings {
+        ASTPathBinding<ASTPathBindingValue> value;
+        ASTPathBinding<ASTPathBindingType> type;
+        ASTPathBinding<ASTPathBindingMacro> macro;
 
-            Bindings clone() const {
-                return Bindings{value.clone(), type.clone(), macro.clone()};
-            }
-
-            bool hasBinding() const {
-                return !value.is_Unbound() || !type.is_Unbound() || !macro.is_Unbound();
-            }
-
-            void mergeFrom(const Bindings& x);
-        };
-
-    public:
-        Class cls;
-        Bindings mBindings;
-
-        virtual ~ASTPath();
-
-        ASTPath(Class c);
-
-        // INVALID
-        ASTPath();
-
-        ASTPath(ASTPath&&) = default;
-        ASTPath& operator=(ASTPath&& x) = default;
-
-        /*explicit*/ ASTPath(const ASTPath& x);
-        ASTPath& operator=(const ASTPath&) = delete;
-
-        // ABSOLUTE
-        ASTPath(RcString crate, ::std::vector<ASTPathNode> nodes);
-
-        ASTPath(const ASTAbsolutePath& p);
-
-        ASTPath(const ASTPathBinding<ASTPathBindingValue>& pb);
-
-        ASTPath(const ASTPathBinding<ASTPathBindingType>& pb);
-
-        ASTPath(const ASTPathBinding<ASTPathBindingMacro>& pb);
-
-        ASTPath(const ASTAbsolutePath& p, ASTPathParams pp);
-
-        // Local (variable/type param)
-        ASTPath(RcString name)
-            : cls(Class::make_Local({mv$(name)}))
-        {
+        Bindings clone() const {
+            return Bindings{value.clone(), type.clone(), macro.clone()};
         }
 
-        // UFCS
-        static ASTPath newUfcsTy(TypeRef type, ::std::vector<ASTPathNode> nodes = {});
-        static ASTPath newUfcsTrait(TypeRef type, ASTPath trait, ::std::vector<ASTPathNode> nodes = {});
-
-        // VARIABLE
-        static ASTPath newLocal(RcString name) {
-            return ASTPath(mv$(name));
+        bool hasBinding() const {
+            return !value.is_Unbound() || !type.is_Unbound() || !macro.is_Unbound();
         }
 
-        // RELATIVE
-        static ASTPath newRelative(Ident::Hygiene hygiene, ::std::vector<ASTPathNode> nodes) {
-            return ASTPath(Class::make_Relative({mv$(hygiene), mv$(nodes)}));
-        }
-
-        static ASTPath newSelf(::std::vector<ASTPathNode> nodes) {
-            return ASTPath(Class::make_Self({mv$(nodes)}));
-        }
-
-        static ASTPath newSuper(unsigned int count, ::std::vector<ASTPathNode> nodes) {
-            return ASTPath(Class::make_Super({count, mv$(nodes)}));
-        }
-
-        ASTPath operator+(ASTPathNode pn) const;
-
-        ASTPath operator+(const RcString& s) const;
-
-        ASTPath operator+(const ASTPath& x) const {
-            return ASTPath(*this) += x;
-        }
-
-        ASTPath& operator+=(const ASTPath& x);
-
-        ASTPath& operator+=(ASTPathNode pn);
-
-    #if 1
-        void append(ASTPathNode node) {
-            assert(!cls.is_Invalid());
-            //if( m_class.is_Invalid() )
-            //    m_class = Class::make_Relative({});
-            nodes().push_back(mv$(node));
-            mBindings = Bindings();
-        }
-    #endif
-
-        bool isTrivial() const {
-            TU_MATCH_DEF(Class, (cls), (e), (return false;), (Local, return true;), (Relative, return e.nodes.size() == 1 && e.nodes[0].args().isEmpty();))
-        }
-
-        const RcString& asTrivial() const;
-
-        bool isValid() const {
-            return !cls.is_Invalid();
-        }
-
-        bool isAbsolute() const {
-            return cls.is_Absolute();
-        }
-
-        bool isRelative() const {
-            return cls.is_Relative() || cls.is_Super() || cls.is_Self();
-        }
-
-        size_t size() const;
-
-        bool isParentOf(const ASTPath& x) const;
-
-        void bindVariable(unsigned int slot);
-
-        ::std::vector<ASTPathNode>& nodes();
-
-        const ::std::vector<ASTPathNode>& nodes() const {
-            return ((ASTPath*)this)->nodes();
-        }
-
-
-        Ordering ord(const ASTPath& x) const;
-
-        bool operator==(const ASTPath& x) const {
-            return ord(x) == OrdEqual;
-        }
-
-        bool operator!=(const ASTPath& x) const {
-            return ord(x) != OrdEqual;
-        }
-
-        bool operator<(const ASTPath& x) const {
-            return ord(x) != OrdLess;
-        }
-
-        void printPretty(::std::ostream& os, bool isTypeContext, bool isDebug = false) const;
-        friend ::std::ostream& operator<<(::std::ostream& os, const ASTPath& path);
-
-    private:
-        static void resolveArgsNl(::std::vector<ASTPathNode>& nodes, ::std::function<TypeRef(const char*)> fcn);
-
-        void checkParamCounts(const ASTGenericParams& params, bool expectParams, ASTPathNode& node);
-
-    public:
-        //void bind_enum_var(const Enum& ent, const RcString& name);
-        //void bind_function(const Function& ent) {
-        //    m_bindings.value = PathBinding_Value::make_Function({&ent});
-        //}
+        void mergeFrom(const Bindings& x);
     };
 
-    TAGGED_UNION_EX(ASTPathParamEnt, (), Null, ((Null, struct {}), (Lifetime, ASTLifetimeRef), (Type, TypeRef), (Value, ASTExprNodeP), (AssociatedTyEqual, ::std::pair<ASTPathNode, TypeRef>), (AssociatedTyBound, ::std::pair<ASTPathNode, std::vector<ASTPath>>)), (), (), (public : ASTPathParamEnt clone() const; Ordering ord(const ASTPathParamEnt& x) const; void fmt(::std::ostream& os) const;));
+public:
+    Class cls;
+    Bindings mBindings;
 
+    virtual ~ASTPath();
 
+    ASTPath(Class c);
+
+    // INVALID
+    ASTPath();
+
+    ASTPath(ASTPath&&) = default;
+    ASTPath& operator=(ASTPath&& x) = default;
+
+    /*explicit*/ ASTPath(const ASTPath& x);
+    ASTPath& operator=(const ASTPath&) = delete;
+
+    // ABSOLUTE
+    ASTPath(RcString crate, ::std::vector<ASTPathNode> nodes);
+
+    ASTPath(const ASTAbsolutePath& p);
+
+    ASTPath(const ASTPathBinding<ASTPathBindingValue>& pb);
+
+    ASTPath(const ASTPathBinding<ASTPathBindingType>& pb);
+
+    ASTPath(const ASTPathBinding<ASTPathBindingMacro>& pb);
+
+    ASTPath(const ASTAbsolutePath& p, ASTPathParams pp);
+
+    // Local (variable/type param)
+    ASTPath(RcString name)
+        : cls(Class::make_Local({mv$(name)}))
+    {
+    }
+
+    // UFCS
+    static ASTPath newUfcsTy(TypeRef type, ::std::vector<ASTPathNode> nodes = {});
+    static ASTPath newUfcsTrait(TypeRef type, ASTPath trait, ::std::vector<ASTPathNode> nodes = {});
+
+    // VARIABLE
+    static ASTPath newLocal(RcString name) {
+        return ASTPath(mv$(name));
+    }
+
+    // RELATIVE
+    static ASTPath newRelative(Ident::Hygiene hygiene, ::std::vector<ASTPathNode> nodes) {
+        return ASTPath(Class::make_Relative({mv$(hygiene), mv$(nodes)}));
+    }
+
+    static ASTPath newSelf(::std::vector<ASTPathNode> nodes) {
+        return ASTPath(Class::make_Self({mv$(nodes)}));
+    }
+
+    static ASTPath newSuper(unsigned int count, ::std::vector<ASTPathNode> nodes) {
+        return ASTPath(Class::make_Super({count, mv$(nodes)}));
+    }
+
+    ASTPath operator+(ASTPathNode pn) const;
+
+    ASTPath operator+(const RcString& s) const;
+
+    ASTPath operator+(const ASTPath& x) const {
+        return ASTPath(*this) += x;
+    }
+
+    ASTPath& operator+=(const ASTPath& x);
+
+    ASTPath& operator+=(ASTPathNode pn);
+
+#if 1
+    void append(ASTPathNode node) {
+        assert(!cls.is_Invalid());
+        //if( m_class.is_Invalid() )
+        //    m_class = Class::make_Relative({});
+        nodes().push_back(mv$(node));
+        mBindings = Bindings();
+    }
+#endif
+
+    bool isTrivial() const {
+        TU_MATCH_DEF(Class, (cls), (e), (return false;), (Local, return true;), (Relative, return e.nodes.size() == 1 && e.nodes[0].args().isEmpty();))
+    }
+
+    const RcString& asTrivial() const;
+
+    bool isValid() const {
+        return !cls.is_Invalid();
+    }
+
+    bool isAbsolute() const {
+        return cls.is_Absolute();
+    }
+
+    bool isRelative() const {
+        return cls.is_Relative() || cls.is_Super() || cls.is_Self();
+    }
+
+    size_t size() const;
+
+    bool isParentOf(const ASTPath& x) const;
+
+    void bindVariable(unsigned int slot);
+
+    ::std::vector<ASTPathNode>& nodes();
+
+    const ::std::vector<ASTPathNode>& nodes() const {
+        return ((ASTPath*)this)->nodes();
+    }
+
+    Ordering ord(const ASTPath& x) const;
+
+    bool operator==(const ASTPath& x) const {
+        return ord(x) == OrdEqual;
+    }
+
+    bool operator!=(const ASTPath& x) const {
+        return ord(x) != OrdEqual;
+    }
+
+    bool operator<(const ASTPath& x) const {
+        return ord(x) != OrdLess;
+    }
+
+    void printPretty(::std::ostream& os, bool isTypeContext, bool isDebug = false) const;
+    friend ::std::ostream& operator<<(::std::ostream& os, const ASTPath& path);
+
+private:
+    static void resolveArgsNl(::std::vector<ASTPathNode>& nodes, ::std::function<TypeRef(const char*)> fcn);
+
+    void checkParamCounts(const ASTGenericParams& params, bool expectParams, ASTPathNode& node);
+
+public:
+    //void bind_enum_var(const Enum& ent, const RcString& name);
+    //void bind_function(const Function& ent) {
+    //    m_bindings.value = PathBinding_Value::make_Function({&ent});
+    //}
+};
+
+TAGGED_UNION_EX(ASTPathParamEnt, (), Null, ((Null, struct {}), (Lifetime, ASTLifetimeRef), (Type, TypeRef), (Value, ASTExprNodeP), (AssociatedTyEqual, ::std::pair<ASTPathNode, TypeRef>), (AssociatedTyBound, ::std::pair<ASTPathNode, std::vector<ASTPath>>)), (), (), (public : ASTPathParamEnt clone() const; Ordering ord(const ASTPathParamEnt& x) const; void fmt(::std::ostream& os) const;));

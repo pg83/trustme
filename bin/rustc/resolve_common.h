@@ -1,18 +1,19 @@
 #pragma once
 
-#include <stdexcept>
 #include "tagged_union.h"
+
+#include <stdexcept>
 
 struct Span;
 class ExpandProcMacro;
 class MacroRules;
 
-    class ASTCrate;
-    class ASTModule;
-    class ASTItem;
-    class ASTPath;
+class ASTCrate;
+class ASTModule;
+class ASTItem;
+class ASTPath;
 
-    struct ASTAbsolutePath;
+struct ASTAbsolutePath;
 
 namespace HIR {
     class Crate;

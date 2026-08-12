@@ -1,212 +1,212 @@
 #pragma once
 
-#include <vector>
-#include <memory>
-#include <string>
-#include "tagged_union.h"
 #include "ident.h"
+#include "floats.h"
 #include "ast_path.h"
 #include "ast_macro.h"
-#include "floats.h"
+#include "tagged_union.h"
 
+#include <memory>
+#include <string>
+#include <vector>
 
-    using ::std::move;
-    using ::std::unique_ptr;
-    class ASTMacroInvocation;
+using ::std::move;
+using ::std::unique_ptr;
+class ASTMacroInvocation;
 
-    class ASTPatternBinding {
-    public:
-        enum class Type {
-            MOVE,
-            REF,
-            MUTREF,
-        };
-        Ident mName;
-        Type mType;
-        bool isMutable;
-        unsigned int slot;
+class ASTPatternBinding {
+public:
+    enum class Type {
+        MOVE,
+        REF,
+        MUTREF,
+    };
+    Ident mName;
+    Type mType;
+    bool isMutable;
+    unsigned int slot;
 
-        ASTPatternBinding();
+    ASTPatternBinding();
 
-        ASTPatternBinding(Ident name, Type ty, bool ismut);
+    ASTPatternBinding(Ident name, Type ty, bool ismut);
 
-        ASTPatternBinding(ASTPatternBinding&& x) = default;
-        ASTPatternBinding(const ASTPatternBinding& x) = default;
-        ASTPatternBinding& operator=(ASTPatternBinding&& x) = default;
+    ASTPatternBinding(ASTPatternBinding&& x) = default;
+    ASTPatternBinding(const ASTPatternBinding& x) = default;
+    ASTPatternBinding& operator=(ASTPatternBinding&& x) = default;
 
-        bool isValid() const {
-            return mName.name != "";
-        }
+    bool isValid() const {
+        return mName.name != "";
+    }
+};
+
+struct ASTStructPatternEntry;
+
+class ASTPattern {
+public:
+    TAGGED_UNION(
+        Value,
+        Invalid,
+        (Invalid, struct {}),
+        (Integer,
+         struct {
+             enum eCoreType type;
+             U128 value; // Signed numbers are encoded as 2's complement
+         }),
+        (Float,
+         struct {
+             enum eCoreType type;
+             FloatValue value;
+         }),
+        (String, ::std::string),
+        (ByteString, struct { ::std::string v; }),
+        (Named, ASTPath)
+    );
+
+    struct TuplePat {
+        ::std::vector<ASTPattern> start;
+        bool hasWildcard;
+        ::std::vector<ASTPattern> end;
     };
 
-    struct ASTStructPatternEntry;
+    TAGGED_UNION(
+        Data,
+        Any,
+        (MaybeBind, struct { Ident name; }),
+        (Macro, struct { unique_ptr<ASTMacroInvocation> inv; }),
+        (Any, struct {}),
+        (Box, struct { unique_ptr<ASTPattern> sub; }),
+        (Ref,
+         struct {
+             bool mut;
+             unique_ptr<ASTPattern> sub;
+         }),
+        (Value,
+         struct {
+             Value start;
+             Value end;
+         }),
+        (ValueLeftInc,
+         struct {
+             Value start;
+             Value end;
+         }),
+        (Tuple, TuplePat),
+        (StructTuple,
+         struct {
+             ASTPath path;
+             TuplePat tupPat;
+         }),
+        (Struct,
+         struct {
+             ASTPath path;
+             ::std::vector<ASTStructPatternEntry> subPatterns;
+             bool isExhaustive;
+         }),
+        (Slice, struct { ::std::vector<ASTPattern> subPats; }),
+        (SplitSlice,
+         struct {
+             ::std::vector<ASTPattern> leading;
+             ASTPatternBinding extraBind;
+             ::std::vector<ASTPattern> trailing;
+         }),
+        (Or, std::vector<ASTPattern>)
+    );
 
-    class ASTPattern {
-    public:
-        TAGGED_UNION(
-            Value,
-            Invalid,
-            (Invalid, struct {}),
-            (Integer,
-             struct {
-                 enum eCoreType type;
-                 U128 value; // Signed numbers are encoded as 2's complement
-             }),
-            (Float,
-             struct {
-                 enum eCoreType type;
-                 FloatValue value;
-             }),
-            (String, ::std::string),
-            (ByteString, struct { ::std::string v; }),
-            (Named, ASTPath)
-        );
+private:
+    Span mSpan;
+    std::vector<ASTPatternBinding> mBindings;
+    Data mData;
 
-        struct TuplePat {
-            ::std::vector<ASTPattern> start;
-            bool hasWildcard;
-            ::std::vector<ASTPattern> end;
-        };
+public:
+    virtual ~ASTPattern();
 
-        TAGGED_UNION(
-            Data,
-            Any,
-            (MaybeBind, struct { Ident name; }),
-            (Macro, struct { unique_ptr<ASTMacroInvocation> inv; }),
-            (Any, struct {}),
-            (Box, struct { unique_ptr<ASTPattern> sub; }),
-            (Ref,
-             struct {
-                 bool mut;
-                 unique_ptr<ASTPattern> sub;
-             }),
-            (Value,
-             struct {
-                 Value start;
-                 Value end;
-             }),
-            (ValueLeftInc,
-             struct {
-                 Value start;
-                 Value end;
-             }),
-            (Tuple, TuplePat),
-            (StructTuple,
-             struct {
-                 ASTPath path;
-                 TuplePat tupPat;
-             }),
-            (Struct,
-             struct {
-                 ASTPath path;
-                 ::std::vector<ASTStructPatternEntry> subPatterns;
-                 bool isExhaustive;
-             }),
-            (Slice, struct { ::std::vector<ASTPattern> subPats; }),
-            (SplitSlice,
-             struct {
-                 ::std::vector<ASTPattern> leading;
-                 ASTPatternBinding extraBind;
-                 ::std::vector<ASTPattern> trailing;
-             }),
-            (Or, std::vector<ASTPattern>)
-        );
+    ASTPattern();
 
-    private:
-        Span mSpan;
-        std::vector<ASTPatternBinding> mBindings;
-        Data mData;
+    ASTPattern(ASTPattern&&) = default;
+    ASTPattern& operator=(ASTPattern&&) = default;
 
-    public:
-        virtual ~ASTPattern();
+    ASTPattern(Span sp, Data dat);
+    ;
 
-        ASTPattern();
+    struct TagMaybeBind {};
 
-        ASTPattern(ASTPattern&&) = default;
-        ASTPattern& operator=(ASTPattern&&) = default;
+    ASTPattern(TagMaybeBind, Span sp, Ident name);
 
-        ASTPattern(Span sp, Data dat);;
+    struct TagMacro {};
 
-        struct TagMaybeBind {};
+    ASTPattern(TagMacro, Span sp, unique_ptr<ASTMacroInvocation> inv);
 
-        ASTPattern(TagMaybeBind, Span sp, Ident name);
+    struct TagBind {};
 
-        struct TagMacro {};
+    ASTPattern(TagBind, Span sp, Ident name, ASTPatternBinding::Type ty = ASTPatternBinding::Type::MOVE, bool isMut = false);
 
-        ASTPattern(TagMacro, Span sp, unique_ptr<ASTMacroInvocation> inv);
+    struct TagBox {};
 
-        struct TagBind {};
+    ASTPattern(TagBox, Span sp, ASTPattern sub);
 
-        ASTPattern(TagBind, Span sp, Ident name, ASTPatternBinding::Type ty = ASTPatternBinding::Type::MOVE, bool isMut = false);
+    struct TagValue {};
 
-        struct TagBox {};
+    ASTPattern(TagValue, Span sp, Value val, Value end = Value());
 
-        ASTPattern(TagBox, Span sp, ASTPattern sub);
+    struct TagReference {};
 
-        struct TagValue {};
+    ASTPattern(TagReference, Span sp, bool isMutable, ASTPattern subPattern);
 
-        ASTPattern(TagValue, Span sp, Value val, Value end = Value());
+    struct TagTuple {};
 
-        struct TagReference {};
+    ASTPattern(TagTuple, Span sp, ::std::vector<ASTPattern> pats);
 
-        ASTPattern(TagReference, Span sp, bool isMutable, ASTPattern subPattern);
+    ASTPattern(TagTuple, Span sp, TuplePat pat);
 
-        struct TagTuple {};
+    struct TagNamedTuple {};
 
-        ASTPattern(TagTuple, Span sp, ::std::vector<ASTPattern> pats);
+    ASTPattern(TagNamedTuple, Span sp, ASTPath path, ::std::vector<ASTPattern> pats);
 
-        ASTPattern(TagTuple, Span sp, TuplePat pat);
+    ASTPattern(TagNamedTuple, Span sp, ASTPath path, TuplePat pat = TuplePat{{}, false, {}});
 
-        struct TagNamedTuple {};
+    struct TagStruct {};
 
-        ASTPattern(TagNamedTuple, Span sp, ASTPath path, ::std::vector<ASTPattern> pats);
+    ASTPattern(TagStruct, Span sp, ASTPath path, ::std::vector<ASTStructPatternEntry> subPatterns, bool isExhaustive);
 
-        ASTPattern(TagNamedTuple, Span sp, ASTPath path, TuplePat pat = TuplePat{{}, false, {}});
+    const Span& span() const {
+        return mSpan;
+    }
 
-        struct TagStruct {};
+    ASTPattern clone() const;
 
-        ASTPattern(TagStruct, Span sp, ASTPath path, ::std::vector<ASTStructPatternEntry> subPatterns, bool isExhaustive);
+    // Accessors
+    std::vector<ASTPatternBinding>& bindings() {
+        return mBindings;
+    }
 
-        const Span& span() const {
-            return mSpan;
-        }
+    const std::vector<ASTPatternBinding>& bindings() const {
+        return mBindings;
+    }
 
-        ASTPattern clone() const;
+    Data& data() {
+        return mData;
+    }
 
-        // Accessors
-        std::vector<ASTPatternBinding>& bindings() {
-            return mBindings;
-        }
+    const Data& data() const {
+        return mData;
+    }
 
-        const std::vector<ASTPatternBinding>& bindings() const {
-            return mBindings;
-        }
+    ASTPath& path() {
+        return mData.as_StructTuple().path;
+    }
 
-        Data& data() {
-            return mData;
-        }
+    const ASTPath& path() const {
+        return mData.as_StructTuple().path;
+    }
 
-        const Data& data() const {
-            return mData;
-        }
+    friend ::std::ostream& operator<<(::std::ostream& os, const ASTPattern& pat);
+};
 
-        ASTPath& path() {
-            return mData.as_StructTuple().path;
-        }
+struct ASTStructPatternEntry {
+    ASTAttributeList attrs;
+    RcString name;
+    ASTPattern pat;
+};
 
-        const ASTPath& path() const {
-            return mData.as_StructTuple().path;
-        }
-
-        friend ::std::ostream& operator<<(::std::ostream& os, const ASTPattern& pat);
-    };
-
-    struct ASTStructPatternEntry {
-        ASTAttributeList attrs;
-        RcString name;
-        ASTPattern pat;
-    };
-
-    extern ::std::ostream& operator<<(::std::ostream& os, const ASTPattern::Value& val);
-    extern ::std::ostream& operator<<(::std::ostream& os, const ASTPattern::TuplePat& val);
-
+extern ::std::ostream& operator<<(::std::ostream& os, const ASTPattern::Value& val);
+extern ::std::ostream& operator<<(::std::ostream& os, const ASTPattern::TuplePat& val);

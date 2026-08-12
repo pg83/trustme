@@ -1,6 +1,6 @@
 #pragma once
 
-    class ASTCrate;
+class ASTCrate;
 
 extern void ResolveUse(ASTCrate& crate);
 extern void ResolveIndex(ASTCrate& crate);

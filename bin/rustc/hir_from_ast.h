@@ -6,10 +6,10 @@ class RcString;
 class TypeRef;
 struct Span;
 
-    class ASTExprNode;
-    class ASTPath;
-    struct ASTPathParams;
-    class ASTPattern;
+class ASTExprNode;
+class ASTPath;
+struct ASTPathParams;
+class ASTPattern;
 
 namespace HIR {
     class Crate;

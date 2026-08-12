@@ -1,11 +1,11 @@
 #pragma once
 
-#include <iostream>
 #include <string>
+#include <iostream>
 
 class RcString;
 
-    class ASTCrate;
+class ASTCrate;
 
 namespace HIR {
     class Crate;

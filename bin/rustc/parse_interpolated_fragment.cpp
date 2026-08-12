@@ -1,7 +1,9 @@
 #include "parse_interpolated_fragment.h"
-#include <iostream>
+
 #include "ast_ast.h"
 #include "ast_expr.h" // For definition of ExprNode
+
+#include <iostream>
 
 InterpolatedFragment::~InterpolatedFragment() {
     if (ptr) {
@@ -153,6 +155,7 @@ TokenTree& InterpolatedFragment::asTt() {
     assert(mType == TT);
     return *reinterpret_cast<TokenTree*>(ptr);
 }
+
 const TokenTree& InterpolatedFragment::asTt() const {
     assert(mType == TT);
     return *reinterpret_cast<TokenTree*>(ptr);

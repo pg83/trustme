@@ -1,31 +1,32 @@
 #pragma once
 
-#include <string>
-#include <memory>
 #include "span.h"
 #include "slice.h"
-#include "ast_item.h"
 #include "ast_expr.h"
+#include "ast_item.h"
+
+#include <memory>
+#include <string>
 
 class TypeRef;
 
-    class ASTCrate;
-    class ASTAttribute;
-    class ASTPath;
+class ASTCrate;
+class ASTAttribute;
+class ASTPath;
 
-    struct ASTStructItem;
-    struct ASTTupleItem;
-    struct ASTEnumVariant;
+struct ASTStructItem;
+struct ASTTupleItem;
+struct ASTEnumVariant;
 
-    class ASTModule;
-    class ASTItem;
+class ASTModule;
+class ASTItem;
 
-    class ASTExpr;
-    class ASTExprNode;
-    struct ASTExprNodeMatchArm;
+class ASTExpr;
+class ASTExprNode;
+struct ASTExprNodeMatchArm;
 
-    class ASTImplDef;
-    class ASTImpl;
+class ASTImplDef;
+class ASTImpl;
 
 enum class AttrStage {
     Pre,

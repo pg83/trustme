@@ -1,4 +1,5 @@
 #include "parse_ttstream.h"
+
 #include "common.h"
 
 TTStream::TTStream(Span parent, ParseState ps, const TokenTree& inputTt)

@@ -1,43 +1,54 @@
 #include "ast_generics.h"
 
-
 ASTTypeParam::ASTTypeParam(const ASTTypeParam& x)
     : mAttrs(x.mAttrs)
     , mSpan(x.mSpan)
     , mName(x.mName)
-    , mDefaultValue(x.mDefaultValue.clone()) {
+    , mDefaultValue(x.mDefaultValue.clone())
+{
 }
+
 ASTTypeParam::ASTTypeParam(Span sp, ASTAttributeList attrs, RcString name)
     : mAttrs(::std::move(attrs))
     , mSpan(::std::move(sp))
     , mName(::std::move(name))
-    , mDefaultValue(mSpan) {
+    , mDefaultValue(mSpan)
+{
 }
+
 void ASTTypeParam::setDefault(TypeRef type) {
     assert(mDefaultValue.isWildcard());
     mDefaultValue = ::std::move(type);
 }
+
 ASTLifetimeParam::ASTLifetimeParam(Span sp, ASTAttributeList attrs, Ident name)
     : mAttrs(::std::move(attrs))
     , mSpan(::std::move(sp))
-    , mName(::std::move(name)) {
+    , mName(::std::move(name))
+{
 }
+
 ASTValueParam::ASTValueParam(Span sp, ASTAttributeList attrs, Ident name, TypeRef type, ASTExpr val)
     : mAttrs(::std::move(attrs))
     , mSpan(::std::move(sp))
     , mName(::std::move(name))
     , mType(::std::move(type))
-    , mDefaultValue(::std::move(val)) {
+    , mDefaultValue(::std::move(val))
+{
 }
+
 ASTValueParam::ASTValueParam(const ASTValueParam& x)
     : mAttrs(x.mAttrs)
     , mSpan(x.mSpan)
     , mName(x.mName)
     , mType(x.mType.clone())
-    , mDefaultValue(x.mDefaultValue ? x.mDefaultValue.clone() : ASTExpr()) {
+    , mDefaultValue(x.mDefaultValue ? x.mDefaultValue.clone() : ASTExpr())
+{
 }
+
 ASTGenericParams::ASTGenericParams() {
 }
+
 ASTGenericParams ASTGenericParams::clone() const {
     ASTGenericParams rv;
     rv.mParams.reserve(mParams.size());
@@ -50,6 +61,7 @@ ASTGenericParams ASTGenericParams::clone() const {
     }
     return rv;
 }
+
 void ASTGenericParams::addParam(GenericParam gp, size_t boundsStart, size_t boundsEnd) {
     mParams.push_back(::std::move(gp));
     mParams.back().boundsStart = boundsStart;

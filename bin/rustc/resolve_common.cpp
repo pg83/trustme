@@ -1,12 +1,13 @@
 #include "resolve_common.h"
-#include "resolve_main_bindings.h"
-#include "ast_crate.h"
+
 #include "ast_ast.h"
-#include "ast_expr.h"
 #include "hir_hir.h"
 #include "stdspan.h" // std::span
+#include "ast_expr.h"
+#include "ast_crate.h"
 #include "expand_cfg.h"
 #include "synext_macro.h"
+#include "resolve_main_bindings.h"
 
 ::std::ostream& operator<<(::std::ostream& os, ResolveNamespace ns) {
     switch (ns) {

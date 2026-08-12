@@ -1,13 +1,14 @@
 #pragma once
 
+#include "common.h"
 #include "parse_lex.h"
 #include "parse_tokentree.h"
-#include "common.h"
+#include "macro_rules_macro_rules_ptr.h"
+
 #include <map>
+#include <set>
 #include <memory>
 #include <cstring>
-#include "macro_rules_macro_rules_ptr.h"
-#include <set>
 
 class MacroExpander;
 class SimplePatEnt;

@@ -1,16 +1,17 @@
 #include "expand_cfg.h"
+
 #include "synext.h"
-#include "parse_common.h"
-#include "parse_tokentree.h"
-#include "parse_ttstream.h"
 #include "ast_expr.h" // Needed to clear a ExprNodeP
-#include "ast_crate.h"
 #include "ast_attrs.h"
+#include "ast_crate.h"
+#include "parse_common.h"
+#include "parse_ttstream.h"
+#include "parse_tokentree.h"
 #include "parse_parseerror.h"
 
 #include <map>
-#include <optional>
 #include <set>
+#include <optional>
 #include <stdexcept>
 
 ::std::multimap<::std::string, ::std::string> gCfgValues;
@@ -138,12 +139,24 @@ namespace {
                 }
                 c = input[pos++];
                 switch (c) {
-                    case '\\': rv += '\\'; break;
-                    case '"': rv += '"'; break;
-                    case 'n': rv += '\n'; break;
-                    case 'r': rv += '\r'; break;
-                    case 't': rv += '\t'; break;
-                    case '0': rv += '\0'; break;
+                    case '\\':
+                        rv += '\\';
+                        break;
+                    case '"':
+                        rv += '"';
+                        break;
+                    case 'n':
+                        rv += '\n';
+                        break;
+                    case 'r':
+                        rv += '\r';
+                        break;
+                    case 't':
+                        rv += '\t';
+                        break;
+                    case '0':
+                        rv += '\0';
+                        break;
                     case 'x': {
                         if (pos + 2 > input.size()) {
                             fail("incomplete hexadecimal string escape");
@@ -295,21 +308,22 @@ namespace {
 
     unsigned lintLevelRank(CfgLintLevel level) {
         switch (level) {
-            case CfgLintLevel::Allow: return 0;
+            case CfgLintLevel::Allow:
+                return 0;
             case CfgLintLevel::Warn:
-            case CfgLintLevel::ForceWarn: return 1;
-            case CfgLintLevel::Deny: return 2;
-            case CfgLintLevel::Forbid: return 3;
+            case CfgLintLevel::ForceWarn:
+                return 1;
+            case CfgLintLevel::Deny:
+                return 2;
+            case CfgLintLevel::Forbid:
+                return 3;
         }
         throw ::std::logic_error("invalid lint level");
     }
 
     CfgLintLevel unexpectedCfgLevel() {
-        auto level = gCheckCfg.unexpectedCfgs.isSet
-            ? gCheckCfg.unexpectedCfgs.level
-            : (gCheckCfg.warnings.isSet ? gCheckCfg.warnings.level : CfgLintLevel::Warn);
-        if (level != CfgLintLevel::ForceWarn && gCheckCfg.cap.isSet
-            && lintLevelRank(level) > lintLevelRank(gCheckCfg.cap.level)) {
+        auto level = gCheckCfg.unexpectedCfgs.isSet ? gCheckCfg.unexpectedCfgs.level : (gCheckCfg.warnings.isSet ? gCheckCfg.warnings.level : CfgLintLevel::Warn);
+        if (level != CfgLintLevel::ForceWarn && gCheckCfg.cap.isSet && lintLevelRank(level) > lintLevelRank(gCheckCfg.cap.level)) {
             level = gCheckCfg.cap.level;
         }
         return level;
@@ -323,18 +337,41 @@ namespace {
 
     BuiltinExpectation checkBuiltinCfg(const ::std::string& name, const ::std::optional<::std::string>& value) {
         static const ::std::set<::std::string> noValueNames = {
-            "debug_assertions", "clippy", "doc", "doctest", "miri", "rustfmt",
-            "overflow_checks", "proc_macro", "sanitizer_cfi_generalize_pointers",
-            "sanitizer_cfi_normalize_integers", "target_thread_local", "ub_checks",
-            "contract_checks", "unix", "windows",
+            "debug_assertions",
+            "clippy",
+            "doc",
+            "doctest",
+            "miri",
+            "rustfmt",
+            "overflow_checks",
+            "proc_macro",
+            "sanitizer_cfi_generalize_pointers",
+            "sanitizer_cfi_normalize_integers",
+            "target_thread_local",
+            "ub_checks",
+            "contract_checks",
+            "unix",
+            "windows",
         };
         static const ::std::set<::std::string> anyValueNames = {
-            "fmt_debug", "panic", "relocation_model", "sanitize", "target_feature",
-            "target_abi", "target_arch", "target_endian", "target_env", "target_family",
-            "target_os", "target_pointer_width", "target_vendor",
+            "fmt_debug",
+            "panic",
+            "relocation_model",
+            "sanitize",
+            "target_feature",
+            "target_abi",
+            "target_arch",
+            "target_endian",
+            "target_env",
+            "target_family",
+            "target_os",
+            "target_pointer_width",
+            "target_vendor",
         };
         static const ::std::set<::std::string> atomicNames = {
-            "target_has_atomic", "target_has_atomic_equal_alignment", "target_has_atomic_load_store",
+            "target_has_atomic",
+            "target_has_atomic_equal_alignment",
+            "target_has_atomic_load_store",
         };
         if (noValueNames.count(name) != 0) {
             return value ? BuiltinExpectation::UnexpectedValue : BuiltinExpectation::Expected;
@@ -343,8 +380,7 @@ namespace {
             return value ? BuiltinExpectation::Expected : BuiltinExpectation::UnexpectedValue;
         }
         if (atomicNames.count(name) != 0) {
-            if (!value || *value == "ptr" || *value == "8" || *value == "16"
-                || *value == "32" || *value == "64" || *value == "128") {
+            if (!value || *value == "ptr" || *value == "8" || *value == "16" || *value == "32" || *value == "64" || *value == "128") {
                 return BuiltinExpectation::Expected;
             }
             return BuiltinExpectation::UnexpectedValue;
@@ -358,9 +394,7 @@ namespace {
             return;
         }
         const auto condition = value ? FMT("`" << name << " = \"" << *value << "\"`") : FMT("`" << name << "`");
-        const auto message = badValue
-            ? FMT("unexpected cfg condition value " << condition)
-            : FMT("unexpected cfg condition name " << condition);
+        const auto message = badValue ? FMT("unexpected cfg condition value " << condition) : FMT("unexpected cfg condition name " << condition);
         if (level == CfgLintLevel::Warn || level == CfgLintLevel::ForceWarn) {
             WARNING(span, W0000, message);
         } else {

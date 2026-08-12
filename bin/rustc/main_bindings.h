@@ -1,11 +1,12 @@
 #pragma once
 
-#include <string>
-#include <memory>
 #include "ast_edition.h"
 
-    class ASTCrate;
-    class ASTExprNode;
+#include <memory>
+#include <string>
+
+class ASTCrate;
+class ASTExprNode;
 
 namespace stl {
     class ObjPool;

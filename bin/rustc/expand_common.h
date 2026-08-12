@@ -10,9 +10,9 @@ namespace HIR {
     class ProcMacro;
 }
 
-    class ASTCrate;
-    class ASTModule;
-    class ASTPath;
+class ASTCrate;
+class ASTModule;
+class ASTPath;
 class ExpandProcMacro;
 class ExpandDecorator;
 

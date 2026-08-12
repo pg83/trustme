@@ -1,10 +1,11 @@
 #pragma once
 
-#include "parse_token.h"
 #include "ident.h"
+#include "parse_token.h"
+
 #include <vector>
 
-    enum class ASTEdition;
+enum class ASTEdition;
 
 class TokenTree {
     ASTEdition edition = (ASTEdition)0; // 2015

@@ -1,8 +1,9 @@
 #pragma once
 
+#include "parse_tokenstream.h"
+
 #include <string>
 #include <fstream>
-#include "parse_tokenstream.h"
 
 struct Codepoint {
     uint32_t v;

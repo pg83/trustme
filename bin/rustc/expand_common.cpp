@@ -1,19 +1,20 @@
 #include "expand_common.h"
-
-#include "ast_ast.h"
-#include "ast_crate.h"
-#include "main_bindings.h"
-#include "synext.h"
-#include <map>
-#include "macro_rules_macro_rules.h"
-#include "parse_common.h" // For reparse from macros
-#include "ast_expr.h"
-#include "hir_hir.h" // For macro lookup
-#include "expand_cfg.h"
 #include "expand_common.h"
+
+#include "synext.h"
+#include "ast_ast.h"
+#include "hir_hir.h" // For macro lookup
+#include "ast_expr.h"
+#include "ast_crate.h"
+#include "expand_cfg.h"
+#include "parse_common.h" // For reparse from macros
+#include "main_bindings.h"
+#include "parse_ttstream.h"
 #include "resolve_common.h"
 #include "expand_proc_macro.h"
-#include "parse_ttstream.h"
+#include "macro_rules_macro_rules.h"
+
+#include <map>
 
 // TODO: Respect the crate attribute #![recursion_limit]
 #define MAX_MACRO_RECURSION 256
@@ -829,11 +830,7 @@ struct CExpandExpr: public ASTNodeVisitor {
                 ASSERT_BUG(node.span(), it != mod.macros().rend(), "macro_rules! definition was not installed");
                 it->data->definitionHygiene = node.definitionHygiene;
                 if (nodesOut) {
-                    auto marker = ASTExprNodeP(new ASTExprNodeMacroDefinition(
-                        it->data->definitionId,
-                        it->data->mHygiene,
-                        it->data->definitionHygiene
-                    ));
+                    auto marker = ASTExprNodeP(new ASTExprNodeMacroDefinition(it->data->definitionId, it->data->mHygiene, it->data->definitionHygiene));
                     marker->setSpan(node.span());
                     nodesOut->push_back({true, ::std::move(marker)});
                 }
@@ -1378,26 +1375,14 @@ struct CExpandExpr: public ASTNodeVisitor {
         // - `None => break label`
         arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagValue(), node.span(), ASTPattern::Value::make_Named(pathNone))), {}, ASTExprNodeP(new ASTExprNodeFlow(ASTExprNodeFlow::BREAK, node.label, nullptr))));
 
-        auto nextReceiver = ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath::newRelative(
-            iteratorHygiene,
-            ::makeVec1(ASTPathNode(rcstringIt))
-        )));
+        auto nextReceiver = ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath::newRelative(iteratorHygiene, ::makeVec1(ASTPathNode(rcstringIt)))));
         auto nextReceiverBorrow = ASTExprNodeP(new ASTExprNodeUniOp(ASTExprNodeUniOp::REFMUT, mv$(nextReceiver)));
-        auto nextCall = ASTExprNodeP(new ASTExprNodeCallPath(
-            ASTPath::newUfcsTrait(::TypeRef(node.span()), pathIterator, {ASTPathNode(rcstringNext)}),
-            ::makeVec1(mv$(nextReceiverBorrow))));
+        auto nextCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::TypeRef(node.span()), pathIterator, {ASTPathNode(rcstringNext)}), ::makeVec1(mv$(nextReceiverBorrow))));
         auto nextMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(nextCall), mv$(arms)));
         auto loop = ASTExprNodeP(new ASTExprNodeLoop(node.label, mv$(nextMatch)));
 
-        auto intoIterCall = ASTExprNodeP(new ASTExprNodeCallPath(
-            ASTPath::newUfcsTrait(::TypeRef(node.span()), pathIntoIterator, {ASTPathNode(rcstringIntoIter)}),
-            ::makeVec1(mv$(node.mValue))));
-        auto outerMatch = ASTExprNodeP(new ASTExprNodeMatch(
-            mv$(intoIterCall),
-            ::makeVec1(ASTExprNodeMatchArm(
-                ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), Ident(iteratorHygiene, rcstringIt))),
-                {},
-                mv$(loop)))));
+        auto intoIterCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::TypeRef(node.span()), pathIntoIterator, {ASTPathNode(rcstringIntoIter)}), ::makeVec1(mv$(node.mValue))));
+        auto outerMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(intoIterCall), ::makeVec1(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), Ident(iteratorHygiene, rcstringIt))), {}, mv$(loop)))));
 
         // rustc wraps the outer match in `DropTemps`: for always yields (), so
         // a block containing the match as a statement provides the same
@@ -1669,17 +1654,15 @@ struct CExpandExpr: public ASTNodeVisitor {
                 // `Continue(v) => v,`
                 arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Continue, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringV)))), {}, ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(rcstringV)))));
                 // `Break(r) => return R::from_residual(r),`
-                arms.push_back(
-                    ASTExprNodeMatchArm(
-                        ::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Break, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringR)))),
-                        {},
-                        ASTExprNodeP(new ASTExprNodeFlow(
-                            (mTryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
-                            (mTryStack.empty() ? RcString("") : mTryStack.back()),
-                            ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathFromResidualFromResidual), ::makeVec1(ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(rcstringR))))))
-                        ))
-                    )
-                );
+                arms.push_back(ASTExprNodeMatchArm(
+                    ::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Break, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringR)))),
+                    {},
+                    ASTExprNodeP(new ASTExprNodeFlow(
+                        (mTryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
+                        (mTryStack.empty() ? RcString("") : mTryStack.back()),
+                        ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathFromResidualFromResidual), ::makeVec1(ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(rcstringR))))))
+                    ))
+                ));
 
                 replacement.reset(new ASTExprNodeMatch(ASTExprNodeP(new ASTExprNodeCallPath(mv$(pathTryBranch), ::makeVec1(mv$(node.mValue)))), mv$(arms)));
             }

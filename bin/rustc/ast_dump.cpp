@@ -1,24 +1,24 @@
 #include "ast_dump.h"
 
-#include "ast_crate.h"
 #include "ast_ast.h"
-#include "ast_expr.h"
 #include "hir_hir.h" // ABI_RUST - TODO: Move elsewhere?
-#include <fstream>
-#include <limits> // std::numeric_limits
-#include <string_view>
-
+#include "ast_expr.h"
+#include "ast_crate.h"
 #include "cpp_unpack.h"
+
+#include <limits> // std::numeric_limits
+#include <fstream>
+#include <string_view>
 
 #define IS(v, c) (cast<c>(&v) != 0)
 #define WRAPIF_CMD(v, t) || IS(v, t)
-#define WRAPIF(uniqPtr, class1, ...)                                   \
+#define WRAPIF(uniqPtr, class1, ...)                                    \
     do {                                                                \
-        auto& _v = *(uniqPtr);                                         \
+        auto& _v = *(uniqPtr);                                          \
         if (IS(_v, class1) CC_ITERATE(WRAPIF_CMD, (_v), __VA_ARGS__)) { \
-            parenWrap(uniqPtr);                                       \
+            parenWrap(uniqPtr);                                         \
         } else {                                                        \
-            ASTNodeVisitor::visit(uniqPtr);                          \
+            ASTNodeVisitor::visit(uniqPtr);                             \
         }                                                               \
     } while (0)
 
@@ -1123,7 +1123,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
                             os << "static mut ";
                             break;
                     } os << it.name
-                           << ": " << e.type() << " = ";
+                         << ": " << e.type() << " = ";
                     e.value().visitNodes(*this);
                     os << ";\n";
                 ),
@@ -1134,7 +1134,6 @@ void RustPrinter::handleModule(const ASTModule& mod) {
         decIndent();
         os << indent() << "}\n";
     }
-
 }
 
 void RustPrinter::printParams(const ASTGenericParams& params) {
@@ -1288,24 +1287,24 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
                 os << ", ";
             }
 
-                                                               if (v.extraBind.isValid()) {
-                                                                   const auto& b = v.extraBind;
-                                                                   if (b.isMutable) {
-                                                                       os << "mut ";
-                                                                   }
-                                                                   switch (b.mType) {
-                                                                       case ASTPatternBinding::Type::MOVE:
-                                                                           break;
-                                                                       case ASTPatternBinding::Type::REF:
-                                                                           os << "ref ";
-                                                                           break;
-                                                                       case ASTPatternBinding::Type::MUTREF:
-                                                                           os << "ref mut ";
-                                                                           break;
-                                                                   }
-                                                                   os << b.mName << "/*" << b.slot << "*/";
-                                                               } os
-                                                               << "..";
+                                                            if (v.extraBind.isValid()) {
+                                                                const auto& b = v.extraBind;
+                                                                if (b.isMutable) {
+                                                                    os << "mut ";
+                                                                }
+                                                                switch (b.mType) {
+                                                                    case ASTPatternBinding::Type::MOVE:
+                                                                        break;
+                                                                    case ASTPatternBinding::Type::REF:
+                                                                        os << "ref ";
+                                                                        break;
+                                                                    case ASTPatternBinding::Type::MUTREF:
+                                                                        os << "ref mut ";
+                                                                        break;
+                                                                }
+                                                                os << b.mName << "/*" << b.slot << "*/";
+                                                            } os
+                                                            << "..";
             needsComma = true;
 
             if (v.trailing.size()) {

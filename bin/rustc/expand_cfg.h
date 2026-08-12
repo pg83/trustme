@@ -1,9 +1,9 @@
 #pragma once
 
-#include <functional>
 #include <iosfwd>
 #include <string>
 #include <vector>
+#include <functional>
 
 struct Span;
 class TokenStream;
@@ -16,8 +16,8 @@ enum class CfgLintLevel {
     Forbid,
 };
 
-    class ASTAttribute;
-    class ASTAttributeList;
+class ASTAttribute;
+class ASTAttributeList;
 
 extern void CfgDump(::std::ostream& os);
 extern void CfgSetFlag(::std::string name);

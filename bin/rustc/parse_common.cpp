@@ -20,7 +20,6 @@
 #include <fstream> // Used by directory path
 #include <iostream>
 
-
 // TODO: Use a ProtoSpan instead of a point span?
 static inline ASTExprNodeP mkExprnodep(const TokenStream& lex, ASTExprNode* en) {
     en->setSpan(lex.pointSpan());
@@ -787,10 +786,10 @@ ASTExprNodeP ParseExpr0(TokenStream& lex) {
 }
 
 #define LEFTASSOC(cur, _next, cases)                 \
-    ASTExprNodeP _next(TokenStream& lex);               \
-    ASTExprNodeP cur(TokenStream& lex) {                \
-        ASTExprNodeP (*next)(TokenStream&) = _next;     \
-        ASTExprNodeP rv = next(lex);                    \
+    ASTExprNodeP _next(TokenStream& lex);            \
+    ASTExprNodeP cur(TokenStream& lex) {             \
+        ASTExprNodeP (*next)(TokenStream&) = _next;  \
+        ASTExprNodeP rv = next(lex);                 \
         while (true) {                               \
             Token tok;                               \
             switch ((tok = lex.getToken()).type()) { \

@@ -426,21 +426,21 @@ void TypeRef::print(::std::ostream& os, bool isDebug /*=false*/) const {
     return os;
 }
 
-    ::std::ostream& operator<<(::std::ostream& os, const ASTLifetimeRef& x) {
-        if (x.mBinding == ASTLifetimeRef::BINDING_STATIC) {
-            os << "'static";
-        } else if (x.mBinding == ASTLifetimeRef::BINDING_INFER) {
-            os << "'_";
-        } else if (x.mBinding == ASTLifetimeRef::BINDING_UNSPECIFIED) {
-            os << "/*'UNSPEC*/";
-        } else {
-            os << "'" << x.mName.name;
-            if (x.mBinding != ASTLifetimeRef::BINDING_UNBOUND) {
-                os << "/*" << x.mBinding << "*/";
-            }
+::std::ostream& operator<<(::std::ostream& os, const ASTLifetimeRef& x) {
+    if (x.mBinding == ASTLifetimeRef::BINDING_STATIC) {
+        os << "'static";
+    } else if (x.mBinding == ASTLifetimeRef::BINDING_INFER) {
+        os << "'_";
+    } else if (x.mBinding == ASTLifetimeRef::BINDING_UNSPECIFIED) {
+        os << "/*'UNSPEC*/";
+    } else {
+        os << "'" << x.mName.name;
+        if (x.mBinding != ASTLifetimeRef::BINDING_UNBOUND) {
+            os << "/*" << x.mBinding << "*/";
         }
-        return os;
     }
+    return os;
+}
 
 PrettyPrintType::PrettyPrintType(const TypeRef& ty)
     : mType(ty)

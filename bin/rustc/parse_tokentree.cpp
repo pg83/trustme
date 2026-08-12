@@ -1,6 +1,7 @@
 #include "parse_tokentree.h"
-#include "ast_edition.h"
+
 #include "common.h"
+#include "ast_edition.h"
 
 TokenTree TokenTree::clone() const {
     if (subtrees.size() == 0) {
@@ -48,32 +49,45 @@ TokenTree TokenTree::clone() const {
 
 TokenTree::~TokenTree() {
 }
+
 TokenTree::TokenTree() {
 }
+
 TokenTree::TokenTree(enum eTokenType ty)
-    : mTok(Token(ty)) {
+    : mTok(Token(ty))
+{
 }
+
 TokenTree::TokenTree(Token tok)
-    : mTok(::std::move(tok)) {
+    : mTok(::std::move(tok))
+{
 }
+
 TokenTree::TokenTree(ASTEdition edition, Token tok)
     : edition(edition)
-    , mTok(::std::move(tok)) {
+    , mTok(::std::move(tok))
+{
 }
+
 TokenTree::TokenTree(ASTEdition edition, Ident::Hygiene hygiene, Token tok)
     : edition(edition)
     , mHygiene(::std::move(hygiene))
-    , mTok(::std::move(tok)) {
+    , mTok(::std::move(tok))
+{
 }
+
 TokenTree::TokenTree(ASTEdition edition, Ident::Hygiene hygiene, ::std::vector<TokenTree> subtrees)
     : edition(edition)
     , mHygiene(::std::move(hygiene))
-    , subtrees(::std::move(subtrees)) {
+    , subtrees(::std::move(subtrees))
+{
 }
+
 const TokenTree& TokenTree::operator[](unsigned int idx) const {
     assert(idx < subtrees.size());
     return subtrees[idx];
 }
+
 TokenTree& TokenTree::operator[](unsigned int idx) {
     assert(idx < subtrees.size());
     return subtrees[idx];

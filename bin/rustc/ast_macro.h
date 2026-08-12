@@ -1,61 +1,59 @@
 #pragma once
 
-#include "parse_tokentree.h"
 #include "span.h"
-#include "ast_attrs.h"
 #include "ast_path.h"
+#include "ast_attrs.h"
+#include "parse_tokentree.h"
 
+class ASTMacroInvocation {
+    Span mSpan;
 
-    class ASTMacroInvocation {
-        Span mSpan;
+    ASTPath macroPath;
+    RcString ident;
+    TokenTree input;
+    bool mIsExpanded = false;
 
-        ASTPath macroPath;
-        RcString ident;
-        TokenTree input;
-        bool mIsExpanded = false;
+public:
+    ASTMacroInvocation(ASTMacroInvocation&&) = default;
+    ASTMacroInvocation& operator=(ASTMacroInvocation&&) = default;
+    ASTMacroInvocation(const ASTMacroInvocation&) = delete;
+    ASTMacroInvocation& operator=(const ASTMacroInvocation&) = delete;
 
-    public:
-        ASTMacroInvocation(ASTMacroInvocation&&) = default;
-        ASTMacroInvocation& operator=(ASTMacroInvocation&&) = default;
-        ASTMacroInvocation(const ASTMacroInvocation&) = delete;
-        ASTMacroInvocation& operator=(const ASTMacroInvocation&) = delete;
+    ASTMacroInvocation();
 
-        ASTMacroInvocation();
+    ASTMacroInvocation(Span span, ASTPath macro, RcString ident, TokenTree input);
 
-        ASTMacroInvocation(Span span, ASTPath macro, RcString ident, TokenTree input);
+    ASTMacroInvocation clone() const;
 
-        ASTMacroInvocation clone() const;
+    void clear();
 
-        void clear();
+    const Span& span() const {
+        return mSpan;
+    }
 
-        const Span& span() const {
-            return mSpan;
-        }
+    const ASTPath& path() const {
+        return macroPath;
+    }
 
-        const ASTPath& path() const {
-            return macroPath;
-        }
+    bool isExpanded() const {
+        return mIsExpanded;
+    }
 
-        bool isExpanded() const {
-            return mIsExpanded;
-        }
+    void setExpanded() {
+        mIsExpanded = true;
+    }
 
-        void setExpanded() {
-            mIsExpanded = true;
-        }
+    const RcString& inputIdent() const {
+        return ident;
+    }
 
-        const RcString& inputIdent() const {
-            return ident;
-        }
+    const TokenTree& inputTt() const {
+        return input;
+    }
 
-        const TokenTree& inputTt() const {
-            return input;
-        }
+    TokenTree& inputTt() {
+        return input;
+    }
 
-        TokenTree& inputTt() {
-            return input;
-        }
-
-        friend ::std::ostream& operator<<(::std::ostream& os, const ASTMacroInvocation& x);
-    };
-
+    friend ::std::ostream& operator<<(::std::ostream& os, const ASTMacroInvocation& x);
+};

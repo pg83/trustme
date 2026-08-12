@@ -1,13 +1,13 @@
 #include "resolve_main_bindings.h"
 
-#include "ast_crate.h"
 #include "ast_ast.h"
-#include "ast_expr.h"
-#include "main_bindings.h"
 #include "hir_hir.h"
-#include "macro_rules_macro_rules.h"
 #include "stdspan.h" // std::span
+#include "ast_expr.h"
+#include "ast_crate.h"
 #include "pop_on_drop.h"
+#include "main_bindings.h"
+#include "macro_rules_macro_rules.h"
 
 #define FLAG_CONST_GENERIC (1u << 31)
 
@@ -649,7 +649,7 @@ namespace {
                                     ASTPath rv(name);
                                     rv.mBindings.type.set(ASTAbsolutePath(), ASTPathBindingType::make_TypeParameter({0xFFFF}));
                                     return rv;
-                                    }
+                                }
                                 case LookupMode::Constant:
                                 case LookupMode::Variable:
                                     // TODO: Ensure validity? (I.e. that `Self` is a unit or tuple struct
@@ -1633,10 +1633,7 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
 
                                 DEBUG("Bound to enum variant '" << var.mName << "' (#" << idx << ")");
                                 auto ap = nameRef.path.mBindings.type.path + var.mName;
-                                if (var.mData.is_Struct()
-                                    || mode == Context::LookupMode::Type
-                                    || mode == Context::LookupMode::Namespace
-                                    || mode == Context::LookupMode::PatternType) {
+                                if (var.mData.is_Struct() || mode == Context::LookupMode::Type || mode == Context::LookupMode::Namespace || mode == Context::LookupMode::PatternType) {
                                     path.mBindings.type.set(ap, ASTPathBindingType::make_EnumVar({e.enum_, idx}));
                                 } else {
                                     path.mBindings.value.set(ap, ASTPathBindingValue::make_EnumVar({e.enum_, idx}));
@@ -2174,11 +2171,7 @@ void ResolveAbsoluteExprNode(Context& context, ASTExprNode& node) {
             this->context.pushBlock();
             for (auto& line : node.nodes) {
                 if (const auto* definition = cast<ASTExprNodeMacroDefinition>(line.node.get())) {
-                    this->context.pushMacroDefinition(
-                        definition->definitionId,
-                        definition->tokenHygiene,
-                        definition->definitionHygiene
-                    );
+                    this->context.pushMacroDefinition(definition->definitionId, definition->tokenHygiene, definition->definitionHygiene);
                 } else {
                     line.node->visit(*this);
                 }
@@ -2838,7 +2831,6 @@ void ResolveAbsolutise(ASTCrate& crate) {
 }
 
 #undef FLAG_CONST_GENERIC
-
 
 enum class IndexName {
     Namespace,
@@ -3744,7 +3736,6 @@ void ResolveIndex(ASTCrate& crate) {
     // - Normalise the index (ensuring all paths point directly to the item)
     ResolveIndexModuleNormalise(crate, Span(), crate.mRootModule);
 }
-
 
 enum class Lookup {
     Any,    // Allow binding to anything

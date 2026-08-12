@@ -1,19 +1,21 @@
 #include "expand_proc_macro.h"
-#include "synext.h"
+
 #include "common.h"
-#include "expand_cfg.h"
+#include "synext.h"
 #include "ast_ast.h"
+#include "hir_hir.h" // ABI_RUST
+#include "ast_dump.h"
 #include "ast_expr.h"
 #include "ast_crate.h"
-#include "main_bindings.h"
-#include "ast_dump.h"
-#include "hir_hir.h" // ABI_RUST
 #include "parse_lex.h"
+#include "expand_cfg.h"
+#include "main_bindings.h"
 #include "parse_ttstream.h"
-#include <unordered_set>
-#include <unistd.h> // read/write/pipe
+
 #include <spawn.h>
+#include <unistd.h> // read/write/pipe
 #include <sys/wait.h>
+#include <unordered_set>
 
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__) || defined(__APPLE__)
 extern char** environ;
@@ -1937,8 +1939,8 @@ ProcMacroInv::Handles::Handles(Handles&& x)
     x.childStdout = -1;
     DEBUG("");
 }
-ProcMacroInv::~ProcMacroInv()
-{
+
+ProcMacroInv::~ProcMacroInv() {
     if (this->handles.childPid != 0) {
         DEBUG("Waiting for child " << this->handles.childPid << " to terminate");
         int status;

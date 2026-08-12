@@ -1,14 +1,14 @@
 #pragma once
 
-    //#include "../common.h"   // for mv$ and other things
+//#include "../common.h"   // for mv$ and other things
 #include <string>
 #include <memory>
 #include "span.h"
 
 class TypeRef;
 
-    class ASTCrate;
-    class ASTModule;
+class ASTCrate;
+class ASTModule;
 class TokenTree;
 class TokenStream;
 

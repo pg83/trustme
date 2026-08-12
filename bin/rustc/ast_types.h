@@ -1,50 +1,49 @@
 #pragma once
 
-#include <cstdint>
-#include <memory>
-
+#include "span.h"
 #include "common.h"
 #include "coretypes.h"
-#include "span.h"
+
+#include <memory>
+#include <cstdint>
+
 //#include "ast/macro.h"
 #include "ast_lifetime_ref.h"
 //#include "ast/path.h"
 #include "tagged_union.h"
 
-    class ASTExprNode;
-    class ASTExpr;
-    class ASTLifetimeParam;
+class ASTExprNode;
+class ASTExpr;
+class ASTLifetimeParam;
 
-    class ASTPath;
-    struct ASTPathParams;
-    class ASTMacroInvocation;
+class ASTPath;
+struct ASTPathParams;
+class ASTMacroInvocation;
 class TypeRef;
 
+enum class ASTBoundConstness : uint8_t {
+    Never,
+    Always,
+    Maybe,
+};
 
-    enum class ASTBoundConstness : uint8_t {
-        Never,
-        Always,
-        Maybe,
-    };
+// Defined here for dependency reasons
+class ASTHigherRankedBounds {
+public:
+    ::std::vector<ASTLifetimeParam> mLifetimes;
+    //::std::vector<TypeParam>    m_types;
+    //::std::vector<GenericBound>    m_bounds;
 
-    // Defined here for dependency reasons
-    class ASTHigherRankedBounds {
-    public:
-        ::std::vector<ASTLifetimeParam> mLifetimes;
-        //::std::vector<TypeParam>    m_types;
-        //::std::vector<GenericBound>    m_bounds;
+    ASTHigherRankedBounds();
+    ~ASTHigherRankedBounds();
+    ASTHigherRankedBounds(ASTHigherRankedBounds&&);
+    ASTHigherRankedBounds& operator=(ASTHigherRankedBounds&&);
+    ASTHigherRankedBounds(const ASTHigherRankedBounds&);
 
-        ASTHigherRankedBounds();
-        ~ASTHigherRankedBounds();
-        ASTHigherRankedBounds(ASTHigherRankedBounds&&);
-        ASTHigherRankedBounds& operator=(ASTHigherRankedBounds&&);
-        ASTHigherRankedBounds(const ASTHigherRankedBounds&);
+    bool empty() const;
 
-        bool empty() const;
-
-        friend ::std::ostream& operator<<(::std::ostream& os, const ASTHigherRankedBounds& x);
-    };
-
+    friend ::std::ostream& operator<<(::std::ostream& os, const ASTHigherRankedBounds& x);
+};
 
 class PrettyPrintType {
     const TypeRef& mType;
@@ -317,4 +316,3 @@ public:
 
     friend ::std::ostream& operator<<(::std::ostream& os, const TypeRef& tr);
 };
-

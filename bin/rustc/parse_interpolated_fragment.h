@@ -1,20 +1,20 @@
 #pragma once
 
-#include <cassert>
 #include <iosfwd>
+#include <cassert>
 
 class TypeRef;
 class TokenTree;
 struct Ident;
 
-    class ASTVisibility;
-    class ASTPattern;
-    class ASTPath;
-    class ASTExprNode;
-    class ASTAttribute;
-    template <typename T>
-    struct ASTNamed;
-    class ASTItem;
+class ASTVisibility;
+class ASTPattern;
+class ASTPath;
+class ASTExprNode;
+class ASTAttribute;
+template <typename T>
+struct ASTNamed;
+class ASTItem;
 
 class InterpolatedFragment {
 public:

@@ -1,6 +1,5 @@
 #include "ast_edition.h"
 
-
 std::ostream& operator<<(std::ostream& os, const ASTEdition& e) {
     switch (e) {
         case ASTEdition::Rust2015:
