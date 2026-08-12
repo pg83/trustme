@@ -3656,3 +3656,98 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::get_value(const Span& sp, const
     }
     throw "";
 }
+
+StaticTraitResolve::StaticTraitResolve(const ::HIR::Crate& crate)
+    : TraitResolveCommon(crate) {
+}
+void StaticTraitResolve::prep_indexes() {
+    m_copy_cache.clear();
+    m_clone_cache.clear();
+    m_drop_cache.clear();
+    m_aty_cache.clear();
+    m_cached_impl_checks.clear();
+    TraitResolveCommon::prep_indexes(Span());
+}
+/// \brief State manipulation
+/// \{
+NullOnDrop<const ::HIR::GenericParams> StaticTraitResolve::set_impl_generics(HIR::StructMarkings::DstType struct_dst_type, const ::HIR::GenericParams& gps) {
+    MetadataType mt = MetadataType::None;
+    switch (struct_dst_type) {
+        case HIR::StructMarkings::DstType::None:
+            break;
+        case HIR::StructMarkings::DstType::Possible:
+            mt = MetadataType::Unknown;
+            break;
+        case HIR::StructMarkings::DstType::Slice:
+            mt = MetadataType::Slice;
+            break;
+        case HIR::StructMarkings::DstType::TraitObject:
+            mt = MetadataType::TraitObject;
+            break;
+    }
+    set_impl_generics_raw(mt, gps);
+    return NullOnDrop<const ::HIR::GenericParams>(m_impl_generics);
+}
+NullOnDrop<const ::HIR::GenericParams> StaticTraitResolve::set_impl_generics(MetadataType self_meta_type, const ::HIR::GenericParams& gps) {
+    set_impl_generics_raw(self_meta_type, gps);
+    return NullOnDrop<const ::HIR::GenericParams>(m_impl_generics);
+}
+NullOnDrop<const ::HIR::GenericParams> StaticTraitResolve::set_impl_generics(const ::HIR::TypeData* self_ty, const ::HIR::GenericParams& gps) {
+    set_impl_generics_raw(MetadataType::Unknown, gps);
+    m_self_metadata = metadata_type(Span(), self_ty);
+    return NullOnDrop<const ::HIR::GenericParams>(m_impl_generics);
+}
+void StaticTraitResolve::update_impl_self_metadata(const ::HIR::TypeData* self_ty) {
+    assert(m_impl_generics);
+    m_self_metadata = metadata_type(Span(), self_ty);
+}
+NullOnDrop<const ::HIR::GenericParams> StaticTraitResolve::set_item_generics(const ::HIR::GenericParams& gps) {
+    set_item_generics_raw(gps);
+    return NullOnDrop<const ::HIR::GenericParams>(m_item_generics);
+}
+void StaticTraitResolve::set_impl_generics_raw(MetadataType self_meta_type, const ::HIR::GenericParams& gps) {
+    assert(!m_impl_generics);
+    m_self_metadata = self_meta_type;
+    m_impl_generics = &gps;
+    prep_indexes();
+}
+void StaticTraitResolve::clear_impl_generics() {
+    m_self_metadata = MetadataType::Unknown;
+    m_impl_generics = nullptr;
+    prep_indexes();
+}
+void StaticTraitResolve::set_item_generics_raw(const ::HIR::GenericParams& gps) {
+    assert(!m_item_generics);
+    m_item_generics = &gps;
+    prep_indexes();
+}
+void StaticTraitResolve::clear_item_generics() {
+    m_item_generics = nullptr;
+    prep_indexes();
+}
+void StaticTraitResolve::set_both_generics_raw(const ::HIR::GenericParams* gps_impl, const ::HIR::GenericParams* gps_fcn) {
+    assert(!m_impl_generics);
+    assert(!m_item_generics);
+    m_impl_generics = gps_impl;
+    m_item_generics = gps_fcn;
+    prep_indexes();
+}
+void StaticTraitResolve::clear_both_generics() {
+    m_self_metadata = MetadataType::Unknown;
+    m_impl_generics = nullptr;
+    m_item_generics = nullptr;
+    prep_indexes();
+}
+// Helper: Run monomorphise+EAT if the type contains generics
+const ::HIR::TypeData* StaticTraitResolve::monomorph_expand_opt(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* input, const Monomorphiser& m) const {
+    if (monomorphise_type_needed(input)) {
+        return tmp = monomorph_expand(sp, input, m);
+    } else {
+        return input;
+    }
+}
+::HIR::TypeRef StaticTraitResolve::monomorph_expand(const Span& sp, const ::HIR::TypeData* input, const Monomorphiser& m) const {
+    auto rv = m.monomorph_type(sp, input);
+    expand_associated_types(sp, rv);
+    return rv;
+}

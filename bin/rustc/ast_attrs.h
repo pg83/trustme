@@ -88,13 +88,7 @@ namespace AST {
         mutable bool m_is_inert;
         // TODO: Parse as a TT then expand?
     public:
-        Attribute(Span sp, AttributeName name, TokenTree data)
-            : m_span(::std::move(sp))
-            , m_name(::std::move(name))
-            , m_data(::std::move(data))
-            , m_is_inert(false)
-        {
-        }
+        Attribute(Span sp, AttributeName name, TokenTree data);
 
         explicit Attribute(const Attribute& x);
         Attribute& operator=(const Attribute&) = delete;

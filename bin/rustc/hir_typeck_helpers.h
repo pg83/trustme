@@ -26,11 +26,7 @@ public:
         const HMTypeInferrence& ctxt;
         const ::HIR::TypeData* ty;
 
-        FmtType(const HMTypeInferrence& ctxt, const ::HIR::TypeData* ty)
-            : ctxt(ctxt)
-            , ty(ty)
-        {
-        }
+        FmtType(const HMTypeInferrence& ctxt, const ::HIR::TypeData* ty);
 
         friend ::std::ostream& operator<<(::std::ostream& os, const FmtType& x) {
             x.ctxt.print_type(os, x.ty);
@@ -42,11 +38,7 @@ public:
         const HMTypeInferrence& ctxt;
         const ::HIR::PathParams& pps;
 
-        FmtPP(const HMTypeInferrence& ctxt, const ::HIR::PathParams& pps)
-            : ctxt(ctxt)
-            , pps(pps)
-        {
-        }
+        FmtPP(const HMTypeInferrence& ctxt, const ::HIR::PathParams& pps);
 
         friend ::std::ostream& operator<<(::std::ostream& os, const FmtPP& x) {
             x.ctxt.print_pathparams(os, x.pps);
@@ -59,11 +51,7 @@ public: // ?? - Needed once, anymore?
         unsigned int alias; // If not ~0, this points to another ivar
         ::HIR::TypeRef type; // Null only when alias != ~0
 
-        explicit IVar(::HIR::TypeRef type)
-            : alias(~0u)
-            , type(type)
-        {
-        }
+        explicit IVar(::HIR::TypeRef type);
 
         bool is_alias() const {
             return alias != ~0u;
@@ -76,11 +64,7 @@ public: // ?? - Needed once, anymore?
         unsigned int alias;
         ::std::unique_ptr<::HIR::ConstGeneric> val;
 
-        IVarValue()
-            : alias(~0u)
-            , val(new ::HIR::ConstGeneric())
-        {
-        }
+        IVarValue();
 
         bool is_alias() const {
             return alias != ~0u;
@@ -94,28 +78,15 @@ public: // ?? - Needed once, anymore?
     ::std::vector<::HIR::TypeRef> m_expand_stack;
 
 public:
-    explicit HMTypeInferrence(HIR::TypeInterner& types)
-        : m_types(types)
-        , m_has_changed(false)
-    {
-    }
+    explicit HMTypeInferrence(HIR::TypeInterner& types);
 
     bool peek_changed() const {
         return m_has_changed;
     }
 
-    bool take_changed() {
-        bool rv = m_has_changed;
-        m_has_changed = false;
-        return rv;
-    }
+    bool take_changed();
 
-    void mark_change() {
-        if (!m_has_changed) {
-            DEBUG("- CHANGE");
-            m_has_changed = true;
-        }
-    }
+    void mark_change();
 
     void compact_ivars();
     bool apply_defaults();
@@ -143,10 +114,7 @@ public:
     struct ResolvePlaceholders: public HIR::ResolvePlaceholders {
         const HMTypeInferrence& m_parent;
 
-        ResolvePlaceholders(const HMTypeInferrence& parent)
-            : m_parent(parent)
-        {
-        }
+        ResolvePlaceholders(const HMTypeInferrence& parent);
 
         const ::HIR::TypeData* get_type(const Span& sp, const HIR::TypeData* ty) const override {
             if (ty->is_Infer()) {
@@ -233,25 +201,14 @@ private:
             const ::HIR::PathParams& params,
             bool has_params,
             const ::HIR::TypeData* type
-        )
-            : trait(trait.clone())
-            , params(params.clone())
-            , type(type)
-            , has_params(has_params)
-        {
-        }
+        );
 
         bool matches(
             const ::HIR::SimplePath& other_trait,
             const ::HIR::PathParams& other_params,
             bool other_has_params,
             const ::HIR::TypeData* other_type
-        ) const {
-            return trait == other_trait
-                && has_params == other_has_params
-                && (!has_params || params == other_params)
-                && type == other_type;
-        }
+        ) const;
     };
 
     mutable ::std::vector<LegacyTraitGoal> m_legacy_trait_goal_stack;
@@ -304,26 +261,11 @@ public:
     bool has_associated_type(const ::HIR::TypeData* ty) const;
 
     /// Expand any located associated types in the input, operating in-place and returning the result
-    ::HIR::TypeRef expand_associated_types(const Span& sp, ::HIR::TypeRef input) const {
-        expand_associated_types_inplace(sp, input, LList<const ::HIR::TypeData*>());
-        return input;
-    }
+    ::HIR::TypeRef expand_associated_types(const Span& sp, ::HIR::TypeRef input) const;
 
-    const ::HIR::TypeData* expand_associated_types(const Span& sp, const ::HIR::TypeData* input, ::HIR::TypeRef& tmp) const {
-        if (this->has_associated_type(input)) {
-            return (tmp = this->expand_associated_types(sp, input));
-        } else {
-            return input;
-        }
-    }
+    const ::HIR::TypeData* expand_associated_types(const Span& sp, const ::HIR::TypeData* input, ::HIR::TypeRef& tmp) const;
 
-    void expand_associated_types_params(const Span& sp, ::HIR::PathParams& params) const {
-        for (auto& type : params.m_types) {
-            if (this->has_associated_type(type)) {
-                type = this->expand_associated_types(sp, type);
-            }
-        }
-    }
+    void expand_associated_types_params(const Span& sp, ::HIR::PathParams& params) const;
 
     typedef ::std::function<bool(HIR::Compare cmp, const ::HIR::TypeData*, const ::HIR::GenericPath& trait_path, const CachedBound& info)> t_cb_bound;
     bool iterate_bounds_traits(const Span& sp, const HIR::TypeData* type, const HIR::SimplePath& trait, t_cb_bound cb) const;

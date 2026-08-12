@@ -1543,3 +1543,108 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(
     return rv;
 }
 #endif
+
+namespace MIR {
+
+TypeResolve::TypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const ::HIR::TypeData* ret_type, const args_t& args, const ::MIR::Function& fcn)
+    : sp(sp)
+    , m_resolve(resolve)
+    , m_crate(resolve.m_crate)
+    , m_path(path)
+    , m_ret_type(ret_type)
+    , m_args(args)
+    , m_fcn(fcn)
+    , m_monomorphed_rettype(nullptr)
+    , m_monomorphed_locals(nullptr) {
+    if (m_crate.m_lang_items.count("owned_box") > 0) {
+        m_lang_Box = &m_crate.m_lang_items.at("owned_box");
+    }
+}
+void TypeResolve::set_cur_stmt(const ::MIR::BasicBlock& bb, const ::MIR::Statement& stmt) {
+    assert(&stmt >= &bb.statements.front());
+    assert(&stmt <= &bb.statements.back());
+    this->set_cur_stmt(bb, &stmt - bb.statements.data());
+}
+void TypeResolve::set_cur_stmt(const ::MIR::BasicBlock& bb, unsigned int stmt_idx) {
+    assert(&bb >= &m_fcn.blocks.front());
+    assert(&bb <= &m_fcn.blocks.back());
+    this->set_cur_stmt(&bb - m_fcn.blocks.data(), stmt_idx);
+}
+void TypeResolve::set_cur_stmt(unsigned int bb_idx, unsigned int stmt_idx) {
+    this->bb_idx = bb_idx;
+    this->stmt_idx = stmt_idx;
+}
+void TypeResolve::set_cur_stmt_term(const ::MIR::BasicBlock& bb) {
+    assert(&bb >= &m_fcn.blocks.front());
+    assert(&bb <= &m_fcn.blocks.back());
+    this->set_cur_stmt_term(&bb - m_fcn.blocks.data());
+}
+void TypeResolve::set_cur_stmt_term(unsigned int bb_idx) {
+    this->bb_idx = bb_idx;
+    this->stmt_idx = STMT_TERM;
+}
+ValueLifetime::ValueLifetime(::std::vector<bool> stmts)
+    : statements(mv$(stmts)) {
+}
+// true if this value is used at any point
+bool ValueLifetime::is_used() const {
+    for (auto v : statements) {
+        if (v) {
+            return true;
+        }
+    }
+    return false;
+}
+bool ValueLifetime::overlaps(const ValueLifetime& x) const {
+    assert(statements.size() == x.statements.size());
+    for (unsigned int i = 0; i < statements.size(); i++) {
+        if (statements[i] && x.statements[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+void ValueLifetime::unify(const ValueLifetime& x) {
+    assert(statements.size() == x.statements.size());
+    for (unsigned int i = 0; i < statements.size(); i++) {
+        if (x.statements[i]) {
+            statements[i] = true;
+        }
+    }
+}
+}
+
+namespace MIR { namespace visit {
+
+bool Visitor::visit_lvalue(const ::MIR::LValue& lv, ValUsage u) {
+    if (lv.m_root.is_Static()) {
+        visit_path(lv.m_root.as_Static());
+    }
+
+    for (auto& w : lv.m_wrappers) {
+        if (w.is_Index()) {
+            if (visit_lvalue(LValue::new_Local(w.as_Index()), ValUsage::Read)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+bool VisitorMut::visit_lvalue(::MIR::LValue& lv, ValUsage u) {
+    if (lv.m_root.is_Static()) {
+        visit_path(lv.m_root.as_Static());
+    }
+    for (auto& w : lv.m_wrappers) {
+        if (w.is_Index()) {
+            auto lv = LValue::new_Local(w.as_Index());
+            bool rv = visit_lvalue(lv, ValUsage::Read);
+            ASSERT_BUG(Span(), lv.is_Local(), "visit_lvalue on Index mutated the index to a non-local");
+            w = ::MIR::LValue::Wrapper::new_Index(lv.as_Local());
+            if (rv) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+}}

@@ -85,8 +85,7 @@ struct RepeatLitStr {
 
 class NullSink {
 public:
-    NullSink() {
-    }
+    NullSink();
 
     template <typename T>
     const NullSink& operator<<(const T&) const {
@@ -111,23 +110,9 @@ public:
         }
     }
 
-    TraceLog(const char* tag)
-        : m_tag(tag)
-    {
-        if (m_tag) {
-            auto& os = debug_output(g_debug_indent_level, m_tag);
-            os << ">>" << ::std::endl;
-            INDENT();
-        }
-    }
+    TraceLog(const char* tag);
 
-    ~TraceLog() {
-        if (m_tag) {
-            UNINDENT();
-            auto& os = debug_output(g_debug_indent_level, m_tag);
-            os << "<< ()" << ::std::endl;
-        }
-    }
+    ~TraceLog();
 };
 
 template<typename Ret>
@@ -173,10 +158,7 @@ auto make_trace_log_ret(const char* tag, Info&& info_cb, Ret&& ret) {
 struct FmtLambda {
     ::std::function<void(::std::ostream&)> m_cb;
 
-    FmtLambda(::std::function<void(::std::ostream&)> cb)
-        : m_cb(cb)
-    {
-    }
+    FmtLambda(::std::function<void(::std::ostream&)> cb);
 
     friend ::std::ostream& operator<<(::std::ostream& os, const FmtLambda& x) {
         x.m_cb(os);

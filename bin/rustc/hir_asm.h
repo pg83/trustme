@@ -145,11 +145,7 @@ namespace AsmCommon {
         unsigned index;
         char modifier;
 
-        LineFragment()
-            : index(UINT_MAX)
-            , modifier('\0')
-        {
-        }
+        LineFragment();
 
         bool operator==(const LineFragment& x) const {
             return before == x.before && index == x.index && modifier == x.modifier;
@@ -178,64 +174,12 @@ namespace AsmCommon {
         // Indicates `naked_asm!`
         unsigned naked : 1;
 
-        Options()
-            : pure(0)
-            , nomem(0)
-            , readonly(0)
-            , preserves_flags(0)
-            , noreturn(0)
-            , nostack(0)
-            , att_syntax(0)
-        {
-        }
+        Options();
 
-        bool any() const {
-#define _(n) \
-    if (n)   \
-    return true
-            _(pure);
-            _(nomem);
-            _(readonly);
-            _(preserves_flags);
-            _(noreturn);
-            _(nostack);
-            _(att_syntax);
-            _(naked);
-#undef _
-            return false;
-        }
+        bool any() const;
 
-        void fmt(std::ostream& os) const {
-            os << "options(";
-#define _(n) \
-    if (n)   \
-    os << #n ","
-            _(pure);
-            _(nomem);
-            _(readonly);
-            _(preserves_flags);
-            _(noreturn);
-            _(nostack);
-            _(att_syntax);
-            _(naked);
-#undef _
-            os << ")";
-        }
+        void fmt(std::ostream& os) const;
 
-        bool operator==(const Options& x) const {
-#define _(n)      \
-    if (n != x.n) \
-    return false
-            _(pure);
-            _(nomem);
-            _(readonly);
-            _(preserves_flags);
-            _(noreturn);
-            _(nostack);
-            _(att_syntax);
-            _(naked);
-#undef _
-            return true;
-        }
+        bool operator==(const Options& x) const;
     };
 }

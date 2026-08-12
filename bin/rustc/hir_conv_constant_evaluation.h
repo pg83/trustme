@@ -33,26 +33,14 @@ namespace HIR {
         public:
             ~CsePtr();
 
-            CsePtr(::MIR::eval::CallStackEntry* ptr)
-                : m_inner(ptr)
-            {
-            }
+            CsePtr(::MIR::eval::CallStackEntry* ptr);
 
             CsePtr(const CsePtr&) = delete;
             CsePtr& operator=(const CsePtr&) = delete;
 
-            CsePtr(CsePtr&& x)
-                : m_inner(x.m_inner)
-            {
-                x.m_inner = nullptr;
-            }
+            CsePtr(CsePtr&& x);
 
-            CsePtr& operator=(CsePtr&& x) {
-                this->~CsePtr();
-                this->m_inner = x.m_inner;
-                x.m_inner = nullptr;
-                return *this;
-            }
+            CsePtr& operator=(CsePtr&& x);
 
             ::MIR::eval::CallStackEntry* operator->() {
                 return m_inner;
@@ -79,16 +67,7 @@ namespace HIR {
         static unsigned s_next_eval_index;
 
     public:
-        Evaluator(const Span& sp, const ::HIR::Crate& crate, Newval& nvs)
-            : root_span(sp)
-            , value_pool(stl::ObjPool::fromMemory())
-            , resolve(crate)
-            , nvs(nvs)
-            , eval_index(s_next_eval_index++)
-            , num_frames(0)
-            , require_const_calls(false)
-        {
-        }
+        Evaluator(const Span& sp, const ::HIR::Crate& crate, Newval& nvs);
 
         Evaluator(Evaluator&&) = default;
         Evaluator(const Evaluator&) = delete;

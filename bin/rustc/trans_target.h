@@ -17,14 +17,7 @@ struct TargetArch {
         bool u64 = false;
         bool ptr = true;
 
-        Atomics(bool u8 = true, bool u16 = true, bool u32 = true, bool u64 = false, bool ptr = true)
-            : u8(u8)
-            , u16(u16)
-            , u32(u32)
-            , u64(u64)
-            , ptr(ptr)
-        {
-        }
+        Atomics(bool u8 = true, bool u16 = true, bool u32 = true, bool u64 = false, bool ptr = true);
     } m_atomics;
 
     struct Alignments {
@@ -36,16 +29,7 @@ struct TargetArch {
         uint8_t f64;
         uint8_t ptr;
 
-        Alignments(uint8_t u16 = 2, uint8_t u32 = 4, uint8_t u64 = 8, uint8_t u128 = 16, uint8_t f32 = 4, uint8_t f64 = 8, uint8_t ptr = 4)
-            : u16(u16)
-            , u32(u32)
-            , u64(u64)
-            , u128(u128)
-            , f32(f32)
-            , f64(f64)
-            , ptr(ptr)
-        {
-        }
+        Alignments(uint8_t u16 = 2, uint8_t u32 = 4, uint8_t u64 = 8, uint8_t u128 = 16, uint8_t f32 = 4, uint8_t f64 = 8, uint8_t ptr = 4);
     } m_alignments;
 };
 

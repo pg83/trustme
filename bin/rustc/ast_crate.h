@@ -114,14 +114,7 @@ namespace AST {
             return m_root_module;
         }
 
-        void set_crate_name(std::string name) {
-            m_crate_name_set = name;
-            if (m_crate_type == Type::Executable) {
-                m_crate_name_real = "";
-            } else {
-                m_crate_name_real = m_crate_name_suffix != "" ? RcString::new_interned(name + "-" + m_crate_name_suffix) : RcString::new_interned(name);
-            }
-        }
+        void set_crate_name(std::string name);
 
         /// Load referenced crates
         void load_externs();

@@ -17,8 +17,7 @@ namespace AST {
 /// State the parser needs to pass down via a second channel.
 struct ParseState {
 public:
-    ParseState() {
-    }
+    ParseState();
 
     // Used for "for/if/while" to handle ambiguity
     bool disallow_struct_literal = false;
@@ -31,10 +30,7 @@ public:
     ::AST::Module* module = nullptr;
     ::AST::AttributeList* parent_attrs = nullptr;
 
-    ::AST::Module& get_current_mod() {
-        assert(this->module);
-        return *this->module;
-    }
+    ::AST::Module& get_current_mod();
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ParseState& ps) {
         os << "ParseState {";
@@ -72,24 +68,10 @@ public:
     Token getToken();
 
     /// <summary>Consumes a token if it is of the specified type</summary>
-    bool getTokenIf(eTokenType exp) { // I'd like std::optional, but not available
-        if (lookahead(0) == exp) {
-            getToken();
-            return true;
-        } else {
-            return false;
-        }
-    }
+    bool getTokenIf(eTokenType exp);
 
     /// <summary>Consumes a token if it is of the specified type</summary>
-    bool getTokenIf(eTokenType exp, Token& dst) { // I'd like std::optional, but not available
-        if (lookahead(0) == exp) {
-            dst = getToken();
-            return true;
-        } else {
-            return false;
-        }
-    }
+    bool getTokenIf(eTokenType exp, Token& dst);
 
     /// <summary>Obtains a token, asserting that it's of the specified type</summary>
     Token getTokenCheck(eTokenType exp);
@@ -148,16 +130,9 @@ class SavedParseState {
     ParseState m_state;
 
 public:
-    SavedParseState(TokenStream& lex, ParseState state)
-        : m_lex(lex)
-        , m_state(state)
-    {
-    }
+    SavedParseState(TokenStream& lex, ParseState state);
 
-    ~SavedParseState() {
-        DEBUG("Restoring " << m_state);
-        m_lex.parse_state() = m_state;
-    }
+    ~SavedParseState();
 };
 
 #define SET_MODULE(lex, mod)                      \

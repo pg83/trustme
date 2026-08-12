@@ -25,17 +25,10 @@ namespace AST {
         ::std::shared_ptr<AST::AbsolutePath> m_vis_path; // if null, then global
         Ty m_ty;
 
-        Visibility()
-            : m_ty(Ty::Pub)
-        {
-        }
+        Visibility();
 
     public:
-        static Visibility make_bare_private() {
-            Visibility rv;
-            rv.m_ty = Ty::Private;
-            return rv;
-        }
+        static Visibility make_bare_private();
 
         static Visibility make_global();
         static Visibility make_restricted(Ty ty, AST::AbsolutePath p);
@@ -52,15 +45,9 @@ namespace AST {
             return m_ty == Ty::Pub;
         }
 
-        const AST::Path& in_path() const {
-            assert(m_in_path);
-            return *m_in_path;
-        }
+        const AST::Path& in_path() const;
 
-        const AST::AbsolutePath& vis_path() const {
-            assert(m_vis_path);
-            return *m_vis_path;
-        }
+        const AST::AbsolutePath& vis_path() const;
 
         bool is_visible(const ::AST::AbsolutePath& from_mod) const;
         /// Returns true if this visibility is "more" than `x`

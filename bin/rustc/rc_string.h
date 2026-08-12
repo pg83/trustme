@@ -13,22 +13,13 @@ class RcString {
     }* m_ptr;
 
 public:
-    RcString()
-        : m_ptr(nullptr)
-    {
-    }
+    RcString();
 
     RcString(const char* s, size_t len);
 
-    RcString(const char* s)
-        : RcString(s, ::std::strlen(s))
-    {
-    }
+    RcString(const char* s);
 
-    explicit RcString(const ::std::string& s)
-        : RcString(s.data(), s.size())
-    {
-    }
+    explicit RcString(const ::std::string& s);
 
     static RcString new_interned(const char* s, size_t len);
 
@@ -40,41 +31,15 @@ public:
         return new_interned(s, ::std::strlen(s));
     }
 
-    RcString(const RcString& x)
-        : m_ptr(x.m_ptr)
-    {
-        if (m_ptr) {
-            m_ptr->refcount += 1;
-        }
-    }
+    RcString(const RcString& x);
 
-    RcString(RcString&& x)
-        : m_ptr(x.m_ptr)
-    {
-        x.m_ptr = nullptr;
-    }
+    RcString(RcString&& x);
 
     ~RcString();
 
-    RcString& operator=(const RcString& x) {
-        if (&x != this) {
-            this->~RcString();
-            m_ptr = x.m_ptr;
-            if (m_ptr) {
-                m_ptr->refcount += 1;
-            }
-        }
-        return *this;
-    }
+    RcString& operator=(const RcString& x);
 
-    RcString& operator=(RcString&& x) {
-        if (&x != this) {
-            this->~RcString();
-            m_ptr = x.m_ptr;
-            x.m_ptr = nullptr;
-        }
-        return *this;
-    }
+    RcString& operator=(RcString&& x);
 
     const char* begin() const {
         return c_str();
@@ -92,46 +57,16 @@ public:
         return m_ptr ? m_ptr->size : 0;
     }
 
-    const char* c_str() const {
-        if (m_ptr) {
-            return reinterpret_cast<const char*>(m_ptr->data);
-        } else {
-            return "";
-        }
-    }
+    const char* c_str() const;
 
-    char back() const {
-        assert(size() > 0);
-        return *(c_str() + size() - 1);
-    }
+    char back() const;
 
     Ordering ord(const char* s, size_t l) const;
     Ordering ord_interned(const RcString& s) const;
 
-    Ordering ord(const RcString& s) const {
-        if (m_ptr == s.m_ptr) {
-            return OrdEqual;
-        }
-        if (!m_ptr || !s.m_ptr) {
-            return m_ptr ? OrdGreater : OrdLess;
-        }
-        // If both are interned, then use stored sorting
-        if (is_interned() && s.is_interned()) {
-            return ord_interned(s);
-        }
-        return ord(s.c_str(), s.size());
-    }
+    Ordering ord(const RcString& s) const;
 
-    bool operator==(const RcString& s) const {
-        if (s.size() != this->size()) {
-            return false;
-        }
-        // If both are interned, then just compare pointers
-        if (is_interned() && s.is_interned()) {
-            return m_ptr == s.m_ptr;
-        }
-        return this->ord(s) == OrdEqual;
-    }
+    bool operator==(const RcString& s) const;
 
     bool operator!=(const RcString& s) const {
         return !(*this == s);
@@ -185,17 +120,7 @@ public:
         return b != a;
     }
 
-    int compare(size_t o, size_t l, const char* s) const {
-        assert(o <= this->size());
-        if (l <= this->size() - o) {
-            return memcmp(this->c_str() + o, s, l);
-        } else {
-            if (int rv = memcmp(this->c_str() + o, s, this->size() - o)) {
-                return rv;
-            }
-            return -1;
-        }
-    }
+    int compare(size_t o, size_t l, const char* s) const;
 };
 
 namespace std {

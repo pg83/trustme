@@ -16,22 +16,12 @@ namespace AST {
         Ident m_name;
         uint16_t m_binding;
 
-        LifetimeRef(Ident name, uint32_t binding)
-            : m_name(::std::move(name))
-            , m_binding(binding)
-        {
-        }
+        LifetimeRef(Ident name, uint32_t binding);
 
     public:
-        LifetimeRef()
-            : LifetimeRef("", BINDING_UNSPECIFIED)
-        {
-        }
+        LifetimeRef();
 
-        LifetimeRef(Ident name)
-            : LifetimeRef(::std::move(name), BINDING_UNBOUND)
-        {
-        }
+        LifetimeRef(Ident name);
 
         static LifetimeRef new_static() {
             return LifetimeRef("static", BINDING_STATIC);
@@ -41,10 +31,7 @@ namespace AST {
             return LifetimeRef("_", BINDING_INFER);
         }
 
-        void set_binding(uint16_t b) {
-            assert(m_binding == BINDING_UNBOUND);
-            m_binding = b;
-        }
+        void set_binding(uint16_t b);
 
         bool is_unbound() const {
             return m_binding == BINDING_UNBOUND;

@@ -632,3 +632,11 @@ void ::HIR::Visitor::visit_expr(::HIR::ExprPtr& exp) {
         visit_type(t);
     }
 }
+
+namespace HIR {
+
+Visitor::Visitor(::StaticTraitResolve* resolve, TypeInterner& types)
+    : m_resolve(resolve)
+    , m_types(types) {
+}
+}

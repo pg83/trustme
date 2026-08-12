@@ -33,23 +33,9 @@ namespace HIR {
             return m_name != "";
         }
 
-        PatternBinding()
-            : m_mutable(false)
-            , m_type(Type::Move)
-            , m_name("")
-            , m_slot(0)
-            , m_implicit_deref_count(0)
-        {
-        }
+        PatternBinding();
 
-        PatternBinding(bool mut, Type type, RcString name, unsigned int slot)
-            : m_mutable(mut)
-            , m_type(type)
-            , m_name(mv$(name))
-            , m_slot(slot)
-            , m_implicit_deref_count(0)
-        {
-        }
+        PatternBinding(bool mut, Type type, RcString name, unsigned int slot);
 
         friend ::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x);
     };
@@ -185,22 +171,11 @@ namespace HIR {
         Data m_data;
         unsigned m_implicit_deref_count = 0;
 
-        Pattern() {
-        }
+        Pattern();
 
-        Pattern(std::vector<PatternBinding> pbs, Data d)
-            : m_bindings(mv$(pbs))
-            , m_data(mv$(d))
-        {
-        }
+        Pattern(std::vector<PatternBinding> pbs, Data d);
 
-        Pattern(PatternBinding pb, Data d)
-            : m_data(mv$(d))
-        {
-            if (pb.is_valid()) {
-                m_bindings.push_back(std::move(pb));
-            }
-        }
+        Pattern(PatternBinding pb, Data d);
 
         Pattern(const Pattern&) = delete;
         Pattern(Pattern&&) = default;

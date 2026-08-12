@@ -1375,3 +1375,6 @@ namespace {
 ::std::unique_ptr<CodeGenerator> Trans_Codegen_GetGenerator_MonoMir(const ::HIR::Crate& crate, const ::std::string& outfile) {
     return ::std::unique_ptr<CodeGenerator>(new CodeGenerator_MonoMir(crate, outfile));
 }
+
+CodeGenerator::~CodeGenerator() {
+}

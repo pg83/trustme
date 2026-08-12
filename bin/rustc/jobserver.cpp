@@ -224,3 +224,6 @@ public:
     }
     return ::std::make_unique<JobServer_Server>(server_jobs);
 }
+
+JobServer::~JobServer() {
+}

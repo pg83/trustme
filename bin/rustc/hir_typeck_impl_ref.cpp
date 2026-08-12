@@ -270,3 +270,36 @@ ImplRef::Monomorph ImplRef::get_cb_monomorph_traitimpl(HIR::TypeInterner& types,
     }
     return os;
 }
+
+ImplRef::ImplRef()
+    : m_data(Data::make_TraitImpl({{}, nullptr, nullptr, nullptr})) {
+}
+ImplRef::ImplRef(HIR::PathParams impl_params, const HIR::Trait& trait_ref, const ::HIR::SimplePath& trait, const ::HIR::TraitImpl& impl)
+    : m_data(Data::make_TraitImpl({mv$(impl_params), &trait_ref, &trait, &impl})) {
+}
+ImplRef::ImplRef(const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assoc_list_t* assoc, ::HIR::BoundConstness constness)
+    : m_data(Data::make_BoundedPtr({HIR::PathParams(), type, args, assoc, constness})) {
+}
+ImplRef::ImplRef(::HIR::PathParams hrls, const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assoc_list_t* assoc, ::HIR::BoundConstness constness)
+    : m_data(Data::make_BoundedPtr({std::move(hrls), type, args, assoc, constness})) {
+}
+ImplRef::ImplRef(::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assoc_list_t assoc, ::HIR::BoundConstness constness)
+    : m_data(Data::make_Bounded({::HIR::PathParams(), mv$(type), mv$(args), mv$(assoc), constness})) {
+}
+ImplRef::ImplRef(::HIR::PathParams hrls, ::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assoc_list_t assoc, ::HIR::BoundConstness constness)
+    : m_data(Data::make_Bounded({mv$(hrls), mv$(type), mv$(args), mv$(assoc), constness})) {
+}
+::HIR::BoundConstness ImplRef::bound_constness() const {
+    if (const auto* e = m_data.opt_BoundedPtr()) {
+        return e->constness;
+    }
+    if (const auto* e = m_data.opt_Bounded()) {
+        return e->constness;
+    }
+    return ::HIR::BoundConstness::Never;
+}
+ImplRef::Monomorph::Monomorph(HIR::TypeInterner& types, const ImplRef::Data::Data_TraitImpl& ti, const ::HIR::PathParams& params)
+    : Monomorphiser(types)
+    , ti(ti)
+    , params(params) {
+}

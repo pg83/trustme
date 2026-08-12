@@ -327,3 +327,33 @@ namespace {
     rv.m_implicit_deref_count = m_implicit_deref_count;
     return rv;
 }
+
+namespace HIR {
+
+PatternBinding::PatternBinding()
+    : m_mutable(false)
+    , m_type(Type::Move)
+    , m_name("")
+    , m_slot(0)
+    , m_implicit_deref_count(0) {
+}
+PatternBinding::PatternBinding(bool mut, Type type, RcString name, unsigned int slot)
+    : m_mutable(mut)
+    , m_type(type)
+    , m_name(mv$(name))
+    , m_slot(slot)
+    , m_implicit_deref_count(0) {
+}
+Pattern::Pattern() {
+}
+Pattern::Pattern(std::vector<PatternBinding> pbs, Data d)
+    : m_bindings(mv$(pbs))
+    , m_data(mv$(d)) {
+}
+Pattern::Pattern(PatternBinding pb, Data d)
+    : m_data(mv$(d)) {
+    if (pb.is_valid()) {
+        m_bindings.push_back(std::move(pb));
+    }
+}
+}

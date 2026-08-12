@@ -8,24 +8,13 @@ class MacroRulesPtr {
     MacroRules* m_ptr;
 
 public:
-    MacroRulesPtr()
-        : m_ptr(nullptr)
-    {
-    }
+    MacroRulesPtr();
 
     MacroRulesPtr(MacroRules* p);
 
-    MacroRulesPtr(MacroRulesPtr&& x)
-        : m_ptr(x.m_ptr)
-    {
-        x.m_ptr = nullptr;
-    }
+    MacroRulesPtr(MacroRulesPtr&& x);
 
-    MacroRulesPtr& operator=(MacroRulesPtr&& x) {
-        m_ptr = x.m_ptr;
-        x.m_ptr = nullptr;
-        return *this;
-    }
+    MacroRulesPtr& operator=(MacroRulesPtr&& x);
 
     ~MacroRulesPtr();
 
@@ -33,23 +22,11 @@ public:
         return m_ptr != nullptr;
     }
 
-    const MacroRules& operator*() const {
-        assert(m_ptr);
-        return *m_ptr;
-    }
+    const MacroRules& operator*() const;
 
-    MacroRules& operator*() {
-        assert(m_ptr);
-        return *m_ptr;
-    }
+    MacroRules& operator*();
 
-    const MacroRules* operator->() const {
-        assert(m_ptr);
-        return m_ptr;
-    }
+    const MacroRules* operator->() const;
 
-    MacroRules* operator->() {
-        assert(m_ptr);
-        return m_ptr;
-    }
+    MacroRules* operator->();
 };

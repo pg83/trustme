@@ -27,49 +27,25 @@ namespace HIR {
     public:
         ~EncodedLiteralPtr();
 
-        EncodedLiteralPtr()
-            : p(nullptr)
-        {
-        }
+        EncodedLiteralPtr();
 
         EncodedLiteralPtr(EncodedLiteral e);
 
-        EncodedLiteralPtr(EncodedLiteralPtr&& x)
-            : p(x.p)
-        {
-            x.p = nullptr;
-        }
+        EncodedLiteralPtr(EncodedLiteralPtr&& x);
 
         EncodedLiteralPtr(const EncodedLiteralPtr& x) = delete;
 
-        EncodedLiteralPtr& operator=(EncodedLiteralPtr&& x) {
-            this->~EncodedLiteralPtr();
-            this->p = x.p;
-            x.p = nullptr;
-            return *this;
-        }
+        EncodedLiteralPtr& operator=(EncodedLiteralPtr&& x);
 
         EncodedLiteralPtr& operator=(const EncodedLiteralPtr& x) = delete;
 
-        EncodedLiteral& operator*() {
-            assert(p);
-            return *p;
-        }
+        EncodedLiteral& operator*();
 
-        const EncodedLiteral& operator*() const {
-            assert(p);
-            return *p;
-        }
+        const EncodedLiteral& operator*() const;
 
-        EncodedLiteral* operator->() {
-            assert(p);
-            return p;
-        }
+        EncodedLiteral* operator->();
 
-        const EncodedLiteral* operator->() const {
-            assert(p);
-            return p;
-        }
+        const EncodedLiteral* operator->() const;
     };
     struct ConstGeneric_Unevaluated;
     TAGGED_UNION_EX(
@@ -138,67 +114,31 @@ namespace HIR {
     private:
         ThinVector<RcString> m_members;
 
-        SimplePath(ThinVector<RcString> members)
-            : m_members(std::move(members))
-        {
-        }
+        SimplePath(ThinVector<RcString> members);
 
     public:
-        SimplePath() {
-        }
+        SimplePath();
 
-        SimplePath(RcString crate)
-            : SimplePath(crate, ::std::span<RcString>())
-        {
-        }
+        SimplePath(RcString crate);
 
-        SimplePath(RcString crate, ::std::vector<RcString> components)
-            : SimplePath(crate, ::std::span<RcString>(components))
-        {
-        }
+        SimplePath(RcString crate, ::std::vector<RcString> components);
 
-        SimplePath(RcString crate, ::std::span<RcString> components) {
-            // NOTE: Ensure that it's impossible for the crate name to be empty with only one value in `m_members`, simplifies comparison logic
-            if (crate.c_str()[0] != '\0' || !components.empty()) {
-                m_members.reserve(1 + components.size());
-                m_members.push_back(std::move(crate));
-                for (auto& n : components) {
-                    m_members.push_back(std::move(n));
-                }
-            }
-        }
+        SimplePath(RcString crate, ::std::span<RcString> components);
 
-        SimplePath(RcString crate, ::std::span<const RcString> components) {
-            if (crate.c_str()[0] != '\0' || !components.empty()) {
-                m_members.reserve(1 + components.size());
-                m_members.push_back(std::move(crate));
-                for (const auto& n : components) {
-                    m_members.push_back(n);
-                }
-            }
-        }
+        SimplePath(RcString crate, ::std::span<const RcString> components);
 
-        SimplePath(RcString crate, ::std::initializer_list<RcString> components)
-            : SimplePath(std::move(crate), ::std::span<const RcString>(components.begin(), components.end()))
-        {
-        }
+        SimplePath(RcString crate, ::std::initializer_list<RcString> components);
 
         SimplePath clone() const;
         SimplePath parent() const;
 
-        const RcString& crate_name() const {
-            static RcString empty;
-            return m_members.empty() ? empty : m_members.front();
-        }
+        const RcString& crate_name() const;
 
         ::std::span<const RcString> components() const {
             return m_members.empty() ? std::span<const RcString>() : std::span<const RcString>(m_members.begin() + 1, m_members.end());
         }
 
-        ::std::vector<RcString> components_vec() const {
-            const auto values = components();
-            return {values.begin(), values.end()};
-        }
+        ::std::vector<RcString> components_vec() const;
 
         SimplePath operator+(const RcString& s) const;
 
@@ -264,16 +204,7 @@ namespace HIR {
             return ord(x) == OrdLess;
         }
 
-        Ordering ord(const PathParams& x) const {
-            //if(auto cmp = ::ord(m_lifetimes, x.m_lifetimes)) return cmp;
-            if (auto cmp = ::ord(m_types, x.m_types)) {
-                return cmp;
-            }
-            if (auto cmp = ::ord(m_values, x.m_values)) {
-                return cmp;
-            }
-            return OrdEqual;
-        }
+        Ordering ord(const PathParams& x) const;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const PathParams& x);
     };
@@ -318,12 +249,7 @@ namespace HIR {
             ::HIR::PathParams aty_params;
             ::HIR::TypeRef type;
 
-            Ordering ord(const AtyEqual& x) const {
-                ORD(source_trait, x.source_trait);
-                ORD(aty_params, x.aty_params);
-                ORD(type, x.type);
-                return OrdEqual;
-            }
+            Ordering ord(const AtyEqual& x) const;
 
             AtyEqual clone() const {
                 return AtyEqual{source_trait.clone(), aty_params.clone(), type};
@@ -341,21 +267,9 @@ namespace HIR {
             ::HIR::PathParams aty_params;
             std::vector<::HIR::TraitPath> traits;
 
-            Ordering ord(const AtyBound& x) const {
-                ORD(source_trait, x.source_trait);
-                ORD(aty_params, x.aty_params);
-                ORD(traits, x.traits);
-                return OrdEqual;
-            }
+            Ordering ord(const AtyBound& x) const;
 
-            AtyBound clone() const {
-                std::vector<::HIR::TraitPath> new_traits;
-                new_traits.reserve(traits.size());
-                for (const auto& t : traits) {
-                    new_traits.push_back(t.clone());
-                }
-                return AtyBound{source_trait.clone(), aty_params.clone(), ::std::move(new_traits)};
-            }
+            AtyBound clone() const;
         };
 
         typedef ::std::map<RcString, AtyEqual> assoc_list_t;
@@ -433,10 +347,7 @@ namespace HIR {
 
         Data m_data;
 
-        Path(Data data)
-            : m_data(mv$(data))
-        {
-        }
+        Path(Data data);
 
         Path(GenericPath _);
         Path(SimplePath _);
@@ -479,8 +390,7 @@ namespace HIR {
         void fmt(::std::ostream& os) const;
 
     private:
-        ConstGeneric_Unevaluated() {
-        }
+        ConstGeneric_Unevaluated();
     };
 
 } // namespace HIR

@@ -22,27 +22,11 @@ public:
     unsigned int line;
     unsigned int ofs;
 
-    Position()
-        : filename("")
-        , line(0)
-        , ofs(0)
-    {
-    }
+    Position();
 
-    Position(Span sp)
-        : span(std::move(sp))
-        , filename("")
-        , line(0)
-        , ofs(0)
-    {
-    }
+    Position(Span sp);
 
-    Position(RcString filename, unsigned int line, unsigned int ofs)
-        : filename(filename)
-        , line(line)
-        , ofs(ofs)
-    {
-    }
+    Position(RcString filename, unsigned int line, unsigned int ofs);
 };
 
 extern ::std::ostream& operator<<(::std::ostream& os, const Position& p);

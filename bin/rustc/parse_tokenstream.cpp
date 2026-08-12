@@ -139,3 +139,36 @@ Span TokenStream::point_span() const {
     }
     return Span(this->outerSpan(), p);
 }
+
+ParseState::ParseState() {
+}
+::AST::Module& ParseState::get_current_mod() {
+    assert(this->module);
+    return *this->module;
+}
+/// <summary>Consumes a token if it is of the specified type</summary>
+bool TokenStream::getTokenIf(eTokenType exp) { // I'd like std::optional, but not available
+    if (lookahead(0) == exp) {
+        getToken();
+        return true;
+    } else {
+        return false;
+    }
+}
+/// <summary>Consumes a token if it is of the specified type</summary>
+bool TokenStream::getTokenIf(eTokenType exp, Token& dst) { // I'd like std::optional, but not available
+    if (lookahead(0) == exp) {
+        dst = getToken();
+        return true;
+    } else {
+        return false;
+    }
+}
+SavedParseState::SavedParseState(TokenStream& lex, ParseState state)
+    : m_lex(lex)
+    , m_state(state) {
+}
+SavedParseState::~SavedParseState() {
+    DEBUG("Restoring " << m_state);
+    m_lex.parse_state() = m_state;
+}

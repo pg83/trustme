@@ -827,3 +827,300 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     }
     throw "";
 }
+
+namespace MIR {
+
+LValue::Storage::Storage(uintptr_t v)
+    : val(v) {
+}
+LValue::Storage::Storage(Storage&& x)
+    : val(x.val) {
+    x.val = 0;
+}
+LValue::Storage& LValue::Storage::operator=(Storage&& x) {
+    this->~Storage();
+    this->val = x.val;
+    x.val = 0;
+    return *this;
+}
+LValue::Storage::~Storage() {
+    if (is_Static()) {
+        delete reinterpret_cast<::HIR::Path*>(val & ~3ull);
+        val = 0;
+    }
+}
+LValue::Storage LValue::Storage::new_Argument(unsigned idx) {
+    assert(idx < MAX_ARG);
+    return Storage((idx + 1) << 2);
+}
+LValue::Storage LValue::Storage::new_Local(unsigned idx) {
+    assert(idx <= MAX_ARG);
+    return Storage((idx << 2) | 1);
+}
+LValue::Storage LValue::Storage::new_Static(::HIR::Path p) {
+    ::HIR::Path* ptr = new ::HIR::Path(::std::move(p));
+    return Storage(reinterpret_cast<uintptr_t>(ptr) | 2);
+}
+uintptr_t LValue::Storage::get_inner() const {
+    assert(!is_Static());
+    return val;
+}
+LValue::Storage LValue::Storage::from_inner(uintptr_t v) {
+    assert((v & 3) < 2);
+    return Storage(v);
+}
+LValue::Storage::Tag LValue::Storage::tag() const {
+    if (val == 0) {
+        return TAG_Return;
+    }
+    return static_cast<Tag>(val & 3);
+}
+char LValue::Storage::as_Return() const {
+    assert(is_Return());
+    return 0;
+}
+unsigned LValue::Storage::as_Argument() const {
+    assert(is_Argument());
+    return static_cast<unsigned>((val >> 2) - 1);
+}
+unsigned LValue::Storage::as_Local() const {
+    assert(is_Local());
+    return static_cast<unsigned>(val >> 2);
+}
+const ::HIR::Path& LValue::Storage::as_Static() const {
+    assert(is_Static());
+    return *reinterpret_cast<const ::HIR::Path*>(val & ~3llu);
+}
+::HIR::Path& LValue::Storage::as_Static() {
+    assert(is_Static());
+    return *reinterpret_cast<::HIR::Path*>(val & ~3llu);
+}
+LValue::Wrapper::Wrapper(uint32_t v)
+    : val(v) {
+}
+LValue::Wrapper LValue::Wrapper::new_Index(unsigned idx) {
+    if (idx == ~0u) {
+        idx = Storage::MAX_ARG;
+    }
+    return Wrapper((idx << 2) | 3);
+}
+char LValue::Wrapper::as_Deref() const {
+    assert(is_Deref());
+    return 0;
+}
+unsigned LValue::Wrapper::as_Field() const {
+    assert(is_Field());
+    return (val >> 2);
+}
+unsigned LValue::Wrapper::as_Downcast() const {
+    assert(is_Downcast());
+    return (val >> 2);
+}
+// TODO: Should this return a LValue?
+unsigned LValue::Wrapper::as_Index() const {
+    assert(is_Index());
+    unsigned rv = (val >> 2);
+    return rv;
+}
+void LValue::Wrapper::inc_Field() {
+    assert(is_Field());
+    *this = Wrapper::new_Field(as_Field() + 1);
+}
+void LValue::Wrapper::inc_Downcast() {
+    assert(is_Downcast());
+    *this = Wrapper::new_Downcast(as_Downcast() + 1);
+}
+LValue::LValue()
+    : m_root(Storage::new_Return()) {
+}
+LValue::LValue(Storage root, ::std::vector<Wrapper> wrappers)
+    : m_root(::std::move(root))
+    , m_wrappers(::std::move(wrappers)) {
+}
+LValue LValue::new_Deref(LValue lv) {
+    lv.m_wrappers.push_back(Wrapper::new_Deref());
+    return lv;
+}
+LValue LValue::new_Field(LValue lv, unsigned idx) {
+    lv.m_wrappers.push_back(Wrapper::new_Field(idx));
+    return lv;
+}
+LValue LValue::new_Downcast(LValue lv, unsigned idx) {
+    lv.m_wrappers.push_back(Wrapper::new_Downcast(idx));
+    return lv;
+}
+LValue LValue::new_Index(LValue lv, unsigned local_idx) {
+    lv.m_wrappers.push_back(Wrapper::new_Index(local_idx));
+    return lv;
+}
+unsigned LValue::as_Local() const {
+    assert(m_wrappers.empty());
+    return m_root.as_Local();
+}
+unsigned LValue::as_Field() const {
+    assert(!m_wrappers.empty());
+    return m_wrappers.back().as_Field();
+}
+void LValue::inc_Field() {
+    assert(m_wrappers.size() > 0);
+    m_wrappers.back().inc_Field();
+}
+void LValue::inc_Downcast() {
+    assert(m_wrappers.size() > 0);
+    m_wrappers.back().inc_Downcast();
+}
+LValue LValue::clone_wrapped(::std::vector<Wrapper> wrappers) const {
+    if (this->m_wrappers.empty()) {
+        return LValue(m_root.clone(), ::std::move(wrappers));
+    } else {
+        return clone_wrapped(wrappers.begin(), wrappers.end());
+    }
+}
+LValue LValue::clone_unwrapped(unsigned count) const {
+    assert(count > 0);
+    assert(count <= m_wrappers.size());
+    return LValue(m_root.clone(), ::std::vector<Wrapper>(m_wrappers.begin(), m_wrappers.end() - count));
+}
+// Returns true if one lvalue is a subset of the other
+// - Equivalent to `a.is_subset_of(b) || b.is_subset_of(a)` (but more efficient)
+bool LValue::is_either_subset(const LValue& other) const {
+    if (!(m_root == other.m_root)) {
+        return false;
+    }
+    if (other.m_wrappers.size() > m_wrappers.size()) {
+        return ::std::equal(m_wrappers.begin(), m_wrappers.end(), other.m_wrappers.begin());
+    } else {
+        return ::std::equal(other.m_wrappers.begin(), other.m_wrappers.end(), m_wrappers.begin());
+    }
+}
+LValue::RefCommon::RefCommon(const LValue& lv, size_t wrapper_count)
+    : m_lv(&lv)
+    , m_wrapper_count(wrapper_count) {
+    assert(wrapper_count <= lv.m_wrappers.size());
+}
+/// Unwrap one level, returning false if already at the root
+bool LValue::RefCommon::try_unwrap() {
+    if (m_wrapper_count == 0) {
+        return false;
+    } else {
+        m_wrapper_count--;
+        return true;
+    }
+}
+LValue::RefCommon::Tag LValue::RefCommon::tag() const {
+    if (m_wrapper_count == 0) {
+        switch (m_lv->m_root.tag()) {
+            case Storage::TAGDEAD:
+                return TAGDEAD;
+            case Storage::TAG_Return:
+                return TAG_Return;
+            case Storage::TAG_Argument:
+                return TAG_Argument;
+            case Storage::TAG_Local:
+                return TAG_Local;
+            case Storage::TAG_Static:
+                return TAG_Static;
+        }
+    } else {
+        switch (m_lv->m_wrappers[m_wrapper_count - 1].tag()) {
+            case Wrapper::TAGDEAD:
+                return TAGDEAD;
+            case Wrapper::TAG_Deref:
+                return TAG_Deref;
+            case Wrapper::TAG_Field:
+                return TAG_Field;
+            case Wrapper::TAG_Downcast:
+                return TAG_Downcast;
+            case Wrapper::TAG_Index:
+                return TAG_Index;
+        }
+    }
+    return TAGDEAD;
+}
+unsigned LValue::RefCommon::as_Local() const {
+    assert(is_Local());
+    return m_lv->m_root.as_Local();
+}
+char LValue::RefCommon::as_Return() const {
+    assert(is_Return());
+    return m_lv->m_root.as_Return();
+}
+unsigned LValue::RefCommon::as_Argument() const {
+    assert(is_Argument());
+    return m_lv->m_root.as_Argument();
+}
+const HIR::Path& LValue::RefCommon::as_Static() const {
+    assert(is_Static());
+    return m_lv->m_root.as_Static();
+}
+char LValue::RefCommon::as_Deref() const {
+    assert(is_Deref());
+    return m_lv->m_wrappers[m_wrapper_count - 1].as_Deref();
+}
+unsigned LValue::RefCommon::as_Field() const {
+    assert(is_Field());
+    return m_lv->m_wrappers[m_wrapper_count - 1].as_Field();
+}
+unsigned LValue::RefCommon::as_Downcast() const {
+    assert(is_Downcast());
+    return m_lv->m_wrappers[m_wrapper_count - 1].as_Downcast();
+}
+unsigned LValue::RefCommon::as_Index() const {
+    assert(is_Index());
+    return m_lv->m_wrappers[m_wrapper_count - 1].as_Index();
+}
+LValue::CRef::CRef(const LValue& lv)
+    : RefCommon(lv, lv.m_wrappers.size()) {
+}
+LValue::CRef::CRef(const LValue& lv, size_t wc)
+    : RefCommon(lv, wc) {
+}
+/// Unwrap one level
+const LValue::CRef LValue::CRef::inner_ref() const {
+    assert(m_wrapper_count > 0);
+    auto rv = *this;
+    rv.m_wrapper_count--;
+    return rv;
+}
+LValue::MRef::MRef(LValue& lv)
+    : RefCommon(lv, lv.m_wrappers.size()) {
+}
+LValue::MRef LValue::MRef::inner_ref() {
+    assert(m_wrapper_count > 0);
+    auto rv = *this;
+    rv.m_wrapper_count--;
+    return rv;
+}
+void LValue::MRef::replace(LValue x) {
+    auto& mut_lv = const_cast<LValue&>(*m_lv);
+    // Shortcut: No wrappers on source/destination (just assign the slot/root)
+    if (m_wrapper_count == 0 && x.m_wrappers.empty()) {
+        mut_lv.m_root = ::std::move(x.m_root);
+        return;
+    }
+    // If there's wrappers on this value (assigning over inner portion)
+    if (m_wrapper_count < m_lv->m_wrappers.size()) {
+        // Add those wrappers to the end of the new value
+        x.m_wrappers.insert(x.m_wrappers.end(), m_lv->m_wrappers.begin() + m_wrapper_count, m_lv->m_wrappers.end());
+    }
+    // Overwrite
+    mut_lv = ::std::move(x);
+}
+ItemAddress::ItemAddress(::std::unique_ptr<::HIR::Path> p, U128 offset)
+    : p(::std::move(p))
+    , offset(offset) {
+}
+EnumCachePtr::EnumCachePtr(const EnumCache* p)
+    : p(p) {
+}
+EnumCachePtr::EnumCachePtr(EnumCachePtr&& x)
+    : p(x.p) {
+    x.p = nullptr;
+}
+EnumCachePtr& EnumCachePtr::operator=(EnumCachePtr&& x) {
+    this->~EnumCachePtr();
+    p = x.p;
+    x.p = nullptr;
+    return *this;
+}
+}

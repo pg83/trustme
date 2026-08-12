@@ -2133,3 +2133,8 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
     }
     throw "";
 }
+
+namespace HIR {
+
+TypeInterner::TypeInterner(stl::ObjPool& pool): m_pool(pool) {}
+}

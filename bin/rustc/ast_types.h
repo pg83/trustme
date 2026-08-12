@@ -54,10 +54,7 @@ class PrettyPrintType {
     const TypeRef& m_type;
 
 public:
-    PrettyPrintType(const TypeRef& ty)
-        : m_type(ty)
-    {
-    }
+    PrettyPrintType(const TypeRef& ty);
 
     void print(::std::ostream& os) const;
 
@@ -175,25 +172,13 @@ public:
     }
 #endif
 
-    TypeRef(Span sp)
-        : m_span(mv$(sp))
-        , m_data(TypeData::make_Any({}))
-    {
-    }
+    TypeRef(Span sp);
 
-    TypeRef(Span sp, TypeData data)
-        : m_span(mv$(sp))
-        , m_data(mv$(data))
-    {
-    }
+    TypeRef(Span sp, TypeData data);
 
     struct TagInvalid {};
 
-    TypeRef(TagInvalid, Span sp)
-        : m_span(mv$(sp))
-        , m_data(TypeData::make_None({}))
-    {
-    }
+    TypeRef(TagInvalid, Span sp);
 
     struct TagMacro {};
 
@@ -201,97 +186,50 @@ public:
 
     struct TagUnit {}; // unit maps to a zero-length tuple, just easier to type
 
-    TypeRef(TagUnit, Span sp)
-        : m_span(mv$(sp))
-        , m_data(TypeData::make_Unit({}))
-    {
-    }
+    TypeRef(TagUnit, Span sp);
 
     struct TagPrimitive {};
 
-    TypeRef(TagPrimitive, Span sp, enum eCoreType type)
-        : m_span(mv$(sp))
-        , m_data(TypeData::make_Primitive({type}))
-    {
-    }
+    TypeRef(TagPrimitive, Span sp, enum eCoreType type);
 
-    TypeRef(Span sp, enum eCoreType type)
-        : m_span(mv$(sp))
-        , m_data(TypeData::make_Primitive({type}))
-    {
-    }
+    TypeRef(Span sp, enum eCoreType type);
 
     struct TagTuple {};
 
-    TypeRef(TagTuple, Span sp, ::std::vector<TypeRef> inner_types)
-        : m_span(mv$(sp))
-        , m_data(TypeData::make_Tuple({::std::move(inner_types)}))
-    {
-    }
+    TypeRef(TagTuple, Span sp, ::std::vector<TypeRef> inner_types);
 
     struct TagFunction {};
 
-    TypeRef(TagFunction, Span sp, AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::vector<TypeRef> args, bool is_variadic, TypeRef ret)
-        : m_span(mv$(sp))
-        , m_data(TypeData::make_Function({Type_Function(mv$(hrbs), is_unsafe, abi, box$(ret), mv$(args), is_variadic)}))
-    {
-    }
+    TypeRef(TagFunction, Span sp, AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::vector<TypeRef> args, bool is_variadic, TypeRef ret);
 
     struct TagReference {};
 
-    TypeRef(TagReference, Span sp, AST::LifetimeRef lft, bool is_mut, TypeRef inner_type)
-        : m_span(mv$(sp))
-        , m_data(TypeData::make_Borrow({::std::move(lft), is_mut, ::make_unique_ptr(mv$(inner_type))}))
-    {
-    }
+    TypeRef(TagReference, Span sp, AST::LifetimeRef lft, bool is_mut, TypeRef inner_type);
 
     struct TagPointer {};
 
-    TypeRef(TagPointer, Span sp, bool is_mut, TypeRef inner_type)
-        : m_span(mv$(sp))
-        , m_data(TypeData::make_Pointer({is_mut, ::make_unique_ptr(mv$(inner_type))}))
-    {
-    }
+    TypeRef(TagPointer, Span sp, bool is_mut, TypeRef inner_type);
 
     struct TagSizedArray {};
 
-    TypeRef(TagSizedArray, Span sp, TypeRef inner_type, ::std::shared_ptr<AST::ExprNode> size)
-        : m_span(mv$(sp))
-        , m_data(TypeData::make_Array({::make_unique_ptr(mv$(inner_type)), mv$(size)}))
-    {
-    }
+    TypeRef(TagSizedArray, Span sp, TypeRef inner_type, ::std::shared_ptr<AST::ExprNode> size);
 
     struct TagUnsizedArray {};
 
-    TypeRef(TagUnsizedArray, Span sp, TypeRef inner_type)
-        : m_span(mv$(sp))
-        , m_data(TypeData::make_Slice({::make_unique_ptr(mv$(inner_type))}))
-    {
-    }
+    TypeRef(TagUnsizedArray, Span sp, TypeRef inner_type);
 
     struct TagArg {};
 
-    TypeRef(TagArg, Span sp, RcString name, unsigned int binding = ~0u)
-        : m_span(mv$(sp))
-        , m_data(TypeData::make_Generic({name, binding}))
-    {
-    }
+    TypeRef(TagArg, Span sp, RcString name, unsigned int binding = ~0u);
 
-    TypeRef(Span sp, RcString name, unsigned int binding = ~0u)
-        : TypeRef(TagArg(), mv$(sp), mv$(name), binding)
-    {
-    }
+    TypeRef(Span sp, RcString name, unsigned int binding = ~0u);
 
     struct TagPath {};
 
     TypeRef(TagPath, Span sp, AST::Path path);
     TypeRef(Span sp, AST::Path path);
 
-    TypeRef(Span sp, ::std::vector<Type_TraitPath> traits, ::std::vector<AST::LifetimeRef> lifetimes)
-        : m_span(mv$(sp))
-        , m_data(TypeData::make_TraitObject({::std::move(traits), mv$(lifetimes)}))
-    {
-    }
+    TypeRef(Span sp, ::std::vector<Type_TraitPath> traits, ::std::vector<AST::LifetimeRef> lifetimes);
 
     const Span& span() const {
         return m_span;

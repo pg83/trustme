@@ -7,15 +7,9 @@
 struct Codepoint {
     uint32_t v;
 
-    Codepoint()
-        : v(0)
-    {
-    }
+    Codepoint();
 
-    Codepoint(uint32_t v)
-        : v(v)
-    {
-    }
+    Codepoint(uint32_t v);
 
     bool isspace() const;
     bool isdigit() const;
@@ -89,15 +83,9 @@ private:
     FloatValue parseFloat(U128 whole);
     uint32_t parseEscape(char enclosing, bool* is_byte_escape = nullptr);
 
-    void push_hygine() override {
-        m_hygiene = Ident::Hygiene::new_scope_chained(m_hygiene);
-        DEBUG(">> " << m_hygiene);
-    }
+    void push_hygine() override;
 
-    void pop_hygine() override {
-        DEBUG("<< " << m_hygiene << " -> " << m_hygiene.get_parent());
-        m_hygiene = m_hygiene.get_parent();
-    }
+    void pop_hygine() override;
 
     void ungetc();
     Codepoint getc_num();

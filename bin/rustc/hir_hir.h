@@ -48,10 +48,7 @@ namespace HIR {
         static ::std::shared_ptr<::HIR::SimplePath> none_path;
         ::std::shared_ptr<::HIR::SimplePath> vis_path;
 
-        Publicity(::std::shared_ptr<::HIR::SimplePath> p)
-            : vis_path(p)
-        {
-        }
+        Publicity(::std::shared_ptr<::HIR::SimplePath> p);
 
     public:
         static Publicity new_global() {
@@ -62,14 +59,7 @@ namespace HIR {
             return Publicity(none_path);
         }
 
-        static Publicity new_priv(::HIR::SimplePath p) {
-            size_t n_comp = p.components().size();
-            while (n_comp > 0 && p.components()[n_comp - 1].c_str()[0] == '#') {
-                n_comp--;
-            }
-            auto s = std::span<const RcString>(p.components().data(), n_comp);
-            return Publicity(::std::make_shared<HIR::SimplePath>(p.crate_name(), s));
-        }
+        static Publicity new_priv(::HIR::SimplePath p);
 
         bool is_global() const {
             return !vis_path;
@@ -130,13 +120,7 @@ namespace HIR {
 
         mutable ::std::map<::HIR::Path, EncodedLiteral> m_monomorph_cache;
 
-        Static(Linkage linkage, bool is_mut, TypeRef type, ExprPtr value)
-            : m_linkage(std::move(linkage))
-            , m_is_mut(is_mut)
-            , m_type(std::move(type))
-            , m_value(std::move(value))
-        {
-        }
+        Static(Linkage linkage, bool is_mut, TypeRef type, ExprPtr value);
     };
 
     class Constant {
@@ -158,15 +142,9 @@ namespace HIR {
         // TODO: Wait, how?
         mutable ::std::map<::HIR::Path, EncodedLiteral> m_monomorph_cache;
 
-        Constant() {
-        }
+        Constant();
 
-        Constant(GenericParams params, TypeRef type, ExprPtr value)
-            : m_params(::std::move(params))
-            , m_type(::std::move(type))
-            , m_value(::std::move(value))
-        {
-        }
+        Constant(GenericParams params, TypeRef type, ExprPtr value);
     };
 
     class Function {
@@ -215,18 +193,9 @@ namespace HIR {
             } inline_type = Inline::Auto;
         } m_markings;
 
-        Function() {
-        }
+        Function();
 
-        Function(Receiver receiver, GenericParams params, args_t args, TypeRef ret_ty, ExprPtr code)
-            : m_receiver(receiver)
-            , m_params(std::move(params))
-            , m_args(std::move(args))
-            , m_variadic(false)
-            , m_return(std::move(ret_ty))
-            , m_code(std::move(code))
-        {
-        }
+        Function(Receiver receiver, GenericParams params, args_t args, TypeRef ret_ty, ExprPtr code);
 
         ::HIR::TypeRef make_ptr_ty(const Span& sp, const Monomorphiser& ms) const;
     };
@@ -404,29 +373,12 @@ namespace HIR {
             EncodedLiteral value_res;
             Constant::ValueState state = Constant::ValueState::Unknown;
 
-            FieldDefault(size_t index, HIR::ExprPtr v)
-                : index(index)
-                , expr(std::move(v))
-            {
-            }
+            FieldDefault(size_t index, HIR::ExprPtr v);
         };
 
-        Struct(GenericParams params, Repr repr, Data data)
-            : m_params(mv$(params))
-            , m_repr(mv$(repr))
-            , m_data(mv$(data))
-        {
-        }
+        Struct(GenericParams params, Repr repr, Data data);
 
-        Struct(GenericParams params, Repr repr, Data data, unsigned align, TraitMarkings tm, StructMarkings sm)
-            : m_params(mv$(params))
-            , m_repr(mv$(repr))
-            , m_data(mv$(data))
-            , m_forced_alignment(align)
-            , m_markings(mv$(tm))
-            , m_struct_markings(mv$(sm))
-        {
-        }
+        Struct(GenericParams params, Repr repr, Data data, unsigned align, TraitMarkings tm, StructMarkings sm);
 
         GenericParams m_params;
         Repr m_repr;
@@ -471,16 +423,7 @@ namespace HIR {
             LifetimeRef lifetime_bound,
             ::std::vector<::HIR::TraitPath> trait_bounds,
             ::HIR::TypeRef default_type
-        )
-            : m_generics(::std::move(generics))
-            , is_sized(is_sized)
-            , m_lifetime_bound(lifetime_bound)
-            , m_trait_bounds(::std::move(trait_bounds))
-            , m_has_default(default_type && !default_type->is_Infer())
-            , m_default(default_type)
-        {
-            assert(default_type);
-        }
+        );
     };
 
     TAGGED_UNION(TraitValueItem, Constant, (Constant, Constant), (Static, Static), (Function, Function));
@@ -517,17 +460,7 @@ namespace HIR {
         // VTable path
         ::HIR::SimplePath m_vtable_path;
 
-        Trait(GenericParams gps, LifetimeRef lifetime, ::std::vector<::HIR::TraitPath> parents)
-            : m_params(mv$(gps))
-            , m_lifetime(mv$(lifetime))
-            , m_parent_traits(mv$(parents))
-            , m_is_marker(false)
-            , m_is_const(false)
-            , m_is_coinductive(false)
-            , m_is_fundamental(false)
-            , m_vtable_parent_traits_start(0)
-        {
-        }
+        Trait(GenericParams gps, LifetimeRef lifetime, ::std::vector<::HIR::TraitPath> parents);
 
         ::HIR::TypeRef get_vtable_type(const Span& sp, const ::HIR::Crate& crate, const ::HIR::TypeData::Data_TraitObject& te) const;
         unsigned get_vtable_value_index(const HIR::GenericPath& trait_path, const RcString& name) const;
@@ -564,8 +497,7 @@ namespace HIR {
 
         ::std::vector<::std::pair<RcString, std::unique_ptr<Static>>> m_inline_statics;
 
-        Module() {
-        }
+        Module();
 
         Module(const Module&) = delete;
         Module(Module&& x) = default;
@@ -798,12 +730,7 @@ namespace HIR {
         /// Extra paths for the linker
         ::std::vector<::std::string> m_link_paths;
 
-        Crate(stl::ObjPool* pool, TypeInterner& types)
-            : m_pool(pool)
-            , m_types(types)
-            , m_intrinsic_offsetof(Function{Function::Receiver::Free, GenericParams{}, {}, types.primitive(CoreType::Usize), {}})
-        {
-        }
+        Crate(stl::ObjPool* pool, TypeInterner& types);
 
         /// Method called to populate runtime state after deserialisation
         /// See hir/crate_post_load.cpp
@@ -832,13 +759,7 @@ namespace HIR {
         // NOTE: Special implementation to handle `m_inline_statics`
         const ::HIR::Static& get_static_by_path(const Span& sp, const ::HIR::SimplePath& path) const;
 
-        const ::HIR::Constant& get_constant_by_path(const Span& sp, const ::HIR::SimplePath& path) const {
-            const auto& ti = this->get_valitem_by_path(sp, path);
-            TU_IFLET(::HIR::ValueItem, ti, Constant, e, return e;)
-            else {
-                BUG(sp, "`const` path " << path << " didn't point to an enum");
-            }
-        }
+        const ::HIR::Constant& get_constant_by_path(const Span& sp, const ::HIR::SimplePath& path) const;
 
         bool find_trait_impls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const;
         bool find_auto_trait_impls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const;
@@ -846,15 +767,9 @@ namespace HIR {
 
         const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::args_t& args, ::HIR::TypeRef& ret_ty) const;
 
-        const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const {
-            auto ty = fcn.m_return;
-            return get_or_gen_mir(ip, fcn.m_code, fcn.m_args, ty);
-        }
+        const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const;
 
-        const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& exp_ty) const {
-            static ::HIR::Function::args_t s_args;
-            return get_or_gen_mir(ip, ep, s_args, exp_ty);
-        }
+        const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& exp_ty) const;
     };
 
     /// Helper for obtaining the matching target for PathTuple/PathNamed

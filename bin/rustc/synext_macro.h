@@ -33,13 +33,7 @@ struct MacroDef {
     ::std::string name;
     ::std::unique_ptr<ExpandProcMacro> def;
 
-    MacroDef(::std::string name, ::std::unique_ptr<ExpandProcMacro> def)
-        : prev(nullptr)
-        , name(::std::move(name))
-        , def(::std::move(def))
-    {
-        Register_Synext_Macro_Static(this);
-    }
+    MacroDef(::std::string name, ::std::unique_ptr<ExpandProcMacro> def);
 };
 
 #define STATIC_MACRO(ident, _handler_class) static MacroDef s_register_##_handler_class(ident, ::std::unique_ptr<ExpandProcMacro>(new _handler_class()));

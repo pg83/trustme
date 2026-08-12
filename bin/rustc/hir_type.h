@@ -345,7 +345,7 @@ namespace HIR {
         ::std::unordered_multimap<size_t, TypeRef> m_nodes;
 
     public:
-        explicit TypeInterner(stl::ObjPool& pool): m_pool(pool) {}
+        explicit TypeInterner(stl::ObjPool& pool);
 
         TypeRef intern(TypeData data);
         TypeRef infer(unsigned int idx = ~0u, InferClass ty_class = InferClass::None);

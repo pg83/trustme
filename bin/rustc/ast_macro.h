@@ -21,24 +21,13 @@ namespace AST {
         MacroInvocation(const MacroInvocation&) = delete;
         MacroInvocation& operator=(const MacroInvocation&) = delete;
 
-        MacroInvocation() {
-        }
+        MacroInvocation();
 
-        MacroInvocation(Span span, AST::Path macro, RcString ident, TokenTree input)
-            : m_span(mv$(span))
-            , m_macro_path(mv$(macro))
-            , m_ident(mv$(ident))
-            , m_input(mv$(input))
-        {
-        }
+        MacroInvocation(Span span, AST::Path macro, RcString ident, TokenTree input);
 
         MacroInvocation clone() const;
 
-        void clear() {
-            m_macro_path = AST::Path();
-            m_ident = "";
-            m_input = TokenTree();
-        }
+        void clear();
 
         const Span& span() const {
             return m_span;

@@ -128,58 +128,21 @@ struct TomlValue {
     ::std::string m_str_value;
     ::std::vector<TomlValue> m_sub_values;
 
-    TomlValue()
-        : m_type(Type::String)
-        , m_int_value(0)
-    {
-    }
+    TomlValue();
 
-    TomlValue(::std::string s)
-        : m_type(Type::String)
-        , m_int_value(0)
-        , m_str_value(::std::move(s))
-    {
-    }
+    TomlValue(::std::string s);
 
-    TomlValue(int64_t v)
-        : m_type(Type::Integer)
-        , m_int_value(v)
-    {
-    }
+    TomlValue(int64_t v);
 
-    TomlValue(bool v)
-        : m_type(Type::Boolean)
-        , m_int_value(v ? 1 : 0)
-    {
-    }
+    TomlValue(bool v);
 
-    const ::std::string& as_string() const {
-        if (m_type != Type::String) {
-            throw TypeError{m_type, Type::String};
-        }
-        return m_str_value;
-    }
+    const ::std::string& as_string() const;
 
-    bool as_bool() const {
-        if (m_type != Type::Boolean) {
-            throw TypeError{m_type, Type::Boolean};
-        }
-        return m_int_value != 0;
-    }
+    bool as_bool() const;
 
-    uint64_t as_int() const {
-        if (m_type != Type::Integer) {
-            throw TypeError{m_type, Type::Integer};
-        }
-        return m_int_value;
-    }
+    uint64_t as_int() const;
 
-    const ::std::vector<TomlValue>& as_list() const {
-        if (m_type != Type::List) {
-            throw TypeError{m_type, Type::List};
-        }
-        return m_sub_values;
-    }
+    const ::std::vector<TomlValue>& as_list() const;
 
     friend ::std::ostream& operator<<(::std::ostream& os, const TomlValue& x) {
         switch (x.m_type) {
@@ -239,10 +202,7 @@ class TomlFileIter {
     TomlFile& m_reader;
     TomlKeyValue m_cur_value;
 
-    TomlFileIter(TomlFile& tf)
-        : m_reader(tf)
-    {
-    }
+    TomlFileIter(TomlFile& tf);
 
 public:
     TomlKeyValue operator*() const {

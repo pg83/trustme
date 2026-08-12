@@ -1385,3 +1385,18 @@ Token Lex_FindReservedWord(const ::std::string& s, AST::Edition edition) {
     }
     return TOK_NULL;
 }
+
+Codepoint::Codepoint()
+    : v(0) {
+}
+Codepoint::Codepoint(uint32_t v)
+    : v(v) {
+}
+void Lexer::push_hygine() {
+    m_hygiene = Ident::Hygiene::new_scope_chained(m_hygiene);
+    DEBUG(">> " << m_hygiene);
+}
+void Lexer::pop_hygine() {
+    DEBUG("<< " << m_hygiene << " -> " << m_hygiene.get_parent());
+    m_hygiene = m_hygiene.get_parent();
+}

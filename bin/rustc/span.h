@@ -21,10 +21,7 @@ private:
     SpanInner* m_ptr;
     //static SpanInner    s_empty_span;
 public:
-    Span()
-        //: m_ptr(&s_empty_span)
-        : m_ptr(nullptr) {
-    }
+    Span();
 
     Span(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int end_line, unsigned int end_ofs);
     Span(Span parent, const Position& position);
@@ -33,23 +30,11 @@ public:
 
     Span(const Span& x);
 
-    Span(Span&& x)
-        : m_ptr(x.m_ptr)
-    {
-        x.m_ptr = nullptr;
-    }
+    Span(Span&& x);
 
-    Span& operator=(const Span& x) {
-        this->~Span();
-        new (this) Span(x);
-        return *this;
-    }
+    Span& operator=(const Span& x);
 
-    Span& operator=(Span&& x) {
-        this->~Span();
-        new (this) Span(std::move(x));
-        return *this;
-    }
+    Span& operator=(Span&& x);
 
     operator bool() const {
         return m_ptr != nullptr;
@@ -130,17 +115,7 @@ public:
     }
 
 private:
-    static SpanInner* alloc(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int end_line, unsigned int end_ofs) {
-        auto* rv = new SpanInner_Source();
-        rv->reference_count = 1;
-        rv->parent_span = parent;
-        rv->filename = ::std::move(filename);
-        rv->start_line = start_line;
-        rv->start_ofs = start_ofs;
-        rv->end_line = end_line;
-        rv->end_ofs = end_ofs;
-        return rv;
-    }
+    static SpanInner* alloc(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int end_line, unsigned int end_ofs);
 };
 
 struct SpanInner_Macro: public SpanInner {

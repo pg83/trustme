@@ -20,8 +20,7 @@ namespace MIR {
 
 class CodeGenerator {
 public:
-    virtual ~CodeGenerator() {
-    }
+    virtual ~CodeGenerator();
 
     virtual void finalise(const TransOptions& opt, CodegenOutput out_ty, const ::std::string& hir_file) {
     }

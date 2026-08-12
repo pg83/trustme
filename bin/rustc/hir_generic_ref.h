@@ -22,18 +22,9 @@ namespace HIR {
         // 0xFFFF = Self, 0-255 = Type/Trait, 256-511 = Method, 512-767 = Placeholder
         uint32_t binding;
 
-        GenericRef(RcString name, uint32_t binding)
-            : name(::std::move(name))
-            , binding(binding)
-        {
-        }
+        GenericRef(RcString name, uint32_t binding);
 
-        GenericRef(RcString name, GenericGroup group, uint16_t idx)
-            : name(::std::move(name))
-            , binding(group * 256 + idx)
-        {
-            assert(idx < 256);
-        }
+        GenericRef(RcString name, GenericGroup group, uint16_t idx);
 
         static GenericRef new_self() {
             return GenericRef(RcString::new_interned("Self"), GENERIC_Self);
@@ -55,16 +46,7 @@ namespace HIR {
             return (binding >> 8) == GENERIC_Placeholder;
         }
 
-        Ordering ord(const GenericRef& x) const {
-            auto rv = ::ord(binding, x.binding);
-            if (rv) {
-                return rv;
-            }
-            if (group() == GENERIC_Placeholder) {
-                return ::ord(name, x.name); // names matter for placeholders
-            }
-            return rv;
-        }
+        Ordering ord(const GenericRef& x) const;
 
         bool operator==(const GenericRef& x) const {
             return this->ord(x) == OrdEqual;

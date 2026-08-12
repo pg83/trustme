@@ -56,26 +56,18 @@ namespace HIR {
             friend class TrackHrbStack;
             std::vector<const HIR::GenericParams*>* v;
 
-            PopOnDrop(): v(nullptr) {}
-            explicit PopOnDrop(std::vector<const HIR::GenericParams*>& v): v(&v) {}
+            PopOnDrop();
+            explicit PopOnDrop(std::vector<const HIR::GenericParams*>& v);
 
         public:
-            ~PopOnDrop() {
-                if (v) {
-                    assert(!v->empty());
-                    v->pop_back();
-                }
-            }
+            ~PopOnDrop();
 
             PopOnDrop(const PopOnDrop&) = delete;
-            PopOnDrop(PopOnDrop&& x): v(x.v) { x.v = nullptr; }
+            PopOnDrop(PopOnDrop&& x);
         };
 
         PopOnDrop push_hrb(const std::unique_ptr<HIR::GenericParams>& params) const;
-        PopOnDrop push_hrb(const HIR::GenericParams& params) const {
-            m_hrb_stack.push_back(&params);
-            return PopOnDrop(m_hrb_stack);
-        }
+        PopOnDrop push_hrb(const HIR::GenericParams& params) const;
         const HIR::GenericParams* has_hrb() const {
             return m_hrb_stack.empty() ? nullptr : m_hrb_stack.back();
         }

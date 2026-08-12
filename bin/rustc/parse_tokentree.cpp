@@ -45,3 +45,36 @@ TokenTree TokenTree::clone() const {
         return os;
     }
 }
+
+TokenTree::~TokenTree() {
+}
+TokenTree::TokenTree() {
+}
+TokenTree::TokenTree(enum eTokenType ty)
+    : m_tok(Token(ty)) {
+}
+TokenTree::TokenTree(Token tok)
+    : m_tok(::std::move(tok)) {
+}
+TokenTree::TokenTree(AST::Edition edition, Token tok)
+    : m_edition(edition)
+    , m_tok(::std::move(tok)) {
+}
+TokenTree::TokenTree(AST::Edition edition, Ident::Hygiene hygiene, Token tok)
+    : m_edition(edition)
+    , m_hygiene(::std::move(hygiene))
+    , m_tok(::std::move(tok)) {
+}
+TokenTree::TokenTree(AST::Edition edition, Ident::Hygiene hygiene, ::std::vector<TokenTree> subtrees)
+    : m_edition(edition)
+    , m_hygiene(::std::move(hygiene))
+    , m_subtrees(::std::move(subtrees)) {
+}
+const TokenTree& TokenTree::operator[](unsigned int idx) const {
+    assert(idx < m_subtrees.size());
+    return m_subtrees[idx];
+}
+TokenTree& TokenTree::operator[](unsigned int idx) {
+    assert(idx < m_subtrees.size());
+    return m_subtrees[idx];
+}

@@ -4452,3 +4452,29 @@ void ConvertHIR_ConstantEvaluate_MethodParams(const Span& sp, const ::HIR::Crate
         }
     }
 }
+
+namespace HIR {
+
+Evaluator::CsePtr::CsePtr(::MIR::eval::CallStackEntry* ptr)
+    : m_inner(ptr) {
+}
+Evaluator::CsePtr::CsePtr(CsePtr&& x)
+    : m_inner(x.m_inner) {
+    x.m_inner = nullptr;
+}
+Evaluator::CsePtr& Evaluator::CsePtr::operator=(CsePtr&& x) {
+    this->~CsePtr();
+    this->m_inner = x.m_inner;
+    x.m_inner = nullptr;
+    return *this;
+}
+Evaluator::Evaluator(const Span& sp, const ::HIR::Crate& crate, Newval& nvs)
+    : root_span(sp)
+    , value_pool(stl::ObjPool::fromMemory())
+    , resolve(crate)
+    , nvs(nvs)
+    , eval_index(s_next_eval_index++)
+    , num_frames(0)
+    , require_const_calls(false) {
+}
+}

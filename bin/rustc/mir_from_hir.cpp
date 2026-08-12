@@ -9493,3 +9493,72 @@ bool VarState::get_used_drop_flags(std::set<unsigned>* out) const {
     }
     return rv;
 }
+
+ScopeHandle::ScopeHandle(const MirBuilder& builder, unsigned int idx)
+    : m_builder(builder)
+    , idx(idx) {
+}
+ScopeHandle::ScopeHandle(ScopeHandle&& x)
+    : m_builder(x.m_builder)
+    , idx(x.idx) {
+    x.idx = ~0;
+}
+PatternBinding::PatternBinding(field_path_t field, const ::HIR::PatternBinding& binding)
+    : field(std::move(field))
+    , binding(&binding)
+    , split_slice(SIZE_MAX, SIZE_MAX) {
+}
+MirBuilder::ScopeDef::ScopeDef(const Span& span)
+    : span(span) {
+}
+MirBuilder::ScopeDef::ScopeDef(const Span& span, ScopeType data)
+    : span(span)
+    , data(mv$(data)) {
+}
+/// Save the current state of aliases (see add_variable_alias)
+MirBuilder::SavedAliases MirBuilder::save_aliases() const {
+    SavedAliases rv;
+    rv.set_aliases.reserve(m_variable_aliases.size());
+    for (const auto& v : m_variable_aliases) {
+        rv.set_aliases.push_back(v.second != MIR::LValue());
+    }
+    return rv;
+}
+void MirBuilder::restore_aliases(SavedAliases a) {
+    assert(a.set_aliases.size() == m_variable_aliases.size());
+    for (size_t i = 0; i < a.set_aliases.size(); i++) {
+        if (!a.set_aliases[i]) {
+            m_variable_aliases.at(i).second = MIR::LValue();
+        }
+    }
+}
+// Variable aliases (used for match guards)
+void MirBuilder::add_variable_alias(const Span& sp, unsigned idx, HIR::PatternBinding::Type ty, MIR::LValue lv) {
+    DEBUG("#" << idx << " = " << int(ty) << " " << lv);
+    ASSERT_BUG(sp, idx < m_variable_aliases.size(), "Variable alias #" << idx << " out of bounds");
+    ASSERT_BUG(sp, m_variable_aliases[idx].second == MIR::LValue(), "Variable alias #" << idx << " already exists: " << m_variable_aliases[idx].second << " setting " << lv);
+    m_variable_aliases[idx] = std::make_pair(ty, mv$(lv));
+}
+const MirBuilder::var_alias_t* MirBuilder::get_variable_alias(const Span& sp, unsigned idx) const {
+    ASSERT_BUG(sp, idx < m_variable_aliases.size(), "Variable alias #" << idx << " out of bounds");
+    if (m_variable_aliases[idx].second == MIR::LValue()) {
+        return nullptr;
+    } else {
+        return &m_variable_aliases[idx];
+    }
+}
+// - Values
+::MIR::LValue MirBuilder::get_variable(const Span& sp, unsigned idx) const {
+    auto it = m_var_arg_mappings.find(idx);
+    if (it != m_var_arg_mappings.end()) {
+        return ::MIR::LValue::new_Argument(it->second);
+    }
+    return ::MIR::LValue::new_Local(idx);
+}
+::MIR::LValue MirBuilder::get_rval_in_if_cond(const Span& sp, ::MIR::RValue val) {
+    push_stmt_assign(sp, m_if_cond_lval.clone(), mv$(val));
+    return m_if_cond_lval.clone();
+}
+MirBuilder::SavedActiveLocal::SavedActiveLocal(VarState vs)
+    : state(mv$(vs)) {
+}

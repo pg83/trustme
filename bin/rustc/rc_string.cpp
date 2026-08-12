@@ -283,3 +283,86 @@ size_t std::hash<RcString>::operator()(const RcString& s) const noexcept {
     return h;
     //return hash<std::string_view>(s.c_str(), s.size());
 }
+
+RcString::RcString()
+    : m_ptr(nullptr) {
+}
+RcString::RcString(const char* s)
+    : RcString(s, ::std::strlen(s)) {
+}
+RcString::RcString(const ::std::string& s)
+    : RcString(s.data(), s.size()) {
+}
+RcString::RcString(const RcString& x)
+    : m_ptr(x.m_ptr) {
+    if (m_ptr) {
+        m_ptr->refcount += 1;
+    }
+}
+RcString::RcString(RcString&& x)
+    : m_ptr(x.m_ptr) {
+    x.m_ptr = nullptr;
+}
+RcString& RcString::operator=(const RcString& x) {
+    if (&x != this) {
+        this->~RcString();
+        m_ptr = x.m_ptr;
+        if (m_ptr) {
+            m_ptr->refcount += 1;
+        }
+    }
+    return *this;
+}
+RcString& RcString::operator=(RcString&& x) {
+    if (&x != this) {
+        this->~RcString();
+        m_ptr = x.m_ptr;
+        x.m_ptr = nullptr;
+    }
+    return *this;
+}
+const char* RcString::c_str() const {
+    if (m_ptr) {
+        return reinterpret_cast<const char*>(m_ptr->data);
+    } else {
+        return "";
+    }
+}
+char RcString::back() const {
+    assert(size() > 0);
+    return *(c_str() + size() - 1);
+}
+Ordering RcString::ord(const RcString& s) const {
+    if (m_ptr == s.m_ptr) {
+        return OrdEqual;
+    }
+    if (!m_ptr || !s.m_ptr) {
+        return m_ptr ? OrdGreater : OrdLess;
+    }
+    // If both are interned, then use stored sorting
+    if (is_interned() && s.is_interned()) {
+        return ord_interned(s);
+    }
+    return ord(s.c_str(), s.size());
+}
+bool RcString::operator==(const RcString& s) const {
+    if (s.size() != this->size()) {
+        return false;
+    }
+    // If both are interned, then just compare pointers
+    if (is_interned() && s.is_interned()) {
+        return m_ptr == s.m_ptr;
+    }
+    return this->ord(s) == OrdEqual;
+}
+int RcString::compare(size_t o, size_t l, const char* s) const {
+    assert(o <= this->size());
+    if (l <= this->size() - o) {
+        return memcmp(this->c_str() + o, s, l);
+    } else {
+        if (int rv = memcmp(this->c_str() + o, s, this->size() - o)) {
+            return rv;
+        }
+        return -1;
+    }
+}

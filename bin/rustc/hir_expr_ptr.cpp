@@ -89,3 +89,76 @@ void HIR::ExprPtr::set_mir(::MIR::FunctionPointer mir) {
     assert(!this->m_mir);
     m_mir = ::std::move(mir);
 }
+
+namespace HIR {
+
+ExprNodeP::ExprNodeP()
+    : ptr(nullptr) {
+}
+ExprNodeP::ExprNodeP(::HIR::ExprNode* p)
+    : ptr(p) {
+}
+ExprNodeP::ExprNodeP(ExprNodeP&& x)
+    : ptr(x.ptr) {
+    x.ptr = nullptr;
+}
+ExprNodeP& ExprNodeP::operator=(ExprNodeP&& x) {
+    ptr = x.ptr;
+    x.ptr = nullptr;
+    return *this;
+}
+::HIR::ExprNode* ExprNodeP::release() {
+    auto* rv = ptr;
+    ptr = nullptr;
+    return rv;
+}
+void ExprNodeP::swap(ExprNodeP& x) {
+    auto* p = ptr;
+    ptr = x.ptr;
+    x.ptr = p;
+}
+::HIR::ExprNode& ExprNodeP::operator*() {
+    assert(ptr);
+    return *ptr;
+}
+const ::HIR::ExprNode& ExprNodeP::operator*() const {
+    assert(ptr);
+    return *ptr;
+}
+::HIR::ExprNode* ExprNodeP::operator->() {
+    assert(ptr);
+    return ptr;
+}
+const ::HIR::ExprNode* ExprNodeP::operator->() const {
+    assert(ptr);
+    return ptr;
+}
+ExprStatePtr::ExprStatePtr()
+    : ptr(nullptr) {
+}
+ExprStatePtr::ExprStatePtr(ExprStatePtr&& x)
+    : ptr(x.ptr) {
+    x.ptr = nullptr;
+}
+ExprStatePtr& ExprStatePtr::operator=(ExprStatePtr&& x) {
+    ptr = x.ptr;
+    x.ptr = nullptr;
+    return *this;
+}
+::HIR::ExprState& ExprStatePtr::operator*() {
+    assert(ptr);
+    return *ptr;
+}
+const ::HIR::ExprState& ExprStatePtr::operator*() const {
+    assert(ptr);
+    return *ptr;
+}
+::HIR::ExprState* ExprStatePtr::operator->() {
+    assert(ptr);
+    return ptr;
+}
+const ::HIR::ExprState* ExprStatePtr::operator->() const {
+    assert(ptr);
+    return ptr;
+}
+}

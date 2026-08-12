@@ -60,10 +60,7 @@ namespace HIR {
         virtual void visit(ExprVisitor& v) = 0;
         virtual unsigned int node_kind() const = 0;
 
-        ExprNode(Span sp)
-            : m_span(mv$(sp))
-        {
-        }
+        ExprNode(Span sp);
 
         virtual ~ExprNode();
 
@@ -78,19 +75,9 @@ namespace HIR {
         ::HIR::SimplePath m_local_mod;
         t_trait_list m_traits;
 
-        ExprNode_Block(Span sp)
-            : ExprNode(mv$(sp))
-            , m_is_unsafe(false)
-        {
-        }
+        ExprNode_Block(Span sp);
 
-        ExprNode_Block(Span sp, bool is_unsafe, ::std::vector<ExprNodeP> nodes, ExprNodeP value_node)
-            : ExprNode(mv$(sp))
-            , m_is_unsafe(is_unsafe)
-            , m_nodes(mv$(nodes))
-            , m_value_node(mv$(value_node))
-        {
-        }
+        ExprNode_Block(Span sp, bool is_unsafe, ::std::vector<ExprNodeP> nodes, ExprNodeP value_node);
 
         static constexpr unsigned int kind = 1;
         unsigned int node_kind() const override;
@@ -100,11 +87,7 @@ namespace HIR {
     struct ExprNode_ConstBlock: public ExprNode {
         ExprNodeP m_inner;
 
-        ExprNode_ConstBlock(Span sp, ExprNodeP inner)
-            : ExprNode(mv$(sp))
-            , m_inner(mv$(inner))
-        {
-        }
+        ExprNode_ConstBlock(Span sp, ExprNodeP inner);
 
         static constexpr unsigned int kind = 2;
         unsigned int node_kind() const override;
@@ -162,13 +145,7 @@ namespace HIR {
         std::vector<AsmCommon::Line> m_lines;
         std::vector<Param> m_params;
 
-        ExprNode_Asm2(Span sp, AsmCommon::Options options, std::vector<AsmCommon::Line> lines, std::vector<Param> params)
-            : ExprNode(mv$(sp))
-            , m_options(options)
-            , m_lines(::std::move(lines))
-            , m_params(::std::move(params))
-        {
-        }
+        ExprNode_Asm2(Span sp, AsmCommon::Options options, std::vector<AsmCommon::Line> lines, std::vector<Param> params);
 
         static constexpr unsigned int kind = 4;
         unsigned int node_kind() const override;
@@ -178,11 +155,7 @@ namespace HIR {
     struct ExprNode_Return: public ExprNode {
         ::HIR::ExprNodeP m_value;
 
-        ExprNode_Return(Span sp, ::HIR::ExprNodeP value)
-            : ExprNode(mv$(sp))
-            , m_value(mv$(value))
-        {
-        }
+        ExprNode_Return(Span sp, ::HIR::ExprNodeP value);
 
         static constexpr unsigned int kind = 5;
         unsigned int node_kind() const override;
@@ -193,11 +166,7 @@ namespace HIR {
     struct ExprNode_Yield: public ExprNode {
         ::HIR::ExprNodeP m_value;
 
-        ExprNode_Yield(Span sp, ::HIR::ExprNodeP value)
-            : ExprNode(mv$(sp))
-            , m_value(mv$(value))
-        {
-        }
+        ExprNode_Yield(Span sp, ::HIR::ExprNodeP value);
 
         static constexpr unsigned int kind = 6;
         unsigned int node_kind() const override;
@@ -208,11 +177,7 @@ namespace HIR {
     struct ExprNode_AWait: public ExprNode {
         ::HIR::ExprNodeP m_value;
 
-        ExprNode_AWait(Span sp, ::HIR::ExprNodeP value)
-            : ExprNode(mv$(sp))
-            , m_value(mv$(value))
-        {
-        }
+        ExprNode_AWait(Span sp, ::HIR::ExprNodeP value);
 
         static constexpr unsigned int kind = 7;
         unsigned int node_kind() const override;
@@ -225,13 +190,7 @@ namespace HIR {
         bool m_diverges = false;
         bool m_require_label = false;
 
-        ExprNode_Loop(Span sp, RcString label, ::HIR::ExprNodeP code, bool require_label = false)
-            : ExprNode(mv$(sp))
-            , m_label(mv$(label))
-            , m_code(mv$(code))
-            , m_require_label(require_label)
-        {
-        }
+        ExprNode_Loop(Span sp, RcString label, ::HIR::ExprNodeP code, bool require_label = false);
 
         static constexpr unsigned int kind = 8;
         unsigned int node_kind() const override;
@@ -245,14 +204,7 @@ namespace HIR {
 
         const ExprNode_Loop* m_target_node; // populated by expr_cs__enum.cpp
 
-        ExprNode_LoopControl(Span sp, RcString label, bool cont, ::HIR::ExprNodeP value = {})
-            : ExprNode(mv$(sp))
-            , m_label(mv$(label))
-            , m_continue(cont)
-            , m_value(mv$(value))
-            , m_target_node(nullptr)
-        {
-        }
+        ExprNode_LoopControl(Span sp, RcString label, bool cont, ::HIR::ExprNodeP value = {});
 
         static constexpr unsigned int kind = 9;
         unsigned int node_kind() const override;
@@ -265,14 +217,7 @@ namespace HIR {
         ::HIR::ExprNodeP m_value;
         bool m_is_super;
 
-        ExprNode_Let(Span sp, ::HIR::Pattern pat, ::HIR::TypeRef ty, ::HIR::ExprNodeP val, bool is_super = false)
-            : ExprNode(mv$(sp))
-            , m_pattern(mv$(pat))
-            , m_type(mv$(ty))
-            , m_value(mv$(val))
-            , m_is_super(is_super)
-        {
-        }
+        ExprNode_Let(Span sp, ::HIR::Pattern pat, ::HIR::TypeRef ty, ::HIR::ExprNodeP val, bool is_super = false);
 
         static constexpr unsigned int kind = 10;
         unsigned int node_kind() const override;
@@ -302,13 +247,7 @@ namespace HIR {
         ::std::vector<Arm> m_arms;
         bool m_is_let_else;
 
-        ExprNode_Match(Span sp, ::HIR::ExprNodeP val, ::std::vector<Arm> arms, bool is_let_else = false)
-            : ExprNode(mv$(sp))
-            , m_value(mv$(val))
-            , m_arms(mv$(arms))
-            , m_is_let_else(is_let_else)
-        {
-        }
+        ExprNode_Match(Span sp, ::HIR::ExprNodeP val, ::std::vector<Arm> arms, bool is_let_else = false);
 
         static constexpr unsigned int kind = 11;
         unsigned int node_kind() const override;
@@ -330,47 +269,13 @@ namespace HIR {
             Shl,
         };
 
-        static const char* opname(Op v) {
-            switch (v) {
-                case Op::None:
-                    return "";
-                case Op::Add:
-                    return "+";
-                case Op::Sub:
-                    return "-";
-                case Op::Mul:
-                    return "*";
-                case Op::Div:
-                    return "/";
-                case Op::Mod:
-                    return "%";
-
-                case Op::And:
-                    return "&";
-                case Op::Or:
-                    return "|";
-                case Op::Xor:
-                    return "^";
-
-                case Op::Shr:
-                    return ">>";
-                case Op::Shl:
-                    return "<<";
-            }
-            throw "";
-        }
+        static const char* opname(Op v);
 
         Op m_op;
         ExprNodeP m_slot;
         ExprNodeP m_value;
 
-        ExprNode_Assign(Span sp, Op op, ::HIR::ExprNodeP slot, ::HIR::ExprNodeP value)
-            : ExprNode(mv$(sp))
-            , m_op(op)
-            , m_slot(mv$(slot))
-            , m_value(mv$(value))
-        {
-        }
+        ExprNode_Assign(Span sp, Op op, ::HIR::ExprNodeP slot, ::HIR::ExprNodeP value);
 
         static constexpr unsigned int kind = 12;
         unsigned int node_kind() const override;
@@ -401,63 +306,13 @@ namespace HIR {
             Shl,
         };
 
-        static const char* opname(Op v) {
-            switch (v) {
-                case Op::CmpEqu:
-                    return "==";
-                case Op::CmpNEqu:
-                    return "!=";
-                case Op::CmpLt:
-                    return "<";
-                case Op::CmpLtE:
-                    return "<=";
-                case Op::CmpGt:
-                    return ">";
-                case Op::CmpGtE:
-                    return ">=";
-
-                case Op::BoolAnd:
-                    return "&&";
-                case Op::BoolOr:
-                    return "||";
-
-                case Op::Add:
-                    return "+";
-                case Op::Sub:
-                    return "-";
-                case Op::Mul:
-                    return "*";
-                case Op::Div:
-                    return "/";
-                case Op::Mod:
-                    return "%";
-
-                case Op::And:
-                    return "&";
-                case Op::Or:
-                    return "|";
-                case Op::Xor:
-                    return "^";
-
-                case Op::Shr:
-                    return ">>";
-                case Op::Shl:
-                    return "<<";
-            }
-            return "??";
-        }
+        static const char* opname(Op v);
 
         Op m_op;
         ::HIR::ExprNodeP m_left;
         ::HIR::ExprNodeP m_right;
 
-        ExprNode_BinOp(Span sp, Op op, ::HIR::ExprNodeP left, ::HIR::ExprNodeP right)
-            : ExprNode(mv$(sp))
-            , m_op(op)
-            , m_left(mv$(left))
-            , m_right(mv$(right))
-        {
-        }
+        ExprNode_BinOp(Span sp, Op op, ::HIR::ExprNodeP left, ::HIR::ExprNodeP right);
 
         static constexpr unsigned int kind = 13;
         unsigned int node_kind() const override;
@@ -470,25 +325,12 @@ namespace HIR {
             Negate, // '-<expr>'
         };
 
-        static const char* opname(Op v) {
-            switch (v) {
-                case Op::Invert:
-                    return "!";
-                case Op::Negate:
-                    return "-";
-            }
-            throw "";
-        }
+        static const char* opname(Op v);
 
         Op m_op;
         ::HIR::ExprNodeP m_value;
 
-        ExprNode_UniOp(Span sp, Op op, ::HIR::ExprNodeP value)
-            : ExprNode(mv$(sp))
-            , m_op(op)
-            , m_value(mv$(value))
-        {
-        }
+        ExprNode_UniOp(Span sp, Op op, ::HIR::ExprNodeP value);
 
         static constexpr unsigned int kind = 14;
         unsigned int node_kind() const override;
@@ -504,13 +346,7 @@ namespace HIR {
         /// </summary>
         bool m_is_valid_static_borrow_constant;
 
-        ExprNode_Borrow(Span sp, ::HIR::BorrowType bt, ::HIR::ExprNodeP value)
-            : ExprNode(mv$(sp))
-            , m_type(bt)
-            , m_value(mv$(value))
-            , m_is_valid_static_borrow_constant(false)
-        {
-        }
+        ExprNode_Borrow(Span sp, ::HIR::BorrowType bt, ::HIR::ExprNodeP value);
 
         static constexpr unsigned int kind = 15;
         unsigned int node_kind() const override;
@@ -521,12 +357,7 @@ namespace HIR {
         ::HIR::BorrowType m_type;
         ::HIR::ExprNodeP m_value;
 
-        ExprNode_RawBorrow(Span sp, ::HIR::BorrowType bt, ::HIR::ExprNodeP value)
-            : ExprNode(mv$(sp))
-            , m_type(bt)
-            , m_value(mv$(value))
-        {
-        }
+        ExprNode_RawBorrow(Span sp, ::HIR::BorrowType bt, ::HIR::ExprNodeP value);
 
         static constexpr unsigned int kind = 16;
         unsigned int node_kind() const override;
@@ -537,12 +368,7 @@ namespace HIR {
         ::HIR::ExprNodeP m_value;
         ::HIR::TypeRef m_dst_type;
 
-        ExprNode_Cast(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dst_type)
-            : ExprNode(mv$(sp))
-            , m_value(mv$(value))
-            , m_dst_type(mv$(dst_type))
-        {
-        }
+        ExprNode_Cast(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dst_type);
 
         static constexpr unsigned int kind = 17;
         unsigned int node_kind() const override;
@@ -559,12 +385,7 @@ namespace HIR {
         ::HIR::TypeRef m_dst_type;
         bool m_is_array_to_slice_adjustment = false;
 
-        ExprNode_Unsize(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dst_type)
-            : ExprNode(mv$(sp))
-            , m_value(mv$(value))
-            , m_dst_type(mv$(dst_type))
-        {
-        }
+        ExprNode_Unsize(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dst_type);
 
         static constexpr unsigned int kind = 18;
         unsigned int node_kind() const override;
@@ -579,12 +400,7 @@ namespace HIR {
             ::HIR::TypeRef index_ty;
         } m_cache;
 
-        ExprNode_Index(Span sp, ::HIR::ExprNodeP val, ::HIR::ExprNodeP index)
-            : ExprNode(mv$(sp))
-            , m_value(mv$(val))
-            , m_index(mv$(index))
-        {
-        }
+        ExprNode_Index(Span sp, ::HIR::ExprNodeP val, ::HIR::ExprNodeP index);
 
         static constexpr unsigned int kind = 19;
         unsigned int node_kind() const override;
@@ -605,12 +421,7 @@ namespace HIR {
         ::HIR::ExprNodeP m_value;
         TraitUsed m_trait_used;
 
-        ExprNode_Deref(Span sp, ::HIR::ExprNodeP val)
-            : ExprNode(mv$(sp))
-            , m_value(mv$(val))
-            , m_trait_used(TraitUsed::Unknown)
-        {
-        }
+        ExprNode_Deref(Span sp, ::HIR::ExprNodeP val);
 
         static constexpr unsigned int kind = 20;
         unsigned int node_kind() const override;
@@ -630,13 +441,7 @@ namespace HIR {
         ExprNodeP m_place;
         ExprNodeP m_value;
 
-        ExprNode_Emplace(Span sp, Type ty, ::HIR::ExprNodeP place, ::HIR::ExprNodeP val)
-            : ExprNode(mv$(sp))
-            , m_type(ty)
-            , m_place(mv$(place))
-            , m_value(mv$(val))
-        {
-        }
+        ExprNode_Emplace(Span sp, Type ty, ::HIR::ExprNodeP place, ::HIR::ExprNodeP val);
 
         static constexpr unsigned int kind = 21;
         unsigned int node_kind() const override;
@@ -652,13 +457,7 @@ namespace HIR {
         // - Cache for typeck
         ::std::vector<::HIR::TypeRef> m_arg_types;
 
-        ExprNode_TupleVariant(Span sp, ::HIR::GenericPath path, bool is_struct, ::std::vector<::HIR::ExprNodeP> args)
-            : ExprNode(mv$(sp))
-            , m_path(mv$(path))
-            , m_is_struct(is_struct)
-            , m_args(mv$(args))
-        {
-        }
+        ExprNode_TupleVariant(Span sp, ::HIR::GenericPath path, bool is_struct, ::std::vector<::HIR::ExprNodeP> args);
 
         static constexpr unsigned int kind = 22;
         unsigned int node_kind() const override;
@@ -681,12 +480,7 @@ namespace HIR {
         // - Cache for typeck
         ExprCallCache m_cache;
 
-        ExprNode_CallPath(Span sp, ::HIR::Path path, ::std::vector<::HIR::ExprNodeP> args)
-            : ExprNode(mv$(sp))
-            , m_path(mv$(path))
-            , m_args(mv$(args))
-        {
-        }
+        ExprNode_CallPath(Span sp, ::HIR::Path path, ::std::vector<::HIR::ExprNodeP> args);
 
         static constexpr unsigned int kind = 23;
         unsigned int node_kind() const override;
@@ -714,12 +508,7 @@ namespace HIR {
         };
         TraitUsed m_trait_used = TraitUsed::Unknown;
 
-        ExprNode_CallValue(Span sp, ::HIR::ExprNodeP val, ::std::vector<::HIR::ExprNodeP> args)
-            : ExprNode(mv$(sp))
-            , m_value(mv$(val))
-            , m_args(mv$(args))
-        {
-        }
+        ExprNode_CallValue(Span sp, ::HIR::ExprNodeP val, ::std::vector<::HIR::ExprNodeP> args);
 
         static constexpr unsigned int kind = 24;
         unsigned int node_kind() const override;
@@ -749,17 +538,7 @@ namespace HIR {
         ::std::vector<unsigned int> m_trait_param_ivars;
         unsigned int m_trait_param_type_ivars = 0;
 
-        ExprNode_CallMethod(Span sp, ::HIR::ExprNodeP val, RcString method_name, ::HIR::PathParams params, ::std::vector<::HIR::ExprNodeP> args)
-            : ExprNode(mv$(sp))
-            , m_value(mv$(val))
-            , m_method(mv$(method_name))
-            , m_params(mv$(params))
-            , m_args(mv$(args))
-            ,
-
-            m_method_path(::HIR::SimplePath("", {}))
-        {
-        }
+        ExprNode_CallMethod(Span sp, ::HIR::ExprNodeP val, RcString method_name, ::HIR::PathParams params, ::std::vector<::HIR::ExprNodeP> args);
 
         static constexpr unsigned int kind = 25;
         unsigned int node_kind() const override;
@@ -770,12 +549,7 @@ namespace HIR {
         ::HIR::ExprNodeP m_value;
         RcString m_field;
 
-        ExprNode_Field(Span sp, ::HIR::ExprNodeP val, RcString field)
-            : ExprNode(mv$(sp))
-            , m_value(mv$(val))
-            , m_field(mv$(field))
-        {
-        }
+        ExprNode_Field(Span sp, ::HIR::ExprNodeP val, RcString field);
 
         static constexpr unsigned int kind = 26;
         unsigned int node_kind() const override;
@@ -804,11 +578,7 @@ namespace HIR {
 
         Data m_data;
 
-        ExprNode_Literal(Span sp, Data data)
-            : ExprNode(mv$(sp))
-            , m_data(mv$(data))
-        {
-        }
+        ExprNode_Literal(Span sp, Data data);
 
         static constexpr unsigned int kind = 27;
         unsigned int node_kind() const override;
@@ -820,12 +590,7 @@ namespace HIR {
         ::HIR::GenericPath m_path;
         bool m_is_struct;
 
-        ExprNode_UnitVariant(Span sp, ::HIR::GenericPath path, bool is_struct)
-            : ExprNode(mv$(sp))
-            , m_path(mv$(path))
-            , m_is_struct(is_struct)
-        {
-        }
+        ExprNode_UnitVariant(Span sp, ::HIR::GenericPath path, bool is_struct);
 
         static constexpr unsigned int kind = 28;
         unsigned int node_kind() const override;
@@ -845,12 +610,7 @@ namespace HIR {
         ::HIR::Path m_path;
         Target m_target;
 
-        ExprNode_PathValue(Span sp, ::HIR::Path path, Target target)
-            : ExprNode(mv$(sp))
-            , m_path(mv$(path))
-            , m_target(target)
-        {
-        }
+        ExprNode_PathValue(Span sp, ::HIR::Path path, Target target);
 
         static constexpr unsigned int kind = 29;
         unsigned int node_kind() const override;
@@ -861,12 +621,7 @@ namespace HIR {
         RcString m_name;
         unsigned int m_slot;
 
-        ExprNode_Variable(Span sp, RcString name, unsigned int slot)
-            : ExprNode(mv$(sp))
-            , m_name(mv$(name))
-            , m_slot(slot)
-        {
-        }
+        ExprNode_Variable(Span sp, RcString name, unsigned int slot);
 
         static constexpr unsigned int kind = 30;
         unsigned int node_kind() const override;
@@ -877,12 +632,7 @@ namespace HIR {
         RcString m_name;
         unsigned int m_binding;
 
-        ExprNode_ConstParam(Span sp, RcString name, unsigned int binding)
-            : ExprNode(mv$(sp))
-            , m_name(mv$(name))
-            , m_binding(binding)
-        {
-        }
+        ExprNode_ConstParam(Span sp, RcString name, unsigned int binding);
 
         static constexpr unsigned int kind = 31;
         unsigned int node_kind() const override;
@@ -905,23 +655,9 @@ namespace HIR {
         /// Monomorphised types of each field.
         ::std::vector<::HIR::TypeRef> m_value_types;
 
-        ExprNode_StructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, ::HIR::ExprNodeP base_value, t_values values)
-            : ExprNode(mv$(sp))
-            , m_type(mv$(ty))
-            , m_is_struct(is_struct)
-            , m_base_value(mv$(base_value))
-            , m_values(mv$(values))
-        {
-        }
+        ExprNode_StructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, ::HIR::ExprNodeP base_value, t_values values);
 
-        ExprNode_StructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, bool, t_values values)
-            : ExprNode(mv$(sp))
-            , m_type(mv$(ty))
-            , m_is_struct(is_struct)
-            , m_use_defaults(true)
-            , m_values(mv$(values))
-        {
-        }
+        ExprNode_StructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, bool, t_values values);
 
         static constexpr unsigned int kind = 32;
         unsigned int node_kind() const override;
@@ -931,11 +667,7 @@ namespace HIR {
     struct ExprNode_Tuple: public ExprNode {
         ::std::vector<::HIR::ExprNodeP> m_vals;
 
-        ExprNode_Tuple(Span sp, ::std::vector<::HIR::ExprNodeP> vals)
-            : ExprNode(mv$(sp))
-            , m_vals(mv$(vals))
-        {
-        }
+        ExprNode_Tuple(Span sp, ::std::vector<::HIR::ExprNodeP> vals);
 
         static constexpr unsigned int kind = 33;
         unsigned int node_kind() const override;
@@ -945,11 +677,7 @@ namespace HIR {
     struct ExprNode_ArrayList: public ExprNode {
         ::std::vector<::HIR::ExprNodeP> m_vals;
 
-        ExprNode_ArrayList(Span sp, ::std::vector<::HIR::ExprNodeP> vals)
-            : ExprNode(mv$(sp))
-            , m_vals(mv$(vals))
-        {
-        }
+        ExprNode_ArrayList(Span sp, ::std::vector<::HIR::ExprNodeP> vals);
 
         static constexpr unsigned int kind = 34;
         unsigned int node_kind() const override;
@@ -961,12 +689,7 @@ namespace HIR {
         ::HIR::ExprNodeP m_val;
         ::HIR::ArraySize m_size;
 
-        ExprNode_ArraySized(Span sp, ::HIR::ExprNodeP val, ::HIR::ExprPtr size)
-            : ExprNode(mv$(sp))
-            , m_val(mv$(val))
-            , m_size(HIR::ConstGeneric(std::make_unique<HIR::ConstGeneric_Unevaluated>(mv$(size))))
-        {
-        }
+        ExprNode_ArraySized(Span sp, ::HIR::ExprNodeP val, ::HIR::ExprPtr size);
 
         static constexpr unsigned int kind = 35;
         unsigned int node_kind() const override;
@@ -1013,14 +736,7 @@ namespace HIR {
         ::HIR::GenericPath m_obj_path;
         ::std::vector<::HIR::ExprNodeP> m_captures;
 
-        ExprNode_Closure(Span sp, args_t args, ::HIR::TypeRef rv, ::HIR::ExprNodeP code, bool is_move)
-            : ExprNode(mv$(sp))
-            , m_args(::std::move(args))
-            , m_return(::std::move(rv))
-            , m_code(::std::move(code))
-            , m_is_move(is_move)
-        {
-        }
+        ExprNode_Closure(Span sp, args_t args, ::HIR::TypeRef rv, ::HIR::ExprNodeP code, bool is_move);
 
         static constexpr unsigned int kind = 36;
         unsigned int node_kind() const override;
@@ -1062,16 +778,7 @@ namespace HIR {
             ::HIR::ExprNodeP code,
             bool is_move,
             bool is_pinned
-        )
-            : ExprNode(mv$(sp))
-            , m_return(::std::move(rv))
-            , m_resume_ty(resume_ty)
-            , m_yield_ty(yield_ty)
-            , m_code(::std::move(code))
-            , m_is_move(is_move)
-            , m_is_pinned(is_pinned)
-        {
-        }
+        );
 
         static constexpr unsigned int kind = 37;
         unsigned int node_kind() const override;
@@ -1105,14 +812,7 @@ namespace HIR {
             ::HIR::TypeRef yield_ty,
             ::HIR::ExprNodeP code,
             bool is_future
-        )
-            : ExprNode(mv$(sp))
-            , m_is_future(is_future)
-            , m_return(rv)
-            , m_yield_ty(yield_ty)
-            , m_code(::std::move(code))
-        {
-        }
+        );
 
         static constexpr unsigned int kind = 38;
         unsigned int node_kind() const override;
@@ -1135,12 +835,7 @@ namespace HIR {
         // State data type (needed for initialising)
         ::HIR::TypeRef m_state_data_type;
 
-        ExprNode_AsyncBlock(Span sp, ::HIR::ExprNodeP code, bool is_move)
-            : ExprNode(mv$(sp))
-            , m_code(std::move(code))
-            , m_is_move(is_move)
-        {
-        }
+        ExprNode_AsyncBlock(Span sp, ::HIR::ExprNodeP code, bool is_move);
 
         static constexpr unsigned int kind = 39;
         unsigned int node_kind() const override;
@@ -1205,7 +900,7 @@ namespace HIR {
         TypeInterner& m_types;
 
     public:
-        explicit ExprVisitorDef(TypeInterner& types): m_types(types) {}
+        explicit ExprVisitorDef(TypeInterner& types);
         TypeInterner& type_interner() const { return m_types; }
 
 #define NV(nt) virtual void visit(nt& n) override;

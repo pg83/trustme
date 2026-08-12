@@ -23,30 +23,16 @@ namespace HIR {
         ::HIR::ExprNode* ptr;
 
     public:
-        ExprNodeP()
-            : ptr(nullptr)
-        {
-        }
+        ExprNodeP();
 
-        ExprNodeP(::HIR::ExprNode* p)
-            : ptr(p)
-        {
-        }
+        ExprNodeP(::HIR::ExprNode* p);
 
-        ExprNodeP(ExprNodeP&& x)
-            : ptr(x.ptr)
-        {
-            x.ptr = nullptr;
-        }
+        ExprNodeP(ExprNodeP&& x);
 
         ExprNodeP(const ExprNodeP&) = delete;
         ~ExprNodeP() = default;
 
-        ExprNodeP& operator=(ExprNodeP&& x) {
-            ptr = x.ptr;
-            x.ptr = nullptr;
-            return *this;
-        }
+        ExprNodeP& operator=(ExprNodeP&& x);
 
         ExprNodeP& operator=(const ExprNodeP&) = delete;
 
@@ -62,66 +48,35 @@ namespace HIR {
             ptr = p;
         }
 
-        ::HIR::ExprNode* release() {
-            auto* rv = ptr;
-            ptr = nullptr;
-            return rv;
-        }
+        ::HIR::ExprNode* release();
 
-        void swap(ExprNodeP& x) {
-            auto* p = ptr;
-            ptr = x.ptr;
-            x.ptr = p;
-        }
+        void swap(ExprNodeP& x);
 
-        ::HIR::ExprNode& operator*() {
-            assert(ptr);
-            return *ptr;
-        }
+        ::HIR::ExprNode& operator*();
 
-        const ::HIR::ExprNode& operator*() const {
-            assert(ptr);
-            return *ptr;
-        }
+        const ::HIR::ExprNode& operator*() const;
 
-        ::HIR::ExprNode* operator->() {
-            assert(ptr);
-            return ptr;
-        }
+        ::HIR::ExprNode* operator->();
 
-        const ::HIR::ExprNode* operator->() const {
-            assert(ptr);
-            return ptr;
-        }
+        const ::HIR::ExprNode* operator->() const;
     };
 
     class ExprStatePtr {
         ::HIR::ExprState* ptr;
 
     public:
-        ExprStatePtr()
-            : ptr(nullptr)
-        {
-        }
+        ExprStatePtr();
 
         ExprStatePtr(stl::ObjPool* pool, ExprState);
         ExprStatePtr(const ExprStatePtr&) = delete;
 
-        ExprStatePtr(ExprStatePtr&& x)
-            : ptr(x.ptr)
-        {
-            x.ptr = nullptr;
-        }
+        ExprStatePtr(ExprStatePtr&& x);
 
         ~ExprStatePtr();
 
         ExprStatePtr& operator=(const ExprStatePtr&) = delete;
 
-        ExprStatePtr& operator=(ExprStatePtr&& x) {
-            ptr = x.ptr;
-            x.ptr = nullptr;
-            return *this;
-        }
+        ExprStatePtr& operator=(ExprStatePtr&& x);
 
         operator bool() const {
             return ptr != nullptr;
@@ -129,25 +84,13 @@ namespace HIR {
 
         ExprStatePtr clone(stl::ObjPool* pool) const;
 
-        ::HIR::ExprState& operator*() {
-            assert(ptr);
-            return *ptr;
-        }
+        ::HIR::ExprState& operator*();
 
-        const ::HIR::ExprState& operator*() const {
-            assert(ptr);
-            return *ptr;
-        }
+        const ::HIR::ExprState& operator*() const;
 
-        ::HIR::ExprState* operator->() {
-            assert(ptr);
-            return ptr;
-        }
+        ::HIR::ExprState* operator->();
 
-        const ::HIR::ExprState* operator->() const {
-            assert(ptr);
-            return ptr;
-        }
+        const ::HIR::ExprState* operator->() const;
     };
 
     class ExprPtr {

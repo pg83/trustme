@@ -2165,3 +2165,105 @@ Ordering EncodedLiteralSlice::ord(const EncodedLiteralSlice& x) const {
     }
     return os;
 }
+
+namespace HIR {
+
+Publicity::Publicity(::std::shared_ptr<::HIR::SimplePath> p)
+    : vis_path(p) {
+}
+Publicity Publicity::new_priv(::HIR::SimplePath p) {
+    size_t n_comp = p.components().size();
+    while (n_comp > 0 && p.components()[n_comp - 1].c_str()[0] == '#') {
+        n_comp--;
+    }
+    auto s = std::span<const RcString>(p.components().data(), n_comp);
+    return Publicity(::std::make_shared<HIR::SimplePath>(p.crate_name(), s));
+}
+Static::Static(Linkage linkage, bool is_mut, TypeRef type, ExprPtr value)
+    : m_linkage(std::move(linkage))
+    , m_is_mut(is_mut)
+    , m_type(std::move(type))
+    , m_value(std::move(value)) {
+}
+Constant::Constant() {
+}
+Constant::Constant(GenericParams params, TypeRef type, ExprPtr value)
+    : m_params(::std::move(params))
+    , m_type(::std::move(type))
+    , m_value(::std::move(value)) {
+}
+Function::Function() {
+}
+Function::Function(Receiver receiver, GenericParams params, args_t args, TypeRef ret_ty, ExprPtr code)
+    : m_receiver(receiver)
+    , m_params(std::move(params))
+    , m_args(std::move(args))
+    , m_variadic(false)
+    , m_return(std::move(ret_ty))
+    , m_code(std::move(code)) {
+}
+Struct::FieldDefault::FieldDefault(size_t index, HIR::ExprPtr v)
+    : index(index)
+    , expr(std::move(v)) {
+}
+Struct::Struct(GenericParams params, Repr repr, Data data)
+    : m_params(mv$(params))
+    , m_repr(mv$(repr))
+    , m_data(mv$(data)) {
+}
+Struct::Struct(GenericParams params, Repr repr, Data data, unsigned align, TraitMarkings tm, StructMarkings sm)
+    : m_params(mv$(params))
+    , m_repr(mv$(repr))
+    , m_data(mv$(data))
+    , m_forced_alignment(align)
+    , m_markings(mv$(tm))
+    , m_struct_markings(mv$(sm)) {
+}
+AssociatedType::AssociatedType(
+    ::HIR::GenericParams generics,
+    bool is_sized,
+    LifetimeRef lifetime_bound,
+    ::std::vector<::HIR::TraitPath> trait_bounds,
+    ::HIR::TypeRef default_type
+)
+    : m_generics(::std::move(generics))
+    , is_sized(is_sized)
+    , m_lifetime_bound(lifetime_bound)
+    , m_trait_bounds(::std::move(trait_bounds))
+    , m_has_default(default_type && !default_type->is_Infer())
+    , m_default(default_type) {
+    assert(default_type);
+}
+Trait::Trait(GenericParams gps, LifetimeRef lifetime, ::std::vector<::HIR::TraitPath> parents)
+    : m_params(mv$(gps))
+    , m_lifetime(mv$(lifetime))
+    , m_parent_traits(mv$(parents))
+    , m_is_marker(false)
+    , m_is_const(false)
+    , m_is_coinductive(false)
+    , m_is_fundamental(false)
+    , m_vtable_parent_traits_start(0) {
+}
+Module::Module() {
+}
+Crate::Crate(stl::ObjPool* pool, TypeInterner& types)
+    : m_pool(pool)
+    , m_types(types)
+    , m_intrinsic_offsetof(Function{Function::Receiver::Free, GenericParams{}, {}, types.primitive(CoreType::Usize), {}}) {
+}
+const ::HIR::Constant& Crate::get_constant_by_path(const Span& sp, const ::HIR::SimplePath& path) const {
+    const auto& ti = this->get_valitem_by_path(sp, path);
+    TU_IFLET(::HIR::ValueItem, ti, Constant, e, return e;)
+    else {
+        BUG(sp, "`const` path " << path << " didn't point to an enum");
+    }
+}
+const ::MIR::Function* Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const {
+    auto ty = fcn.m_return;
+    return get_or_gen_mir(ip, fcn.m_code, fcn.m_args, ty);
+}
+const ::MIR::Function* Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& exp_ty) const {
+    static ::HIR::Function::args_t s_args;
+    return get_or_gen_mir(ip, ep, s_args, exp_ty);
+}
+}

@@ -16,15 +16,9 @@ namespace AST {
     public:
         ~ExprNodeP();
 
-        ExprNodeP()
-            : m_ptr(nullptr)
-        {
-        }
+        ExprNodeP();
 
-        ExprNodeP(ExprNode* node)
-            : m_ptr(node)
-        {
-        }
+        ExprNodeP(ExprNode* node);
 
         ExprNodeP(std::unique_ptr<ExprNode> node); //: m_ptr(node.release()) {}
 
@@ -36,12 +30,7 @@ namespace AST {
 
         ExprNodeP(const ExprNodeP& x) = delete;
 
-        ExprNodeP& operator=(ExprNodeP&& x) {
-            this->~ExprNodeP();
-            this->m_ptr = x.m_ptr;
-            x.m_ptr = nullptr;
-            return *this;
-        }
+        ExprNodeP& operator=(ExprNodeP&& x);
 
         ExprNodeP& operator=(const ExprNodeP& x) = delete;
 
@@ -77,16 +66,9 @@ namespace AST {
             return m_ptr;
         }
 
-        ExprNode* release() {
-            auto rv = m_ptr;
-            m_ptr = nullptr;
-            return rv;
-        }
+        ExprNode* release();
 
-        void reset(ExprNode* n = nullptr) {
-            this->~ExprNodeP();
-            m_ptr = n;
-        }
+        void reset(ExprNode* n = nullptr);
 
         const char* type_name() const;
     };
@@ -107,20 +89,11 @@ namespace AST {
             return m_node.get() != nullptr;
         }
 
-        const ExprNode& node() const {
-            assert(m_node.get());
-            return *m_node;
-        }
+        const ExprNode& node() const;
 
-        ExprNode& node() {
-            assert(m_node.get());
-            return *m_node;
-        }
+        ExprNode& node();
 
-        ::std::shared_ptr<ExprNode> take_node() {
-            assert(m_node.get());
-            return ::std::move(m_node);
-        }
+        ::std::shared_ptr<ExprNode> take_node();
 
         void visit_nodes(NodeVisitor& v);
         void visit_nodes(NodeVisitor& v) const;

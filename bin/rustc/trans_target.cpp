@@ -2084,3 +2084,20 @@ std::pair<unsigned, bool> TypeRepr::get_enum_variant(const Span& sp, const Stati
     }
     return std::make_pair(var_idx, sub_has_tag);
 }
+
+TargetArch::Atomics::Atomics(bool u8, bool u16, bool u32, bool u64, bool ptr)
+    : u8(u8)
+    , u16(u16)
+    , u32(u32)
+    , u64(u64)
+    , ptr(ptr) {
+}
+TargetArch::Alignments::Alignments(uint8_t u16, uint8_t u32, uint8_t u64, uint8_t u128, uint8_t f32, uint8_t f64, uint8_t ptr)
+    : u16(u16)
+    , u32(u32)
+    , u64(u64)
+    , u128(u128)
+    , f32(f32)
+    , f64(f64)
+    , ptr(ptr) {
+}

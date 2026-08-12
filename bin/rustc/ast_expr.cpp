@@ -970,3 +970,214 @@ namespace AST {
 #undef NV
 
 };
+
+namespace AST {
+
+void ExprNode::set_attrs(AttributeList&& mi) {
+    for (auto& i : mi.m_items) {
+        m_attrs.m_items.push_back(mv$(i));
+    }
+    mi.m_items.clear();
+}
+ExprNode_Block::ExprNode_Block(::std::vector<Line> nodes)
+    : m_block_type(Type::Bare)
+    , m_label("")
+    , m_local_mod()
+    , m_nodes(::std::move(nodes)) {
+}
+/// Shortcut for a block that returns a contained node
+ExprNode_Block::ExprNode_Block(ExprNodeP value)
+    : ExprNode_Block() {
+    set_span(value->span());
+    m_nodes.push_back({false, std::move(value)});
+}
+ExprNode_Block::ExprNode_Block(Type type, ::std::vector<Line> nodes, ::std::shared_ptr<AST::Module> local_mod)
+    : m_block_type(type)
+    , m_label("")
+    , m_local_mod(::std::move(local_mod))
+    , m_nodes(::std::move(nodes)) {
+}
+ExprNode_AsyncBlock::ExprNode_AsyncBlock(ExprNodeP inner, bool is_move)
+    : m_inner(std::move(inner))
+    , m_is_move(is_move) {
+}
+ExprNode_GeneratorBlock::ExprNode_GeneratorBlock(ExprNodeP inner, bool is_move)
+    : m_inner(std::move(inner))
+    , m_is_move(is_move) {
+}
+ExprNode_Try::ExprNode_Try(ExprNodeP inner)
+    : m_inner(::std::move(inner)) {
+}
+ExprNode_Macro::ExprNode_Macro(AST::Path name, RcString ident, ::TokenTree&& tokens, bool is_braced, Ident::Hygiene definition_hygiene)
+    : m_path(::std::move(name))
+    , m_ident(ident)
+    , m_tokens(::std::move(tokens))
+    , m_is_braced(is_braced)
+    , m_definition_hygiene(::std::move(definition_hygiene)) {
+}
+ExprNode_Asm::ExprNode_Asm(::std::string text, ::std::vector<ValRef> output, ::std::vector<ValRef> input, ::std::vector<::std::string> clobbers, ::std::vector<::std::string> flags)
+    : m_text(::std::move(text))
+    , m_output(::std::move(output))
+    , m_input(::std::move(input))
+    , m_clobbers(::std::move(clobbers))
+    , m_flags(::std::move(flags)) {
+}
+ExprNode_Asm2::ExprNode_Asm2(AsmCommon::Options options, std::vector<AsmCommon::Line> lines, std::vector<Param> params)
+    : m_options(options)
+    , m_lines(::std::move(lines))
+    , m_params(::std::move(params)) {
+}
+ExprNode_Flow::ExprNode_Flow(Type type, Ident target, ExprNodeP value)
+    : m_type(type)
+    , m_target(::std::move(target))
+    , m_value(::std::move(value)) {
+}
+ExprNode_LetBinding::ExprNode_LetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP else_arm, bool is_super)
+    : m_pat(::std::move(pat))
+    , m_type(::std::move(type))
+    , m_value(::std::move(value))
+    , m_else(::std::move(else_arm))
+    , m_is_super(is_super) {
+}
+ExprNode_Assign::ExprNode_Assign()
+    : m_op(NONE) {
+}
+ExprNode_Assign::ExprNode_Assign(Operation op, ExprNodeP slot, ExprNodeP value)
+    : m_op(op)
+    , m_slot(::std::move(slot))
+    , m_value(::std::move(value)) {
+}
+ExprNode_CallPath::ExprNode_CallPath(Path&& path, ::std::vector<ExprNodeP>&& args)
+    : m_path(::std::move(path))
+    , m_args(::std::move(args)) {
+}
+ExprNode_CallMethod::ExprNode_CallMethod(ExprNodeP obj, PathNode method, ::std::vector<ExprNodeP> args)
+    : m_val(::std::move(obj))
+    , m_method(::std::move(method))
+    , m_args(::std::move(args)) {
+}
+ExprNode_CallObject::ExprNode_CallObject(ExprNodeP val, ::std::vector<ExprNodeP>&& args)
+    : m_val(::std::move(val))
+    , m_args(::std::move(args)) {
+}
+ExprNode_Loop::ExprNode_Loop()
+    : m_label("") {
+}
+ExprNode_Loop::ExprNode_Loop(Ident label, ExprNodeP code)
+    : m_label(::std::move(label))
+    , m_code(::std::move(code)) {
+}
+ExprNode_For::ExprNode_For(Ident label, AST::Pattern pattern, ExprNodeP val, ExprNodeP code)
+    : m_label(::std::move(label))
+    , m_pattern(::std::move(pattern))
+    , m_value(::std::move(val))
+    , m_code(::std::move(code)) {
+}
+ExprNode_While::ExprNode_While(Ident label, std::vector<IfLet_Condition> conditions, ExprNodeP code)
+    : m_label(::std::move(label))
+    , m_conditions(::std::move(conditions))
+    , m_code(::std::move(code)) {
+}
+ExprNode_Match_Arm::ExprNode_Match_Arm() {
+}
+ExprNode_Match_Arm::ExprNode_Match_Arm(::std::vector<Pattern> patterns, std::vector<IfLet_Condition> guard, ExprNodeP code)
+    : m_patterns(mv$(patterns))
+    , m_guard(mv$(guard))
+    , m_code(mv$(code)) {
+}
+ExprNode_Match::ExprNode_Match(ExprNodeP val, ::std::vector<ExprNode_Match_Arm> arms)
+    : m_val(::std::move(val))
+    , m_arms(::std::move(arms)) {
+}
+ExprNode_If::ExprNode_If(std::vector<Arm> arms, ExprNodeP else_code)
+    : m_arms(::std::move(arms))
+    , m_else(::std::move(else_code)) {
+}
+ExprNode_Integer::ExprNode_Integer(U128 value, enum eCoreType datatype)
+    : m_datatype(datatype)
+    , m_value(value) {
+}
+ExprNode_Float::ExprNode_Float(FloatValue value, enum eCoreType datatype)
+    : m_datatype(datatype)
+    , m_value(value) {
+}
+ExprNode_Bool::ExprNode_Bool(bool value)
+    : m_value(value) {
+}
+ExprNode_String::ExprNode_String(::std::string value, Ident::Hygiene h)
+    : m_value(::std::move(value))
+    , m_hygiene(::std::move(h)) {
+}
+ExprNode_ByteString::ExprNode_ByteString(::std::string value)
+    : m_value(::std::move(value)) {
+}
+ExprNode_CString::ExprNode_CString(::std::string value)
+    : m_value(::std::move(value)) {
+}
+ExprNode_StructLiteral::ExprNode_StructLiteral(Path path, ExprNodeP base_value, t_values&& values)
+    : m_path(std::move(path))
+    , m_base_value(std::move(base_value))
+    , m_values(std::move(values)) {
+}
+ExprNode_StructLiteralPattern::ExprNode_StructLiteralPattern(Path path, t_values&& values)
+    : m_path(std::move(path))
+    , m_values(std::move(values)) {
+}
+ExprNode_Array::ExprNode_Array(::std::vector<ExprNodeP> vals)
+    : m_values(::std::move(vals)) {
+}
+ExprNode_Array::ExprNode_Array(ExprNodeP val, ExprNodeP size)
+    : m_size(::std::move(size)) {
+    m_values.push_back(::std::move(val));
+}
+ExprNode_Tuple::ExprNode_Tuple(::std::vector<ExprNodeP> vals)
+    : m_values(::std::move(vals)) {
+}
+ExprNode_NamedValue::ExprNode_NamedValue(Path path)
+    : m_path(::std::move(path)) {
+}
+ExprNode_Field::ExprNode_Field(ExprNodeP obj, RcString name)
+    : m_obj(::std::move(obj))
+    , m_name(::std::move(name)) {
+}
+ExprNode_Index::ExprNode_Index(ExprNodeP obj, ExprNodeP idx)
+    : m_obj(::std::move(obj))
+    , m_idx(::std::move(idx)) {
+}
+ExprNode_Deref::ExprNode_Deref(ExprNodeP value)
+    : m_value(::std::move(value)) {
+}
+ExprNode_Cast::ExprNode_Cast(ExprNodeP value, TypeRef&& dst_type)
+    : m_value(::std::move(value))
+    , m_type(::std::move(dst_type)) {
+}
+ExprNode_TypeAnnotation::ExprNode_TypeAnnotation(ExprNodeP value, TypeRef&& dst_type)
+    : m_value(::std::move(value))
+    , m_type(::std::move(dst_type)) {
+}
+ExprNode_BinOp::ExprNode_BinOp(Type type, ExprNodeP left, ExprNodeP right)
+    : m_type(type)
+    , m_left(::std::move(left))
+    , m_right(::std::move(right)) {
+}
+ExprNode_UniOp::ExprNode_UniOp(Type type, ExprNodeP value)
+    : m_type(type)
+    , m_value(::std::move(value)) {
+}
+ExprNode_MacroDefinition::ExprNode_MacroDefinition(unsigned int definition_id, Ident::Hygiene token_hygiene, Ident::Hygiene definition_hygiene)
+    : m_definition_id(definition_id)
+    , m_token_hygiene(::std::move(token_hygiene))
+    , m_definition_hygiene(::std::move(definition_hygiene)) {
+}
+void NodeVisitor::visit(ExprNodeP& cnode) {
+    if (cnode.get()) {
+        cnode->visit(*this);
+    }
+}
+void NodeVisitorDef::visit(ExprNodeP& cnode) {
+    if (cnode.is_valid()) {
+        TRACE_FUNCTION_F(cnode.type_name());
+        cnode->visit(*this);
+    }
+}
+}

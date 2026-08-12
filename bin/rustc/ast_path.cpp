@@ -406,3 +406,131 @@ namespace AST {
     }
 
 }
+
+namespace AST {
+
+AbsolutePath::AbsolutePath() {
+}
+AbsolutePath::AbsolutePath(RcString crate, ::std::vector<RcString> nodes)
+    : crate(::std::move(crate))
+    , nodes(::std::move(nodes)) {
+}
+AbsolutePath AbsolutePath::operator+(RcString n) const {
+    // Maybe being overly efficient here, but meh.
+    AbsolutePath rv;
+    rv.crate = this->crate;
+    rv.nodes.reserve(this->nodes.size() + 1);
+    rv.nodes.insert(rv.nodes.end(), this->nodes.begin(), this->nodes.end());
+    rv.nodes.push_back(::std::move(n));
+    return rv;
+}
+bool AbsolutePath::operator==(const AbsolutePath& x) const {
+    if (this->crate != x.crate) {
+        return false;
+    }
+    if (this->nodes != x.nodes) {
+        return false;
+    }
+    return true;
+}
+// Returns true if this path is a prefix of the other path (or equal)
+bool AbsolutePath::is_parent_of(const AbsolutePath& other) const {
+    if (this->crate != other.crate) {
+        return false;
+    }
+    if (this->nodes.size() > other.nodes.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < this->nodes.size(); i++) {
+        if (this->nodes[i] != other.nodes[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+PathNode::PathNode() {
+}
+void Path::Bindings::merge_from(const Bindings& x) {
+    if (value.is_Unbound()) {
+        value = x.value.clone();
+    }
+    if (type.is_Unbound()) {
+        type = x.type.clone();
+    }
+    if (macro.is_Unbound()) {
+        macro = x.macro.clone();
+    }
+}
+Path::Path(Class c)
+    : m_class(::std::move(c)) {
+}
+// INVALID
+Path::Path()
+    : m_class() {
+}
+// ABSOLUTE
+Path::Path(RcString crate, ::std::vector<PathNode> nodes)
+    : m_class(Class::make_Absolute({mv$(crate), mv$(nodes)})) {
+}
+Path::Path(const AbsolutePath& p)
+    : m_class(Class::make_Absolute({p.crate, {}})) {
+    auto& n = m_class.as_Absolute().nodes;
+    n.reserve(p.nodes.size());
+    for (const auto& v : p.nodes) {
+        n.push_back(v);
+    }
+}
+Path::Path(const PathBinding<PathBinding_Value>& pb)
+    : Path(pb.path) {
+    this->m_bindings.value = pb.clone();
+}
+Path::Path(const PathBinding<PathBinding_Type>& pb)
+    : Path(pb.path) {
+    this->m_bindings.type = pb.clone();
+}
+Path::Path(const PathBinding<PathBinding_Macro>& pb)
+    : Path(pb.path) {
+    this->m_bindings.macro = pb.clone();
+}
+Path::Path(const AbsolutePath& p, ::AST::PathParams pp)
+    : Path(p) {
+    auto& n = m_class.as_Absolute().nodes;
+    assert(n.size() > 0);
+    n.back().args() = ::std::move(pp);
+}
+Path Path::operator+(PathNode pn) const {
+    Path tmp = Path(*this);
+    tmp.append(mv$(pn));
+    return tmp;
+}
+Path Path::operator+(const RcString& s) const {
+    Path tmp = Path(*this);
+    tmp.append(PathNode(s, {}));
+    return tmp;
+}
+Path& Path::operator+=(PathNode pn) {
+    this->append(mv$(pn));
+    return *this;
+}
+const RcString& Path::as_trivial() const {
+TU_MATCH_HDRA( (m_class), {)
+default:
+    break;
+        TU_ARMA(Local, e) {
+            return e.name;
+        }
+        TU_ARMA(Relative, e) {
+            return e.nodes[0].name();
+        }
+}
+throw std::runtime_error("as_trivial on non-trivial path");
+}
+size_t Path::size() const {
+    TU_MATCH(Class, (m_class), (ent), (Invalid, assert(!m_class.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");), (Local, return 1;), (Relative, return ent.nodes.size();), (Self, return ent.nodes.size();), (Super, return ent.nodes.size();), (Absolute, return ent.nodes.size();), (UFCS, return ent.nodes.size();))
+    throw ::std::runtime_error("Path::nodes() fell off");
+}
+::std::vector<PathNode>& Path::nodes() {
+    TU_MATCH(Class, (m_class), (ent), (Invalid, assert(!m_class.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");), (Local, assert(!m_class.is_Local()); throw ::std::runtime_error("Path::nodes() on Local");), (Relative, return ent.nodes;), (Self, return ent.nodes;), (Super, return ent.nodes;), (Absolute, return ent.nodes;), (UFCS, return ent.nodes;))
+    throw ::std::runtime_error("Path::nodes() fell off");
+}
+}

@@ -8,62 +8,25 @@ namespace MIR {
         ::MIR::Function* ptr;
 
     public:
-        FunctionPointer()
-            : ptr(nullptr)
-        {
-        }
+        FunctionPointer();
 
-        FunctionPointer(::MIR::Function* p)
-            : ptr(p)
-        {
-        }
+        FunctionPointer(::MIR::Function* p);
 
-        FunctionPointer(FunctionPointer&& x)
-            : ptr(x.ptr)
-        {
-            x.ptr = nullptr;
-        }
+        FunctionPointer(FunctionPointer&& x);
 
-        ~FunctionPointer() {
-            reset();
-        }
+        ~FunctionPointer();
 
-        FunctionPointer& operator=(FunctionPointer&& x) {
-            reset();
-            ptr = x.ptr;
-            x.ptr = nullptr;
-            return *this;
-        }
+        FunctionPointer& operator=(FunctionPointer&& x);
 
         void reset();
 
-        ::MIR::Function* operator->() {
-            if (!ptr) {
-                throw "";
-            }
-            return ptr;
-        }
+        ::MIR::Function* operator->();
 
-        const ::MIR::Function* operator->() const {
-            if (!ptr) {
-                throw "";
-            }
-            return ptr;
-        }
+        const ::MIR::Function* operator->() const;
 
-        ::MIR::Function& operator*() {
-            if (!ptr) {
-                throw "";
-            }
-            return *ptr;
-        }
+        ::MIR::Function& operator*();
 
-        const ::MIR::Function& operator*() const {
-            if (!ptr) {
-                throw "";
-            }
-            return *ptr;
-        }
+        const ::MIR::Function& operator*() const;
 
         operator bool() const {
             return ptr != nullptr;

@@ -47,34 +47,13 @@ namespace AST {
         RcString crate;
         ::std::vector<RcString> nodes;
 
-        AbsolutePath() {
-        }
+        AbsolutePath();
 
-        AbsolutePath(RcString crate, ::std::vector<RcString> nodes)
-            : crate(::std::move(crate))
-            , nodes(::std::move(nodes))
-        {
-        }
+        AbsolutePath(RcString crate, ::std::vector<RcString> nodes);
 
-        AbsolutePath operator+(RcString n) const {
-            // Maybe being overly efficient here, but meh.
-            AbsolutePath rv;
-            rv.crate = this->crate;
-            rv.nodes.reserve(this->nodes.size() + 1);
-            rv.nodes.insert(rv.nodes.end(), this->nodes.begin(), this->nodes.end());
-            rv.nodes.push_back(::std::move(n));
-            return rv;
-        }
+        AbsolutePath operator+(RcString n) const;
 
-        bool operator==(const AbsolutePath& x) const {
-            if (this->crate != x.crate) {
-                return false;
-            }
-            if (this->nodes != x.nodes) {
-                return false;
-            }
-            return true;
-        }
+        bool operator==(const AbsolutePath& x) const;
 
         bool operator!=(const AbsolutePath& x) const {
             return !(*this == x);
@@ -93,20 +72,7 @@ namespace AST {
         }
 
         // Returns true if this path is a prefix of the other path (or equal)
-        bool is_parent_of(const AbsolutePath& other) const {
-            if (this->crate != other.crate) {
-                return false;
-            }
-            if (this->nodes.size() > other.nodes.size()) {
-                return false;
-            }
-            for (size_t i = 0; i < this->nodes.size(); i++) {
-                if (this->nodes[i] != other.nodes[i]) {
-                    return false;
-                }
-            }
-            return true;
-        }
+        bool is_parent_of(const AbsolutePath& other) const;
     };
 
     TAGGED_UNION_EX(
@@ -294,8 +260,7 @@ namespace AST {
         PathParams m_params;
 
     public:
-        PathNode() {
-        }
+        PathNode();
 
         PathNode(RcString name, PathParams args = {});
 
@@ -388,17 +353,7 @@ namespace AST {
                 return !value.is_Unbound() || !type.is_Unbound() || !macro.is_Unbound();
             }
 
-            void merge_from(const Bindings& x) {
-                if (value.is_Unbound()) {
-                    value = x.value.clone();
-                }
-                if (type.is_Unbound()) {
-                    type = x.type.clone();
-                }
-                if (macro.is_Unbound()) {
-                    macro = x.macro.clone();
-                }
-            }
+            void merge_from(const Bindings& x);
         };
 
     public:
@@ -407,16 +362,10 @@ namespace AST {
 
         virtual ~Path();
 
-        Path(Class c)
-            : m_class(::std::move(c))
-        {
-        }
+        Path(Class c);
 
         // INVALID
-        Path()
-            : m_class()
-        {
-        }
+        Path();
 
         Path(Path&&) = default;
         Path& operator=(AST::Path&& x) = default;
@@ -425,46 +374,17 @@ namespace AST {
         Path& operator=(const AST::Path&) = delete;
 
         // ABSOLUTE
-        Path(RcString crate, ::std::vector<PathNode> nodes)
-            : m_class(Class::make_Absolute({mv$(crate), mv$(nodes)}))
-        {
-        }
+        Path(RcString crate, ::std::vector<PathNode> nodes);
 
-        Path(const AbsolutePath& p)
-            : m_class(Class::make_Absolute({p.crate, {}}))
-        {
-            auto& n = m_class.as_Absolute().nodes;
-            n.reserve(p.nodes.size());
-            for (const auto& v : p.nodes) {
-                n.push_back(v);
-            }
-        }
+        Path(const AbsolutePath& p);
 
-        Path(const PathBinding<PathBinding_Value>& pb)
-            : Path(pb.path)
-        {
-            this->m_bindings.value = pb.clone();
-        }
+        Path(const PathBinding<PathBinding_Value>& pb);
 
-        Path(const PathBinding<PathBinding_Type>& pb)
-            : Path(pb.path)
-        {
-            this->m_bindings.type = pb.clone();
-        }
+        Path(const PathBinding<PathBinding_Type>& pb);
 
-        Path(const PathBinding<PathBinding_Macro>& pb)
-            : Path(pb.path)
-        {
-            this->m_bindings.macro = pb.clone();
-        }
+        Path(const PathBinding<PathBinding_Macro>& pb);
 
-        Path(const AbsolutePath& p, ::AST::PathParams pp)
-            : Path(p)
-        {
-            auto& n = m_class.as_Absolute().nodes;
-            assert(n.size() > 0);
-            n.back().args() = ::std::move(pp);
-        }
+        Path(const AbsolutePath& p, ::AST::PathParams pp);
 
         // Local (variable/type param)
         Path(RcString name)
@@ -494,17 +414,9 @@ namespace AST {
             return Path(Class::make_Super({count, mv$(nodes)}));
         }
 
-        Path operator+(PathNode pn) const {
-            Path tmp = Path(*this);
-            tmp.append(mv$(pn));
-            return tmp;
-        }
+        Path operator+(PathNode pn) const;
 
-        Path operator+(const RcString& s) const {
-            Path tmp = Path(*this);
-            tmp.append(PathNode(s, {}));
-            return tmp;
-        }
+        Path operator+(const RcString& s) const;
 
         Path operator+(const Path& x) const {
             return Path(*this) += x;
@@ -512,10 +424,7 @@ namespace AST {
 
         Path& operator+=(const Path& x);
 
-        Path& operator+=(PathNode pn) {
-            this->append(mv$(pn));
-            return *this;
-        }
+        Path& operator+=(PathNode pn);
 
     #if 1
         void append(PathNode node) {
@@ -531,19 +440,7 @@ namespace AST {
             TU_MATCH_DEF(Class, (m_class), (e), (return false;), (Local, return true;), (Relative, return e.nodes.size() == 1 && e.nodes[0].args().is_empty();))
         }
 
-        const RcString& as_trivial() const {
-        TU_MATCH_HDRA( (m_class), {)
-        default:
-            break;
-                TU_ARMA(Local, e) {
-                    return e.name;
-                }
-                TU_ARMA(Relative, e) {
-                    return e.nodes[0].name();
-                }
-        }
-        throw std::runtime_error("as_trivial on non-trivial path");
-        }
+        const RcString& as_trivial() const;
 
         bool is_valid() const {
             return !m_class.is_Invalid();
@@ -557,19 +454,13 @@ namespace AST {
             return m_class.is_Relative() || m_class.is_Super() || m_class.is_Self();
         }
 
-        size_t size() const {
-            TU_MATCH(Class, (m_class), (ent), (Invalid, assert(!m_class.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");), (Local, return 1;), (Relative, return ent.nodes.size();), (Self, return ent.nodes.size();), (Super, return ent.nodes.size();), (Absolute, return ent.nodes.size();), (UFCS, return ent.nodes.size();))
-            throw ::std::runtime_error("Path::nodes() fell off");
-        }
+        size_t size() const;
 
         bool is_parent_of(const Path& x) const;
 
         void bind_variable(unsigned int slot);
 
-        ::std::vector<PathNode>& nodes() {
-            TU_MATCH(Class, (m_class), (ent), (Invalid, assert(!m_class.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");), (Local, assert(!m_class.is_Local()); throw ::std::runtime_error("Path::nodes() on Local");), (Relative, return ent.nodes;), (Self, return ent.nodes;), (Super, return ent.nodes;), (Absolute, return ent.nodes;), (UFCS, return ent.nodes;))
-            throw ::std::runtime_error("Path::nodes() fell off");
-        }
+        ::std::vector<PathNode>& nodes();
 
         const ::std::vector<PathNode>& nodes() const {
             return ((Path*)this)->nodes();

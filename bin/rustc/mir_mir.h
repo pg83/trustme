@@ -29,65 +29,33 @@ namespace MIR {
         private:
             uintptr_t val;
 
-            Storage(uintptr_t v)
-                : val(v)
-            {
-            }
+            Storage(uintptr_t v);
 
         public:
             Storage(const Storage&) = delete;
             Storage& operator=(const Storage&) = delete;
 
-            Storage(Storage&& x)
-                : val(x.val)
-            {
-                x.val = 0;
-            }
+            Storage(Storage&& x);
 
-            Storage& operator=(Storage&& x) {
-                this->~Storage();
-                this->val = x.val;
-                x.val = 0;
-                return *this;
-            }
+            Storage& operator=(Storage&& x);
 
-            ~Storage() {
-                if (is_Static()) {
-                    delete reinterpret_cast<::HIR::Path*>(val & ~3ull);
-                    val = 0;
-                }
-            }
+            ~Storage();
 
             static Storage new_Return() {
                 return Storage(0 << 2);
             }
 
-            static Storage new_Argument(unsigned idx) {
-                assert(idx < MAX_ARG);
-                return Storage((idx + 1) << 2);
-            }
+            static Storage new_Argument(unsigned idx);
 
-            static Storage new_Local(unsigned idx) {
-                assert(idx <= MAX_ARG);
-                return Storage((idx << 2) | 1);
-            }
+            static Storage new_Local(unsigned idx);
 
-            static Storage new_Static(::HIR::Path p) {
-                ::HIR::Path* ptr = new ::HIR::Path(::std::move(p));
-                return Storage(reinterpret_cast<uintptr_t>(ptr) | 2);
-            }
+            static Storage new_Static(::HIR::Path p);
 
             Storage clone() const;
 
-            uintptr_t get_inner() const {
-                assert(!is_Static());
-                return val;
-            }
+            uintptr_t get_inner() const;
 
-            static Storage from_inner(uintptr_t v) {
-                assert((v & 3) < 2);
-                return Storage(v);
-            }
+            static Storage from_inner(uintptr_t v);
 
             enum Tag {
                 TAG_Argument,
@@ -97,12 +65,7 @@ namespace MIR {
                 TAGDEAD,
             };
 
-            Tag tag() const {
-                if (val == 0) {
-                    return TAG_Return;
-                }
-                return static_cast<Tag>(val & 3);
-            }
+            Tag tag() const;
 
             bool is_Return() const {
                 return val == 0;
@@ -120,30 +83,15 @@ namespace MIR {
                 return (val & 3) == 2;
             }
 
-            char as_Return() const {
-                assert(is_Return());
-                return 0;
-            }
+            char as_Return() const;
 
-            unsigned as_Argument() const {
-                assert(is_Argument());
-                return static_cast<unsigned>((val >> 2) - 1);
-            }
+            unsigned as_Argument() const;
 
-            unsigned as_Local() const {
-                assert(is_Local());
-                return static_cast<unsigned>(val >> 2);
-            }
+            unsigned as_Local() const;
 
-            const ::HIR::Path& as_Static() const {
-                assert(is_Static());
-                return *reinterpret_cast<const ::HIR::Path*>(val & ~3llu);
-            }
+            const ::HIR::Path& as_Static() const;
 
-            ::HIR::Path& as_Static() {
-                assert(is_Static());
-                return *reinterpret_cast<::HIR::Path*>(val & ~3llu);
-            }
+            ::HIR::Path& as_Static();
 
             Ordering ord(const Storage& x) const;
 
@@ -159,10 +107,7 @@ namespace MIR {
         class Wrapper {
             uint32_t val;
 
-            Wrapper(uint32_t v)
-                : val(v)
-            {
-            }
+            Wrapper(uint32_t v);
 
         public:
             static Wrapper new_Deref() {
@@ -177,12 +122,7 @@ namespace MIR {
                 return Wrapper((idx << 2) | 2);
             }
 
-            static Wrapper new_Index(unsigned idx) {
-                if (idx == ~0u) {
-                    idx = Storage::MAX_ARG;
-                }
-                return Wrapper((idx << 2) | 3);
-            }
+            static Wrapper new_Index(unsigned idx);
 
             uint32_t get_inner() const {
                 return val;
@@ -223,37 +163,18 @@ namespace MIR {
                 return (val & 3) == 3;
             }
 
-            char as_Deref() const {
-                assert(is_Deref());
-                return 0;
-            }
+            char as_Deref() const;
 
-            unsigned as_Field() const {
-                assert(is_Field());
-                return (val >> 2);
-            }
+            unsigned as_Field() const;
 
-            unsigned as_Downcast() const {
-                assert(is_Downcast());
-                return (val >> 2);
-            }
+            unsigned as_Downcast() const;
 
             // TODO: Should this return a LValue?
-            unsigned as_Index() const {
-                assert(is_Index());
-                unsigned rv = (val >> 2);
-                return rv;
-            }
+            unsigned as_Index() const;
 
-            void inc_Field() {
-                assert(is_Field());
-                *this = Wrapper::new_Field(as_Field() + 1);
-            }
+            void inc_Field();
 
-            void inc_Downcast() {
-                assert(is_Downcast());
-                *this = Wrapper::new_Downcast(as_Downcast() + 1);
-            }
+            void inc_Downcast();
 
             Ordering ord(const Wrapper& x) const {
                 return ::ord(val, x.val);
@@ -271,16 +192,9 @@ namespace MIR {
         Storage m_root;
         ::std::vector<Wrapper> m_wrappers;
 
-        LValue()
-            : m_root(Storage::new_Return())
-        {
-        }
+        LValue();
 
-        LValue(Storage root, ::std::vector<Wrapper> wrappers)
-            : m_root(::std::move(root))
-            , m_wrappers(::std::move(wrappers))
-        {
-        }
+        LValue(Storage root, ::std::vector<Wrapper> wrappers);
 
         static LValue new_Return() {
             return LValue(Storage::new_Return(), {});
@@ -298,25 +212,13 @@ namespace MIR {
             return LValue(Storage::new_Static(::std::move(p)), {});
         }
 
-        static LValue new_Deref(LValue lv) {
-            lv.m_wrappers.push_back(Wrapper::new_Deref());
-            return lv;
-        }
+        static LValue new_Deref(LValue lv);
 
-        static LValue new_Field(LValue lv, unsigned idx) {
-            lv.m_wrappers.push_back(Wrapper::new_Field(idx));
-            return lv;
-        }
+        static LValue new_Field(LValue lv, unsigned idx);
 
-        static LValue new_Downcast(LValue lv, unsigned idx) {
-            lv.m_wrappers.push_back(Wrapper::new_Downcast(idx));
-            return lv;
-        }
+        static LValue new_Downcast(LValue lv, unsigned idx);
 
-        static LValue new_Index(LValue lv, unsigned local_idx) {
-            lv.m_wrappers.push_back(Wrapper::new_Index(local_idx));
-            return lv;
-        }
+        static LValue new_Index(LValue lv, unsigned local_idx);
 
         bool is_Return() const {
             return m_wrappers.empty() && m_root.is_Return();
@@ -326,10 +228,7 @@ namespace MIR {
             return m_wrappers.empty() && m_root.is_Local();
         }
 
-        unsigned as_Local() const {
-            assert(m_wrappers.empty());
-            return m_root.as_Local();
-        }
+        unsigned as_Local() const;
 
         bool is_Deref() const {
             return m_wrappers.size() > 0 && m_wrappers.back().is_Deref();
@@ -343,20 +242,11 @@ namespace MIR {
             return m_wrappers.size() > 0 && m_wrappers.back().is_Downcast();
         }
 
-        unsigned as_Field() const {
-            assert(!m_wrappers.empty());
-            return m_wrappers.back().as_Field();
-        }
+        unsigned as_Field() const;
 
-        void inc_Field() {
-            assert(m_wrappers.size() > 0);
-            m_wrappers.back().inc_Field();
-        }
+        void inc_Field();
 
-        void inc_Downcast() {
-            assert(m_wrappers.size() > 0);
-            m_wrappers.back().inc_Downcast();
-        }
+        void inc_Downcast();
 
         Ordering ord(const LValue& x) const;
 
@@ -367,13 +257,7 @@ namespace MIR {
             return LValue(m_root.clone(), m_wrappers);
         }
 
-        LValue clone_wrapped(::std::vector<Wrapper> wrappers) const {
-            if (this->m_wrappers.empty()) {
-                return LValue(m_root.clone(), ::std::move(wrappers));
-            } else {
-                return clone_wrapped(wrappers.begin(), wrappers.end());
-            }
-        }
+        LValue clone_wrapped(::std::vector<Wrapper> wrappers) const;
 
         template <typename It>
         LValue clone_wrapped(It begin_it, It end_it) const {
@@ -384,11 +268,7 @@ namespace MIR {
             return LValue(m_root.clone(), ::std::move(wrappers));
         }
 
-        LValue clone_unwrapped(unsigned count = 1) const {
-            assert(count > 0);
-            assert(count <= m_wrappers.size());
-            return LValue(m_root.clone(), ::std::vector<Wrapper>(m_wrappers.begin(), m_wrappers.end() - count));
-        }
+        LValue clone_unwrapped(unsigned count = 1) const;
 
         // Returns true if this LValue is a subset of the other (e.g. `_1.0` is a subset of `_1.0*`)
         bool is_subset_of(const LValue& other) const {
@@ -397,16 +277,7 @@ namespace MIR {
 
         // Returns true if one lvalue is a subset of the other
         // - Equivalent to `a.is_subset_of(b) || b.is_subset_of(a)` (but more efficient)
-        bool is_either_subset(const LValue& other) const {
-            if (!(m_root == other.m_root)) {
-                return false;
-            }
-            if (other.m_wrappers.size() > m_wrappers.size()) {
-                return ::std::equal(m_wrappers.begin(), m_wrappers.end(), other.m_wrappers.begin());
-            } else {
-                return ::std::equal(other.m_wrappers.begin(), other.m_wrappers.end(), m_wrappers.begin());
-            }
-        }
+        bool is_either_subset(const LValue& other) const;
 
         /// Helper class that represents a LValue unwrapped to a certain degree
         class RefCommon {
@@ -414,12 +285,7 @@ namespace MIR {
             const LValue* m_lv;
             size_t m_wrapper_count;
 
-            RefCommon(const LValue& lv, size_t wrapper_count)
-                : m_lv(&lv)
-                , m_wrapper_count(wrapper_count)
-            {
-                assert(wrapper_count <= lv.m_wrappers.size());
-            }
+            RefCommon(const LValue& lv, size_t wrapper_count);
 
         public:
             LValue clone() const {
@@ -435,14 +301,7 @@ namespace MIR {
             }
 
             /// Unwrap one level, returning false if already at the root
-            bool try_unwrap() {
-                if (m_wrapper_count == 0) {
-                    return false;
-                } else {
-                    m_wrapper_count--;
-                    return true;
-                }
-            }
+            bool try_unwrap();
 
             enum Tag {
                 TAGDEAD,
@@ -456,36 +315,7 @@ namespace MIR {
                 TAG_Index,
             };
 
-            Tag tag() const {
-                if (m_wrapper_count == 0) {
-                    switch (m_lv->m_root.tag()) {
-                        case Storage::TAGDEAD:
-                            return TAGDEAD;
-                        case Storage::TAG_Return:
-                            return TAG_Return;
-                        case Storage::TAG_Argument:
-                            return TAG_Argument;
-                        case Storage::TAG_Local:
-                            return TAG_Local;
-                        case Storage::TAG_Static:
-                            return TAG_Static;
-                    }
-                } else {
-                    switch (m_lv->m_wrappers[m_wrapper_count - 1].tag()) {
-                        case Wrapper::TAGDEAD:
-                            return TAGDEAD;
-                        case Wrapper::TAG_Deref:
-                            return TAG_Deref;
-                        case Wrapper::TAG_Field:
-                            return TAG_Field;
-                        case Wrapper::TAG_Downcast:
-                            return TAG_Downcast;
-                        case Wrapper::TAG_Index:
-                            return TAG_Index;
-                    }
-                }
-                return TAGDEAD;
-            }
+            Tag tag() const;
 
             bool is_Local() const {
                 return m_wrapper_count == 0 && m_lv->m_root.is_Local();
@@ -519,45 +349,21 @@ namespace MIR {
                 return m_wrapper_count >= 1 && m_lv->m_wrappers[m_wrapper_count - 1].is_Index();
             }
 
-            unsigned as_Local() const {
-                assert(is_Local());
-                return m_lv->m_root.as_Local();
-            }
+            unsigned as_Local() const;
 
-            char as_Return() const {
-                assert(is_Return());
-                return m_lv->m_root.as_Return();
-            }
+            char as_Return() const;
 
-            unsigned as_Argument() const {
-                assert(is_Argument());
-                return m_lv->m_root.as_Argument();
-            }
+            unsigned as_Argument() const;
 
-            const HIR::Path& as_Static() const {
-                assert(is_Static());
-                return m_lv->m_root.as_Static();
-            }
+            const HIR::Path& as_Static() const;
 
-            char as_Deref() const {
-                assert(is_Deref());
-                return m_lv->m_wrappers[m_wrapper_count - 1].as_Deref();
-            }
+            char as_Deref() const;
 
-            unsigned as_Field() const {
-                assert(is_Field());
-                return m_lv->m_wrappers[m_wrapper_count - 1].as_Field();
-            }
+            unsigned as_Field() const;
 
-            unsigned as_Downcast() const {
-                assert(is_Downcast());
-                return m_lv->m_wrappers[m_wrapper_count - 1].as_Downcast();
-            }
+            unsigned as_Downcast() const;
 
-            unsigned as_Index() const {
-                assert(is_Index());
-                return m_lv->m_wrappers[m_wrapper_count - 1].as_Index();
-            }
+            unsigned as_Index() const;
 
             void fmt(::std::ostream& os) const;
             Ordering ord(const RefCommon& b) const;
@@ -565,23 +371,12 @@ namespace MIR {
 
         class CRef: public RefCommon {
         public:
-            CRef(const LValue& lv)
-                : RefCommon(lv, lv.m_wrappers.size())
-            {
-            }
+            CRef(const LValue& lv);
 
-            CRef(const LValue& lv, size_t wc)
-                : RefCommon(lv, wc)
-            {
-            }
+            CRef(const LValue& lv, size_t wc);
 
             /// Unwrap one level
-            const CRef inner_ref() const {
-                assert(m_wrapper_count > 0);
-                auto rv = *this;
-                rv.m_wrapper_count--;
-                return rv;
-            }
+            const CRef inner_ref() const;
 
             friend ::std::ostream& operator<<(::std::ostream& os, const CRef& x) {
                 x.fmt(os);
@@ -599,37 +394,15 @@ namespace MIR {
 
         class MRef: public RefCommon {
         public:
-            MRef(LValue& lv)
-                : RefCommon(lv, lv.m_wrappers.size())
-            {
-            }
+            MRef(LValue& lv);
 
             operator CRef() const {
                 return CRef(*m_lv, m_wrapper_count);
             }
 
-            MRef inner_ref() {
-                assert(m_wrapper_count > 0);
-                auto rv = *this;
-                rv.m_wrapper_count--;
-                return rv;
-            }
+            MRef inner_ref();
 
-            void replace(LValue x) {
-                auto& mut_lv = const_cast<LValue&>(*m_lv);
-                // Shortcut: No wrappers on source/destination (just assign the slot/root)
-                if (m_wrapper_count == 0 && x.m_wrappers.empty()) {
-                    mut_lv.m_root = ::std::move(x.m_root);
-                    return;
-                }
-                // If there's wrappers on this value (assigning over inner portion)
-                if (m_wrapper_count < m_lv->m_wrappers.size()) {
-                    // Add those wrappers to the end of the new value
-                    x.m_wrappers.insert(x.m_wrappers.end(), m_lv->m_wrappers.begin() + m_wrapper_count, m_lv->m_wrappers.end());
-                }
-                // Overwrite
-                mut_lv = ::std::move(x);
-            }
+            void replace(LValue x);
 
             friend ::std::ostream& operator<<(::std::ostream& os, const MRef& x) {
                 x.fmt(os);
@@ -710,11 +483,7 @@ namespace MIR {
         ::std::unique_ptr<::HIR::Path> p;
         U128 offset;
 
-        ItemAddress(::std::unique_ptr<::HIR::Path> p = {}, U128 offset = U128(0))
-            : p(::std::move(p))
-            , offset(offset)
-        {
-        }
+        ItemAddress(::std::unique_ptr<::HIR::Path> p = {}, U128 offset = U128(0));
 
         explicit operator bool() const {
             return static_cast<bool>(p);
@@ -1039,25 +808,13 @@ namespace MIR {
         const EnumCache* p;
 
     public:
-        EnumCachePtr(const EnumCache* p = nullptr)
-            : p(p)
-        {
-        }
+        EnumCachePtr(const EnumCache* p = nullptr);
 
         ~EnumCachePtr();
 
-        EnumCachePtr(EnumCachePtr&& x)
-            : p(x.p)
-        {
-            x.p = nullptr;
-        }
+        EnumCachePtr(EnumCachePtr&& x);
 
-        EnumCachePtr& operator=(EnumCachePtr&& x) {
-            this->~EnumCachePtr();
-            p = x.p;
-            x.p = nullptr;
-            return *this;
-        }
+        EnumCachePtr& operator=(EnumCachePtr&& x);
 
         operator bool() {
             return p != nullptr;

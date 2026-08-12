@@ -692,3 +692,112 @@ bool HIR::Path::equals_ignoring_regions(const Path& x) const {
 bool ::HIR::Path::operator==(const Path & x) const {
     return this->ord(x) == ::OrdEqual;
 }
+
+namespace HIR {
+
+EncodedLiteralPtr::EncodedLiteralPtr()
+    : p(nullptr) {
+}
+EncodedLiteralPtr::EncodedLiteralPtr(EncodedLiteralPtr&& x)
+    : p(x.p) {
+    x.p = nullptr;
+}
+EncodedLiteralPtr& EncodedLiteralPtr::operator=(EncodedLiteralPtr&& x) {
+    this->~EncodedLiteralPtr();
+    this->p = x.p;
+    x.p = nullptr;
+    return *this;
+}
+EncodedLiteral& EncodedLiteralPtr::operator*() {
+    assert(p);
+    return *p;
+}
+const EncodedLiteral& EncodedLiteralPtr::operator*() const {
+    assert(p);
+    return *p;
+}
+EncodedLiteral* EncodedLiteralPtr::operator->() {
+    assert(p);
+    return p;
+}
+const EncodedLiteral* EncodedLiteralPtr::operator->() const {
+    assert(p);
+    return p;
+}
+SimplePath::SimplePath(ThinVector<RcString> members)
+    : m_members(std::move(members)) {
+}
+SimplePath::SimplePath() {
+}
+SimplePath::SimplePath(RcString crate)
+    : SimplePath(crate, ::std::span<RcString>()) {
+}
+SimplePath::SimplePath(RcString crate, ::std::vector<RcString> components)
+    : SimplePath(crate, ::std::span<RcString>(components)) {
+}
+SimplePath::SimplePath(RcString crate, ::std::span<RcString> components) {
+    // NOTE: Ensure that it's impossible for the crate name to be empty with only one value in `m_members`, simplifies comparison logic
+    if (crate.c_str()[0] != '\0' || !components.empty()) {
+        m_members.reserve(1 + components.size());
+        m_members.push_back(std::move(crate));
+        for (auto& n : components) {
+            m_members.push_back(std::move(n));
+        }
+    }
+}
+SimplePath::SimplePath(RcString crate, ::std::span<const RcString> components) {
+    if (crate.c_str()[0] != '\0' || !components.empty()) {
+        m_members.reserve(1 + components.size());
+        m_members.push_back(std::move(crate));
+        for (const auto& n : components) {
+            m_members.push_back(n);
+        }
+    }
+}
+SimplePath::SimplePath(RcString crate, ::std::initializer_list<RcString> components)
+    : SimplePath(std::move(crate), ::std::span<const RcString>(components.begin(), components.end())) {
+}
+const RcString& SimplePath::crate_name() const {
+    static RcString empty;
+    return m_members.empty() ? empty : m_members.front();
+}
+::std::vector<RcString> SimplePath::components_vec() const {
+    const auto values = components();
+    return {values.begin(), values.end()};
+}
+Ordering PathParams::ord(const PathParams& x) const {
+    //if(auto cmp = ::ord(m_lifetimes, x.m_lifetimes)) return cmp;
+    if (auto cmp = ::ord(m_types, x.m_types)) {
+        return cmp;
+    }
+    if (auto cmp = ::ord(m_values, x.m_values)) {
+        return cmp;
+    }
+    return OrdEqual;
+}
+Ordering TraitPath::AtyEqual::ord(const AtyEqual& x) const {
+    ORD(source_trait, x.source_trait);
+    ORD(aty_params, x.aty_params);
+    ORD(type, x.type);
+    return OrdEqual;
+}
+Ordering TraitPath::AtyBound::ord(const AtyBound& x) const {
+    ORD(source_trait, x.source_trait);
+    ORD(aty_params, x.aty_params);
+    ORD(traits, x.traits);
+    return OrdEqual;
+}
+TraitPath::AtyBound TraitPath::AtyBound::clone() const {
+    std::vector<::HIR::TraitPath> new_traits;
+    new_traits.reserve(traits.size());
+    for (const auto& t : traits) {
+        new_traits.push_back(t.clone());
+    }
+    return AtyBound{source_trait.clone(), aty_params.clone(), ::std::move(new_traits)};
+}
+Path::Path(Data data)
+    : m_data(mv$(data)) {
+}
+ConstGeneric_Unevaluated::ConstGeneric_Unevaluated() {
+}
+}

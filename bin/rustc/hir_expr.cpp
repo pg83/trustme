@@ -544,3 +544,332 @@ TU_ARMA(Alias, ee) {
         void ::HIR::ExprVisitorDef::visit_generic_path(::HIR::Visitor::PathContext pc, ::HIR::GenericPath& path) {
             visit_path_params(path.m_params);
         }
+
+namespace HIR {
+
+ExprNode::ExprNode(Span sp)
+    : m_span(mv$(sp)) {
+}
+ExprNode_Block::ExprNode_Block(Span sp)
+    : ExprNode(mv$(sp))
+    , m_is_unsafe(false) {
+}
+ExprNode_Block::ExprNode_Block(Span sp, bool is_unsafe, ::std::vector<ExprNodeP> nodes, ExprNodeP value_node)
+    : ExprNode(mv$(sp))
+    , m_is_unsafe(is_unsafe)
+    , m_nodes(mv$(nodes))
+    , m_value_node(mv$(value_node)) {
+}
+ExprNode_ConstBlock::ExprNode_ConstBlock(Span sp, ExprNodeP inner)
+    : ExprNode(mv$(sp))
+    , m_inner(mv$(inner)) {
+}
+ExprNode_Asm2::ExprNode_Asm2(Span sp, AsmCommon::Options options, std::vector<AsmCommon::Line> lines, std::vector<Param> params)
+    : ExprNode(mv$(sp))
+    , m_options(options)
+    , m_lines(::std::move(lines))
+    , m_params(::std::move(params)) {
+}
+ExprNode_Return::ExprNode_Return(Span sp, ::HIR::ExprNodeP value)
+    : ExprNode(mv$(sp))
+    , m_value(mv$(value)) {
+}
+ExprNode_Yield::ExprNode_Yield(Span sp, ::HIR::ExprNodeP value)
+    : ExprNode(mv$(sp))
+    , m_value(mv$(value)) {
+}
+ExprNode_AWait::ExprNode_AWait(Span sp, ::HIR::ExprNodeP value)
+    : ExprNode(mv$(sp))
+    , m_value(mv$(value)) {
+}
+ExprNode_Loop::ExprNode_Loop(Span sp, RcString label, ::HIR::ExprNodeP code, bool require_label)
+    : ExprNode(mv$(sp))
+    , m_label(mv$(label))
+    , m_code(mv$(code))
+    , m_require_label(require_label) {
+}
+// populated by expr_cs__enum.cpp
+
+ExprNode_LoopControl::ExprNode_LoopControl(Span sp, RcString label, bool cont, ::HIR::ExprNodeP value)
+    : ExprNode(mv$(sp))
+    , m_label(mv$(label))
+    , m_continue(cont)
+    , m_value(mv$(value))
+    , m_target_node(nullptr) {
+}
+ExprNode_Let::ExprNode_Let(Span sp, ::HIR::Pattern pat, ::HIR::TypeRef ty, ::HIR::ExprNodeP val, bool is_super)
+    : ExprNode(mv$(sp))
+    , m_pattern(mv$(pat))
+    , m_type(mv$(ty))
+    , m_value(mv$(val))
+    , m_is_super(is_super) {
+}
+ExprNode_Match::ExprNode_Match(Span sp, ::HIR::ExprNodeP val, ::std::vector<Arm> arms, bool is_let_else)
+    : ExprNode(mv$(sp))
+    , m_value(mv$(val))
+    , m_arms(mv$(arms))
+    , m_is_let_else(is_let_else) {
+}
+const char* ExprNode_Assign::opname(Op v) {
+    switch (v) {
+        case Op::None:
+            return "";
+        case Op::Add:
+            return "+";
+        case Op::Sub:
+            return "-";
+        case Op::Mul:
+            return "*";
+        case Op::Div:
+            return "/";
+        case Op::Mod:
+            return "%";
+
+        case Op::And:
+            return "&";
+        case Op::Or:
+            return "|";
+        case Op::Xor:
+            return "^";
+
+        case Op::Shr:
+            return ">>";
+        case Op::Shl:
+            return "<<";
+    }
+    throw "";
+}
+ExprNode_Assign::ExprNode_Assign(Span sp, Op op, ::HIR::ExprNodeP slot, ::HIR::ExprNodeP value)
+    : ExprNode(mv$(sp))
+    , m_op(op)
+    , m_slot(mv$(slot))
+    , m_value(mv$(value)) {
+}
+const char* ExprNode_BinOp::opname(Op v) {
+    switch (v) {
+        case Op::CmpEqu:
+            return "==";
+        case Op::CmpNEqu:
+            return "!=";
+        case Op::CmpLt:
+            return "<";
+        case Op::CmpLtE:
+            return "<=";
+        case Op::CmpGt:
+            return ">";
+        case Op::CmpGtE:
+            return ">=";
+
+        case Op::BoolAnd:
+            return "&&";
+        case Op::BoolOr:
+            return "||";
+
+        case Op::Add:
+            return "+";
+        case Op::Sub:
+            return "-";
+        case Op::Mul:
+            return "*";
+        case Op::Div:
+            return "/";
+        case Op::Mod:
+            return "%";
+
+        case Op::And:
+            return "&";
+        case Op::Or:
+            return "|";
+        case Op::Xor:
+            return "^";
+
+        case Op::Shr:
+            return ">>";
+        case Op::Shl:
+            return "<<";
+    }
+    return "??";
+}
+ExprNode_BinOp::ExprNode_BinOp(Span sp, Op op, ::HIR::ExprNodeP left, ::HIR::ExprNodeP right)
+    : ExprNode(mv$(sp))
+    , m_op(op)
+    , m_left(mv$(left))
+    , m_right(mv$(right)) {
+}
+const char* ExprNode_UniOp::opname(Op v) {
+    switch (v) {
+        case Op::Invert:
+            return "!";
+        case Op::Negate:
+            return "-";
+    }
+    throw "";
+}
+ExprNode_UniOp::ExprNode_UniOp(Span sp, Op op, ::HIR::ExprNodeP value)
+    : ExprNode(mv$(sp))
+    , m_op(op)
+    , m_value(mv$(value)) {
+}
+ExprNode_Borrow::ExprNode_Borrow(Span sp, ::HIR::BorrowType bt, ::HIR::ExprNodeP value)
+    : ExprNode(mv$(sp))
+    , m_type(bt)
+    , m_value(mv$(value))
+    , m_is_valid_static_borrow_constant(false) {
+}
+ExprNode_RawBorrow::ExprNode_RawBorrow(Span sp, ::HIR::BorrowType bt, ::HIR::ExprNodeP value)
+    : ExprNode(mv$(sp))
+    , m_type(bt)
+    , m_value(mv$(value)) {
+}
+ExprNode_Cast::ExprNode_Cast(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dst_type)
+    : ExprNode(mv$(sp))
+    , m_value(mv$(value))
+    , m_dst_type(mv$(dst_type)) {
+}
+ExprNode_Unsize::ExprNode_Unsize(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dst_type)
+    : ExprNode(mv$(sp))
+    , m_value(mv$(value))
+    , m_dst_type(mv$(dst_type)) {
+}
+ExprNode_Index::ExprNode_Index(Span sp, ::HIR::ExprNodeP val, ::HIR::ExprNodeP index)
+    : ExprNode(mv$(sp))
+    , m_value(mv$(val))
+    , m_index(mv$(index)) {
+}
+ExprNode_Deref::ExprNode_Deref(Span sp, ::HIR::ExprNodeP val)
+    : ExprNode(mv$(sp))
+    , m_value(mv$(val))
+    , m_trait_used(TraitUsed::Unknown) {
+}
+ExprNode_Emplace::ExprNode_Emplace(Span sp, Type ty, ::HIR::ExprNodeP place, ::HIR::ExprNodeP val)
+    : ExprNode(mv$(sp))
+    , m_type(ty)
+    , m_place(mv$(place))
+    , m_value(mv$(val)) {
+}
+ExprNode_TupleVariant::ExprNode_TupleVariant(Span sp, ::HIR::GenericPath path, bool is_struct, ::std::vector<::HIR::ExprNodeP> args)
+    : ExprNode(mv$(sp))
+    , m_path(mv$(path))
+    , m_is_struct(is_struct)
+    , m_args(mv$(args)) {
+}
+ExprNode_CallPath::ExprNode_CallPath(Span sp, ::HIR::Path path, ::std::vector<::HIR::ExprNodeP> args)
+    : ExprNode(mv$(sp))
+    , m_path(mv$(path))
+    , m_args(mv$(args)) {
+}
+ExprNode_CallValue::ExprNode_CallValue(Span sp, ::HIR::ExprNodeP val, ::std::vector<::HIR::ExprNodeP> args)
+    : ExprNode(mv$(sp))
+    , m_value(mv$(val))
+    , m_args(mv$(args)) {
+}
+ExprNode_CallMethod::ExprNode_CallMethod(Span sp, ::HIR::ExprNodeP val, RcString method_name, ::HIR::PathParams params, ::std::vector<::HIR::ExprNodeP> args)
+    : ExprNode(mv$(sp))
+    , m_value(mv$(val))
+    , m_method(mv$(method_name))
+    , m_params(mv$(params))
+    , m_args(mv$(args))
+    ,
+
+    m_method_path(::HIR::SimplePath("", {})) {
+}
+ExprNode_Field::ExprNode_Field(Span sp, ::HIR::ExprNodeP val, RcString field)
+    : ExprNode(mv$(sp))
+    , m_value(mv$(val))
+    , m_field(mv$(field)) {
+}
+ExprNode_Literal::ExprNode_Literal(Span sp, Data data)
+    : ExprNode(mv$(sp))
+    , m_data(mv$(data)) {
+}
+ExprNode_UnitVariant::ExprNode_UnitVariant(Span sp, ::HIR::GenericPath path, bool is_struct)
+    : ExprNode(mv$(sp))
+    , m_path(mv$(path))
+    , m_is_struct(is_struct) {
+}
+ExprNode_PathValue::ExprNode_PathValue(Span sp, ::HIR::Path path, Target target)
+    : ExprNode(mv$(sp))
+    , m_path(mv$(path))
+    , m_target(target) {
+}
+ExprNode_Variable::ExprNode_Variable(Span sp, RcString name, unsigned int slot)
+    : ExprNode(mv$(sp))
+    , m_name(mv$(name))
+    , m_slot(slot) {
+}
+ExprNode_ConstParam::ExprNode_ConstParam(Span sp, RcString name, unsigned int binding)
+    : ExprNode(mv$(sp))
+    , m_name(mv$(name))
+    , m_binding(binding) {
+}
+ExprNode_StructLiteral::ExprNode_StructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, ::HIR::ExprNodeP base_value, t_values values)
+    : ExprNode(mv$(sp))
+    , m_type(mv$(ty))
+    , m_is_struct(is_struct)
+    , m_base_value(mv$(base_value))
+    , m_values(mv$(values)) {
+}
+ExprNode_StructLiteral::ExprNode_StructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, bool, t_values values)
+    : ExprNode(mv$(sp))
+    , m_type(mv$(ty))
+    , m_is_struct(is_struct)
+    , m_use_defaults(true)
+    , m_values(mv$(values)) {
+}
+ExprNode_Tuple::ExprNode_Tuple(Span sp, ::std::vector<::HIR::ExprNodeP> vals)
+    : ExprNode(mv$(sp))
+    , m_vals(mv$(vals)) {
+}
+ExprNode_ArrayList::ExprNode_ArrayList(Span sp, ::std::vector<::HIR::ExprNodeP> vals)
+    : ExprNode(mv$(sp))
+    , m_vals(mv$(vals)) {
+}
+ExprNode_ArraySized::ExprNode_ArraySized(Span sp, ::HIR::ExprNodeP val, ::HIR::ExprPtr size)
+    : ExprNode(mv$(sp))
+    , m_val(mv$(val))
+    , m_size(HIR::ConstGeneric(std::make_unique<HIR::ConstGeneric_Unevaluated>(mv$(size)))) {
+}
+ExprNode_Closure::ExprNode_Closure(Span sp, args_t args, ::HIR::TypeRef rv, ::HIR::ExprNodeP code, bool is_move)
+    : ExprNode(mv$(sp))
+    , m_args(::std::move(args))
+    , m_return(::std::move(rv))
+    , m_code(::std::move(code))
+    , m_is_move(is_move) {
+}
+ExprNode_Generator::ExprNode_Generator(
+    Span sp,
+    ::HIR::TypeRef rv,
+    ::HIR::TypeRef resume_ty,
+    ::HIR::TypeRef yield_ty,
+    ::HIR::ExprNodeP code,
+    bool is_move,
+    bool is_pinned
+)
+    : ExprNode(mv$(sp))
+    , m_return(::std::move(rv))
+    , m_resume_ty(resume_ty)
+    , m_yield_ty(yield_ty)
+    , m_code(::std::move(code))
+    , m_is_move(is_move)
+    , m_is_pinned(is_pinned) {
+}
+ExprNode_GeneratorWrapper::ExprNode_GeneratorWrapper(
+    Span sp,
+    ::HIR::TypeRef rv,
+    ::HIR::TypeRef yield_ty,
+    ::HIR::ExprNodeP code,
+    bool is_future
+)
+    : ExprNode(mv$(sp))
+    , m_is_future(is_future)
+    , m_return(rv)
+    , m_yield_ty(yield_ty)
+    , m_code(::std::move(code)) {
+}
+ExprNode_AsyncBlock::ExprNode_AsyncBlock(Span sp, ::HIR::ExprNodeP code, bool is_move)
+    : ExprNode(mv$(sp))
+    , m_code(std::move(code))
+    , m_is_move(is_move) {
+}
+ExprVisitorDef::ExprVisitorDef(TypeInterner& types): m_types(types) {}
+}

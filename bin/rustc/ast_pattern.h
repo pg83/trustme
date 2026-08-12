@@ -27,21 +27,9 @@ namespace AST {
         bool m_mutable;
         unsigned int m_slot;
 
-        PatternBinding()
-            : m_name({}, "")
-            , m_type(Type::MOVE)
-            , m_mutable(false)
-            , m_slot(~0u)
-        {
-        }
+        PatternBinding();
 
-        PatternBinding(Ident name, Type ty, bool ismut)
-            : m_name(::std::move(name))
-            , m_type(ty)
-            , m_mutable(ismut)
-            , m_slot(~0u)
-        {
-        }
+        PatternBinding(Ident name, Type ty, bool ismut);
 
         PatternBinding(PatternBinding&& x) = default;
         PatternBinding(const PatternBinding& x) = default;
@@ -133,91 +121,48 @@ namespace AST {
     public:
         virtual ~Pattern();
 
-        Pattern() {
-        }
+        Pattern();
 
         Pattern(Pattern&&) = default;
         Pattern& operator=(Pattern&&) = default;
 
-        Pattern(Span sp, Data dat)
-            : m_span(mv$(sp))
-            , m_data(mv$(dat)) {};
+        Pattern(Span sp, Data dat);;
 
         struct TagMaybeBind {};
 
-        Pattern(TagMaybeBind, Span sp, Ident name)
-            : m_span(mv$(sp))
-            , m_data(Data::make_MaybeBind({mv$(name)}))
-        {
-        }
+        Pattern(TagMaybeBind, Span sp, Ident name);
 
         struct TagMacro {};
 
-        Pattern(TagMacro, Span sp, unique_ptr<::AST::MacroInvocation> inv)
-            : m_span(mv$(sp))
-            , m_data(Data::make_Macro({mv$(inv)}))
-        {
-        }
+        Pattern(TagMacro, Span sp, unique_ptr<::AST::MacroInvocation> inv);
 
         struct TagBind {};
 
-        Pattern(TagBind, Span sp, Ident name, PatternBinding::Type ty = PatternBinding::Type::MOVE, bool is_mut = false)
-            : m_span(mv$(sp))
-        {
-            m_bindings.push_back(PatternBinding(mv$(name), ty, is_mut));
-        }
+        Pattern(TagBind, Span sp, Ident name, PatternBinding::Type ty = PatternBinding::Type::MOVE, bool is_mut = false);
 
         struct TagBox {};
 
-        Pattern(TagBox, Span sp, Pattern sub)
-            : m_span(mv$(sp))
-            , m_data(Data::make_Box({unique_ptr<Pattern>(new Pattern(mv$(sub)))}))
-        {
-        }
+        Pattern(TagBox, Span sp, Pattern sub);
 
         struct TagValue {};
 
-        Pattern(TagValue, Span sp, Value val, Value end = Value())
-            : m_span(mv$(sp))
-            , m_data(Data::make_Value({::std::move(val), ::std::move(end)}))
-        {
-        }
+        Pattern(TagValue, Span sp, Value val, Value end = Value());
 
         struct TagReference {};
 
-        Pattern(TagReference, Span sp, bool is_mutable, Pattern sub_pattern)
-            : m_span(mv$(sp))
-            , m_data(Data::make_Ref(/*Data::Data_Ref */ {is_mutable, unique_ptr<Pattern>(new Pattern(::std::move(sub_pattern)))}))
-        {
-        }
+        Pattern(TagReference, Span sp, bool is_mutable, Pattern sub_pattern);
 
         struct TagTuple {};
 
-        Pattern(TagTuple, Span sp, ::std::vector<Pattern> pats)
-            : m_span(mv$(sp))
-            , m_data(Data::make_Tuple(TuplePat{mv$(pats), false, {}}))
-        {
-        }
+        Pattern(TagTuple, Span sp, ::std::vector<Pattern> pats);
 
-        Pattern(TagTuple, Span sp, TuplePat pat)
-            : m_span(mv$(sp))
-            , m_data(Data::make_Tuple(mv$(pat)))
-        {
-        }
+        Pattern(TagTuple, Span sp, TuplePat pat);
 
         struct TagNamedTuple {};
 
-        Pattern(TagNamedTuple, Span sp, Path path, ::std::vector<Pattern> pats)
-            : m_span(mv$(sp))
-            , m_data(Data::make_StructTuple({mv$(path), TuplePat{mv$(pats), false, {}}}))
-        {
-        }
+        Pattern(TagNamedTuple, Span sp, Path path, ::std::vector<Pattern> pats);
 
-        Pattern(TagNamedTuple, Span sp, Path path, TuplePat pat = TuplePat{{}, false, {}})
-            : m_span(mv$(sp))
-            , m_data(Data::make_StructTuple({::std::move(path), ::std::move(pat)}))
-        {
-        }
+        Pattern(TagNamedTuple, Span sp, Path path, TuplePat pat = TuplePat{{}, false, {}});
 
         struct TagStruct {};
 

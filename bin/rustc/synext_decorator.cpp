@@ -3652,3 +3652,10 @@ class CTestHandler_Ignore: public ExpandDecorator {
 STATIC_DECORATOR("test", CTestHandler);
 STATIC_DECORATOR("should_panic", CTestHandler_SP);
 STATIC_DECORATOR("ignore", CTestHandler_Ignore);
+
+DecoratorDef::DecoratorDef(::std::string name, ::std::unique_ptr<ExpandDecorator> def)
+    : prev(nullptr)
+    , name(::std::move(name))
+    , def(::std::move(def)) {
+    Register_Synext_Decorator_Static(this);
+}

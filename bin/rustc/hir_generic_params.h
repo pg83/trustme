@@ -14,21 +14,13 @@ namespace HIR {
         ::HIR::TypeRef m_default;
         bool m_is_sized;
 
-        Ordering ord(const TypeParamDef& x) const {
-            ORD(m_name, x.m_name);
-            ORD(m_default, x.m_default);
-            ORD(m_is_sized, x.m_is_sized);
-            return OrdEqual;
-        }
+        Ordering ord(const TypeParamDef& x) const;
     };
 
     struct LifetimeDef {
         RcString m_name;
 
-        Ordering ord(const LifetimeDef& x) const {
-            ORD(m_name, x.m_name);
-            return OrdEqual;
-        }
+        Ordering ord(const LifetimeDef& x) const;
     };
 
     struct ValueParamDef {
@@ -36,12 +28,7 @@ namespace HIR {
         ::HIR::TypeRef m_type;
         ConstGeneric m_default;
 
-        Ordering ord(const ValueParamDef& x) const {
-            ORD(m_name, x.m_name);
-            ORD(m_type, x.m_type);
-            //ORD(m_default, x.m_default);
-            return OrdEqual;
-        }
+        Ordering ord(const ValueParamDef& x) const;
     };
 
     class GenericParams;
@@ -95,50 +82,19 @@ namespace HIR {
 
         GenericParams clone() const;
 
-        bool is_empty() const {
-            if (!m_types.empty()) {
-                return false;
-            }
-            if (!m_lifetimes.empty()) {
-                return false;
-            }
-            if (!m_values.empty()) {
-                return false;
-            }
-            if (!m_bounds.empty()) {
-                return false;
-            }
-            return true;
-        }
+        bool is_empty() const;
 
-        bool is_generic() const {
-            if (!m_types.empty()) {
-                return true;
-            }
-            // Note: Lifetimes don't matter
-            if (!m_values.empty()) {
-                return true;
-            }
-            return false;
-        }
+        bool is_generic() const;
 
         /// Create a PathParams instance that doesn't monomorphise at all
         PathParams make_nop_params(TypeInterner& types, unsigned level, bool lifetimes_only = false) const;
 
-        PathParams make_empty_params(bool lifetimes_only = false) const {
-            assert(lifetimes_only);
-            PathParams rv;
-            rv.m_lifetimes = ThinVector<LifetimeRef>(m_lifetimes.size());
-            return rv;
-        }
+        PathParams make_empty_params(bool lifetimes_only = false) const;
 
         struct PrintArgs {
             const GenericParams& gp;
 
-            PrintArgs(const GenericParams& gp)
-                : gp(gp)
-            {
-            }
+            PrintArgs(const GenericParams& gp);
 
             friend ::std::ostream& operator<<(::std::ostream& os, const PrintArgs& x);
         };
@@ -150,10 +106,7 @@ namespace HIR {
         struct PrintBounds {
             const GenericParams& gp;
 
-            PrintBounds(const GenericParams& gp)
-                : gp(gp)
-            {
-            }
+            PrintBounds(const GenericParams& gp);
 
             friend ::std::ostream& operator<<(::std::ostream& os, const PrintBounds& x);
         };
@@ -162,13 +115,7 @@ namespace HIR {
             return PrintBounds(*this);
         }
 
-        Ordering ord(const HIR::GenericParams& x) const {
-            ORD(m_types, x.m_types);
-            ORD(m_lifetimes, x.m_lifetimes);
-            ORD(m_values, x.m_values);
-            ORD(m_bounds, x.m_bounds);
-            return OrdEqual;
-        }
+        Ordering ord(const HIR::GenericParams& x) const;
     };
 
 } // namespace HIR

@@ -142,3 +142,33 @@ void SpanInner_Macro::fmt(::std::ostream& os) const {
     }
     return os;
 }
+
+Span::Span()
+    //: m_ptr(&s_empty_span)
+    : m_ptr(nullptr) {
+}
+Span::Span(Span&& x)
+    : m_ptr(x.m_ptr) {
+    x.m_ptr = nullptr;
+}
+Span& Span::operator=(const Span& x) {
+    this->~Span();
+    new (this) Span(x);
+    return *this;
+}
+Span& Span::operator=(Span&& x) {
+    this->~Span();
+    new (this) Span(std::move(x));
+    return *this;
+}
+SpanInner* SpanInner_Source::alloc(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int end_line, unsigned int end_ofs) {
+    auto* rv = new SpanInner_Source();
+    rv->reference_count = 1;
+    rv->parent_span = parent;
+    rv->filename = ::std::move(filename);
+    rv->start_line = start_line;
+    rv->start_ofs = start_ofs;
+    rv->end_line = end_line;
+    rv->end_ofs = end_ofs;
+    return rv;
+}

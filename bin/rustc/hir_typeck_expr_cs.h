@@ -46,11 +46,7 @@ struct Context {
 
             ::HIR::TypeRef ty;
 
-            CoerceTy(::HIR::TypeRef ty, bool is_coerce)
-                : op(is_coerce ? Coercion : Unsizing)
-                , ty(ty)
-            {
-            }
+            CoerceTy(::HIR::TypeRef ty, bool is_coerce);
         };
 
         // Strong disable (depends on a trait impl)
@@ -75,82 +71,11 @@ struct Context {
 
         ::std::vector<::HIR::TypeRef> bounded;
 
-        void reset() {
-            // Manually clear, to avoid needing to reallocate the lists all the time.
-            this->force_disable = false;
-            this->force_no_to = false;
-            this->force_no_from = false;
-            this->types_coerce_to.clear();
-            this->types_coerce_from.clear();
-            //this->types_default.clear();
-            this->has_bounded = false;
-            this->bounds_include_self = false;
-            this->bounded.clear();
-        }
+        void reset();
 
-        bool has_rules() const {
-            if (force_disable) {
-                return true;
-            }
-            if (force_no_to || !types_coerce_to.empty()) {
-                return true;
-            }
-            if (force_no_from || !types_coerce_from.empty()) {
-                return true;
-            }
-            //if( !types_default.empty() )
-            //    return true;
-            if (has_bounded) {
-                return true;
-            }
-            return false;
-        }
+        bool has_rules() const;
 
-        void merge_from(const IVarPossible& source) {
-            force_disable |= source.force_disable;
-            force_no_to |= source.force_no_to;
-            force_no_from |= source.force_no_from;
-
-            auto merge_coercions = [](auto& destination, const auto& values) {
-                for (const auto& value : values) {
-                    const auto found = ::std::find_if(destination.begin(), destination.end(), [&](const auto& existing) {
-                        return existing.op == value.op && existing.ty == value.ty;
-                    });
-                    if (found == destination.end()) {
-                        destination.push_back(value);
-                    }
-                }
-            };
-            merge_coercions(types_coerce_to, source.types_coerce_to);
-            merge_coercions(types_coerce_from, source.types_coerce_from);
-            types_default.insert(source.types_default.begin(), source.types_default.end());
-
-            if (!source.has_bounded) {
-                return;
-            }
-            if (!has_bounded) {
-                has_bounded = true;
-                bounds_include_self = source.bounds_include_self;
-                bounded = source.bounded;
-                return;
-            }
-
-            bounds_include_self |= source.bounds_include_self;
-            if (bounds_include_self) {
-                for (const auto type : source.bounded) {
-                    if (::std::find(bounded.begin(), bounded.end(), type) == bounded.end()) {
-                        bounded.push_back(type);
-                    }
-                }
-            } else {
-                bounded.erase(
-                    ::std::remove_if(bounded.begin(), bounded.end(), [&](const auto type) {
-                        return ::std::find(source.bounded.begin(), source.bounded.end(), type) == source.bounded.end();
-                    }),
-                    bounded.end()
-                );
-            }
-        }
+        void merge_from(const IVarPossible& source);
     };
 
     struct Associated {
@@ -227,29 +152,14 @@ struct Context {
         HIR::PathParams params;
         HIR::TypeRef our_type;
 
-        TaitEntry(const HIR::PathParams& p, HIR::TypeRef t)
-            : params(p.clone())
-            , our_type(std::move(t))
-        {
-        }
+        TaitEntry(const HIR::PathParams& p, HIR::TypeRef t);
     };
 
     ::std::map<HIR::TypeData_ErasedType_AliasInner*, TaitEntry> m_erased_type_aliases;
 
     const ::HIR::SimplePath m_lang_Box;
 
-    Context(const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params, const ::HIR::SimplePath& mod_path, const ::HIR::GenericPath* current_trait, const ::HIR::TraitImpl* current_trait_impl)
-        : m_crate(crate)
-        , m_current_trait_impl(current_trait_impl)
-        , m_ivars(crate.m_types)
-        , m_resolve(m_ivars, crate, impl_params, item_params, mod_path, current_trait)
-        , next_rule_idx(0)
-        , m_lang_Box(crate.get_lang_item_path_opt("owned_box"))
-    {
-        m_resolve.set_inherent_type_constraint([this](const Span& sp, const ::HIR::TypeData* receiver, const ::HIR::TypeData* impl_type) {
-            this->equate_types_inner(sp, receiver, impl_type);
-        });
-    }
+    Context(const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params, const ::HIR::SimplePath& mod_path, const ::HIR::GenericPath* current_trait, const ::HIR::TraitImpl* current_trait_impl);
 
     void dump() const;
 
@@ -274,32 +184,16 @@ struct Context {
     void equate_types_coerce(const Span& sp, const ::HIR::TypeData* l, ::HIR::ExprNodeP& node_ptr);
     void record_coercion_hint(const ::HIR::TypeData* type, ::HIR::ExprNodeP& node_ptr);
 
-    const ::HIR::TypeData* coercion_hint(const ::HIR::ExprNode& node) const {
-        const auto it = coercion_hints.find(&node);
-        return it == coercion_hints.end() ? nullptr : it->second;
-    }
+    const ::HIR::TypeData* coercion_hint(const ::HIR::ExprNode& node) const;
     // - Equate a type to an associated type (if name == "", no equation is done, but trait is searched)
     void equate_types_assoc(const Span& sp, const ::HIR::TypeData* l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeData* impl_ty, const char* name, const ::HIR::PathParams& aty_pp, bool is_op = false, typeck::PrimitiveOperator operator_kind = typeck::PrimitiveOperator::None);
 
-    bool is_current_operator_impl(const ImplRef& impl) const {
-        const auto* trait_impl = impl.m_data.opt_TraitImpl();
-        return m_current_trait_impl && trait_impl && trait_impl->impl == m_current_trait_impl;
-    }
+    bool is_current_operator_impl(const ImplRef& impl) const;
 
     // A Deref implementation for a native pointer/reference receives `&Self`.
     // Dereferencing that receiver is the native step needed to recover `Self`,
     // not another dispatch through a potentially overlapping Deref impl.
-    bool is_current_native_deref_receiver(const ::HIR::SimplePath& deref_trait, const ::HIR::TypeData* operand) const {
-        const auto* current_trait = m_resolve.current_trait_path();
-        const auto& ty = m_ivars.get_type(operand);
-        const auto* borrow = ty->opt_Borrow();
-        return m_current_trait_impl
-            && current_trait
-            && current_trait->m_path == deref_trait
-            && borrow
-            && typeck::primitive_operator_has_builtin(typeck::PrimitiveOperator::Deref, borrow->inner)
-            && m_current_trait_impl->matches_type(borrow->inner, m_ivars.callback_resolve_infer());
-    }
+    bool is_current_native_deref_receiver(const ::HIR::SimplePath& deref_trait, const ::HIR::TypeData* operand) const;
 
     // Equate const generics (values)
     void equate_values(const Span& sp, const ::HIR::ConstGeneric& rl, const ::HIR::ConstGeneric& rr);

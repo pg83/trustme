@@ -87,49 +87,17 @@ namespace MIR {
         unsigned int stmt_idx = 0;
 
     public:
-        TypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const ::HIR::TypeData* ret_type, const args_t& args, const ::MIR::Function& fcn)
-            : sp(sp)
-            , m_resolve(resolve)
-            , m_crate(resolve.m_crate)
-            , m_path(path)
-            , m_ret_type(ret_type)
-            , m_args(args)
-            , m_fcn(fcn)
-            , m_monomorphed_rettype(nullptr)
-            , m_monomorphed_locals(nullptr)
-        {
-            if (m_crate.m_lang_items.count("owned_box") > 0) {
-                m_lang_Box = &m_crate.m_lang_items.at("owned_box");
-            }
-        }
+        TypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const ::HIR::TypeData* ret_type, const args_t& args, const ::MIR::Function& fcn);
 
-        void set_cur_stmt(const ::MIR::BasicBlock& bb, const ::MIR::Statement& stmt) {
-            assert(&stmt >= &bb.statements.front());
-            assert(&stmt <= &bb.statements.back());
-            this->set_cur_stmt(bb, &stmt - bb.statements.data());
-        }
+        void set_cur_stmt(const ::MIR::BasicBlock& bb, const ::MIR::Statement& stmt);
 
-        void set_cur_stmt(const ::MIR::BasicBlock& bb, unsigned int stmt_idx) {
-            assert(&bb >= &m_fcn.blocks.front());
-            assert(&bb <= &m_fcn.blocks.back());
-            this->set_cur_stmt(&bb - m_fcn.blocks.data(), stmt_idx);
-        }
+        void set_cur_stmt(const ::MIR::BasicBlock& bb, unsigned int stmt_idx);
 
-        void set_cur_stmt(unsigned int bb_idx, unsigned int stmt_idx) {
-            this->bb_idx = bb_idx;
-            this->stmt_idx = stmt_idx;
-        }
+        void set_cur_stmt(unsigned int bb_idx, unsigned int stmt_idx);
 
-        void set_cur_stmt_term(const ::MIR::BasicBlock& bb) {
-            assert(&bb >= &m_fcn.blocks.front());
-            assert(&bb <= &m_fcn.blocks.back());
-            this->set_cur_stmt_term(&bb - m_fcn.blocks.data());
-        }
+        void set_cur_stmt_term(const ::MIR::BasicBlock& bb);
 
-        void set_cur_stmt_term(unsigned int bb_idx) {
-            this->bb_idx = bb_idx;
-            this->stmt_idx = STMT_TERM;
-        }
+        void set_cur_stmt_term(unsigned int bb_idx);
 
         unsigned int get_cur_block() const {
             return bb_idx;
@@ -193,43 +161,18 @@ namespace MIR {
         ::std::vector<bool> statements;
 
     public:
-        ValueLifetime(::std::vector<bool> stmts)
-            : statements(mv$(stmts))
-        {
-        }
+        ValueLifetime(::std::vector<bool> stmts);
 
         bool valid_at(size_t ofs) const {
             return statements.at(ofs);
         }
 
         // true if this value is used at any point
-        bool is_used() const {
-            for (auto v : statements) {
-                if (v) {
-                    return true;
-                }
-            }
-            return false;
-        }
+        bool is_used() const;
 
-        bool overlaps(const ValueLifetime& x) const {
-            assert(statements.size() == x.statements.size());
-            for (unsigned int i = 0; i < statements.size(); i++) {
-                if (statements[i] && x.statements[i]) {
-                    return true;
-                }
-            }
-            return false;
-        }
+        bool overlaps(const ValueLifetime& x) const;
 
-        void unify(const ValueLifetime& x) {
-            assert(statements.size() == x.statements.size());
-            for (unsigned int i = 0; i < statements.size(); i++) {
-                if (x.statements[i]) {
-                    statements[i] = true;
-                }
-            }
-        }
+        void unify(const ValueLifetime& x);
     };
 
     struct ValueLifetimes {
@@ -551,41 +494,12 @@ namespace MIR {
 
         class Visitor: public VisitorBase<DecConst> {
         public:
-            virtual bool visit_lvalue(const ::MIR::LValue& lv, ValUsage u) override {
-                if (lv.m_root.is_Static()) {
-                    visit_path(lv.m_root.as_Static());
-                }
-
-                for (auto& w : lv.m_wrappers) {
-                    if (w.is_Index()) {
-                        if (visit_lvalue(LValue::new_Local(w.as_Index()), ValUsage::Read)) {
-                            return true;
-                        }
-                    }
-                }
-                return false;
-            }
+            virtual bool visit_lvalue(const ::MIR::LValue& lv, ValUsage u) override;
         };
 
         class VisitorMut: public VisitorBase<DecMut> {
         public:
-            virtual bool visit_lvalue(::MIR::LValue& lv, ValUsage u) override {
-                if (lv.m_root.is_Static()) {
-                    visit_path(lv.m_root.as_Static());
-                }
-                for (auto& w : lv.m_wrappers) {
-                    if (w.is_Index()) {
-                        auto lv = LValue::new_Local(w.as_Index());
-                        bool rv = visit_lvalue(lv, ValUsage::Read);
-                        ASSERT_BUG(Span(), lv.is_Local(), "visit_lvalue on Index mutated the index to a non-local");
-                        w = ::MIR::LValue::Wrapper::new_Index(lv.as_Local());
-                        if (rv) {
-                            return true;
-                        }
-                    }
-                }
-                return false;
-            }
+            virtual bool visit_lvalue(::MIR::LValue& lv, ValUsage u) override;
         };
     } // namespace visit
 

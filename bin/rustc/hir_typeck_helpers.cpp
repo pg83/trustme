@@ -9292,3 +9292,81 @@ bool TraitResolution::find_trait_impls(
             }
             return false;
         }
+
+HMTypeInferrence::FmtType::FmtType(const HMTypeInferrence& ctxt, const ::HIR::TypeData* ty)
+    : ctxt(ctxt)
+    , ty(ty) {
+}
+HMTypeInferrence::FmtPP::FmtPP(const HMTypeInferrence& ctxt, const ::HIR::PathParams& pps)
+    : ctxt(ctxt)
+    , pps(pps) {
+}
+// Null only when alias != ~0
+
+HMTypeInferrence::IVar::IVar(::HIR::TypeRef type)
+    : alias(~0u)
+    , type(type) {
+}
+HMTypeInferrence::IVarValue::IVarValue()
+    : alias(~0u)
+    , val(new ::HIR::ConstGeneric()) {
+}
+HMTypeInferrence::HMTypeInferrence(HIR::TypeInterner& types)
+    : m_types(types)
+    , m_has_changed(false) {
+}
+bool HMTypeInferrence::take_changed() {
+    bool rv = m_has_changed;
+    m_has_changed = false;
+    return rv;
+}
+void HMTypeInferrence::mark_change() {
+    if (!m_has_changed) {
+        DEBUG("- CHANGE");
+        m_has_changed = true;
+    }
+}
+HMTypeInferrence::ResolvePlaceholders::ResolvePlaceholders(const HMTypeInferrence& parent)
+    : m_parent(parent) {
+}
+TraitResolution::LegacyTraitGoal::LegacyTraitGoal(
+    const ::HIR::SimplePath& trait,
+    const ::HIR::PathParams& params,
+    bool has_params,
+    const ::HIR::TypeData* type
+)
+    : trait(trait.clone())
+    , params(params.clone())
+    , type(type)
+    , has_params(has_params) {
+}
+bool TraitResolution::LegacyTraitGoal::matches(
+    const ::HIR::SimplePath& other_trait,
+    const ::HIR::PathParams& other_params,
+    bool other_has_params,
+    const ::HIR::TypeData* other_type
+) const {
+    return trait == other_trait
+        && has_params == other_has_params
+        && (!has_params || params == other_params)
+        && type == other_type;
+}
+/// Expand any located associated types in the input, operating in-place and returning the result
+::HIR::TypeRef TraitResolution::expand_associated_types(const Span& sp, ::HIR::TypeRef input) const {
+    expand_associated_types_inplace(sp, input, LList<const ::HIR::TypeData*>());
+    return input;
+}
+const ::HIR::TypeData* TraitResolution::expand_associated_types(const Span& sp, const ::HIR::TypeData* input, ::HIR::TypeRef& tmp) const {
+    if (this->has_associated_type(input)) {
+        return (tmp = this->expand_associated_types(sp, input));
+    } else {
+        return input;
+    }
+}
+void TraitResolution::expand_associated_types_params(const Span& sp, ::HIR::PathParams& params) const {
+    for (auto& type : params.m_types) {
+        if (this->has_associated_type(type)) {
+            type = this->expand_associated_types(sp, type);
+        }
+    }
+}

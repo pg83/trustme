@@ -22,54 +22,20 @@ struct Trans_Params: public MonomorphiserPP {
     ::HIR::TypeRef self_type;
     bool force_monomorphisation;
 
-    explicit Trans_Params(HIR::TypeInterner& types)
-        : MonomorphiserPP(types)
-        , gdef_impl(nullptr)
-        , force_monomorphisation(false)
-    {
-    }
+    explicit Trans_Params(HIR::TypeInterner& types);
 
-    Trans_Params(HIR::TypeInterner& types, const Span& sp)
-        : MonomorphiserPP(types)
-        , sp(sp)
-        , gdef_impl(nullptr)
-        , force_monomorphisation(false)
-    {
-    }
+    Trans_Params(HIR::TypeInterner& types, const Span& sp);
 
-    Trans_Params(Trans_Params&& x)
-        : Trans_Params(x.type_interner())
-    {
-        *this = ::std::move(x);
-    }
+    Trans_Params(Trans_Params&& x);
 
-    Trans_Params& operator=(Trans_Params&& x) {
-        sp = ::std::move(x.sp);
-        gdef_impl = x.gdef_impl;
-        pp_method = ::std::move(x.pp_method);
-        pp_impl = ::std::move(x.pp_impl);
-        self_type = x.self_type;
-        force_monomorphisation = x.force_monomorphisation;
-        return *this;
-    }
+    Trans_Params& operator=(Trans_Params&& x);
 
     Trans_Params(const Trans_Params&) = delete;
     Trans_Params& operator=(const Trans_Params&) = delete;
 
-    static Trans_Params new_impl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams impl_params) {
-        Trans_Params tp(types, sp);
-        tp.self_type = std::move(ty);
-        tp.pp_impl = std::move(impl_params);
-        return tp;
-    }
+    static Trans_Params new_impl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams impl_params);
 
-    const ::HIR::TypeData* maybe_monomorph(const ::StaticTraitResolve& resolve, ::HIR::TypeRef& tmp, const ::HIR::TypeData* p) const {
-        if (monomorphise_type_needed(p)) {
-            return tmp = this->monomorph(resolve, p);
-        } else {
-            return p;
-        }
-    }
+    const ::HIR::TypeData* maybe_monomorph(const ::StaticTraitResolve& resolve, ::HIR::TypeRef& tmp, const ::HIR::TypeData* p) const;
 
     ::HIR::TypeRef monomorph(const ::StaticTraitResolve& resolve, const ::HIR::TypeData* p) const;
     ::HIR::Path monomorph(const ::StaticTraitResolve& resolve, const ::HIR::Path& p) const;
@@ -112,27 +78,21 @@ struct TransList_Function {
     /// Forces the function to not be emited as code (just emit the signature)
     bool force_prototype;
 
-    TransList_Function(HIR::TypeInterner& types, const ::HIR::Path& path)
-        : path(&path)
-        , ptr(nullptr)
-        , pp(types)
-        , force_prototype(false)
-    {
-    }
+    TransList_Function(HIR::TypeInterner& types, const ::HIR::Path& path);
 };
 
 struct TransList_Static {
     const ::HIR::Static* ptr;
     Trans_Params pp;
 
-    explicit TransList_Static(HIR::TypeInterner& types): ptr(nullptr), pp(types) {}
+    explicit TransList_Static(HIR::TypeInterner& types);
 };
 
 struct TransList_Const {
     const ::HIR::Constant* ptr;
     Trans_Params pp;
 
-    explicit TransList_Const(HIR::TypeInterner& types): ptr(nullptr), pp(types) {}
+    explicit TransList_Const(HIR::TypeInterner& types);
 };
 
 class TransList {

@@ -36,12 +36,7 @@ namespace AST {
             return m_span;
         }
 
-        void set_attrs(AttributeList&& mi) {
-            for (auto& i : mi.m_items) {
-                m_attrs.m_items.push_back(mv$(i));
-            }
-            mi.m_items.clear();
-        }
+        void set_attrs(AttributeList&& mi);
 
         AttributeList& attrs() {
             return m_attrs;
@@ -65,29 +60,12 @@ namespace AST {
 
         ::std::vector<Line> m_nodes;
 
-        ExprNode_Block(::std::vector<Line> nodes = {})
-            : m_block_type(Type::Bare)
-            , m_label("")
-            , m_local_mod()
-            , m_nodes(::std::move(nodes))
-        {
-        }
+        ExprNode_Block(::std::vector<Line> nodes = {});
 
         /// Shortcut for a block that returns a contained node
-        ExprNode_Block(ExprNodeP value)
-            : ExprNode_Block()
-        {
-            set_span(value->span());
-            m_nodes.push_back({false, std::move(value)});
-        }
+        ExprNode_Block(ExprNodeP value);
 
-        ExprNode_Block(Type type, ::std::vector<Line> nodes, ::std::shared_ptr<AST::Module> local_mod)
-            : m_block_type(type)
-            , m_label("")
-            , m_local_mod(::std::move(local_mod))
-            , m_nodes(::std::move(nodes))
-        {
-        }
+        ExprNode_Block(Type type, ::std::vector<Line> nodes, ::std::shared_ptr<AST::Module> local_mod);
 
         void push_stmt(AST::ExprNodeP node) {
             m_nodes.push_back({true, std::move(node)});
@@ -108,11 +86,7 @@ namespace AST {
         ExprNodeP m_inner;
         bool m_is_move;
 
-        ExprNode_AsyncBlock(ExprNodeP inner, bool is_move)
-            : m_inner(std::move(inner))
-            , m_is_move(is_move)
-        {
-        }
+        ExprNode_AsyncBlock(ExprNodeP inner, bool is_move);
 
         static constexpr unsigned int kind = 2;
         unsigned int node_kind() const override;
@@ -125,11 +99,7 @@ namespace AST {
         ExprNodeP m_inner;
         bool m_is_move;
 
-        ExprNode_GeneratorBlock(ExprNodeP inner, bool is_move)
-            : m_inner(std::move(inner))
-            , m_is_move(is_move)
-        {
-        }
+        ExprNode_GeneratorBlock(ExprNodeP inner, bool is_move);
 
         static constexpr unsigned int kind = 3;
         unsigned int node_kind() const override;
@@ -141,10 +111,7 @@ namespace AST {
     struct ExprNode_Try: public ExprNode {
         ExprNodeP m_inner;
 
-        ExprNode_Try(ExprNodeP inner)
-            : m_inner(::std::move(inner))
-        {
-        }
+        ExprNode_Try(ExprNodeP inner);
 
         static constexpr unsigned int kind = 4;
         unsigned int node_kind() const override;
@@ -160,14 +127,7 @@ namespace AST {
         bool m_is_braced;
         Ident::Hygiene m_definition_hygiene;
 
-        ExprNode_Macro(AST::Path name, RcString ident, ::TokenTree&& tokens, bool is_braced = false, Ident::Hygiene definition_hygiene = {})
-            : m_path(::std::move(name))
-            , m_ident(ident)
-            , m_tokens(::std::move(tokens))
-            , m_is_braced(is_braced)
-            , m_definition_hygiene(::std::move(definition_hygiene))
-        {
-        }
+        ExprNode_Macro(AST::Path name, RcString ident, ::TokenTree&& tokens, bool is_braced = false, Ident::Hygiene definition_hygiene = {});
 
         static constexpr unsigned int kind = 5;
         unsigned int node_kind() const override;
@@ -189,14 +149,7 @@ namespace AST {
         ::std::vector<::std::string> m_clobbers;
         ::std::vector<::std::string> m_flags;
 
-        ExprNode_Asm(::std::string text, ::std::vector<ValRef> output, ::std::vector<ValRef> input, ::std::vector<::std::string> clobbers, ::std::vector<::std::string> flags)
-            : m_text(::std::move(text))
-            , m_output(::std::move(output))
-            , m_input(::std::move(input))
-            , m_clobbers(::std::move(clobbers))
-            , m_flags(::std::move(flags))
-        {
-        }
+        ExprNode_Asm(::std::string text, ::std::vector<ValRef> output, ::std::vector<ValRef> input, ::std::vector<::std::string> clobbers, ::std::vector<::std::string> flags);
 
         static constexpr unsigned int kind = 6;
         unsigned int node_kind() const override;
@@ -230,12 +183,7 @@ namespace AST {
         std::vector<AsmCommon::Line> m_lines;
         std::vector<Param> m_params;
 
-        ExprNode_Asm2(AsmCommon::Options options, std::vector<AsmCommon::Line> lines, std::vector<Param> params)
-            : m_options(options)
-            , m_lines(::std::move(lines))
-            , m_params(::std::move(params))
-        {
-        }
+        ExprNode_Asm2(AsmCommon::Options options, std::vector<AsmCommon::Line> lines, std::vector<Param> params);
 
         static constexpr unsigned int kind = 7;
         unsigned int node_kind() const override;
@@ -258,12 +206,7 @@ namespace AST {
         Ident m_target;
         ExprNodeP m_value;
 
-        ExprNode_Flow(Type type, Ident target, ExprNodeP value)
-            : m_type(type)
-            , m_target(::std::move(target))
-            , m_value(::std::move(value))
-        {
-        }
+        ExprNode_Flow(Type type, Ident target, ExprNodeP value);
 
         static constexpr unsigned int kind = 8;
         unsigned int node_kind() const override;
@@ -281,14 +224,7 @@ namespace AST {
         /// Allocated binding slots/indexes for the pattern in `let-else`
         ::std::pair<unsigned, unsigned> m_letelse_slots;
 
-        ExprNode_LetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP else_arm = {}, bool is_super = false)
-            : m_pat(::std::move(pat))
-            , m_type(::std::move(type))
-            , m_value(::std::move(value))
-            , m_else(::std::move(else_arm))
-            , m_is_super(is_super)
-        {
-        }
+        ExprNode_LetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP else_arm = {}, bool is_super = false);
 
         static constexpr unsigned int kind = 9;
         unsigned int node_kind() const override;
@@ -315,17 +251,9 @@ namespace AST {
         ExprNodeP m_slot;
         ExprNodeP m_value;
 
-        ExprNode_Assign()
-            : m_op(NONE)
-        {
-        }
+        ExprNode_Assign();
 
-        ExprNode_Assign(Operation op, ExprNodeP slot, ExprNodeP value)
-            : m_op(op)
-            , m_slot(::std::move(slot))
-            , m_value(::std::move(value))
-        {
-        }
+        ExprNode_Assign(Operation op, ExprNodeP slot, ExprNodeP value);
 
         static constexpr unsigned int kind = 10;
         unsigned int node_kind() const override;
@@ -338,11 +266,7 @@ namespace AST {
         Path m_path;
         ::std::vector<ExprNodeP> m_args;
 
-        ExprNode_CallPath(Path&& path, ::std::vector<ExprNodeP>&& args)
-            : m_path(::std::move(path))
-            , m_args(::std::move(args))
-        {
-        }
+        ExprNode_CallPath(Path&& path, ::std::vector<ExprNodeP>&& args);
 
         static constexpr unsigned int kind = 11;
         unsigned int node_kind() const override;
@@ -356,12 +280,7 @@ namespace AST {
         PathNode m_method;
         ::std::vector<ExprNodeP> m_args;
 
-        ExprNode_CallMethod(ExprNodeP obj, PathNode method, ::std::vector<ExprNodeP> args)
-            : m_val(::std::move(obj))
-            , m_method(::std::move(method))
-            , m_args(::std::move(args))
-        {
-        }
+        ExprNode_CallMethod(ExprNodeP obj, PathNode method, ::std::vector<ExprNodeP> args);
 
         static constexpr unsigned int kind = 12;
         unsigned int node_kind() const override;
@@ -375,11 +294,7 @@ namespace AST {
         ExprNodeP m_val;
         ::std::vector<ExprNodeP> m_args;
 
-        ExprNode_CallObject(ExprNodeP val, ::std::vector<ExprNodeP>&& args)
-            : m_val(::std::move(val))
-            , m_args(::std::move(args))
-        {
-        }
+        ExprNode_CallObject(ExprNodeP val, ::std::vector<ExprNodeP>&& args);
 
         static constexpr unsigned int kind = 13;
         unsigned int node_kind() const override;
@@ -392,16 +307,9 @@ namespace AST {
         Ident m_label;
         ExprNodeP m_code;
 
-        ExprNode_Loop()
-            : m_label("")
-        {
-        }
+        ExprNode_Loop();
 
-        ExprNode_Loop(Ident label, ExprNodeP code)
-            : m_label(::std::move(label))
-            , m_code(::std::move(code))
-        {
-        }
+        ExprNode_Loop(Ident label, ExprNodeP code);
 
         static constexpr unsigned int kind = 14;
         unsigned int node_kind() const override;
@@ -416,13 +324,7 @@ namespace AST {
         ExprNodeP m_value;
         ExprNodeP m_code;
 
-        ExprNode_For(Ident label, AST::Pattern pattern, ExprNodeP val, ExprNodeP code)
-            : m_label(::std::move(label))
-            , m_pattern(::std::move(pattern))
-            , m_value(::std::move(val))
-            , m_code(::std::move(code))
-        {
-        }
+        ExprNode_For(Ident label, AST::Pattern pattern, ExprNodeP val, ExprNodeP code);
 
         static constexpr unsigned int kind = 15;
         unsigned int node_kind() const override;
@@ -441,12 +343,7 @@ namespace AST {
         std::vector<IfLet_Condition> m_conditions;
         ExprNodeP m_code;
 
-        ExprNode_While(Ident label, std::vector<IfLet_Condition> conditions, ExprNodeP code)
-            : m_label(::std::move(label))
-            , m_conditions(::std::move(conditions))
-            , m_code(::std::move(code))
-        {
-        }
+        ExprNode_While(Ident label, std::vector<IfLet_Condition> conditions, ExprNodeP code);
 
         static constexpr unsigned int kind = 16;
         unsigned int node_kind() const override;
@@ -462,26 +359,16 @@ namespace AST {
 
         ExprNodeP m_code;
 
-        ExprNode_Match_Arm() {
-        }
+        ExprNode_Match_Arm();
 
-        ExprNode_Match_Arm(::std::vector<Pattern> patterns, std::vector<IfLet_Condition> guard, ExprNodeP code)
-            : m_patterns(mv$(patterns))
-            , m_guard(mv$(guard))
-            , m_code(mv$(code))
-        {
-        }
+        ExprNode_Match_Arm(::std::vector<Pattern> patterns, std::vector<IfLet_Condition> guard, ExprNodeP code);
     };
 
     struct ExprNode_Match: public ExprNode {
         ExprNodeP m_val;
         ::std::vector<ExprNode_Match_Arm> m_arms;
 
-        ExprNode_Match(ExprNodeP val, ::std::vector<ExprNode_Match_Arm> arms)
-            : m_val(::std::move(val))
-            , m_arms(::std::move(arms))
-        {
-        }
+        ExprNode_Match(ExprNodeP val, ::std::vector<ExprNode_Match_Arm> arms);
 
         static constexpr unsigned int kind = 17;
         unsigned int node_kind() const override;
@@ -499,11 +386,7 @@ namespace AST {
         std::vector<Arm> m_arms;
         ExprNodeP m_else;
 
-        ExprNode_If(std::vector<Arm> arms, ExprNodeP else_code)
-            : m_arms(::std::move(arms))
-            , m_else(::std::move(else_code))
-        {
-        }
+        ExprNode_If(std::vector<Arm> arms, ExprNodeP else_code);
 
         static constexpr unsigned int kind = 18;
         unsigned int node_kind() const override;
@@ -526,11 +409,7 @@ namespace AST {
         enum eCoreType m_datatype;
         U128 m_value;
 
-        ExprNode_Integer(U128 value, enum eCoreType datatype)
-            : m_datatype(datatype)
-            , m_value(value)
-        {
-        }
+        ExprNode_Integer(U128 value, enum eCoreType datatype);
 
         static constexpr unsigned int kind = 20;
         unsigned int node_kind() const override;
@@ -544,11 +423,7 @@ namespace AST {
         enum eCoreType m_datatype;
         FloatValue m_value;
 
-        ExprNode_Float(FloatValue value, enum eCoreType datatype)
-            : m_datatype(datatype)
-            , m_value(value)
-        {
-        }
+        ExprNode_Float(FloatValue value, enum eCoreType datatype);
 
         static constexpr unsigned int kind = 21;
         unsigned int node_kind() const override;
@@ -561,10 +436,7 @@ namespace AST {
     struct ExprNode_Bool: public ExprNode {
         bool m_value;
 
-        ExprNode_Bool(bool value)
-            : m_value(value)
-        {
-        }
+        ExprNode_Bool(bool value);
 
         static constexpr unsigned int kind = 22;
         unsigned int node_kind() const override;
@@ -579,11 +451,7 @@ namespace AST {
         /// Hygiene for format strings
         Ident::Hygiene m_hygiene;
 
-        ExprNode_String(::std::string value, Ident::Hygiene h = {})
-            : m_value(::std::move(value))
-            , m_hygiene(::std::move(h))
-        {
-        }
+        ExprNode_String(::std::string value, Ident::Hygiene h = {});
 
         static constexpr unsigned int kind = 23;
         unsigned int node_kind() const override;
@@ -596,10 +464,7 @@ namespace AST {
     struct ExprNode_ByteString: public ExprNode {
         ::std::string m_value;
 
-        ExprNode_ByteString(::std::string value)
-            : m_value(::std::move(value))
-        {
-        }
+        ExprNode_ByteString(::std::string value);
 
         static constexpr unsigned int kind = 24;
         unsigned int node_kind() const override;
@@ -612,10 +477,7 @@ namespace AST {
     struct ExprNode_CString: public ExprNode {
         ::std::string m_value;
 
-        ExprNode_CString(::std::string value)
-            : m_value(::std::move(value))
-        {
-        }
+        ExprNode_CString(::std::string value);
 
         static constexpr unsigned int kind = 25;
         unsigned int node_kind() const override;
@@ -663,12 +525,7 @@ namespace AST {
         ExprNodeP m_base_value;
         t_values m_values;
 
-        ExprNode_StructLiteral(Path path, ExprNodeP base_value, t_values&& values)
-            : m_path(std::move(path))
-            , m_base_value(std::move(base_value))
-            , m_values(std::move(values))
-        {
-        }
+        ExprNode_StructLiteral(Path path, ExprNodeP base_value, t_values&& values);
 
         static constexpr unsigned int kind = 27;
         unsigned int node_kind() const override;
@@ -684,11 +541,7 @@ namespace AST {
         Path m_path;
         t_values m_values;
 
-        ExprNode_StructLiteralPattern(Path path, t_values&& values)
-            : m_path(std::move(path))
-            , m_values(std::move(values))
-        {
-        }
+        ExprNode_StructLiteralPattern(Path path, t_values&& values);
 
         static constexpr unsigned int kind = 28;
         unsigned int node_kind() const override;
@@ -702,16 +555,9 @@ namespace AST {
         ExprNodeP m_size; // if non-NULL, it's a sized array
         ::std::vector<ExprNodeP> m_values;
 
-        ExprNode_Array(::std::vector<ExprNodeP> vals)
-            : m_values(::std::move(vals))
-        {
-        }
+        ExprNode_Array(::std::vector<ExprNodeP> vals);
 
-        ExprNode_Array(ExprNodeP val, ExprNodeP size)
-            : m_size(::std::move(size))
-        {
-            m_values.push_back(::std::move(val));
-        }
+        ExprNode_Array(ExprNodeP val, ExprNodeP size);
 
         static constexpr unsigned int kind = 29;
         unsigned int node_kind() const override;
@@ -724,10 +570,7 @@ namespace AST {
     struct ExprNode_Tuple: public ExprNode {
         ::std::vector<ExprNodeP> m_values;
 
-        ExprNode_Tuple(::std::vector<ExprNodeP> vals)
-            : m_values(::std::move(vals))
-        {
-        }
+        ExprNode_Tuple(::std::vector<ExprNodeP> vals);
 
         static constexpr unsigned int kind = 30;
         unsigned int node_kind() const override;
@@ -740,10 +583,7 @@ namespace AST {
     struct ExprNode_NamedValue: public ExprNode {
         Path m_path;
 
-        ExprNode_NamedValue(Path path)
-            : m_path(::std::move(path))
-        {
-        }
+        ExprNode_NamedValue(Path path);
 
         static constexpr unsigned int kind = 31;
         unsigned int node_kind() const override;
@@ -757,11 +597,7 @@ namespace AST {
         ExprNodeP m_obj;
         RcString m_name;
 
-        ExprNode_Field(ExprNodeP obj, RcString name)
-            : m_obj(::std::move(obj))
-            , m_name(::std::move(name))
-        {
-        }
+        ExprNode_Field(ExprNodeP obj, RcString name);
 
         static constexpr unsigned int kind = 32;
         unsigned int node_kind() const override;
@@ -774,11 +610,7 @@ namespace AST {
         ExprNodeP m_obj;
         ExprNodeP m_idx;
 
-        ExprNode_Index(ExprNodeP obj, ExprNodeP idx)
-            : m_obj(::std::move(obj))
-            , m_idx(::std::move(idx))
-        {
-        }
+        ExprNode_Index(ExprNodeP obj, ExprNodeP idx);
 
         static constexpr unsigned int kind = 33;
         unsigned int node_kind() const override;
@@ -791,10 +623,7 @@ namespace AST {
     struct ExprNode_Deref: public ExprNode {
         ExprNodeP m_value;
 
-        ExprNode_Deref(ExprNodeP value)
-            : m_value(::std::move(value))
-        {
-        }
+        ExprNode_Deref(ExprNodeP value);
 
         static constexpr unsigned int kind = 34;
         unsigned int node_kind() const override;
@@ -808,11 +637,7 @@ namespace AST {
         ExprNodeP m_value;
         TypeRef m_type;
 
-        ExprNode_Cast(ExprNodeP value, TypeRef&& dst_type)
-            : m_value(::std::move(value))
-            , m_type(::std::move(dst_type))
-        {
-        }
+        ExprNode_Cast(ExprNodeP value, TypeRef&& dst_type);
 
         static constexpr unsigned int kind = 35;
         unsigned int node_kind() const override;
@@ -826,11 +651,7 @@ namespace AST {
         ExprNodeP m_value;
         TypeRef m_type;
 
-        ExprNode_TypeAnnotation(ExprNodeP value, TypeRef&& dst_type)
-            : m_value(::std::move(value))
-            , m_type(::std::move(dst_type))
-        {
-        }
+        ExprNode_TypeAnnotation(ExprNodeP value, TypeRef&& dst_type);
 
         static constexpr unsigned int kind = 36;
         unsigned int node_kind() const override;
@@ -874,12 +695,7 @@ namespace AST {
         ExprNodeP m_left;
         ExprNodeP m_right;
 
-        ExprNode_BinOp(Type type, ExprNodeP left, ExprNodeP right)
-            : m_type(type)
-            , m_left(::std::move(left))
-            , m_right(::std::move(right))
-        {
-        }
+        ExprNode_BinOp(Type type, ExprNodeP left, ExprNodeP right);
 
         static constexpr unsigned int kind = 37;
         unsigned int node_kind() const override;
@@ -904,11 +720,7 @@ namespace AST {
         enum Type m_type;
         ExprNodeP m_value;
 
-        ExprNode_UniOp(Type type, ExprNodeP value)
-            : m_type(type)
-            , m_value(::std::move(value))
-        {
-        }
+        ExprNode_UniOp(Type type, ExprNodeP value);
 
         static constexpr unsigned int kind = 38;
         unsigned int node_kind() const override;
@@ -925,12 +737,7 @@ namespace AST {
         Ident::Hygiene m_token_hygiene;
         Ident::Hygiene m_definition_hygiene;
 
-        ExprNode_MacroDefinition(unsigned int definition_id, Ident::Hygiene token_hygiene, Ident::Hygiene definition_hygiene)
-            : m_definition_id(definition_id)
-            , m_token_hygiene(::std::move(token_hygiene))
-            , m_definition_hygiene(::std::move(definition_hygiene))
-        {
-        }
+        ExprNode_MacroDefinition(unsigned int definition_id, Ident::Hygiene token_hygiene, Ident::Hygiene definition_hygiene);
 
         static constexpr unsigned int kind = 39;
         unsigned int node_kind() const override;
@@ -943,11 +750,7 @@ namespace AST {
     public:
         virtual ~NodeVisitor() = default;
 
-        inline void visit(ExprNodeP& cnode) {
-            if (cnode.get()) {
-                cnode->visit(*this);
-            }
-        }
+        void visit(ExprNodeP& cnode);
 
         virtual bool is_const() const {
             return false;
@@ -1002,12 +805,7 @@ namespace AST {
 
     class NodeVisitorDef: public NodeVisitor {
     public:
-        inline void visit(ExprNodeP& cnode) {
-            if (cnode.is_valid()) {
-                TRACE_FUNCTION_F(cnode.type_name());
-                cnode->visit(*this);
-            }
-        }
+        void visit(ExprNodeP& cnode);
 
 #define NT(nt) \
     virtual void visit(nt& node) override; /* \

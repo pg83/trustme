@@ -610,3 +610,124 @@ AST::AttributeList::~AttributeList() = default;
 AST::AttributeList::AttributeList(AttributeList&&) = default;
 AST::AttributeList& AST::AttributeList::operator=(AttributeList&&) = default;
 AST::AttributeList::AttributeList(const AttributeList&) = default;
+
+namespace AST {
+
+//StructItem() {}
+
+StructItem::StructItem(::AST::AttributeList attrs, AST::Visibility vis, RcString name, TypeRef ty, Expr default_value)
+    : m_attrs(mv$(attrs))
+    , m_vis(mv$(vis))
+    , m_name(mv$(name))
+    , m_type(mv$(ty))
+    , m_default(mv$(default_value)) {
+}
+//TupleItem() {}
+
+TupleItem::TupleItem(::AST::AttributeList attrs, AST::Visibility vis, TypeRef ty)
+    : m_attrs(mv$(attrs))
+    , m_vis(mv$(vis))
+    , m_type(mv$(ty)) {
+}
+//TypeAlias() {}
+TypeAlias::TypeAlias(GenericParams params, TypeRef type)
+    : m_params(std::move(params))
+    , m_type(std::move(type)) {
+}
+TypeAlias TypeAlias::new_associated_type(GenericParams params, GenericParams type_bounds, TypeRef default_type) {
+    TypeAlias rv{std::move(params), std::move(default_type)};
+    rv.m_self_bounds = std::move(type_bounds);
+    return rv;
+}
+TraitAlias TraitAlias::clone() const {
+    TraitAlias rv;
+    for (const auto& p : this->traits) {
+        rv.traits.push_back(p);
+    }
+    return rv;
+}
+Static::Static(Class s_class, TypeRef type, Expr value)
+    : m_class(s_class)
+    , m_type(std::move(type))
+    , m_value(std::move(value)) {
+}
+Function::Arg::Arg(::AST::Pattern pat, TypeRef ty, ::AST::AttributeList attrs)
+    : attrs(mv$(attrs))
+    , pat(mv$(pat))
+    , ty(mv$(ty)) {
+}
+Function::Flags::Flags()
+    : is_const(false)
+    , is_unsafe(false)
+    , is_async(false) {
+}
+Function::Flags Function::Flags::set_unsafe() const {
+    auto rv = *this;
+    rv.is_unsafe = true;
+    return rv;
+}
+Function::Flags Function::Flags::set_const() const {
+    auto rv = *this;
+    rv.is_const = true;
+    return rv;
+}
+Function::Flags Function::Flags::set_async() const {
+    auto rv = *this;
+    rv.is_async = true;
+    return rv;
+}
+// Helper for derive, defines an ABI_RUST function with no generics
+Function::Function(Span sp, TypeRef ret_type, Arglist args)
+    : Function(sp, ABI_RUST, Flags(), GenericParams(), std::move(ret_type), std::move(args), false) {
+}
+EnumVariant::EnumVariant() {
+}
+EnumVariant::EnumVariant(AttributeList attrs, RcString name)
+    : m_attrs(mv$(attrs))
+    , m_name(mv$(name))
+    , m_data(EnumVariantData::make_Unit({})) {
+}
+EnumVariant::EnumVariant(AttributeList attrs, RcString name, ::std::vector<TupleItem> sub_types)
+    : m_attrs(mv$(attrs))
+    , m_name(::std::move(name))
+    , m_data(EnumVariantData::make_Tuple({std::move(sub_types)})) {
+}
+EnumVariant::EnumVariant(AttributeList attrs, RcString name, ::std::vector<StructItem> fields)
+    : m_attrs(mv$(attrs))
+    , m_name(::std::move(name))
+    , m_data(EnumVariantData::make_Struct({std::move(fields)})) {
+}
+Enum::Enum() {
+}
+Enum::Enum(GenericParams params, ::std::vector<EnumVariant> variants)
+    : m_params(::std::move(params))
+    , m_variants(::std::move(variants)) {
+}
+Struct::Markings::Markings() {
+}
+Struct::Struct() {
+}
+Struct::Struct(GenericParams params)
+    : m_params(::std::move(params))
+    , m_data(StructData::make_Unit({})) {
+}
+Struct::Struct(GenericParams params, ::std::vector<StructItem> fields)
+    : m_params(::std::move(params))
+    , m_data(StructData::make_Struct({mv$(fields)})) {
+}
+Struct::Struct(GenericParams params, ::std::vector<TupleItem> fields)
+    : m_params(::std::move(params))
+    , m_data(StructData::make_Tuple({mv$(fields)})) {
+}
+Union::Union(GenericParams params, ::std::vector<StructItem> fields)
+    : m_params(::std::move(params))
+    , m_variants(::std::move(fields)) {
+}
+ImplDef::ImplDef(GenericParams params, Spanned<Path> trait_type, TypeRef impl_type)
+    : m_is_unsafe(false)
+    , m_is_const(false)
+    , m_params(mv$(params))
+    , m_trait(mv$(trait_type))
+    , m_type(mv$(impl_type)) {
+}
+}

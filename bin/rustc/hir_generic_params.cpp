@@ -122,3 +122,67 @@ HIR::PathParams HIR::GenericParams::make_nop_params(TypeInterner& types, unsigne
     }
     throw "Unreachable";
 }
+
+namespace HIR {
+
+Ordering TypeParamDef::ord(const TypeParamDef& x) const {
+    ORD(m_name, x.m_name);
+    ORD(m_default, x.m_default);
+    ORD(m_is_sized, x.m_is_sized);
+    return OrdEqual;
+}
+Ordering LifetimeDef::ord(const LifetimeDef& x) const {
+    ORD(m_name, x.m_name);
+    return OrdEqual;
+}
+Ordering ValueParamDef::ord(const ValueParamDef& x) const {
+    ORD(m_name, x.m_name);
+    ORD(m_type, x.m_type);
+    //ORD(m_default, x.m_default);
+    return OrdEqual;
+}
+bool GenericParams::is_empty() const {
+    if (!m_types.empty()) {
+        return false;
+    }
+    if (!m_lifetimes.empty()) {
+        return false;
+    }
+    if (!m_values.empty()) {
+        return false;
+    }
+    if (!m_bounds.empty()) {
+        return false;
+    }
+    return true;
+}
+bool GenericParams::is_generic() const {
+    if (!m_types.empty()) {
+        return true;
+    }
+    // Note: Lifetimes don't matter
+    if (!m_values.empty()) {
+        return true;
+    }
+    return false;
+}
+PathParams GenericParams::make_empty_params(bool lifetimes_only) const {
+    assert(lifetimes_only);
+    PathParams rv;
+    rv.m_lifetimes = ThinVector<LifetimeRef>(m_lifetimes.size());
+    return rv;
+}
+GenericParams::PrintArgs::PrintArgs(const GenericParams& gp)
+    : gp(gp) {
+}
+GenericParams::PrintBounds::PrintBounds(const GenericParams& gp)
+    : gp(gp) {
+}
+Ordering GenericParams::ord(const HIR::GenericParams& x) const {
+    ORD(m_types, x.m_types);
+    ORD(m_lifetimes, x.m_lifetimes);
+    ORD(m_values, x.m_values);
+    ORD(m_bounds, x.m_bounds);
+    return OrdEqual;
+}
+}

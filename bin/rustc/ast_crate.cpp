@@ -283,3 +283,15 @@ namespace AST {
     }
 
 } // namespace AST
+
+namespace AST {
+
+void Crate::set_crate_name(std::string name) {
+    m_crate_name_set = name;
+    if (m_crate_type == Type::Executable) {
+        m_crate_name_real = "";
+    } else {
+        m_crate_name_real = m_crate_name_suffix != "" ? RcString::new_interned(name + "-" + m_crate_name_suffix) : RcString::new_interned(name);
+    }
+}
+}

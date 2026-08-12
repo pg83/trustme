@@ -737,3 +737,20 @@ struct EscapedString {
 ::std::ostream& operator<<(::std::ostream& os, const Position& p) {
     return os << ::std::dec << p.filename << ":" << p.line;
 }
+
+Position::Position()
+    : filename("")
+    , line(0)
+    , ofs(0) {
+}
+Position::Position(Span sp)
+    : span(std::move(sp))
+    , filename("")
+    , line(0)
+    , ofs(0) {
+}
+Position::Position(RcString filename, unsigned int line, unsigned int ofs)
+    : filename(filename)
+    , line(line)
+    , ofs(ofs) {
+}

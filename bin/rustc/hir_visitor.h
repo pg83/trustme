@@ -13,11 +13,7 @@ namespace HIR {
         TypeInterner& m_types;
 
     public:
-        Visitor(::StaticTraitResolve* resolve, TypeInterner& types)
-            : m_resolve(resolve)
-            , m_types(types)
-        {
-        }
+        Visitor(::StaticTraitResolve* resolve, TypeInterner& types);
 
         virtual ~Visitor();
 

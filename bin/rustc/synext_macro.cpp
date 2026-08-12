@@ -2015,3 +2015,10 @@ class CExpander: public ExpandProcMacro {
 };
 
 STATIC_MACRO("stringify", CExpander);
+
+MacroDef::MacroDef(::std::string name, ::std::unique_ptr<ExpandProcMacro> def)
+    : prev(nullptr)
+    , name(::std::move(name))
+    , def(::std::move(def)) {
+    Register_Synext_Macro_Static(this);
+}

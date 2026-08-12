@@ -164,3 +164,49 @@ TransList_Const* TransList::add_const(HIR::TypeInterner& types, ::HIR::Path p) {
 ::HIR::TypeRef Trans_Params::monomorph(const ::StaticTraitResolve& resolve, const ::HIR::TypeData* ty) const {
     return resolve.monomorph_expand(sp, ty, *this);
 }
+
+Trans_Params::Trans_Params(HIR::TypeInterner& types)
+    : MonomorphiserPP(types)
+    , gdef_impl(nullptr)
+    , force_monomorphisation(false) {
+}
+Trans_Params::Trans_Params(HIR::TypeInterner& types, const Span& sp)
+    : MonomorphiserPP(types)
+    , sp(sp)
+    , gdef_impl(nullptr)
+    , force_monomorphisation(false) {
+}
+Trans_Params::Trans_Params(Trans_Params&& x)
+    : Trans_Params(x.type_interner()) {
+    *this = ::std::move(x);
+}
+Trans_Params& Trans_Params::operator=(Trans_Params&& x) {
+    sp = ::std::move(x.sp);
+    gdef_impl = x.gdef_impl;
+    pp_method = ::std::move(x.pp_method);
+    pp_impl = ::std::move(x.pp_impl);
+    self_type = x.self_type;
+    force_monomorphisation = x.force_monomorphisation;
+    return *this;
+}
+Trans_Params Trans_Params::new_impl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams impl_params) {
+    Trans_Params tp(types, sp);
+    tp.self_type = std::move(ty);
+    tp.pp_impl = std::move(impl_params);
+    return tp;
+}
+const ::HIR::TypeData* Trans_Params::maybe_monomorph(const ::StaticTraitResolve& resolve, ::HIR::TypeRef& tmp, const ::HIR::TypeData* p) const {
+    if (monomorphise_type_needed(p)) {
+        return tmp = this->monomorph(resolve, p);
+    } else {
+        return p;
+    }
+}
+TransList_Function::TransList_Function(HIR::TypeInterner& types, const ::HIR::Path& path)
+    : path(&path)
+    , ptr(nullptr)
+    , pp(types)
+    , force_prototype(false) {
+}
+TransList_Static::TransList_Static(HIR::TypeInterner& types): ptr(nullptr), pp(types) {}
+TransList_Const::TransList_Const(HIR::TypeInterner& types): ptr(nullptr), pp(types) {}

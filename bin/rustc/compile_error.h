@@ -19,8 +19,7 @@ namespace CompileError {
         Generic(::std::string message);
         Generic(const TokenStream& lex, ::std::string message);
 
-        virtual ~Generic() throw() {
-        }
+        virtual ~Generic() throw();
     };
 
     class BugCheck: public Base {
@@ -30,8 +29,7 @@ namespace CompileError {
         BugCheck(::std::string message);
         BugCheck(const TokenStream& lex, ::std::string message);
 
-        virtual ~BugCheck() throw() {
-        }
+        virtual ~BugCheck() throw();
     };
 
     class Todo: public Base {

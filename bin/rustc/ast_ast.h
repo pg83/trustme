@@ -46,14 +46,7 @@ namespace AST {
 
         //StructItem() {}
 
-        StructItem(::AST::AttributeList attrs, AST::Visibility vis, RcString name, TypeRef ty, Expr default_value)
-            : m_attrs(mv$(attrs))
-            , m_vis(mv$(vis))
-            , m_name(mv$(name))
-            , m_type(mv$(ty))
-            , m_default(mv$(default_value))
-        {
-        }
+        StructItem(::AST::AttributeList attrs, AST::Visibility vis, RcString name, TypeRef ty, Expr default_value);
 
         friend ::std::ostream& operator<<(::std::ostream& os, const StructItem& x) {
             return os << x.m_vis << x.m_name << ": " << x.m_type;
@@ -69,12 +62,7 @@ namespace AST {
 
         //TupleItem() {}
 
-        TupleItem(::AST::AttributeList attrs, AST::Visibility vis, TypeRef ty)
-            : m_attrs(mv$(attrs))
-            , m_vis(mv$(vis))
-            , m_type(mv$(ty))
-        {
-        }
+        TupleItem(::AST::AttributeList attrs, AST::Visibility vis, TypeRef ty);
 
         friend ::std::ostream& operator<<(::std::ostream& os, const TupleItem& x) {
             return os << x.m_vis << x.m_type;
@@ -92,17 +80,9 @@ namespace AST {
         TypeRef m_type;
 
         //TypeAlias() {}
-        TypeAlias(GenericParams params, TypeRef type)
-            : m_params(std::move(params))
-            , m_type(std::move(type))
-        {
-        }
+        TypeAlias(GenericParams params, TypeRef type);
 
-        static TypeAlias new_associated_type(GenericParams params, GenericParams type_bounds, TypeRef default_type) {
-            TypeAlias rv{std::move(params), std::move(default_type)};
-            rv.m_self_bounds = std::move(type_bounds);
-            return rv;
-        }
+        static TypeAlias new_associated_type(GenericParams params, GenericParams type_bounds, TypeRef default_type);
 
         const GenericParams& params() const {
             return m_params;
@@ -128,13 +108,7 @@ namespace AST {
         GenericParams params;
         std::vector<Spanned<Type_TraitPath>> traits;
 
-        TraitAlias clone() const {
-            TraitAlias rv;
-            for (const auto& p : this->traits) {
-                rv.traits.push_back(p);
-            }
-            return rv;
-        }
+        TraitAlias clone() const;
     };
 
     enum class Linkage {
@@ -167,12 +141,7 @@ namespace AST {
             Linkage linkage = Linkage::Default;
         } m_markings;
 
-        Static(Class s_class, TypeRef type, Expr value)
-            : m_class(s_class)
-            , m_type(std::move(type))
-            , m_value(std::move(value))
-        {
-        }
+        Static(Class s_class, TypeRef type, Expr value);
 
         const Class& s_class() const {
             return m_class;
@@ -204,12 +173,7 @@ namespace AST {
             ::AST::Pattern pat;
             TypeRef ty;
 
-            Arg(::AST::Pattern pat, TypeRef ty, ::AST::AttributeList attrs = {})
-                : attrs(mv$(attrs))
-                , pat(mv$(pat))
-                , ty(mv$(ty))
-            {
-            }
+            Arg(::AST::Pattern pat, TypeRef ty, ::AST::AttributeList attrs = {});
         };
 
         typedef ::std::vector<Arg> Arglist;
@@ -219,34 +183,17 @@ namespace AST {
             bool is_unsafe;
             bool is_async;
 
-            Flags()
-                : is_const(false)
-                , is_unsafe(false)
-                , is_async(false)
-            {
-            }
+            Flags();
 
             static Flags make_unsafe() {
                 return Flags().set_unsafe();
             }
 
-            Flags set_unsafe() const {
-                auto rv = *this;
-                rv.is_unsafe = true;
-                return rv;
-            }
+            Flags set_unsafe() const;
 
-            Flags set_const() const {
-                auto rv = *this;
-                rv.is_const = true;
-                return rv;
-            }
+            Flags set_const() const;
 
-            Flags set_async() const {
-                auto rv = *this;
-                rv.is_async = true;
-                return rv;
-            }
+            Flags set_async() const;
         };
 
     private:
@@ -286,10 +233,7 @@ namespace AST {
         Function(Span sp, ::std::string abi, Flags flags, GenericParams params, TypeRef ret_type, Arglist args, bool is_variadic);
 
         // Helper for derive, defines an ABI_RUST function with no generics
-        Function(Span sp, TypeRef ret_type, Arglist args)
-            : Function(sp, ABI_RUST, Flags(), GenericParams(), std::move(ret_type), std::move(args), false)
-        {
-        }
+        Function(Span sp, TypeRef ret_type, Arglist args);
 
         void set_code(Expr code) {
             m_code = ::std::move(code);
@@ -435,29 +379,13 @@ namespace AST {
         /// Optional discriminant value
         Expr m_discriminant_value;
 
-        EnumVariant() {
-        }
+        EnumVariant();
 
-        EnumVariant(AttributeList attrs, RcString name)
-            : m_attrs(mv$(attrs))
-            , m_name(mv$(name))
-            , m_data(EnumVariantData::make_Unit({}))
-        {
-        }
+        EnumVariant(AttributeList attrs, RcString name);
 
-        EnumVariant(AttributeList attrs, RcString name, ::std::vector<TupleItem> sub_types)
-            : m_attrs(mv$(attrs))
-            , m_name(::std::move(name))
-            , m_data(EnumVariantData::make_Tuple({std::move(sub_types)}))
-        {
-        }
+        EnumVariant(AttributeList attrs, RcString name, ::std::vector<TupleItem> sub_types);
 
-        EnumVariant(AttributeList attrs, RcString name, ::std::vector<StructItem> fields)
-            : m_attrs(mv$(attrs))
-            , m_name(::std::move(name))
-            , m_data(EnumVariantData::make_Struct({std::move(fields)}))
-        {
-        }
+        EnumVariant(AttributeList attrs, RcString name, ::std::vector<StructItem> fields);
 
         friend ::std::ostream& operator<<(::std::ostream& os, const EnumVariant& x) {
             os << "EnumVariant(" << x.m_name;
@@ -494,14 +422,9 @@ namespace AST {
             uint64_t align_value = 0;
         } m_markings;
 
-        Enum() {
-        }
+        Enum();
 
-        Enum(GenericParams params, ::std::vector<EnumVariant> variants)
-            : m_params(::std::move(params))
-            , m_variants(::std::move(variants))
-        {
-        }
+        Enum(GenericParams params, ::std::vector<EnumVariant> variants);
 
         const GenericParams& params() const {
             return m_params;
@@ -531,8 +454,7 @@ namespace AST {
         StructData m_data;
 
         struct Markings {
-            Markings() {
-            }
+            Markings();
 
             enum class Repr {
                 Rust,
@@ -551,26 +473,13 @@ namespace AST {
             U128 scalar_valid_end;
         } m_markings;
 
-        Struct() {
-        }
+        Struct();
 
-        Struct(GenericParams params)
-            : m_params(::std::move(params))
-            , m_data(StructData::make_Unit({}))
-        {
-        }
+        Struct(GenericParams params);
 
-        Struct(GenericParams params, ::std::vector<StructItem> fields)
-            : m_params(::std::move(params))
-            , m_data(StructData::make_Struct({mv$(fields)}))
-        {
-        }
+        Struct(GenericParams params, ::std::vector<StructItem> fields);
 
-        Struct(GenericParams params, ::std::vector<TupleItem> fields)
-            : m_params(::std::move(params))
-            , m_data(StructData::make_Tuple({mv$(fields)}))
-        {
-        }
+        Struct(GenericParams params, ::std::vector<TupleItem> fields);
 
         const GenericParams& params() const {
             return m_params;
@@ -596,11 +505,7 @@ namespace AST {
             } repr = Repr::Rust;
         } m_markings;
 
-        Union(GenericParams params, ::std::vector<StructItem> fields)
-            : m_params(::std::move(params))
-            , m_variants(::std::move(fields))
-        {
-        }
+        Union(GenericParams params, ::std::vector<StructItem> fields);
 
         const GenericParams& params() const {
             return m_params;
@@ -621,14 +526,7 @@ namespace AST {
         TypeRef m_type;
 
     public:
-        ImplDef(GenericParams params, Spanned<Path> trait_type, TypeRef impl_type)
-            : m_is_unsafe(false)
-            , m_is_const(false)
-            , m_params(mv$(params))
-            , m_trait(mv$(trait_type))
-            , m_type(mv$(impl_type))
-        {
-        }
+        ImplDef(GenericParams params, Spanned<Path> trait_type, TypeRef impl_type);
 
         ImplDef(ImplDef&&) /*noexcept*/ = default;
         ImplDef& operator=(ImplDef&&) = default;

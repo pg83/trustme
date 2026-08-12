@@ -232,3 +232,53 @@ void Typecheck_Expressions(::HIR::Crate& crate) {
     OuterVisitor visitor{crate};
     visitor.visit_crate(crate);
 }
+
+namespace typeck {
+
+ModuleState::ModuleState(const ::HIR::Crate& crate)
+    : m_crate(crate)
+    , m_current_trait(nullptr)
+    , m_current_trait_impl(nullptr)
+    , m_impl_generics(nullptr)
+    , m_item_generics(nullptr) {
+}
+ModuleState::NullOnDrop<const ::HIR::GenericPath> ModuleState::set_current_trait(const ::HIR::GenericPath& p) {
+    assert(!m_current_trait);
+    m_current_trait = &p;
+    return NullOnDrop<const ::HIR::GenericPath>(m_current_trait);
+}
+ModuleState::NullOnDrop<const ::HIR::TraitImpl> ModuleState::set_current_trait_impl(const ::HIR::TraitImpl& impl) {
+    assert(!m_current_trait_impl);
+    m_current_trait_impl = &impl;
+    return NullOnDrop<const ::HIR::TraitImpl>(m_current_trait_impl);
+}
+ModuleState::NullOnDrop<const ::HIR::GenericParams> ModuleState::set_impl_generics(const ::HIR::GenericParams& gps) {
+    assert(!m_impl_generics);
+    m_impl_generics = &gps;
+    return NullOnDrop<const ::HIR::GenericParams>(m_impl_generics);
+}
+ModuleState::NullOnDrop<const ::HIR::GenericParams> ModuleState::set_item_generics(const ::HIR::GenericParams& gps) {
+    assert(!m_item_generics);
+    m_item_generics = &gps;
+    return NullOnDrop<const ::HIR::GenericParams>(m_item_generics);
+}
+void ModuleState::push_traits(::HIR::ItemPath p, const ::HIR::Module& mod) {
+    auto sp = Span();
+    m_mod_paths.push_back(p.get_simple_path());
+    DEBUG("Module has " << mod.m_traits.size() << " in-scope traits");
+    // - Push a NULL entry to prevent parent module import lists being searched
+    m_traits.push_back(::std::make_pair(nullptr, nullptr));
+    for (const auto& trait_path : mod.m_traits) {
+        DEBUG("Push " << trait_path);
+        m_traits.push_back(::std::make_pair(&trait_path, &this->m_crate.get_trait_by_path(sp, trait_path)));
+    }
+}
+void ModuleState::pop_traits(const ::HIR::Module& mod) {
+    DEBUG("Module has " << mod.m_traits.size() << " in-scope traits");
+    for (unsigned int i = 0; i < mod.m_traits.size(); i++) {
+        m_traits.pop_back();
+    }
+    m_traits.pop_back();
+    m_mod_paths.pop_back();
+}
+}

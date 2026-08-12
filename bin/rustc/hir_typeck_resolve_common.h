@@ -42,11 +42,7 @@ struct TraitResolveCommon {
             return ord(a, b) == OrdLess;
         }
 
-        Ordering ord(const key_t& a, const ref_t& b) const {
-            ORD(a.first, b.first);
-            ORD(a.second, b.second);
-            return OrdEqual;
-        }
+        Ordering ord(const key_t& a, const ref_t& b) const;
 
         bool operator()(const key_t& a, const ref_t& b) const {
             return ord(a, b) == OrdLess;
@@ -56,11 +52,7 @@ struct TraitResolveCommon {
             return ord(b, a) == OrdGreater;
         }
 
-        Ordering ord(const key_t& a, const ref_sp_t& b) const {
-            ORD(a.first, b.first);
-            ORD(a.second.m_path, b.second);
-            return OrdEqual;
-        }
+        Ordering ord(const key_t& a, const ref_sp_t& b) const;
 
         bool operator()(const key_t& a, const ref_sp_t& b) const {
             return ord(a, b) == OrdLess;
@@ -93,44 +85,15 @@ struct TraitResolveCommon {
     ::HIR::SimplePath m_lang_Destruct;         // 1.90
     ::HIR::SimplePath m_lang_Future;           // 1.90 (well, added earlier)
 
-    TraitResolveCommon(const ::HIR::Crate& crate)
-        : m_crate(crate)
-        , m_impl_generics(nullptr)
-        , m_item_generics(nullptr)
-    {
-        m_lang_Copy = m_crate.get_lang_item_path_opt("copy");
-        m_lang_Clone = m_crate.get_lang_item_path_opt("clone");
-        m_lang_Drop = m_crate.get_lang_item_path_opt("drop");
-        m_lang_Sized = m_crate.get_lang_item_path_opt("sized");
-        m_lang_Unsize = m_crate.get_lang_item_path_opt("unsize");
-        m_lang_Fn = m_crate.get_lang_item_path_opt("fn");
-        m_lang_FnMut = m_crate.get_lang_item_path_opt("fn_mut");
-        m_lang_FnOnce = m_crate.get_lang_item_path_opt("fn_once");
-        m_lang_Box = m_crate.get_lang_item_path_opt("owned_box");
-        m_lang_PhantomData = m_crate.get_lang_item_path_opt("phantom_data");
-        m_lang_Generator = m_crate.get_lang_item_path_opt("coroutine");
-        m_lang_DiscriminantKind = m_crate.get_lang_item_path_opt("discriminant_kind");
-        m_lang_Pointee = m_crate.get_lang_item_path_opt("pointee_trait");
-        m_lang_DynMetadata = m_crate.get_lang_item_path_opt("dyn_metadata");
-        m_lang_PointeeSized = m_crate.get_lang_item_path_opt("pointee_sized");
-        m_lang_MetaSized = m_crate.get_lang_item_path_opt("meta_sized");
-        m_lang_Destruct = m_crate.get_lang_item_path_opt("destruct");
-        m_lang_Future = m_crate.get_lang_item_path_opt("future_trait");
-    }
+    TraitResolveCommon(const ::HIR::Crate& crate);
 
     bool has_self() const {
         return m_impl_generics ? true : false;
     }
 
-    const ::HIR::GenericParams& impl_generics() const {
-        static ::HIR::GenericParams empty;
-        return m_impl_generics ? *m_impl_generics : empty;
-    }
+    const ::HIR::GenericParams& impl_generics() const;
 
-    const ::HIR::GenericParams& item_generics() const {
-        static ::HIR::GenericParams empty;
-        return m_item_generics ? *m_item_generics : empty;
-    }
+    const ::HIR::GenericParams& item_generics() const;
 
     /// <summary>
     /// Obtain the type for a given constant parameter
@@ -144,20 +107,7 @@ protected:
     void prep_indexes__add_trait_bound(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef type, ::HIR::TraitPath trait_path, bool add_parents = true);
 
     /// Iterate over in-scope bounds (function then type)
-    bool iterate_bounds(::std::function<bool(const ::HIR::GenericBound&)> cb) const {
-        const ::HIR::GenericParams* v[2] = {m_item_generics, m_impl_generics};
-        for (auto p : v) {
-            if (!p) {
-                continue;
-            }
-            for (const auto& b : p->m_bounds) {
-                if (cb(b)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
+    bool iterate_bounds(::std::function<bool(const ::HIR::GenericBound&)> cb) const;
 };
 
 extern ::std::ostream& operator<<(::std::ostream& s, const TraitResolveCommon::CachedEquality& x);

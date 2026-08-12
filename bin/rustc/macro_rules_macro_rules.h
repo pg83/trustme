@@ -68,40 +68,16 @@ struct MacroPatEnt {
         PAT_LITERAL,
     } type;
 
-    MacroPatEnt()
-        : tok(TOK_NULL)
-        , type(PAT_TOKEN)
-    {
-    }
+    MacroPatEnt();
 
     // Literal token
-    MacroPatEnt(Span sp, Token tok)
-        : sp(mv$(sp))
-        , tok(mv$(tok))
-        , type(PAT_TOKEN)
-    {
-    }
+    MacroPatEnt(Span sp, Token tok);
 
     // Variable reference
-    MacroPatEnt(Span sp, RcString name, unsigned int name_index, Type type)
-        : sp(mv$(sp))
-        , name(mv$(name))
-        , name_index(name_index)
-        , tok()
-        , type(type)
-    {
-    }
+    MacroPatEnt(Span sp, RcString name, unsigned int name_index, Type type);
 
     // Loop/optional
-    MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, ::std::vector<MacroPatEnt> ents)
-        : sp(mv$(sp))
-        , name(op)
-        , name_index(index)
-        , tok(mv$(sep))
-        , subpats(mv$(ents))
-        , type(PAT_LOOP)
-    {
-    }
+    MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, ::std::vector<MacroPatEnt> ents);
 
     friend ::std::ostream& operator<<(::std::ostream& os, const MacroPatEnt& x);
     friend ::std::ostream& operator<<(::std::ostream& os, const MacroPatEnt::Type& x);
@@ -169,14 +145,9 @@ struct MacroRulesArm {
 
     ~MacroRulesArm();
 
-    MacroRulesArm() {
-    }
+    MacroRulesArm();
 
-    MacroRulesArm(::std::vector<SimplePatEnt> pattern, ::std::vector<MacroExpansionEnt> contents)
-        : m_pattern(mv$(pattern))
-        , m_contents(mv$(contents))
-    {
-    }
+    MacroRulesArm(::std::vector<SimplePatEnt> pattern, ::std::vector<MacroExpansionEnt> contents);
 
     MacroRulesArm(const MacroRulesArm&) = delete;
     MacroRulesArm& operator=(const MacroRulesArm&) = delete;
@@ -209,12 +180,7 @@ public:
     /// Expansion rules
     ::std::vector<MacroRulesArm> m_rules;
 
-    MacroRules(RcString source_crate, AST::Edition edition)
-        : m_definition_id(++g_next_definition_id)
-        , m_source_crate(std::move(source_crate))
-        , m_edition(edition)
-    {
-    }
+    MacroRules(RcString source_crate, AST::Edition edition);
 
     virtual ~MacroRules();
     MacroRules(MacroRules&&) = default;

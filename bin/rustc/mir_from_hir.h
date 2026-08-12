@@ -13,21 +13,12 @@ class ScopeHandle {
     const MirBuilder& m_builder;
     unsigned int idx;
 
-    ScopeHandle(const MirBuilder& builder, unsigned int idx)
-        : m_builder(builder)
-        , idx(idx)
-    {
-    }
+    ScopeHandle(const MirBuilder& builder, unsigned int idx);
 
 public:
     ScopeHandle(const ScopeHandle& x) = delete;
 
-    ScopeHandle(ScopeHandle&& x)
-        : m_builder(x.m_builder)
-        , idx(x.idx)
-    {
-        x.idx = ~0;
-    }
+    ScopeHandle(ScopeHandle&& x);
 
     ScopeHandle& operator=(const ScopeHandle& x) = delete;
     ScopeHandle& operator=(ScopeHandle&& x) = delete;
@@ -182,12 +173,7 @@ struct PatternBinding {
     const ::HIR::PatternBinding* binding;
     std::pair<size_t, size_t> split_slice;
 
-    PatternBinding(field_path_t field, const ::HIR::PatternBinding& binding)
-        : field(std::move(field))
-        , binding(&binding)
-        , split_slice(SIZE_MAX, SIZE_MAX)
-    {
-    }
+    PatternBinding(field_path_t field, const ::HIR::PatternBinding& binding);
 
     bool is_split_slice() const {
         return split_slice.first != SIZE_MAX;
@@ -250,16 +236,9 @@ class MirBuilder {
         bool complete = false;
         ScopeType data;
 
-        ScopeDef(const Span& span)
-            : span(span)
-        {
-        }
+        ScopeDef(const Span& span);
 
-        ScopeDef(const Span& span, ScopeType data)
-            : span(span)
-            , data(mv$(data))
-        {
-        }
+        ScopeDef(const Span& span, ScopeType data);
     };
 
     ::std::vector<ScopeDef> m_scopes;
@@ -301,49 +280,17 @@ public:
     };
 
     /// Save the current state of aliases (see add_variable_alias)
-    SavedAliases save_aliases() const {
-        SavedAliases rv;
-        rv.set_aliases.reserve(m_variable_aliases.size());
-        for (const auto& v : m_variable_aliases) {
-            rv.set_aliases.push_back(v.second != MIR::LValue());
-        }
-        return rv;
-    }
+    SavedAliases save_aliases() const;
 
-    void restore_aliases(SavedAliases a) {
-        assert(a.set_aliases.size() == m_variable_aliases.size());
-        for (size_t i = 0; i < a.set_aliases.size(); i++) {
-            if (!a.set_aliases[i]) {
-                m_variable_aliases.at(i).second = MIR::LValue();
-            }
-        }
-    }
+    void restore_aliases(SavedAliases a);
 
     // Variable aliases (used for match guards)
-    void add_variable_alias(const Span& sp, unsigned idx, HIR::PatternBinding::Type ty, MIR::LValue lv) {
-        DEBUG("#" << idx << " = " << int(ty) << " " << lv);
-        ASSERT_BUG(sp, idx < m_variable_aliases.size(), "Variable alias #" << idx << " out of bounds");
-        ASSERT_BUG(sp, m_variable_aliases[idx].second == MIR::LValue(), "Variable alias #" << idx << " already exists: " << m_variable_aliases[idx].second << " setting " << lv);
-        m_variable_aliases[idx] = std::make_pair(ty, mv$(lv));
-    }
+    void add_variable_alias(const Span& sp, unsigned idx, HIR::PatternBinding::Type ty, MIR::LValue lv);
 
-    const var_alias_t* get_variable_alias(const Span& sp, unsigned idx) const {
-        ASSERT_BUG(sp, idx < m_variable_aliases.size(), "Variable alias #" << idx << " out of bounds");
-        if (m_variable_aliases[idx].second == MIR::LValue()) {
-            return nullptr;
-        } else {
-            return &m_variable_aliases[idx];
-        }
-    }
+    const var_alias_t* get_variable_alias(const Span& sp, unsigned idx) const;
 
     // - Values
-    ::MIR::LValue get_variable(const Span& sp, unsigned idx) const {
-        auto it = m_var_arg_mappings.find(idx);
-        if (it != m_var_arg_mappings.end()) {
-            return ::MIR::LValue::new_Argument(it->second);
-        }
-        return ::MIR::LValue::new_Local(idx);
-    }
+    ::MIR::LValue get_variable(const Span& sp, unsigned idx) const;
 
     ::MIR::LValue new_temporary(const ::HIR::TypeData* ty);
     ::MIR::LValue lvalue_or_temp(const Span& sp, const ::HIR::TypeData* ty, ::MIR::RValue val);
@@ -368,10 +315,7 @@ public:
         return m_if_cond_lval.clone();
     }
 
-    ::MIR::LValue get_rval_in_if_cond(const Span& sp, ::MIR::RValue val) {
-        push_stmt_assign(sp, m_if_cond_lval.clone(), mv$(val));
-        return m_if_cond_lval.clone();
-    }
+    ::MIR::LValue get_rval_in_if_cond(const Span& sp, ::MIR::RValue val);
 
     ::MIR::LValue get_result_in_if_cond(const Span& sp) {
         return get_rval_in_if_cond(sp, get_result(sp));
@@ -538,10 +482,7 @@ public:
         friend class MirBuilder;
         VarState state;
 
-        SavedActiveLocal(VarState vs)
-            : state(mv$(vs))
-        {
-        }
+        SavedActiveLocal(VarState vs);
 
     public:
         const VarState& get_state() const {

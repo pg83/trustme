@@ -363,11 +363,7 @@ class FmtEscaped {
     const char* e;
 
 public:
-    FmtEscaped(const ::std::string& s)
-        : s(s.c_str())
-        , e(s.c_str() + s.size())
-    {
-    }
+    FmtEscaped(const ::std::string& s);
 
     // See main.cpp
     friend ::std::ostream& operator<<(::std::ostream& os, const FmtEscaped& x);

@@ -11071,3 +11071,119 @@ void Typecheck_Code_CS__EnumerateRules(Context& context, const typeck::ModuleSta
     DEBUG("Return type = " << new_res_ty << ", root_ptr = " << root_ptr->type_name() << " " << root_ptr->m_res_type);
     context.equate_types_coerce(sp, new_res_ty, root_ptr);
 }
+
+Context::IVarPossible::CoerceTy::CoerceTy(::HIR::TypeRef ty, bool is_coerce)
+    : op(is_coerce ? Coercion : Unsizing)
+    , ty(ty) {
+}
+void Context::IVarPossible::reset() {
+    // Manually clear, to avoid needing to reallocate the lists all the time.
+    this->force_disable = false;
+    this->force_no_to = false;
+    this->force_no_from = false;
+    this->types_coerce_to.clear();
+    this->types_coerce_from.clear();
+    //this->types_default.clear();
+    this->has_bounded = false;
+    this->bounds_include_self = false;
+    this->bounded.clear();
+}
+bool Context::IVarPossible::has_rules() const {
+    if (force_disable) {
+        return true;
+    }
+    if (force_no_to || !types_coerce_to.empty()) {
+        return true;
+    }
+    if (force_no_from || !types_coerce_from.empty()) {
+        return true;
+    }
+    //if( !types_default.empty() )
+    //    return true;
+    if (has_bounded) {
+        return true;
+    }
+    return false;
+}
+void Context::IVarPossible::merge_from(const IVarPossible& source) {
+    force_disable |= source.force_disable;
+    force_no_to |= source.force_no_to;
+    force_no_from |= source.force_no_from;
+
+    auto merge_coercions = [](auto& destination, const auto& values) {
+        for (const auto& value : values) {
+            const auto found = ::std::find_if(destination.begin(), destination.end(), [&](const auto& existing) {
+                return existing.op == value.op && existing.ty == value.ty;
+            });
+            if (found == destination.end()) {
+                destination.push_back(value);
+            }
+        }
+    };
+    merge_coercions(types_coerce_to, source.types_coerce_to);
+    merge_coercions(types_coerce_from, source.types_coerce_from);
+    types_default.insert(source.types_default.begin(), source.types_default.end());
+
+    if (!source.has_bounded) {
+        return;
+    }
+    if (!has_bounded) {
+        has_bounded = true;
+        bounds_include_self = source.bounds_include_self;
+        bounded = source.bounded;
+        return;
+    }
+
+    bounds_include_self |= source.bounds_include_self;
+    if (bounds_include_self) {
+        for (const auto type : source.bounded) {
+            if (::std::find(bounded.begin(), bounded.end(), type) == bounded.end()) {
+                bounded.push_back(type);
+            }
+        }
+    } else {
+        bounded.erase(
+            ::std::remove_if(bounded.begin(), bounded.end(), [&](const auto type) {
+                return ::std::find(source.bounded.begin(), source.bounded.end(), type) == source.bounded.end();
+            }),
+            bounded.end()
+        );
+    }
+}
+Context::TaitEntry::TaitEntry(const HIR::PathParams& p, HIR::TypeRef t)
+    : params(p.clone())
+    , our_type(std::move(t)) {
+}
+Context::Context(const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params, const ::HIR::SimplePath& mod_path, const ::HIR::GenericPath* current_trait, const ::HIR::TraitImpl* current_trait_impl)
+    : m_crate(crate)
+    , m_current_trait_impl(current_trait_impl)
+    , m_ivars(crate.m_types)
+    , m_resolve(m_ivars, crate, impl_params, item_params, mod_path, current_trait)
+    , next_rule_idx(0)
+    , m_lang_Box(crate.get_lang_item_path_opt("owned_box")) {
+    m_resolve.set_inherent_type_constraint([this](const Span& sp, const ::HIR::TypeData* receiver, const ::HIR::TypeData* impl_type) {
+        this->equate_types_inner(sp, receiver, impl_type);
+    });
+}
+const ::HIR::TypeData* Context::coercion_hint(const ::HIR::ExprNode& node) const {
+    const auto it = coercion_hints.find(&node);
+    return it == coercion_hints.end() ? nullptr : it->second;
+}
+bool Context::is_current_operator_impl(const ImplRef& impl) const {
+    const auto* trait_impl = impl.m_data.opt_TraitImpl();
+    return m_current_trait_impl && trait_impl && trait_impl->impl == m_current_trait_impl;
+}
+// A Deref implementation for a native pointer/reference receives `&Self`.
+// Dereferencing that receiver is the native step needed to recover `Self`,
+// not another dispatch through a potentially overlapping Deref impl.
+bool Context::is_current_native_deref_receiver(const ::HIR::SimplePath& deref_trait, const ::HIR::TypeData* operand) const {
+    const auto* current_trait = m_resolve.current_trait_path();
+    const auto& ty = m_ivars.get_type(operand);
+    const auto* borrow = ty->opt_Borrow();
+    return m_current_trait_impl
+        && current_trait
+        && current_trait->m_path == deref_trait
+        && borrow
+        && typeck::primitive_operator_has_builtin(typeck::PrimitiveOperator::Deref, borrow->inner)
+        && m_current_trait_impl->matches_type(borrow->inner, m_ivars.callback_resolve_infer());
+}

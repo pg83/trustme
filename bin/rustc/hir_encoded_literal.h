@@ -32,21 +32,7 @@ struct Reloc {
         return os;
     }
 
-    Ordering ord(const Reloc& x) const {
-        ORD(ofs, x.ofs);
-        ORD(len, x.len);
-        if (p) {
-            if (!x.p) {
-                return OrdLess;
-            }
-            return p->ord(*x.p);
-        } else {
-            if (x.p) {
-                return OrdGreater;
-            }
-            return ::ord(bytes, x.bytes);
-        }
-    }
+    Ordering ord(const Reloc& x) const;
 
     bool operator==(const Reloc& x) const {
         return ord(x) == OrdEqual;
@@ -79,11 +65,7 @@ struct EncodedLiteral {
         return os;
     }
 
-    Ordering ord(const EncodedLiteral& x) const {
-        ORD(bytes, x.bytes);
-        ORD(relocations, x.relocations);
-        return OrdEqual;
-    }
+    Ordering ord(const EncodedLiteral& x) const;
 
     bool operator==(const EncodedLiteral& x) const {
         return ord(x) == OrdEqual;
@@ -98,29 +80,11 @@ struct EncodedLiteralSlice {
     //size_t  m_reloc_ofs;
     //size_t  m_reloc_size;
 
-    EncodedLiteralSlice(const EncodedLiteral& base)
-        : m_base(base)
-        , m_ofs(0)
-        , m_size(base.bytes.size())
-    //, m_reloc_ofs(0)
-    //, m_reloc_size(base.relocations.size())
-    {
-    }
+    EncodedLiteralSlice(const EncodedLiteral& base);
 
-    EncodedLiteralSlice slice(size_t ofs) const {
-        assert(ofs <= m_size);
-        return slice(ofs, m_size - ofs);
-    }
+    EncodedLiteralSlice slice(size_t ofs) const;
 
-    EncodedLiteralSlice slice(size_t ofs, size_t len) const {
-        assert(ofs <= m_size);
-        assert(len <= m_size);
-        assert(ofs + len <= m_size);
-        auto rv = EncodedLiteralSlice(m_base);
-        rv.m_ofs = m_ofs + ofs;
-        rv.m_size = len;
-        return rv;
-    }
+    EncodedLiteralSlice slice(size_t ofs, size_t len) const;
 
     U128 read_uint(size_t size = 0) const;
     S128 read_sint(size_t size = 0) const;

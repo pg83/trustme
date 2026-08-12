@@ -44,194 +44,67 @@ namespace HIR {
                 write(reinterpret_cast<const char*>(&v), 1);
             }
 
-            void write_u16(uint16_t v) {
-                uint8_t buf[] = {static_cast<uint8_t>(v & 0xFF), static_cast<uint8_t>(v >> 8)};
-                this->write(buf, 2);
-            }
+            void write_u16(uint16_t v);
 
-            void write_u32(uint32_t v) {
-                uint8_t buf[] = {static_cast<uint8_t>(v & 0xFF), static_cast<uint8_t>(v >> 8), static_cast<uint8_t>(v >> 16), static_cast<uint8_t>(v >> 24)};
-                this->write(buf, 4);
-            }
+            void write_u32(uint32_t v);
 
-            void write_u64(uint64_t v) {
-                uint8_t buf[] = {static_cast<uint8_t>(v & 0xFF), static_cast<uint8_t>(v >> 8), static_cast<uint8_t>(v >> 16), static_cast<uint8_t>(v >> 24), static_cast<uint8_t>(v >> 32), static_cast<uint8_t>(v >> 40), static_cast<uint8_t>(v >> 48), static_cast<uint8_t>(v >> 56)};
-                this->write(buf, 8);
-            }
+            void write_u64(uint64_t v);
 
             void write_i64(int64_t v) {
                 write_u64(static_cast<uint64_t>(v));
             }
 
             // Variable-length encoded u64 (for array sizes)
-            void write_u64c(uint64_t v) {
-                if (v < (1 << 7)) {
-                    write_u8(static_cast<uint8_t>(v));
-                } else if (v < (1 << (6 + 16))) {
-                    uint8_t buf[] = {
-                        static_cast<uint8_t>(0x80 + (v >> 16)), // 0x80 -- 0xBF
-                        static_cast<uint8_t>(v >> 8),
-                        static_cast<uint8_t>(v & 0xFF)
-                    };
-                    this->write(buf, sizeof buf);
-                } else if (v < (1ull << (5 + 32))) {
-                    uint8_t buf[] = {
-                        static_cast<uint8_t>(0xC0 + (v >> 32)), // 0xC0 -- 0xDF
-                        static_cast<uint8_t>(v >> 24),
-                        static_cast<uint8_t>(v >> 16),
-                        static_cast<uint8_t>(v >> 8),
-                        static_cast<uint8_t>(v)
-                    };
-                    this->write(buf, sizeof buf);
-                } else {
-                    uint8_t buf[] = {0xFF, static_cast<uint8_t>(v & 0xFF), static_cast<uint8_t>(v >> 8), static_cast<uint8_t>(v >> 16), static_cast<uint8_t>(v >> 24), static_cast<uint8_t>(v >> 32), static_cast<uint8_t>(v >> 40), static_cast<uint8_t>(v >> 48), static_cast<uint8_t>(v >> 56)};
-                    this->write(buf, sizeof buf);
-                }
-            }
+            void write_u64c(uint64_t v);
 
-            void write_i64c(int64_t v) {
-                // Convert from 2's completement
-                bool sign = (v < 0);
-                uint64_t va = (v < 0 ? -v : v);
-                va <<= 1;
-                va |= (sign ? 1 : 0);
-                write_u64c(va);
-            }
+            void write_i64c(int64_t v);
 
-            void write_u128(U128 v) {
-                write_u64(v.get_lo());
-                write_u64(v.get_hi());
-            }
+            void write_u128(U128 v);
 
             void write_i128(S128 v) {
                 write_u128(v.get_inner());
             }
 
-            void write_double(double v) {
-                // - Just raw-writes the double
-                this->write(&v, sizeof v);
-            }
+            void write_double(double v);
 
-            void write_float_value(FloatValue value) {
-                auto encoded = F128(value);
-                write_u64(encoded.lo);
-                write_u64(encoded.hi);
-            }
+            void write_float_value(FloatValue value);
 
-            void write_tag(unsigned int t) {
-                assert(t < 256);
-                write_u8(static_cast<uint8_t>(t));
-            }
+            void write_tag(unsigned int t);
 
-            void write_count(size_t c) {
-                DEBUG(c);
-                if (c < 0xFD) {
-                    write_u8(static_cast<uint8_t>(c));
-                } else if (c == ~0u) {
-                    write_u8(0xFF);
-                } else if (c < (1u << 16)) {
-                    write_u8(0xFD);
-                    write_u16(static_cast<uint16_t>(c));
-                } else {
-                    assert(c < (1u << 31));
-                    write_u8(0xFE);
-                    write_u32(static_cast<uint32_t>(c));
-                }
-            }
+            void write_count(size_t c);
 
             void write_string(const RcString& v);
 
-            void write_string(size_t len, const char* s) {
-                TRACE_FUNCTION;
-                if (len < 128) {
-                    write_u8(static_cast<uint8_t>(len));
-                } else {
-                    assert(len < (1u << (16 + 7)));
-                    write_u8(static_cast<uint8_t>(128 + (len >> 16)));
-                    write_u16(static_cast<uint16_t>(len & 0xFFFF));
-                }
-                this->write(s, len);
-            }
+            void write_string(size_t len, const char* s);
 
             void write_string(const ::std::string& v) {
                 write_string(v.size(), v.c_str());
             }
 
-            void write_bool(bool v) {
-                TRACE_FUNCTION_F(v);
-                write_u8(v ? 0xFF : 0x00);
-            }
+            void write_bool(bool v);
 
             // Core protocol
-            void raw_write_uint(uint64_t val) {
-                if (val < 0xC0) {
-                    write_u8(static_cast<uint8_t>(val));
-                } else {
-                    uint8_t bytes[8];
-                    uint8_t len = 0;
-                    while (val > 0) {
-                        assert(len < 8);
-                        bytes[len] = static_cast<uint8_t>(val);
-                        val >>= 8;
-                        len += 1;
-                    }
-                    write_u8(0xC0 + len);
-                    this->write(bytes, len);
-                }
-            }
+            void raw_write_uint(uint64_t val);
 
-            void raw_write_len(size_t len) {
-                if (len < (0xFC - 0xC0)) {
-                    write_u8(0xC0 + len);
-                } else {
-                    write_u8(0xFC);
-                    raw_write_uint(len);
-                }
-            }
+            void raw_write_len(size_t len);
 
-            void raw_write_bytes(size_t len, const void* data) {
-                raw_write_len(len);
-                this->write(data, len);
-            }
+            void raw_write_bytes(size_t len, const void* data);
 
             class CloseOnDrop {
                 friend class Writer;
                 Writer* r;
 
-                CloseOnDrop(Writer& r)
-                    : r(&r)
-                {
-                }
+                CloseOnDrop(Writer& r);
 
             public:
-                CloseOnDrop(CloseOnDrop&& x)
-                    : r(x.r)
-                {
-                    x.r = nullptr;
-                }
+                CloseOnDrop(CloseOnDrop&& x);
 
-                ~CloseOnDrop() {
-                    if (r) {
-                        r->close_object();
-                    }
-                    r = nullptr;
-                }
+                ~CloseOnDrop();
             };
 
-            CloseOnDrop open_object(const char* name) {
-                write_u8(0xFD);
-                auto iv = m_objname_cache.insert(std::make_pair(name, static_cast<unsigned>(m_objname_cache.size())));
-                raw_write_uint(iv.first->second);
-                if (iv.second) {
-                    raw_write_bytes(strlen(name), name);
-                }
-                return CloseOnDrop(*this);
-            }
+            CloseOnDrop open_object(const char* name);
 
-            CloseOnDrop open_anon_object() {
-                write_u8(0xFE);
-                return CloseOnDrop(*this);
-            }
+            CloseOnDrop open_anon_object();
 
             void close_object() {
                 write_u8(0xFF);
@@ -273,243 +146,71 @@ namespace HIR {
 
             void read(void* dst, size_t count);
 
-            uint8_t read_u8() {
-                uint8_t v;
-                read(&v, sizeof v);
-                return v;
-            }
+            uint8_t read_u8();
 
-            uint16_t read_u16() {
-                uint8_t buf[2];
-                read(buf, sizeof buf);
-                return static_cast<uint16_t>(buf[0]) | (static_cast<uint16_t>(buf[1]) << 8);
-            }
+            uint16_t read_u16();
 
-            uint32_t read_u32() {
-                uint8_t buf[4];
-                read(buf, sizeof buf);
-                return static_cast<uint32_t>(buf[0]) | (static_cast<uint32_t>(buf[1]) << 8) | (static_cast<uint32_t>(buf[2]) << 16) | (static_cast<uint32_t>(buf[3]) << 24);
-            }
+            uint32_t read_u32();
 
-            uint64_t read_u64() {
-                uint8_t buf[8];
-                read(buf, sizeof buf);
-                return static_cast<uint64_t>(buf[0]) | (static_cast<uint64_t>(buf[1]) << 8) | (static_cast<uint64_t>(buf[2]) << 16) | (static_cast<uint64_t>(buf[3]) << 24) | (static_cast<uint64_t>(buf[4]) << 32) | (static_cast<uint64_t>(buf[5]) << 40) | (static_cast<uint64_t>(buf[6]) << 48) | (static_cast<uint64_t>(buf[7]) << 56);
-            }
+            uint64_t read_u64();
 
             int64_t read_i64() {
                 return static_cast<int64_t>(read_u64());
             }
 
-            U128 read_u128() {
-                auto lo = read_u64();
-                auto hi = read_u64();
-                return U128(lo, hi);
-            }
+            U128 read_u128();
 
             S128 read_i128() {
                 return S128(read_u128());
             }
 
             // Variable-length encoded u64 (for array sizes)
-            uint64_t read_u64c() {
-                auto v = read_u8();
-                if (v < (1 << 7)) {
-                    return static_cast<uint64_t>(v);
-                } else if (v < 0xC0) {
-                    uint64_t rv = static_cast<uint64_t>(v & 0x3F) << 16;
-                    rv |= static_cast<uint64_t>(read_u8()) << 8;
-                    rv |= static_cast<uint64_t>(read_u8());
-                    return rv;
-                } else if (v < 0xFF) {
-                    uint64_t rv = static_cast<uint64_t>(v & 0x3F) << 32;
-                    rv |= static_cast<uint64_t>(read_u8()) << 24;
-                    rv |= static_cast<uint64_t>(read_u8()) << 16;
-                    rv |= static_cast<uint64_t>(read_u8()) << 8;
-                    rv |= static_cast<uint64_t>(read_u8());
-                    return rv;
-                } else {
-                    return read_u64();
-                }
-            }
+            uint64_t read_u64c();
 
-            int64_t read_i64c() {
-                uint64_t va = read_u64c();
-                bool sign = (va & 0x1) != 0;
-                va >>= 1;
+            int64_t read_i64c();
 
-                if (va == 0 && sign) {
-                    return INT64_MIN;
-                } else if (sign) {
-                    return -static_cast<int64_t>(va);
-                } else {
-                    return static_cast<int64_t>(va);
-                }
-            }
+            double read_double();
 
-            double read_double() {
-                double v;
-                read(reinterpret_cast<char*>(&v), sizeof v);
-                return v;
-            }
-
-            FloatValue read_float_value() {
-                F128 encoded;
-                encoded.lo = read_u64();
-                encoded.hi = read_u64();
-                return encoded;
-            }
+            FloatValue read_float_value();
 
             unsigned int read_tag() {
                 return static_cast<unsigned int>(read_u8());
             }
 
-            size_t read_count() {
-                size_t rv;
-                auto v = read_u8();
-                if (v < 0xFD) {
-                    rv = v;
-                } else if (v == 0xFD) {
-                    rv = read_u16();
-                } else if (v == 0xFE) {
-                    rv = read_u32();
-                } else /*if( v == 0xFF )*/ {
-                    rv = ~0u;
-                }
-                DEBUG(rv);
-                return rv;
-            }
+            size_t read_count();
 
-            RcString read_istring() {
-                size_t idx = read_count();
-                return m_strings.at(idx);
-            }
+            RcString read_istring();
 
-            ::std::string read_string() {
-                size_t len = read_u8();
-                if (len < 128) {
-                } else {
-                    len = (len & 0x7F) << 16;
-                    len |= read_u16();
-                }
-                ::std::string rv(len, '\0');
-                read(const_cast<char*>(rv.data()), len);
-                return rv;
-            }
+            ::std::string read_string();
 
-            bool read_bool() {
-                auto v = read_u8();
-                switch (v) {
-                    case 0:
-                        return false;
-                    case 255:
-                        return true;
-                    default:
-                        std::cerr << "Expected false(0)/true(255), got " << unsigned(v) << "u8" << ::std::endl;
-                        abort();
-                }
-            }
+            bool read_bool();
 
             // Core protocol
-            uint64_t raw_read_uint() {
-                auto v = read_u8();
-                assert(v <= 0xC0 + 8);
-                if (v < 0xC0) {
-                    return v;
-                } else {
-                    size_t len = v - 0xC0;
-                    uint64_t rv = 0;
-                    for (size_t p = 0; p < len; p++) {
-                        rv |= static_cast<uint64_t>(read_u8()) << (8 * p);
-                    }
-                    return rv;
-                }
-            }
+            uint64_t raw_read_uint();
 
-            size_t raw_read_len() {
-                auto v = read_u8();
-                if (v < 0xC0) {
-                    std::cerr << "Expected length, got literal integer " << unsigned(v) << ::std::endl;
-                    abort();
-                } else if (v < 0xFC) {
-                    return v - 0xC0;
-                } else if (v == 0xFC) {
-                    return raw_read_uint();
-                } else {
-                    std::cerr << "Expected length, got tag " << unsigned(v) << ::std::endl;
-                    abort();
-                }
-            }
+            size_t raw_read_len();
 
-            std::string raw_read_bytes_stdstring() {
-                auto len = raw_read_len();
-                std::string rv(len, '\0');
-                read(const_cast<char*>(rv.data()), len);
-                return rv;
-            }
+            std::string raw_read_bytes_stdstring();
 
             class CloseOnDrop {
                 friend class Reader;
                 Reader* r;
 
-                CloseOnDrop(Reader& r)
-                    : r(&r)
-                {
-                }
+                CloseOnDrop(Reader& r);
 
             public:
                 CloseOnDrop(const CloseOnDrop&) = delete;
 
-                CloseOnDrop(CloseOnDrop&& x)
-                    : r(x.r)
-                {
-                    x.r = nullptr;
-                }
+                CloseOnDrop(CloseOnDrop&& x);
 
-                ~CloseOnDrop() {
-                    if (r) {
-                        r->close_object();
-                    }
-                    r = nullptr;
-                }
+                ~CloseOnDrop();
             };
 
-            CloseOnDrop open_object(const char* name) {
-                auto v = read_u8();
-                if (v != 0xFD) {
-                    std::cerr << "Expected OpenNamed(" << name << "), got " << unsigned(v) << "u8" << ::std::endl;
-                    abort();
-                }
-                auto key = raw_read_uint();
-                //std::cout << key << " = " << "..." << std::endl;
-                if (key == m_objname_cache.size()) {
-                    m_objname_cache.push_back(raw_read_bytes_stdstring());
-                }
-                assert(key < m_objname_cache.size());
-                //std::cout << key << " = " << m_objname_cache[key] << std::endl;
-                if (m_objname_cache[key] != name) {
-                    std::cerr << "Expecting OpenNamed(" << name << "), got OpenNamed(" << m_objname_cache[key] << ")" << std::endl;
-                    abort();
-                }
-                return CloseOnDrop(*this);
-            }
+            CloseOnDrop open_object(const char* name);
 
-            CloseOnDrop open_anon_object() {
-                auto v = read_u8();
-                if (v != 0xFE) {
-                    std::cerr << "Expected OpenAnon, got " << unsigned(v) << ::std::endl;
-                    abort();
-                }
-                return CloseOnDrop(*this);
-            }
+            CloseOnDrop open_anon_object();
 
-            void close_object() {
-                auto v = read_u8();
-                if (v != 0xFF) {
-                    std::cerr << "Expected CloseObject(0xFF), got " << unsigned(v) << ::std::endl;
-                    abort();
-                }
-            }
+            void close_object();
         };
 
     } // namespace serialise

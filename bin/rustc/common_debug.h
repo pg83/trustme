@@ -67,15 +67,9 @@ namespace {
 struct DebugFunctionScope {
     const char* m_name;
 
-    DebugFunctionScope(const char* name, dbg_cb_t cb)
-        : m_name(name)
-    {
-        Debug_EnterScope(m_name, cb);
-    }
+    DebugFunctionScope(const char* name, dbg_cb_t cb);
 
-    ~DebugFunctionScope() {
-        Debug_LeaveScope(m_name, [](auto&) {});
-    }
+    ~DebugFunctionScope();
 };
 
 template <typename... T>

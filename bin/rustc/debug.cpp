@@ -159,3 +159,24 @@ extern void debug_init_phases(const char* env_var_name, std::initializer_list<co
     os << ::std::dec;
     return os;
 }
+
+NullSink::NullSink() {
+}
+TraceLog::TraceLog(const char* tag)
+    : m_tag(tag) {
+    if (m_tag) {
+        auto& os = debug_output(g_debug_indent_level, m_tag);
+        os << ">>" << ::std::endl;
+        INDENT();
+    }
+}
+TraceLog::~TraceLog() {
+    if (m_tag) {
+        UNINDENT();
+        auto& os = debug_output(g_debug_indent_level, m_tag);
+        os << "<< ()" << ::std::endl;
+    }
+}
+FmtLambda::FmtLambda(::std::function<void(::std::ostream&)> cb)
+    : m_cb(cb) {
+}

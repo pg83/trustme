@@ -106,3 +106,11 @@ void Debug_LeaveScope(const char* name, dbg_cb_t cb) {
     }
     ::std::cout << "<<< " << name << ::std::endl;
 }
+
+DebugFunctionScope::DebugFunctionScope(const char* name, dbg_cb_t cb)
+    : m_name(name) {
+    Debug_EnterScope(m_name, cb);
+}
+DebugFunctionScope::~DebugFunctionScope() {
+    Debug_LeaveScope(m_name, [](auto&) {});
+}
