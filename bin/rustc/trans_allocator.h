@@ -35,7 +35,7 @@ extern const AllocatorMethod ALLOCATOR_METHODS[];
 extern const size_t NUM_ALLOCATOR_METHODS;
 
 extern const char GLOBAL_ALLOCATOR_LANG_ITEM[];
-HIR::SimplePath Trans_Allocator_TraitPath(const HIR::Crate& crate);
-const HIR::SimplePath& Trans_Allocator_LayoutPath(const HIR::Crate& crate);
-HIR::Path Trans_Allocator_LayoutCtorPath(const HIR::Crate& crate);
-HIR::Path Trans_Allocator_MethodPath(const HIR::Crate& crate, const HIR::TypeData* allocator_type, const AllocatorMethod& method);
+HIR::SimplePath TransAllocatorTraitPath(const HIR::Crate& crate);
+const HIR::SimplePath& TransAllocatorLayoutPath(const HIR::Crate& crate);
+HIR::Path TransAllocatorLayoutCtorPath(const HIR::Crate& crate);
+HIR::Path TransAllocatorMethodPath(const HIR::Crate& crate, const HIR::TypeData* allocator_type, const AllocatorMethod& method);

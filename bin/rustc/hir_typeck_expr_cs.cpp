@@ -98,7 +98,7 @@ namespace {
     // Handles visiting nodes during inferrence passes
     // -----------------------------------------------------------------------
     // TODO: Convert these to `Revisitor` instances
-    class ExprVisitor_Revisit: public ::HIR::ExprVisitor {
+    class ExprVisitorRevisit: public ::HIR::ExprVisitor {
         Context& context;
         bool m_completed;
         /// Tells vistors that inferrence has stalled, and that they can take
@@ -107,7 +107,7 @@ namespace {
         bool m_is_fallback;
 
     public:
-        ExprVisitor_Revisit(Context& context, bool fallback = false)
+        ExprVisitorRevisit(Context& context, bool fallback = false)
             : context(context)
             , m_completed(false)
             , m_is_fallback(fallback)
@@ -1317,14 +1317,14 @@ namespace {
     // Saves the inferred types into the HIR expression tree, and ensures that
     // all types were inferred.
     // -----------------------------------------------------------------------
-    class ExprVisitor_Apply: public ::HIR::ExprVisitorDef {
+    class ExprVisitorApply: public ::HIR::ExprVisitorDef {
         const Context& context;
         const HMTypeInferrence& ivars;
         ::HIR::PathParams nop_impl;
         ::HIR::PathParams nop_item;
 
     public:
-        ExprVisitor_Apply(const Context& context)
+        ExprVisitorApply(const Context& context)
             : ::HIR::ExprVisitorDef(context.m_crate.m_types)
             , context(context)
             , ivars(context.m_ivars)
@@ -1664,12 +1664,12 @@ namespace {
 
         void check_type_resolved(const Span& sp, ::HIR::TypeRef& ty, const ::HIR::TypeData* top_type) const {
             class InnerVisitor: public HIR::Visitor {
-                const ExprVisitor_Apply& parent;
+                const ExprVisitorApply& parent;
                 const Span& sp;
                 const ::HIR::TypeData* top_type;
 
             public:
-                InnerVisitor(const ExprVisitor_Apply& parent, const Span& sp, const ::HIR::TypeData* top_type)
+                InnerVisitor(const ExprVisitorApply& parent, const Span& sp, const ::HIR::TypeData* top_type)
                     : HIR::Visitor(nullptr, parent.context.m_crate.m_types)
                     , parent(parent)
                     , sp(sp)
@@ -1736,12 +1736,12 @@ namespace {
         }
     }; // class ExprVisitor_Apply
 
-    class ExprVisitor_Print: public ::HIR::ExprVisitor {
+    class ExprVisitorPrint: public ::HIR::ExprVisitor {
         const Context& context;
         ::std::ostream& m_os;
 
     public:
-        ExprVisitor_Print(const Context& context, ::std::ostream& os)
+        ExprVisitorPrint(const Context& context, ::std::ostream& os)
             : context(context)
             , m_os(os)
         {
@@ -1944,7 +1944,7 @@ void Context::dump() const {
                 << FMT_CB(
                        os,
                        {
-                           ExprVisitor_Print ev(*this, os);
+                           ExprVisitorPrint ev(*this, os);
                            v->visit(ev);
                        }
                    )
@@ -2047,7 +2047,7 @@ void Context::equate_types_inner(const Span& sp, const ::HIR::TypeData* li, cons
         }
     }
 
-    auto equate_erased_alias = [&](const ::HIR::TypeData_ErasedType& erased, const auto& alias, const ::HIR::TypeData* hidden_type) {
+    auto equate_erased_alias = [&](const ::HIR::TypeDataErasedType& erased, const auto& alias, const ::HIR::TypeData* hidden_type) {
         if (!alias.inner->is_public_to(m_resolve.m_vis_path)) {
             return false;
         }
@@ -2068,7 +2068,7 @@ void Context::equate_types_inner(const Span& sp, const ::HIR::TypeData* li, cons
             }
 
             ::HIR::TypeRef get_type(const Span&, const ::HIR::GenericRef& type) const override {
-                if (type.binding == GENERIC_ErasedSelf) {
+                if (type.binding == GENERICErasedSelf) {
                     return hidden_type;
                 }
                 return m_types.generic(type.name, type.binding);
@@ -2398,13 +2398,13 @@ namespace {
         Context& context;
         const Span& sp;
 
-        const ::HIR::ConstGeneric* get_param(const ::HIR::ConstGeneric_Unevaluated& value, unsigned int binding) const {
+        const ::HIR::ConstGeneric* get_param(const ::HIR::ConstGenericUnevaluated& value, unsigned int binding) const {
             const ::HIR::PathParams* params = nullptr;
             switch (binding >> 8) {
-                case ::HIR::GENERIC_Impl:
+                case ::HIR::GENERICImpl:
                     params = &value.params_impl;
                     break;
-                case ::HIR::GENERIC_Item:
+                case ::HIR::GENERICItem:
                     params = &value.params_item;
                     break;
                 default:
@@ -2429,7 +2429,7 @@ namespace {
             throw "";
         }
 
-        bool equate_node(const ::HIR::ConstGeneric_Unevaluated& left_value, const ::HIR::ExprNode& left, const ::HIR::ConstGeneric_Unevaluated& right_value, const ::HIR::ExprNode& right) const {
+        bool equate_node(const ::HIR::ConstGenericUnevaluated& left_value, const ::HIR::ExprNode& left, const ::HIR::ConstGenericUnevaluated& right_value, const ::HIR::ExprNode& right) const {
             if (const auto* l = cast<const ::HIR::ExprNodeConstParam>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeConstParam>(&right);
                 if (!r) {
@@ -2494,7 +2494,7 @@ namespace {
             return false;
         }
 
-        bool equate(const ::HIR::ConstGeneric_Unevaluated& left, const ::HIR::ConstGeneric_Unevaluated& right) const {
+        bool equate(const ::HIR::ConstGenericUnevaluated& left, const ::HIR::ConstGenericUnevaluated& right) const {
             return equate_node(left, **left.expr, right, **right.expr);
         }
     };
@@ -6117,7 +6117,7 @@ namespace {
                         ::HIR::Compare cmp_type(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, HIR::t_cb_resolve_type resolve_cb) override {
                             const auto& l = (ty_l->is_Infer() ? resolve_cb.get_type(sp, ty_l) : ty_l);
                             const auto& r = (ty_r->is_Infer() ? resolve_cb.get_type(sp, ty_r) : ty_r);
-                            if (ty_r->is_Generic() && ty_r->as_Generic().group() == HIR::GENERIC_Placeholder) {
+                            if (ty_r->is_Generic() && ty_r->as_Generic().group() == HIR::GENERICPlaceholder) {
                                 BUG(sp, "Assigning into a placeholder? should have been known");
                             }
                             if (l->is_Infer() && !r->is_Infer()) {
@@ -6144,7 +6144,7 @@ namespace {
                         }
 
                         ::HIR::TypeRef get_type(const Span& sp, const ::HIR::GenericRef& g) const override {
-                            if (g.group() == ::HIR::GENERIC_Placeholder) {
+                            if (g.group() == ::HIR::GENERICPlaceholder) {
                                 auto it = m_types.find(g);
                                 if (it == m_types.end()) {
                                     it = m_types.insert(std::make_pair(g, m_context.m_ivars.new_ivar_tr())).first;
@@ -6157,7 +6157,7 @@ namespace {
                         }
 
                         ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& g) const override {
-                            if (g.group() == ::HIR::GENERIC_Placeholder) {
+                            if (g.group() == ::HIR::GENERICPlaceholder) {
                                 auto it = m_values.find(g);
                                 if (it == m_values.end()) {
                                     auto v = ::HIR::ConstGeneric::make_Infer(::HIR::ConstGeneric::Data_Infer{m_context.m_ivars.new_ivar_val()});
@@ -6171,7 +6171,7 @@ namespace {
                         }
 
                         ::HIR::LifetimeRef get_lifetime(const Span& sp, const ::HIR::GenericRef& g) const override {
-                            if (g.group() == ::HIR::GENERIC_Placeholder) {
+                            if (g.group() == ::HIR::GENERICPlaceholder) {
                                 TODO(sp, "get_lifetime");
                             } else {
                                 return HIR::LifetimeRef(g.binding);
@@ -8074,7 +8074,7 @@ namespace {
                 if (const auto* te = (possible_tys[0].ty)->opt_NamedFunction()) {
                     new_ty = context.m_crate.m_types.function(te->decay(context.m_crate.m_types, sp));
                 } else if (const auto* t1_nodep = TU_OPT1(*possible_tys[0].ty, NodeType, .opt_Closure())) {
-                    auto ft = HIR::TypeData_FunctionPointer{HIR::GenericParams(), false, false, RcString::new_interned(ABI_RUST), (*t1_nodep)->m_return, {}};
+                    auto ft = HIR::TypeDataFunctionPointer{HIR::GenericParams(), false, false, RcString::new_interned(ABI_RUST), (*t1_nodep)->m_return, {}};
                     for (const auto& t : (*t1_nodep)->m_args) {
                         ft.m_arg_types.push_back(t.second);
                     }
@@ -8346,7 +8346,7 @@ namespace {
     }
 }
 
-void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr) {
+void TypecheckCodeCS(const typeck::ModuleState& ms, t_args& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr) {
     TRACE_FUNCTION;
 
     auto root_ptr = expr.take_node();
@@ -8452,7 +8452,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
             DEBUG("--- Node revisits");
             for (auto it = context.to_visit.begin(); it != context.to_visit.end();) {
                 ::HIR::ExprNode& node = **it;
-                ExprVisitor_Revisit visitor{context};
+                ExprVisitorRevisit visitor{context};
                 DEBUG("> " << &node << " " << typeid(node).name() << " -> " << context.m_ivars.fmt_type(node.m_res_type));
                 node.visit(visitor);
                 //  - If the node is completed, remove it
@@ -8545,7 +8545,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
             DEBUG("--- Node revisits (fallback)");
             for (auto it = context.to_visit.begin(); it != context.to_visit.end();) {
                 ::HIR::ExprNode& node = **it;
-                ExprVisitor_Revisit visitor{context, true};
+                ExprVisitorRevisit visitor{context, true};
                 DEBUG("> " << &node << " " << typeid(node).name() << " -> " << context.m_ivars.fmt_type(node.m_res_type));
                 node.visit(visitor);
                 //  - If the node is completed, remove it
@@ -8698,7 +8698,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
         for (const auto& node : context.to_visit) {
             const auto& sp = node->span();
             WARNING(sp, W0000, "Spare rule - " << FMT_CB(os, {
-                                   ExprVisitor_Print ev(context, os);
+                                   ExprVisitorPrint ev(context, os);
                                    node->visit(ev);
                                }) << " -> " << context.m_ivars.fmt_type(node->m_res_type));
         }
@@ -8722,7 +8722,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
         DEBUG("==== VALIDATE ==== (" << count << " rounds)");
         context.dump();
 
-        ExprVisitor_Apply visitor{context};
+        ExprVisitorApply visitor{context};
         visitor.visit_node_ptr(expr);
     }
 
@@ -8730,7 +8730,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
         DEBUG("==== FINAL VALIDATE ====");
         StaticTraitResolve static_resolve(ms.m_crate);
         static_resolve.set_both_generics_raw(ms.m_impl_generics, ms.m_item_generics);
-        Typecheck_Expressions_ValidateOne(static_resolve, args, result_type, expr);
+        TypecheckExpressionsValidateOne(static_resolve, args, result_type, expr);
 
         DEBUG("=== Method const params ===");
 
@@ -8771,7 +8771,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
                     auto val_ref = static_resolve.get_value(node.span(), node.m_method_path, out_params, /*signature_only=*/true, nullptr);
                     const HIR::Function& fcn = *val_ref.as_Function();
                     const HIR::GenericParams& gp_def = fcn.m_params;
-                    ConvertHIR_ConstantEvaluate_MethodParams(node.span(), ms.m_crate, ms.m_mod_paths.back(), ms.m_impl_generics, ms.m_item_generics, &gp_def, *params_ptr);
+                    ConvertHIRConstantEvaluateMethodParams(node.span(), ms.m_crate, ms.m_mod_paths.back(), ms.m_impl_generics, ms.m_item_generics, &gp_def, *params_ptr);
                 }
             }
         } v(ms, static_resolve);
@@ -9214,11 +9214,11 @@ namespace typecheck {
     //
     // Iterates the HIR expression tree and adds ivars to all types
     // -----------------------------------------------------------------------
-    class ExprVisitor_AddIvars: public HIR::ExprVisitorDef {
+    class ExprVisitorAddIvars: public HIR::ExprVisitorDef {
         Context& context;
 
     public:
-        ExprVisitor_AddIvars(Context& context)
+        ExprVisitorAddIvars(Context& context)
             : HIR::ExprVisitorDef(context.m_crate.m_types)
             , context(context)
         {
@@ -9269,7 +9269,7 @@ namespace typecheck {
     //
     // Iterates the HIR expression tree and extracts type "equations"
     // -----------------------------------------------------------------------
-    class ExprVisitor_Enum: public ::HIR::ExprVisitor {
+    class ExprVisitorEnum: public ::HIR::ExprVisitor {
         Context& context;
         const ::HIR::TypeData* ret_type;
 
@@ -9303,7 +9303,7 @@ namespace typecheck {
         ::HIR::t_trait_list m_traits;
 
     public:
-        ExprVisitor_Enum(Context& context, ::HIR::t_trait_list base_traits, const ::HIR::TypeData* ret_type)
+        ExprVisitorEnum(Context& context, ::HIR::t_trait_list base_traits, const ::HIR::TypeData* ret_type)
             : context(context)
             , ret_type(ret_type)
             , m_traits(mv$(base_traits))
@@ -10652,7 +10652,7 @@ namespace typecheck {
 
                             auto ms = MonomorphStatePtr(this->context.m_crate.m_types, nullptr, &e.m_params, nullptr);
                             //apply_bounds_as_rules(this->context, sp, enm.m_params, monomorph_cb, /*is_impl_level=*/true);
-                            auto ty = this->context.m_crate.m_types.intern(HIR::TypeData::make_NamedFunction({node.m_path.clone(), HIR::TypeData_NamedFunction_Ty::make_EnumConstructor({&enm, idx})}));
+                            auto ty = this->context.m_crate.m_types.intern(HIR::TypeData::make_NamedFunction({node.m_path.clone(), HIR::TypeDataNamedFunctionTy::make_EnumConstructor({&enm, idx})}));
                             this->context.equate_types(sp, node.m_res_type, ty);
                         } break;
                         case ::HIR::ExprNodePathValue::STATIC: {
@@ -10907,10 +10907,10 @@ namespace typecheck {
         }
 
         class InnerCoerceGuard {
-            ExprVisitor_Enum& t;
+            ExprVisitorEnum& t;
 
         public:
-            InnerCoerceGuard(ExprVisitor_Enum& t)
+            InnerCoerceGuard(ExprVisitorEnum& t)
                 : t(t)
             {
             }
@@ -10984,7 +10984,7 @@ void Typecheck_Code_CS__EnumerateRules(Context& context, const typeck::ModuleSta
         }
 
         ::HIR::TypeRef get_type(const Span& sp, const ::HIR::GenericRef& g) const override {
-            if (g.binding == GENERIC_ErasedSelf && cur_self) {
+            if (g.binding == GENERICErasedSelf && cur_self) {
                 return cur_self;
             }
             return context.m_crate.m_types.generic(g.name, g.binding);
@@ -11057,14 +11057,14 @@ void Typecheck_Code_CS__EnumerateRules(Context& context, const typeck::ModuleSta
 
     if (true) {
         DEBUG("--- Pre-adding ivars");
-        typecheck::ExprVisitor_AddIvars visitor(context);
+        typecheck::ExprVisitorAddIvars visitor(context);
         context.add_ivars(root_ptr->m_res_type);
         root_ptr->visit(visitor);
     }
 
     DEBUG("--- Enumerating");
     context.record_coercion_hint(new_res_ty, root_ptr);
-    typecheck::ExprVisitor_Enum visitor(context, ms.m_traits, new_res_ty);
+    typecheck::ExprVisitorEnum visitor(context, ms.m_traits, new_res_ty);
     context.add_ivars(root_ptr->m_res_type);
     root_ptr->visit(visitor);
 

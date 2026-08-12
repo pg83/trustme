@@ -157,29 +157,29 @@
 #define TU_MATCH_HDRA_(CLASS, VARS, brace) /*
     */                           \
     for (bool tu_lc = true; tu_lc; tu_lc = false)                       \
-        for (TU_EXP1(TU_MATCH_HDRA_Decl VARS); tu_lc; tu_lc = false) /*
+        for (TU_EXP1(TUMATCHHDRADecl VARS); tu_lc; tu_lc = false) /*
         */ \
             switch (tu_match_hdr2_v.tag())                              \
             brace /*
         */                                                    \
                 case CLASS::TAGDEAD:                                    \
                 assert(!"ERROR: destructed tagged union used");
-#define TU_MATCH_HDRA_DeclRest1(v1) &tu_match_hdr2_v = v1
-#define TU_MATCH_HDRA_DeclRest2(v1, v2) TU_MATCH_HDRA_DeclRest1(v1), &tu_match_hdr2_v2 = v2
-#define TU_MATCH_HDRA_DeclRest3(v1, v2, v3) TU_MATCH_HDRA_DeclRest2(_, v2), &tu_match_hdr2_v3 = v3
-#define TU_MATCH_HDRA_Decl(...) auto TU_EXP1(TU_GM(TU_MATCH_HDRA_DeclRest, __VA_ARGS__)(__VA_ARGS__))
-#define TU_ARMA_DeclInner1(TAG, v1) v1 = tu_match_hdr2_v.as_##TAG()
-#define TU_ARMA_DeclInner2(TAG, v1, v2) TU_ARMA_DeclInner1(TAG, v1), v2 = tu_match_hdr2_v2.as_##TAG()
-#define TU_ARMA_DeclInner3(TAG, v1, v2, v3) TU_ARMA_DeclInner1(TAG, v1, v2), v3 = tu_match_hdr2_v3.as_##TAG()
-#define TU_ARMA_Decl(TAG, ...) decltype(tu_match_hdr2_v.as_##TAG()) TU_EXP1(TU_GM(TU_ARMA_DeclInner, __VA_ARGS__)(TAG, __VA_ARGS__))
-#define TU_ARMA_IgnVal(v) (void)v,
+#define TUMATCHHDRADeclRest1(v1) &tu_match_hdr2_v = v1
+#define TUMATCHHDRADeclRest2(v1, v2) TUMATCHHDRADeclRest1(v1), &tu_match_hdr2_v2 = v2
+#define TUMATCHHDRADeclRest3(v1, v2, v3) TUMATCHHDRADeclRest2(_, v2), &tu_match_hdr2_v3 = v3
+#define TUMATCHHDRADecl(...) auto TU_EXP1(TU_GM(TUMATCHHDRADeclRest, __VA_ARGS__)(__VA_ARGS__))
+#define TUARMADeclInner1(TAG, v1) v1 = tu_match_hdr2_v.as_##TAG()
+#define TUARMADeclInner2(TAG, v1, v2) TUARMADeclInner1(TAG, v1), v2 = tu_match_hdr2_v2.as_##TAG()
+#define TUARMADeclInner3(TAG, v1, v2, v3) TUARMADeclInner1(TAG, v1, v2), v3 = tu_match_hdr2_v3.as_##TAG()
+#define TUARMADecl(TAG, ...) decltype(tu_match_hdr2_v.as_##TAG()) TU_EXP1(TU_GM(TUARMADeclInner, __VA_ARGS__)(TAG, __VA_ARGS__))
+#define TUARMAIgnVal(v) (void)v,
 // Nested single-iteration loops provide a declaration scope for the arm bindings.
 #define TU_ARMA(TAG, ...)                                                        \
     break;                                                                       \
     case ::std::remove_reference<decltype(tu_match_hdr2_v)>::type::TAG_##TAG: /*
     */ \
         for (bool tu_lc = true; tu_lc; tu_lc = false)                            \
-            for (TU_ARMA_Decl(TAG, __VA_ARGS__); TU_EXP1(TU_GMO(__VA_ARGS__)(TU_ARMA_IgnVal, __VA_ARGS__)) tu_lc; tu_lc = false)
+            for (TUARMADecl(TAG, __VA_ARGS__); TU_EXP1(TU_GMO(__VA_ARGS__)(TUARMAIgnVal, __VA_ARGS__)) tu_lc; tu_lc = false)
 
 //#define TU_TEST(VAL, ...)    (VAL.is_##TAG() && VAL.as_##TAG() TEST)
 #define TU_TEST1(VAL, TAG1, TEST) ((VAL).is_##TAG1() && ((VAL).as_##TAG1() TEST))
@@ -191,12 +191,12 @@
 #define TU_CONS_I(__name, __tag, __type)               \
     __name(__type&& v)                                 \
         : m_tag(TAG_##__tag) {                         \
-        TU_move_inplace(m_data.__tag, ::std::move(v)); \
+        TUMoveInplace(m_data.__tag, ::std::move(v)); \
     }                                                  \
     template <typename _TU_Dummy = void>               \
     __name(const __type& v)                            \
         : m_tag(TAG_##__tag) {                         \
-        TU_copy_inplace(m_data.__tag, v);              \
+        TUCopyInplace(m_data.__tag, v);              \
     }                                                  \
     static self_t make_##__tag(__type&& v) {           \
         return __name(::std::move(v));                 \
@@ -285,14 +285,14 @@
 // Destructor internals
 #define TU_DEST_CASE(tag, ...)           \
     case TAG_##tag:                      \
-        TU_destruct_inplace(m_data.tag); \
+        TUDestructInplace(m_data.tag); \
         break; /*
 */
 
 // move constructor internals
 #define TU_MOVE_CASE(tag, ...)                                  \
     case TAG_##tag:                                             \
-        TU_move_inplace(m_data.tag, ::std::move(x.m_data.tag)); \
+        TUMoveInplace(m_data.tag, ::std::move(x.m_data.tag)); \
         break; /*
 */
 
@@ -562,17 +562,17 @@
 
 namespace {
     template <typename T>
-    static void TU_destruct_inplace(T& v) {
+    static void TUDestructInplace(T& v) {
         v.~T();
     }
 
     template <typename T>
-    static void TU_move_inplace(T& dst, T&& src) {
+    static void TUMoveInplace(T& dst, T&& src) {
         new (&dst) T(::std::move(src));
     }
 
     template <typename T>
-    static void TU_copy_inplace(T& dst, const T& src) {
+    static void TUCopyInplace(T& dst, const T& src) {
         new (&dst) T(src);
     }
 }

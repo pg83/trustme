@@ -141,7 +141,7 @@ struct Context {
         TaitEntry(const HIR::PathParams& p, HIR::TypeRef t);
     };
 
-    ::std::map<HIR::TypeData_ErasedType_AliasInner*, TaitEntry> m_erased_type_aliases;
+    ::std::map<HIR::TypeDataErasedTypeAliasInner*, TaitEntry> m_erased_type_aliases;
 
     const ::HIR::SimplePath m_lang_Box;
 

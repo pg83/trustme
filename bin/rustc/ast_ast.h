@@ -106,7 +106,7 @@ namespace AST {
     class TraitAlias {
     public:
         GenericParams params;
-        std::vector<Spanned<Type_TraitPath>> traits;
+        std::vector<Spanned<TypeTraitPath>> traits;
 
         TraitAlias clone() const;
     };
@@ -304,7 +304,7 @@ namespace AST {
 
     class Trait {
         GenericParams m_params;
-        ::std::vector<Spanned<Type_TraitPath>> m_supertraits;
+        ::std::vector<Spanned<TypeTraitPath>> m_supertraits;
         ::std::vector<Spanned<LifetimeRef>> m_lifetimes;
 
         bool m_is_marker;
@@ -313,7 +313,7 @@ namespace AST {
 
     public:
         Trait();
-        Trait(GenericParams params, ::std::vector<Spanned<Type_TraitPath>> supertraits, ::std::vector<Spanned<LifetimeRef>> lifetimes);
+        Trait(GenericParams params, ::std::vector<Spanned<TypeTraitPath>> supertraits, ::std::vector<Spanned<LifetimeRef>> lifetimes);
         ~Trait();
         Trait(Trait&&);
         Trait& operator=(Trait&&);
@@ -326,11 +326,11 @@ namespace AST {
             return m_params;
         }
 
-        const ::std::vector<Spanned<Type_TraitPath>>& supertraits() const {
+        const ::std::vector<Spanned<TypeTraitPath>>& supertraits() const {
             return m_supertraits;
         }
 
-        ::std::vector<Spanned<Type_TraitPath>>& supertraits() {
+        ::std::vector<Spanned<TypeTraitPath>>& supertraits() {
             return m_supertraits;
         }
 

@@ -231,7 +231,7 @@ namespace {
         }
 
         virtual ::HIR::Compare match_lft(const ::HIR::GenericRef& g, const ::HIR::LifetimeRef& lft) {
-            if (!::HIR::MatchGenerics::has_hrb() && g.group() == ::HIR::GENERIC_Hrtb) {
+            if (!::HIR::MatchGenerics::has_hrb() && g.group() == ::HIR::GENERICHrtb) {
                 ASSERT_BUG(Span(), g.idx() < hrls.m_lifetimes.size(), "HRL index out of range");
                 hrls.m_lifetimes.at(g.idx()) = lft;
                 return ::HIR::Compare::Equal;
@@ -249,7 +249,7 @@ namespace {
         }
 
         ::HIR::LifetimeRef get_lifetime(const Span& sp, const ::HIR::GenericRef& g) const {
-            if (g.group() == ::HIR::GENERIC_Hrtb) {
+            if (g.group() == ::HIR::GENERICHrtb) {
                 return hrls.m_lifetimes.at(g.idx());
             }
             return ::HIR::LifetimeRef(g.binding);
@@ -1044,8 +1044,8 @@ void HMTypeInferrence::set_ivar_to(unsigned int slot, ::HIR::TypeRef type) {
         // Erase (replace with blank) lifetimes
 #if 1
         // TODO: Avoid needing to clone in all cases?
-        struct Monomorph_AddLifetimes: public Monomorphiser {
-            explicit Monomorph_AddLifetimes(HIR::TypeInterner& types): Monomorphiser(types) {}
+        struct MonomorphAddLifetimes: public Monomorphiser {
+            explicit MonomorphAddLifetimes(HIR::TypeInterner& types): Monomorphiser(types) {}
 
             ::HIR::TypeRef get_type(const Span& sp, const ::HIR::GenericRef& g) const override {
                 return m_types.generic(g.name, g.binding);
@@ -1068,7 +1068,7 @@ void HMTypeInferrence::set_ivar_to(unsigned int slot, ::HIR::TypeRef type) {
 
         };
 
-        type = Monomorph_AddLifetimes(m_types).monomorph_type(sp, type, true);
+        type = MonomorphAddLifetimes(m_types).monomorph_type(sp, type, true);
 #else
         if (type->is_Borrow() && type->as_Borrow().lifetime != HIR::LifetimeRef()) {
             auto& t = type.get_unique();
@@ -2748,7 +2748,7 @@ class NextTraitGoalEvaluator {
             bool found = false;
             visit_ty_with(type, [&](const ::HIR::TypeData* inner) {
                 if (const auto* generic = inner->opt_Generic()) {
-                    found |= generic->group() == ::HIR::GENERIC_Placeholder;
+                    found |= generic->group() == ::HIR::GENERICPlaceholder;
                 }
                 return found;
             });
@@ -2775,7 +2775,7 @@ class NextTraitGoalEvaluator {
             }
             for (const auto& value : params.m_values) {
                 if (value.is_Generic()
-                    && value.as_Generic().group() == ::HIR::GENERIC_Placeholder) {
+                    && value.as_Generic().group() == ::HIR::GENERICPlaceholder) {
                     return true;
                 }
             }
@@ -2806,7 +2806,7 @@ class NextTraitGoalEvaluator {
                 bool found = false;
                 visit_ty_with(type, [&](const ::HIR::TypeData* inner) {
                     if (const auto* generic = inner->opt_Generic()) {
-                        found |= generic->group() == ::HIR::GENERIC_Placeholder;
+                        found |= generic->group() == ::HIR::GENERICPlaceholder;
                     } else if (const auto* infer = inner->opt_Infer()) {
                         found |= !infer->is_lit();
                     }
@@ -2820,7 +2820,7 @@ class NextTraitGoalEvaluator {
                 if (value.is_Infer()
                     || (value.is_Generic()
                         && value.as_Generic().group()
-                            == ::HIR::GENERIC_Placeholder)) {
+                            == ::HIR::GENERICPlaceholder)) {
                     return true;
                 }
             }
@@ -3579,7 +3579,7 @@ class NextTraitGoalEvaluator {
 
                 bool is_bindable(const ::HIR::TypeData* type) const {
                     if (const auto* generic = type->opt_Generic()) {
-                        return generic->group() == ::HIR::GENERIC_Placeholder;
+                        return generic->group() == ::HIR::GENERICPlaceholder;
                     }
                     if (const auto* infer = type->opt_Infer()) {
                         return !infer->is_lit();
@@ -3688,7 +3688,7 @@ class NextTraitGoalEvaluator {
                     if (value.is_Generic() && value.as_Generic() == generic) {
                         return ::HIR::Compare::Equal;
                     }
-                    if (generic.group() == ::HIR::GENERIC_Placeholder) {
+                    if (generic.group() == ::HIR::GENERICPlaceholder) {
                         for (auto& parameter : m_params.m_values) {
                             if (parameter.is_Generic()
                                 && parameter.as_Generic() == generic) {
@@ -3819,7 +3819,7 @@ class NextTraitGoalEvaluator {
 
                 bool is_bindable(const ::HIR::TypeData* type) const {
                     if (const auto* generic = type->opt_Generic()) {
-                        return generic->group() == ::HIR::GENERIC_Placeholder;
+                        return generic->group() == ::HIR::GENERICPlaceholder;
                     }
                     if (const auto* infer = type->opt_Infer()) {
                         return !infer->is_lit();
@@ -3928,7 +3928,7 @@ class NextTraitGoalEvaluator {
                     if (value.is_Generic() && value.as_Generic() == generic) {
                         return ::HIR::Compare::Equal;
                     }
-                    if (generic.group() != ::HIR::GENERIC_Placeholder) {
+                    if (generic.group() != ::HIR::GENERICPlaceholder) {
                         return ::HIR::Compare::Fuzzy;
                     }
                     for (auto& parameter : m_params.m_values) {
@@ -4243,13 +4243,13 @@ class NextTraitGoalEvaluator {
                         const auto hrl_params = outer_present
                             ? be->hrtbs->make_nop_params(
                                 m_crate.m_types,
-                                ::HIR::GENERIC_Hrtb,
+                                ::HIR::GENERICHrtb,
                                 true
                             )
                             : (bound_trait.m_hrtbs
                                 ? bound_trait.m_hrtbs->make_nop_params(
                                     m_crate.m_types,
-                                    ::HIR::GENERIC_Hrtb,
+                                    ::HIR::GENERICHrtb,
                                     true
                                 )
                                 : ::HIR::PathParams());
@@ -5746,7 +5746,7 @@ bool TraitResolution::find_trait_impls(
         TU_ARMA(Path, e) {
         TU_MATCH_HDRA( (e.path.m_data), {)
         TU_ARMA(Generic, pe) {
-                    ConvertHIR_ConstantEvaluate_MethodParams(sp, m_crate, m_vis_path, m_impl_generics, m_item_generics, e.binding.get_generics(), pe.m_params);
+                    ConvertHIRConstantEvaluateMethodParams(sp, m_crate, m_vis_path, m_impl_generics, m_item_generics, e.binding.get_generics(), pe.m_params);
                     H::expand_associated_types_params(sp, *this, pe.m_params, stack);
                 }
                 TU_ARMA(UfcsInherent, pe) {
@@ -5834,7 +5834,7 @@ bool TraitResolution::find_trait_impls(
             // Recurse?
         }
         TU_ARMA(Array, e) {
-            ConvertHIR_ConstantEvaluate_ArraySize(sp, m_crate, m_vis_path, e.size);
+            ConvertHIRConstantEvaluateArraySize(sp, m_crate, m_vis_path, e.size);
             expand_associated_types_inplace(sp, e.inner, stack);
         }
         TU_ARMA(Slice, e) {
@@ -5930,7 +5930,7 @@ bool TraitResolution::find_trait_impls(
                 return false;
             }
 
-            ConvertHIR_ConstantEvaluate_MethodParams(
+            ConvertHIRConstantEvaluateMethodParams(
                 sp,
                 m_crate,
                 m_vis_path,
@@ -5953,7 +5953,7 @@ bool TraitResolution::find_trait_impls(
                 || item_params.m_values.size() != alias->m_params.m_values.size()) {
                 ERROR(sp, E0000, "Incorrect generic arguments for inherent associated type " << input);
             }
-            ConvertHIR_ConstantEvaluate_MethodParams(
+            ConvertHIRConstantEvaluateMethodParams(
                 sp,
                 m_crate,
                 m_vis_path,
@@ -7233,7 +7233,7 @@ bool TraitResolution::find_trait_impls(
                     // a higher-ranked placeholder. It marks a fresh universe
                     // and is needed later to reject leaking outlives bounds.
                     // Elided/inferred regions carry no such information.
-                    if (g.group() != ::HIR::GENERIC_Impl
+                    if (g.group() != ::HIR::GENERICImpl
                         || lifetime.binding == ::HIR::LifetimeRef::UNKNOWN
                         || lifetime.binding == ::HIR::LifetimeRef::INFER) {
                         return ::HIR::Compare::Equal;

@@ -13,14 +13,14 @@
 #include <sstream>
 
 typedef ::std::function<void(::std::ostream& os)> dbg_cb_t;
-extern void Debug_SetPhase(const char* phase_name);
-extern void Debug_ProcessEnable(const char* enable_string);
-extern void Debug_DisablePhase(const char* phase_name);
-extern void Debug_EnablePhase(const char* phase_name);
-extern bool Debug_IsEnabled();
-extern void Debug_EnterScope(const char* name, dbg_cb_t);
-extern void Debug_LeaveScope(const char* name, dbg_cb_t);
-extern void Debug_Print(dbg_cb_t cb);
+extern void DebugSetPhase(const char* phase_name);
+extern void DebugProcessEnable(const char* enable_string);
+extern void DebugDisablePhase(const char* phase_name);
+extern void DebugEnablePhase(const char* phase_name);
+extern bool DebugIsEnabled();
+extern void DebugEnterScope(const char* name, dbg_cb_t);
+extern void DebugLeaveScope(const char* name, dbg_cb_t);
+extern void DebugPrint(dbg_cb_t cb);
 
 #if defined(NOLOG)
     #define DEBUG(fmt) \
@@ -33,7 +33,7 @@ extern void Debug_Print(dbg_cb_t cb);
     #define DEBUG(fmt)                             \
         do {                                       \
             const char* _DEBUG_fcn = __FUNCTION__; \
-            Debug_Print([&](auto& os) {            \
+            DebugPrint([&](auto& os) {            \
                 os << _DEBUG_fcn << ": " << fmt;   \
             });                                    \
         } while (0)

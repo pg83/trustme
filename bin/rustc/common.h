@@ -184,9 +184,9 @@ Ordering ord(const ::std::map<T, U>& l, const ::std::map<T, U>& r) {
 
 #define ORD(a, b)                      \
     do {                               \
-        Ordering ORD_rv = ::ord(a, b); \
-        if (ORD_rv != ::OrdEqual)      \
-            return ORD_rv;             \
+        Ordering ORDRv = ::ord(a, b); \
+        if (ORDRv != ::OrdEqual)      \
+            return ORDRv;             \
     } while (0)
 
 template <typename T>

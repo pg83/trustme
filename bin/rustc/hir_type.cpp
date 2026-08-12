@@ -88,7 +88,7 @@ namespace HIR {
 
 void HIR::GenericRef::fmt(std::ostream& os) const {
     os << this->name << "/*";
-    if (this->binding == GENERIC_Self) {
+    if (this->binding == GENERICSelf) {
         os << "";
     } else {
         switch (this->group()) {
@@ -135,7 +135,7 @@ HIR::ArraySize HIR::ArraySize::clone() const {
     throw "";
 }
 
-::HIR::TypeData_ErasedType_AliasInner::TypeData_ErasedType_AliasInner(const HIR::ItemPath& p, const HIR::GenericParams& params)
+::HIR::TypeDataErasedTypeAliasInner::TypeDataErasedTypeAliasInner(const HIR::ItemPath& p, const HIR::GenericParams& params)
     : path(p.get_simple_path())
     , type()
 {
@@ -143,11 +143,11 @@ HIR::ArraySize HIR::ArraySize::clone() const {
     this->generics.m_bounds.clear();
 }
 
-bool ::HIR::TypeData_ErasedType_AliasInner::is_public_to(const HIR::SimplePath& p) const {
+bool ::HIR::TypeDataErasedTypeAliasInner::is_public_to(const HIR::SimplePath& p) const {
     return p.starts_with(this->path, /*skip_last=*/true);
 }
 
-::HIR::TypeData_FunctionPointer HIR::TypeData::Data_NamedFunction::decay(TypeInterner& types, const Span& sp) const {
+::HIR::TypeDataFunctionPointer HIR::TypeData::Data_NamedFunction::decay(TypeInterner& types, const Span& sp) const {
     const ::HIR::TypeData* ty_self = nullptr;
     const ::HIR::PathParams* pp_impl = nullptr;
     const ::HIR::PathParams* pp_method = nullptr;
@@ -175,7 +175,7 @@ bool ::HIR::TypeData_ErasedType_AliasInner::is_public_to(const HIR::SimplePath& 
         }
         MonomorphStatePtr   ms { types, ty_self, pp_impl, pp_method };
         const auto& f = *fp;
-        ::HIR::TypeData_FunctionPointer ft {
+        ::HIR::TypeDataFunctionPointer ft {
             HIR::GenericParams(),   // TODO: Get HRLs
             f.m_unsafe,
             f.m_variadic,
@@ -207,7 +207,7 @@ bool ::HIR::TypeData_ErasedType_AliasInner::is_public_to(const HIR::SimplePath& 
             const auto& str = *var_ty->as_Path().binding.as_Struct();
             const auto& var_data = str.m_data.as_Tuple();
 
-            ::HIR::TypeData_FunctionPointer ft{
+            ::HIR::TypeDataFunctionPointer ft{
                 HIR::GenericParams(), // TODO: Get HRLs
                 false,
                 false,
@@ -223,7 +223,7 @@ bool ::HIR::TypeData_ErasedType_AliasInner::is_public_to(const HIR::SimplePath& 
         TU_ARMA(StructConstructor, p) {
             const auto& e = this->path.m_data.as_Generic();
             MonomorphStatePtr ms{types, nullptr, &e.m_params, nullptr};
-            ::HIR::TypeData_FunctionPointer ft{
+            ::HIR::TypeDataFunctionPointer ft{
                 HIR::GenericParams(), // TODO: Get HRLs
                 false,
                 false,
@@ -405,11 +405,11 @@ void ::HIR::TypeData::fmt(::std::ostream& os) const {
     }
 }
 
-bool HIR::TypeData_NodeType::operator==(const ::HIR::TypeData_NodeType& x) const {
+bool HIR::TypeDataNodeType::operator==(const ::HIR::TypeDataNodeType& x) const {
     return this->ord(x) == OrdEqual;
 }
 
-Ordering HIR::TypeData_NodeType::ord(const ::HIR::TypeData_NodeType& x) const {
+Ordering HIR::TypeDataNodeType::ord(const ::HIR::TypeDataNodeType& x) const {
     ORD(static_cast<int>(this->tag()), static_cast<int>(x.tag()));
     TU_MATCH_HDRA((*this, x), {)
     TU_ARMA(Closure, te, xe) {
@@ -425,7 +425,7 @@ Ordering HIR::TypeData_NodeType::ord(const ::HIR::TypeData_NodeType& x) const {
     return OrdEqual;
 }
 
-void ::HIR::TypeData_NodeType::fmt(::std::ostream& os) const {
+void ::HIR::TypeDataNodeType::fmt(::std::ostream& os) const {
     TU_MATCH_HDRA((*this), {)
     TU_ARMA(Closure, e) {
             os << "closure[" << e << "]";
@@ -439,7 +439,7 @@ void ::HIR::TypeData_NodeType::fmt(::std::ostream& os) const {
     }
 }
 
-::HIR::TypeData_NodeType HIR::TypeData_NodeType::clone() const {
+::HIR::TypeDataNodeType HIR::TypeDataNodeType::clone() const {
     TU_MATCH_HDRA((*this), {)
     TU_ARMA(Closure, e) {
             return e;
@@ -612,7 +612,7 @@ namespace {
         throw "";
     }
 
-    bool exact_erased_inner_equal(const TypeData_ErasedType_Inner& a, const TypeData_ErasedType_Inner& b) {
+    bool exact_erased_inner_equal(const TypeDataErasedTypeInner& a, const TypeDataErasedTypeInner& b) {
         if (a.tag() != b.tag()) return false;
         TU_MATCH_HDRA((a, b), {)
         TU_ARMA(Fcn, ae, be) return ae.m_index == be.m_index && exact_path_equal(ae.m_origin, be.m_origin);
@@ -691,7 +691,7 @@ namespace {
     }
 
     void add_lifetime_flags(uint32_t& flags, LifetimeRef lifetime) {
-        if (lifetime.is_param() && lifetime.as_param().group() != GENERIC_Hrtb) {
+        if (lifetime.is_param() && lifetime.as_param().group() != GENERICHrtb) {
             flags |= TypeData::HAS_LIFETIME_PARAM;
         }
     }
@@ -843,7 +843,7 @@ namespace {
 
     size_t hash_generic_ref(const GenericRef& generic) {
         size_t h = generic.binding;
-        if (generic.group() == GENERIC_Placeholder) {
+        if (generic.group() == GENERICPlaceholder) {
             h = hash_mix(h, ::std::hash<RcString>()(generic.name));
         }
         return h;
@@ -1013,7 +1013,7 @@ namespace {
 }
 
 ::HIR::TypeRef HIR::TypeInterner::self() {
-    return generic(RcString::new_interned("Self"), GENERIC_Self);
+    return generic(RcString::new_interned("Self"), GENERICSelf);
 }
 
 ::HIR::TypeRef HIR::TypeInterner::unit() {
@@ -1057,20 +1057,20 @@ namespace {
     return intern(TypeData::make_Path({mv$(path), mv$(binding), mv$(hrtbs)}));
 }
 
-::HIR::TypeRef HIR::TypeInterner::function(TypeData_FunctionPointer ft) {
+::HIR::TypeRef HIR::TypeInterner::function(TypeDataFunctionPointer ft) {
     return intern(TypeData::make_Function(mv$(ft)));
 }
 
 ::HIR::TypeRef HIR::TypeInterner::closure(ExprNodeClosure* node) {
-    return intern(TypeData::make_NodeType(TypeData_NodeType::make_Closure(node)));
+    return intern(TypeData::make_NodeType(TypeDataNodeType::make_Closure(node)));
 }
 
 ::HIR::TypeRef HIR::TypeInterner::generator(ExprNodeGenerator* node) {
-    return intern(TypeData::make_NodeType(TypeData_NodeType::make_Generator(node)));
+    return intern(TypeData::make_NodeType(TypeDataNodeType::make_Generator(node)));
 }
 
 ::HIR::TypeRef HIR::TypeInterner::async_block(ExprNodeAsyncBlock* node) {
-    return intern(TypeData::make_NodeType(TypeData_NodeType::make_Async(node)));
+    return intern(TypeData::make_NodeType(TypeDataNodeType::make_Async(node)));
 }
 
 const ::HIR::SimplePath* HIR::TypeData::get_sort_path() const {
@@ -1083,7 +1083,7 @@ const ::HIR::SimplePath* HIR::TypeData::get_sort_path() const {
     return nullptr;
 }
 
-Ordering ord(const HIR::TypeData_ErasedType_Inner& l, const HIR::TypeData_ErasedType_Inner& r);
+Ordering ord(const HIR::TypeDataErasedTypeInner& l, const HIR::TypeDataErasedTypeInner& r);
 
 bool ::HIR::TypeData::equals_ignoring_regions(::HIR::TypeRef x) const {
     if (this == x) {
@@ -1192,7 +1192,7 @@ bool ::HIR::TypeData::equals_ignoring_regions(::HIR::TypeRef x) const {
     throw "";
 }
 
-Ordering ord(const HIR::TypeData_ErasedType_Inner& l, const HIR::TypeData_ErasedType_Inner& r) {
+Ordering ord(const HIR::TypeDataErasedTypeInner& l, const HIR::TypeDataErasedTypeInner& r) {
     ORD(static_cast<unsigned int>(l.tag()), static_cast<unsigned int>(r.tag()));
     TU_MATCH_HDRA( (l, r), {)
     TU_ARMA(Known, le, re) {
@@ -1730,7 +1730,7 @@ const ::HIR::GenericParams* HIR::TypePathBinding::get_generics() const {
     return rv;
 }
 
-HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
+HIR::TypeDataNamedFunctionTy HIR::TypeDataNamedFunctionTy::clone() const {
     TU_MATCH_HDRA( (*this), { )
     TU_ARMA(Function, e)    return e;
         TU_ARMA(EnumConstructor, e) return e;
@@ -1772,14 +1772,14 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
                 traits.push_back(trait.clone());
             }
 
-            HIR::TypeData_ErasedType_Inner inner;
+            HIR::TypeDataErasedTypeInner inner;
         TU_MATCH_HDRA( (e.m_inner), {)
         TU_ARMA(Fcn, ee) {
-                    inner = HIR::TypeData_ErasedType_Inner::Data_Fcn{ee.m_origin.clone(), ee.m_index};
+                    inner = HIR::TypeDataErasedTypeInner::Data_Fcn{ee.m_origin.clone(), ee.m_index};
                 }
                 TU_ARMA(Known, ee) inner = ee;
                 TU_ARMA(Alias, ee) {
-                    inner = HIR::TypeData_ErasedType_Inner::Data_Alias{ee.params.clone(), ee.inner};
+                    inner = HIR::TypeDataErasedTypeInner::Data_Alias{ee.params.clone(), ee.inner};
                 }
         }
         return TypeData::make_ErasedType({
@@ -1814,7 +1814,7 @@ HIR::TypeData_NamedFunction_Ty HIR::TypeData_NamedFunction_Ty::clone() const {
             return TypeData::make_NamedFunction({e.path.clone(), e.def.clone()});
         }
         TU_ARMA(Function, e) {
-            TypeData_FunctionPointer ft{e.hrls.clone(), e.is_unsafe, e.is_variadic, e.m_abi, e.m_rettype, {}};
+            TypeDataFunctionPointer ft{e.hrls.clone(), e.is_unsafe, e.is_variadic, e.m_abi, e.m_rettype, {}};
             for (const auto& a : e.m_arg_types) {
                 ft.m_arg_types.push_back(a);
             }

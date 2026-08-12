@@ -10,4 +10,4 @@ extern const char* gsVersion_GitShortHash;
 extern const char* gsVersion_BuildTime;
 extern bool gbVersion_GitDirty;
 
-extern ::std::string Version_GetString();
+extern ::std::string VersionGetString();

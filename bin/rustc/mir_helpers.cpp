@@ -245,7 +245,7 @@ const ::HIR::TypeData* MIR::TypeResolve::get_param_type(::HIR::TypeRef& tmp, con
                     return m_crate.m_types.intern(::HIR::TypeData::make_NamedFunction({e.p->clone(), ve}));
                 }
                 TU_ARMA(EnumConstructor, ve) {
-                    return m_crate.m_types.intern(::HIR::TypeData::make_NamedFunction({e.p->clone(), ::HIR::TypeData_NamedFunction_Ty::make_EnumConstructor({ve.e, ve.v})}));
+                    return m_crate.m_types.intern(::HIR::TypeData::make_NamedFunction({e.p->clone(), ::HIR::TypeDataNamedFunctionTy::make_EnumConstructor({ve.e, ve.v})}));
                 }
                 TU_ARMA(StructConstructor, ve) {
                     return m_crate.m_types.intern(::HIR::TypeData::make_NamedFunction({e.p->clone(), ve.s}));
@@ -304,7 +304,7 @@ const ::HIR::TypeData* MIR::TypeResolve::get_param_type(::HIR::TypeRef& tmp, con
                     MIR_BUG(*this, "get_const_type - ItemAddr points to an enum value - " << c);
                 }
                 TU_ARMA(EnumConstructor, ve) {
-                    auto rv = m_crate.m_types.function((::HIR::TypeData::Data_NamedFunction{e->clone(), ::HIR::TypeData_NamedFunction_Ty::make_EnumConstructor({ve.e, ve.v})}).decay(m_crate.m_types, this->sp));
+                    auto rv = m_crate.m_types.function((::HIR::TypeData::Data_NamedFunction{e->clone(), ::HIR::TypeDataNamedFunctionTy::make_EnumConstructor({ve.e, ve.v})}).decay(m_crate.m_types, this->sp));
                     m_resolve.expand_associated_types(this->sp, rv);
                     return rv;
                 }
@@ -391,7 +391,7 @@ size_t MIR::TypeResolve::intrinsic_offset_of(const ::HIR::TypeData* ty, const ::
                 }
             }
         }
-        auto* repr = Target_GetTypeRepr(this->sp, m_resolve, cur_ty);
+        auto* repr = TargetGetTypeRepr(this->sp, m_resolve, cur_ty);
         if(!repr) {
             MIR_BUG(*this, "Calling `offset_of!` on type with non-defined repr: " << cur_ty);
         }
@@ -539,7 +539,7 @@ namespace {
 }
 
 #if 1 // Alternate algorithm
-void MIR_Helper_GetLifetimes_DetermineValueLifetime(::MIR::TypeResolve& state, const ::MIR::Function& fcn, size_t bb_idx, size_t stmt_idx, const ::MIR::LValue& lv, const ::std::vector<size_t>& block_offsets, const ::std::vector<bool>& use_bitmap, ValueLifetime& vl);
+void MIRHelperGetLifetimesDetermineValueLifetime(::MIR::TypeResolve& state, const ::MIR::Function& fcn, size_t bb_idx, size_t stmt_idx, const ::MIR::LValue& lv, const ::std::vector<size_t>& block_offsets, const ::std::vector<bool>& use_bitmap, ValueLifetime& vl);
 
 // ----------
 // TODO: Improved algorithm
@@ -554,7 +554,7 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(::MIR::TypeResolve& state, c
 // - an asignment of the value
 // - a use-by-move
 
-::MIR::ValueLifetimes MIR_Helper_GetLifetimes(::MIR::TypeResolve& state, const ::MIR::Function& fcn, bool dump_debug, const ::std::vector<bool>* mask /*=nullptr*/) {
+::MIR::ValueLifetimes MIRHelperGetLifetimes(::MIR::TypeResolve& state, const ::MIR::Function& fcn, bool dump_debug, const ::std::vector<bool>* mask /*=nullptr*/) {
     TRACE_FUNCTION_F(state);
 
     size_t statement_count = 0;
@@ -605,7 +605,7 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(::MIR::TypeResolve& state, c
             if (lv.is_Local()) {
                 auto de = lv.m_root.as_Local();
                 if (!mask || mask->at(de)) {
-                    MIR_Helper_GetLifetimes_DetermineValueLifetime(state, fcn, bb_idx, stmt_idx, lv, block_offsets, slot_read_bitmaps[de], slot_lifetimes[de]);
+                    MIRHelperGetLifetimesDetermineValueLifetime(state, fcn, bb_idx, stmt_idx, lv, block_offsets, slot_read_bitmaps[de], slot_lifetimes[de]);
                     slot_lifetimes[de].fill(block_offsets, bb_idx, stmt_idx, stmt_idx);
                 }
             }
@@ -646,7 +646,7 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(::MIR::TypeResolve& state, c
     return rv;
 }
 
-void MIR_Helper_GetLifetimes_DetermineValueLifetime(
+void MIRHelperGetLifetimesDetermineValueLifetime(
     ::MIR::TypeResolve& mir_res,
     const ::MIR::Function& fcn,
     size_t bb_idx,
@@ -1086,7 +1086,7 @@ void MIR_Helper_GetLifetimes_DetermineValueLifetime(
 
 #else
 
-::MIR::ValueLifetimes MIR_Helper_GetLifetimes(::MIR::TypeResolve& state, const ::MIR::Function& fcn, bool dump_debug) {
+::MIR::ValueLifetimes MIRHelperGetLifetimes(::MIR::TypeResolve& state, const ::MIR::Function& fcn, bool dump_debug) {
     TRACE_FUNCTION_F(state);
 
     // New algorithm notes:

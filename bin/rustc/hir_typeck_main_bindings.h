@@ -4,6 +4,6 @@ namespace HIR {
     class Crate;
 };
 
-extern void Typecheck_ModuleLevel(::HIR::Crate& crate);
-extern void Typecheck_Expressions(::HIR::Crate& crate);
-extern void Typecheck_Expressions_Validate(::HIR::Crate& crate);
+extern void TypecheckModuleLevel(::HIR::Crate& crate);
+extern void TypecheckExpressions(::HIR::Crate& crate);
+extern void TypecheckExpressionsValidate(::HIR::Crate& crate);

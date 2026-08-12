@@ -14,7 +14,7 @@ namespace HIR {
 }
 
 // TODO: This is very similar to "hir_typeck/common.h" MonomorphState, except it owns its data
-struct Trans_Params: public MonomorphiserPP {
+struct TransParams: public MonomorphiserPP {
     Span sp;
     const ::HIR::GenericParams* gdef_impl;
     ::HIR::PathParams pp_method;
@@ -22,18 +22,18 @@ struct Trans_Params: public MonomorphiserPP {
     ::HIR::TypeRef self_type;
     bool force_monomorphisation;
 
-    explicit Trans_Params(HIR::TypeInterner& types);
+    explicit TransParams(HIR::TypeInterner& types);
 
-    Trans_Params(HIR::TypeInterner& types, const Span& sp);
+    TransParams(HIR::TypeInterner& types, const Span& sp);
 
-    Trans_Params(Trans_Params&& x);
+    TransParams(TransParams&& x);
 
-    Trans_Params& operator=(Trans_Params&& x);
+    TransParams& operator=(TransParams&& x);
 
-    Trans_Params(const Trans_Params&) = delete;
-    Trans_Params& operator=(const Trans_Params&) = delete;
+    TransParams(const TransParams&) = delete;
+    TransParams& operator=(const TransParams&) = delete;
 
-    static Trans_Params new_impl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams impl_params);
+    static TransParams new_impl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams impl_params);
 
     const ::HIR::TypeData* maybe_monomorph(const ::StaticTraitResolve& resolve, ::HIR::TypeRef& tmp, const ::HIR::TypeData* p) const;
 
@@ -69,30 +69,30 @@ struct CachedFunction {
     ::MIR::FunctionPointer code;
 };
 
-struct TransList_Function {
+struct TransListFunction {
     const ::HIR::Path* path; // Pointer into the list (std::map pointers are stable)
     const ::HIR::Function* ptr;
-    Trans_Params pp;
+    TransParams pp;
     // If `pp.has_types` is true, the below is valid
     CachedFunction monomorphised;
     /// Forces the function to not be emited as code (just emit the signature)
     bool force_prototype;
 
-    TransList_Function(HIR::TypeInterner& types, const ::HIR::Path& path);
+    TransListFunction(HIR::TypeInterner& types, const ::HIR::Path& path);
 };
 
-struct TransList_Static {
+struct TransListStatic {
     const ::HIR::Static* ptr;
-    Trans_Params pp;
+    TransParams pp;
 
-    explicit TransList_Static(HIR::TypeInterner& types);
+    explicit TransListStatic(HIR::TypeInterner& types);
 };
 
-struct TransList_Const {
+struct TransListConst {
     const ::HIR::Constant* ptr;
-    Trans_Params pp;
+    TransParams pp;
 
-    explicit TransList_Const(HIR::TypeInterner& types);
+    explicit TransListConst(HIR::TypeInterner& types);
 };
 
 class TransList {
@@ -117,11 +117,11 @@ public:
     /// Root-level items (exposed globals)
     ::std::vector<HIR::Path> m_roots;
 
-    ::std::map<::HIR::Path, ::std::unique_ptr<TransList_Function>> m_functions;
-    ::std::map<::HIR::Path, ::std::unique_ptr<TransList_Static>> m_statics;
+    ::std::map<::HIR::Path, ::std::unique_ptr<TransListFunction>> m_functions;
+    ::std::map<::HIR::Path, ::std::unique_ptr<TransListStatic>> m_statics;
     /// Constants that are still Defer
-    ::std::map<::HIR::Path, ::std::unique_ptr<TransList_Const>> m_constants;
-    ::std::map<::HIR::Path, Trans_Params> m_vtables;
+    ::std::map<::HIR::Path, ::std::unique_ptr<TransListConst>> m_constants;
+    ::std::map<::HIR::Path, TransParams> m_vtables;
     /// Required type_id values
     ::std::set<::HIR::TypeRef> m_typeids;
     // Required drop glue
@@ -141,16 +141,16 @@ public:
     // .second is `true` if this is a from a reference to the type
     ::std::vector<::std::pair<::HIR::TypeRef, bool>> m_types;
 
-    TransList_Function* add_function(HIR::TypeInterner& types, ::HIR::Path p);
-    TransList_Static* add_static(HIR::TypeInterner& types, ::HIR::Path p);
-    TransList_Const* add_const(HIR::TypeInterner& types, ::HIR::Path p);
-    TransList_Function* find_function(const ::HIR::Path& p);
-    const TransList_Function* find_function(const ::HIR::Path& p) const;
+    TransListFunction* add_function(HIR::TypeInterner& types, ::HIR::Path p);
+    TransListStatic* add_static(HIR::TypeInterner& types, ::HIR::Path p);
+    TransListConst* add_const(HIR::TypeInterner& types, ::HIR::Path p);
+    TransListFunction* find_function(const ::HIR::Path& p);
+    const TransListFunction* find_function(const ::HIR::Path& p) const;
     bool has_type(::HIR::TypeRef type, bool shallow) const;
     bool add_type(::HIR::TypeRef type, bool shallow);
     void clear_types();
 
-    bool add_vtable(::HIR::Path p, Trans_Params pp) {
+    bool add_vtable(::HIR::Path p, TransParams pp) {
         return m_vtables.insert(::std::make_pair(mv$(p), mv$(pp))).second;
     }
 };

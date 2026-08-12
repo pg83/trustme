@@ -16,7 +16,7 @@
 #include "parse_interpolated_fragment.h"
 
 namespace {
-    class Common_Function: public ExpandDecorator {
+    class CommonFunction: public ExpandDecorator {
     public:
         virtual void handle(const AST::Attribute& mi, AST::Function& fcn) const = 0;
 
@@ -53,7 +53,7 @@ namespace {
     };
 }
 
-class CHandler_Inline: public Common_Function {
+class CHandlerInline: public CommonFunction {
 public:
     void handle(const AST::Attribute& mi, AST::Function& fcn) const override {
         TTStream lex(mi.span(), ParseState(), mi.data());
@@ -75,9 +75,9 @@ public:
     }
 };
 
-STATIC_DECORATOR("inline", CHandler_Inline);
+STATIC_DECORATOR("inline", CHandlerInline);
 
-class CHandler_Cold: public Common_Function {
+class CHandlerCold: public CommonFunction {
 public:
     void handle(const AST::Attribute& mi, AST::Function& fcn) const override {
         TTStream lex(mi.span(), ParseState(), mi.data());
@@ -87,9 +87,9 @@ public:
     }
 };
 
-STATIC_DECORATOR("cold", CHandler_Cold);
+STATIC_DECORATOR("cold", CHandlerCold);
 
-class CHandler_rustc_legacy_const_generics: public Common_Function {
+class CHandlerRustcLegacyConstGenerics: public CommonFunction {
     void handle(const AST::Attribute& mi, AST::Function& fcn) const override {
         TTStream lex(mi.span(), ParseState(), mi.data());
         lex.getTokenCheck(TOK_PAREN_OPEN);
@@ -108,9 +108,9 @@ class CHandler_rustc_legacy_const_generics: public Common_Function {
     }
 };
 
-STATIC_DECORATOR("rustc_legacy_const_generics", CHandler_rustc_legacy_const_generics);
+STATIC_DECORATOR("rustc_legacy_const_generics", CHandlerRustcLegacyConstGenerics);
 
-class CHandler_Repr: public ExpandDecorator {
+class CHandlerRepr: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -146,7 +146,7 @@ class CHandler_Repr: public ExpandDecorator {
                         // TODO: Error
                     }
                     if (lex.getTokenIf(TOK_PAREN_OPEN)) {
-                        auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
+                        auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
                         auto* val = cast<AST::ExprNodeInteger>(&*n);
                         ASSERT_BUG(n->span(), val, "#[repr(packed(...))] - alignment must be an integer");
                         auto v = val->m_value;
@@ -165,7 +165,7 @@ class CHandler_Repr: public ExpandDecorator {
                     s->m_markings.repr = AST::Struct::Markings::Repr::Transparent;
                 } else if (repr_type == "align") {
                     lex.getTokenCheck(TOK_PAREN_OPEN);
-                    auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
+                    auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
                     auto* val = cast<AST::ExprNodeInteger>(&*n);
                     ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
                     auto v = val->m_value;
@@ -224,7 +224,7 @@ class CHandler_Repr: public ExpandDecorator {
                     set_repr(::AST::Enum::Markings::Repr::Isize);
                 } else if (repr_str == "align") {
                     lex.getTokenCheck(TOK_PAREN_OPEN);
-                    auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
+                    auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
                     auto* val = cast<AST::ExprNodeInteger>(&*n);
                     ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
                     auto v = val->m_value;
@@ -268,7 +268,7 @@ class CHandler_Repr: public ExpandDecorator {
                     //    // TODO: Error
                     //}
                     if (lex.getTokenIf(TOK_PAREN_OPEN)) {
-                        auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
+                        auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
                         auto* val = cast<AST::ExprNodeInteger>(&*n);
                         ASSERT_BUG(n->span(), val, "#[repr(packed(...))] - alignment must be an integer");
                         auto v = val->m_value;
@@ -294,9 +294,9 @@ class CHandler_Repr: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("repr", CHandler_Repr);
+STATIC_DECORATOR("repr", CHandlerRepr);
 
-class CHandler_RustcNonnullOptimizationGuaranteed: public ExpandDecorator {
+class CHandlerRustcNonnullOptimizationGuaranteed: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -309,10 +309,10 @@ class CHandler_RustcNonnullOptimizationGuaranteed: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_nonnull_optimization_guaranteed", CHandler_RustcNonnullOptimizationGuaranteed);
+STATIC_DECORATOR("rustc_nonnull_optimization_guaranteed", CHandlerRustcNonnullOptimizationGuaranteed);
 
 // 1.39
-class CHandler_RustcLayoutScalarValidRangeStart: public ExpandDecorator {
+class CHandlerRustcLayoutScalarValidRangeStart: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -322,7 +322,7 @@ class CHandler_RustcLayoutScalarValidRangeStart: public ExpandDecorator {
         if (auto* s = i.opt_Struct()) {
             TTStream lex(sp, ParseState(), mi.data());
             lex.getTokenCheck(TOK_PAREN_OPEN);
-            auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
+            auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
             auto* np = cast<AST::ExprNodeInteger>(n.get());
             ASSERT_BUG(n->span(), np, "#[rustc_layout_scalar_valid_range_start] requires an integer - got " << FMT_CB(ss, n->print(ss)));
             lex.getTokenCheck(TOK_PAREN_CLOSE);
@@ -337,9 +337,9 @@ class CHandler_RustcLayoutScalarValidRangeStart: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_layout_scalar_valid_range_start", CHandler_RustcLayoutScalarValidRangeStart);
+STATIC_DECORATOR("rustc_layout_scalar_valid_range_start", CHandlerRustcLayoutScalarValidRangeStart);
 
-class CHandler_RustcLayoutScalarValidRangeEnd: public ExpandDecorator {
+class CHandlerRustcLayoutScalarValidRangeEnd: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -349,7 +349,7 @@ class CHandler_RustcLayoutScalarValidRangeEnd: public ExpandDecorator {
         if (auto* s = i.opt_Struct()) {
             TTStream lex(sp, ParseState(), mi.data());
             lex.getTokenCheck(TOK_PAREN_OPEN);
-            auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
+            auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
             auto* np = cast<AST::ExprNodeInteger>(n.get());
             ASSERT_BUG(n->span(), np, "#[rustc_layout_scalar_valid_range_end] requires an integer - got " << FMT_CB(ss, n->print(ss)));
             lex.getTokenCheck(TOK_PAREN_CLOSE);
@@ -363,9 +363,9 @@ class CHandler_RustcLayoutScalarValidRangeEnd: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_layout_scalar_valid_range_end", CHandler_RustcLayoutScalarValidRangeEnd);
+STATIC_DECORATOR("rustc_layout_scalar_valid_range_end", CHandlerRustcLayoutScalarValidRangeEnd);
 
-class CHandler_LinkName: public ExpandDecorator {
+class CHandlerLinkName: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -387,9 +387,9 @@ class CHandler_LinkName: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("link_name", CHandler_LinkName);
+STATIC_DECORATOR("link_name", CHandlerLinkName);
 
-class CHandler_LinkSection: public ExpandDecorator {
+class CHandlerLinkSection: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -411,9 +411,9 @@ class CHandler_LinkSection: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("link_section", CHandler_LinkSection);
+STATIC_DECORATOR("link_section", CHandlerLinkSection);
 
-class CHandler_Link: public ExpandDecorator {
+class CHandlerLink: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -473,9 +473,9 @@ class CHandler_Link: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("link", CHandler_Link);
+STATIC_DECORATOR("link", CHandlerLink);
 
-class CHandler_Linkage: public ExpandDecorator {
+class CHandlerLinkage: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -523,9 +523,9 @@ class CHandler_Linkage: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("linkage", CHandler_Linkage);
+STATIC_DECORATOR("linkage", CHandlerLinkage);
 
-class CHandler_TargetFeature: public ExpandDecorator {
+class CHandlerTargetFeature: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -535,9 +535,9 @@ class CHandler_TargetFeature: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("target_feature", CHandler_TargetFeature);
+STATIC_DECORATOR("target_feature", CHandlerTargetFeature);
 
-class CHandler_RustcIntrinsic: public ExpandDecorator {
+class CHandlerRustcIntrinsic: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Post;
     }
@@ -557,9 +557,9 @@ class CHandler_RustcIntrinsic: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_intrinsic", CHandler_RustcIntrinsic);
+STATIC_DECORATOR("rustc_intrinsic", CHandlerRustcIntrinsic);
 
-class CHandler_TrackCaller: public ExpandDecorator {
+class CHandlerTrackCaller: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Post;
     }
@@ -598,10 +598,10 @@ class CHandler_TrackCaller: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("track_caller", CHandler_TrackCaller);
+STATIC_DECORATOR("track_caller", CHandlerTrackCaller);
 
 /// @brief Various unsafe attributes, addded around 1.90
-class CHandler_Unsafe: public ExpandDecorator {
+class CHandlerUnsafe: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Post;
     }
@@ -660,10 +660,10 @@ class CHandler_Unsafe: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("unsafe", CHandler_Unsafe);
+STATIC_DECORATOR("unsafe", CHandlerUnsafe);
 
 
-class Decorator_CrateType: public ExpandDecorator {
+class DecoratorCrateType: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Pre;
@@ -685,7 +685,7 @@ public:
     }
 };
 
-class Decorator_CrateName: public ExpandDecorator {
+class DecoratorCrateName: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Pre;
@@ -697,7 +697,7 @@ public:
     }
 };
 
-class Decorator_Feature: public ExpandDecorator {
+class DecoratorFeature: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Pre;
@@ -709,9 +709,9 @@ public:
         });
     }
 };
-STATIC_DECORATOR("feature", Decorator_Feature)
+STATIC_DECORATOR("feature", DecoratorFeature)
 
-class Decorator_Allocator: public ExpandDecorator {
+class DecoratorAllocator: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Pre;
@@ -731,7 +731,7 @@ public:
     }
 };
 
-class Decorator_PanicRuntime: public ExpandDecorator {
+class DecoratorPanicRuntime: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Pre;
@@ -743,7 +743,7 @@ public:
     }
 };
 
-class Decorator_NeedsPanicRuntime: public ExpandDecorator {
+class DecoratorNeedsPanicRuntime: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Pre;
@@ -754,12 +754,12 @@ public:
     }
 };
 
-STATIC_DECORATOR("crate_type", Decorator_CrateType)
-STATIC_DECORATOR("crate_name", Decorator_CrateName)
+STATIC_DECORATOR("crate_type", DecoratorCrateType)
+STATIC_DECORATOR("crate_name", DecoratorCrateName)
 
-STATIC_DECORATOR("allocator", Decorator_Allocator)
-STATIC_DECORATOR("panic_runtime", Decorator_PanicRuntime)
-STATIC_DECORATOR("needs_panic_runtime", Decorator_NeedsPanicRuntime)
+STATIC_DECORATOR("allocator", DecoratorAllocator)
+STATIC_DECORATOR("panic_runtime", DecoratorPanicRuntime)
+STATIC_DECORATOR("needs_panic_runtime", DecoratorNeedsPanicRuntime)
 
 
 namespace {
@@ -1093,7 +1093,7 @@ struct Deriver {
 };
 
 /// 'Debug' derive handler
-class Deriver_Debug: public Deriver {
+class DeriverDebug: public Deriver {
     AST::Impl make_ret(Span sp, const RcString& core_name, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
         const AST::Path debug_trait = get_path(core_name, "fmt", "Debug");
 
@@ -1207,7 +1207,7 @@ public:
 
 // ---- Comparisons
 
-class DeriverInner_Compare: public Deriver {
+class DeriverInnerCompare: public Deriver {
 protected:
     /// Create a final output impl block
     virtual AST::Impl make_ret(Span sp, const RcString& core_name, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const = 0;
@@ -1306,7 +1306,7 @@ public:
     }
 };
 
-class Deriver_PartialEq: public DeriverInner_Compare {
+class DeriverPartialEq: public DeriverInnerCompare {
     AST::Impl make_ret(Span sp, const RcString& core_name, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const override {
         const AST::Path trait_path = get_path(core_name, "cmp", "PartialEq");
 
@@ -1322,7 +1322,7 @@ class Deriver_PartialEq: public DeriverInner_Compare {
 
     AST::ExprNodeP compare_and_ret(Span sp, const RcString& core_name, AST::ExprNodeP v1, AST::ExprNodeP v2) const override {
         std::vector<AST::ExprNodeIf::Arm> arms;
-        arms.push_back(AST::ExprNodeIf::Arm{make_vec1(AST::IfLet_Condition{{}, NEWNODE(BinOp, AST::ExprNodeBinOp::CMPNEQU, mv$(v1), mv$(v2))}), NEWNODE(Flow, AST::ExprNodeFlow::RETURN, "", NEWNODE(Bool, false))});
+        arms.push_back(AST::ExprNodeIf::Arm{make_vec1(AST::IfLetCondition{{}, NEWNODE(BinOp, AST::ExprNodeBinOp::CMPNEQU, mv$(v1), mv$(v2))}), NEWNODE(Flow, AST::ExprNodeFlow::RETURN, "", NEWNODE(Bool, false))});
         return NEWNODE(If, std::move(arms), nullptr);
     }
 
@@ -1340,7 +1340,7 @@ public:
     }
 } g_derive_partialeq;
 
-class Deriver_PartialOrd: public DeriverInner_Compare {
+class DeriverPartialOrd: public DeriverInnerCompare {
     AST::Impl make_ret(Span sp, const RcString& core_name, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const override {
         const AST::Path trait_path = get_path(core_name, "cmp", "PartialOrd");
         const AST::Path path_ordering = get_path(core_name, "cmp", "Ordering");
@@ -1376,7 +1376,7 @@ public:
     }
 } g_derive_partialord;
 
-class Deriver_Eq: public Deriver {
+class DeriverEq: public Deriver {
     AST::Path get_trait_path(const RcString& core_name) const {
         return get_path(core_name, "cmp", "Eq");
     }
@@ -1487,7 +1487,7 @@ public:
     }
 } g_derive_eq;
 
-class Deriver_Ord: public DeriverInner_Compare {
+class DeriverOrd: public DeriverInnerCompare {
     AST::Impl make_ret(Span sp, const RcString& core_name, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const override {
         const AST::Path trait_path = get_path(core_name, "cmp", "Ord");
         const AST::Path path_ordering = get_path(core_name, "cmp", "Ordering");
@@ -1529,7 +1529,7 @@ public:
     }
 } g_derive_ord;
 
-class Deriver_Clone: public Deriver {
+class DeriverClone: public Deriver {
     AST::Path get_trait_path(const RcString& core_name) const {
         return AST::Path(core_name, {AST::PathNode(rcstring_clone, {}), AST::PathNode(rcstring_Clone, {})});
     }
@@ -1677,7 +1677,7 @@ private:
     }
 } g_derive_clone;
 
-class Deriver_Copy: public Deriver {
+class DeriverCopy: public Deriver {
     AST::Path get_trait_path(const RcString& core_name) const {
         return get_path(core_name, "marker", "Copy");
     }
@@ -1709,7 +1709,7 @@ public:
     }
 } g_derive_copy;
 
-class Deriver_Default: public Deriver {
+class DeriverDefault: public Deriver {
     AST::Path get_trait_path(const RcString& core_name) const {
         return get_path(core_name, "default", "Default");
     }
@@ -1823,7 +1823,7 @@ public:
     }
 } g_derive_default;
 
-class Deriver_Hash: public Deriver {
+class DeriverHash: public Deriver {
     AST::Path get_trait_path(const RcString& core_name) const {
         return get_path(core_name, "hash", "Hash");
     }
@@ -1941,7 +1941,7 @@ public:
     }
 } g_derive_hash;
 
-class Deriver_RustcEncodable: public Deriver {
+class DeriverRustcEncodable: public Deriver {
     // NOTE: This emits paths like `::rustc_serialize::Encodable` - rustc and crates.io have subtly different crate names
     AST::Path get_trait_path() const {
         return AST::Path(RcString::new_interned("=rustc_serialize"), {AST::PathNode(RcString::new_interned("Encodable"), {})});
@@ -2103,7 +2103,7 @@ public:
     }
 } g_derive_rustc_encodable;
 
-class Deriver_RustcDecodable: public Deriver {
+class DeriverRustcDecodable: public Deriver {
     // NOTE: This emits paths like `::rustc_serialize::Encodable` - rustc and crates.io have subtly different crate names
     AST::Path get_trait_path() const {
         return AST::Path(RcString::new_interned("=rustc_serialize"), {AST::PathNode(RcString::new_interned("Decodable"), {})});
@@ -2288,7 +2288,7 @@ public:
     }
 } g_derive_rustc_decodable;
 
-class Deriver_ConstParamTy: public Deriver {
+class DeriverConstParamTy: public Deriver {
     AST::Impl handle_generic(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound) const {
         const AST::Path trait_path = get_path(opts.core_name, "marker", "StructuralPartialEq");
         AST::GenericParams params = get_params_with_bounds(sp, p, trait_path, mv$(types_to_bound));
@@ -2410,7 +2410,7 @@ namespace {
             }
         }
         if (mac_path.empty()) {
-            auto mac = Expand_LookupMacro(sp, crate, LList<const AST::Module*>(nullptr, &mod), trait_path);
+            auto mac = ExpandLookupMacro(sp, crate, LList<const AST::Module*>(nullptr, &mod), trait_path);
 
             TU_MATCH_HDRA( (mac), {)
             TU_ARMA(None, e) {
@@ -2462,10 +2462,10 @@ static void derive_item(const Span& sp, const AST::Crate& crate, AST::Module& mo
 
         std::vector<RcString> mac_path = find_macro(sp, crate, mod, trait_path);
         if (!mac_path.empty()) {
-            auto lex = ProcMacro_Invoke(sp, crate, mac_path, attrs, vis, path.nodes.back(), item);
+            auto lex = ProcMacroInvoke(sp, crate, mac_path, attrs, vis, path.nodes.back(), item);
             if (lex) {
                 lex->parse_state().module = &mod;
-                Parse_ModRoot_Items(*lex, mod);
+                ParseModRootItems(*lex, mod);
             } else {
                 ERROR(sp, E0000, "proc_macro derive failed");
             }
@@ -2497,7 +2497,7 @@ static void derive_item(const Span& sp, const AST::Crate& crate, AST::Module& mo
     }
 }
 
-class Decorator_Derive: public ExpandDecorator {
+class DecoratorDerive: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Pre;
@@ -2527,11 +2527,11 @@ public:
     }
 };
 
-STATIC_DECORATOR("derive", Decorator_Derive)
+STATIC_DECORATOR("derive", DecoratorDerive)
 
 // TODO: `derive_const` should generate const impls, but mrustc doesn't care
-class Decorator_DeriveConst: public Decorator_Derive {};
-STATIC_DECORATOR("derive_const", Decorator_DeriveConst)
+class DecoratorDeriveConst: public DecoratorDerive {};
+STATIC_DECORATOR("derive_const", DecoratorDeriveConst)
 
 
 class CDocHandler: public ExpandDecorator {
@@ -2968,7 +2968,7 @@ void handle_lang_item(const Span& sp, AST::Crate& crate, const AST::AbsolutePath
     }
 }
 
-class Decorator_LangItem: public ExpandDecorator {
+class DecoratorLangItem: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Post;
@@ -3070,7 +3070,7 @@ public:
     }
 };
 
-class Decorator_Main: public ExpandDecorator {
+class DecoratorMain: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Post;
@@ -3091,7 +3091,7 @@ public:
     }
 };
 
-class Decorator_Start: public ExpandDecorator {
+class DecoratorStart: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Post;
@@ -3111,7 +3111,7 @@ public:
     }
 };
 
-class Decorator_PanicImplementation: public ExpandDecorator {
+class DecoratorPanicImplementation: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Post;
@@ -3130,7 +3130,7 @@ public:
     }
 };
 
-class Decorator_PanicHandler: public ExpandDecorator {
+class DecoratorPanicHandler: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Post;
@@ -3149,7 +3149,7 @@ public:
     }
 };
 
-class Decorator_RustcStdInternalSymbol: public ExpandDecorator {
+class DecoratorRustcStdInternalSymbol: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Post;
@@ -3160,7 +3160,7 @@ public:
     }
 };
 
-class Decorator_AllocErrorHandler: public ExpandDecorator {
+class DecoratorAllocErrorHandler: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Post;
@@ -3177,7 +3177,7 @@ public:
     }
 };
 
-class Decorator_GlobalAllocator: public ExpandDecorator {
+class DecoratorGlobalAllocator: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Post;
@@ -3194,17 +3194,17 @@ public:
     }
 };
 
-STATIC_DECORATOR("lang", Decorator_LangItem)
-STATIC_DECORATOR("main", Decorator_Main);
-STATIC_DECORATOR("start", Decorator_Start);
-STATIC_DECORATOR("panic_implementation", Decorator_PanicImplementation);
-STATIC_DECORATOR("panic_handler", Decorator_PanicHandler);
-STATIC_DECORATOR("rustc_std_internal_symbol", Decorator_RustcStdInternalSymbol);
-STATIC_DECORATOR("alloc_error_handler", Decorator_AllocErrorHandler);
-STATIC_DECORATOR("global_allocator", Decorator_GlobalAllocator);
+STATIC_DECORATOR("lang", DecoratorLangItem)
+STATIC_DECORATOR("main", DecoratorMain);
+STATIC_DECORATOR("start", DecoratorStart);
+STATIC_DECORATOR("panic_implementation", DecoratorPanicImplementation);
+STATIC_DECORATOR("panic_handler", DecoratorPanicHandler);
+STATIC_DECORATOR("rustc_std_internal_symbol", DecoratorRustcStdInternalSymbol);
+STATIC_DECORATOR("alloc_error_handler", DecoratorAllocErrorHandler);
+STATIC_DECORATOR("global_allocator", DecoratorGlobalAllocator);
 
 
-class CMultiHandler_Lint: public ExpandDecorator {
+class CMultiHandlerLint: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -3240,25 +3240,25 @@ class CMultiHandler_Lint: public ExpandDecorator {
     }
 };
 
-class CHandler_Allow: public CMultiHandler_Lint {};
+class CHandlerAllow: public CMultiHandlerLint {};
 
-STATIC_DECORATOR("allow", CHandler_Allow);
+STATIC_DECORATOR("allow", CHandlerAllow);
 
-class CHandler_Warn: public CMultiHandler_Lint {};
+class CHandlerWarn: public CMultiHandlerLint {};
 
-STATIC_DECORATOR("warn", CHandler_Warn);
+STATIC_DECORATOR("warn", CHandlerWarn);
 
-class CHandler_Deny: public CMultiHandler_Lint {};
+class CHandlerDeny: public CMultiHandlerLint {};
 
-STATIC_DECORATOR("deny", CHandler_Deny);
+STATIC_DECORATOR("deny", CHandlerDeny);
 
-class CHandler_Forbid: public CMultiHandler_Lint {};
+class CHandlerForbid: public CMultiHandlerLint {};
 
-STATIC_DECORATOR("forbid", CHandler_Forbid);
+STATIC_DECORATOR("forbid", CHandlerForbid);
 
 
 // #[must_use] - Marks a type needing to be consumed
-class CHandler_MustUse: public ExpandDecorator {
+class CHandlerMustUse: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -3276,10 +3276,10 @@ class CHandler_MustUse: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("must_use", CHandler_MustUse);
+STATIC_DECORATOR("must_use", CHandlerMustUse);
 
 // #[non_exhaustive] - Tag an enum as being extensible
-class CHandler_NonExhaustive: public ExpandDecorator {
+class CHandlerNonExhaustive: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -3289,10 +3289,10 @@ class CHandler_NonExhaustive: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("non_exhaustive", CHandler_NonExhaustive);
+STATIC_DECORATOR("non_exhaustive", CHandlerNonExhaustive);
 
 // #[path] - Already used by this stage
-class CHandler_Path: public ExpandDecorator {
+class CHandlerPath: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -3302,10 +3302,10 @@ class CHandler_Path: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("path", CHandler_Path);
+STATIC_DECORATOR("path", CHandlerPath);
 
 // #[rustc_promotable] - ?
-class CHandler_RustcPromotable: public ExpandDecorator {
+class CHandlerRustcPromotable: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -3322,10 +3322,10 @@ class CHandler_RustcPromotable: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_promotable", CHandler_RustcPromotable);
+STATIC_DECORATOR("rustc_promotable", CHandlerRustcPromotable);
 
 // #[rustc_inherit_overflow_checks]
-class CHandler_RustcInheritOverflowChecks: public ExpandDecorator {
+class CHandlerRustcInheritOverflowChecks: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -3343,10 +3343,10 @@ class CHandler_RustcInheritOverflowChecks: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_inherit_overflow_checks", CHandler_RustcInheritOverflowChecks);
+STATIC_DECORATOR("rustc_inherit_overflow_checks", CHandlerRustcInheritOverflowChecks);
 
 // #[rustc_on_unimplemented]
-class CHandler_RustcOnUnimiplemented: public ExpandDecorator {
+class CHandlerRustcOnUnimiplemented: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -3356,11 +3356,11 @@ class CHandler_RustcOnUnimiplemented: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_on_unimplemented", CHandler_RustcOnUnimiplemented);
+STATIC_DECORATOR("rustc_on_unimplemented", CHandlerRustcOnUnimiplemented);
 
 
 // #[rustc_box] - Marks the `Box::new` inner constructor
-class CHandler_RustBox: public ExpandDecorator {
+class CHandlerRustBox: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Post;
     }
@@ -3376,10 +3376,10 @@ class CHandler_RustBox: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_box", CHandler_RustBox);
+STATIC_DECORATOR("rustc_box", CHandlerRustBox);
 
 
-class CMultiHandler_Stability: public ExpandDecorator {
+class CMultiHandlerStability: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -3406,28 +3406,28 @@ class CMultiHandler_Stability: public ExpandDecorator {
     }
 };
 
-class CHandler_Stable: public CMultiHandler_Stability {};
+class CHandlerStable: public CMultiHandlerStability {};
 
-STATIC_DECORATOR("stable", CHandler_Stable);
+STATIC_DECORATOR("stable", CHandlerStable);
 
-class CHandler_Unstable: public CMultiHandler_Stability {};
+class CHandlerUnstable: public CMultiHandlerStability {};
 
-STATIC_DECORATOR("unstable", CHandler_Unstable);
+STATIC_DECORATOR("unstable", CHandlerUnstable);
 
-class CHandler_RustcDeprecated: public CMultiHandler_Stability {};
+class CHandlerRustcDeprecated: public CMultiHandlerStability {};
 
-STATIC_DECORATOR("rustc_deprecated", CHandler_RustcDeprecated);
+STATIC_DECORATOR("rustc_deprecated", CHandlerRustcDeprecated);
 
 // #[rustc_const_unstable] - Unstable in const context
-class CHandler_RustcConstUnstable: public CMultiHandler_Stability {};
+class CHandlerRustcConstUnstable: public CMultiHandlerStability {};
 
-STATIC_DECORATOR("rustc_const_unstable", CHandler_RustcConstUnstable);
+STATIC_DECORATOR("rustc_const_unstable", CHandlerRustcConstUnstable);
 
-class CHandler_Deprecated: public CMultiHandler_Stability {};
+class CHandlerDeprecated: public CMultiHandlerStability {};
 
-STATIC_DECORATOR("deprecated", CHandler_Deprecated);
+STATIC_DECORATOR("deprecated", CHandlerDeprecated);
 
-class CHandler_AllowInternalUnstable: public ExpandDecorator {
+class CHandlerAllowInternalUnstable: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
@@ -3436,10 +3436,10 @@ class CHandler_AllowInternalUnstable: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("allow_internal_unstable", CHandler_AllowInternalUnstable);
+STATIC_DECORATOR("allow_internal_unstable", CHandlerAllowInternalUnstable);
 
 
-class Decorator_NoStd: public ExpandDecorator {
+class DecoratorNoStd: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Pre;
@@ -3454,7 +3454,7 @@ public:
     }
 };
 
-class Decorator_NoCore: public ExpandDecorator {
+class DecoratorNoCore: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Pre;
@@ -3468,7 +3468,7 @@ public:
     }
 };
 
-class Decorator_NoMain: public ExpandDecorator {
+class DecoratorNoMain: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Pre;
@@ -3486,7 +3486,7 @@ public:
 //    AttrStage stage() const override { return AttrStage::Pre; }
 //};
 
-class Decorator_NoPrelude: public ExpandDecorator {
+class DecoratorNoPrelude: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Pre;
@@ -3501,7 +3501,7 @@ public:
     }
 };
 
-class Decorator_PreludeImport: public ExpandDecorator {
+class DecoratorPreludeImport: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Pre;
@@ -3532,13 +3532,13 @@ public:
     }
 };
 
-void Expand_init_std_prelude() {
-    Register_Synext_Decorator_G<Decorator_NoStd>("no_std");
-    Register_Synext_Decorator_G<Decorator_NoCore>("no_core");
-    Register_Synext_Decorator_G<Decorator_NoMain>("no_main");
+void ExpandInitStdPrelude() {
+    RegisterSynextDecoratorG<DecoratorNoStd>("no_std");
+    RegisterSynextDecoratorG<DecoratorNoCore>("no_core");
+    RegisterSynextDecoratorG<DecoratorNoMain>("no_main");
     //Register_Synext_Decorator_G<Decorator_Prelude>("prelude");
-    Register_Synext_Decorator_G<Decorator_PreludeImport>("prelude_import");
-    Register_Synext_Decorator_G<Decorator_NoPrelude>("no_prelude");
+    RegisterSynextDecoratorG<DecoratorPreludeImport>("prelude_import");
+    RegisterSynextDecoratorG<DecoratorNoPrelude>("no_prelude");
 }
 
 
@@ -3568,7 +3568,7 @@ class CTestHandler: public ExpandDecorator {
     }
 };
 
-class CTestHandler_SP: public ExpandDecorator {
+class CTestHandlerSP: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Post;
     }
@@ -3590,7 +3590,7 @@ class CTestHandler_SP: public ExpandDecorator {
 
                     TTStream lex(sp, ParseState(), mi.data());
                     auto parse_message = [&]() {
-                        auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
+                        auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
                         if (auto* v = cast<::AST::ExprNodeString>(&*n)) {
                             td.expected_panic_message = v->m_value;
                         } else {
@@ -3625,7 +3625,7 @@ class CTestHandler_SP: public ExpandDecorator {
     }
 };
 
-class CTestHandler_Ignore: public ExpandDecorator {
+class CTestHandlerIgnore: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Post;
     }
@@ -3650,12 +3650,12 @@ class CTestHandler_Ignore: public ExpandDecorator {
 };
 
 STATIC_DECORATOR("test", CTestHandler);
-STATIC_DECORATOR("should_panic", CTestHandler_SP);
-STATIC_DECORATOR("ignore", CTestHandler_Ignore);
+STATIC_DECORATOR("should_panic", CTestHandlerSP);
+STATIC_DECORATOR("ignore", CTestHandlerIgnore);
 
 DecoratorDef::DecoratorDef(::std::string name, ::std::unique_ptr<ExpandDecorator> def)
     : prev(nullptr)
     , name(::std::move(name))
     , def(::std::move(def)) {
-    Register_Synext_Decorator_Static(this);
+    RegisterSynextDecoratorStatic(this);
 }

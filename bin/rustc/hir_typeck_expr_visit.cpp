@@ -4,10 +4,10 @@
 #include "hir_visitor.h"
 #include "hir_expr_state.h"
 
-void Typecheck_Code(const typeck::ModuleState& ms, t_args& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr) {
+void TypecheckCode(const typeck::ModuleState& ms, t_args& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr) {
     if (expr.m_state->stage < ::HIR::ExprState::Stage::Typecheck) {
         //Typecheck_Code_Simple(ms, args, result_type, expr);
-        Typecheck_Code_CS(ms, args, result_type, expr);
+        TypecheckCodeCS(ms, args, result_type, expr);
         expr.m_state->stage = ::HIR::ExprState::Stage::Typecheck;
     }
 }
@@ -170,7 +170,7 @@ namespace {
                 t_args tmp;
                 if (auto* se = e.size.opt_Unevaluated()) {
                     if (se->is_Unevaluated()) {
-                        Typecheck_Code(m_ms, tmp, m_ms.m_crate.m_types.primitive(::HIR::CoreType::Usize), *se->as_Unevaluated()->expr);
+                        TypecheckCode(m_ms, tmp, m_ms.m_crate.m_types.primitive(::HIR::CoreType::Usize), *se->as_Unevaluated()->expr);
                     }
                 }
                 ty = m_ms.m_crate.m_types.intern(std::move(data));
@@ -186,7 +186,7 @@ namespace {
             auto _ = this->m_ms.set_item_generics(item.m_params);
             if (item.m_code) {
                 DEBUG("Function code " << p);
-                Typecheck_Code(m_ms, item.m_args, item.m_return, item.m_code);
+                TypecheckCode(m_ms, item.m_args, item.m_return, item.m_code);
             } else {
                 DEBUG("Function code " << p << " (none)");
             }
@@ -197,7 +197,7 @@ namespace {
             if (item.m_value) {
                 DEBUG("Static value " << p);
                 t_args tmp;
-                Typecheck_Code(m_ms, tmp, item.m_type, item.m_value);
+                TypecheckCode(m_ms, tmp, item.m_type, item.m_value);
             }
         }
 
@@ -206,7 +206,7 @@ namespace {
             if (item.m_value) {
                 DEBUG("Const value " << p);
                 t_args tmp;
-                Typecheck_Code(m_ms, tmp, item.m_type, item.m_value);
+                TypecheckCode(m_ms, tmp, item.m_type, item.m_value);
             }
         }
 
@@ -220,7 +220,7 @@ namespace {
                     DEBUG("Enum value " << p << " - " << var.name);
                     if (var.expr) {
                         t_args tmp;
-                        Typecheck_Code(m_ms, tmp, m_ms.m_crate.m_types.primitive(enum_type), var.expr);
+                        TypecheckCode(m_ms, tmp, m_ms.m_crate.m_types.primitive(enum_type), var.expr);
                     }
                 }
             }
@@ -228,7 +228,7 @@ namespace {
     };
 }
 
-void Typecheck_Expressions(::HIR::Crate& crate) {
+void TypecheckExpressions(::HIR::Crate& crate) {
     OuterVisitor visitor{crate};
     visitor.visit_crate(crate);
 }

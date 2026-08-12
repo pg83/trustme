@@ -20,7 +20,7 @@
 
 namespace {
     ::std::string get_string(const Span& sp, TokenStream& lex, const ::AST::Crate& crate, AST::Module& mod) {
-        auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
+        auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
 
         auto* format_string_np = cast<AST::ExprNodeString>(&*n);
         if (!format_string_np) {
@@ -68,7 +68,7 @@ public:
                 auto name = mv$(tok.str());
 
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-                auto val = Parse_Expr0(lex);
+                auto val = ParseExpr0(lex);
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
                 outputs.push_back(::AST::ExprNodeAsm::ValRef{mv$(name), mv$(val)});
@@ -94,7 +94,7 @@ public:
                 auto name = mv$(tok.str());
 
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-                auto val = Parse_Expr0(lex);
+                auto val = ParseExpr0(lex);
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
                 inputs.push_back(::AST::ExprNodeAsm::ValRef{mv$(name), mv$(val)});
@@ -208,13 +208,13 @@ namespace {
     }
 
     AsmCommon::RegisterClass get_reg_class(const Span& sp, const RcString& str) {
-        if (Target_GetCurSpec().m_arch.m_name == "x86_64") {
+        if (TargetGetCurSpec().m_arch.m_name == "x86_64") {
             return get_reg_class_x8664(sp, str);
         }
-        if (Target_GetCurSpec().m_arch.m_name == "x86") {
+        if (TargetGetCurSpec().m_arch.m_name == "x86") {
             return get_reg_class_x8664(sp, str);
         }
-        if (Target_GetCurSpec().m_arch.m_name == "riscv64") {
+        if (TargetGetCurSpec().m_arch.m_name == "riscv64") {
             return get_reg_class_riscv(sp, str);
         }
         ERROR(sp, E0000, "Unknown architecture for asm!");
@@ -232,7 +232,7 @@ public:
         std::vector<std::pair<Span, std::string>> raw_lines;
         do {
             auto ps = lex.start_span();
-            auto attrs = Parse_ItemAttrs(lex);
+            auto attrs = ParseItemAttrs(lex);
             auto text = get_string(sp, lex, crate, mod);
             auto sp = lex.end_span(ps);
             if (check_cfg_attrs(attrs)) {
@@ -321,10 +321,10 @@ public:
 
             AST::ExprNodeAsm2::Param param_spec;
             if (v == "const") {
-                auto e = Parse_Expr0(lex);
+                auto e = ParseExpr0(lex);
                 param_spec = AST::ExprNodeAsm2::Param::make_Const(std::move(e));
             } else if (v == "sym") {
-                auto p = Parse_Path(lex, PATH_GENERIC_EXPR);
+                auto p = ParsePath(lex, PATH_GENERIC_EXPR);
                 param_spec = AST::ExprNodeAsm2::Param::make_Sym(std::move(p));
             } else {
                 AsmCommon::Direction dir;
@@ -367,7 +367,7 @@ public:
                     }
                     param_spec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(reg_spec), nullptr, nullptr});
                 } else {
-                    auto e = Parse_Expr0(lex);
+                    auto e = ParseExpr0(lex);
 
                     if (lex.lookahead(0) == TOK_FATARROW) {
                         // inout or inlateout only
@@ -383,7 +383,7 @@ public:
                             GET_TOK(tok, lex);
                             param_spec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(reg_spec), mv$(e), nullptr});
                         } else {
-                            auto e2 = Parse_Expr0(lex);
+                            auto e2 = ParseExpr0(lex);
                             param_spec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(reg_spec), mv$(e), mv$(e2)});
                         }
                     } else {
@@ -562,7 +562,7 @@ STATIC_MACRO("global_asm", CGlobalAsmExpander);
 STATIC_MACRO("naked_asm", CNakedAsmExpander);
 
 
-class CExpander_assert: public ExpandProcMacro {
+class CExpanderAssert: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         Token tok;
 
@@ -570,7 +570,7 @@ class CExpander_assert: public ExpandProcMacro {
         lex.parse_state().module = &mod;
 
         // assertion condition
-        auto n = Parse_Expr0(lex);
+        auto n = ParseExpr0(lex);
         ASSERT_BUG(sp, n, "No expression returned");
 
         ::std::vector<TokenTree> toks;
@@ -590,7 +590,7 @@ class CExpander_assert: public ExpandProcMacro {
             toks.push_back(Token(TOK_EXCLAM));
             toks.push_back(Token(TOK_PAREN_OPEN));
 
-            auto fmt = Parse_Expr0(lex);
+            auto fmt = ParseExpr0(lex);
             // If there's a comma, it's a formatting sequence
             if (lex.getTokenIf(TOK_COMMA)) {
                 toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, fmt.release())));
@@ -601,9 +601,9 @@ class CExpander_assert: public ExpandProcMacro {
                     if ((lex.lookahead(0) == TOK_IDENT || Token::type_is_rword(lex.lookahead(0))) && lex.lookahead(1) == TOK_EQUAL) {
                         toks.push_back(lex.getToken());
                         toks.push_back(lex.getToken());
-                        toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, Parse_Expr0(lex).release())));
+                        toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
                     } else {
-                        toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, Parse_Expr0(lex).release())));
+                        toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
                     }
                     if (lex.lookahead(0) != TOK_COMMA) {
                         break;
@@ -641,18 +641,18 @@ class CExpander_assert: public ExpandProcMacro {
     }
 };
 
-void Expand_init_assert() {
-    Register_Synext_Macro("assert", ::std::unique_ptr<ExpandProcMacro>(new CExpander_assert));
+void ExpandInitAssert() {
+    RegisterSynextMacro("assert", ::std::unique_ptr<ExpandProcMacro>(new CExpanderAssert));
 }
 
 
-class CExpander_CompileError: public ExpandProcMacro {
+class CExpanderCompileError: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         ERROR(sp, E0000, "compile_error! " << tt);
     }
 };
 
-STATIC_MACRO("compile_error", CExpander_CompileError);
+STATIC_MACRO("compile_error", CExpanderCompileError);
 
 
 class CConcatExpander: public ExpandProcMacro {
@@ -668,9 +668,9 @@ class CConcatExpander: public ExpandProcMacro {
                 break;
             }
 
-            auto v = Parse_Expr0(lex);
+            auto v = ParseExpr0(lex);
             DEBUG("concat - v=" << *v);
-            Expand_BareExpr(crate, mod, v);
+            ExpandBareExpr(crate, mod, v);
             DEBUG("concat[pe] - v=" << *v);
             // TODO: Visitor instead
             if (auto* vp = cast<AST::ExprNodeString>(v.get())) {
@@ -731,7 +731,7 @@ namespace {
     ::std::string get_string(const Span& sp, const AST::Crate& crate, AST::Module& mod, const TokenTree& tt) {
         auto lex = TTStream(sp, ParseState(), tt);
 
-        auto n = Parse_ExprVal(lex);
+        auto n = ParseExprVal(lex);
         ASSERT_BUG(sp, n, "No expression returned");
         if (lex.lookahead(0) == TOK_COMMA) {
             lex.getToken();
@@ -739,7 +739,7 @@ namespace {
         if (lex.lookahead(0) != TOK_EOF) {
             ERROR(sp, E0000, "Unexpected token after string literal - " << lex.getToken());
         }
-        Expand_BareExpr(crate, mod, n);
+        ExpandBareExpr(crate, mod, n);
 
         auto* string_np = cast<AST::ExprNodeString>(&*n);
         if (!string_np) {
@@ -792,7 +792,7 @@ STATIC_MACRO("option_env", CExpanderOptionEnv);
 
 
 namespace {
-    const SpanInner_Source* get_top_span(const Span& sp) {
+    const SpanInnerSource* get_top_span(const Span& sp) {
         return &sp.get_top_file_span();
     }
 }
@@ -1374,9 +1374,9 @@ namespace {
     ::std::unique_ptr<TokenStream> expand_format_args(const Span& sp, const ::AST::Crate& crate, TTStream& lex, bool add_newline) {
         Token tok;
 
-        auto format_string_node = Parse_ExprVal(lex);
+        auto format_string_node = ParseExprVal(lex);
         ASSERT_BUG(sp, format_string_node, "No expression returned");
-        Expand_BareExpr(crate, lex.parse_state().get_current_mod(), format_string_node);
+        ExpandBareExpr(crate, lex.parse_state().get_current_mod(), format_string_node);
 
         auto* format_string_np = cast<AST::ExprNodeString>(&*format_string_node);
         if (!format_string_np) {
@@ -1405,7 +1405,7 @@ namespace {
 
                 GET_CHECK_TOK(tok, lex, TOK_EQUAL);
 
-                auto expr_tt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, Parse_Expr0(lex).release())));
+                auto expr_tt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
 
                 auto ins_rv = named_args_index.insert(::std::make_pair(mv$(name), static_cast<unsigned>(named_args.size())));
                 if (ins_rv.second == false) {
@@ -1416,7 +1416,7 @@ namespace {
             // - Free parameters
             else {
                 DEBUG("Free");
-                auto expr_tt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, Parse_Expr0(lex).release())));
+                auto expr_tt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
                 free_args.push_back(mv$(expr_tt));
             }
         }
@@ -1742,12 +1742,12 @@ STATIC_MACRO("format_args_nl", CFormatArgsNlExpander);
 namespace {
 
     ::std::string include_get_string(const Span& sp, TokenStream& lex, const ::AST::Crate& crate, AST::Module& mod) {
-        auto n = Parse_ExprVal(lex);
+        auto n = ParseExprVal(lex);
         ASSERT_BUG(sp, n, "No expression returned");
         if (lex.lookahead(0) == TOK_COMMA) {
             lex.getToken();
         }
-        Expand_BareExpr(crate, mod, n);
+        ExpandBareExpr(crate, mod, n);
 
         auto* string_np = cast<AST::ExprNodeString>(&*n);
         if (!string_np) {
@@ -1861,7 +1861,7 @@ STATIC_MACRO("include_bytes", CIncludeBytesExpander);
 STATIC_MACRO("include_str", CIncludeStrExpander);
 
 
-class CExpander_panic: public ExpandProcMacro {
+class CExpanderPanic: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         Token tok;
 
@@ -1896,7 +1896,7 @@ class CExpander_panic: public ExpandProcMacro {
     }
 };
 
-class CExpander_unreachable: public ExpandProcMacro {
+class CExpanderUnreachable: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         Token tok;
 
@@ -1931,9 +1931,9 @@ class CExpander_unreachable: public ExpandProcMacro {
     }
 };
 
-void Expand_init_panic() {
-    Register_Synext_Macro("panic", ::std::unique_ptr<ExpandProcMacro>(new CExpander_panic));
-    Register_Synext_Macro("unreachable", ::std::unique_ptr<ExpandProcMacro>(new CExpander_unreachable));
+void ExpandInitPanic() {
+    RegisterSynextMacro("panic", ::std::unique_ptr<ExpandProcMacro>(new CExpanderPanic));
+    RegisterSynextMacro("unreachable", ::std::unique_ptr<ExpandProcMacro>(new CExpanderUnreachable));
 }
 
 
@@ -2020,5 +2020,5 @@ MacroDef::MacroDef(::std::string name, ::std::unique_ptr<ExpandProcMacro> def)
     : prev(nullptr)
     , name(::std::move(name))
     , def(::std::move(def)) {
-    Register_Synext_Macro_Static(this);
+    RegisterSynextMacroStatic(this);
 }

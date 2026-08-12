@@ -18,20 +18,20 @@
     #include <thread>
     #include <vector>
 
-class JobServer_Client: public JobServer {
+class JobServerClient: public JobServer {
     int m_fd_read;
     int m_fd_write;
     std::vector<uint8_t> m_held_tokens;
     //::std::semaphore    m_sem;
 public:
-    JobServer_Client(int fd_read, int fd_write = -1)
+    JobServerClient(int fd_read, int fd_write = -1)
         : m_fd_read(fd_read)
         , m_fd_write(fd_write)
     {
         assert(fd_read >= 0);
     }
 
-    ~JobServer_Client() {
+    ~JobServerClient() {
         if (m_fd_write == -1) {
             close(m_fd_read);
         }
@@ -71,7 +71,7 @@ public:
     }
 };
 
-class JobServer_Server: public JobServer {
+class JobServerServer: public JobServer {
     class ServerInner {
         ::std::string m_path;
         int m_wr_fd;
@@ -146,10 +146,10 @@ class JobServer_Server: public JobServer {
     };
 
     ServerInner m_server;
-    JobServer_Client m_client;
+    JobServerClient m_client;
 
 public:
-    JobServer_Server(size_t max_jobs)
+    JobServerServer(size_t max_jobs)
         : m_server(max_jobs)
         , m_client(m_server.get_client_read_fd(), m_server.get_client_write_fd())
     {
@@ -162,7 +162,7 @@ public:
         setenv("MAKEFLAGS", ss.str().c_str(), /*overwrite=*/1);
     }
 
-    ~JobServer_Server() {
+    ~JobServerServer() {
     }
 
     bool take_one(unsigned long timeout_ms) override {
@@ -200,7 +200,7 @@ public:
         if (std::strncmp(auth_str.c_str(), "fifo:", 5) == 0) {
             auto fd = open(auth_str.c_str() + 5, O_RDWR | O_CLOEXEC);
             if (fd > 0) {
-                return ::std::make_unique<JobServer_Client>(fd);
+                return ::std::make_unique<JobServerClient>(fd);
             }
         }
         // - Unix pipe pair: `<fd_r>,<fd_w>`
@@ -211,7 +211,7 @@ public:
                     if (fcntl(fd_r, F_GETFL) == -1 || fcntl(fd_w, F_GETFL) == -1) {
                         ::std::cerr << "JobServer: Pipe FDs aren't open, likely missing `+` in makefile" << std::endl;
                     } else {
-                        return ::std::make_unique<JobServer_Client>(fd_r, fd_w);
+                        return ::std::make_unique<JobServerClient>(fd_r, fd_w);
                     }
                 } else {
                 }
@@ -222,7 +222,7 @@ public:
     if (server_jobs == 0) {
         return nullptr;
     }
-    return ::std::make_unique<JobServer_Server>(server_jobs);
+    return ::std::make_unique<JobServerServer>(server_jobs);
 }
 
 JobServer::~JobServer() {

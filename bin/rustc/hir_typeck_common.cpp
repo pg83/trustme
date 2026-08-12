@@ -438,13 +438,13 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
                 lfts.push_back(monomorph_lifetime(sp, lft));
             }
 
-            HIR::TypeData_ErasedType_Inner inner;
+            HIR::TypeDataErasedTypeInner inner;
         TU_MATCH_HDRA( (e.m_inner), {)
         TU_ARMA(Fcn, ee) {
-                    inner = ::HIR::TypeData_ErasedType_Inner::Data_Fcn{this->monomorph_path(sp, ee.m_origin, allow_infer), ee.m_index};
+                    inner = ::HIR::TypeDataErasedTypeInner::Data_Fcn{this->monomorph_path(sp, ee.m_origin, allow_infer), ee.m_index};
                 }
                 TU_ARMA(Alias, ee) {
-                    inner = ::HIR::TypeData_ErasedType_Inner::Data_Alias{this->monomorph_path_params(sp, ee.params, allow_infer), ee.inner};
+                    inner = ::HIR::TypeDataErasedTypeInner::Data_Alias{this->monomorph_path_params(sp, ee.params, allow_infer), ee.inner};
                 }
                 TU_ARMA(Known, ee) {
                     inner = this->monomorph_type(sp, ee, allow_infer);
@@ -489,7 +489,7 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
         }
         TU_ARMA(Function, e) {
             auto _ = push_hrb(e.hrls);
-            ::HIR::TypeData_FunctionPointer ft;
+            ::HIR::TypeDataFunctionPointer ft;
             ft.hrls = e.hrls.clone();
             ft.is_unsafe = e.is_unsafe;
             ft.is_variadic = e.is_variadic;
@@ -514,7 +514,7 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
 
         // Have a flag/stack here for current defined HRL batches (trait paths and function pointers), if in one then do the hack
         // - Otherwise, pass to `get_lifetime`
-        if (g.group() == HIR::GENERIC_Hrtb) {
+        if (g.group() == HIR::GENERICHrtb) {
             if (const auto* hrtb = has_hrb()) {
                 // TODO: Ensure that the param is in range (has some issues with nested?)
                 //ASSERT_BUG(sp, g.idx() < hrtb->m_lifetimes.size(), "Found HRTB out of range - " << g << " from for" << hrtb->fmt_args());
@@ -579,7 +579,7 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
     if (const auto* ge = val.opt_Generic()) {
         return this->get_value(sp, *ge);
     } else if (const auto* ge = val.opt_Unevaluated()) {
-        auto rv = HIR::ConstGeneric(std::make_unique<HIR::ConstGeneric_Unevaluated>((*ge)->monomorph(sp, *this, true)));
+        auto rv = HIR::ConstGeneric(std::make_unique<HIR::ConstGenericUnevaluated>((*ge)->monomorph(sp, *this, true)));
         // TODO: Evaluate this constant (if possible), but that requires knowing the target type :/
         return rv;
     } else {
@@ -619,7 +619,7 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
             sz = this->get_value(sp, se->as_Generic());
             DEBUG(tpl << " -> " << sz);
         } else if (se->is_Unevaluated()) {
-            sz = HIR::ConstGeneric(std::make_unique<HIR::ConstGeneric_Unevaluated>(se->as_Unevaluated()->monomorph(sp, *this, true)));
+            sz = HIR::ConstGeneric(std::make_unique<HIR::ConstGenericUnevaluated>(se->as_Unevaluated()->monomorph(sp, *this, true)));
         } else {
             sz = se->clone();
         }
@@ -629,7 +629,7 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
         // Evaluate, if possible
         if (se->is_Unevaluated()) {
             if (this->consteval_crate) {
-                ConvertHIR_ConstantEvaluate_ConstGeneric(sp, *this->consteval_crate, m_types.primitive(HIR::CoreType::Usize), sz.as_Unevaluated());
+                ConvertHIRConstantEvaluateConstGeneric(sp, *this->consteval_crate, m_types.primitive(HIR::CoreType::Usize), sz.as_Unevaluated());
             } else {
                 DEBUG("TODO: Evaluate unevaluated generic for array size - " << *se);
             }
@@ -644,10 +644,10 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
     }
 }
 
-struct CloneTyWith_Monomorph: Monomorphiser {
+struct CloneTyWithMonomorph: Monomorphiser {
     t_cb_clone_ty callback;
 
-    explicit CloneTyWith_Monomorph(HIR::TypeInterner& types): Monomorphiser(types) {}
+    explicit CloneTyWithMonomorph(HIR::TypeInterner& types): Monomorphiser(types) {}
 
     ::HIR::TypeRef get_type(const Span& sp, const ::HIR::GenericRef& g) const override {
         return m_types.generic(g.name, g.binding);
@@ -688,7 +688,7 @@ struct CloneTyWith_Monomorph: Monomorphiser {
 }
 
 ::HIR::TypeRef clone_ty_with(::HIR::TypeInterner& types, const Span& sp, const ::HIR::TypeData* tpl, t_cb_clone_ty callback) {
-    CloneTyWith_Monomorph m(types);
+    CloneTyWithMonomorph m(types);
     m.callback = std::move(callback);
     return m.monomorph_type(sp, tpl, true);
 }

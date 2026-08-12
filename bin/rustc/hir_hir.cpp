@@ -90,26 +90,26 @@ namespace HIR {
         return OrdEqual;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const ConstGeneric_Unevaluated& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const ConstGenericUnevaluated& x) {
         x.fmt(os);
         return os;
     }
 
-    ConstGeneric_Unevaluated::ConstGeneric_Unevaluated(HIR::ExprPtr ep)
+    ConstGenericUnevaluated::ConstGenericUnevaluated(HIR::ExprPtr ep)
         : expr(std::make_shared<HIR::ExprPtr>(std::move(ep)))
     {
     }
 
-    ConstGeneric_Unevaluated ConstGeneric_Unevaluated::clone() const {
-        ConstGeneric_Unevaluated rv;
+    ConstGenericUnevaluated ConstGenericUnevaluated::clone() const {
+        ConstGenericUnevaluated rv;
         rv.params_impl = params_impl.clone();
         rv.params_item = params_item.clone();
         rv.expr = expr;
         return rv;
     }
 
-    ConstGeneric_Unevaluated ConstGeneric_Unevaluated::monomorph(const Span& sp, const Monomorphiser& ms, bool allow_infer /*=true*/) const {
-        ConstGeneric_Unevaluated rv;
+    ConstGenericUnevaluated ConstGenericUnevaluated::monomorph(const Span& sp, const Monomorphiser& ms, bool allow_infer /*=true*/) const {
+        ConstGenericUnevaluated rv;
         rv.params_impl = ms.monomorph_path_params(sp, params_impl, allow_infer);
         rv.params_item = ms.monomorph_path_params(sp, params_item, allow_infer);
         rv.expr = this->expr;
@@ -117,13 +117,13 @@ namespace HIR {
     }
 
     namespace {
-        const ::HIR::ConstGeneric* get_unevaluated_param(const ::HIR::ConstGeneric_Unevaluated& value, unsigned int binding) {
+        const ::HIR::ConstGeneric* get_unevaluated_param(const ::HIR::ConstGenericUnevaluated& value, unsigned int binding) {
             const ::HIR::PathParams* params = nullptr;
             switch (binding >> 8) {
-                case ::HIR::GENERIC_Impl:
+                case ::HIR::GENERICImpl:
                     params = &value.params_impl;
                     break;
-                case ::HIR::GENERIC_Item:
+                case ::HIR::GENERICItem:
                     params = &value.params_item;
                     break;
                 default:
@@ -148,7 +148,7 @@ namespace HIR {
             throw "";
         }
 
-        bool const_expr_nodes_equal(const ::HIR::ConstGeneric_Unevaluated& left_value, const ::HIR::ExprNode& left, const ::HIR::ConstGeneric_Unevaluated& right_value, const ::HIR::ExprNode& right) {
+        bool const_expr_nodes_equal(const ::HIR::ConstGenericUnevaluated& left_value, const ::HIR::ExprNode& left, const ::HIR::ConstGenericUnevaluated& right_value, const ::HIR::ExprNode& right) {
             if (const auto* l = cast<const ::HIR::ExprNodeConstParam>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeConstParam>(&right);
                 if (!r) {
@@ -206,11 +206,11 @@ namespace HIR {
         }
     }
 
-    bool ConstGeneric_Unevaluated::equivalent(const ConstGeneric_Unevaluated& x) const {
+    bool ConstGenericUnevaluated::equivalent(const ConstGenericUnevaluated& x) const {
         return const_expr_nodes_equal(*this, **this->expr, x, **x.expr);
     }
 
-    Ordering ConstGeneric_Unevaluated::ord(const ConstGeneric_Unevaluated& x) const {
+    Ordering ConstGenericUnevaluated::ord(const ConstGenericUnevaluated& x) const {
         if (this->expr.get() != x.expr.get()) {
             // If only one has populated MIR, they can't be equal (sort populated MIR after)
             if (!this->expr->m_mir != !x.expr->m_mir) {
@@ -242,7 +242,7 @@ namespace HIR {
         return OrdEqual;
     }
 
-    void ConstGeneric_Unevaluated::fmt(::std::ostream& os) const {
+    void ConstGenericUnevaluated::fmt(::std::ostream& os) const {
         os << "{";
         os << "0=" << this->params_impl;
         os << "1=" << this->params_item;
@@ -279,7 +279,7 @@ namespace HIR {
                 }
             } inner_os(os);
 
-            HIR_DumpExpr(inner_os, *expr);
+            HIRDumpExpr(inner_os, *expr);
         }
     }
 
@@ -307,7 +307,7 @@ namespace HIR {
 HIR::ConstGeneric HIR::ConstGeneric::clone() const {
     TU_MATCH_HDRA( (*this), {)
     TU_ARMA(Infer, e) return e;
-        TU_ARMA(Unevaluated, e) return ::std::make_unique<ConstGeneric_Unevaluated>(e->clone());
+        TU_ARMA(Unevaluated, e) return ::std::make_unique<ConstGenericUnevaluated>(e->clone());
         TU_ARMA(Generic, e) return e;
         TU_ARMA(Evaluated, e) return EncodedLiteralPtr(e->clone());
     }
@@ -331,7 +331,7 @@ bool HIR::Publicity::is_visible(const ::HIR::SimplePath& p) const {
 }
 
 ::HIR::TypeRef HIR::Function::make_ptr_ty(const Span& sp, const Monomorphiser& ms) const {
-    ::HIR::TypeData_FunctionPointer ft;
+    ::HIR::TypeDataFunctionPointer ft;
     ft.is_unsafe = this->m_unsafe;
     ft.is_variadic = this->m_variadic;
     ft.m_abi = this->m_abi;
@@ -344,7 +344,7 @@ bool HIR::Publicity::is_visible(const ::HIR::SimplePath& p) const {
 }
 
 ::HIR::TypeRef HIR::fn_ptr_tuple_constructor(const Span& sp, const Monomorphiser& ms, HIR::TypeRef ret_ty, const t_tuple_fields& fields) {
-    ::HIR::TypeData_FunctionPointer ft;
+    ::HIR::TypeDataFunctionPointer ft;
     ft.is_unsafe = false;
     ft.is_variadic = false;
     ft.m_abi = RcString::new_interned(ABI_RUST);
@@ -754,7 +754,7 @@ bool ::HIR::MarkerImpl::matches_type(const ::HIR::TypeData* type, ::HIR::t_cb_re
 
 namespace {
 
-    struct TypeOrdSpecific_MixedOrdering {};
+    struct TypeOrdSpecificMixedOrdering {};
 
     ::Ordering typelist_ord_specific(const Span& sp, const ThinVector<::HIR::TypeRef>& left, const ThinVector<::HIR::TypeRef>& right);
     ::Ordering typelist_ord_specific(const Span& sp, const ::std::vector<::HIR::TypeRef>& left, const ::std::vector<::HIR::TypeRef>& right);
@@ -788,7 +788,7 @@ namespace {
         if (right == ::OrdEqual || left == right) {
             return left;
         }
-        throw TypeOrdSpecific_MixedOrdering{};
+        throw TypeOrdSpecificMixedOrdering{};
     }
 
     ::Ordering type_ord_specific(const Span& sp, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
@@ -929,7 +929,7 @@ namespace {
             if (a != ::OrdEqual) {
                 if (rv != ::OrdEqual && a != rv) {
                     DEBUG("Inconsistent ordering between type lists - i=" << i << " [" << le << "] vs [" << re << "]");
-                    throw TypeOrdSpecific_MixedOrdering{};
+                    throw TypeOrdSpecificMixedOrdering{};
                 }
                 rv = a;
             }
@@ -945,7 +945,7 @@ namespace {
             if (a != ::OrdEqual) {
                 if (rv != ::OrdEqual && a != rv) {
                     DEBUG("Inconsistent ordering between type lists - i=" << i << " [" << le << "] vs [" << re << "]");
-                    throw TypeOrdSpecific_MixedOrdering{};
+                    throw TypeOrdSpecificMixedOrdering{};
                 }
                 rv = a;
             }
@@ -1010,7 +1010,7 @@ bool ::HIR::TraitImpl::more_specific_than(HIR::TypeInterner& types, const ::HIR:
             DEBUG("- Type " << this->m_type << " " << (ord == ::OrdLess ? "less" : "more") << " specific than " << other.m_type);
             return ord == ::OrdGreater;
         }
-    } catch (const TypeOrdSpecific_MixedOrdering& e) {
+    } catch (const TypeOrdSpecificMixedOrdering& e) {
         BUG(sp, "Mixed ordering in more_specific_than");
     }
 
@@ -1138,7 +1138,7 @@ namespace {
             ASSERT_BUG(sp, g.idx() < impl_tys.size(), "");
             if (!impl_tys[g.idx()]) {
                 DEBUG("get_type - not populated, " << g);
-                return m_types.generic(RcString(FMT("placeholder_" << &impl_tys << "_" << g.idx())), HIR::GenericRef(RcString(), HIR::GENERIC_Placeholder, g.idx()).binding);
+                return m_types.generic(RcString(FMT("placeholder_" << &impl_tys << "_" << g.idx())), HIR::GenericRef(RcString(), HIR::GENERICPlaceholder, g.idx()).binding);
             }
             return *impl_tys[g.idx()];
         }
@@ -1355,7 +1355,7 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
     try {
         type_ord_specific(sp, this->m_type, other.m_type);
         typelist_ord_specific(sp, this->m_trait_args.m_types, other.m_trait_args.m_types);
-    } catch (const TypeOrdSpecific_MixedOrdering& /*e*/) {
+    } catch (const TypeOrdSpecificMixedOrdering& /*e*/) {
         return false;
     }
 
@@ -1730,7 +1730,7 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
                 // Lazy processing can be requested from Resolve UFCS Outer,
                 // before the whole-crate Self-expansion pass has run.  Give
                 // this body and its signature the same owner substitution.
-                ConvertHIR_ExpandAliases_Self_Expr(
+                ConvertHIRExpandAliasesSelfExpr(
                     *this,
                     ep.m_state->m_current_trait_impl->m_type,
                     const_cast<::HIR::Function::args_t&>(args),
@@ -1745,8 +1745,8 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
                     ERROR(Span(), E0000, "Loop in constant evaluation");
                 }
                 ep.m_state->stage = ::HIR::ExprState::Stage::ConstEvalRequest;
-                ConvertHIR_ResolveUFCS_Expr(*this, ip, ep_mut);
-                ConvertHIR_ConstantEvaluate_Expr(*this, ip, ep_mut);
+                ConvertHIRResolveUFCSExpr(*this, ip, ep_mut);
+                ConvertHIRConstantEvaluateExpr(*this, ip, ep_mut);
                 ep.m_state->stage = ::HIR::ExprState::Stage::ConstEval;
             }
 
@@ -1768,19 +1768,19 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
                 ms.m_current_trait_impl = ep.m_state->m_current_trait_impl;
                 ms.m_traits = ep.m_state->m_traits;
                 ms.m_mod_paths.push_back(ep.m_state->m_mod_path);
-                Typecheck_Code(ms, const_cast<::HIR::Function::args_t&>(args), ret_ty, ep_mut);
+                TypecheckCode(ms, const_cast<::HIR::Function::args_t&>(args), ret_ty, ep_mut);
                 // NOTE: This is already set by the above function
                 ASSERT_BUG(Span(), ep.m_state->stage == ::HIR::ExprState::Stage::Typecheck, "Typecheck_Code didn't set stage");
             }
             if (ep.m_state->stage < ::HIR::ExprState::Stage::PostTypecheck) {
                 //Debug_SetStagePre("Expand HIR Annotate");
-                HIR_Expand_AnnotateUsage_Expr(*this, ip, ep_mut);
+                HIRExpandAnnotateUsageExpr(*this, ip, ep_mut);
                 //Debug_SetStagePre("Expand HIR Statics Mark");
-                HIR_Expand_StaticBorrowConstants_Mark_Expr(*this, ip, ep_mut);
+                HIRExpandStaticBorrowConstantsMarkExpr(*this, ip, ep_mut);
             }
             if (ep.m_state->stage < ::HIR::ExprState::Stage::Lifetimes) {
                 //Debug_SetStagePre("Expand HIR Lifetimes");
-                HIR_Expand_LifetimeInfer_Expr(*this, ip, args, ret_ty, ep_mut);
+                HIRExpandLifetimeInferExpr(*this, ip, args, ret_ty, ep_mut);
                 ep.m_state->stage = ::HIR::ExprState::Stage::Lifetimes;
             }
             if (ep.m_state->stage < ::HIR::ExprState::Stage::Sbc) {
@@ -1789,9 +1789,9 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
                 }
                 ep.m_state->stage = ::HIR::ExprState::Stage::SbcRequest;
                 //Debug_SetStagePre("Expand HIR Closures");
-                HIR_Expand_Closures_Expr(*this, ret_ty, ep_mut);
+                HIRExpandClosuresExpr(*this, ret_ty, ep_mut);
                 //Debug_SetStagePre("Expand HIR Statics");
-                HIR_Expand_StaticBorrowConstants_Expr(*this, ip, ep_mut);
+                HIRExpandStaticBorrowConstantsExpr(*this, ip, ep_mut);
             }
             if (ep.m_state->stage < ::HIR::ExprState::Stage::Expand) {
                 if (ep.m_state->stage == ::HIR::ExprState::Stage::ExpandRequest) {
@@ -1799,9 +1799,9 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
                 }
                 ep.m_state->stage = ::HIR::ExprState::Stage::ExpandRequest;
                 //Debug_SetStagePre("Expand HIR Calls");
-                HIR_Expand_UfcsEverything_Expr(*this, ep_mut, ep.m_state->m_current_trait_impl);
+                HIRExpandUfcsEverythingExpr(*this, ep_mut, ep.m_state->m_current_trait_impl);
                 //Debug_SetStagePre("Expand HIR Reborrows");
-                HIR_Expand_Reborrows_Expr(*this, ep_mut);
+                HIRExpandReborrowsExpr(*this, ep_mut);
                 //Debug_SetStagePre("Expand HIR ErasedType");
                 //HIR_Expand_ErasedType(*this, ep_mut);    // - Maybe?
                 //Typecheck_Expressions_Validate(*hir_crate);
@@ -1815,7 +1815,7 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
                 }
                 ep.m_state->stage = ::HIR::ExprState::Stage::MirRequest;
                 //Debug_SetStage("Lower MIR");
-                HIR_GenerateMIR_Expr(*this, ip, ep_mut, args, ret_ty);
+                HIRGenerateMIRExpr(*this, ip, ep_mut, args, ret_ty);
                 ep.m_state->stage = ::HIR::ExprState::Stage::Mir;
             }
             assert(ep.m_mir);
@@ -1954,7 +1954,7 @@ namespace HIR {
 // ---
 EncodedLiteral EncodedLiteral::make_usize(uint64_t v) {
     EncodedLiteral rv;
-    rv.bytes.resize(Target_GetPointerBits() / 8);
+    rv.bytes.resize(TargetGetPointerBits() / 8);
     rv.write_usize(0, v);
     return rv;
 }
@@ -1976,7 +1976,7 @@ EncodedLiteral EncodedLiteral::clone() const {
 void EncodedLiteral::write_uint(size_t ofs, size_t size, uint64_t v) {
     assert(ofs + size <= bytes.size());
     for (size_t i = 0; i < size; i++) {
-        size_t bit = (Target_GetCurSpec().m_arch.m_big_endian ? (size - 1 - i) * 8 : i * 8);
+        size_t bit = (TargetGetCurSpec().m_arch.m_big_endian ? (size - 1 - i) * 8 : i * 8);
         if (bit < 64) {
             auto b = static_cast<uint8_t>(v >> bit);
             bytes[ofs + i] = b;
@@ -1985,11 +1985,11 @@ void EncodedLiteral::write_uint(size_t ofs, size_t size, uint64_t v) {
 }
 
 void EncodedLiteral::write_usize(size_t ofs, uint64_t v) {
-    this->write_uint(ofs, Target_GetPointerBits() / 8, v);
+    this->write_uint(ofs, TargetGetPointerBits() / 8, v);
 }
 
 uint64_t EncodedLiteral::read_usize(size_t ofs) const {
-    return EncodedLiteralSlice(*this).slice(ofs).read_uint(Target_GetPointerBits() / 8).truncate_u64();
+    return EncodedLiteralSlice(*this).slice(ofs).read_uint(TargetGetPointerBits() / 8).truncate_u64();
 }
 
 U128 EncodedLiteralSlice::read_uint(size_t size /*=0*/) const {
@@ -1999,7 +1999,7 @@ U128 EncodedLiteralSlice::read_uint(size_t size /*=0*/) const {
     ASSERT_BUG(Span(), size <= m_size, "Over-large read (" << size << " > " << m_size << ")");
     U128 v(0);
     for (size_t i = 0; i < size; i++) {
-        size_t bit = (Target_GetCurSpec().m_arch.m_big_endian ? (size - 1 - i) * 8 : i * 8);
+        size_t bit = (TargetGetCurSpec().m_arch.m_big_endian ? (size - 1 - i) * 8 : i * 8);
         if (bit < 128) {
             v |= U128(m_base.bytes[m_ofs + i]) << bit;
         }

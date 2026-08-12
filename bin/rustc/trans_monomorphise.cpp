@@ -8,10 +8,10 @@
 namespace {
     class Cloner: public ::MIR::Cloner {
         const ::StaticTraitResolve& m_resolve;
-        const Trans_Params& params;
+        const TransParams& params;
 
     public:
-        Cloner(const Span& sp, const ::StaticTraitResolve& resolve, const Trans_Params& params)
+        Cloner(const Span& sp, const ::StaticTraitResolve& resolve, const TransParams& params)
             : ::MIR::Cloner(sp, resolve.m_crate.m_types)
             , m_resolve(resolve)
             , params(params)
@@ -41,7 +41,7 @@ namespace {
     };
 }
 
-::MIR::FunctionPointer Trans_Monomorphise(const ::StaticTraitResolve& resolve, const Trans_Params& params, const ::MIR::FunctionPointer& tpl) {
+::MIR::FunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const TransParams& params, const ::MIR::FunctionPointer& tpl) {
     static Span sp;
     TRACE_FUNCTION;
     assert(tpl);
@@ -90,7 +90,7 @@ namespace {
 }
 
 /// Monomorphise all functions in a TransList
-void Trans_Monomorphise_List(const ::HIR::Crate& crate, TransList& list, unsigned mir_opt_level) {
+void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned mir_opt_level) {
     ::StaticTraitResolve resolve{crate};
 
     struct Nvs: public ::HIR::Evaluator::Newval {
@@ -201,7 +201,7 @@ void Trans_Monomorphise_List(const ::HIR::Crate& crate, TransList& list, unsigne
             }
             resolve.set_both_generics_raw(pp.gdef_impl, &fcn.m_params);
 
-            auto mir = Trans_Monomorphise(resolve, fcn_ent.second->pp, fcn.m_code.m_mir);
+            auto mir = TransMonomorphise(resolve, fcn_ent.second->pp, fcn.m_code.m_mir);
 
             // TODO: Should these be moved to their own pass? Potentially not, the extra pass should just be an inlining optimise pass
             auto ret_type = pp.monomorph(resolve, fcn.m_return);
@@ -212,14 +212,14 @@ void Trans_Monomorphise_List(const ::HIR::Crate& crate, TransList& list, unsigne
 
             //::std::string s = FMT(path);
             ::HIR::ItemPath ip(path);
-            MIR_Validate(resolve, ip, *mir, args, ret_type);
-            MIR_Cleanup(resolve, ip, *mir, args, ret_type);
+            MIRValidate(resolve, ip, *mir, args, ret_type);
+            MIRCleanup(resolve, ip, *mir, args, ret_type);
             if (mir_opt_level == 0) {
-                MIR_OptimiseMin(resolve, ip, *mir, args, ret_type);
+                MIROptimiseMin(resolve, ip, *mir, args, ret_type);
             } else {
-                MIR_Optimise(resolve, ip, *mir, args, ret_type, mir_opt_level, /*do_inline*/ false);
+                MIROptimise(resolve, ip, *mir, args, ret_type, mir_opt_level, /*do_inline*/ false);
             }
-            MIR_Validate(resolve, ip, *mir, args, ret_type);
+            MIRValidate(resolve, ip, *mir, args, ret_type);
 
             fcn_ent.second->monomorphised.ret_ty = ::std::move(ret_type);
             fcn_ent.second->monomorphised.arg_tys = ::std::move(args);

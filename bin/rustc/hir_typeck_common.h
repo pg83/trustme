@@ -78,4 +78,4 @@ namespace typeck {
 }
 
 class StaticTraitResolve;
-extern void Typecheck_Expressions_ValidateOne(const StaticTraitResolve& resolve, const ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args, const ::HIR::TypeData* ret_ty, const ::HIR::ExprPtr& code);
+extern void TypecheckExpressionsValidateOne(const StaticTraitResolve& resolve, const ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args, const ::HIR::TypeData* ret_ty, const ::HIR::ExprPtr& code);

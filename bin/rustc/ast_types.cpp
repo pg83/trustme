@@ -12,7 +12,7 @@ TAGGED_UNION_OUT_OF_LINE_IMPL(
     (Unit, struct {}),
     (Macro, struct { ::std::unique_ptr<::AST::MacroInvocation> inv; }),
     (Primitive, struct { enum eCoreType core_type; }),
-    (Function, struct { Type_Function info; }),
+    (Function, struct { TypeFunction info; }),
     (Tuple, struct { ::std::vector<TypeRef> inner_types; }),
     (Borrow,
      struct {
@@ -39,10 +39,10 @@ TAGGED_UNION_OUT_OF_LINE_IMPL(
     (Path, ::std::unique_ptr<AST::Path>),
     (TraitObject,
      struct {
-         ::std::vector<Type_TraitPath> traits;
+         ::std::vector<TypeTraitPath> traits;
          ::std::vector<AST::LifetimeRef> lifetimes;
      }),
-    (ErasedType, std::unique_ptr<Type_ErasedType>)
+    (ErasedType, std::unique_ptr<TypeErasedType>)
 );
 
 /// Mappings from internal type names to the core type enum
@@ -85,9 +85,9 @@ bool AST::HigherRankedBounds::empty() const {
     return m_lifetimes.empty();
 }
 
-Type_Function::Type_Function() = default;
+TypeFunction::TypeFunction() = default;
 
-Type_Function::Type_Function(AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool is_variadic)
+TypeFunction::TypeFunction(AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool is_variadic)
     : hrbs(mv$(hrbs))
     , is_unsafe(is_unsafe)
     , m_abi(mv$(abi))
@@ -97,8 +97,8 @@ Type_Function::Type_Function(AST::HigherRankedBounds hrbs, bool is_unsafe, ::std
 {
 }
 
-Type_Function::~Type_Function() = default;
-Type_Function::Type_Function(Type_Function&&) = default;
+TypeFunction::~TypeFunction() = default;
+TypeFunction::TypeFunction(TypeFunction&&) = default;
 
 enum eCoreType coretype_fromstring(const char* name) {
     for (unsigned int i = 0; i < sizeof(CORETYPES) / sizeof(CORETYPES[0]); i++) {
@@ -162,7 +162,7 @@ const char* coretype_name(const eCoreType ct) {
     return "NFI";
 }
 
-Type_Function::Type_Function(const Type_Function& other)
+TypeFunction::TypeFunction(const TypeFunction& other)
     : hrbs(other.hrbs)
     , is_unsafe(other.is_unsafe)
     , m_abi(other.m_abi)
@@ -174,7 +174,7 @@ Type_Function::Type_Function(const Type_Function& other)
     }
 }
 
-Ordering Type_Function::ord(const Type_Function& x) const {
+Ordering TypeFunction::ord(const TypeFunction& x) const {
     Ordering rv;
 
     rv = ::ord(m_abi, x.m_abi);
@@ -248,32 +248,32 @@ TypeRef TypeRef::clone() const {
             _COPY(Generic)
             _CLONE(Path, std::make_unique<AST::Path>(*old))
             _COPY(TraitObject)
-            _CLONE(ErasedType, std::make_unique<Type_ErasedType>(Type_ErasedType{old->traits, old->maybe_traits, old->lifetimes, old->use ? box$(*old->use) : ::std::unique_ptr<AST::PathParams>(), old->is_edition_2024_or_later}))
+            _CLONE(ErasedType, std::make_unique<TypeErasedType>(TypeErasedType{old->traits, old->maybe_traits, old->lifetimes, old->use ? box$(*old->use) : ::std::unique_ptr<AST::PathParams>(), old->is_edition_2024_or_later}))
 #undef _COPY
 #undef _CLONE
     }
     throw "";
 }
 
-Type_TraitPath::Type_TraitPath(AST::HigherRankedBounds hrbs, AST::Path path, AST::BoundConstness constness)
+TypeTraitPath::TypeTraitPath(AST::HigherRankedBounds hrbs, AST::Path path, AST::BoundConstness constness)
     : hrbs(mv$(hrbs))
     , path(box$(path))
     , constness(constness)
 {
 }
 
-Type_TraitPath::Type_TraitPath() = default;
-Type_TraitPath::~Type_TraitPath() = default;
-Type_TraitPath::Type_TraitPath(Type_TraitPath&&) = default;
+TypeTraitPath::TypeTraitPath() = default;
+TypeTraitPath::~TypeTraitPath() = default;
+TypeTraitPath::TypeTraitPath(TypeTraitPath&&) = default;
 
-Type_TraitPath::Type_TraitPath(const Type_TraitPath& x)
+TypeTraitPath::TypeTraitPath(const TypeTraitPath& x)
     : hrbs(x.hrbs)
     , path(std::make_unique<AST::Path>(*x.path))
     , constness(x.constness)
 {
 }
 
-Ordering Type_TraitPath::ord(const Type_TraitPath& x) const {
+Ordering TypeTraitPath::ord(const TypeTraitPath& x) const {
     Ordering rv;
 
     rv = ::ord(static_cast<unsigned>(this->constness), static_cast<unsigned>(x.constness));
@@ -470,7 +470,7 @@ TypeRef::TypeRef(TagTuple, Span sp, ::std::vector<TypeRef> inner_types)
 }
 TypeRef::TypeRef(TagFunction, Span sp, AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::vector<TypeRef> args, bool is_variadic, TypeRef ret)
     : m_span(mv$(sp))
-    , m_data(TypeData::make_Function({Type_Function(mv$(hrbs), is_unsafe, abi, box$(ret), mv$(args), is_variadic)})) {
+    , m_data(TypeData::make_Function({TypeFunction(mv$(hrbs), is_unsafe, abi, box$(ret), mv$(args), is_variadic)})) {
 }
 TypeRef::TypeRef(TagReference, Span sp, AST::LifetimeRef lft, bool is_mut, TypeRef inner_type)
     : m_span(mv$(sp))
@@ -495,7 +495,7 @@ TypeRef::TypeRef(TagArg, Span sp, RcString name, unsigned int binding)
 TypeRef::TypeRef(Span sp, RcString name, unsigned int binding)
     : TypeRef(TagArg(), mv$(sp), mv$(name), binding) {
 }
-TypeRef::TypeRef(Span sp, ::std::vector<Type_TraitPath> traits, ::std::vector<AST::LifetimeRef> lifetimes)
+TypeRef::TypeRef(Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<AST::LifetimeRef> lifetimes)
     : m_span(mv$(sp))
     , m_data(TypeData::make_TraitObject({::std::move(traits), mv$(lifetimes)})) {
 }

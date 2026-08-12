@@ -948,4 +948,4 @@ namespace HIR {
 
 }
 
-void HIR_DumpExpr(::std::ostream& sink, const ::HIR::ExprPtr& expr);
+void HIRDumpExpr(::std::ostream& sink, const ::HIR::ExprPtr& expr);

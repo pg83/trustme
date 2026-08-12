@@ -26,9 +26,9 @@ namespace {
         return AST::AbsolutePath(sp.crate_name(), sp.components_vec());
     }
 
-    ResolveItemRef_Type as_Namespace(ResolveItemRef ir) {
+    ResolveItemRefType as_Namespace(ResolveItemRef ir) {
         if (ir.is_None()) {
-            return ResolveItemRef_Type::make_None({});
+            return ResolveItemRefType::make_None({});
         }
         return std::move(ir.as_Namespace());
     }
@@ -501,11 +501,11 @@ namespace {
                                 BUG(sp, "macro_imports_res had a None entry");
                             }
                             TU_ARMA(MacroRules, me)
-                            return ResolveItemRef_Macro(me);
+                            return ResolveItemRefMacro(me);
                             TU_ARMA(BuiltinProcMacro, me)
-                            return ResolveItemRef_Macro(me);
+                            return ResolveItemRefMacro(me);
                             TU_ARMA(ExternalProcMacro, me)
-                            return ResolveItemRef_Macro(me);
+                            return ResolveItemRefMacro(me);
                         }
                     }
                 }
@@ -536,22 +536,22 @@ namespace {
                         case ResolveNamespace::Macro:
                             if (const auto* mac = i->data.opt_Macro()) {
                                 if (i->attrs.get("rustc_builtin_macro")) {
-                                    auto* rv = Expand_FindProcMacro(name);
+                                    auto* rv = ExpandFindProcMacro(name);
                                     if (rv) {
-                                        return ResolveItemRef_Macro(rv);
+                                        return ResolveItemRefMacro(rv);
                                     }
                                     // HACK: Ignore, as there's references to the `Debug` macro... but mrustc doesn't do things that way
                                     // - Probably should have derives be in the same namespace as macros
                                     //ASSERT_BUG(sp, rv, "Unable to find rustc_builtin_macro: " << name);
                                 }
-                                return ResolveItemRef_Macro(&**mac);
+                                return ResolveItemRefMacro(&**mac);
                             }
                             DEBUG("- Ignoring macro");
                             break;
                         case ResolveNamespace::Namespace:
-                            return ResolveItemRef_Type(&i->data);
+                            return ResolveItemRefType(&i->data);
                         case ResolveNamespace::Value:
-                            return ResolveItemRef_Value(&i->data);
+                            return ResolveItemRefValue(&i->data);
                     }
                 }
 
@@ -570,7 +570,7 @@ namespace {
                                         out_path->crate = pe.crate;
                                         out_path->nodes = make_vec1<RcString>(RcString(pe.nodes.front().name()));
                                     }
-                                    return ResolveItemRef_Macro(Expand_FindProcMacro(pe.nodes.front().name()));
+                                    return ResolveItemRefMacro(ExpandFindProcMacro(pe.nodes.front().name()));
                                 }
                             }
                             if (e.path.m_class.is_Absolute() && e.path.m_class.as_Absolute().nodes.empty()) {
@@ -582,13 +582,13 @@ namespace {
                                             if (out_path) {
                                                 *out_path = tmp;
                                             }
-                                            return ResolveItemRef_Type::make_AstRoot(mod_ptr);
+                                            return ResolveItemRefType::make_AstRoot(mod_ptr);
                                         }
                                         TU_ARMA(Hir, mod_ptr) {
                                             if (out_path) {
                                                 *out_path = tmp;
                                             }
-                                            return ResolveItemRef_Type::make_HirRoot(&*crate.m_extern_crates.at(tmp.crate).m_hir);
+                                            return ResolveItemRefType::make_HirRoot(&*crate.m_extern_crates.at(tmp.crate).m_hir);
                                         }
                                         TU_ARMA(ImplicitPrelude, _e) {
                                             TODO(sp, "ImplicitPrelude?");
@@ -630,7 +630,7 @@ namespace {
                                                 out_path->crate = ec_it->second;
                                                 out_path->nodes.clear();
                                             }
-                                            return ResolveItemRef_Type(&*crate.m_extern_crates.at(ec_it->second).m_hir);
+                                            return ResolveItemRefType(&*crate.m_extern_crates.at(ec_it->second).m_hir);
                                         }
                                         TODO(sp, "ImplicitPrelude?");
                                     }
@@ -736,7 +736,7 @@ namespace {
                             }
                             const auto& ext_crate = H::get_crate(sp, crate, p->path);
                             if (p->path.components().empty()) {
-                                return ResolveItemRef_Type(&ext_crate);
+                                return ResolveItemRefType(&ext_crate);
                             }
                             ti = &ext_crate.get_typeitem_by_path(sp, p->path, true);
                         } else {
@@ -746,7 +746,7 @@ namespace {
                             ti = &it->second->ent;
                         }
                         ASSERT_BUG(sp, !ti->is_Import(), "Recursive namespace import in HIR: " << it->second->ent.as_Import().path << " pointed to " << ti->as_Import().path);
-                        return ResolveItemRef_Type(ti);
+                        return ResolveItemRefType(ti);
                     }
                 } break;
                 case ResolveNamespace::Value: {
@@ -766,7 +766,7 @@ namespace {
                             vi = &it->second->ent;
                         }
                         ASSERT_BUG(sp, !vi->is_Import(), "Recursive value import in HIR: " << it->second->ent.as_Import().path << " pointed to " << vi->as_Import().path);
-                        return ResolveItemRef_Value(vi);
+                        return ResolveItemRefValue(vi);
                     }
                 } break;
                 case ResolveNamespace::Macro: {
@@ -784,10 +784,10 @@ namespace {
                             }
 
                             struct H2 {
-                                static ResolveItemRef_Macro get_builtin(const Span& sp, const RcString& name) {
+                                static ResolveItemRefMacro get_builtin(const Span& sp, const RcString& name) {
                                     // TODO: What if it's a derive? Or it's an attribute
-                                    if (auto* pm = Expand_FindProcMacro(name)) {
-                                        return ResolveItemRef_Macro(pm);
+                                    if (auto* pm = ExpandFindProcMacro(name)) {
+                                        return ResolveItemRefMacro(pm);
                                     }
                                     //if( /*auto* pm =*/ Expand_FindDecorator(name) ) {
                                     //    TODO(sp, "Resolve HIR import to decorator");
@@ -827,10 +827,10 @@ namespace {
                                 BUG(sp, "Recursive macro import in HIR: " << it->second->ent.as_Import().path << " pointed to " << me.path);
                             }
                             TU_ARMA(MacroRules, me) {
-                                return ResolveItemRef_Macro(&*me);
+                                return ResolveItemRefMacro(&*me);
                             }
                             TU_ARMA(ProcMacro, me) {
-                                return ResolveItemRef_Macro(&me);
+                                return ResolveItemRefMacro(&me);
                             }
                     }
                     }
@@ -845,13 +845,13 @@ namespace {
 // TODO: Function that turns a relative path into a canonical absolute path to the containing module
 // - This should check if the index has been populated, and use it if present.
 // - NOTE: Can only go to the containing module, not to the item itself - `use` can end up importing disparate paths for all three namespaces.
-ResolveModuleRef Resolve_Lookup_GetModule(const Span& sp, const AST::Crate& crate, const ::AST::Path& base_path, ::AST::Path path, bool ignore_last, ::AST::AbsolutePath* out_path) {
+ResolveModuleRef ResolveLookupGetModule(const Span& sp, const AST::Crate& crate, const ::AST::Path& base_path, ::AST::Path path, bool ignore_last, ::AST::AbsolutePath* out_path) {
     ResolveState rs(sp, crate);
 
     return rs.get_module(base_path, path, ignore_last, out_path);
 }
 
-ResolveItemRef_Macro Resolve_Lookup_Macro(const Span& span, const AST::Crate& crate, const ::AST::Path& base_path, ::AST::Path path, ::AST::AbsolutePath* out_path) {
+ResolveItemRefMacro ResolveLookupMacro(const Span& span, const AST::Crate& crate, const ::AST::Path& base_path, ::AST::Path path, ::AST::AbsolutePath* out_path) {
     TRACE_FUNCTION_F("path=" << path << " in " << base_path);
     ResolveState rs(span, crate);
 
@@ -865,7 +865,7 @@ ResolveItemRef_Macro Resolve_Lookup_Macro(const Span& span, const AST::Crate& cr
     TU_ARMA(Ast, mod_ptr) {
             auto rv = rs.find_item(*mod_ptr, item_name, ResolveNamespace::Macro, out_path);
             if (rv.is_None()) {
-                return ResolveItemRef_Macro::make_None({});
+                return ResolveItemRefMacro::make_None({});
             }
             ASSERT_BUG(span, rv.is_Macro(), rv.tag_str());
             return std::move(rv.as_Macro());
@@ -881,26 +881,26 @@ ResolveItemRef_Macro Resolve_Lookup_Macro(const Span& span, const AST::Crate& cr
             }
             auto rv = rs.find_item_hir(*mod_ptr, item_name, ResolveNamespace::Macro, out_path, vis_path);
             if (rv.is_None()) {
-                return ResolveItemRef_Macro::make_None({});
+                return ResolveItemRefMacro::make_None({});
             }
             ASSERT_BUG(span, rv.is_Macro(), rv.tag_str());
             return std::move(rv.as_Macro());
         }
         TU_ARMA(ImplicitPrelude, _e) {
             // This isn't a macro, so return `None`
-            return ResolveItemRef_Macro::make_None({});
+            return ResolveItemRefMacro::make_None({});
         }
         TU_ARMA(None, e) {
-            return ResolveItemRef_Macro::make_None({});
+            return ResolveItemRefMacro::make_None({});
         }
     }
     // Technically a bug to reach this point.
-    return ResolveItemRef_Macro::make_None({});
+    return ResolveItemRefMacro::make_None({});
 }
 
 /// Returns the source module for the specified name
 // NOTE: Name resolution
-ResolveModuleRef Resolve_Lookup_GetModuleForName(const Span& sp, const AST::Crate& crate, const ::AST::Path& base_path, const ::AST::Path& path, ResolveNamespace ns, ::AST::AbsolutePath* out_path) {
+ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const AST::Crate& crate, const ::AST::Path& base_path, const ::AST::Path& path, ResolveNamespace ns, ::AST::AbsolutePath* out_path) {
     TRACE_FUNCTION_F("path=" << path << " in " << base_path);
     ResolveState rs(sp, crate);
 

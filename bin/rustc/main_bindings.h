@@ -18,9 +18,9 @@ namespace HIR {
 }
 
 /// Parse a crate from the given file
-extern AST::Crate* Parse_Crate(stl::ObjPool* pool, HIR::TypeInterner& types, ::std::string mainfile, AST::Edition edition);
+extern AST::Crate* ParseCrate(stl::ObjPool* pool, HIR::TypeInterner& types, ::std::string mainfile, AST::Edition edition);
 
-extern void Expand_Init();
+extern void ExpandInit();
 extern void Expand(::AST::Crate& crate);
-extern void Expand_TestHarness(::AST::Crate& crate);
-extern void Expand_ProcMacro(::AST::Crate& crate);
+extern void ExpandTestHarness(::AST::Crate& crate);
+extern void ExpandProcMacroHarness(::AST::Crate& crate);

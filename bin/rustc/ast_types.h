@@ -61,7 +61,7 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const PrettyPrintType& v);
 };
 
-struct Type_Function {
+struct TypeFunction {
     AST::HigherRankedBounds hrbs;
     bool is_unsafe;
     ::std::string m_abi;
@@ -69,32 +69,32 @@ struct Type_Function {
     ::std::vector<TypeRef> m_arg_types;
     bool is_variadic;
 
-    Type_Function();
-    Type_Function(AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool is_variadic);
-    ~Type_Function();
-    Type_Function(Type_Function&& other);
-    Type_Function(const Type_Function& other);
+    TypeFunction();
+    TypeFunction(AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool is_variadic);
+    ~TypeFunction();
+    TypeFunction(TypeFunction&& other);
+    TypeFunction(const TypeFunction& other);
 
-    Ordering ord(const Type_Function& x) const;
+    Ordering ord(const TypeFunction& x) const;
 };
 
-struct Type_TraitPath {
+struct TypeTraitPath {
     AST::HigherRankedBounds hrbs;
     ::std::unique_ptr<AST::Path> path;
     AST::BoundConstness constness = AST::BoundConstness::Never;
 
-    Type_TraitPath();
-    Type_TraitPath(AST::HigherRankedBounds hrbs, AST::Path path, AST::BoundConstness constness = AST::BoundConstness::Never);
-    ~Type_TraitPath();
-    Type_TraitPath(Type_TraitPath&&);
-    Type_TraitPath(const Type_TraitPath&);
+    TypeTraitPath();
+    TypeTraitPath(AST::HigherRankedBounds hrbs, AST::Path path, AST::BoundConstness constness = AST::BoundConstness::Never);
+    ~TypeTraitPath();
+    TypeTraitPath(TypeTraitPath&&);
+    TypeTraitPath(const TypeTraitPath&);
 
-    Ordering ord(const Type_TraitPath& x) const;
+    Ordering ord(const TypeTraitPath& x) const;
 };
 
-struct Type_ErasedType {
-    ::std::vector<Type_TraitPath> traits;
-    ::std::vector<Type_TraitPath> maybe_traits;
+struct TypeErasedType {
+    ::std::vector<TypeTraitPath> traits;
+    ::std::vector<TypeTraitPath> maybe_traits;
     ::std::vector<AST::LifetimeRef> lifetimes;
     ::std::unique_ptr<AST::PathParams> use;
     /// Was this `impl` from 2024 or later edition? This changes the behaviour if `use` is not present
@@ -110,7 +110,7 @@ TAGGED_UNION_OUT_OF_LINE(
     (Unit, struct {}),
     (Macro, struct { ::std::unique_ptr<::AST::MacroInvocation> inv; }),
     (Primitive, struct { enum eCoreType core_type; }),
-    (Function, struct { Type_Function info; }),
+    (Function, struct { TypeFunction info; }),
     (Tuple, struct { ::std::vector<TypeRef> inner_types; }),
     (Borrow,
      struct {
@@ -138,10 +138,10 @@ TAGGED_UNION_OUT_OF_LINE(
     (Path, ::std::unique_ptr<AST::Path>),
     (TraitObject,
      struct {
-         ::std::vector<Type_TraitPath> traits;
+         ::std::vector<TypeTraitPath> traits;
          ::std::vector<AST::LifetimeRef> lifetimes;
      }),
-    (ErasedType, std::unique_ptr<Type_ErasedType>)
+    (ErasedType, std::unique_ptr<TypeErasedType>)
 );
 
 /// A type
@@ -229,7 +229,7 @@ public:
     TypeRef(TagPath, Span sp, AST::Path path);
     TypeRef(Span sp, AST::Path path);
 
-    TypeRef(Span sp, ::std::vector<Type_TraitPath> traits, ::std::vector<AST::LifetimeRef> lifetimes);
+    TypeRef(Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<AST::LifetimeRef> lifetimes);
 
     const Span& span() const {
         return m_span;

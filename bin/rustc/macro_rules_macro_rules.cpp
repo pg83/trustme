@@ -169,8 +169,8 @@ public:
 };
 
 // === Prototypes ===
-unsigned int Macro_InvokeRules_MatchPattern(const Span& sp, const MacroRules& rules, TokenTree input, const AST::Crate& crate, AST::Module& mod, ParameterMappings& bound_tts);
-void Macro_InvokeRules_CountSubstUses(ParameterMappings& bound_tts, const ::std::vector<MacroExpansionEnt>& contents);
+unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rules, TokenTree input, const AST::Crate& crate, AST::Module& mod, ParameterMappings& bound_tts);
+void MacroInvokeRulesCountSubstUses(ParameterMappings& bound_tts, const ::std::vector<MacroExpansionEnt>& contents);
 
 // ------------------------------------
 // ParameterMappings
@@ -497,10 +497,10 @@ public:
 unsigned MacroExpander::s_next_log_index = 0;
 unsigned int MacroRules::g_next_definition_id = 0;
 
-void Macro_InitDefaults() {
+void MacroInitDefaults() {
 }
 
-InterpolatedFragment Macro_HandlePatternCap(TokenStream& lex, MacroPatEnt::Type type, bool stmt_is_item) {
+InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type type, bool stmt_is_item) {
     Token tok;
     switch (type) {
         case MacroPatEnt::PAT_TOKEN:
@@ -514,15 +514,15 @@ InterpolatedFragment Macro_HandlePatternCap(TokenStream& lex, MacroPatEnt::Type 
             } else {
                 PUTBACK(tok, lex);
             }
-            return InterpolatedFragment(Parse_TT(lex, false));
+            return InterpolatedFragment(ParseTT(lex, false));
         case MacroPatEnt::PAT_PAT:
             // TODO: Is this edition check correct? Or should it be uncondiitonally "Yes"?
             //return InterpolatedFragment( Parse_Pattern(lex, lex.edition_after(AST::Edition::Rust2021) ? AllowOrPattern::Yes : AllowOrPattern::No) );
-            return InterpolatedFragment(Parse_Pattern(lex, AllowOrPattern::Yes));
+            return InterpolatedFragment(ParsePattern(lex, AllowOrPattern::Yes));
         case MacroPatEnt::PAT_TYPE:
-            return InterpolatedFragment(Parse_Type(lex));
+            return InterpolatedFragment(ParseType(lex));
         case MacroPatEnt::PAT_EXPR:
-            return InterpolatedFragment(InterpolatedFragment::EXPR, Parse_Expr0(lex).release());
+            return InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release());
         case MacroPatEnt::PAT_STMT:
             if (stmt_is_item) {
                 if (lex.lookahead(0) == TOK_INTERPOLATED_STMT_ITEM) {
@@ -531,23 +531,23 @@ InterpolatedFragment Macro_HandlePatternCap(TokenStream& lex, MacroPatEnt::Type 
                 }
                 assert(lex.parse_state().module);
                 const auto& cur_mod = *lex.parse_state().module;
-                return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, Parse_Mod_Item_S(lex, cur_mod.m_file_info, cur_mod.path(), AST::AttributeList{}));
+                return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, ParseModItemS(lex, cur_mod.m_file_info, cur_mod.path(), AST::AttributeList{}));
             }
-            return InterpolatedFragment(InterpolatedFragment::STMT, Parse_Stmt(lex).release());
+            return InterpolatedFragment(InterpolatedFragment::STMT, ParseStmt(lex).release());
         case MacroPatEnt::PAT_PATH:
             // HACK for `rustc-1.90.0-src/vendor/icu_locid_transform_data-1.5.0/data/macros.rs::23`
             if (lex.lookahead(0) == TOK_INTERPOLATED_TYPE) {
                 return InterpolatedFragment(std::move(lex.getToken().frag_type()));
             }
-            return InterpolatedFragment(Parse_Path(lex, PATH_GENERIC_TYPE)); // non-expr mode
+            return InterpolatedFragment(ParsePath(lex, PATH_GENERIC_TYPE)); // non-expr mode
         case MacroPatEnt::PAT_BLOCK:
-            return InterpolatedFragment(InterpolatedFragment::BLOCK, Parse_ExprBlockNode(lex).release());
+            return InterpolatedFragment(InterpolatedFragment::BLOCK, ParseExprBlockNode(lex).release());
         case MacroPatEnt::PAT_META:
-            return InterpolatedFragment(Parse_MetaItem(lex));
+            return InterpolatedFragment(ParseMetaItem(lex));
         case MacroPatEnt::PAT_ITEM: {
             assert(lex.parse_state().module);
             const auto& cur_mod = *lex.parse_state().module;
-            return InterpolatedFragment(Parse_Mod_Item_S(lex, cur_mod.m_file_info, cur_mod.path(), AST::AttributeList{}));
+            return InterpolatedFragment(ParseModItemS(lex, cur_mod.m_file_info, cur_mod.path(), AST::AttributeList{}));
         } break;
         case MacroPatEnt::PAT_IDENT:
             // NOTE: Any reserved word is also valid as an ident
@@ -559,7 +559,7 @@ InterpolatedFragment Macro_HandlePatternCap(TokenStream& lex, MacroPatEnt::Type 
                 return InterpolatedFragment(TokenTree(lex.get_edition(), lex.get_hygiene(), tok));
             }
         case MacroPatEnt::PAT_VIS:
-            return InterpolatedFragment(Parse_Publicity(lex, /*allow_restricted=*/true));
+            return InterpolatedFragment(ParsePublicity(lex, /*allow_restricted=*/true));
         case MacroPatEnt::PAT_LIFETIME:
             GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
             return InterpolatedFragment(TokenTree(lex.get_edition(), lex.get_hygiene(), tok));
@@ -597,13 +597,13 @@ InterpolatedFragment Macro_HandlePatternCap(TokenStream& lex, MacroPatEnt::Type 
 }
 
 /// Parse the input TokenTree according to the `macro_rules!` patterns and return a token stream of the replacement
-::std::unique_ptr<TokenStream> Macro_InvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, TokenTree input, const AST::Crate& crate, AST::Module& mod) {
+::std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, TokenTree input, const AST::Crate& crate, AST::Module& mod) {
     TRACE_FUNCTION_F("'" << name << "', " << input);
     DEBUG("rules.m_source_crate = " << rules.m_source_crate);
     DEBUG("rules.m_hygiene = " << rules.m_hygiene);
 
     ParameterMappings bound_tts;
-    unsigned int rule_index = Macro_InvokeRules_MatchPattern(sp, rules, mv$(input), crate, mod, bound_tts);
+    unsigned int rule_index = MacroInvokeRulesMatchPattern(sp, rules, mv$(input), crate, mod, bound_tts);
 
     const auto& rule = rules.m_rules.at(rule_index);
 
@@ -614,7 +614,7 @@ InterpolatedFragment Macro_HandlePatternCap(TokenStream& lex, MacroPatEnt::Type 
     //bound_tts.dump();
 
     // Run through the expansion counting the number of times each fragment is used
-    Macro_InvokeRules_CountSubstUses(bound_tts, rule.m_contents);
+    MacroInvokeRulesCountSubstUses(bound_tts, rule.m_contents);
 
     TokenStream* ret_ptr = new MacroExpander(name, sp, crate.m_edition, rules.m_is_macro_item, rules.m_definition_id, rules.m_hygiene, rule.m_contents, mv$(bound_tts), rules.m_source_crate == "" ? crate.m_crate_name_real : rules.m_source_crate, rules.m_edition);
 
@@ -2033,7 +2033,7 @@ namespace {
     }
 }
 
-unsigned int Macro_InvokeRules_MatchPattern(const Span& sp, const MacroRules& rules, TokenTree input, const AST::Crate& crate, AST::Module& mod, ParameterMappings& bound_tts) {
+unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rules, TokenTree input, const AST::Crate& crate, AST::Module& mod, ParameterMappings& bound_tts) {
     TRACE_FUNCTION_F(rules.m_rules.size() << " options");
     ASSERT_BUG(sp, rules.m_rules.size() > 0, "Empty macro_rules set");
 
@@ -2166,7 +2166,7 @@ unsigned int Macro_InvokeRules_MatchPattern(const Span& sp, const MacroRules& ru
                     ASSERT_BUG(sp, stmt_capture_index < stmt_is_item_history.size(), "Missing statement fragment classification");
                     stmt_is_item = stmt_is_item_history[stmt_capture_index++];
                 }
-                auto cap = Macro_HandlePatternCap(lex, e->type, stmt_is_item);
+                auto cap = MacroHandlePatternCap(lex, e->type, stmt_is_item);
 
                 unsigned int cap_idx = captures.size();
                 captures.push_back(mv$(cap));
@@ -2185,7 +2185,7 @@ unsigned int Macro_InvokeRules_MatchPattern(const Span& sp, const MacroRules& ru
     }
 }
 
-void Macro_InvokeRules_CountSubstUses(ParameterMappings& bound_tts, const ::std::vector<MacroExpansionEnt>& contents) {
+void MacroInvokeRulesCountSubstUses(ParameterMappings& bound_tts, const ::std::vector<MacroExpansionEnt>& contents) {
     TRACE_FUNCTION;
     MacroExpandState state(contents, bound_tts);
 
@@ -2860,7 +2860,7 @@ MacroRulesArm::~MacroRulesArm() {
 }
 
 
-MacroRulesPtr Parse_MacroRules(TokenStream& lex);
+MacroRulesPtr ParseMacroRules(TokenStream& lex);
 
 namespace {
     ::std::vector<SimplePatEnt> macro_pattern_to_simple(const Span& sp, const ::std::vector<MacroPatEnt>& pattern);
@@ -2936,7 +2936,7 @@ public:
 };
 
 /// Parse the pattern of a macro_rules! arm
-::std::vector<MacroPatEnt> Parse_MacroRules_Pat(TokenStream& lex, enum eTokenType open, enum eTokenType close, RuleParseState& state) {
+::std::vector<MacroPatEnt> ParseMacroRulesPat(TokenStream& lex, enum eTokenType open, enum eTokenType close, RuleParseState& state) {
     TRACE_FUNCTION;
     Token tok;
 
@@ -3019,7 +3019,7 @@ public:
                     }
                     case TOK_PAREN_OPEN: {
                         auto loop_idx = state.open_loop();
-                        auto subpat = Parse_MacroRules_Pat(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state);
+                        auto subpat = ParseMacroRulesPat(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state);
                         state.close_loop();
 
                         enum eTokenType joiner = TOK_NULL;
@@ -3095,7 +3095,7 @@ struct ContentLoopVariableUse {
 };
 
 /// Parse the contents (replacement) of a macro_rules! arm
-::std::vector<MacroExpansionEnt> Parse_MacroRules_Cont(TokenStream& lex, enum eTokenType open, enum eTokenType close, const RuleParseState& state, unsigned loop_depth = 0, ::std::map<unsigned int, ContentLoopVariableUse>* var_usage_ptr = nullptr) {
+::std::vector<MacroExpansionEnt> ParseMacroRulesCont(TokenStream& lex, enum eTokenType open, enum eTokenType close, const RuleParseState& state, unsigned loop_depth = 0, ::std::map<unsigned int, ContentLoopVariableUse>* var_usage_ptr = nullptr) {
     TRACE_FUNCTION;
 
     Token tok;
@@ -3131,7 +3131,7 @@ struct ContentLoopVariableUse {
             // `$(`
             if (tok.type() == TOK_PAREN_OPEN) {
                 ::std::map<unsigned int, ContentLoopVariableUse> var_usage;
-                auto content = Parse_MacroRules_Cont(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state, loop_depth + 1, &var_usage);
+                auto content = ParseMacroRulesCont(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state, loop_depth + 1, &var_usage);
                 // ^^ The above will eat the PAREN_CLOSE
                 DEBUG("var_usage = {" << var_usage << "}");
 
@@ -3353,7 +3353,7 @@ struct ContentLoopVariableUse {
 }
 
 /// Parse a single arm of a macro_rules! block - `(foo) => (bar)`
-MacroRule Parse_MacroRules_Var(TokenStream& lex) {
+MacroRule ParseMacroRulesVar(TokenStream& lex) {
     TRACE_FUNCTION;
     Token tok;
 
@@ -3378,7 +3378,7 @@ MacroRule Parse_MacroRules_Var(TokenStream& lex) {
     RuleParseState state;
     {
         auto ps = lex.start_span();
-        rule.m_pattern = Parse_MacroRules_Pat(lex, tok.type(), close, state);
+        rule.m_pattern = ParseMacroRulesPat(lex, tok.type(), close, state);
         rule.m_pat_span = lex.end_span(ps);
     }
 
@@ -3395,7 +3395,7 @@ MacroRule Parse_MacroRules_Var(TokenStream& lex) {
         default:
             throw ParseError::Unexpected(lex, tok);
     }
-    rule.m_contents = Parse_MacroRules_Cont(lex, tok.type(), close, state);
+    rule.m_contents = ParseMacroRulesCont(lex, tok.type(), close, state);
 
     DEBUG("Rule - [" << rule.m_pattern << "] => " << rule.m_contents << "");
 
@@ -3417,7 +3417,7 @@ void enumerate_names(const ::std::vector<MacroPatEnt>& pats, ::std::vector<RcStr
     }
 }
 
-MacroRulesArm Parse_MacroRules_MakeArm(Span pat_sp, ::std::vector<MacroPatEnt> pattern, ::std::vector<MacroExpansionEnt> contents) {
+MacroRulesArm ParseMacroRulesMakeArm(Span pat_sp, ::std::vector<MacroPatEnt> pattern, ::std::vector<MacroExpansionEnt> contents) {
     // - Convert the rule into an instruction stream
     auto rule_sequence = macro_pattern_to_simple(pat_sp, pattern);
     auto arm = MacroRulesArm(mv$(rule_sequence), mv$(contents));
@@ -3435,7 +3435,7 @@ namespace {
 }
 
 /// Parse an entire macro_rules! block into a format that exec.cpp can use
-MacroRulesPtr Parse_MacroRules(TokenStream& lex) {
+MacroRulesPtr ParseMacroRules(TokenStream& lex) {
     TRACE_FUNCTION_F("");
 
     Token tok;
@@ -3443,7 +3443,7 @@ MacroRulesPtr Parse_MacroRules(TokenStream& lex) {
     // Parse the patterns and replacements
     ::std::vector<MacroRule> rules;
     while (lex.lookahead(0) != TOK_EOF && lex.lookahead(0) != TOK_BRACE_CLOSE) {
-        rules.push_back(Parse_MacroRules_Var(lex));
+        rules.push_back(ParseMacroRulesVar(lex));
         GET_TOK(tok, lex);
         // LAZY: `macro` allows comma (not `macro_rules!`) but this is strictly more permissive than rustc
         if (tok.type() != TOK_SEMICOLON && tok.type() != TOK_COMMA) {
@@ -3460,13 +3460,13 @@ MacroRulesPtr Parse_MacroRules(TokenStream& lex) {
     auto rv = make_mr_ptr(lex);
     // Re-parse the patterns into a unified form
     for (auto& rule : rules) {
-        rv->m_rules.push_back(Parse_MacroRules_MakeArm(rule.m_pat_span, mv$(rule.m_pattern), mv$(rule.m_contents)));
+        rv->m_rules.push_back(ParseMacroRulesMakeArm(rule.m_pat_span, mv$(rule.m_pattern), mv$(rule.m_contents)));
     }
 
     return rv;
 }
 
-MacroRulesPtr Parse_MacroRulesSingleArm(TokenStream& lex) {
+MacroRulesPtr ParseMacroRulesSingleArm(TokenStream& lex) {
     TRACE_FUNCTION_F("");
     Token tok;
 
@@ -3474,14 +3474,14 @@ MacroRulesPtr Parse_MacroRulesSingleArm(TokenStream& lex) {
 
     auto ps = lex.start_span();
     GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-    auto arm_pat = Parse_MacroRules_Pat(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state);
+    auto arm_pat = ParseMacroRulesPat(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state);
     auto pat_span = lex.end_span(ps);
     GET_CHECK_TOK(tok, lex, TOK_BRACE_OPEN);
     // TODO: Pass a flag that annotates all idents with the current module?
-    auto body = Parse_MacroRules_Cont(lex, TOK_BRACE_OPEN, TOK_BRACE_CLOSE, state);
+    auto body = ParseMacroRulesCont(lex, TOK_BRACE_OPEN, TOK_BRACE_CLOSE, state);
 
     auto rv = make_mr_ptr(lex);
-    rv->m_rules.push_back(Parse_MacroRules_MakeArm(pat_span, ::std::move(arm_pat), ::std::move(body)));
+    rv->m_rules.push_back(ParseMacroRulesMakeArm(pat_span, ::std::move(arm_pat), ::std::move(body)));
     return rv;
 }
 

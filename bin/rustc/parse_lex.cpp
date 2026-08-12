@@ -853,7 +853,7 @@ Token Lexer::getTokenInt_Identifier(Codepoint leader, Codepoint leader2, bool pa
 
     this->ungetc();
     if (parse_reserved_word) {
-        auto v = Lex_FindReservedWord(str, this->m_edition);
+        auto v = LexFindReservedWord(str, this->m_edition);
         if (v != TOK_NULL) {
             return Token(v);
         }
@@ -1338,7 +1338,7 @@ bool Codepoint::isxdigit() const {
     return os;
 }
 
-Token Lex_FindOperator(const ::std::string& s) {
+Token LexFindOperator(const ::std::string& s) {
     if (s == "_") {
         return TOK_UNDERSCORE;
     }
@@ -1357,7 +1357,7 @@ Token Lex_FindOperator(const ::std::string& s) {
     return TOK_NULL;
 }
 
-Token Lex_FindReservedWord(const ::std::string& s, AST::Edition edition) {
+Token LexFindReservedWord(const ::std::string& s, AST::Edition edition) {
     size_t len = 0;
     const sRWORD* RWORDS = nullptr;
     switch (edition) {

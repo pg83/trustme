@@ -398,7 +398,7 @@ namespace {
 
 static const RcString rcstring_cfg = RcString::new_interned("cfg");
 
-void Cfg_Dump(::std::ostream& os) {
+void CfgDump(::std::ostream& os) {
     for (const auto& v : g_cfg_values) {
         os << ">" << v.first << "=" << v.second << std::endl;
     }
@@ -408,19 +408,19 @@ void Cfg_Dump(::std::ostream& os) {
     // NOTE: `g_cfg_value_fcns` is only used for feature flags, which minicargo doesn't need
 }
 
-void Cfg_SetFlag(::std::string name) {
+void CfgSetFlag(::std::string name) {
     g_cfg_flags.insert(mv$(name));
 }
 
-void Cfg_SetValue(::std::string name, ::std::string val) {
+void CfgSetValue(::std::string name, ::std::string val) {
     g_cfg_values.insert(::std::make_pair(mv$(name), mv$(val)));
 }
 
-void Cfg_SetValueCb(::std::string name, ::std::function<bool(const ::std::string&)> cb) {
+void CfgSetValueCb(::std::string name, ::std::function<bool(const ::std::string&)> cb) {
     g_cfg_value_fcns.insert(::std::make_pair(mv$(name), mv$(cb)));
 }
 
-bool Cfg_ParseOption(const ::std::string& spec, ::std::string& name, bool& has_value, ::std::string& value, ::std::string& error) {
+bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool& has_value, ::std::string& value, ::std::string& error) {
     try {
         auto parsed = CfgSpecParser(spec).parse_cfg_option();
         name = ::std::move(parsed.first);
@@ -433,7 +433,7 @@ bool Cfg_ParseOption(const ::std::string& spec, ::std::string& name, bool& has_v
     }
 }
 
-bool Cfg_SetCheckSpec(const ::std::string& spec, ::std::string& error) {
+bool CfgSetCheckSpec(const ::std::string& spec, ::std::string& error) {
     try {
         auto parsed = CfgSpecParser(spec).parse_check_spec();
         g_check_cfg.active = true;
@@ -458,7 +458,7 @@ bool Cfg_SetCheckSpec(const ::std::string& spec, ::std::string& error) {
     }
 }
 
-void Cfg_SetLintLevel(::std::string name, CfgLintLevel level) {
+void CfgSetLintLevel(::std::string name, CfgLintLevel level) {
     for (auto& c : name) {
         if (c == '-') {
             c = '_';
@@ -471,7 +471,7 @@ void Cfg_SetLintLevel(::std::string name, CfgLintLevel level) {
     }
 }
 
-void Cfg_SetLintCap(CfgLintLevel level) {
+void CfgSetLintCap(CfgLintLevel level) {
     g_check_cfg.cap.is_set = true;
     g_check_cfg.cap.level = level;
 }
@@ -648,7 +648,7 @@ std::vector<AST::Attribute> check_cfg_attr(const ::AST::Attribute& mi) {
     auto cfg_res = check_cfg_inner(lex);
     while (lex.lookahead(0) == TOK_COMMA) {
         lex.getTokenCheck(TOK_COMMA);
-        rv.push_back(Parse_MetaItem(lex));
+        rv.push_back(ParseMetaItem(lex));
     }
     lex.getTokenCheck(TOK_PAREN_CLOSE);
     lex.getTokenCheck(TOK_EOF);
@@ -677,7 +677,7 @@ class CCfgSelectExpander: public ExpandProcMacro {
         for (;;) {
             bool rv = lex.getTokenIf(TOK_UNDERSCORE) || check_cfg_inner(lex);
             lex.getTokenCheck(TOK_FATARROW);
-            auto t = Parse_TT(lex, true);
+            auto t = ParseTT(lex, true);
             if (rv) {
                 return box$(TTStreamO(sp, ParseState(), std::move(t)));
             }

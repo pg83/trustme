@@ -10,7 +10,7 @@
 namespace {
     typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> t_args;
 
-    class ExprVisitor_Validate: public ::HIR::ExprVisitor {
+    class ExprVisitorValidate: public ::HIR::ExprVisitor {
         const StaticTraitResolve& m_resolve;
         //const t_args&   m_args;
         const ::HIR::TypeData* real_ret_type;
@@ -42,7 +42,7 @@ namespace {
     public:
         bool expand_erased_types;
 
-        ExprVisitor_Validate(const StaticTraitResolve& res, const t_args& args, const ::HIR::TypeData* ret_type)
+        ExprVisitorValidate(const StaticTraitResolve& res, const t_args& args, const ::HIR::TypeData* ret_type)
             : m_resolve(res)
             ,
             //m_args(args),
@@ -1127,7 +1127,7 @@ namespace {
                     ty = m_resolve.m_crate.m_types.intern(::HIR::TypeData::make_NamedFunction({node.m_path.clone(), ve.s}));
                 }
                 TU_ARMA(EnumConstructor, ve) {
-                    ty = m_resolve.m_crate.m_types.intern(::HIR::TypeData::make_NamedFunction({node.m_path.clone(), ::HIR::TypeData_NamedFunction_Ty::make_EnumConstructor({ve.e, ve.v})}));
+                    ty = m_resolve.m_crate.m_types.intern(::HIR::TypeData::make_NamedFunction({node.m_path.clone(), ::HIR::TypeDataNamedFunctionTy::make_EnumConstructor({ve.e, ve.v})}));
                 }
             }
             if( ty != HIR::TypeRef() ) {
@@ -1437,7 +1437,7 @@ namespace {
                     if (auto* se = se1->opt_Unevaluated()) {
                         t_args tmp;
                         auto ty_usize = m_resolve.m_crate.m_types.primitive(::HIR::CoreType::Usize);
-                        ExprVisitor_Validate ev(m_resolve, tmp, ty_usize);
+                        ExprVisitorValidate ev(m_resolve, tmp, ty_usize);
                         ev.visit_root(*(*se)->expr);
                     }
                 }
@@ -1451,7 +1451,7 @@ namespace {
             if (auto* unevaluated = value.opt_Unevaluated()) {
                 t_args tmp;
                 auto& expr = *(**unevaluated).expr;
-                ExprVisitor_Validate ev(m_resolve, tmp, expr->m_res_type);
+                ExprVisitorValidate ev(m_resolve, tmp, expr->m_res_type);
                 ev.visit_root(expr);
             }
         }
@@ -1465,7 +1465,7 @@ namespace {
                 DEBUG("Function code " << p);
                 ::HIR::TypeRef tmp;
                 const auto& ret_ty = m_resolve.fix_trait_default_return(item.m_code->span(), p, item.m_return, tmp);
-                ExprVisitor_Validate ev(m_resolve, item.m_args, ret_ty);
+                ExprVisitorValidate ev(m_resolve, item.m_args, ret_ty);
                 ev.visit_root(item.m_code);
             } else {
                 DEBUG("Function code " << p << " (none)");
@@ -1476,7 +1476,7 @@ namespace {
             auto _ = this->m_resolve.set_item_generics(item.m_params);
             if (item.m_value) {
                 t_args tmp;
-                ExprVisitor_Validate ev(m_resolve, tmp, item.m_type);
+                ExprVisitorValidate ev(m_resolve, tmp, item.m_type);
                 ev.visit_root(item.m_value);
             }
         }
@@ -1485,7 +1485,7 @@ namespace {
             auto _ = this->m_resolve.set_item_generics(item.m_params);
             if (item.m_value) {
                 t_args tmp;
-                ExprVisitor_Validate ev(m_resolve, tmp, item.m_type);
+                ExprVisitorValidate ev(m_resolve, tmp, item.m_type);
                 ev.visit_root(item.m_value);
             }
             m_resolve.expand_associated_types(Span(), item.m_type);
@@ -1501,7 +1501,7 @@ namespace {
 
                     if (var.expr) {
                         t_args tmp;
-                        ExprVisitor_Validate ev(m_resolve, tmp, enum_type);
+                        ExprVisitorValidate ev(m_resolve, tmp, enum_type);
                         ev.visit_root(var.expr);
                     }
                 }
@@ -1529,13 +1529,13 @@ namespace {
     };
 }
 
-void Typecheck_Expressions_ValidateOne(const StaticTraitResolve& resolve, const ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args, const ::HIR::TypeData* ret_ty, const ::HIR::ExprPtr& code) {
-    ExprVisitor_Validate ev(resolve, args, ret_ty);
+void TypecheckExpressionsValidateOne(const StaticTraitResolve& resolve, const ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args, const ::HIR::TypeData* ret_ty, const ::HIR::ExprPtr& code) {
+    ExprVisitorValidate ev(resolve, args, ret_ty);
     ev.expand_erased_types = false; // TODO: Make this an argument, we don't want to do this too early
     ev.visit_root(const_cast<::HIR::ExprPtr&>(code));
 }
 
-void Typecheck_Expressions_Validate(::HIR::Crate& crate) {
+void TypecheckExpressionsValidate(::HIR::Crate& crate) {
     OuterVisitor ov(crate);
     ov.visit_crate(crate);
 }
@@ -2540,7 +2540,7 @@ namespace {
     };
 }
 
-void Typecheck_ModuleLevel(::HIR::Crate& crate) {
+void TypecheckModuleLevel(::HIR::Crate& crate) {
     Visitor v{crate};
     v.visit_crate(crate);
 }

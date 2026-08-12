@@ -16,7 +16,7 @@ Ordering GenericRef::ord(const GenericRef& x) const {
     if (rv) {
         return rv;
     }
-    if (group() == GENERIC_Placeholder) {
+    if (group() == GENERICPlaceholder) {
         return ::ord(name, x.name); // names matter for placeholders
     }
     return rv;

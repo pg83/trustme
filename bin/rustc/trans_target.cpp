@@ -57,7 +57,7 @@ const TargetArch ARCH_POWERPC = {
 const TargetArch ARCH_RISCV64 = {"riscv64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
 TargetSpec g_target;
 
-bool Target_GetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size, size_t& out_align);
+bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size, size_t& out_align);
 
 namespace {
     TargetSpec load_spec_from_file(const ::std::string& filename) {
@@ -377,107 +377,107 @@ namespace {
     }
 }
 
-const TargetSpec& Target_GetCurSpec() {
+const TargetSpec& TargetGetCurSpec() {
     return g_target;
 }
 
-void Target_ExportCurSpec(const ::std::string& filename) {
+void TargetExportCurSpec(const ::std::string& filename) {
     save_spec_to_file(filename, g_target);
 }
 
-void Target_SetCfg(const ::std::string& target_name) {
+void TargetSetCfg(const ::std::string& target_name) {
     g_target = init_from_spec_name(target_name);
 
     if (g_target.m_family == "unix") {
-        Cfg_SetFlag("unix");
+        CfgSetFlag("unix");
     }
-    Cfg_SetValue("target_family", g_target.m_family);
+    CfgSetValue("target_family", g_target.m_family);
 
     if (g_target.m_os_name == "linux") {
-        Cfg_SetFlag("linux");
-        Cfg_SetValue("target_vendor", "gnu");
+        CfgSetFlag("linux");
+        CfgSetValue("target_vendor", "gnu");
     }
 
     if (g_target.m_os_name == "macos") {
-        Cfg_SetFlag("apple");
-        Cfg_SetValue("target_vendor", "apple");
+        CfgSetFlag("apple");
+        CfgSetValue("target_vendor", "apple");
     }
 
     if (g_target.m_os_name == "freebsd") {
-        Cfg_SetFlag("freebsd");
-        Cfg_SetValue("target_vendor", "unknown");
+        CfgSetFlag("freebsd");
+        CfgSetValue("target_vendor", "unknown");
     }
 
     if (g_target.m_os_name == "netbsd") {
-        Cfg_SetFlag("netbsd");
-        Cfg_SetValue("target_vendor", "unknown");
+        CfgSetFlag("netbsd");
+        CfgSetValue("target_vendor", "unknown");
     }
 
     if (g_target.m_os_name == "openbsd") {
-        Cfg_SetFlag("openbsd");
-        Cfg_SetValue("target_vendor", "unknown");
+        CfgSetFlag("openbsd");
+        CfgSetValue("target_vendor", "unknown");
     }
 
     if (g_target.m_os_name == "dragonfly") {
-        Cfg_SetFlag("dragonfly");
-        Cfg_SetValue("target_vendor", "unknown");
+        CfgSetFlag("dragonfly");
+        CfgSetValue("target_vendor", "unknown");
     }
 
-    Cfg_SetValue("target_vendor", ""); // NOTE: Doesn't override a pre-set value
-    Cfg_SetValue("target_env", g_target.m_env_name);
-    Cfg_SetValue("target_os", g_target.m_os_name);
-    Cfg_SetValue("target_pointer_width", FMT(g_target.m_arch.m_pointer_bits));
-    Cfg_SetValue("target_endian", g_target.m_arch.m_big_endian ? "big" : "little");
-    Cfg_SetValue("target_arch", g_target.m_arch.m_name);
-    Cfg_SetValue("target_abi", "llvm"); // This is a lie, but hopefully works?
+    CfgSetValue("target_vendor", ""); // NOTE: Doesn't override a pre-set value
+    CfgSetValue("target_env", g_target.m_env_name);
+    CfgSetValue("target_os", g_target.m_os_name);
+    CfgSetValue("target_pointer_width", FMT(g_target.m_arch.m_pointer_bits));
+    CfgSetValue("target_endian", g_target.m_arch.m_big_endian ? "big" : "little");
+    CfgSetValue("target_arch", g_target.m_arch.m_name);
+    CfgSetValue("target_abi", "llvm"); // This is a lie, but hopefully works?
     // target_has_atomic_equal_alignment="N" means align_of::<AtomicN>() == align_of::<N>().
     // Since libcore declares AtomicN with repr(align(sizeof(N))), only set it when the
     // primitive's natural alignment already matches its size (e.g. u64 on x86 has align 4,
     // so target_has_atomic_equal_alignment="64" must be unset there even with cmpxchg8b).
     if (g_target.m_arch.m_atomics.u8) {
-        Cfg_SetValue("target_has_atomic", "8");
-        Cfg_SetValue("target_has_atomic_load_store", "8");
-        Cfg_SetValue("target_has_atomic_equal_alignment", "8");
+        CfgSetValue("target_has_atomic", "8");
+        CfgSetValue("target_has_atomic_load_store", "8");
+        CfgSetValue("target_has_atomic_equal_alignment", "8");
     }
     if (g_target.m_arch.m_atomics.u16) {
-        Cfg_SetValue("target_has_atomic", "16");
-        Cfg_SetValue("target_has_atomic_load_store", "16");
+        CfgSetValue("target_has_atomic", "16");
+        CfgSetValue("target_has_atomic_load_store", "16");
         if (g_target.m_arch.m_alignments.u16 >= 2) {
-            Cfg_SetValue("target_has_atomic_equal_alignment", "16");
+            CfgSetValue("target_has_atomic_equal_alignment", "16");
         }
     }
     if (g_target.m_arch.m_atomics.u32) {
-        Cfg_SetValue("target_has_atomic", "32");
-        Cfg_SetValue("target_has_atomic_load_store", "32");
+        CfgSetValue("target_has_atomic", "32");
+        CfgSetValue("target_has_atomic_load_store", "32");
         if (g_target.m_arch.m_alignments.u32 >= 4) {
-            Cfg_SetValue("target_has_atomic_equal_alignment", "32");
+            CfgSetValue("target_has_atomic_equal_alignment", "32");
         }
     }
     if (g_target.m_arch.m_atomics.u64) {
-        Cfg_SetValue("target_has_atomic", "64");
-        Cfg_SetValue("target_has_atomic_load_store", "64");
+        CfgSetValue("target_has_atomic", "64");
+        CfgSetValue("target_has_atomic_load_store", "64");
         if (g_target.m_arch.m_alignments.u64 >= 8) {
-            Cfg_SetValue("target_has_atomic_equal_alignment", "64");
+            CfgSetValue("target_has_atomic_equal_alignment", "64");
         }
     }
     if (g_target.m_arch.m_atomics.ptr) {
-        Cfg_SetValue("target_has_atomic", "ptr");
-        Cfg_SetValue("target_has_atomic_load_store", "ptr");
+        CfgSetValue("target_has_atomic", "ptr");
+        CfgSetValue("target_has_atomic_load_store", "ptr");
         if (g_target.m_arch.m_alignments.ptr * 8u >= g_target.m_arch.m_pointer_bits) {
-            Cfg_SetValue("target_has_atomic_equal_alignment", "ptr");
+            CfgSetValue("target_has_atomic_equal_alignment", "ptr");
         }
     }
     // TODO: Atomic compare-and-set option
     if (g_target.m_arch.m_atomics.ptr) {
-        Cfg_SetValue("target_has_atomic", "cas");
+        CfgSetValue("target_has_atomic", "cas");
     }
-    Cfg_SetValueCb("target_feature", [](const ::std::string& s) {
+    CfgSetValueCb("target_feature", [](const ::std::string& s) {
         //if(g_target.m_arch.m_name == "x86_64" && s == "sse2") return true;    // 1.39 ppv-lite86 requires sse2 (x86_64 always has it)
         return false;
     });
 }
 
-bool Target_GetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size, size_t& out_align) {
+bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size, size_t& out_align) {
     //TRACE_FUNCTION_FR(ty, "size=" << out_size << ", align=" << out_align);
     TU_MATCH_HDRA( (*ty), {)
     TU_ARMA(Infer, te) {
@@ -560,7 +560,7 @@ bool Target_GetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve,
                 out_size = SIZE_MAX;
                 return true;
             }
-            const auto* repr = Target_GetTypeRepr(sp, resolve, ty);
+            const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
             if (!repr) {
                 DEBUG("Cannot get type repr for " << ty);
                 return false;
@@ -584,7 +584,7 @@ bool Target_GetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve,
             BUG(sp, "sizeof on an erased type - shouldn't exist");
         }
         TU_ARMA(Array, te) {
-            if (!Target_GetSizeAndAlignOf(sp, resolve, te.inner, out_size, out_align)) {
+            if (!TargetGetSizeAndAlignOf(sp, resolve, te.inner, out_size, out_align)) {
                 return false;
             }
             if (out_size == SIZE_MAX) {
@@ -605,7 +605,7 @@ bool Target_GetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve,
             return true;
         }
         TU_ARMA(Slice, te) {
-            if (!Target_GetAlignOf(sp, resolve, te.inner, out_align)) {
+            if (!TargetGetAlignOf(sp, resolve, te.inner, out_align)) {
                 return false;
             }
             out_size = SIZE_MAX;
@@ -613,7 +613,7 @@ bool Target_GetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve,
             return true;
         }
         TU_ARMA(Tuple, te) {
-            const auto* repr = Target_GetTypeRepr(sp, resolve, ty);
+            const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
             if (!repr) {
                 DEBUG("Cannot get type repr for " << ty);
                 return false;
@@ -679,18 +679,18 @@ bool Target_GetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve,
     return false;
 }
 
-bool Target_GetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size) {
+bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size) {
     size_t ignore_align;
-    bool rv = Target_GetSizeAndAlignOf(sp, resolve, ty, out_size, ignore_align);
+    bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, out_size, ignore_align);
     if (rv && out_size == SIZE_MAX) {
         BUG(sp, "Getting size of Unsized type - " << ty);
     }
     return rv;
 }
 
-bool Target_GetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_align) {
+bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_align) {
     size_t ignore_size;
-    bool rv = Target_GetSizeAndAlignOf(sp, resolve, ty, ignore_size, out_align);
+    bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, ignore_size, out_align);
     if (rv && ignore_size == SIZE_MAX) {
         BUG(sp, "Getting alignment of Unsized type - " << ty);
     }
@@ -716,12 +716,12 @@ namespace {
 
     bool make_field_ent(const Span& sp, const StaticTraitResolve& resolve, unsigned idx, ::HIR::TypeRef ty, Ent& out) {
         size_t size, align;
-        if (!Target_GetSizeAndAlignOf(sp, resolve, ty, size, align)) {
+        if (!TargetGetSizeAndAlignOf(sp, resolve, ty, size, align)) {
             DEBUG("Can't get size/align of " << ty);
             return false;
         }
         out = Ent{idx, size, align, HIR::TypeRef(), false};
-        out.user_align = Target_TypeHasUserAlignment(sp, resolve, ty);
+        out.user_align = TargetTypeHasUserAlignment(sp, resolve, ty);
         out.ty = mv$(ty);
         return true;
     }
@@ -829,7 +829,7 @@ namespace {
             // First element uses natural alignment, subsequent elements with natural alignment
             // >= 4 and up to 8 use embedding = 4. Skip ZST.
             // The cap is on natural alignment only: an explicitly aligned member keeps it, as in gcc.
-            if (Target_CapsMemberAlignment()) {
+            if (TargetCapsMemberAlignment()) {
                 if (e.size > 0) {
                     if (!is_first_field && !e.user_align && align >= 4 && align <= 8) {
                         align = 4;
@@ -964,13 +964,13 @@ namespace {
                     return bounded_max == U128(UINT64_MAX, UINT64_MAX);
                 case ::HIR::CoreType::Usize:
                 case ::HIR::CoreType::Isize:
-                    return bounded_max == (Target_GetPointerBits() == 64 ? U128(UINT64_MAX) : U128(UINT32_MAX));
+                    return bounded_max == (TargetGetPointerBits() == 64 ? U128(UINT64_MAX) : U128(UINT32_MAX));
                 default:
                     return false;
             }
         }
         if (ty->is_Pointer()) {
-            return bounded_max == (Target_GetPointerBits() == 64 ? U128(UINT64_MAX) : U128(UINT32_MAX));
+            return bounded_max == (TargetGetPointerBits() == 64 ? U128(UINT64_MAX) : U128(UINT32_MAX));
         }
         return false;
     }
@@ -978,7 +978,7 @@ namespace {
     bool get_nonzero_path(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, TypeRepr::FieldPath& out_path) {
         switch (ty->tag()) {
             TU_ARM(*ty, Tuple, te) {
-                const TypeRepr* repr = Target_GetTypeRepr(sp, resolve, ty);
+                const TypeRepr* repr = TargetGetTypeRepr(sp, resolve, ty);
                 if (!repr) {
                     return false;
                 }
@@ -1000,7 +1000,7 @@ namespace {
             TU_ARM(*ty, Path, te) {
                 if (te.binding.is_Struct()) {
                     const auto* str = te.binding.as_Struct();
-                    const TypeRepr* r = Target_GetTypeRepr(sp, resolve, ty);
+                    const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);
                     if (!r) {
                         return false;
                     }
@@ -1024,7 +1024,7 @@ namespace {
                     }
 
                 } else if (te.binding.is_Enum()) {
-                    const TypeRepr* repr = Target_GetTypeRepr(sp, resolve, ty);
+                    const TypeRepr* repr = TargetGetTypeRepr(sp, resolve, ty);
                     if (!repr) {
                         return false;
                     }
@@ -1044,13 +1044,13 @@ namespace {
                 //out_path.sub_fields.push_back(0);
                 // TODO: Only return a single-pointer size
                 //Target_GetSizeOf(sp, resolve, ty, out_path.size);
-                out_path.size = Target_GetPointerBits() / 8;
+                out_path.size = TargetGetPointerBits() / 8;
                 return true;
             }
             break;
             TU_ARM(*ty, Function, _te)(void) _te;
             //out_path.sub_fields.push_back(0);
-            Target_GetSizeOf(sp, resolve, ty, out_path.size);
+            TargetGetSizeOf(sp, resolve, ty, out_path.size);
             return true;
             default:
                 break;
@@ -1060,7 +1060,7 @@ namespace {
 
     size_t get_size_or_zero(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
         size_t size = 0;
-        Target_GetSizeOf(sp, resolve, ty, size);
+        TargetGetSizeOf(sp, resolve, ty, size);
         return size;
     }
 
@@ -1076,7 +1076,7 @@ namespace {
                 ty = &array->inner;
                 continue;
             }
-            r = Target_GetTypeRepr(sp, resolve, *ty);
+            r = TargetGetTypeRepr(sp, resolve, *ty);
             assert(f < r->fields.size());
             ofs += r->fields[f].offset;
             ty = &r->fields[f].ty;
@@ -1097,7 +1097,7 @@ namespace {
         TRACE_FUNCTION_F(ty << " min_offset=" << min_offset << " max_offset=" << max_offset);
         switch (ty->tag()) {
             TU_ARM(*ty, Tuple, te) {
-                const TypeRepr* r = Target_GetTypeRepr(sp, resolve, ty);
+                const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);
                 if (!r) {
                     return 0;
                 }
@@ -1119,7 +1119,7 @@ namespace {
             TU_ARM(*ty, Path, te) {
                 if (te.binding.is_Struct()) {
                     const auto* str = te.binding.as_Struct();
-                    const TypeRepr* r = Target_GetTypeRepr(sp, resolve, ty);
+                    const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);
                     if (!r) {
                         return 0;
                     }
@@ -1158,7 +1158,7 @@ namespace {
                         }
                     }
                 } else if (te.binding.is_Enum()) {
-                    const TypeRepr* r = Target_GetTypeRepr(sp, resolve, ty);
+                    const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);
                     if (!r) {
                         return 0;
                     }
@@ -1247,7 +1247,7 @@ namespace {
         };
 
         if (!enm.discriminants_evaluated) {
-            ConvertHIR_ConstantEvaluate_Enum(resolve.m_crate, te.path.m_data.as_Generic().m_path, enm);
+            ConvertHIRConstantEvaluateEnum(resolve.m_crate, te.path.m_data.as_Generic().m_path, enm);
             assert(enm.discriminants_evaluated);
         }
 
@@ -1264,7 +1264,7 @@ namespace {
                         for (const auto& var : e) {
                             auto t = monomorph(var.type);
                             size_t size, align;
-                            if (!Target_GetSizeAndAlignOf(sp, resolve, t, size, align)) {
+                            if (!TargetGetSizeAndAlignOf(sp, resolve, t, size, align)) {
                                 DEBUG("Generic type in enum - " << t);
                                 return nullptr;
                             }
@@ -1282,7 +1282,7 @@ namespace {
                         auto tag_ty = enm.m_tag_repr == ::HIR::Enum::Repr::Auto ? ::HIR::CoreType::U32 : enm.get_repr_type(enm.m_tag_repr);
                         rv.fields.push_back(TypeRepr::Field{0, resolve.m_crate.m_types.primitive(tag_ty)});
                         size_t tag_size, tag_align;
-                        Target_GetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, tag_size, tag_align);
+                        TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, tag_size, tag_align);
                         size_t data_ofs = tag_size;
 
                         while (data_ofs % max_align != 0) {
@@ -1302,7 +1302,7 @@ namespace {
                         // If there are not multiple variants, then only include the one body
                         if (e.size() == 1) {
                             auto t = monomorph(e[0].type);
-                            const auto* inner_repr = Target_GetTypeRepr(sp, resolve, t);
+                            const auto* inner_repr = TargetGetTypeRepr(sp, resolve, t);
                             if (!inner_repr) {
                                 DEBUG("Generic type in enum - " << t);
                                 return nullptr;
@@ -1378,8 +1378,8 @@ namespace {
 
                                             size_t size0, size1;
                                             size_t align0, align1;
-                                            Target_GetSizeAndAlignOf(sp, resolve, variants[0].type, size0, align0);
-                                            Target_GetSizeAndAlignOf(sp, resolve, variants[1].type, size1, align1);
+                                            TargetGetSizeAndAlignOf(sp, resolve, variants[0].type, size0, align0);
+                                            TargetGetSizeAndAlignOf(sp, resolve, variants[1].type, size1, align1);
                                             rv.size = std::max(size0, size1);
                                             rv.align = std::max(align0, align1);
                                             rv.fields.push_back({0, std::move(variants[0].type)});
@@ -1626,7 +1626,7 @@ namespace {
                                         } else {
                                             // Note: unit type (any empty type) doesn't need the tag added
                                             // NOTE: Unit type should already have a repr, but make sure
-                                            if (const auto* r = Target_GetTypeRepr(sp, resolve, variants[i].type)) {
+                                            if (const auto* r = TargetGetTypeRepr(sp, resolve, variants[i].type)) {
                                                 final_size = std::max(final_size, r->size);
                                                 final_align = std::max(final_align, r->align);
                                             }
@@ -1638,7 +1638,7 @@ namespace {
                                     rv.align = max_align;
 
                                     // Under a capping ABI take size/align from the final variant layouts - `max_align` predates the tag field, so it over-states them
-                                    if (Target_CapsMemberAlignment() && final_size > 0) {
+                                    if (TargetCapsMemberAlignment() && final_size > 0) {
                                         size_t sz = final_size;
                                         while (sz % final_align != 0) {
                                             sz++;
@@ -1693,7 +1693,7 @@ namespace {
 
                             size_t tag_size;
                             size_t tag_align;
-                            Target_GetSizeAndAlignOf(sp, resolve, tag_ty, tag_size, tag_align);
+                            TargetGetSizeAndAlignOf(sp, resolve, tag_ty, tag_size, tag_align);
                             size_t max_size = tag_size;
                             size_t max_align = tag_align;
                             // Sort all varaint fields (fully)
@@ -1792,7 +1792,7 @@ namespace {
                     }
                     if (rv.fields.size() > 0) {
                         // Can't return false or unsized
-                        Target_GetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, rv.size, rv.align);
+                        TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, rv.size, rv.align);
 
                         ::std::vector<U128> vals;
                         for (const auto& v : e.variants) {
@@ -1822,7 +1822,7 @@ namespace {
 
         // An enum inherits user-alignment from any variant, as in gcc; every variant repr is already cached here, so this cannot recurse.
         for(const auto& f : rv.fields) {
-            if (Target_TypeHasUserAlignment(sp, resolve, f.ty)) {
+            if (TargetTypeHasUserAlignment(sp, resolve, f.ty)) {
                 rv.user_align = true;
                 break;
             }
@@ -1845,7 +1845,7 @@ namespace {
         for (const auto& var : unn.m_variants) {
             rv.fields.push_back({0, monomorph(var.ty)});
             size_t size, align;
-            if (!Target_GetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, size, align)) {
+            if (!TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, size, align)) {
                 // Generic? - Not good.
                 DEBUG("Generic type encounterd after monomorphise in union - " << rv.fields.back().ty);
                 return nullptr;
@@ -1856,7 +1856,7 @@ namespace {
             rv.size = ::std::max(rv.size, size);
             rv.align = ::std::max(rv.align, align);
             // A union inherits user-alignment from any member, as in gcc.
-            if (Target_TypeHasUserAlignment(sp, resolve, rv.fields.back().ty)) {
+            if (TargetTypeHasUserAlignment(sp, resolve, rv.fields.back().ty)) {
                 rv.user_align = true;
             }
         }
@@ -1936,7 +1936,7 @@ namespace {
             DEBUG("Set temporary repr for " << ty);
             return;
         }
-        auto symbol = FMT(Trans_Mangle(ty));
+        auto symbol = FMT(TransMangle(ty));
         auto ires = s_cache.emplace(mv$(symbol), CachedTypeRepr{ty, mv$(repr)});
         ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
         s_cache_exact.emplace(ty, ires.first->second.repr.get());
@@ -1944,31 +1944,31 @@ namespace {
     }
 }
 
-void Target_ForceTypeRepr(const Span& sp, const ::HIR::TypeData* ty, TypeRepr repr) {
+void TargetForceTypeRepr(const Span& sp, const ::HIR::TypeData* ty, TypeRepr repr) {
     set_type_repr(sp, ty, box$(repr));
 }
 
-bool Target_CapsMemberAlignment() {
-    return Target_GetCurSpec().m_arch.m_name == "powerpc";
+bool TargetCapsMemberAlignment() {
+    return TargetGetCurSpec().m_arch.m_name == "powerpc";
 }
 
-bool Target_TypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
     // Arrays and slices inherit it from the element type, as in gcc's `layout_type`
     if (const auto* te = ty->opt_Array()) {
-        return Target_TypeHasUserAlignment(sp, resolve, te->inner);
+        return TargetTypeHasUserAlignment(sp, resolve, te->inner);
     }
     if (const auto* te = ty->opt_Slice()) {
-        return Target_TypeHasUserAlignment(sp, resolve, te->inner);
+        return TargetTypeHasUserAlignment(sp, resolve, te->inner);
     }
     // Aggregates cache it on their repr; everything else is naturally aligned by definition
     if (ty->is_Tuple() || (ty->is_Path() && (ty->as_Path().binding.is_Struct() || ty->as_Path().binding.is_Union() || ty->as_Path().binding.is_Enum()))) {
-        const auto* repr = Target_GetTypeRepr(sp, resolve, ty);
+        const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
         return repr && repr->user_align;
     }
     return false;
 }
 
-const TypeRepr* Target_GetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
     auto exact = s_cache_exact.find(ty);
     if (exact != s_cache_exact.end()) {
         return exact->second;
@@ -1984,7 +1984,7 @@ const TypeRepr* Target_GetTypeRepr(const Span& sp, const StaticTraitResolve& res
         return rv;
     }
 
-    auto symbol = FMT(Trans_Mangle(ty));
+    auto symbol = FMT(TransMangle(ty));
     auto existing = s_cache.find(symbol);
     if (existing != s_cache.end()) {
         ASSERT_BUG(sp, existing->second.canonical == ty || existing->second.canonical->equals_ignoring_regions(ty),
@@ -2003,7 +2003,7 @@ const TypeRepr* Target_GetTypeRepr(const Span& sp, const StaticTraitResolve& res
     return rv;
 }
 
-const ::HIR::TypeData* Target_GetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& sub_fields, size_t ofs) {
+const ::HIR::TypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& sub_fields, size_t ofs) {
     const auto* ty = &repr.fields.at(idx).ty;
     while (ofs < sub_fields.size()) {
         const auto field = sub_fields[ofs++];
@@ -2012,7 +2012,7 @@ const ::HIR::TypeData* Target_GetInnerType(const Span& sp, const StaticTraitReso
             ASSERT_BUG(sp, array && array->size.is_Known() && array->size.as_Known() > 0, "Array field path on non-array " << *ty);
             ty = &array->inner;
         } else {
-            const auto* inner_repr = Target_GetTypeRepr(sp, resolve, *ty);
+            const auto* inner_repr = TargetGetTypeRepr(sp, resolve, *ty);
             ASSERT_BUG(sp, inner_repr, "No inner repr for " << *ty);
             ty = &inner_repr->fields.at(field).ty;
         }
@@ -2033,7 +2033,7 @@ size_t TypeRepr::get_offset(const Span& sp, const StaticTraitResolve& resolve, c
             ty = &array->inner;
             continue;
         }
-        r = Target_GetTypeRepr(sp, resolve, *ty);
+        r = TargetGetTypeRepr(sp, resolve, *ty);
         assert(r); // We have an outer repr, so inner must exist
         assert(f < r->fields.size());
         ofs += r->fields[f].offset;

@@ -14,14 +14,14 @@
 #include <iomanip>
 #include <fstream>
 
-void Trans_Codegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* crate_ptr, TransList list, const ::std::string& hir_file) {
+void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* crate_ptr, TransList list, const ::std::string& hir_file) {
     static Span sp;
 
     ::std::unique_ptr<CodeGenerator> codegen;
     if (opt.mode == "monomir") {
-        codegen = Trans_Codegen_GetGenerator_MonoMir(*crate_ptr, outfile);
+        codegen = TransCodegenGetGeneratorMonoMir(*crate_ptr, outfile);
     } else if (opt.mode == "c") {
-        codegen = Trans_Codegen_GetGeneratorC(*crate_ptr, outfile);
+        codegen = TransCodegenGetGeneratorC(*crate_ptr, outfile);
     } else {
         BUG(sp, "Unknown codegen mode '" << opt.mode << "'");
     }
@@ -196,15 +196,15 @@ namespace {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<::HIR::Path>& x) {
-        return os << Trans_Mangle(x.e);
+        return os << TransMangle(x.e);
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<::HIR::GenericPath>& x) {
-        return os << Trans_Mangle(x.e);
+        return os << TransMangle(x.e);
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<::HIR::SimplePath>& x) {
-        return os << Trans_Mangle(x.e);
+        return os << TransMangle(x.e);
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<::HIR::TypeRef>& x) {
@@ -217,14 +217,14 @@ namespace {
                 os << te;
             }
             TU_ARMA(Path, te) {
-                os << Trans_Mangle(te.path);
+                os << TransMangle(te.path);
             }
             TU_ARMA(Generic, te) {
                 BUG(Span(), "" << x.e);
             }
             TU_ARMA(TraitObject, te) {
                 auto path = te.m_trait.m_path.clone();
-                os << "dyn " << Trans_Mangle(path);
+                os << "dyn " << TransMangle(path);
             }
             TU_ARMA(ErasedType, te) {
                 BUG(Span(), "" << x.e);
@@ -239,7 +239,7 @@ namespace {
                 if (te.empty()) {
                     os << "()";
                 } else {
-                    os << Trans_Mangle(x.e);
+                    os << TransMangle(x.e);
                 }
             }
             TU_ARMA(Borrow, te) {
@@ -271,7 +271,7 @@ namespace {
                 os << fmt(te.inner);
             }
             TU_ARMA(NamedFunction, te) {
-                os << "fn " << Trans_Mangle(te.path);
+                os << "fn " << TransMangle(te.path);
             }
             TU_ARMA(Function, e) {
                 if (e.is_unsafe) {
@@ -411,7 +411,7 @@ namespace {
         return os;
     }
 
-    class CodeGenerator_MonoMir: public CodeGenerator {
+    class CodeGeneratorMonoMir: public CodeGenerator {
         enum class MetadataType {
             None,
             Slice,
@@ -428,7 +428,7 @@ namespace {
         const ::MIR::TypeResolve* m_mir_res;
 
     public:
-        CodeGenerator_MonoMir(const ::HIR::Crate& crate, const ::std::string& outfile)
+        CodeGeneratorMonoMir(const ::HIR::Crate& crate, const ::std::string& outfile)
             : m_crate(crate)
             , m_resolve(crate)
             , m_outfile_path(outfile)
@@ -508,7 +508,7 @@ namespace {
 
             if (const auto* te = ty->opt_Tuple()) {
                 if (te->size() > 0) {
-                    const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+                    const auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
                     MIR_ASSERT(*m_mir_res, repr, "No repr for tuple " << ty);
 
                     bool has_drop_glue = m_resolve.type_needs_drop_glue(sp, ty);
@@ -605,7 +605,7 @@ namespace {
                     } else if (t->is_Path() && t->as_Path().binding.is_ExternType()) {
                         return resolve.m_crate.m_types.unit();
                     } else if (t->is_Path()) {
-                        auto* repr = Target_GetTypeRepr(sp, resolve, t);
+                        auto* repr = TargetGetTypeRepr(sp, resolve, t);
                         ASSERT_BUG(sp, repr, "No repr for " << t);
                         return get_metadata_type(sp, resolve, *repr);
                     } else {
@@ -617,9 +617,9 @@ namespace {
             // Generate the drop glue (and determine if there is any)
             bool has_drop_glue = m_resolve.type_needs_drop_glue(sp, ty);
 
-            const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+            const auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
             MIR_ASSERT(*m_mir_res, repr, "No repr for struct " << ty);
-            m_of << "type " << Trans_Mangle(p) << " {\n";
+            m_of << "type " << TransMangle(p) << " {\n";
             m_of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
             if (repr->size == SIZE_MAX) {
                 m_of << "\tDSTMETA " << H::get_metadata_type(sp, m_resolve, *repr) << ";\n";
@@ -718,7 +718,7 @@ namespace {
             bool has_drop_glue = m_resolve.type_needs_drop_glue(sp, ty);
             auto drop_glue_path = ::HIR::Path(ty, "#drop_glue");
 
-            const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+            const auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
             MIR_ASSERT(*m_mir_res, repr, "No repr for union " << ty);
             m_of << "type " << fmt(p) << " {\n";
             m_of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
@@ -745,7 +745,7 @@ namespace {
             bool has_drop_glue = m_resolve.type_needs_drop_glue(sp, ty);
             auto drop_glue_path = ::HIR::Path(ty, "#drop_glue");
 
-            const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+            const auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
             MIR_ASSERT(*m_mir_res, repr, "No repr for enum " << ty);
             m_of << "type " << fmt(p) << " {\n";
             m_of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
@@ -847,7 +847,7 @@ namespace {
             }
         }
 
-        void emit_static_local(const ::HIR::Path& p, const ::HIR::Static& item, const Trans_Params& params, const EncodedLiteral& encoded) override {
+        void emit_static_local(const ::HIR::Path& p, const ::HIR::Static& item, const TransParams& params, const EncodedLiteral& encoded) override {
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
                 sp, m_resolve, FMT_CB(ss, ss << "static " << p;), ::HIR::TypeRef(), {}, empty_fcn
@@ -879,7 +879,7 @@ namespace {
             m_mir_res = nullptr;
         }
 
-        void emit_function_ext(const ::HIR::Path& p, const ::HIR::Function& item, const Trans_Params& params) override {
+        void emit_function_ext(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params) override {
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
                 sp, m_resolve, FMT_CB(ss, ss << "extern fn " << p;), ::HIR::TypeRef(), {}, empty_fcn
@@ -906,7 +906,7 @@ namespace {
             m_mir_res = nullptr;
         }
 
-        void emit_function_code(const ::HIR::Path& p, const ::HIR::Function& item, const Trans_Params& params, bool is_extern_def, const ::MIR::FunctionPointer& code) override {
+        void emit_function_code(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool is_extern_def, const ::MIR::FunctionPointer& code) override {
             TRACE_FUNCTION_F(p);
 
             ::MIR::TypeResolve::args_t arg_types;
@@ -1340,7 +1340,7 @@ namespace {
         }
 
     private:
-        const ::HIR::TypeData* monomorphise_fcn_return(::HIR::TypeRef& tmp, const ::HIR::Function& item, const Trans_Params& params) {
+        const ::HIR::TypeData* monomorphise_fcn_return(::HIR::TypeRef& tmp, const ::HIR::Function& item, const TransParams& params) {
             bool has_erased = visit_ty_with(item.m_return, [&](const auto& x) {
                 return x->is_ErasedType();
             });
@@ -1369,11 +1369,11 @@ namespace {
         }
     };
 
-    Span CodeGenerator_MonoMir::sp;
+    Span CodeGeneratorMonoMir::sp;
 }
 
-::std::unique_ptr<CodeGenerator> Trans_Codegen_GetGenerator_MonoMir(const ::HIR::Crate& crate, const ::std::string& outfile) {
-    return ::std::unique_ptr<CodeGenerator>(new CodeGenerator_MonoMir(crate, outfile));
+::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorMonoMir(const ::HIR::Crate& crate, const ::std::string& outfile) {
+    return ::std::unique_ptr<CodeGenerator>(new CodeGeneratorMonoMir(crate, outfile));
 }
 
 CodeGenerator::~CodeGenerator() {

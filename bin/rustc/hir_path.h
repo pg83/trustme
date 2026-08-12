@@ -47,7 +47,7 @@ namespace HIR {
 
         const EncodedLiteral* operator->() const;
     };
-    struct ConstGeneric_Unevaluated;
+    struct ConstGenericUnevaluated;
     TAGGED_UNION_EX(
         ConstGeneric,
         (),
@@ -64,7 +64,7 @@ namespace HIR {
              }),
             // NOTE: This is a `unique_ptr` because it contains two PathParams and a shared (2*3 pointers + 2 pointers)
             // The rest of the variants here are two pointers
-            (Unevaluated, std::unique_ptr<ConstGeneric_Unevaluated>), // Unevaluated (or evaluation deferred)
+            (Unevaluated, std::unique_ptr<ConstGenericUnevaluated>), // Unevaluated (or evaluation deferred)
             //(Unevaluated, std::shared_ptr<HIR::ExprPtr>),   // Unevaluated (or evaluation deferred)
             (Generic, GenericRef),         // A single generic reference
             (Evaluated, EncodedLiteralPtr) // A fully known literal
@@ -349,22 +349,22 @@ namespace HIR {
         friend ::std::ostream& operator<<(::std::ostream& os, const Path& x);
     };
 
-    struct ConstGeneric_Unevaluated {
+    struct ConstGenericUnevaluated {
         /// Impl-level parameters to the expression
         HIR::PathParams params_impl;
         HIR::PathParams params_item;
         /// HIR/MIR for this unevaluated parameter
         std::shared_ptr<HIR::ExprPtr> expr;
 
-        ConstGeneric_Unevaluated(HIR::ExprPtr ep);
-        ConstGeneric_Unevaluated clone() const;
-        ConstGeneric_Unevaluated monomorph(const Span& sp, const Monomorphiser& ms, bool allow_infer = true) const;
-        bool equivalent(const ConstGeneric_Unevaluated& x) const;
-        Ordering ord(const ConstGeneric_Unevaluated& x) const;
+        ConstGenericUnevaluated(HIR::ExprPtr ep);
+        ConstGenericUnevaluated clone() const;
+        ConstGenericUnevaluated monomorph(const Span& sp, const Monomorphiser& ms, bool allow_infer = true) const;
+        bool equivalent(const ConstGenericUnevaluated& x) const;
+        Ordering ord(const ConstGenericUnevaluated& x) const;
         void fmt(::std::ostream& os) const;
 
     private:
-        ConstGeneric_Unevaluated();
+        ConstGenericUnevaluated();
     };
 
 } // namespace HIR

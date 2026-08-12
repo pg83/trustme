@@ -43,15 +43,15 @@ enum class CodegenOutput {
     Executable,     // no suffix, includes main stub (TODO: Can't that just be added earlier?)
 };
 
-extern TransList Trans_Enumerate_Main(const ::HIR::Crate& crate);
+extern TransList TransEnumerateMain(const ::HIR::Crate& crate);
 // NOTE: This also sets the saveout flags
-extern TransList Trans_Enumerate_Public(::HIR::Crate& crate);
+extern TransList TransEnumeratePublic(::HIR::Crate& crate);
 
 /// Re-run enumeration on monomorphised functions, removing now-unused items
-extern void Trans_Enumerate_Cleanup(const ::HIR::Crate& crate, TransList& list);
+extern void TransEnumerateCleanup(const ::HIR::Crate& crate, TransList& list);
 
-extern void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list);
+extern void TransAutoImpls(::HIR::Crate& crate, TransList& trans_list);
 
-extern void Trans_Monomorphise_List(const ::HIR::Crate& crate, TransList& list, unsigned mir_opt_level);
+extern void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned mir_opt_level);
 
-extern void Trans_Codegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* crate, TransList list, const ::std::string& hir_file);
+extern void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* crate, TransList list, const ::std::string& hir_file);

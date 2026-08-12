@@ -4,6 +4,6 @@ namespace AST {
     class Crate;
 }
 
-extern void Resolve_Use(::AST::Crate& crate);
-extern void Resolve_Index(::AST::Crate& crate);
-extern void Resolve_Absolutise(::AST::Crate& crate);
+extern void ResolveUse(::AST::Crate& crate);
+extern void ResolveIndex(::AST::Crate& crate);
+extern void ResolveAbsolutise(::AST::Crate& crate);

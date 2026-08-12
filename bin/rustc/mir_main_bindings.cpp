@@ -549,13 +549,13 @@ namespace {
     };
 }
 
-void MIR_Dump(::std::ostream& sink, const ::HIR::Crate& crate) {
+void MIRDump(::std::ostream& sink, const ::HIR::Crate& crate) {
     TreeVisitor tv{crate.m_types, sink};
 
     tv.visit_crate(const_cast<::HIR::Crate&>(crate));
 }
 
-void MIR_Dump_Fcn(::std::ostream& sink, const ::MIR::Function& fcn, unsigned int il) {
+void MIRDumpFcn(::std::ostream& sink, const ::MIR::Function& fcn, unsigned int il) {
     MirDumper md{sink, il};
     md.dump_mir(fcn);
 }

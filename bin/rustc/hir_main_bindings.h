@@ -18,9 +18,9 @@ namespace stl {
     class ObjPool;
 }
 
-extern void HIR_Dump(::std::ostream& sink, const ::HIR::Crate& crate);
-extern ::HIR::Crate* LowerHIR_FromAST(stl::ObjPool* pool, ::AST::Crate& crate);
-extern void HIR_Serialise(const ::std::string& filename, const ::HIR::Crate& crate);
+extern void HIRDump(::std::ostream& sink, const ::HIR::Crate& crate);
+extern ::HIR::Crate* LowerHIRFromAST(stl::ObjPool* pool, ::AST::Crate& crate);
+extern void HIRSerialise(const ::std::string& filename, const ::HIR::Crate& crate);
 
-extern ::HIR::Crate* HIR_Deserialise(stl::ObjPool* pool, ::HIR::TypeInterner& types, const ::std::string& filename);
-extern RcString HIR_Deserialise_JustName(const ::std::string& filename);
+extern ::HIR::Crate* HIRDeserialise(stl::ObjPool* pool, ::HIR::TypeInterner& types, const ::std::string& filename);
+extern RcString HIRDeserialiseJustName(const ::std::string& filename);

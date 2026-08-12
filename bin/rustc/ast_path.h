@@ -66,7 +66,7 @@ namespace AST {
     };
 
     TAGGED_UNION_EX(
-        PathBinding_Value,
+        PathBindingValue,
         (),
         Unbound,
         ((Unbound, struct {}),
@@ -91,10 +91,10 @@ namespace AST {
          (Variable, struct { unsigned int slot; })),
         (),
         (),
-        (public : PathBinding_Value clone() const;)
+        (public : PathBindingValue clone() const;)
     );
     TAGGED_UNION_EX(
-        PathBinding_Type,
+        PathBindingType,
         (),
         Unbound,
         ((Unbound, struct {}),
@@ -145,10 +145,10 @@ namespace AST {
          (TypeParameter, struct { unsigned int slot; })),
         (),
         (),
-        (public : PathBinding_Type clone() const;)
+        (public : PathBindingType clone() const;)
     );
     TAGGED_UNION_EX(
-        PathBinding_Macro,
+        PathBindingMacro,
         (),
         Unbound,
         ((Unbound, struct {}),
@@ -174,12 +174,12 @@ namespace AST {
           })),
         (),
         (),
-        (public : PathBinding_Macro clone() const;)
+        (public : PathBindingMacro clone() const;)
     );
 
-    extern ::std::ostream& operator<<(::std::ostream& os, const PathBinding_Value& x);
-    extern ::std::ostream& operator<<(::std::ostream& os, const PathBinding_Type& x);
-    extern ::std::ostream& operator<<(::std::ostream& os, const PathBinding_Macro& x);
+    extern ::std::ostream& operator<<(::std::ostream& os, const PathBindingValue& x);
+    extern ::std::ostream& operator<<(::std::ostream& os, const PathBindingType& x);
+    extern ::std::ostream& operator<<(::std::ostream& os, const PathBindingMacro& x);
 
     /// <summary>
     /// Wrapper for PathBinding_* that also includes an item path
@@ -331,9 +331,9 @@ namespace AST {
         );
 
         struct Bindings {
-            PathBinding<PathBinding_Value> value;
-            PathBinding<PathBinding_Type> type;
-            PathBinding<PathBinding_Macro> macro;
+            PathBinding<PathBindingValue> value;
+            PathBinding<PathBindingType> type;
+            PathBinding<PathBindingMacro> macro;
 
             Bindings clone() const {
                 return Bindings{value.clone(), type.clone(), macro.clone()};
@@ -368,11 +368,11 @@ namespace AST {
 
         Path(const AbsolutePath& p);
 
-        Path(const PathBinding<PathBinding_Value>& pb);
+        Path(const PathBinding<PathBindingValue>& pb);
 
-        Path(const PathBinding<PathBinding_Type>& pb);
+        Path(const PathBinding<PathBindingType>& pb);
 
-        Path(const PathBinding<PathBinding_Macro>& pb);
+        Path(const PathBinding<PathBindingMacro>& pb);
 
         Path(const AbsolutePath& p, ::AST::PathParams pp);
 

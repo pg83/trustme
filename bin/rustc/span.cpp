@@ -5,17 +5,17 @@
 #include "common.h"
 
 Span::Span(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int end_line, unsigned int end_ofs)
-    : m_ptr(SpanInner_Source::alloc(parent, ::std::move(filename), start_line, start_ofs, end_line, end_ofs))
+    : m_ptr(SpanInnerSource::alloc(parent, ::std::move(filename), start_line, start_ofs, end_line, end_ofs))
 {
 }
 
 Span::Span(Span parent, const Position& pos)
-    : m_ptr(SpanInner_Source::alloc(parent, pos.filename, pos.line, pos.ofs, pos.line, pos.ofs))
+    : m_ptr(SpanInnerSource::alloc(parent, pos.filename, pos.line, pos.ofs, pos.line, pos.ofs))
 {
 }
 
 Span::Span(Span parent, RcString source_crate, RcString macro_name)
-    : m_ptr(SpanInner_Macro::alloc(parent, source_crate, macro_name))
+    : m_ptr(SpanInnerMacro::alloc(parent, source_crate, macro_name))
 {
 }
 
@@ -37,12 +37,12 @@ Span::~Span() {
     }
 }
 
-const SpanInner_Source& Span::get_top_file_span() const {
+const SpanInnerSource& Span::get_top_file_span() const {
     auto* top_span = this;
     while (top_span->get() && (*top_span)->parent_span != Span()) {
         top_span = &(*top_span)->parent_span;
     }
-    if (const auto* ts = cast<const SpanInner_Source>(top_span->get())) {
+    if (const auto* ts = cast<const SpanInnerSource>(top_span->get())) {
         return *ts;
     }
     TODO(*this, "Top span isn't source?");
@@ -96,14 +96,14 @@ void Span::note(::std::function<void(::std::ostream&)> msg) const {
 SpanInner::~SpanInner() {
 }
 
-SpanInner_Source::~SpanInner_Source() {
+SpanInnerSource::~SpanInnerSource() {
 }
 
-unsigned int SpanInner_Source::node_kind() const {
-    return SpanInner_Source::kind;
+unsigned int SpanInnerSource::node_kind() const {
+    return SpanInnerSource::kind;
 }
 
-void SpanInner_Source::fmt(::std::ostream& os) const {
+void SpanInnerSource::fmt(::std::ostream& os) const {
     os << this->filename;
     if (this->start_line != this->end_line) {
         os << ":" << this->start_line << "-" << this->end_line;
@@ -114,19 +114,19 @@ void SpanInner_Source::fmt(::std::ostream& os) const {
     }
 }
 
-SpanInner_Macro::~SpanInner_Macro() {
+SpanInnerMacro::~SpanInnerMacro() {
 }
 
-unsigned int SpanInner_Macro::node_kind() const {
-    return SpanInner_Macro::kind;
+unsigned int SpanInnerMacro::node_kind() const {
+    return SpanInnerMacro::kind;
 }
 
-void SpanInner_Macro::fmt(::std::ostream& os) const {
+void SpanInnerMacro::fmt(::std::ostream& os) const {
     os << "MACRO<::\"" << this->crate << "\"::" << this->macro << ">";
 }
 
-/*static*/ SpanInner* SpanInner_Macro::alloc(Span parent, RcString crate, RcString macro) {
-    auto rv = new SpanInner_Macro;
+/*static*/ SpanInner* SpanInnerMacro::alloc(Span parent, RcString crate, RcString macro) {
+    auto rv = new SpanInnerMacro;
     rv->reference_count = 1;
     rv->parent_span = std::move(parent);
     rv->crate = std::move(crate);
@@ -161,8 +161,8 @@ Span& Span::operator=(Span&& x) {
     new (this) Span(std::move(x));
     return *this;
 }
-SpanInner* SpanInner_Source::alloc(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int end_line, unsigned int end_ofs) {
-    auto* rv = new SpanInner_Source();
+SpanInner* SpanInnerSource::alloc(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int end_line, unsigned int end_ofs) {
+    auto* rv = new SpanInnerSource();
     rv->reference_count = 1;
     rv->parent_span = parent;
     rv->filename = ::std::move(filename);

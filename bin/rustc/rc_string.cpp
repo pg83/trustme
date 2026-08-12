@@ -81,7 +81,7 @@ namespace {
         }
     };
 
-    struct Cmp_RcString_Raw {
+    struct CmpRcStringRaw {
         bool operator()(const RcString& a, const RcString& b) const {
             return a.ord(b.c_str(), b.size()) == OrdLess;
         }
@@ -240,21 +240,21 @@ namespace {
     };
 }
 
-TieredSet* RcString_interned_strings;
-bool RcString_interned_ordering_valid;
+TieredSet* RcStringInternedStrings;
+bool RcStringInternedOrderingValid;
 
 RcString RcString::new_interned(const char* s, size_t len) {
     if (len == 0) {
         return RcString();
     }
-    if (!RcString_interned_strings) {
-        RcString_interned_strings = new TieredSet;
+    if (!RcStringInternedStrings) {
+        RcStringInternedStrings = new TieredSet;
     }
-    auto ret = RcString_interned_strings->lookup_or_add(StringView{s, len});
+    auto ret = RcStringInternedStrings->lookup_or_add(StringView{s, len});
     // Set interned and invalidate the cache if an insert happened
     if (ret.second) {
         ret.first->m_ptr->ordering = 1;
-        RcString_interned_ordering_valid = false;
+        RcStringInternedOrderingValid = false;
     }
     //assert( ret.first->ord(s, len) == 0 );
     return *ret.first;
@@ -262,14 +262,14 @@ RcString RcString::new_interned(const char* s, size_t len) {
 
 Ordering RcString::ord_interned(const RcString& s) const {
     assert(s.is_interned() && this->is_interned());
-    if (!RcString_interned_ordering_valid) {
+    if (!RcStringInternedOrderingValid) {
         // Populate cache
         unsigned i = 1;
-        assert(RcString_interned_strings);
-        for (auto& e : *RcString_interned_strings) {
+        assert(RcStringInternedStrings);
+        for (auto& e : *RcStringInternedStrings) {
             e.m_ptr->ordering = i++;
         }
-        RcString_interned_ordering_valid = true;
+        RcStringInternedOrderingValid = true;
     }
     return ::ord(this->m_ptr->ordering, s.m_ptr->ordering);
 }

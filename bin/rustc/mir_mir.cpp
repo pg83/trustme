@@ -730,7 +730,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
                         case ::HIR::CoreType::U128:
                             return ::MIR::Constant::make_Uint({v.read_uint(ve->bytes.size()), ty->as_Primitive()});
                         case ::HIR::CoreType::Usize:
-                            return ::MIR::Constant::make_Uint({v.read_uint(Target_GetPointerBits() / 8), ty->as_Primitive()});
+                            return ::MIR::Constant::make_Uint({v.read_uint(TargetGetPointerBits() / 8), ty->as_Primitive()});
                         case ::HIR::CoreType::I8:
                         case ::HIR::CoreType::I16:
                         case ::HIR::CoreType::I32:
@@ -738,7 +738,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
                         case ::HIR::CoreType::I128:
                             return ::MIR::Constant::make_Int({v.read_sint(ve->bytes.size()), ty->as_Primitive()});
                         case ::HIR::CoreType::Isize:
-                            return ::MIR::Constant::make_Int({v.read_sint(Target_GetPointerBits() / 8), ty->as_Primitive()});
+                            return ::MIR::Constant::make_Int({v.read_sint(TargetGetPointerBits() / 8), ty->as_Primitive()});
                         case ::HIR::CoreType::F16:
                         case ::HIR::CoreType::F32:
                         case ::HIR::CoreType::F64:

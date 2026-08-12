@@ -20,7 +20,7 @@ namespace AST {
     {
     }
 
-    Trait::Trait(GenericParams params, ::std::vector<Spanned<Type_TraitPath>> supertraits, ::std::vector<Spanned<LifetimeRef>> lifetimes)
+    Trait::Trait(GenericParams params, ::std::vector<Spanned<TypeTraitPath>> supertraits, ::std::vector<Spanned<LifetimeRef>> lifetimes)
         : m_params(mv$(params))
         , m_supertraits(mv$(supertraits))
         , m_lifetimes(mv$(lifetimes))
@@ -112,7 +112,7 @@ namespace AST {
     std::string Attribute::parse_equals_string(const AST::Crate& crate, const AST::Module& mod) const {
         TTStream lex(this->m_span, ParseState(), this->data());
         lex.getTokenCheck(TOK_EQUAL);
-        auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
+        auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
 
         std::string rv;
         if (auto* v = cast<::AST::ExprNodeString>(&*n)) {

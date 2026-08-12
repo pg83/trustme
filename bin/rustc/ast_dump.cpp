@@ -376,7 +376,7 @@ public:
         AST::NodeVisitor::visit(n.m_code);
     }
 
-    void visit_iflet_conditions(std::vector<AST::IfLet_Condition>& conds) {
+    void visit_iflet_conditions(std::vector<AST::IfLetCondition>& conds) {
         for (size_t i = 0; i < conds.size(); i++) {
             if (i != 0) {
                 m_os << " && ";
@@ -1458,13 +1458,13 @@ void RustPrinter::dec_indent() {
     m_indent_level--;
 }
 
-void Dump_Rust(const char* filename, const AST::Crate& crate) {
+void DumpRust(const char* filename, const AST::Crate& crate) {
     ::std::ofstream os(filename);
     RustPrinter printer(os);
     printer.handle_module(crate.root_module());
 }
 
-void DumpAST_Node(::std::ostream& os, const AST::ExprNode& node) {
+void DumpASTNode(::std::ostream& os, const AST::ExprNode& node) {
     RustPrinter printer(os);
     const_cast<AST::ExprNode&>(node).visit(printer);
 }

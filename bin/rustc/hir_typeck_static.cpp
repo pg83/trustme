@@ -32,7 +32,7 @@ namespace {
         }
 
         virtual ::HIR::Compare match_lft(const ::HIR::GenericRef& g, const ::HIR::LifetimeRef& lft) {
-            if (!::HIR::MatchGenerics::has_hrb() && g.group() == ::HIR::GENERIC_Hrtb) {
+            if (!::HIR::MatchGenerics::has_hrb() && g.group() == ::HIR::GENERICHrtb) {
                 ASSERT_BUG(Span(), g.idx() < hrls.m_lifetimes.size(), "HRL index out of range");
                 hrls.m_lifetimes.at(g.idx()) = lft;
                 return ::HIR::Compare::Equal;
@@ -50,7 +50,7 @@ namespace {
         }
 
         ::HIR::LifetimeRef get_lifetime(const Span& sp, const ::HIR::GenericRef& g) const {
-            if (g.group() == ::HIR::GENERIC_Hrtb) {
+            if (g.group() == ::HIR::GENERICHrtb) {
                 return hrls.m_lifetimes.at(g.idx());
             }
             return ::HIR::LifetimeRef(g.binding);
@@ -114,7 +114,7 @@ public:
             inferred_params.m_types.reserve(trait_def.m_params.m_types.size());
             for (size_t i = 0; i < trait_def.m_params.m_types.size(); i++) {
                 inferred_params.m_types.push_back(m_resolve.m_crate.m_types.generic(
-                    placeholder_name, ::HIR::GENERIC_Placeholder * 256 + i
+                    placeholder_name, ::HIR::GENERICPlaceholder * 256 + i
                 ));
             }
             inferred_params.m_values.reserve(trait_def.m_params.m_values.size());
@@ -123,7 +123,7 @@ public:
                     ::HIR::ConstGeneric::make_Generic({
                         placeholder_name,
                         static_cast<unsigned int>(
-                            ::HIR::GENERIC_Placeholder * 256 + i
+                            ::HIR::GENERICPlaceholder * 256 + i
                         )
                     })
                 );
@@ -310,7 +310,7 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
 
     // Special case: Generic placeholder
     if (const auto* e = type->opt_Generic()) {
-        if (e->group() == HIR::GENERIC_Placeholder) {
+        if (e->group() == HIR::GENERICPlaceholder) {
             // TODO: If the type is a magic placeholder, assume it impls the specified trait.
             // TODO: Restructure so this knows that the placehlder impls the impl-provided bounds.
             return found_cb(ImplRef(type, trait_params, &null_assoc), false);
@@ -1550,11 +1550,11 @@ void StaticTraitResolve::expand_associated_types(const Span& sp, ::HIR::TypeRef&
 }
 
 void StaticTraitResolve::evaluate_array_size(const Span& sp, ::HIR::ArraySize& size) const {
-    ConvertHIR_ConstantEvaluate_ArraySize(sp, m_crate, HIR::SimplePath(m_crate.m_crate_name, {}), size);
+    ConvertHIRConstantEvaluateArraySize(sp, m_crate, HIR::SimplePath(m_crate.m_crate_name, {}), size);
 }
 
 void StaticTraitResolve::evaluate_const_generic(const Span& sp, ::HIR::ConstGeneric& value) const {
-    ConvertHIR_ConstantEvaluate_ConstGeneric(sp, m_crate, value);
+    ConvertHIRConstantEvaluateConstGeneric(sp, m_crate, value);
 }
 
 void StaticTraitResolve::evaluate_path_params(const Span& sp, ::HIR::PathParams& params) const {
@@ -1664,7 +1664,7 @@ void StaticTraitResolve::expand_associated_types_inner(const Span& sp, ::HIR::Ty
         TU_MATCH_HDRA( (e.path.m_data), { )
         TU_ARMA(Generic, e2) {
                     evaluate_path_params(sp, e2.m_params);
-                    ConvertHIR_ConstantEvaluate_MethodParams(sp, m_crate, HIR::SimplePath(m_crate.m_crate_name, {}), m_impl_generics, m_item_generics, e.binding.get_generics(), e2.m_params);
+                    ConvertHIRConstantEvaluateMethodParams(sp, m_crate, HIR::SimplePath(m_crate.m_crate_name, {}), m_impl_generics, m_item_generics, e.binding.get_generics(), e2.m_params);
                     expand_associated_types_params(sp, e2.m_params);
                 }
                 TU_ARMA(UfcsInherent, e2) {
@@ -1741,7 +1741,7 @@ void StaticTraitResolve::expand_associated_types_inner(const Span& sp, ::HIR::Ty
             }
         }
         TU_ARMA(Array, e) {
-            ConvertHIR_ConstantEvaluate_ArraySize(sp, m_crate, HIR::SimplePath(m_crate.m_crate_name, {}), e.size);
+            ConvertHIRConstantEvaluateArraySize(sp, m_crate, HIR::SimplePath(m_crate.m_crate_name, {}), e.size);
             expand_associated_types_inner(sp, e.inner);
         }
         TU_ARMA(Slice, e) {
@@ -1849,7 +1849,7 @@ bool StaticTraitResolve::expand_associated_types__UfcsInherent(const Span& sp, :
         return false;
     }
 
-    ConvertHIR_ConstantEvaluate_MethodParams(
+    ConvertHIRConstantEvaluateMethodParams(
         sp,
         m_crate,
         ::HIR::SimplePath(m_crate.m_crate_name, {}),
@@ -1868,7 +1868,7 @@ bool StaticTraitResolve::expand_associated_types__UfcsInherent(const Span& sp, :
         || item_params.m_values.size() != alias->m_params.m_values.size()) {
         ERROR(sp, E0000, "Incorrect generic arguments for inherent associated type " << input);
     }
-    ConvertHIR_ConstantEvaluate_MethodParams(
+    ConvertHIRConstantEvaluateMethodParams(
         sp,
         m_crate,
         ::HIR::SimplePath(m_crate.m_crate_name, {}),

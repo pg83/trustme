@@ -17,7 +17,7 @@ class CMacroRulesExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand_ident(const Span& sp, const ::AST::Crate& crate, const RcString& ident, const TokenTree& tt, AST::Module& mod) override {
         DEBUG("Parsing macro_rules! " << ident);
         TTStream lex(sp, ParseState(), tt);
-        auto mac = Parse_MacroRules(lex);
+        auto mac = ParseMacroRules(lex);
         DEBUG("macro_rules! " << mod.path() + ident << " " << &*mac);
         mod.add_macro(false, ident, mv$(mac));
 

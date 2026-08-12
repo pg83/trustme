@@ -405,7 +405,7 @@ namespace AST {
     )
 
     namespace {
-        void fmt_iflet_conditions(::std::ostream& os, const ::std::vector<AST::IfLet_Condition>& conditions) {
+        void fmt_iflet_conditions(::std::ostream& os, const ::std::vector<AST::IfLetCondition>& conditions) {
             for (const auto& cond : conditions) {
                 if (&cond != &conditions.front()) {
                     os << " && ";
@@ -418,11 +418,11 @@ namespace AST {
             }
         }
 
-        ::std::vector<AST::IfLet_Condition> clone_iflet_conditions(const ::std::vector<AST::IfLet_Condition>& conditions) {
-            ::std::vector<AST::IfLet_Condition> new_conds;
+        ::std::vector<AST::IfLetCondition> clone_iflet_conditions(const ::std::vector<AST::IfLetCondition>& conditions) {
+            ::std::vector<AST::IfLetCondition> new_conds;
             new_conds.reserve(conditions.size());
             for (const auto& cond : conditions) {
-                AST::IfLet_Condition new_cond;
+                AST::IfLetCondition new_cond;
                 if (cond.opt_pat) {
                     new_cond.opt_pat = std::make_unique<AST::Pattern>(cond.opt_pat->clone());
                 }
@@ -1073,14 +1073,14 @@ ExprNodeFor::ExprNodeFor(Ident label, AST::Pattern pattern, ExprNodeP val, ExprN
     , m_value(::std::move(val))
     , m_code(::std::move(code)) {
 }
-ExprNodeWhile::ExprNodeWhile(Ident label, std::vector<IfLet_Condition> conditions, ExprNodeP code)
+ExprNodeWhile::ExprNodeWhile(Ident label, std::vector<IfLetCondition> conditions, ExprNodeP code)
     : m_label(::std::move(label))
     , m_conditions(::std::move(conditions))
     , m_code(::std::move(code)) {
 }
 ExprNodeMatchArm::ExprNodeMatchArm() {
 }
-ExprNodeMatchArm::ExprNodeMatchArm(::std::vector<Pattern> patterns, std::vector<IfLet_Condition> guard, ExprNodeP code)
+ExprNodeMatchArm::ExprNodeMatchArm(::std::vector<Pattern> patterns, std::vector<IfLetCondition> guard, ExprNodeP code)
     : m_patterns(mv$(patterns))
     , m_guard(mv$(guard))
     , m_code(mv$(code)) {

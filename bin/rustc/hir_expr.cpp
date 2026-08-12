@@ -827,7 +827,7 @@ ExprNodeArrayList::ExprNodeArrayList(Span sp, ::std::vector<::HIR::ExprNodeP> va
 ExprNodeArraySized::ExprNodeArraySized(Span sp, ::HIR::ExprNodeP val, ::HIR::ExprPtr size)
     : ExprNode(mv$(sp))
     , m_val(mv$(val))
-    , m_size(HIR::ConstGeneric(std::make_unique<HIR::ConstGeneric_Unevaluated>(mv$(size)))) {
+    , m_size(HIR::ConstGeneric(std::make_unique<HIR::ConstGenericUnevaluated>(mv$(size)))) {
 }
 ExprNodeClosure::ExprNodeClosure(Span sp, args_t args, ::HIR::TypeRef rv, ::HIR::ExprNodeP code, bool is_move)
     : ExprNode(mv$(sp))

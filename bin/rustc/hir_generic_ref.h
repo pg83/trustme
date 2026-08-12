@@ -4,17 +4,17 @@
 #include "rc_string.h"
 
 /// Binding index for a Generic that indicates "Self"
-#define GENERIC_Self 0xFFFF
+#define GENERICSelf 0xFFFF
 /// `Self` in the context of an erased type
-#define GENERIC_ErasedSelf 0xFFFE
+#define GENERICErasedSelf 0xFFFE
 
 namespace HIR {
 
     enum GenericGroup {
-        GENERIC_Impl,
-        GENERIC_Item,
-        GENERIC_Placeholder,
-        GENERIC_Hrtb,
+        GENERICImpl,
+        GENERICItem,
+        GENERICPlaceholder,
+        GENERICHrtb,
     };
 
     struct GenericRef {
@@ -27,7 +27,7 @@ namespace HIR {
         GenericRef(RcString name, GenericGroup group, uint16_t idx);
 
         static GenericRef new_self() {
-            return GenericRef(RcString::new_interned("Self"), GENERIC_Self);
+            return GenericRef(RcString::new_interned("Self"), GENERICSelf);
         }
 
         bool is_self() const {
@@ -43,7 +43,7 @@ namespace HIR {
         }
 
         bool is_placeholder() const {
-            return (binding >> 8) == GENERIC_Placeholder;
+            return (binding >> 8) == GENERICPlaceholder;
         }
 
         Ordering ord(const GenericRef& x) const;

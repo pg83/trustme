@@ -798,7 +798,7 @@ TraitPath::AtyBound TraitPath::AtyBound::clone() const {
 Path::Path(Data data)
     : m_data(mv$(data)) {
 }
-ConstGeneric_Unevaluated::ConstGeneric_Unevaluated() {
+ConstGenericUnevaluated::ConstGenericUnevaluated() {
 }
 }
 

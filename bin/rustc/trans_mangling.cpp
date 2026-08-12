@@ -399,19 +399,19 @@ public:
     }
 };
 
-::FmtLambda Trans_ManglePath(const ::HIR::Path& p) {
+::FmtLambda TransManglePath(const ::HIR::Path& p) {
     return FMT_CB(os, os << "ZR"; Mangler(os).fmt_path(p));
 }
 
-::FmtLambda Trans_MangleSimplePath(const ::HIR::SimplePath& p) {
+::FmtLambda TransMangleSimplePath(const ::HIR::SimplePath& p) {
     return FMT_CB(os, os << "ZRG"; Mangler(os).fmt_simple_path(p); Mangler(os).fmt_path_params({}););
 }
 
-::FmtLambda Trans_MangleGenericPath(const ::HIR::GenericPath& p) {
+::FmtLambda TransMangleGenericPath(const ::HIR::GenericPath& p) {
     return FMT_CB(os, os << "ZRG"; Mangler(os).fmt_generic_path(p));
 }
 
-::FmtLambda Trans_MangleTypeRef(const ::HIR::TypeData* p) {
+::FmtLambda TransMangleTypeRef(const ::HIR::TypeData* p) {
     return ::FmtLambda([p](::std::ostream& os) {
         os << "ZRT";
         Mangler(os).fmt_type(p);
@@ -440,13 +440,13 @@ namespace {
 
 // TODO: If the mangled name exceeds a limit, stop emitting the real name and start hashing the rest.
 #define DO_MANGLE(ty)                              \
-    ::FmtLambda Trans_Mangle(const ::HIR::ty& v) { \
-        return max_len(Trans_Mangle##ty(v));       \
+    ::FmtLambda TransMangle(const ::HIR::ty& v) { \
+        return max_len(TransMangle##ty(v));       \
     }
 DO_MANGLE(SimplePath)
 DO_MANGLE(GenericPath)
 DO_MANGLE(Path)
 
-::FmtLambda Trans_Mangle(const ::HIR::TypeData* v) {
-    return max_len(Trans_MangleTypeRef(v));
+::FmtLambda TransMangle(const ::HIR::TypeData* v) {
+    return max_len(TransMangleTypeRef(v));
 }

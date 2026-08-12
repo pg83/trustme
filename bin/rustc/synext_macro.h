@@ -25,8 +25,8 @@ public:
 };
 
 struct MacroDef;
-extern void Register_Synext_Macro(::std::string name, ::std::unique_ptr<ExpandProcMacro> handler);
-extern void Register_Synext_Macro_Static(MacroDef* def);
+extern void RegisterSynextMacro(::std::string name, ::std::unique_ptr<ExpandProcMacro> handler);
+extern void RegisterSynextMacroStatic(MacroDef* def);
 
 struct MacroDef {
     MacroDef* prev;

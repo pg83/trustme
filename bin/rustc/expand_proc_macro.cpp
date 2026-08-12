@@ -21,7 +21,7 @@ extern char** environ;
 
 #define NEWNODE(ty, ...) ::AST::ExprNodeP(new ::AST::ExprNode##ty(__VA_ARGS__))
 
-class Decorator_ProcMacroDerive: public ExpandDecorator {
+class DecoratorProcMacroDerive: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Post;
@@ -63,9 +63,9 @@ public:
         crate.m_proc_macros.push_back(AST::ProcMacroDef{AST::ProcMacroTy::Derive, RcString::new_interned(FMT(trait_name)), path, mv$(attributes)});
     }
 };
-STATIC_DECORATOR("proc_macro_derive", Decorator_ProcMacroDerive)
+STATIC_DECORATOR("proc_macro_derive", DecoratorProcMacroDerive)
 
-class Decorator_ProcMacroAttribute: public ExpandDecorator {
+class DecoratorProcMacroAttribute: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Post;
@@ -83,9 +83,9 @@ public:
         crate.m_proc_macros.push_back(AST::ProcMacroDef{AST::ProcMacroTy::Attribute, path.nodes.back(), path, {}});
     }
 };
-STATIC_DECORATOR("proc_macro_attribute", Decorator_ProcMacroAttribute)
+STATIC_DECORATOR("proc_macro_attribute", DecoratorProcMacroAttribute)
 
-class Decorator_ProcMacro: public ExpandDecorator {
+class DecoratorProcMacro: public ExpandDecorator {
 public:
     AttrStage stage() const override {
         return AttrStage::Post;
@@ -103,9 +103,9 @@ public:
         crate.m_proc_macros.push_back(AST::ProcMacroDef{AST::ProcMacroTy::Function, path.nodes.back(), path, {}});
     }
 };
-STATIC_DECORATOR("proc_macro", Decorator_ProcMacro)
+STATIC_DECORATOR("proc_macro", DecoratorProcMacro)
 
-void Expand_ProcMacro(::AST::Crate& crate) {
+void ExpandProcMacroHarness(::AST::Crate& crate) {
     auto pm_crate_name = RcString::new_interned("proc_macro");
     AST::g_implicit_crates.insert(std::make_pair(pm_crate_name, crate.load_extern_crate(Span(), pm_crate_name)));
 
@@ -254,7 +254,7 @@ public:
 
     void send_ident(const char* val) {
         this->send_u8(static_cast<uint8_t>(TokenClass::Ident));
-        if (Lex_FindReservedWord(val, m_edition) != TOK_NULL) {
+        if (LexFindReservedWord(val, m_edition) != TOK_NULL) {
             auto size = ::std::strlen(val);
             this->send_v128u(2 + size);
             this->send_bytes_raw("r#", 2);
@@ -381,7 +381,7 @@ public:
         this->send_u8(static_cast<uint8_t>(TokenClass::SpanDef));
         this->send_v128u(index);
         this->send_v128u(0); // TODO: Parent span
-        if (const auto* sp_p = cast<const SpanInner_Source>(sp.get())) {
+        if (const auto* sp_p = cast<const SpanInnerSource>(sp.get())) {
             this->send_bytes(sp_p->filename.c_str(), sp_p->filename.size());
             this->send_u8(1); // path_is_real
             this->send_v128u(sp_p->start_line);
@@ -429,7 +429,7 @@ private:
     U128 recv_v128u_u128();
 };
 
-ProcMacroInv ProcMacro_Invoke_int(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path) {
+ProcMacroInv ProcMacroInvokeInt(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path) {
     TRACE_FUNCTION_F(mac_path);
     // 1. Locate macro in HIR list
     const auto& crate_name = mac_path.front();
@@ -1370,7 +1370,7 @@ namespace {
             // TODO: Dump to a string, then re-parse into a TT and then send that TT
             // - Avoids needing to repeat logic
             ::std::stringstream ss;
-            DumpAST_Node(ss, e);
+            DumpASTNode(ss, e);
             ss << " ";
             DEBUG("STRING: " << ss.str());
 
@@ -1799,9 +1799,9 @@ namespace {
     };
 }
 
-::std::unique_ptr<TokenStream> ProcMacro_Invoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, const TokenTree* attr_input, std::function<void(Visitor& v)> cb) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, const TokenTree* attr_input, std::function<void(Visitor& v)> cb) {
     // 1. Create ProcMacroInv instance
-    auto pmi = ProcMacro_Invoke_int(sp, crate, mac_path);
+    auto pmi = ProcMacroInvokeInt(sp, crate, mac_path);
     if (!pmi.check_good()) {
         return ::std::unique_ptr<TokenStream>();
     }
@@ -1828,8 +1828,8 @@ namespace {
 }
 
 // --- Derive inputs
-::std::unique_ptr<TokenStream> ProcMacro_Invoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& item_name, const ::AST::Struct& i) {
-    return ProcMacro_Invoke(sp, crate, mac_path, nullptr, [&](Visitor& v) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& item_name, const ::AST::Struct& i) {
+    return ProcMacroInvoke(sp, crate, mac_path, nullptr, [&](Visitor& v) {
         DEBUG("derive on struct");
         v.skip_derive_attrs = true;
         v.visit_top_attrs(attrs);
@@ -1837,8 +1837,8 @@ namespace {
     });
 }
 
-::std::unique_ptr<TokenStream> ProcMacro_Invoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& item_name, const ::AST::Enum& i) {
-    return ProcMacro_Invoke(sp, crate, mac_path, nullptr, [&](Visitor& v) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& item_name, const ::AST::Enum& i) {
+    return ProcMacroInvoke(sp, crate, mac_path, nullptr, [&](Visitor& v) {
         DEBUG("derive on enum");
         v.skip_derive_attrs = true;
         v.visit_top_attrs(attrs);
@@ -1846,8 +1846,8 @@ namespace {
     });
 }
 
-::std::unique_ptr<TokenStream> ProcMacro_Invoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& item_name, const ::AST::Union& i) {
-    return ProcMacro_Invoke(sp, crate, mac_path, nullptr, [&](Visitor& v) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& item_name, const ::AST::Union& i) {
+    return ProcMacroInvoke(sp, crate, mac_path, nullptr, [&](Visitor& v) {
         DEBUG("derive on union");
         v.skip_derive_attrs = true;
         v.visit_top_attrs(attrs);
@@ -1856,8 +1856,8 @@ namespace {
 }
 
 // --- attribute
-::std::unique_ptr<TokenStream> ProcMacro_Invoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, const TokenTree& tt, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& item_name, const ::AST::Item& i) {
-    return ProcMacro_Invoke(sp, crate, mac_path, &tt, [&](Visitor& v) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, const TokenTree& tt, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& item_name, const ::AST::Item& i) {
+    return ProcMacroInvoke(sp, crate, mac_path, &tt, [&](Visitor& v) {
         v.emit_all_attrs = true;
         v.visit_top_attrs(attrs);
         v.visit_item(item_name, vis, i);
@@ -1865,8 +1865,8 @@ namespace {
 }
 
 // -- function-like input
-::std::unique_ptr<TokenStream> ProcMacro_Invoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, const TokenTree& tt) {
-    return ProcMacro_Invoke(sp, crate, mac_path, nullptr, [&](Visitor& v) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, const TokenTree& tt) {
+    return ProcMacroInvoke(sp, crate, mac_path, nullptr, [&](Visitor& v) {
         v.visit_tokentree(tt);
     });
 }
@@ -2099,7 +2099,7 @@ Token ProcMacroInv::realGetToken_() {
                 m_eof_hit = true;
                 return Token(TOK_EOF);
             }
-            auto t = Lex_FindOperator(val);
+            auto t = LexFindOperator(val);
             ASSERT_BUG(this->m_parent_span, t != TOK_NULL, "Unknown symbol from child process - '" << val << "'");
             return t;
         }
@@ -2108,7 +2108,7 @@ Token ProcMacroInv::realGetToken_() {
             if (val == "_" || val == "r#_") {
                 return TOK_UNDERSCORE;
             }
-            auto t = Lex_FindReservedWord(val, m_edition);
+            auto t = LexFindReservedWord(val, m_edition);
             if (t != TOK_NULL) {
                 return t;
             }

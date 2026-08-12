@@ -11,49 +11,49 @@
 namespace AST {
 
     // --- AST::PathBinding
-    ::std::ostream& operator<<(::std::ostream& os, const PathBinding_Type& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const PathBindingType& x) {
         TU_MATCHA((x), (i), (Unbound, os << "_";), (Crate, os << "Crate";), (Primitive, os << "Primitive";), (Module, os << "Module";), (Trait, os << "Trait";), (TraitAlias, os << "TraitAlias";), (Struct, os << "Struct";), (Enum, os << "Enum";), (Union, os << "Union";), (EnumVar, os << "EnumVar(" << i.idx << ")";), (TypeAlias, os << "TypeAlias";), (TypeParameter, os << "TyParam(" << i.slot << ")";))
         return os;
     }
 
-    PathBinding_Type PathBinding_Type::clone() const {
+    PathBindingType PathBindingType::clone() const {
         TU_MATCHA(
             (*this),
             (e),
-            (Unbound, return PathBinding_Type::make_Unbound({});),
+            (Unbound, return PathBindingType::make_Unbound({});),
             (Primitive, return e;),
-            (Module, return PathBinding_Type::make_Module(e);),
-            (Crate, return PathBinding_Type(e);),
-            (Trait, return PathBinding_Type(e);),
-            (TraitAlias, return PathBinding_Type(e);),
-            (Struct, return PathBinding_Type(e);),
-            (Enum, return PathBinding_Type(e);),
-            (Union, return PathBinding_Type(e);),
-            (TypeAlias, return PathBinding_Type::make_TypeAlias(e);),
-            (EnumVar, return PathBinding_Type::make_EnumVar(e);),
+            (Module, return PathBindingType::make_Module(e);),
+            (Crate, return PathBindingType(e);),
+            (Trait, return PathBindingType(e);),
+            (TraitAlias, return PathBindingType(e);),
+            (Struct, return PathBindingType(e);),
+            (Enum, return PathBindingType(e);),
+            (Union, return PathBindingType(e);),
+            (TypeAlias, return PathBindingType::make_TypeAlias(e);),
+            (EnumVar, return PathBindingType::make_EnumVar(e);),
 
-            (TypeParameter, return PathBinding_Type::make_TypeParameter(e);)
+            (TypeParameter, return PathBindingType::make_TypeParameter(e);)
         )
         throw "BUG: Fell off the end of PathBinding_Type::clone";
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const PathBinding_Value& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const PathBindingValue& x) {
         TU_MATCHA((x), (i), (Unbound, os << "_";), (Struct, os << "Struct";), (Static, os << "Static";), (Function, os << "Function";), (EnumVar, os << "EnumVar(" << i.idx << ")";), (Generic, os << "Param(" << i.index << ")";), (Variable, os << "Var(" << i.slot << ")";))
         return os;
     }
 
-    PathBinding_Value PathBinding_Value::clone() const {
-        TU_MATCHA((*this), (e), (Unbound, return PathBinding_Value::make_Unbound({});), (Struct, return PathBinding_Value(e);), (Static, return PathBinding_Value(e);), (Function, return PathBinding_Value(e);), (EnumVar, return PathBinding_Value::make_EnumVar(e);), (Generic, return PathBinding_Value::make_Generic(e);), (Variable, return PathBinding_Value::make_Variable(e);))
+    PathBindingValue PathBindingValue::clone() const {
+        TU_MATCHA((*this), (e), (Unbound, return PathBindingValue::make_Unbound({});), (Struct, return PathBindingValue(e);), (Static, return PathBindingValue(e);), (Function, return PathBindingValue(e);), (EnumVar, return PathBindingValue::make_EnumVar(e);), (Generic, return PathBindingValue::make_Generic(e);), (Variable, return PathBindingValue::make_Variable(e);))
         throw "BUG: Fell off the end of PathBinding_Value::clone";
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const PathBinding_Macro& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const PathBindingMacro& x) {
         TU_MATCHA((x), (i), (Unbound, os << "_";), (ProcMacroDerive, os << "ProcMacroDerive(? " << i.mac_name << ")";), (ProcMacroAttribute, os << "ProcMacroAttribute(? " << i.mac_name << ")";), (ProcMacro, os << "ProcMacro(? " << i.mac_name << ")";), (MacroRules, os << "MacroRules(? ?)";))
         return os;
     }
 
-    PathBinding_Macro PathBinding_Macro::clone() const {
-        TU_MATCHA((*this), (e), (Unbound, return PathBinding_Macro::make_Unbound({});), (ProcMacroDerive, return PathBinding_Macro(e);), (ProcMacroAttribute, return PathBinding_Macro(e);), (ProcMacro, return PathBinding_Macro(e);), (MacroRules, return PathBinding_Macro(e);))
+    PathBindingMacro PathBindingMacro::clone() const {
+        TU_MATCHA((*this), (e), (Unbound, return PathBindingMacro::make_Unbound({});), (ProcMacroDerive, return PathBindingMacro(e);), (ProcMacroAttribute, return PathBindingMacro(e);), (ProcMacro, return PathBindingMacro(e);), (MacroRules, return PathBindingMacro(e);))
         throw "BUG: Fell off the end of PathBinding_Macro::clone";
     }
 
@@ -268,7 +268,7 @@ namespace AST {
     }
 
     void Path::bind_variable(unsigned int slot) {
-        m_bindings.value.set(AST::AbsolutePath(), PathBinding_Value::make_Variable({slot}));
+        m_bindings.value.set(AST::AbsolutePath(), PathBindingValue::make_Variable({slot}));
     }
 
     Path& Path::operator+=(const Path& other) {
@@ -480,15 +480,15 @@ Path::Path(const AbsolutePath& p)
         n.push_back(v);
     }
 }
-Path::Path(const PathBinding<PathBinding_Value>& pb)
+Path::Path(const PathBinding<PathBindingValue>& pb)
     : Path(pb.path) {
     this->m_bindings.value = pb.clone();
 }
-Path::Path(const PathBinding<PathBinding_Type>& pb)
+Path::Path(const PathBinding<PathBindingType>& pb)
     : Path(pb.path) {
     this->m_bindings.type = pb.clone();
 }
-Path::Path(const PathBinding<PathBinding_Macro>& pb)
+Path::Path(const PathBinding<PathBindingMacro>& pb)
     : Path(pb.path) {
     this->m_bindings.macro = pb.clone();
 }

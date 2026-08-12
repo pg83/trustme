@@ -104,7 +104,7 @@ namespace HIR {
          bool operator!=(const TypePathBinding & x) const { return !(*this == x); })
     );
 
-    struct TypeData_Path {
+    struct TypeDataPath {
         ::HIR::Path path;
         TypePathBinding binding;
         ::std::unique_ptr<::HIR::GenericParams> hrtbs; // HRTBs for vtable paths ONLY
@@ -122,23 +122,23 @@ namespace HIR {
         }
     };
 
-    struct TypeData_TraitObject {
+    struct TypeDataTraitObject {
         ::HIR::TraitPath m_trait;
         ::std::vector<::HIR::GenericPath> m_markers;
         ::HIR::LifetimeRef m_lifetime;
     };
 
-    struct TypeData_ErasedType_AliasInner {
+    struct TypeDataErasedTypeAliasInner {
         HIR::GenericParams generics;
         HIR::SimplePath path;
         HIR::TypeRef type;
 
-        TypeData_ErasedType_AliasInner(const HIR::ItemPath& p, const HIR::GenericParams& params);
+        TypeDataErasedTypeAliasInner(const HIR::ItemPath& p, const HIR::GenericParams& params);
         bool is_public_to(const HIR::SimplePath& p) const;
     };
 
     TAGGED_UNION(
-        TypeData_ErasedType_Inner,
+        TypeDataErasedTypeInner,
         Alias,
         (Fcn,
          struct {
@@ -148,29 +148,29 @@ namespace HIR {
         (Known, HIR::TypeRef),
         (Alias, struct {
             ::HIR::PathParams params;
-            ::std::shared_ptr<TypeData_ErasedType_AliasInner> inner;
+            ::std::shared_ptr<TypeDataErasedTypeAliasInner> inner;
         })
     );
 
 } // namespace HIR
 
-extern Ordering ord(const HIR::TypeData_ErasedType_Inner& a, const HIR::TypeData_ErasedType_Inner& b);
+extern Ordering ord(const HIR::TypeDataErasedTypeInner& a, const HIR::TypeDataErasedTypeInner& b);
 
-static inline bool operator==(const HIR::TypeData_ErasedType_Inner& a, const HIR::TypeData_ErasedType_Inner& b) {
+static inline bool operator==(const HIR::TypeDataErasedTypeInner& a, const HIR::TypeDataErasedTypeInner& b) {
     return ord(a, b) == OrdEqual;
 }
 
-static inline bool operator!=(const HIR::TypeData_ErasedType_Inner& a, const HIR::TypeData_ErasedType_Inner& b) {
+static inline bool operator!=(const HIR::TypeDataErasedTypeInner& a, const HIR::TypeDataErasedTypeInner& b) {
     return ord(a, b) != OrdEqual;
 }
 
 namespace HIR {
 
-    struct TypeData_ErasedType {
+    struct TypeDataErasedType {
         bool m_is_sized;
         ::std::vector<::HIR::TraitPath> m_traits;
         ::std::vector<::HIR::LifetimeRef> m_lifetime_bounds;
-        TypeData_ErasedType_Inner m_inner;
+        TypeDataErasedTypeInner m_inner;
         /// Contents of the `use<...>` annotation/bound
         ::HIR::PathParams m_use;
         /// Indicates if `use<...>` was present (and what edition)
@@ -184,7 +184,7 @@ namespace HIR {
         } m_use_present;
     };
 
-    struct TypeData_FunctionPointer {
+    struct TypeDataFunctionPointer {
         GenericParams hrls; // Higher-ranked lifetimes
         bool is_unsafe;
         bool is_variadic;
@@ -194,7 +194,7 @@ namespace HIR {
     };
 
     TAGGED_UNION_EX(
-        TypeData_NamedFunction_Ty,
+        TypeDataNamedFunctionTy,
         (),
         Function,
         ((Function, const ::HIR::Function*),
@@ -206,11 +206,11 @@ namespace HIR {
          (StructConstructor, const ::HIR::Struct*)),
         (),
         (),
-        (TypeData_NamedFunction_Ty clone() const;)
+        (TypeDataNamedFunctionTy clone() const;)
     );
     /// "magic structs": Any type generated from a node
     TAGGED_UNION_EX(
-        TypeData_NodeType,
+        TypeDataNodeType,
         (),
         Closure,
         ((Closure, const ::HIR::ExprNodeClosure*),
@@ -218,7 +218,7 @@ namespace HIR {
          (Async, const ::HIR::ExprNodeAsyncBlock*)),
         (),
         (),
-        (bool operator==(const TypeData_NodeType& x) const; bool operator!=(const TypeData_NodeType& x) const { return !(*this == x); } Ordering ord(const ::HIR::TypeData_NodeType& x) const; TypeData_NodeType clone() const; void fmt(::std::ostream& os) const;)
+        (bool operator==(const TypeDataNodeType& x) const; bool operator!=(const TypeDataNodeType& x) const { return !(*this == x); } Ordering ord(const ::HIR::TypeDataNodeType& x) const; TypeDataNodeType clone() const; void fmt(::std::ostream& os) const;)
     );
 
     TAGGED_UNION_EX(
@@ -244,10 +244,10 @@ namespace HIR {
          }),
         (Diverge, struct {}),
         (Primitive, ::HIR::CoreType),
-        (Path, TypeData_Path), // TODO: Pointer wrap
+        (Path, TypeDataPath), // TODO: Pointer wrap
         (Generic, GenericRef),
-        (TraitObject, TypeData_TraitObject),                      // TODO: Pointer wrap
-        (ErasedType, /*::std::unique_ptr<*/ TypeData_ErasedType), // TODO: Pointer wrap
+        (TraitObject, TypeDataTraitObject),                      // TODO: Pointer wrap
+        (ErasedType, /*::std::unique_ptr<*/ TypeDataErasedType), // TODO: Pointer wrap
         (Array,
          struct {
              TypeRef inner;
@@ -269,12 +269,12 @@ namespace HIR {
         (NamedFunction,
          struct {
              ::HIR::Path path;
-             TypeData_NamedFunction_Ty def;
+             TypeDataNamedFunctionTy def;
 
-             TypeData_FunctionPointer decay(TypeInterner& types, const Span& sp) const;
+             TypeDataFunctionPointer decay(TypeInterner& types, const Span& sp) const;
          }),
-        (Function, TypeData_FunctionPointer), // TODO: Pointer wrap, this is quite large
-        (NodeType, TypeData_NodeType)),
+        (Function, TypeDataFunctionPointer), // TODO: Pointer wrap, this is quite large
+        (NodeType, TypeDataNodeType)),
         (, m_flags(x.m_flags)),
         (m_flags = x.m_flags;),
         (
@@ -334,7 +334,7 @@ namespace HIR {
         TypeRef array(TypeRef inner, uint64_t size);
         TypeRef array(TypeRef inner, ConstGeneric size);
         TypeRef path(Path path, TypePathBinding binding, ::std::unique_ptr<GenericParams> hrtbs = {});
-        TypeRef function(TypeData_FunctionPointer ft);
+        TypeRef function(TypeDataFunctionPointer ft);
         TypeRef closure(ExprNodeClosure* node);
         TypeRef generator(ExprNodeGenerator* node);
         TypeRef async_block(ExprNodeAsyncBlock* node);

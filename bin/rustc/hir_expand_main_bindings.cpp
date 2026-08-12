@@ -1398,7 +1398,7 @@ namespace {
     };
 }
 
-void HIR_Expand_AnnotateUsage_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp) {
+void HIRExpandAnnotateUsageExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp) {
     TRACE_FUNCTION_F(ip);
     assert(exp);
     StaticTraitResolve resolve{crate};
@@ -1407,7 +1407,7 @@ void HIR_Expand_AnnotateUsage_Expr(const ::HIR::Crate& crate, const ::HIR::ItemP
     ev.visit_root(exp);
 }
 
-void HIR_Expand_AnnotateUsage(::HIR::Crate& crate) {
+void HIRExpandAnnotateUsage(::HIR::Crate& crate) {
     AnnotateOuterVisitor ov(crate);
     ov.visit_crate(crate);
 }
@@ -2680,14 +2680,14 @@ namespace {
         }
 
         // So, re-write all variable references into either a capture or a local.
-        class ExprVisitor_GeneratorRewrite: public ::HIR::ExprVisitorDef {
+        class ExprVisitorGeneratorRewrite: public ::HIR::ExprVisitorDef {
             const Monomorph& m_monomorph;
             const std::map<unsigned, unsigned>& m_variable_rewrites;
 
             ::HIR::ExprNodeP m_replacement;
 
         public:
-            ExprVisitor_GeneratorRewrite(const Monomorph& monomorph, const std::map<unsigned, unsigned>& rewrites)
+            ExprVisitorGeneratorRewrite(const Monomorph& monomorph, const std::map<unsigned, unsigned>& rewrites)
                 : ::HIR::ExprVisitorDef(monomorph.type_interner())
                 , m_monomorph(monomorph)
                 , m_variable_rewrites(rewrites)
@@ -2861,7 +2861,7 @@ namespace {
 
             {
                 TRACE_FUNCTION_F("-- Rewrite variables");
-                ExprVisitor_GeneratorRewrite visitor_rewrite(monomorph_cb, cr_vars.variable_rewrites);
+                ExprVisitorGeneratorRewrite visitor_rewrite(monomorph_cb, cr_vars.variable_rewrites);
                 visitor_rewrite.visit_node_ptr(node.m_code);
             }
 
@@ -3000,7 +3000,7 @@ namespace {
             auto cr_vars = coroutine_vars(node.span(), node.m_avu_cache, 2, monomorph_cb);
 
             {
-                ExprVisitor_GeneratorRewrite visitor_rewrite(monomorph_cb, cr_vars.variable_rewrites);
+                ExprVisitorGeneratorRewrite visitor_rewrite(monomorph_cb, cr_vars.variable_rewrites);
                 visitor_rewrite.visit_node_ptr(node.m_code);
             }
 
@@ -3353,7 +3353,7 @@ namespace {
     };
 }
 
-void HIR_Expand_Closures_Expr(const ::HIR::Crate& crate_ro, ::HIR::TypeRef& exp_ty, ::HIR::ExprPtr& exp) {
+void HIRExpandClosuresExpr(const ::HIR::Crate& crate_ro, ::HIR::TypeRef& exp_ty, ::HIR::ExprPtr& exp) {
     Span sp;
     auto& crate = const_cast<::HIR::Crate&>(crate_ro);
     TRACE_FUNCTION;
@@ -3411,7 +3411,7 @@ void HIR_Expand_Closures_Expr(const ::HIR::Crate& crate_ro, ::HIR::TypeRef& exp_
     out.push_new_impls(sp, crate);
 }
 
-void HIR_Expand_Closures(::HIR::Crate& crate) {
+void HIRExpandClosures(::HIR::Crate& crate) {
     ClosureOuterVisitor ov(crate);
     ov.visit_crate(crate);
 
@@ -3642,7 +3642,7 @@ namespace {
     };
 }
 
-void HIR_Expand_ErasedType(::HIR::Crate& crate) {
+void HIRExpandErasedType(::HIR::Crate& crate) {
     ErasedOuterVisitor ov(crate);
     ov.visit_crate(crate);
 
@@ -3754,7 +3754,7 @@ namespace {
         std::vector<IvarLifetime> m_ivars;
         /// Assignment values to Type-Alias Impl-Trait, so they can be assigned after all is done
         /// - The `PathParams` is used to map between this context and the TAIT
-        std::map<const HIR::TypeData_ErasedType_AliasInner*, std::pair<HIR::PathParams, HIR::TypeRef>> m_tait_values;
+        std::map<const HIR::TypeDataErasedTypeAliasInner*, std::pair<HIR::PathParams, HIR::TypeRef>> m_tait_values;
 
         LifetimeInferState(const StaticTraitResolve& resolve, bool in_constant_context)
             : m_resolve(resolve)
@@ -4077,10 +4077,10 @@ namespace {
         }
     };
 
-    class ExprVisitor_Enumerate;
+    class ExprVisitorEnumerate;
 
     struct LocalTraitResolve: public StaticTraitResolve {
-        ExprVisitor_Enumerate* m_lifetime_state = nullptr;
+        ExprVisitorEnumerate* m_lifetime_state = nullptr;
 
         LocalTraitResolve(const HIR::Crate& crate)
             : StaticTraitResolve(crate)
@@ -4106,7 +4106,7 @@ namespace {
         return false;
     }
 
-    class ExprVisitor_Enumerate: public HIR::ExprVisitorDef {
+    class ExprVisitorEnumerate: public HIR::ExprVisitorDef {
         friend struct LocalTraitResolve;
         const StaticTraitResolve& m_resolve;
         const ::HIR::Function::args_t& m_args;
@@ -4122,7 +4122,7 @@ namespace {
         std::vector<const HIR::TypeData*> m_yields;
 
     public:
-        ExprVisitor_Enumerate(const StaticTraitResolve& resolve, const ::HIR::Function::args_t& args, const HIR::TypeData* ret_ty, bool remove_locals, LifetimeInferState& state)
+        ExprVisitorEnumerate(const StaticTraitResolve& resolve, const ::HIR::Function::args_t& args, const HIR::TypeData* ret_ty, bool remove_locals, LifetimeInferState& state)
             : HIR::ExprVisitorDef(resolve.m_crate.m_types)
             , m_resolve(resolve)
             , m_args(args)
@@ -4538,8 +4538,8 @@ namespace {
             m_pattern_lifetime_stack.resize(start_lifetime_stack_height);
         }
 
-        struct Monomorph_AddLifetimes: public Monomorphiser {
-            ExprVisitor_Enumerate& parent;
+        struct MonomorphAddLifetimes: public Monomorphiser {
+            ExprVisitorEnumerate& parent;
 
             ::HIR::TypeRef get_type(const Span& sp, const ::HIR::GenericRef& g) const override {
                 return m_types.generic(g.name, g.binding);
@@ -4551,7 +4551,7 @@ namespace {
 
             ::HIR::LifetimeRef get_lifetime(const Span& sp, const ::HIR::GenericRef& g) const override {
                 // Placeholder.
-                if (g.group() == ::HIR::GENERIC_Placeholder) {
+                if (g.group() == ::HIR::GENERICPlaceholder) {
                     // HACK: Ideally - placeholders won't be here, but just in case...
                     return parent.m_state.allocate_ivar(sp);
                 }
@@ -4573,15 +4573,15 @@ namespace {
                 }
             }
 
-            Monomorph_AddLifetimes(ExprVisitor_Enumerate& parent)
+            MonomorphAddLifetimes(ExprVisitorEnumerate& parent)
                 : Monomorphiser(parent.m_resolve.m_crate.m_types)
                 , parent(parent)
             {
             }
         };
 
-        Monomorph_AddLifetimes get_monomorph_add() {
-            return Monomorph_AddLifetimes(*this);
+        MonomorphAddLifetimes get_monomorph_add() {
+            return MonomorphAddLifetimes(*this);
         }
 
         void visit_path(::HIR::Visitor::PathContext pc, HIR::Path& p) override {
@@ -4620,11 +4620,11 @@ namespace {
             // - Static - 'static
             // - Local variable (really anything else) - allocate local
             struct V: public HIR::ExprVisitor {
-                const ExprVisitor_Enumerate& m_parent;
+                const ExprVisitorEnumerate& m_parent;
                 std::function<HIR::LifetimeRef(const ::HIR::ExprNode&)>& m_cb;
                 HIR::LifetimeRef m_res;
 
-                V(const ExprVisitor_Enumerate& parent, std::function<HIR::LifetimeRef(const ::HIR::ExprNode&)>& cb)
+                V(const ExprVisitorEnumerate& parent, std::function<HIR::LifetimeRef(const ::HIR::ExprNode&)>& cb)
                     : m_parent(parent)
                     , m_cb(cb)
                 {
@@ -4904,12 +4904,12 @@ namespace {
         /// Extract lifetimes from a type and equate with the target lifetime.
         void equate_type_lifetimes(const Span& sp, const HIR::LifetimeRef& dst_lft, const HIR::TypeData* ty) {
             struct V: public HIR::Visitor {
-                ExprVisitor_Enumerate& parent;
+                ExprVisitorEnumerate& parent;
                 const Span& sp;
                 const HIR::LifetimeRef& dst_lft;
                 std::vector<HIR::PathParams> m_hrls;
 
-                V(ExprVisitor_Enumerate& parent, const Span& sp, const HIR::LifetimeRef& dst_lft)
+                V(ExprVisitorEnumerate& parent, const Span& sp, const HIR::LifetimeRef& dst_lft)
                     : HIR::Visitor(nullptr, parent.m_resolve.m_crate.m_types)
                     , parent(parent)
                     , sp(sp)
@@ -5353,7 +5353,7 @@ namespace {
             default:
                 TODO(node.span(), "PathValue - " << node.m_path << " - " << v.tag_str());
                 TU_ARMA(EnumConstructor, ve) {
-                    ty = m_resolve.m_crate.m_types.intern(::HIR::TypeData::make_NamedFunction({node.m_path.clone(), ::HIR::TypeData_NamedFunction_Ty::make_EnumConstructor({ve.e, ve.v})}));
+                    ty = m_resolve.m_crate.m_types.intern(::HIR::TypeData::make_NamedFunction({node.m_path.clone(), ::HIR::TypeDataNamedFunctionTy::make_EnumConstructor({ve.e, ve.v})}));
                 }
                 TU_ARMA(StructConstructor, ve) {
                     ty = m_resolve.m_crate.m_types.intern(::HIR::TypeData::make_NamedFunction({node.m_path.clone(), ve.s}));
@@ -5641,11 +5641,11 @@ namespace {
         }
     };
 
-    void HIR_Expand_LifetimeInfer_ExprInner(LocalTraitResolve& resolve, const ::HIR::Function::args_t& args, const HIR::TypeData* ret_ty, HIR::ExprPtr& ep, bool remove_locals, bool is_const_context) {
+    void HIRExpandLifetimeInferExprInner(LocalTraitResolve& resolve, const ::HIR::Function::args_t& args, const HIR::TypeData* ret_ty, HIR::ExprPtr& ep, bool remove_locals, bool is_const_context) {
         LifetimeInferState state{resolve, is_const_context};
 
         // Before running algorithm, dump the HIR (just as a reference for debugging)
-        DEBUG("\n" << FMT_CB(os, HIR_DumpExpr(os, ep)));
+        DEBUG("\n" << FMT_CB(os, HIRDumpExpr(os, ep)));
 
         // Build up a simplified list of in-scope liftime rules (bounds)
         {
@@ -5770,7 +5770,7 @@ namespace {
         {
             TRACE_FUNCTION_FR("Enumerating lifetimes", "Enumerating lifetimes");
             // TODO: Also do lifetime equality of the return type and the ATY version
-            ExprVisitor_Enumerate ev(resolve, args, ret_ty, remove_locals, state);
+            ExprVisitorEnumerate ev(resolve, args, ret_ty, remove_locals, state);
             resolve.m_lifetime_state = &ev;
             ev.visit_root(ep);
             resolve.m_lifetime_state = nullptr;
@@ -5782,7 +5782,7 @@ namespace {
         }
 
         // Before running algorithm, dump the HIR (just as a reference for debugging)
-        DEBUG("\n" << FMT_CB(os, HIR_DumpExpr(os, ep)));
+        DEBUG("\n" << FMT_CB(os, HIRDumpExpr(os, ep)));
 
         // If there were inferred liftimes present
 
@@ -6089,10 +6089,10 @@ namespace {
         // ---
         // Visit lifetimes in tree, updating all of them
         // ---
-        struct Monomorph_CommitLifetimes: public Monomorphiser {
+        struct MonomorphCommitLifetimes: public Monomorphiser {
             LifetimeInferState& state;
 
-            Monomorph_CommitLifetimes(LifetimeInferState& state)
+            MonomorphCommitLifetimes(LifetimeInferState& state)
                 : Monomorphiser(state.m_resolve.m_crate.m_types)
                 , state(state)
             {
@@ -6183,10 +6183,10 @@ namespace {
         } ms(state);
 
         {
-            struct Visitor_CommitLifetimes: HIR::ExprVisitorDef {
-                Monomorph_CommitLifetimes& ms;
+            struct VisitorCommitLifetimes: HIR::ExprVisitorDef {
+                MonomorphCommitLifetimes& ms;
 
-                Visitor_CommitLifetimes(Monomorph_CommitLifetimes& ms)
+                VisitorCommitLifetimes(MonomorphCommitLifetimes& ms)
                     : HIR::ExprVisitorDef(ms.type_interner())
                     , ms(ms)
                 {
@@ -6234,7 +6234,7 @@ namespace {
         {
             for (auto& ent : state.m_tait_values) {
                 const Span& sp = ep->span(); // TODO: Get a better liftime (first usage?)
-                auto& tait_inner = *const_cast<HIR::TypeData_ErasedType_AliasInner*>(ent.first);
+                auto& tait_inner = *const_cast<HIR::TypeDataErasedTypeAliasInner*>(ent.first);
                 HIR::PathParams& pp = ent.second.first;
                 HIR::TypeRef& ty = ent.second.second;
 
@@ -6322,7 +6322,7 @@ namespace {
             }
         }
 
-        DEBUG("\n" << FMT_CB(os, HIR_DumpExpr(os, ep)));
+        DEBUG("\n" << FMT_CB(os, HIRDumpExpr(os, ep)));
         ep.m_state->stage = ::HIR::ExprState::Stage::Lifetimes;
     }
 
@@ -6343,7 +6343,7 @@ namespace {
                 DEBUG("MIR present, skipping");
                 return;
             }
-            HIR_Expand_LifetimeInfer_ExprInner(m_resolve, args, ret_ty, root, m_remove_locals, !is_function);
+            HIRExpandLifetimeInferExprInner(m_resolve, args, ret_ty, root, m_remove_locals, !is_function);
         }
 
         // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
@@ -6505,23 +6505,23 @@ namespace {
     }
 }
 
-void HIR_Expand_LifetimeInfer(::HIR::Crate& crate) {
+void HIRExpandLifetimeInfer(::HIR::Crate& crate) {
     LifetimeOuterVisitor ov(crate, false);
     ov.visit_crate(crate);
 }
 
-void HIR_Expand_LifetimeInfer_Validate(::HIR::Crate& crate) {
+void HIRExpandLifetimeInferValidate(::HIR::Crate& crate) {
     // TODO: When running, clear all local lifetimes (replace with empty - to be turned into ivars)
     LifetimeOuterVisitor ov(crate, true);
     ov.visit_crate(crate);
 }
 
-void HIR_Expand_LifetimeInfer_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, const HIR::Function::args_t& args, const HIR::TypeData* ret_ty, ::HIR::ExprPtr& exp) {
+void HIRExpandLifetimeInferExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, const HIR::Function::args_t& args, const HIR::TypeData* ret_ty, ::HIR::ExprPtr& exp) {
     TRACE_FUNCTION_F("ip=" << ip << " ret_ty=" << ret_ty << ", args=" << args);
     LocalTraitResolve resolve{crate};
     resolve.set_both_generics_raw(exp.m_state->m_impl_generics, exp.m_state->m_item_generics);
 
-    HIR_Expand_LifetimeInfer_ExprInner(resolve, args, ret_ty, exp, /*remove_locals*/ false, /*is_const_context=*/true);
+    HIRExpandLifetimeInferExprInner(resolve, args, ret_ty, exp, /*remove_locals*/ false, /*is_const_context=*/true);
 }
 
 
@@ -6718,13 +6718,13 @@ namespace {
     };
 } // namespace
 
-void HIR_Expand_Reborrows_Expr(const ::HIR::Crate& crate, ::HIR::ExprPtr& exp) {
+void HIRExpandReborrowsExpr(const ::HIR::Crate& crate, ::HIR::ExprPtr& exp) {
     TRACE_FUNCTION;
     ReborrowExprVisitorMutate ev(crate);
     ev.visit_node_ptr(exp);
 }
 
-void HIR_Expand_Reborrows(::HIR::Crate& crate) {
+void HIRExpandReborrows(::HIR::Crate& crate) {
     ReborrowOuterVisitor ov(crate);
     ov.visit_crate(crate);
 }
@@ -6865,7 +6865,7 @@ namespace static_borrow_constants {
                         }
                     }
                     size_t v = 1, unused_align = 0;
-                    Target_GetSizeAndAlignOf(value_ptr->span(), m_resolve, value_ptr->m_res_type, v, unused_align);
+                    TargetGetSizeAndAlignOf(value_ptr->span(), m_resolve, value_ptr->m_res_type, v, unused_align);
                     is_unsized = (v == SIZE_MAX);
                     return v == 0;
                 })();
@@ -8027,7 +8027,7 @@ namespace static_borrow_constants {
     };
 } // namespace
 
-void HIR_Expand_StaticBorrowConstants_Mark_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp) {
+void HIRExpandStaticBorrowConstantsMarkExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp) {
     TRACE_FUNCTION_F(ip);
     StaticTraitResolve resolve(crate);
 
@@ -8042,7 +8042,7 @@ void HIR_Expand_StaticBorrowConstants_Mark_Expr(const ::HIR::Crate& crate, const
     }
 }
 
-void HIR_Expand_StaticBorrowConstants_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp) {
+void HIRExpandStaticBorrowConstantsExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp) {
     TRACE_FUNCTION_F(ip);
     StaticTraitResolve resolve(crate);
     resolve.set_both_generics_raw(exp.m_state->m_impl_generics, exp.m_state->m_item_generics);
@@ -8146,12 +8146,12 @@ void HIR_Expand_StaticBorrowConstants_Expr(const ::HIR::Crate& crate, const ::HI
     ev.visit_node_ptr(exp);
 }
 
-void HIR_Expand_StaticBorrowConstants_Mark(::HIR::Crate& crate) {
+void HIRExpandStaticBorrowConstantsMark(::HIR::Crate& crate) {
     static_borrow_constants::StaticBorrowOuterVisitorMark ov(crate);
     ov.visit_crate(crate);
 }
 
-void HIR_Expand_StaticBorrowConstants(::HIR::Crate& crate) {
+void HIRExpandStaticBorrowConstants(::HIR::Crate& crate) {
     static_borrow_constants::StaticBorrowOuterVisitor ov(crate);
     ov.visit_crate(crate);
 
@@ -8829,13 +8829,13 @@ namespace {
     };
 } // namespace
 
-void HIR_Expand_UfcsEverything_Expr(const ::HIR::Crate& crate, ::HIR::ExprPtr& exp, const ::HIR::TraitImpl* current_trait_impl) {
+void HIRExpandUfcsEverythingExpr(const ::HIR::Crate& crate, ::HIR::ExprPtr& exp, const ::HIR::TraitImpl* current_trait_impl) {
     TRACE_FUNCTION;
     UfcsExprVisitorMutate ev{crate, current_trait_impl};
     ev.visit_node_ptr(exp);
 }
 
-void HIR_Expand_UfcsEverything(::HIR::Crate& crate) {
+void HIRExpandUfcsEverything(::HIR::Crate& crate) {
     UfcsOuterVisitor ov(crate);
     ov.visit_crate(crate);
 }
@@ -8844,7 +8844,7 @@ void HIR_Expand_UfcsEverything(::HIR::Crate& crate) {
 
 
 namespace {
-    class Visitor_ImplTrait: public ::HIR::Visitor {
+    class VisitorImplTrait: public ::HIR::Visitor {
         ::HIR::Trait* m_target_trait = nullptr;
         ::HIR::TraitImpl* m_target_impl = nullptr;
 
@@ -8857,7 +8857,7 @@ namespace {
         ::std::vector<HIR::TypeRef> m_tys;
 
     public:
-        explicit Visitor_ImplTrait(HIR::TypeInterner& types)
+        explicit VisitorImplTrait(HIR::TypeInterner& types)
             : ::HIR::Visitor(nullptr, types)
         {
         }
@@ -9163,7 +9163,7 @@ namespace {
                                 }
                                 ::HIR::TypeRef tmp;
 
-                                ::HIR::TypeData_FunctionPointer ft;
+                                ::HIR::TypeDataFunctionPointer ft;
                                 ft.hrls.m_lifetimes = ve.m_params.m_lifetimes;
                                 ft.is_unsafe = ve.m_unsafe;
                                 ft.is_variadic = ve.m_variadic;
@@ -9218,7 +9218,7 @@ namespace {
 
             VtableConstruct vtc{m_crate.m_types, this, &resolve, &tr, {}};
             // - Drop glue pointer
-            ::HIR::TypeData_FunctionPointer ft;
+            ::HIR::TypeDataFunctionPointer ft;
             ft.is_unsafe = false;
             ft.is_variadic = false;
             ft.m_abi = RcString::new_interned(ABI_RUST);
@@ -9385,9 +9385,9 @@ namespace {
     };
 } // namespace
 
-void HIR_Expand_VTables(::HIR::Crate& crate) {
+void HIRExpandVTables(::HIR::Crate& crate) {
     {
-        Visitor_ImplTrait v(crate.m_types);
+        VisitorImplTrait v(crate.m_types);
         v.visit_crate(crate);
     }
 

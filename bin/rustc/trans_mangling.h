@@ -11,7 +11,7 @@ namespace HIR {
     using TypeRef = const TypeData*;
 }
 
-extern ::FmtLambda Trans_Mangle(const ::HIR::SimplePath& path);
-extern ::FmtLambda Trans_Mangle(const ::HIR::GenericPath& path);
-extern ::FmtLambda Trans_Mangle(const ::HIR::Path& path);
-extern ::FmtLambda Trans_Mangle(const ::HIR::TypeData* ty);
+extern ::FmtLambda TransMangle(const ::HIR::SimplePath& path);
+extern ::FmtLambda TransMangle(const ::HIR::GenericPath& path);
+extern ::FmtLambda TransMangle(const ::HIR::Path& path);
+extern ::FmtLambda TransMangle(const ::HIR::TypeData* ty);

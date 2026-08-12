@@ -333,17 +333,17 @@ namespace AST {
         ExprNodeP clone() const override;
     };
 
-    struct IfLet_Condition {
+    struct IfLetCondition {
         ::std::unique_ptr<AST::Pattern> opt_pat;
         ExprNodeP value;
     };
 
     struct ExprNodeWhile: public ExprNode {
         Ident m_label;
-        std::vector<IfLet_Condition> m_conditions;
+        std::vector<IfLetCondition> m_conditions;
         ExprNodeP m_code;
 
-        ExprNodeWhile(Ident label, std::vector<IfLet_Condition> conditions, ExprNodeP code);
+        ExprNodeWhile(Ident label, std::vector<IfLetCondition> conditions, ExprNodeP code);
 
         static constexpr unsigned int kind = 16;
         unsigned int node_kind() const override;
@@ -355,13 +355,13 @@ namespace AST {
     struct ExprNodeMatchArm {
         AttributeList m_attrs;
         ::std::vector<Pattern> m_patterns;
-        std::vector<IfLet_Condition> m_guard;
+        std::vector<IfLetCondition> m_guard;
 
         ExprNodeP m_code;
 
         ExprNodeMatchArm();
 
-        ExprNodeMatchArm(::std::vector<Pattern> patterns, std::vector<IfLet_Condition> guard, ExprNodeP code);
+        ExprNodeMatchArm(::std::vector<Pattern> patterns, std::vector<IfLetCondition> guard, ExprNodeP code);
     };
 
     struct ExprNodeMatch: public ExprNode {
@@ -379,7 +379,7 @@ namespace AST {
 
     struct ExprNodeIf: public ExprNode {
         struct Arm {
-            std::vector<IfLet_Condition> m_conditions;
+            std::vector<IfLetCondition> m_conditions;
             ExprNodeP m_body;
         };
 

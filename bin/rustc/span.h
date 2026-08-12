@@ -14,7 +14,7 @@ enum WarningType {
 
 class Position;
 struct SpanInner;
-struct SpanInner_Source;
+struct SpanInnerSource;
 
 struct Span {
 private:
@@ -57,7 +57,7 @@ public:
         return m_ptr;
     }
 
-    const SpanInner_Source& get_top_file_span() const;
+    const SpanInnerSource& get_top_file_span() const;
 
     void bug(::std::function<void(::std::ostream&)> msg) const;
     void error(ErrorType tag, ::std::function<void(::std::ostream&)> msg) const;
@@ -94,7 +94,7 @@ public:
     virtual unsigned int node_kind() const = 0;
 };
 
-struct SpanInner_Source: public SpanInner {
+struct SpanInnerSource: public SpanInner {
     friend struct Span;
 
 public:
@@ -107,7 +107,7 @@ public:
     unsigned int end_line;
     unsigned int end_ofs;
 
-    ~SpanInner_Source() override;
+    ~SpanInnerSource() override;
     void fmt(::std::ostream& os) const override;
 
     RcString crate_name() const override {
@@ -118,14 +118,14 @@ private:
     static SpanInner* alloc(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int end_line, unsigned int end_ofs);
 };
 
-struct SpanInner_Macro: public SpanInner {
+struct SpanInnerMacro: public SpanInner {
     friend struct Span;
     static constexpr unsigned int kind = 2;
     unsigned int node_kind() const override;
     RcString crate;
     RcString macro;
 
-    ~SpanInner_Macro() override;
+    ~SpanInnerMacro() override;
     void fmt(::std::ostream& os) const override;
 
     RcString crate_name() const override {

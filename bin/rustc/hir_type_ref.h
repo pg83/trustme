@@ -93,7 +93,7 @@ namespace HIR {
 
     enum class CoreType;
     enum class BorrowType;
-    struct TypeData_FunctionPointer;
+    struct TypeDataFunctionPointer;
     class TypePathBinding;
 
 } // namespace HIR

@@ -536,7 +536,7 @@ public:
         }
     }
 
-    ::HIR::ConstGeneric_Unevaluated deserialise_constgeneric_unevaluated();
+    ::HIR::ConstGenericUnevaluated deserialise_constgeneric_unevaluated();
     ::HIR::ConstGeneric deserialise_constgeneric();
     EncodedLiteral deserialise_encodedliteral();
 
@@ -1293,10 +1293,10 @@ DEF_D(::HIR::ExternLibrary, return d.deserialise_extlib();)
     return rv;
 }
 
-::HIR::ConstGeneric_Unevaluated HirDeserialiser::deserialise_constgeneric_unevaluated() {
+::HIR::ConstGenericUnevaluated HirDeserialiser::deserialise_constgeneric_unevaluated() {
     auto p_i = deserialise_pathparams();
     auto p_m = deserialise_pathparams();
-    auto rv = ::HIR::ConstGeneric_Unevaluated(deserialise_exprptr());
+    auto rv = ::HIR::ConstGenericUnevaluated(deserialise_exprptr());
     rv.params_impl = std::move(p_i);
     rv.params_item = std::move(p_m);
     return rv;
@@ -1308,7 +1308,7 @@ DEF_D(::HIR::ExternLibrary, return d.deserialise_extlib();)
     case ::HIR::ConstGeneric::TAG_##x: \
         return ::HIR::ConstGeneric::make_##x(__VA_ARGS__);
         _(Infer, {})
-        _(Unevaluated, std::make_unique<HIR::ConstGeneric_Unevaluated>(deserialise_constgeneric_unevaluated()))
+        _(Unevaluated, std::make_unique<HIR::ConstGenericUnevaluated>(deserialise_constgeneric_unevaluated()))
         _(Generic, deserialise_genericref())
         _(Evaluated, HIR::EncodedLiteralPtr(deserialise_encodedliteral()))
 #undef _
@@ -1605,7 +1605,7 @@ void HirDeserialiser::deserialise_crate(::HIR::Crate& rv) {
 
 //}
 
-::HIR::Crate* HIR_Deserialise(stl::ObjPool* pool, ::HIR::TypeInterner& types, const ::std::string& filename) {
+::HIR::Crate* HIRDeserialise(stl::ObjPool* pool, ::HIR::TypeInterner& types, const ::std::string& filename) {
     try {
         ::HIR::serialise::Reader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
         HirDeserialiser s{in, types};
@@ -1621,7 +1621,7 @@ void HirDeserialiser::deserialise_crate(::HIR::Crate& rv) {
     }
 }
 
-RcString HIR_Deserialise_JustName(const ::std::string& filename) {
+RcString HIRDeserialiseJustName(const ::std::string& filename) {
     try {
         ::HIR::serialise::Reader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
 
@@ -2459,13 +2459,13 @@ namespace {
     };
 }
 
-void HIR_Dump(::std::ostream& sink, const ::HIR::Crate& crate) {
+void HIRDump(::std::ostream& sink, const ::HIR::Crate& crate) {
     TreeVisitor tv{crate.m_types, sink};
 
     tv.visit_crate(const_cast<::HIR::Crate&>(crate));
 }
 
-void HIR_DumpExpr(::std::ostream& sink, const ::HIR::ExprPtr& expr) {
+void HIRDumpExpr(::std::ostream& sink, const ::HIR::ExprPtr& expr) {
     if (!expr) {
         sink << "/*NULL*/";
         return;
@@ -3249,7 +3249,7 @@ public:
         }
     }
 
-    void serialise(const ::HIR::ConstGeneric_Unevaluated& v) {
+    void serialise(const ::HIR::ConstGenericUnevaluated& v) {
         ASSERT_BUG(v.expr->span(), v.expr->m_mir, "Encountered non-translated value in ConstGeneric: " << v);
         serialise_pathparams(v.params_impl);
         serialise_pathparams(v.params_item);
@@ -3745,7 +3745,7 @@ public:
 
 //}
 
-void HIR_Serialise(const ::std::string& filename, const ::HIR::Crate& crate) {
+void HIRSerialise(const ::std::string& filename, const ::HIR::Crate& crate) {
     ::HIR::serialise::Writer out;
     HirSerialiser s{out, crate.m_types};
     s.serialise_crate(crate);

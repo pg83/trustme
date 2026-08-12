@@ -19,7 +19,7 @@
 #include "hir_conv_main_bindings.h" // For consteval
 
 namespace {
-    class ExprVisitor_Conv: public MirConverter {
+    class ExprVisitorConv: public MirConverter {
         MirBuilder& m_builder;
 
         const ::std::vector<::HIR::TypeRef>& m_variable_types;
@@ -76,7 +76,7 @@ namespace {
         } m_generator_state;
 
     public:
-        ExprVisitor_Conv(MirBuilder& builder, const ::std::vector<::HIR::TypeRef>& var_types, const ::HIR::ExprNodeGeneratorWrapper* is_generator)
+        ExprVisitorConv(MirBuilder& builder, const ::std::vector<::HIR::TypeRef>& var_types, const ::HIR::ExprNodeGeneratorWrapper* is_generator)
             : m_builder(builder)
             , m_variable_types(var_types)
             , m_is_generator(is_generator != nullptr)
@@ -245,7 +245,7 @@ namespace {
         MIR::LValue get_value_for_binding_path(const Span& sp, const ::HIR::TypeData* outer_ty, const ::MIR::LValue& outer_lval, const PatternBinding& b) {
             HIR::TypeRef ty;
             MIR::LValue lval;
-            MIR_LowerHIR_GetTypeValueForPath(sp, m_builder, outer_ty, outer_lval, b.field, ty, lval);
+            MIRLowerHIRGetTypeValueForPath(sp, m_builder, outer_ty, outer_lval, b.field, ty, lval);
 
             if (b.is_split_slice()) {
                 struct H {
@@ -774,7 +774,7 @@ namespace {
                     auto pattern_value = m_builder.lvalue_or_temp(node.m_value->span(), node.m_type, mv$(res));
                     auto drop_value = pattern_value.clone();
                     this->register_pattern_variables(node.span(), node.m_pattern, PatternDropOrder::FirstCandidate);
-                    MIR_LowerHIR_Let(m_builder, *this, node.span(), node.m_pattern, mv$(pattern_value), nullptr);
+                    MIRLowerHIRLet(m_builder, *this, node.span(), node.m_pattern, mv$(pattern_value), nullptr);
                     if (m_block_tmp_scope) {
                         m_builder.move_temporary_drop_to_variable_scope(node.span(), drop_value, *m_block_tmp_scope);
                     }
@@ -943,7 +943,7 @@ namespace {
                 //m_builder.set_cur_block( m_builder.new_bb_unlinked() );
                 //m_builder.set_result(node.span(), ::MIR::LValue::make_Invalid({}) );
             } else {
-                MIR_LowerHIR_Match(m_builder, *this, node, mv$(match_val), let_else_initializer_temps);
+                MIRLowerHIRMatch(m_builder, *this, node, mv$(match_val), let_else_initializer_temps);
             }
 
             if (m_builder.block_active()) {
@@ -1907,7 +1907,7 @@ namespace {
             // 1. Determine the size/alignment of the type
             ::MIR::Param size_param, align_param;
             size_t item_size, item_align;
-            if (Target_GetSizeAndAlignOf(node.span(), m_builder.resolve(), data_ty, item_size, item_align)) {
+            if (TargetGetSizeAndAlignOf(node.span(), m_builder.resolve(), data_ty, item_size, item_align)) {
                 size_param = ::MIR::Constant::make_Uint({U128(item_size), ::HIR::CoreType::Usize});
                 align_param = ::MIR::Constant::make_Uint({U128(item_align), ::HIR::CoreType::Usize});
             } else {
@@ -2730,7 +2730,7 @@ namespace {
 
         ::HIR::ExprNode& root_node = const_cast<::HIR::ExprNode&>(*ptr);
         MirBuilder builder{ptr->span(), resolve, ret_ty, args, fcn};
-        ExprVisitor_Conv ev{builder, ptr.m_bindings, cast<::HIR::ExprNodeGeneratorWrapper>(&root_node)};
+        ExprVisitorConv ev{builder, ptr.m_bindings, cast<::HIR::ExprNodeGeneratorWrapper>(&root_node)};
 
         // 1. Apply destructuring to arguments
         unsigned int i = 0;
@@ -2743,7 +2743,7 @@ namespace {
             } else {
                 DEBUG("Argument a" << i << " - " << pat);
                 ev.schedule_pattern_drops(ptr->span(), arg.first, PatternDropOrder::FirstCandidate);
-                MIR_LowerHIR_Let(builder, ev, ptr->span(), arg.first, ::MIR::LValue::new_Argument(i), /*else_node=*/nullptr);
+                MIRLowerHIRLet(builder, ev, ptr->span(), arg.first, ::MIR::LValue::new_Argument(i), /*else_node=*/nullptr);
             }
             i++;
         }
@@ -2984,7 +2984,7 @@ namespace {
                     }
                 }
             }
-            MIR_Validate(resolve, path, *drop_impl_body, gen_node->m_drop_fcn_ptr->m_args, resolve.m_crate.m_types.unit());
+            MIRValidate(resolve, path, *drop_impl_body, gen_node->m_drop_fcn_ptr->m_args, resolve.m_crate.m_types.unit());
             gen_node->m_drop_fcn_ptr->m_code.m_mir = std::move(drop_impl_body);
         } else {
             root_node.visit(ev);
@@ -2995,10 +2995,10 @@ namespace {
     // NOTE: Can't clean up yet, as consteval isn't done
     //MIR_Cleanup(resolve, path, fcn, args, ret_ty);
     //DEBUG("MIR Dump:" << ::std::endl << FMT_CB(ss, MIR_Dump_Fcn(ss, fcn, 1);));
-    MIR_Validate(resolve, path, fcn, args, ret_ty);
+    MIRValidate(resolve, path, fcn, args, ret_ty);
 
     if (getenv("MRUSTC_VALIDATE_FULL_EARLY")) {
-        MIR_Validate_Full(resolve, path, fcn, args, ptr->m_res_type);
+        MIRValidateFull(resolve, path, fcn, args, ptr->m_res_type);
     }
 
     return ::MIR::FunctionPointer(new ::MIR::Function(mv$(fcn)));
@@ -3006,7 +3006,7 @@ namespace {
 
 // --------------------------------------------------------------------
 
-void HIR_GenerateMIR_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& path, ::HIR::ExprPtr& expr_ptr, const ::HIR::Function::args_t& args, const ::HIR::TypeData* res_ty) {
+void HIRGenerateMIRExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& path, ::HIR::ExprPtr& expr_ptr, const ::HIR::Function::args_t& args, const ::HIR::TypeData* res_ty) {
     if (!expr_ptr.m_mir) {
         TRACE_FUNCTION;
         StaticTraitResolve resolve{crate};
@@ -3018,11 +3018,11 @@ void HIR_GenerateMIR_Expr(const ::HIR::Crate& crate, const ::HIR::ItemPath& path
         // This path prepares an on-demand body for the constant evaluator, not
         // the runtime MIR selected by the driver. Keep normal inlining disabled,
         // but retain the local simplification that CTFE historically required.
-        MIR_Optimise(resolve, path, *expr_ptr.m_mir, args, res_ty, /*opt_level=*/2, /*do_inline=*/false);
+        MIROptimise(resolve, path, *expr_ptr.m_mir, args, res_ty, /*opt_level=*/2, /*do_inline=*/false);
     }
 }
 
-void HIR_GenerateMIR(::HIR::Crate& crate) {
+void HIRGenerateMIR(::HIR::Crate& crate) {
     ::MIR::OuterVisitor ov{crate, [&](const auto& res, const auto& p, ::HIR::ExprPtr& expr_ptr, const auto& args, const auto& ty) {
         if (!expr_ptr.get_mir_opt()) {
             expr_ptr.set_mir(LowerMIR(res, p, expr_ptr, ty, args));
@@ -3032,7 +3032,7 @@ void HIR_GenerateMIR(::HIR::Crate& crate) {
 }
 
 
-void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps);
+void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps);
 
 namespace {
     void get_ty_and_val(
@@ -3047,7 +3047,7 @@ namespace {
     );
 }
 
-void MIR_LowerHIR_GetTypeValueForPath(
+void MIRLowerHIRGetTypeValueForPath(
     const Span& sp,
     MirBuilder& builder,
     const ::HIR::TypeData* top_ty,
@@ -3152,10 +3152,10 @@ struct ArmCode {
 
 typedef ::std::vector<PatternRuleset> t_arm_rules;
 
-void MIR_LowerHIR_Match_Simple(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arm_code, ::MIR::BasicBlockId first_cmp_block);
+void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arm_code, ::MIR::BasicBlockId first_cmp_block);
 int MIR_LowerHIR_Match_Simple__GeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int num_rules, const ::HIR::TypeData* top_ty, const ::MIR::LValue& top_val, unsigned int field_path_ofs, ::MIR::BasicBlockId fail_bb);
-void MIR_LowerHIR_Match_Grouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIR::TypeData* match_ty, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block);
-void MIR_LowerHIR_Match_DecisionTree(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arm_code, ::MIR::BasicBlockId first_cmp_block);
+void MIRLowerHIRMatchGrouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIR::TypeData* match_ty, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block);
+void MIRLowerHIRMatchDecisionTree(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arm_code, ::MIR::BasicBlockId first_cmp_block);
 
 /// Helper to construct rules from a passed pattern
 struct PatternRulesetBuilder {
@@ -3296,7 +3296,7 @@ void sort_rulesets_inner(RulesetRef rulesets, size_t idx);
 /// `let` (also used for destructuring arguments) - Introduces arguments into the current scope
 ///
 /// If `else_node` is non-null, a `_` "arm" is added to invoke that block (which must diverge)
-void MIR_LowerHIR_Let(MirBuilder& builder, MirConverter& conv, const Span& sp, const ::HIR::Pattern& pat, ::MIR::LValue val, const ::HIR::ExprNode* else_node) {
+void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const ::HIR::Pattern& pat, ::MIR::LValue val, const ::HIR::ExprNode* else_node) {
     TRACE_FUNCTION;
 
     HIR::TypeRef outer_ty;
@@ -3343,7 +3343,7 @@ void MIR_LowerHIR_Let(MirBuilder& builder, MirConverter& conv, const Span& sp, c
         TODO(sp, "Handle let-else");
     }
 
-    MIR_LowerHIR_Match_Grouped(builder, conv, sp, outer_ty, mv$(val), mv$(arm_rules), mv$(arm_code), first_cmp_block);
+    MIRLowerHIRMatchGrouped(builder, conv, sp, outer_ty, mv$(val), mv$(arm_rules), mv$(arm_code), first_cmp_block);
 
     builder.set_cur_block(success_node);
 }
@@ -3351,7 +3351,7 @@ void MIR_LowerHIR_Let(MirBuilder& builder, MirConverter& conv, const Span& sp, c
 // Handles lowering non-trivial matches to MIR
 // - Non-trivial means that there's more than one pattern
 // - Trivial matches are handled using `MIR_LowerHIR_Let`
-void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps) {
+void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps) {
     TRACE_FUNCTION;
     // NOTE: Lowers to the following pattern:
     // ```
@@ -3906,9 +3906,9 @@ void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode
     // - Allocating a BB and then rewriting references to it is a possibility.
 
     if (fall_back_on_simple) {
-        MIR_LowerHIR_Match_Simple(builder, conv, node /*.span(), match_ty*/, mv$(match_val), mv$(arm_rules), mv$(arm_code), first_cmp_block);
+        MIRLowerHIRMatchSimple(builder, conv, node /*.span(), match_ty*/, mv$(match_val), mv$(arm_rules), mv$(arm_code), first_cmp_block);
     } else {
-        MIR_LowerHIR_Match_Grouped(builder, conv, node.span(), match_ty, mv$(match_val), mv$(arm_rules), mv$(arm_code), first_cmp_block);
+        MIRLowerHIRMatchGrouped(builder, conv, node.span(), match_ty, mv$(match_val), mv$(arm_rules), mv$(arm_code), first_cmp_block);
     }
 
     builder.set_cur_block(next_block);
@@ -4260,7 +4260,7 @@ void PatternRulesetBuilder::append_from_lit(const Span& sp, EncodedLiteralSlice 
                     this->push_rule(PatternRule::make_Value(::MIR::Constant::make_Uint({lit.read_uint(16), e})));
                     break;
                 case ::HIR::CoreType::Usize:
-                    this->push_rule(PatternRule::make_Value(::MIR::Constant::make_Uint({lit.read_uint(Target_GetPointerBits() / 8), e})));
+                    this->push_rule(PatternRule::make_Value(::MIR::Constant::make_Uint({lit.read_uint(TargetGetPointerBits() / 8), e})));
                     break;
 
                 case ::HIR::CoreType::I8:
@@ -4279,7 +4279,7 @@ void PatternRulesetBuilder::append_from_lit(const Span& sp, EncodedLiteralSlice 
                     this->push_rule(PatternRule::make_Value(::MIR::Constant::make_Int({lit.read_sint(16), e})));
                     break;
                 case ::HIR::CoreType::Isize:
-                    this->push_rule(PatternRule::make_Value(::MIR::Constant::make_Int({lit.read_sint(Target_GetPointerBits() / 8), e})));
+                    this->push_rule(PatternRule::make_Value(::MIR::Constant::make_Int({lit.read_sint(TargetGetPointerBits() / 8), e})));
                     break;
 
                 case ::HIR::CoreType::Bool:
@@ -4295,7 +4295,7 @@ void PatternRulesetBuilder::append_from_lit(const Span& sp, EncodedLiteralSlice 
             }
         }
         TU_ARMA(Tuple, e) {
-            auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+            auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
             ASSERT_BUG(sp, repr, "Matching with generic constant type not valid - " << ty);
             ASSERT_BUG(sp, e.size() == repr->fields.size(), "Matching tuple with mismatched literal size - " << e.size() << " != " << repr->fields.size());
 
@@ -4318,7 +4318,7 @@ void PatternRulesetBuilder::append_from_lit(const Span& sp, EncodedLiteralSlice 
                     this->push_rule(PatternRule::make_Any({}));
                 }
                 TU_ARMA(Struct, pbe) {
-                    auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+                    auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
                     ASSERT_BUG(sp, repr, "Matching with generic constant type not valid - " << ty);
 
                     m_field_path.push_back(0);
@@ -4335,7 +4335,7 @@ void PatternRulesetBuilder::append_from_lit(const Span& sp, EncodedLiteralSlice 
                     TODO(sp, "Match union");
                 }
                 TU_ARMA(Enum, pbe) {
-                    auto* enm_repr = Target_GetTypeRepr(sp, m_resolve, ty);
+                    auto* enm_repr = TargetGetTypeRepr(sp, m_resolve, ty);
                     ASSERT_BUG(sp, enm_repr, "Matching with generic constant type not valid - " << ty);
 
                     // TODO: Share code with `MIR_Cleanup_LiteralToRValue`
@@ -4355,7 +4355,7 @@ void PatternRulesetBuilder::append_from_lit(const Span& sp, EncodedLiteralSlice 
                         if (sub_has_tag && var_ty != m_resolve.m_crate.m_types.unit()) {
                             // This inner type should be a struct
                             DEBUG("Enum variant type w/ tag field: " << var_ty);
-                            auto* inner_repr = Target_GetTypeRepr(sp, m_resolve, var_ty);
+                            auto* inner_repr = TargetGetTypeRepr(sp, m_resolve, var_ty);
                             assert(inner_repr->variants.is_None());
                             assert(inner_repr->fields.size() > 0);
                             sub_builder.m_field_path.push_back(0);
@@ -4387,7 +4387,7 @@ void PatternRulesetBuilder::append_from_lit(const Span& sp, EncodedLiteralSlice 
         }
         TU_ARMA(Array, e) {
             size_t size = 0;
-            ASSERT_BUG(sp, Target_GetSizeOf(sp, m_resolve, e.inner, size), "Matching with generic constant type not valid - " << ty);
+            ASSERT_BUG(sp, TargetGetSizeOf(sp, m_resolve, e.inner, size), "Matching with generic constant type not valid - " << ty);
 
             m_field_path.push_back(0);
             size_t ofs = 0;
@@ -4404,7 +4404,7 @@ void PatternRulesetBuilder::append_from_lit(const Span& sp, EncodedLiteralSlice 
         TU_ARMA(Borrow, e) {
             m_field_path.push_back(FIELD_DEREF);
             if (e.inner == ::HIR::CoreType::Str) {
-                auto ptr_size = Target_GetPointerBits() / 8;
+                auto ptr_size = TargetGetPointerBits() / 8;
                 auto ptr = lit.read_uint(ptr_size).truncate_u64();
                 auto len = lit.slice(ptr_size, ptr_size).read_uint(ptr_size).truncate_u64();
                 auto* r = lit.get_reloc();
@@ -4419,7 +4419,7 @@ void PatternRulesetBuilder::append_from_lit(const Span& sp, EncodedLiteralSlice 
 
                 this->push_rule(PatternRule::make_Value(std::string(r->bytes.data() + ptr, r->bytes.data() + ptr + len)));
             } else if (e.inner->is_Slice() && e.inner->as_Slice().inner == ::HIR::CoreType::U8) {
-                auto ptr_size = Target_GetPointerBits() / 8;
+                auto ptr_size = TargetGetPointerBits() / 8;
                 auto ptr = lit.read_uint(ptr_size).truncate_u64();
                 auto len = lit.slice(ptr_size, ptr_size).read_uint(ptr_size).truncate_u64();
                 auto* r = lit.get_reloc();
@@ -4454,7 +4454,7 @@ void PatternRulesetBuilder::append_from_lit(const Span& sp, EncodedLiteralSlice 
         }
         TU_ARMA(Pointer, e) {
             // Need to be able to tell downstream to cast to integer before comparison?
-            this->push_rule(PatternRule::make_Value(::MIR::Constant::make_Uint({lit.read_uint(Target_GetPointerBits() / 8), HIR::CoreType::Usize})));
+            this->push_rule(PatternRule::make_Value(::MIR::Constant::make_Uint({lit.read_uint(TargetGetPointerBits() / 8), HIR::CoreType::Usize})));
             //TODO(sp, "Match literal with pointer? " << lit);
         }
         TU_ARMA(NamedFunction, e) {
@@ -4626,7 +4626,7 @@ void PatternRulesetBuilder::append_from(const Span& sp, const ::HIR::Pattern& pa
                     MonomorphState unused_ms(m_resolve.m_crate.m_types);
                     const HIR::GenericParams* impl_def = nullptr;
                     auto v = m_resolve.get_value(sp, pve->path, unused_ms, false, &impl_def);
-                    ConvertHIR_ConstantEvaluate_Constant(m_resolve.m_crate, impl_def, pve->path, const_cast<HIR::Constant&>(*pve->binding));
+                    ConvertHIRConstantEvaluateConstant(m_resolve.m_crate, impl_def, pve->path, const_cast<HIR::Constant&>(*pve->binding));
                 }
                 ASSERT_BUG(sp, pve->binding->m_value_state == HIR::Constant::ValueState::Known, "Match with an unresolved constant - " << pve->path);
                 this->append_from_lit(sp, pve->binding->m_value_res, ty);
@@ -5640,7 +5640,7 @@ namespace {
 // Dumb and Simple
 // --------------------------------------------------------------------
 
-void MIR_LowerHIR_Match_Simple(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block) {
+void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block) {
     TRACE_FUNCTION;
 
     // 1. Generate pattern matches
@@ -6280,7 +6280,7 @@ namespace {
     }
 }
 
-void MIR_LowerHIR_Match_Grouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIR::TypeData* match_ty, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block) {
+void MIRLowerHIRMatchGrouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIR::TypeData* match_ty, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block) {
     TRACE_FUNCTION_F("");
 
     // The grouped matcher consumes one constructor or field test per matrix

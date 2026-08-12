@@ -166,7 +166,7 @@ namespace {
         Xor
     };
 
-    class CodeGenerator_C: public CodeGenerator {
+    class CodeGeneratorC: public CodeGenerator {
         static Span sp;
 
         const ::HIR::Crate& m_crate;
@@ -187,7 +187,7 @@ namespace {
         ::std::set<const TypeRepr*> m_embedded_tags;
 
     public:
-        CodeGenerator_C(const ::HIR::Crate& crate, const ::std::string& outfile)
+        CodeGeneratorC(const ::HIR::Crate& crate, const ::std::string& outfile)
             : m_crate(crate)
             , m_resolve(crate)
             , m_outfile_path(outfile)
@@ -195,8 +195,8 @@ namespace {
             , m_of(m_outfile_path_c)
         {
             ASSERT_BUG(Span(), m_of.is_open(), "Failed to open `" << m_outfile_path_c << "` for writing");
-            m_options.emulated_i128 = Target_GetCurSpec().m_backend_c.m_emulated_i128;
-            if (Target_GetCurSpec().m_arch.m_pointer_bits < 64 && !m_options.emulated_i128) {
+            m_options.emulated_i128 = TargetGetCurSpec().m_backend_c.m_emulated_i128;
+            if (TargetGetCurSpec().m_arch.m_pointer_bits < 64 && !m_options.emulated_i128) {
                 WARNING(Span(), W0000, "Potentially misconfigured target, 32-bit targets require i128 emulation");
             }
             m_options.disallow_empty_structs = true;
@@ -476,7 +476,7 @@ namespace {
                  << "static int f128_cmp(f128 a, f128 b){ abort(); }\n";
         }
 
-        ~CodeGenerator_C() {
+        ~CodeGeneratorC() {
         }
 
         void finalise(const TransOptions& opt, CodegenOutput out_ty, const ::std::string& hir_file) override {
@@ -499,18 +499,18 @@ namespace {
                         // A no_core binary has no standard entrypoint protocol.
                         // Call its ordinary main directly instead of inventing a
                         // `start` language item.
-                        m_of << "\t" << Trans_Mangle(::HIR::GenericPath(main_path)) << "();\n";
+                        m_of << "\t" << TransMangle(::HIR::GenericPath(main_path)) << "();\n";
                         m_of << "\treturn 0;\n";
                     } else {
                         auto start_gpath = ::HIR::GenericPath(m_resolve.m_crate.get_lang_item_path(Span(), "start"));
                         start_gpath.m_params.m_types.push_back(main_fcn.m_return);
-                        m_of << "\treturn " << Trans_Mangle(start_gpath) << "(" << Trans_Mangle(::HIR::GenericPath(main_path)) << ", argc, (uint8_t**)argv";
+                        m_of << "\treturn " << TransMangle(start_gpath) << "(" << TransMangle(::HIR::GenericPath(main_path)) << ", argc, (uint8_t**)argv";
                         m_of << ", 0"; // `sigpipe` setting
                         // 0: Default, 1: Inherit, 2: SIG_IGN, 3: SIG_DFL
                         m_of << ");\n";
                     }
                 } else {
-                    m_of << "\treturn " << Trans_Mangle(::HIR::GenericPath(c_start_path)) << "(argc, (uint8_t**)argv);\n";
+                    m_of << "\treturn " << TransMangle(::HIR::GenericPath(c_start_path)) << "(argc, (uint8_t**)argv);\n";
                 }
                 m_of << "}\n";
                 m_of << "extern \"C\" {\n";
@@ -604,7 +604,7 @@ namespace {
                                 switch (method.args[j]) {
                                     case AllocatorDataTy::Layout:
                                         m_of << "\tauto layout" << layout_arg << " = "
-                                             << Trans_Mangle(Trans_Allocator_LayoutCtorPath(m_crate))
+                                             << TransMangle(TransAllocatorLayoutCtorPath(m_crate))
                                              << "(a" << flat_arg << ", a" << flat_arg + 1 << ");\n";
                                         flat_arg += 2;
                                         layout_arg += 1;
@@ -619,13 +619,13 @@ namespace {
                                 }
                             }
 
-                            const auto method_path = Trans_Allocator_MethodPath(m_crate, global_allocator->m_type, method);
+                            const auto method_path = TransAllocatorMethodPath(m_crate, global_allocator->m_type, method);
                             const HIR::Path static_path = HIR::GenericPath(allocator_it->second);
                             m_of << "\t";
                             if (method.ret != AllocatorDataTy::Unit) {
                                 m_of << "return reinterpret_cast<int8_t*>(";
                             }
-                            m_of << Trans_Mangle(method_path) << "(&" << Trans_Mangle(static_path) << ".val";
+                            m_of << TransMangle(method_path) << "(&" << TransMangle(static_path) << ".val";
                             flat_arg = 0;
                             layout_arg = 0;
                             for (size_t j = 0; j < method.n_args; j++) {
@@ -667,10 +667,10 @@ namespace {
 
                         auto layout_path = ::HIR::SimplePath("core", {"alloc", "Layout"});
                         if (oom_method != HIR::SimplePath()) {
-                            m_of << "struct s_" << Trans_Mangle(layout_path) << "_A { uintptr_t a, b; };\n";
-                            m_of << "void oom_impl(struct s_" << Trans_Mangle(layout_path) << "_A l) {"
-                                 << " extern void " << Trans_Mangle(oom_method) << "(struct s_" << Trans_Mangle(layout_path) << "_A l);"
-                                 << " " << Trans_Mangle(oom_method) << "(l);"
+                            m_of << "struct s_" << TransMangle(layout_path) << "_A { uintptr_t a, b; };\n";
+                            m_of << "void oom_impl(struct s_" << TransMangle(layout_path) << "_A l) {"
+                                 << " extern void " << TransMangle(oom_method) << "(struct s_" << TransMangle(layout_path) << "_A l);"
+                                 << " " << TransMangle(oom_method) << "(l);"
                                  << " }\n";
                         }
 
@@ -681,7 +681,7 @@ namespace {
                             m_of << "\tvoid __rdl_oom(uintptr_t, uintptr_t);\n";
                             m_of << "\t__rdl_oom(s,a);\n";
                         } else {
-                            m_of << "\tstruct s_" << Trans_Mangle(layout_path) << "_A v = { s, a };\n";
+                            m_of << "\tstruct s_" << TransMangle(layout_path) << "_A v = { s, a };\n";
                             m_of << "\toom_impl(v);\n";
                         }
                         m_of << "}\n";
@@ -695,8 +695,8 @@ namespace {
                     const auto& panic_impl_path = m_crate.get_lang_item_path_opt("mrustc-panic_implementation");
                     if (panic_impl_path != ::HIR::SimplePath()) {
                         m_of << "uint32_t panic_impl(uintptr_t payload) {";
-                        m_of << "extern uint32_t " << Trans_Mangle(panic_impl_path) << "(uintptr_t payload);";
-                        m_of << "return " << Trans_Mangle(panic_impl_path) << "(payload);";
+                        m_of << "extern uint32_t " << TransMangle(panic_impl_path) << "(uintptr_t payload);";
+                        m_of << "return " << TransMangle(panic_impl_path) << "(payload);";
                         m_of << "}\n";
                     } else if (!m_crate.m_is_no_core) {
                         m_crate.get_lang_item_path(Span(), "mrustc-panic_implementation");
@@ -931,15 +931,15 @@ namespace {
             size_t arg_file_start = 0;
             // Pick the C++ compiler.
             {
-                std::string varname = "CXX_" + Target_GetCurSpec().m_backend_c.m_c_compiler;
+                std::string varname = "CXX_" + TargetGetCurSpec().m_backend_c.m_c_compiler;
                 std::replace(varname.begin(), varname.end(), '-', '_');
 
                 if (getenv(varname.c_str())) {
                     args.push_back(getenv(varname.c_str()));
                 } else if (getenv("CXX")) {
                     args.push_back(getenv("CXX"));
-                } else if (system(("command -v " + Target_GetCurSpec().m_backend_c.m_c_compiler + "-g++" + " >/dev/null 2>&1").c_str()) == 0) {
-                    args.push_back(Target_GetCurSpec().m_backend_c.m_c_compiler + "-g++");
+                } else if (system(("command -v " + TargetGetCurSpec().m_backend_c.m_c_compiler + "-g++" + " >/dev/null 2>&1").c_str()) == 0) {
+                    args.push_back(TargetGetCurSpec().m_backend_c.m_c_compiler + "-g++");
                 } else {
                     args.push_back("g++");
                 }
@@ -947,7 +947,7 @@ namespace {
             arg_file_start = args.get_vec().size();
             args.push_back("-std=gnu++20");
             args.push_back("-fexceptions");
-            for (const auto& a : Target_GetCurSpec().m_backend_c.m_compiler_opts) {
+            for (const auto& a : TargetGetCurSpec().m_backend_c.m_compiler_opts) {
                 args.push_back(a.c_str());
             }
             switch (opt.opt_level) {
@@ -1011,7 +1011,7 @@ namespace {
                 case CodegenOutput::DynamicLibrary:
                     args.push_back("-shared");
                 case CodegenOutput::Executable:
-                    for (const auto& a : Target_GetCurSpec().m_backend_c.m_linker_opts_pre) {
+                    for (const auto& a : TargetGetCurSpec().m_backend_c.m_linker_opts_pre) {
                         args.push_back(a.c_str());
                     }
                     for (const auto& c : ext_crates) {
@@ -1040,7 +1040,7 @@ namespace {
                                 break;
                         }
                     }
-                    for (const auto& a : Target_GetCurSpec().m_backend_c.m_linker_opts_post) {
+                    for (const auto& a : TargetGetCurSpec().m_backend_c.m_linker_opts_post) {
                         args.push_back(a.c_str());
                     }
                     for (const auto& a : opt.linker_args) {
@@ -1110,13 +1110,13 @@ namespace {
             }
 
             auto p = ::HIR::Path(box_type, m_crate.get_lang_item_path(Span(), "drop"), "drop");
-            m_of << indent << Trans_Mangle(p) << "(&";
+            m_of << indent << TransMangle(p) << "(&";
             emit_lvalue(slot);
             m_of << ");\n";
 
             // The pointee is a synthetic Box move-path, not a physical field. A shallow
             // drop skips that path, but still drops the real fields after Box::drop.
-            const auto* repr = Target_GetTypeRepr(sp, m_resolve, box_type);
+            const auto* repr = TargetGetTypeRepr(sp, m_resolve, box_type);
             MIR_ASSERT(*m_mir_res, repr, "No repr for Box " << box_type);
             auto field = ::MIR::LValue::new_Field(slot.clone(), 0);
             for (const auto& field_repr : repr->fields) {
@@ -1129,7 +1129,7 @@ namespace {
 
         void emit_global_asm(const ::HIR::GlobalAssembly& se) override {
             m_of << "__asm__ (\"";
-            if ((Target_GetCurSpec().m_arch.m_name == "x86" || Target_GetCurSpec().m_arch.m_name == "x86_64") && !se.m_options.att_syntax) {
+            if ((TargetGetCurSpec().m_arch.m_name == "x86" || TargetGetCurSpec().m_arch.m_name == "x86_64") && !se.m_options.att_syntax) {
                 m_of << ".intel_syntax noprefix; ";
             }
             for (const auto& l : se.m_lines) {
@@ -1141,14 +1141,14 @@ namespace {
                 m_of << FmtGccAsm(l.trailing, false);
                 m_of << ";\\n ";
             }
-            if ((Target_GetCurSpec().m_arch.m_name == "x86" || Target_GetCurSpec().m_arch.m_name == "x86_64") && !se.m_options.att_syntax) {
+            if ((TargetGetCurSpec().m_arch.m_name == "x86" || TargetGetCurSpec().m_arch.m_name == "x86_64") && !se.m_options.att_syntax) {
                 m_of << ".att_syntax; ";
             }
             m_of << "\");\n";
         }
 
         void emit_type_id(const ::HIR::TypeData* ty) override {
-            m_of << "tTYPEID __typeid_" << Trans_Mangle(ty) << " __attribute__((weak));\n";
+            m_of << "tTYPEID __typeid_" << TransMangle(ty) << " __attribute__((weak));\n";
 
         }
 
@@ -1189,16 +1189,16 @@ namespace {
                 TU_ARMA(Unbound, tpb) throw "";
                         TU_ARMA(Opaque, tpb) throw "";
                         TU_ARMA(Struct, tpb) {
-                            m_of << "struct s_" << Trans_Mangle(te.path) << ";\n";
+                            m_of << "struct s_" << TransMangle(te.path) << ";\n";
                         }
                         TU_ARMA(ExternType, tpb) {
-                            m_of << "struct x_" << Trans_Mangle(te.path) << ";\n";
+                            m_of << "struct x_" << TransMangle(te.path) << ";\n";
                         }
                         TU_ARMA(Union, tpb) {
-                            m_of << "union u_" << Trans_Mangle(te.path) << ";\n";
+                            m_of << "union u_" << TransMangle(te.path) << ";\n";
                         }
                         TU_ARMA(Enum, tpb) {
-                            m_of << "struct e_" << Trans_Mangle(te.path) << ";\n";
+                            m_of << "struct e_" << TransMangle(te.path) << ";\n";
                         }
                 }
                 }
@@ -1262,7 +1262,7 @@ namespace {
                 const auto& ty = ent.ty;
 
                 size_t sz = -1, al = 0;
-                Target_GetSizeAndAlignOf(sp, m_resolve, ty, sz, al);
+                TargetGetSizeAndAlignOf(sp, m_resolve, ty, sz, al);
                 if (sz == 0 && al == repr->align && al > 0) {
                     has_manual_align = true;
                 }
@@ -1270,7 +1270,7 @@ namespace {
                 // Track what C will derive separately - under a capping ABI an interior over-aligned member doesn't raise it
                 {
                     size_t al_c = al;
-                    if (Target_CapsMemberAlignment() && sz > 0 && ent.offset != 0 && al_c > 4 && !Target_TypeHasUserAlignment(sp, m_resolve, ty)) {
+                    if (TargetCapsMemberAlignment() && sz > 0 && ent.offset != 0 && al_c > 4 && !TargetTypeHasUserAlignment(sp, m_resolve, ty)) {
                         al_c = 4;
                     }
                     c_max_align = std::max(c_max_align, al_c);
@@ -1313,7 +1313,7 @@ namespace {
                 const auto& ty = repr->fields[fld].ty;
                 const auto offset = repr->fields[fld].offset;
                 size_t s = 0, a;
-                Target_GetSizeAndAlignOf(sp, m_resolve, ty, s, a);
+                TargetGetSizeAndAlignOf(sp, m_resolve, ty, s, a);
                 DEBUG("@" << offset << ": " << ty << " " << s << "," << a);
 
                 // Check offset/alignment
@@ -1323,7 +1323,7 @@ namespace {
                     MIR_ASSERT(*m_mir_res, cur_ofs <= offset, "Current offset is already past expected (#" << fld << "): " << cur_ofs << " > " << offset);
                     auto field_align = a;
                     // PowerPC 32-bit ABI alignment
-                    if (Target_GetCurSpec().m_arch.m_name == "powerpc") {
+                    if (TargetGetCurSpec().m_arch.m_name == "powerpc") {
                         if (s > 0) {
                             if (!is_first_field && field_align >= 4 && field_align <= 8) {
                                 field_align = 4;
@@ -1414,7 +1414,7 @@ namespace {
                 TU_ARMA(Tuple, te) {
                     if (te.size() > 0) {
                         m_of << " // " << ty << "\n";
-                        const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+                        const auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
 
                         emit_struct_inner(ty, repr, /*packing_max_align=*/0);
 
@@ -1444,13 +1444,13 @@ namespace {
                 }
                 TU_ARMA(Array, te) {
                     size_t rust_size;
-                    ASSERT_BUG(sp, Target_GetSizeOf(sp, m_resolve, ty, rust_size), "Unable to determine array size for " << ty);
+                    ASSERT_BUG(sp, TargetGetSizeOf(sp, m_resolve, ty, rust_size), "Unable to determine array size for " << ty);
                     const bool is_zero_sized = rust_size == 0;
 
                     m_of << "typedef ";
                     size_t align;
                     if (is_zero_sized) {
-                        Target_GetAlignOf(sp, m_resolve, ty, align);
+                        TargetGetAlignOf(sp, m_resolve, ty, align);
 
                     }
                     m_of << "struct ";
@@ -1498,7 +1498,7 @@ namespace {
 
             TRACE_FUNCTION_F(p);
             auto item_ty = m_crate.m_types.path(p.clone(), ::HIR::TypePathBinding::make_Struct(&item));
-            const auto* repr = Target_GetTypeRepr(sp, m_resolve, item_ty);
+            const auto* repr = TargetGetTypeRepr(sp, m_resolve, item_ty);
             MIR_ASSERT(*m_mir_res, repr, "No repr for struct " << p);
 
             m_of << "// struct " << p << "\n";
@@ -1507,9 +1507,9 @@ namespace {
 
             if (repr->size > 0 && repr->size != SIZE_MAX) {
                 // TODO: Handle unsized (should check the size of the fixed-size region)
-                m_of << "typedef char sizeof_assert_" << Trans_Mangle(p) << "[ (sizeof(struct s_" << Trans_Mangle(p) << ") == " << repr->size << ") ? 1 : -1 ];\n";
+                m_of << "typedef char sizeof_assert_" << TransMangle(p) << "[ (sizeof(struct s_" << TransMangle(p) << ") == " << repr->size << ") ? 1 : -1 ];\n";
             }
-            m_of << "typedef char alignof_assert_" << Trans_Mangle(p) << "[ (ALIGNOF(struct s_" << Trans_Mangle(p) << ") == " << repr->align << ") ? 1 : -1 ];\n";
+            m_of << "typedef char alignof_assert_" << TransMangle(p) << "[ (ALIGNOF(struct s_" << TransMangle(p) << ") == " << repr->align << ") ? 1 : -1 ];\n";
 
             m_mir_res = nullptr;
         }
@@ -1523,10 +1523,10 @@ namespace {
 
             TRACE_FUNCTION_F(p);
             auto item_ty = m_crate.m_types.path(p.clone(), ::HIR::TypePathBinding::make_Union(&item));
-            const auto* repr = Target_GetTypeRepr(sp, m_resolve, item_ty);
+            const auto* repr = TargetGetTypeRepr(sp, m_resolve, item_ty);
             MIR_ASSERT(*m_mir_res, repr != nullptr, "No repr for union " << item_ty);
 
-            m_of << "union u_" << Trans_Mangle(p) << " {\n";
+            m_of << "union u_" << TransMangle(p) << " {\n";
             for (unsigned int i = 0; i < repr->fields.size(); i++) {
                 assert(repr->fields[i].offset == 0);
                 m_of << "\t";
@@ -1540,7 +1540,7 @@ namespace {
             }
             m_of << ";\n";
             if (true && repr->size > 0) {
-                m_of << "typedef char sizeof_assert_" << Trans_Mangle(p) << "[ (sizeof(union u_" << Trans_Mangle(p) << ") == " << repr->size << ") ? 1 : -1 ];\n";
+                m_of << "typedef char sizeof_assert_" << TransMangle(p) << "[ (sizeof(union u_" << TransMangle(p) << ") == " << repr->size << ") ? 1 : -1 ];\n";
             }
 
             m_mir_res = nullptr;
@@ -1576,7 +1576,7 @@ namespace {
                     ty = &array->inner;
                     continue;
                 }
-                repr = Target_GetTypeRepr(sp, m_resolve, *ty);
+                repr = TargetGetTypeRepr(sp, m_resolve, *ty);
                 if (is_enum_tag(repr, fld)) {
                     if (m_embedded_tags.count(repr)) {
                         m_of << ".DATA";
@@ -1612,7 +1612,7 @@ namespace {
 
             TRACE_FUNCTION_F(p);
             auto item_ty = m_crate.m_types.path(p.clone(), ::HIR::TypePathBinding::make_Enum(&item));
-            const auto* repr = Target_GetTypeRepr(sp, m_resolve, item_ty);
+            const auto* repr = TargetGetTypeRepr(sp, m_resolve, item_ty);
 
             // 1. Enumerate fields with the same offset as the first (these go into a union)
             // TODO: What if all data variants are zero-sized?
@@ -1627,7 +1627,7 @@ namespace {
             }
 
             m_of << "// enum " << p << "\n";
-            m_of << "struct e_" << Trans_Mangle(p) << " {\n";
+            m_of << "struct e_" << TransMangle(p) << " {\n";
 
             // HACK: For NonZero optimised enums, emit a struct with a single field
             // - This avoids a bug in GCC5 where it would generate incorrect code if there's a union here.
@@ -1718,7 +1718,7 @@ namespace {
             m_of << "};\n";
 
             size_t exp_size = (repr->size > 0 ? repr->size : (m_options.disallow_empty_structs ? 1 : 0));
-            m_of << "typedef char sizeof_assert_" << Trans_Mangle(p) << "[ (sizeof(struct e_" << Trans_Mangle(p) << ") == " << exp_size << ") ? 1 : -1 ];\n";
+            m_of << "typedef char sizeof_assert_" << TransMangle(p) << "[ (sizeof(struct e_" << TransMangle(p) << ") == " << exp_size << ") ? 1 : -1 ];\n";
 
             m_mir_res = nullptr;
         }
@@ -1754,7 +1754,7 @@ namespace {
             };
             m_mir_res = &top_mir_res;
 
-            m_of << "static struct e_" << Trans_Mangle(p) << " " << Trans_Mangle(path) << "(";
+            m_of << "static struct e_" << TransMangle(p) << " " << TransMangle(path) << "(";
             for (unsigned int i = 0; i < e.size(); i++) {
                 if (i != 0) {
                     m_of << ", ";
@@ -1764,7 +1764,7 @@ namespace {
             }
             m_of << ") {\n";
 
-            m_of << "\tstruct e_" << Trans_Mangle(p) << " rv;\n";
+            m_of << "\tstruct e_" << TransMangle(p) << " rv;\n";
 
             std::vector<MIR::Param> vals;
             for (unsigned int i = 0; i < e.size(); i++) {
@@ -1789,7 +1789,7 @@ namespace {
 
             // Crate constructor function
             const auto& e = item.m_data.as_Tuple();
-            m_of << "static struct s_" << Trans_Mangle(p) << " " << Trans_Mangle(p) << "(";
+            m_of << "static struct s_" << TransMangle(p) << " " << TransMangle(p) << "(";
             for (unsigned int i = 0; i < e.size(); i++) {
                 if (i != 0) {
                     m_of << ", ";
@@ -1798,7 +1798,7 @@ namespace {
                 emit_ctype(ty, FMT_CB(ss, ss << "_" << i;));
             }
             m_of << ") {\n";
-            m_of << "\tstruct s_" << Trans_Mangle(p) << " rv = {";
+            m_of << "\tstruct s_" << TransMangle(p) << " rv = {";
             bool emitted = false;
             for (unsigned int i = 0; i < e.size(); i++) {
                 const auto& ty = monomorph(e[i].ent);
@@ -1823,25 +1823,25 @@ namespace {
         // Returns `true` if the type is pointer-aligned (i.e. it could contain a pointer)
         bool emit_static_ty(const HIR::TypeData* type, const ::HIR::Path& p, bool is_proto) {
             size_t size = 0, align = 0;
-            Target_GetSizeAndAlignOf(sp, m_resolve, type, size, align);
-            bool rv = (align * 8 >= Target_GetCurSpec().m_arch.m_pointer_bits);
-            m_of << "union u_static_" << Trans_Mangle(p);
+            TargetGetSizeAndAlignOf(sp, m_resolve, type, size, align);
+            bool rv = (align * 8 >= TargetGetCurSpec().m_arch.m_pointer_bits);
+            m_of << "union u_static_" << TransMangle(p);
             if (is_proto) {
                 m_of << "{ ";
                 emit_ctype(type, FMT_CB(ss, ss << "val";));
                 m_of << "; ";
                 if (rv) {
-                    m_of << "uintptr_t raw[" << (size / (Target_GetCurSpec().m_arch.m_pointer_bits / 8)) << "];";
+                    m_of << "uintptr_t raw[" << (size / (TargetGetCurSpec().m_arch.m_pointer_bits / 8)) << "];";
                 } else {
                     m_of << "uint8_t raw[" << size << "];";
                 }
                 m_of << " }";
             }
-            m_of << " " << Trans_Mangle(p);
+            m_of << " " << TransMangle(p);
             return rv;
         }
 
-        void emit_static_ext(const ::HIR::Path& p, const ::HIR::Static& item, const Trans_Params& params) override {
+        void emit_static_ext(const ::HIR::Path& p, const ::HIR::Static& item, const TransParams& params) override {
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
                 sp, m_resolve, FMT_CB(ss, ss << "extern static " << p;), ::HIR::TypeRef(), {}, empty_fcn
@@ -1879,7 +1879,7 @@ namespace {
             m_of << "extern ";
             emit_static_ty(type, p, /*is_proto=*/true);
             if (linkage_name != "") {
-                if (Target_GetCurSpec().m_os_name == "macos") { // Not macOS only, but all Apple platforms.
+                if (TargetGetCurSpec().m_os_name == "macos") { // Not macOS only, but all Apple platforms.
                     m_of << " asm(\"_" << linkage_name << "\")";
                 } else {
                     m_of << " asm(\"" << linkage_name << "\")";
@@ -1892,7 +1892,7 @@ namespace {
             m_mir_res = nullptr;
         }
 
-        void emit_static_proto(const ::HIR::Path& p, const ::HIR::Static& item, const Trans_Params& params) override {
+        void emit_static_proto(const ::HIR::Path& p, const ::HIR::Static& item, const TransParams& params) override {
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
                 sp, m_resolve, FMT_CB(ss, ss << "static " << p;), ::HIR::TypeRef(), {}, empty_fcn
@@ -1932,7 +1932,7 @@ namespace {
             m_mir_res = nullptr;
         }
 
-        void emit_static_local(const ::HIR::Path& p, const ::HIR::Static& item, const Trans_Params& params, const EncodedLiteral& encoded) override {
+        void emit_static_local(const ::HIR::Path& p, const ::HIR::Static& item, const TransParams& params, const EncodedLiteral& encoded) override {
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
                 sp, m_resolve, FMT_CB(ss, ss << "static " << p;), ::HIR::TypeRef(), {}, empty_fcn
@@ -1958,10 +1958,10 @@ namespace {
                     DEBUG("encoded.bytes = `" << FMT_CB(ss, for (auto& b : encoded.bytes) ss << std::setw(2) << std::setfill('0') << std::hex << unsigned(b) << (int(&b - encoded.bytes.data()) % 8 == 7 ? " " : "");) << "`");
                     DEBUG("encoded.relocations = " << encoded.relocations);
                     auto reloc_it = encoded.relocations.begin();
-                    auto ptr_size = Target_GetCurSpec().m_arch.m_pointer_bits / 8;
+                    auto ptr_size = TargetGetCurSpec().m_arch.m_pointer_bits / 8;
                     for (size_t i = 0; i < encoded.bytes.size(); i += ptr_size) {
                         uint64_t v = 0;
-                        if (Target_GetCurSpec().m_arch.m_big_endian) {
+                        if (TargetGetCurSpec().m_arch.m_big_endian) {
                             for (size_t o = 0, j = ptr_size; j--; o++) {
                                 v |= static_cast<uint64_t>(encoded.bytes[i + o]) << (j * 8);
                             }
@@ -1985,9 +1985,9 @@ namespace {
                             if (reloc_it->p) {
                                 if (reloc_it->p->m_data.is_UfcsInherent() && reloc_it->p->m_data.as_UfcsInherent().item == "#type_id") {
                                     const auto& ty = reloc_it->p->m_data.as_UfcsInherent().type;
-                                    m_of << "&__typeid_" << Trans_Mangle(ty);
+                                    m_of << "&__typeid_" << TransMangle(ty);
                                 } else {
-                                    m_of << "&" << Trans_Mangle(*reloc_it->p);
+                                    m_of << "&" << TransMangle(*reloc_it->p);
                                 }
                             } else {
                                 this->print_escaped_string(reloc_it->bytes);
@@ -2104,7 +2104,7 @@ namespace {
             m_of << "\"" << ::std::dec;
         }
 
-        void emit_function_ext(const ::HIR::Path& p, const ::HIR::Function& item, const Trans_Params& params) override {
+        void emit_function_ext(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params) override {
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
                 sp, m_resolve, FMT_CB(ss, ss << "extern fn " << p;), ::HIR::TypeRef(), {}, empty_fcn
@@ -2293,7 +2293,7 @@ namespace {
             }
             emit_function_header(p, item, params);
             if (item.m_linkage.name != "") {
-                if (Target_GetCurSpec().m_os_name == "macos") { // Not macOS only, but all Apple platforms.
+                if (TargetGetCurSpec().m_os_name == "macos") { // Not macOS only, but all Apple platforms.
                     m_of << " asm(\"_" << item.m_linkage.name << "\")";
                 } else {
                     m_of << " asm(\"" << item.m_linkage.name << "\")";
@@ -2305,7 +2305,7 @@ namespace {
             m_mir_res = nullptr;
         }
 
-        void emit_function_proto(const ::HIR::Path& p, const ::HIR::Function& item, const Trans_Params& params, bool is_extern_def) override {
+        void emit_function_proto(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool is_extern_def) override {
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
                 sp, m_resolve, FMT_CB(ss, ss << "/*proto*/ fn " << p;), ::HIR::TypeRef(), {}, empty_fcn
@@ -2316,7 +2316,7 @@ namespace {
             m_of << "// PROTO extern \"" << item.m_abi << "\" " << p << "\n";
             if (item.m_linkage.name != "") {
                 // If this function is implementing an external ABI, just rename it.
-                m_of << "#define " << Trans_Mangle(p) << " " << item.m_linkage.name << "\n";
+                m_of << "#define " << TransMangle(p) << " " << item.m_linkage.name << "\n";
             }
             if (is_extern_def) {
                 m_of << "static ";
@@ -2339,7 +2339,7 @@ namespace {
             m_mir_res = nullptr;
         }
 
-        void emit_function_code(const ::HIR::Path& p, const ::HIR::Function& item, const Trans_Params& params, bool is_extern_def, const ::MIR::FunctionPointer& code) override {
+        void emit_function_code(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool is_extern_def, const ::MIR::FunctionPointer& code) override {
             TRACE_FUNCTION_F(p);
 
             ::MIR::TypeResolve::args_t arg_types;
@@ -2565,7 +2565,7 @@ namespace {
                 // TODO: Extern types are also ZSTs?
                 size_t size, align;
                 // NOTE: Uses the Size+Align version because that doesn't panic on unsized
-                MIR_ASSERT(*m_mir_res, Target_GetSizeAndAlignOf(sp, m_resolve, ty, size, align), "Unexpected generic? " << ty);
+                MIR_ASSERT(*m_mir_res, TargetGetSizeAndAlignOf(sp, m_resolve, ty, size, align), "Unexpected generic? " << ty);
                 return size == 0;
             } else {
                 return false;
@@ -2670,7 +2670,7 @@ namespace {
                                     m_of << " + ";
                                 }
                                 emit_trait_object_dst_field_offset(*cur_ty, wrapper.as_Field(), base_param);
-                                const auto* repr = Target_GetTypeRepr(sp, m_resolve, *cur_ty);
+                                const auto* repr = TargetGetTypeRepr(sp, m_resolve, *cur_ty);
                                 MIR_ASSERT(mir_res, repr && wrapper.as_Field() < repr->fields.size(), "Invalid DST field - " << val);
                                 cur_ty = &repr->fields[wrapper.as_Field()].ty;
                             }
@@ -2705,7 +2705,7 @@ namespace {
                 }
                 MIR_ASSERT(mir_res, element_ty, "Index of non-array type in ZST borrow path: " << parent_ty);
                 size_t element_size = 0;
-                MIR_ASSERT(mir_res, Target_GetSizeOf(sp, m_resolve, element_ty, element_size), "Unknown array element size for " << parent_ty);
+                MIR_ASSERT(mir_res, TargetGetSizeOf(sp, m_resolve, element_ty, element_size), "Unknown array element size for " << parent_ty);
                 MIR_ASSERT(mir_res, element_size == 0, "Non-ZST element in ZST borrow path: " << element_ty);
                 if (parent_ty->is_Slice()) {
                     MIR_ASSERT(mir_res, inner.is_Deref(), "Raw slice lvalue in ZST borrow path");
@@ -2763,7 +2763,7 @@ namespace {
 
                     if (element_ty) {
                         size_t element_size = 0;
-                        MIR_ASSERT(mir_res, Target_GetSizeOf(sp, m_resolve, element_ty, element_size), "Unknown array element size for " << parent_ty);
+                        MIR_ASSERT(mir_res, TargetGetSizeOf(sp, m_resolve, element_ty, element_size), "Unknown array element size for " << parent_ty);
                         MIR_ASSERT(mir_res, element_size == 0, "Non-ZST element in ZST borrow path: " << element_ty);
                         m_of << "(void*)( (uint8_t*)";
                         if (parent_ty->is_Slice()) {
@@ -2777,7 +2777,7 @@ namespace {
                         m_of << " + " << element_size * val_fp.as_Field() << ") /*ZST*/";
                     } else {
                         // Get the number of fields in parent
-                        auto* repr = Target_GetTypeRepr(sp, m_resolve, parent_ty);
+                        auto* repr = TargetGetTypeRepr(sp, m_resolve, parent_ty);
                         assert(repr);
                         size_t n_parent_fields = repr->fields.size();
                         // Find next non-zero field
@@ -3482,7 +3482,7 @@ namespace {
 
                             ::HIR::TypeRef tmp;
                             const auto& ty = mir_res.get_lvalue_type(tmp, e.dst);
-                            auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+                            auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
 
                     TU_MATCH_HDRA( (repr->variants), {)
                     TU_ARMA(None, re) {
@@ -3523,7 +3523,7 @@ namespace {
                                             }
                                             m_of << (re.offset + ve.index);
                                         } else {
-                                            auto vr = Target_GetTypeRepr(sp, m_resolve, repr->fields[ve.index].ty);
+                                            auto vr = TargetGetTypeRepr(sp, m_resolve, repr->fields[ve.index].ty);
                                             //m_of << "assert(&";
                                             //emit_lvalue(e.dst); m_of << ".DATA.var_" << ve.index << "._" << (vr->fields.size() - 1);
                                             //m_of << " == &";
@@ -3615,7 +3615,7 @@ namespace {
             // Cast of a named function to a function pointer - originate the pointer
             if (ve.type->is_Function() && ty->is_NamedFunction()) {
                 emit_lvalue(dst);
-                m_of << " = " << Trans_Mangle(ty->as_NamedFunction().path);
+                m_of << " = " << TransMangle(ty->as_NamedFunction().path);
                 return;
             }
 
@@ -3750,7 +3750,7 @@ namespace {
                 }
             }
             if (ty->is_NamedFunction()) {
-                m_of << Trans_Mangle(ty->as_NamedFunction().path);
+                m_of << TransMangle(ty->as_NamedFunction().path);
                 special = true;
             }
             if (ve.type->is_Primitive() && ty->is_Path() && ty->as_Path().binding.is_Enum()) {
@@ -3771,7 +3771,7 @@ namespace {
             const auto& ty = mir_res.get_lvalue_type(tmp, val);
             MIR_ASSERT(mir_res, ty->is_Path(), "Switch over non-Path type");
             MIR_ASSERT(mir_res, ty->as_Path().binding.is_Enum(), "Switch over non-enum");
-            const auto* repr = Target_GetTypeRepr(mir_res.sp, m_resolve, ty);
+            const auto* repr = TargetGetTypeRepr(mir_res.sp, m_resolve, ty);
             MIR_ASSERT(mir_res, repr, "No repr for " << ty);
 
             struct MaybeSigned64 {
@@ -3822,7 +3822,7 @@ namespace {
                     m_of << "\n";
                 }
                 TU_ARMA(Linear, e) {
-                    const auto& tag_ty = Target_GetInnerType(sp, m_resolve, *repr, e.field.index, e.field.sub_fields);
+                    const auto& tag_ty = TargetGetInnerType(sp, m_resolve, *repr, e.field.index, e.field.sub_fields);
                     const bool pointer_tag = tag_ty->is_Pointer() || tag_ty->is_Borrow() || tag_ty->is_Function();
                     if (!pointer_tag) {
                         switch (tag_ty->as_Primitive()) {
@@ -3907,7 +3907,7 @@ namespace {
                     }
                 }
                 TU_ARMA(Values, e) {
-                    const auto& tag_ty = Target_GetInnerType(sp, m_resolve, *repr, e.field.index, e.field.sub_fields);
+                    const auto& tag_ty = TargetGetInnerType(sp, m_resolve, *repr, e.field.index, e.field.sub_fields);
                     bool is_signed = false;
                     switch (tag_ty->as_Primitive()) {
                         case ::HIR::CoreType::I8:
@@ -4231,7 +4231,7 @@ namespace {
                             m_of << " = ";
                     }
                     }
-                    m_of << Trans_Mangle(e2);
+                    m_of << TransMangle(e2);
                 }
                 TU_ARMA(Intrinsic, e2) {
                     const auto& name = e2.name;
@@ -4744,7 +4744,7 @@ namespace {
                 m_of << indent << "__asm__ ";
                 m_of << "__volatile__"; // Default everything to volatile
                 m_of << "(\"";
-                if ((Target_GetCurSpec().m_arch.m_name == "x86" || Target_GetCurSpec().m_arch.m_name == "x86_64") && !se.options.att_syntax) {
+                if ((TargetGetCurSpec().m_arch.m_name == "x86" || TargetGetCurSpec().m_arch.m_name == "x86_64") && !se.options.att_syntax) {
                     m_of << ".intel_syntax noprefix; ";
                 }
                 bool escape_percent = true || !inputs.empty() || !outputs.empty();
@@ -4774,7 +4774,7 @@ namespace {
                     m_of << FmtGccAsm(l.trailing, escape_percent);
                     m_of << ";\\n ";
                 }
-                if ((Target_GetCurSpec().m_arch.m_name == "x86" || Target_GetCurSpec().m_arch.m_name == "x86_64") && !se.options.att_syntax) {
+                if ((TargetGetCurSpec().m_arch.m_name == "x86" || TargetGetCurSpec().m_arch.m_name == "x86_64") && !se.options.att_syntax) {
                     m_of << ".att_syntax; ";
                 }
                 m_of << "\" :";
@@ -4939,7 +4939,7 @@ namespace {
         }
 
     private:
-        const ::HIR::TypeData* monomorphise_fcn_return(::HIR::TypeRef& tmp, const ::HIR::Function& item, const Trans_Params& params) {
+        const ::HIR::TypeData* monomorphise_fcn_return(::HIR::TypeRef& tmp, const ::HIR::Function& item, const TransParams& params) {
             bool has_erased = visit_ty_with(item.m_return, [&](const auto& x) {
                 return x->is_ErasedType();
             });
@@ -4967,7 +4967,7 @@ namespace {
             }
         }
 
-        void emit_function_header(const ::HIR::Path& p, const ::HIR::Function& item, const Trans_Params& params) {
+        void emit_function_header(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params) {
             ::HIR::TypeRef tmp;
             const auto& ret_ty = monomorphise_fcn_return(tmp, item, params);
             if (item.m_markings.is_naked) {
@@ -4977,7 +4977,7 @@ namespace {
             auto cb = FMT_CB(
                 ss,
                 // TODO: Cleaner ABI handling
-                ss << " " << Trans_Mangle(p) << "(";
+                ss << " " << TransMangle(p) << "(";
                 if (item.m_args.size() == 0) { ss << "void)"; } else {
                     for (unsigned int i = 0; i < item.m_args.size(); i++) {
                         ss << "\n\t\t";
@@ -5054,7 +5054,7 @@ namespace {
             };
             auto get_prim_size = [&mir_res](const ::HIR::TypeData* ty) -> unsigned {
                 if (ty->is_Pointer()) {
-                    return Target_GetCurSpec().m_arch.m_pointer_bits;
+                    return TargetGetCurSpec().m_arch.m_pointer_bits;
                 }
                 if (!ty->is_Primitive()) {
                     MIR_BUG(mir_res, "Unknown type for getting primitive size - " << ty);
@@ -5078,7 +5078,7 @@ namespace {
                     case ::HIR::CoreType::Usize:
                     case ::HIR::CoreType::Isize:
                         // TODO: Is this a good idea?
-                        return Target_GetCurSpec().m_arch.m_pointer_bits;
+                        return TargetGetCurSpec().m_arch.m_pointer_bits;
                     default:
                         MIR_BUG(mir_res, "Unknown primitive for getting size- " << ty);
                 }
@@ -5086,18 +5086,18 @@ namespace {
             auto get_real_prim_ty = [](HIR::CoreType ct) -> HIR::CoreType {
                 switch (ct) {
                     case HIR::CoreType::Usize:
-                        if (Target_GetCurSpec().m_arch.m_pointer_bits == 64) {
+                        if (TargetGetCurSpec().m_arch.m_pointer_bits == 64) {
                             return ::HIR::CoreType::U64;
                         }
-                        if (Target_GetCurSpec().m_arch.m_pointer_bits == 32) {
+                        if (TargetGetCurSpec().m_arch.m_pointer_bits == 32) {
                             return ::HIR::CoreType::U32;
                         }
                         BUG(Span(), "");
                     case HIR::CoreType::Isize:
-                        if (Target_GetCurSpec().m_arch.m_pointer_bits == 64) {
+                        if (TargetGetCurSpec().m_arch.m_pointer_bits == 64) {
                             return ::HIR::CoreType::I64;
                         }
-                        if (Target_GetCurSpec().m_arch.m_pointer_bits == 32) {
+                        if (TargetGetCurSpec().m_arch.m_pointer_bits == 32) {
                             return ::HIR::CoreType::I32;
                         }
                         BUG(Span(), "");
@@ -5202,7 +5202,7 @@ namespace {
             };
             if (name == "size_of") {
                 size_t size = 0;
-                MIR_ASSERT(mir_res, Target_GetSizeOf(sp, m_resolve, params.m_types.at(0), size), "Can't get size of " << params.m_types.at(0));
+                MIR_ASSERT(mir_res, TargetGetSizeOf(sp, m_resolve, params.m_types.at(0), size), "Can't get size of " << params.m_types.at(0));
                 emit_lvalue(e.ret_val);
                 m_of << " = " << size;
             } else if (name == "offset_of") {
@@ -5211,7 +5211,7 @@ namespace {
                 m_of << " = " << val;
             } else if (name == "min_align_of" || name == "align_of") {
                 size_t align = 0;
-                MIR_ASSERT(mir_res, Target_GetAlignOf(sp, m_resolve, params.m_types.at(0), align), "Can't get alignment of " << params.m_types.at(0));
+                MIR_ASSERT(mir_res, TargetGetAlignOf(sp, m_resolve, params.m_types.at(0), align), "Can't get alignment of " << params.m_types.at(0));
                 emit_lvalue(e.ret_val);
                 m_of << " = " << align;
             } else if (name == "size_of_val") {
@@ -5222,7 +5222,7 @@ namespace {
                 auto inner_ty = get_inner_unsized_type(ty);
                 if (inner_ty == ::HIR::TypeRef()) {
                     size_t size = 0;
-                    MIR_ASSERT(mir_res, Target_GetSizeOf(sp, m_resolve, ty, size), "Can't get size of " << ty);
+                    MIR_ASSERT(mir_res, TargetGetSizeOf(sp, m_resolve, ty, size), "Can't get size of " << ty);
                     m_of << size;
                 }
                 // slice metadata (`[T]` and `str`)
@@ -5231,7 +5231,7 @@ namespace {
                     size_t item_size = 0;
                     size_t item_align = 0;
                     if (const auto* te = inner_ty->opt_Slice()) {
-                        MIR_ASSERT(mir_res, Target_GetSizeAndAlignOf(sp, m_resolve, te->inner, item_size, item_align), "Can't get size of " << te->inner);
+                        MIR_ASSERT(mir_res, TargetGetSizeAndAlignOf(sp, m_resolve, te->inner, item_size, item_align), "Can't get size of " << te->inner);
                     } else {
                         assert(inner_ty == ::HIR::CoreType::Str);
                         item_size = 1;
@@ -5241,13 +5241,13 @@ namespace {
                         // TODO: What if the wrapper has no other fields?
                         // Get the alignment and check if it's higher than the item alignment
                         size_t wrapper_align = 0, wrapper_size_ignore = 0;
-                        MIR_ASSERT(mir_res, Target_GetSizeAndAlignOf(sp, m_resolve, ty, wrapper_size_ignore, wrapper_align), "Can't get align of " << ty);
+                        MIR_ASSERT(mir_res, TargetGetSizeAndAlignOf(sp, m_resolve, ty, wrapper_size_ignore, wrapper_align), "Can't get align of " << ty);
                         if (wrapper_align > item_align) {
                             item_align = wrapper_align;
                             align_needed = true;
                             m_of << "ALIGN_TO(";
                         }
-                        const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+                        const auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
                         m_of << repr->fields.back().offset << " + ";
                     }
                     emit_param(e.args.at(0));
@@ -5348,7 +5348,7 @@ namespace {
                 if (m_options.emulated_i128) {
                     m_of << "make128(";
                 }
-                m_of << "(uintptr_t)&__typeid_" << Trans_Mangle(ty);
+                m_of << "(uintptr_t)&__typeid_" << TransMangle(ty);
                 if (m_options.emulated_i128) {
                     m_of << ")";
                 }
@@ -5496,7 +5496,7 @@ namespace {
                 m_of << ")";
             } else if (name == "raw_eq") {
                 size_t size = 0;
-                MIR_ASSERT(mir_res, Target_GetSizeOf(sp, m_resolve, params.m_types.at(0), size), "Can't get size of " << params.m_types.at(0));
+                MIR_ASSERT(mir_res, TargetGetSizeOf(sp, m_resolve, params.m_types.at(0), size), "Can't get size of " << params.m_types.at(0));
 
                 // Raw byte equality (could be implemented without a memcmp call, if desired)
                 emit_lvalue(e.ret_val);
@@ -5592,7 +5592,7 @@ namespace {
                 if (p == HIR::SimplePath()) {
                     m_of << "s_ZRG2cE9core0_0_05panic8Location0g";
                 } else {
-                    m_of << "s_" << Trans_Mangle(p);
+                    m_of << "s_" << TransMangle(p);
                 }
                 m_of << " mrustc_empty_caller_location = {._0={._0={(void*)\"\",0}},._1=0,._2=0};";
                 emit_lvalue(e.ret_val);
@@ -5717,7 +5717,7 @@ namespace {
                 if (!(ty->is_Path() && ty->as_Path().binding.is_Enum())) {
                     m_of << "0";
                 } else {
-                    const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+                    const auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
                     MIR_ASSERT(mir_res, repr, "No repr for enum " << ty);
                     switch (repr->variants.tag()) {
                         case TypeRepr::VariantMode::TAGDEAD:
@@ -5733,7 +5733,7 @@ namespace {
                             }
                             break;
                             TU_ARM(repr->variants, Linear, ve) {
-                                const auto& tag_ty = Target_GetInnerType(sp, m_resolve, *repr, ve.field.index, ve.field.sub_fields);
+                                const auto& tag_ty = TargetGetInnerType(sp, m_resolve, *repr, ve.field.index, ve.field.sub_fields);
                                 const bool pointer_tag = tag_ty->is_Pointer() || tag_ty->is_Borrow() || tag_ty->is_Function();
                                 auto emit_tag = [&]() {
                                     if (pointer_tag) {
@@ -6456,7 +6456,7 @@ namespace {
                     }
                     m_of << ";";
                     return;
-                } else if (ty == ::HIR::CoreType::U64 || (ty == ::HIR::CoreType::Usize && Target_GetPointerBits() > 32)) {
+                } else if (ty == ::HIR::CoreType::U64 || (ty == ::HIR::CoreType::Usize && TargetGetPointerBits() > 32)) {
                     emit_param(e.args.at(0));
                     m_of << " != 0 ? ";
                     if (name == "ctlz" || name == "ctlz_nonzero") {
@@ -6838,8 +6838,8 @@ namespace {
                         Unsigned,
                     } ty;
 
-                    static SimdInfo for_ty(const CodeGenerator_C& self, const HIR::TypeData* ty) {
-                        const auto* ty_repr = Target_GetTypeRepr(self.sp, self.m_mir_res->m_resolve, ty);
+                    static SimdInfo for_ty(const CodeGeneratorC& self, const HIR::TypeData* ty) {
+                        const auto* ty_repr = TargetGetTypeRepr(self.sp, self.m_mir_res->m_resolve, ty);
                         MIR_ASSERT(*self.m_mir_res, ty_repr, "No repr for " << ty);
                         size_t size_slot = ty_repr->size;
                         const auto& ity = ty_repr->fields[0].ty;
@@ -6847,7 +6847,7 @@ namespace {
                         const auto& ty_val = ity->is_Primitive() ? ity : ty_repr->fields[0].ty->as_Array().inner;
                         DEBUG("ty_val = " << ty_val);
                         size_t size_val = 0;
-                        MIR_ASSERT(*self.m_mir_res, Target_GetSizeOf(self.sp, self.m_resolve, ty_val, size_val), ty_val);
+                        MIR_ASSERT(*self.m_mir_res, TargetGetSizeOf(self.sp, self.m_resolve, ty_val, size_val), ty_val);
 
                         MIR_ASSERT(*self.m_mir_res, size_slot >= size_val, size_slot << " < " << size_val);
                         MIR_ASSERT(*self.m_mir_res, size_val > 0, "SimdInfo::for_ty - Value type " << ty_val << " was a ZST");
@@ -6901,7 +6901,7 @@ namespace {
                         return rv;
                     }
 
-                    void emit_val_ty(CodeGenerator_C& self) {
+                    void emit_val_ty(CodeGeneratorC& self) {
                         switch (ty) {
                             case Float:
                                 self.m_of << (item_size == 4 ? "float" : "double");
@@ -6982,8 +6982,8 @@ namespace {
                 // Insert a value at position
                 if (name_strip == "simd_insert") {
                     size_t size_slot = 0, size_val = 0;
-                    Target_GetSizeOf(sp, m_resolve, params.m_types.at(0), size_slot);
-                    Target_GetSizeOf(sp, m_resolve, params.m_types.at(1), size_val);
+                    TargetGetSizeOf(sp, m_resolve, params.m_types.at(0), size_slot);
+                    TargetGetSizeOf(sp, m_resolve, params.m_types.at(1), size_val);
                     MIR_ASSERT(mir_res, size_slot >= size_val, size_slot << " < " << size_val);
                     MIR_ASSERT(mir_res, size_slot / size_val * size_val == size_slot, size_slot << " not a multiple of " << size_val);
 
@@ -7002,8 +7002,8 @@ namespace {
                     emit_param(e.args.at(2));
                 } else if (name_strip == "simd_extract") {
                     size_t size_slot = 0, size_val = 0;
-                    Target_GetSizeOf(sp, m_resolve, params.m_types.at(0), size_slot);
-                    Target_GetSizeOf(sp, m_resolve, params.m_types.at(1), size_val);
+                    TargetGetSizeOf(sp, m_resolve, params.m_types.at(0), size_slot);
+                    TargetGetSizeOf(sp, m_resolve, params.m_types.at(1), size_val);
                     MIR_ASSERT(mir_res, size_slot >= size_val, size_slot << " < " << size_val);
                     MIR_ASSERT(mir_res, size_slot / size_val * size_val == size_slot, size_slot << " not a multiple of " << size_val);
 
@@ -7021,7 +7021,7 @@ namespace {
                 else if (name_strip == "simd_bitmask") {
                     auto src_info = SimdInfo::for_ty(*this, params.m_types.at(0));
                     size_t size_out = 0;
-                    Target_GetSizeOf(sp, m_resolve, params.m_types.at(1), size_out);
+                    TargetGetSizeOf(sp, m_resolve, params.m_types.at(1), size_out);
                     m_of << "{ uint8_t* out = (uint8_t*)&(";
                     emit_lvalue(e.ret_val);
                     m_of << "); memset(out, 0, " << size_out << "); ";
@@ -7036,7 +7036,7 @@ namespace {
                 } else if (name_strip == "simd_shuffle128" || name_strip == "simd_shuffle64" || name_strip == "simd_shuffle32" || name_strip == "simd_shuffle16" || name_strip == "simd_shuffle8" || name_strip == "simd_shuffle4" || name_strip == "simd_shuffle2") {
                     // Shuffle in 8 entries
                     size_t size_slot = 0;
-                    Target_GetSizeOf(sp, m_resolve, params.m_types.at(1), size_slot);
+                    TargetGetSizeOf(sp, m_resolve, params.m_types.at(1), size_slot);
                     size_t div = name_strip == "simd_shuffle128" ? 128 : name_strip == "simd_shuffle64" ? 64 : name_strip == "simd_shuffle32" ? 32 : name_strip == "simd_shuffle16" ? 16 : name_strip == "simd_shuffle8" ? 8 : name_strip == "simd_shuffle4" ? 4 : name_strip == "simd_shuffle2" ? 2 : throw "";
                     size_t size_val = size_slot / div;
                     MIR_ASSERT(mir_res, size_val > 0, size_slot << " / " << div << " == 0?");
@@ -7045,7 +7045,7 @@ namespace {
                     // Indices address the concatenation of both input vectors, so the split
                     // point is the INPUT element count, not the index count.
                     size_t size_in = 0;
-                    Target_GetSizeOf(sp, m_resolve, params.m_types.at(0), size_in);
+                    TargetGetSizeOf(sp, m_resolve, params.m_types.at(0), size_in);
                     size_t n_in = size_in / size_val;
                     MIR_ASSERT(mir_res, n_in > 0, "Zero-sized shuffle input");
                     m_of << "for(int i = 0; i < " << div << "; i++) { int j = ";
@@ -7067,9 +7067,9 @@ namespace {
                     size_t size_vec = 0;
                     size_t size_map = 0;
                     size_t size_ret = 0;
-                    Target_GetSizeOf(sp, m_resolve, vec_ty, size_vec);
-                    Target_GetSizeOf(sp, m_resolve, map_ty, size_map);
-                    Target_GetSizeOf(sp, m_resolve, ret_ty, size_ret);
+                    TargetGetSizeOf(sp, m_resolve, vec_ty, size_vec);
+                    TargetGetSizeOf(sp, m_resolve, map_ty, size_map);
+                    TargetGetSizeOf(sp, m_resolve, ret_ty, size_ret);
                     size_t div = size_map / 4; // map must be u32s
                     size_t size_val = size_ret / div;
                     // Indices address the concatenation of both inputs; split on the input
@@ -7373,9 +7373,9 @@ namespace {
                                 // an elided local (which can be behind Field/Index/etc.).
                                 m_of << indent << "{ ";
                                 emit_ctype(ty);
-                                m_of << " mrustc_zst{}; " << Trans_Mangle(p) << "(&mrustc_zst); }\n";
+                                m_of << " mrustc_zst{}; " << TransMangle(p) << "(&mrustc_zst); }\n";
                             } else if (this->type_is_bad_zst(ty) && ::MIR::LValue::CRef(slot).is_Index()) {
-                                m_of << indent << Trans_Mangle(p) << "((";
+                                m_of << indent << TransMangle(p) << "((";
                                 emit_ctype(ty);
                                 m_of << "*)";
                                 emit_borrow(*m_mir_res, ::HIR::BorrowType::Unique, slot);
@@ -7387,17 +7387,17 @@ namespace {
                                 if (this->type_is_bad_zst(m_mir_res->get_lvalue_type(tmp, v)) && (v.is_Field() || v.is_Downcast())) {
                                     v = v.inner_ref();
                                 }
-                                m_of << indent << Trans_Mangle(p) << "((";
+                                m_of << indent << TransMangle(p) << "((";
                                 emit_ctype(ty);
                                 m_of << "*)&";
                                 emit_lvalue(v);
                                 m_of << ");\n";
                             } else if (this->type_is_bad_zst(ty) && slot.m_wrappers.empty()) {
-                                m_of << indent << Trans_Mangle(p) << "((";
+                                m_of << indent << TransMangle(p) << "((";
                                 emit_ctype(ty);
                                 m_of << "*)&rv);\n";
                             } else {
-                                m_of << indent << Trans_Mangle(p) << "(&";
+                                m_of << indent << TransMangle(p) << "(&";
                                 emit_lvalue(slot);
                                 m_of << ");\n";
                             }
@@ -7408,7 +7408,7 @@ namespace {
                                 case MetadataType::TraitObject:
                                     make_fcn = "make_traitobjptr";
                             }
-                            m_of << indent << Trans_Mangle(p) << "( " << make_fcn << "(";
+                            m_of << indent << TransMangle(p) << "( " << make_fcn << "(";
                             if (slot.is_Deref()) {
                                 emit_lvalue(::MIR::LValue::CRef(slot).inner_ref());
                                 m_of << ".PTR";
@@ -7477,7 +7477,7 @@ namespace {
 
         void emit_enum_variant_val(const TypeRepr* repr, unsigned idx) {
             const auto& ve = repr->variants.as_Values();
-            const auto& tag_ty = Target_GetInnerType(sp, m_resolve, *repr, ve.field.index, ve.field.sub_fields);
+            const auto& tag_ty = TargetGetInnerType(sp, m_resolve, *repr, ve.field.index, ve.field.sub_fields);
             switch (tag_ty->as_Primitive()) {
                 case ::HIR::CoreType::I8:
                 case ::HIR::CoreType::I16:
@@ -7521,7 +7521,7 @@ namespace {
         }
 
         // returns whether a literal can be represented as zeroed memory.
-        bool is_zero_literal(const ::HIR::TypeData* ty, const EncodedLiteral& lit, const Trans_Params& params) {
+        bool is_zero_literal(const ::HIR::TypeData* ty, const EncodedLiteral& lit, const TransParams& params) {
             for (auto v : lit.bytes) {
                 if (v) {
                     return false;
@@ -7549,7 +7549,7 @@ namespace {
                     }
                 }
                 TU_ARMA(Static, e) {
-                    m_of << Trans_Mangle(e);
+                    m_of << TransMangle(e);
                     m_of << ".val";
                 }
                 TU_ARMA(Field, field_index) {
@@ -7759,7 +7759,7 @@ namespace {
                         m_of << "((void*)((uint8_t*)";
                     }
                     if (c->m_data.is_UfcsInherent() && c->m_data.as_UfcsInherent().item == "#type_id") {
-                        m_of << "(void*)&__typeid_" << Trans_Mangle(c->m_data.as_UfcsInherent().type);
+                        m_of << "(void*)&__typeid_" << TransMangle(c->m_data.as_UfcsInherent().type);
                     } else {
                         bool is_fcn = false;
                         MonomorphState ms_tmp(m_crate.m_types);
@@ -7769,7 +7769,7 @@ namespace {
                         if (!is_fcn) {
                             m_of << "&";
                         }
-                        m_of << Trans_Mangle(*c);
+                        m_of << TransMangle(*c);
                         if (!is_fcn) {
                             m_of << ".val";
                         }
@@ -7897,16 +7897,16 @@ namespace {
                     //}
                 TU_MATCH_HDRA( (te.binding), { )
                 TU_ARMA(Struct, tpb) {
-                            m_of << "struct s_" << Trans_Mangle(te.path);
+                            m_of << "struct s_" << TransMangle(te.path);
                         }
                         TU_ARMA(Union, tpb) {
-                            m_of << "union u_" << Trans_Mangle(te.path);
+                            m_of << "union u_" << TransMangle(te.path);
                         }
                         TU_ARMA(Enum, tpb) {
-                            m_of << "struct e_" << Trans_Mangle(te.path);
+                            m_of << "struct e_" << TransMangle(te.path);
                         }
                         TU_ARMA(ExternType, tpb) {
-                            m_of << "struct x_" << Trans_Mangle(te.path);
+                            m_of << "struct x_" << TransMangle(te.path);
                         }
                         TU_ARMA(Unbound, tpb) {
                             MIR_BUG(*m_mir_res, "Unbound type path in trans - " << ty);
@@ -7927,7 +7927,7 @@ namespace {
                     MIR_BUG(*m_mir_res, "ErasedType in trans - " << ty);
                 }
                 TU_ARMA(Array, te) {
-                    m_of << "t_" << Trans_Mangle(ty) << " " << inner;
+                    m_of << "t_" << TransMangle(ty) << " " << inner;
                     //emit_ctype(te.inner, inner);
                     //m_of << "[" << te.size.as_Known() << "]";
                 }
@@ -7940,7 +7940,7 @@ namespace {
                     } else {
                         m_of << "TUP_" << te.size();
                         for (const auto& t : te) {
-                            m_of << "_" << Trans_Mangle(t);
+                            m_of << "_" << TransMangle(t);
                         }
                     }
                     m_of << " " << inner;
@@ -7952,10 +7952,10 @@ namespace {
                     emit_ctype_ptr(te.inner, inner);
                 }
                 TU_ARMA(NamedFunction, te) {
-                    m_of << "t_" << Trans_Mangle(ty) << " " << inner;
+                    m_of << "t_" << TransMangle(ty) << " " << inner;
                 }
                 TU_ARMA(Function, te) {
-                    m_of << "t_" << Trans_Mangle(ty) << " " << inner;
+                    m_of << "t_" << TransMangle(ty) << " " << inner;
                 }
                 break;
                 case ::HIR::TypeData::TAG_NodeType:
@@ -8045,7 +8045,7 @@ namespace {
                 return;
             }
 
-            const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+            const auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
             MIR_ASSERT(*m_mir_res, repr && repr->size == SIZE_MAX && !repr->fields.empty(), "Expected a DST wrapper - " << ty);
             m_of << "mrustc_max(" << repr->align << ", ";
             emit_trait_object_dst_tail_align(ty, repr->fields.back().ty, value);
@@ -8058,7 +8058,7 @@ namespace {
                 return;
             }
 
-            const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+            const auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
             MIR_ASSERT(*m_mir_res, repr && repr->size == SIZE_MAX && !repr->fields.empty(), "Expected a DST wrapper - " << ty);
             const auto& tail = repr->fields.back();
             m_of << "ALIGN_TO(ALIGN_TO(" << tail.offset << ", ";
@@ -8071,7 +8071,7 @@ namespace {
         }
 
         void emit_trait_object_dst_field_offset(const ::HIR::TypeData* ty, size_t field_idx, const ::MIR::Param& value) {
-            const auto* repr = Target_GetTypeRepr(sp, m_resolve, ty);
+            const auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
             MIR_ASSERT(*m_mir_res, repr && field_idx < repr->fields.size(), "Invalid DST field " << field_idx << " on " << ty);
             const auto& field = repr->fields[field_idx];
             auto inner_ty = get_inner_unsized_type(field.ty);
@@ -8123,9 +8123,9 @@ namespace {
         }
     };
 
-    Span CodeGenerator_C::sp;
+    Span CodeGeneratorC::sp;
 }
 
-::std::unique_ptr<CodeGenerator> Trans_Codegen_GetGeneratorC(const ::HIR::Crate& crate, const ::std::string& outfile) {
-    return ::std::unique_ptr<CodeGenerator>(new CodeGenerator_C(crate, outfile));
+::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorC(const ::HIR::Crate& crate, const ::std::string& outfile) {
+    return ::std::unique_ptr<CodeGenerator>(new CodeGeneratorC(crate, outfile));
 }

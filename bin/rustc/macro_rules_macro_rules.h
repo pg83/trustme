@@ -180,9 +180,9 @@ public:
     MacroRules(MacroRules&&) = default;
 };
 
-extern ::std::unique_ptr<TokenStream> Macro_InvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, TokenTree input, const AST::Crate& crate, AST::Module& mod);
+extern ::std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, TokenTree input, const AST::Crate& crate, AST::Module& mod);
 
 /// Parse a full `macro_rules` block
-extern MacroRulesPtr Parse_MacroRules(TokenStream& lex);
+extern MacroRulesPtr ParseMacroRules(TokenStream& lex);
 /// Parse a single-arm `macro` item ( `macro foo($name:ident) { $name }`)
-extern MacroRulesPtr Parse_MacroRulesSingleArm(TokenStream& lex);
+extern MacroRulesPtr ParseMacroRulesSingleArm(TokenStream& lex);

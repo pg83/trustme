@@ -139,7 +139,7 @@ namespace AST {
 
                 if (::std::ifstream(path).good()) {
                     // Ensure that if this is loaded, it yields the right name (otherwise skip)
-                    auto n = HIR_Deserialise_JustName(path);
+                    auto n = HIRDeserialiseJustName(path);
                     if (n == name) {
                         break;
                     }
@@ -272,7 +272,7 @@ namespace AST {
         , m_filename(path)
     {
         TRACE_FUNCTION_F("name=" << name << ", path='" << path << "'");
-        m_hir = HIR_Deserialise(pool, types, path);
+        m_hir = HIRDeserialise(pool, types, path);
 
         m_hir->post_load_update(name);
         m_name = m_hir->m_crate_name;
