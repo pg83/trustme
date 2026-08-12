@@ -1,11 +1,11 @@
 #pragma once
 
 #include "mir_mir.h"
-
-#include <map>
 #include "hir_expr.h" // for ExprNodeMatch
 #include "hir_type.h"
 #include "hir_typeck_static.h" // StaticTraitResolve for Copy
+
+#include <map>
 
 class MirBuilder;
 

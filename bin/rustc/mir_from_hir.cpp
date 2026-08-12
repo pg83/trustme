@@ -9317,11 +9317,12 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
     }
             );
             if (isBox) {
-                dropValueFromState(sp, *vse.innerState, MIRLValue::newDeref(lv.clone()));
-                const auto outerFlag = vse.outerFlag;
-                vs = VarState::make_Invalid(InvalidType::Moved);
-                pushStmtDropShallow(sp, mv$(lv), outerFlag);
-            } else { TODO(sp, ""); }
+        dropValueFromState(sp, *vse.innerState, MIRLValue::newDeref(lv.clone()));
+        const auto outerFlag = vse.outerFlag;
+        vs = VarState::make_Invalid(InvalidType::Moved);
+        pushStmtDropShallow(sp, mv$(lv), outerFlag);
+            } else {
+        TODO(sp, ""); }
         ),
         (
             Partial, bool is_enum = false; bool isUnion = false; withValType(
@@ -9333,49 +9334,49 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
     }
             );
             if (is_enum) {
-                bool hasValidVariant = false;
-                for (const auto& state : vse.innerStates) {
-                    hasValidVariant |= !state.is_Invalid();
-                }
-                if (!hasValidVariant) {
-                    return;
-                }
+        bool hasValidVariant = false;
+        for (const auto& state : vse.innerStates) {
+            hasValidVariant |= !state.is_Invalid();
+        }
+        if (!hasValidVariant) {
+            return;
+        }
 
-                auto originalState = vs.clone();
-                const auto outerFlag = vse.outerFlag;
-                const auto nextBb = newBbUnlinked();
-                ::std::vector<MIRBasicBlockId> arms;
-                ::std::vector<MIRBasicBlockId> cleanupBlocks;
-                arms.reserve(vse.innerStates.size());
-                cleanupBlocks.reserve(vse.innerStates.size());
-                for (const auto& state : vse.innerStates) {
-                    const auto cleanupBb = state.is_Invalid() ? nextBb : newBbUnlinked();
-                    arms.push_back(cleanupBb);
-                    cleanupBlocks.push_back(cleanupBb);
-                }
-                endBlock(MIRTerminator::make_Switch({lv.clone(), mv$(arms), outerFlag, outerFlag == ~0u ? ~0u : nextBb}));
+        auto originalState = vs.clone();
+        const auto outerFlag = vse.outerFlag;
+        const auto nextBb = newBbUnlinked();
+        ::std::vector<MIRBasicBlockId> arms;
+        ::std::vector<MIRBasicBlockId> cleanupBlocks;
+        arms.reserve(vse.innerStates.size());
+        cleanupBlocks.reserve(vse.innerStates.size());
+        for (const auto& state : vse.innerStates) {
+            const auto cleanupBb = state.is_Invalid() ? nextBb : newBbUnlinked();
+            arms.push_back(cleanupBb);
+            cleanupBlocks.push_back(cleanupBb);
+        }
+        endBlock(MIRTerminator::make_Switch({lv.clone(), mv$(arms), outerFlag, outerFlag == ~0u ? ~0u : nextBb}));
 
-                const auto variantCount = originalState.as_Partial().innerStates.size();
-                for (size_t i = 0; i < variantCount; i++) {
-                    if (originalState.as_Partial().innerStates[i].is_Invalid()) {
-                        continue;
-                    }
-                    setCurBlock(cleanupBlocks[i]);
-                    vs = originalState.clone();
-                    dropValueFromState(sp, vs.as_Partial().innerStates[i], MIRLValue::newDowncast(lv.clone(), static_cast<unsigned int>(i)));
-                    vs = VarState::make_Invalid(InvalidType::Moved);
-                    endBlock(MIRTerminator::make_Goto(nextBb));
-                }
-                vs = VarState::make_Invalid(InvalidType::Moved);
-                setCurBlock(nextBb);
+        const auto variantCount = originalState.as_Partial().innerStates.size();
+        for (size_t i = 0; i < variantCount; i++) {
+            if (originalState.as_Partial().innerStates[i].is_Invalid()) {
+                continue;
+            }
+            setCurBlock(cleanupBlocks[i]);
+            vs = originalState.clone();
+            dropValueFromState(sp, vs.as_Partial().innerStates[i], MIRLValue::newDowncast(lv.clone(), static_cast<unsigned int>(i)));
+            vs = VarState::make_Invalid(InvalidType::Moved);
+            endBlock(MIRTerminator::make_Goto(nextBb));
+        }
+        vs = VarState::make_Invalid(InvalidType::Moved);
+        setCurBlock(nextBb);
             } else if (isUnion) {
-                // NOTE: Unions don't drop inner items.
-                vs = VarState::make_Invalid(InvalidType::Moved);
+        // NOTE: Unions don't drop inner items.
+        vs = VarState::make_Invalid(InvalidType::Moved);
             } else {
-                for (size_t i = 0; i < vse.innerStates.size(); i++) {
-                    dropValueFromState(sp, vse.innerStates[i], MIRLValue::newField(lv.clone(), static_cast<unsigned int>(i)));
-                }
-                vs = VarState::make_Invalid(InvalidType::Moved);
+        for (size_t i = 0; i < vse.innerStates.size(); i++) {
+            dropValueFromState(sp, vse.innerStates[i], MIRLValue::newField(lv.clone(), static_cast<unsigned int>(i)));
+        }
+        vs = VarState::make_Invalid(InvalidType::Moved);
             }
         ),
         (Optional, const auto flag = vse; vs = VarState::make_Invalid(InvalidType::Moved); pushStmtDrop(sp, mv$(lv), flag);),
@@ -9386,25 +9387,25 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
             TU_MATCH_HDRA((*vse.fillState), {)
             default:
                 BUG(sp, "Composite fill state in PartialArray drop - " << *vse.fillState);
-                TU_ARMA(Valid, fe) {
-                }
-                TU_ARMA(Invalid, fe) {
-                    fillDrop = false;
-                }
-                TU_ARMA(Optional, fe) {
-                    fillFlag = fe;
-                }
+        TU_ARMA(Valid, fe) {
+        }
+        TU_ARMA(Invalid, fe) {
+            fillDrop = false;
+        }
+        TU_ARMA(Optional, fe) {
+            fillFlag = fe;
+        }
             }
             size_t prev = 0;
             for (auto& kv : vse.otherStates) {
-                if (fillDrop) {
-                    emitArrayElementDropLoop(sp, lv, prev, kv.first, fillFlag);
-                }
-                dropValueFromState(sp, kv.second, MIRLValue::newField(lv.clone(), kv.first));
-                prev = kv.first + 1;
+        if (fillDrop) {
+            emitArrayElementDropLoop(sp, lv, prev, kv.first, fillFlag);
+        }
+        dropValueFromState(sp, kv.second, MIRLValue::newField(lv.clone(), kv.first));
+        prev = kv.first + 1;
             }
             if (fillDrop) {
-                emitArrayElementDropLoop(sp, lv, prev, vse.count, fillFlag);
+        emitArrayElementDropLoop(sp, lv, prev, vse.count, fillFlag);
             }
             vs = VarState::make_Invalid(InvalidType::Moved);
         )
@@ -9549,15 +9550,26 @@ bool VarState::operator==(const VarState& x) const {
     if (this->tag() != x.tag()) {
         return false;
     }
-    TU_MATCHA((*this, x), (te, xe), (Invalid, return te == xe;), (Valid, return true;), (Optional, return te == xe;), (MovedOut, if (te.outerFlag != xe.outerFlag) return false; return *te.innerState == *xe.innerState;), (Partial, if (te.outerFlag != xe.outerFlag || te.innerStates.size() != xe.innerStates.size()) return false; for (unsigned int i = 0; i < te.innerStates.size(); i++) {
-                  if (te.innerStates[i] != xe.innerStates[i]) {
-                      return false;
-                  }
-              } return true;), (PartialArray, if (te.count != xe.count || !(*te.fillState == *xe.fillState) || te.otherStates.size() != xe.otherStates.size()) return false; for (auto itT = te.otherStates.begin(), itX = xe.otherStates.begin(); itT != te.otherStates.end(); ++itT, ++itX) {
-                  if (itT->first != itX->first || itT->second != itX->second) {
-                      return false;
-                  }
-              } return true;))
+    TU_MATCHA(
+        (*this, x),
+        (te, xe),
+        (Invalid, return te == xe;),
+        (Valid, return true;),
+        (Optional, return te == xe;),
+        (MovedOut, if (te.outerFlag != xe.outerFlag) return false; return *te.innerState == *xe.innerState;),
+        (
+            Partial, if (te.outerFlag != xe.outerFlag || te.innerStates.size() != xe.innerStates.size()) return false; for (unsigned int i = 0; i < te.innerStates.size(); i++) {
+                if (te.innerStates[i] != xe.innerStates[i]) {
+                    return false;
+                }
+            } return true;
+        ),
+        (PartialArray, if (te.count != xe.count || !(*te.fillState == *xe.fillState) || te.otherStates.size() != xe.otherStates.size()) return false; for (auto itT = te.otherStates.begin(), itX = xe.otherStates.begin(); itT != te.otherStates.end(); ++itT, ++itX) {
+            if (itT->first != itX->first || itT->second != itX->second) {
+                return false;
+            }
+        } return true;)
+    )
     throw "";
 }
 

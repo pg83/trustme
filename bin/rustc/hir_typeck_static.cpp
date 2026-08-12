@@ -1610,8 +1610,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, HIRTy
     return true;
 }
 
-namespace {
-}
+namespace {}
 
 bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeRef& input, bool recurse /*=true*/) const {
     TRACE_FUNCTION_FR(input, input);
