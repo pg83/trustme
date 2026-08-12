@@ -47,26 +47,32 @@ void TraitResolveCommon::prep_indexes__add_equality(const Span& sp, const ::HIR:
 void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::HIR::GenericParams* outer_hrtbs, ::HIR::TypeRef type, ::HIR::TraitPath trait_path, bool add_parents /*=true*/) {
     TRACE_FUNCTION_F(FMT_CB(os, if (outer_hrtbs) os << "for" << outer_hrtbs->fmt_args() << " ";) << type << " : " << trait_path);
 
-    auto get_or_add_trait_bound = [&](const HIR::GenericParams* hrbs, const HIR::GenericPath& trait_path) -> CachedBound& {
+    const auto bound_constness = trait_path.m_constness;
+    auto get_or_add_trait_bound = [&](const HIR::GenericParams* hrbs, const HIR::GenericPath& generic_path) -> CachedBound& {
         auto it = ::std::find_if(m_trait_bounds.begin(), m_trait_bounds.end(), [&](const auto& entry) {
             const auto& bound_type = entry.first.first;
             const auto& bound_trait = entry.first.second;
             return (bound_type == type || bound_type->equals_ignoring_regions(type))
-                && bound_trait.equals_ignoring_regions(trait_path);
+                && bound_trait.equals_ignoring_regions(generic_path);
         });
         if (it != m_trait_bounds.end()) {
-            DEBUG("[get_or_add_trait_bound] Existing " << FMT_CB(os, if (hrbs) os << "for" << hrbs->fmt_args() << " ";) << trait_path);
+            DEBUG("[get_or_add_trait_bound] Existing " << FMT_CB(os, if (hrbs) os << "for" << hrbs->fmt_args() << " ";) << generic_path);
+            if (bound_constness == HIR::BoundConstness::Always
+                || (bound_constness == HIR::BoundConstness::Maybe && it->second.constness == HIR::BoundConstness::Never)) {
+                it->second.constness = bound_constness;
+            }
             return it->second;
         }
-        DEBUG("[get_or_add_trait_bound] Add " << FMT_CB(os, if (outer_hrtbs) os << "for" << outer_hrtbs->fmt_args() << " ";) << " ?: " << FMT_CB(os, if (hrbs) os << "for" << hrbs->fmt_args() << " ";) << trait_path);
-        auto& rv = m_trait_bounds[std::make_pair(type, trait_path.clone())];
+        DEBUG("[get_or_add_trait_bound] Add " << FMT_CB(os, if (outer_hrtbs) os << "for" << outer_hrtbs->fmt_args() << " ";) << " ?: " << FMT_CB(os, if (hrbs) os << "for" << hrbs->fmt_args() << " ";) << generic_path);
+        auto& rv = m_trait_bounds[std::make_pair(type, generic_path.clone())];
         if (outer_hrtbs && !outer_hrtbs->is_empty()) {
             rv.hrbs = outer_hrtbs->clone();
         }
         if (hrbs && !hrbs->is_empty()) {
             rv.hrbs = hrbs->clone();
         }
-        rv.trait_ptr = &m_crate.get_trait_by_path(sp, trait_path.m_path);
+        rv.trait_ptr = &m_crate.get_trait_by_path(sp, generic_path.m_path);
+        rv.constness = bound_constness;
         return rv;
     };
     auto push_type = [&](const RcString& name, const HIR::GenericParams* hrbs, const HIR::TraitPath::AtyEqual& atye) {

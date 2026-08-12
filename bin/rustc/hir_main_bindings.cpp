@@ -300,6 +300,7 @@ public:
         rv.m_params = deserialise_genericparams();
         rv.m_trait_args = deserialise_pathparams();
         rv.m_type = deserialise_type();
+        rv.m_is_const = m_in.read_bool();
         DEBUG("impl" << rv.m_params.fmt_args() << " ?" << rv.m_trait_args << " for " << rv.m_type);
 
         size_t method_count = m_in.read_count();
@@ -1104,7 +1105,8 @@ DEF_D(::HIR::ExternLibrary, return d.deserialise_extlib();)
     auto gpath = deserialise_genericpath();
     auto tys = deserialise_istrmap<::HIR::TraitPath::AtyEqual>();
     auto bounds = deserialise_istrmap<::HIR::TraitPath::AtyBound>();
-    return ::HIR::TraitPath{std::move(hrls), mv$(gpath), mv$(tys), mv$(bounds)};
+    auto constness = static_cast<::HIR::BoundConstness>(m_in.read_u8());
+    return ::HIR::TraitPath{std::move(hrls), mv$(gpath), mv$(tys), mv$(bounds), nullptr, constness};
 }
 
 ::HIR::Path HirDeserialiser::deserialise_path() {
@@ -1161,7 +1163,13 @@ DEF_D(::HIR::ExternLibrary, return d.deserialise_extlib();)
         case 1:
             return ::HIR::GenericBound::make_TypeLifetime({deserialise_type(), deserialise_lifetimeref()});
         case 2:
-            return ::HIR::GenericBound::make_TraitBound({m_in.read_bool() ? box$(deserialise_genericparams()) : nullptr, deserialise_type(), deserialise_traitpath()});
+        {
+            auto hrtbs = m_in.read_bool() ? box$(deserialise_genericparams()) : nullptr;
+            auto type = deserialise_type();
+            auto trait = deserialise_traitpath();
+            auto constness = static_cast<::HIR::BoundConstness>(m_in.read_u8());
+            return ::HIR::GenericBound::make_TraitBound({mv$(hrtbs), mv$(type), mv$(trait), constness});
+        }
         case 3:
             return ::HIR::GenericBound::make_TypeEquality({deserialise_type(), deserialise_type()});
         default:
@@ -1266,6 +1274,7 @@ DEF_D(::HIR::ExternLibrary, return d.deserialise_extlib();)
     rv.m_is_marker = trait_flags & 1;
     rv.m_is_fundamental = trait_flags & 2;
     rv.m_is_coinductive = (trait_flags & 4) || rv.m_is_marker;
+    rv.m_is_const = trait_flags & 8;
     rv.m_types = deserialise_istrumap<::HIR::AssociatedType>();
     rv.m_values = deserialise_istrumap<::HIR::TraitValueItem>();
     rv.m_value_indexes = deserialise_istrummap<::std::pair<unsigned int, ::HIR::GenericPath>>();
@@ -2795,6 +2804,7 @@ public:
         serialise_genericpath(path.m_path);
         serialise_strmap(path.m_type_bounds);
         serialise_strmap(path.m_trait_bounds);
+        m_out.write_u8(static_cast<uint8_t>(path.m_constness));
     }
 
     void serialise(const ::HIR::TraitPath::AtyEqual& e) {
@@ -2883,6 +2893,7 @@ public:
                 }
                 serialise_type(e.type);
                 serialise_traitpath(e.trait);
+                m_out.write_u8(static_cast<uint8_t>(e.constness));
             }
             TU_ARMA(TypeEquality, e) {
                 m_out.write_tag(3);
@@ -2994,6 +3005,7 @@ public:
         serialise_generics(impl.m_params);
         serialise_pathparams(impl.m_trait_args);
         serialise_type(impl.m_type);
+        m_out.write_bool(impl.m_is_const);
 
         m_out.write_count(impl.m_methods.size());
         for (const auto& v : impl.m_methods) {
@@ -3697,6 +3709,7 @@ public:
             (item.m_is_marker ? 1u : 0u)
             | (item.m_is_fundamental ? 2u : 0u)
             | (item.m_is_coinductive ? 4u : 0u)
+            | (item.m_is_const ? 8u : 0u)
         );
         serialise_strmap(item.m_types);
         serialise_strmap(item.m_values);

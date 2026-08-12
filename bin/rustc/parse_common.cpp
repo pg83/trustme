@@ -2589,6 +2589,26 @@ namespace {
         CHECK_TOK(tok, TOK_LIFETIME);
         return AST::LifetimeRef(/*lex.point_span(), */ tok.ident());
     }
+
+    AST::BoundConstness Parse_BoundConstness(TokenStream& lex) {
+        Token tok;
+        if (lex.getTokenIf(TOK_TILDE)) {
+            GET_CHECK_TOK(tok, lex, TOK_RWORD_CONST);
+            return AST::BoundConstness::Maybe;
+        }
+        if (lex.getTokenIf(TOK_RWORD_CONST)) {
+            return AST::BoundConstness::Always;
+        }
+        if (lex.lookahead(0) == TOK_SQUARE_OPEN
+            && lex.lookahead(1) == TOK_RWORD_CONST
+            && lex.lookahead(2) == TOK_SQUARE_CLOSE) {
+            lex.getToken();
+            lex.getToken();
+            lex.getToken();
+            return AST::BoundConstness::Maybe;
+        }
+        return AST::BoundConstness::Never;
+    }
 }
 
 /// Parse type parameters in a definition
@@ -2617,18 +2637,19 @@ void Parse_TypeBound(TokenStream& lex, AST::GenericParams& ret, TypeRef checked_
             (void)hrbs; // The only valid ?Trait is Sized, which doesn't have any generics
             ret.add_bound(AST::GenericBound::make_MaybeTrait({checked_type.clone(), Parse_Path(lex, PATH_GENERIC_TYPE)}));
         } else {
-            if (lex.getTokenIf(TOK_TILDE)) {
-                GET_CHECK_TOK(tok, lex, TOK_RWORD_CONST);
-            } else if (lex.getTokenIf(TOK_RWORD_CONST)) {
-            }
+            auto constness = Parse_BoundConstness(lex);
             ::AST::HigherRankedBounds inner_hrls;
             if (lex.getTokenIf(TOK_RWORD_FOR)) {
                 inner_hrls = Parse_HRB(lex);
             }
+            auto post_hrb_constness = Parse_BoundConstness(lex);
+            if (post_hrb_constness != AST::BoundConstness::Never) {
+                constness = post_hrb_constness;
+            }
             auto trait_path = Parse_Path(lex, PATH_GENERIC_TYPE);
 
             auto this_outer_hrbs = (lex.lookahead(0) == TOK_PLUS ? AST::HigherRankedBounds(outer_hrbs) : mv$(outer_hrbs));
-            ret.add_bound(AST::GenericBound::make_IsTrait({lex.end_span(ps), mv$(this_outer_hrbs), checked_type.clone(), mv$(inner_hrls), mv$(trait_path)}));
+            ret.add_bound(AST::GenericBound::make_IsTrait({lex.end_span(ps), mv$(this_outer_hrbs), checked_type.clone(), mv$(inner_hrls), mv$(trait_path), constness}));
         }
     } while (lex.getTokenIf(TOK_PLUS));
 }
@@ -3212,15 +3233,14 @@ AST::Trait Parse_TraitDef(TokenStream& lex, const AST::AttributeList& meta_items
             } else if (tok.type() == TOK_BRACE_OPEN) {
                 break;
             } else {
-                if (tok.type() == TOK_TILDE) {
-                    GET_CHECK_TOK(tok, lex, TOK_RWORD_CONST);
-                    GET_TOK(tok, lex);
-                } else if (tok.type() == TOK_RWORD_CONST) {
-                    GET_TOK(tok, lex);
-                }
                 PUTBACK(tok, lex);
+                auto constness = Parse_BoundConstness(lex);
                 auto hrbs = Parse_HRB_Opt(lex);
-                supertraits.push_back(GET_SPANNED(Type_TraitPath, lex, (Type_TraitPath(mv$(hrbs), Parse_Path(lex, PATH_GENERIC_TYPE)))));
+                auto post_hrb_constness = Parse_BoundConstness(lex);
+                if (post_hrb_constness != AST::BoundConstness::Never) {
+                    constness = post_hrb_constness;
+                }
+                supertraits.push_back(GET_SPANNED(Type_TraitPath, lex, (Type_TraitPath(mv$(hrbs), Parse_Path(lex, PATH_GENERIC_TYPE), constness))));
             }
         } while (GET_TOK(tok, lex) == TOK_PLUS);
     }
@@ -3468,9 +3488,7 @@ AST::Attribute Parse_MetaItem(TokenStream& lex) {
 
     Spanned<AST::Path> trait_path;
 
-    if (lex.getTokenIf(TOK_RWORD_CONST)) {
-        // TODO: Save the const flag?
-    }
+    const bool is_const = lex.getTokenIf(TOK_RWORD_CONST);
 
     // - Handle negative impls specially, which must be a trait
     // "impl !Trait for Type {}"
@@ -3525,6 +3543,9 @@ AST::Attribute Parse_MetaItem(TokenStream& lex) {
     Parse_ParentAttrs(lex, attrs);
 
     auto impl = AST::Impl(AST::ImplDef(mv$(params), mv$(trait_path), mv$(impl_type)));
+    if (is_const) {
+        impl.def().set_is_const();
+    }
 
     // A sequence of method implementations
     while (lex.lookahead(0) != TOK_BRACE_CLOSE) {
@@ -4945,14 +4966,19 @@ TypeRef Parse_Type_TraitObject(TokenStream& lex, ::AST::HigherRankedBounds hrbs)
 
             lifetimes.push_back(AST::LifetimeRef(/*lex.point_span(),*/ tok.ident()));
         } else {
+            auto constness = Parse_BoundConstness(lex);
             if (lex.getTokenIf(TOK_RWORD_FOR)) {
                 hrbs = Parse_HRB(lex);
             } else {
             }
+            auto post_hrb_constness = Parse_BoundConstness(lex);
+            if (post_hrb_constness != AST::BoundConstness::Never) {
+                constness = post_hrb_constness;
+            }
 
             bool is_paren = lex.getTokenIf(TOK_PAREN_OPEN);
 
-            traits.push_back({mv$(hrbs), Parse_Path(lex, PATH_GENERIC_TYPE)});
+            traits.push_back({mv$(hrbs), Parse_Path(lex, PATH_GENERIC_TYPE), constness});
 
             if (is_paren) {
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
@@ -4993,12 +5019,13 @@ TypeRef Parse_Type_ErasedType(TokenStream& lex, bool allow_trait_list) {
             }
             rv_data.use.reset(new ::AST::PathParams(Parse_Path_GenericList(lex)));
         } else {
-            if (lex.getTokenIf(TOK_TILDE)) {
-                GET_CHECK_TOK(tok, lex, TOK_RWORD_CONST);
-            } else if (lex.getTokenIf(TOK_RWORD_CONST)) {
-            }
+            auto constness = Parse_BoundConstness(lex);
             AST::HigherRankedBounds hrbs = Parse_HRB_Opt(lex);
-            rv_data.traits.push_back({mv$(hrbs), Parse_Path(lex, PATH_GENERIC_TYPE)});
+            auto post_hrb_constness = Parse_BoundConstness(lex);
+            if (post_hrb_constness != AST::BoundConstness::Never) {
+                constness = post_hrb_constness;
+            }
+            rv_data.traits.push_back({mv$(hrbs), Parse_Path(lex, PATH_GENERIC_TYPE), constness});
         }
     } while (lex.getTokenIf(TOK_PLUS));
 

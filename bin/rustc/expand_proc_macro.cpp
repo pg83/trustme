@@ -487,6 +487,16 @@ namespace {
         {
         }
 
+        void visit_bound_constness(AST::BoundConstness constness) {
+            if (constness == AST::BoundConstness::Always) {
+                m_pmi.send_rword("const");
+            } else if (constness == AST::BoundConstness::Maybe) {
+                m_pmi.send_symbol("[");
+                m_pmi.send_rword("const");
+                m_pmi.send_symbol("]");
+            }
+        }
+
         void visit_token(const ::Token& tok) {
             switch (tok.type()) {
                 case TOK_NULL:
@@ -1009,6 +1019,7 @@ namespace {
                         }
                         needs_plus = true;
                         this->visit_hrbs(t.hrbs);
+                        this->visit_bound_constness(t.constness);
                         this->visit_path(*t.path);
                     } for (const auto& lft : te.lifetimes) {
                         if (lft != AST::LifetimeRef()) {
@@ -1026,6 +1037,7 @@ namespace {
                     }
                     needs_plus = true;
                     this->visit_hrbs(t.hrbs);
+                    this->visit_bound_constness(t.constness);
                     this->visit_path(*t.path);
                 } for (const auto& t : te->maybe_traits) {
                     if (needs_plus) {
@@ -1245,6 +1257,7 @@ namespace {
                                         if (!be.inner_hrbs.empty()) {
                                             TODO(sp, "be.inner_hrbs");
                                         }
+                                        visit_bound_constness(be.constness);
                                         visit_path(be.trait);
                                     }
                                     TU_ARMA(MaybeTrait, be) {
@@ -1325,6 +1338,7 @@ namespace {
                             visit_type(be.type);
                             m_pmi.send_symbol(":");
                             visit_hrbs(be.inner_hrbs);
+                            visit_bound_constness(be.constness);
                             visit_path(be.trait);
                         }
                         TU_ARMA(MaybeTrait, be) {
@@ -1655,6 +1669,9 @@ namespace {
 
         void visit_impl_hdr(const ::AST::ImplDef& impl) {
             m_pmi.send_rword("impl");
+            if (impl.is_const()) {
+                m_pmi.send_rword("const");
+            }
             visit_params(impl.params());
 
             if (impl.trait().ent.is_valid()) {
@@ -1681,6 +1698,7 @@ namespace {
                 m_pmi.send_symbol(first ? ":" : "+");
                 first = false;
                 this->visit_hrbs(st.ent.hrbs);
+                this->visit_bound_constness(st.ent.constness);
                 this->visit_path(*st.ent.path);
             }
             for (const auto& lft : trait.lifetimes()) {

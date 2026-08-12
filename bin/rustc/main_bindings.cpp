@@ -1086,6 +1086,9 @@ void RustPrinter::handle_module(const AST::Module& mod) {
 
         m_os << "\n";
         m_os << indent() << "impl";
+        if (i.def().is_const()) {
+            m_os << " const";
+        }
         print_params(i.def().params());
         if (i.def().trait().ent != AST::Path()) {
             m_os << " " << i.def().trait().ent << " for";
@@ -1186,7 +1189,7 @@ void RustPrinter::print_bounds(const AST::GenericParams& params) {
             is_first = false;
 
             m_os << indent();
-            TU_MATCH(AST::GenericBound, (b), (ent), (None, m_os << "/*-*/";), (Lifetime, m_os << ent.test << ": " << ent.bound;), (TypeLifetime, m_os << ent.type << ": " << ent.bound;), (IsTrait, m_os << ent.outer_hrbs << ent.type << ": " << ent.inner_hrbs << ent.trait;), (MaybeTrait, m_os << ent.type << ": ?" << ent.trait;), (NotTrait, m_os << ent.type << ": !" << ent.trait;), (Equality, m_os << ent.type << ": =" << ent.replacement;))
+            TU_MATCH(AST::GenericBound, (b), (ent), (None, m_os << "/*-*/";), (Lifetime, m_os << ent.test << ": " << ent.bound;), (TypeLifetime, m_os << ent.type << ": " << ent.bound;), (IsTrait, m_os << ent.outer_hrbs << ent.type << ": "; if (ent.constness == AST::BoundConstness::Always) m_os << "const "; else if (ent.constness == AST::BoundConstness::Maybe) m_os << "[const] "; m_os << ent.inner_hrbs << ent.trait;), (MaybeTrait, m_os << ent.type << ": ?" << ent.trait;), (NotTrait, m_os << ent.type << ": !" << ent.trait;), (Equality, m_os << ent.type << ": =" << ent.replacement;))
         }
         m_os << "\n";
 

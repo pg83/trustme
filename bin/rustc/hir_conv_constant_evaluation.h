@@ -71,6 +71,7 @@ namespace HIR {
         Newval& nvs;
         unsigned int eval_index;
         unsigned int num_frames;
+        bool require_const_calls;
         // Note: Pointer is needed to maintain internal reference stability
         ::std::vector<CsePtr> call_stack;
 
@@ -84,6 +85,7 @@ namespace HIR {
             , nvs(nvs)
             , eval_index(s_next_eval_index++)
             , num_frames(0)
+            , require_const_calls(false)
         {
         }
 
@@ -92,6 +94,10 @@ namespace HIR {
 
         EncodedLiteral evaluate_constant(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& expr, ::HIR::TypeRef exp);
         EncodedLiteral evaluate_constant(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& expr, ::HIR::TypeRef exp, MonomorphState ms);
+
+        void set_require_const_calls() {
+            require_const_calls = true;
+        }
 
         StaticTraitResolve& get_resolve() {
             return this->resolve;

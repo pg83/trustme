@@ -16,6 +16,12 @@ class HirSerialiser;
 class HirDeserialiser;
 
 namespace HIR {
+    enum class BoundConstness : uint8_t {
+        Never,
+        Always,
+        Maybe,
+    };
+
 
     class EncodedLiteralPtr {
         EncodedLiteral* p;
@@ -360,6 +366,7 @@ namespace HIR {
         GenericPath m_path;
         assoc_list_t m_type_bounds;
         ::std::map<RcString, AtyBound> m_trait_bounds;
+        BoundConstness m_constness = BoundConstness::Never;
         // Parenthesised Fn-trait syntax uses function lifetime-elision rules.
         // This is consumed and cleared by ConvertHIR_LifetimeElision.
         bool m_lifetime_elision = false;
@@ -368,7 +375,7 @@ namespace HIR {
 
         TraitPath();
         TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path);
-        TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path, assoc_list_t type_bounds, ::std::map<RcString, AtyBound> trait_bounds, const ::HIR::Trait* trait_ptr = nullptr);
+        TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path, assoc_list_t type_bounds, ::std::map<RcString, AtyBound> trait_bounds, const ::HIR::Trait* trait_ptr = nullptr, BoundConstness constness = BoundConstness::Never);
         ~TraitPath();
         TraitPath(TraitPath&&);
         TraitPath& operator=(TraitPath&&);

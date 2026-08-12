@@ -2294,7 +2294,7 @@ namespace {
                     TU_ARMA(TraitBound, e) {
                         const static HIR::GenericParams null_hrtbs;
                         auto _ = this->push_hrb(e.hrtbs ? *e.hrtbs : null_hrtbs);
-                        return ::HIR::GenericBound::make_TraitBound({(e.hrtbs ? box$(e.hrtbs->clone()) : nullptr), this->monomorph_type(sp, e.type), this->monomorph_traitpath(sp, e.trait, false)});
+                        return ::HIR::GenericBound::make_TraitBound({(e.hrtbs ? box$(e.hrtbs->clone()) : nullptr), this->monomorph_type(sp, e.type), this->monomorph_traitpath(sp, e.trait, false), e.constness});
                     }
                     TU_ARMA(TypeEquality, e)
                     return ::HIR::GenericBound::make_TypeEquality({this->monomorph_type(sp, e.type), this->monomorph_type(sp, e.other_type)});
@@ -7528,9 +7528,9 @@ namespace static_borrow_constants {
                     TU_ARMA(TraitBound, e)
                     if (e.hrtbs) {
                         auto _h = monomorph_cb.push_hrb(*e.hrtbs);
-                        return ::HIR::GenericBound::make_TraitBound({box$(e.hrtbs->clone()), monomorph_cb.monomorph_type(sp, e.type), monomorph_cb.monomorph_traitpath(sp, e.trait, false)});
+                        return ::HIR::GenericBound::make_TraitBound({box$(e.hrtbs->clone()), monomorph_cb.monomorph_type(sp, e.type), monomorph_cb.monomorph_traitpath(sp, e.trait, false), e.constness});
                     } else {
-                        return ::HIR::GenericBound::make_TraitBound({nullptr, monomorph_cb.monomorph_type(sp, e.type), monomorph_cb.monomorph_traitpath(sp, e.trait, false)});
+                        return ::HIR::GenericBound::make_TraitBound({nullptr, monomorph_cb.monomorph_type(sp, e.type), monomorph_cb.monomorph_traitpath(sp, e.trait, false), e.constness});
                     }
                     TU_ARMA(TypeEquality, e)
                     return ::HIR::GenericBound::make_TypeEquality({monomorph_cb.monomorph_type(sp, e.type), monomorph_cb.monomorph_type(sp, e.other_type)});

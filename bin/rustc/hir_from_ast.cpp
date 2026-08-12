@@ -21,7 +21,7 @@
 ::HIR::ValueItem LowerHIR_Static(::HIR::ItemPath p, const ::AST::AttributeList& attrs, const ::AST::Static& e, const Span& sp, const RcString& name);
 ::HIR::PathParams LowerHIR_PathParams(const Span& sp, const ::AST::PathParams& src_params, bool allow_assoc);
 ::HIR::ConstGeneric LowerHIR_ConstGeneric(const ::AST::ExprNode& node_ref);
-::HIR::TraitPath LowerHIR_TraitPath(const Span& sp, const ::AST::Path& path, const AST::HigherRankedBounds& hrbs, bool allow_bounds = false);
+::HIR::TraitPath LowerHIR_TraitPath(const Span& sp, const ::AST::Path& path, const AST::HigherRankedBounds& hrbs, bool allow_bounds = false, AST::BoundConstness constness = AST::BoundConstness::Never);
 ::HIR::GenericParams LowerHIR_HigherRankedBounds(const AST::HigherRankedBounds& hrbs);
 
 ::HIR::SimplePath path_Sized;
@@ -31,6 +31,17 @@ RcString g_core_crate;
 RcString g_crate_name;
 ::HIR::Crate* g_crate_ptr = nullptr;
 const ::AST::Crate* g_ast_crate_ptr;
+
+namespace {
+    ::HIR::BoundConstness LowerHIR_BoundConstness(::AST::BoundConstness v) {
+        switch (v) {
+        case ::AST::BoundConstness::Never: return ::HIR::BoundConstness::Never;
+        case ::AST::BoundConstness::Always: return ::HIR::BoundConstness::Always;
+        case ::AST::BoundConstness::Maybe: return ::HIR::BoundConstness::Maybe;
+        }
+        throw "Invalid bound constness";
+    }
+}
 
 // --------------------------------------------------------------------
 HIR::LifetimeRef LowerHIR_LifetimeRef(const ::AST::LifetimeRef& r) {
@@ -89,7 +100,7 @@ HIR::LifetimeRef LowerHIR_LifetimeRef(const ::AST::LifetimeRef& r) {
                     TODO(bound.span, "Handle two layers of HRBs in a bound");
                 }
 
-                auto bound_trait_path = LowerHIR_TraitPath(bound.span, e.trait, e.inner_hrbs, /*allow_bounds=*/true);
+                auto bound_trait_path = LowerHIR_TraitPath(bound.span, e.trait, e.inner_hrbs, /*allow_bounds=*/true, e.constness);
                 auto tp_bounds = mv$(bound_trait_path.m_trait_bounds);
                 bound_trait_path.m_trait_bounds.clear();
 
@@ -106,7 +117,7 @@ HIR::LifetimeRef LowerHIR_LifetimeRef(const ::AST::LifetimeRef& r) {
                     }
                 }
 
-                rv.m_bounds.push_back(::HIR::GenericBound::make_TraitBound({box$(LowerHIR_HigherRankedBounds(e.outer_hrbs)), type, mv$(bound_trait_path)}));
+                rv.m_bounds.push_back(::HIR::GenericBound::make_TraitBound({box$(LowerHIR_HigherRankedBounds(e.outer_hrbs)), type, mv$(bound_trait_path), LowerHIR_BoundConstness(e.constness)}));
 
                 for (auto& bound : tp_bounds) {
                     const auto& name = bound.first;
@@ -577,14 +588,15 @@ namespace {
     return params;
 }
 
-::HIR::TraitPath LowerHIR_TraitPath(const Span& sp, const ::AST::Path& path, const AST::HigherRankedBounds& hrbs, bool ignore_bounds /*=false*/) {
+::HIR::TraitPath LowerHIR_TraitPath(const Span& sp, const ::AST::Path& path, const AST::HigherRankedBounds& hrbs, bool ignore_bounds /*=false*/, AST::BoundConstness constness /*=Never*/) {
     DEBUG(hrbs << " " << path);
     ::HIR::TraitPath rv{
         hrbs.empty() ? nullptr : box$(LowerHIR_HigherRankedBounds(hrbs)), // m_hrtbs
         LowerHIR_GenericPath(sp, path, FromAST_PathClass::Type, /*allow_assoc=*/true),
         {},
         {},
-        nullptr
+        nullptr,
+        LowerHIR_BoundConstness(constness)
     };
     // Parenthesised Fn-trait syntax follows function lifetime-elision rules.
     if (!rv.m_hrtbs && path.nodes().back().args().m_is_paren) {
@@ -634,7 +646,7 @@ namespace {
             auto self_ty = g_crate_ptr->m_types.self();
             auto cb = MonomorphStatePtr(g_crate_ptr->m_types, self_ty, &path.m_params, nullptr);
             for (const auto& st : trait.supertraits()) {
-                auto b = LowerHIR_TraitPath(sp, *st.ent.path, st.ent.hrbs, true);
+                auto b = LowerHIR_TraitPath(sp, *st.ent.path, st.ent.hrbs, true, st.ent.constness);
                 ASSERT_BUG(sp, st.ent.path->m_bindings.type.binding.is_Trait(), "Not a trait: " << *st.ent.path);
                 auto rv = H::find_source_trait(sp, b.m_path, st.ent.path->m_bindings.type.binding.as_Trait(), name, cb);
                 if (rv != HIR::GenericPath()) {
@@ -674,7 +686,7 @@ namespace {
                     auto self_ty = g_crate_ptr->m_types.self();
                     auto cb = MonomorphStatePtr(g_crate_ptr->m_types, self_ty, &path.m_params, nullptr);
                     for (const auto& st : pbe.trait_->traits) {
-                        auto b = LowerHIR_TraitPath(sp, *st.ent.path, st.ent.hrbs, true);
+                        auto b = LowerHIR_TraitPath(sp, *st.ent.path, st.ent.hrbs, true, st.ent.constness);
                         auto rv = H::find_source_trait(sp, b.m_path, st.ent.path->m_bindings.type.binding, name, cb);
                         if (rv != HIR::GenericPath()) {
                             return ms.monomorph_genericpath(sp, rv, /*allow_infer=*/false);
@@ -969,7 +981,7 @@ namespace {
                 auto params = ConvertHIR_CompleteAliasParams(g_crate_ptr->m_types, m_span, params_def, alias_path.m_path, false);
                 auto monomorph = MonomorphStatePtr(g_crate_ptr->m_types, nullptr, &params, nullptr);
                 for (const auto& bound : binding.trait_->traits) {
-                    auto trait = rebase_bound_hrtbs(LowerHIR_TraitPath(bound.sp, *bound.ent.path, bound.ent.hrbs));
+                    auto trait = rebase_bound_hrtbs(LowerHIR_TraitPath(bound.sp, *bound.ent.path, bound.ent.hrbs, false, bound.ent.constness));
                     add_ast_path(
                         monomorph.monomorph_traitpath(m_span, trait, false),
                         bound.ent.path->m_bindings.type.binding);
@@ -1007,7 +1019,7 @@ namespace {
         }
 
         void add(const ::Type_TraitPath& bound) {
-            auto path = LowerHIR_TraitPath(m_span, *bound.path, bound.hrbs);
+            auto path = LowerHIR_TraitPath(m_span, *bound.path, bound.hrbs, false, bound.constness);
             add_ast_path(mv$(path), bound.path->m_bindings.type.binding);
         }
     };
@@ -1167,7 +1179,7 @@ namespace {
             for (const auto& t : e->traits) {
                 DEBUG("t = " << *t.path);
                 // TODO: Handle ATY bounds
-                traits.push_back(LowerHIR_TraitPath(ty.span(), *t.path, t.hrbs, /*allow_aty_trait_bounds=*/true));
+                traits.push_back(LowerHIR_TraitPath(ty.span(), *t.path, t.hrbs, /*allow_aty_trait_bounds=*/true, t.constness));
             }
             bool is_sized = true;
             for (const auto& t : e->maybe_traits) {
@@ -1611,10 +1623,11 @@ namespace {
     }
     ::std::vector<::HIR::TraitPath> supertraits;
     for (const auto& st : f.supertraits()) {
-        supertraits.push_back(LowerHIR_TraitPath(st.sp, *st.ent.path, st.ent.hrbs, true));
+        supertraits.push_back(LowerHIR_TraitPath(st.sp, *st.ent.path, st.ent.hrbs, true, st.ent.constness));
         DEBUG("Supertrait " << supertraits.back());
     }
     ::HIR::Trait rv{mv$(params), mv$(lifetime), mv$(supertraits)};
+    rv.m_is_const = attrs.has("const_trait");
 
     // HACK: Add a bound of Self: ThisTrait for parts of typeck (TODO: Remove this, it's evil)
     {
@@ -1665,6 +1678,9 @@ namespace {
             }
             TU_ARMA(Function, i) {
                 auto fcn = LowerHIR_Function(item_path, item.attrs, i, g_crate_ptr->m_types.self());
+                if (rv.m_is_const) {
+                    fcn.m_const = true;
+                }
                 fcn.m_save_code = true;
                 rv.m_values.insert(::std::make_pair(item.name, ::HIR::TraitValueItem::make_Function(mv$(fcn))));
             }
@@ -1692,7 +1708,7 @@ namespace {
     HIR::TraitAlias ta;
     ta.m_params = LowerHIR_GenericParams(f.params, &trait_reqires_sized);
     for (const auto& t : f.traits) {
-        ta.m_traits.push_back(LowerHIR_TraitPath(t.sp, *t.ent.path, t.ent.hrbs));
+        ta.m_traits.push_back(LowerHIR_TraitPath(t.sp, *t.ent.path, t.ent.hrbs, false, t.ent.constness));
     }
 
     return ta;
@@ -2311,14 +2327,17 @@ void LowerHIR_Module_Impls(const ::AST::Module& ast_mod, ::HIR::Crate& hir_crate
                         }
                         TU_ARMA(Function, e) {
                             DEBUG("- method " << item.name);
-                            methods.insert(::std::make_pair(item.name, ::HIR::TraitImpl::ImplEnt<::HIR::Function>{item.is_specialisable, LowerHIR_Function(item_path, item.attrs, e, type)}));
+                            auto fcn = LowerHIR_Function(item_path, item.attrs, e, type);
+                            if (impl.def().is_const()) {
+                                fcn.m_const = true;
+                            }
+                            methods.insert(::std::make_pair(item.name, ::HIR::TraitImpl::ImplEnt<::HIR::Function>{item.is_specialisable, mv$(fcn)}));
                         }
                     }
                 }
 
                 // Sorted later on
-                hir_crate.m_trait_impls[mv$(trait_name)].generic.push_back(
-                    ::std::make_unique<HIR::TraitImpl>(::HIR::TraitImpl{
+                auto hir_impl = ::std::make_unique<HIR::TraitImpl>(::HIR::TraitImpl{
                         mv$(params),
                         mv$(trait_args),
                         mv$(type),
@@ -2329,8 +2348,9 @@ void LowerHIR_Module_Impls(const ::AST::Module& ast_mod, ::HIR::Crate& hir_crate
                         mv$(types),
 
                         mod_path
-                    })
-                );
+                    });
+                hir_impl->m_is_const = impl.def().is_const();
+                hir_crate.m_trait_impls[mv$(trait_name)].generic.push_back(mv$(hir_impl));
             } else if (impl.def().type().m_data.is_None()) {
                 // Ignore - These are encoded in the 'is_marker' field of the trait
             } else {

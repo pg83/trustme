@@ -38,10 +38,6 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 В 513 красных targets первым внутренним маркером является явный assert/TODO из `bin/rustc`; это 125 разных `file.cpp:line`. Первые десять сигнатур дают 254 targets, первые двадцать — 315. Остальные большие классы (`Unexpected token` — 348, `Type mismatch` — 93, `Failed to find an impl` — 65) пока являются только симптомами и не считаются одним исправлением.
 
-## P1 — 25–99 targets одним общим исправлением
-
-1. [ ] **Conditional const bounds `[const]`: 28 targets.** Parser одинаково видит `TOK_SQUARE_OPEN, expected TOK_IDENT` в const-trait bounds. Реализовать синтаксис, HIR-представление и trait-selection semantics; простого принятия токенов недостаточно.
-
 ## P2 — 10–24 targets одним общим исправлением
 
 1. [ ] **Inherent associated types: 24 targets.** Одна сигнатура `hir_from_ast.cpp:2365`, `Unexpected item type in inherent impl - Type`. После HIR lowering проверить lookup, normalization, generics и visibility, а не только убрать assert.
@@ -75,7 +71,7 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ### Parser, resolver и type system
 
-- [ ] После вынесенных выше `[const]` и `reuse` остаётся 281 `Unexpected token` target. Крупнейшие наблюдаемые формы — `fn` вместо `{` (включая семь `coretests/pin_macro`, остановившихся на вложенном `async fn`), lifetime/function modifiers, async closures, range/or-pattern syntax и interpolated macro fragments. Каждую форму минимизировать до grammar/expansion причины до назначения приоритета.
+- [ ] После вынесенного выше `reuse` остаётся 281 `Unexpected token` target. Крупнейшие наблюдаемые формы — `fn` вместо `{` (включая семь `coretests/pin_macro`, остановившихся на вложенном `async fn`), lifetime/function modifiers, async closures, range/or-pattern syntax и interpolated macro fragments. Каждую форму минимизировать до grammar/expansion причины до назначения приоритета.
 - [ ] 94 `Type mismatch`, 66 `Failed to find an impl`, 23 `Unknown macro` и 17 `No applicable methods` сначала кластеризовать по semantic path. Trait objects, HRTB/binders, projections, const inference, TAIT/RPITIT и async lowering не объединять по тексту diagnostic.
 - [ ] Полный source-scoped lint store отсутствует: кроме CLI-level `unexpected_cfgs`, `allow/warn/deny/forbid/force-warn` пока не производят rustc diagnostics, а positive harness их не сравнивает. Добавить diagnostic-verifying nodes и измерить fan-out.
 - [ ] Настоящий check-only driver (`--emit=metadata`/stop after typeck) остаётся отдельной задачей. Перед повышением приоритета заново измерить текущие красные `check-pass`; `build-pass` обязан проходить полный pipeline.

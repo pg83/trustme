@@ -492,6 +492,7 @@ namespace HIR {
         ::std::vector<::HIR::TraitPath> m_parent_traits;
 
         bool m_is_marker; // aka auto trait/OIBIT
+        bool m_is_const;
         /// Auto traits and traits carrying `#[rustc_coinductive]` admit
         /// productive recursive goals in the trait solver.
         bool m_is_coinductive;
@@ -520,6 +521,7 @@ namespace HIR {
             , m_lifetime(mv$(lifetime))
             , m_parent_traits(mv$(parents))
             , m_is_marker(false)
+            , m_is_const(false)
             , m_is_coinductive(false)
             , m_is_fundamental(false)
             , m_vtable_parent_traits_start(0)
@@ -652,6 +654,7 @@ namespace HIR {
         ::std::map<RcString, ImplEnt<::HIR::TypeRef>> m_types;
 
         ::HIR::SimplePath m_src_module;
+        bool m_is_const = false;
 
         //
         //const TraitImpl*    m_parent_spec_impl;

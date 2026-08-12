@@ -26,12 +26,14 @@ struct ImplRef {
              const ::HIR::TypeData* type;
              const ::HIR::PathParams* trait_args;
              const ::HIR::TraitPath::assoc_list_t* assoc;
+             ::HIR::BoundConstness constness;
          }),
         (Bounded, struct {
             ::HIR::PathParams hrls;
             ::HIR::TypeRef type;
             ::HIR::PathParams trait_args;
             ::HIR::TraitPath::assoc_list_t assoc;
+            ::HIR::BoundConstness constness;
         })
     );
 
@@ -49,23 +51,23 @@ struct ImplRef {
     {
     }
 
-    ImplRef(const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assoc_list_t* assoc)
-        : m_data(Data::make_BoundedPtr({HIR::PathParams(), type, args, assoc}))
+    ImplRef(const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assoc_list_t* assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never)
+        : m_data(Data::make_BoundedPtr({HIR::PathParams(), type, args, assoc, constness}))
     {
     }
 
-    ImplRef(::HIR::PathParams hrls, const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assoc_list_t* assoc)
-        : m_data(Data::make_BoundedPtr({std::move(hrls), type, args, assoc}))
+    ImplRef(::HIR::PathParams hrls, const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assoc_list_t* assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never)
+        : m_data(Data::make_BoundedPtr({std::move(hrls), type, args, assoc, constness}))
     {
     }
 
-    ImplRef(::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assoc_list_t assoc)
-        : m_data(Data::make_Bounded({::HIR::PathParams(), mv$(type), mv$(args), mv$(assoc)}))
+    ImplRef(::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assoc_list_t assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never)
+        : m_data(Data::make_Bounded({::HIR::PathParams(), mv$(type), mv$(args), mv$(assoc), constness}))
     {
     }
 
-    ImplRef(::HIR::PathParams hrls, ::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assoc_list_t assoc)
-        : m_data(Data::make_Bounded({mv$(hrls), mv$(type), mv$(args), mv$(assoc)}))
+    ImplRef(::HIR::PathParams hrls, ::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assoc_list_t assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never)
+        : m_data(Data::make_Bounded({mv$(hrls), mv$(type), mv$(args), mv$(assoc), constness}))
     {
     }
 
@@ -79,6 +81,16 @@ struct ImplRef {
 
     void mark_ambiguous_identity() {
         m_is_ambiguous_identity = true;
+    }
+
+    ::HIR::BoundConstness bound_constness() const {
+        if (const auto* e = m_data.opt_BoundedPtr()) {
+            return e->constness;
+        }
+        if (const auto* e = m_data.opt_Bounded()) {
+            return e->constness;
+        }
+        return ::HIR::BoundConstness::Never;
     }
 
     bool more_specific_than(HIR::TypeInterner& types, const ImplRef& other) const;

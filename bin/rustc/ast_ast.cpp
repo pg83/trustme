@@ -342,7 +342,7 @@ namespace AST {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const ImplDef& impl) {
-        return os << "impl<" << impl.m_params << "> " << impl.m_trait.ent << " for " << impl.m_type << "";
+        return os << "impl " << (impl.m_is_const ? "const " : "") << "<" << impl.m_params << "> " << impl.m_trait.ent << " for " << impl.m_type << "";
     }
 
     void Impl::add_function(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Function fcn) {
@@ -561,7 +561,13 @@ namespace AST {
                 os << ent.type << ": " << ent.bound;
             }
             TU_ARMA(IsTrait, ent) {
-                os << ent.outer_hrbs << ent.type << ": " << ent.inner_hrbs << ent.trait;
+                os << ent.outer_hrbs << ent.type << ": ";
+                if (ent.constness == BoundConstness::Always) {
+                    os << "const ";
+                } else if (ent.constness == BoundConstness::Maybe) {
+                    os << "[const] ";
+                }
+                os << ent.inner_hrbs << ent.trait;
             }
             TU_ARMA(MaybeTrait, ent) {
                 os << ent.type << ": ?" << ent.trait;

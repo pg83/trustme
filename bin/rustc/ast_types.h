@@ -29,6 +29,12 @@ class TypeRef;
 
 namespace AST {
 
+    enum class BoundConstness : uint8_t {
+        Never,
+        Always,
+        Maybe,
+    };
+
     // Defined here for dependency reasons
     class HigherRankedBounds {
     public:
@@ -83,9 +89,10 @@ struct Type_Function {
 struct Type_TraitPath {
     AST::HigherRankedBounds hrbs;
     ::std::unique_ptr<AST::Path> path;
+    AST::BoundConstness constness = AST::BoundConstness::Never;
 
     Type_TraitPath();
-    Type_TraitPath(AST::HigherRankedBounds hrbs, AST::Path path);
+    Type_TraitPath(AST::HigherRankedBounds hrbs, AST::Path path, AST::BoundConstness constness = AST::BoundConstness::Never);
     ~Type_TraitPath();
     Type_TraitPath(Type_TraitPath&&);
     Type_TraitPath(const Type_TraitPath&);

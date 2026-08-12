@@ -108,7 +108,7 @@ HIR::PathParams HIR::GenericParams::make_nop_params(TypeInterner& types, unsigne
             return ::HIR::GenericBound::make_TypeLifetime({e.type, e.valid_for});
         }
         TU_ARMA(TraitBound, e) {
-            return ::HIR::GenericBound::make_TraitBound({e.hrtbs ? box$(e.hrtbs->clone()) : nullptr, e.type, e.trait.clone()});
+            return ::HIR::GenericBound::make_TraitBound({e.hrtbs ? box$(e.hrtbs->clone()) : nullptr, e.type, e.trait.clone(), e.constness});
         } /*
     TU_ARMA(NotTrait, e) {
         return ::HIR::GenericBound::make_NotTrait({

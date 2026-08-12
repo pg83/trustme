@@ -474,7 +474,7 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
             if (trait_path == e.m_trait.m_path.m_path) {
                 if (H::check_params(sp, e.m_trait.m_path.m_params, trait_params)) {
                     auto hrls = get_hrls(m_crate.m_types, sp, e.m_trait.m_hrtbs, e.m_trait.m_path.m_params, trait_params);
-                    return found_cb(ImplRef(std::move(hrls), type, &e.m_trait.m_path.m_params, &e.m_trait.m_type_bounds), false);
+                    return found_cb(ImplRef(std::move(hrls), type, &e.m_trait.m_path.m_params, &e.m_trait.m_type_bounds, e.m_trait.m_constness), false);
                 }
             }
             // Markers too
@@ -585,12 +585,12 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
                                         atys.insert(::std::make_pair(tb.first, ::HIR::TraitPath::AtyEqual{mv$(src), {}, mv$(aty)}));
                                     }
                                 }
-                                if (found_cb(ImplRef(std::move(hrls), type, mv$(params_mono_o), mv$(atys)), false)) {
+                                if (found_cb(ImplRef(std::move(hrls), type, mv$(params_mono_o), mv$(atys), bound.m_constness), false)) {
                                     return true;
                                 }
                                 params_mono_o = monomorph_cb.monomorph_path_params(sp, b_params, false);
                             } else {
-                                if (found_cb(ImplRef(std::move(hrls), type, &bound.m_path.m_params, &bound.m_type_bounds), false)) {
+                                if (found_cb(ImplRef(std::move(hrls), type, &bound.m_path.m_params, &bound.m_type_bounds, bound.m_constness), false)) {
                                     return true;
                                 }
                             }
@@ -603,7 +603,7 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
                                 return false;
                             }
                             DEBUG("impl " << trait_path << i_params << " for " << type << " -- desired " << trait_path << *trait_params);
-                            return found_cb(ImplRef(type, i_params.clone(), {}), false);
+                            return found_cb(ImplRef(type, i_params.clone(), {}, bound.m_constness), false);
                         });
                     } else {
                         auto monomorph = MonomorphStatePtr(m_crate.m_types, type, &b_params_mono, nullptr);
@@ -617,7 +617,7 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
                             if (pt.m_path.m_path == trait_path) {
                                 // TODO: Monomorphse trait params
                                 //DEBUG("impl " << trait_path << i_params << " for " << type << " -- desired " << trait_path << *trait_params);
-                                return found_cb(ImplRef(type, mv$(pt_mono.m_path.m_params), {}), false);
+                                return found_cb(ImplRef(type, mv$(pt_mono.m_path.m_params), {}, pt_mono.m_constness), false);
                             }
                         }
                         return false;
@@ -847,7 +847,7 @@ bool StaticTraitResolve::find_impl__bounds(const Span& sp, const ::HIR::SimplePa
         }
         // Hand off to the closure, and return true if it does
         auto hrls = get_hrls(m_crate.m_types, sp, it->second.hrbs, b_params, trait_params);
-        if (found_cb(ImplRef(std::move(hrls), b_type, &b_params, &it->second.assoc), false)) {
+        if (found_cb(ImplRef(std::move(hrls), b_type, &b_params, &it->second.assoc, it->second.constness), false)) {
             return true;
         }
     }
@@ -881,7 +881,7 @@ bool StaticTraitResolve::find_impl__bounds(const Span& sp, const ::HIR::SimplePa
                         DEBUG("- tp_mono = " << tp_mono);
                         // TODO: Instead of using `type` here, build the real type
                         auto hrls = get_hrls(m_crate.m_types, sp, bound.m_hrtbs, tp_mono.m_path.m_params, trait_params);
-                        if (found_cb(ImplRef(std::move(hrls), type, mv$(tp_mono.m_path.m_params), mv$(tp_mono.m_type_bounds)), false)) {
+                        if (found_cb(ImplRef(std::move(hrls), type, mv$(tp_mono.m_path.m_params), mv$(tp_mono.m_type_bounds), tp_mono.m_constness), false)) {
                             return true;
                         }
                     }

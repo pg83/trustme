@@ -44,6 +44,7 @@ namespace {
 
         NewvalState_Nop nvs{sp};
         auto eval = ::HIR::Evaluator{sp, crate, nvs};
+        eval.set_require_const_calls();
         eval.resolve.set_both_generics_raw(state.m_impl_generics, state.m_item_generics);
 
         MonomorphState ms(crate.m_types);
@@ -3479,6 +3480,29 @@ namespace HIR {
         }
         const auto& path = *path_p;
 
+        if (require_const_calls) if (const auto* e = path.m_data.opt_UfcsKnown()) {
+            const auto& trait = resolve.m_crate.get_trait_by_path(state.sp, e->trait.m_path);
+            if (trait.m_is_const) {
+                ImplRef best_impl;
+                bool has_const_bound = false;
+                resolve.find_impl(state.sp, e->trait.m_path, e->trait.m_params, e->type, [&](ImplRef impl, bool is_fuzzed) {
+                    if (is_fuzzed) {
+                        return false;
+                    }
+                    if (!impl.m_data.is_TraitImpl()) {
+                        has_const_bound |= impl.bound_constness() != HIR::BoundConstness::Never;
+                        return false;
+                    }
+                    if (!best_impl.is_valid() || impl.more_specific_than(resolve.m_crate.m_types, best_impl)) {
+                        best_impl = mv$(impl);
+                    }
+                    return false;
+                });
+                MIR_ASSERT(state, has_const_bound || best_impl.is_valid(), "const trait call did not resolve to an impl: " << path);
+                MIR_ASSERT(state, has_const_bound || best_impl.m_data.as_TraitImpl().impl->m_is_const, "const trait call requires a const impl: " << path);
+            }
+        }
+
         auto rv = get_ent_fullpath(local_state.state.sp, resolve, path, EntNS::Value, fcn_ms, &impl_params_def);
         if (const auto* fcn_p = rv.opt_Function()) {
             const HIR::Function& fcn = **fcn_p;
@@ -3527,6 +3551,8 @@ namespace HIR {
                 impl_params_def
             );
             return true;
+        } else if (rv.is_NotFound() && monomorphise_path_needed(path, true)) {
+            throw Defer();
         } else if (rv.is_Struct()) {
             // Set destination, same way as `RValue::Struct` does
             auto dst = local_state.get_lval(rv_slot);
@@ -3701,6 +3727,7 @@ namespace {
 
         ::HIR::Evaluator get_eval(const Span& sp, NewvalState& nvs) const {
             auto eval = ::HIR::Evaluator{sp, m_crate, nvs};
+            eval.set_require_const_calls();
             eval.resolve.set_both_generics_raw(m_impl_params, m_item_params);
             return eval;
         }

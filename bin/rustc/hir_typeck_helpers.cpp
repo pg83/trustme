@@ -1986,7 +1986,7 @@ TU_ARMA(Alias, ee) {
                 if (cmp != ::HIR::Compare::Unequal) {
                     DEBUG("TraitObject impl params" << e.m_trait.m_path.m_params);
                     auto hrls = get_hrls(m_crate.m_types, sp, e.m_trait.m_hrtbs, e.m_trait.m_path.m_params, params);
-                    return callback(ImplRef(std::move(hrls), type, &e.m_trait.m_path.m_params, &e.m_trait.m_type_bounds), cmp);
+                    return callback(ImplRef(std::move(hrls), type, &e.m_trait.m_path.m_params, &e.m_trait.m_type_bounds, e.m_trait.m_constness), cmp);
                 }
             }
             // Markers too
@@ -2049,7 +2049,7 @@ TU_ARMA(Alias, ee) {
                     if (cmp != ::HIR::Compare::Unequal) {
                         DEBUG("TraitObject impl params" << trait_path.m_path.m_params);
                         auto hrls = get_hrls(m_crate.m_types, sp, trait_path.m_hrtbs, trait_path.m_path.m_params, params);
-                        return callback(ImplRef(std::move(hrls), type, &trait_path.m_path.m_params, &trait_path.m_type_bounds), cmp);
+                        return callback(ImplRef(std::move(hrls), type, &trait_path.m_path.m_params, &trait_path.m_type_bounds, trait_path.m_constness), cmp);
                     }
                 }
 
@@ -2151,7 +2151,7 @@ TU_ARMA(Alias, ee) {
                         if (cmp != ::HIR::Compare::Unequal) {
                             if (b_params_mono == &params_mono_o) {
                                 // TODO: assoc bounds
-                                if (callback(ImplRef(type, mv$(params_mono_o), mv$(b_atys)), cmp)) {
+                                if (callback(ImplRef(type, mv$(params_mono_o), mv$(b_atys), bound.m_constness), cmp)) {
                                     return true;
                                 }
                                 params_mono_o = monomorph_cb.monomorph_path_params(sp, b_params, false);
@@ -2159,12 +2159,12 @@ TU_ARMA(Alias, ee) {
                                     this->expand_associated_types_params(sp, params_mono_o);
                                 }
                             } else if (!b_atys.empty()) {
-                                if (callback(ImplRef(type, b_params_mono->clone(), mv$(b_atys)), cmp)) {
+                                if (callback(ImplRef(type, b_params_mono->clone(), mv$(b_atys), bound.m_constness), cmp)) {
                                     return true;
                                 }
                             } else {
                                 auto hrls = get_hrls(m_crate.m_types, sp, bound.m_hrtbs, bound.m_path.m_params, params);
-                                if (callback(ImplRef(std::move(hrls), type, &bound.m_path.m_params, &null_assoc), cmp)) {
+                                if (callback(ImplRef(std::move(hrls), type, &bound.m_path.m_params, &null_assoc, bound.m_constness), cmp)) {
                                     return true;
                                 }
                             }
@@ -2180,7 +2180,7 @@ TU_ARMA(Alias, ee) {
                         ASSERT_BUG(sp, !bound.m_hrtbs || !i_tp.m_hrtbs, "TODO: Handle two layers of HRTBs - " << bound.m_path << " and " << i_tp);
                         const HIR::GenericParams* hrtbs = bound.m_hrtbs ? bound.m_hrtbs.get() : i_tp.m_hrtbs.get();
                         auto hrls = get_hrls(m_crate.m_types, sp, hrtbs, i_tp.m_path.m_params, params);
-                        auto ir = ImplRef(std::move(hrls), type, i_tp.m_path.m_params.clone(), {});
+                        auto ir = ImplRef(std::move(hrls), type, i_tp.m_path.m_params.clone(), {}, i_tp.m_constness);
                         rv |= (cmp != ::HIR::Compare::Unequal && callback(std::move(ir), cmp));
                         ret = true;
                         return false; // Continue
@@ -6590,7 +6590,7 @@ bool TraitResolution::find_trait_impls(
                     // Hand off to the closure, and return true if it does
                     // TODO: The type bounds are only the types that are specified.
                     auto hrls = get_hrls(m_crate.m_types, sp, bound_info.hrbs, *b_params, params);
-                    if (callback(ImplRef(std::move(hrls), bound_ty, &bound_trait.m_params, &bound_info.assoc), ord)) {
+                    if (callback(ImplRef(std::move(hrls), bound_ty, &bound_trait.m_params, &bound_info.assoc, bound_info.constness), ord)) {
                         return true;
                     }
 
@@ -6647,7 +6647,7 @@ bool TraitResolution::find_trait_impls(
                             }
                             DEBUG("- tp_mono = " << tp_mono);
                             // TODO: Instead of using `type` here, build the real type
-                            if (callback(ImplRef(type, mv$(tp_mono.m_path.m_params), mv$(tp_mono.m_type_bounds)), ord)) {
+                            if (callback(ImplRef(type, mv$(tp_mono.m_path.m_params), mv$(tp_mono.m_type_bounds), tp_mono.m_constness), ord)) {
                                 return true;
                             }
                         }

@@ -26,6 +26,7 @@ struct TraitResolveCommon {
         HIR::GenericParams hrbs;
         const HIR::Trait* trait_ptr;
         HIR::TraitPath::assoc_list_t assoc;
+        HIR::BoundConstness constness = HIR::BoundConstness::Never;
     };
 
     struct CachedBoundCmp {

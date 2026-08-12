@@ -616,6 +616,7 @@ namespace AST {
 
     class ImplDef {
         bool m_is_unsafe;
+        bool m_is_const;
         GenericParams m_params;
         Spanned<Path> m_trait;
         TypeRef m_type;
@@ -623,6 +624,7 @@ namespace AST {
     public:
         ImplDef(GenericParams params, Spanned<Path> trait_type, TypeRef impl_type)
             : m_is_unsafe(false)
+            , m_is_const(false)
             , m_params(mv$(params))
             , m_trait(mv$(trait_type))
             , m_type(mv$(impl_type))
@@ -638,6 +640,14 @@ namespace AST {
 
         bool is_unsafe() const {
             return m_is_unsafe;
+        }
+
+        void set_is_const() {
+            m_is_const = true;
+        }
+
+        bool is_const() const {
+            return m_is_const;
         }
 
         const GenericParams& params() const {

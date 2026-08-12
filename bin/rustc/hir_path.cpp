@@ -20,11 +20,12 @@ namespace HIR {
     {
     }
 
-    TraitPath::TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path, assoc_list_t type_bounds, ::std::map<RcString, AtyBound> trait_bounds, const ::HIR::Trait* trait_ptr)
+    TraitPath::TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path, assoc_list_t type_bounds, ::std::map<RcString, AtyBound> trait_bounds, const ::HIR::Trait* trait_ptr, BoundConstness constness)
         : m_hrtbs(::std::move(hrtbs))
         , m_path(::std::move(path))
         , m_type_bounds(::std::move(type_bounds))
         , m_trait_bounds(::std::move(trait_bounds))
+        , m_constness(constness)
         , m_trait_ptr(trait_ptr)
     {
     }
@@ -73,6 +74,11 @@ namespace HIR {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const TraitPath& x) {
+        if (x.m_constness == BoundConstness::Always) {
+            os << "const ";
+        } else if (x.m_constness == BoundConstness::Maybe) {
+            os << "[const] ";
+        }
         if (x.m_hrtbs) {
             os << "for" << x.m_hrtbs->fmt_args() << " ";
         }
@@ -270,7 +276,7 @@ Ordering HIR::GenericPath::ord(const HIR::GenericPath& x) const {
 }
 
 ::HIR::TraitPath HIR::TraitPath::clone() const {
-    ::HIR::TraitPath rv{m_hrtbs ? box$(m_hrtbs->clone()) : nullptr, m_path.clone(), {}, {}, m_trait_ptr};
+    ::HIR::TraitPath rv{m_hrtbs ? box$(m_hrtbs->clone()) : nullptr, m_path.clone(), {}, {}, m_trait_ptr, m_constness};
     rv.m_lifetime_elision = m_lifetime_elision;
 
     for (const auto& assoc : m_type_bounds) {

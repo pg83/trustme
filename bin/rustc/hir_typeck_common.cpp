@@ -554,7 +554,7 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
         _ = std::make_unique<PopOnDrop>(push_hrb(*tpl.m_hrtbs));
     }
 
-    ::HIR::TraitPath rv{tpl.m_hrtbs ? box$(tpl.m_hrtbs->clone()) : nullptr, this->monomorph_genericpath(sp, tpl.m_path, allow_infer, true), {}, {}, tpl.m_trait_ptr};
+    ::HIR::TraitPath rv{tpl.m_hrtbs ? box$(tpl.m_hrtbs->clone()) : nullptr, this->monomorph_genericpath(sp, tpl.m_path, allow_infer, true), {}, {}, tpl.m_trait_ptr, tpl.m_constness};
     rv.m_lifetime_elision = tpl.m_lifetime_elision;
 
     for (const auto& assoc : tpl.m_type_bounds) {

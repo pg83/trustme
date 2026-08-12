@@ -64,6 +64,7 @@ namespace HIR {
               ::std::unique_ptr<::HIR::GenericParams> hrtbs;
               ::HIR::TypeRef type;
               ::HIR::TraitPath trait;
+              BoundConstness constness = BoundConstness::Never;
           }) /*,
     (NotTrait, struct {
         ::HIR::TypeRef  type;

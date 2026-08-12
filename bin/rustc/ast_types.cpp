@@ -255,9 +255,10 @@ TypeRef TypeRef::clone() const {
     throw "";
 }
 
-Type_TraitPath::Type_TraitPath(AST::HigherRankedBounds hrbs, AST::Path path)
+Type_TraitPath::Type_TraitPath(AST::HigherRankedBounds hrbs, AST::Path path, AST::BoundConstness constness)
     : hrbs(mv$(hrbs))
     , path(box$(path))
+    , constness(constness)
 {
 }
 
@@ -268,11 +269,17 @@ Type_TraitPath::Type_TraitPath(Type_TraitPath&&) = default;
 Type_TraitPath::Type_TraitPath(const Type_TraitPath& x)
     : hrbs(x.hrbs)
     , path(std::make_unique<AST::Path>(*x.path))
+    , constness(x.constness)
 {
 }
 
 Ordering Type_TraitPath::ord(const Type_TraitPath& x) const {
     Ordering rv;
+
+    rv = ::ord(static_cast<unsigned>(this->constness), static_cast<unsigned>(x.constness));
+    if (rv != OrdEqual) {
+        return rv;
+    }
 
     rv = ::ord(*this->path, *x.path);
     if (rv != OrdEqual) {
@@ -362,6 +369,7 @@ void TypeRef::print(::std::ostream& os, bool is_debug /*=false*/) const {
                 }
                 needs_plus = true;
                 os << it.hrbs;
+                if (it.constness == AST::BoundConstness::Always) os << "const "; else if (it.constness == AST::BoundConstness::Maybe) os << "[const] ";
                 it.path->print_pretty(os, true, is_debug);
             } for (const auto& it : ent.lifetimes) {
                 if (it.binding() != AST::LifetimeRef::BINDING_UNSPECIFIED) {
@@ -378,6 +386,7 @@ void TypeRef::print(::std::ostream& os, bool is_debug /*=false*/) const {
                 }
                 needs_plus = true;
                 os << it.hrbs;
+                if (it.constness == AST::BoundConstness::Always) os << "const "; else if (it.constness == AST::BoundConstness::Maybe) os << "[const] ";
                 it.path->print_pretty(os, true, is_debug);
             } for (const auto& it : ent->maybe_traits) {
                 if (needs_plus) {
