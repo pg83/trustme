@@ -36,8 +36,10 @@ namespace {
         ::std::vector<LoopDesc> m_loop_stack;
 
         const ScopeHandle* m_block_tmp_scope = nullptr;
+        const ScopeHandle* m_block_var_scope = nullptr;
         const ScopeHandle* m_borrow_raise_target = nullptr;
         const ScopeHandle* m_stmt_scope = nullptr;
+        const ScopeHandle* m_super_let_scope = nullptr;
         bool m_in_borrow = false;
 
         struct GeneratorState {
@@ -367,6 +369,7 @@ namespace {
             // a distinct scope from the one used for extended let initializers.
             auto tail_tmp_scope = m_builder.new_scope_temp(node.span());
             auto scope = m_builder.new_scope_var(node.span());
+            auto _block_var_scope = save_and_edit(m_block_var_scope, &scope);
             auto tmp_scope = m_builder.new_scope_temp(node.span());
             auto _block_tmp_scope = save_and_edit(m_block_tmp_scope, &tmp_scope);
 
@@ -376,6 +379,8 @@ namespace {
                 const Span& sp = subnode->span();
 
                 auto stmt_scope = m_builder.new_scope_temp(sp);
+                const auto* let_node = cast<::HIR::ExprNode_Let>(subnode.get());
+                auto _super_let_scope = save_and_edit(m_super_let_scope, let_node && let_node->m_is_super ? m_super_let_scope : &stmt_scope);
                 // NOTE: Only set the statement scope if processing a block
                 auto _stmt_scope_push = save_and_edit(m_stmt_scope, cast<::HIR::ExprNode_Block>(subnode.get()) ? &stmt_scope : nullptr);
                 this->visit_node_ptr(subnode);
@@ -746,6 +751,7 @@ namespace {
             TRACE_FUNCTION_F("_Let " << node.m_pattern);
             if (node.m_value) {
                 auto _ = save_and_edit(m_borrow_raise_target, m_block_tmp_scope);
+                auto _super_let_scope = save_and_edit(m_super_let_scope, node.m_is_super ? m_super_let_scope : m_block_var_scope);
                 this->visit_node_ptr(node.m_value);
 
                 if (!m_builder.block_active()) {
@@ -773,6 +779,12 @@ namespace {
                 }
             } else {
                 this->schedule_pattern_drops(node.span(), node.m_pattern, PatternDropOrder::Declaration);
+            }
+            if (node.m_is_super) {
+                ASSERT_BUG(node.span(), m_super_let_scope, "`super let` without an enclosing expression scope");
+                for (const auto slot : ::HIR::pattern_binding_slots(node.m_pattern, PatternDropOrder::FirstCandidate)) {
+                    m_builder.move_variable_to_scope(node.span(), slot, *m_super_let_scope);
+                }
             }
             m_builder.set_result(node.span(), ::MIR::RValue::make_Tuple({}));
         }
@@ -7307,6 +7319,42 @@ void MirBuilder::move_temporary_drop_to_variable_scope(const Span& sp, const ::M
         }
     }
     BUG(sp, "No variable scope outside temporary scope " << source);
+}
+
+void MirBuilder::move_variable_to_scope(const Span& sp, unsigned int idx, const ScopeHandle& target) {
+    ASSERT_BUG(sp, target.idx < m_scopes.size(), "Invalid `super let` target scope " << target);
+    auto& target_scope = m_scopes.at(target.idx);
+    ASSERT_BUG(sp, target_scope.data.is_Owning(), "`super let` target is not an owning scope: " << target);
+
+    ScopeType::Data_Owning* source = nullptr;
+    for (auto scope_idx : ::reverse(m_scope_stack)) {
+        auto* owning = m_scopes.at(scope_idx).data.opt_Owning();
+        if (!owning) {
+            continue;
+        }
+        auto state_it = ::std::find(owning->slots.begin(), owning->slots.end(), idx);
+        if (state_it != owning->slots.end()) {
+            if (scope_idx == target.idx) {
+                return;
+            }
+            ASSERT_BUG(sp, !owning->is_temporary, "`super let` binding is already in a temporary scope");
+            source = owning;
+            owning->slots.erase(state_it);
+            break;
+        }
+    }
+    ASSERT_BUG(sp, source, "`super let` binding _" << idx << " has no lexical scope");
+
+    auto drop_it = ::std::find_if(source->drop_slots.begin(), source->drop_slots.end(), [&](const ScopeDropSlot& slot) {
+        return !slot.is_argument && slot.index == idx;
+    });
+    ASSERT_BUG(sp, drop_it != source->drop_slots.end(), "`super let` binding _" << idx << " has no scheduled drop");
+    source->drop_slots.erase(drop_it);
+
+    auto& target_owning = target_scope.data.as_Owning();
+    ASSERT_BUG(sp, ::std::find(target_owning.slots.begin(), target_owning.slots.end(), idx) == target_owning.slots.end(), "Duplicate `super let` state owner for _" << idx);
+    target_owning.slots.push_back(idx);
+    target_owning.drop_slots.push_back(ScopeDropSlot{false, idx});
 }
 
 void MirBuilder::drop_lvalue(const Span& sp, const ::MIR::LValue& value) {

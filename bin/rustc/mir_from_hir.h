@@ -495,6 +495,8 @@ public:
     void schedule_argument_drop(unsigned int idx);
     /// Move a temporary's drop entry from `source` into the nearest variable scope.
     void move_temporary_drop_to_variable_scope(const Span& sp, const ::MIR::LValue& value, const ScopeHandle& source);
+    /// Move a local binding from its lexical block into the scope selected for a `super let`.
+    void move_variable_to_scope(const Span& sp, unsigned int idx, const ScopeHandle& target);
     /// Drop a live value on the current control-flow path and mark it invalid.
     void drop_lvalue(const Span& sp, const ::MIR::LValue& value);
     // Helper - Marks a variable/... as moved (and checks if the move is valid)

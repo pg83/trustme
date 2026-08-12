@@ -278,14 +278,16 @@ namespace AST {
         TypeRef m_type;
         ExprNodeP m_value;
         ExprNodeP m_else;
+        bool m_is_super;
         /// Allocated binding slots/indexes for the pattern in `let-else`
         ::std::pair<unsigned, unsigned> m_letelse_slots;
 
-        ExprNode_LetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP else_arm = {})
+        ExprNode_LetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP else_arm = {}, bool is_super = false)
             : m_pat(::std::move(pat))
             , m_type(::std::move(type))
             , m_value(::std::move(value))
             , m_else(::std::move(else_arm))
+            , m_is_super(is_super)
         {
         }
 

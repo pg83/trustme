@@ -42,10 +42,6 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 1. [ ] **Conditional const bounds `[const]`: 28 targets.** Parser одинаково видит `TOK_SQUARE_OPEN, expected TOK_IDENT` в const-trait bounds. Реализовать синтаксис, HIR-представление и trait-selection semantics; простого принятия токенов недостаточно.
 
-2. [ ] **`pin!` statement expansion: 29 targets.** 22 targets падают внутри `core::pin!` с `let` после path separator, ещё 7 `coretests/pin_macro` доходят до `fn` вместо раскрытого block. Исправить expansion macro в block/expression context и проверить expression, `let`, function item, unsafe block, unsize coercion и lifetime temporary.
-
-3. [ ] **`-Z unpretty`: 30 прямых отказов.** Определить реально используемые режимы каждого trigger и реализовать соответствующий вывод/stop point. Не превращать их в обычную компиляцию игнорированием флага.
-
 ## P2 — 10–24 targets одним общим исправлением
 
 1. [ ] **Inherent associated types: 24 targets.** Одна сигнатура `hir_from_ast.cpp:2365`, `Unexpected item type in inherent impl - Type`. После HIR lowering проверить lookup, normalization, generics и visibility, а не только убрать assert.
@@ -75,26 +71,27 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 - [ ] MIR control: `validate-mir` — 22, `mir-enable-passes` — 9, `inline-mir`/`inline_mir` — 8, `lint-mir` — 5. Связать с validator/pass selection; принятие без изменения pipeline не считается реализацией.
 - [ ] Codegen: `codegen-units` — 9, `link-dead-code` — 6, `debug_assertions` — 5, `no-prepopulate-passes` — 5, `overflow-checks=on` — 4, `target-feature` — 3, `lto` — 3, затем единичные LTO/mangling/coverage/link options. Группировать только по общему backend behavior.
 - [ ] Driver/front-end: `crate-attr` — 8, `verbose-internals` — 5, `print-type-sizes` — 5, `parse-crate-root-only` — 4 и оставшиеся `--print`, `--explain`, `--env-set`/`-Z` options. Diagnostic-only tests должны действительно проверять output, а не зеленеть от игнорирования флага.
+- [ ] `-Z unpretty` требует разных printer/stop-point реализаций: `expanded` — 8, `hir` — 7, `normal` — 4, `thir-tree` — 4, `hir,typed` — 2, `thir-flat` — 2, по одному `expanded,hygiene`, `hir-tree` и `mir-cfg`. Принятие option без соответствующего вывода не считается исправлением.
 
 ### Parser, resolver и type system
 
-- [ ] После вынесенных выше `[const]`, `pin!` и `reuse` остаётся 280 `Unexpected token` targets. Крупнейшие наблюдаемые формы — `fn` вместо `{` (32, несколько разных причин), lifetime/function modifiers, async closures, range/or-pattern syntax и interpolated macro fragments. Каждую форму минимизировать до grammar/expansion причины до назначения приоритета.
-- [ ] 94 `Type mismatch`, 66 `Failed to find an impl`, 23 `Unknown macro` и 14 `No applicable methods` сначала кластеризовать по semantic path. Trait objects, HRTB/binders, projections, const inference, TAIT/RPITIT и async lowering не объединять по тексту diagnostic.
+- [ ] После вынесенных выше `[const]` и `reuse` остаётся 281 `Unexpected token` target. Крупнейшие наблюдаемые формы — `fn` вместо `{` (включая семь `coretests/pin_macro`, остановившихся на вложенном `async fn`), lifetime/function modifiers, async closures, range/or-pattern syntax и interpolated macro fragments. Каждую форму минимизировать до grammar/expansion причины до назначения приоритета.
+- [ ] 94 `Type mismatch`, 66 `Failed to find an impl`, 23 `Unknown macro` и 17 `No applicable methods` сначала кластеризовать по semantic path. Trait objects, HRTB/binders, projections, const inference, TAIT/RPITIT и async lowering не объединять по тексту diagnostic.
 - [ ] Полный source-scoped lint store отсутствует: кроме CLI-level `unexpected_cfgs`, `allow/warn/deny/forbid/force-warn` пока не производят rustc diagnostics, а positive harness их не сравнивает. Добавить diagnostic-verifying nodes и измерить fan-out.
 - [ ] Настоящий check-only driver (`--emit=metadata`/stop after typeck) остаётся отдельной задачей. Перед повышением приоритета заново измерить текущие красные `check-pass`; `build-pass` обязан проходить полный pipeline.
 
 ### CTFE, MIR и const generics
 
-- [ ] Остальные повторяющиеся явные сигнатуры: primitive operator против `Add::Output` — 9, unsized MIR local — 8, expanded generic `Infer` в CTFE — 8, erased `sizeof` — 7, higher-ranked lifetime assert — 6, spare typecheck rules — 6, CTFE slice out of range — 6. Для каждой нужен unit на минимальный trigger до исправления.
+- [ ] Остальные повторяющиеся явные сигнатуры: primitive operator против `Add::Output` — 9, unsized MIR local — 8, expanded generic `Infer` в CTFE — 8, erased `sizeof` — 7, higher-ranked lifetime assert — 6, spare typecheck rules — 6, CTFE slice out of range — 6, generic `Deref` path в trans — 2. Для каждой нужен unit на минимальный trigger до исправления.
 - [ ] Реализовать оставшиеся CTFE float `signum`, `three_way_compare`, `black_box` с relocations и invalid enum tag; не пропускать `f128` через host `double`.
 - [ ] Не возвращать path-copy алгоритмы и не ослаблять MIR validation ради зелёного теста.
 
 ### Runtime correctness
 
-89 targets компилируются, но завершаются с `exit 101`: Rust 1.90 — 47, library — 35, Miri — 3, Reference — 3, GCCRS — 1. Это не одна задача.
+97 targets компилируются, но завершаются с `exit 101`: Rust 1.90 — 55, library — 35, Miri — 3, Reference — 3, GCCRS — 1. Это не одна задача.
 
 - [ ] В library-группе отдельно кластеризовать float formatting (4), numeric formatting (2), time formatting (2), `NonZero` bit operations (5), `std::error` multiline formatting (6), panic `Location` (4), `i128/u128` carrying arithmetic (2), saturating integer arithmetic (2), waker identity (2), C string formatting (2) и одиночные `MaybeUninit` formatting, `type_name`, `Any` и const string pointer cases.
-- [ ] Для остальных runtime failures сравнить полученное значение/bits/ABI, а не только panic text. Отдельно держать i128/u128, float/NaN/signed zero, derived traits, `track_caller`, `TypeId`/`Any`, process environment, SIMD и aggregate move/drop.
+- [ ] Для остальных runtime failures сравнить полученное значение/bits/ABI, а не только panic text. Отдельно держать async-drop ordering (8), i128/u128, float/NaN/signed zero, derived traits, `track_caller`, `TypeId`/`Any`, process environment, SIMD и aggregate move/drop.
 - [ ] Добавить metadata encoding для cross-crate enum discriminants шире 64 бит и проверить producer/consumer crates.
 
 ## P4 — crash/timeout и unit-регрессии после крупных групп

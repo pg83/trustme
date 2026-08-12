@@ -24,7 +24,7 @@ ExprNodeP Parse_ExprBlockNode(TokenStream& lex, AST::ExprNode_Block::Type ty, Id
 //ExprNodeP Parse_ExprBlockLine(TokenStream& lex, bool *add_silence);
 ExprNodeP Parse_ExprBlockLine_Stmt(TokenStream& lex, bool& has_semicolon);
 //ExprNodeP Parse_Stmt(TokenStream& lex);   // common.h
-ExprNodeP Parse_Stmt_Let(TokenStream& lex);
+ExprNodeP Parse_Stmt_Let(TokenStream& lex, bool is_super = false);
 ExprNodeP Parse_Expr0(TokenStream& lex);
 ExprNodeP Parse_Expr1_5(TokenStream& lex); // Boolean OR
 ExprNodeP Parse_Expr3(TokenStream& lex);
@@ -260,6 +260,13 @@ ExprNodeP Parse_ExprBlockLine(TokenStream& lex, bool* add_silence) {
                 throw ParseError::Unexpected(lex, tok);
         }
     } else {
+        if (tok.type() == TOK_RWORD_SUPER && lex.lookahead(0) == TOK_RWORD_LET) {
+            GET_CHECK_TOK(tok, lex, TOK_RWORD_LET);
+            ret = Parse_Stmt_Let(lex, true);
+            GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
+            return ret;
+        }
+
         // HACK: Parse a path and look for a `macro::path! { }`, so it can be parsed as a block (instead of as an expression)
         // NOTE: This means that here is where the path parsing code ends up
         switch (tok.type()) {
@@ -630,6 +637,12 @@ ExprNodeP Parse_Stmt(TokenStream& lex) {
         // Duplicated here for the :stmt pattern fragment.
         case TOK_RWORD_LET:
             return Parse_Stmt_Let(lex);
+        case TOK_RWORD_SUPER:
+            if (lex.getTokenIf(TOK_RWORD_LET)) {
+                return Parse_Stmt_Let(lex, true);
+            }
+            PUTBACK(tok, lex);
+            return Parse_Expr0(lex);
         case TOK_RWORD_YIELD:
             return Parse_FlowControl(lex, AST::ExprNode_Flow::YIELD);
         case TOK_RWORD_CONTINUE:
@@ -660,7 +673,7 @@ ExprNodeP Parse_Stmt(TokenStream& lex) {
     }
 }
 
-ExprNodeP Parse_Stmt_Let(TokenStream& lex) {
+ExprNodeP Parse_Stmt_Let(TokenStream& lex, bool is_super) {
     Token tok;
     AST::Pattern pat = Parse_Pattern(lex, AllowOrPattern::Yes); // irrefutable
     TypeRef type{lex.point_span()};
@@ -675,7 +688,7 @@ ExprNodeP Parse_Stmt_Let(TokenStream& lex) {
             else_arm = Parse_ExprBlockNode(lex);
         }
     }
-    return NEWNODE(AST::ExprNode_LetBinding, ::std::move(pat), mv$(type), ::std::move(val), ::std::move(else_arm));
+    return NEWNODE(AST::ExprNode_LetBinding, ::std::move(pat), mv$(type), ::std::move(val), ::std::move(else_arm), is_super);
 }
 
 ::std::vector<ExprNodeP> Parse_ParenList(TokenStream& lex) {

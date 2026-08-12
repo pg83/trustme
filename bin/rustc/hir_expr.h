@@ -263,12 +263,14 @@ namespace HIR {
         ::HIR::Pattern m_pattern;
         ::HIR::TypeRef m_type;
         ::HIR::ExprNodeP m_value;
+        bool m_is_super;
 
-        ExprNode_Let(Span sp, ::HIR::Pattern pat, ::HIR::TypeRef ty, ::HIR::ExprNodeP val)
+        ExprNode_Let(Span sp, ::HIR::Pattern pat, ::HIR::TypeRef ty, ::HIR::ExprNodeP val, bool is_super = false)
             : ExprNode(mv$(sp))
             , m_pattern(mv$(pat))
             , m_type(mv$(ty))
             , m_value(mv$(val))
+            , m_is_super(is_super)
         {
         }
 

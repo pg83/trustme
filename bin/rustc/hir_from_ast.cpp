@@ -3143,7 +3143,7 @@ struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
             // `let (a,b,c,...) = ...`
             m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Let>(v.span(), HIR::Pattern(::std::vector<HIR::PatternBinding>(), HIR::Pattern::Data::make_Tuple({std::move(new_pats)})), g_crate_ptr->m_types.infer(), std::move(match)));
         } else {
-            m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Let>(v.span(), LowerHIR_Pattern(v.m_pat), LowerHIR_Type(v.m_type), lower_opt(v.m_value)));
+            m_rv.reset(g_crate_ptr->m_pool->make<::HIR::ExprNode_Let>(v.span(), LowerHIR_Pattern(v.m_pat), LowerHIR_Type(v.m_type), lower_opt(v.m_value), v.m_is_super));
         }
     }
 

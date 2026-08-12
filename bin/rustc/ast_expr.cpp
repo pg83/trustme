@@ -326,7 +326,7 @@ namespace AST {
     NODE(
         ExprNode_LetBinding,
         {
-            os << "let " << m_pat << ": " << m_type;
+            os << (m_is_super ? "super let " : "let ") << m_pat << ": " << m_type;
             if (m_value) {
                 os << " = " << *m_value;
                 if (m_else) {
@@ -334,7 +334,7 @@ namespace AST {
                 }
             }
         },
-        { return NEWNODE(ExprNode_LetBinding, m_pat.clone(), m_type.clone(), OPT_CLONE(m_value), OPT_CLONE(m_else)); }
+        { return NEWNODE(ExprNode_LetBinding, m_pat.clone(), m_type.clone(), OPT_CLONE(m_value), OPT_CLONE(m_else), m_is_super); }
     )
 
     NODE(ExprNode_Assign, { os << *m_slot << " = " << *m_value; }, { return NEWNODE(ExprNode_Assign, m_op, m_slot->clone(), m_value->clone()); })
