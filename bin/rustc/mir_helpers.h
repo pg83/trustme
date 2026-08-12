@@ -7,11 +7,11 @@
 #include <functional>
 #include <type_traits>
 
-    class HIRCrate;
-    class HIRTypeData;
-    using HIRTypeRef = const HIRTypeData*;
-    struct HIRPattern;
-    struct HIRSimplePath;
+class HIRCrate;
+class HIRTypeData;
+using HIRTypeRef = const HIRTypeData*;
+struct HIRPattern;
+struct HIRSimplePath;
 
 class MIRFunction;
 struct MIRLValue;

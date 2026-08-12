@@ -2,10 +2,10 @@
 
 #include <cstddef>
 
-    class HIRCrate;
-    class HIRPath;
-    class HIRSimplePath;
-    class HIRTypeData;
+class HIRCrate;
+class HIRPath;
+class HIRSimplePath;
+class HIRTypeData;
 
 enum class AllocatorDataTy {
     // - Return

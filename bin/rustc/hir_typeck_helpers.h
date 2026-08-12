@@ -2,7 +2,6 @@
 
 #include "hir_hir.h"
 #include "hir_expr.h" // t_trait_list
-
 #include "hir_typeck_common.h"
 #include "hir_typeck_resolve_common.h"
 
@@ -31,7 +30,7 @@ public:
 public: // ?? - Needed once, anymore?
     struct IVar {
         unsigned int alias; // If not ~0, this points to another ivar
-        HIRTypeRef type; // Null only when alias != ~0
+        HIRTypeRef type;    // Null only when alias != ~0
 
         explicit IVar(HIRTypeRef type);
 
@@ -166,19 +165,9 @@ private:
         HIRTypeRef type;
         bool hasParams;
 
-        LegacyTraitGoal(
-            const HIRSimplePath& trait,
-            const HIRPathParams& params,
-            bool hasParams,
-            const HIRTypeData* type
-        );
+        LegacyTraitGoal(const HIRSimplePath& trait, const HIRPathParams& params, bool hasParams, const HIRTypeData* type);
 
-        bool matches(
-            const HIRSimplePath& otherTrait,
-            const HIRPathParams& otherParams,
-            bool otherHasParams,
-            const HIRTypeData* otherType
-        ) const;
+        bool matches(const HIRSimplePath& otherTrait, const HIRPathParams& otherParams, bool otherHasParams, const HIRTypeData* otherType) const;
     };
 
     mutable ::std::vector<LegacyTraitGoal> legacyTraitGoalStack;
@@ -258,16 +247,7 @@ public:
     /// assembly is exhaustive, impl where-clauses are evaluated recursively,
     /// and only a merged response is exposed to the caller.  `assoc_name` and
     /// `assoc_type` add an associated-type equality to the goal.
-    bool findTraitImplsNext(
-        const Span& sp,
-        const HIRSimplePath& trait,
-        const HIRPathParams& params,
-        const HIRTypeData* type,
-        tCbTraitImplR callback,
-        const char* assocName = nullptr,
-        const HIRTypeData* assocType = nullptr,
-        const HIRPathParams* assocParams = nullptr
-    ) const;
+    bool findTraitImplsNext(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, const char* assocName = nullptr, const HIRTypeData* assocType = nullptr, const HIRPathParams* assocParams = nullptr) const;
 
     /// Whether two concrete impl candidates may apply to one canonical goal.
     /// With next-solver coherence enabled this unifies both headers and proves
@@ -344,12 +324,7 @@ public:
     /// Probe one automatic-dereference step without changing inference state.
     /// `impl_type` is populated for a trait-based step so that a caller which
     /// actually selects this step can commit the impl response afterwards.
-    AutoderefResult autoderefStep(
-        const Span& sp,
-        const HIRTypeData* ty,
-        HIRTypeRef& target,
-        ::std::optional<HIRTypeRef>* implType = nullptr
-    ) const;
+    AutoderefResult autoderefStep(const Span& sp, const HIRTypeData* ty, HIRTypeRef& target, ::std::optional<HIRTypeRef>* implType = nullptr) const;
 
     /// Apply an automatic dereference
     const HIRTypeData* autoderef(const Span& sp, const HIRTypeData* ty, HIRTypeRef& tmpType) const;

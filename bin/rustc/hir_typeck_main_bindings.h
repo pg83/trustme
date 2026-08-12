@@ -1,6 +1,6 @@
 #pragma once
 
-    class HIRCrate;
+class HIRCrate;
 
 extern void TypecheckModuleLevel(HIRCrate& crate);
 extern void TypecheckExpressions(HIRCrate& crate);

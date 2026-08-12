@@ -11,150 +11,148 @@ namespace stl {
     class ObjPool;
 }
 
+class HIRTypeData;
+using HIRTypeRef = const HIRTypeData*;
+class HIRExprNode;
+class HIRCrate;
+class HIRExprState;
 
-    class HIRTypeData;
-    using HIRTypeRef = const HIRTypeData*;
-    class HIRExprNode;
-    class HIRCrate;
-    class HIRExprState;
+class HIRExprNodeP {
+    HIRExprNode* ptr;
 
-    class HIRExprNodeP {
-        HIRExprNode* ptr;
+public:
+    HIRExprNodeP();
 
-    public:
-        HIRExprNodeP();
+    HIRExprNodeP(HIRExprNode* p);
 
-        HIRExprNodeP(HIRExprNode* p);
+    HIRExprNodeP(HIRExprNodeP&& x);
 
-        HIRExprNodeP(HIRExprNodeP&& x);
+    HIRExprNodeP(const HIRExprNodeP&) = delete;
+    ~HIRExprNodeP() = default;
 
-        HIRExprNodeP(const HIRExprNodeP&) = delete;
-        ~HIRExprNodeP() = default;
+    HIRExprNodeP& operator=(HIRExprNodeP&& x);
 
-        HIRExprNodeP& operator=(HIRExprNodeP&& x);
+    HIRExprNodeP& operator=(const HIRExprNodeP&) = delete;
 
-        HIRExprNodeP& operator=(const HIRExprNodeP&) = delete;
+    operator bool() const {
+        return ptr != nullptr;
+    }
 
-        operator bool() const {
-            return ptr != nullptr;
-        }
+    HIRExprNode* get() const {
+        return ptr;
+    }
 
-        HIRExprNode* get() const {
-            return ptr;
-        }
+    void reset(HIRExprNode* p = nullptr) {
+        ptr = p;
+    }
 
-        void reset(HIRExprNode* p = nullptr) {
-            ptr = p;
-        }
+    HIRExprNode* release();
 
-        HIRExprNode* release();
+    void swap(HIRExprNodeP& x);
 
-        void swap(HIRExprNodeP& x);
+    HIRExprNode& operator*();
 
-        HIRExprNode& operator*();
+    const HIRExprNode& operator*() const;
 
-        const HIRExprNode& operator*() const;
+    HIRExprNode* operator->();
 
-        HIRExprNode* operator->();
+    const HIRExprNode* operator->() const;
+};
 
-        const HIRExprNode* operator->() const;
-    };
+class HIRExprStatePtr {
+    HIRExprState* ptr;
 
-    class HIRExprStatePtr {
-        HIRExprState* ptr;
+public:
+    HIRExprStatePtr();
 
-    public:
-        HIRExprStatePtr();
+    HIRExprStatePtr(stl::ObjPool* pool, HIRExprState);
+    HIRExprStatePtr(const HIRExprStatePtr&) = delete;
 
-        HIRExprStatePtr(stl::ObjPool* pool, HIRExprState);
-        HIRExprStatePtr(const HIRExprStatePtr&) = delete;
+    HIRExprStatePtr(HIRExprStatePtr&& x);
 
-        HIRExprStatePtr(HIRExprStatePtr&& x);
+    ~HIRExprStatePtr();
 
-        ~HIRExprStatePtr();
+    HIRExprStatePtr& operator=(const HIRExprStatePtr&) = delete;
 
-        HIRExprStatePtr& operator=(const HIRExprStatePtr&) = delete;
+    HIRExprStatePtr& operator=(HIRExprStatePtr&& x);
 
-        HIRExprStatePtr& operator=(HIRExprStatePtr&& x);
+    operator bool() const {
+        return ptr != nullptr;
+    }
 
-        operator bool() const {
-            return ptr != nullptr;
-        }
+    HIRExprStatePtr clone(stl::ObjPool* pool) const;
 
-        HIRExprStatePtr clone(stl::ObjPool* pool) const;
+    HIRExprState& operator*();
 
-        HIRExprState& operator*();
+    const HIRExprState& operator*() const;
 
-        const HIRExprState& operator*() const;
+    HIRExprState* operator->();
 
-        HIRExprState* operator->();
+    const HIRExprState* operator->() const;
+};
 
-        const HIRExprState* operator->() const;
-    };
+class HIRExprPtr {
+    //::HIR::Path m_path;
+    HIRExprNodeP node;
 
-    class HIRExprPtr {
-        //::HIR::Path m_path;
-        HIRExprNodeP node;
+public:
+    //::std::vector< ::HIR::TypeRef>  m_type_table;
+    ::std::vector<HIRTypeRef> mBindings;
+    ::std::vector<HIRTypeRef> erasedTypes;
 
-    public:
-        //::std::vector< ::HIR::TypeRef>  m_type_table;
-        ::std::vector<HIRTypeRef> mBindings;
-        ::std::vector<HIRTypeRef> erasedTypes;
+    // Public because too much relies on access to it
+    MIRFunctionPointer mir;
 
-        // Public because too much relies on access to it
-        MIRFunctionPointer mir;
+    HIRExprStatePtr state;
 
-        HIRExprStatePtr state;
+public:
+    HIRExprPtr();
+    HIRExprPtr(HIRExprNodeP node);
+    ~HIRExprPtr();
+    HIRExprPtr(const HIRExprPtr&) = delete;
+    HIRExprPtr(HIRExprPtr&&);
+    HIRExprPtr& operator=(HIRExprPtr&&);
 
-    public:
-        HIRExprPtr();
-        HIRExprPtr(HIRExprNodeP node);
-        ~HIRExprPtr();
-        HIRExprPtr(const HIRExprPtr&) = delete;
-        HIRExprPtr(HIRExprPtr&&);
-        HIRExprPtr& operator=(HIRExprPtr&&);
+    HIRExprNodeP takeNode();
 
-        HIRExprNodeP takeNode();
+    operator bool() const {
+        return node;
+    }
 
-        operator bool() const {
-            return node;
-        }
+    HIRExprNode* get() const {
+        return node.get();
+    }
 
-        HIRExprNode* get() const {
-            return node.get();
-        }
+    void reset(HIRExprNode* p) {
+        node.reset(p);
+    }
 
-        void reset(HIRExprNode* p) {
-            node.reset(p);
-        }
+    const Span& span() const;
 
-        const Span& span() const;
+    HIRExprNode& operator*() {
+        return *node;
+    }
 
-        HIRExprNode& operator*() {
-            return *node;
-        }
+    const HIRExprNode& operator*() const {
+        return *node;
+    }
 
-        const HIRExprNode& operator*() const {
-            return *node;
-        }
+    HIRExprNode* operator->() {
+        return &*node;
+    }
 
-        HIRExprNode* operator->() {
-            return &*node;
-        }
+    const HIRExprNode* operator->() const {
+        return &*node;
+    }
 
-        const HIRExprNode* operator->() const {
-            return &*node;
-        }
+    //void ensure_typechecked(const ::HIR::Crate& crate) const;
+    /// Get MIR (checks if the MIR should be available)
+    const MIRFunction* getMirOpt() const;
+    const MIRFunction& getMirOrError(const Span& sp) const;
+    MIRFunction& getMirOrErrorMut(const Span& sp);
+    /// Get external MIR, returns nullptr if none
+    const MIRFunction* getExtMir() const;
+    MIRFunction* getExtMirMut();
 
-        //void ensure_typechecked(const ::HIR::Crate& crate) const;
-        /// Get MIR (checks if the MIR should be available)
-        const MIRFunction* getMirOpt() const;
-        const MIRFunction& getMirOrError(const Span& sp) const;
-        MIRFunction& getMirOrErrorMut(const Span& sp);
-        /// Get external MIR, returns nullptr if none
-        const MIRFunction* getExtMir() const;
-        MIRFunction* getExtMirMut();
-
-        void setMir(MIRFunctionPointer mir);
-    };
-
+    void setMir(MIRFunctionPointer mir);
+};

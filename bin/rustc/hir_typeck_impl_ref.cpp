@@ -1,4 +1,5 @@
 #include "hir_typeck_impl_ref.h"
+
 #include "hir_hir.h"
 #include "hir_typeck_static.h" // for monomorphise_type_with
 
@@ -272,23 +273,35 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
 }
 
 ImplRef::ImplRef()
-    : mData(Data::make_TraitImpl({{}, nullptr, nullptr, nullptr})) {
+    : mData(Data::make_TraitImpl({{}, nullptr, nullptr, nullptr}))
+{
 }
+
 ImplRef::ImplRef(HIRPathParams implParams, const HIRTrait& traitRef, const HIRSimplePath& trait, const HIRTraitImpl& impl)
-    : mData(Data::make_TraitImpl({mv$(implParams), &traitRef, &trait, &impl})) {
+    : mData(Data::make_TraitImpl({mv$(implParams), &traitRef, &trait, &impl}))
+{
 }
+
 ImplRef::ImplRef(const HIRTypeData* type, const HIRPathParams* args, const HIRTraitPath::assocListT* assoc, HIRBoundConstness constness)
-    : mData(Data::make_BoundedPtr({HIRPathParams(), type, args, assoc, constness})) {
+    : mData(Data::make_BoundedPtr({HIRPathParams(), type, args, assoc, constness}))
+{
 }
+
 ImplRef::ImplRef(HIRPathParams hrls, const HIRTypeData* type, const HIRPathParams* args, const HIRTraitPath::assocListT* assoc, HIRBoundConstness constness)
-    : mData(Data::make_BoundedPtr({std::move(hrls), type, args, assoc, constness})) {
+    : mData(Data::make_BoundedPtr({std::move(hrls), type, args, assoc, constness}))
+{
 }
+
 ImplRef::ImplRef(HIRTypeRef type, HIRPathParams args, HIRTraitPath::assocListT assoc, HIRBoundConstness constness)
-    : mData(Data::make_Bounded({HIRPathParams(), mv$(type), mv$(args), mv$(assoc), constness})) {
+    : mData(Data::make_Bounded({HIRPathParams(), mv$(type), mv$(args), mv$(assoc), constness}))
+{
 }
+
 ImplRef::ImplRef(HIRPathParams hrls, HIRTypeRef type, HIRPathParams args, HIRTraitPath::assocListT assoc, HIRBoundConstness constness)
-    : mData(Data::make_Bounded({mv$(hrls), mv$(type), mv$(args), mv$(assoc), constness})) {
+    : mData(Data::make_Bounded({mv$(hrls), mv$(type), mv$(args), mv$(assoc), constness}))
+{
 }
+
 HIRBoundConstness ImplRef::boundConstness() const {
     if (const auto* e = mData.opt_BoundedPtr()) {
         return e->constness;
@@ -298,8 +311,10 @@ HIRBoundConstness ImplRef::boundConstness() const {
     }
     return HIRBoundConstness::Never;
 }
+
 ImplRef::Monomorph::Monomorph(HIRTypeInterner& types, const ImplRef::Data::Data_TraitImpl& ti, const HIRPathParams& params)
     : Monomorphiser(types)
     , ti(ti)
-    , params(params) {
+    , params(params)
+{
 }

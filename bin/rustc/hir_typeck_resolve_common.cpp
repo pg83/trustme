@@ -1,4 +1,5 @@
 #include "hir_typeck_resolve_common.h"
+
 #include "hir_typeck_monomorph.h" // MonomorphStatePtr
 
 void TraitResolveCommon::prepIndexes(const Span& sp) {
@@ -52,13 +53,11 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const HIRGener
         auto it = ::std::find_if(traitBounds.begin(), traitBounds.end(), [&](const auto& entry) {
             const auto& boundType = entry.first.first;
             const auto& boundTrait = entry.first.second;
-            return (boundType == type || boundType->equalsIgnoringRegions(type))
-                && boundTrait.equalsIgnoringRegions(genericPath);
+            return (boundType == type || boundType->equalsIgnoringRegions(type)) && boundTrait.equalsIgnoringRegions(genericPath);
         });
         if (it != traitBounds.end()) {
             DEBUG("[get_or_add_trait_bound] Existing " << FMT_CB(os, if (hrbs) os << "for" << hrbs->fmtArgs() << " ";) << genericPath);
-            if (boundConstness == HIRBoundConstness::Always
-                || (boundConstness == HIRBoundConstness::Maybe && it->second.constness == HIRBoundConstness::Never)) {
+            if (boundConstness == HIRBoundConstness::Always || (boundConstness == HIRBoundConstness::Maybe && it->second.constness == HIRBoundConstness::Never)) {
                 it->second.constness = boundConstness;
             }
             return it->second;
@@ -203,17 +202,20 @@ Ordering TraitResolveCommon::CachedBoundCmp::ord(const keyT& a, const refT& b) c
     ORD(a.second, b.second);
     return OrdEqual;
 }
+
 Ordering TraitResolveCommon::CachedBoundCmp::ord(const keyT& a, const refSpT& b) const {
     ORD(a.first, b.first);
     ORD(a.second.mPath, b.second);
     return OrdEqual;
 }
+
 // 1.90 (well, added earlier)
 
 TraitResolveCommon::TraitResolveCommon(const HIRCrate& crate)
     : crate(crate)
     , mImplGenerics(nullptr)
-    , mItemGenerics(nullptr) {
+    , mItemGenerics(nullptr)
+{
     mLangCopy = crate.getLangItemPathOpt("copy");
     mLangClone = crate.getLangItemPathOpt("clone");
     mLangDrop = crate.getLangItemPathOpt("drop");
@@ -233,14 +235,17 @@ TraitResolveCommon::TraitResolveCommon(const HIRCrate& crate)
     mLangDestruct = crate.getLangItemPathOpt("destruct");
     mLangFuture = crate.getLangItemPathOpt("future_trait");
 }
+
 const HIRGenericParams& TraitResolveCommon::implGenerics() const {
     static HIRGenericParams empty;
     return mImplGenerics ? *mImplGenerics : empty;
 }
+
 const HIRGenericParams& TraitResolveCommon::itemGenerics() const {
     static HIRGenericParams empty;
     return mItemGenerics ? *mItemGenerics : empty;
 }
+
 /// Iterate over in-scope bounds (function then type)
 bool TraitResolveCommon::iterateBounds(::std::function<bool(const HIRGenericBound&)> cb) const {
     const HIRGenericParams* v[2] = {mItemGenerics, mImplGenerics};

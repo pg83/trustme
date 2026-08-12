@@ -6,7 +6,7 @@
 #include "ast_attrs.h"
 #include "macro_rules_macro_rules.h"
 
-    class HIRProcMacro;
+class HIRProcMacro;
 
 class ASTCrate;
 class ASTModule;

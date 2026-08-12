@@ -3,161 +3,161 @@
 #include <cassert>
 #include <functional>
 
-    ::std::ostream& operator<<(::std::ostream& os, const HIRPattern::Value& x) {
-        TU_MATCH(
-            HIRPattern::Value,
-            (x),
-            (e),
-            (Integer,
-             // TODO: Print with type (and signed-ness)
-             os << e.value;),
-            (Float,
-             // TODO: Print with type
-             os << e.value;),
-            (String, os << "\"" << e << "\"";),
-            (ByteString, os << "b\"" << e.v << "\"";),
-            (Named, os << e.path;)
-        )
-        return os;
-    }
+::std::ostream& operator<<(::std::ostream& os, const HIRPattern::Value& x) {
+    TU_MATCH(
+        HIRPattern::Value,
+        (x),
+        (e),
+        (Integer,
+         // TODO: Print with type (and signed-ness)
+         os << e.value;),
+        (Float,
+         // TODO: Print with type
+         os << e.value;),
+        (String, os << "\"" << e << "\"";),
+        (ByteString, os << "b\"" << e.v << "\"";),
+        (Named, os << e.path;)
+    )
+    return os;
+}
 
-    ::std::ostream& operator<<(::std::ostream& os, const HIRPatternBinding& x) {
-        if (x.isMutable) {
-            os << "mut ";
-        }
-        switch (x.mType) {
-            case HIRPatternBinding::Type::Move:
-                break;
-            case HIRPatternBinding::Type::Ref:
-                os << "ref ";
-                break;
-            case HIRPatternBinding::Type::MutRef:
-                os << "ref mut ";
-                break;
-        }
-        os << x.mName << "/*" << x.slot << "*/" << " @ ";
-        return os;
+::std::ostream& operator<<(::std::ostream& os, const HIRPatternBinding& x) {
+    if (x.isMutable) {
+        os << "mut ";
     }
+    switch (x.mType) {
+        case HIRPatternBinding::Type::Move:
+            break;
+        case HIRPatternBinding::Type::Ref:
+            os << "ref ";
+            break;
+        case HIRPatternBinding::Type::MutRef:
+            os << "ref mut ";
+            break;
+    }
+    os << x.mName << "/*" << x.slot << "*/" << " @ ";
+    return os;
+}
 
-    ::std::ostream& operator<<(::std::ostream& os, const HIRPattern& x) {
-        for (const auto& pb : x.mBindings) {
-            os << pb;
-        }
-        if (x.implicitDerefCount > 0) {
-            os << "&*" << x.implicitDerefCount;
-        }
+::std::ostream& operator<<(::std::ostream& os, const HIRPattern& x) {
+    for (const auto& pb : x.mBindings) {
+        os << pb;
+    }
+    if (x.implicitDerefCount > 0) {
+        os << "&*" << x.implicitDerefCount;
+    }
         TU_MATCH_HDRA( (x.mData), {)
         TU_ARMA(Any, e) {
-                os << "_";
+            os << "_";
+        }
+        TU_ARMA(Box, e) {
+            os << "box " << *e.sub;
+        }
+        TU_ARMA(Ref, e) {
+            switch (e.type) {
+                case HIRBorrowType::Shared:
+                    os << "&";
+                    break;
+                case HIRBorrowType::Unique:
+                    os << "&mut ";
+                    break;
+                case HIRBorrowType::Owned:
+                    os << "&move ";
+                    break;
             }
-            TU_ARMA(Box, e) {
-                os << "box " << *e.sub;
+            os << *e.sub;
+        }
+        TU_ARMA(Tuple, e) {
+            os << "(";
+            for (const auto& s : e.subPatterns) {
+                os << s << ", ";
             }
-            TU_ARMA(Ref, e) {
-                switch (e.type) {
-                    case HIRBorrowType::Shared:
-                        os << "&";
-                        break;
-                    case HIRBorrowType::Unique:
-                        os << "&mut ";
-                        break;
-                    case HIRBorrowType::Owned:
-                        os << "&move ";
-                        break;
-                }
-                os << *e.sub;
+            os << ")";
+        }
+        TU_ARMA(SplitTuple, e) {
+            os << "(";
+            for (const auto& s : e.leading) {
+                os << s << ", ";
             }
-            TU_ARMA(Tuple, e) {
-                os << "(";
-                for (const auto& s : e.subPatterns) {
-                    os << s << ", ";
-                }
-                os << ")";
+            os << ".., ";
+            for (const auto& s : e.trailing) {
+                os << s << ", ";
             }
-            TU_ARMA(SplitTuple, e) {
-                os << "(";
-                for (const auto& s : e.leading) {
-                    os << s << ", ";
-                }
-                os << ".., ";
-                for (const auto& s : e.trailing) {
-                    os << s << ", ";
-                }
-                os << ")";
+            os << ")";
+        }
+        TU_ARMA(PathValue, e) {
+            os << e.path;
+        }
+        TU_ARMA(PathTuple, e) {
+            os << e.path;
+            os << "(";
+            for (const auto& s : e.leading) {
+                os << s << ", ";
             }
-            TU_ARMA(PathValue, e) {
-                os << e.path;
-            }
-            TU_ARMA(PathTuple, e) {
-                os << e.path;
-                os << "(";
-                for (const auto& s : e.leading) {
-                    os << s << ", ";
-                }
-                if (e.isSplit) {
-                    os << "..";
-                    for (const auto& s : e.trailing) {
-                        os << ", " << s;
-                    }
-                }
-                os << ")";
-            }
-            TU_ARMA(PathNamed, e) {
-                os << e.path;
-                os << "{ ";
-                for (const auto& ns : e.subPatterns) {
-                    os << ns.first << ": " << ns.second << ", ";
-                }
-                os << "}";
-            }
-
-            TU_ARMA(Value, e) {
-                os << e.val;
-            }
-            TU_ARMA(Range, e) {
-                if (e.start) {
-                    os << *e.start;
-                }
-                os << " .." << (e.isInclusive ? "=" : "") << " ";
-                if (e.end) {
-                    os << *e.end;
-                }
-            }
-
-            TU_ARMA(Slice, e) {
-                os << "[";
-                for (const auto& s : e.subPatterns) {
-                    os << s << ", ";
-                }
-                os << "]";
-            }
-            TU_ARMA(SplitSlice, e) {
-                os << "[ ";
-                for (const auto& s : e.leading) {
-                    os << s << ", ";
-                }
-                if (e.extraBind.isValid()) {
-                    os << e.extraBind;
-                }
+            if (e.isSplit) {
                 os << "..";
                 for (const auto& s : e.trailing) {
                     os << ", " << s;
                 }
-                os << " ]";
             }
-            TU_ARMA(Or, e) {
-                os << "(";
-                for (size_t i = 0; i < e.size(); i++) {
-                    if (i != 0) {
-                        os << "|";
-                    }
-                    os << e[i];
-                }
-                os << ")";
+            os << ")";
+        }
+        TU_ARMA(PathNamed, e) {
+            os << e.path;
+            os << "{ ";
+            for (const auto& ns : e.subPatterns) {
+                os << ns.first << ": " << ns.second << ", ";
+            }
+            os << "}";
+        }
+
+        TU_ARMA(Value, e) {
+            os << e.val;
+        }
+        TU_ARMA(Range, e) {
+            if (e.start) {
+                os << *e.start;
+            }
+            os << " .." << (e.isInclusive ? "=" : "") << " ";
+            if (e.end) {
+                os << *e.end;
             }
         }
+
+        TU_ARMA(Slice, e) {
+            os << "[";
+            for (const auto& s : e.subPatterns) {
+                os << s << ", ";
+            }
+            os << "]";
+        }
+        TU_ARMA(SplitSlice, e) {
+            os << "[ ";
+            for (const auto& s : e.leading) {
+                os << s << ", ";
+            }
+            if (e.extraBind.isValid()) {
+                os << e.extraBind;
+            }
+            os << "..";
+            for (const auto& s : e.trailing) {
+                os << ", " << s;
+            }
+            os << " ]";
+        }
+        TU_ARMA(Or, e) {
+            os << "(";
+            for (size_t i = 0; i < e.size(); i++) {
+                if (i != 0) {
+                    os << "|";
+                }
+                os << e[i];
+            }
+            os << ")";
+        }
+        }
         return os;
-    }
+}
 
 namespace {
     void visitPatternDeclarationSlots(const HIRPattern& pattern, ::std::vector<unsigned>& slots) {
@@ -165,49 +165,14 @@ namespace {
             slots.push_back(binding.slot);
         }
 
-        TU_MATCHA(
-            (pattern.mData),
-            (e),
-            (Any, ),
-            (Box, visitPatternDeclarationSlots(*e.sub, slots);),
-            (Ref, visitPatternDeclarationSlots(*e.sub, slots);),
-            (Tuple, for (const auto& subpattern : e.subPatterns) { visitPatternDeclarationSlots(subpattern, slots); }),
-            (SplitTuple, for (const auto& subpattern : e.leading) visitPatternDeclarationSlots(subpattern, slots); for (const auto& subpattern : e.trailing) visitPatternDeclarationSlots(subpattern, slots);),
-            (PathValue, ),
-            (PathTuple, for (const auto& subpattern : e.leading) visitPatternDeclarationSlots(subpattern, slots); for (const auto& subpattern : e.trailing) visitPatternDeclarationSlots(subpattern, slots);),
-            (PathNamed, for (const auto& field : e.subPatterns) { visitPatternDeclarationSlots(field.second, slots); }),
-            (Value, ),
-            (Range, ),
-            (Slice, for (const auto& subpattern : e.subPatterns) { visitPatternDeclarationSlots(subpattern, slots); }),
-            (SplitSlice, for (const auto& subpattern : e.leading) { visitPatternDeclarationSlots(subpattern, slots); } if (e.extraBind.isValid()) { slots.push_back(e.extraBind.slot); } for (const auto& subpattern : e.trailing) { visitPatternDeclarationSlots(subpattern, slots); }),
-            (Or, assert(!e.empty()); visitPatternDeclarationSlots(e.front(), slots);)
-        )
+        TU_MATCHA((pattern.mData), (e), (Any, ), (Box, visitPatternDeclarationSlots(*e.sub, slots);), (Ref, visitPatternDeclarationSlots(*e.sub, slots);), (Tuple, for (const auto& subpattern : e.subPatterns) { visitPatternDeclarationSlots(subpattern, slots); }), (SplitTuple, for (const auto& subpattern : e.leading) visitPatternDeclarationSlots(subpattern, slots); for (const auto& subpattern : e.trailing) visitPatternDeclarationSlots(subpattern, slots);), (PathValue, ), (PathTuple, for (const auto& subpattern : e.leading) visitPatternDeclarationSlots(subpattern, slots); for (const auto& subpattern : e.trailing) visitPatternDeclarationSlots(subpattern, slots);), (PathNamed, for (const auto& field : e.subPatterns) { visitPatternDeclarationSlots(field.second, slots); }), (Value, ), (Range, ), (Slice, for (const auto& subpattern : e.subPatterns) { visitPatternDeclarationSlots(subpattern, slots); }), (SplitSlice, for (const auto& subpattern : e.leading) { visitPatternDeclarationSlots(subpattern, slots); } if (e.extraBind.isValid()) { slots.push_back(e.extraBind.slot); } for (const auto& subpattern : e.trailing) { visitPatternDeclarationSlots(subpattern, slots); }), (Or, assert(!e.empty()); visitPatternDeclarationSlots(e.front(), slots);))
     }
 
     void visitPatternCandidateSlots(const HIRPattern& pattern, bool useLastAlternative, ::std::vector<unsigned>& slots) {
         ::std::vector<const HIRPattern*> deferredOrPatterns;
         ::std::function<void(const HIRPattern&)> visitImmediate;
         visitImmediate = [&](const HIRPattern& current) {
-            TU_MATCHA(
-                (current.mData),
-                (e),
-                (Any, ),
-                (Box, visitImmediate(*e.sub);),
-                (Ref, visitImmediate(*e.sub);),
-                (Tuple, for (const auto& subpattern : e.subPatterns) { visitImmediate(subpattern); }),
-                (SplitTuple, for (const auto& subpattern : e.leading) visitImmediate(subpattern); for (const auto& subpattern : e.trailing) visitImmediate(subpattern);),
-                (PathValue, ),
-                (PathTuple, for (const auto& subpattern : e.leading) visitImmediate(subpattern); for (const auto& subpattern : e.trailing) visitImmediate(subpattern);),
-                (PathNamed, for (const auto& field : e.subPatterns) { visitImmediate(field.second); }),
-                (Value, ),
-                (Range, ),
-                (Slice, for (const auto& subpattern : e.subPatterns) { visitImmediate(subpattern); }),
-                (SplitSlice,
-                 for (const auto& subpattern : e.leading) { visitImmediate(subpattern); }
-                 if (e.extraBind.isValid()) { slots.push_back(e.extraBind.slot); }
-                 for (auto it = e.trailing.rbegin(); it != e.trailing.rend(); ++it) { visitImmediate(*it); }),
-                (Or, assert(!e.empty()); deferredOrPatterns.push_back(&current);)
-            )
+            TU_MATCHA((current.mData), (e), (Any, ), (Box, visitImmediate(*e.sub);), (Ref, visitImmediate(*e.sub);), (Tuple, for (const auto& subpattern : e.subPatterns) { visitImmediate(subpattern); }), (SplitTuple, for (const auto& subpattern : e.leading) visitImmediate(subpattern); for (const auto& subpattern : e.trailing) visitImmediate(subpattern);), (PathValue, ), (PathTuple, for (const auto& subpattern : e.leading) visitImmediate(subpattern); for (const auto& subpattern : e.trailing) visitImmediate(subpattern);), (PathNamed, for (const auto& field : e.subPatterns) { visitImmediate(field.second); }), (Value, ), (Range, ), (Slice, for (const auto& subpattern : e.subPatterns) { visitImmediate(subpattern); }), (SplitSlice, for (const auto& subpattern : e.leading) { visitImmediate(subpattern); } if (e.extraBind.isValid()) { slots.push_back(e.extraBind.slot); } for (auto it = e.trailing.rbegin(); it != e.trailing.rend(); ++it) { visitImmediate(*it); }), (Or, assert(!e.empty()); deferredOrPatterns.push_back(&current);))
 
             // HIR stores `outer @ inner @ pattern` bindings outermost first,
             // while rustc establishes the inner binding first.
@@ -219,11 +184,7 @@ namespace {
         visitImmediate(pattern);
         for (const auto* orPattern : deferredOrPatterns) {
             const auto& alternatives = orPattern->mData.as_Or();
-            visitPatternCandidateSlots(
-                useLastAlternative ? alternatives.back() : alternatives.front(),
-                useLastAlternative,
-                slots
-            );
+            visitPatternCandidateSlots(useLastAlternative ? alternatives.back() : alternatives.front(), useLastAlternative, slots);
         }
     }
 }
@@ -326,29 +287,36 @@ HIRPattern HIRPattern::clone() const {
     return rv;
 }
 
-
 HIRPatternBinding::HIRPatternBinding()
     : isMutable(false)
     , mType(Type::Move)
     , mName("")
     , slot(0)
-    , implicitDerefCount(0) {
+    , implicitDerefCount(0)
+{
 }
+
 HIRPatternBinding::HIRPatternBinding(bool mut, Type type, RcString name, unsigned int slot)
     : isMutable(mut)
     , mType(type)
     , mName(mv$(name))
     , slot(slot)
-    , implicitDerefCount(0) {
+    , implicitDerefCount(0)
+{
 }
+
 HIRPattern::HIRPattern() {
 }
+
 HIRPattern::HIRPattern(std::vector<HIRPatternBinding> pbs, Data d)
     : mBindings(mv$(pbs))
-    , mData(mv$(d)) {
+    , mData(mv$(d))
+{
 }
+
 HIRPattern::HIRPattern(HIRPatternBinding pb, Data d)
-    : mData(mv$(d)) {
+    : mData(mv$(d))
+{
     if (pb.isValid()) {
         mBindings.push_back(std::move(pb));
     }

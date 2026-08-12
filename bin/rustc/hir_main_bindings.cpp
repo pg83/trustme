@@ -870,9 +870,9 @@ public:
 
     HIRTraitValueItem deserialiseTraitvalueitem() {
         switch (auto tag = in.readTag()) {
-#define _(x, ...)                                            \
+#define _(x, ...)                                        \
     case HIRTraitValueItem::TAG_##x:                     \
-        DEBUG("- " #x);                                      \
+        DEBUG("- " #x);                                  \
         return HIRTraitValueItem::make_##x(__VA_ARGS__); \
         break;
             _(Constant, deserialiseConstant())
@@ -1003,7 +1003,7 @@ DEF_D(HIRCrate::ImplGroup<std::unique_ptr<T>>, HIRCrate::ImplGroup<std::unique_p
 template <>
 DEF_D(HIRExternLibrary, return d.deserialiseExtlib();)
 
-    HIRLifetimeDef HirDeserialiser::deserialiseLifetimedef() {
+HIRLifetimeDef HirDeserialiser::deserialiseLifetimedef() {
     HIRLifetimeDef rv;
     rv.mName = in.readIstring();
     return rv;
@@ -1021,9 +1021,9 @@ HIRGenericRef HirDeserialiser::deserialiseGenericref() {
 
 HIRArraySize HirDeserialiser::deserialiseArraysize() {
     switch (auto tag = in.readTag()) {
-#define _(x, ...)                   \
+#define _(x, ...)               \
     case HIRArraySize::TAG_##x: \
-        DEBUG("- " #x);             \
+        DEBUG("- " #x);         \
         return HIRArraySize::make_##x(__VA_ARGS__);
         _(Known, in.readU64c())
         _(Unevaluated, deserialiseConstgeneric())
@@ -1048,9 +1048,9 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
     auto _ = in.openObject("HIR::TypeData");
 
     switch (auto tag = in.readTag()) {
-#define _(x, ...)                                                         \
+#define _(x, ...)                                                     \
     case HIRTypeData::TAG_##x:                                        \
-        DEBUG("- " #x);                                                   \
+        DEBUG("- " #x);                                               \
         rv = typeInterner.intern(HIRTypeData::make_##x(__VA_ARGS__)); \
         break;
         _(Infer, {~0u, HIRInferClass::None})
@@ -1306,7 +1306,7 @@ HIRConstGenericUnevaluated HirDeserialiser::deserialiseConstgenericUnevaluated()
 
 HIRConstGeneric HirDeserialiser::deserialiseConstgeneric() {
     switch (auto tag = in.readTag()) {
-#define _(x, ...)                      \
+#define _(x, ...)                  \
     case HIRConstGeneric::TAG_##x: \
         return HIRConstGeneric::make_##x(__VA_ARGS__);
         _(Infer, {})

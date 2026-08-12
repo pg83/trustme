@@ -92,94 +92,93 @@ void HIRExprPtr::setMir(MIRFunctionPointer mir) {
     this->mir = ::std::move(mir);
 }
 
+HIRExprNodeP::HIRExprNodeP()
+    : ptr(nullptr)
+{
+}
 
-    HIRExprNodeP::HIRExprNodeP()
-        : ptr(nullptr)
-    {
-    }
+HIRExprNodeP::HIRExprNodeP(HIRExprNode* p)
+    : ptr(p)
+{
+}
 
-    HIRExprNodeP::HIRExprNodeP(HIRExprNode* p)
-        : ptr(p)
-    {
-    }
+HIRExprNodeP::HIRExprNodeP(HIRExprNodeP&& x)
+    : ptr(x.ptr)
+{
+    x.ptr = nullptr;
+}
 
-    HIRExprNodeP::HIRExprNodeP(HIRExprNodeP&& x)
-        : ptr(x.ptr)
-    {
-        x.ptr = nullptr;
-    }
+HIRExprNodeP& HIRExprNodeP::operator=(HIRExprNodeP&& x) {
+    ptr = x.ptr;
+    x.ptr = nullptr;
+    return *this;
+}
 
-    HIRExprNodeP& HIRExprNodeP::operator=(HIRExprNodeP&& x) {
-        ptr = x.ptr;
-        x.ptr = nullptr;
-        return *this;
-    }
+HIRExprNode* HIRExprNodeP::release() {
+    auto* rv = ptr;
+    ptr = nullptr;
+    return rv;
+}
 
-    HIRExprNode* HIRExprNodeP::release() {
-        auto* rv = ptr;
-        ptr = nullptr;
-        return rv;
-    }
+void HIRExprNodeP::swap(HIRExprNodeP& x) {
+    auto* p = ptr;
+    ptr = x.ptr;
+    x.ptr = p;
+}
 
-    void HIRExprNodeP::swap(HIRExprNodeP& x) {
-        auto* p = ptr;
-        ptr = x.ptr;
-        x.ptr = p;
-    }
+HIRExprNode& HIRExprNodeP::operator*() {
+    assert(ptr);
+    return *ptr;
+}
 
-    HIRExprNode& HIRExprNodeP::operator*() {
-        assert(ptr);
-        return *ptr;
-    }
+const HIRExprNode& HIRExprNodeP::operator*() const {
+    assert(ptr);
+    return *ptr;
+}
 
-    const HIRExprNode& HIRExprNodeP::operator*() const {
-        assert(ptr);
-        return *ptr;
-    }
+HIRExprNode* HIRExprNodeP::operator->() {
+    assert(ptr);
+    return ptr;
+}
 
-    HIRExprNode* HIRExprNodeP::operator->() {
-        assert(ptr);
-        return ptr;
-    }
+const HIRExprNode* HIRExprNodeP::operator->() const {
+    assert(ptr);
+    return ptr;
+}
 
-    const HIRExprNode* HIRExprNodeP::operator->() const {
-        assert(ptr);
-        return ptr;
-    }
+HIRExprStatePtr::HIRExprStatePtr()
+    : ptr(nullptr)
+{
+}
 
-    HIRExprStatePtr::HIRExprStatePtr()
-        : ptr(nullptr)
-    {
-    }
+HIRExprStatePtr::HIRExprStatePtr(HIRExprStatePtr&& x)
+    : ptr(x.ptr)
+{
+    x.ptr = nullptr;
+}
 
-    HIRExprStatePtr::HIRExprStatePtr(HIRExprStatePtr&& x)
-        : ptr(x.ptr)
-    {
-        x.ptr = nullptr;
-    }
+HIRExprStatePtr& HIRExprStatePtr::operator=(HIRExprStatePtr&& x) {
+    ptr = x.ptr;
+    x.ptr = nullptr;
+    return *this;
+}
 
-    HIRExprStatePtr& HIRExprStatePtr::operator=(HIRExprStatePtr&& x) {
-        ptr = x.ptr;
-        x.ptr = nullptr;
-        return *this;
-    }
+HIRExprState& HIRExprStatePtr::operator*() {
+    assert(ptr);
+    return *ptr;
+}
 
-    HIRExprState& HIRExprStatePtr::operator*() {
-        assert(ptr);
-        return *ptr;
-    }
+const HIRExprState& HIRExprStatePtr::operator*() const {
+    assert(ptr);
+    return *ptr;
+}
 
-    const HIRExprState& HIRExprStatePtr::operator*() const {
-        assert(ptr);
-        return *ptr;
-    }
+HIRExprState* HIRExprStatePtr::operator->() {
+    assert(ptr);
+    return ptr;
+}
 
-    HIRExprState* HIRExprStatePtr::operator->() {
-        assert(ptr);
-        return ptr;
-    }
-
-    const HIRExprState* HIRExprStatePtr::operator->() const {
-        assert(ptr);
-        return ptr;
-    }
+const HIRExprState* HIRExprStatePtr::operator->() const {
+    assert(ptr);
+    return ptr;
+}

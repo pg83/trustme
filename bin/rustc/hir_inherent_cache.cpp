@@ -1,6 +1,7 @@
 #include "hir_inherent_cache.h"
-#include "hir_type.h"
+
 #include "hir_hir.h"
+#include "hir_type.h"
 
 void HIRInherentCache::Lowest::insert(const Span& sp, const HIRTypeImpl& impl) {
     const auto& type = impl.mType;

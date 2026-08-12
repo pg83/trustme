@@ -4595,9 +4595,9 @@ namespace {
                     res = cb(cur);
                 }
 
-#define NV(nt)                           \
+#define NV(nt)                      \
     void visit(nt& node) override { \
-        local(node);                     \
+        local(node);                \
     }
                 NV(HIRExprNodeBlock)
                 NV(HIRExprNodeConstBlock)

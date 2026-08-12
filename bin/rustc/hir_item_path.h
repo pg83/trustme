@@ -2,61 +2,59 @@
 
 #include "hir_type.h"
 
+class HIRItemPath {
+public:
+    const HIRItemPath* parent = nullptr;
+    const HIRTypeData* ty = nullptr;
+    const HIRSimplePath* trait = nullptr;
+    const HIRPathParams* traitParams = nullptr;
+    const char* name = nullptr;
+    const char* crateName = nullptr;
+    const HIRPath* wrapped = nullptr;
 
-    class HIRItemPath {
-    public:
-        const HIRItemPath* parent = nullptr;
-        const HIRTypeData* ty = nullptr;
-        const HIRSimplePath* trait = nullptr;
-        const HIRPathParams* traitParams = nullptr;
-        const char* name = nullptr;
-        const char* crateName = nullptr;
-        const HIRPath* wrapped = nullptr;
+    HIRItemPath(const char* crate);
 
-        HIRItemPath(const char* crate);
+    HIRItemPath(const ::std::string& crate);
 
-        HIRItemPath(const ::std::string& crate);
+    HIRItemPath(const RcString& crate);
 
-        HIRItemPath(const RcString& crate);
+    HIRItemPath(const HIRItemPath& p, const char* n);
 
-        HIRItemPath(const HIRItemPath& p, const char* n);
+    HIRItemPath(const HIRPath& p);
 
-        HIRItemPath(const HIRPath& p);
+    HIRItemPath(const HIRTypeData* type);
 
-        HIRItemPath(const HIRTypeData* type);
+    HIRItemPath(const HIRTypeData* type, const HIRSimplePath& path, const HIRPathParams& params);
 
-        HIRItemPath(const HIRTypeData* type, const HIRSimplePath& path, const HIRPathParams& params);
+    HIRItemPath(const HIRSimplePath& path);
 
-        HIRItemPath(const HIRSimplePath& path);
+    const HIRSimplePath* traitPath() const {
+        return trait;
+    }
 
-        const HIRSimplePath* traitPath() const {
-            return trait;
-        }
+    const HIRPathParams* traitArgs() const {
+        return traitParams;
+    }
 
-        const HIRPathParams* traitArgs() const {
-            return traitParams;
-        }
+    HIRSimplePath getSimplePath() const;
 
-        HIRSimplePath getSimplePath() const;
+    HIRPath getFullPath() const;
 
-        HIRPath getFullPath() const;
+    const char* getName() const {
+        return name ? name : "";
+    }
 
-        const char* getName() const {
-            return name ? name : "";
-        }
+    const HIRItemPath& getTopIp() const;
 
-        const HIRItemPath& getTopIp() const;
+    HIRItemPath operator+(const ::std::string& name) const {
+        return HIRItemPath(*this, name.c_str());
+    }
 
-        HIRItemPath operator+(const ::std::string& name) const {
-            return HIRItemPath(*this, name.c_str());
-        }
+    HIRItemPath operator+(const RcString& name) const {
+        return HIRItemPath(*this, name.c_str());
+    }
 
-        HIRItemPath operator+(const RcString& name) const {
-            return HIRItemPath(*this, name.c_str());
-        }
+    bool operator==(const HIRSimplePath& sp) const;
 
-        bool operator==(const HIRSimplePath& sp) const;
-
-        friend ::std::ostream& operator<<(::std::ostream& os, const HIRItemPath& x);
-    };
-
+    friend ::std::ostream& operator<<(::std::ostream& os, const HIRItemPath& x);
+};

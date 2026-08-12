@@ -3,12 +3,15 @@
 Monomorphiser::Monomorphiser(HIRTypeInterner& types)
     : types(types)
     , constevalCrate(nullptr)
-    , constevalPath("") {
+    , constevalPath("")
+{
 }
+
 void Monomorphiser::setConstevalState(const HIRCrate& crate, HIRItemPath ip) {
     this->constevalCrate = &crate;
     this->constevalPath = ip;
 }
+
 const HIRTypeData* Monomorphiser::maybeMonomorphType(const Span& sp, HIRTypeRef& tmp, const HIRTypeData* ty, bool allowInfer) const {
     if (monomorphiseTypeNeeded(ty)) {
         return tmp = monomorphType(sp, ty, allowInfer);
@@ -16,28 +19,41 @@ const HIRTypeData* Monomorphiser::maybeMonomorphType(const Span& sp, HIRTypeRef&
         return ty;
     }
 }
-MonomorphiserPP::MonomorphiserPP(HIRTypeInterner& types): Monomorphiser(types) {}
+
+MonomorphiserPP::MonomorphiserPP(HIRTypeInterner& types)
+    : Monomorphiser(types)
+{
+}
+
 MonomorphStatePtr::MonomorphStatePtr(HIRTypeInterner& types)
     : MonomorphiserPP(types)
     , selfTy(nullptr)
     , ppImpl(nullptr)
     , ppMethod(nullptr)
-    , ppHrb(nullptr) {
+    , ppHrb(nullptr)
+{
 }
+
 MonomorphStatePtr::MonomorphStatePtr(HIRTypeInterner& types, const HIRTypeData* selfTy, const HIRPathParams* paramsI, const HIRPathParams* paramsM, const HIRPathParams* paramsP, const HIRPathParams* paramsH)
     : MonomorphiserPP(types)
     , selfTy(selfTy)
     , ppImpl(paramsI)
     , ppMethod(paramsM)
     //, pp_placeholder(params_p)
-    , ppHrb(paramsH) {
+    , ppHrb(paramsH)
+{
 }
+
 MonomorphStatePtr::MonomorphStatePtr(MonomorphStatePtr&& x)
-    : MonomorphStatePtr(x.typeInterner(), x.selfTy, x.ppImpl, x.ppMethod, nullptr, x.ppHrb) {
+    : MonomorphStatePtr(x.typeInterner(), x.selfTy, x.ppImpl, x.ppMethod, nullptr, x.ppHrb)
+{
 }
+
 MonomorphStatePtr::MonomorphStatePtr(const MonomorphStatePtr& x)
-    : MonomorphStatePtr(x.typeInterner(), x.selfTy, x.ppImpl, x.ppMethod, nullptr, x.ppHrb) {
+    : MonomorphStatePtr(x.typeInterner(), x.selfTy, x.ppImpl, x.ppMethod, nullptr, x.ppHrb)
+{
 }
+
 MonomorphStatePtr& MonomorphStatePtr::operator=(MonomorphStatePtr&& x) {
     selfTy = x.selfTy;
     ppImpl = x.ppImpl;
@@ -45,20 +61,27 @@ MonomorphStatePtr& MonomorphStatePtr::operator=(MonomorphStatePtr&& x) {
     ppHrb = x.ppHrb;
     return *this;
 }
+
 MonomorphHrlsOnly::MonomorphHrlsOnly(HIRTypeInterner& types, const HIRPathParams& paramsH)
     : Monomorphiser(types)
-    , ppHrb(&paramsH) {
+    , ppHrb(&paramsH)
+{
 }
+
 MonomorphState::MonomorphState(HIRTypeInterner& types)
     : MonomorphiserPP(types)
     , selfTy()
     , ppImpl(nullptr)
-    , ppMethod(nullptr) {
+    , ppMethod(nullptr)
+{
 }
+
 MonomorphState::MonomorphState(MonomorphState&& x)
-    : MonomorphState(x.typeInterner()) {
+    : MonomorphState(x.typeInterner())
+{
     *this = ::std::move(x);
 }
+
 MonomorphState& MonomorphState::operator=(MonomorphState&& x) {
     this->selfTy = ::std::move(x.selfTy);
     this->ppImpl = (x.ppImpl == &x.ppImplData ? &this->ppImplData : x.ppImpl);
@@ -66,6 +89,7 @@ MonomorphState& MonomorphState::operator=(MonomorphState&& x) {
     this->ppMethod = x.ppMethod;
     return *this;
 }
+
 MonomorphState MonomorphState::clone() const {
     MonomorphState rv(this->typeInterner());
     rv.selfTy = this->selfTy;
@@ -74,6 +98,7 @@ MonomorphState MonomorphState::clone() const {
     rv.ppMethod = this->ppMethod;
     return rv;
 }
+
 void MonomorphState::setImplParams(HIRPathParams pp) {
     ppImpl = &ppImplData;
     ppImplData = std::move(pp);
@@ -86,6 +111,7 @@ HIRTypeRef MonomorphHrlsOnly::getType(const Span& sp, const HIRGenericRef& ty) c
     }
     return types.generic(ty.name, ty.binding);
 }
+
 HIRConstGeneric MonomorphHrlsOnly::getValue(const Span& sp, const HIRGenericRef& val) const {
     if (val.group() == 3) {
         ASSERT_BUG(sp, val.idx() < ppHrb->values.size(), val << " out of bounds (" << ppHrb->values.size() << ")");
@@ -93,6 +119,7 @@ HIRConstGeneric MonomorphHrlsOnly::getValue(const Span& sp, const HIRGenericRef&
     }
     return HIRConstGeneric(val);
 }
+
 HIRLifetimeRef MonomorphHrlsOnly::getLifetime(const Span& sp, const HIRGenericRef& lftRef) const {
     if (lftRef.group() == 3) {
         // If the HRL batch does not cover this index, pass the lifetime through rather than abort: not reliably in range for nested binders, and erased before codegen.

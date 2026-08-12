@@ -1,16 +1,18 @@
 #include "trans_target.h"
-#include <algorithm>
-#include "expand_cfg.h"
-#include <fstream>
-#include <map>
+
+#include "toml.h" // tools/common
 #include "hir_hir.h"
+#include "expand_cfg.h"
+#include "trans_mangling.h"
 #include "hir_typeck_helpers.h"
 #include "hir_typeck_monomorph.h"
 #include "hir_conv_main_bindings.h" // ConvertHIR_ConstantEvaluate_Enum
-#include "trans_mangling.h"
-#include <climits>                    // UINT_MAX
+
+#include <map>
+#include <climits> // UINT_MAX
+#include <fstream>
+#include <algorithm>
 #include <unordered_map>
-#include "toml.h"                     // tools/common
 
 const TargetArch ARCH_X86_64 = {
     "x86_64",
@@ -248,7 +250,6 @@ namespace {
             static const char* tfstr(bool v) {
                 return v ? "true" : "false";
             }
-
         };
 
         of << "[target]\n"
@@ -1389,9 +1390,9 @@ namespace {
                                         }
                                     }
                                 }
-// DISABLED: This doesn't work properly
-// - Downstream assumes `NonZero` means that one element is zero-sized
-// - Calling `Target_GetTypeRepr` generates the variant early - too lazy to reimplement logic
+                                // DISABLED: This doesn't work properly
+                                // - Downstream assumes `NonZero` means that one element is zero-sized
+                                // - Calling `Target_GetTypeRepr` generates the variant early - too lazy to reimplement logic
                             } // non-zero
 
                             // Niche optimisation
@@ -1921,10 +1922,7 @@ namespace {
     static ::std::unordered_map<HIRTypeRef, const TypeRepr*> sCacheExact;
 
     bool hasAbiIdentity(HIRTypeRef ty) {
-        return !monomorphiseTypeNeeded(ty, /*ignore_lifetimes=*/true)
-            && !ty->is_Infer()
-            && !ty->is_ErasedType()
-            && !ty->is_NodeType();
+        return !monomorphiseTypeNeeded(ty, /*ignore_lifetimes=*/true) && !ty->is_Infer() && !ty->is_ErasedType() && !ty->is_NodeType();
     }
 
     void setTypeRepr(const Span& sp, const HIRTypeData* ty, ::std::unique_ptr<TypeRepr> repr) {
@@ -1987,8 +1985,7 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
     auto symbol = FMT(TransMangle(ty));
     auto existing = sCache.find(symbol);
     if (existing != sCache.end()) {
-        ASSERT_BUG(sp, existing->second.canonical == ty || existing->second.canonical->equalsIgnoringRegions(ty),
-            "Distinct types have the same mangled name: " << existing->second.canonical << " and " << ty);
+        ASSERT_BUG(sp, existing->second.canonical == ty || existing->second.canonical->equalsIgnoringRegions(ty), "Distinct types have the same mangled name: " << existing->second.canonical << " and " << ty);
         const auto* repr = existing->second.repr.get();
         sCacheExact.emplace(ty, repr);
         return repr;
@@ -2090,8 +2087,10 @@ TargetArch::Atomics::Atomics(bool u8, bool u16, bool u32, bool u64, bool ptr)
     , u16(u16)
     , u32(u32)
     , u64(u64)
-    , ptr(ptr) {
+    , ptr(ptr)
+{
 }
+
 TargetArch::Alignments::Alignments(uint8_t u16, uint8_t u32, uint8_t u64, uint8_t u128, uint8_t f32, uint8_t f64, uint8_t ptr)
     : u16(u16)
     , u32(u32)
@@ -2099,7 +2098,8 @@ TargetArch::Alignments::Alignments(uint8_t u16, uint8_t u32, uint8_t u64, uint8_
     , u128(u128)
     , f32(f32)
     , f64(f64)
-    , ptr(ptr) {
+    , ptr(ptr)
+{
 }
 
 std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x) {

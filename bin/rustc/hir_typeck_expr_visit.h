@@ -3,7 +3,7 @@
 #include "hir_hir.h"
 #include "hir_item_path.h"
 
-    class HIRTraitImpl;
+class HIRTraitImpl;
 
 struct TypeckModuleState {
     const HIRCrate& crate;

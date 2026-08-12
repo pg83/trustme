@@ -1,9 +1,9 @@
 #pragma once
 
 #include "hir_hir.h"
+#include "range_vec_map.h"
 #include "hir_typeck_common.h"
 #include "hir_typeck_impl_ref.h"
-#include "range_vec_map.h"
 #include "hir_typeck_resolve_common.h"
 
 enum class MetadataType {
@@ -27,11 +27,7 @@ class StaticTraitResolve: public TraitResolveCommon {
 
     /// Cache of the result of find_impl__check_crate_raw
     mutable ::std::map<std::string, std::pair<HIRPathParams, HIRCompare>> cachedImplChecks;
-    mutable ::std::vector<::std::tuple<
-        const HIRSimplePath*,
-        const HIRPathParams*,
-        const HIRTypeData*
-    >> findImplStack;
+    mutable ::std::vector<::std::tuple<const HIRSimplePath*, const HIRPathParams*, const HIRTypeData*>> findImplStack;
     // Owned by the crate ObjPool and reused across all fully-static goals.
     mutable NextSolverBridge* nextSolver = nullptr;
 

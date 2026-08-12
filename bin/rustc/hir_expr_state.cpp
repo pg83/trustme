@@ -1,6 +1,5 @@
 #include "hir_expr_state.h"
 
-
 HIRExprState::HIRExprState(HIRTypeInterner& types, const HIRModule& modPtr, HIRSimplePath modPath)
     : types(types)
     , modPath(::std::move(modPath))
@@ -8,5 +7,6 @@ HIRExprState::HIRExprState(HIRTypeInterner& types, const HIRModule& modPtr, HIRS
     , mImplGenerics(nullptr)
     , mItemGenerics(nullptr)
     , currentTraitImpl(nullptr)
-    , stage(Stage::Created) {
+    , stage(Stage::Created)
+{
 }

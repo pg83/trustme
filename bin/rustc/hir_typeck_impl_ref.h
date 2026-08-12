@@ -1,10 +1,10 @@
 #pragma once
 
-#include "hir_type.h"
 #include "hir_hir.h"
+#include "hir_type.h"
 #include "hir_typeck_monomorph.h"
 
-    class HIRTraitImpl;
+class HIRTraitImpl;
 
 struct ImplRef {
     TAGGED_UNION(

@@ -1,4 +1,5 @@
 #include "hir_visitor.h"
+
 #include "hir_hir.h"
 #include "hir_typeck_static.h"
 
@@ -633,8 +634,8 @@ void HIRVisitor::visitExpr(HIRExprPtr& exp) {
     }
 }
 
-
 HIRVisitor::HIRVisitor(::StaticTraitResolve* resolve, HIRTypeInterner& types)
     : mResolve(resolve)
-    , types(types) {
+    , types(types)
+{
 }

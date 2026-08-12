@@ -27,10 +27,7 @@ const HIRSimplePath& TransAllocatorLayoutPath(const HIRCrate& crate) {
 HIRPath TransAllocatorLayoutCtorPath(const HIRCrate& crate) {
     const auto& layoutPath = TransAllocatorLayoutPath(crate);
     const auto& layoutStruct = crate.getStructByPath(Span(), layoutPath);
-    const auto layoutType = crate.types.path(
-        HIRGenericPath(layoutPath),
-        HIRTypePathBinding(&layoutStruct)
-    );
+    const auto layoutType = crate.types.path(HIRGenericPath(layoutPath), HIRTypePathBinding(&layoutStruct));
     return HIRPath(layoutType, RcString::newInterned("from_size_align_unchecked"));
 }
 
@@ -38,10 +35,5 @@ HIRPath TransAllocatorMethodPath(const HIRCrate& crate, const HIRTypeData* alloc
     const auto traitPath = TransAllocatorTraitPath(crate);
     const auto& trait = crate.getTraitByPath(Span(), traitPath);
     const auto& function = trait.values.at(method.name).as_Function();
-    return HIRPath(
-        allocatorType,
-        HIRGenericPath(traitPath),
-        RcString::newInterned(method.name),
-        function.mParams.makeEmptyParams(true)
-    );
+    return HIRPath(allocatorType, HIRGenericPath(traitPath), RcString::newInterned(method.name), function.mParams.makeEmptyParams(true));
 }

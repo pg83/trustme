@@ -27,7 +27,9 @@ public:
 
     virtual ~Monomorphiser() = default;
 
-    HIRTypeInterner& typeInterner() const { return types; }
+    HIRTypeInterner& typeInterner() const {
+        return types;
+    }
 
     void setConstevalState(const HIRCrate& crate, HIRItemPath ip);
 

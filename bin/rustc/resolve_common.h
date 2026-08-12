@@ -15,11 +15,11 @@ class ASTPath;
 
 struct ASTAbsolutePath;
 
-    class HIRCrate;
-    class HIRModule;
-    class HIRProcMacro;
-    class HIRTypeItem;
-    class HIRValueItem;
+class HIRCrate;
+class HIRModule;
+class HIRProcMacro;
+class HIRTypeItem;
+class HIRValueItem;
 
 TAGGED_UNION(ResolveModuleRef, None, (None, struct {}), (ImplicitPrelude, struct {}), (Ast, const ASTModule*), (Hir, const HIRModule*));
 

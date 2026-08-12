@@ -2,7 +2,7 @@
 
 #include "trans_trans_list.h"
 
-    class HIRCrate;
+class HIRCrate;
 
 enum class OptimizationLevel : unsigned {
     None,

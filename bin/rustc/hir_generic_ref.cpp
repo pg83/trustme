@@ -1,15 +1,18 @@
 #include "hir_generic_ref.h"
 
-
 HIRGenericRef::HIRGenericRef(RcString name, uint32_t binding)
     : name(::std::move(name))
-    , binding(binding) {
+    , binding(binding)
+{
 }
+
 HIRGenericRef::HIRGenericRef(RcString name, HIRGenericGroup group, uint16_t idx)
     : name(::std::move(name))
-    , binding(group * 256 + idx) {
+    , binding(group * 256 + idx)
+{
     assert(idx < 256);
 }
+
 Ordering HIRGenericRef::ord(const HIRGenericRef& x) const {
     auto rv = ::ord(binding, x.binding);
     if (rv) {
@@ -21,28 +24,32 @@ Ordering HIRGenericRef::ord(const HIRGenericRef& x) const {
     return rv;
 }
 
-
 ::std::ostream& operator<<(::std::ostream& os, const HIRGenericRef& x) {
     x.fmt(os);
     return os;
 }
 
-
 HIRLifetimeRef::HIRLifetimeRef()
-    : binding(HIRLifetimeRef::UNKNOWN) {
+    : binding(HIRLifetimeRef::UNKNOWN)
+{
 }
+
 HIRLifetimeRef::HIRLifetimeRef(uint32_t binding)
-    : binding(binding) {
+    : binding(binding)
+{
 }
+
 HIRLifetimeRef HIRLifetimeRef::newStatic() {
     HIRLifetimeRef rv;
     rv.binding = HIRLifetimeRef::STATIC;
     return rv;
 }
+
 HIRGenericRef HIRLifetimeRef::asParam() const {
     assert(isParam());
     return HIRGenericRef(RcString(), binding);
 }
+
 ::std::ostream& operator<<(::std::ostream& os, const HIRLifetimeRef& x) {
     if (x.binding == HIRLifetimeRef::INFER) {
         os << "'_";

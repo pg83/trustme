@@ -1,12 +1,13 @@
 #pragma once
 
+#include "hir_hir.h"
+#include "hir_path.h"
+#include "hir_type_ref.h"
+#include "range_vec_map.h"
+#include "hir_generic_params.h"
+
 #include <map>
 #include <memory>
-#include "hir_hir.h"
-#include "hir_type_ref.h"
-#include "hir_path.h"
-#include "hir_generic_params.h"
-#include "range_vec_map.h"
 
 struct TraitResolveCommon {
     const HIRCrate& crate;

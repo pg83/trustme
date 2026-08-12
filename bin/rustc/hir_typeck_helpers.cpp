@@ -1,11 +1,14 @@
 #include "hir_typeck_helpers.h"
-#include "hir_conv_main_bindings.h"
+
 #include "trait_solver_mode.h"
-#include <algorithm>
-#include <optional>
-#include <unordered_map>
-#include <std/mem/obj_pool.h>
+#include "hir_conv_main_bindings.h"
+
 #include <std/mem/obj_list.h>
+#include <std/mem/obj_pool.h>
+
+#include <optional>
+#include <algorithm>
+#include <unordered_map>
 
 namespace {
     // TODO: De-duplicate this with `static.cpp`
@@ -24,9 +27,7 @@ namespace {
                     return entry.second;
                 }
             }
-            auto canonical = RcString::newInterned(
-                FMT("#solver-placeholder-" << mPlaceholderNames.size())
-            );
+            auto canonical = RcString::newInterned(FMT("#solver-placeholder-" << mPlaceholderNames.size()));
             mPlaceholderNames.push_back({name, canonical});
             return canonical;
         }
@@ -37,36 +38,19 @@ namespace {
         {
         }
 
-        HIRTypeRef getType(
-            const Span&, const HIRGenericRef& generic
-        ) const override {
-            return generic.isPlaceholder()
-                ? types.generic(
-                    canonicalPlaceholderName(generic.name), generic.binding
-                )
-                : types.generic(generic.name, generic.binding);
+        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
+            return generic.isPlaceholder() ? types.generic(canonicalPlaceholderName(generic.name), generic.binding) : types.generic(generic.name, generic.binding);
         }
 
-        HIRConstGeneric getValue(
-            const Span&, const HIRGenericRef& generic
-        ) const override {
-            return HIRConstGeneric(
-                generic.isPlaceholder()
-                    ? HIRGenericRef(
-                        canonicalPlaceholderName(generic.name), generic.binding
-                    )
-                    : generic
-            );
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
+            return HIRConstGeneric(generic.isPlaceholder() ? HIRGenericRef(canonicalPlaceholderName(generic.name), generic.binding) : generic);
         }
 
-        HIRLifetimeRef getLifetime(
-            const Span&, const HIRGenericRef& generic
-        ) const override {
+        HIRLifetimeRef getLifetime(const Span&, const HIRGenericRef& generic) const override {
             return HIRLifetimeRef(generic.binding);
         }
 
-        const ::std::vector<::std::pair<RcString, RcString>>&
-        placeholderNames() const {
+        const ::std::vector<::std::pair<RcString, RcString>>& placeholderNames() const {
             return mPlaceholderNames;
         }
     };
@@ -87,52 +71,28 @@ namespace {
                     return entry.second;
                 }
             }
-            auto fresh = RcString(FMT(
-                "solver_response_" << instance << "_" << freshNames.size()
-            ));
+            auto fresh = RcString(FMT("solver_response_" << instance << "_" << freshNames.size()));
             freshNames.push_back({canonical, fresh});
             return fresh;
         }
 
     public:
-        InstantiateCanonicalTraitResponse(
-            HIRTypeInterner& types,
-            const ::std::vector<::std::pair<RcString, RcString>>& goalNames,
-            uint64_t instance
-        )
+        InstantiateCanonicalTraitResponse(HIRTypeInterner& types, const ::std::vector<::std::pair<RcString, RcString>>& goalNames, uint64_t instance)
             : Monomorphiser(types)
             , goalNames(goalNames)
             , instance(instance)
         {
         }
 
-        HIRTypeRef getType(
-            const Span&, const HIRGenericRef& generic
-        ) const override {
-            return types.generic(
-                generic.isPlaceholder()
-                    ? instantiatePlaceholderName(generic.name)
-                    : generic.name,
-                generic.binding
-            );
+        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
+            return types.generic(generic.isPlaceholder() ? instantiatePlaceholderName(generic.name) : generic.name, generic.binding);
         }
 
-        HIRConstGeneric getValue(
-            const Span&, const HIRGenericRef& generic
-        ) const override {
-            return HIRConstGeneric(
-                generic.isPlaceholder()
-                    ? HIRGenericRef(
-                        instantiatePlaceholderName(generic.name),
-                        generic.binding
-                    )
-                    : generic
-            );
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
+            return HIRConstGeneric(generic.isPlaceholder() ? HIRGenericRef(instantiatePlaceholderName(generic.name), generic.binding) : generic);
         }
 
-        HIRLifetimeRef getLifetime(
-            const Span&, const HIRGenericRef& generic
-        ) const override {
+        HIRLifetimeRef getLifetime(const Span&, const HIRGenericRef& generic) const override {
             return HIRLifetimeRef(generic.binding);
         }
     };
@@ -158,20 +118,14 @@ namespace {
         }
 
     public:
-        InstantiateTraitResponseForCaller(
-            HIRTypeInterner& types,
-            HMTypeInferrence& ivars,
-            const ::std::vector<::std::pair<RcString, RcString>>& goalNames
-        )
+        InstantiateTraitResponseForCaller(HIRTypeInterner& types, HMTypeInferrence& ivars, const ::std::vector<::std::pair<RcString, RcString>>& goalNames)
             : Monomorphiser(types)
             , ivars(ivars)
             , goalNames(goalNames)
         {
         }
 
-        HIRTypeRef getType(
-            const Span&, const HIRGenericRef& generic
-        ) const override {
+        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
             if (!generic.isPlaceholder() || isGoalPlaceholder(generic)) {
                 return Monomorphiser::types.generic(generic.name, generic.binding);
             }
@@ -185,9 +139,7 @@ namespace {
             return fresh;
         }
 
-        HIRConstGeneric getValue(
-            const Span&, const HIRGenericRef& generic
-        ) const override {
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
             if (!generic.isPlaceholder() || isGoalPlaceholder(generic)) {
                 return HIRConstGeneric(generic);
             }
@@ -201,9 +153,7 @@ namespace {
             return fresh;
         }
 
-        HIRLifetimeRef getLifetime(
-            const Span&, const HIRGenericRef& generic
-        ) const override {
+        HIRLifetimeRef getLifetime(const Span&, const HIRGenericRef& generic) const override {
             return HIRLifetimeRef(generic.binding);
         }
     };
@@ -704,16 +654,24 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
     if (!type->hasTypeInfer()) {
         return;
     }
-    if (::std::find(expandStack.begin(), expandStack.end(), type) != expandStack.end()) return;
+    if (::std::find(expandStack.begin(), expandStack.end(), type) != expandStack.end()) {
+        return;
+    }
     expandStack.push_back(type);
+
     struct Guard {
         ::std::vector<HIRTypeRef>& stack;
-        ~Guard() { stack.pop_back(); }
+
+        ~Guard() {
+            stack.pop_back();
+        }
     } guard{expandStack};
 
     if (type->is_Infer()) {
         const auto& resolved = this->getType(type);
-        if (resolved != type) type = resolved;
+        if (resolved != type) {
+            type = resolved;
+        }
         return;
     }
 
@@ -726,7 +684,8 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
     };
 
     TU_MATCH_HDRA( (data), {)
-    TU_ARMA(Infer, e) {}
+    TU_ARMA(Infer, e) {
+        }
         TU_ARMA(Diverge, e) {
         }
         TU_ARMA(Primitive, e) {
@@ -787,7 +746,7 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
                 this->expandIvars(ty);
             }
         }
-    TU_ARMA(NodeType, e) {
+        TU_ARMA(NodeType, e) {
         }
     }
     type = types.intern(std::move(data));
@@ -866,7 +825,7 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
                 addIvars(ty);
             }
         }
-    TU_ARMA(NodeType, e) {
+        TU_ARMA(NodeType, e) {
             // Shouldn't be possible
         }
     }
@@ -1045,7 +1004,10 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
 #if 1
         // TODO: Avoid needing to clone in all cases?
         struct MonomorphAddLifetimes: public Monomorphiser {
-            explicit MonomorphAddLifetimes(HIRTypeInterner& types): Monomorphiser(types) {}
+            explicit MonomorphAddLifetimes(HIRTypeInterner& types)
+                : Monomorphiser(types)
+            {
+            }
 
             HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override {
                 return types.generic(g.name, g.binding);
@@ -1065,7 +1027,6 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
                 }
                 return HIRLifetimeRef();
             }
-
         };
 
         type = MonomorphAddLifetimes(types).monomorphType(sp, type, true);
@@ -1094,8 +1055,7 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
                     }
                     break;
             }
-        }
-        else {
+        } else {
             BUG(sp, "Overwriting ivar " << slot << " (" << rootIvar.type << ") with " << type);
         }
 
@@ -1567,13 +1527,7 @@ TU_ARMA(Alias, ee) {
                 }
             }
 
-            if (trait == mLangClone
-                && (type->is_Tuple()
-                    || type->is_Array()
-                    || type->is_Function()
-                    || type->is_NodeType()
-                    || type->is_NamedFunction()
-                    || TU_TEST1(*type, Path, .isClosure()))) {
+            if (trait == mLangClone && (type->is_Tuple() || type->is_Array() || type->is_Function() || type->is_NodeType() || type->is_NamedFunction() || TU_TEST1(*type, Path, .isClosure()))) {
                 auto cmp = this->typeIsClone(sp, type);
                 if (cmp != HIRCompare::Unequal) {
                     return callback(ImplRef(type, &nullParams, &nullAssoc), cmp);
@@ -1648,11 +1602,7 @@ TU_ARMA(Alias, ee) {
                         case HIRStructMarkings::DstType::Possible:
                         case HIRStructMarkings::DstType::TraitObject: {
                             const HIRTypeData* tailTpl = nullptr;
-                            TU_MATCHA((str.mData), (se),
-                                (Unit, BUG(sp, "Unsized unit struct in Pointee lookup - " << type);),
-                                (Tuple, ASSERT_BUG(sp, !se.empty(), "Unsized tuple struct without fields - " << type); tailTpl = se.back().ent;),
-                                (Named, ASSERT_BUG(sp, !se.empty(), "Unsized struct without fields - " << type); tailTpl = se.back().ty;)
-                            )
+                            TU_MATCHA((str.mData), (se), (Unit, BUG(sp, "Unsized unit struct in Pointee lookup - " << type);), (Tuple, ASSERT_BUG(sp, !se.empty(), "Unsized tuple struct without fields - " << type); tailTpl = se.back().ent;), (Named, ASSERT_BUG(sp, !se.empty(), "Unsized struct without fields - " << type); tailTpl = se.back().ty;))
                             ASSERT_BUG(sp, tailTpl, "Missing unsized tail field for " << type);
 
                             const auto& path = type->as_Path().path.mData.as_Generic();
@@ -1960,7 +1910,6 @@ TU_ARMA(Alias, ee) {
             const auto& type = this->ivars.getType(ty);
             TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
 
-
             //const auto& trait_index = this->m_crate.get_lang_item_path(sp, "index");
             //const auto& trait_indexmut = this->m_crate.get_lang_item_path(sp, "index_mut");
 
@@ -2015,16 +1964,9 @@ TU_ARMA(Alias, ee) {
                             assocClone.insert(::std::make_pair(e.first, e.second.clone()));
                         }
                         for (const auto& bound : e.mTrait.typeBounds) {
-                            if (bound.second.sourceTrait.mPath == trait
-                                && comparePp(
-                                    sp,
-                                    bound.second.sourceTrait.mParams,
-                                    iTp.mPath.mParams
-                                ) != HIRCompare::Unequal) {
+                            if (bound.second.sourceTrait.mPath == trait && comparePp(sp, bound.second.sourceTrait.mParams, iTp.mPath.mParams) != HIRCompare::Unequal) {
                                 assocClone.erase(bound.first);
-                                assocClone.insert(::std::make_pair(
-                                    bound.first, bound.second.clone()
-                                ));
+                                assocClone.insert(::std::make_pair(bound.first, bound.second.clone()));
                             }
                         }
                         ASSERT_BUG(sp, !e.mTrait.hrtbs || !iTp.hrtbs, "TODO: Handle two layers of HRTBs - " << e.mTrait << " and " << iTp);
@@ -2072,16 +2014,9 @@ TU_ARMA(Alias, ee) {
                         // Project those equalities together with the
                         // supertrait candidate.
                         for (const auto& e : traitPath.typeBounds) {
-                            if (e.second.sourceTrait.mPath == trait
-                                && comparePp(
-                                    sp,
-                                    e.second.sourceTrait.mParams,
-                                    iTp.mPath.mParams
-                                ) != HIRCompare::Unequal) {
+                            if (e.second.sourceTrait.mPath == trait && comparePp(sp, e.second.sourceTrait.mParams, iTp.mPath.mParams) != HIRCompare::Unequal) {
                                 assocClone.erase(e.first);
-                                assocClone.insert(::std::make_pair(
-                                    e.first, e.second.clone()
-                                ));
+                                assocClone.insert(::std::make_pair(e.first, e.second.clone()));
                             }
                         }
                         ASSERT_BUG(sp, !traitPath.hrtbs || !iTp.hrtbs, "TODO: Handle two layers of HRTBs - " << traitPath << " and " << iTp);
@@ -2129,10 +2064,9 @@ TU_ARMA(Alias, ee) {
                         paramsMonoO = monomorphCb.monomorphPathParams(sp, bParams, false);
                         bParamsMono = &paramsMonoO;
                     }
-                    const bool paramsNeedNormalisation = ::std::any_of(
-                        bParamsMono->types.begin(), bParamsMono->types.end(),
-                        [&](const auto& ty) { return this->hasAssociatedType(ty); }
-                    );
+                    const bool paramsNeedNormalisation = ::std::any_of(bParamsMono->types.begin(), bParamsMono->types.end(), [&](const auto& ty) {
+                        return this->hasAssociatedType(ty);
+                    });
                     if (paramsNeedNormalisation) {
                         if (bParamsMono != &paramsMonoO) {
                             paramsMonoO = bParams.clone();
@@ -2207,1863 +2141,1303 @@ TU_ARMA(Alias, ee) {
     return findTraitImplsCrate(sp, trait, params, type,  callback);
         }
 
-class NextTraitGoalEvaluator {
-        enum class Certainty {
-            NoSolution,
-            Ambiguous,
-            Proven,
-        };
+        class NextTraitGoalEvaluator {
+            enum class Certainty {
+                NoSolution,
+                Ambiguous,
+                Proven,
+            };
 
-        enum class CandidateSource {
-            Builtin,
-            ParamEnv,
-            Other,
-            TraitImpl,
-        };
+            enum class CandidateSource {
+                Builtin,
+                ParamEnv,
+                Other,
+                TraitImpl,
+            };
 
-        enum class OrphanPerspective {
-            Local,
-            Remote,
-        };
+            enum class OrphanPerspective {
+                Local,
+                Remote,
+            };
 
-        enum class OrphanVisit {
-            NonLocal,
-            LocalKey,
-            Uncovered,
-        };
+            enum class OrphanVisit {
+                NonLocal,
+                LocalKey,
+                Uncovered,
+            };
 
-        struct Candidate {
-            ImplRef impl;
-            HIRCompare headMatch;
-            Certainty certainty;
-            const HIRMarkerImpl* markerImpl;
-            HIRPathParams markerImplParams;
-            bool autoBuiltin;
-            CandidateSource source;
-            bool ambiguityBeyondHead = false;
-            bool discarded = false;
+            struct Candidate {
+                ImplRef impl;
+                HIRCompare headMatch;
+                Certainty certainty;
+                const HIRMarkerImpl* markerImpl;
+                HIRPathParams markerImplParams;
+                bool autoBuiltin;
+                CandidateSource source;
+                bool ambiguityBeyondHead = false;
+                bool discarded = false;
 
-            Candidate(
-                ImplRef impl,
-                HIRCompare headMatch,
-                const HIRMarkerImpl* markerImpl,
-                HIRPathParams markerImplParams,
-                bool autoBuiltin,
-                CandidateSource source
-            )
-                : impl(::std::move(impl))
-                , headMatch(headMatch)
-                , certainty(Certainty::Ambiguous)
-                , markerImpl(markerImpl)
-                , markerImplParams(::std::move(markerImplParams))
-                , autoBuiltin(autoBuiltin)
-                , source(source)
-            {
-            }
-
-            bool isNegative() const {
-                return markerImpl && !markerImpl->isPositive;
-            }
-
-            bool isPositiveMarkerImpl() const {
-                return markerImpl && markerImpl->isPositive;
-            }
-        };
-
-        struct CandidateFrame {
-            ::std::vector<Candidate*> candidates;
-            ::std::vector<Candidate*> viable;
-            size_t availableDepth = 0;
-            bool encounteredOverflow = false;
-
-            CandidateFrame() {
-                candidates.reserve(32);
-                viable.reserve(32);
-            }
-
-            void clear(stl::ObjList<Candidate>& nodes) {
-                for (auto* candidate : candidates) {
-                    nodes.release(candidate);
+                Candidate(ImplRef impl, HIRCompare headMatch, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source)
+                    : impl(::std::move(impl))
+                    , headMatch(headMatch)
+                    , certainty(Certainty::Ambiguous)
+                    , markerImpl(markerImpl)
+                    , markerImplParams(::std::move(markerImplParams))
+                    , autoBuiltin(autoBuiltin)
+                    , source(source)
+                {
                 }
-                candidates.clear();
-                viable.clear();
-                availableDepth = 0;
-                encounteredOverflow = false;
+
+                bool isNegative() const {
+                    return markerImpl && !markerImpl->isPositive;
+                }
+
+                bool isPositiveMarkerImpl() const {
+                    return markerImpl && markerImpl->isPositive;
+                }
+            };
+
+            struct CandidateFrame {
+                ::std::vector<Candidate*> candidates;
+                ::std::vector<Candidate*> viable;
+                size_t availableDepth = 0;
+                bool encounteredOverflow = false;
+
+                CandidateFrame() {
+                    candidates.reserve(32);
+                    viable.reserve(32);
+                }
+
+                void clear(stl::ObjList<Candidate>& nodes) {
+                    for (auto* candidate : candidates) {
+                        nodes.release(candidate);
+                    }
+                    candidates.clear();
+                    viable.clear();
+                    availableDepth = 0;
+                    encounteredOverflow = false;
+                }
+            };
+
+            static constexpr size_t ROOT_DEPTH = 128;
+            static constexpr size_t OVERFLOW_DEPTH_DIVISOR = 4;
+
+            struct GoalKey {
+                size_t hash;
+                HIRSimplePath trait;
+                HIRPathParams params;
+                HIRTypeRef type;
+                HIRTraitPath::assocListT associated;
+
+                GoalKey(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated)
+                    : hash(hash)
+                    , trait(trait)
+                    , params(params.clone())
+                    , type(type)
+                    , associated(cloneAssociated(associated))
+                {
+                }
+            };
+
+            struct CachedGoal {
+                GoalKey goal;
+                Certainty certainty;
+                ImplRef response;
+                HIRCompare responseCertainty = HIRCompare::Fuzzy;
+                bool hasResponse = false;
+
+                CachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, Certainty certainty)
+                    : goal(hash, trait, params, type, associated)
+                    , certainty(certainty)
+                {
+                }
+            };
+
+            const TraitResolution& mResolve;
+            const HIRCrate& crate;
+            const Span* mSpan = nullptr;
+            bool coherenceMode = false;
+
+            // Frames and candidates have stable pool-backed addresses.  Vectors
+            // are pointer indexes only, so recursive growth never moves an ImplRef
+            // or invalidates a parent candidate.
+            stl::ObjList<Candidate> candidateNodes;
+            ::std::vector<CandidateFrame*> frames;
+            size_t frameDepth = 0;
+            stl::ObjList<GoalKey> activeGoalNodes;
+            stl::ObjList<CachedGoal> cachedGoalNodes;
+            ::std::vector<GoalKey*> goalStack;
+            ::std::vector<CachedGoal*> goalCache;
+            ::std::unordered_multimap<size_t, GoalKey*> activeGoalIndex;
+            ::std::unordered_multimap<size_t, CachedGoal*> goalCacheIndex;
+            uint64_t responseInstanceCounter = 0;
+
+            struct CanonicalGoal {
+                HIRPathParams params;
+                HIRTypeRef type;
+                HIRTraitPath::assocListT associated;
+
+                CanonicalGoal(HIRPathParams params, HIRTypeRef type)
+                    : params(::std::move(params))
+                    , type(type)
+                {
+                }
+            };
+
+            const Span& span() const {
+                ASSERT_BUG(Span(), mSpan, "next-solver session used outside an evaluation");
+                return *mSpan;
             }
-        };
 
-        static constexpr size_t ROOT_DEPTH = 128;
-        static constexpr size_t OVERFLOW_DEPTH_DIVISOR = 4;
-
-        struct GoalKey {
-            size_t hash;
-            HIRSimplePath trait;
-            HIRPathParams params;
-            HIRTypeRef type;
-            HIRTraitPath::assocListT associated;
-
-            GoalKey(
-                size_t hash,
-                const HIRSimplePath& trait,
-                const HIRPathParams& params,
-                const HIRTypeData* type,
-                const HIRTraitPath::assocListT* associated
-            )
-                : hash(hash)
-                , trait(trait)
-                , params(params.clone())
-                , type(type)
-                , associated(cloneAssociated(associated))
-            {
+            CanonicalGoal canonicalizeGoal(const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, CanonicalizeTraitGoal& canonicalizer) const {
+                auto canonicalParams = canonicalizer.monomorphPathParams(span(), params, true);
+                const auto canonicalType = canonicalizer.monomorphType(span(), type, true);
+                CanonicalGoal result(::std::move(canonicalParams), canonicalType);
+                if (associated) {
+                    for (const auto& entry : *associated) {
+                        result.associated.insert({entry.first, HIRTraitPath::AtyEqual{canonicalizer.monomorphGenericpath(span(), entry.second.sourceTrait, true), canonicalizer.monomorphPathParams(span(), entry.second.atyParams, true), canonicalizer.monomorphType(span(), entry.second.type, true)}});
+                    }
+                }
+                return result;
             }
-        };
 
-        struct CachedGoal {
-            GoalKey goal;
-            Certainty certainty;
-            ImplRef response;
-            HIRCompare responseCertainty = HIRCompare::Fuzzy;
-            bool hasResponse = false;
-
-            CachedGoal(
-                size_t hash,
-                const HIRSimplePath& trait,
-                const HIRPathParams& params,
-                const HIRTypeData* type,
-                const HIRTraitPath::assocListT* associated,
-                Certainty certainty
-            )
-                : goal(hash, trait, params, type, associated)
-                , certainty(certainty)
-            {
+            ::std::optional<size_t> availableDepthForNested() {
+                if (frameDepth == 0) {
+                    return ROOT_DEPTH;
+                }
+                auto& parent = *frames[frameDepth - 1];
+                if (parent.availableDepth == 0) {
+                    parent.encounteredOverflow = true;
+                    return {};
+                }
+                return parent.encounteredOverflow ? parent.availableDepth / OVERFLOW_DEPTH_DIVISOR : parent.availableDepth - 1;
             }
-        };
 
-        const TraitResolution& mResolve;
-        const HIRCrate& crate;
-        const Span* mSpan = nullptr;
-        bool coherenceMode = false;
-
-        // Frames and candidates have stable pool-backed addresses.  Vectors
-        // are pointer indexes only, so recursive growth never moves an ImplRef
-        // or invalidates a parent candidate.
-        stl::ObjList<Candidate> candidateNodes;
-        ::std::vector<CandidateFrame*> frames;
-        size_t frameDepth = 0;
-        stl::ObjList<GoalKey> activeGoalNodes;
-        stl::ObjList<CachedGoal> cachedGoalNodes;
-        ::std::vector<GoalKey*> goalStack;
-        ::std::vector<CachedGoal*> goalCache;
-        ::std::unordered_multimap<size_t, GoalKey*> activeGoalIndex;
-        ::std::unordered_multimap<size_t, CachedGoal*> goalCacheIndex;
-        uint64_t responseInstanceCounter = 0;
-
-        struct CanonicalGoal {
-            HIRPathParams params;
-            HIRTypeRef type;
-            HIRTraitPath::assocListT associated;
-
-            CanonicalGoal(HIRPathParams params, HIRTypeRef type)
-                : params(::std::move(params))
-                , type(type)
-            {
+            static bool isEnvironmentOrBuiltin(const ImplRef& impl) {
+                return !impl.mData.is_TraitImpl();
             }
-        };
 
-        const Span& span() const {
-            ASSERT_BUG(Span(), mSpan, "next-solver session used outside an evaluation");
-            return *mSpan;
-        }
+            bool paramsHaveUnknownTypes(const HIRPathParams& params) const {
+                for (const auto& type : params.types) {
+                    if (typeHasUnknown(type)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
 
-        CanonicalGoal canonicalizeGoal(
-            const HIRPathParams& params,
-            const HIRTypeData* type,
-            const HIRTraitPath::assocListT* associated,
-            CanonicalizeTraitGoal& canonicalizer
-        ) const {
-            auto canonicalParams = canonicalizer.monomorphPathParams(
-                span(), params, true
-            );
-            const auto canonicalType = canonicalizer.monomorphType(
-                span(), type, true
-            );
-            CanonicalGoal result(
-                ::std::move(canonicalParams), canonicalType
-            );
-            if (associated) {
-                for (const auto& entry : *associated) {
-                    result.associated.insert({
-                        entry.first,
-                        HIRTraitPath::AtyEqual{
-                            canonicalizer.monomorphGenericpath(
-                                span(), entry.second.sourceTrait, true
-                            ),
-                            canonicalizer.monomorphPathParams(
-                                span(), entry.second.atyParams, true
-                            ),
-                            canonicalizer.monomorphType(
-                                span(), entry.second.type, true
-                            )
+            bool pathHasUnknownTypes(const HIRPath& path) const {
+                if (const auto* pe = path.mData.opt_Generic()) {
+                    return paramsHaveUnknownTypes(pe->mParams);
+                }
+                if (const auto* pe = path.mData.opt_UfcsInherent()) {
+                    return typeHasUnknown(pe->type) || paramsHaveUnknownTypes(pe->params) || paramsHaveUnknownTypes(pe->implParams);
+                }
+                if (const auto* pe = path.mData.opt_UfcsKnown()) {
+                    return typeHasUnknown(pe->type) || paramsHaveUnknownTypes(pe->trait.mParams) || paramsHaveUnknownTypes(pe->params);
+                }
+                const auto& pe = path.mData.as_UfcsUnknown();
+                return typeHasUnknown(pe.type) || paramsHaveUnknownTypes(pe.params);
+            }
+
+            bool traitPathHasUnknownTypes(const HIRTraitPath& trait) const {
+                if (paramsHaveUnknownTypes(trait.mPath.mParams)) {
+                    return true;
+                }
+                for (const auto& assoc : trait.typeBounds) {
+                    if (paramsHaveUnknownTypes(assoc.second.sourceTrait.mParams) || paramsHaveUnknownTypes(assoc.second.atyParams) || typeHasUnknown(assoc.second.type)) {
+                        return true;
+                    }
+                }
+                for (const auto& assoc : trait.traitBounds) {
+                    if (paramsHaveUnknownTypes(assoc.second.sourceTrait.mParams) || paramsHaveUnknownTypes(assoc.second.atyParams)) {
+                        return true;
+                    }
+                    for (const auto& bound : assoc.second.traits) {
+                        if (traitPathHasUnknownTypes(bound)) {
+                            return true;
                         }
-                    });
+                    }
                 }
+                return false;
             }
-            return result;
-        }
 
-        ::std::optional<size_t> availableDepthForNested() {
-            if (frameDepth == 0) {
-                return ROOT_DEPTH;
-            }
-            auto& parent = *frames[frameDepth - 1];
-            if (parent.availableDepth == 0) {
-                parent.encounteredOverflow = true;
-                return {};
-            }
-            return parent.encounteredOverflow
-                ? parent.availableDepth / OVERFLOW_DEPTH_DIVISOR
-                : parent.availableDepth - 1;
-        }
-
-        static bool isEnvironmentOrBuiltin(const ImplRef& impl) {
-            return !impl.mData.is_TraitImpl();
-        }
-
-        bool paramsHaveUnknownTypes(const HIRPathParams& params) const {
-            for (const auto& type : params.types) {
-                if (typeHasUnknown(type)) {
-                    return true;
+            bool valueHasUnassignedInfer(const HIRConstGeneric& value) const {
+                if (const auto* infer = value.opt_Infer()) {
+                    return infer->index == ~0u;
                 }
-            }
-            return false;
-        }
-
-        bool pathHasUnknownTypes(const HIRPath& path) const {
-            if (const auto* pe = path.mData.opt_Generic()) {
-                return paramsHaveUnknownTypes(pe->mParams);
-            }
-            if (const auto* pe = path.mData.opt_UfcsInherent()) {
-                return typeHasUnknown(pe->type)
-                    || paramsHaveUnknownTypes(pe->params)
-                    || paramsHaveUnknownTypes(pe->implParams);
-            }
-            if (const auto* pe = path.mData.opt_UfcsKnown()) {
-                return typeHasUnknown(pe->type)
-                    || paramsHaveUnknownTypes(pe->trait.mParams)
-                    || paramsHaveUnknownTypes(pe->params);
-            }
-            const auto& pe = path.mData.as_UfcsUnknown();
-            return typeHasUnknown(pe.type)
-                || paramsHaveUnknownTypes(pe.params);
-        }
-
-        bool traitPathHasUnknownTypes(const HIRTraitPath& trait) const {
-            if (paramsHaveUnknownTypes(trait.mPath.mParams)) {
-                return true;
-            }
-            for (const auto& assoc : trait.typeBounds) {
-                if (paramsHaveUnknownTypes(assoc.second.sourceTrait.mParams)
-                    || paramsHaveUnknownTypes(assoc.second.atyParams)
-                    || typeHasUnknown(assoc.second.type)) {
-                    return true;
+                if (const auto* unevaluated = value.opt_Unevaluated()) {
+                    return paramsHaveUnassignedInfer((*unevaluated)->paramsImpl) || paramsHaveUnassignedInfer((*unevaluated)->paramsItem);
                 }
+                return false;
             }
-            for (const auto& assoc : trait.traitBounds) {
-                if (paramsHaveUnknownTypes(assoc.second.sourceTrait.mParams)
-                    || paramsHaveUnknownTypes(assoc.second.atyParams)) {
-                    return true;
-                }
-                for (const auto& bound : assoc.second.traits) {
-                    if (traitPathHasUnknownTypes(bound)) {
+
+            bool paramsHaveUnassignedInfer(const HIRPathParams& params) const {
+                for (const auto& type : params.types) {
+                    if (typeHasUnassignedInfer(type)) {
                         return true;
                     }
                 }
-            }
-            return false;
-        }
-
-        bool valueHasUnassignedInfer(
-            const HIRConstGeneric& value
-        ) const {
-            if (const auto* infer = value.opt_Infer()) {
-                return infer->index == ~0u;
-            }
-            if (const auto* unevaluated = value.opt_Unevaluated()) {
-                return paramsHaveUnassignedInfer((*unevaluated)->paramsImpl)
-                    || paramsHaveUnassignedInfer((*unevaluated)->paramsItem);
-            }
-            return false;
-        }
-
-        bool paramsHaveUnassignedInfer(
-            const HIRPathParams& params
-        ) const {
-            for (const auto& type : params.types) {
-                if (typeHasUnassignedInfer(type)) {
-                    return true;
-                }
-            }
-            for (const auto& value : params.values) {
-                if (valueHasUnassignedInfer(value)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        bool pathHasUnassignedInfer(const HIRPath& path) const {
-            if (const auto* pe = path.mData.opt_Generic()) {
-                return paramsHaveUnassignedInfer(pe->mParams);
-            }
-            if (const auto* pe = path.mData.opt_UfcsInherent()) {
-                return typeHasUnassignedInfer(pe->type)
-                    || paramsHaveUnassignedInfer(pe->params)
-                    || paramsHaveUnassignedInfer(pe->implParams);
-            }
-            if (const auto* pe = path.mData.opt_UfcsKnown()) {
-                return typeHasUnassignedInfer(pe->type)
-                    || paramsHaveUnassignedInfer(pe->trait.mParams)
-                    || paramsHaveUnassignedInfer(pe->params);
-            }
-            const auto& pe = path.mData.as_UfcsUnknown();
-            return typeHasUnassignedInfer(pe.type)
-                || paramsHaveUnassignedInfer(pe.params);
-        }
-
-        bool traitPathHasUnassignedInfer(
-            const HIRTraitPath& trait
-        ) const {
-            if (paramsHaveUnassignedInfer(trait.mPath.mParams)) {
-                return true;
-            }
-            for (const auto& assoc : trait.typeBounds) {
-                if (paramsHaveUnassignedInfer(
-                        assoc.second.sourceTrait.mParams
-                    )
-                    || paramsHaveUnassignedInfer(assoc.second.atyParams)
-                    || typeHasUnassignedInfer(assoc.second.type)) {
-                    return true;
-                }
-            }
-            for (const auto& assoc : trait.traitBounds) {
-                if (paramsHaveUnassignedInfer(
-                        assoc.second.sourceTrait.mParams
-                    )
-                    || paramsHaveUnassignedInfer(assoc.second.atyParams)) {
-                    return true;
-                }
-                for (const auto& bound : assoc.second.traits) {
-                    if (traitPathHasUnassignedInfer(bound)) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        bool typeHasUnassignedInfer(
-            const HIRTypeData* input
-        ) const {
-            if (const auto* infer = input->opt_Infer()) {
-                if (infer->index == ~0u) {
-                    return true;
-                }
-                const auto* resolved = mResolve.resolveType(input);
-                return resolved != input
-                    && typeHasUnassignedInfer(resolved);
-            }
-            if (const auto* path = input->opt_Path()) {
-                return pathHasUnassignedInfer(path->path);
-            }
-            if (const auto* object = input->opt_TraitObject()) {
-                if (traitPathHasUnassignedInfer(object->mTrait)) {
-                    return true;
-                }
-                for (const auto& marker : object->markers) {
-                    if (paramsHaveUnassignedInfer(marker.mParams)) {
+                for (const auto& value : params.values) {
+                    if (valueHasUnassignedInfer(value)) {
                         return true;
                     }
                 }
                 return false;
             }
-            if (const auto* erased = input->opt_ErasedType()) {
-                for (const auto& trait : erased->traits) {
-                    if (traitPathHasUnassignedInfer(trait)) {
-                        return true;
-                    }
-                }
-                if (const auto* known = erased->inner.opt_Known()) {
-                    return typeHasUnassignedInfer(*known);
-                }
-                if (const auto* alias = erased->inner.opt_Alias()) {
-                    return paramsHaveUnassignedInfer(alias->params);
-                }
-                if (const auto* fcn = erased->inner.opt_Fcn()) {
-                    return pathHasUnassignedInfer(fcn->origin);
-                }
-                return false;
-            }
-            if (const auto* array = input->opt_Array()) {
-                const auto* size = array->size.opt_Unevaluated();
-                return typeHasUnassignedInfer(array->inner)
-                    || (size && valueHasUnassignedInfer(*size));
-            }
-            if (const auto* slice = input->opt_Slice()) {
-                return typeHasUnassignedInfer(slice->inner);
-            }
-            if (const auto* tuple = input->opt_Tuple()) {
-                for (const auto& field : *tuple) {
-                    if (typeHasUnassignedInfer(field)) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            if (const auto* borrow = input->opt_Borrow()) {
-                return typeHasUnassignedInfer(borrow->inner);
-            }
-            if (const auto* pointer = input->opt_Pointer()) {
-                return typeHasUnassignedInfer(pointer->inner);
-            }
-            if (const auto* named = input->opt_NamedFunction()) {
-                return pathHasUnassignedInfer(named->path);
-            }
-            if (const auto* fcn = input->opt_Function()) {
-                for (const auto& arg : fcn->argTypes) {
-                    if (typeHasUnassignedInfer(arg)) {
-                        return true;
-                    }
-                }
-                return typeHasUnassignedInfer(fcn->mRettype);
-            }
-            return false;
-        }
 
-        bool goalHasUnassignedInfer(
-            const HIRPathParams& params,
-            const HIRTypeData* type,
-            const HIRTraitPath::assocListT* associated
-        ) const {
-            if (paramsHaveUnassignedInfer(params)
-                || typeHasUnassignedInfer(type)) {
-                return true;
-            }
-            if (associated) {
-                for (const auto& entry : *associated) {
-                    if (paramsHaveUnassignedInfer(
-                            entry.second.sourceTrait.mParams
-                        )
-                        || paramsHaveUnassignedInfer(entry.second.atyParams)
-                        || typeHasUnassignedInfer(entry.second.type)) {
-                        return true;
-                    }
+            bool pathHasUnassignedInfer(const HIRPath& path) const {
+                if (const auto* pe = path.mData.opt_Generic()) {
+                    return paramsHaveUnassignedInfer(pe->mParams);
                 }
+                if (const auto* pe = path.mData.opt_UfcsInherent()) {
+                    return typeHasUnassignedInfer(pe->type) || paramsHaveUnassignedInfer(pe->params) || paramsHaveUnassignedInfer(pe->implParams);
+                }
+                if (const auto* pe = path.mData.opt_UfcsKnown()) {
+                    return typeHasUnassignedInfer(pe->type) || paramsHaveUnassignedInfer(pe->trait.mParams) || paramsHaveUnassignedInfer(pe->params);
+                }
+                const auto& pe = path.mData.as_UfcsUnknown();
+                return typeHasUnassignedInfer(pe.type) || paramsHaveUnassignedInfer(pe.params);
             }
-            return false;
-        }
 
-        bool selfIsUnresolvedProjectionOverIvar(
-            const HIRTypeData* type
-        ) const {
-            const auto* path = type->opt_Path();
-            return path
-                && path->binding.is_Unbound()
-                && path->path.mData.is_UfcsKnown()
-                && mResolve.typeContainsIvars(type);
-        }
-
-        bool typeHasUnknown(const HIRTypeData* input) const {
-            const auto& type = mResolve.resolveType(input);
-            if (type->is_Infer() || type->is_Generic()) {
-                return true;
-            }
-            if (const auto* path = type->opt_Path()) {
-                return pathHasUnknownTypes(path->path);
-            }
-            if (const auto* object = type->opt_TraitObject()) {
-                if (traitPathHasUnknownTypes(object->mTrait)) {
+            bool traitPathHasUnassignedInfer(const HIRTraitPath& trait) const {
+                if (paramsHaveUnassignedInfer(trait.mPath.mParams)) {
                     return true;
                 }
-                for (const auto& marker : object->markers) {
-                    if (paramsHaveUnknownTypes(marker.mParams)) {
+                for (const auto& assoc : trait.typeBounds) {
+                    if (paramsHaveUnassignedInfer(assoc.second.sourceTrait.mParams) || paramsHaveUnassignedInfer(assoc.second.atyParams) || typeHasUnassignedInfer(assoc.second.type)) {
                         return true;
+                    }
+                }
+                for (const auto& assoc : trait.traitBounds) {
+                    if (paramsHaveUnassignedInfer(assoc.second.sourceTrait.mParams) || paramsHaveUnassignedInfer(assoc.second.atyParams)) {
+                        return true;
+                    }
+                    for (const auto& bound : assoc.second.traits) {
+                        if (traitPathHasUnassignedInfer(bound)) {
+                            return true;
+                        }
                     }
                 }
                 return false;
             }
-            if (const auto* erased = type->opt_ErasedType()) {
-                for (const auto& trait : erased->traits) {
-                    if (traitPathHasUnknownTypes(trait)) {
-                        return true;
-                    }
-                }
-                if (const auto* known = erased->inner.opt_Known()) {
-                    return typeHasUnknown(*known);
-                }
-                if (const auto* alias = erased->inner.opt_Alias()) {
-                    return paramsHaveUnknownTypes(alias->params);
-                }
-                if (const auto* fcn = erased->inner.opt_Fcn()) {
-                    return pathHasUnknownTypes(fcn->origin);
-                }
-                return false;
-            }
-            if (const auto* array = type->opt_Array()) {
-                return typeHasUnknown(array->inner);
-            }
-            if (const auto* slice = type->opt_Slice()) {
-                return typeHasUnknown(slice->inner);
-            }
-            if (const auto* tuple = type->opt_Tuple()) {
-                for (const auto& field : *tuple) {
-                    if (typeHasUnknown(field)) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            if (const auto* borrow = type->opt_Borrow()) {
-                return typeHasUnknown(borrow->inner);
-            }
-            if (const auto* pointer = type->opt_Pointer()) {
-                return typeHasUnknown(pointer->inner);
-            }
-            if (const auto* named = type->opt_NamedFunction()) {
-                return pathHasUnknownTypes(named->path);
-            }
-            if (const auto* fcn = type->opt_Function()) {
-                for (const auto& arg : fcn->argTypes) {
-                    if (typeHasUnknown(arg)) {
-                        return true;
-                    }
-                }
-                return typeHasUnknown(fcn->mRettype);
-            }
-            return false;
-        }
 
-        static bool typeHasCandidatePlaceholder(
-            const HIRTypeData* type
-        ) {
-            bool found = false;
-            visitTyWith(type, [&](const HIRTypeData* inner) {
-                if (const auto* generic = inner->opt_Generic()) {
-                    found |= generic->group() == GENERICPlaceholder;
+            bool typeHasUnassignedInfer(const HIRTypeData* input) const {
+                if (const auto* infer = input->opt_Infer()) {
+                    if (infer->index == ~0u) {
+                        return true;
+                    }
+                    const auto* resolved = mResolve.resolveType(input);
+                    return resolved != input && typeHasUnassignedInfer(resolved);
                 }
-                return found;
-            });
-            return found;
-        }
-
-        static bool typeHasUfcsUnknown(const HIRTypeData* type) {
-            if (!type) {
+                if (const auto* path = input->opt_Path()) {
+                    return pathHasUnassignedInfer(path->path);
+                }
+                if (const auto* object = input->opt_TraitObject()) {
+                    if (traitPathHasUnassignedInfer(object->mTrait)) {
+                        return true;
+                    }
+                    for (const auto& marker : object->markers) {
+                        if (paramsHaveUnassignedInfer(marker.mParams)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                if (const auto* erased = input->opt_ErasedType()) {
+                    for (const auto& trait : erased->traits) {
+                        if (traitPathHasUnassignedInfer(trait)) {
+                            return true;
+                        }
+                    }
+                    if (const auto* known = erased->inner.opt_Known()) {
+                        return typeHasUnassignedInfer(*known);
+                    }
+                    if (const auto* alias = erased->inner.opt_Alias()) {
+                        return paramsHaveUnassignedInfer(alias->params);
+                    }
+                    if (const auto* fcn = erased->inner.opt_Fcn()) {
+                        return pathHasUnassignedInfer(fcn->origin);
+                    }
+                    return false;
+                }
+                if (const auto* array = input->opt_Array()) {
+                    const auto* size = array->size.opt_Unevaluated();
+                    return typeHasUnassignedInfer(array->inner) || (size && valueHasUnassignedInfer(*size));
+                }
+                if (const auto* slice = input->opt_Slice()) {
+                    return typeHasUnassignedInfer(slice->inner);
+                }
+                if (const auto* tuple = input->opt_Tuple()) {
+                    for (const auto& field : *tuple) {
+                        if (typeHasUnassignedInfer(field)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                if (const auto* borrow = input->opt_Borrow()) {
+                    return typeHasUnassignedInfer(borrow->inner);
+                }
+                if (const auto* pointer = input->opt_Pointer()) {
+                    return typeHasUnassignedInfer(pointer->inner);
+                }
+                if (const auto* named = input->opt_NamedFunction()) {
+                    return pathHasUnassignedInfer(named->path);
+                }
+                if (const auto* fcn = input->opt_Function()) {
+                    for (const auto& arg : fcn->argTypes) {
+                        if (typeHasUnassignedInfer(arg)) {
+                            return true;
+                        }
+                    }
+                    return typeHasUnassignedInfer(fcn->mRettype);
+                }
                 return false;
             }
-            return visitTyWith(type, [](const HIRTypeData* inner) {
-                const auto* path = inner->opt_Path();
-                return path && path->path.mData.is_UfcsUnknown();
-            });
-        }
 
-        static bool paramsHaveCandidatePlaceholders(
-            const HIRPathParams& params
-        ) {
-            for (const auto& type : params.types) {
-                if (typeHasCandidatePlaceholder(type)) {
+            bool goalHasUnassignedInfer(const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) const {
+                if (paramsHaveUnassignedInfer(params) || typeHasUnassignedInfer(type)) {
                     return true;
                 }
+                if (associated) {
+                    for (const auto& entry : *associated) {
+                        if (paramsHaveUnassignedInfer(entry.second.sourceTrait.mParams) || paramsHaveUnassignedInfer(entry.second.atyParams) || typeHasUnassignedInfer(entry.second.type)) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
             }
-            for (const auto& value : params.values) {
-                if (value.is_Generic()
-                    && value.as_Generic().group() == GENERICPlaceholder) {
+
+            bool selfIsUnresolvedProjectionOverIvar(const HIRTypeData* type) const {
+                const auto* path = type->opt_Path();
+                return path && path->binding.is_Unbound() && path->path.mData.is_UfcsKnown() && mResolve.typeContainsIvars(type);
+            }
+
+            bool typeHasUnknown(const HIRTypeData* input) const {
+                const auto& type = mResolve.resolveType(input);
+                if (type->is_Infer() || type->is_Generic()) {
                     return true;
                 }
-            }
-            return false;
-        }
-
-        bool candidateHasPlaceholders(const Candidate& candidate) const {
-            if (typeHasCandidatePlaceholder(candidate.impl.getImplType(crate.types))
-                || paramsHaveCandidatePlaceholders(
-                    candidate.impl.getTraitParams(crate.types)
-                )) {
-                return true;
-            }
-            if (const auto* traitImpl = candidate.impl.mData.opt_TraitImpl()) {
-                if (paramsHaveCandidatePlaceholders(traitImpl->implParams)) {
-                    return true;
+                if (const auto* path = type->opt_Path()) {
+                    return pathHasUnknownTypes(path->path);
                 }
+                if (const auto* object = type->opt_TraitObject()) {
+                    if (traitPathHasUnknownTypes(object->mTrait)) {
+                        return true;
+                    }
+                    for (const auto& marker : object->markers) {
+                        if (paramsHaveUnknownTypes(marker.mParams)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                if (const auto* erased = type->opt_ErasedType()) {
+                    for (const auto& trait : erased->traits) {
+                        if (traitPathHasUnknownTypes(trait)) {
+                            return true;
+                        }
+                    }
+                    if (const auto* known = erased->inner.opt_Known()) {
+                        return typeHasUnknown(*known);
+                    }
+                    if (const auto* alias = erased->inner.opt_Alias()) {
+                        return paramsHaveUnknownTypes(alias->params);
+                    }
+                    if (const auto* fcn = erased->inner.opt_Fcn()) {
+                        return pathHasUnknownTypes(fcn->origin);
+                    }
+                    return false;
+                }
+                if (const auto* array = type->opt_Array()) {
+                    return typeHasUnknown(array->inner);
+                }
+                if (const auto* slice = type->opt_Slice()) {
+                    return typeHasUnknown(slice->inner);
+                }
+                if (const auto* tuple = type->opt_Tuple()) {
+                    for (const auto& field : *tuple) {
+                        if (typeHasUnknown(field)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                if (const auto* borrow = type->opt_Borrow()) {
+                    return typeHasUnknown(borrow->inner);
+                }
+                if (const auto* pointer = type->opt_Pointer()) {
+                    return typeHasUnknown(pointer->inner);
+                }
+                if (const auto* named = type->opt_NamedFunction()) {
+                    return pathHasUnknownTypes(named->path);
+                }
+                if (const auto* fcn = type->opt_Function()) {
+                    for (const auto& arg : fcn->argTypes) {
+                        if (typeHasUnknown(arg)) {
+                            return true;
+                        }
+                    }
+                    return typeHasUnknown(fcn->mRettype);
+                }
+                return false;
             }
-            return paramsHaveCandidatePlaceholders(
-                candidate.markerImplParams
-            );
-        }
 
-        static bool paramsNeedResponseConstraints(
-            const HIRPathParams& params
-        ) {
-            for (const auto& type : params.types) {
+            static bool typeHasCandidatePlaceholder(const HIRTypeData* type) {
                 bool found = false;
                 visitTyWith(type, [&](const HIRTypeData* inner) {
                     if (const auto* generic = inner->opt_Generic()) {
                         found |= generic->group() == GENERICPlaceholder;
-                    } else if (const auto* infer = inner->opt_Infer()) {
-                        found |= !infer->isLit();
                     }
                     return found;
                 });
-                if (found) {
+                return found;
+            }
+
+            static bool typeHasUfcsUnknown(const HIRTypeData* type) {
+                if (!type) {
+                    return false;
+                }
+                return visitTyWith(type, [](const HIRTypeData* inner) {
+                    const auto* path = inner->opt_Path();
+                    return path && path->path.mData.is_UfcsUnknown();
+                });
+            }
+
+            static bool paramsHaveCandidatePlaceholders(const HIRPathParams& params) {
+                for (const auto& type : params.types) {
+                    if (typeHasCandidatePlaceholder(type)) {
+                        return true;
+                    }
+                }
+                for (const auto& value : params.values) {
+                    if (value.is_Generic() && value.as_Generic().group() == GENERICPlaceholder) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            bool candidateHasPlaceholders(const Candidate& candidate) const {
+                if (typeHasCandidatePlaceholder(candidate.impl.getImplType(crate.types)) || paramsHaveCandidatePlaceholders(candidate.impl.getTraitParams(crate.types))) {
                     return true;
                 }
-            }
-            for (const auto& value : params.values) {
-                if (value.is_Infer()
-                    || (value.is_Generic()
-                        && value.as_Generic().group()
-                            == GENERICPlaceholder)) {
-                    return true;
+                if (const auto* traitImpl = candidate.impl.mData.opt_TraitImpl()) {
+                    if (paramsHaveCandidatePlaceholders(traitImpl->implParams)) {
+                        return true;
+                    }
                 }
-            }
-            return false;
-        }
-
-        bool candidateNeedsResponseConstraints(
-            const Candidate& candidate
-        ) const {
-            if (const auto* traitImpl = candidate.impl.mData.opt_TraitImpl()) {
-                return paramsNeedResponseConstraints(traitImpl->implParams);
-            }
-            return candidate.markerImpl
-                && paramsNeedResponseConstraints(candidate.markerImplParams);
-        }
-
-        OrphanVisit orphanVisitResolvedType(
-            const HIRTypeData* type,
-            OrphanPerspective perspective
-        ) const {
-            if (type->is_Infer() || type->is_Generic()) {
-                return perspective == OrphanPerspective::Remote
-                    ? OrphanVisit::LocalKey
-                    : OrphanVisit::Uncovered;
+                return paramsHaveCandidatePlaceholders(candidate.markerImplParams);
             }
 
-            if (const auto* path = type->opt_Path()) {
-                const auto* generic = path->path.mData.opt_Generic();
-                const bool concreteAdt = generic
-                    && (path->binding.is_Struct()
-                        || path->binding.is_Enum()
-                        || path->binding.is_Union()
-                        || path->binding.is_ExternType());
-                if (!concreteAdt) {
-                    if (typeHasUnknown(type)) {
-                        return perspective == OrphanPerspective::Remote
-                            ? OrphanVisit::LocalKey
-                            : OrphanVisit::Uncovered;
+            static bool paramsNeedResponseConstraints(const HIRPathParams& params) {
+                for (const auto& type : params.types) {
+                    bool found = false;
+                    visitTyWith(type, [&](const HIRTypeData* inner) {
+                        if (const auto* generic = inner->opt_Generic()) {
+                            found |= generic->group() == GENERICPlaceholder;
+                        } else if (const auto* infer = inner->opt_Infer()) {
+                            found |= !infer->isLit();
+                        }
+                        return found;
+                    });
+                    if (found) {
+                        return true;
+                    }
+                }
+                for (const auto& value : params.values) {
+                    if (value.is_Infer() || (value.is_Generic() && value.as_Generic().group() == GENERICPlaceholder)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            bool candidateNeedsResponseConstraints(const Candidate& candidate) const {
+                if (const auto* traitImpl = candidate.impl.mData.opt_TraitImpl()) {
+                    return paramsNeedResponseConstraints(traitImpl->implParams);
+                }
+                return candidate.markerImpl && paramsNeedResponseConstraints(candidate.markerImplParams);
+            }
+
+            OrphanVisit orphanVisitResolvedType(const HIRTypeData* type, OrphanPerspective perspective) const {
+                if (type->is_Infer() || type->is_Generic()) {
+                    return perspective == OrphanPerspective::Remote ? OrphanVisit::LocalKey : OrphanVisit::Uncovered;
+                }
+
+                if (const auto* path = type->opt_Path()) {
+                    const auto* generic = path->path.mData.opt_Generic();
+                    const bool concreteAdt = generic && (path->binding.is_Struct() || path->binding.is_Enum() || path->binding.is_Union() || path->binding.is_ExternType());
+                    if (!concreteAdt) {
+                        if (typeHasUnknown(type)) {
+                            return perspective == OrphanPerspective::Remote ? OrphanVisit::LocalKey : OrphanVisit::Uncovered;
+                        }
+                        return OrphanVisit::NonLocal;
+                    }
+
+                    const bool local = perspective == OrphanPerspective::Local && generic->mPath.crateName() == crate.crateName;
+                    if (local) {
+                        return OrphanVisit::LocalKey;
+                    }
+
+                    const auto* strPtr = path->binding.opt_Struct();
+                    if (strPtr && (*strPtr)->structMarkings.isFundamental) {
+                        for (const auto& param : generic->mParams.types) {
+                            const auto result = orphanVisitType(param, perspective);
+                            if (result != OrphanVisit::NonLocal) {
+                                return result;
+                            }
+                        }
                     }
                     return OrphanVisit::NonLocal;
                 }
 
-                const bool local = perspective == OrphanPerspective::Local
-                    && generic->mPath.crateName() == crate.crateName;
-                if (local) {
-                    return OrphanVisit::LocalKey;
+                if (const auto* borrow = type->opt_Borrow()) {
+                    // References are fundamental even though raw pointers are not.
+                    return orphanVisitType(borrow->inner, perspective);
                 }
 
-                const auto* strPtr = path->binding.opt_Struct();
-                if (strPtr && (*strPtr)->structMarkings.isFundamental) {
-                    for (const auto& param : generic->mParams.types) {
-                        const auto result = orphanVisitType(param, perspective);
-                        if (result != OrphanVisit::NonLocal) {
-                            return result;
-                        }
+                if (const auto* object = type->opt_TraitObject()) {
+                    const auto& principal = object->mTrait.mPath.mPath;
+                    if (perspective == OrphanPerspective::Local && principal != HIRSimplePath() && principal.crateName() == crate.crateName) {
+                        return OrphanVisit::LocalKey;
+                    }
+                    return OrphanVisit::NonLocal;
+                }
+
+                if (type->is_NodeType()) {
+                    return perspective == OrphanPerspective::Local ? OrphanVisit::LocalKey : OrphanVisit::NonLocal;
+                }
+
+                if (type->is_ErasedType() && typeHasUnknown(type)) {
+                    return perspective == OrphanPerspective::Remote ? OrphanVisit::LocalKey : OrphanVisit::Uncovered;
+                }
+
+                // Primitive, tuple, array, slice, raw-pointer, function, opaque,
+                // and foreign rigid types are non-local and cover their contents.
+                return OrphanVisit::NonLocal;
+            }
+
+            OrphanVisit orphanVisitType(const HIRTypeData* input, OrphanPerspective perspective) const {
+                const auto& resolved = mResolve.resolveType(input);
+                const auto* path = resolved->opt_Path();
+                const bool isAlias = path && (!path->path.mData.is_Generic() || path->binding.is_Unbound() || path->binding.is_Opaque());
+                if (isAlias) {
+                    // rustc's orphan checker normalizes aliases lazily.  Keep a
+                    // rigid alias if normalization only produces a fresh type
+                    // variable; such an alias still carries coverage information.
+                    auto normalized = mResolve.expandAssociatedTypes(span(), resolved);
+                    if (!(normalized->is_Infer() && !resolved->is_Infer())) {
+                        return orphanVisitResolvedType(normalized, perspective);
                     }
                 }
-                return OrphanVisit::NonLocal;
+                return orphanVisitResolvedType(resolved, perspective);
             }
 
-            if (const auto* borrow = type->opt_Borrow()) {
-                // References are fundamental even though raw pointers are not.
-                return orphanVisitType(borrow->inner, perspective);
-            }
-
-            if (const auto* object = type->opt_TraitObject()) {
-                const auto& principal = object->mTrait.mPath.mPath;
-                if (perspective == OrphanPerspective::Local
-                    && principal != HIRSimplePath()
-                    && principal.crateName() == crate.crateName) {
-                    return OrphanVisit::LocalKey;
+            bool orphanCheckTraitRef(const HIRPathParams& params, const HIRTypeData* type, OrphanPerspective perspective) const {
+                const auto selfResult = orphanVisitType(type, perspective);
+                if (selfResult != OrphanVisit::NonLocal) {
+                    return selfResult == OrphanVisit::LocalKey;
                 }
-                return OrphanVisit::NonLocal;
-            }
-
-            if (type->is_NodeType()) {
-                return perspective == OrphanPerspective::Local
-                    ? OrphanVisit::LocalKey
-                    : OrphanVisit::NonLocal;
-            }
-
-            if (type->is_ErasedType() && typeHasUnknown(type)) {
-                return perspective == OrphanPerspective::Remote
-                    ? OrphanVisit::LocalKey
-                    : OrphanVisit::Uncovered;
-            }
-
-            // Primitive, tuple, array, slice, raw-pointer, function, opaque,
-            // and foreign rigid types are non-local and cover their contents.
-            return OrphanVisit::NonLocal;
-        }
-
-        OrphanVisit orphanVisitType(
-            const HIRTypeData* input,
-            OrphanPerspective perspective
-        ) const {
-            const auto& resolved = mResolve.resolveType(input);
-            const auto* path = resolved->opt_Path();
-            const bool isAlias = path
-                && (!path->path.mData.is_Generic()
-                    || path->binding.is_Unbound()
-                    || path->binding.is_Opaque());
-            if (isAlias) {
-                // rustc's orphan checker normalizes aliases lazily.  Keep a
-                // rigid alias if normalization only produces a fresh type
-                // variable; such an alias still carries coverage information.
-                auto normalized = mResolve.expandAssociatedTypes(span(), resolved);
-                if (!(normalized->is_Infer() && !resolved->is_Infer())) {
-                    return orphanVisitResolvedType(normalized, perspective);
+                for (const auto& param : params.types) {
+                    const auto result = orphanVisitType(param, perspective);
+                    if (result != OrphanVisit::NonLocal) {
+                        return result == OrphanVisit::LocalKey;
+                    }
                 }
-            }
-            return orphanVisitResolvedType(resolved, perspective);
-        }
-
-        bool orphanCheckTraitRef(
-            const HIRPathParams& params,
-            const HIRTypeData* type,
-            OrphanPerspective perspective
-        ) const {
-            const auto selfResult = orphanVisitType(type, perspective);
-            if (selfResult != OrphanVisit::NonLocal) {
-                return selfResult == OrphanVisit::LocalKey;
-            }
-            for (const auto& param : params.types) {
-                const auto result = orphanVisitType(param, perspective);
-                if (result != OrphanVisit::NonLocal) {
-                    return result == OrphanVisit::LocalKey;
-                }
-            }
-            return false;
-        }
-
-        bool traitRefIsKnowable(
-            const HIRSimplePath& trait,
-            const HIRPathParams& params,
-            const HIRTypeData* type
-        ) const {
-            if (orphanCheckTraitRef(
-                    params, type, OrphanPerspective::Remote
-                )) {
                 return false;
             }
 
-            const auto& traitDef = crate.getTraitByPath(span(), trait);
-            if (trait.crateName() == crate.crateName
-                || traitDef.isFundamental) {
-                return true;
+            bool traitRefIsKnowable(const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) const {
+                if (orphanCheckTraitRef(params, type, OrphanPerspective::Remote)) {
+                    return false;
+                }
+
+                const auto& traitDef = crate.getTraitByPath(span(), trait);
+                if (trait.crateName() == crate.crateName || traitDef.isFundamental) {
+                    return true;
+                }
+
+                return orphanCheckTraitRef(params, type, OrphanPerspective::Local);
             }
 
-            return orphanCheckTraitRef(
-                params, type, OrphanPerspective::Local
-            );
-        }
+            static size_t hashMix(size_t state, size_t value) {
+                // boost::hash_combine's avalanche step.  Equality never relies on
+                // this fingerprint: hash collisions are resolved by goal_matches.
+                return state ^ (value + 0x9e3779b97f4a7c15ULL + (state << 6) + (state >> 2));
+            }
 
-        static size_t hashMix(size_t state, size_t value) {
-            // boost::hash_combine's avalanche step.  Equality never relies on
-            // this fingerprint: hash collisions are resolved by goal_matches.
-            return state ^ (value + 0x9e3779b97f4a7c15ULL + (state << 6) + (state >> 2));
-        }
-
-        static size_t hashSimplePath(const HIRSimplePath& path) {
-            size_t result = ::std::hash<RcString>()(path.crateName());
-            for (const auto& component : path.components()) {
-                result = hashMix(result, ::std::hash<RcString>()(component));
-            }
-            return result;
-        }
-
-        static size_t hashType(const HIRTypeData* type) {
-            if (const auto* path = type->getSortPath()) {
-                return hashMix(0x10, hashSimplePath(*path));
-            }
-            if (const auto* primitive = type->opt_Primitive()) {
-                return hashMix(0x20, static_cast<size_t>(*primitive));
-            }
-            if (const auto* generic = type->opt_Generic()) {
-                return hashMix(0x30, generic->binding);
-            }
-            if (const auto* infer = type->opt_Infer()) {
-                return hashMix(0x40, infer->index);
-            }
-            if (const auto* tuple = type->opt_Tuple()) {
-                size_t result = hashMix(0x50, tuple->size());
-                for (const auto& field : *tuple) {
-                    result = hashMix(result, hashType(field));
+            static size_t hashSimplePath(const HIRSimplePath& path) {
+                size_t result = ::std::hash<RcString>()(path.crateName());
+                for (const auto& component : path.components()) {
+                    result = hashMix(result, ::std::hash<RcString>()(component));
                 }
                 return result;
             }
-            if (const auto* array = type->opt_Array()) {
-                return hashMix(0x60, hashType(array->inner));
-            }
-            if (const auto* slice = type->opt_Slice()) {
-                return hashMix(0x70, hashType(slice->inner));
-            }
-            if (const auto* borrow = type->opt_Borrow()) {
-                return hashMix(hashMix(0x80, static_cast<size_t>(borrow->type)), hashType(borrow->inner));
-            }
-            if (const auto* pointer = type->opt_Pointer()) {
-                return hashMix(hashMix(0x90, static_cast<size_t>(pointer->type)), hashType(pointer->inner));
-            }
-            if (const auto* traitObject = type->opt_TraitObject()) {
-                return hashMix(0xa0, hashSimplePath(traitObject->mTrait.mPath.mPath));
-            }
-            if (type->is_Diverge()) {
-                return 0xb0;
-            }
-            // Function, erased, and compiler-generated node types are rare in
-            // recursive solver tables.  A stable tag is sufficient; full
-            // equality below still resolves every collision correctly.
-            return 0xc0;
-        }
 
-        static size_t goalHash(
-            const HIRSimplePath& trait,
-            const HIRPathParams& params,
-            const HIRTypeData* type,
-            const HIRTraitPath::assocListT* associated
-        ) {
-            size_t result = hashSimplePath(trait);
-            result = hashMix(result, params.types.size());
-            for (const auto& param : params.types) {
-                result = hashMix(result, hashType(param));
-            }
-            result = hashMix(result, params.values.size());
-            result = hashMix(result, hashType(type));
-            if (associated && !associated->empty()) {
-                result = hashMix(result, associated->size());
-                for (const auto& entry : *associated) {
-                    result = hashMix(result, ::std::hash<RcString>()(entry.first));
-                    result = hashMix(result, hashSimplePath(entry.second.sourceTrait.mPath));
-                    result = hashMix(result, hashType(entry.second.type));
+            static size_t hashType(const HIRTypeData* type) {
+                if (const auto* path = type->getSortPath()) {
+                    return hashMix(0x10, hashSimplePath(*path));
                 }
-            }
-            return result;
-        }
-
-        static HIRTraitPath::assocListT cloneAssociated(
-            const HIRTraitPath::assocListT* associated
-        ) {
-            HIRTraitPath::assocListT result;
-            if (associated) {
-                for (const auto& entry : *associated) {
-                    result.insert({entry.first, entry.second.clone()});
+                if (const auto* primitive = type->opt_Primitive()) {
+                    return hashMix(0x20, static_cast<size_t>(*primitive));
                 }
+                if (const auto* generic = type->opt_Generic()) {
+                    return hashMix(0x30, generic->binding);
+                }
+                if (const auto* infer = type->opt_Infer()) {
+                    return hashMix(0x40, infer->index);
+                }
+                if (const auto* tuple = type->opt_Tuple()) {
+                    size_t result = hashMix(0x50, tuple->size());
+                    for (const auto& field : *tuple) {
+                        result = hashMix(result, hashType(field));
+                    }
+                    return result;
+                }
+                if (const auto* array = type->opt_Array()) {
+                    return hashMix(0x60, hashType(array->inner));
+                }
+                if (const auto* slice = type->opt_Slice()) {
+                    return hashMix(0x70, hashType(slice->inner));
+                }
+                if (const auto* borrow = type->opt_Borrow()) {
+                    return hashMix(hashMix(0x80, static_cast<size_t>(borrow->type)), hashType(borrow->inner));
+                }
+                if (const auto* pointer = type->opt_Pointer()) {
+                    return hashMix(hashMix(0x90, static_cast<size_t>(pointer->type)), hashType(pointer->inner));
+                }
+                if (const auto* traitObject = type->opt_TraitObject()) {
+                    return hashMix(0xa0, hashSimplePath(traitObject->mTrait.mPath.mPath));
+                }
+                if (type->is_Diverge()) {
+                    return 0xb0;
+                }
+                // Function, erased, and compiler-generated node types are rare in
+                // recursive solver tables.  A stable tag is sufficient; full
+                // equality below still resolves every collision correctly.
+                return 0xc0;
             }
-            return result;
-        }
 
-        ImplRef monomorphImplRef(
-            const ImplRef& source,
-            const Monomorphiser& monomorph
-        ) const {
-            auto monomorphAssociated = [&](
-                const HIRTraitPath::assocListT* associated
-            ) {
+            static size_t goalHash(const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) {
+                size_t result = hashSimplePath(trait);
+                result = hashMix(result, params.types.size());
+                for (const auto& param : params.types) {
+                    result = hashMix(result, hashType(param));
+                }
+                result = hashMix(result, params.values.size());
+                result = hashMix(result, hashType(type));
+                if (associated && !associated->empty()) {
+                    result = hashMix(result, associated->size());
+                    for (const auto& entry : *associated) {
+                        result = hashMix(result, ::std::hash<RcString>()(entry.first));
+                        result = hashMix(result, hashSimplePath(entry.second.sourceTrait.mPath));
+                        result = hashMix(result, hashType(entry.second.type));
+                    }
+                }
+                return result;
+            }
+
+            static HIRTraitPath::assocListT cloneAssociated(const HIRTraitPath::assocListT* associated) {
                 HIRTraitPath::assocListT result;
                 if (associated) {
                     for (const auto& entry : *associated) {
-                        result.insert({
-                            entry.first,
-                            monomorph.monomorphTpAtyEqual(
-                                span(), entry.second, true
-                            )
-                        });
+                        result.insert({entry.first, entry.second.clone()});
                     }
                 }
                 return result;
-            };
+            }
 
-            ImplRef result;
-            if (const auto* impl = source.mData.opt_TraitImpl()) {
-                ASSERT_BUG(
-                    span(),
-                    impl->traitPtr && impl->traitPath && impl->impl,
-                    "Cannot monomorphise an invalid trait impl response"
-                );
-                result = ImplRef(
-                    monomorph.monomorphPathParams(
-                        span(), impl->implParams, true
-                    ),
-                    *impl->traitPtr,
-                    *impl->traitPath,
-                    *impl->impl
-                );
-            } else if (const auto* bounded = source.mData.opt_BoundedPtr()) {
-                result = ImplRef(
-                    monomorph.monomorphPathParams(
-                        span(), bounded->hrls, true
-                    ),
-                    monomorph.monomorphType(span(), bounded->type, true),
-                    monomorph.monomorphPathParams(
-                        span(), *bounded->traitArgs, true
-                    ),
-                    monomorphAssociated(bounded->assoc)
-                );
-            } else {
-                const auto& owned = source.mData.as_Bounded();
-                result = ImplRef(
-                    monomorph.monomorphPathParams(
-                        span(), owned.hrls, true
-                    ),
-                    monomorph.monomorphType(span(), owned.type, true),
-                    monomorph.monomorphPathParams(
-                        span(), owned.traitArgs, true
-                    ),
-                    monomorphAssociated(&owned.assoc)
-                );
-            }
-            if (source.isAmbiguousIdentity()) {
-                result.markAmbiguousIdentity();
-            }
-            return result;
-        }
+            ImplRef monomorphImplRef(const ImplRef& source, const Monomorphiser& monomorph) const {
+                auto monomorphAssociated = [&](const HIRTraitPath::assocListT* associated) {
+                    HIRTraitPath::assocListT result;
+                    if (associated) {
+                        for (const auto& entry : *associated) {
+                            result.insert({entry.first, monomorph.monomorphTpAtyEqual(span(), entry.second, true)});
+                        }
+                    }
+                    return result;
+                };
 
-        static bool goalMatches(
-            const GoalKey& goal,
-            const HIRSimplePath& trait,
-            const HIRPathParams& params,
-            const HIRTypeData* type,
-            const HIRTraitPath::assocListT* associated
-        ) {
-            if (goal.trait != trait || goal.params != params || goal.type != type) {
-                return false;
+                ImplRef result;
+                if (const auto* impl = source.mData.opt_TraitImpl()) {
+                    ASSERT_BUG(span(), impl->traitPtr && impl->traitPath && impl->impl, "Cannot monomorphise an invalid trait impl response");
+                    result = ImplRef(monomorph.monomorphPathParams(span(), impl->implParams, true), *impl->traitPtr, *impl->traitPath, *impl->impl);
+                } else if (const auto* bounded = source.mData.opt_BoundedPtr()) {
+                    result = ImplRef(monomorph.monomorphPathParams(span(), bounded->hrls, true), monomorph.monomorphType(span(), bounded->type, true), monomorph.monomorphPathParams(span(), *bounded->traitArgs, true), monomorphAssociated(bounded->assoc));
+                } else {
+                    const auto& owned = source.mData.as_Bounded();
+                    result = ImplRef(monomorph.monomorphPathParams(span(), owned.hrls, true), monomorph.monomorphType(span(), owned.type, true), monomorph.monomorphPathParams(span(), owned.traitArgs, true), monomorphAssociated(&owned.assoc));
+                }
+                if (source.isAmbiguousIdentity()) {
+                    result.markAmbiguousIdentity();
+                }
+                return result;
             }
-            if (!associated || associated->empty()) {
-                return goal.associated.empty();
-            }
-            if (goal.associated.size() != associated->size()) {
-                return false;
-            }
-            auto left = goal.associated.begin();
-            auto right = associated->begin();
-            for (; left != goal.associated.end(); ++left, ++right) {
-                if (left->first != right->first
-                    || left->second.sourceTrait != right->second.sourceTrait
-                    || left->second.atyParams != right->second.atyParams
-                    || left->second.type != right->second.type) {
+
+            static bool goalMatches(const GoalKey& goal, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) {
+                if (goal.trait != trait || goal.params != params || goal.type != type) {
                     return false;
                 }
-            }
-            return true;
-        }
-
-        CachedGoal* findCachedGoal(
-            size_t hash,
-            const HIRSimplePath& trait,
-            const HIRPathParams& params,
-            const HIRTypeData* type,
-            const HIRTraitPath::assocListT* associated
-        ) const {
-            const auto range = goalCacheIndex.equal_range(hash);
-            for (auto it = range.first; it != range.second; ++it) {
-                if (goalMatches(it->second->goal, trait, params, type, associated)) {
-                    return it->second;
+                if (!associated || associated->empty()) {
+                    return goal.associated.empty();
                 }
-            }
-            return nullptr;
-        }
-
-        GoalKey* findActiveGoal(
-            size_t hash,
-            const HIRSimplePath& trait,
-            const HIRPathParams& params,
-            const HIRTypeData* type,
-            const HIRTraitPath::assocListT* associated
-        ) const {
-            const auto range = activeGoalIndex.equal_range(hash);
-            for (auto it = range.first; it != range.second; ++it) {
-                if (goalMatches(*it->second, trait, params, type, associated)) {
-                    return it->second;
-                }
-            }
-            return nullptr;
-        }
-
-        GoalKey* pushActiveGoal(
-            size_t hash,
-            const HIRSimplePath& trait,
-            const HIRPathParams& params,
-            const HIRTypeData* type,
-            const HIRTraitPath::assocListT* associated
-        ) {
-            auto* goal = activeGoalNodes.make(hash, trait, params, type, associated);
-            goalStack.push_back(goal);
-            activeGoalIndex.emplace(hash, goal);
-            return goal;
-        }
-
-        void popActiveGoal(GoalKey* goal) {
-            assert(!goalStack.empty() && goalStack.back() == goal);
-            const auto range = activeGoalIndex.equal_range(goal->hash);
-            for (auto it = range.first; it != range.second; ++it) {
-                if (it->second == goal) {
-                    activeGoalIndex.erase(it);
-                    goalStack.pop_back();
-                    activeGoalNodes.release(goal);
-                    return;
-                }
-            }
-            assert(!"next-solver active goal missing from hash index");
-            ::std::abort();
-        }
-
-        Certainty cacheGoal(
-            size_t hash,
-            const HIRSimplePath& trait,
-            const HIRPathParams& params,
-            const HIRTypeData* type,
-            const HIRTraitPath::assocListT* associated,
-            Certainty certainty
-        ) {
-            auto* goal = cachedGoalNodes.make(
-                hash, trait, params, type, associated, certainty
-            );
-            goalCache.push_back(goal);
-            goalCacheIndex.emplace(hash, goal);
-            return certainty;
-        }
-
-        CachedGoal* cacheResponse(
-            size_t hash,
-            const HIRSimplePath& trait,
-            const HIRPathParams& params,
-            const HIRTypeData* type,
-            const HIRTraitPath::assocListT* associated,
-            ImplRef response,
-            HIRCompare responseCertainty
-        ) {
-            auto* cached = findCachedGoal(
-                hash, trait, params, type, associated
-            );
-            const auto certainty = responseCertainty == HIRCompare::Equal
-                ? Certainty::Proven
-                : Certainty::Ambiguous;
-            if (!cached) {
-                cached = cachedGoalNodes.make(
-                    hash, trait, params, type, associated, certainty
-                );
-                goalCache.push_back(cached);
-                goalCacheIndex.emplace(hash, cached);
-            }
-            cached->certainty = certainty;
-            cached->response = ::std::move(response);
-            cached->responseCertainty = responseCertainty;
-            cached->hasResponse = true;
-            return cached;
-        }
-
-        void clearGoalCache() {
-            goalCacheIndex.clear();
-            for (auto* goal : goalCache) {
-                cachedGoalNodes.release(goal);
-            }
-            goalCache.clear();
-        }
-
-        static const HIRPathParams& boundedHrls(const ImplRef& impl) {
-            if (const auto* bounded = impl.mData.opt_BoundedPtr()) {
-                return bounded->hrls;
-            }
-            return impl.mData.as_Bounded().hrls;
-        }
-
-        static const HIRTraitPath::assocListT& boundedAssociated(
-            const ImplRef& impl
-        ) {
-            if (const auto* bounded = impl.mData.opt_BoundedPtr()) {
-                return *bounded->assoc;
-            }
-            return impl.mData.as_Bounded().assoc;
-        }
-
-        static bool associatedResponsesEqual(
-            const HIRTraitPath::assocListT& left,
-            const HIRTraitPath::assocListT& right
-        ) {
-            if (left.size() != right.size()) {
-                return false;
-            }
-            auto li = left.begin();
-            auto ri = right.begin();
-            for (; li != left.end(); ++li, ++ri) {
-                if (li->first != ri->first
-                    || li->second.ord(ri->second) != OrdEqual) {
+                if (goal.associated.size() != associated->size()) {
                     return false;
                 }
-            }
-            return true;
-        }
-
-        bool isSameImpl(const ImplRef& left, const ImplRef& right) const {
-            const auto* li = left.mData.opt_TraitImpl();
-            const auto* ri = right.mData.opt_TraitImpl();
-            if (li || ri) {
-                return li && ri && li->impl == ri->impl && li->implParams == ri->implParams;
-            }
-            return left.getImplType(crate.types) == right.getImplType(crate.types)
-                && left.getTraitParams(crate.types) == right.getTraitParams(crate.types)
-                && boundedHrls(left) == boundedHrls(right)
-                && associatedResponsesEqual(
-                    boundedAssociated(left), boundedAssociated(right)
-                );
-        }
-
-        bool paramEnvCandidateIsNonGlobal(const Candidate& candidate) const {
-            if (candidate.source != CandidateSource::ParamEnv) {
-                return false;
-            }
-            if (typeHasUnknown(candidate.impl.getImplType(crate.types))
-                || paramsHaveUnknownTypes(
-                    candidate.impl.getTraitParams(crate.types)
-                )) {
+                auto left = goal.associated.begin();
+                auto right = associated->begin();
+                for (; left != goal.associated.end(); ++left, ++right) {
+                    if (left->first != right->first || left->second.sourceTrait != right->second.sourceTrait || left->second.atyParams != right->second.atyParams || left->second.type != right->second.type) {
+                        return false;
+                    }
+                }
                 return true;
             }
-            for (const auto& associated : boundedAssociated(candidate.impl)) {
-                if (paramsHaveUnknownTypes(
-                        associated.second.sourceTrait.mParams
-                    )
-                    || paramsHaveUnknownTypes(associated.second.atyParams)
-                    || typeHasUnknown(associated.second.type)) {
+
+            CachedGoal* findCachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) const {
+                const auto range = goalCacheIndex.equal_range(hash);
+                for (auto it = range.first; it != range.second; ++it) {
+                    if (goalMatches(it->second->goal, trait, params, type, associated)) {
+                        return it->second;
+                    }
+                }
+                return nullptr;
+            }
+
+            GoalKey* findActiveGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) const {
+                const auto range = activeGoalIndex.equal_range(hash);
+                for (auto it = range.first; it != range.second; ++it) {
+                    if (goalMatches(*it->second, trait, params, type, associated)) {
+                        return it->second;
+                    }
+                }
+                return nullptr;
+            }
+
+            GoalKey* pushActiveGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) {
+                auto* goal = activeGoalNodes.make(hash, trait, params, type, associated);
+                goalStack.push_back(goal);
+                activeGoalIndex.emplace(hash, goal);
+                return goal;
+            }
+
+            void popActiveGoal(GoalKey* goal) {
+                assert(!goalStack.empty() && goalStack.back() == goal);
+                const auto range = activeGoalIndex.equal_range(goal->hash);
+                for (auto it = range.first; it != range.second; ++it) {
+                    if (it->second == goal) {
+                        activeGoalIndex.erase(it);
+                        goalStack.pop_back();
+                        activeGoalNodes.release(goal);
+                        return;
+                    }
+                }
+                assert(!"next-solver active goal missing from hash index");
+                ::std::abort();
+            }
+
+            Certainty cacheGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, Certainty certainty) {
+                auto* goal = cachedGoalNodes.make(hash, trait, params, type, associated, certainty);
+                goalCache.push_back(goal);
+                goalCacheIndex.emplace(hash, goal);
+                return certainty;
+            }
+
+            CachedGoal* cacheResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, ImplRef response, HIRCompare responseCertainty) {
+                auto* cached = findCachedGoal(hash, trait, params, type, associated);
+                const auto certainty = responseCertainty == HIRCompare::Equal ? Certainty::Proven : Certainty::Ambiguous;
+                if (!cached) {
+                    cached = cachedGoalNodes.make(hash, trait, params, type, associated, certainty);
+                    goalCache.push_back(cached);
+                    goalCacheIndex.emplace(hash, cached);
+                }
+                cached->certainty = certainty;
+                cached->response = ::std::move(response);
+                cached->responseCertainty = responseCertainty;
+                cached->hasResponse = true;
+                return cached;
+            }
+
+            void clearGoalCache() {
+                goalCacheIndex.clear();
+                for (auto* goal : goalCache) {
+                    cachedGoalNodes.release(goal);
+                }
+                goalCache.clear();
+            }
+
+            static const HIRPathParams& boundedHrls(const ImplRef& impl) {
+                if (const auto* bounded = impl.mData.opt_BoundedPtr()) {
+                    return bounded->hrls;
+                }
+                return impl.mData.as_Bounded().hrls;
+            }
+
+            static const HIRTraitPath::assocListT& boundedAssociated(const ImplRef& impl) {
+                if (const auto* bounded = impl.mData.opt_BoundedPtr()) {
+                    return *bounded->assoc;
+                }
+                return impl.mData.as_Bounded().assoc;
+            }
+
+            static bool associatedResponsesEqual(const HIRTraitPath::assocListT& left, const HIRTraitPath::assocListT& right) {
+                if (left.size() != right.size()) {
+                    return false;
+                }
+                auto li = left.begin();
+                auto ri = right.begin();
+                for (; li != left.end(); ++li, ++ri) {
+                    if (li->first != ri->first || li->second.ord(ri->second) != OrdEqual) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            bool isSameImpl(const ImplRef& left, const ImplRef& right) const {
+                const auto* li = left.mData.opt_TraitImpl();
+                const auto* ri = right.mData.opt_TraitImpl();
+                if (li || ri) {
+                    return li && ri && li->impl == ri->impl && li->implParams == ri->implParams;
+                }
+                return left.getImplType(crate.types) == right.getImplType(crate.types) && left.getTraitParams(crate.types) == right.getTraitParams(crate.types) && boundedHrls(left) == boundedHrls(right) && associatedResponsesEqual(boundedAssociated(left), boundedAssociated(right));
+            }
+
+            bool paramEnvCandidateIsNonGlobal(const Candidate& candidate) const {
+                if (candidate.source != CandidateSource::ParamEnv) {
+                    return false;
+                }
+                if (typeHasUnknown(candidate.impl.getImplType(crate.types)) || paramsHaveUnknownTypes(candidate.impl.getTraitParams(crate.types))) {
                     return true;
                 }
-            }
-            return false;
-        }
-
-        void pushCandidate(
-            size_t frameIndex,
-            ImplRef impl,
-            HIRCompare match,
-            const HIRMarkerImpl* markerImpl = nullptr,
-            HIRPathParams markerImplParams = {},
-            bool autoBuiltin = false,
-            CandidateSource source = CandidateSource::Other
-        ) {
-            if (match == HIRCompare::Unequal) {
-                return;
-            }
-            auto& candidates = frames[frameIndex]->candidates;
-            for (size_t i = 0; i < candidates.size(); i++) {
-                const bool sameSource = candidates[i]->markerImpl == markerImpl
-                    && candidates[i]->autoBuiltin == autoBuiltin
-                    && candidates[i]->source == source;
-                const bool same = markerImpl
-                    ? sameSource
-                        && candidates[i]->markerImplParams == markerImplParams
-                    : sameSource && isSameImpl(candidates[i]->impl, impl);
-                if (same) {
-                    candidates[i]->headMatch &= match;
-                    return;
+                for (const auto& associated : boundedAssociated(candidate.impl)) {
+                    if (paramsHaveUnknownTypes(associated.second.sourceTrait.mParams) || paramsHaveUnknownTypes(associated.second.atyParams) || typeHasUnknown(associated.second.type)) {
+                        return true;
+                    }
                 }
-            }
-            candidates.push_back(candidateNodes.make(
-                ::std::move(impl),
-                match,
-                markerImpl,
-                ::std::move(markerImplParams),
-                autoBuiltin,
-                source
-            ));
-        }
-
-        void assembleCandidates(
-            size_t frameIndex,
-            const HIRSimplePath& trait,
-            const HIRPathParams& params,
-            const HIRTypeData* type
-        ) {
-            auto collect = [&](CandidateSource source) {
-                return [&, source](ImplRef impl, HIRCompare match) {
-                    pushCandidate(
-                        frameIndex, ::std::move(impl), match,
-                        nullptr, {}, false, source
-                    );
-                    return false;
-                };
-            };
-
-            // Candidate source is semantically significant: a non-global
-            // ParamEnv predicate shadows builtin and impl candidates in the
-            // next solver.  The legacy lookup flattened these sources into
-            // the same bounded ImplRef, so collect each source independently.
-            mResolve.findTraitImplsMagic(
-                span(), trait, params, type,
-                collect(CandidateSource::Builtin)
-            );
-            mResolve.findTraitImplsLegacy(
-                span(), trait, params, type,
-                collect(CandidateSource::Other), false, false, false
-            );
-            mResolve.findTraitImplsBound(
-                span(), trait, params, type,
-                collect(CandidateSource::ParamEnv)
-            );
-
-            const auto& resolvedType = mResolve.resolveType(type);
-            const auto& traitDef = crate.getTraitByPath(span(), trait);
-            if (!traitDef.mIsMarker) {
-                // Assemble impl heads without evaluating their where-clauses.
-                // Those nested goals belong exclusively to evaluate_candidate.
-                crate.findTraitImpls(
-                    trait,
-                    resolvedType,
-                    mResolve.ivars.callbackResolveInfer(),
-                    [&](const HIRTraitImpl& impl) {
-                        HIRPathParams implParams;
-                        const auto match = mResolve.fticCheckParams(
-                            span(),
-                            trait,
-                            &params,
-                            resolvedType,
-                            impl.mParams,
-                            impl.traitArgs,
-                            impl.mType,
-                            implParams,
-                            false
-                        );
-                        if (match != HIRCompare::Unequal) {
-                            pushCandidate(
-                                frameIndex,
-                                ImplRef(
-                                    ::std::move(implParams),
-                                    traitDef,
-                                    trait,
-                                    impl
-                                ),
-                                match,
-                                nullptr,
-                                {},
-                                false,
-                                CandidateSource::TraitImpl
-                            );
-                        }
-                        return false;
-                    }
-                );
-            } else {
-                // Explicit positive and negative auto-trait impls are
-                // candidates with polarity.  Only their heads are matched
-                // here; their bounds are nested goals evaluated below.
-                crate.findAutoTraitImpls(
-                    trait,
-                    resolvedType,
-                    mResolve.ivars.callbackResolveInfer(),
-                    [&](const HIRMarkerImpl& impl) {
-                        HIRPathParams implParams;
-                        const auto match = mResolve.fticCheckParams(
-                            span(),
-                            trait,
-                            &params,
-                            resolvedType,
-                            impl.mParams,
-                            impl.traitArgs,
-                            impl.mType,
-                            implParams,
-                            false
-                        );
-                        if (match != HIRCompare::Unequal) {
-                            auto monomorph = MonomorphStatePtr(
-                                crate.types, nullptr, &implParams, nullptr
-                            );
-                            auto responseType = monomorph.monomorphType(
-                                span(), impl.mType, false
-                            );
-                            auto responseParams = monomorph.monomorphPathParams(
-                                span(), impl.traitArgs, false
-                            );
-                            pushCandidate(
-                                frameIndex,
-                                ImplRef(
-                                    ::std::move(responseType),
-                                    ::std::move(responseParams),
-                                    HIRTraitPath::assocListT()
-                                ),
-                                match,
-                                &impl,
-                                ::std::move(implParams),
-                                false,
-                                CandidateSource::TraitImpl
-                            );
-                        }
-                        return false;
-                    }
-                );
-
-                // The structural auto candidate is evaluated recursively in
-                // evaluate_candidate, after explicit polarity is known.
-                pushCandidate(
-                    frameIndex,
-                    ImplRef(
-                        resolvedType,
-                        params.clone(),
-                        HIRTraitPath::assocListT()
-                    ),
-                    mResolve.typeContainsIvars(resolvedType)
-                        || mResolve.paramsContainIvars(params)
-                        ? HIRCompare::Fuzzy
-                        : HIRCompare::Equal,
-                    nullptr,
-                    {},
-                    true,
-                    CandidateSource::Builtin
-                );
-            }
-        }
-
-        HIRTypeRef makeAssociatedProjection(
-            const HIRTypeData* type,
-            const HIRGenericPath& sourceTrait,
-            const RcString& name,
-            const HIRPathParams& associatedParams
-        ) const {
-            return crate.types.path(
-                HIRPath(
-                    type,
-                    sourceTrait.clone(),
-                    name,
-                    associatedParams.clone()
-                ),
-                HIRTypePathBinding::make_Opaque({})
-            );
-        }
-
-        HIRTypeRef makeAssociatedProjection(
-            const ImplRef& impl,
-            const HIRGenericPath& sourceTrait,
-            const RcString& name,
-            const HIRPathParams& associatedParams
-        ) const {
-            return makeAssociatedProjection(
-                impl.getImplType(crate.types), sourceTrait, name, associatedParams
-            );
-        }
-
-        bool bindCandidatePlaceholders(
-            Candidate& candidate,
-            const HIRTypeData* nestedType,
-            const HIRTraitPath::assocListT& associated,
-            bool useCandidateResponse = false
-        ) {
-            HIRPathParams* candidateParams = nullptr;
-            if (auto* traitImpl = candidate.impl.mData.opt_TraitImpl()) {
-                candidateParams = &traitImpl->implParams;
-            } else if (candidate.markerImpl) {
-                candidateParams = &candidate.markerImplParams;
-            }
-            if (!candidateParams || associated.empty()) {
                 return false;
             }
 
-            class BindPlaceholders final: public HIRMatchGenerics {
-                const Span& mSpan;
-                HIRTypeInterner& types;
-                HIRPathParams& mParams;
-                ::std::vector<::std::pair<HIRTypeRef, HIRTypeRef>> mBindings;
+            void pushCandidate(size_t frameIndex, ImplRef impl, HIRCompare match, const HIRMarkerImpl* markerImpl = nullptr, HIRPathParams markerImplParams = {}, bool autoBuiltin = false, CandidateSource source = CandidateSource::Other) {
+                if (match == HIRCompare::Unequal) {
+                    return;
+                }
+                auto& candidates = frames[frameIndex]->candidates;
+                for (size_t i = 0; i < candidates.size(); i++) {
+                    const bool sameSource = candidates[i]->markerImpl == markerImpl && candidates[i]->autoBuiltin == autoBuiltin && candidates[i]->source == source;
+                    const bool same = markerImpl ? sameSource && candidates[i]->markerImplParams == markerImplParams : sameSource && isSameImpl(candidates[i]->impl, impl);
+                    if (same) {
+                        candidates[i]->headMatch &= match;
+                        return;
+                    }
+                }
+                candidates.push_back(candidateNodes.make(::std::move(impl), match, markerImpl, ::std::move(markerImplParams), autoBuiltin, source));
+            }
 
-                bool isBindable(const HIRTypeData* type) const {
-                    if (const auto* generic = type->opt_Generic()) {
-                        return generic->group() == GENERICPlaceholder;
-                    }
-                    if (const auto* infer = type->opt_Infer()) {
-                        return !infer->isLit();
-                    }
+            void assembleCandidates(size_t frameIndex, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) {
+                auto collect = [&](CandidateSource source) {
+                    return [&, source](ImplRef impl, HIRCompare match) {
+                        pushCandidate(frameIndex, ::std::move(impl), match, nullptr, {}, false, source);
+                        return false;
+                    };
+                };
+
+                // Candidate source is semantically significant: a non-global
+                // ParamEnv predicate shadows builtin and impl candidates in the
+                // next solver.  The legacy lookup flattened these sources into
+                // the same bounded ImplRef, so collect each source independently.
+                mResolve.findTraitImplsMagic(span(), trait, params, type, collect(CandidateSource::Builtin));
+                mResolve.findTraitImplsLegacy(span(), trait, params, type, collect(CandidateSource::Other), false, false, false);
+                mResolve.findTraitImplsBound(span(), trait, params, type, collect(CandidateSource::ParamEnv));
+
+                const auto& resolvedType = mResolve.resolveType(type);
+                const auto& traitDef = crate.getTraitByPath(span(), trait);
+                if (!traitDef.mIsMarker) {
+                    // Assemble impl heads without evaluating their where-clauses.
+                    // Those nested goals belong exclusively to evaluate_candidate.
+                    crate.findTraitImpls(trait, resolvedType, mResolve.ivars.callbackResolveInfer(), [&](const HIRTraitImpl& impl) {
+                        HIRPathParams implParams;
+                        const auto match = mResolve.fticCheckParams(span(), trait, &params, resolvedType, impl.mParams, impl.traitArgs, impl.mType, implParams, false);
+                        if (match != HIRCompare::Unequal) {
+                            pushCandidate(frameIndex, ImplRef(::std::move(implParams), traitDef, trait, impl), match, nullptr, {}, false, CandidateSource::TraitImpl);
+                        }
+                        return false;
+                    });
+                } else {
+                    // Explicit positive and negative auto-trait impls are
+                    // candidates with polarity.  Only their heads are matched
+                    // here; their bounds are nested goals evaluated below.
+                    crate.findAutoTraitImpls(trait, resolvedType, mResolve.ivars.callbackResolveInfer(), [&](const HIRMarkerImpl& impl) {
+                        HIRPathParams implParams;
+                        const auto match = mResolve.fticCheckParams(span(), trait, &params, resolvedType, impl.mParams, impl.traitArgs, impl.mType, implParams, false);
+                        if (match != HIRCompare::Unequal) {
+                            auto monomorph = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr);
+                            auto responseType = monomorph.monomorphType(span(), impl.mType, false);
+                            auto responseParams = monomorph.monomorphPathParams(span(), impl.traitArgs, false);
+                            pushCandidate(frameIndex, ImplRef(::std::move(responseType), ::std::move(responseParams), HIRTraitPath::assocListT()), match, &impl, ::std::move(implParams), false, CandidateSource::TraitImpl);
+                        }
+                        return false;
+                    });
+
+                    // The structural auto candidate is evaluated recursively in
+                    // evaluate_candidate, after explicit polarity is known.
+                    pushCandidate(frameIndex, ImplRef(resolvedType, params.clone(), HIRTraitPath::assocListT()), mResolve.typeContainsIvars(resolvedType) || mResolve.paramsContainIvars(params) ? HIRCompare::Fuzzy : HIRCompare::Equal, nullptr, {}, true, CandidateSource::Builtin);
+                }
+            }
+
+            HIRTypeRef makeAssociatedProjection(const HIRTypeData* type, const HIRGenericPath& sourceTrait, const RcString& name, const HIRPathParams& associatedParams) const {
+                return crate.types.path(HIRPath(type, sourceTrait.clone(), name, associatedParams.clone()), HIRTypePathBinding::make_Opaque({}));
+            }
+
+            HIRTypeRef makeAssociatedProjection(const ImplRef& impl, const HIRGenericPath& sourceTrait, const RcString& name, const HIRPathParams& associatedParams) const {
+                return makeAssociatedProjection(impl.getImplType(crate.types), sourceTrait, name, associatedParams);
+            }
+
+            bool bindCandidatePlaceholders(Candidate& candidate, const HIRTypeData* nestedType, const HIRTraitPath::assocListT& associated, bool useCandidateResponse = false) {
+                HIRPathParams* candidateParams = nullptr;
+                if (auto* traitImpl = candidate.impl.mData.opt_TraitImpl()) {
+                    candidateParams = &traitImpl->implParams;
+                } else if (candidate.markerImpl) {
+                    candidateParams = &candidate.markerImplParams;
+                }
+                if (!candidateParams || associated.empty()) {
                     return false;
                 }
 
-                ::std::optional<HIRCompare> bindType(
-                    const HIRTypeData* pattern,
-                    const HIRTypeData* value,
-                    tCbResolveType resolve
-                ) {
-                    for (const auto& binding : mBindings) {
-                        if (binding.first == pattern) {
-                            return binding.second->compareWithPlaceholders(
-                                mSpan, value, resolve
-                            );
+                class BindPlaceholders final: public HIRMatchGenerics {
+                    const Span& mSpan;
+                    HIRTypeInterner& types;
+                    HIRPathParams& mParams;
+                    ::std::vector<::std::pair<HIRTypeRef, HIRTypeRef>> mBindings;
+
+                    bool isBindable(const HIRTypeData* type) const {
+                        if (const auto* generic = type->opt_Generic()) {
+                            return generic->group() == GENERICPlaceholder;
                         }
+                        if (const auto* infer = type->opt_Infer()) {
+                            return !infer->isLit();
+                        }
+                        return false;
                     }
-                    if (!isBindable(pattern)) {
-                        return {};
-                    }
-                    bool isParameter = false;
-                    for (const auto& parameter : mParams.types) {
-                        isParameter |= visitTyWith(
-                            parameter,
-                            [&](const HIRTypeData* inner) {
-                                return inner == pattern;
+
+                    ::std::optional<HIRCompare> bindType(const HIRTypeData* pattern, const HIRTypeData* value, tCbResolveType resolve) {
+                        for (const auto& binding : mBindings) {
+                            if (binding.first == pattern) {
+                                return binding.second->compareWithPlaceholders(mSpan, value, resolve);
                             }
-                        );
-                    }
-                    if (!isParameter) {
-                        return {};
-                    }
-                    if (pattern == value) {
-                        return HIRCompare::Equal;
-                    }
-                    for (auto& parameter : mParams.types) {
-                        parameter = cloneTyWith(
-                            types,
-                            mSpan,
-                            parameter,
-                            [&](const HIRTypeData* input,
-                                HIRTypeRef& output) {
+                        }
+                        if (!isBindable(pattern)) {
+                            return {};
+                        }
+                        bool isParameter = false;
+                        for (const auto& parameter : mParams.types) {
+                            isParameter |= visitTyWith(parameter, [&](const HIRTypeData* inner) {
+                                return inner == pattern;
+                            });
+                        }
+                        if (!isParameter) {
+                            return {};
+                        }
+                        if (pattern == value) {
+                            return HIRCompare::Equal;
+                        }
+                        for (auto& parameter : mParams.types) {
+                            parameter = cloneTyWith(types, mSpan, parameter, [&](const HIRTypeData* input, HIRTypeRef& output) {
                                 if (input != pattern) {
                                     return false;
                                 }
                                 output = value;
                                 return true;
-                            }
-                        );
-                    }
-                    mBindings.push_back({pattern, value});
-                    changed = true;
-                    return HIRCompare::Equal;
-                }
-
-            public:
-                bool changed = false;
-
-                BindPlaceholders(
-                    const Span& span,
-                    HIRTypeInterner& types,
-                    HIRPathParams& params
-                )
-                    : mSpan(span)
-                    , types(types)
-                    , mParams(params)
-                {
-                }
-
-                HIRCompare cmpType(
-                    const Span& span,
-                    const HIRTypeData* pattern,
-                    const HIRTypeData* value,
-                    tCbResolveType resolve
-                ) override {
-                    if (auto result = bindType(pattern, value, resolve)) {
-                        return *result;
-                    }
-                    return HIRMatchGenerics::cmpType(
-                        span, pattern, value, resolve
-                    );
-                }
-
-                HIRCompare matchTy(
-                    const HIRGenericRef& generic,
-                    const HIRTypeData* type,
-                    tCbResolveType resolve
-                ) override {
-                    const auto pattern = types.generic(
-                        generic.name, generic.binding
-                    );
-                    if (auto result = bindType(pattern, type, resolve)) {
-                        return *result;
-                    }
-                    return pattern->compareWithPlaceholders(
-                        mSpan, type, resolve
-                    );
-                }
-
-                HIRCompare matchVal(
-                    const HIRGenericRef& generic,
-                    const HIRConstGeneric& value
-                ) override {
-                    if (value.is_Generic() && value.as_Generic() == generic) {
+                            });
+                        }
+                        mBindings.push_back({pattern, value});
+                        changed = true;
                         return HIRCompare::Equal;
                     }
-                    if (generic.group() == GENERICPlaceholder) {
-                        for (auto& parameter : mParams.values) {
-                            if (parameter.is_Generic()
-                                && parameter.as_Generic() == generic) {
-                                parameter = value.clone();
-                                changed = true;
-                                return HIRCompare::Equal;
+
+                public:
+                    bool changed = false;
+
+                    BindPlaceholders(const Span& span, HIRTypeInterner& types, HIRPathParams& params)
+                        : mSpan(span)
+                        , types(types)
+                        , mParams(params)
+                    {
+                    }
+
+                    HIRCompare cmpType(const Span& span, const HIRTypeData* pattern, const HIRTypeData* value, tCbResolveType resolve) override {
+                        if (auto result = bindType(pattern, value, resolve)) {
+                            return *result;
+                        }
+                        return HIRMatchGenerics::cmpType(span, pattern, value, resolve);
+                    }
+
+                    HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* type, tCbResolveType resolve) override {
+                        const auto pattern = types.generic(generic.name, generic.binding);
+                        if (auto result = bindType(pattern, type, resolve)) {
+                            return *result;
+                        }
+                        return pattern->compareWithPlaceholders(mSpan, type, resolve);
+                    }
+
+                    HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override {
+                        if (value.is_Generic() && value.as_Generic() == generic) {
+                            return HIRCompare::Equal;
+                        }
+                        if (generic.group() == GENERICPlaceholder) {
+                            for (auto& parameter : mParams.values) {
+                                if (parameter.is_Generic() && parameter.as_Generic() == generic) {
+                                    parameter = value.clone();
+                                    changed = true;
+                                    return HIRCompare::Equal;
+                                }
                             }
                         }
+                        return HIRCompare::Fuzzy;
                     }
-                    return HIRCompare::Fuzzy;
-                }
-            } binder{span(), crate.types, *candidateParams};
+                } binder{span(), crate.types, *candidateParams};
 
-            for (const auto& requirement : associated) {
-                const auto saved = candidateParams->clone();
-                auto candidateOutput = useCandidateResponse
-                    ? candidate.impl.getType(
-                        crate.types, requirement.first.c_str(), requirement.second.atyParams
-                    )
-                    : HIRTypeRef();
-                if (!useCandidateResponse) {
-                    // An impl parameter can occur only in a nested projection
-                    // equality (for example `I: Iterator<Item = &'a T>`).
-                    // Ask the solver for that projection's actual response so
-                    // `T` is bound to the response, not to the alias syntax.
-                    evaluate(
-                        span(),
-                        requirement.second.sourceTrait.mPath,
-                        requirement.second.sourceTrait.mParams,
-                        nestedType,
-                        [&](ImplRef impl, HIRCompare certainty) {
-                            if (certainty != HIRCompare::Equal
-                                || impl.isAmbiguousIdentity()) {
+                for (const auto& requirement : associated) {
+                    const auto saved = candidateParams->clone();
+                    auto candidateOutput = useCandidateResponse ? candidate.impl.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams) : HIRTypeRef();
+                    if (!useCandidateResponse) {
+                        // An impl parameter can occur only in a nested projection
+                        // equality (for example `I: Iterator<Item = &'a T>`).
+                        // Ask the solver for that projection's actual response so
+                        // `T` is bound to the response, not to the alias syntax.
+                        evaluate(span(), requirement.second.sourceTrait.mPath, requirement.second.sourceTrait.mParams, nestedType, [&](ImplRef impl, HIRCompare certainty) {
+                            if (certainty != HIRCompare::Equal || impl.isAmbiguousIdentity()) {
                                 return false;
                             }
-                            auto output = impl.getType(
-                                crate.types,
-                                requirement.first.c_str(),
-                                requirement.second.atyParams
-                            );
+                            auto output = impl.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams);
                             if (output == HIRTypeRef()) {
                                 return false;
                             }
                             candidateOutput = ::std::move(output);
                             return true;
-                        },
-                        requirement.first.c_str(),
-                        nullptr,
-                        &requirement.second.atyParams
-                    );
-                }
-                if (candidateOutput == HIRTypeRef()) {
-                    candidateOutput = makeAssociatedProjection(
-                        nestedType,
-                        requirement.second.sourceTrait,
-                        requirement.first,
-                        requirement.second.atyParams
-                    );
-                }
-                if (!useCandidateResponse
-                    && !typeHasUfcsUnknown(candidateOutput)) {
-                    // rustc normalises a nested projection response before it
-                    // is unified with the outer candidate.  In particular,
-                    // `<&mut I as Iterator>::Item` first becomes
-                    // `<I as Iterator>::Item` and then the ParamEnv equality
-                    // `&T`; matching the unnormalised alias against
-                    // `&placeholder` only reports a fuzzy relation and loses
-                    // the constraint.  A candidate's own response is not a
-                    // nested solver response: during Resolve UFCS Outer either
-                    // form can still legally contain a local UfcsUnknown, and
-                    // such a response must remain deferred until that pass
-                    // resolves its trait path.
-                    candidateOutput = mResolve.expandAssociatedTypes(
-                        span(), ::std::move(candidateOutput)
-                    );
-                }
-                const auto match = (useCandidateResponse
-                    ? candidateOutput
-                    : requirement.second.type)->matchTestGenericsFuzz(
-                    span(),
-                    useCandidateResponse
-                        ? requirement.second.type
-                        : candidateOutput,
-                    mResolve.ivars.callbackResolveInfer(),
-                    binder
-                );
-                if (match == HIRCompare::Unequal) {
-                    *candidateParams = saved.clone();
-                }
-            }
-
-            if (binder.changed && candidate.markerImpl) {
-                auto monomorph = MonomorphStatePtr(
-                    crate.types, nullptr, &candidate.markerImplParams, nullptr
-                );
-                auto& response = candidate.impl.mData.as_Bounded();
-                response.type = monomorph.monomorphType(
-                    span(), candidate.markerImpl->mType, false
-                );
-                response.traitArgs = monomorph.monomorphPathParams(
-                    span(), candidate.markerImpl->traitArgs, false
-                );
-            }
-            return binder.changed;
-        }
-
-        bool bindCandidateResponse(
-            Candidate& candidate,
-            const HIRTypeData* nestedType,
-            const HIRPathParams& nestedParams,
-            const ImplRef& response
-        ) {
-            HIRPathParams* candidateParams = nullptr;
-            if (auto* traitImpl = candidate.impl.mData.opt_TraitImpl()) {
-                candidateParams = &traitImpl->implParams;
-            } else if (candidate.markerImpl) {
-                candidateParams = &candidate.markerImplParams;
-            }
-            if (!candidateParams || response.isAmbiguousIdentity()) {
-                return false;
-            }
-
-            class BindResponse final: public HIRMatchGenerics {
-                const Span& mSpan;
-                HIRTypeInterner& types;
-                HIRPathParams& mParams;
-                ::std::vector<::std::pair<HIRTypeRef, HIRTypeRef>> mBindings;
-
-                bool isBindable(const HIRTypeData* type) const {
-                    if (const auto* generic = type->opt_Generic()) {
-                        return generic->group() == GENERICPlaceholder;
+                        }, requirement.first.c_str(), nullptr, &requirement.second.atyParams);
                     }
-                    if (const auto* infer = type->opt_Infer()) {
-                        return !infer->isLit();
+                    if (candidateOutput == HIRTypeRef()) {
+                        candidateOutput = makeAssociatedProjection(nestedType, requirement.second.sourceTrait, requirement.first, requirement.second.atyParams);
                     }
+                    if (!useCandidateResponse && !typeHasUfcsUnknown(candidateOutput)) {
+                        // rustc normalises a nested projection response before it
+                        // is unified with the outer candidate.  In particular,
+                        // `<&mut I as Iterator>::Item` first becomes
+                        // `<I as Iterator>::Item` and then the ParamEnv equality
+                        // `&T`; matching the unnormalised alias against
+                        // `&placeholder` only reports a fuzzy relation and loses
+                        // the constraint.  A candidate's own response is not a
+                        // nested solver response: during Resolve UFCS Outer either
+                        // form can still legally contain a local UfcsUnknown, and
+                        // such a response must remain deferred until that pass
+                        // resolves its trait path.
+                        candidateOutput = mResolve.expandAssociatedTypes(span(), ::std::move(candidateOutput));
+                    }
+                    const auto match = (useCandidateResponse ? candidateOutput : requirement.second.type)->matchTestGenericsFuzz(span(), useCandidateResponse ? requirement.second.type : candidateOutput, mResolve.ivars.callbackResolveInfer(), binder);
+                    if (match == HIRCompare::Unequal) {
+                        *candidateParams = saved.clone();
+                    }
+                }
+
+                if (binder.changed && candidate.markerImpl) {
+                    auto monomorph = MonomorphStatePtr(crate.types, nullptr, &candidate.markerImplParams, nullptr);
+                    auto& response = candidate.impl.mData.as_Bounded();
+                    response.type = monomorph.monomorphType(span(), candidate.markerImpl->mType, false);
+                    response.traitArgs = monomorph.monomorphPathParams(span(), candidate.markerImpl->traitArgs, false);
+                }
+                return binder.changed;
+            }
+
+            bool bindCandidateResponse(Candidate& candidate, const HIRTypeData* nestedType, const HIRPathParams& nestedParams, const ImplRef& response) {
+                HIRPathParams* candidateParams = nullptr;
+                if (auto* traitImpl = candidate.impl.mData.opt_TraitImpl()) {
+                    candidateParams = &traitImpl->implParams;
+                } else if (candidate.markerImpl) {
+                    candidateParams = &candidate.markerImplParams;
+                }
+                if (!candidateParams || response.isAmbiguousIdentity()) {
                     return false;
                 }
 
-                ::std::optional<HIRCompare> bindType(
-                    const HIRTypeData* pattern,
-                    const HIRTypeData* value,
-                    tCbResolveType resolve
-                ) {
-                    for (const auto& binding : mBindings) {
-                        if (binding.first == pattern) {
-                            return binding.second->compareWithPlaceholders(
-                                mSpan, value, resolve
-                            );
+                class BindResponse final: public HIRMatchGenerics {
+                    const Span& mSpan;
+                    HIRTypeInterner& types;
+                    HIRPathParams& mParams;
+                    ::std::vector<::std::pair<HIRTypeRef, HIRTypeRef>> mBindings;
+
+                    bool isBindable(const HIRTypeData* type) const {
+                        if (const auto* generic = type->opt_Generic()) {
+                            return generic->group() == GENERICPlaceholder;
                         }
+                        if (const auto* infer = type->opt_Infer()) {
+                            return !infer->isLit();
+                        }
+                        return false;
                     }
-                    if (!isBindable(pattern)) {
-                        return {};
-                    }
-                    bool isParameter = false;
-                    for (const auto& parameter : mParams.types) {
-                        isParameter |= visitTyWith(
-                            parameter,
-                            [&](const HIRTypeData* inner) {
-                                return inner == pattern;
+
+                    ::std::optional<HIRCompare> bindType(const HIRTypeData* pattern, const HIRTypeData* value, tCbResolveType resolve) {
+                        for (const auto& binding : mBindings) {
+                            if (binding.first == pattern) {
+                                return binding.second->compareWithPlaceholders(mSpan, value, resolve);
                             }
-                        );
-                    }
-                    if (!isParameter) {
-                        return {};
-                    }
-                    if (pattern == value) {
-                        return HIRCompare::Equal;
-                    }
-                    for (auto& parameter : mParams.types) {
-                        parameter = cloneTyWith(
-                            types,
-                            mSpan,
-                            parameter,
-                            [&](const HIRTypeData* input,
-                                HIRTypeRef& output) {
+                        }
+                        if (!isBindable(pattern)) {
+                            return {};
+                        }
+                        bool isParameter = false;
+                        for (const auto& parameter : mParams.types) {
+                            isParameter |= visitTyWith(parameter, [&](const HIRTypeData* inner) {
+                                return inner == pattern;
+                            });
+                        }
+                        if (!isParameter) {
+                            return {};
+                        }
+                        if (pattern == value) {
+                            return HIRCompare::Equal;
+                        }
+                        for (auto& parameter : mParams.types) {
+                            parameter = cloneTyWith(types, mSpan, parameter, [&](const HIRTypeData* input, HIRTypeRef& output) {
                                 if (input != pattern) {
                                     return false;
                                 }
                                 output = value;
                                 return true;
-                            }
-                        );
-                    }
-                    mBindings.push_back({pattern, value});
-                    changed = true;
-                    return HIRCompare::Equal;
-                }
-
-            public:
-                bool changed = false;
-
-                BindResponse(
-                    const Span& span,
-                    HIRTypeInterner& types,
-                    HIRPathParams& params
-                )
-                    : mSpan(span)
-                    , types(types)
-                    , mParams(params)
-                {
-                }
-
-                HIRCompare cmpType(
-                    const Span& span,
-                    const HIRTypeData* pattern,
-                    const HIRTypeData* value,
-                    tCbResolveType resolve
-                ) override {
-                    if (auto result = bindType(pattern, value, resolve)) {
-                        return *result;
-                    }
-                    return HIRMatchGenerics::cmpType(
-                        span, pattern, value, resolve
-                    );
-                }
-
-                HIRCompare matchTy(
-                    const HIRGenericRef& generic,
-                    const HIRTypeData* value,
-                    tCbResolveType resolve
-                ) override {
-                    const auto pattern = types.generic(
-                        generic.name, generic.binding
-                    );
-                    if (auto result = bindType(pattern, value, resolve)) {
-                        return *result;
-                    }
-                    return pattern->compareWithPlaceholders(
-                        mSpan, value, resolve
-                    );
-                }
-
-                HIRCompare matchVal(
-                    const HIRGenericRef& generic,
-                    const HIRConstGeneric& value
-                ) override {
-                    if (value.is_Generic() && value.as_Generic() == generic) {
+                            });
+                        }
+                        mBindings.push_back({pattern, value});
+                        changed = true;
                         return HIRCompare::Equal;
                     }
-                    if (generic.group() != GENERICPlaceholder) {
-                        return HIRCompare::Fuzzy;
+
+                public:
+                    bool changed = false;
+
+                    BindResponse(const Span& span, HIRTypeInterner& types, HIRPathParams& params)
+                        : mSpan(span)
+                        , types(types)
+                        , mParams(params)
+                    {
                     }
-                    for (auto& parameter : mParams.values) {
-                        if (parameter.is_Generic()
-                            && parameter.as_Generic() == generic) {
-                            parameter = value.clone();
-                            changed = true;
+
+                    HIRCompare cmpType(const Span& span, const HIRTypeData* pattern, const HIRTypeData* value, tCbResolveType resolve) override {
+                        if (auto result = bindType(pattern, value, resolve)) {
+                            return *result;
+                        }
+                        return HIRMatchGenerics::cmpType(span, pattern, value, resolve);
+                    }
+
+                    HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* value, tCbResolveType resolve) override {
+                        const auto pattern = types.generic(generic.name, generic.binding);
+                        if (auto result = bindType(pattern, value, resolve)) {
+                            return *result;
+                        }
+                        return pattern->compareWithPlaceholders(mSpan, value, resolve);
+                    }
+
+                    HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override {
+                        if (value.is_Generic() && value.as_Generic() == generic) {
                             return HIRCompare::Equal;
                         }
-                    }
-                    return HIRCompare::Fuzzy;
-                }
-            } binder{span(), crate.types, *candidateParams};
-
-            const auto saved = candidateParams->clone();
-            auto match = nestedType->matchTestGenericsFuzz(
-                span(),
-                response.getImplType(crate.types),
-                mResolve.ivars.callbackResolveInfer(),
-                binder
-            );
-            match &= nestedParams.matchTestGenericsFuzz(
-                span(),
-                response.getTraitParams(crate.types),
-                mResolve.ivars.callbackResolveInfer(),
-                binder
-            );
-            if (match == HIRCompare::Unequal) {
-                *candidateParams = saved.clone();
-                return false;
-            }
-
-            if (binder.changed && candidate.markerImpl) {
-                auto monomorph = MonomorphStatePtr(
-                    crate.types, nullptr, &candidate.markerImplParams, nullptr
-                );
-                auto& bounded = candidate.impl.mData.as_Bounded();
-                bounded.type = monomorph.monomorphType(
-                    span(), candidate.markerImpl->mType, false
-                );
-                bounded.traitArgs = monomorph.monomorphPathParams(
-                    span(), candidate.markerImpl->traitArgs, false
-                );
-            }
-            return binder.changed;
-        }
-
-        Certainty matchAssociatedTypes(
-            const HIRSimplePath& trait,
-            const ImplRef& impl,
-            const HIRTraitPath::assocListT* associated
-        ) {
-            if (!associated || associated->empty()) {
-                return Certainty::Proven;
-            }
-
-            Certainty result = Certainty::Proven;
-            for (const auto& requirement : *associated) {
-                const auto& aty = requirement.second;
-                if (!impl.mData.is_TraitImpl() && aty.atyParams.hasParams()) {
-                    // Bounded candidates currently store non-GAT projections.
-                    // They remain a valid but non-guiding response instead of
-                    // being rejected or calling ImplRef's non-GAT assertion.
-                    result = Certainty::Ambiguous;
-                    continue;
-                }
-                auto output = impl.getType(crate.types, requirement.first.c_str(), aty.atyParams);
-                if (output == HIRTypeRef()) {
-                    if (aty.sourceTrait.mPath != trait) {
-                        HIRTraitPath::assocListT sourceAssociated;
-                        sourceAssociated.insert({
-                            requirement.first,
-                            requirement.second.clone()
-                        });
-                        const auto sourceResult = solveGoal(
-                            aty.sourceTrait.mPath,
-                            aty.sourceTrait.mParams,
-                            impl.getImplType(crate.types),
-                            &sourceAssociated
-                        );
-                        if (sourceResult == Certainty::NoSolution) {
-                            return Certainty::NoSolution;
+                        if (generic.group() != GENERICPlaceholder) {
+                            return HIRCompare::Fuzzy;
                         }
-                        if (sourceResult == Certainty::Ambiguous) {
-                            result = Certainty::Ambiguous;
+                        for (auto& parameter : mParams.values) {
+                            if (parameter.is_Generic() && parameter.as_Generic() == generic) {
+                                parameter = value.clone();
+                                changed = true;
+                                return HIRCompare::Equal;
+                            }
                         }
-                        continue;
+                        return HIRCompare::Fuzzy;
                     }
-                    if (impl.mData.is_TraitImpl()) {
+                } binder{span(), crate.types, *candidateParams};
+
+                const auto saved = candidateParams->clone();
+                auto match = nestedType->matchTestGenericsFuzz(span(), response.getImplType(crate.types), mResolve.ivars.callbackResolveInfer(), binder);
+                match &= nestedParams.matchTestGenericsFuzz(span(), response.getTraitParams(crate.types), mResolve.ivars.callbackResolveInfer(), binder);
+                if (match == HIRCompare::Unequal) {
+                    *candidateParams = saved.clone();
+                    return false;
+                }
+
+                if (binder.changed && candidate.markerImpl) {
+                    auto monomorph = MonomorphStatePtr(crate.types, nullptr, &candidate.markerImplParams, nullptr);
+                    auto& bounded = candidate.impl.mData.as_Bounded();
+                    bounded.type = monomorph.monomorphType(span(), candidate.markerImpl->mType, false);
+                    bounded.traitArgs = monomorph.monomorphPathParams(span(), candidate.markerImpl->traitArgs, false);
+                }
+                return binder.changed;
+            }
+
+            Certainty matchAssociatedTypes(const HIRSimplePath& trait, const ImplRef& impl, const HIRTraitPath::assocListT* associated) {
+                if (!associated || associated->empty()) {
+                    return Certainty::Proven;
+                }
+
+                Certainty result = Certainty::Proven;
+                for (const auto& requirement : *associated) {
+                    const auto& aty = requirement.second;
+                    if (!impl.mData.is_TraitImpl() && aty.atyParams.hasParams()) {
+                        // Bounded candidates currently store non-GAT projections.
+                        // They remain a valid but non-guiding response instead of
+                        // being rejected or calling ImplRef's non-GAT assertion.
                         result = Certainty::Ambiguous;
                         continue;
                     }
-                    // A ParamEnv predicate without an explicit equality still
-                    // has a canonical projection response.  This is what lets
-                    // `T: Trait` prove a nested `T: Trait<Assoc = U>` while
-                    // constraining U to `<T as Trait>::Assoc`.
-                    output = makeAssociatedProjection(
-                        impl,
-                        aty.sourceTrait,
-                        requirement.first,
-                        aty.atyParams
-                    );
+                    auto output = impl.getType(crate.types, requirement.first.c_str(), aty.atyParams);
+                    if (output == HIRTypeRef()) {
+                        if (aty.sourceTrait.mPath != trait) {
+                            HIRTraitPath::assocListT sourceAssociated;
+                            sourceAssociated.insert({requirement.first, requirement.second.clone()});
+                            const auto sourceResult = solveGoal(aty.sourceTrait.mPath, aty.sourceTrait.mParams, impl.getImplType(crate.types), &sourceAssociated);
+                            if (sourceResult == Certainty::NoSolution) {
+                                return Certainty::NoSolution;
+                            }
+                            if (sourceResult == Certainty::Ambiguous) {
+                                result = Certainty::Ambiguous;
+                            }
+                            continue;
+                        }
+                        if (impl.mData.is_TraitImpl()) {
+                            result = Certainty::Ambiguous;
+                            continue;
+                        }
+                        // A ParamEnv predicate without an explicit equality still
+                        // has a canonical projection response.  This is what lets
+                        // `T: Trait` prove a nested `T: Trait<Assoc = U>` while
+                        // constraining U to `<T as Trait>::Assoc`.
+                        output = makeAssociatedProjection(impl, aty.sourceTrait, requirement.first, aty.atyParams);
+                    }
+                    // The projection response may contain the very caller-owned
+                    // inference variable from the requested equality. That is an
+                    // exact response, not an ambiguous comparison of two ivars.
+                    const auto cmp = output == aty.type ? HIRCompare::Equal : mResolve.compareTy(span(), output, aty.type);
+                    if (cmp == HIRCompare::Unequal) {
+                        return Certainty::NoSolution;
+                    }
+                    if (cmp == HIRCompare::Fuzzy) {
+                        result = Certainty::Ambiguous;
+                    }
                 }
-                // The projection response may contain the very caller-owned
-                // inference variable from the requested equality. That is an
-                // exact response, not an ambiguous comparison of two ivars.
-                const auto cmp = output == aty.type
-                    ? HIRCompare::Equal
-                    : mResolve.compareTy(span(), output, aty.type);
-                if (cmp == HIRCompare::Unequal) {
-                    return Certainty::NoSolution;
-                }
-                if (cmp == HIRCompare::Fuzzy) {
-                    result = Certainty::Ambiguous;
-                }
+                return result;
             }
-            return result;
-        }
 
-        Certainty evaluateAutoBuiltin(
-            const HIRSimplePath& trait,
-            const HIRPathParams& params,
-            const HIRTypeData* type
-        ) {
-            auto combine = [](Certainty& result, Certainty nested) {
-                if (nested == Certainty::NoSolution) {
-                    result = Certainty::NoSolution;
-                } else if (nested == Certainty::Ambiguous
-                           && result == Certainty::Proven) {
-                    result = Certainty::Ambiguous;
-                }
-            };
-            auto evaluateInner = [&](const HIRTypeData* inner) {
-                return solveGoal(trait, params, inner, nullptr);
-            };
+            Certainty evaluateAutoBuiltin(const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) {
+                auto combine = [](Certainty& result, Certainty nested) {
+                    if (nested == Certainty::NoSolution) {
+                        result = Certainty::NoSolution;
+                    } else if (nested == Certainty::Ambiguous && result == Certainty::Proven) {
+                        result = Certainty::Ambiguous;
+                    }
+                };
+                auto evaluateInner = [&](const HIRTypeData* inner) {
+                    return solveGoal(trait, params, inner, nullptr);
+                };
 
             TU_MATCH_HDRA((*type), {)
             default:
@@ -4071,15 +3445,9 @@ class NextTraitGoalEvaluator {
             TU_ARMA(Path, e) {
                 if (const auto* pe = e.path.mData.opt_Generic()) {
                     HIRTypeRef tmp;
-                    auto monomorph = MonomorphStatePtr(
-                        crate.types, nullptr, &pe->mParams, nullptr
-                    );
+                    auto monomorph = MonomorphStatePtr(crate.types, nullptr, &pe->mParams, nullptr);
                     auto evaluateField = [&](const HIRTypeData* field) {
-                        const auto& fieldType = monomorphiseTypeNeeded(field)
-                            ? (tmp = mResolve.expandAssociatedTypes(
-                                span(), monomorph.monomorphType(span(), field)
-                            ))
-                            : field;
+                        const auto& fieldType = monomorphiseTypeNeeded(field) ? (tmp = mResolve.expandAssociatedTypes(span(), monomorph.monomorphType(span(), field))) : field;
                         return evaluateInner(fieldType);
                     };
 
@@ -4101,13 +3469,12 @@ class NextTraitGoalEvaluator {
                                      return result;
                                  }
                              }),
-                            (Named,
-                             for (const auto& field : se) {
-                                 combine(result, evaluateField(field.ty));
-                                 if (result == Certainty::NoSolution) {
-                                     return result;
-                                 }
-                             })
+                            (Named, for (const auto& field : se) {
+                                combine(result, evaluateField(field.ty));
+                                if (result == Certainty::NoSolution) {
+                                    return result;
+                                }
+                            })
                         )
                     } else if (const auto* enmPtr = e.binding.opt_Enum()) {
                         const auto& enm = **enmPtr;
@@ -4132,8 +3499,7 @@ class NextTraitGoalEvaluator {
                     }
                     return result;
                 }
-                if (e.path.mData.is_UfcsKnown()
-                    && (e.binding.is_Unbound() || e.binding.is_Opaque())) {
+                if (e.path.mData.is_UfcsKnown() && (e.binding.is_Unbound() || e.binding.is_Opaque())) {
                     return Certainty::Ambiguous;
                 }
                 return Certainty::Ambiguous;
@@ -4156,1395 +3522,981 @@ class NextTraitGoalEvaluator {
             }
             }
             throw "";
-        }
-
-        Certainty evaluateCandidate(
-            size_t frameIndex,
-            size_t candidateIndex,
-            const HIRSimplePath& trait,
-            const HIRTraitPath::assocListT* associated
-        ) {
-            auto* candidate = frames[frameIndex]->candidates[candidateIndex];
-            candidate->ambiguityBeyondHead = false;
-            if (associated) {
-                bindCandidatePlaceholders(
-                    *candidate,
-                    candidate->impl.getImplType(crate.types),
-                    *associated,
-                    true
-                );
             }
-            const bool environmentResponseConstraint =
-                candidate->headMatch == HIRCompare::Fuzzy
-                && isEnvironmentOrBuiltin(candidate->impl)
-                && !candidateHasPlaceholders(*candidate);
-            auto result = candidate->headMatch == HIRCompare::Equal
-                    || environmentResponseConstraint
-                ? Certainty::Proven : Certainty::Ambiguous;
 
-            const bool autoBuiltin = candidate->autoBuiltin;
-            const auto* markerImpl = candidate->markerImpl;
-            if (autoBuiltin) {
-                const auto& response = candidate->impl.mData.as_Bounded();
-                const auto structural = evaluateAutoBuiltin(
-                    trait, response.traitArgs, response.type
-                );
-                if (structural == Certainty::NoSolution) {
+            Certainty evaluateCandidate(size_t frameIndex, size_t candidateIndex, const HIRSimplePath& trait, const HIRTraitPath::assocListT* associated) {
+                auto* candidate = frames[frameIndex]->candidates[candidateIndex];
+                candidate->ambiguityBeyondHead = false;
+                if (associated) {
+                    bindCandidatePlaceholders(*candidate, candidate->impl.getImplType(crate.types), *associated, true);
+                }
+                const bool environmentResponseConstraint = candidate->headMatch == HIRCompare::Fuzzy && isEnvironmentOrBuiltin(candidate->impl) && !candidateHasPlaceholders(*candidate);
+                auto result = candidate->headMatch == HIRCompare::Equal || environmentResponseConstraint ? Certainty::Proven : Certainty::Ambiguous;
+
+                const bool autoBuiltin = candidate->autoBuiltin;
+                const auto* markerImpl = candidate->markerImpl;
+                if (autoBuiltin) {
+                    const auto& response = candidate->impl.mData.as_Bounded();
+                    const auto structural = evaluateAutoBuiltin(trait, response.traitArgs, response.type);
+                    if (structural == Certainty::NoSolution) {
+                        return Certainty::NoSolution;
+                    }
+                    if (structural == Certainty::Ambiguous) {
+                        candidate->ambiguityBeyondHead = true;
+                        result = Certainty::Ambiguous;
+                    }
+                }
+
+                const auto assocResult = matchAssociatedTypes(trait, candidate->impl, associated);
+                if (assocResult == Certainty::NoSolution) {
                     return Certainty::NoSolution;
                 }
-                if (structural == Certainty::Ambiguous) {
+                if (assocResult == Certainty::Ambiguous) {
                     candidate->ambiguityBeyondHead = true;
                     result = Certainty::Ambiguous;
                 }
-            }
 
-            const auto assocResult = matchAssociatedTypes(
-                trait, candidate->impl, associated
-            );
-            if (assocResult == Certainty::NoSolution) {
-                return Certainty::NoSolution;
-            }
-            if (assocResult == Certainty::Ambiguous) {
-                candidate->ambiguityBeyondHead = true;
-                result = Certainty::Ambiguous;
-            }
+                const auto* traitImpl = candidate->impl.mData.opt_TraitImpl();
+                const HIRGenericParams* implParamsDef = markerImpl ? &markerImpl->mParams : (traitImpl && traitImpl->impl ? &traitImpl->impl->mParams : nullptr);
+                if (!implParamsDef) {
+                    return result;
+                }
 
-            const auto* traitImpl = candidate->impl.mData.opt_TraitImpl();
-            const HIRGenericParams* implParamsDef = markerImpl
-                ? &markerImpl->mParams
-                : (traitImpl && traitImpl->impl
-                    ? &traitImpl->impl->mParams
-                    : nullptr);
-            if (!implParamsDef) {
+                for (const auto& bound : implParamsDef->bounds) {
+                    if (const auto* be = bound.opt_TraitBound()) {
+                        HIRTypeRef nestedType;
+                        HIRSimplePath nestedTrait;
+                        HIRPathParams nestedParams;
+                        HIRTraitPath::assocListT nestedAssociated;
+
+                        // Candidate and response storage is pool-backed, so nested
+                        // goals cannot relocate this parent slot.
+                        auto monomorphBound = [&](auto& ms) {
+                            static const HIRGenericParams noHrbs;
+                            const bool outerPresent = be->hrtbs && !be->hrtbs->isEmpty();
+                            auto hrbGuard = ms.pushHrb(outerPresent ? *be->hrtbs : noHrbs);
+                            auto boundType = ms.monomorphType(span(), be->type);
+                            auto boundTrait = ms.monomorphTraitpath(span(), be->trait, true);
+
+                            // Unlike the legacy solver, keep higher-ranked
+                            // lifetimes as placeholders while evaluating this
+                            // nested goal. Erasing them to `'#omitted` here loses
+                            // the universe boundary and makes leak checking
+                            // impossible (`for<'b> 'b: 'a` appears unconstrained).
+                            const auto hrlParams = outerPresent ? be->hrtbs->makeNopParams(crate.types, GENERICHrtb, true) : (boundTrait.hrtbs ? boundTrait.hrtbs->makeNopParams(crate.types, GENERICHrtb, true) : HIRPathParams());
+                            auto hrlMonomorph = MonomorphHrlsOnly(crate.types, hrlParams);
+                            nestedType = hrlMonomorph.monomorphType(span(), boundType, true);
+                            nestedTrait = boundTrait.mPath.mPath;
+                            nestedParams = hrlMonomorph.monomorphPathParams(span(), boundTrait.mPath.mParams, true);
+                            for (const auto& aty : boundTrait.typeBounds) {
+                                auto value = aty.second.clone();
+                                value.type = hrlMonomorph.monomorphType(span(), value.type, true);
+                                value.atyParams = hrlMonomorph.monomorphPathParams(span(), value.atyParams, true);
+                                nestedAssociated.insert({aty.first, ::std::move(value)});
+                            }
+                        };
+                        if (markerImpl) {
+                            auto ms = MonomorphStatePtr(crate.types, nullptr, &candidate->markerImplParams, nullptr);
+                            monomorphBound(ms);
+                        } else {
+                            auto ms = candidate->impl.getCbMonomorphTraitimpl(crate.types, span(), {});
+                            monomorphBound(ms);
+                        }
+
+                        // An impl parameter may occur only in an associated-type
+                        // equality of a nested goal.  Canonical solvers infer that
+                        // parameter from the projection response of the nested
+                        // goal; preserve the same response in our impl parameters
+                        // before evaluating the goal itself.
+                        if (bindCandidatePlaceholders(*candidate, nestedType, nestedAssociated)) {
+                            nestedAssociated.clear();
+                            if (markerImpl) {
+                                auto ms = MonomorphStatePtr(crate.types, nullptr, &candidate->markerImplParams, nullptr);
+                                monomorphBound(ms);
+                            } else {
+                                auto ms = candidate->impl.getCbMonomorphTraitimpl(crate.types, span(), {});
+                                monomorphBound(ms);
+                            }
+                        }
+
+                        // The certainty-only table is the fast path for the vast
+                        // majority of nested obligations and also validates all
+                        // associated-type constraints. Only an ambiguous goal
+                        // whose response can still bind this candidate needs the
+                        // more expensive canonical response assembly.
+                        auto nested = solveGoal(nestedTrait, nestedParams, nestedType, &nestedAssociated);
+                        if (nested == Certainty::NoSolution) {
+                            return Certainty::NoSolution;
+                        }
+                        if (nested == Certainty::Ambiguous && candidateNeedsResponseConstraints(*candidate)) {
+                            Certainty responseCertainty = Certainty::NoSolution;
+                            const bool hasResponse = evaluate(span(), nestedTrait, nestedParams, nestedType, [&](ImplRef response, HIRCompare certainty) {
+                                bindCandidateResponse(*candidate, nestedType, nestedParams, response);
+                                responseCertainty = certainty == HIRCompare::Equal ? Certainty::Proven : Certainty::Ambiguous;
+                                return true;
+                            }, "", nullptr, nullptr);
+                            if (!hasResponse) {
+                                return Certainty::NoSolution;
+                            }
+                            nested = responseCertainty;
+                        }
+                        if (nested == Certainty::Ambiguous) {
+                            candidate->ambiguityBeyondHead = true;
+                            result = Certainty::Ambiguous;
+                        }
+                    } else if (const auto* equality = bound.opt_TypeEquality()) {
+                        HIRTypeRef left;
+                        HIRTypeRef right;
+                        if (markerImpl) {
+                            auto ms = MonomorphStatePtr(crate.types, nullptr, &candidate->markerImplParams, nullptr);
+                            left = ms.monomorphType(span(), equality->type);
+                            right = ms.monomorphType(span(), equality->otherType);
+                        } else {
+                            auto ms = candidate->impl.getCbMonomorphTraitimpl(crate.types, span(), {});
+                            left = ms.monomorphType(span(), equality->type);
+                            right = ms.monomorphType(span(), equality->otherType);
+                        }
+                        const auto cmp = mResolve.compareTy(span(), left, right);
+                        if (cmp == HIRCompare::Unequal) {
+                            return Certainty::NoSolution;
+                        }
+                        if (cmp == HIRCompare::Fuzzy) {
+                            candidate->ambiguityBeyondHead = true;
+                            result = Certainty::Ambiguous;
+                        }
+                    } else if (const auto* lifetime = bound.opt_Lifetime()) {
+                        HIRLifetimeRef test;
+                        HIRLifetimeRef validFor;
+                        if (markerImpl) {
+                            auto ms = MonomorphStatePtr(crate.types, nullptr, &candidate->markerImplParams, nullptr);
+                            test = ms.monomorphLifetime(span(), lifetime->test);
+                            validFor = ms.monomorphLifetime(span(), lifetime->validFor);
+                        } else {
+                            auto ms = candidate->impl.getCbMonomorphTraitimpl(crate.types, span(), {});
+                            test = ms.monomorphLifetime(span(), lifetime->test);
+                            validFor = ms.monomorphLifetime(span(), lifetime->validFor);
+                        }
+
+                        // A higher-ranked placeholder is a fresh lifetime from a
+                        // new universe.  It cannot be required to outlive an
+                        // outer lifetime: accepting `for<'b> 'b: 'a` would let
+                        // the bound variable leak out of its binder.  Ordinary
+                        // region constraints stay deferred to lifetime inference.
+                        if (test.isHrl() && test != validFor) {
+                            return Certainty::NoSolution;
+                        }
+                    }
+                }
                 return result;
             }
 
-            for (const auto& bound : implParamsDef->bounds) {
-                if (const auto* be = bound.opt_TraitBound()) {
-                    HIRTypeRef nestedType;
-                    HIRSimplePath nestedTrait;
-                    HIRPathParams nestedParams;
-                    HIRTraitPath::assocListT nestedAssociated;
-
-                    // Candidate and response storage is pool-backed, so nested
-                    // goals cannot relocate this parent slot.
-                    auto monomorphBound = [&](auto& ms) {
-                        static const HIRGenericParams noHrbs;
-                        const bool outerPresent = be->hrtbs && !be->hrtbs->isEmpty();
-                        auto hrbGuard = ms.pushHrb(outerPresent ? *be->hrtbs : noHrbs);
-                        auto boundType = ms.monomorphType(span(), be->type);
-                        auto boundTrait = ms.monomorphTraitpath(span(), be->trait, true);
-
-                        // Unlike the legacy solver, keep higher-ranked
-                        // lifetimes as placeholders while evaluating this
-                        // nested goal. Erasing them to `'#omitted` here loses
-                        // the universe boundary and makes leak checking
-                        // impossible (`for<'b> 'b: 'a` appears unconstrained).
-                        const auto hrlParams = outerPresent
-                            ? be->hrtbs->makeNopParams(
-                                crate.types,
-                                GENERICHrtb,
-                                true
-                            )
-                            : (boundTrait.hrtbs
-                                ? boundTrait.hrtbs->makeNopParams(
-                                    crate.types,
-                                    GENERICHrtb,
-                                    true
-                                )
-                                : HIRPathParams());
-                        auto hrlMonomorph = MonomorphHrlsOnly(crate.types, hrlParams);
-                        nestedType = hrlMonomorph.monomorphType(span(), boundType, true);
-                        nestedTrait = boundTrait.mPath.mPath;
-                        nestedParams = hrlMonomorph.monomorphPathParams(
-                            span(), boundTrait.mPath.mParams, true
-                        );
-                        for (const auto& aty : boundTrait.typeBounds) {
-                            auto value = aty.second.clone();
-                            value.type = hrlMonomorph.monomorphType(span(), value.type, true);
-                            value.atyParams = hrlMonomorph.monomorphPathParams(
-                                span(), value.atyParams, true
-                            );
-                            nestedAssociated.insert({aty.first, ::std::move(value)});
-                        }
-                    };
-                    if (markerImpl) {
-                        auto ms = MonomorphStatePtr(
-                            crate.types,
-                            nullptr,
-                            &candidate->markerImplParams,
-                            nullptr
-                        );
-                        monomorphBound(ms);
-                    } else {
-                        auto ms = candidate->impl.getCbMonomorphTraitimpl(crate.types, span(), {});
-                        monomorphBound(ms);
-                    }
-
-                    // An impl parameter may occur only in an associated-type
-                    // equality of a nested goal.  Canonical solvers infer that
-                    // parameter from the projection response of the nested
-                    // goal; preserve the same response in our impl parameters
-                    // before evaluating the goal itself.
-                    if (bindCandidatePlaceholders(
-                            *candidate, nestedType, nestedAssociated
-                        )) {
-                        nestedAssociated.clear();
-                        if (markerImpl) {
-                            auto ms = MonomorphStatePtr(
-                                crate.types,
-                                nullptr,
-                                &candidate->markerImplParams,
-                                nullptr
-                            );
-                            monomorphBound(ms);
-                        } else {
-                            auto ms = candidate->impl.getCbMonomorphTraitimpl(
-                                crate.types, span(), {}
-                            );
-                            monomorphBound(ms);
-                        }
-                    }
-
-                    // The certainty-only table is the fast path for the vast
-                    // majority of nested obligations and also validates all
-                    // associated-type constraints. Only an ambiguous goal
-                    // whose response can still bind this candidate needs the
-                    // more expensive canonical response assembly.
-                    auto nested = solveGoal(
-                        nestedTrait,
-                        nestedParams,
-                        nestedType,
-                        &nestedAssociated
-                    );
-                    if (nested == Certainty::NoSolution) {
-                        return Certainty::NoSolution;
-                    }
-                    if (nested == Certainty::Ambiguous
-                        && candidateNeedsResponseConstraints(*candidate)) {
-                        Certainty responseCertainty = Certainty::NoSolution;
-                        const bool hasResponse = evaluate(
-                            span(),
-                            nestedTrait,
-                            nestedParams,
-                            nestedType,
-                            [&](ImplRef response, HIRCompare certainty) {
-                                bindCandidateResponse(
-                                    *candidate,
-                                    nestedType,
-                                    nestedParams,
-                                    response
-                                );
-                                responseCertainty = certainty
-                                        == HIRCompare::Equal
-                                    ? Certainty::Proven
-                                    : Certainty::Ambiguous;
-                                return true;
-                            },
-                            "",
-                            nullptr,
-                            nullptr
-                        );
-                        if (!hasResponse) {
-                            return Certainty::NoSolution;
-                        }
-                        nested = responseCertainty;
-                    }
-                    if (nested == Certainty::Ambiguous) {
-                        candidate->ambiguityBeyondHead = true;
-                        result = Certainty::Ambiguous;
-                    }
-                } else if (const auto* equality = bound.opt_TypeEquality()) {
-                    HIRTypeRef left;
-                    HIRTypeRef right;
-                    if (markerImpl) {
-                        auto ms = MonomorphStatePtr(
-                            crate.types,
-                            nullptr,
-                            &candidate->markerImplParams,
-                            nullptr
-                        );
-                        left = ms.monomorphType(span(), equality->type);
-                        right = ms.monomorphType(span(), equality->otherType);
-                    } else {
-                        auto ms = candidate->impl.getCbMonomorphTraitimpl(crate.types, span(), {});
-                        left = ms.monomorphType(span(), equality->type);
-                        right = ms.monomorphType(span(), equality->otherType);
-                    }
-                    const auto cmp = mResolve.compareTy(span(), left, right);
-                    if (cmp == HIRCompare::Unequal) {
-                        return Certainty::NoSolution;
-                    }
-                    if (cmp == HIRCompare::Fuzzy) {
-                        candidate->ambiguityBeyondHead = true;
-                        result = Certainty::Ambiguous;
-                    }
-                } else if (const auto* lifetime = bound.opt_Lifetime()) {
-                    HIRLifetimeRef test;
-                    HIRLifetimeRef validFor;
-                    if (markerImpl) {
-                        auto ms = MonomorphStatePtr(
-                            crate.types,
-                            nullptr,
-                            &candidate->markerImplParams,
-                            nullptr
-                        );
-                        test = ms.monomorphLifetime(span(), lifetime->test);
-                        validFor = ms.monomorphLifetime(
-                            span(), lifetime->validFor
-                        );
-                    } else {
-                        auto ms = candidate->impl.getCbMonomorphTraitimpl(
-                            crate.types, span(), {}
-                        );
-                        test = ms.monomorphLifetime(span(), lifetime->test);
-                        validFor = ms.monomorphLifetime(
-                            span(), lifetime->validFor
-                        );
-                    }
-
-                    // A higher-ranked placeholder is a fresh lifetime from a
-                    // new universe.  It cannot be required to outlive an
-                    // outer lifetime: accepting `for<'b> 'b: 'a` would let
-                    // the bound variable leak out of its binder.  Ordinary
-                    // region constraints stay deferred to lifetime inference.
-                    if (test.isHrl() && test != validFor) {
-                        return Certainty::NoSolution;
-                    }
-                }
-            }
-            return result;
-        }
-
-        Certainty solveGoal(
-            const HIRSimplePath& trait,
-            const HIRPathParams& params,
-            const HIRTypeData* type,
-            const HIRTraitPath::assocListT* associated
-        ) {
-            const auto availableDepth = availableDepthForNested();
-            if (!availableDepth) {
-                return Certainty::Ambiguous;
-            }
-            auto goalType = type;
-            auto goalParams = params.clone();
-            if (goalHasUnassignedInfer(
-                    goalParams, goalType, associated
-                )) {
-                return Certainty::Ambiguous;
-            }
-            // Nested obligations are formed directly from monomorphised impl
-            // bounds.  Their Self type can therefore still be a projection,
-            // e.g. `<Option::IntoIter<T> as Iterator>::Item: IntoIterator`.
-            // Candidate assembly operates on the normalized goal input, just
-            // as it already does for trait arguments.
-            goalType = mResolve.expandAssociatedTypes(span(), goalType);
-            for (auto& param : goalParams.types) {
-                param = mResolve.expandAssociatedTypes(
-                    span(), ::std::move(param)
-                );
-            }
-            if (goalHasUnassignedInfer(
-                    goalParams, goalType, associated
-                )) {
-                return Certainty::Ambiguous;
-            }
-            // rustc structurally normalises Self before candidate assembly.
-            // An unresolved projection over a type variable normalises to an
-            // inference variable and therefore forces ambiguity; treating the
-            // projection syntax as rigid lets an unrelated fuzzy ParamEnv
-            // predicate constrain its output.
-            if (selfIsUnresolvedProjectionOverIvar(goalType)) {
-                return Certainty::Ambiguous;
-            }
-            const auto& resolvedType = mResolve.resolveType(goalType);
-            // Candidate assembly must not use an unconstrained `Self` type to
-            // guide inference.  A concrete associated-type equality does
-            // constrain the goal, however, and may uniquely determine Self.
-            bool associatedConstrainsSelf = false;
-            if (associated) {
-                for (const auto& entry : *associated) {
-                    associatedConstrainsSelf |=
-                        !typeHasUnknown(entry.second.type);
-                }
-            }
-            if (const auto* infer = resolvedType->opt_Infer()) {
-                if (!infer->isLit() && !associatedConstrainsSelf) {
+            Certainty solveGoal(const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) {
+                const auto availableDepth = availableDepthForNested();
+                if (!availableDepth) {
                     return Certainty::Ambiguous;
                 }
-            }
-            CanonicalizeTraitGoal canonicalizer(crate.types);
-            const auto canonical = canonicalizeGoal(
-                goalParams, resolvedType, associated, canonicalizer
-            );
-            const auto* canonicalAssociated = canonical.associated.empty()
-                ? nullptr : &canonical.associated;
-            const auto hash = goalHash(
-                trait, canonical.params, canonical.type, canonicalAssociated
-            );
-            if (const auto* cached = findCachedGoal(
-                    hash,
-                    trait,
-                    canonical.params,
-                    canonical.type,
-                    canonicalAssociated
-                )) {
-                return cached->certainty;
-            }
-            if (findActiveGoal(
-                    hash,
-                    trait,
-                    canonical.params,
-                    canonical.type,
-                    canonicalAssociated
-                )) {
-                // Productive recursive traits prove their provisional goal;
-                // ordinary trait cycles remain ambiguous.
-                return crate.getTraitByPath(span(), trait).isCoinductive
-                    ? Certainty::Proven
-                    : Certainty::Ambiguous;
-            }
-
-            auto* activeGoal = pushActiveGoal(
-                hash,
-                trait,
-                canonical.params,
-                canonical.type,
-                canonicalAssociated
-            );
-            struct StackGuard {
-                NextTraitGoalEvaluator& self;
-                GoalKey* goal;
-                ~StackGuard() { self.popActiveGoal(goal); }
-            } guard{*this, activeGoal};
-            auto cacheResult = [&](Certainty certainty) {
-                return cacheGoal(
-                    hash,
-                    trait,
-                    canonical.params,
-                    canonical.type,
-                    canonicalAssociated,
-                    certainty
-                );
-            };
-
-            const size_t frameIndex = frameDepth++;
-            if (frameIndex == frames.size()) {
-                frames.push_back(crate.pool->make<CandidateFrame>());
-            }
-            frames[frameIndex]->clear(candidateNodes);
-            frames[frameIndex]->availableDepth = *availableDepth;
-            struct FrameGuard {
-                NextTraitGoalEvaluator& self;
-                size_t index;
-                ~FrameGuard() {
-                    const bool encounteredOverflow =
-                        self.frames[index]->encounteredOverflow;
-                    self.frames[index]->clear(self.candidateNodes);
-                    assert(self.frameDepth == index + 1);
-                    self.frameDepth--;
-                    if (encounteredOverflow && index > 0) {
-                        self.frames[index - 1]->encounteredOverflow = true;
+                auto goalType = type;
+                auto goalParams = params.clone();
+                if (goalHasUnassignedInfer(goalParams, goalType, associated)) {
+                    return Certainty::Ambiguous;
+                }
+                // Nested obligations are formed directly from monomorphised impl
+                // bounds.  Their Self type can therefore still be a projection,
+                // e.g. `<Option::IntoIter<T> as Iterator>::Item: IntoIterator`.
+                // Candidate assembly operates on the normalized goal input, just
+                // as it already does for trait arguments.
+                goalType = mResolve.expandAssociatedTypes(span(), goalType);
+                for (auto& param : goalParams.types) {
+                    param = mResolve.expandAssociatedTypes(span(), ::std::move(param));
+                }
+                if (goalHasUnassignedInfer(goalParams, goalType, associated)) {
+                    return Certainty::Ambiguous;
+                }
+                // rustc structurally normalises Self before candidate assembly.
+                // An unresolved projection over a type variable normalises to an
+                // inference variable and therefore forces ambiguity; treating the
+                // projection syntax as rigid lets an unrelated fuzzy ParamEnv
+                // predicate constrain its output.
+                if (selfIsUnresolvedProjectionOverIvar(goalType)) {
+                    return Certainty::Ambiguous;
+                }
+                const auto& resolvedType = mResolve.resolveType(goalType);
+                // Candidate assembly must not use an unconstrained `Self` type to
+                // guide inference.  A concrete associated-type equality does
+                // constrain the goal, however, and may uniquely determine Self.
+                bool associatedConstrainsSelf = false;
+                if (associated) {
+                    for (const auto& entry : *associated) {
+                        associatedConstrainsSelf |= !typeHasUnknown(entry.second.type);
                     }
                 }
-            } frameGuard{*this, frameIndex};
+                if (const auto* infer = resolvedType->opt_Infer()) {
+                    if (!infer->isLit() && !associatedConstrainsSelf) {
+                        return Certainty::Ambiguous;
+                    }
+                }
+                CanonicalizeTraitGoal canonicalizer(crate.types);
+                const auto canonical = canonicalizeGoal(goalParams, resolvedType, associated, canonicalizer);
+                const auto* canonicalAssociated = canonical.associated.empty() ? nullptr : &canonical.associated;
+                const auto hash = goalHash(trait, canonical.params, canonical.type, canonicalAssociated);
+                if (const auto* cached = findCachedGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated)) {
+                    return cached->certainty;
+                }
+                if (findActiveGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated)) {
+                    // Productive recursive traits prove their provisional goal;
+                    // ordinary trait cycles remain ambiguous.
+                    return crate.getTraitByPath(span(), trait).isCoinductive ? Certainty::Proven : Certainty::Ambiguous;
+                }
 
-            try {
-                assembleCandidates(frameIndex, trait, goalParams, resolvedType);
-            } catch (const TraitResolution::RecursionDetected&) {
-                return cacheResult(Certainty::Ambiguous);
+                auto* activeGoal = pushActiveGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated);
+
+                struct StackGuard {
+                    NextTraitGoalEvaluator& self;
+                    GoalKey* goal;
+
+                    ~StackGuard() {
+                        self.popActiveGoal(goal);
+                    }
+                } guard{*this, activeGoal};
+
+                auto cacheResult = [&](Certainty certainty) {
+                    return cacheGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated, certainty);
+                };
+
+                const size_t frameIndex = frameDepth++;
+                if (frameIndex == frames.size()) {
+                    frames.push_back(crate.pool->make<CandidateFrame>());
+                }
+                frames[frameIndex]->clear(candidateNodes);
+                frames[frameIndex]->availableDepth = *availableDepth;
+
+                struct FrameGuard {
+                    NextTraitGoalEvaluator& self;
+                    size_t index;
+
+                    ~FrameGuard() {
+                        const bool encounteredOverflow = self.frames[index]->encounteredOverflow;
+                        self.frames[index]->clear(self.candidateNodes);
+                        assert(self.frameDepth == index + 1);
+                        self.frameDepth--;
+                        if (encounteredOverflow && index > 0) {
+                            self.frames[index - 1]->encounteredOverflow = true;
+                        }
+                    }
+                } frameGuard{*this, frameIndex};
+
+                try {
+                    assembleCandidates(frameIndex, trait, goalParams, resolvedType);
+                } catch (const TraitResolution::RecursionDetected&) {
+                    return cacheResult(Certainty::Ambiguous);
+                }
+
+                bool sawAmbiguous = false;
+                bool suppressAutoBuiltin = false;
+                bool negativeProven = false;
+                bool negativeAmbiguous = false;
+                Certainty autoBuiltinResult = Certainty::NoSolution;
+                const size_t candidateCount = frames[frameIndex]->candidates.size();
+                for (size_t i = 0; i < candidateCount; i++) {
+                    const auto result = evaluateCandidate(frameIndex, i, trait, associated);
+                    auto* candidate = frames[frameIndex]->candidates[i];
+                    candidate->certainty = result;
+                    if (candidate->isNegative()) {
+                        negativeProven |= result == Certainty::Proven;
+                        negativeAmbiguous |= result == Certainty::Ambiguous;
+                        continue;
+                    }
+                    if (candidate->autoBuiltin) {
+                        autoBuiltinResult = result;
+                        continue;
+                    }
+                    suppressAutoBuiltin |= candidate->isPositiveMarkerImpl() && result != Certainty::NoSolution;
+                    if (result == Certainty::Proven) {
+                        return cacheResult(Certainty::Proven);
+                    }
+                    sawAmbiguous |= result == Certainty::Ambiguous;
+                }
+                if (!suppressAutoBuiltin && !negativeProven) {
+                    if (negativeAmbiguous && autoBuiltinResult == Certainty::Proven) {
+                        autoBuiltinResult = Certainty::Ambiguous;
+                    }
+                    if (autoBuiltinResult == Certainty::Proven) {
+                        return cacheResult(Certainty::Proven);
+                    }
+                    sawAmbiguous |= autoBuiltinResult == Certainty::Ambiguous;
+                }
+                if (sawAmbiguous || mResolve.typeContainsIvars(resolvedType) || mResolve.paramsContainIvars(goalParams) || (coherenceMode && !traitRefIsKnowable(trait, goalParams, resolvedType))) {
+                    return cacheResult(Certainty::Ambiguous);
+                }
+                return cacheResult(Certainty::NoSolution);
             }
 
-            bool sawAmbiguous = false;
-            bool suppressAutoBuiltin = false;
-            bool negativeProven = false;
-            bool negativeAmbiguous = false;
-            Certainty autoBuiltinResult = Certainty::NoSolution;
-            const size_t candidateCount = frames[frameIndex]->candidates.size();
-            for (size_t i = 0; i < candidateCount; i++) {
-                const auto result = evaluateCandidate(frameIndex, i, trait, associated);
-                auto* candidate = frames[frameIndex]->candidates[i];
-                candidate->certainty = result;
-                if (candidate->isNegative()) {
-                    negativeProven |= result == Certainty::Proven;
-                    negativeAmbiguous |= result == Certainty::Ambiguous;
-                    continue;
+            Certainty matchRootAssociated(const HIRSimplePath& trait, const ImplRef& impl, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams) const {
+                if (!assocName || !assocName[0]) {
+                    return Certainty::Proven;
                 }
-                if (candidate->autoBuiltin) {
-                    autoBuiltinResult = result;
-                    continue;
-                }
-                suppressAutoBuiltin |= candidate->isPositiveMarkerImpl()
-                    && result != Certainty::NoSolution;
-                if (result == Certainty::Proven) {
-                    return cacheResult(Certainty::Proven);
-                }
-                sawAmbiguous |= result == Certainty::Ambiguous;
-            }
-            if (!suppressAutoBuiltin && !negativeProven) {
-                if (negativeAmbiguous && autoBuiltinResult == Certainty::Proven) {
-                    autoBuiltinResult = Certainty::Ambiguous;
-                }
-                if (autoBuiltinResult == Certainty::Proven) {
-                    return cacheResult(Certainty::Proven);
-                }
-                sawAmbiguous |= autoBuiltinResult == Certainty::Ambiguous;
-            }
-            if (sawAmbiguous
-                || mResolve.typeContainsIvars(resolvedType)
-                || mResolve.paramsContainIvars(goalParams)
-                || (coherenceMode
-                    && !traitRefIsKnowable(trait, goalParams, resolvedType))) {
-                return cacheResult(Certainty::Ambiguous);
-            }
-            return cacheResult(Certainty::NoSolution);
-        }
-
-        Certainty matchRootAssociated(
-            const HIRSimplePath& trait,
-            const ImplRef& impl,
-            const char* assocName,
-            const HIRTypeData* assocType,
-            const HIRPathParams* assocParams
-        ) const {
-            if (!assocName || !assocName[0]) {
-                return Certainty::Proven;
-            }
-            const static HIRPathParams noParams;
-            const auto& params = assocParams ? *assocParams : noParams;
-            if (!impl.mData.is_TraitImpl() && params.hasParams()) {
-                return Certainty::Ambiguous;
-            }
-            auto output = impl.getType(crate.types, assocName, params);
-            if (output == HIRTypeRef()) {
-                if (impl.mData.is_TraitImpl()) {
+                const static HIRPathParams noParams;
+                const auto& params = assocParams ? *assocParams : noParams;
+                if (!impl.mData.is_TraitImpl() && params.hasParams()) {
                     return Certainty::Ambiguous;
+                }
+                auto output = impl.getType(crate.types, assocName, params);
+                if (output == HIRTypeRef()) {
+                    if (impl.mData.is_TraitImpl()) {
+                        return Certainty::Ambiguous;
+                    }
+                    if (!assocType) {
+                        // A bare ParamEnv trait predicate does not normalize its
+                        // associated type.  It only proves that the projection is
+                        // well-formed, so the normalizes-to response is ambiguous.
+                        return Certainty::Ambiguous;
+                    }
+                    output = makeAssociatedProjection(impl, HIRGenericPath(trait, impl.getTraitParams(crate.types)), RcString::newInterned(assocName), params);
                 }
                 if (!assocType) {
-                    // A bare ParamEnv trait predicate does not normalize its
-                    // associated type.  It only proves that the projection is
-                    // well-formed, so the normalizes-to response is ambiguous.
-                    return Certainty::Ambiguous;
+                    return Certainty::Proven;
                 }
-                output = makeAssociatedProjection(
-                    impl,
-                    HIRGenericPath(trait, impl.getTraitParams(crate.types)),
-                    RcString::newInterned(assocName),
-                    params
-                );
-            }
-            if (!assocType) {
-                return Certainty::Proven;
-            }
-            const auto cmp = mResolve.compareTy(span(), assocType, output);
-            if (cmp == HIRCompare::Unequal) {
-                return Certainty::NoSolution;
-            }
-            // A normalizes-to goal with a caller inference variable has a
-            // proven response plus an equality constraint. The caller applies
-            // that constraint from the returned ImplRef; the unassigned
-            // destination alone must not turn a unique response into `Maybe`.
-            if (cmp == HIRCompare::Fuzzy
-                && mResolve.typeContainsIvars(assocType)
-                && !mResolve.typeContainsIvars(output)
-                && !typeHasCandidatePlaceholder(output)) {
-                return Certainty::Proven;
-            }
-            return cmp == HIRCompare::Equal
-                ? Certainty::Proven
-                : Certainty::Ambiguous;
-        }
-
-        ImplRef materializeRootAssociated(
-            ImplRef impl,
-            const HIRSimplePath& trait,
-            const char* assocName,
-            const HIRPathParams* assocParams
-        ) const {
-            if (!assocName || !assocName[0] || impl.mData.is_TraitImpl()) {
-                return impl;
-            }
-            const static HIRPathParams noParams;
-            const auto& itemParams = assocParams ? *assocParams : noParams;
-            if (impl.getType(crate.types, assocName, itemParams) != HIRTypeRef()) {
-                return impl;
+                const auto cmp = mResolve.compareTy(span(), assocType, output);
+                if (cmp == HIRCompare::Unequal) {
+                    return Certainty::NoSolution;
+                }
+                // A normalizes-to goal with a caller inference variable has a
+                // proven response plus an equality constraint. The caller applies
+                // that constraint from the returned ImplRef; the unassigned
+                // destination alone must not turn a unique response into `Maybe`.
+                if (cmp == HIRCompare::Fuzzy && mResolve.typeContainsIvars(assocType) && !mResolve.typeContainsIvars(output) && !typeHasCandidatePlaceholder(output)) {
+                    return Certainty::Proven;
+                }
+                return cmp == HIRCompare::Equal ? Certainty::Proven : Certainty::Ambiguous;
             }
 
-            auto type = impl.getImplType(crate.types);
-            auto params = impl.getTraitParams(crate.types);
-            HIRTraitPath::assocListT associated;
-            if (const auto* bounded = impl.mData.opt_BoundedPtr()) {
-                for (const auto& entry : *bounded->assoc) {
-                    associated.insert({entry.first, entry.second.clone()});
+            ImplRef materializeRootAssociated(ImplRef impl, const HIRSimplePath& trait, const char* assocName, const HIRPathParams* assocParams) const {
+                if (!assocName || !assocName[0] || impl.mData.is_TraitImpl()) {
+                    return impl;
                 }
-            } else if (const auto* bounded = impl.mData.opt_Bounded()) {
-                for (const auto& entry : bounded->assoc) {
-                    associated.insert({entry.first, entry.second.clone()});
+                const static HIRPathParams noParams;
+                const auto& itemParams = assocParams ? *assocParams : noParams;
+                if (impl.getType(crate.types, assocName, itemParams) != HIRTypeRef()) {
+                    return impl;
                 }
+
+                auto type = impl.getImplType(crate.types);
+                auto params = impl.getTraitParams(crate.types);
+                HIRTraitPath::assocListT associated;
+                if (const auto* bounded = impl.mData.opt_BoundedPtr()) {
+                    for (const auto& entry : *bounded->assoc) {
+                        associated.insert({entry.first, entry.second.clone()});
+                    }
+                } else if (const auto* bounded = impl.mData.opt_Bounded()) {
+                    for (const auto& entry : bounded->assoc) {
+                        associated.insert({entry.first, entry.second.clone()});
+                    }
+                }
+
+                const auto name = RcString::newInterned(assocName);
+                auto sourceTrait = HIRGenericPath(trait, params.clone());
+                auto projection = makeAssociatedProjection(type, sourceTrait, name, itemParams);
+                associated.erase(name);
+                associated.insert({name, HIRTraitPath::AtyEqual{::std::move(sourceTrait), itemParams.clone(), ::std::move(projection)}});
+                const bool ambiguousIdentity = impl.isAmbiguousIdentity();
+                auto result = ImplRef(::std::move(type), ::std::move(params), ::std::move(associated));
+                if (ambiguousIdentity) {
+                    result.markAmbiguousIdentity();
+                }
+                return result;
             }
 
-            const auto name = RcString::newInterned(assocName);
-            auto sourceTrait = HIRGenericPath(trait, params.clone());
-            auto projection = makeAssociatedProjection(
-                type, sourceTrait, name, itemParams
-            );
-            associated.erase(name);
-            associated.insert({
-                name,
-                HIRTraitPath::AtyEqual{
-                    ::std::move(sourceTrait),
-                    itemParams.clone(),
-                    ::std::move(projection)
-                }
-            });
-            const bool ambiguousIdentity = impl.isAmbiguousIdentity();
-            auto result = ImplRef(
-                ::std::move(type),
-                ::std::move(params),
-                ::std::move(associated)
-            );
-            if (ambiguousIdentity) {
-                result.markAmbiguousIdentity();
-            }
-            return result;
-        }
-
-        bool responsesEqual(
-            const ImplRef& left,
-            const ImplRef& right,
-            const char* assocName,
-            const HIRPathParams* assocParams
-        ) const {
-            auto typesEqualAfterNormalization = [&](const HIRTypeData* lhs,
-                                                       const HIRTypeData* rhs) {
-                if (lhs == HIRTypeRef() || rhs == HIRTypeRef()) {
-                    return lhs == rhs;
-                }
-                // TypeRef identity is structural equality after interning.
-                // Avoid recursively normalising and re-interning the common
-                // case where both canonical responses already share a type.
-                if (lhs == rhs) {
+            bool responsesEqual(const ImplRef& left, const ImplRef& right, const char* assocName, const HIRPathParams* assocParams) const {
+                auto typesEqualAfterNormalization = [&](const HIRTypeData* lhs, const HIRTypeData* rhs) {
+                    if (lhs == HIRTypeRef() || rhs == HIRTypeRef()) {
+                        return lhs == rhs;
+                    }
+                    // TypeRef identity is structural equality after interning.
+                    // Avoid recursively normalising and re-interning the common
+                    // case where both canonical responses already share a type.
+                    if (lhs == rhs) {
+                        return true;
+                    }
+                    auto normalizedLhs = mResolve.expandAssociatedTypes(span(), lhs);
+                    auto normalizedRhs = mResolve.expandAssociatedTypes(span(), rhs);
+                    if (normalizedLhs == HIRTypeRef() || normalizedRhs == HIRTypeRef()) {
+                        return normalizedLhs == normalizedRhs;
+                    }
+                    const auto* resolvedLhs = mResolve.resolveType(normalizedLhs);
+                    const auto* resolvedRhs = mResolve.resolveType(normalizedRhs);
+                    return resolvedLhs == resolvedRhs || resolvedLhs->equalsIgnoringRegions(resolvedRhs);
+                };
+                auto paramsEqualAfterNormalization = [&](const HIRPathParams& lhs, const HIRPathParams& rhs) {
+                    if (lhs.mLifetimes.size() != rhs.mLifetimes.size() || lhs.types.size() != rhs.types.size() || lhs.values.size() != rhs.values.size()) {
+                        return false;
+                    }
+                    // Ordinary regions are deliberately erased when a type is
+                    // stored in an HM inference variable, and trait selection
+                    // defers their constraints to lifetime inference.  Thus a
+                    // ParamEnv proof for `Projection<'a>` and the same declared
+                    // GAT bound seen through `Projection<'#omitted>` are one
+                    // canonical solver response.  Higher-ranked leak checking is
+                    // performed while evaluating the candidate bounds above; it
+                    // must not be reintroduced here as response identity.
+                    for (size_t i = 0; i < lhs.types.size(); i++) {
+                        if (!typesEqualAfterNormalization(lhs.types[i], rhs.types[i])) {
+                            return false;
+                        }
+                    }
+                    for (size_t i = 0; i < lhs.values.size(); i++) {
+                        if (lhs.values[i] != rhs.values[i]) {
+                            return false;
+                        }
+                    }
                     return true;
-                }
-                auto normalizedLhs = mResolve.expandAssociatedTypes(
-                    span(), lhs
-                );
-                auto normalizedRhs = mResolve.expandAssociatedTypes(
-                    span(), rhs
-                );
-                if (normalizedLhs == HIRTypeRef()
-                    || normalizedRhs == HIRTypeRef()) {
-                    return normalizedLhs == normalizedRhs;
-                }
-                const auto* resolvedLhs = mResolve.resolveType(normalizedLhs);
-                const auto* resolvedRhs = mResolve.resolveType(normalizedRhs);
-                return resolvedLhs == resolvedRhs
-                    || resolvedLhs->equalsIgnoringRegions(resolvedRhs);
-            };
-            auto paramsEqualAfterNormalization = [&](const HIRPathParams& lhs,
-                                                        const HIRPathParams& rhs) {
-                if (lhs.mLifetimes.size() != rhs.mLifetimes.size()
-                    || lhs.types.size() != rhs.types.size()
-                    || lhs.values.size() != rhs.values.size()) {
+                };
+
+                if (!typesEqualAfterNormalization(left.getImplType(crate.types), right.getImplType(crate.types)) || !paramsEqualAfterNormalization(left.getTraitParams(crate.types), right.getTraitParams(crate.types))) {
                     return false;
                 }
-                // Ordinary regions are deliberately erased when a type is
-                // stored in an HM inference variable, and trait selection
-                // defers their constraints to lifetime inference.  Thus a
-                // ParamEnv proof for `Projection<'a>` and the same declared
-                // GAT bound seen through `Projection<'#omitted>` are one
-                // canonical solver response.  Higher-ranked leak checking is
-                // performed while evaluating the candidate bounds above; it
-                // must not be reintroduced here as response identity.
-                for (size_t i = 0; i < lhs.types.size(); i++) {
-                    if (!typesEqualAfterNormalization(
-                            lhs.types[i], rhs.types[i]
-                        )) {
-                        return false;
-                    }
+                if (!assocName || !assocName[0]) {
+                    return true;
                 }
-                for (size_t i = 0; i < lhs.values.size(); i++) {
-                    if (lhs.values[i] != rhs.values[i]) {
-                        return false;
-                    }
+                const static HIRPathParams noParams;
+                const auto& params = assocParams ? *assocParams : noParams;
+                if ((!left.mData.is_TraitImpl() || !right.mData.is_TraitImpl()) && params.hasParams()) {
+                    return false;
                 }
-                return true;
-            };
-
-            if (!typesEqualAfterNormalization(
-                    left.getImplType(crate.types), right.getImplType(crate.types)
-                )
-                || !paramsEqualAfterNormalization(
-                    left.getTraitParams(crate.types), right.getTraitParams(crate.types)
-                )) {
-                return false;
-            }
-            if (!assocName || !assocName[0]) {
-                return true;
-            }
-            const static HIRPathParams noParams;
-            const auto& params = assocParams ? *assocParams : noParams;
-            if ((!left.mData.is_TraitImpl() || !right.mData.is_TraitImpl())
-                && params.hasParams()) {
-                return false;
-            }
-            return typesEqualAfterNormalization(
-                left.getType(crate.types, assocName, params),
-                right.getType(crate.types, assocName, params)
-            );
-        }
-
-    public:
-        NextTraitGoalEvaluator(
-            const TraitResolution& resolve,
-            const HIRCrate& crate
-        )
-            : mResolve(resolve)
-            , crate(crate)
-            , candidateNodes(crate.pool)
-            , activeGoalNodes(crate.pool)
-            , cachedGoalNodes(crate.pool)
-        {
-            frames.reserve(16);
-            goalStack.reserve(16);
-            goalCache.reserve(64);
-            activeGoalIndex.reserve(32);
-            goalCacheIndex.reserve(128);
-        }
-
-        bool evaluateOverlap(
-            const Span& callSpan,
-            const HIRSimplePath& trait,
-            const HIRTraitImpl& left,
-            const HIRTraitImpl& right
-        ) {
-            ASSERT_BUG(callSpan, !mSpan, "nested coherence overlap session");
-            ASSERT_BUG(callSpan, !coherenceMode, "coherence mode leaked before overlap probe");
-            ASSERT_BUG(callSpan, goalStack.empty(), "next-solver goal stack leaked before coherence probe");
-            ASSERT_BUG(callSpan, activeGoalIndex.empty(), "next-solver active goal index leaked before coherence probe");
-            ASSERT_BUG(callSpan, frameDepth == 0, "next-solver candidate frames leaked before coherence probe");
-            clearGoalCache();
-            mSpan = &callSpan;
-            coherenceMode = true;
-            struct SessionGuard {
-                NextTraitGoalEvaluator& self;
-                ~SessionGuard() {
-                    assert(self.goalStack.empty());
-                    assert(self.activeGoalIndex.empty());
-                    self.clearGoalCache();
-                    self.frameDepth = 0;
-                    self.coherenceMode = false;
-                    self.mSpan = nullptr;
-                }
-            } sessionGuard{*this};
-
-            // Instantiate the first header with fresh inference variables, then
-            // match the second header against it.  This is a unification of two
-            // independently generic impls, not a one-way syntactic ordering.
-            auto leftParams = mResolve.makeFreshImplParams(left.mParams);
-            auto leftMonomorph = MonomorphStatePtr(crate.types, nullptr, &leftParams, nullptr);
-            auto goalType = leftMonomorph.monomorphType(callSpan, left.mType, true);
-            auto goalParams = leftMonomorph.monomorphPathParams(
-                callSpan, left.traitArgs, true
-            );
-
-            HIRPathParams rightParams;
-            const auto rightMatch = mResolve.fticCheckParams(
-                callSpan,
-                trait,
-                &goalParams,
-                goalType,
-                right.mParams,
-                right.traitArgs,
-                right.mType,
-                rightParams,
-                false
-            );
-            if (rightMatch == HIRCompare::Unequal) {
-                return false;
+                return typesEqualAfterNormalization(left.getType(crate.types, assocName, params), right.getType(crate.types, assocName, params));
             }
 
-            const size_t frameIndex = frameDepth++;
-            if (frameIndex == frames.size()) {
-                frames.push_back(crate.pool->make<CandidateFrame>());
+        public:
+            NextTraitGoalEvaluator(const TraitResolution& resolve, const HIRCrate& crate)
+                : mResolve(resolve)
+                , crate(crate)
+                , candidateNodes(crate.pool)
+                , activeGoalNodes(crate.pool)
+                , cachedGoalNodes(crate.pool)
+            {
+                frames.reserve(16);
+                goalStack.reserve(16);
+                goalCache.reserve(64);
+                activeGoalIndex.reserve(32);
+                goalCacheIndex.reserve(128);
             }
-            frames[frameIndex]->clear(candidateNodes);
-            frames[frameIndex]->availableDepth = ROOT_DEPTH;
-            struct FrameGuard {
-                NextTraitGoalEvaluator& self;
-                size_t index;
-                ~FrameGuard() {
-                    const bool encounteredOverflow =
-                        self.frames[index]->encounteredOverflow;
-                    self.frames[index]->clear(self.candidateNodes);
-                    assert(self.frameDepth == index + 1);
-                    self.frameDepth--;
-                    if (encounteredOverflow && index > 0) {
-                        self.frames[index - 1]->encounteredOverflow = true;
-                    }
-                }
-            } frameGuard{*this, frameIndex};
 
-            const auto& traitDef = crate.getTraitByPath(callSpan, trait);
-            pushCandidate(
-                frameIndex,
-                ImplRef(::std::move(leftParams), traitDef, trait, left),
-                HIRCompare::Equal,
-                nullptr, {}, false, CandidateSource::TraitImpl
-            );
-            pushCandidate(
-                frameIndex,
-                ImplRef(::std::move(rightParams), traitDef, trait, right),
-                rightMatch,
-                nullptr, {}, false, CandidateSource::TraitImpl
-            );
-
-            const auto& candidates = frames[frameIndex]->candidates;
-            ASSERT_BUG(callSpan, candidates.size() == 2, "coherence probe lost an impl candidate");
-            const auto leftResult = evaluateCandidate(frameIndex, 0, trait, nullptr);
-            if (leftResult == Certainty::NoSolution) {
-                return false;
-            }
-            const auto rightResult = evaluateCandidate(frameIndex, 1, trait, nullptr);
-            return rightResult != Certainty::NoSolution;
-        }
-
-        bool evaluate(
-            const Span& callSpan,
-            const HIRSimplePath& trait,
-            const HIRPathParams& params,
-            const HIRTypeData* type,
-            TraitResolution::tCbTraitImplR callback,
-            const char* assocName,
-            const HIRTypeData* assocType,
-            const HIRPathParams* assocParams
-        ) {
-            const bool outermost = mSpan == nullptr;
-            if (outermost) {
-                ASSERT_BUG(callSpan, goalStack.empty(), "next-solver goal stack leaked between evaluations");
-                ASSERT_BUG(callSpan, activeGoalIndex.empty(), "next-solver active goal index leaked between evaluations");
-                ASSERT_BUG(callSpan, frameDepth == 0, "next-solver candidate frames leaked between evaluations");
+            bool evaluateOverlap(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right) {
+                ASSERT_BUG(callSpan, !mSpan, "nested coherence overlap session");
+                ASSERT_BUG(callSpan, !coherenceMode, "coherence mode leaked before overlap probe");
+                ASSERT_BUG(callSpan, goalStack.empty(), "next-solver goal stack leaked before coherence probe");
+                ASSERT_BUG(callSpan, activeGoalIndex.empty(), "next-solver active goal index leaked before coherence probe");
+                ASSERT_BUG(callSpan, frameDepth == 0, "next-solver candidate frames leaked before coherence probe");
                 clearGoalCache();
                 mSpan = &callSpan;
-            }
-            struct SessionGuard {
-                NextTraitGoalEvaluator& self;
-                bool outermost;
-                ~SessionGuard() {
-                    if (outermost) {
+                coherenceMode = true;
+
+                struct SessionGuard {
+                    NextTraitGoalEvaluator& self;
+
+                    ~SessionGuard() {
                         assert(self.goalStack.empty());
                         assert(self.activeGoalIndex.empty());
                         self.clearGoalCache();
                         self.frameDepth = 0;
+                        self.coherenceMode = false;
                         self.mSpan = nullptr;
                     }
-                }
-            } sessionGuard{*this, outermost};
+                } sessionGuard{*this};
 
-            auto goalType = type;
-            auto goalParams = params.clone();
-            auto emitForcedAmbiguity = [&]() {
-                // Ordinary lookup cannot consume an identity response, while
-                // extended solver callers use it to retain the original goal
-                // without committing any candidate substitutions.
-                if (!assocName) {
+                // Instantiate the first header with fresh inference variables, then
+                // match the second header against it.  This is a unification of two
+                // independently generic impls, not a one-way syntactic ordering.
+                auto leftParams = mResolve.makeFreshImplParams(left.mParams);
+                auto leftMonomorph = MonomorphStatePtr(crate.types, nullptr, &leftParams, nullptr);
+                auto goalType = leftMonomorph.monomorphType(callSpan, left.mType, true);
+                auto goalParams = leftMonomorph.monomorphPathParams(callSpan, left.traitArgs, true);
+
+                HIRPathParams rightParams;
+                const auto rightMatch = mResolve.fticCheckParams(callSpan, trait, &goalParams, goalType, right.mParams, right.traitArgs, right.mType, rightParams, false);
+                if (rightMatch == HIRCompare::Unequal) {
                     return false;
                 }
-                auto ambiguous = ImplRef(
-                    goalType,
-                    goalParams.clone(),
-                    HIRTraitPath::assocListT()
-                );
-                ambiguous.markAmbiguousIdentity();
-                return callback(
-                    materializeRootAssociated(
-                        ::std::move(ambiguous),
-                        trait,
-                        assocName,
-                        assocParams
-                    ),
-                    HIRCompare::Fuzzy
-                );
-            };
-            if (goalHasUnassignedInfer(
-                    goalParams, goalType, nullptr
-                )) {
-                return emitForcedAmbiguity();
-            }
-            goalType = mResolve.expandAssociatedTypes(span(), goalType);
-            for (auto& param : goalParams.types) {
-                param = mResolve.expandAssociatedTypes(
-                    span(), ::std::move(param)
-                );
-            }
-            if (selfIsUnresolvedProjectionOverIvar(goalType)) {
-                return emitForcedAmbiguity();
-            }
-            const auto& resolvedType = mResolve.resolveType(goalType);
-            // Match rustc's forced-ambiguity response for a genuinely
-            // unconstrained `Self` type.  A known associated output is an
-            // input constraint and can legitimately select a unique response.
-            const bool associatedConstrainsSelf =
-                assocName && assocName[0] && assocType
-                && !typeHasUnknown(assocType);
-            if (const auto* infer = resolvedType->opt_Infer()) {
-                if (!infer->isLit() && !associatedConstrainsSelf) {
-                    return emitForcedAmbiguity();
-                }
-            }
-            CanonicalizeTraitGoal canonicalizer(crate.types);
-            const auto canonical = canonicalizeGoal(
-                goalParams, resolvedType, nullptr, canonicalizer
-            );
-            // The associated output is not part of the response cache key,
-            // but its placeholders are still inputs of this query.  Record
-            // them so root response instantiation does not mistake them for
-            // existential variables created by candidate evaluation.
-            if (assocType) {
-                canonicalizer.monomorphType(span(), assocType, true);
-            }
-            if (assocParams) {
-                canonicalizer.monomorphPathParams(span(), *assocParams, true);
-            }
-            const auto rootHash = goalHash(
-                trait, canonical.params, canonical.type, nullptr
-            );
-            auto instantiateForCaller = [&](ImplRef response) {
-                if (!outermost) {
-                    return response;
-                }
-                InstantiateTraitResponseForCaller instantiator(
-                    crate.types,
-                    const_cast<HMTypeInferrence&>(mResolve.ivars),
-                    canonicalizer.placeholderNames()
-                );
-                return monomorphImplRef(response, instantiator);
-            };
-            // Extended callers use an explicit empty associated-item name
-            // when they need the canonical trait response itself. Cache that
-            // completed response, not just its certainty: otherwise every
-            // repeated nested obligation rebuilds the entire candidate graph.
-            const bool cacheableResponse = assocName && !assocName[0];
-            if (cacheableResponse) {
-                if (const auto* cached = findCachedGoal(
-                        rootHash,
-                        trait,
-                        canonical.params,
-                        canonical.type,
-                        nullptr
-                    ); cached && cached->hasResponse) {
-                    InstantiateCanonicalTraitResponse instantiator(
-                        crate.types,
-                        canonicalizer.placeholderNames(),
-                        responseInstanceCounter++
-                    );
-                    auto response = monomorphImplRef(
-                        cached->response, instantiator
-                    );
-                    return callback(
-                        instantiateForCaller(::std::move(response)),
-                        cached->responseCertainty
-                    );
-                }
-            }
-            auto emitResponse = [&](ImplRef response, HIRCompare certainty) {
-                if (!cacheableResponse) {
-                    return callback(
-                        instantiateForCaller(::std::move(response)), certainty
-                    );
-                }
-                auto canonicalResponse = monomorphImplRef(
-                    response, canonicalizer
-                );
-                auto* cached = cacheResponse(
-                    rootHash,
-                    trait,
-                    canonical.params,
-                    canonical.type,
-                    nullptr,
-                    ::std::move(canonicalResponse),
-                    certainty
-                );
-                return callback(
-                    instantiateForCaller(::std::move(response)),
-                    cached->responseCertainty
-                );
-            };
-            if (findActiveGoal(
-                    rootHash,
-                    trait,
-                    canonical.params,
-                    canonical.type,
-                    nullptr
-                )) {
-                static const HIRTraitPath::assocListT noAssociated;
-                const bool coinductive = crate.getTraitByPath(
-                    span(), trait
-                ).isCoinductive;
-                return callback(
-                    ImplRef(resolvedType, &goalParams, &noAssociated),
-                    coinductive
-                        ? HIRCompare::Equal
-                        : HIRCompare::Fuzzy
-                );
-            }
-            auto* rootGoal = pushActiveGoal(
-                rootHash,
-                trait,
-                canonical.params,
-                canonical.type,
-                nullptr
-            );
-            struct RootStackGuard {
-                NextTraitGoalEvaluator& self;
-                GoalKey* goal;
-                ~RootStackGuard() { self.popActiveGoal(goal); }
-            } rootGuard{*this, rootGoal};
 
-            const size_t frameIndex = frameDepth++;
-            if (frameIndex == frames.size()) {
-                frames.push_back(crate.pool->make<CandidateFrame>());
-            }
-            frames[frameIndex]->clear(candidateNodes);
-            frames[frameIndex]->availableDepth = ROOT_DEPTH;
-            struct FrameGuard {
-                NextTraitGoalEvaluator& self;
-                size_t index;
-                ~FrameGuard() {
-                    const bool encounteredOverflow =
-                        self.frames[index]->encounteredOverflow;
-                    self.frames[index]->clear(self.candidateNodes);
-                    assert(self.frameDepth == index + 1);
-                    self.frameDepth--;
-                    if (encounteredOverflow && index > 0) {
-                        self.frames[index - 1]->encounteredOverflow = true;
-                    }
+                const size_t frameIndex = frameDepth++;
+                if (frameIndex == frames.size()) {
+                    frames.push_back(crate.pool->make<CandidateFrame>());
                 }
-            } frameGuard{*this, frameIndex};
+                frames[frameIndex]->clear(candidateNodes);
+                frames[frameIndex]->availableDepth = ROOT_DEPTH;
 
-            try {
-                assembleCandidates(
-                    frameIndex, trait, goalParams, resolvedType
-                );
-            } catch (const TraitResolution::RecursionDetected&) {
-                return false;
-            }
-            auto& frame = *frames[frameIndex];
-            const size_t candidateCount = frame.candidates.size();
-            DEBUG("next-solver assembled " << candidateCount
-                  << " candidate(s) for " << type << ": " << trait << params);
+                struct FrameGuard {
+                    NextTraitGoalEvaluator& self;
+                    size_t index;
 
-            bool suppressAutoBuiltin = false;
-            bool negativeProven = false;
-            bool negativeAmbiguous = false;
-            const HIRTypeData* candidateAssocType = assocType;
-            if (candidateAssocType) {
-                if (const auto* erased = candidateAssocType->opt_ErasedType()) {
-                    if (const auto* alias = erased->inner.opt_Alias();
-                        alias && alias->inner->isPublicTo(mResolve.mVisPath)) {
-                        // A defining opaque is an output of alias-relate, not
-                        // an input that can reject an otherwise valid impl.
-                        // Return the projection response to the caller, which
-                        // then equates it with this opaque and records its
-                        // hidden type.
-                        candidateAssocType = nullptr;
-                    }
-                }
-            }
-            HIRTraitPath::assocListT rootAssociated;
-            if (assocName && assocName[0] && candidateAssocType) {
-                const static HIRPathParams noAssocParams;
-                rootAssociated.insert({
-                    RcString::newInterned(assocName),
-                    HIRTraitPath::AtyEqual{
-                        HIRGenericPath(trait, goalParams.clone()),
-                        assocParams ? assocParams->clone() : noAssocParams.clone(),
-                        candidateAssocType
-                    }
-                });
-            }
-            for (size_t i = 0; i < candidateCount; i++) {
-                auto certainty = evaluateCandidate(
-                    frameIndex,
-                    i,
-                    trait,
-                    rootAssociated.empty() ? nullptr : &rootAssociated
-                );
-                auto* candidate = frame.candidates[i];
-                if (!candidate->isNegative()) {
-                    const auto assocCertainty = matchRootAssociated(
-                        trait,
-                        candidate->impl,
-                        assocName,
-                        candidateAssocType,
-                        assocParams
-                    );
-                    if (assocCertainty == Certainty::NoSolution) {
-                        certainty = Certainty::NoSolution;
-                    } else if (assocCertainty == Certainty::Ambiguous
-                               && certainty == Certainty::Proven) {
-                        certainty = Certainty::Ambiguous;
-                    }
-                }
-                candidate->certainty = certainty;
-                DEBUG("next-solver candidate " << candidate->impl
-                      << " => " << static_cast<unsigned>(certainty));
-                if (candidate->isNegative()) {
-                    negativeProven |= certainty == Certainty::Proven;
-                    negativeAmbiguous |= certainty == Certainty::Ambiguous;
-                    continue;
-                }
-                suppressAutoBuiltin |= candidate->isPositiveMarkerImpl()
-                    && certainty != Certainty::NoSolution;
-                if (certainty != Certainty::NoSolution) {
-                    frame.viable.push_back(candidate);
-                }
-            }
-
-            if (suppressAutoBuiltin || negativeProven) {
-                auto& viable = frame.viable;
-                viable.erase(
-                    ::std::remove_if(
-                        viable.begin(), viable.end(),
-                        [&](Candidate* candidate) {
-                            return candidate->autoBuiltin;
+                    ~FrameGuard() {
+                        const bool encounteredOverflow = self.frames[index]->encounteredOverflow;
+                        self.frames[index]->clear(self.candidateNodes);
+                        assert(self.frameDepth == index + 1);
+                        self.frameDepth--;
+                        if (encounteredOverflow && index > 0) {
+                            self.frames[index - 1]->encounteredOverflow = true;
                         }
-                    ),
-                    viable.end()
-                );
-            } else if (negativeAmbiguous) {
-                for (auto* candidate : frame.viable) {
-                    if (candidate->autoBuiltin
-                        && candidate->certainty == Certainty::Proven) {
-                        candidate->certainty = Certainty::Ambiguous;
                     }
+                } frameGuard{*this, frameIndex};
+
+                const auto& traitDef = crate.getTraitByPath(callSpan, trait);
+                pushCandidate(frameIndex, ImplRef(::std::move(leftParams), traitDef, trait, left), HIRCompare::Equal, nullptr, {}, false, CandidateSource::TraitImpl);
+                pushCandidate(frameIndex, ImplRef(::std::move(rightParams), traitDef, trait, right), rightMatch, nullptr, {}, false, CandidateSource::TraitImpl);
+
+                const auto& candidates = frames[frameIndex]->candidates;
+                ASSERT_BUG(callSpan, candidates.size() == 2, "coherence probe lost an impl candidate");
+                const auto leftResult = evaluateCandidate(frameIndex, 0, trait, nullptr);
+                if (leftResult == Certainty::NoSolution) {
+                    return false;
                 }
+                const auto rightResult = evaluateCandidate(frameIndex, 1, trait, nullptr);
+                return rightResult != Certainty::NoSolution;
             }
 
-            if (frame.viable.empty()) {
-                DEBUG("next-solver: no viable response");
-                // solve_goal keeps an obligation ambiguous while inference
-                // still occurs in its inputs.  The response-producing path
-                // must preserve the same result: nested candidate evaluation
-                // calls it specifically to recover constraints from an
-                // ambiguous goal.  Returning false here would turn e.g.
-                // `<_ as IntoIterator>::IntoIter: Iterator` into NoSolution
-                // and incorrectly discard an enclosing `Zip` candidate.
-                if (mResolve.typeContainsIvars(resolvedType)
-                    || mResolve.paramsContainIvars(goalParams)) {
+            bool evaluate(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitResolution::tCbTraitImplR callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams) {
+                const bool outermost = mSpan == nullptr;
+                if (outermost) {
+                    ASSERT_BUG(callSpan, goalStack.empty(), "next-solver goal stack leaked between evaluations");
+                    ASSERT_BUG(callSpan, activeGoalIndex.empty(), "next-solver active goal index leaked between evaluations");
+                    ASSERT_BUG(callSpan, frameDepth == 0, "next-solver candidate frames leaked between evaluations");
+                    clearGoalCache();
+                    mSpan = &callSpan;
+                }
+
+                struct SessionGuard {
+                    NextTraitGoalEvaluator& self;
+                    bool outermost;
+
+                    ~SessionGuard() {
+                        if (outermost) {
+                            assert(self.goalStack.empty());
+                            assert(self.activeGoalIndex.empty());
+                            self.clearGoalCache();
+                            self.frameDepth = 0;
+                            self.mSpan = nullptr;
+                        }
+                    }
+                } sessionGuard{*this, outermost};
+
+                auto goalType = type;
+                auto goalParams = params.clone();
+                auto emitForcedAmbiguity = [&]() {
+                    // Ordinary lookup cannot consume an identity response, while
+                    // extended solver callers use it to retain the original goal
+                    // without committing any candidate substitutions.
+                    if (!assocName) {
+                        return false;
+                    }
+                    auto ambiguous = ImplRef(goalType, goalParams.clone(), HIRTraitPath::assocListT());
+                    ambiguous.markAmbiguousIdentity();
+                    return callback(materializeRootAssociated(::std::move(ambiguous), trait, assocName, assocParams), HIRCompare::Fuzzy);
+                };
+                if (goalHasUnassignedInfer(goalParams, goalType, nullptr)) {
                     return emitForcedAmbiguity();
                 }
-                return false;
-            }
+                goalType = mResolve.expandAssociatedTypes(span(), goalType);
+                for (auto& param : goalParams.types) {
+                    param = mResolve.expandAssociatedTypes(span(), ::std::move(param));
+                }
+                if (selfIsUnresolvedProjectionOverIvar(goalType)) {
+                    return emitForcedAmbiguity();
+                }
+                const auto& resolvedType = mResolve.resolveType(goalType);
+                // Match rustc's forced-ambiguity response for a genuinely
+                // unconstrained `Self` type.  A known associated output is an
+                // input constraint and can legitimately select a unique response.
+                const bool associatedConstrainsSelf = assocName && assocName[0] && assocType && !typeHasUnknown(assocType);
+                if (const auto* infer = resolvedType->opt_Infer()) {
+                    if (!infer->isLit() && !associatedConstrainsSelf) {
+                        return emitForcedAmbiguity();
+                    }
+                }
+                CanonicalizeTraitGoal canonicalizer(crate.types);
+                const auto canonical = canonicalizeGoal(goalParams, resolvedType, nullptr, canonicalizer);
+                // The associated output is not part of the response cache key,
+                // but its placeholders are still inputs of this query.  Record
+                // them so root response instantiation does not mistake them for
+                // existential variables created by candidate evaluation.
+                if (assocType) {
+                    canonicalizer.monomorphType(span(), assocType, true);
+                }
+                if (assocParams) {
+                    canonicalizer.monomorphPathParams(span(), *assocParams, true);
+                }
+                const auto rootHash = goalHash(trait, canonical.params, canonical.type, nullptr);
+                auto instantiateForCaller = [&](ImplRef response) {
+                    if (!outermost) {
+                        return response;
+                    }
+                    InstantiateTraitResponseForCaller instantiator(crate.types, const_cast<HMTypeInferrence&>(mResolve.ivars), canonicalizer.placeholderNames());
+                    return monomorphImplRef(response, instantiator);
+                };
+                // Extended callers use an explicit empty associated-item name
+                // when they need the canonical trait response itself. Cache that
+                // completed response, not just its certainty: otherwise every
+                // repeated nested obligation rebuilds the entire candidate graph.
+                const bool cacheableResponse = assocName && !assocName[0];
+                if (cacheableResponse) {
+                    if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, nullptr); cached && cached->hasResponse) {
+                        InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++);
+                        auto response = monomorphImplRef(cached->response, instantiator);
+                        return callback(instantiateForCaller(::std::move(response)), cached->responseCertainty);
+                    }
+                }
+                auto emitResponse = [&](ImplRef response, HIRCompare certainty) {
+                    if (!cacheableResponse) {
+                        return callback(instantiateForCaller(::std::move(response)), certainty);
+                    }
+                    auto canonicalResponse = monomorphImplRef(response, canonicalizer);
+                    auto* cached = cacheResponse(rootHash, trait, canonical.params, canonical.type, nullptr, ::std::move(canonicalResponse), certainty);
+                    return callback(instantiateForCaller(::std::move(response)), cached->responseCertainty);
+                };
+                if (findActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr)) {
+                    static const HIRTraitPath::assocListT noAssociated;
+                    const bool coinductive = crate.getTraitByPath(span(), trait).isCoinductive;
+                    return callback(ImplRef(resolvedType, &goalParams, &noAssociated), coinductive ? HIRCompare::Equal : HIRCompare::Fuzzy);
+                }
+                auto* rootGoal = pushActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr);
 
-            // rustc prefers all ParamEnv responses when any applicable
-            // non-global where-bound exists. In particular, `T:
-            // Pointee<Metadata = ()>` must retain the environment response
-            // instead of normalising through the generic builtin fallback.
-            const bool hasNonGlobalParamEnv = ::std::any_of(
-                frame.viable.begin(), frame.viable.end(),
-                [&](const Candidate* candidate) {
+                struct RootStackGuard {
+                    NextTraitGoalEvaluator& self;
+                    GoalKey* goal;
+
+                    ~RootStackGuard() {
+                        self.popActiveGoal(goal);
+                    }
+                } rootGuard{*this, rootGoal};
+
+                const size_t frameIndex = frameDepth++;
+                if (frameIndex == frames.size()) {
+                    frames.push_back(crate.pool->make<CandidateFrame>());
+                }
+                frames[frameIndex]->clear(candidateNodes);
+                frames[frameIndex]->availableDepth = ROOT_DEPTH;
+
+                struct FrameGuard {
+                    NextTraitGoalEvaluator& self;
+                    size_t index;
+
+                    ~FrameGuard() {
+                        const bool encounteredOverflow = self.frames[index]->encounteredOverflow;
+                        self.frames[index]->clear(self.candidateNodes);
+                        assert(self.frameDepth == index + 1);
+                        self.frameDepth--;
+                        if (encounteredOverflow && index > 0) {
+                            self.frames[index - 1]->encounteredOverflow = true;
+                        }
+                    }
+                } frameGuard{*this, frameIndex};
+
+                try {
+                    assembleCandidates(frameIndex, trait, goalParams, resolvedType);
+                } catch (const TraitResolution::RecursionDetected&) {
+                    return false;
+                }
+                auto& frame = *frames[frameIndex];
+                const size_t candidateCount = frame.candidates.size();
+                DEBUG("next-solver assembled " << candidateCount << " candidate(s) for " << type << ": " << trait << params);
+
+                bool suppressAutoBuiltin = false;
+                bool negativeProven = false;
+                bool negativeAmbiguous = false;
+                const HIRTypeData* candidateAssocType = assocType;
+                if (candidateAssocType) {
+                    if (const auto* erased = candidateAssocType->opt_ErasedType()) {
+                        if (const auto* alias = erased->inner.opt_Alias(); alias && alias->inner->isPublicTo(mResolve.mVisPath)) {
+                            // A defining opaque is an output of alias-relate, not
+                            // an input that can reject an otherwise valid impl.
+                            // Return the projection response to the caller, which
+                            // then equates it with this opaque and records its
+                            // hidden type.
+                            candidateAssocType = nullptr;
+                        }
+                    }
+                }
+                HIRTraitPath::assocListT rootAssociated;
+                if (assocName && assocName[0] && candidateAssocType) {
+                    const static HIRPathParams noAssocParams;
+                    rootAssociated.insert({RcString::newInterned(assocName), HIRTraitPath::AtyEqual{HIRGenericPath(trait, goalParams.clone()), assocParams ? assocParams->clone() : noAssocParams.clone(), candidateAssocType}});
+                }
+                for (size_t i = 0; i < candidateCount; i++) {
+                    auto certainty = evaluateCandidate(frameIndex, i, trait, rootAssociated.empty() ? nullptr : &rootAssociated);
+                    auto* candidate = frame.candidates[i];
+                    if (!candidate->isNegative()) {
+                        const auto assocCertainty = matchRootAssociated(trait, candidate->impl, assocName, candidateAssocType, assocParams);
+                        if (assocCertainty == Certainty::NoSolution) {
+                            certainty = Certainty::NoSolution;
+                        } else if (assocCertainty == Certainty::Ambiguous && certainty == Certainty::Proven) {
+                            certainty = Certainty::Ambiguous;
+                        }
+                    }
+                    candidate->certainty = certainty;
+                    DEBUG("next-solver candidate " << candidate->impl << " => " << static_cast<unsigned>(certainty));
+                    if (candidate->isNegative()) {
+                        negativeProven |= certainty == Certainty::Proven;
+                        negativeAmbiguous |= certainty == Certainty::Ambiguous;
+                        continue;
+                    }
+                    suppressAutoBuiltin |= candidate->isPositiveMarkerImpl() && certainty != Certainty::NoSolution;
+                    if (certainty != Certainty::NoSolution) {
+                        frame.viable.push_back(candidate);
+                    }
+                }
+
+                if (suppressAutoBuiltin || negativeProven) {
+                    auto& viable = frame.viable;
+                    viable.erase(
+                        ::std::remove_if(
+                            viable.begin(),
+                            viable.end(),
+                            [&](Candidate* candidate) {
+                        return candidate->autoBuiltin;
+                    }
+                        ),
+                        viable.end()
+                    );
+                } else if (negativeAmbiguous) {
+                    for (auto* candidate : frame.viable) {
+                        if (candidate->autoBuiltin && candidate->certainty == Certainty::Proven) {
+                            candidate->certainty = Certainty::Ambiguous;
+                        }
+                    }
+                }
+
+                if (frame.viable.empty()) {
+                    DEBUG("next-solver: no viable response");
+                    // solve_goal keeps an obligation ambiguous while inference
+                    // still occurs in its inputs.  The response-producing path
+                    // must preserve the same result: nested candidate evaluation
+                    // calls it specifically to recover constraints from an
+                    // ambiguous goal.  Returning false here would turn e.g.
+                    // `<_ as IntoIterator>::IntoIter: Iterator` into NoSolution
+                    // and incorrectly discard an enclosing `Zip` candidate.
+                    if (mResolve.typeContainsIvars(resolvedType) || mResolve.paramsContainIvars(goalParams)) {
+                        return emitForcedAmbiguity();
+                    }
+                    return false;
+                }
+
+                // rustc prefers all ParamEnv responses when any applicable
+                // non-global where-bound exists. In particular, `T:
+                // Pointee<Metadata = ()>` must retain the environment response
+                // instead of normalising through the generic builtin fallback.
+                const bool hasNonGlobalParamEnv = ::std::any_of(frame.viable.begin(), frame.viable.end(), [&](const Candidate* candidate) {
                     return paramEnvCandidateIsNonGlobal(*candidate);
-                }
-            );
-            if (hasNonGlobalParamEnv) {
-                auto& viable = frame.viable;
-                viable.erase(
-                    ::std::remove_if(
-                        viable.begin(), viable.end(),
-                        [](const Candidate* candidate) {
-                            return candidate->source != CandidateSource::ParamEnv;
-                        }
-                    ),
-                    viable.end()
-                );
-            }
-
-            // A proven ParamEnv or builtin candidate shadows impl candidates.
-            // This is the central next-solver candidate preference used for
-            // projection normalization and dyn-object builtins.
-            bool hasPreferredNonImpl = false;
-            for (const auto* candidate : frame.viable) {
-                hasPreferredNonImpl |= isEnvironmentOrBuiltin(candidate->impl)
-                    && candidate->certainty == Certainty::Proven;
-            }
-            if (hasPreferredNonImpl) {
-                auto& viable = frame.viable;
-                viable.erase(
-                    ::std::remove_if(
-                        viable.begin(), viable.end(),
-                        [&](Candidate* candidate) {
-                            return !isEnvironmentOrBuiltin(candidate->impl);
-                        }
-                    ),
-                    viable.end()
-                );
-            }
-
-            // Apply specialization only after nested goals have been probed.
-            for (auto* candidate : frame.viable) {
-                candidate->discarded = false;
-            }
-            for (size_t i = 0; i < frame.viable.size(); i++) {
-                if (frame.viable[i]->discarded) {
-                    continue;
-                }
-                for (size_t j = i + 1; j < frame.viable.size(); j++) {
-                    if (frame.viable[j]->discarded) {
-                        continue;
+                });
+                if (hasNonGlobalParamEnv) {
+                    auto& viable = frame.viable;
+                    viable.erase(
+                        ::std::remove_if(
+                            viable.begin(),
+                            viable.end(),
+                            [](const Candidate* candidate) {
+                        return candidate->source != CandidateSource::ParamEnv;
                     }
-                    auto& left = frame.viable[i]->impl;
-                    auto& right = frame.viable[j]->impl;
-                    // Specialization only distinguishes different canonical
-                    // responses.  If both candidates constrain the caller in
-                    // exactly the same way, merge their certainties instead;
-                    // a proven route must not be discarded behind an
-                    // ambiguous, cyclic route to the same response.
-                    if (responsesEqual(left, right, assocName, assocParams)) {
-                        continue;
-                    }
-                    if (!left.mData.is_TraitImpl() || !right.mData.is_TraitImpl()) {
-                        continue;
-                    }
-                    // evaluate_overlap is itself the recursive overlap query.
-                    // Re-entering either overlap implementation here makes a
-                    // coinductive pair recurse without a solver cycle head.
-                    // Keeping both responses is conservative: ambiguity is
-                    // already sufficient to report that the impls may overlap.
-                    if (coherenceMode
-                        || !mResolve.implsOverlap(span(), left, right)) {
-                        continue;
-                    }
-                    // A more-specific impl with an ambiguous where-clause
-                    // cannot shadow the fallback: that nested goal may still
-                    // fail.  Head ambiguity alone is inference guidance and
-                    // remains eligible for specialization.
-                    if (left.moreSpecificThan(crate.types, right)
-                        && !frame.viable[i]->ambiguityBeyondHead) {
-                        frame.viable[j]->discarded = true;
-                    } else if (right.moreSpecificThan(crate.types, left)
-                               && !frame.viable[j]->ambiguityBeyondHead) {
-                        frame.viable[i]->discarded = true;
-                        break;
-                    }
-                }
-            }
-            frame.viable.erase(
-                ::std::remove_if(
-                    frame.viable.begin(), frame.viable.end(),
-                    [](const Candidate* candidate) { return candidate->discarded; }
-                ),
-                frame.viable.end()
-            );
-
-            bool oneResponse = true;
-            for (size_t i = 1; i < frame.viable.size(); i++) {
-                if (!responsesEqual(
-                        frame.viable.front()->impl,
-                        frame.viable[i]->impl,
-                        assocName,
-                        assocParams
-                    )) {
-                    oneResponse = false;
-                    break;
-                }
-            }
-
-            if (oneResponse) {
-                Candidate* selected = frame.viable.front();
-                for (auto* candidate : frame.viable) {
-                    if (candidate->certainty == Certainty::Proven) {
-                        selected = candidate;
-                        break;
-                    }
-                }
-                const auto certainty = selected->certainty;
-                DEBUG("next-solver: applying merged response "
-                      << selected->impl << " certainty="
-                      << static_cast<unsigned>(certainty));
-                if (certainty != Certainty::Proven) {
-                    return emitResponse(
-                        ::std::move(selected->impl),
-                        HIRCompare::Fuzzy
+                        ),
+                        viable.end()
                     );
                 }
-                return emitResponse(
-                    materializeRootAssociated(
-                        ::std::move(selected->impl),
-                        trait,
-                        assocName,
-                        assocParams
+
+                // A proven ParamEnv or builtin candidate shadows impl candidates.
+                // This is the central next-solver candidate preference used for
+                // projection normalization and dyn-object builtins.
+                bool hasPreferredNonImpl = false;
+                for (const auto* candidate : frame.viable) {
+                    hasPreferredNonImpl |= isEnvironmentOrBuiltin(candidate->impl) && candidate->certainty == Certainty::Proven;
+                }
+                if (hasPreferredNonImpl) {
+                    auto& viable = frame.viable;
+                    viable.erase(
+                        ::std::remove_if(
+                            viable.begin(),
+                            viable.end(),
+                            [&](Candidate* candidate) {
+                        return !isEnvironmentOrBuiltin(candidate->impl);
+                    }
+                        ),
+                        viable.end()
+                    );
+                }
+
+                // Apply specialization only after nested goals have been probed.
+                for (auto* candidate : frame.viable) {
+                    candidate->discarded = false;
+                }
+                for (size_t i = 0; i < frame.viable.size(); i++) {
+                    if (frame.viable[i]->discarded) {
+                        continue;
+                    }
+                    for (size_t j = i + 1; j < frame.viable.size(); j++) {
+                        if (frame.viable[j]->discarded) {
+                            continue;
+                        }
+                        auto& left = frame.viable[i]->impl;
+                        auto& right = frame.viable[j]->impl;
+                        // Specialization only distinguishes different canonical
+                        // responses.  If both candidates constrain the caller in
+                        // exactly the same way, merge their certainties instead;
+                        // a proven route must not be discarded behind an
+                        // ambiguous, cyclic route to the same response.
+                        if (responsesEqual(left, right, assocName, assocParams)) {
+                            continue;
+                        }
+                        if (!left.mData.is_TraitImpl() || !right.mData.is_TraitImpl()) {
+                            continue;
+                        }
+                        // evaluate_overlap is itself the recursive overlap query.
+                        // Re-entering either overlap implementation here makes a
+                        // coinductive pair recurse without a solver cycle head.
+                        // Keeping both responses is conservative: ambiguity is
+                        // already sufficient to report that the impls may overlap.
+                        if (coherenceMode || !mResolve.implsOverlap(span(), left, right)) {
+                            continue;
+                        }
+                        // A more-specific impl with an ambiguous where-clause
+                        // cannot shadow the fallback: that nested goal may still
+                        // fail.  Head ambiguity alone is inference guidance and
+                        // remains eligible for specialization.
+                        if (left.moreSpecificThan(crate.types, right) && !frame.viable[i]->ambiguityBeyondHead) {
+                            frame.viable[j]->discarded = true;
+                        } else if (right.moreSpecificThan(crate.types, left) && !frame.viable[j]->ambiguityBeyondHead) {
+                            frame.viable[i]->discarded = true;
+                            break;
+                        }
+                    }
+                }
+                frame.viable.erase(
+                    ::std::remove_if(
+                        frame.viable.begin(),
+                        frame.viable.end(),
+                        [](const Candidate* candidate) {
+                    return candidate->discarded;
+                }
                     ),
-                    HIRCompare::Equal
+                    frame.viable.end()
                 );
+
+                bool oneResponse = true;
+                for (size_t i = 1; i < frame.viable.size(); i++) {
+                    if (!responsesEqual(frame.viable.front()->impl, frame.viable[i]->impl, assocName, assocParams)) {
+                        oneResponse = false;
+                        break;
+                    }
+                }
+
+                if (oneResponse) {
+                    Candidate* selected = frame.viable.front();
+                    for (auto* candidate : frame.viable) {
+                        if (candidate->certainty == Certainty::Proven) {
+                            selected = candidate;
+                            break;
+                        }
+                    }
+                    const auto certainty = selected->certainty;
+                    DEBUG("next-solver: applying merged response " << selected->impl << " certainty=" << static_cast<unsigned>(certainty));
+                    if (certainty != Certainty::Proven) {
+                        return emitResponse(::std::move(selected->impl), HIRCompare::Fuzzy);
+                    }
+                    return emitResponse(materializeRootAssociated(::std::move(selected->impl), trait, assocName, assocParams), HIRCompare::Equal);
+                }
+
+                // Distinct canonical responses cannot guide inference.  Return a
+                // single identity response for the original goal: exposing any
+                // concrete candidate here lets a callback accidentally commit the
+                // first candidate's substitutions despite the ambiguity.
+                auto ambiguous = ImplRef(resolvedType, goalParams.clone(), HIRTraitPath::assocListT());
+                ambiguous.markAmbiguousIdentity();
+                return emitResponse(materializeRootAssociated(::std::move(ambiguous), trait, assocName, assocParams), HIRCompare::Fuzzy);
+            }
+        };
+
+        TraitResolution::TraitResolution(const HMTypeInferrence& ivars, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait)
+            : TraitResolveCommon(crate)
+            , mLangDeref(crate.getLangItemPathOpt("deref"))
+            , ivars(ivars)
+            , coherenceIvars(crate.types)
+            , mVisPath(visPath)
+            , mCurrentTraitPath(currentTrait)
+            , currentTraitPtr(currentTrait ? &crate.getTraitByPath(Span(), currentTrait->mPath) : nullptr)
+        {
+            mImplGenerics = implParams;
+            mItemGenerics = itemParams;
+            prepIndexes(Span());
+        }
+
+        TraitResolution::~TraitResolution() = default;
+
+        void TraitResolution::setGenericContext(const HIRGenericParams* implParams, const HIRGenericParams* itemParams) {
+            if (mImplGenerics == implParams && mItemGenerics == itemParams) {
+                return;
+            }
+            ASSERT_BUG(Span(), eatActiveStack.empty(), "changing trait environment during associated-type expansion");
+            mImplGenerics = implParams;
+            mItemGenerics = itemParams;
+            eatCache.clear();
+            prepIndexes(Span());
+        }
+
+        HIRPathParams TraitResolution::makeFreshImplParams(const HIRGenericParams& params) const {
+            auto& mutIvars = const_cast<HMTypeInferrence&>(this->ivars);
+            HIRPathParams result;
+            result.mLifetimes = ThinVector<HIRLifetimeRef>(params.mLifetimes.size());
+            result.types.reserve(params.types.size());
+            for (size_t i = 0; i < params.types.size(); i++) {
+                result.types.push_back(mutIvars.newIvarTr());
+            }
+            result.values.reserve(params.values.size());
+            for (size_t i = 0; i < params.values.size(); i++) {
+                result.values.push_back(HIRConstGeneric::make_Infer({mutIvars.newIvarVal()}));
+            }
+            return result;
+        }
+
+        bool TraitResolution::implsOverlap(const Span& sp, const ImplRef& left, const ImplRef& right) const {
+            const auto* leftImpl = left.mData.opt_TraitImpl();
+            const auto* rightImpl = right.mData.opt_TraitImpl();
+            if (!gTraitSolverConfig.coherence || !leftImpl || !rightImpl || !leftImpl->impl || !rightImpl->impl) {
+                return left.overlapsWith(crate, right);
+            }
+            if (!leftImpl->traitPath || !rightImpl->traitPath || *leftImpl->traitPath != *rightImpl->traitPath) {
+                return false;
+            }
+            if (leftImpl->impl == rightImpl->impl) {
+                return true;
             }
 
-            // Distinct canonical responses cannot guide inference.  Return a
-            // single identity response for the original goal: exposing any
-            // concrete candidate here lets a callback accidentally commit the
-            // first candidate's substitutions despite the ambiguity.
-            auto ambiguous = ImplRef(
-                resolvedType,
-                goalParams.clone(),
-                HIRTraitPath::assocListT()
-            );
-            ambiguous.markAmbiguousIdentity();
-            return emitResponse(
-                materializeRootAssociated(
-                    ::std::move(ambiguous),
-                    trait,
-                    assocName,
-                    assocParams
-                ),
-                HIRCompare::Fuzzy
-            );
+            // The probe resolver is pool-owned and reused, while its inference table
+            // is reset per overlap query.  No probe variable can escape into m_ivars.
+            coherenceIvars.ivars.clear();
+            coherenceIvars.values.clear();
+            coherenceIvars.hasChanged = false;
+            if (!coherenceResolve) {
+                ASSERT_BUG(sp, crate.pool, "next-solver coherence requires the crate object pool");
+                coherenceResolve = crate.pool->make<TraitResolution>(coherenceIvars, crate, mImplGenerics, mItemGenerics, mVisPath, mCurrentTraitPath);
+            } else {
+                coherenceResolve->setGenericContext(mImplGenerics, mItemGenerics);
+            }
+            if (!coherenceResolve->nextSolver) {
+                coherenceResolve->nextSolver = crate.pool->make<NextTraitGoalEvaluator>(*coherenceResolve, crate);
+            }
+            return coherenceResolve->nextSolver->evaluateOverlap(sp, *leftImpl->traitPath, *leftImpl->impl, *rightImpl->impl);
         }
-    };
 
-TraitResolution::TraitResolution(
-    const HMTypeInferrence& ivars,
-    const HIRCrate& crate,
-    const HIRGenericParams* implParams,
-    const HIRGenericParams* itemParams,
-    const HIRSimplePath& visPath,
-    const HIRGenericPath* currentTrait
-)
-    : TraitResolveCommon(crate)
-    , mLangDeref(crate.getLangItemPathOpt("deref"))
-    , ivars(ivars)
-    , coherenceIvars(crate.types)
-    , mVisPath(visPath)
-    , mCurrentTraitPath(currentTrait)
-    , currentTraitPtr(currentTrait ? &crate.getTraitByPath(Span(), currentTrait->mPath) : nullptr)
-{
-    mImplGenerics = implParams;
-    mItemGenerics = itemParams;
-    prepIndexes(Span());
-}
+        bool TraitResolution::findTraitImplsNext(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams) const {
+            TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
+            if (!nextSolver) {
+                ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
+                nextSolver = crate.pool->make<NextTraitGoalEvaluator>(*this, crate);
+            }
+            return nextSolver->evaluate(sp, trait, params, type, ::std::move(callback), assocName, assocType, assocParams);
+        }
 
-TraitResolution::~TraitResolution() = default;
-
-void TraitResolution::setGenericContext(
-    const HIRGenericParams* implParams,
-    const HIRGenericParams* itemParams
-) {
-    if (mImplGenerics == implParams && mItemGenerics == itemParams) {
-        return;
-    }
-    ASSERT_BUG(Span(), eatActiveStack.empty(), "changing trait environment during associated-type expansion");
-    mImplGenerics = implParams;
-    mItemGenerics = itemParams;
-    eatCache.clear();
-    prepIndexes(Span());
-}
-
-HIRPathParams TraitResolution::makeFreshImplParams(
-    const HIRGenericParams& params
-) const {
-    auto& mutIvars = const_cast<HMTypeInferrence&>(this->ivars);
-    HIRPathParams result;
-    result.mLifetimes = ThinVector<HIRLifetimeRef>(params.mLifetimes.size());
-    result.types.reserve(params.types.size());
-    for (size_t i = 0; i < params.types.size(); i++) {
-        result.types.push_back(mutIvars.newIvarTr());
-    }
-    result.values.reserve(params.values.size());
-    for (size_t i = 0; i < params.values.size(); i++) {
-        result.values.push_back(
-            HIRConstGeneric::make_Infer({mutIvars.newIvarVal()})
-        );
-    }
-    return result;
-}
-
-bool TraitResolution::implsOverlap(
-    const Span& sp,
-    const ImplRef& left,
-    const ImplRef& right
-) const {
-    const auto* leftImpl = left.mData.opt_TraitImpl();
-    const auto* rightImpl = right.mData.opt_TraitImpl();
-    if (!gTraitSolverConfig.coherence
-        || !leftImpl || !rightImpl
-        || !leftImpl->impl || !rightImpl->impl) {
-        return left.overlapsWith(crate, right);
-    }
-    if (!leftImpl->traitPath || !rightImpl->traitPath
-        || *leftImpl->traitPath != *rightImpl->traitPath) {
-        return false;
-    }
-    if (leftImpl->impl == rightImpl->impl) {
-        return true;
-    }
-
-    // The probe resolver is pool-owned and reused, while its inference table
-    // is reset per overlap query.  No probe variable can escape into m_ivars.
-    coherenceIvars.ivars.clear();
-    coherenceIvars.values.clear();
-    coherenceIvars.hasChanged = false;
-    if (!coherenceResolve) {
-        ASSERT_BUG(sp, crate.pool, "next-solver coherence requires the crate object pool");
-        coherenceResolve = crate.pool->make<TraitResolution>(
-            coherenceIvars,
-            crate,
-            mImplGenerics,
-            mItemGenerics,
-            mVisPath,
-            mCurrentTraitPath
-        );
-    } else {
-        coherenceResolve->setGenericContext(mImplGenerics, mItemGenerics);
-    }
-    if (!coherenceResolve->nextSolver) {
-        coherenceResolve->nextSolver = crate.pool->make<NextTraitGoalEvaluator>(
-            *coherenceResolve, crate
-        );
-    }
-    return coherenceResolve->nextSolver->evaluateOverlap(
-        sp,
-        *leftImpl->traitPath,
-        *leftImpl->impl,
-        *rightImpl->impl
-    );
-}
-
-bool TraitResolution::findTraitImplsNext(
-    const Span& sp,
-    const HIRSimplePath& trait,
-    const HIRPathParams& params,
-    const HIRTypeData* type,
-    tCbTraitImplR callback,
-    const char* assocName,
-    const HIRTypeData* assocType,
-    const HIRPathParams* assocParams
-) const {
-    TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
-    if (!nextSolver) {
-        ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
-        nextSolver = crate.pool->make<NextTraitGoalEvaluator>(*this, crate);
-    }
-    return nextSolver->evaluate(
-        sp, trait, params, type, ::std::move(callback), assocName, assocType, assocParams
-    );
-}
-
-bool TraitResolution::findTraitImpls(
-    const Span& sp,
-    const HIRSimplePath& trait,
-    const HIRPathParams& params,
-    const HIRTypeData* type,
-    tCbTraitImplR callback,
-    bool magicTraitImpls
-) const {
-    if (gTraitSolverConfig.globally && magicTraitImpls) {
-        return findTraitImplsNext(
-            sp, trait, params, type, ::std::move(callback)
-        );
-    }
-    return findTraitImplsLegacy(
-        sp, trait, params, type, ::std::move(callback), magicTraitImpls
-    );
-}
+        bool TraitResolution::findTraitImpls(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, bool magicTraitImpls) const {
+            if (gTraitSolverConfig.globally && magicTraitImpls) {
+                return findTraitImplsNext(sp, trait, params, type, ::std::move(callback));
+            }
+            return findTraitImplsLegacy(sp, trait, params, type, ::std::move(callback), magicTraitImpls);
+        }
 
         // -------------------------------------------------------------------------------------------------------------------
         //
@@ -5587,6 +4539,7 @@ bool TraitResolution::findTraitImpls(
             if (!input->mayHaveAssociatedType()) {
                 return false;
             }
+
             struct H {
                 static bool checkPathparams(const TraitResolution& r, const HIRPathParams& pp) {
                     for (const auto& arg : pp.types) {
@@ -5622,8 +4575,7 @@ bool TraitResolution::findTraitImpls(
             // Both states still need projection normalisation. `Opaque` means
             // that no rule was available at the previous attempt, not that
             // the projection can never become known.
-            if (e.path.mData.is_UfcsKnown()
-                && (e.binding.is_Unbound() || e.binding.is_Opaque())) {
+            if (e.path.mData.is_UfcsKnown() && (e.binding.is_Unbound() || e.binding.is_Opaque())) {
                 return true;
             }
             return H::checkPath(*this, e.path);
@@ -5729,7 +4681,7 @@ bool TraitResolution::findTraitImpls(
                 }
             }
             //TRACE_FUNCTION_F(input);
-    auto data = input->cloneData();
+            auto data = input->cloneData();
     TU_MATCH_HDRA( (data), {)
     TU_ARMA(Infer, e) {
             const auto* ty = this->ivars.getType(input);
@@ -5805,9 +4757,7 @@ bool TraitResolution::findTraitImpls(
                             input = it->second;
                         } else {
                             this->expandAssociatedTypesInplaceUfcsKnown(sp, input, stack);
-                            if (input->is_Path()
-                                && (input->as_Path().binding.is_Unbound()
-                                    || input->as_Path().binding.is_Opaque())) {
+                            if (input->is_Path() && (input->as_Path().binding.is_Unbound() || input->as_Path().binding.is_Opaque())) {
                             } else {
                                 DEBUG("CACHE+: " << k << " = " << input);
                                 eatCache.insert(::std::make_pair(k, input));
@@ -5904,18 +4854,8 @@ bool TraitResolution::findTraitImpls(
                 }
 
                 HIRPathParams candidateParams;
-                const auto match = this->fticCheckParams(
-                    sp,
-                    HIRSimplePath(),
-                    nullptr,
-                    pe.type,
-                    impl.mParams,
-                    noTraitParams,
-                    impl.mType,
-                    candidateParams
-                );
-                if (match != HIRCompare::Unequal
-                    && (bestMatch == HIRCompare::Unequal || match == HIRCompare::Equal)) {
+                const auto match = this->fticCheckParams(sp, HIRSimplePath(), nullptr, pe.type, impl.mParams, noTraitParams, impl.mType, candidateParams);
+                if (match != HIRCompare::Unequal && (bestMatch == HIRCompare::Unequal || match == HIRCompare::Equal)) {
                     alias = &itemIt->second.data;
                     implParamsDef = &impl.mParams;
                     selectedImpl = &impl;
@@ -5930,15 +4870,7 @@ bool TraitResolution::findTraitImpls(
                 return false;
             }
 
-            ConvertHIRConstantEvaluateMethodParams(
-                sp,
-                crate,
-                mVisPath,
-                mImplGenerics,
-                mItemGenerics,
-                implParamsDef,
-                implParams
-            );
+            ConvertHIRConstantEvaluateMethodParams(sp, crate, mVisPath, mImplGenerics, mItemGenerics, implParamsDef, implParams);
             if (inherentTypeConstraint) {
                 auto selectedType = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr).monomorphType(sp, selectedImpl->mType);
                 inherentTypeConstraint(sp, pe.type, selectedType);
@@ -5948,20 +4880,10 @@ bool TraitResolution::findTraitImpls(
             if (itemParams.mLifetimes.empty()) {
                 itemParams.mLifetimes.resize(alias->mParams.mLifetimes.size());
             }
-            if (itemParams.mLifetimes.size() != alias->mParams.mLifetimes.size()
-                || itemParams.types.size() != alias->mParams.types.size()
-                || itemParams.values.size() != alias->mParams.values.size()) {
+            if (itemParams.mLifetimes.size() != alias->mParams.mLifetimes.size() || itemParams.types.size() != alias->mParams.types.size() || itemParams.values.size() != alias->mParams.values.size()) {
                 ERROR(sp, E0000, "Incorrect generic arguments for inherent associated type " << input);
             }
-            ConvertHIRConstantEvaluateMethodParams(
-                sp,
-                crate,
-                mVisPath,
-                mImplGenerics,
-                mItemGenerics,
-                &alias->mParams,
-                itemParams
-            );
+            ConvertHIRConstantEvaluateMethodParams(sp, crate, mVisPath, mImplGenerics, mItemGenerics, &alias->mParams, itemParams);
 
             input = MonomorphStatePtr(crate.types, pe.type, &implParams, &itemParams).monomorphType(sp, alias->mType);
             return true;
@@ -6304,9 +5226,7 @@ bool TraitResolution::findTraitImpls(
                     auto cmp = sourceTrait.compareWithPlaceholders(sp, pe.trait, ivars.callbackResolveInfer());
                     cmp &= atyParams.compareWithPlaceholders(sp, pe.params, ivars.callbackResolveInfer());
                     if (cmp == HIRCompare::Equal) {
-                        input = monomorphiseTypeNeeded(it->second.type)
-                            ? cbPlaceholdersTrait.monomorphType(sp, it->second.type)
-                            : it->second.type;
+                        input = monomorphiseTypeNeeded(it->second.type) ? cbPlaceholdersTrait.monomorphType(sp, it->second.type) : it->second.type;
                         DEBUG("- Found replacement from " << sourceTrait << ": " << input);
                         this->expandAssociatedTypesInplace(sp, input, stack);
                         return;
@@ -6341,31 +5261,22 @@ bool TraitResolution::findTraitImpls(
     if (gTraitSolverConfig.globally) {
         bool normalized = false;
         bool ambiguous = false;
-        this->findTraitImplsNext(
-            sp,
-            traitPath.mPath,
-            traitPath.mParams,
-            pe.type,
-            [&](ImplRef impl, HIRCompare certainty) {
-                if (impl.isAmbiguousIdentity()) {
-                    ambiguous = true;
-                    return true;
-                }
-
-                auto output = impl.getType(crate.types, pe.item.c_str(), pe.params);
-                if (output == HIRTypeRef() || output == input) {
-                    ambiguous = true;
-                    return true;
-                }
-                input = ::std::move(output);
-                normalized = true;
-                ambiguous = certainty == HIRCompare::Fuzzy;
+        this->findTraitImplsNext(sp, traitPath.mPath, traitPath.mParams, pe.type, [&](ImplRef impl, HIRCompare certainty) {
+            if (impl.isAmbiguousIdentity()) {
+                ambiguous = true;
                 return true;
-            },
-            pe.item.c_str(),
-            nullptr,
-            &pe.params
-        );
+            }
+
+            auto output = impl.getType(crate.types, pe.item.c_str(), pe.params);
+            if (output == HIRTypeRef() || output == input) {
+                ambiguous = true;
+                return true;
+            }
+            input = ::std::move(output);
+            normalized = true;
+            ambiguous = certainty == HIRCompare::Fuzzy;
+            return true;
+        }, pe.item.c_str(), nullptr, &pe.params);
         if (normalized) {
             this->expandAssociatedTypesInplace(sp, input, stack);
             return;
@@ -6644,10 +5555,9 @@ bool TraitResolution::findTraitImpls(
                     const auto& storedParams = boundTrait.mParams;
                     HIRPathParams normalisedParams;
                     const HIRPathParams* bParams = &storedParams;
-                    if (::std::any_of(
-                            storedParams.types.begin(), storedParams.types.end(),
-                            [&](const auto& ty) { return this->hasAssociatedType(ty); }
-                        )) {
+                    if (::std::any_of(storedParams.types.begin(), storedParams.types.end(), [&](const auto& ty) {
+                        return this->hasAssociatedType(ty);
+                    })) {
                         normalisedParams = storedParams.clone();
                         this->expandAssociatedTypesParams(sp, normalisedParams);
                         bParams = &normalisedParams;
@@ -6752,26 +5662,18 @@ bool TraitResolution::findTraitImpls(
             HIRPathParams canonicalParams;
             const bool hasParams = paramsPtr != nullptr;
             if (hasParams) {
-                canonicalParams = canonicalizer.monomorphPathParams(
-                    sp, *paramsPtr, true
-                );
+                canonicalParams = canonicalizer.monomorphPathParams(sp, *paramsPtr, true);
             }
 
             for (const auto& activeGoal : legacyTraitGoalStack) {
-                if (!activeGoal.matches(
-                        trait, canonicalParams, hasParams, canonicalType
-                    )) {
+                if (!activeGoal.matches(trait, canonicalParams, hasParams, canonicalType)) {
                     continue;
                 }
 
                 // rustc treats an inductive recursive trait predicate as
                 // ambiguous, while productive recursive traits are proven.
-                const auto cmp = crate.getTraitByPath(sp, trait).isCoinductive
-                    ? HIRCompare::Equal
-                    : HIRCompare::Fuzzy;
-                DEBUG("Legacy trait goal recurred: " << trait
-                    << FMT_CB(ss, if (paramsPtr) { ss << *paramsPtr; } else { ss << "<?>"; })
-                    << " for " << type << ", result=" << cmp);
+                const auto cmp = crate.getTraitByPath(sp, trait).isCoinductive ? HIRCompare::Equal : HIRCompare::Fuzzy;
+                DEBUG("Legacy trait goal recurred: " << trait << FMT_CB(ss, if (paramsPtr) { ss << *paramsPtr; } else { ss << "<?>"; }) << " for " << type << ", result=" << cmp);
                 return callback(ImplRef(type, paramsPtr, &nullAssoc), cmp);
             }
 
@@ -6786,23 +5688,17 @@ bool TraitResolution::findTraitImpls(
                     return true;
                 }
                 return visitTyWith(ty, [](const HIRTypeData* inner) {
-                    return inner->is_Generic()
-                        && inner->as_Generic().isPlaceholder();
+                    return inner->is_Generic() && inner->as_Generic().isPlaceholder();
                 });
             };
             bool hasFreshInputs = !hasParams || typeIsFresh(type);
             if (hasParams && !hasFreshInputs) {
-                hasFreshInputs = ivars.pathparamsContainIvars(
-                    *paramsPtr, false
-                );
+                hasFreshInputs = ivars.pathparamsContainIvars(*paramsPtr, false);
                 for (const auto& param : paramsPtr->types) {
                     hasFreshInputs = hasFreshInputs || typeIsFresh(param);
                 }
                 for (const auto& param : paramsPtr->values) {
-                    hasFreshInputs = hasFreshInputs
-                        || param.is_Infer()
-                        || (param.is_Generic()
-                            && param.as_Generic().isPlaceholder());
+                    hasFreshInputs = hasFreshInputs || param.is_Infer() || (param.is_Generic() && param.as_Generic().isPlaceholder());
                 }
             }
 
@@ -6812,34 +5708,23 @@ bool TraitResolution::findTraitImpls(
                     if (activeGoal.trait != trait) {
                         continue;
                     }
-                    if (canonicalType->compareWithPlaceholders(
-                            sp, activeGoal.type, resolve
-                        ) == HIRCompare::Unequal) {
+                    if (canonicalType->compareWithPlaceholders(sp, activeGoal.type, resolve) == HIRCompare::Unequal) {
                         continue;
                     }
-                    if (hasParams && activeGoal.hasParams
-                        && canonicalParams.compareWithPlaceholders(
-                            sp, activeGoal.params, resolve
-                        ) == HIRCompare::Unequal) {
+                    if (hasParams && activeGoal.hasParams && canonicalParams.compareWithPlaceholders(sp, activeGoal.params, resolve) == HIRCompare::Unequal) {
                         continue;
                     }
 
-                    DEBUG("Fresh legacy trait goal matched an active goal: "
-                        << trait
-                        << FMT_CB(ss, if (paramsPtr) { ss << *paramsPtr; } else { ss << "<?>"; })
-                        << " for " << type << ", result=Fuzzy");
-                    return callback(
-                        ImplRef(type, paramsPtr, &nullAssoc),
-                        HIRCompare::Fuzzy
-                    );
+                    DEBUG("Fresh legacy trait goal matched an active goal: " << trait << FMT_CB(ss, if (paramsPtr) { ss << *paramsPtr; } else { ss << "<?>"; }) << " for " << type << ", result=Fuzzy");
+                    return callback(ImplRef(type, paramsPtr, &nullAssoc), HIRCompare::Fuzzy);
                 }
             }
 
-            legacyTraitGoalStack.emplace_back(
-                trait, canonicalParams, hasParams, canonicalType
-            );
+            legacyTraitGoalStack.emplace_back(trait, canonicalParams, hasParams, canonicalType);
+
             struct StackGuard {
                 ::std::vector<LegacyTraitGoal>& stack;
+
                 ~StackGuard() {
                     stack.pop_back();
                 }
@@ -6847,7 +5732,6 @@ bool TraitResolution::findTraitImpls(
 
             // Handle auto traits (aka OIBITs)
             if (crate.getTraitByPath(sp, trait).mIsMarker) {
-
                 // NOTE: Expected behavior is for Ivars to return false
                 // TODO: Should they return Compare::Fuzzy instead?
                 if (type->is_Infer()) {
@@ -7224,30 +6108,18 @@ bool TraitResolution::findTraitImpls(
                     }
                 }
 
-                HIRCompare matchLft(
-                    const HIRGenericRef& g,
-                    const HIRLifetimeRef& lifetime
-                ) override {
+                HIRCompare matchLft(const HIRGenericRef& g, const HIRLifetimeRef& lifetime) override {
                     // Region equality is deliberately not part of impl-head
                     // selection, but the candidate substitution must retain
                     // a higher-ranked placeholder. It marks a fresh universe
                     // and is needed later to reject leaking outlives bounds.
                     // Elided/inferred regions carry no such information.
-                    if (g.group() != GENERICImpl
-                        || lifetime.binding == HIRLifetimeRef::UNKNOWN
-                        || lifetime.binding == HIRLifetimeRef::INFER) {
+                    if (g.group() != GENERICImpl || lifetime.binding == HIRLifetimeRef::UNKNOWN || lifetime.binding == HIRLifetimeRef::INFER) {
                         return HIRCompare::Equal;
                     }
-                    ASSERT_BUG(
-                        sp,
-                        g.binding < outImplParams.mLifetimes.size(),
-                        "Lifetime generic " << g << " out of range ("
-                            << outImplParams.mLifetimes.size() << ")"
-                    );
+                    ASSERT_BUG(sp, g.binding < outImplParams.mLifetimes.size(), "Lifetime generic " << g << " out of range (" << outImplParams.mLifetimes.size() << ")");
                     auto& current = outImplParams.mLifetimes[g.binding];
-                    if (current.binding == HIRLifetimeRef::UNKNOWN
-                        || current.binding == HIRLifetimeRef::INFER
-                        || (!current.isHrl() && lifetime.isHrl())) {
+                    if (current.binding == HIRLifetimeRef::UNKNOWN || current.binding == HIRLifetimeRef::INFER || (!current.isHrl() && lifetime.isHrl())) {
                         current = lifetime;
                     }
                     return HIRCompare::Equal;
@@ -7301,10 +6173,7 @@ bool TraitResolution::findTraitImpls(
             if (placeholdersNeeded) {
                 // NOTE: Not using interning, because these are short-lived
                 // - Also, adding an interned string is quite expensive
-                placeholderName = RcString(FMT(
-                    "ph_" << &implParamsDef << "_"
-                    << freshImplPlaceholderCounter++
-                ));
+                placeholderName = RcString(FMT("ph_" << &implParamsDef << "_" << freshImplPlaceholderCounter++));
                 for (unsigned int i = 0; i < outImplParams.types.size(); i++) {
                     if (outImplParams.types[i] == HIRTypeRef()) {
                         if (placeholders.types.size() == 0) {
@@ -8158,36 +7027,19 @@ bool TraitResolution::findTraitImpls(
                     const HIRTraitPath* projected = nullptr;
                     HIRTraitPath projectedStorage;
                     if (de->mTrait.mPath.mPath == se->mTrait.mPath.mPath) {
-                        rv &= comparePp(
-                            sp,
-                            se->mTrait.mPath.mParams,
-                            de->mTrait.mPath.mParams
-                        );
+                        rv &= comparePp(sp, se->mTrait.mPath.mParams, de->mTrait.mPath.mParams);
                         projected = &se->mTrait;
                     } else if (se->mTrait.mPath.mPath != HIRSimplePath()) {
-                        findNamedTraitInTrait(
-                            sp,
-                            de->mTrait.mPath.mPath,
-                            de->mTrait.mPath.mParams,
-                            *se->mTrait.traitPtr,
-                            se->mTrait.mPath.mPath,
-                            se->mTrait.mPath.mParams,
-                            srcTy,
-                            [&](const HIRTraitPath& parent) {
-                                const auto cmp = comparePp(
-                                    sp,
-                                    parent.mPath.mParams,
-                                    de->mTrait.mPath.mParams
-                                );
-                                if (cmp == HIRCompare::Unequal) {
-                                    return false;
-                                }
-                                rv &= cmp;
-                                projectedStorage = parent.clone();
-                                projected = &projectedStorage;
-                                return cmp == HIRCompare::Equal;
+                        findNamedTraitInTrait(sp, de->mTrait.mPath.mPath, de->mTrait.mPath.mParams, *se->mTrait.traitPtr, se->mTrait.mPath.mPath, se->mTrait.mPath.mParams, srcTy, [&](const HIRTraitPath& parent) {
+                            const auto cmp = comparePp(sp, parent.mPath.mParams, de->mTrait.mPath.mParams);
+                            if (cmp == HIRCompare::Unequal) {
+                                return false;
                             }
-                        );
+                            rv &= cmp;
+                            projectedStorage = parent.clone();
+                            projected = &projectedStorage;
+                            return cmp == HIRCompare::Equal;
+                        });
                     }
                     if (!projected || rv == HIRCompare::Unequal) {
                         return HIRCompare::Unequal;
@@ -8201,11 +7053,7 @@ bool TraitResolution::findTraitImpls(
                         if (source == projected->typeBounds.end()) {
                             return HIRCompare::Unequal;
                         }
-                        rv &= source->second.type->compareWithPlaceholders(
-                            sp,
-                            required.second.type,
-                            ivars.callbackResolveInfer()
-                        );
+                        rv &= source->second.type->compareWithPlaceholders(sp, required.second.type, ivars.callbackResolveInfer());
                         if (rv == HIRCompare::Unequal) {
                             return rv;
                         }
@@ -8260,10 +7108,7 @@ bool TraitResolution::findTraitImpls(
                         // response parameters with the original goal.
                         auto remapSourceTrait = [&](const HIRGenericPath& sourceTrait) {
                             if (sourceTrait.mPath == de->mTrait.mPath.mPath) {
-                                return HIRGenericPath(
-                                    sourceTrait.mPath,
-                                    candidateE.mTrait.mPath.mParams.clone()
-                                );
+                                return HIRGenericPath(sourceTrait.mPath, candidateE.mTrait.mPath.mParams.clone());
                             }
 
                             HIRGenericPath result = sourceTrait.clone();
@@ -8272,35 +7117,21 @@ bool TraitResolution::findTraitImpls(
                                 return result;
                             }
 
-                            auto goalMonomorph = MonomorphStatePtr(
-                                crate.types, srcTy, &de->mTrait.mPath.mParams, nullptr
-                            );
-                            auto responseMonomorph = MonomorphStatePtr(
-                                crate.types,
-                                srcTy,
-                                &candidateE.mTrait.mPath.mParams,
-                                nullptr
-                            );
+                            auto goalMonomorph = MonomorphStatePtr(crate.types, srcTy, &de->mTrait.mPath.mParams, nullptr);
+                            auto responseMonomorph = MonomorphStatePtr(crate.types, srcTy, &candidateE.mTrait.mPath.mParams, nullptr);
                             bool found = false;
                             bool foundEqual = false;
                             for (const auto& parent : de->mTrait.traitPtr->allParentTraits) {
                                 if (parent.mPath.mPath != sourceTrait.mPath) {
                                     continue;
                                 }
-                                auto goalParent = goalMonomorph.monomorphGenericpath(
-                                    sp, parent.mPath, false
-                                );
-                                const auto parentCmp = comparePp(
-                                    sp, goalParent.mParams, sourceTrait.mParams
-                                );
-                                if (parentCmp == HIRCompare::Unequal
-                                    || (foundEqual && parentCmp != HIRCompare::Equal)) {
+                                auto goalParent = goalMonomorph.monomorphGenericpath(sp, parent.mPath, false);
+                                const auto parentCmp = comparePp(sp, goalParent.mParams, sourceTrait.mParams);
+                                if (parentCmp == HIRCompare::Unequal || (foundEqual && parentCmp != HIRCompare::Equal)) {
                                     continue;
                                 }
 
-                                auto responseParent = responseMonomorph.monomorphGenericpath(
-                                    sp, parent.mPath, false
-                                );
+                                auto responseParent = responseMonomorph.monomorphGenericpath(sp, parent.mPath, false);
                                 if (!found || parentCmp == HIRCompare::Equal) {
                                     result = ::std::move(responseParent);
                                     found = true;
@@ -8324,29 +7155,18 @@ bool TraitResolution::findTraitImpls(
                             if (atyv == HIRTypeRef()) {
                                 // Get the trait from which this associated type comes.
                                 // Insert a UfcsKnown path for that
-                                auto p = HIRPath(
-                                    srcTy,
-                                    aty.second.sourceTrait.clone(),
-                                    aty.first,
-                                    aty.second.atyParams.clone()
-                                );
+                                auto p = HIRPath(srcTy, aty.second.sourceTrait.clone(), aty.first, aty.second.atyParams.clone());
                                 // Run EAT
                                 atyv = this->expandAssociatedTypes(sp, crate.types.path(mv$(p), {}));
                             }
 
-                            auto desired = this->expandAssociatedTypes(
-                                sp, aty.second.type
-                            );
+                            auto desired = this->expandAssociatedTypes(sp, aty.second.type);
                             const auto atyCmp = compareTy(sp, atyv, desired);
                             if (atyCmp == HIRCompare::Unequal) {
                                 return false;
                             }
                             candidateCmp &= atyCmp;
-                            candidateE.mTrait.typeBounds[aty.first] = HIRTraitPath::AtyEqual{
-                                remapSourceTrait(aty.second.sourceTrait),
-                                aty.second.atyParams.clone(),
-                                mv$(atyv)
-                            };
+                            candidateE.mTrait.typeBounds[aty.first] = HIRTraitPath::AtyEqual{remapSourceTrait(aty.second.sourceTrait), aty.second.atyParams.clone(), mv$(atyv)};
                         }
 
                         totalCmp &= candidateCmp;
@@ -8410,12 +7230,7 @@ bool TraitResolution::findTraitImpls(
         // -------------------------------------------------------------------------------------------------------------------
         //
         // -------------------------------------------------------------------------------------------------------------------
-        TraitResolution::AutoderefResult TraitResolution::autoderefStep(
-            const Span& sp,
-            const HIRTypeData* tyIn,
-            HIRTypeRef& target,
-            ::std::optional<HIRTypeRef>* implType
-        ) const {
+        TraitResolution::AutoderefResult TraitResolution::autoderefStep(const Span& sp, const HIRTypeData* tyIn, HIRTypeRef& target, ::std::optional<HIRTypeRef>* implType) const {
             if (implType) {
                 implType->reset();
             }
@@ -8487,9 +7302,7 @@ bool TraitResolution::findTraitImpls(
         }
 
         const HIRTypeData* TraitResolution::autoderef(const Span& sp, const HIRTypeData* ty, HIRTypeRef& tmpType) const {
-            return autoderefStep(sp, ty, tmpType) == AutoderefResult::Match
-                ? tmpType
-                : nullptr;
+            return autoderefStep(sp, ty, tmpType) == AutoderefResult::Match ? tmpType : nullptr;
         }
 
         unsigned int TraitResolution::autoderefFindMethod(
@@ -8516,8 +7329,7 @@ bool TraitResolution::findTraitImpls(
                 // - If no, dereference T and try again
                 auto curAccess = MethodAccess::Move; // Assume that the input value is movable
                 auto collapseToMostSpecificSubtrait = [&]() {
-                    if (!crate.featureEnabled("supertrait_item_shadowing")
-                        || possibilities.size() < 2) {
+                    if (!crate.featureEnabled("supertrait_item_shadowing") || possibilities.size() < 2) {
                         return;
                     }
 
@@ -9293,117 +8105,126 @@ bool TraitResolution::findTraitImpls(
             return false;
         }
 
-HMTypeInferrence::FmtType::FmtType(const HMTypeInferrence& ctxt, const HIRTypeData* ty)
-    : ctxt(ctxt)
-    , ty(ty) {
-}
-HMTypeInferrence::FmtPP::FmtPP(const HMTypeInferrence& ctxt, const HIRPathParams& pps)
-    : ctxt(ctxt)
-    , pps(pps) {
-}
-// Null only when alias != ~0
-
-HMTypeInferrence::IVar::IVar(HIRTypeRef type)
-    : alias(~0u)
-    , type(type) {
-}
-HMTypeInferrence::IVarValue::IVarValue()
-    : alias(~0u)
-    , val(new HIRConstGeneric()) {
-}
-HMTypeInferrence::HMTypeInferrence(HIRTypeInterner& types)
-    : types(types)
-    , hasChanged(false) {
-}
-bool HMTypeInferrence::takeChanged() {
-    bool rv = hasChanged;
-    hasChanged = false;
-    return rv;
-}
-void HMTypeInferrence::markChange() {
-    if (!hasChanged) {
-        DEBUG("- CHANGE");
-        hasChanged = true;
-    }
-}
-HMTypeInferrence::ResolvePlaceholders::ResolvePlaceholders(const HMTypeInferrence& parent)
-    : parent(parent) {
-}
-TraitResolution::LegacyTraitGoal::LegacyTraitGoal(
-    const HIRSimplePath& trait,
-    const HIRPathParams& params,
-    bool hasParams,
-    const HIRTypeData* type
-)
-    : trait(trait.clone())
-    , params(params.clone())
-    , type(type)
-    , hasParams(hasParams) {
-}
-bool TraitResolution::LegacyTraitGoal::matches(
-    const HIRSimplePath& otherTrait,
-    const HIRPathParams& otherParams,
-    bool otherHasParams,
-    const HIRTypeData* otherType
-) const {
-    return trait == otherTrait
-        && hasParams == otherHasParams
-        && (!hasParams || params == otherParams)
-        && type == otherType;
-}
-/// Expand any located associated types in the input, operating in-place and returning the result
-HIRTypeRef TraitResolution::expandAssociatedTypes(const Span& sp, HIRTypeRef input) const {
-    expandAssociatedTypesInplace(sp, input, LList<const HIRTypeData*>());
-    return input;
-}
-const HIRTypeData* TraitResolution::expandAssociatedTypes(const Span& sp, const HIRTypeData* input, HIRTypeRef& tmp) const {
-    if (this->hasAssociatedType(input)) {
-        return (tmp = this->expandAssociatedTypes(sp, input));
-    } else {
-        return input;
-    }
-}
-void TraitResolution::expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const {
-    for (auto& type : params.types) {
-        if (this->hasAssociatedType(type)) {
-            type = this->expandAssociatedTypes(sp, type);
+        HMTypeInferrence::FmtType::FmtType(const HMTypeInferrence& ctxt, const HIRTypeData* ty)
+            : ctxt(ctxt)
+            , ty(ty)
+        {
         }
-    }
-}
 
-bool typeIsUnboundedInfer(const HIRTypeData* ty) {
-    if (const auto* te = ty->opt_Infer()) {
-        switch (te->tyClass) {
-            case HIRInferClass::Integer:
-                return false;
-            case HIRInferClass::Float:
-                return false;
-            case HIRInferClass::None:
-                return true;
+        HMTypeInferrence::FmtPP::FmtPP(const HMTypeInferrence& ctxt, const HIRPathParams& pps)
+            : ctxt(ctxt)
+            , pps(pps)
+        {
         }
-    }
-    return false;
-}
-::std::ostream& operator<<(::std::ostream& os, const HMTypeInferrence::FmtType& x) {
-    x.ctxt.printType(os, x.ty);
-    return os;
-}
-::std::ostream& operator<<(::std::ostream& os, const HMTypeInferrence::FmtPP& x) {
-    x.ctxt.printPathparams(os, x.pps);
-    return os;
-}
 
-const HIRTypeData* HMTypeInferrence::ResolvePlaceholders::getType(const Span& sp, const HIRTypeData* ty) const {
-    if (ty->is_Infer()) {
-        return parent.getType(ty);
-    } else {
-        return ty;
-    }
-}
-const HIRConstGeneric& HMTypeInferrence::ResolvePlaceholders::getVal(const Span& sp, const HIRConstGeneric& v) const {
-    if (v.is_Infer()) {
-        return parent.getValue(v);
-    } else {
-        return v;
-    }
-}
+        // Null only when alias != ~0
+
+        HMTypeInferrence::IVar::IVar(HIRTypeRef type)
+            : alias(~0u)
+            , type(type)
+        {
+        }
+
+        HMTypeInferrence::IVarValue::IVarValue()
+            : alias(~0u)
+            , val(new HIRConstGeneric())
+        {
+        }
+
+        HMTypeInferrence::HMTypeInferrence(HIRTypeInterner& types)
+            : types(types)
+            , hasChanged(false)
+        {
+        }
+
+        bool HMTypeInferrence::takeChanged() {
+            bool rv = hasChanged;
+            hasChanged = false;
+            return rv;
+        }
+
+        void HMTypeInferrence::markChange() {
+            if (!hasChanged) {
+                DEBUG("- CHANGE");
+                hasChanged = true;
+            }
+        }
+
+        HMTypeInferrence::ResolvePlaceholders::ResolvePlaceholders(const HMTypeInferrence& parent)
+            : parent(parent)
+        {
+        }
+
+        TraitResolution::LegacyTraitGoal::LegacyTraitGoal(const HIRSimplePath& trait, const HIRPathParams& params, bool hasParams, const HIRTypeData* type)
+            : trait(trait.clone())
+            , params(params.clone())
+            , type(type)
+            , hasParams(hasParams)
+        {
+        }
+
+        bool TraitResolution::LegacyTraitGoal::matches(const HIRSimplePath& otherTrait, const HIRPathParams& otherParams, bool otherHasParams, const HIRTypeData* otherType) const {
+            return trait == otherTrait && hasParams == otherHasParams && (!hasParams || params == otherParams) && type == otherType;
+        }
+
+        /// Expand any located associated types in the input, operating in-place and returning the result
+        HIRTypeRef TraitResolution::expandAssociatedTypes(const Span& sp, HIRTypeRef input) const {
+            expandAssociatedTypesInplace(sp, input, LList<const HIRTypeData*>());
+            return input;
+        }
+
+        const HIRTypeData* TraitResolution::expandAssociatedTypes(const Span& sp, const HIRTypeData* input, HIRTypeRef& tmp) const {
+            if (this->hasAssociatedType(input)) {
+                return (tmp = this->expandAssociatedTypes(sp, input));
+            } else {
+                return input;
+            }
+        }
+
+        void TraitResolution::expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const {
+            for (auto& type : params.types) {
+                if (this->hasAssociatedType(type)) {
+                    type = this->expandAssociatedTypes(sp, type);
+                }
+            }
+        }
+
+        bool typeIsUnboundedInfer(const HIRTypeData* ty) {
+            if (const auto* te = ty->opt_Infer()) {
+                switch (te->tyClass) {
+                    case HIRInferClass::Integer:
+                        return false;
+                    case HIRInferClass::Float:
+                        return false;
+                    case HIRInferClass::None:
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        ::std::ostream& operator<<(::std::ostream& os, const HMTypeInferrence::FmtType& x) {
+            x.ctxt.printType(os, x.ty);
+            return os;
+        }
+
+        ::std::ostream& operator<<(::std::ostream& os, const HMTypeInferrence::FmtPP& x) {
+            x.ctxt.printPathparams(os, x.pps);
+            return os;
+        }
+
+        const HIRTypeData* HMTypeInferrence::ResolvePlaceholders::getType(const Span& sp, const HIRTypeData* ty) const {
+            if (ty->is_Infer()) {
+                return parent.getType(ty);
+            } else {
+                return ty;
+            }
+        }
+
+        const HIRConstGeneric& HMTypeInferrence::ResolvePlaceholders::getVal(const Span& sp, const HIRConstGeneric& v) const {
+            if (v.is_Infer()) {
+                return parent.getValue(v);
+            } else {
+                return v;
+            }
+        }

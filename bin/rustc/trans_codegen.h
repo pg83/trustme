@@ -3,14 +3,14 @@
 #include "trans_trans_list.h"
 #include "trans_main_bindings.h" // TransOptions
 
-    class HIRTypeData;
-    using HIRTypeRef = const HIRTypeData*;
-    class HIRPath;
-    class HIRGenericPath;
+class HIRTypeData;
+using HIRTypeRef = const HIRTypeData*;
+class HIRPath;
+class HIRGenericPath;
 
-    class HIRFunction;
-    class HIRStatic;
-    class HIRGlobalAssembly;
+class HIRFunction;
+class HIRStatic;
+class HIRGlobalAssembly;
 
 class MIRFunctionPointer;
 

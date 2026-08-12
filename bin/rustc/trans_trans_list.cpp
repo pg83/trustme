@@ -1,13 +1,13 @@
 #include "trans_trans_list.h"
-#include "hir_typeck_static.h" // StaticTraitResolve
+
 #include "trans_mangling.h"
+#include "hir_typeck_static.h" // StaticTraitResolve
 
 TransListFunction* TransList::addFunction(HIRTypeInterner& types, HIRPath p) {
     auto symbol = FMT(TransMangle(p));
     auto existing = functionSymbols.find(symbol);
     if (existing != functionSymbols.end()) {
-        ASSERT_BUG(Span(), existing->second.equalsIgnoringRegions(p),
-            "Distinct function paths have the same mangled name: " << existing->second << " and " << p);
+        ASSERT_BUG(Span(), existing->second.equalsIgnoringRegions(p), "Distinct function paths have the same mangled name: " << existing->second << " and " << p);
         return nullptr;
     }
 
@@ -34,8 +34,7 @@ const TransListFunction* TransList::findFunction(const HIRPath& p) const {
     if (canonical == functionSymbols.end()) {
         return nullptr;
     }
-    ASSERT_BUG(Span(), canonical->second.equalsIgnoringRegions(p),
-        "Distinct function paths have the same mangled name: " << canonical->second << " and " << p);
+    ASSERT_BUG(Span(), canonical->second.equalsIgnoringRegions(p), "Distinct function paths have the same mangled name: " << canonical->second << " and " << p);
     exact = functions.find(canonical->second);
     ASSERT_BUG(Span(), exact != functions.end(), "Function symbol index is stale for " << p);
     return exact->second.get();
@@ -51,8 +50,7 @@ bool TransList::hasType(HIRTypeRef type, bool shallow) const {
     if (existing == typeSymbols.end()) {
         return false;
     }
-    ASSERT_BUG(Span(), existing->second.canonical == type || existing->second.canonical->equalsIgnoringRegions(type),
-        "Distinct types have the same mangled name: " << existing->second.canonical << " and " << type);
+    ASSERT_BUG(Span(), existing->second.canonical == type || existing->second.canonical->equalsIgnoringRegions(type), "Distinct types have the same mangled name: " << existing->second.canonical << " and " << type);
     return existing->second.hasDefinition || (shallow && existing->second.hasPrototype);
 }
 
@@ -63,8 +61,7 @@ bool TransList::addType(HIRTypeRef type, bool shallow) {
         typeSymbols.emplace(mv$(symbol), TypeEmissionState{type, shallow, !shallow});
     } else {
         auto& state = existing->second;
-        ASSERT_BUG(Span(), state.canonical == type || state.canonical->equalsIgnoringRegions(type),
-            "Distinct types have the same mangled name: " << state.canonical << " and " << type);
+        ASSERT_BUG(Span(), state.canonical == type || state.canonical->equalsIgnoringRegions(type), "Distinct types have the same mangled name: " << state.canonical << " and " << type);
         auto& alreadyEmitted = shallow ? state.hasPrototype : state.hasDefinition;
         if (alreadyEmitted || (shallow && state.hasDefinition)) {
             return false;
@@ -84,8 +81,7 @@ TransListStatic* TransList::addStatic(HIRTypeInterner& types, HIRPath p) {
     auto symbol = FMT(TransMangle(p));
     auto existing = staticSymbols.find(symbol);
     if (existing != staticSymbols.end()) {
-        ASSERT_BUG(Span(), existing->second.equalsIgnoringRegions(p),
-            "Distinct static paths have the same mangled name: " << existing->second << " and " << p);
+        ASSERT_BUG(Span(), existing->second.equalsIgnoringRegions(p), "Distinct static paths have the same mangled name: " << existing->second << " and " << p);
         return nullptr;
     }
 
@@ -168,18 +164,24 @@ HIRTypeRef TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIR
 TransParams::TransParams(HIRTypeInterner& types)
     : MonomorphiserPP(types)
     , gdefImpl(nullptr)
-    , forceMonomorphisation(false) {
+    , forceMonomorphisation(false)
+{
 }
+
 TransParams::TransParams(HIRTypeInterner& types, const Span& sp)
     : MonomorphiserPP(types)
     , sp(sp)
     , gdefImpl(nullptr)
-    , forceMonomorphisation(false) {
+    , forceMonomorphisation(false)
+{
 }
+
 TransParams::TransParams(TransParams&& x)
-    : TransParams(x.typeInterner()) {
+    : TransParams(x.typeInterner())
+{
     *this = ::std::move(x);
 }
+
 TransParams& TransParams::operator=(TransParams&& x) {
     sp = ::std::move(x.sp);
     gdefImpl = x.gdefImpl;
@@ -189,12 +191,14 @@ TransParams& TransParams::operator=(TransParams&& x) {
     forceMonomorphisation = x.forceMonomorphisation;
     return *this;
 }
+
 TransParams TransParams::newImpl(HIRTypeInterner& types, Span sp, HIRTypeRef ty, HIRPathParams implParams) {
     TransParams tp(types, sp);
     tp.selfType = std::move(ty);
     tp.ppImpl = std::move(implParams);
     return tp;
 }
+
 const HIRTypeData* TransParams::maybeMonomorph(const ::StaticTraitResolve& resolve, HIRTypeRef& tmp, const HIRTypeData* p) const {
     if (monomorphiseTypeNeeded(p)) {
         return tmp = this->monomorph(resolve, p);
@@ -202,11 +206,23 @@ const HIRTypeData* TransParams::maybeMonomorph(const ::StaticTraitResolve& resol
         return p;
     }
 }
+
 TransListFunction::TransListFunction(HIRTypeInterner& types, const HIRPath& path)
     : path(&path)
     , ptr(nullptr)
     , pp(types)
-    , forcePrototype(false) {
+    , forcePrototype(false)
+{
 }
-TransListStatic::TransListStatic(HIRTypeInterner& types): ptr(nullptr), pp(types) {}
-TransListConst::TransListConst(HIRTypeInterner& types): ptr(nullptr), pp(types) {}
+
+TransListStatic::TransListStatic(HIRTypeInterner& types)
+    : ptr(nullptr)
+    , pp(types)
+{
+}
+
+TransListConst::TransListConst(HIRTypeInterner& types)
+    : ptr(nullptr)
+    , pp(types)
+{
+}

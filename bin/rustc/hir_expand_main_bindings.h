@@ -3,13 +3,13 @@
 #include <vector>
 #include <utility> // std::pair
 
-    class HIRCrate;
-    class HIRExprPtr;
-    class HIRTypeData;
-    using HIRTypeRef = const HIRTypeData*;
-    class HIRTraitImpl;
-    struct HIRPattern;
-    class HIRItemPath;
+class HIRCrate;
+class HIRExprPtr;
+class HIRTypeData;
+using HIRTypeRef = const HIRTypeData*;
+class HIRTraitImpl;
+struct HIRPattern;
+class HIRItemPath;
 
 extern void HIRExpandAnnotateUsage(HIRCrate& crate);
 extern void HIRExpandVTables(HIRCrate& crate);

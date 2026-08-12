@@ -6,8 +6,8 @@
 
 #include <set>
 
-    class HIRCrate;
-    class HIRTypeInterner;
+class HIRCrate;
+class HIRTypeInterner;
 
 namespace stl {
     class ObjPool;

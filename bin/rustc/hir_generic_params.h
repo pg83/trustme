@@ -1,119 +1,118 @@
 #pragma once
 
+#include "hir_path.h"
+#include "hir_type_ref.h"
+#include "hir_generic_ref.h"
+
 #include <string>
 #include <vector>
 #include <iostream>
-#include "hir_generic_ref.h"
-#include "hir_path.h"
-#include "hir_type_ref.h"
 
+struct HIRTypeParamDef {
+    RcString mName;
+    HIRTypeRef defaultValue;
+    bool isSized;
 
-    struct HIRTypeParamDef {
-        RcString mName;
-        HIRTypeRef defaultValue;
-        bool isSized;
+    Ordering ord(const HIRTypeParamDef& x) const;
+};
 
-        Ordering ord(const HIRTypeParamDef& x) const;
-    };
+struct HIRLifetimeDef {
+    RcString mName;
 
-    struct HIRLifetimeDef {
-        RcString mName;
+    Ordering ord(const HIRLifetimeDef& x) const;
+};
 
-        Ordering ord(const HIRLifetimeDef& x) const;
-    };
+struct HIRValueParamDef {
+    RcString mName;
+    HIRTypeRef mType;
+    HIRConstGeneric defaultValue;
 
-    struct HIRValueParamDef {
-        RcString mName;
-        HIRTypeRef mType;
-        HIRConstGeneric defaultValue;
+    Ordering ord(const HIRValueParamDef& x) const;
+};
 
-        Ordering ord(const HIRValueParamDef& x) const;
-    };
+class HIRGenericParams;
 
-    class HIRGenericParams;
-
-    TAGGED_UNION_EX(
-        HIRGenericBound,
-        (),
-        Lifetime,
-        ((Lifetime,
-          struct {
-              HIRLifetimeRef test;
-              HIRLifetimeRef validFor;
-          }),
-         (TypeLifetime,
-          struct {
-              HIRTypeRef type;
-              HIRLifetimeRef validFor;
-          }),
-         (TraitBound,
-          struct {
-              ::std::unique_ptr<HIRGenericParams> hrtbs;
-              HIRTypeRef type;
-              HIRTraitPath trait;
-              HIRBoundConstness constness = HIRBoundConstness::Never;
-          }) /*,
+TAGGED_UNION_EX(
+    HIRGenericBound,
+    (),
+    Lifetime,
+    ((Lifetime,
+      struct {
+          HIRLifetimeRef test;
+          HIRLifetimeRef validFor;
+      }),
+     (TypeLifetime,
+      struct {
+          HIRTypeRef type;
+          HIRLifetimeRef validFor;
+      }),
+     (TraitBound,
+      struct {
+          ::std::unique_ptr<HIRGenericParams> hrtbs;
+          HIRTypeRef type;
+          HIRTraitPath trait;
+          HIRBoundConstness constness = HIRBoundConstness::Never;
+      }) /*,
     (NotTrait, struct {
         ::HIR::TypeRef  type;
         ::HIR::GenricPath    trait;
         })*/
-         ,
-         (TypeEquality,
-          struct {
-              HIRTypeRef type;
-              HIRTypeRef otherType;
-          })),
-        (),
-        (),
-        (HIRGenericBound clone() const; Ordering ord(const HIRGenericBound& x) const;)
-    );
-    extern ::std::ostream& operator<<(::std::ostream& os, const HIRGenericBound& x);
+     ,
+     (TypeEquality,
+      struct {
+          HIRTypeRef type;
+          HIRTypeRef otherType;
+      })),
+    (),
+    (),
+    (HIRGenericBound clone() const; Ordering ord(const HIRGenericBound& x) const;)
+);
+extern ::std::ostream& operator<<(::std::ostream& os, const HIRGenericBound& x);
 
-    class HIRGenericParams {
-    public:
-        ::std::vector<HIRTypeParamDef> types;
-        ::std::vector<HIRLifetimeDef> mLifetimes;
-        ::std::vector<HIRValueParamDef> values;
+class HIRGenericParams {
+public:
+    ::std::vector<HIRTypeParamDef> types;
+    ::std::vector<HIRLifetimeDef> mLifetimes;
+    ::std::vector<HIRValueParamDef> values;
 
-        ::std::vector<HIRGenericBound> bounds;
+    ::std::vector<HIRGenericBound> bounds;
 
-        //GenericParams() {}
+    //GenericParams() {}
 
-        HIRGenericParams clone() const;
+    HIRGenericParams clone() const;
 
-        bool isEmpty() const;
+    bool isEmpty() const;
 
-        bool isGeneric() const;
+    bool isGeneric() const;
 
-        /// Create a PathParams instance that doesn't monomorphise at all
-        HIRPathParams makeNopParams(HIRTypeInterner& types, unsigned level, bool lifetimesOnly = false) const;
+    /// Create a PathParams instance that doesn't monomorphise at all
+    HIRPathParams makeNopParams(HIRTypeInterner& types, unsigned level, bool lifetimesOnly = false) const;
 
-        HIRPathParams makeEmptyParams(bool lifetimesOnly = false) const;
+    HIRPathParams makeEmptyParams(bool lifetimesOnly = false) const;
 
-        struct PrintArgs {
-            const HIRGenericParams& gp;
+    struct PrintArgs {
+        const HIRGenericParams& gp;
 
-            PrintArgs(const HIRGenericParams& gp);
+        PrintArgs(const HIRGenericParams& gp);
 
-            friend ::std::ostream& operator<<(::std::ostream& os, const PrintArgs& x);
-        };
-
-        PrintArgs fmtArgs() const {
-            return PrintArgs(*this);
-        }
-
-        struct PrintBounds {
-            const HIRGenericParams& gp;
-
-            PrintBounds(const HIRGenericParams& gp);
-
-            friend ::std::ostream& operator<<(::std::ostream& os, const PrintBounds& x);
-        };
-
-        PrintBounds fmtBounds() const {
-            return PrintBounds(*this);
-        }
-
-        Ordering ord(const HIRGenericParams& x) const;
+        friend ::std::ostream& operator<<(::std::ostream& os, const PrintArgs& x);
     };
 
+    PrintArgs fmtArgs() const {
+        return PrintArgs(*this);
+    }
+
+    struct PrintBounds {
+        const HIRGenericParams& gp;
+
+        PrintBounds(const HIRGenericParams& gp);
+
+        friend ::std::ostream& operator<<(::std::ostream& os, const PrintBounds& x);
+    };
+
+    PrintBounds fmtBounds() const {
+        return PrintBounds(*this);
+    }
+
+    Ordering ord(const HIRGenericParams& x) const;
+};

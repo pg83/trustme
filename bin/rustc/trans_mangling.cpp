@@ -3,9 +3,10 @@
 #include "debug.h"
 #include "hir_hir.h" // ABI_RUST
 #include "hir_type.h"
+
+#include <cmath> // ceil/log10
 #include <cctype>
 #include <algorithm> // std::find
-#include <cmath>     // ceil/log10
 
 class Mangler {
     ::std::ostream& os;
@@ -439,9 +440,9 @@ namespace {
 }
 
 // TODO: If the mangled name exceeds a limit, stop emitting the real name and start hashing the rest.
-#define DO_MANGLE(ty, suffix)                      \
-    ::FmtLambda TransMangle(const ty& v) { \
-        return maxLen(TransMangle##suffix(v));   \
+#define DO_MANGLE(ty, suffix)                  \
+    ::FmtLambda TransMangle(const ty& v) {     \
+        return maxLen(TransMangle##suffix(v)); \
     }
 DO_MANGLE(HIRSimplePath, SimplePath)
 DO_MANGLE(HIRGenericPath, GenericPath)

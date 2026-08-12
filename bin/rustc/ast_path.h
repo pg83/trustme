@@ -18,13 +18,13 @@
 
 class MacroRules;
 
-    class HIRModule;
-    class HIRTrait;
-    struct HIRTraitAlias;
-    class HIREnum;
-    class HIRStruct;
-    class HIRUnion;
-    class HIRStatic;
+class HIRModule;
+class HIRTrait;
+struct HIRTraitAlias;
+class HIREnum;
+class HIRStruct;
+class HIRUnion;
+class HIRStatic;
 
 class ASTLifetimeRef;
 class ASTGenericParams;

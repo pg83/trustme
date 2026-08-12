@@ -16,293 +16,293 @@
 #include <optional>
 #include <algorithm>
 
-    ::std::ostream& operator<<(::std::ostream& os, const HIRPublicity& x) {
-        if (!x.visPath) {
-            os << "pub";
-        } else if (*x.visPath == *HIRPublicity::nonePath) {
-            os << "priv";
-        } else {
-            os << "pub(" << *x.visPath << ")";
-        }
-        return os;
+::std::ostream& operator<<(::std::ostream& os, const HIRPublicity& x) {
+    if (!x.visPath) {
+        os << "pub";
+    } else if (*x.visPath == *HIRPublicity::nonePath) {
+        os << "priv";
+    } else {
+        os << "pub(" << *x.visPath << ")";
     }
+    return os;
+}
 
-    ::std::ostream& operator<<(::std::ostream& os, const HIRConstGeneric& x) {
+::std::ostream& operator<<(::std::ostream& os, const HIRConstGeneric& x) {
         TU_MATCH_HDRA( (x), {)
         TU_ARMA(Infer, e) {
-                os << "Infer";
-                if (e.index != ~0u) {
-                    os << "(";
-                    os << e.index;
-                    os << ")";
-                }
-            }
-            TU_ARMA(Unevaluated, e) {
-                os << "Unevaluated(";
-                e->fmt(os);
+            os << "Infer";
+            if (e.index != ~0u) {
+                os << "(";
+                os << e.index;
                 os << ")";
             }
-            TU_ARMA(Generic, e) os << "Generic(" << e << ")";
-            TU_ARMA(Evaluated, e) os << "Evaluated(" << *e << ")";
+        }
+        TU_ARMA(Unevaluated, e) {
+            os << "Unevaluated(";
+            e->fmt(os);
+            os << ")";
+        }
+        TU_ARMA(Generic, e) os << "Generic(" << e << ")";
+        TU_ARMA(Evaluated, e) os << "Evaluated(" << *e << ")";
         }
         return os;
-    }
+}
 
-    bool HIRConstGeneric::operator==(const HIRConstGeneric& x) const {
-        if (this->tag() != x.tag()) {
-            return false;
-        }
+bool HIRConstGeneric::operator==(const HIRConstGeneric& x) const {
+    if (this->tag() != x.tag()) {
+        return false;
+    }
         TU_MATCH_HDRA( (*this, x), {)
         TU_ARMA(Infer, te, xe) return te.index == xe.index;
-            TU_ARMA(Unevaluated, te, xe) return te->equivalent(*xe);
-            TU_ARMA(Generic, te, xe) return te == xe;
-            TU_ARMA(Evaluated, te, xe) return EncodedLiteralSlice(*te) == EncodedLiteralSlice(*xe);
+        TU_ARMA(Unevaluated, te, xe) return te->equivalent(*xe);
+        TU_ARMA(Generic, te, xe) return te == xe;
+        TU_ARMA(Evaluated, te, xe) return EncodedLiteralSlice(*te) == EncodedLiteralSlice(*xe);
         }
         return true;
-    }
+}
 
-    Ordering HIRConstGeneric::ord(const HIRConstGeneric& x) const {
-        if (auto cmp = ::ord(static_cast<int>(this->tag()), static_cast<int>(x.tag()))) {
-            return cmp;
-        }
+Ordering HIRConstGeneric::ord(const HIRConstGeneric& x) const {
+    if (auto cmp = ::ord(static_cast<int>(this->tag()), static_cast<int>(x.tag()))) {
+        return cmp;
+    }
         TU_MATCH_HDRA( (*this, x), {)
         TU_ARMA(Infer, te, xe) {
-                if (auto cmp = ::ord(te.index, xe.index)) {
-                    return cmp;
-                }
+            if (auto cmp = ::ord(te.index, xe.index)) {
+                return cmp;
             }
-            TU_ARMA(Unevaluated, te, xe) {
-                if (te->equivalent(*xe)) {
-                    return OrdEqual;
-                }
-                return te->ord(*xe);
+        }
+        TU_ARMA(Unevaluated, te, xe) {
+            if (te->equivalent(*xe)) {
+                return OrdEqual;
             }
-            TU_ARMA(Generic, te, xe) {
-                if (auto cmp = ::ord(te, xe)) {
-                    return cmp;
-                }
+            return te->ord(*xe);
+        }
+        TU_ARMA(Generic, te, xe) {
+            if (auto cmp = ::ord(te, xe)) {
+                return cmp;
             }
-            TU_ARMA(Evaluated, te, xe) {
-                if (auto cmp = ::ord(EncodedLiteralSlice(*te), EncodedLiteralSlice(*xe))) {
-                    return cmp;
-                }
+        }
+        TU_ARMA(Evaluated, te, xe) {
+            if (auto cmp = ::ord(EncodedLiteralSlice(*te), EncodedLiteralSlice(*xe))) {
+                return cmp;
             }
+        }
         }
         return OrdEqual;
-    }
+}
 
-    ::std::ostream& operator<<(::std::ostream& os, const HIRConstGenericUnevaluated& x) {
-        x.fmt(os);
-        return os;
-    }
+::std::ostream& operator<<(::std::ostream& os, const HIRConstGenericUnevaluated& x) {
+    x.fmt(os);
+    return os;
+}
 
-    HIRConstGenericUnevaluated::HIRConstGenericUnevaluated(HIRExprPtr ep)
-        : expr(std::make_shared<HIRExprPtr>(std::move(ep)))
-    {
-    }
+HIRConstGenericUnevaluated::HIRConstGenericUnevaluated(HIRExprPtr ep)
+    : expr(std::make_shared<HIRExprPtr>(std::move(ep)))
+{
+}
 
-    HIRConstGenericUnevaluated HIRConstGenericUnevaluated::clone() const {
-        HIRConstGenericUnevaluated rv;
-        rv.paramsImpl = paramsImpl.clone();
-        rv.paramsItem = paramsItem.clone();
-        rv.expr = expr;
-        return rv;
-    }
+HIRConstGenericUnevaluated HIRConstGenericUnevaluated::clone() const {
+    HIRConstGenericUnevaluated rv;
+    rv.paramsImpl = paramsImpl.clone();
+    rv.paramsItem = paramsItem.clone();
+    rv.expr = expr;
+    return rv;
+}
 
-    HIRConstGenericUnevaluated HIRConstGenericUnevaluated::monomorph(const Span& sp, const Monomorphiser& ms, bool allowInfer /*=true*/) const {
-        HIRConstGenericUnevaluated rv;
-        rv.paramsImpl = ms.monomorphPathParams(sp, paramsImpl, allowInfer);
-        rv.paramsItem = ms.monomorphPathParams(sp, paramsItem, allowInfer);
-        rv.expr = this->expr;
-        return rv;
-    }
+HIRConstGenericUnevaluated HIRConstGenericUnevaluated::monomorph(const Span& sp, const Monomorphiser& ms, bool allowInfer /*=true*/) const {
+    HIRConstGenericUnevaluated rv;
+    rv.paramsImpl = ms.monomorphPathParams(sp, paramsImpl, allowInfer);
+    rv.paramsItem = ms.monomorphPathParams(sp, paramsItem, allowInfer);
+    rv.expr = this->expr;
+    return rv;
+}
 
-    namespace {
-        const HIRConstGeneric* getUnevaluatedParam(const HIRConstGenericUnevaluated& value, unsigned int binding) {
-            const HIRPathParams* params = nullptr;
-            switch (binding >> 8) {
-                case GENERICImpl:
-                    params = &value.paramsImpl;
-                    break;
-                case GENERICItem:
-                    params = &value.paramsItem;
-                    break;
-                default:
-                    return nullptr;
-            }
-            const unsigned int index = binding & 0xFF;
-            return index < params->values.size() ? &params->values[index] : nullptr;
+namespace {
+    const HIRConstGeneric* getUnevaluatedParam(const HIRConstGenericUnevaluated& value, unsigned int binding) {
+        const HIRPathParams* params = nullptr;
+        switch (binding >> 8) {
+            case GENERICImpl:
+                params = &value.paramsImpl;
+                break;
+            case GENERICItem:
+                params = &value.paramsItem;
+                break;
+            default:
+                return nullptr;
         }
+        const unsigned int index = binding & 0xFF;
+        return index < params->values.size() ? &params->values[index] : nullptr;
+    }
 
-        bool constExprLiteralsEqual(const HIRExprNodeLiteral& left, const HIRExprNodeLiteral& right) {
-            if (left.mData.tag() != right.mData.tag()) {
-                return false;
-            }
-            TU_MATCH_HDRA( (left.mData, right.mData), {)
-            TU_ARMA(Integer, l, r) return l.mType == r.mType && l.mValue == r.mValue;
-                TU_ARMA(Float, l, r) return l.mType == r.mType && l.mValue == r.mValue;
-                TU_ARMA(Boolean, l, r) return l == r;
-                TU_ARMA(String, l, r) return l == r;
-                TU_ARMA(CString, l, r) return l.v == r.v;
-                TU_ARMA(ByteString, l, r) return l == r;
-            }
-            throw "";
-        }
-
-        bool constExprNodesEqual(const HIRConstGenericUnevaluated& leftValue, const HIRExprNode& left, const HIRConstGenericUnevaluated& rightValue, const HIRExprNode& right) {
-            if (const auto* l = cast<const HIRExprNodeConstParam>(&left)) {
-                const auto* r = cast<const HIRExprNodeConstParam>(&right);
-                if (!r) {
-                    return false;
-                }
-                const auto* lParam = getUnevaluatedParam(leftValue, l->mBinding);
-                const auto* rParam = getUnevaluatedParam(rightValue, r->mBinding);
-                return lParam && rParam ? *lParam == *rParam : l->mBinding == r->mBinding;
-            }
-            if (const auto* l = cast<const HIRExprNodeLiteral>(&left)) {
-                const auto* r = cast<const HIRExprNodeLiteral>(&right);
-                return r && constExprLiteralsEqual(*l, *r);
-            }
-            if (const auto* l = cast<const HIRExprNodeBinOp>(&left)) {
-                const auto* r = cast<const HIRExprNodeBinOp>(&right);
-                return r && l->op == r->op && constExprNodesEqual(leftValue, *l->left, rightValue, *r->left) && constExprNodesEqual(leftValue, *l->right, rightValue, *r->right);
-            }
-            if (const auto* l = cast<const HIRExprNodeUniOp>(&left)) {
-                const auto* r = cast<const HIRExprNodeUniOp>(&right);
-                return r && l->op == r->op && constExprNodesEqual(leftValue, *l->mValue, rightValue, *r->mValue);
-            }
-            if (const auto* l = cast<const HIRExprNodeCast>(&left)) {
-                const auto* r = cast<const HIRExprNodeCast>(&right);
-                return r && l->dstType == r->dstType && constExprNodesEqual(leftValue, *l->mValue, rightValue, *r->mValue);
-            }
-            if (const auto* l = cast<const HIRExprNodeConstBlock>(&left)) {
-                const auto* r = cast<const HIRExprNodeConstBlock>(&right);
-                return r && constExprNodesEqual(leftValue, *l->inner, rightValue, *r->inner);
-            }
-            if (const auto* l = cast<const HIRExprNodeCallPath>(&left)) {
-                const auto* r = cast<const HIRExprNodeCallPath>(&right);
-                if (!r || l->mPath != r->mPath || l->mArgs.size() != r->mArgs.size()) {
-                    return false;
-                }
-                for (unsigned int i = 0; i < l->mArgs.size(); i++) {
-                    if (!constExprNodesEqual(leftValue, *l->mArgs[i], rightValue, *r->mArgs[i])) {
-                        return false;
-                    }
-                }
-                return true;
-            }
-            if (const auto* l = cast<const HIRExprNodeBlock>(&left)) {
-                const auto* r = cast<const HIRExprNodeBlock>(&right);
-                if (!r || l->nodes.size() != r->nodes.size() || static_cast<bool>(l->valueNode) != static_cast<bool>(r->valueNode)) {
-                    return false;
-                }
-                for (unsigned int i = 0; i < l->nodes.size(); i++) {
-                    if (!constExprNodesEqual(leftValue, *l->nodes[i], rightValue, *r->nodes[i])) {
-                        return false;
-                    }
-                }
-                return !l->valueNode || constExprNodesEqual(leftValue, *l->valueNode, rightValue, *r->valueNode);
-            }
+    bool constExprLiteralsEqual(const HIRExprNodeLiteral& left, const HIRExprNodeLiteral& right) {
+        if (left.mData.tag() != right.mData.tag()) {
             return false;
         }
+            TU_MATCH_HDRA( (left.mData, right.mData), {)
+            TU_ARMA(Integer, l, r) return l.mType == r.mType && l.mValue == r.mValue;
+            TU_ARMA(Float, l, r) return l.mType == r.mType && l.mValue == r.mValue;
+            TU_ARMA(Boolean, l, r) return l == r;
+            TU_ARMA(String, l, r) return l == r;
+            TU_ARMA(CString, l, r) return l.v == r.v;
+            TU_ARMA(ByteString, l, r) return l == r;
+            }
+            throw "";
     }
 
-    bool HIRConstGenericUnevaluated::equivalent(const HIRConstGenericUnevaluated& x) const {
-        return constExprNodesEqual(*this, **this->expr, x, **x.expr);
+    bool constExprNodesEqual(const HIRConstGenericUnevaluated& leftValue, const HIRExprNode& left, const HIRConstGenericUnevaluated& rightValue, const HIRExprNode& right) {
+        if (const auto* l = cast<const HIRExprNodeConstParam>(&left)) {
+            const auto* r = cast<const HIRExprNodeConstParam>(&right);
+            if (!r) {
+                return false;
+            }
+            const auto* lParam = getUnevaluatedParam(leftValue, l->mBinding);
+            const auto* rParam = getUnevaluatedParam(rightValue, r->mBinding);
+            return lParam && rParam ? *lParam == *rParam : l->mBinding == r->mBinding;
+        }
+        if (const auto* l = cast<const HIRExprNodeLiteral>(&left)) {
+            const auto* r = cast<const HIRExprNodeLiteral>(&right);
+            return r && constExprLiteralsEqual(*l, *r);
+        }
+        if (const auto* l = cast<const HIRExprNodeBinOp>(&left)) {
+            const auto* r = cast<const HIRExprNodeBinOp>(&right);
+            return r && l->op == r->op && constExprNodesEqual(leftValue, *l->left, rightValue, *r->left) && constExprNodesEqual(leftValue, *l->right, rightValue, *r->right);
+        }
+        if (const auto* l = cast<const HIRExprNodeUniOp>(&left)) {
+            const auto* r = cast<const HIRExprNodeUniOp>(&right);
+            return r && l->op == r->op && constExprNodesEqual(leftValue, *l->mValue, rightValue, *r->mValue);
+        }
+        if (const auto* l = cast<const HIRExprNodeCast>(&left)) {
+            const auto* r = cast<const HIRExprNodeCast>(&right);
+            return r && l->dstType == r->dstType && constExprNodesEqual(leftValue, *l->mValue, rightValue, *r->mValue);
+        }
+        if (const auto* l = cast<const HIRExprNodeConstBlock>(&left)) {
+            const auto* r = cast<const HIRExprNodeConstBlock>(&right);
+            return r && constExprNodesEqual(leftValue, *l->inner, rightValue, *r->inner);
+        }
+        if (const auto* l = cast<const HIRExprNodeCallPath>(&left)) {
+            const auto* r = cast<const HIRExprNodeCallPath>(&right);
+            if (!r || l->mPath != r->mPath || l->mArgs.size() != r->mArgs.size()) {
+                return false;
+            }
+            for (unsigned int i = 0; i < l->mArgs.size(); i++) {
+                if (!constExprNodesEqual(leftValue, *l->mArgs[i], rightValue, *r->mArgs[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if (const auto* l = cast<const HIRExprNodeBlock>(&left)) {
+            const auto* r = cast<const HIRExprNodeBlock>(&right);
+            if (!r || l->nodes.size() != r->nodes.size() || static_cast<bool>(l->valueNode) != static_cast<bool>(r->valueNode)) {
+                return false;
+            }
+            for (unsigned int i = 0; i < l->nodes.size(); i++) {
+                if (!constExprNodesEqual(leftValue, *l->nodes[i], rightValue, *r->nodes[i])) {
+                    return false;
+                }
+            }
+            return !l->valueNode || constExprNodesEqual(leftValue, *l->valueNode, rightValue, *r->valueNode);
+        }
+        return false;
     }
+}
 
-    Ordering HIRConstGenericUnevaluated::ord(const HIRConstGenericUnevaluated& x) const {
-        if (this->expr.get() != x.expr.get()) {
-            // If only one has populated MIR, they can't be equal (sort populated MIR after)
-            if (!this->expr->mir != !x.expr->mir) {
-                return (this->expr->mir ? OrdGreater : OrdLess);
+bool HIRConstGenericUnevaluated::equivalent(const HIRConstGenericUnevaluated& x) const {
+    return constExprNodesEqual(*this, **this->expr, x, **x.expr);
+}
+
+Ordering HIRConstGenericUnevaluated::ord(const HIRConstGenericUnevaluated& x) const {
+    if (this->expr.get() != x.expr.get()) {
+        // If only one has populated MIR, they can't be equal (sort populated MIR after)
+        if (!this->expr->mir != !x.expr->mir) {
+            return (this->expr->mir ? OrdGreater : OrdLess);
+        }
+
+        // HACK: If the inner is a const param on both, sort based on that.
+        // - Very similar to the ordering of TypeRef::Generic
+        const auto* tn = cast<const HIRExprNodeConstParam>(&**this->expr);
+        const auto* xn = cast<const HIRExprNodeConstParam>(&**x.expr);
+        if (tn && xn) {
+            // Is this valid? What if they're from different scopes?
+            return ::ord(tn->mBinding, xn->mBinding);
+        }
+
+        // EVIL OPTION: Just compare the string representations
+        // - The fmt() routine prints MIR blocks (when populated) or the source expression
+        //   (when not) in a deterministic, pointer-free form, so this gives a stable order.
+        auto vT = FMT(*this);
+        auto vX = FMT(x);
+        return ::ord(vT, vX);
+    }
+    if (auto cmp = this->paramsImpl.ord(x.paramsImpl)) {
+        return cmp;
+    }
+    if (auto cmp = this->paramsItem.ord(x.paramsItem)) {
+        return cmp;
+    }
+    return OrdEqual;
+}
+
+void HIRConstGenericUnevaluated::fmt(::std::ostream& os) const {
+    os << "{";
+    os << "0=" << this->paramsImpl;
+    os << "1=" << this->paramsItem;
+    os << "}";
+    if (expr->mir) {
+        for (const auto& b : expr->mir->blocks) {
+            os << "bb" << (&b - expr->mir->blocks.data()) << ":{ ";
+            for (const auto& s : b.statements) {
+                os << s << "; ";
+            }
+            os << b.terminator;
+            os << " }";
+        }
+    } else {
+        struct NoNewline: public ::std::ostream, ::std::streambuf {
+            ::std::ostream& inner;
+
+            NoNewline(::std::ostream& inner)
+                : ::std::ostream(this)
+                , inner(inner)
+            {
             }
 
-            // HACK: If the inner is a const param on both, sort based on that.
-            // - Very similar to the ordering of TypeRef::Generic
-            const auto* tn = cast<const HIRExprNodeConstParam>(&**this->expr);
-            const auto* xn = cast<const HIRExprNodeConstParam>(&**x.expr);
-            if (tn && xn) {
-                // Is this valid? What if they're from different scopes?
-                return ::ord(tn->mBinding, xn->mBinding);
+            int overflow(int c) override {
+                switch (c) {
+                    case '\n':
+                        inner.put(' ');
+                        break;
+                    default:
+                        inner.put(c);
+                        break;
+                }
+                return 0;
             }
+        } innerOs(os);
 
-            // EVIL OPTION: Just compare the string representations
-            // - The fmt() routine prints MIR blocks (when populated) or the source expression
-            //   (when not) in a deterministic, pointer-free form, so this gives a stable order.
-            auto vT = FMT(*this);
-            auto vX = FMT(x);
-            return ::ord(vT, vX);
-        }
-        if (auto cmp = this->paramsImpl.ord(x.paramsImpl)) {
-            return cmp;
-        }
-        if (auto cmp = this->paramsItem.ord(x.paramsItem)) {
-            return cmp;
-        }
-        return OrdEqual;
+        HIRDumpExpr(innerOs, *expr);
     }
+}
 
-    void HIRConstGenericUnevaluated::fmt(::std::ostream& os) const {
-        os << "{";
-        os << "0=" << this->paramsImpl;
-        os << "1=" << this->paramsItem;
-        os << "}";
-        if (expr->mir) {
-            for (const auto& b : expr->mir->blocks) {
-                os << "bb" << (&b - expr->mir->blocks.data()) << ":{ ";
-                for (const auto& s : b.statements) {
-                    os << s << "; ";
-                }
-                os << b.terminator;
-                os << " }";
-            }
-        } else {
-            struct NoNewline: public ::std::ostream, ::std::streambuf {
-                ::std::ostream& inner;
-
-                NoNewline(::std::ostream& inner)
-                    : ::std::ostream(this)
-                    , inner(inner)
-                {
-                }
-
-                int overflow(int c) override {
-                    switch (c) {
-                        case '\n':
-                            inner.put(' ');
-                            break;
-                        default:
-                            inner.put(c);
-                            break;
-                    }
-                    return 0;
-                }
-            } innerOs(os);
-
-            HIRDumpExpr(innerOs, *expr);
-        }
+::std::ostream& operator<<(::std::ostream& os, const HIRStruct::Repr& x) {
+    os << "repr(";
+    switch (x) {
+        case HIRStruct::Repr::Rust:
+            os << "Rust";
+            break;
+        case HIRStruct::Repr::C:
+            os << "C";
+            break;
+        case HIRStruct::Repr::Simd:
+            os << "simd";
+            break;
+        case HIRStruct::Repr::Transparent:
+            os << "transparent";
+            break;
     }
-
-    ::std::ostream& operator<<(::std::ostream& os, const HIRStruct::Repr& x) {
-        os << "repr(";
-        switch (x) {
-            case HIRStruct::Repr::Rust:
-                os << "Rust";
-                break;
-            case HIRStruct::Repr::C:
-                os << "C";
-                break;
-            case HIRStruct::Repr::Simd:
-                os << "simd";
-                break;
-            case HIRStruct::Repr::Transparent:
-                os << "transparent";
-                break;
-        }
-        os << ")";
-        return os;
-    }
+    os << ")";
+    return os;
+}
 
 HIRConstGeneric HIRConstGeneric::clone() const {
     TU_MATCH_HDRA( (*this), {)
@@ -1914,16 +1914,16 @@ const tStructFields& patternGetNamed(const Span& sp, const HIRPath& path, const 
     return patternGetStruct(sp, path, binding, false).mData.as_Named();
 }
 
-    HIREncodedLiteralPtr::HIREncodedLiteralPtr(EncodedLiteral el) {
-        p = new EncodedLiteral(mv$(el));
-    }
+HIREncodedLiteralPtr::HIREncodedLiteralPtr(EncodedLiteral el) {
+    p = new EncodedLiteral(mv$(el));
+}
 
-    HIREncodedLiteralPtr::~HIREncodedLiteralPtr() {
-        if (p) {
-            delete p;
-            p = nullptr;
-        }
+HIREncodedLiteralPtr::~HIREncodedLiteralPtr() {
+    if (p) {
+        delete p;
+        p = nullptr;
     }
+}
 
 // ---
 EncodedLiteral EncodedLiteral::makeUsize(uint64_t v) {
@@ -2140,122 +2140,121 @@ Ordering EncodedLiteralSlice::ord(const EncodedLiteralSlice& x) const {
     return os;
 }
 
+HIRPublicity::HIRPublicity(::std::shared_ptr<HIRSimplePath> p)
+    : visPath(p)
+{
+}
 
-    HIRPublicity::HIRPublicity(::std::shared_ptr<HIRSimplePath> p)
-        : visPath(p)
-    {
+HIRPublicity HIRPublicity::newPriv(HIRSimplePath p) {
+    size_t nComp = p.components().size();
+    while (nComp > 0 && p.components()[nComp - 1].c_str()[0] == '#') {
+        nComp--;
     }
+    auto s = std::span<const RcString>(p.components().data(), nComp);
+    return HIRPublicity(::std::make_shared<HIRSimplePath>(p.crateName(), s));
+}
 
-    HIRPublicity HIRPublicity::newPriv(HIRSimplePath p) {
-        size_t nComp = p.components().size();
-        while (nComp > 0 && p.components()[nComp - 1].c_str()[0] == '#') {
-            nComp--;
-        }
-        auto s = std::span<const RcString>(p.components().data(), nComp);
-        return HIRPublicity(::std::make_shared<HIRSimplePath>(p.crateName(), s));
-    }
+HIRStatic::HIRStatic(HIRLinkage linkage, bool isMut, HIRTypeRef type, HIRExprPtr value)
+    : linkage(std::move(linkage))
+    , isMut(isMut)
+    , mType(std::move(type))
+    , mValue(std::move(value))
+{
+}
 
-    HIRStatic::HIRStatic(HIRLinkage linkage, bool isMut, HIRTypeRef type, HIRExprPtr value)
-        : linkage(std::move(linkage))
-        , isMut(isMut)
-        , mType(std::move(type))
-        , mValue(std::move(value))
-    {
-    }
+HIRConstant::HIRConstant() {
+}
 
-    HIRConstant::HIRConstant() {
-    }
+HIRConstant::HIRConstant(HIRGenericParams params, HIRTypeRef type, HIRExprPtr value)
+    : mParams(::std::move(params))
+    , mType(::std::move(type))
+    , mValue(::std::move(value))
+{
+}
 
-    HIRConstant::HIRConstant(HIRGenericParams params, HIRTypeRef type, HIRExprPtr value)
-        : mParams(::std::move(params))
-        , mType(::std::move(type))
-        , mValue(::std::move(value))
-    {
-    }
+HIRFunction::HIRFunction() {
+}
 
-    HIRFunction::HIRFunction() {
-    }
+HIRFunction::HIRFunction(Receiver receiver, HIRGenericParams params, argsT args, HIRTypeRef retTy, HIRExprPtr code)
+    : receiver(receiver)
+    , mParams(std::move(params))
+    , mArgs(std::move(args))
+    , variadic(false)
+    , returnType(std::move(retTy))
+    , mCode(std::move(code))
+{
+}
 
-    HIRFunction::HIRFunction(Receiver receiver, HIRGenericParams params, argsT args, HIRTypeRef retTy, HIRExprPtr code)
-        : receiver(receiver)
-        , mParams(std::move(params))
-        , mArgs(std::move(args))
-        , variadic(false)
-        , returnType(std::move(retTy))
-        , mCode(std::move(code))
-    {
-    }
+HIRStruct::FieldDefault::FieldDefault(size_t index, HIRExprPtr v)
+    : index(index)
+    , expr(std::move(v))
+{
+}
 
-    HIRStruct::FieldDefault::FieldDefault(size_t index, HIRExprPtr v)
-        : index(index)
-        , expr(std::move(v))
-    {
-    }
+HIRStruct::HIRStruct(HIRGenericParams params, Repr repr, Data data)
+    : mParams(mv$(params))
+    , repr(mv$(repr))
+    , mData(mv$(data))
+{
+}
 
-    HIRStruct::HIRStruct(HIRGenericParams params, Repr repr, Data data)
-        : mParams(mv$(params))
-        , repr(mv$(repr))
-        , mData(mv$(data))
-    {
-    }
+HIRStruct::HIRStruct(HIRGenericParams params, Repr repr, Data data, unsigned align, HIRTraitMarkings tm, HIRStructMarkings sm)
+    : mParams(mv$(params))
+    , repr(mv$(repr))
+    , mData(mv$(data))
+    , forcedAlignment(align)
+    , markings(mv$(tm))
+    , structMarkings(mv$(sm))
+{
+}
 
-    HIRStruct::HIRStruct(HIRGenericParams params, Repr repr, Data data, unsigned align, HIRTraitMarkings tm, HIRStructMarkings sm)
-        : mParams(mv$(params))
-        , repr(mv$(repr))
-        , mData(mv$(data))
-        , forcedAlignment(align)
-        , markings(mv$(tm))
-        , structMarkings(mv$(sm))
-    {
-    }
+HIRAssociatedType::HIRAssociatedType(HIRGenericParams generics, bool isSized, HIRLifetimeRef lifetimeBound, ::std::vector<HIRTraitPath> traitBounds, HIRTypeRef defaultType)
+    : generics(::std::move(generics))
+    , isSized(isSized)
+    , lifetimeBound(lifetimeBound)
+    , traitBounds(::std::move(traitBounds))
+    , hasDefault(defaultType && !defaultType->is_Infer())
+    , defaultValue(defaultType)
+{
+    assert(defaultType);
+}
 
-    HIRAssociatedType::HIRAssociatedType(HIRGenericParams generics, bool isSized, HIRLifetimeRef lifetimeBound, ::std::vector<HIRTraitPath> traitBounds, HIRTypeRef defaultType)
-        : generics(::std::move(generics))
-        , isSized(isSized)
-        , lifetimeBound(lifetimeBound)
-        , traitBounds(::std::move(traitBounds))
-        , hasDefault(defaultType && !defaultType->is_Infer())
-        , defaultValue(defaultType)
-    {
-        assert(defaultType);
-    }
+HIRTrait::HIRTrait(HIRGenericParams gps, HIRLifetimeRef lifetime, ::std::vector<HIRTraitPath> parents)
+    : mParams(mv$(gps))
+    , lifetime(mv$(lifetime))
+    , parentTraits(mv$(parents))
+    , mIsMarker(false)
+    , isConst(false)
+    , isCoinductive(false)
+    , isFundamental(false)
+    , vtableParentTraitsStart(0)
+{
+}
 
-    HIRTrait::HIRTrait(HIRGenericParams gps, HIRLifetimeRef lifetime, ::std::vector<HIRTraitPath> parents)
-        : mParams(mv$(gps))
-        , lifetime(mv$(lifetime))
-        , parentTraits(mv$(parents))
-        , mIsMarker(false)
-        , isConst(false)
-        , isCoinductive(false)
-        , isFundamental(false)
-        , vtableParentTraitsStart(0)
-    {
-    }
+HIRModule::HIRModule() {
+}
 
-    HIRModule::HIRModule() {
-    }
+HIRCrate::HIRCrate(stl::ObjPool* pool, HIRTypeInterner& types)
+    : pool(pool)
+    , types(types)
+    , intrinsicOffsetof(HIRFunction{HIRFunction::Receiver::Free, HIRGenericParams{}, {}, types.primitive(HIRCoreType::Usize), {}})
+{
+}
 
-    HIRCrate::HIRCrate(stl::ObjPool* pool, HIRTypeInterner& types)
-        : pool(pool)
-        , types(types)
-        , intrinsicOffsetof(HIRFunction{HIRFunction::Receiver::Free, HIRGenericParams{}, {}, types.primitive(HIRCoreType::Usize), {}})
-    {
+const HIRConstant& HIRCrate::getConstantByPath(const Span& sp, const HIRSimplePath& path) const {
+    const auto& ti = this->getValitemByPath(sp, path);
+    TU_IFLET(HIRValueItem, ti, Constant, e, return e;)
+    else {
+        BUG(sp, "`const` path " << path << " didn't point to an enum");
     }
+}
 
-    const HIRConstant& HIRCrate::getConstantByPath(const Span& sp, const HIRSimplePath& path) const {
-        const auto& ti = this->getValitemByPath(sp, path);
-        TU_IFLET(HIRValueItem, ti, Constant, e, return e;)
-        else {
-            BUG(sp, "`const` path " << path << " didn't point to an enum");
-        }
-    }
+const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRFunction& fcn) const {
+    auto ty = fcn.returnType;
+    return getOrGenMir(ip, fcn.mCode, fcn.mArgs, ty);
+}
 
-    const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRFunction& fcn) const {
-        auto ty = fcn.returnType;
-        return getOrGenMir(ip, fcn.mCode, fcn.mArgs, ty);
-    }
-
-    const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRExprPtr& ep, HIRTypeRef& expTy) const {
-        static HIRFunction::argsT sArgs;
-        return getOrGenMir(ip, ep, sArgs, expTy);
-    }
+const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRExprPtr& ep, HIRTypeRef& expTy) const {
+    static HIRFunction::argsT sArgs;
+    return getOrGenMir(ip, ep, sArgs, expTy);
+}

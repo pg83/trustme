@@ -1,8 +1,9 @@
 #pragma once
 
-#include <cstddef>
 #include "hir_type.h"
 #include "hir_typeck_static.h"
+
+#include <cstddef>
 
 // NOTE: The default architecture is an unnamed 32-bit little-endian arch with all types natively aligned
 struct TargetArch {

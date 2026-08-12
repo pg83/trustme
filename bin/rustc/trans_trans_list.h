@@ -8,9 +8,9 @@
 
 class StaticTraitResolve;
 
-    class HIRCrate;
-    class HIRFunction;
-    class HIRStatic;
+class HIRCrate;
+class HIRFunction;
+class HIRStatic;
 
 // TODO: This is very similar to "hir_typeck/common.h" MonomorphState, except it owns its data
 struct TransParams: public MonomorphiserPP {

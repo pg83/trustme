@@ -11,12 +11,12 @@ class ASTPath;
 struct ASTPathParams;
 class ASTPattern;
 
-    class HIRCrate;
-    class HIRGenericPath;
-    class HIRPath;
-    struct HIRPathParams;
-    struct HIRPattern;
-    struct HIRSimplePath;
+class HIRCrate;
+class HIRGenericPath;
+class HIRPath;
+struct HIRPathParams;
+struct HIRPattern;
+struct HIRSimplePath;
 
 enum class FromASTPathClass {
     Type,
