@@ -15,10 +15,18 @@ enum class OptimizationLevel : unsigned {
     SizeMin,
 };
 
+enum class DebugInfoLevel : unsigned {
+    None,
+    LineDirectivesOnly,
+    LineTablesOnly,
+    Limited,
+    Full,
+};
+
 struct TransOptions {
     ::std::string mode = "c";
     OptimizationLevel opt_level = OptimizationLevel::None;
-    bool emit_debug_info = false;
+    DebugInfoLevel debug_info = DebugInfoLevel::None;
     ::std::string build_command_file;
     ::std::vector<::std::string> linker_args;
 

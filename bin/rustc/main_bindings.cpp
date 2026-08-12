@@ -1666,7 +1666,7 @@ struct ProgramParams {
     // from the implicit default.
     unsigned mir_opt_level = 0;
     bool mir_opt_level_explicit = false;
-    bool emit_debug_info = false;
+    DebugInfoLevel debug_info = DebugInfoLevel::None;
 
     bool test_harness = false;
 
@@ -2335,7 +2335,7 @@ int main(int argc, char* argv[]) {
         for (const char* libname : params.libraries) {
             hir_crate->m_ext_libs.push_back(::HIR::ExternLibrary{libname});
         }
-        trans_opt.emit_debug_info = params.emit_debug_info;
+        trans_opt.debug_info = params.debug_info;
 
         // Generate code for non-generic public items (if requested)
         if (params.test_harness) {
@@ -2650,6 +2650,22 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                             exit(1);
                         }
                         this->debug_assertions_explicit = true;
+                    } else if (optname == "debuginfo") {
+                        get_optval();
+                        if (optval == "0" || optval == "none") {
+                            this->debug_info = DebugInfoLevel::None;
+                        } else if (optval == "line-directives-only") {
+                            this->debug_info = DebugInfoLevel::LineDirectivesOnly;
+                        } else if (optval == "line-tables-only") {
+                            this->debug_info = DebugInfoLevel::LineTablesOnly;
+                        } else if (optval == "1" || optval == "limited") {
+                            this->debug_info = DebugInfoLevel::Limited;
+                        } else if (optval == "2" || optval == "full") {
+                            this->debug_info = DebugInfoLevel::Full;
+                        } else {
+                            ::std::cerr << "invalid value for -C debuginfo: '" << optval << "'" << ::std::endl;
+                            exit(1);
+                        }
                     } else {
                         ::std::cerr << "Unknown codegen option: '" << optname << "'" << ::std::endl;
                         exit(1);
@@ -2797,7 +2813,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         this->opt_level = OptimizationLevel::Aggressive;
                         break;
                     case 'g':
-                        this->emit_debug_info = true;
+                        this->debug_info = DebugInfoLevel::Full;
                         break;
                     default:
                         ::std::cerr << "Unknown option: '-" << *arg << "'" << ::std::endl;

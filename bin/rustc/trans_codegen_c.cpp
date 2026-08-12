@@ -981,8 +981,17 @@ namespace {
             }
     #endif
 #endif
-            if (opt.emit_debug_info) {
-                args.push_back("-g");
+            switch (opt.debug_info) {
+                case DebugInfoLevel::None:
+                    break;
+                case DebugInfoLevel::LineDirectivesOnly:
+                case DebugInfoLevel::LineTablesOnly:
+                case DebugInfoLevel::Limited:
+                    args.push_back("-g1");
+                    break;
+                case DebugInfoLevel::Full:
+                    args.push_back("-g");
+                    break;
             }
             // TODO: Why?
             args.push_back("-fPIC");

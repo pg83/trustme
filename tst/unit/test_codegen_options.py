@@ -71,16 +71,16 @@ def check_cfg(rustc: str, src: str, work: str, name: str, expected: bool, args: 
     expect_ok(result, name)
 
 
-def codegen_flag(rustc: str, src: str, work: str, name: str, level: str) -> list[str]:
+def codegen_flags(rustc: str, src: str, work: str, name: str, args: list[str]) -> list[str]:
     output = os.path.join(work, name)
     command_file = output + ".command"
     result = invoke(
         rustc,
         src,
         output,
-        [f"-Cemit-build-command={command_file}", f"-Copt-level={level}"],
+        [f"-Cemit-build-command={command_file}", *args],
     )
-    expect_ok(result, f"C codegen opt-level={level}")
+    expect_ok(result, f"C codegen {name}")
     command = shlex.split(Path(command_file).read_text())
     response = next((arg[1:] for arg in command if arg.startswith("@")), None)
     if response is None:
@@ -167,9 +167,33 @@ def main() -> int:
 
         expected_codegen_flags = {"0": "-O0", "1": "-O1", "s": "-Os", "z": "-Oz"}
         for level, expected_flag in expected_codegen_flags.items():
-            flags = codegen_flag(rustc, mir_src, work, f"codegen-{level}", level)
+            flags = codegen_flags(rustc, mir_src, work, f"codegen-{level}", [f"-Copt-level={level}"])
             if expected_flag not in flags:
                 raise RuntimeError(f"opt-level={level} did not emit {expected_flag}: {flags!r}")
+
+        debuginfo_cases = [
+            ("none-number", ["-Cdebuginfo=0"], None),
+            ("none-name", ["-Cdebuginfo=none"], None),
+            ("line-directives", ["-Cdebuginfo=line-directives-only"], "-g1"),
+            ("line-tables", ["-Cdebuginfo=line-tables-only"], "-g1"),
+            ("limited-number", ["-Cdebuginfo=1"], "-g1"),
+            ("limited-name", ["-Cdebuginfo=limited"], "-g1"),
+            ("full-number", ["-Cdebuginfo=2"], "-g"),
+            ("full-name", ["-Cdebuginfo=full"], "-g"),
+            ("short", ["-g"], "-g"),
+        ]
+        for name, args, expected_flag in debuginfo_cases:
+            flags = codegen_flags(rustc, mir_src, work, f"debuginfo-{name}", args)
+            actual_flags = [flag for flag in flags if flag == "-g" or flag.startswith("-g")]
+            expected_flags = [] if expected_flag is None else [expected_flag]
+            if actual_flags != expected_flags:
+                raise RuntimeError(f"debuginfo={name} emitted {actual_flags!r}, expected {expected_flags!r}")
+
+        expect_error(
+            invoke(rustc, cfg_src, os.path.join(work, "invalid-debuginfo"), ["-Cdebuginfo=3"]),
+            "invalid debuginfo",
+            "debuginfo",
+        )
         check_link_args(rustc, link_src, work)
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)

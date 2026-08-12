@@ -40,15 +40,13 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ## P2 — 10–24 targets одним общим исправлением
 
-1. [ ] **`-Cdebuginfo`: 16 targets.** Связать уровни с backend output либо доказанно классифицировать tests, которым нужен только принятый driver contract. Не принимать option без эффекта там, где тест проверяет debug info.
+1. [ ] **CTFE `simd_extract`: 16 targets.** Одна сигнатура `hir_conv_constant_evaluation.cpp:3408`; покрывает Rust 1.90, library, Miri и doctest. Реализовать bounds/type/layout semantics и unit для valid и out-of-bounds lane.
 
-2. [ ] **CTFE `simd_extract`: 16 targets.** Одна сигнатура `hir_conv_constant_evaluation.cpp:3408`; покрывает Rust 1.90, library, Miri и doctest. Реализовать bounds/type/layout semantics и unit для valid и out-of-bounds lane.
+2. [ ] **Delegation `reuse`: 13 прямых parser failures.** Реализовать современный синтаксис delegation вместе с HIR/resolution, включая glob/list/rename/override и impl-trait cases.
 
-3. [ ] **Delegation `reuse`: 13 прямых parser failures.** Реализовать современный синтаксис delegation вместе с HIR/resolution, включая glob/list/rename/override и impl-trait cases.
+3. [ ] **CTFE null relocation: 11 targets.** `hir_conv_constant_evaluation.cpp:1571`, `Null (<PTR_BASE) pointer deref`. Искать место потери relocation/provenance, а не ослаблять assert.
 
-4. [ ] **CTFE null relocation: 11 targets.** `hir_conv_constant_evaluation.cpp:1571`, `Null (<PTR_BASE) pointer deref`. Искать место потери relocation/provenance, а не ослаблять assert.
-
-5. [ ] **Const pattern literal borrow: 11 targets.** `mir_from_hir.cpp:4443`, `append_from_lit Match literal Borrow`. Добавить корректное MIR lowering и проверить custom equality/branch selection.
+4. [ ] **Const pattern literal borrow: 11 targets.** `mir_from_hir.cpp:4443`, `append_from_lit Match literal Borrow`. Добавить корректное MIR lowering и проверить custom equality/branch selection.
 
 ## P3 — измеренные, но раздробленные группы
 
