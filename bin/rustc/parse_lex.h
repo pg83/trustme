@@ -57,7 +57,6 @@ class Lexer: public TokenStream {
     bool m_last_char_valid;
     Codepoint m_last_char;
     ::std::vector<Token> m_next_tokens;
-    eTokenType m_last_token_type = TOK_NULL;
 
     AST::Edition m_edition;
     Ident::Hygiene m_hygiene;

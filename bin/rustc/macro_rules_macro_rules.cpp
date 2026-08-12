@@ -798,25 +798,9 @@ namespace {
         for (;;) {
             if (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT) {
                 level += (lex.next() == TOK_DOUBLE_LT ? 2 : 1);
-            } else if (lex.next() == TOK_GT || lex.next() == TOK_DOUBLE_GT || lex.next() == TOK_GTE || lex.next() == TOK_DOUBLE_GT_EQUAL) {
+            } else if (lex.next() == TOK_GT || lex.next() == TOK_DOUBLE_GT) {
                 assert(level > 0);
-                if (lex.next() == TOK_DOUBLE_GT_EQUAL) {
-                    if (level == 1) {
-                        lex.consume_and_push(TOK_GTE);
-                        return true;
-                    }
-                    if (level == 2) {
-                        lex.consume_and_push(TOK_EQUAL);
-                        return true;
-                    }
-                    level -= 2;
-                } else if (lex.next() == TOK_GTE) {
-                    if (level == 1) {
-                        lex.consume_and_push(TOK_EQUAL);
-                        return true;
-                    }
-                    level -= 1;
-                } else if (lex.next() == TOK_DOUBLE_GT) {
+                if (lex.next() == TOK_DOUBLE_GT) {
                     if (level == 1) {
                         lex.consume_and_push(TOK_GT);
                         return true;
@@ -862,14 +846,12 @@ namespace {
                 break;
             case TOK_RWORD_CRATE:
                 lex.consume();
-                if (lex.next() != TOK_DOUBLE_COLON) {
-                    return true;
-                }
+                // Require `::` after `crate`
                 break;
             case TOK_RWORD_SUPER:
                 lex.consume();
                 if (lex.next() != TOK_DOUBLE_COLON) {
-                    return true;
+                    return false;
                 }
                 break;
             case TOK_DOUBLE_COLON:
@@ -907,11 +889,11 @@ namespace {
             lex.consume();
             if (lex.next() == TOK_STRING) {
                 lex.consume();
-            } else if (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT) {
+            } else if (!type_mode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
                 if (!consume_tt_angle(lex)) {
                     return false;
                 }
-            } else if (lex.next() == TOK_IDENT || lex.next() == TOK_RWORD_SELF || lex.next() == TOK_RWORD_SUPER || lex.next() == TOK_RWORD_CRATE) {
+            } else if (lex.next() == TOK_IDENT) {
                 lex.consume();
                 if (type_mode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
                     if (!consume_tt_angle(lex)) {
@@ -1031,12 +1013,6 @@ namespace {
                     consume_type(lex);
                 }
                 return true;
-            case TOK_RWORD_FOR:
-                lex.consume();
-                if (!(lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT) || !consume_tt_angle(lex)) {
-                    return false;
-                }
-                return consume_type(lex);
             default:
                 return false;
         }
@@ -1044,10 +1020,6 @@ namespace {
 
     bool consume_pat(TokenStreamRO& lex, bool allow_or = true) {
         TRACE_FUNCTION;
-
-        if (lex.consume_if(TOK_DASH) && lex.next() != TOK_INTEGER && lex.next() != TOK_FLOAT) {
-            return false;
-        }
 
         if (lex.next() == TOK_RWORD_REF || lex.next() == TOK_RWORD_MUT) {
             lex.consume_if(TOK_RWORD_REF);
@@ -1081,8 +1053,6 @@ namespace {
                 case TOK_RWORD_CRATE:
                 case TOK_DOUBLE_COLON:
                 case TOK_INTERPOLATED_PATH:
-                case TOK_LT:
-                case TOK_DOUBLE_LT:
                     consume_path(lex);
                     if (lex.next() == TOK_BRACE_OPEN) {
                         if (!consume_tt(lex)) {
@@ -1148,7 +1118,6 @@ namespace {
             }
             // ... or ..=
             if (lex.consume_if(TOK_TRIPLE_DOT) || lex.consume_if(TOK_DOUBLE_DOT_EQUAL)) {
-                lex.consume_if(TOK_DASH);
                 switch (lex.next()) {
                     case TOK_IDENT:
                     case TOK_RWORD_SUPER:
@@ -1226,12 +1195,6 @@ namespace {
                     case TOK_AMP:
                         lex.consume();
                         lex.consume_if(TOK_RWORD_MUT);
-                        if (lex.next() == TOK_IDENT && lex.next_tok().ident().name == "raw") {
-                            lex.consume();
-                            if (!(lex.consume_if(TOK_RWORD_CONST) || lex.consume_if(TOK_RWORD_MUT))) {
-                                return false;
-                            }
-                        }
                         break;
                     default:
                         inner_cont = false;
@@ -1313,14 +1276,6 @@ namespace {
                     lex.consume();
                     lex.consume_if(TOK_RWORD_MOVE);
                     return consume_expr(lex, no_struct_lit);
-
-                case TOK_RWORD_CONST:
-                    lex.consume();
-                    if (lex.next() != TOK_BRACE_OPEN) {
-                        return false;
-                    }
-                    consume_tt(lex);
-                    break;
 
                 case TOK_RWORD_UNSAFE:
                     lex.consume();
@@ -1873,7 +1828,7 @@ namespace {
                 if (lex.consume_if(TOK_RWORD_FN)) {
                     goto fn;
                 } else {
-                    if (!(lex.consume_if(TOK_IDENT) || lex.consume_if(TOK_UNDERSCORE))) {
+                    if (!lex.consume_if(TOK_IDENT)) {
                         return false;
                     }
                     if (!lex.consume_if(TOK_COLON)) {
@@ -1919,7 +1874,7 @@ namespace {
             case TOK_RWORD_EXTERN:
                 lex.consume();
                 if (lex.consume_if(TOK_RWORD_CRATE)) {
-                    if (!(lex.consume_if(TOK_IDENT) || lex.consume_if(TOK_RWORD_SELF))) {
+                    if (!lex.consume_if(TOK_IDENT)) {
                         return false;
                     }
                     if (lex.consume_if(TOK_RWORD_AS)) {
@@ -2028,8 +1983,6 @@ namespace {
                     lex.consume();
                     switch (lex.next()) {
                         case TOK_PAREN_OPEN:
-                        case TOK_SQUARE_OPEN:
-                        case TOK_BRACE_OPEN:
                             return consume_tt(lex);
                         case TOK_EQUAL:
                             lex.consume();
@@ -2574,7 +2527,6 @@ bool is_token_path(eTokenType tt) {
         case TOK_DOUBLE_LT:
         case TOK_RWORD_SELF:
         case TOK_RWORD_SUPER:
-        case TOK_RWORD_CRATE:
         case TOK_INTERPOLATED_PATH:
             return true;
         default:
@@ -2592,7 +2544,6 @@ bool is_token_pat(eTokenType tt) {
 
         case TOK_UNDERSCORE:
         case TOK_AMP:
-        case TOK_DASH:
         case TOK_RWORD_BOX:
         case TOK_RWORD_REF:
         case TOK_RWORD_MUT:
@@ -2618,10 +2569,6 @@ bool is_token_type(eTokenType tt) {
         case TOK_RWORD_EXTERN:
         case TOK_RWORD_UNSAFE:
         case TOK_RWORD_FN:
-        case TOK_RWORD_FOR:
-        case TOK_RWORD_IMPL:
-        case TOK_RWORD_DYN:
-        case TOK_EXCLAM:
         case TOK_INTERPOLATED_TYPE:
             return true;
         default:
@@ -2657,8 +2604,6 @@ bool is_token_expr(eTokenType tt) {
         case TOK_RWORD_WHILE:
         case TOK_RWORD_LOOP:
         case TOK_RWORD_UNSAFE:
-        case TOK_RWORD_CONST:
-        case TOK_RWORD_ASYNC:
 
         // Closures
         case TOK_RWORD_MOVE:
@@ -2670,12 +2615,10 @@ bool is_token_expr(eTokenType tt) {
         case TOK_FLOAT:
         case TOK_STRING:
         case TOK_BYTESTRING:
-        case TOK_CSTRING:
         case TOK_RWORD_TRUE:
         case TOK_RWORD_FALSE:
 
         case TOK_INTERPOLATED_EXPR:
-        case TOK_INTERPOLATED_BLOCK:
             return true;
         default:
             return false;
@@ -3015,17 +2958,6 @@ public:
     auto ps = lex.start_span();
     while (GET_TOK(tok, lex) != close || depth > 0) {
         DEBUG("tok = " << tok);
-        if (tok.is_doc_comment()) {
-            lex.getTokenIf(TOK_EXCLAM);
-            lex.getTokenCheck(TOK_SQUARE_OPEN);
-            auto name = lex.getTokenCheck(TOK_IDENT);
-            ASSERT_BUG(lex.point_span(), name.ident().name == "doc", "Malformed doc comment token sequence");
-            lex.getTokenCheck(TOK_EQUAL);
-            lex.getTokenCheck(TOK_STRING);
-            lex.getTokenCheck(TOK_SQUARE_CLOSE);
-            ps = lex.start_span();
-            continue;
-        }
         if (tok.type() == open) {
             depth++;
         } else if (tok.type() == close) {

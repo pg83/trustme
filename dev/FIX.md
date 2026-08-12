@@ -40,13 +40,15 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ## P2 — 10–24 targets одним общим исправлением
 
-1. [ ] **CTFE `simd_extract`: 16 targets.** Одна сигнатура `hir_conv_constant_evaluation.cpp:3408`; покрывает Rust 1.90, library, Miri и doctest. Реализовать bounds/type/layout semantics и unit для valid и out-of-bounds lane.
+1. [ ] **Macro matcher: 20 targets.** Одна сигнатура `macro_rules_macro_rules.cpp:2113`, `Macro_InvokeRules_MatchPattern - No arm matched`, проходит через UI, Rust 1.90 и Reference tests. Минимизировать по одной matcher state transition; отдельно проверить interpolated block/type/visibility/meta fragments и statement boundaries. Первая попытка (`eff927717`) ревертнута: её экспансия ломала typeck `compiler-builtins/src/float/div.rs:497` при сборке libstd (детерминированный репро — `mrustc` на `compiler-builtins/src/lib.rs` c `--extern core`); этот кейс обязан стать unit до повторной посадки.
 
-2. [ ] **Delegation `reuse`: 13 прямых parser failures.** Реализовать современный синтаксис delegation вместе с HIR/resolution, включая glob/list/rename/override и impl-trait cases.
+2. [ ] **CTFE `simd_extract`: 16 targets.** Одна сигнатура `hir_conv_constant_evaluation.cpp:3408`; покрывает Rust 1.90, library, Miri и doctest. Реализовать bounds/type/layout semantics и unit для valid и out-of-bounds lane.
 
-3. [ ] **CTFE null relocation: 11 targets.** `hir_conv_constant_evaluation.cpp:1571`, `Null (<PTR_BASE) pointer deref`. Искать место потери relocation/provenance, а не ослаблять assert.
+3. [ ] **Delegation `reuse`: 13 прямых parser failures.** Реализовать современный синтаксис delegation вместе с HIR/resolution, включая glob/list/rename/override и impl-trait cases.
 
-4. [ ] **Const pattern literal borrow: 11 targets.** `mir_from_hir.cpp:4443`, `append_from_lit Match literal Borrow`. Добавить корректное MIR lowering и проверить custom equality/branch selection.
+4. [ ] **CTFE null relocation: 11 targets.** `hir_conv_constant_evaluation.cpp:1571`, `Null (<PTR_BASE) pointer deref`. Искать место потери relocation/provenance, а не ослаблять assert.
+
+5. [ ] **Const pattern literal borrow: 11 targets.** `mir_from_hir.cpp:4443`, `append_from_lit Match literal Borrow`. Добавить корректное MIR lowering и проверить custom equality/branch selection.
 
 ## P3 — измеренные, но раздробленные группы
 

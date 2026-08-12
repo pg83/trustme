@@ -301,34 +301,6 @@ bool issym(Codepoint ch) {
     return false;
 }
 
-bool token_can_end_expression(eTokenType type) {
-    switch (type) {
-        case TOK_IDENT:
-        case TOK_INTEGER:
-        case TOK_CHAR:
-        case TOK_FLOAT:
-        case TOK_STRING:
-        case TOK_BYTESTRING:
-        case TOK_CSTRING:
-        case TOK_PAREN_CLOSE:
-        case TOK_BRACE_CLOSE:
-        case TOK_SQUARE_CLOSE:
-        case TOK_RWORD_TRUE:
-        case TOK_RWORD_FALSE:
-        case TOK_RWORD_SELF:
-        case TOK_RWORD_SUPER:
-        case TOK_RWORD_CRATE:
-        case TOK_RWORD_AWAIT:
-        case TOK_INTERPOLATED_PATH:
-        case TOK_INTERPOLATED_EXPR:
-        case TOK_INTERPOLATED_BLOCK:
-        case TOK_QMARK:
-            return true;
-        default:
-            return false;
-    }
-}
-
 Position Lexer::getPosition() const {
     return Position(m_path, m_line, m_line_ofs);
 }
@@ -339,7 +311,6 @@ Ident::Hygiene Lexer::realGetHygiene() const {
 
 Token Lexer::realGetToken() {
     while (true) {
-        bool from_pending = !m_next_tokens.empty();
         Token tok = getTokenInt();
 #ifdef TRACE_RAW_TOKENS
         ::std::cout << "getTokenInt: tok = " << tok << ::std::endl;
@@ -353,35 +324,6 @@ Token Lexer::realGetToken() {
                 continue;
             }
             default:
-                if (!from_pending && m_next_tokens.empty()) {
-                    switch (tok.type()) {
-                        case TOK_INTEGER:
-                        case TOK_CHAR:
-                        case TOK_FLOAT:
-                        case TOK_STRING:
-                        case TOK_BYTESTRING:
-                        case TOK_CSTRING: {
-                            try {
-                                auto ch = this->getc();
-                                if (!ch.isdigit() && issym(ch)) {
-                                    ::std::string suffix;
-                                    do {
-                                        suffix += ch;
-                                        ch = this->getc();
-                                    } while (issym(ch));
-                                    this->ungetc();
-                                    tok.set_suffix(RcString::new_interned(suffix));
-                                } else {
-                                    this->ungetc();
-                                }
-                            } catch (Lexer::EndOfFile&) {
-                            }
-                        } break;
-                        default:
-                            break;
-                    }
-                }
-                m_last_token_type = tok.type();
                 return tok;
         }
     }
@@ -517,9 +459,7 @@ Token Lexer::getTokenInt() {
                         } else if (suffix == "f128") {
                             num_type = CORETYPE_F128;
                         } else {
-                            auto rv = Token::make_float(fval, CORETYPE_ANY);
-                            rv.set_suffix(RcString::new_interned(suffix));
-                            return rv;
+                            ERROR(this->point_span(), E0000, "Unknown float suffix " << suffix);
                         }
                     } else {
                         this->ungetc();
@@ -570,9 +510,9 @@ Token Lexer::getTokenInt() {
                     } else if (suffix == "f128") {
                         num_type = CORETYPE_F128;
                     } else {
-                        auto rv = Token(val, CORETYPE_ANY);
-                        rv.set_suffix(RcString::new_interned(suffix));
-                        return rv;
+                        // Not a numeric type suffix - rustc allows any identifier here, so emit it as a following ident token
+                        m_next_tokens.push_back(Token(TOK_IDENT, Ident(this->realGetHygiene(), RcString::new_interned(suffix))));
+                        return Token(val, CORETYPE_ANY);
                     }
                     return Token(val, num_type);
                 } else {
@@ -645,7 +585,7 @@ Token Lexer::getTokenInt() {
             if (sym == TOK_DOT) {
                 auto ch = this->getc();
                 this->ungetc();
-                if (ch.isdigit() && token_can_end_expression(m_last_token_type)) {
+                if (ch.isdigit()) {
                     auto val = this->parseInt(nullptr);
                     m_next_tokens.push_back(Token(val, CORETYPE_ANY));
                 } else {
@@ -686,9 +626,7 @@ Token Lexer::getTokenInt() {
                         if (is_pdoc) {
                             m_next_tokens.push_back(TOK_EXCLAM);
                         }
-                        auto rv = Token(TOK_HASH);
-                        rv.mark_doc_comment();
-                        return rv;
+                        return TOK_HASH;
                     }
                     return Token(TOK_COMMENT, str, realGetHygiene());
                 }
@@ -752,9 +690,7 @@ Token Lexer::getTokenInt() {
                         if (is_pdoc) {
                             m_next_tokens.push_back(TOK_EXCLAM);
                         }
-                        auto rv = Token(TOK_HASH);
-                        rv.mark_doc_comment();
-                        return rv;
+                        return TOK_HASH;
                     }
                     return Token(TOK_COMMENT, str, realGetHygiene());
                 }
@@ -777,14 +713,7 @@ Token Lexer::getTokenInt() {
                         } else if (issym(firstchar.v)) {
                             // Lifetime name
                             ::std::string str;
-                            if (firstchar == 'r' && ch == '#') {
-                                ch = this->getc();
-                                if (ch.isdigit() || !issym(ch)) {
-                                    throw ParseError::Unexpected(*this, TOK_HASH, TOK_IDENT);
-                                }
-                            } else {
-                                str += firstchar;
-                            }
+                            str += firstchar;
                             while (issym(ch)) {
                                 str += ch;
                                 ch = this->getc();
