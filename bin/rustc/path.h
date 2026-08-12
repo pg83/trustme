@@ -19,7 +19,7 @@ namespace helpers {
     class path {
         static const char SEP = '/';
 
-        ::std::string m_str;
+        ::std::string mStr;
 
     public:
         path();
@@ -29,19 +29,19 @@ namespace helpers {
         path(const char* s);
 
         bool is_valid() const {
-            return m_str != "";
+            return mStr != "";
         }
 
         bool is_absolute() const {
-            return m_str != "" && m_str[0] == '/';
+            return mStr != "" && mStr[0] == '/';
         }
 
         bool operator==(const path& p) const {
-            return m_str == p.m_str;
+            return mStr == p.mStr;
         }
 
         bool operator!=(const path& p) const {
-            return m_str != p.m_str;
+            return mStr != p.mStr;
         }
 
         path& operator/=(const path& p);
@@ -67,11 +67,11 @@ namespace helpers {
         ::std::string basename() const;
 
         const ::std::string& str() const {
-            return m_str;
+            return mStr;
         }
 
         operator ::std::string() const {
-            return m_str;
+            return mStr;
         }
 
         class ComponentsIter {
@@ -85,7 +85,7 @@ namespace helpers {
 
         public:
             ::std::string_view operator*() const {
-                return ::std::string_view(p.m_str.c_str() + pos, end - pos);
+                return ::std::string_view(p.mStr.c_str() + pos, end - pos);
             }
 
             void operator++();
@@ -100,7 +100,7 @@ namespace helpers {
         }
 
         ComponentsIter end() const {
-            return ComponentsIter(*this, m_str.size());
+            return ComponentsIter(*this, mStr.size());
         }
 
         path normalise() const;
@@ -108,7 +108,7 @@ namespace helpers {
         //void normalise_in_place();
 
         friend ::std::ostream& operator<<(::std::ostream& os, const path& p) {
-            return os << p.m_str;
+            return os << p.mStr;
         }
     };
 

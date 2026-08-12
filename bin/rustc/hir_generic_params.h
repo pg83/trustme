@@ -10,23 +10,23 @@
 namespace HIR {
 
     struct TypeParamDef {
-        RcString m_name;
-        ::HIR::TypeRef m_default;
-        bool m_is_sized;
+        RcString mName;
+        ::HIR::TypeRef defaultValue;
+        bool isSized;
 
         Ordering ord(const TypeParamDef& x) const;
     };
 
     struct LifetimeDef {
-        RcString m_name;
+        RcString mName;
 
         Ordering ord(const LifetimeDef& x) const;
     };
 
     struct ValueParamDef {
-        RcString m_name;
-        ::HIR::TypeRef m_type;
-        ConstGeneric m_default;
+        RcString mName;
+        ::HIR::TypeRef mType;
+        ConstGeneric defaultValue;
 
         Ordering ord(const ValueParamDef& x) const;
     };
@@ -72,11 +72,11 @@ namespace HIR {
 
     class GenericParams {
     public:
-        ::std::vector<TypeParamDef> m_types;
-        ::std::vector<LifetimeDef> m_lifetimes;
-        ::std::vector<ValueParamDef> m_values;
+        ::std::vector<TypeParamDef> types;
+        ::std::vector<LifetimeDef> mLifetimes;
+        ::std::vector<ValueParamDef> values;
 
-        ::std::vector<GenericBound> m_bounds;
+        ::std::vector<GenericBound> bounds;
 
         //GenericParams() {}
 

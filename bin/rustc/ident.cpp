@@ -6,18 +6,18 @@
 unsigned int Ident::Hygiene::g_next_scope = 0;
 
 bool Ident::Hygiene::is_visible(const Hygiene& src) const {
-    if (m_inner->contexts.size() > src->contexts.size()) {
+    if (inner->contexts.size() > src->contexts.size()) {
         return false;
     }
-    for (size_t i = 0; i < m_inner->contexts.size(); i++) {
-        if (m_inner->contexts[i] != src->contexts[i] || m_inner->macro_definitions[i] != src->macro_definitions[i]) {
+    for (size_t i = 0; i < inner->contexts.size(); i++) {
+        if (inner->contexts[i] != src->contexts[i] || inner->macro_definitions[i] != src->macro_definitions[i]) {
             return false;
         }
     }
     // Ordinary lexical scopes extend visibility. A macro invocation is a
     // semi-opaque rib: it must be removed at its definition boundary before
     // bindings outside that definition become visible.
-    for (size_t i = m_inner->contexts.size(); i < src->contexts.size(); i++) {
+    for (size_t i = inner->contexts.size(); i < src->contexts.size(); i++) {
         if (src->macro_definitions[i] != 0) {
             return false;
         }
@@ -58,28 +58,28 @@ std::ostream& operator<<(std::ostream& os, const Ident::ModPath& x) {
 }
 
 Ident::Hygiene::Hygiene(unsigned int index)
-    : m_inner(new Inner()) {
-    m_inner->contexts.push_back(index);
-    m_inner->macro_definitions.push_back(0);
+    : inner(new Inner()) {
+    inner->contexts.push_back(index);
+    inner->macro_definitions.push_back(0);
 }
 Ident::Hygiene::Hygiene()
-    : m_inner(new Inner()) {
+    : inner(new Inner()) {
 }
 Ident::Hygiene::Hygiene(const Hygiene& x)
-    : m_inner(new Inner(*x.m_inner)) {
+    : inner(new Inner(*x.inner)) {
 }
 Ident::Hygiene& Ident::Hygiene::operator=(const Hygiene& x) {
     *this = Hygiene(x);
-    assert(this->m_inner);
+    assert(this->inner);
     return *this;
 }
 //Hygiene(Hygiene&& x) = default;
 Ident::Hygiene::Hygiene(Hygiene&& x)
-    : m_inner(std::move(x.m_inner)) {
+    : inner(std::move(x.inner)) {
     //assert(m_inner);
 }
 Ident::Hygiene& Ident::Hygiene::operator=(Hygiene&& x) {
-    m_inner.reset(x.m_inner.release());
+    inner.reset(x.inner.release());
     //assert(m_inner);
     return *this;
 }
@@ -108,29 +108,29 @@ Ident::Hygiene Ident::Hygiene::with_tail_scope(const Hygiene& scope, bool inheri
 Ident::Hygiene Ident::Hygiene::get_parent() const {
     //assert(this->contexts.size() > 1);
     Hygiene rv;
-    rv->contexts.insert(rv->contexts.begin(), m_inner->contexts.begin(), m_inner->contexts.end() - 1);
-    rv->macro_definitions.insert(rv->macro_definitions.begin(), m_inner->macro_definitions.begin(), m_inner->macro_definitions.end() - 1);
+    rv->contexts.insert(rv->contexts.begin(), inner->contexts.begin(), inner->contexts.end() - 1);
+    rv->macro_definitions.insert(rv->macro_definitions.begin(), inner->macro_definitions.begin(), inner->macro_definitions.end() - 1);
     return rv;
 }
 bool Ident::Hygiene::leave_macro_definition(unsigned int definition, const Hygiene& token_context, const Hygiene& definition_context) {
-    assert(m_inner->contexts.size() == m_inner->macro_definitions.size());
-    if (m_inner->macro_definitions.empty() || m_inner->macro_definitions.back() != definition) {
+    assert(inner->contexts.size() == inner->macro_definitions.size());
+    if (inner->macro_definitions.empty() || inner->macro_definitions.back() != definition) {
         return false;
     }
-    m_inner->contexts.pop_back();
-    m_inner->macro_definitions.pop_back();
+    inner->contexts.pop_back();
+    inner->macro_definitions.pop_back();
     if (*this == token_context) {
         *this = definition_context;
     }
     return true;
 }
 const Ident::ModPath& Ident::Hygiene::mod_path() const {
-    assert(m_inner->search_module);
-    return *m_inner->search_module;
+    assert(inner->search_module);
+    return *inner->search_module;
 }
 Ordering Ident::Hygiene::ord(const Hygiene& x) const {
-    ORD(m_inner->contexts, x->contexts);
-    ORD(m_inner->macro_definitions, x->macro_definitions); /*ORD(*m_inner->search_module, *x->search_module);*/
+    ORD(inner->contexts, x->contexts);
+    ORD(inner->macro_definitions, x->macro_definitions); /*ORD(*m_inner->search_module, *x->search_module);*/
     return OrdEqual;
 }
 Ident::Ident(const char* name)

@@ -13,7 +13,7 @@
 
 namespace {
     bool check_item_cfg(const ::AST::AttributeList& attrs) {
-        for (const auto& at : attrs.m_items) {
+        for (const auto& at : attrs.mItems) {
             if (at.name() == "cfg" && !check_cfg(at.span(), at)) {
                 return false;
             }
@@ -23,7 +23,7 @@ namespace {
 
     void iterate_module(::AST::Module& mod, ::std::function<void(::AST::Module& mod)> fcn) {
         fcn(mod);
-        for (auto& sm : mod.m_items) {
+        for (auto& sm : mod.mItems) {
             if (auto* e = sm->data.opt_Module()) {
                 if (check_item_cfg(sm->attrs)) {
                     iterate_module(*e, fcn);
@@ -41,16 +41,16 @@ namespace {
 namespace AST {
 
     Crate::Crate(stl::ObjPool* pool, HIR::TypeInterner& types)
-        : m_pool(pool)
-        , m_types(types)
-        , m_root_module(AST::AbsolutePath())
-        , m_load_std(LOAD_STD)
+        : pool(pool)
+        , types(types)
+        , rootModule(AST::AbsolutePath())
+        , loadStd(LOAD_STD)
     {
     }
 
     void Crate::load_externs() {
         auto cb = [this](Module& mod) {
-            for (/*const*/ auto& it : mod.m_items) {
+            for (/*const*/ auto& it : mod.mItems) {
                 if (auto* c = it->data.opt_Crate()) {
                     if (check_item_cfg(it->attrs)) {
                         if (c->name == "") {
@@ -62,7 +62,7 @@ namespace AST {
                 }
             }
         };
-        iterate_module(m_root_module, cb);
+        iterate_module(rootModule, cb);
 
         // Check for no_std or no_core, and load libstd/libcore
         // - Duplicates some of the logic in "Expand", but also helps keep crate loading separate to most of expand
@@ -70,7 +70,7 @@ namespace AST {
         bool no_std = false;
         bool no_core = false;
 
-        for (const auto& a : this->m_attrs.m_items) {
+        for (const auto& a : this->mAttrs.mItems) {
             if (a.name() == "no_std") {
                 no_std = true;
             }
@@ -110,8 +110,8 @@ namespace AST {
             auto real_name = this->load_extern_crate(Span(), n);
             g_implicit_crates.insert(std::make_pair(n, real_name));
         }
-        if (this->m_ext_cratename_core != "") {
-            g_implicit_crates.insert(std::make_pair(RcString::new_interned("core"), this->m_ext_cratename_core));
+        if (this->extCratenameCore != "") {
+            g_implicit_crates.insert(std::make_pair(RcString::new_interned("core"), this->extCratenameCore));
         }
     }
 
@@ -213,10 +213,10 @@ namespace AST {
         }
 
         // NOTE: Creating `ExternCrate` loads the crate from the specified path
-        auto ec = ExternCrate{m_pool, m_types, name, path};
-        auto real_name = ec.m_hir->m_crate_name;
+        auto ec = ExternCrate{pool, types, name, path};
+        auto real_name = ec.hir->crateName;
         assert(real_name != "");
-        auto res = m_extern_crates.insert(::std::make_pair(real_name, mv$(ec)));
+        auto res = externCrates.insert(::std::make_pair(real_name, mv$(ec)));
         if (!res.second) {
             // Crate already loaded?
             DEBUG("Duplicate load of '" << real_name);
@@ -226,58 +226,58 @@ namespace AST {
         auto& ext_crate = res.first->second;
         // Move the external list out (doesn't need to be kept in the nested crate)
         //auto crate_ext_list = mv$( ext_crate.m_hir->m_ext_crates );
-        const auto& crate_ext_list = ext_crate.m_hir->m_ext_crates;
+        const auto& crate_ext_list = ext_crate.hir->extCrates;
 
         // Load referenced crates
         for (const auto& ext : crate_ext_list) {
-            if (m_extern_crates.count(ext.first) == 0) {
-                const auto load_name = this->load_extern_crate(sp, ext.first, ext.second.m_basename);
+            if (externCrates.count(ext.first) == 0) {
+                const auto load_name = this->load_extern_crate(sp, ext.first, ext.second.basename);
                 if (load_name != ext.first) {
                     // ERROR - The crate loaded wasn't the one that was used when compiling this crate.
-                    ERROR(sp, E0000, "The crate file `" << ext.second.m_basename << "` didn't load the expected crate - have " << load_name << " != exp " << ext.first);
+                    ERROR(sp, E0000, "The crate file `" << ext.second.basename << "` didn't load the expected crate - have " << load_name << " != exp " << ext.first);
                 }
             }
         }
         // NOTE: Add the crate to the ordered list AFTER its dependencies
-        m_extern_crates_ord.push_back(real_name);
+        externCratesOrd.push_back(real_name);
 
-        if (ext_crate.m_short_name == "core") {
-            if (this->m_ext_cratename_core == "") {
-                this->m_ext_cratename_core = ext_crate.m_name;
+        if (ext_crate.shortName == "core") {
+            if (this->extCratenameCore == "") {
+                this->extCratenameCore = ext_crate.mName;
             }
         }
-        if (ext_crate.m_short_name == "std") {
-            if (this->m_ext_cratename_std == "") {
-                this->m_ext_cratename_std = ext_crate.m_name;
+        if (ext_crate.shortName == "std") {
+            if (this->extCratenameStd == "") {
+                this->extCratenameStd = ext_crate.mName;
             }
         }
-        if (ext_crate.m_short_name == "proc_macro") {
-            if (this->m_ext_cratename_procmacro == "") {
-                this->m_ext_cratename_procmacro = ext_crate.m_name;
+        if (ext_crate.shortName == "proc_macro") {
+            if (this->extCratenameProcmacro == "") {
+                this->extCratenameProcmacro = ext_crate.mName;
             }
         }
-        if (ext_crate.m_short_name == "test") {
-            if (this->m_ext_cratename_test == "") {
-                this->m_ext_cratename_test = ext_crate.m_name;
+        if (ext_crate.shortName == "test") {
+            if (this->extCratenameTest == "") {
+                this->extCratenameTest = ext_crate.mName;
             }
         }
 
-        DEBUG("Loaded '" << name << "' from '" << basename << "' (actual name is '" << real_name << "' aka `" << ext_crate.m_short_name << "`)");
+        DEBUG("Loaded '" << name << "' from '" << basename << "' (actual name is '" << real_name << "' aka `" << ext_crate.shortName << "`)");
         return real_name;
     }
 
     ExternCrate::ExternCrate(stl::ObjPool* pool, HIR::TypeInterner& types, const RcString& name, const ::std::string& path)
-        : m_name(name)
-        , m_short_name(name)
-        , m_filename(path)
+        : mName(name)
+        , shortName(name)
+        , filename(path)
     {
         TRACE_FUNCTION_F("name=" << name << ", path='" << path << "'");
-        m_hir = HIRDeserialise(pool, types, path);
+        hir = HIRDeserialise(pool, types, path);
 
-        m_hir->post_load_update(name);
-        m_name = m_hir->m_crate_name;
-        if (const auto* e = strchr(m_name.c_str(), '-')) {
-            m_short_name = RcString::new_interned(m_name.c_str(), e - m_name.c_str());
+        hir->post_load_update(name);
+        mName = hir->crateName;
+        if (const auto* e = strchr(mName.c_str(), '-')) {
+            shortName = RcString::new_interned(mName.c_str(), e - mName.c_str());
         } else {
         }
     }
@@ -287,11 +287,11 @@ namespace AST {
 namespace AST {
 
 void Crate::set_crate_name(std::string name) {
-    m_crate_name_set = name;
-    if (m_crate_type == Type::Executable) {
-        m_crate_name_real = "";
+    crateNameSet = name;
+    if (crateType == Type::Executable) {
+        crateNameReal = "";
     } else {
-        m_crate_name_real = m_crate_name_suffix != "" ? RcString::new_interned(name + "-" + m_crate_name_suffix) : RcString::new_interned(name);
+        crateNameReal = crateNameSuffix != "" ? RcString::new_interned(name + "-" + crateNameSuffix) : RcString::new_interned(name);
     }
 }
 }

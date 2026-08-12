@@ -65,23 +65,23 @@ namespace MIR {
 
     public:
         const Span& sp;
-        const ::StaticTraitResolve& m_resolve;
-        const ::HIR::Crate& m_crate;
+        const ::StaticTraitResolve& mResolve;
+        const ::HIR::Crate& crate;
 
     private:
-        ::FmtLambda m_path;
+        ::FmtLambda mPath;
 
     public:
-        const ::HIR::TypeData* m_ret_type;
-        const args_t& m_args;
-        const ::MIR::Function& m_fcn;
+        const ::HIR::TypeData* retType;
+        const args_t& mArgs;
+        const ::MIR::Function& fcn;
 
         // If set, these override the list in `m_fcn`
-        const ::HIR::TypeData* m_monomorphed_rettype;
-        const ::std::vector<::HIR::TypeRef>* m_monomorphed_locals;
+        const ::HIR::TypeData* monomorphedRettype;
+        const ::std::vector<::HIR::TypeRef>* monomorphedLocals;
 
     private:
-        const ::HIR::SimplePath* m_lang_Box = nullptr;
+        const ::HIR::SimplePath* mLangBox = nullptr;
 
         unsigned int bb_idx = 0;
         unsigned int stmt_idx = 0;
@@ -123,11 +123,11 @@ namespace MIR {
         const ::HIR::TypeData* get_lvalue_type(::HIR::TypeRef& tmp, const ::MIR::LValue& val, unsigned wrapper_skip_count = 0) const;
 
         const ::HIR::TypeData* get_lvalue_type(::HIR::TypeRef& tmp, const ::MIR::LValue::CRef& val) const {
-            return get_lvalue_type(tmp, val.lv(), val.lv().m_wrappers.size() - val.wrapper_count());
+            return get_lvalue_type(tmp, val.lv(), val.lv().wrappers.size() - val.wrapper_count());
         }
 
         const ::HIR::TypeData* get_lvalue_type(::HIR::TypeRef& tmp, const ::MIR::LValue::MRef& val) const {
-            return get_lvalue_type(tmp, val.lv(), val.lv().m_wrappers.size() - val.wrapper_count());
+            return get_lvalue_type(tmp, val.lv(), val.lv().wrappers.size() - val.wrapper_count());
         }
 
         const ::HIR::TypeData* get_unwrapped_type(::HIR::TypeRef& tmp, const ::MIR::LValue::Wrapper& w, const ::HIR::TypeData* ty) const;
@@ -173,11 +173,11 @@ namespace MIR {
     };
 
     struct ValueLifetimes {
-        ::std::vector<size_t> m_block_offsets;
-        ::std::vector<ValueLifetime> m_slots;
+        ::std::vector<size_t> blockOffsets;
+        ::std::vector<ValueLifetime> slots;
 
         bool slot_valid(unsigned idx, unsigned bb_idx, unsigned stmt_idx) const {
-            return m_slots.at(idx).valid_at(m_block_offsets[bb_idx] + stmt_idx);
+            return slots.at(idx).valid_at(blockOffsets[bb_idx] + stmt_idx);
         }
     };
 
@@ -224,9 +224,9 @@ namespace MIR {
             }
 
             virtual void visit_path(typename Dec<::HIR::Path>::Type& path) {
-            TU_MATCH_HDRA((path.m_data), {)
+            TU_MATCH_HDRA((path.mData), {)
             TU_ARMA(Generic, e) {
-                        visit_path_params(e.m_params);
+                        visit_path_params(e.mParams);
                     }
                     TU_ARMA(UfcsInherent, e) {
                         visit_type(e.type);
@@ -234,7 +234,7 @@ namespace MIR {
                     }
                     TU_ARMA(UfcsKnown, e) {
                         visit_type(e.type);
-                        visit_path_params(e.trait.m_params);
+                        visit_path_params(e.trait.mParams);
                         visit_path_params(e.params);
                     }
                     TU_ARMA(UfcsUnknown, e) {
@@ -245,11 +245,11 @@ namespace MIR {
             }
 
             virtual void visit_genericpath(typename Dec<::HIR::GenericPath>::Type& p) {
-                visit_path_params(p.m_params);
+                visit_path_params(p.mParams);
             }
 
             virtual void visit_path_params(typename Dec<::HIR::PathParams>::Type& p) {
-                for (auto& e : p.m_types) {
+                for (auto& e : p.types) {
                     visit_type(e);
                 }
             }

@@ -28,16 +28,16 @@ struct Ident {
 
         // NOTE: Use a unique pointer to reduce the size to 1 pointer (instead of 5)
         // - Used quite a bit, and parse sometimes runs out of stack.
-        ::std::unique_ptr<Inner> m_inner;
+        ::std::unique_ptr<Inner> inner;
 
         Hygiene(unsigned int index);
 
         Inner* operator->() {
-            return &*m_inner;
+            return &*inner;
         }
 
         const Inner* operator->() const {
-            return &*m_inner;
+            return &*inner;
         }
 
     public:
@@ -65,13 +65,13 @@ struct Ident {
         bool leave_macro_definition(unsigned int definition, const Hygiene& token_context, const Hygiene& definition_context);
 
         bool has_mod_path() const {
-            return m_inner->search_module != 0;
+            return inner->search_module != 0;
         }
 
         const ModPath& mod_path() const;
 
         void set_mod_path(ModPath p) {
-            m_inner->search_module.reset(new ModPath(::std::move(p)));
+            inner->search_module.reset(new ModPath(::std::move(p)));
         }
 
         // Returns true if an ident with hygine `source` can see an ident with this hygine

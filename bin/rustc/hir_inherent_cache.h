@@ -31,15 +31,15 @@ namespace HIR {
         /// </summary>
         struct Inner {
             /// Cache content used for just `Self`
-            Lowest m_byvalue;
+            Lowest byvalue;
             // Sub-caches for different wrappers around `Self` (can recurse)
-            std::unique_ptr<Inner> m_ref;
-            std::unique_ptr<Inner> m_ref_mut;
-            std::unique_ptr<Inner> m_ref_move;
-            std::unique_ptr<Inner> m_ptr;
-            std::unique_ptr<Inner> m_ptr_mut;
-            std::unique_ptr<Inner> m_ptr_move;
-            std::map<HIR::SimplePath, Inner> m_path;
+            std::unique_ptr<Inner> ref;
+            std::unique_ptr<Inner> refMut;
+            std::unique_ptr<Inner> refMove;
+            std::unique_ptr<Inner> ptr;
+            std::unique_ptr<Inner> ptrMut;
+            std::unique_ptr<Inner> ptrMove;
+            std::map<HIR::SimplePath, Inner> mPath;
 
             void insert(const Span& sp, const HIR::TypeData* receiver, const HIR::TypeImpl& impl);
             void find(const Span& sp, const HIR::TypeData* cur_ty, t_cb_resolve_type ty_res, inner_callback_t& cb) const;

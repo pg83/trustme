@@ -47,9 +47,9 @@ namespace MIR {
     }
 
     void LValue::RefCommon::fmt(::std::ostream& os) const {
-        os << m_lv->m_root;
-        for (size_t i = 0; i < m_wrapper_count; i++) {
-            os << m_lv->m_wrappers.at(i);
+        os << mLv->root;
+        for (size_t i = 0; i < wrapperCount; i++) {
+            os << mLv->wrappers.at(i);
         }
     }
 
@@ -85,27 +85,27 @@ namespace MIR {
     }
 
     Ordering LValue::ord(const LValue& x) const {
-        auto rv = m_root.ord(x.m_root);
+        auto rv = root.ord(x.root);
         if (rv != OrdEqual) {
             return rv;
         }
-        return ::ord(m_wrappers, x.m_wrappers);
+        return ::ord(wrappers, x.wrappers);
     }
 
     Ordering LValue::RefCommon::ord(const LValue::RefCommon& x) const {
         Ordering rv;
         //TRACE_FUNCTION_FR(FMT_CB(ss, this->fmt(ss); ss << " ? "; x.fmt(ss);), rv);
-        rv = m_lv->m_root.ord(x.m_lv->m_root);
+        rv = mLv->root.ord(x.mLv->root);
         if (rv != OrdEqual) {
             return rv;
         }
-        for (size_t i = 0; i < ::std::min(m_wrapper_count, x.m_wrapper_count); i++) {
-            rv = m_lv->m_wrappers[i].ord(x.m_lv->m_wrappers[i]);
+        for (size_t i = 0; i < ::std::min(wrapperCount, x.wrapperCount); i++) {
+            rv = mLv->wrappers[i].ord(x.mLv->wrappers[i]);
             if (rv != OrdEqual) {
                 return rv;
             }
         }
-        return (rv = ::ord(m_wrapper_count, x.m_wrapper_count));
+        return (rv = ::ord(wrapperCount, x.wrapperCount));
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Param& x) {
@@ -477,7 +477,7 @@ const HIR::TypeData* MIR::Cloner::value_generic_type(HIR::GenericRef ce) const {
 }
 
 MIR::Cloner::Cloner(const Span& sp, HIR::TypeInterner& types)
-    : m_nop(new MonomorphiserNop(types))
+    : nop(new MonomorphiserNop(types))
     , sp(sp)
 {
 }
@@ -485,7 +485,7 @@ MIR::Cloner::Cloner(const Span& sp, HIR::TypeInterner& types)
 MIR::Cloner::~Cloner() = default;
 
 const Monomorphiser& MIR::Cloner::monomorphiser() const {
-    return *m_nop;
+    return *nop;
 }
 
 ::HIR::TypeRef MIR::Cloner::monomorph(const ::HIR::TypeData* ty) const {
@@ -501,8 +501,8 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorph_genericpath(sp, ty, false);
     if (const auto* r = resolve()) {
-        r->evaluate_path_params(sp, rv.m_params);
-        for (auto& arg : rv.m_params.m_types) {
+        r->evaluate_path_params(sp, rv.mParams);
+        for (auto& arg : rv.mParams.types) {
             r->expand_associated_types(sp, arg);
         }
     }
@@ -515,13 +515,13 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     if (const auto* r = resolve()) {
         TU_MATCH(
             ::HIR::Path::Data,
-            (rv.m_data),
+            (rv.mData),
             (e2),
-            (Generic, r->evaluate_path_params(sp, e2.m_params); for (auto& arg : e2.m_params.m_types) r->expand_associated_types(sp, arg);),
-            (UfcsInherent, r->expand_associated_types(sp, e2.type); r->evaluate_path_params(sp, e2.params); r->evaluate_path_params(sp, e2.impl_params); for (auto& arg : e2.params.m_types) r->expand_associated_types(sp, arg);
+            (Generic, r->evaluate_path_params(sp, e2.mParams); for (auto& arg : e2.mParams.types) r->expand_associated_types(sp, arg);),
+            (UfcsInherent, r->expand_associated_types(sp, e2.type); r->evaluate_path_params(sp, e2.params); r->evaluate_path_params(sp, e2.impl_params); for (auto& arg : e2.params.types) r->expand_associated_types(sp, arg);
              // TODO: impl params too?
-             for (auto& arg : e2.impl_params.m_types) r->expand_associated_types(sp, arg);),
-            (UfcsKnown, r->expand_associated_types(sp, e2.type); r->evaluate_path_params(sp, e2.trait.m_params); r->evaluate_path_params(sp, e2.params); for (auto& arg : e2.trait.m_params.m_types) r->expand_associated_types(sp, arg); for (auto& arg : e2.params.m_types) r->expand_associated_types(sp, arg);),
+             for (auto& arg : e2.impl_params.types) r->expand_associated_types(sp, arg);),
+            (UfcsKnown, r->expand_associated_types(sp, e2.type); r->evaluate_path_params(sp, e2.trait.mParams); r->evaluate_path_params(sp, e2.params); for (auto& arg : e2.trait.mParams.types) r->expand_associated_types(sp, arg); for (auto& arg : e2.params.types) r->expand_associated_types(sp, arg);),
             (UfcsUnknown, BUG(sp, "Encountered UfcsUnknown");)
         )
     }
@@ -533,7 +533,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     auto rv = monomorphiser().monomorph_path_params(sp, ty, false);
     if (const auto* r = resolve()) {
         r->evaluate_path_params(sp, rv);
-        for (auto& arg : rv.m_types) {
+        for (auto& arg : rv.types) {
             r->expand_associated_types(sp, arg);
         }
     }
@@ -670,13 +670,13 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
 }
 
 ::MIR::LValue MIR::Cloner::clone_lval(const ::MIR::LValue& src) const {
-    auto wrappers = src.m_wrappers;
+    auto wrappers = src.wrappers;
     for (auto& w : wrappers) {
         if (w.is_Index()) {
             w = ::MIR::LValue::Wrapper::newIndex(map_local(w.as_Index()));
         }
     }
-    TU_MATCH_HDRA( (src.m_root), {)
+    TU_MATCH_HDRA( (src.root), {)
     TU_ARMA(Return, se) {
             return ::MIR::LValue(::MIR::LValue::Storage::newReturn(), mv$(wrappers));
         }
@@ -931,85 +931,85 @@ void LValue::Wrapper::incDowncast() {
     *this = Wrapper::newDowncast(as_Downcast() + 1);
 }
 LValue::LValue()
-    : m_root(Storage::newReturn()) {
+    : root(Storage::newReturn()) {
 }
 LValue::LValue(Storage root, ::std::vector<Wrapper> wrappers)
-    : m_root(::std::move(root))
-    , m_wrappers(::std::move(wrappers)) {
+    : root(::std::move(root))
+    , wrappers(::std::move(wrappers)) {
 }
 LValue LValue::newDeref(LValue lv) {
-    lv.m_wrappers.push_back(Wrapper::newDeref());
+    lv.wrappers.push_back(Wrapper::newDeref());
     return lv;
 }
 LValue LValue::newField(LValue lv, unsigned idx) {
-    lv.m_wrappers.push_back(Wrapper::newField(idx));
+    lv.wrappers.push_back(Wrapper::newField(idx));
     return lv;
 }
 LValue LValue::newDowncast(LValue lv, unsigned idx) {
-    lv.m_wrappers.push_back(Wrapper::newDowncast(idx));
+    lv.wrappers.push_back(Wrapper::newDowncast(idx));
     return lv;
 }
 LValue LValue::newIndex(LValue lv, unsigned local_idx) {
-    lv.m_wrappers.push_back(Wrapper::newIndex(local_idx));
+    lv.wrappers.push_back(Wrapper::newIndex(local_idx));
     return lv;
 }
 unsigned LValue::as_Local() const {
-    assert(m_wrappers.empty());
-    return m_root.as_Local();
+    assert(wrappers.empty());
+    return root.as_Local();
 }
 unsigned LValue::as_Field() const {
-    assert(!m_wrappers.empty());
-    return m_wrappers.back().as_Field();
+    assert(!wrappers.empty());
+    return wrappers.back().as_Field();
 }
 void LValue::incField() {
-    assert(m_wrappers.size() > 0);
-    m_wrappers.back().incField();
+    assert(wrappers.size() > 0);
+    wrappers.back().incField();
 }
 void LValue::incDowncast() {
-    assert(m_wrappers.size() > 0);
-    m_wrappers.back().incDowncast();
+    assert(wrappers.size() > 0);
+    wrappers.back().incDowncast();
 }
 LValue LValue::clone_wrapped(::std::vector<Wrapper> wrappers) const {
-    if (this->m_wrappers.empty()) {
-        return LValue(m_root.clone(), ::std::move(wrappers));
+    if (this->wrappers.empty()) {
+        return LValue(root.clone(), ::std::move(wrappers));
     } else {
         return clone_wrapped(wrappers.begin(), wrappers.end());
     }
 }
 LValue LValue::clone_unwrapped(unsigned count) const {
     assert(count > 0);
-    assert(count <= m_wrappers.size());
-    return LValue(m_root.clone(), ::std::vector<Wrapper>(m_wrappers.begin(), m_wrappers.end() - count));
+    assert(count <= wrappers.size());
+    return LValue(root.clone(), ::std::vector<Wrapper>(wrappers.begin(), wrappers.end() - count));
 }
 // Returns true if one lvalue is a subset of the other
 // - Equivalent to `a.is_subset_of(b) || b.is_subset_of(a)` (but more efficient)
 bool LValue::is_either_subset(const LValue& other) const {
-    if (!(m_root == other.m_root)) {
+    if (!(root == other.root)) {
         return false;
     }
-    if (other.m_wrappers.size() > m_wrappers.size()) {
-        return ::std::equal(m_wrappers.begin(), m_wrappers.end(), other.m_wrappers.begin());
+    if (other.wrappers.size() > wrappers.size()) {
+        return ::std::equal(wrappers.begin(), wrappers.end(), other.wrappers.begin());
     } else {
-        return ::std::equal(other.m_wrappers.begin(), other.m_wrappers.end(), m_wrappers.begin());
+        return ::std::equal(other.wrappers.begin(), other.wrappers.end(), wrappers.begin());
     }
 }
 LValue::RefCommon::RefCommon(const LValue& lv, size_t wrapper_count)
-    : m_lv(&lv)
-    , m_wrapper_count(wrapper_count) {
-    assert(wrapper_count <= lv.m_wrappers.size());
+    : mLv(&lv)
+    , wrapperCount(wrapper_count) {
+    assert(wrapper_count <= lv.wrappers.size());
 }
 /// Unwrap one level, returning false if already at the root
 bool LValue::RefCommon::try_unwrap() {
-    if (m_wrapper_count == 0) {
+    if (wrapperCount == 0) {
         return false;
     } else {
-        m_wrapper_count--;
+        wrapperCount--;
         return true;
     }
 }
 LValue::RefCommon::Tag LValue::RefCommon::tag() const {
-    if (m_wrapper_count == 0) {
-        switch (m_lv->m_root.tag()) {
+    if (wrapperCount == 0) {
+        switch (mLv->root.tag()) {
             case Storage::TAGDEAD:
                 return TAGDEAD;
             case Storage::TAG_Return:
@@ -1022,7 +1022,7 @@ LValue::RefCommon::Tag LValue::RefCommon::tag() const {
                 return TAG_Static;
         }
     } else {
-        switch (m_lv->m_wrappers[m_wrapper_count - 1].tag()) {
+        switch (mLv->wrappers[wrapperCount - 1].tag()) {
             case Wrapper::TAGDEAD:
                 return TAGDEAD;
             case Wrapper::TAG_Deref:
@@ -1039,69 +1039,69 @@ LValue::RefCommon::Tag LValue::RefCommon::tag() const {
 }
 unsigned LValue::RefCommon::as_Local() const {
     assert(is_Local());
-    return m_lv->m_root.as_Local();
+    return mLv->root.as_Local();
 }
 char LValue::RefCommon::as_Return() const {
     assert(is_Return());
-    return m_lv->m_root.as_Return();
+    return mLv->root.as_Return();
 }
 unsigned LValue::RefCommon::as_Argument() const {
     assert(is_Argument());
-    return m_lv->m_root.as_Argument();
+    return mLv->root.as_Argument();
 }
 const HIR::Path& LValue::RefCommon::as_Static() const {
     assert(is_Static());
-    return m_lv->m_root.as_Static();
+    return mLv->root.as_Static();
 }
 char LValue::RefCommon::as_Deref() const {
     assert(is_Deref());
-    return m_lv->m_wrappers[m_wrapper_count - 1].as_Deref();
+    return mLv->wrappers[wrapperCount - 1].as_Deref();
 }
 unsigned LValue::RefCommon::as_Field() const {
     assert(is_Field());
-    return m_lv->m_wrappers[m_wrapper_count - 1].as_Field();
+    return mLv->wrappers[wrapperCount - 1].as_Field();
 }
 unsigned LValue::RefCommon::as_Downcast() const {
     assert(is_Downcast());
-    return m_lv->m_wrappers[m_wrapper_count - 1].as_Downcast();
+    return mLv->wrappers[wrapperCount - 1].as_Downcast();
 }
 unsigned LValue::RefCommon::as_Index() const {
     assert(is_Index());
-    return m_lv->m_wrappers[m_wrapper_count - 1].as_Index();
+    return mLv->wrappers[wrapperCount - 1].as_Index();
 }
 LValue::CRef::CRef(const LValue& lv)
-    : RefCommon(lv, lv.m_wrappers.size()) {
+    : RefCommon(lv, lv.wrappers.size()) {
 }
 LValue::CRef::CRef(const LValue& lv, size_t wc)
     : RefCommon(lv, wc) {
 }
 /// Unwrap one level
 const LValue::CRef LValue::CRef::inner_ref() const {
-    assert(m_wrapper_count > 0);
+    assert(wrapperCount > 0);
     auto rv = *this;
-    rv.m_wrapper_count--;
+    rv.wrapperCount--;
     return rv;
 }
 LValue::MRef::MRef(LValue& lv)
-    : RefCommon(lv, lv.m_wrappers.size()) {
+    : RefCommon(lv, lv.wrappers.size()) {
 }
 LValue::MRef LValue::MRef::inner_ref() {
-    assert(m_wrapper_count > 0);
+    assert(wrapperCount > 0);
     auto rv = *this;
-    rv.m_wrapper_count--;
+    rv.wrapperCount--;
     return rv;
 }
 void LValue::MRef::replace(LValue x) {
-    auto& mut_lv = const_cast<LValue&>(*m_lv);
+    auto& mut_lv = const_cast<LValue&>(*mLv);
     // Shortcut: No wrappers on source/destination (just assign the slot/root)
-    if (m_wrapper_count == 0 && x.m_wrappers.empty()) {
-        mut_lv.m_root = ::std::move(x.m_root);
+    if (wrapperCount == 0 && x.wrappers.empty()) {
+        mut_lv.root = ::std::move(x.root);
         return;
     }
     // If there's wrappers on this value (assigning over inner portion)
-    if (m_wrapper_count < m_lv->m_wrappers.size()) {
+    if (wrapperCount < mLv->wrappers.size()) {
         // Add those wrappers to the end of the new value
-        x.m_wrappers.insert(x.m_wrappers.end(), m_lv->m_wrappers.begin() + m_wrapper_count, m_lv->m_wrappers.end());
+        x.wrappers.insert(x.wrappers.end(), mLv->wrappers.begin() + wrapperCount, mLv->wrappers.end());
     }
     // Overwrite
     mut_lv = ::std::move(x);

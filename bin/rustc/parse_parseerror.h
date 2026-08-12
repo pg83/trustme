@@ -18,7 +18,7 @@ namespace ParseError {
     };
 
     class Unexpected: public CompileError::Base {
-        Token m_tok;
+        Token mTok;
 
     public:
         Unexpected(const TokenStream& lex, const Token& tok);

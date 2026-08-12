@@ -29,12 +29,12 @@ bool debug_enabled_update() {
 }
 
 DebugTimedPhase::DebugTimedPhase(const char* name)
-    : m_name(name)
+    : mName(name)
 {
-    ::std::cout << m_name << ": V V V" << ::std::endl;
-    g_cur_phase = m_name;
+    ::std::cout << mName << ": V V V" << ::std::endl;
+    g_cur_phase = mName;
     g_debug_enabled = debug_enabled_update();
-    m_start = clock();
+    start = clock();
 }
 
 DebugTimedPhase::~DebugTimedPhase() {
@@ -43,8 +43,8 @@ DebugTimedPhase::~DebugTimedPhase() {
     g_debug_enabled = debug_enabled_update();
 
     // TODO: Show wall time too?
-    ::std::cout << "(" << ::std::fixed << ::std::setprecision(2) << static_cast<double>(end - m_start) / static_cast<double>(CLOCKS_PER_SEC) << " s) ";
-    ::std::cout << m_name << ": DONE";
+    ::std::cout << "(" << ::std::fixed << ::std::setprecision(2) << static_cast<double>(end - start) / static_cast<double>(CLOCKS_PER_SEC) << " s) ";
+    ::std::cout << mName << ": DONE";
     ::std::cout << ::std::endl;
 }
 
@@ -163,22 +163,22 @@ extern void debug_init_phases(const char* env_var_name, std::initializer_list<co
 NullSink::NullSink() {
 }
 TraceLog::TraceLog(const char* tag)
-    : m_tag(tag) {
-    if (m_tag) {
-        auto& os = debug_output(g_debug_indent_level, m_tag);
+    : mTag(tag) {
+    if (mTag) {
+        auto& os = debug_output(g_debug_indent_level, mTag);
         os << ">>" << ::std::endl;
         INDENT();
     }
 }
 TraceLog::~TraceLog() {
-    if (m_tag) {
+    if (mTag) {
         UNINDENT();
-        auto& os = debug_output(g_debug_indent_level, m_tag);
+        auto& os = debug_output(g_debug_indent_level, mTag);
         os << "<< ()" << ::std::endl;
     }
 }
 FmtLambda::FmtLambda(::std::function<void(::std::ostream&)> cb)
-    : m_cb(cb) {
+    : cb(cb) {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const RepeatLitStr& r) {
@@ -188,6 +188,6 @@ FmtLambda::FmtLambda(::std::function<void(::std::ostream&)> cb)
     return os;
 }
 ::std::ostream& operator<<(::std::ostream& os, const FmtLambda& x) {
-    x.m_cb(os);
+    x.cb(os);
     return os;
 }

@@ -9,17 +9,17 @@
 #include "range_vec_map.h"
 
 struct TraitResolveCommon {
-    const ::HIR::Crate& m_crate;
+    const ::HIR::Crate& crate;
 
-    const ::HIR::GenericParams* m_impl_generics;
-    const ::HIR::GenericParams* m_item_generics;
+    const ::HIR::GenericParams* implGenerics;
+    const ::HIR::GenericParams* itemGenerics;
 
     struct CachedEquality {
         ::HIR::GenericParams hrbs;
         ::HIR::TypeRef ty;
     };
 
-    ::std::map<::HIR::TypeRef, CachedEquality> m_type_equalities;
+    ::std::map<::HIR::TypeRef, CachedEquality> typeEqualities;
 
     // A pre-calculated list of trait bounds
     struct CachedBound {
@@ -64,31 +64,31 @@ struct TraitResolveCommon {
     };
 
     typedef RangeVecMap<std::pair<::HIR::TypeRef, ::HIR::GenericPath>, CachedBound, CachedBoundCmp> cached_bounds_t;
-    cached_bounds_t m_trait_bounds;
+    cached_bounds_t traitBounds;
 
-    ::HIR::SimplePath m_lang_Copy;
-    ::HIR::SimplePath m_lang_Clone; // 1.29
-    ::HIR::SimplePath m_lang_Drop;
-    ::HIR::SimplePath m_lang_Sized;
-    ::HIR::SimplePath m_lang_Unsize;
-    ::HIR::SimplePath m_lang_Fn;
-    ::HIR::SimplePath m_lang_FnMut;
-    ::HIR::SimplePath m_lang_FnOnce;
-    ::HIR::SimplePath m_lang_Box;
-    ::HIR::SimplePath m_lang_PhantomData;
-    ::HIR::SimplePath m_lang_Generator;        // 1.39
-    ::HIR::SimplePath m_lang_DiscriminantKind; // 1.54
-    ::HIR::SimplePath m_lang_Pointee;          // 1.54
-    ::HIR::SimplePath m_lang_DynMetadata;      // 1.54
-    ::HIR::SimplePath m_lang_PointeeSized;     // 1.90
-    ::HIR::SimplePath m_lang_MetaSized;        // 1.90
-    ::HIR::SimplePath m_lang_Destruct;         // 1.90
-    ::HIR::SimplePath m_lang_Future;           // 1.90 (well, added earlier)
+    ::HIR::SimplePath mLangCopy;
+    ::HIR::SimplePath mLangClone; // 1.29
+    ::HIR::SimplePath mLangDrop;
+    ::HIR::SimplePath mLangSized;
+    ::HIR::SimplePath mLangUnsize;
+    ::HIR::SimplePath mLangFn;
+    ::HIR::SimplePath mLangFnMut;
+    ::HIR::SimplePath mLangFnOnce;
+    ::HIR::SimplePath mLangBox;
+    ::HIR::SimplePath mLangPhantomData;
+    ::HIR::SimplePath mLangGenerator;        // 1.39
+    ::HIR::SimplePath mLangDiscriminantKind; // 1.54
+    ::HIR::SimplePath mLangPointee;          // 1.54
+    ::HIR::SimplePath mLangDynMetadata;      // 1.54
+    ::HIR::SimplePath mLangPointeeSized;     // 1.90
+    ::HIR::SimplePath mLangMetaSized;        // 1.90
+    ::HIR::SimplePath mLangDestruct;         // 1.90
+    ::HIR::SimplePath mLangFuture;           // 1.90 (well, added earlier)
 
     TraitResolveCommon(const ::HIR::Crate& crate);
 
     bool has_self() const {
-        return m_impl_generics ? true : false;
+        return implGenerics ? true : false;
     }
 
     const ::HIR::GenericParams& impl_generics() const;

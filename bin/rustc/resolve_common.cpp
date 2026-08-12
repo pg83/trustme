@@ -52,7 +52,7 @@ namespace {
         ResolveModuleRef get_module(const ::AST::Path& base_path, const AST::Path& path, bool ignore_last, ::AST::AbsolutePath* out_path, bool ignore_hygiene = false) {
             TRACE_FUNCTION_F(path << " in " << base_path << (ignore_last ? " (ignore last)" : ""));
             const auto& base_nodes = base_path.nodes();
-            TU_MATCH_HDRA( (path.m_class), {)
+            TU_MATCH_HDRA( (path.cls), {)
             TU_ARMA(Invalid, e) {
                     // Should never happen
                     BUG(sp, "Invalid path class encountered");
@@ -72,12 +72,12 @@ namespace {
                     if (!ignore_hygiene && e.hygiene.has_mod_path()) {
                         const auto& mp = e.hygiene.mod_path();
                         if (mp.crate != "") {
-                            ASSERT_BUG(sp, this->crate.m_extern_crates.count(mp.crate), "Crate not loaded for " << mp);
-                            const auto& crate = this->crate.m_extern_crates.at(mp.crate);
-                            const HIR::Module* mod = &crate.m_hir->m_root_module;
+                            ASSERT_BUG(sp, this->crate.externCrates.count(mp.crate), "Crate not loaded for " << mp);
+                            const auto& crate = this->crate.externCrates.at(mp.crate);
+                            const HIR::Module* mod = &crate.hir->rootModule;
                             for (const auto& n : mp.ents) {
-                                ASSERT_BUG(sp, mod->m_mod_items.count(n), "Node `" << n << "` missing in path " << mp);
-                                const auto& i = *mod->m_mod_items.at(n);
+                                ASSERT_BUG(sp, mod->modItems.count(n), "Node `" << n << "` missing in path " << mp);
+                                const auto& i = *mod->modItems.at(n);
                                 ASSERT_BUG(sp, i.ent.is_Module(), "Node `" << n << "` not a module in path " << mp);
                                 mod = &i.ent.as_Module();
                             }
@@ -96,7 +96,7 @@ namespace {
                     }
                     if (e.nodes.size() == 1 && ignore_last) {
                         // HACK: If the target path is a crate name, then return `ImplicitPrelude` instead of the current module
-                        if (crate.m_edition >= AST::Edition::Rust2018) {
+                        if (crate.edition >= AST::Edition::Rust2018) {
                             const auto& name = e.nodes.back().name();
                             DEBUG("Trying implicit externs for " << name);
                             DEBUG(FmtLambda([&](std::ostream& os) {
@@ -139,10 +139,10 @@ namespace {
                                             *out_path = AST::AbsolutePath(c.name, {});
                                         }
                                         if (c.name == "") {
-                                            return get_module_ast(crate.m_root_module, path, 1, ignore_last, out_path);
+                                            return get_module_ast(crate.rootModule, path, 1, ignore_last, out_path);
                                         }
-                                        ASSERT_BUG(sp, crate.m_extern_crates.count(c.name) > 0, "Unable to find crate `" << c.name << "`");
-                                        return get_module_hir(crate.m_extern_crates.at(c.name).m_hir->m_root_module, path, 1, ignore_last, out_path);
+                                        ASSERT_BUG(sp, crate.externCrates.count(c.name) > 0, "Unable to find crate `" << c.name << "`");
+                                        return get_module_hir(crate.externCrates.at(c.name).hir->rootModule, path, 1, ignore_last, out_path);
                                     }
                                     TU_ARMA(Module, m) {
                                         return get_module_ast(m, path, 1, ignore_last, out_path);
@@ -156,7 +156,7 @@ namespace {
                                 return get_module_ast(*m, path, 1, ignore_last, out_path);
                             }
                             TU_ARMA(HirRoot, hir_crate) {
-                                return get_module_hir(hir_crate->m_root_module, path, 1, ignore_last, out_path);
+                                return get_module_hir(hir_crate->rootModule, path, 1, ignore_last, out_path);
                             }
                             TU_ARMA(Hir, i_ent_ptr) {
                                 ASSERT_BUG(sp, !i_ent_ptr->is_Import(), "");
@@ -184,7 +184,7 @@ namespace {
                     } while (i < base_nodes.size() && base_nodes[base_nodes.size() - i].name().c_str()[0] == '#');
 
                     // If not found, look for an implicit crate allowed in this edition.
-                    if (crate.m_edition >= AST::Edition::Rust2018 || name == "core") {
+                    if (crate.edition >= AST::Edition::Rust2018 || name == "core") {
                         DEBUG("Trying implicit externs for " << name);
                         DEBUG(FmtLambda([&](std::ostream& os) {
                             for (const auto& v : AST::g_implicit_crates) {
@@ -195,15 +195,15 @@ namespace {
                         if (ec_it != AST::g_implicit_crates.end()) {
                             if (ec_it->second == "") {
                                 // This crate!
-                                return get_module_ast(crate.m_root_module, path, 1, ignore_last, out_path);
+                                return get_module_ast(crate.rootModule, path, 1, ignore_last, out_path);
                             } else {
-                                ASSERT_BUG(sp, crate.m_extern_crates.count(ec_it->second), "Crate \"" << ec_it->second << "\" not loaded (for \"" << ec_it->first << "\")");
-                                const auto& ec = crate.m_extern_crates.at(ec_it->second);
+                                ASSERT_BUG(sp, crate.externCrates.count(ec_it->second), "Crate \"" << ec_it->second << "\" not loaded (for \"" << ec_it->first << "\")");
+                                const auto& ec = crate.externCrates.at(ec_it->second);
                                 DEBUG("Implicitly imported crate");
                                 if (out_path) {
                                     *out_path = AST::AbsolutePath(ec_it->second, {});
                                 }
-                                return get_module_hir(ec.m_hir->m_root_module, path, 1, ignore_last, out_path);
+                                return get_module_hir(ec.hir->rootModule, path, 1, ignore_last, out_path);
                             }
                         }
                     }
@@ -238,40 +238,40 @@ namespace {
                 }
                 TU_ARMA(Absolute, e) {
                     DEBUG("Absolute " << path);
-                    if (e.crate == "" || e.crate == crate.m_crate_name_real) {
+                    if (e.crate == "" || e.crate == crate.crateNameReal) {
                         DEBUG("Current crate");
-                        return get_module_ast(crate.m_root_module, path, 0, ignore_last, out_path);
+                        return get_module_ast(crate.rootModule, path, 0, ignore_last, out_path);
                     }
                     // 2018 `::cratename::` paths
                     else if (e.crate.c_str()[0] == '=') {
                         const char* n = e.crate.c_str() + 1;
-                        if (n == crate.m_crate_name_set) {
-                            return get_module_ast(crate.m_root_module, path, 0, ignore_last, out_path);
+                        if (n == crate.crateNameSet) {
+                            return get_module_ast(crate.rootModule, path, 0, ignore_last, out_path);
                         }
                         auto ec_it = AST::g_implicit_crates.find(n);
                         if (ec_it == AST::g_implicit_crates.end()) {
                             return ResolveModuleRef();
                         }
-                        auto ec_it2 = crate.m_extern_crates.find(ec_it->second);
-                        if (ec_it2 == crate.m_extern_crates.end()) {
+                        auto ec_it2 = crate.externCrates.find(ec_it->second);
+                        if (ec_it2 == crate.externCrates.end()) {
                             DEBUG("Crate " << ec_it->second << " not found");
                             return ResolveModuleRef();
                         }
                         if (out_path) {
                             *out_path = AST::AbsolutePath(ec_it->second, {});
                         }
-                        return get_module_hir(ec_it2->second.m_hir->m_root_module, path, 0, ignore_last, out_path);
+                        return get_module_hir(ec_it2->second.hir->rootModule, path, 0, ignore_last, out_path);
                     } else {
                         // HIR lookup (different)
-                        auto ec_it = crate.m_extern_crates.find(e.crate);
-                        if (ec_it == crate.m_extern_crates.end()) {
+                        auto ec_it = crate.externCrates.find(e.crate);
+                        if (ec_it == crate.externCrates.end()) {
                             DEBUG("Crate " << e.crate << " not found");
                             return ResolveModuleRef();
                         }
                         if (out_path) {
                             *out_path = AST::AbsolutePath(e.crate, {});
                         }
-                        return get_module_hir(ec_it->second.m_hir->m_root_module, path, 0, ignore_last, out_path);
+                        return get_module_hir(ec_it->second.hir->rootModule, path, 0, ignore_last, out_path);
                     }
                 }
             }
@@ -305,10 +305,10 @@ namespace {
                                 *out_path = AST::AbsolutePath(i->name, {});
                             }
                             if (i->name == "") {
-                                return get_module_ast(crate.m_root_module, path, idx + 1, ignore_last, out_path);
+                                return get_module_ast(crate.rootModule, path, idx + 1, ignore_last, out_path);
                             } else {
-                                ASSERT_BUG(sp, crate.m_extern_crates.count(i->name) != 0, "Cannot find crate `" << i->name << "`");
-                                return get_module_hir(crate.m_extern_crates.at(i->name).m_hir->m_root_module, path, idx + 1, ignore_last, out_path);
+                                ASSERT_BUG(sp, crate.externCrates.count(i->name) != 0, "Cannot find crate `" << i->name << "`");
+                                return get_module_hir(crate.externCrates.at(i->name).hir->rootModule, path, idx + 1, ignore_last, out_path);
                             }
                         } else {
                             DEBUG("Found " << e->tag_str() << ", not module");
@@ -328,10 +328,10 @@ namespace {
                     }
                     TU_ARMA(HirRoot, e) {
                         if (out_path) {
-                            out_path->crate = e->m_crate_name;
+                            out_path->crate = e->crateName;
                             out_path->nodes.clear();
                         }
-                        return get_module_hir(e->m_root_module, path, idx + 1, ignore_last, out_path);
+                        return get_module_hir(e->rootModule, path, idx + 1, ignore_last, out_path);
                     }
                 }
             }
@@ -348,17 +348,17 @@ namespace {
             for (size_t i = start_offset; i < path.nodes().size() - (ignore_last ? 1 : 0); i++) {
                 const auto& name = path.nodes()[i].name();
                 // Find the module for this node
-                auto it = mod->m_mod_items.find(name);
-                if (it == mod->m_mod_items.end() || !it->second->publicity.is_global()) {
+                auto it = mod->modItems.find(name);
+                if (it == mod->modItems.end() || !it->second->publicity.is_global()) {
                     DEBUG(name << " Not Found");
                     return ResolveModuleRef();
                 }
                 const auto* ti = &it->second->ent;
                 if (const auto* imp = ti->opt_Import()) {
-                    ASSERT_BUG(sp, crate.m_extern_crates.count(imp->path.crate_name()), "Crate " << imp->path.crate_name() << " not loaded");
-                    const auto& ext_crate = *crate.m_extern_crates.at(imp->path.crate_name()).m_hir;
+                    ASSERT_BUG(sp, crate.externCrates.count(imp->path.crate_name()), "Crate " << imp->path.crate_name() << " not loaded");
+                    const auto& ext_crate = *crate.externCrates.at(imp->path.crate_name()).hir;
                     if (imp->path.components().empty()) {
-                        mod = &ext_crate.m_root_module;
+                        mod = &ext_crate.rootModule;
                         continue;
                     }
                     if (out_path) {
@@ -386,7 +386,7 @@ namespace {
         }
 
         const AST::Module& get_mod_by_true_path(const std::vector<AST::PathNode>& base_nodes, size_t len) {
-            const AST::Module* mod = &crate.m_root_module;
+            const AST::Module* mod = &crate.rootModule;
             for (size_t i = 0; i < len; i++) {
                 const auto& tgt_name = base_nodes[i].name();
                 if (tgt_name.c_str()[0] == '#') {
@@ -395,7 +395,7 @@ namespace {
                     continue;
                 }
                 const AST::Module* next_mod = nullptr;
-                for (const auto& i : mod->m_items) {
+                for (const auto& i : mod->mItems) {
                     if (const auto* m = i->data.opt_Module()) {
                         //DEBUG(i.name);
                         if (i->name == tgt_name) {
@@ -425,7 +425,7 @@ namespace {
                 case AST::Item::TAG_TraitAlias:
                     return ns == ResolveNamespace::Namespace;
                 case AST::Item::TAG_Struct:
-                    return ns == ResolveNamespace::Namespace || (ns == ResolveNamespace::Value && !i.as_Struct().m_data.is_Struct());
+                    return ns == ResolveNamespace::Namespace || (ns == ResolveNamespace::Value && !i.as_Struct().mData.is_Struct());
                 case AST::Item::TAG_Function:
                 case AST::Item::TAG_Static:
                     return ns == ResolveNamespace::Value;
@@ -447,7 +447,7 @@ namespace {
         //ResolveModuleRef get_source_module_for_name(const AST::Module& mod, const RcString& name, ResolveNamespace ns, ::AST::AbsolutePath* out_path=nullptr)
         {
             TRACE_FUNCTION_F("Looking for " << name << " in " << mod.path() << " (ns=" << ns << ")");
-            if (mod.m_index_populated) {
+            if (mod.indexPopulated) {
                 TODO(sp, "Look up in index");
             }
 
@@ -485,7 +485,7 @@ namespace {
                         return ResolveItemRef::make_Macro(&*i.data);
                     }
                 }
-                for (const auto& mac : reverse(mod.m_macro_imports)) {
+                for (const auto& mac : reverse(mod.macroImports)) {
                     if (mac.ref.is_None()) {
                         // Skip
                         continue;
@@ -511,7 +511,7 @@ namespace {
                 }
             }
 
-            for (const auto& i : mod.m_items) {
+            for (const auto& i : mod.mItems) {
                 //DEBUG(i.name << " " << i.data.tag_str());
 
                 // Note: Cache the result of `cfg()` resolution, as it doesn't change
@@ -563,8 +563,8 @@ namespace {
                         if (e.name == name) {
                             DEBUG("Use " << e.name << " := " << e.path);
 
-                            if (e.path.m_class.is_Absolute() && e.path.m_class.as_Absolute().crate == CRATE_BUILTINS) {
-                                const auto& pe = e.path.m_class.as_Absolute();
+                            if (e.path.cls.is_Absolute() && e.path.cls.as_Absolute().crate == CRATE_BUILTINS) {
+                                const auto& pe = e.path.cls.as_Absolute();
                                 if (ns == ResolveNamespace::Macro) {
                                     if (out_path) {
                                         out_path->crate = pe.crate;
@@ -573,7 +573,7 @@ namespace {
                                     return ResolveItemRefMacro(ExpandFindProcMacro(pe.nodes.front().name()));
                                 }
                             }
-                            if (e.path.m_class.is_Absolute() && e.path.m_class.as_Absolute().nodes.empty()) {
+                            if (e.path.cls.is_Absolute() && e.path.cls.as_Absolute().nodes.empty()) {
                                 if (ns == ResolveNamespace::Namespace) {
                                     AST::AbsolutePath tmp;
                                     auto tgt_mod = this->get_module(mod.path(), e.path, false, &tmp);
@@ -588,7 +588,7 @@ namespace {
                                             if (out_path) {
                                                 *out_path = tmp;
                                             }
-                                            return ResolveItemRefType::make_HirRoot(&*crate.m_extern_crates.at(tmp.crate).m_hir);
+                                            return ResolveItemRefType::make_HirRoot(&*crate.externCrates.at(tmp.crate).hir);
                                         }
                                         TU_ARMA(ImplicitPrelude, _e) {
                                             TODO(sp, "ImplicitPrelude?");
@@ -630,7 +630,7 @@ namespace {
                                                 out_path->crate = ec_it->second;
                                                 out_path->nodes.clear();
                                             }
-                                            return ResolveItemRefType(&*crate.m_extern_crates.at(ec_it->second).m_hir);
+                                            return ResolveItemRefType(&*crate.externCrates.at(ec_it->second).hir);
                                         }
                                         TODO(sp, "ImplicitPrelude?");
                                     }
@@ -644,7 +644,7 @@ namespace {
                     }
                 }
             }
-            for (const auto& i : mod.m_items) {
+            for (const auto& i : mod.mItems) {
                 if (const auto* use_stmt = i->data.opt_Use()) {
                     if (!visit_use) {
                         continue;
@@ -688,7 +688,7 @@ namespace {
             }
             if (mod.is_anon()) {
                 DEBUG("Recurse to parent");
-                const AST::Module* m = &crate.m_root_module;
+                const AST::Module* m = &crate.rootModule;
                 for (size_t i = 0; i < mod.path().nodes.size() - 1; i++) {
                     auto& tgt_name = mod.path().nodes[i];
                     if (tgt_name.c_str()[0] == '#') {
@@ -714,11 +714,11 @@ namespace {
 
             struct H {
                 static const HIR::Crate& get_crate(const Span& sp, const AST::Crate& crate, const HIR::SimplePath& p) {
-                    return *crate.m_extern_crates.at(p.crate_name()).m_hir;
+                    return *crate.externCrates.at(p.crate_name()).hir;
                 }
 
                 static const HIR::Module& get_mod_for_hir_path(const Span& sp, const AST::Crate& crate, const HIR::SimplePath& p) {
-                    const auto& hir_crate = *crate.m_extern_crates.at(p.crate_name()).m_hir;
+                    const auto& hir_crate = *crate.externCrates.at(p.crate_name()).hir;
                     return hir_crate.get_mod_by_path(sp, p, /*ignore_last*/ true, /*ingore_crate*/ true);
                 }
             };
@@ -726,8 +726,8 @@ namespace {
             // Note, `out_path` should be populated to this module's path
             switch (ns) {
                 case ResolveNamespace::Namespace: {
-                    auto it = mod.m_mod_items.find(item_name);
-                    if (it != mod.m_mod_items.end() && it->second->publicity.is_visible(vis_path)) {
+                    auto it = mod.modItems.find(item_name);
+                    if (it != mod.modItems.end() && it->second->publicity.is_visible(vis_path)) {
                         DEBUG("Found `" << item_name << "` in HIR namespace");
                         const HIR::TypeItem* ti;
                         if (const auto* p = it->second->ent.opt_Import()) {
@@ -750,8 +750,8 @@ namespace {
                     }
                 } break;
                 case ResolveNamespace::Value: {
-                    auto it = mod.m_value_items.find(item_name);
-                    if (it != mod.m_value_items.end() && it->second->publicity.is_visible(vis_path)) {
+                    auto it = mod.valueItems.find(item_name);
+                    if (it != mod.valueItems.end() && it->second->publicity.is_visible(vis_path)) {
                         DEBUG("Found `" << item_name << "` in HIR value");
                         const HIR::ValueItem* vi;
                         if (const auto* p = it->second->ent.opt_Import()) {
@@ -770,8 +770,8 @@ namespace {
                     }
                 } break;
                 case ResolveNamespace::Macro: {
-                    auto it = mod.m_macro_items.find(item_name);
-                    if (it == mod.m_macro_items.end()) {
+                    auto it = mod.macroItems.find(item_name);
+                    if (it == mod.macroItems.end()) {
                         DEBUG("Did not find `" << item_name << "` in HIR macro");
                     } else if (!it->second->publicity.is_visible(vis_path)) {
                         DEBUG("Found `" << item_name << "` in HIR macro - but not public, ignoring");
@@ -873,8 +873,8 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const AST::Crate& crate
         TU_ARMA(Hir, mod_ptr) {
             const ::HIR::SimplePath* vis_path = nullptr;
             ::HIR::SimplePath tmp_p;
-            if (path.m_class.is_Relative() && path.m_class.as_Relative().hygiene.has_mod_path()) {
-                const auto& in_p = path.m_class.as_Relative().hygiene.mod_path();
+            if (path.cls.is_Relative() && path.cls.as_Relative().hygiene.has_mod_path()) {
+                const auto& in_p = path.cls.as_Relative().hygiene.mod_path();
                 tmp_p = HIR::SimplePath(in_p.crate, in_p.ents);
                 DEBUG("vis_path=" << tmp_p);
                 vis_path = &tmp_p;

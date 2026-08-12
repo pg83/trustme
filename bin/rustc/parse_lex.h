@@ -41,18 +41,18 @@ extern Token LexFindReservedWord(const ::std::string& s, AST::Edition edition);
 typedef Codepoint uchar;
 
 class Lexer: public TokenStream {
-    RcString m_path;
-    unsigned int m_line;
-    unsigned int m_line_ofs;
+    RcString mPath;
+    unsigned int line;
+    unsigned int lineOfs;
 
-    ::std::unique_ptr<::std::ifstream> m_istream_fp;
-    ::std::istream& m_istream;
-    bool m_last_char_valid;
-    Codepoint m_last_char;
-    ::std::vector<Token> m_next_tokens;
+    ::std::unique_ptr<::std::ifstream> istreamFp;
+    ::std::istream& istream;
+    bool lastCharValid;
+    Codepoint lastChar;
+    ::std::vector<Token> nextTokens;
 
-    AST::Edition m_edition;
-    Ident::Hygiene m_hygiene;
+    AST::Edition edition;
+    Ident::Hygiene mHygiene;
 
 public:
     Lexer(::std::istringstream& ss, AST::Edition edition, ParseState ps);
@@ -62,7 +62,7 @@ public:
     Ident::Hygiene realGetHygiene() const override;
 
     AST::Edition realGetEdition() const override {
-        return m_edition;
+        return edition;
     }
 
     Token realGetToken() override;

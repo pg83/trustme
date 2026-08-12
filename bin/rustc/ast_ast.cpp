@@ -15,17 +15,17 @@
 namespace AST {
 
     Trait::Trait()
-        : m_is_marker(false)
-        , m_is_unsafe(false)
+        : isMarker(false)
+        , isUnsafe(false)
     {
     }
 
     Trait::Trait(GenericParams params, ::std::vector<Spanned<TypeTraitPath>> supertraits, ::std::vector<Spanned<LifetimeRef>> lifetimes)
-        : m_params(mv$(params))
-        , m_supertraits(mv$(supertraits))
-        , m_lifetimes(mv$(lifetimes))
-        , m_is_marker(false)
-        , m_is_unsafe(false)
+        : mParams(mv$(params))
+        , mSupertraits(mv$(supertraits))
+        , mLifetimes(mv$(lifetimes))
+        , isMarker(false)
+        , isUnsafe(false)
     {
     }
 
@@ -34,7 +34,7 @@ namespace AST {
     Trait& Trait::operator=(Trait&&) = default;
 
     Impl::Impl(ImplDef def)
-        : m_def(mv$(def))
+        : mDef(mv$(def))
     {
     }
 
@@ -54,15 +54,15 @@ namespace AST {
     }
 
     AttributeList AttributeList::clone() const {
-        return AttributeList(clone_mivec(m_items));
+        return AttributeList(clone_mivec(mItems));
     }
 
     void AttributeList::push_back(Attribute i) {
-        m_items.push_back(::std::move(i));
+        mItems.push_back(::std::move(i));
     }
 
     const Attribute* AttributeList::get(const char* name) const {
-        for (auto& i : m_items) {
+        for (auto& i : mItems) {
             if (i.name() == name) {
                 //i.mark_used();
                 return &i;
@@ -72,7 +72,7 @@ namespace AST {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const AttributeList& x) {
-        for (const auto& i : x.m_items) {
+        for (const auto& i : x.mItems) {
             os << "#[" << i << "]";
         }
         return os;
@@ -93,10 +93,10 @@ namespace AST {
     }
 
     Attribute::Attribute(const Attribute& x)
-        : m_span(x.m_span)
-        , m_name(x.m_name)
-        , m_data(x.m_data.clone())
-        , m_is_inert(x.m_is_inert)
+        : mSpan(x.mSpan)
+        , mName(x.mName)
+        , mData(x.mData.clone())
+        , isInert(x.isInert)
     {
     }
 
@@ -105,18 +105,18 @@ namespace AST {
     }
 
     void Attribute::fmt(std::ostream& os) const {
-        os << m_name;
-        os << m_data;
+        os << mName;
+        os << mData;
     }
 
     std::string Attribute::parse_equals_string(const AST::Crate& crate, const AST::Module& mod) const {
-        TTStream lex(this->m_span, ParseState(), this->data());
+        TTStream lex(this->mSpan, ParseState(), this->data());
         lex.getTokenCheck(TOK_EQUAL);
         auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
 
         std::string rv;
         if (auto* v = cast<::AST::ExprNodeString>(&*n)) {
-            rv = v->m_value;
+            rv = v->mValue;
         } else {
             throw ParseError::Unexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);
         }
@@ -125,7 +125,7 @@ namespace AST {
     }
 
     std::string Attribute::parse_paren_string() const {
-        TTStream lex(this->m_span, ParseState(), this->data());
+        TTStream lex(this->mSpan, ParseState(), this->data());
         lex.getTokenCheck(TOK_PAREN_OPEN);
         auto rv = lex.getTokenCheck(TOK_STRING).str();
         lex.getTokenCheck(TOK_PAREN_CLOSE);
@@ -133,7 +133,7 @@ namespace AST {
     }
 
     void Attribute::parse_paren_ident_list(std::function<void(const Span& sp, RcString ident)> item_cb) const {
-        TTStream lex(this->m_span, ParseState(), this->data());
+        TTStream lex(this->mSpan, ParseState(), this->data());
         lex.getTokenCheck(TOK_PAREN_OPEN);
         while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
             item_cb(lex.point_span(), lex.getTokenCheck(TOK_IDENT).ident().name);
@@ -152,21 +152,21 @@ namespace AST {
 
     Visibility Visibility::make_restricted(Ty ty, AST::AbsolutePath p) {
         Visibility rv;
-        rv.m_ty = ty;
-        rv.m_vis_path = std::make_shared<AST::AbsolutePath>(std::move(p));
+        rv.mTy = ty;
+        rv.visPath = std::make_shared<AST::AbsolutePath>(std::move(p));
         return rv;
     }
 
     Visibility Visibility::make_restricted(AST::AbsolutePath p, AST::Path in_path) {
         Visibility rv;
-        rv.m_ty = Ty::PubIn;
-        rv.m_vis_path = std::make_shared<AST::AbsolutePath>(std::move(p));
-        rv.m_in_path = std::make_shared<AST::Path>(std::move(in_path));
+        rv.mTy = Ty::PubIn;
+        rv.visPath = std::make_shared<AST::AbsolutePath>(std::move(p));
+        rv.inPath = std::make_shared<AST::Path>(std::move(in_path));
         return rv;
     }
 
     void Visibility::fmt(::std::ostream& os) const {
-        switch (m_ty) {
+        switch (mTy) {
             case Ty::Private:
                 break;
             case Ty::Pub:
@@ -186,8 +186,8 @@ namespace AST {
                 break;
             case Ty::PubIn:
                 os << "pub(in ";
-                if (m_in_path) {
-                    os << *m_in_path;
+                if (inPath) {
+                    os << *inPath;
                 } else {
                     os << "???";
                 }
@@ -202,15 +202,15 @@ namespace AST {
     }
 
     bool Visibility::is_visible(const ::AST::AbsolutePath& from_mod) const {
-        if (m_vis_path) {
-            if (m_vis_path->crate != from_mod.crate) {
+        if (visPath) {
+            if (visPath->crate != from_mod.crate) {
                 return false;
             }
-            if (m_vis_path->nodes.size() > from_mod.nodes.size()) {
+            if (visPath->nodes.size() > from_mod.nodes.size()) {
                 return false;
             }
-            for (size_t i = 0; i < m_vis_path->nodes.size(); i++) {
-                if (m_vis_path->nodes[i] != from_mod.nodes[i]) {
+            for (size_t i = 0; i < visPath->nodes.size(); i++) {
+                if (visPath->nodes[i] != from_mod.nodes[i]) {
                     return false;
                 }
             }
@@ -221,8 +221,8 @@ namespace AST {
     }
 
     bool Visibility::contains(const ::AST::Visibility& x) const {
-        if (m_vis_path) {
-            return x.is_visible(*m_vis_path);
+        if (visPath) {
+            return x.is_visible(*visPath);
         } else {
             return true;
         }
@@ -231,7 +231,7 @@ namespace AST {
     void Visibility::inplace_union(const Visibility& x) {
         if (this->contains(x)) {
         } else if (x.contains(*this)) {
-            m_vis_path = x.m_vis_path;
+            visPath = x.visPath;
         } else {
             TODO(Span(), "Union with incompatible visbility");
         }
@@ -240,67 +240,67 @@ namespace AST {
     // ---
 
     StructItem StructItem::clone() const {
-        return StructItem(m_attrs.clone(), m_vis, m_name, m_type.clone(), m_default.clone());
+        return StructItem(mAttrs.clone(), vis, mName, mType.clone(), defaultValue.clone());
     }
 
     TupleItem TupleItem::clone() const {
-        return TupleItem(m_attrs.clone(), m_vis, m_type.clone());
+        return TupleItem(mAttrs.clone(), vis, mType.clone());
     }
 
     TypeAlias TypeAlias::clone() const {
-        return TypeAlias(m_params.clone(), m_type.clone());
+        return TypeAlias(mParams.clone(), mType.clone());
     }
 
     Static Static::clone() const {
-        return Static(m_class, m_type.clone(), m_value.is_valid() ? AST::Expr(m_value.node().clone()) : AST::Expr());
+        return Static(cls, mType.clone(), mValue.is_valid() ? AST::Expr(mValue.node().clone()) : AST::Expr());
     }
 
     Function::Function(Span sp, ::std::string abi, Flags flags, GenericParams params, TypeRef ret_type, Arglist args, bool is_variadic)
-        : m_span(sp)
-        , m_params(mv$(params))
-        , m_rettype(mv$(ret_type))
-        , m_args(mv$(args))
-        , m_is_variadic(is_variadic)
-        , m_abi(mv$(abi))
-        , m_flags(flags)
+        : mSpan(sp)
+        , mParams(mv$(params))
+        , mRettype(mv$(ret_type))
+        , mArgs(mv$(args))
+        , isVariadic(is_variadic)
+        , mAbi(mv$(abi))
+        , flags(flags)
     {
     }
 
     Function Function::clone() const {
-        decltype(m_args) new_args;
-        for (const auto& arg : m_args) {
+        decltype(mArgs) new_args;
+        for (const auto& arg : mArgs) {
             new_args.push_back(AST::Function::Arg(arg.pat.clone(), arg.ty.clone(), arg.attrs.clone()));
         }
 
-        auto rv = Function(m_span, m_abi, m_flags, m_params.clone(), m_rettype.clone(), mv$(new_args), m_is_variadic);
-        if (m_code.is_valid()) {
-            rv.m_code = AST::Expr(m_code.node().clone());
+        auto rv = Function(mSpan, mAbi, flags, mParams.clone(), mRettype.clone(), mv$(new_args), isVariadic);
+        if (mCode.is_valid()) {
+            rv.mCode = AST::Expr(mCode.node().clone());
         }
         return rv;
     }
 
     void Trait::add_type(Span sp, RcString name, AttributeList attrs, TypeRef type) {
-        m_items.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::make_global(), mv$(name), Item::make_Type({TypeAlias(GenericParams(), mv$(type))})));
+        mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::make_global(), mv$(name), Item::make_Type({TypeAlias(GenericParams(), mv$(type))})));
     }
 
     void Trait::add_function(Span sp, RcString name, AttributeList attrs, Function fcn) {
-        m_items.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::make_global(), mv$(name), Item::make_Function({mv$(fcn)})));
+        mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::make_global(), mv$(name), Item::make_Function({mv$(fcn)})));
     }
 
     void Trait::add_static(Span sp, RcString name, AttributeList attrs, Static v) {
-        m_items.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::make_global(), mv$(name), Item::make_Static({mv$(v)})));
+        mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::make_global(), mv$(name), Item::make_Static({mv$(v)})));
     }
 
     void Trait::set_is_marker() {
-        m_is_marker = true;
+        isMarker = true;
     }
 
     bool Trait::is_marker() const {
-        return m_is_marker;
+        return isMarker;
     }
 
     bool Trait::has_named_item(const RcString& name, bool& out_is_fcn) const {
-        for (const auto& i : m_items) {
+        for (const auto& i : mItems) {
             if (i.name == name) {
                 out_is_fcn = i.data.is_Function();
                 return true;
@@ -310,55 +310,55 @@ namespace AST {
     }
 
     Trait Trait::clone() const {
-        auto rv = Trait(m_params.clone(), m_supertraits, m_lifetimes);
-        for (const auto& item : m_items) {
-            rv.m_items.push_back(Named<Item>{item.span, item.attrs.clone(), item.vis, item.name, item.data.clone()});
+        auto rv = Trait(mParams.clone(), mSupertraits, mLifetimes);
+        for (const auto& item : mItems) {
+            rv.mItems.push_back(Named<Item>{item.span, item.attrs.clone(), item.vis, item.name, item.data.clone()});
         }
         return rv;
     }
 
     Enum Enum::clone() const {
-        decltype(m_variants) new_variants;
-        for (const auto& var : m_variants) {
-            TU_MATCHA((var.m_data), (e), (Unit, new_variants.push_back(EnumVariant(var.m_attrs.clone(), var.m_name));), (Tuple, decltype(e.m_items) new_st; for (const auto& f : e.m_items) new_st.push_back(f.clone()); new_variants.push_back(EnumVariant(var.m_attrs.clone(), var.m_name, mv$(new_st)));), (Struct, decltype(e.m_fields) new_fields; for (const auto& f : e.m_fields) new_fields.push_back(f.clone()); new_variants.push_back(EnumVariant(var.m_attrs.clone(), var.m_name, mv$(new_fields)));))
-            new_variants.back().m_discriminant_value = var.m_discriminant_value.clone();
+        decltype(mVariants) new_variants;
+        for (const auto& var : mVariants) {
+            TU_MATCHA((var.mData), (e), (Unit, new_variants.push_back(EnumVariant(var.mAttrs.clone(), var.mName));), (Tuple, decltype(e.mItems) new_st; for (const auto& f : e.mItems) new_st.push_back(f.clone()); new_variants.push_back(EnumVariant(var.mAttrs.clone(), var.mName, mv$(new_st)));), (Struct, decltype(e.fields) new_fields; for (const auto& f : e.fields) new_fields.push_back(f.clone()); new_variants.push_back(EnumVariant(var.mAttrs.clone(), var.mName, mv$(new_fields)));))
+            new_variants.back().discriminantValue = var.discriminantValue.clone();
         }
-        auto rv = Enum(m_params.clone(), mv$(new_variants));
-        rv.m_markings = m_markings;
+        auto rv = Enum(mParams.clone(), mv$(new_variants));
+        rv.markings = markings;
         return rv;
     }
 
     Struct Struct::clone() const {
-        TU_MATCHA((m_data), (e), (Unit, return Struct(m_params.clone());), (Tuple, decltype(e.ents) new_fields; for (const auto& f : e.ents) new_fields.push_back(f.clone()); return Struct(m_params.clone(), mv$(new_fields));), (Struct, decltype(e.ents) new_fields; for (const auto& f : e.ents) new_fields.push_back(f.clone()); return Struct(m_params.clone(), mv$(new_fields));))
+        TU_MATCHA((mData), (e), (Unit, return Struct(mParams.clone());), (Tuple, decltype(e.ents) new_fields; for (const auto& f : e.ents) new_fields.push_back(f.clone()); return Struct(mParams.clone(), mv$(new_fields));), (Struct, decltype(e.ents) new_fields; for (const auto& f : e.ents) new_fields.push_back(f.clone()); return Struct(mParams.clone(), mv$(new_fields));))
         throw "";
     }
 
     Union Union::clone() const {
-        decltype(m_variants) new_vars;
-        for (const auto& f : m_variants) {
+        decltype(mVariants) new_vars;
+        for (const auto& f : mVariants) {
             new_vars.push_back(f.clone());
         }
-        return Union(m_params.clone(), mv$(new_vars));
+        return Union(mParams.clone(), mv$(new_vars));
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const ImplDef& impl) {
-        return os << "impl " << (impl.m_is_const ? "const " : "") << "<" << impl.m_params << "> " << impl.m_trait.ent << " for " << impl.m_type << "";
+        return os << "impl " << (impl.isConst ? "const " : "") << "<" << impl.mParams << "> " << impl.mTrait.ent << " for " << impl.mType << "";
     }
 
     void Impl::add_function(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Function fcn) {
-        m_items.push_back(ImplItem{sp, mv$(attrs), mv$(vis), is_specialisable, mv$(name), box$(Item::make_Function(mv$(fcn)))});
+        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), is_specialisable, mv$(name), box$(Item::make_Function(mv$(fcn)))});
     }
 
     void Impl::add_type(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, GenericParams params, TypeRef type) {
-        m_items.push_back(ImplItem{sp, mv$(attrs), mv$(vis), is_specialisable, mv$(name), box$(Item::make_Type(TypeAlias(mv$(params), mv$(type))))});
+        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), is_specialisable, mv$(name), box$(Item::make_Type(TypeAlias(mv$(params), mv$(type))))});
     }
 
     void Impl::add_static(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Static v) {
-        m_items.push_back(ImplItem{sp, mv$(attrs), mv$(vis), is_specialisable, mv$(name), box$(Item::make_Static(mv$(v)))});
+        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), is_specialisable, mv$(name), box$(Item::make_Static(mv$(v)))});
     }
 
     void Impl::add_macro_invocation(MacroInvocation item) {
-        m_items.push_back(ImplItem{item.span(), {}, AST::Visibility::make_global(), false, "", box$(Item::make_MacroInv(mv$(item)))});
+        mItems.push_back(ImplItem{item.span(), {}, AST::Visibility::make_global(), false, "", box$(Item::make_MacroInv(mv$(item)))});
     }
 
     bool Impl::has_named_item(const RcString& name) const {
@@ -371,7 +371,7 @@ namespace AST {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Impl& impl) {
-        return os << impl.m_def;
+        return os << impl.mDef;
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const UseItem::Ent& x) {
@@ -379,7 +379,7 @@ namespace AST {
     }
 
     MacroInvocation MacroInvocation::clone() const {
-        return MacroInvocation(m_span, AST::Path(m_macro_path), m_ident, m_input.clone());
+        return MacroInvocation(mSpan, AST::Path(macroPath), ident, input.clone());
     }
 
     UseItem UseItem::clone() const {
@@ -391,7 +391,7 @@ namespace AST {
     }
 
     ExternBlock::ExternBlock(::std::string abi)
-        : m_abi(mv$(abi))
+        : mAbi(mv$(abi))
     {
     }
 
@@ -401,7 +401,7 @@ namespace AST {
 
     void ExternBlock::add_item(Named<Item> named_item) {
         ASSERT_BUG(named_item.span, named_item.data.is_Function() || named_item.data.is_Static() || named_item.data.is_Type() || named_item.data.is_MacroInv(), "Incorrect item type for ExternBlock - " << named_item.data.tag_str());
-        m_items.push_back(mv$(named_item));
+        mItems.push_back(mv$(named_item));
     }
 
     ExternBlock ExternBlock::clone() const {
@@ -411,7 +411,7 @@ namespace AST {
     Module::Module() = default;
 
     Module::Module(::AST::AbsolutePath path)
-        : m_my_path(mv$(path))
+        : myPath(mv$(path))
     {
     }
 
@@ -420,21 +420,21 @@ namespace AST {
     Module& Module::operator=(Module&&) = default;
 
     ::std::shared_ptr<AST::Module> Module::add_anon() {
-        auto rv = ::std::shared_ptr<AST::Module>(new Module(m_my_path + RcString::new_interned(FMT("#" << m_anon_modules.size()))));
-        DEBUG("New anon " << rv->m_my_path);
-        rv->m_file_info = m_file_info;
+        auto rv = ::std::shared_ptr<AST::Module>(new Module(myPath + RcString::new_interned(FMT("#" << anonModules.size()))));
+        DEBUG("New anon " << rv->myPath);
+        rv->fileInfo = fileInfo;
 
-        m_anon_modules.push_back(rv);
+        anonModules.push_back(rv);
 
         return rv;
     }
 
     void Module::add_item(Named<Item> named_item) {
-        m_items.push_back(box$(named_item));
-        const auto& i = m_items.back();
+        mItems.push_back(box$(named_item));
+        const auto& i = mItems.back();
         if (i->name == "") {
         } else {
-            DEBUG(m_my_path << "::" << i->name << " = " << i->data.tag_str() << ", attrs = " << i->attrs);
+            DEBUG(myPath << "::" << i->name << " = " << i->data.tag_str() << ", attrs = " << i->attrs);
         }
     }
 
@@ -452,12 +452,12 @@ namespace AST {
 
     void Module::add_macro(bool is_exported, RcString name, MacroRulesPtr macro) {
         assert(macro);
-        assert(macro->m_rules.size() > 0);
-        m_macros.push_back(
+        assert(macro->rules.size() > 0);
+        mMacros.push_back(
             Named<MacroRulesPtr>(
                 Span(),
                 {},
-                /*is_pub=*/is_exported ? AST::Visibility::make_global() : AST::Visibility::make_restricted(AST::Visibility::Ty::Private, m_my_path),
+                /*is_pub=*/is_exported ? AST::Visibility::make_global() : AST::Visibility::make_restricted(AST::Visibility::Ty::Private, myPath),
                 mv$(name),
                 mv$(macro)
             )
@@ -493,27 +493,27 @@ namespace AST {
 
     ::std::ostream& operator<<(::std::ostream& os, const TypeParam& tp) {
         //os << "TypeParam(";
-        os << tp.m_name;
+        os << tp.mName;
         os << " = ";
-        os << tp.m_default;
+        os << tp.defaultValue;
         //os << ")";
         return os;
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const LifetimeParam& p) {
-        os << "'" << p.m_name;
+        os << "'" << p.mName;
         return os;
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const ValueParam& p) {
-        os << "const " << p.m_name << ": " << p.m_type;
+        os << "const " << p.mName << ": " << p.mType;
         return os;
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const HigherRankedBounds& x) {
         if (!x.empty()) {
             os << "for<";
-            for (const auto& l : x.m_lifetimes) {
+            for (const auto& l : x.mLifetimes) {
                 os << l << ",";
             }
             os << "> ";
@@ -594,7 +594,7 @@ namespace AST {
     //}
 
     ::std::ostream& operator<<(::std::ostream& os, const GenericParams& tps) {
-        return os << "<" << tps.m_params << "> where {" << tps.m_bounds << "}";
+        return os << "<" << tps.mParams << "> where {" << tps.bounds << "}";
     }
 
 } // namespace AST
@@ -602,7 +602,7 @@ namespace AST {
 AST::AttributeList::AttributeList() = default;
 
 AST::AttributeList::AttributeList(::std::vector<AST::Attribute> items)
-    : m_items(mv$(items))
+    : mItems(mv$(items))
 {
 }
 
@@ -616,27 +616,27 @@ namespace AST {
 //StructItem() {}
 
 StructItem::StructItem(::AST::AttributeList attrs, AST::Visibility vis, RcString name, TypeRef ty, Expr default_value)
-    : m_attrs(mv$(attrs))
-    , m_vis(mv$(vis))
-    , m_name(mv$(name))
-    , m_type(mv$(ty))
-    , m_default(mv$(default_value)) {
+    : mAttrs(mv$(attrs))
+    , vis(mv$(vis))
+    , mName(mv$(name))
+    , mType(mv$(ty))
+    , defaultValue(mv$(default_value)) {
 }
 //TupleItem() {}
 
 TupleItem::TupleItem(::AST::AttributeList attrs, AST::Visibility vis, TypeRef ty)
-    : m_attrs(mv$(attrs))
-    , m_vis(mv$(vis))
-    , m_type(mv$(ty)) {
+    : mAttrs(mv$(attrs))
+    , vis(mv$(vis))
+    , mType(mv$(ty)) {
 }
 //TypeAlias() {}
 TypeAlias::TypeAlias(GenericParams params, TypeRef type)
-    : m_params(std::move(params))
-    , m_type(std::move(type)) {
+    : mParams(std::move(params))
+    , mType(std::move(type)) {
 }
 TypeAlias TypeAlias::new_associated_type(GenericParams params, GenericParams type_bounds, TypeRef default_type) {
     TypeAlias rv{std::move(params), std::move(default_type)};
-    rv.m_self_bounds = std::move(type_bounds);
+    rv.selfBounds = std::move(type_bounds);
     return rv;
 }
 TraitAlias TraitAlias::clone() const {
@@ -647,9 +647,9 @@ TraitAlias TraitAlias::clone() const {
     return rv;
 }
 Static::Static(Class s_class, TypeRef type, Expr value)
-    : m_class(s_class)
-    , m_type(std::move(type))
-    , m_value(std::move(value)) {
+    : cls(s_class)
+    , mType(std::move(type))
+    , mValue(std::move(value)) {
 }
 Function::Arg::Arg(::AST::Pattern pat, TypeRef ty, ::AST::AttributeList attrs)
     : attrs(mv$(attrs))
@@ -683,62 +683,62 @@ Function::Function(Span sp, TypeRef ret_type, Arglist args)
 EnumVariant::EnumVariant() {
 }
 EnumVariant::EnumVariant(AttributeList attrs, RcString name)
-    : m_attrs(mv$(attrs))
-    , m_name(mv$(name))
-    , m_data(EnumVariantData::make_Unit({})) {
+    : mAttrs(mv$(attrs))
+    , mName(mv$(name))
+    , mData(EnumVariantData::make_Unit({})) {
 }
 EnumVariant::EnumVariant(AttributeList attrs, RcString name, ::std::vector<TupleItem> sub_types)
-    : m_attrs(mv$(attrs))
-    , m_name(::std::move(name))
-    , m_data(EnumVariantData::make_Tuple({std::move(sub_types)})) {
+    : mAttrs(mv$(attrs))
+    , mName(::std::move(name))
+    , mData(EnumVariantData::make_Tuple({std::move(sub_types)})) {
 }
 EnumVariant::EnumVariant(AttributeList attrs, RcString name, ::std::vector<StructItem> fields)
-    : m_attrs(mv$(attrs))
-    , m_name(::std::move(name))
-    , m_data(EnumVariantData::make_Struct({std::move(fields)})) {
+    : mAttrs(mv$(attrs))
+    , mName(::std::move(name))
+    , mData(EnumVariantData::make_Struct({std::move(fields)})) {
 }
 Enum::Enum() {
 }
 Enum::Enum(GenericParams params, ::std::vector<EnumVariant> variants)
-    : m_params(::std::move(params))
-    , m_variants(::std::move(variants)) {
+    : mParams(::std::move(params))
+    , mVariants(::std::move(variants)) {
 }
 Struct::Markings::Markings() {
 }
 Struct::Struct() {
 }
 Struct::Struct(GenericParams params)
-    : m_params(::std::move(params))
-    , m_data(StructData::make_Unit({})) {
+    : mParams(::std::move(params))
+    , mData(StructData::make_Unit({})) {
 }
 Struct::Struct(GenericParams params, ::std::vector<StructItem> fields)
-    : m_params(::std::move(params))
-    , m_data(StructData::make_Struct({mv$(fields)})) {
+    : mParams(::std::move(params))
+    , mData(StructData::make_Struct({mv$(fields)})) {
 }
 Struct::Struct(GenericParams params, ::std::vector<TupleItem> fields)
-    : m_params(::std::move(params))
-    , m_data(StructData::make_Tuple({mv$(fields)})) {
+    : mParams(::std::move(params))
+    , mData(StructData::make_Tuple({mv$(fields)})) {
 }
 Union::Union(GenericParams params, ::std::vector<StructItem> fields)
-    : m_params(::std::move(params))
-    , m_variants(::std::move(fields)) {
+    : mParams(::std::move(params))
+    , mVariants(::std::move(fields)) {
 }
 ImplDef::ImplDef(GenericParams params, Spanned<Path> trait_type, TypeRef impl_type)
-    : m_is_unsafe(false)
-    , m_is_const(false)
-    , m_params(mv$(params))
-    , m_trait(mv$(trait_type))
-    , m_type(mv$(impl_type)) {
+    : isUnsafe(false)
+    , isConst(false)
+    , mParams(mv$(params))
+    , mTrait(mv$(trait_type))
+    , mType(mv$(impl_type)) {
 }
 }
 
 namespace AST {
 
 ::std::ostream& operator<<(::std::ostream& os, const EnumVariant& x) {
-    os << "EnumVariant(" << x.m_name;
-    TU_MATCH(EnumVariantData, (x.m_data), (e), (Unit, ), (Tuple, os << "(" << e.m_items << ")";), (Struct, os << " { " << e.m_fields << " }";))
-    if (x.m_discriminant_value) {
-        os << " = " << x.m_discriminant_value;
+    os << "EnumVariant(" << x.mName;
+    TU_MATCH(EnumVariantData, (x.mData), (e), (Unit, ), (Tuple, os << "(" << e.mItems << ")";), (Struct, os << " { " << e.fields << " }";))
+    if (x.discriminantValue) {
+        os << " = " << x.discriminantValue;
     }
     return os << ")";
 }

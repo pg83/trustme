@@ -107,12 +107,12 @@ struct Context {
         friend ::std::ostream& operator<<(::std::ostream& os, const Associated& v);
     };
 
-    const ::HIR::Crate& m_crate;
-    const ::HIR::TraitImpl* m_current_trait_impl;
+    const ::HIR::Crate& crate;
+    const ::HIR::TraitImpl* currentTraitImpl;
 
-    ::std::vector<Binding> m_bindings;
-    HMTypeInferrence m_ivars;
-    TraitResolution m_resolve;
+    ::std::vector<Binding> mBindings;
+    HMTypeInferrence ivars;
+    TraitResolution mResolve;
 
     unsigned next_rule_idx;
     // NOTE: unique_ptr used to reduce copy costs of the list
@@ -128,9 +128,9 @@ struct Context {
 
     // Keep track of if an ivar is used in a context where it has to be Sized
     // - If it is, then we can discount any unsized possibilities
-    ::std::vector<bool> m_ivars_sized;
+    ::std::vector<bool> ivarsSized;
     ::std::vector<IVarPossible> possible_ivar_vals;
-    ::std::vector<Associated::CapturedIvarPossible>* m_possible_ivar_sink = nullptr;
+    ::std::vector<Associated::CapturedIvarPossible>* possibleIvarSink = nullptr;
 
     IVarPossible* get_possible_ivar_sink(unsigned index);
 
@@ -141,16 +141,16 @@ struct Context {
         TaitEntry(const HIR::PathParams& p, HIR::TypeRef t);
     };
 
-    ::std::map<HIR::TypeDataErasedTypeAliasInner*, TaitEntry> m_erased_type_aliases;
+    ::std::map<HIR::TypeDataErasedTypeAliasInner*, TaitEntry> erasedTypeAliases;
 
-    const ::HIR::SimplePath m_lang_Box;
+    const ::HIR::SimplePath mLangBox;
 
     Context(const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params, const ::HIR::SimplePath& mod_path, const ::HIR::GenericPath* current_trait, const ::HIR::TraitImpl* current_trait_impl);
 
     void dump() const;
 
     bool take_changed() {
-        return m_ivars.take_changed();
+        return ivars.take_changed();
     }
 
     bool has_rules() const {
@@ -158,7 +158,7 @@ struct Context {
     }
 
     inline void add_ivars(::HIR::TypeRef& ty) {
-        m_ivars.add_ivars(ty);
+        ivars.add_ivars(ty);
     }
 
     // - Equate two types, with no possibility of coercion
@@ -189,7 +189,7 @@ struct Context {
 
     // - Add a trait bound (gets encoded as an associated type bound)
     void add_trait_bound(const Span& sp, const ::HIR::TypeData* impl_ty, const ::HIR::SimplePath& trait, ::HIR::PathParams params) {
-        equate_types_assoc(sp, m_crate.m_types.infer(), trait, mv$(params), impl_ty, "", {}, false);
+        equate_types_assoc(sp, crate.types.infer(), trait, mv$(params), impl_ty, "", {}, false);
     }
 
     /// Get the `possible_ivar_vals` entry for the given ivar index
@@ -247,7 +247,7 @@ struct Context {
     void add_revisit_adv(::std::unique_ptr<Revisitor> ent);
 
     const ::HIR::TypeData* get_type(const ::HIR::TypeData* ty) const {
-        return m_ivars.get_type(ty);
+        return ivars.get_type(ty);
     }
 
     /// Create an autoderef operation from val_node->m_res_type to ty_dst (handling implicit unsizing)
@@ -255,7 +255,7 @@ struct Context {
 
 private:
     void add_ivars_params(::HIR::PathParams& params) {
-        m_ivars.add_ivars_params(params);
+        ivars.add_ivars_params(params);
     }
 };
 

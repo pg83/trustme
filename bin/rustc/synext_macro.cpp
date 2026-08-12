@@ -27,7 +27,7 @@ namespace {
             ERROR(sp, E0000, "asm! requires a string literal - got " << *n);
         }
         //const auto& format_string_sp = format_string_np->span();
-        return mv$(format_string_np->m_value);
+        return mv$(format_string_np->mValue);
     }
 
     RcString get_tok_ident_rword(TokenStream& lex) {
@@ -208,13 +208,13 @@ namespace {
     }
 
     AsmCommon::RegisterClass get_reg_class(const Span& sp, const RcString& str) {
-        if (TargetGetCurSpec().m_arch.m_name == "x86_64") {
+        if (TargetGetCurSpec().arch.mName == "x86_64") {
             return get_reg_class_x8664(sp, str);
         }
-        if (TargetGetCurSpec().m_arch.m_name == "x86") {
+        if (TargetGetCurSpec().arch.mName == "x86") {
             return get_reg_class_x8664(sp, str);
         }
-        if (TargetGetCurSpec().m_arch.m_name == "riscv64") {
+        if (TargetGetCurSpec().arch.mName == "riscv64") {
             return get_reg_class_riscv(sp, str);
         }
         ERROR(sp, E0000, "Unknown architecture for asm!");
@@ -529,8 +529,8 @@ public:
         ASSERT_BUG(sp, node_ap, "");
         auto& node_a = *node_ap;
 
-        auto global_asm = AST::GlobalAsm{std::move(node_a.m_lines), {}, node_a.m_options};
-        for (auto& param : node_a.m_params) {
+        auto global_asm = AST::GlobalAsm{std::move(node_a.lines), {}, node_a.options};
+        for (auto& param : node_a.mParams) {
             if (!(param.is_Sym() || param.is_Const())) {
                 ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
             } else {
@@ -550,7 +550,7 @@ public:
         auto node = o->getToken().take_frag_node();
         auto* node_ap = cast<AST::ExprNodeAsm2>(node.get());
         ASSERT_BUG(sp, node_ap, "");
-        node_ap->m_options.naked = true;
+        node_ap->options.naked = true;
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())))));
     }
@@ -674,17 +674,17 @@ class CConcatExpander: public ExpandProcMacro {
             DEBUG("concat[pe] - v=" << *v);
             // TODO: Visitor instead
             if (auto* vp = cast<AST::ExprNodeString>(v.get())) {
-                rv += vp->m_value;
+                rv += vp->mValue;
             } else if (auto* vp = cast<AST::ExprNodeInteger>(v.get())) {
-                if (vp->m_datatype == CORETYPE_CHAR) {
-                    rv += Codepoint{static_cast<uint32_t>(vp->m_value.truncate_u64())};
+                if (vp->datatype == CORETYPE_CHAR) {
+                    rv += Codepoint{static_cast<uint32_t>(vp->mValue.truncate_u64())};
                 } else {
-                    rv += FMT(vp->m_value);
+                    rv += FMT(vp->mValue);
                 }
             } else if (auto* vp = cast<AST::ExprNodeFloat>(v.get())) {
-                rv += FMT(vp->m_value);
+                rv += FMT(vp->mValue);
             } else if (auto* vp = cast<AST::ExprNodeBool>(v.get())) {
-                rv += (vp->m_value ? "true" : "false");
+                rv += (vp->mValue ? "true" : "false");
             } else {
                 ERROR(sp, E0000, "Unexpected expression type in concat! argument");
             }
@@ -745,7 +745,7 @@ namespace {
         if (!string_np) {
             ERROR(sp, E0000, "Expected a string literal - got " << *n);
         }
-        return mv$(string_np->m_value);
+        return mv$(string_np->mValue);
     }
 }
 
@@ -829,7 +829,7 @@ class CExpanderUnstableColumn: public ExpandProcMacro {
 class CExpanderModulePath: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         ::std::string path_str;
-        path_str += crate.m_crate_name_set;
+        path_str += crate.crateNameSet;
         for (const auto& comp : mod.path().nodes) {
             path_str += "::";
             path_str += comp.c_str();
@@ -1330,17 +1330,17 @@ namespace {
     void push_path(::std::vector<TokenTree>& toks, const AST::Crate& crate, ::std::initializer_list<const char*> il) {
         AST::AbsolutePath ap;
         // TODO: Inject a path fragment (interpolated path), to avoid edition parsing quirks
-        switch (crate.m_load_std) {
+        switch (crate.loadStd) {
             case ::AST::Crate::LOAD_NONE:
                 break;
             case ::AST::Crate::LOAD_CORE:
-                ASSERT_BUG(Span(), crate.m_ext_cratename_core != "", "");
-                ap.crate = crate.m_ext_cratename_core;
+                ASSERT_BUG(Span(), crate.extCratenameCore != "", "");
+                ap.crate = crate.extCratenameCore;
                 break;
             case ::AST::Crate::LOAD_STD:
                 //ap.crate = "=std";
-                ASSERT_BUG(Span(), crate.m_ext_cratename_core != "", "");
-                ap.crate = crate.m_ext_cratename_core;
+                ASSERT_BUG(Span(), crate.extCratenameCore != "", "");
+                ap.crate = crate.extCratenameCore;
                 break;
         }
         for (auto ent : il) {
@@ -1383,8 +1383,8 @@ namespace {
             ERROR(sp, E0000, "format_args! requires a string literal - got " << *format_string_node);
         }
         const auto& format_string_sp = format_string_np->span();
-        const auto& format_string = format_string_np->m_value;
-        auto h = format_string_np->m_hygiene;
+        const auto& format_string = format_string_np->mValue;
+        auto h = format_string_np->mHygiene;
 
         ::std::map<RcString, unsigned int> named_args_index;
         ::std::vector<TokenTree> named_args;
@@ -1753,7 +1753,7 @@ namespace {
         if (!string_np) {
             ERROR(sp, E0000, "include! requires a string literal - got " << *n);
         }
-        return mv$(string_np->m_value);
+        return mv$(string_np->mValue);
     }
 
     ::std::string get_path_relative_to(const ::std::string& base_path, ::std::string path) {
@@ -1793,13 +1793,13 @@ class CIncludeExpander: public ExpandProcMacro {
 
         //::std::string file_path = get_path_relative_to(mod.m_file_info.path, mv$(path));
         ::std::string file_path = get_path_relative_to(sp.get_top_file_span().filename.c_str(), mv$(path));
-        crate.m_extra_files.push_back(file_path);
+        crate.extraFiles.push_back(file_path);
 
         try {
             ParseState ps;
             ps.module = &mod;
-            DEBUG("Edition = " << crate.m_edition);
-            return box$(Lexer(file_path, crate.m_edition, ps));
+            DEBUG("Edition = " << crate.edition);
+            return box$(Lexer(file_path, crate.edition, ps));
         } catch (::std::runtime_error& e) {
             ERROR(sp, E0000, e.what());
         }
@@ -1814,8 +1814,8 @@ class CIncludeBytesExpander: public ExpandProcMacro {
         auto path = include_get_string(sp, lex, crate, mod);
         GET_CHECK_TOK(tok, lex, TOK_EOF);
 
-        ::std::string file_path = get_path_relative_to(mod.m_file_info.path, mv$(path));
-        crate.m_extra_files.push_back(file_path);
+        ::std::string file_path = get_path_relative_to(mod.fileInfo.path, mv$(path));
+        crate.extraFiles.push_back(file_path);
 
         ::std::ifstream is(file_path);
         if (!is.good()) {
@@ -1838,8 +1838,8 @@ class CIncludeStrExpander: public ExpandProcMacro {
         auto path = include_get_string(sp, lex, crate, mod);
         GET_CHECK_TOK(tok, lex, TOK_EOF);
 
-        ::std::string file_path = get_path_relative_to(mod.m_file_info.path, mv$(path));
-        crate.m_extra_files.push_back(file_path);
+        ::std::string file_path = get_path_relative_to(mod.fileInfo.path, mv$(path));
+        crate.extraFiles.push_back(file_path);
 
         ::std::ifstream is(file_path);
         if (!is.good()) {
@@ -1865,17 +1865,17 @@ class CExpanderPanic: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         Token tok;
 
-        auto edition = crate.m_edition;
+        auto edition = crate.edition;
         if (tt.hygiene().has_mod_path() && tt.hygiene().mod_path().crate != "") {
-            edition = crate.m_extern_crates.at(tt.hygiene().mod_path().crate).m_hir->m_edition;
+            edition = crate.externCrates.at(tt.hygiene().mod_path().crate).hir->edition;
         }
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_DOUBLE_COLON));
-        toks.push_back(Token(TOK_STRING, std::string(crate.m_ext_cratename_core.c_str()), {}));
+        toks.push_back(Token(TOK_STRING, std::string(crate.extCratenameCore.c_str()), {}));
         toks.push_back(Token(TOK_DOUBLE_COLON));
         toks.push_back(Token(TOK_IDENT, RcString::new_interned("panic")));
         toks.push_back(Token(TOK_DOUBLE_COLON));
-        switch (crate.m_edition) {
+        switch (crate.edition) {
             case AST::Edition::Rust2015:
             case AST::Edition::Rust2018:
                 toks.push_back(Token(TOK_IDENT, RcString::new_interned("panic_2015")));
@@ -1900,17 +1900,17 @@ class CExpanderUnreachable: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         Token tok;
 
-        auto edition = crate.m_edition;
+        auto edition = crate.edition;
         if (tt.hygiene().has_mod_path() && tt.hygiene().mod_path().crate != "") {
-            edition = crate.m_extern_crates.at(tt.hygiene().mod_path().crate).m_hir->m_edition;
+            edition = crate.externCrates.at(tt.hygiene().mod_path().crate).hir->edition;
         }
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_DOUBLE_COLON));
-        toks.push_back(Token(TOK_STRING, std::string(crate.m_ext_cratename_core.c_str()), {}));
+        toks.push_back(Token(TOK_STRING, std::string(crate.extCratenameCore.c_str()), {}));
         toks.push_back(Token(TOK_DOUBLE_COLON));
         toks.push_back(Token(TOK_IDENT, RcString::new_interned("panic")));
         toks.push_back(Token(TOK_DOUBLE_COLON));
-        switch (crate.m_edition) {
+        switch (crate.edition) {
             case AST::Edition::Rust2015:
             case AST::Edition::Rust2018:
                 toks.push_back(Token(TOK_IDENT, RcString::new_interned("unreachable_2015")));

@@ -89,15 +89,15 @@ public:
 };
 
 class TraceLog {
-    const char* m_tag;
+    const char* mTag;
 
 public:
     template<typename Info>
     TraceLog(const char* tag, Info&& info_cb)
-        : m_tag(tag)
+        : mTag(tag)
     {
-        if (m_tag) {
-            auto& os = debug_output(g_debug_indent_level, m_tag);
+        if (mTag) {
+            auto& os = debug_output(g_debug_indent_level, mTag);
             os << ">> (";
             info_cb(os);
             os << ")" << ::std::endl;
@@ -112,17 +112,17 @@ public:
 
 template<typename Ret>
 class TraceLogRet {
-    const char* m_tag;
-    Ret m_ret;
+    const char* mTag;
+    Ret ret;
 
 public:
     template<typename Info>
     TraceLogRet(const char* tag, Info&& info_cb, Ret&& ret)
-        : m_tag(tag)
-        , m_ret(::std::forward<Ret>(ret))
+        : mTag(tag)
+        , ret(::std::forward<Ret>(ret))
     {
-        if (m_tag) {
-            auto& os = debug_output(g_debug_indent_level, m_tag);
+        if (mTag) {
+            auto& os = debug_output(g_debug_indent_level, mTag);
             os << ">> (";
             info_cb(os);
             os << ")" << ::std::endl;
@@ -131,11 +131,11 @@ public:
     }
 
     ~TraceLogRet() {
-        if (m_tag) {
+        if (mTag) {
             UNINDENT();
-            auto& os = debug_output(g_debug_indent_level, m_tag);
+            auto& os = debug_output(g_debug_indent_level, mTag);
             os << "<< (";
-            m_ret(os);
+            ret(os);
             os << ")" << ::std::endl;
         }
     }
@@ -151,7 +151,7 @@ auto make_trace_log_ret(const char* tag, Info&& info_cb, Ret&& ret) {
 }
 
 struct FmtLambda {
-    ::std::function<void(::std::ostream&)> m_cb;
+    ::std::function<void(::std::ostream&)> cb;
 
     FmtLambda(::std::function<void(::std::ostream&)> cb);
 

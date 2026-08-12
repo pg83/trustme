@@ -5,7 +5,7 @@ CompileError::Base::~Base() throw() {
 }
 
 CompileError::Generic::Generic(::std::string message)
-    : m_message(message)
+    : message(message)
 {
     ::std::cout << "Generic(" << message << ")" << ::std::endl;
 }
@@ -15,25 +15,25 @@ CompileError::Generic::Generic(const TokenStream& lex, ::std::string message) {
 }
 
 CompileError::BugCheck::BugCheck(const TokenStream& lex, ::std::string message)
-    : m_message(message)
+    : message(message)
 {
     ::std::cout << lex.point_span() << "BugCheck(" << message << ")" << ::std::endl;
 }
 
 CompileError::BugCheck::BugCheck(::std::string message)
-    : m_message(message)
+    : message(message)
 {
     ::std::cout << "BugCheck(" << message << ")" << ::std::endl;
 }
 
 CompileError::Todo::Todo(::std::string message)
-    : m_message(message)
+    : message(message)
 {
     ::std::cout << "Todo(" << message << ")" << ::std::endl;
 }
 
 CompileError::Todo::Todo(const TokenStream& lex, ::std::string message)
-    : m_message(message)
+    : message(message)
 {
     ::std::cout << lex.point_span() << ": Todo(" << message << ")" << ::std::endl;
 }

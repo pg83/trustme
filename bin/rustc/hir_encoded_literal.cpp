@@ -24,24 +24,24 @@ Ordering EncodedLiteral::ord(const EncodedLiteral& x) const {
 //size_t  m_reloc_size;
 
 EncodedLiteralSlice::EncodedLiteralSlice(const EncodedLiteral& base)
-    : m_base(base)
-    , m_ofs(0)
-    , m_size(base.bytes.size())
+    : base(base)
+    , ofs(0)
+    , mSize(base.bytes.size())
 //, m_reloc_ofs(0)
 //, m_reloc_size(base.relocations.size())
 {
 }
 EncodedLiteralSlice EncodedLiteralSlice::slice(size_t ofs) const {
-    assert(ofs <= m_size);
-    return slice(ofs, m_size - ofs);
+    assert(ofs <= mSize);
+    return slice(ofs, mSize - ofs);
 }
 EncodedLiteralSlice EncodedLiteralSlice::slice(size_t ofs, size_t len) const {
-    assert(ofs <= m_size);
-    assert(len <= m_size);
-    assert(ofs + len <= m_size);
-    auto rv = EncodedLiteralSlice(m_base);
-    rv.m_ofs = m_ofs + ofs;
-    rv.m_size = len;
+    assert(ofs <= mSize);
+    assert(len <= mSize);
+    assert(ofs + len <= mSize);
+    auto rv = EncodedLiteralSlice(base);
+    rv.ofs = this->ofs + ofs;
+    rv.mSize = len;
     return rv;
 }
 

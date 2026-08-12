@@ -9,8 +9,8 @@ const bool DEBUG_PRINT_TOKENS = false;
 #define FULL_TRACE
 
 TokenStream::TokenStream(ParseState ps)
-    : m_cache_valid(false)
-    , m_parse_state(ps)
+    : cacheValid(false)
+    , parseState(ps)
 {
 }
 
@@ -27,17 +27,17 @@ Token TokenStream::innerGetToken() {
 }
 
 Token TokenStream::getToken() {
-    if (m_cache_valid) {
+    if (cacheValid) {
 #ifdef FULL_TRACE
-        DEBUG("<= " << m_cache << " (cache)");
+        DEBUG("<= " << cache << " (cache)");
 #endif
-        m_cache_valid = false;
-        return mv$(m_cache);
-    } else if (m_lookahead.size()) {
-        Token ret = mv$(m_lookahead.front().tok);
-        m_edition = m_lookahead.front().edition;
-        m_hygiene = m_lookahead.front().hygiene;
-        m_lookahead.erase(m_lookahead.begin());
+        cacheValid = false;
+        return mv$(cache);
+    } else if (mLookahead.size()) {
+        Token ret = mv$(mLookahead.front().tok);
+        edition = mLookahead.front().edition;
+        mHygiene = mLookahead.front().hygiene;
+        mLookahead.erase(mLookahead.begin());
 #ifdef FULL_TRACE
         DEBUG("<= " << ret << " (lookahead)");
 #endif
@@ -47,8 +47,8 @@ Token TokenStream::getToken() {
         return ret;
     } else {
         Token ret = this->innerGetToken();
-        m_edition = this->realGetEdition();
-        m_hygiene = this->realGetHygiene();
+        edition = this->realGetEdition();
+        mHygiene = this->realGetHygiene();
 #ifdef FULL_TRACE
         DEBUG("<= " << ret << " (new)");
 #endif
@@ -68,24 +68,24 @@ Token TokenStream::getTokenCheck(eTokenType exp) {
 }
 
 void TokenStream::putback(Token tok) {
-    if (m_cache_valid) {
-        DEBUG("" << getPosition() << " - Double putback: " << tok << " but " << m_cache);
+    if (cacheValid) {
+        DEBUG("" << getPosition() << " - Double putback: " << tok << " but " << cache);
         throw ParseError::BugCheck("Double putback");
     } else {
 #ifdef FULL_TRACE
         DEBUG(">>> " << tok);
 #endif
-        m_cache_valid = true;
-        m_cache = mv$(tok);
+        cacheValid = true;
+        cache = mv$(tok);
     }
 }
 
 eTokenType TokenStream::lookahead(unsigned int i) {
     const unsigned int MAX_LOOKAHEAD = 4;
 
-    if (m_cache_valid) {
+    if (cacheValid) {
         if (i == 0) {
-            return m_cache.type();
+            return cache.type();
         }
         i--;
     }
@@ -94,19 +94,19 @@ eTokenType TokenStream::lookahead(unsigned int i) {
         throw ParseError::BugCheck("Excessive lookahead");
     }
 
-    while (i >= m_lookahead.size()) {
-        DEBUG("lookahead - read #" << m_lookahead.size());
+    while (i >= mLookahead.size()) {
+        DEBUG("lookahead - read #" << mLookahead.size());
         auto tok = this->innerGetToken();
         auto hygiene = this->realGetHygiene();
-        m_lookahead.push_back({mv$(tok), this->realGetEdition(), mv$(hygiene)});
+        mLookahead.push_back({mv$(tok), this->realGetEdition(), mv$(hygiene)});
     }
 
-    DEBUG("lookahead(" << i << ") = " << m_lookahead[i].tok);
-    return m_lookahead[i].tok.type();
+    DEBUG("lookahead(" << i << ") = " << mLookahead[i].tok);
+    return mLookahead[i].tok.type();
 }
 
 Ident::Hygiene TokenStream::get_hygiene() const {
-    return m_hygiene;
+    return mHygiene;
 }
 
 ProtoSpan TokenStream::start_span() const {
@@ -165,12 +165,12 @@ bool TokenStream::getTokenIf(eTokenType exp, Token& dst) { // I'd like std::opti
     }
 }
 SavedParseState::SavedParseState(TokenStream& lex, ParseState state)
-    : m_lex(lex)
-    , m_state(state) {
+    : lex(lex)
+    , state(state) {
 }
 SavedParseState::~SavedParseState() {
-    DEBUG("Restoring " << m_state);
-    m_lex.parse_state() = m_state;
+    DEBUG("Restoring " << state);
+    lex.parse_state() = state;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ParseState& ps) {

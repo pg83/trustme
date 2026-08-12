@@ -18,7 +18,7 @@ struct SpanInnerSource;
 
 struct Span {
 private:
-    SpanInner* m_ptr;
+    SpanInner* ptr;
     //static SpanInner    s_empty_span;
 public:
     Span();
@@ -37,11 +37,11 @@ public:
     Span& operator=(Span&& x);
 
     operator bool() const {
-        return m_ptr != nullptr;
+        return ptr != nullptr;
     }
 
     bool operator==(const Span& x) const {
-        return m_ptr == x.m_ptr;
+        return ptr == x.ptr;
     }
 
     bool operator!=(const Span& x) const {
@@ -49,12 +49,12 @@ public:
     }
 
     const SpanInner* get() const {
-        return m_ptr;
+        return ptr;
     }
 
     //const SpanInner& operator*() const { return *m_ptr; }
     const SpanInner* operator->() const {
-        return m_ptr;
+        return ptr;
     }
 
     const SpanInnerSource& get_top_file_span() const;

@@ -8,12 +8,12 @@
 namespace AST {
 
     class MacroInvocation {
-        Span m_span;
+        Span mSpan;
 
-        AST::Path m_macro_path;
-        RcString m_ident;
-        TokenTree m_input;
-        bool m_is_expanded = false;
+        AST::Path macroPath;
+        RcString ident;
+        TokenTree input;
+        bool isExpanded = false;
 
     public:
         MacroInvocation(MacroInvocation&&) = default;
@@ -30,31 +30,31 @@ namespace AST {
         void clear();
 
         const Span& span() const {
-            return m_span;
+            return mSpan;
         }
 
         const AST::Path& path() const {
-            return m_macro_path;
+            return macroPath;
         }
 
         bool is_expanded() const {
-            return m_is_expanded;
+            return isExpanded;
         }
 
         void set_expanded() {
-            m_is_expanded = true;
+            isExpanded = true;
         }
 
         const RcString& input_ident() const {
-            return m_ident;
+            return ident;
         }
 
         const TokenTree& input_tt() const {
-            return m_input;
+            return input;
         }
 
         TokenTree& input_tt() {
-            return m_input;
+            return input;
         }
 
         friend ::std::ostream& operator<<(::std::ostream& os, const MacroInvocation& x);

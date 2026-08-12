@@ -5,22 +5,22 @@ namespace AST {
 MacroInvocation::MacroInvocation() {
 }
 MacroInvocation::MacroInvocation(Span span, AST::Path macro, RcString ident, TokenTree input)
-    : m_span(mv$(span))
-    , m_macro_path(mv$(macro))
-    , m_ident(mv$(ident))
-    , m_input(mv$(input)) {
+    : mSpan(mv$(span))
+    , macroPath(mv$(macro))
+    , ident(mv$(ident))
+    , input(mv$(input)) {
 }
 void MacroInvocation::clear() {
-    m_macro_path = AST::Path();
-    m_ident = "";
-    m_input = TokenTree();
+    macroPath = AST::Path();
+    ident = "";
+    input = TokenTree();
 }
 }
 
 namespace AST {
 
 ::std::ostream& operator<<(::std::ostream& os, const MacroInvocation& x) {
-    os << x.m_macro_path << "! " << x.m_ident << x.m_input;
+    os << x.macroPath << "! " << x.ident << x.input;
     return os;
 }
 }

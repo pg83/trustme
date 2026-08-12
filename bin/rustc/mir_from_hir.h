@@ -10,7 +10,7 @@ class MirBuilder;
 class ScopeHandle {
     friend class MirBuilder;
 
-    const MirBuilder& m_builder;
+    const MirBuilder& builder;
     unsigned int idx;
 
     ScopeHandle(const MirBuilder& builder, unsigned int idx);
@@ -173,40 +173,40 @@ struct PatternBinding {
 class MirBuilder {
     friend class ScopeHandle;
 
-    const Span& m_root_span;
-    const StaticTraitResolve& m_resolve;
-    const ::HIR::TypeData* m_ret_ty;
-    const ::HIR::Function::args_t& m_args;
-    ::MIR::Function& m_output;
+    const Span& rootSpan;
+    const StaticTraitResolve& mResolve;
+    const ::HIR::TypeData* retTy;
+    const ::HIR::Function::args_t& mArgs;
+    ::MIR::Function& output;
 
-    const ::HIR::SimplePath* m_lang_Box;
+    const ::HIR::SimplePath* mLangBox;
 
-    unsigned int m_current_block;
-    bool m_block_active;
-    bool m_building_cleanup = false;
-    const MIR::LValue* m_unwind_consumed_value = nullptr;
+    unsigned int currentBlock;
+    bool blockActive;
+    bool buildingCleanup = false;
+    const MIR::LValue* unwindConsumedValue = nullptr;
 
-    ::MIR::RValue m_result;
-    bool m_result_valid;
+    ::MIR::RValue result;
+    bool resultValid;
 
     // TODO: Extra information (e.g. mutability)
-    VarState m_return_state;
-    ::std::vector<VarState> m_arg_states;
-    ::std::vector<VarState> m_slot_states;
-    size_t m_first_temp_idx;
+    VarState returnState;
+    ::std::vector<VarState> argStates;
+    ::std::vector<VarState> slotStates;
+    size_t firstTempIdx;
 
     // A diverging match guard is generated once and then cloned for each
     // alternative. Drops on that terminal path must update state for nested
     // unwind cleanups without mutating the canonical state being cloned.
-    bool m_frozen_exit_state_active = false;
-    ::std::map<unsigned int, VarState> m_frozen_exit_slot_states;
-    ::std::map<unsigned int, VarState> m_frozen_exit_arg_states;
+    bool frozenExitStateActive = false;
+    ::std::map<unsigned int, VarState> frozenExitSlotStates;
+    ::std::map<unsigned int, VarState> frozenExitArgStates;
 
     /// Mapping between variable slots and MIR arguments (for when the argument is not destructuring)
-    ::std::map<unsigned, unsigned> m_var_arg_mappings;
+    ::std::map<unsigned, unsigned> varArgMappings;
 
     /// Re-mapped dropped flags (all flags in the vector are to be set when the key flag is set)
-    ::std::map<unsigned, std::vector<unsigned>> m_drop_flag_aliases;
+    ::std::map<unsigned, std::vector<unsigned>> dropFlagAliases;
 
     struct ScopeDef {
         const Span& span;
@@ -218,17 +218,17 @@ class MirBuilder {
         ScopeDef(const Span& span, ScopeType data);
     };
 
-    ::std::vector<ScopeDef> m_scopes;
-    ::std::vector<unsigned int> m_scope_stack;
-    ScopeHandle m_fcn_scope;
+    ::std::vector<ScopeDef> scopes;
+    ::std::vector<unsigned int> scopeStack;
+    ScopeHandle fcnScope;
 
     typedef std::pair<HIR::PatternBinding::Type, MIR::LValue> var_alias_t;
-    ::std::vector<var_alias_t> m_variable_aliases;
+    ::std::vector<var_alias_t> variableAliases;
 
     // LValue used only for the condition of `if`
     // - Using a fixed temporary simplifies parts of lowering (scope related) and reduces load on
     //   the optimiser.
-    ::MIR::LValue m_if_cond_lval;
+    ::MIR::LValue ifCondLval;
 
 public:
     MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ret_ty, const ::HIR::Function::args_t& args, ::MIR::Function& output);
@@ -236,15 +236,15 @@ public:
     void final_cleanup();
 
     const ::HIR::SimplePath* langBox() const {
-        return m_lang_Box;
+        return mLangBox;
     }
 
     const ::HIR::Crate& crate() const {
-        return m_resolve.m_crate;
+        return mResolve.crate;
     }
 
     const StaticTraitResolve& resolve() const {
-        return m_resolve;
+        return mResolve;
     }
 
     /// Check if the passed type is Box<T> and returns a pointer to the T type if so, otherwise nullptr
@@ -272,11 +272,11 @@ public:
     ::MIR::LValue new_temporary(const ::HIR::TypeData* ty);
     ::MIR::LValue lvalue_or_temp(const Span& sp, const ::HIR::TypeData* ty, ::MIR::RValue val);
     size_t local_count() const {
-        return m_output.locals.size();
+        return output.locals.size();
     }
 
     bool has_result() const {
-        return m_result_valid;
+        return resultValid;
     }
 
     void set_result(const Span& sp, ::MIR::RValue val);
@@ -289,7 +289,7 @@ public:
     ::MIR::Param get_result_in_param(const Span& sp, const ::HIR::TypeData* ty, bool allow_missing_value = false);
 
     ::MIR::LValue get_if_cond() const {
-        return m_if_cond_lval.clone();
+        return ifCondLval.clone();
     }
 
     ::MIR::LValue get_rval_in_if_cond(const Span& sp, ::MIR::RValue val);
@@ -316,7 +316,7 @@ public:
 
     // - Block management
     bool block_active() const {
-        return m_block_active;
+        return blockActive;
     }
 
     // Mark a value as initialised (used for Call, because it has to be done after the panic block is populated)
@@ -359,7 +359,7 @@ private:
         std::vector<unsigned> blocks;
     };
 
-    std::vector<CodeSaveStackEnt> m_code_save_stack;
+    std::vector<CodeSaveStackEnt> codeSaveStack;
 
 public:
     void set_cur_block(unsigned int new_block);
@@ -404,7 +404,7 @@ public:
     void unfreeze_scope(const Span& sp, const ScopeHandle&);
 
     const ScopeHandle& fcn_scope() const {
-        return m_fcn_scope;
+        return fcnScope;
     }
 
     /// Schedule a local's value drop in the current variable scope.
@@ -479,18 +479,18 @@ public:
 
 template <typename T>
 struct SaveAndEditVal {
-    T& m_dst;
-    T m_saved;
+    T& dst;
+    T saved;
 
     SaveAndEditVal(T& dst, T newval)
-        : m_dst(dst)
-        , m_saved(dst)
+        : dst(dst)
+        , saved(dst)
     {
-        m_dst = mv$(newval);
+        dst = mv$(newval);
     }
 
     ~SaveAndEditVal() {
-        this->m_dst = this->m_saved;
+        this->dst = this->saved;
     }
 };
 

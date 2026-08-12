@@ -15,17 +15,17 @@
 
 Lexer::Lexer(const ::std::string& filename, AST::Edition edition, ParseState ps)
     : TokenStream(ps)
-    , m_path(filename.c_str())
-    , m_line(1)
-    , m_line_ofs(0)
-    , m_istream_fp(filename != "-" ? new std::ifstream(filename.c_str()) : nullptr)
-    , m_istream(filename != "-" ? *m_istream_fp : std::cin)
-    , m_last_char_valid(false)
-    , m_edition(edition)
-    , m_hygiene(Ident::Hygiene::new_scope())
+    , mPath(filename.c_str())
+    , line(1)
+    , lineOfs(0)
+    , istreamFp(filename != "-" ? new std::ifstream(filename.c_str()) : nullptr)
+    , istream(filename != "-" ? *istreamFp : std::cin)
+    , lastCharValid(false)
+    , edition(edition)
+    , mHygiene(Ident::Hygiene::new_scope())
 {
-    if (m_istream_fp) {
-        if (!m_istream_fp->is_open()) {
+    if (istreamFp) {
+        if (!istreamFp->is_open()) {
             throw ::std::runtime_error("Unable to open file '" + filename + "'");
         }
         // Consume the BOM
@@ -36,23 +36,23 @@ Lexer::Lexer(const ::std::string& filename, AST::Edition edition, ParseState ps)
             if (this->getc_byte() != '\xbf') {
                 throw ::std::runtime_error("Incomplete BOM - missing \\xBF in third position");
             }
-            m_line_ofs = 0;
+            lineOfs = 0;
         } else {
-            m_istream.unget();
+            istream.unget();
         }
     }
 }
 
 Lexer::Lexer(::std::istringstream& ss, AST::Edition edition, ParseState ps)
     : TokenStream(ps)
-    , m_path("-")
-    , m_line(1)
-    , m_line_ofs(0)
-    , m_istream_fp(nullptr)
-    , m_istream(ss)
-    , m_last_char_valid(false)
-    , m_edition(edition)
-    , m_hygiene(Ident::Hygiene::new_scope())
+    , mPath("-")
+    , line(1)
+    , lineOfs(0)
+    , istreamFp(nullptr)
+    , istream(ss)
+    , lastCharValid(false)
+    , edition(edition)
+    , mHygiene(Ident::Hygiene::new_scope())
 {
 }
 
@@ -302,11 +302,11 @@ bool issym(Codepoint ch) {
 }
 
 Position Lexer::getPosition() const {
-    return Position(m_path, m_line, m_line_ofs);
+    return Position(mPath, line, lineOfs);
 }
 
 Ident::Hygiene Lexer::realGetHygiene() const {
-    return m_hygiene;
+    return mHygiene;
 }
 
 Token Lexer::realGetToken() {
@@ -330,15 +330,15 @@ Token Lexer::realGetToken() {
 }
 
 Token Lexer::getTokenInt() {
-    if (!this->m_next_tokens.empty()) {
-        auto rv = ::std::move(this->m_next_tokens.back());
-        m_next_tokens.pop_back();
+    if (!this->nextTokens.empty()) {
+        auto rv = ::std::move(this->nextTokens.back());
+        nextTokens.pop_back();
         return rv;
     }
     try {
         Codepoint ch = this->getc();
 
-        if (m_line == 1 && m_line_ofs == 1 && ch == '#') {
+        if (line == 1 && lineOfs == 1 && ch == '#') {
             switch ((ch = this->getc()).v) {
                 case '!':
                     switch ((ch = this->getc()).v) {
@@ -350,7 +350,7 @@ Token Lexer::getTokenInt() {
                             return Token(TOK_NEWLINE);
                         case '[':
                             this->ungetc();
-                            this->m_next_tokens.push_back(TOK_EXCLAM);
+                            this->nextTokens.push_back(TOK_EXCLAM);
                             return Token(TOK_HASH);
                         default:
                             throw ParseError::BadChar(*this, ch.v);
@@ -398,12 +398,12 @@ Token Lexer::getTokenInt() {
                         if (ch == '.') {
                             ch = this->getc();
                             if (ch == '.') {
-                                this->m_next_tokens.push_back(TOK_TRIPLE_DOT);
+                                this->nextTokens.push_back(TOK_TRIPLE_DOT);
                             } else if (ch == '=') {
-                                this->m_next_tokens.push_back(TOK_DOUBLE_DOT_EQUAL);
+                                this->nextTokens.push_back(TOK_DOUBLE_DOT_EQUAL);
                             } else {
                                 this->ungetc();
-                                this->m_next_tokens.push_back(TOK_DOUBLE_DOT);
+                                this->nextTokens.push_back(TOK_DOUBLE_DOT);
                             }
                             return Token(val, CORETYPE_ANY);
                         }
@@ -416,7 +416,7 @@ Token Lexer::getTokenInt() {
                             }
                             this->ungetc();
                             if (ch.isdigit() || issym(ch)) {
-                                this->m_next_tokens.push_back(TOK_DOT);
+                                this->nextTokens.push_back(TOK_DOT);
                                 return Token(val, CORETYPE_ANY);
                             } else {
                                 FloatValue fval = val.to_double();
@@ -435,9 +435,9 @@ Token Lexer::getTokenInt() {
                     this->ungetc();
                     FloatValue fval = this->parseFloat(val);
                     if (fval != fval) {
-                        assert(!this->m_next_tokens.empty());
-                        auto t = std::move(this->m_next_tokens.back());
-                        this->m_next_tokens.pop_back();
+                        assert(!this->nextTokens.empty());
+                        auto t = std::move(this->nextTokens.back());
+                        this->nextTokens.pop_back();
                         return t;
                     }
                     if (issym(ch = this->getc())) {
@@ -511,7 +511,7 @@ Token Lexer::getTokenInt() {
                         num_type = CORETYPE_F128;
                     } else {
                         // Not a numeric type suffix - rustc allows any identifier here, so emit it as a following ident token
-                        m_next_tokens.push_back(Token(TOK_IDENT, Ident(this->realGetHygiene(), RcString::new_interned(suffix))));
+                        nextTokens.push_back(Token(TOK_IDENT, Ident(this->realGetHygiene(), RcString::new_interned(suffix))));
                         return Token(val, CORETYPE_ANY);
                     }
                     return Token(val, num_type);
@@ -587,7 +587,7 @@ Token Lexer::getTokenInt() {
                 this->ungetc();
                 if (ch.isdigit()) {
                     auto val = this->parseInt(nullptr);
-                    m_next_tokens.push_back(Token(val, CORETYPE_ANY));
+                    nextTokens.push_back(Token(val, CORETYPE_ANY));
                 } else {
                 }
             }
@@ -618,13 +618,13 @@ Token Lexer::getTokenInt() {
                     this->ungetc();
                     if (is_doc || is_pdoc) {
                         //# [ doc = "commment data" ]
-                        m_next_tokens.push_back(TOK_SQUARE_CLOSE);
-                        m_next_tokens.push_back(Token(TOK_STRING, mv$(str), realGetHygiene()));
-                        m_next_tokens.push_back(TOK_EQUAL);
-                        m_next_tokens.push_back(Token(TOK_IDENT, RcString::new_interned("doc")));
-                        m_next_tokens.push_back(TOK_SQUARE_OPEN);
+                        nextTokens.push_back(TOK_SQUARE_CLOSE);
+                        nextTokens.push_back(Token(TOK_STRING, mv$(str), realGetHygiene()));
+                        nextTokens.push_back(TOK_EQUAL);
+                        nextTokens.push_back(Token(TOK_IDENT, RcString::new_interned("doc")));
+                        nextTokens.push_back(TOK_SQUARE_OPEN);
                         if (is_pdoc) {
-                            m_next_tokens.push_back(TOK_EXCLAM);
+                            nextTokens.push_back(TOK_EXCLAM);
                         }
                         return TOK_HASH;
                     }
@@ -682,13 +682,13 @@ Token Lexer::getTokenInt() {
                     }
                     if (is_doc || is_pdoc) {
                         //# [ doc = "commment data" ]
-                        m_next_tokens.push_back(TOK_SQUARE_CLOSE);
-                        m_next_tokens.push_back(Token(TOK_STRING, mv$(str), realGetHygiene()));
-                        m_next_tokens.push_back(TOK_EQUAL);
-                        m_next_tokens.push_back(Token(TOK_IDENT, RcString::new_interned("doc")));
-                        m_next_tokens.push_back(TOK_SQUARE_OPEN);
+                        nextTokens.push_back(TOK_SQUARE_CLOSE);
+                        nextTokens.push_back(Token(TOK_STRING, mv$(str), realGetHygiene()));
+                        nextTokens.push_back(TOK_EQUAL);
+                        nextTokens.push_back(Token(TOK_IDENT, RcString::new_interned("doc")));
+                        nextTokens.push_back(TOK_SQUARE_OPEN);
                         if (is_pdoc) {
-                            m_next_tokens.push_back(TOK_EXCLAM);
+                            nextTokens.push_back(TOK_EXCLAM);
                         }
                         return TOK_HASH;
                     }
@@ -853,7 +853,7 @@ Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool par
 
     this->ungetc();
     if (parse_reserved_word) {
-        auto v = LexFindReservedWord(str, this->m_edition);
+        auto v = LexFindReservedWord(str, this->edition);
         if (v != TOK_NULL) {
             return Token(v);
         }
@@ -985,17 +985,17 @@ FloatValue Lexer::parseFloat(U128 whole) {
         }
 
         if (has_trailing_dot) {
-            m_next_tokens.push_back(TOK_DOT);
+            nextTokens.push_back(TOK_DOT);
         }
         for (size_t i = indices.size(); i-- > 0;) {
-            m_next_tokens.push_back(Token(indices[i], CORETYPE_ANY));
+            nextTokens.push_back(Token(indices[i], CORETYPE_ANY));
             if (i > 0) {
-                m_next_tokens.push_back(TOK_DOT);
+                nextTokens.push_back(TOK_DOT);
             }
         }
     };
     auto queue_float = [&]() {
-        m_next_tokens.push_back(Token::make_float(parse_float_value(sbuf.c_str()), CORETYPE_ANY));
+        nextTokens.push_back(Token::make_float(parse_float_value(sbuf.c_str()), CORETYPE_ANY));
         return std::numeric_limits<double>::quiet_NaN();
     };
     // If the current char is a `.`
@@ -1007,19 +1007,19 @@ FloatValue Lexer::parseFloat(U128 whole) {
             // OR: Explicitly handle the symbols
             switch (this->getc().v) {
                 case '.':
-                    m_next_tokens.push_back(TOK_TRIPLE_DOT);
+                    nextTokens.push_back(TOK_TRIPLE_DOT);
                     break;
                 case '=':
-                    m_next_tokens.push_back(TOK_DOUBLE_DOT_EQUAL);
+                    nextTokens.push_back(TOK_DOUBLE_DOT_EQUAL);
                     break;
                 default:
                     this->ungetc();
-                    m_next_tokens.push_back(TOK_DOUBLE_DOT);
+                    nextTokens.push_back(TOK_DOUBLE_DOT);
                     break;
             }
             //buf[ofs] = 0;
             //m_next_tokens.push_back(Token::make_float(::std::strtod(buf, NULL), CORETYPE_ANY));
-            m_next_tokens.push_back(Token::make_float(parse_float_value(sbuf.c_str()), CORETYPE_ANY));
+            nextTokens.push_back(Token::make_float(parse_float_value(sbuf.c_str()), CORETYPE_ANY));
 
             return std::numeric_limits<double>::quiet_NaN();
         } else {
@@ -1030,7 +1030,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
                 queue_tuple_indices(ch);
             } else {
                 this->ungetc();
-                m_next_tokens.push_back(TOK_DOT);
+                nextTokens.push_back(TOK_DOT);
                 queue_float();
             }
             return std::numeric_limits<double>::quiet_NaN();
@@ -1052,7 +1052,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
             queue_tuple_indices(ch);
         } else {
             this->ungetc();
-            m_next_tokens.push_back(TOK_DOT);
+            nextTokens.push_back(TOK_DOT);
             queue_float();
         }
         return std::numeric_limits<double>::quiet_NaN();
@@ -1163,40 +1163,40 @@ uint32_t Lexer::parseEscape(char enclosing, bool* is_byte_escape) {
 }
 
 char Lexer::getc_byte() {
-    int rv = m_istream.get();
+    int rv = istream.get();
     if (rv == EOF) {
         throw Lexer::EndOfFile();
     }
 
     if (rv == '\r') {
-        if (m_istream.get() != '\n') {
-            m_istream.unget();
+        if (istream.get() != '\n') {
+            istream.unget();
         } else {
             rv = '\n';
         }
     }
     if (rv == '\n') {
-        m_line++;
-        m_line_ofs = 0;
+        line++;
+        lineOfs = 0;
     }
 
     return rv;
 }
 
 Codepoint Lexer::getc() {
-    if (m_last_char_valid) {
-        m_last_char_valid = false;
+    if (lastCharValid) {
+        lastCharValid = false;
 #ifdef TRACE_CHARS
-        ::std::cout << "getc(): U+" << ::std::hex << m_last_char.v << " (cached)" << ::std::endl;
+        ::std::cout << "getc(): U+" << ::std::hex << lastChar.v << " (cached)" << ::std::endl;
 #endif
     } else {
-        m_last_char = this->getc_cp();
-        m_line_ofs += 1;
+        lastChar = this->getc_cp();
+        lineOfs += 1;
 #ifdef TRACE_CHARS
-        ::std::cout << "getc(): U+" << ::std::hex << m_last_char.v << ::std::endl;
+        ::std::cout << "getc(): U+" << ::std::hex << lastChar.v << ::std::endl;
 #endif
     }
-    return m_last_char;
+    return lastChar;
 }
 
 Codepoint Lexer::getc_num() {
@@ -1260,10 +1260,10 @@ Codepoint Lexer::getc_cp() {
 
 void Lexer::ungetc() {
 #ifdef TRACE_CHARS
-    ::std::cout << "ungetc(): cache U+" << ::std::hex << m_last_char.v << ::std::endl;
+    ::std::cout << "ungetc(): cache U+" << ::std::hex << lastChar.v << ::std::endl;
 #endif
-    assert(!m_last_char_valid);
-    m_last_char_valid = true;
+    assert(!lastCharValid);
+    lastCharValid = true;
 }
 
 // --------------------------------------------------------------------
@@ -1393,10 +1393,10 @@ Codepoint::Codepoint(uint32_t v)
     : v(v) {
 }
 void Lexer::push_hygine() {
-    m_hygiene = Ident::Hygiene::new_scope_chained(m_hygiene);
-    DEBUG(">> " << m_hygiene);
+    mHygiene = Ident::Hygiene::new_scope_chained(mHygiene);
+    DEBUG(">> " << mHygiene);
 }
 void Lexer::pop_hygine() {
-    DEBUG("<< " << m_hygiene << " -> " << m_hygiene.get_parent());
-    m_hygiene = m_hygiene.get_parent();
+    DEBUG("<< " << mHygiene << " -> " << mHygiene.get_parent());
+    mHygiene = mHygiene.get_parent();
 }

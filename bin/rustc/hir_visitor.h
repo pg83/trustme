@@ -9,8 +9,8 @@ namespace HIR {
 
     // TODO: Split into Visitor and ItemVisitor
     class Visitor {
-        StaticTraitResolve* m_resolve;
-        TypeInterner& m_types;
+        StaticTraitResolve* mResolve;
+        TypeInterner& types;
 
     public:
         Visitor(::StaticTraitResolve* resolve, TypeInterner& types);
@@ -18,7 +18,7 @@ namespace HIR {
         virtual ~Visitor();
 
     protected:
-        TypeInterner& type_interner() const { return m_types; }
+        TypeInterner& type_interner() const { return types; }
         void visit_type_data(TypeData& data);
 
     public:

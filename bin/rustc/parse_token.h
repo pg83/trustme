@@ -60,21 +60,21 @@ class Token {
         (String, ::std::string),
         (Integer,
          struct {
-             enum eCoreType m_datatype;
-             U128 m_intval;
+             enum eCoreType datatype;
+             U128 intval;
          }),
         (Float,
          struct {
-             enum eCoreType m_datatype;
-             FloatValue m_floatval;
+             enum eCoreType datatype;
+             FloatValue floatval;
          }),
         (Fragment, void*)
     );
 
-    enum eTokenType m_type;
-    Data m_data;
-    Position m_pos;
-    Ident::Hygiene m_hygiene; // Only for strings, for formatting
+    enum eTokenType mType;
+    Data mData;
+    Position pos;
+    Ident::Hygiene mHygiene; // Only for strings, for formatting
 
     Token(enum eTokenType t, Data d, Position p);
 
@@ -103,39 +103,39 @@ public:
     Token(TagTakeIP, InterpolatedFragment);
 
     enum eTokenType type() const {
-        return m_type;
+        return mType;
     }
 
     bool has_data() const {
-        return !m_data.is_None();
+        return !mData.is_None();
     }
 
     const Ident& ident() const {
-        return m_data.as_Ident();
+        return mData.as_Ident();
     }
 
     ::std::string& str() {
-        return m_data.as_String();
+        return mData.as_String();
     }
 
     const ::std::string& str() const {
-        return m_data.as_String();
+        return mData.as_String();
     }
 
     const Ident::Hygiene& str_hygiene() const {
-        return m_hygiene;
+        return mHygiene;
     }
 
     enum eCoreType datatype() const {
-        TU_MATCH_DEF(Data, (m_data), (e), (assert(!"Getting datatype of invalid token type");), (Integer, return e.m_datatype;), (Float, return e.m_datatype;)) throw "";
+        TU_MATCH_DEF(Data, (mData), (e), (assert(!"Getting datatype of invalid token type");), (Integer, return e.datatype;), (Float, return e.datatype;)) throw "";
     }
 
     U128 intval() const {
-        return m_data.as_Integer().m_intval;
+        return mData.as_Integer().intval;
     }
 
     FloatValue floatval() const {
-        return m_data.as_Float().m_floatval;
+        return mData.as_Float().floatval;
     }
 
     // TODO: Replace these with a way of getting a InterpolatedFragment&
@@ -172,11 +172,11 @@ public:
     ::std::string to_str() const;
 
     void set_pos(Position pos) {
-        m_pos = pos;
+        this->pos = pos;
     }
 
     const Position& get_pos() const {
-        return m_pos;
+        return pos;
     }
 
     static bool type_is_rword(enum eTokenType type) {

@@ -3,31 +3,31 @@
 
 TTStream::TTStream(Span parent, ParseState ps, const TokenTree& input_tt)
     : TokenStream(ps)
-    , m_parent_span(mv$(parent))
+    , parentSpan(mv$(parent))
 {
-    DEBUG("parent " << m_parent_span);
-    for (auto s = m_parent_span; s; s = s->parent_span) {
+    DEBUG("parent " << parentSpan);
+    for (auto s = parentSpan; s; s = s->parent_span) {
         DEBUG("parent " << s->parent_span);
     }
     DEBUG("input_tt = [" << input_tt << "]");
     DEBUG("Set edition " << input_tt.get_edition());
-    m_edition = input_tt.get_edition();
-    m_stack.push_back(::std::make_pair(0, &input_tt));
+    edition = input_tt.get_edition();
+    stack.push_back(::std::make_pair(0, &input_tt));
 }
 
 TTStream::~TTStream() {
 }
 
 Token TTStream::realGetToken() {
-    while (m_stack.size() > 0) {
+    while (stack.size() > 0) {
         // If current index is above TT size, go up
-        unsigned int& idx = m_stack.back().first;
-        assert(m_stack.back().second);
-        const TokenTree& tree = *m_stack.back().second;
+        unsigned int& idx = stack.back().first;
+        assert(stack.back().second);
+        const TokenTree& tree = *stack.back().second;
 
         if (idx == 0 && tree.is_token()) {
             idx++;
-            m_hygiene_ptr = &tree.hygiene();
+            hygienePtr = &tree.hygiene();
             DEBUG(tree.tok());
             return tree.tok();
         }
@@ -36,19 +36,19 @@ Token TTStream::realGetToken() {
             const TokenTree& subtree = tree[idx];
             idx++;
             if (subtree.size() == 0) {
-                m_hygiene_ptr = &subtree.hygiene();
+                hygienePtr = &subtree.hygiene();
                 DEBUG(subtree.tok());
                 return subtree.tok().clone();
             } else {
-                m_stack.push_back(::std::make_pair(0, &subtree));
-                DEBUG("Set edition " << m_edition << " -> " << subtree.get_edition());
-                m_edition = subtree.get_edition();
+                stack.push_back(::std::make_pair(0, &subtree));
+                DEBUG("Set edition " << edition << " -> " << subtree.get_edition());
+                edition = subtree.get_edition();
             }
         } else {
-            m_stack.pop_back();
-            if (!m_stack.empty()) {
-                DEBUG("Restore edition " << m_edition << " -> " << m_stack.back().second->get_edition());
-                m_edition = m_stack.back().second->get_edition();
+            stack.pop_back();
+            if (!stack.empty()) {
+                DEBUG("Restore edition " << edition << " -> " << stack.back().second->get_edition());
+                edition = stack.back().second->get_edition();
             }
         }
     }
@@ -62,40 +62,40 @@ Position TTStream::getPosition() const {
 }
 
 AST::Edition TTStream::realGetEdition() const {
-    return m_edition;
+    return edition;
 }
 
 Ident::Hygiene TTStream::realGetHygiene() const {
     // Empty.
-    if (!m_hygiene_ptr) {
+    if (!hygienePtr) {
         return Ident::Hygiene();
     }
-    return *m_hygiene_ptr;
+    return *hygienePtr;
 }
 
 TTStreamO::TTStreamO(Span parent, ParseState ps, TokenTree input_tt)
     : TokenStream(ps)
-    , m_parent_span(mv$(parent))
-    , m_input_tt(mv$(input_tt))
+    , parentSpan(mv$(parent))
+    , inputTt(mv$(input_tt))
 {
-    assert(m_parent_span);
-    m_stack.push_back(::std::make_pair(0, nullptr));
+    assert(parentSpan);
+    stack.push_back(::std::make_pair(0, nullptr));
 }
 
 TTStreamO::~TTStreamO() {
 }
 
 Token TTStreamO::realGetToken() {
-    while (m_stack.size() > 0) {
+    while (stack.size() > 0) {
         // If current index is above TT size, go up
-        unsigned int& idx = m_stack.back().first;
-        TokenTree& tree = (m_stack.back().second ? *m_stack.back().second : m_input_tt);
+        unsigned int& idx = stack.back().first;
+        TokenTree& tree = (stack.back().second ? *stack.back().second : inputTt);
 
         if (idx == 0 && tree.is_token()) {
             idx++;
-            m_last_pos = tree.tok().get_pos();
-            m_edition = tree.get_edition();
-            m_hygiene_ptr = &tree.hygiene();
+            lastPos = tree.tok().get_pos();
+            edition = tree.get_edition();
+            hygienePtr = &tree.hygiene();
             return mv$(tree.tok());
         }
 
@@ -103,32 +103,32 @@ Token TTStreamO::realGetToken() {
             TokenTree& subtree = tree[idx];
             idx++;
             if (subtree.size() == 0) {
-                m_last_pos = subtree.tok().get_pos();
-                m_edition = subtree.get_edition();
-                m_hygiene_ptr = &subtree.hygiene();
+                lastPos = subtree.tok().get_pos();
+                edition = subtree.get_edition();
+                hygienePtr = &subtree.hygiene();
                 return mv$(subtree.tok());
             } else {
-                m_stack.push_back(::std::make_pair(0, &subtree));
+                stack.push_back(::std::make_pair(0, &subtree));
             }
         } else {
-            m_stack.pop_back();
+            stack.pop_back();
         }
     }
     return Token(TOK_EOF);
 }
 
 AST::Edition TTStreamO::realGetEdition() const {
-    return m_edition;
+    return edition;
 }
 
 Position TTStreamO::getPosition() const {
-    return m_last_pos;
+    return lastPos;
 }
 
 Ident::Hygiene TTStreamO::realGetHygiene() const {
     // Empty.
-    if (!m_hygiene_ptr) {
+    if (!hygienePtr) {
         return Ident::Hygiene();
     }
-    return *m_hygiene_ptr;
+    return *hygienePtr;
 }

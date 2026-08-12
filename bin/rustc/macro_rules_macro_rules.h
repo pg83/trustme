@@ -129,13 +129,13 @@ extern ::std::ostream& operator<<(::std::ostream& os, const SimplePatEnt& x);
 /// An expansion arm within a macro_rules! blcok
 struct MacroRulesArm {
     /// Names for the parameters
-    ::std::vector<RcString> m_param_names;
+    ::std::vector<RcString> paramNames;
 
     /// Patterns
-    ::std::vector<SimplePatEnt> m_pattern;
+    ::std::vector<SimplePatEnt> pattern;
 
     /// Rule contents
-    ::std::vector<MacroExpansionEnt> m_contents;
+    ::std::vector<MacroExpansionEnt> contents;
 
     ~MacroRulesArm();
 
@@ -154,25 +154,25 @@ class MacroRules {
     static unsigned int g_next_definition_id;
 
 public:
-    unsigned int m_definition_id;
+    unsigned int definitionId;
 
     /// Marks if this macro should be exported from the defining crate
-    bool m_exported = false;
+    bool exported = false;
 
-    bool m_is_macro_item = false;
+    bool isMacroItem = false;
 
     /// Crate that defined this macro
     /// - Populated on deserialise if not already set
-    RcString m_source_crate;
-    AST::Edition m_edition;
+    RcString sourceCrate;
+    AST::Edition edition;
 
-    Ident::Hygiene m_hygiene;
+    Ident::Hygiene mHygiene;
     // Lexical context at the macro definition, before the parser enters the
     // token-tree scope used to distinguish literal RHS tokens.
-    Ident::Hygiene m_definition_hygiene;
+    Ident::Hygiene definitionHygiene;
 
     /// Expansion rules
-    ::std::vector<MacroRulesArm> m_rules;
+    ::std::vector<MacroRulesArm> rules;
 
     MacroRules(RcString source_crate, AST::Edition edition);
 

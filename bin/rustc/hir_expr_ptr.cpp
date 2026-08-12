@@ -26,12 +26,12 @@
 ::HIR::ExprStatePtr::~ExprStatePtr() = default;
 
 ::HIR::ExprStatePtr HIR::ExprStatePtr::clone(stl::ObjPool* pool) const {
-    auto rv = ::HIR::ExprStatePtr(pool, ::HIR::ExprState((*this)->m_types, (*this)->m_module, (*this)->m_mod_path));
-    rv->m_traits = (*this)->m_traits;
-    rv->m_impl_generics = (*this)->m_impl_generics;
-    rv->m_item_generics = (*this)->m_item_generics;
-    rv->m_current_trait_path = (*this)->m_current_trait_path;
-    rv->m_current_trait_impl = (*this)->m_current_trait_impl;
+    auto rv = ::HIR::ExprStatePtr(pool, ::HIR::ExprState((*this)->types, (*this)->mModule, (*this)->modPath));
+    rv->traits = (*this)->traits;
+    rv->implGenerics = (*this)->implGenerics;
+    rv->itemGenerics = (*this)->itemGenerics;
+    rv->currentTraitPath = (*this)->currentTraitPath;
+    rv->currentTraitImpl = (*this)->currentTraitImpl;
     rv->stage = (*this)->stage;
     return rv;
 }
@@ -45,49 +45,49 @@ const Span& HIR::ExprPtr::span() const {
 }
 
 const ::MIR::Function* HIR::ExprPtr::get_mir_opt() const {
-    if (!this->m_mir) {
+    if (!this->mir) {
         return nullptr;
     }
-    return &*this->m_mir;
+    return &*this->mir;
 }
 
 const ::MIR::Function& HIR::ExprPtr::get_mir_or_error(const Span& sp) const {
-    if (!this->m_mir) {
+    if (!this->mir) {
         BUG(sp, "No MIR");
     }
-    return *this->m_mir;
+    return *this->mir;
 }
 
 ::MIR::Function& HIR::ExprPtr::get_mir_or_error_mut(const Span& sp) {
-    if (!this->m_mir) {
+    if (!this->mir) {
         BUG(sp, "No MIR");
     }
-    return *this->m_mir;
+    return *this->mir;
 }
 
 const ::MIR::Function* HIR::ExprPtr::get_ext_mir() const {
     if (this->node) {
         return nullptr;
     }
-    if (!this->m_mir) {
+    if (!this->mir) {
         return nullptr;
     }
-    return &*this->m_mir;
+    return &*this->mir;
 }
 
 ::MIR::Function* HIR::ExprPtr::get_ext_mir_mut() {
     if (this->node) {
         return nullptr;
     }
-    if (!this->m_mir) {
+    if (!this->mir) {
         return nullptr;
     }
-    return &*this->m_mir;
+    return &*this->mir;
 }
 
 void HIR::ExprPtr::set_mir(::MIR::FunctionPointer mir) {
-    assert(!this->m_mir);
-    m_mir = ::std::move(mir);
+    assert(!this->mir);
+    this->mir = ::std::move(mir);
 }
 
 namespace HIR {

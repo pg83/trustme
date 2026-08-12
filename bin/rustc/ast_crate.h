@@ -51,39 +51,39 @@ namespace AST {
 
     class Crate {
     public:
-        stl::ObjPool* m_pool;
-        HIR::TypeInterner& m_types;
-        ::AST::AttributeList m_attrs;
+        stl::ObjPool* pool;
+        HIR::TypeInterner& types;
+        ::AST::AttributeList mAttrs;
 
-        ::std::map<::std::string, ::AST::AbsolutePath> m_lang_items;
-        ::std::set<RcString> m_features;
+        ::std::map<::std::string, ::AST::AbsolutePath> mLangItems;
+        ::std::set<RcString> features;
 
     public:
-        Module m_root_module;
+        Module rootModule;
 
         /// Loaded crates in load order
-        ::std::vector<RcString> m_extern_crates_ord;
-        ::std::map<RcString, ExternCrate> m_extern_crates;
+        ::std::vector<RcString> externCratesOrd;
+        ::std::map<RcString, ExternCrate> externCrates;
         // Mapping filled by searching for (?visible) macros with is_pub=true
-        ::std::map<RcString, const MacroRules*> m_exported_macros;
+        ::std::map<RcString, const MacroRules*> exportedMacros;
 
-        RcString m_ext_cratename_core;
-        RcString m_ext_cratename_std;
-        RcString m_ext_cratename_procmacro;
-        RcString m_ext_cratename_test;
+        RcString extCratenameCore;
+        RcString extCratenameStd;
+        RcString extCratenameProcmacro;
+        RcString extCratenameTest;
 
         // List of tests (populated in expand if --test is passed)
-        bool m_test_harness = false;
-        bool m_no_main = false;
-        ::std::vector<TestDesc> m_tests;
+        bool testHarness = false;
+        bool noMain = false;
+        ::std::vector<TestDesc> tests;
 
         /// Files loaded using things like include! and include_str!
-        mutable ::std::vector<::std::string> m_extra_files;
+        mutable ::std::vector<::std::string> extraFiles;
 
         // Procedural macros!
-        ::std::vector<ProcMacroDef> m_proc_macros;
+        ::std::vector<ProcMacroDef> procMacros;
 
-        AST::Edition m_edition;
+        AST::Edition edition;
         enum class Type {
             Unknown,
             RustLib,
@@ -91,27 +91,27 @@ namespace AST {
             CDylib,
             Executable,
             ProcMacro, // Procedural macro
-        } m_crate_type = Type::Unknown;
+        } crateType = Type::Unknown;
 
         enum LoadStd {
             LOAD_STD,
             LOAD_CORE,
             LOAD_NONE,
-        } m_load_std = LOAD_STD;
+        } loadStd = LOAD_STD;
 
-        ::std::string m_crate_name_suffix; // Suffix (from command-line)
-        ::std::string m_crate_name_set;    // Crate name as set by the user (or auto-detected)
-        RcString m_crate_name_real;        // user name '-' suffix
-        AST::Path m_prelude_path;
+        ::std::string crateNameSuffix; // Suffix (from command-line)
+        ::std::string crateNameSet;    // Crate name as set by the user (or auto-detected)
+        RcString crateNameReal;        // user name '-' suffix
+        AST::Path preludePath;
 
         Crate(stl::ObjPool* pool, HIR::TypeInterner& types);
 
         const Module& root_module() const {
-            return m_root_module;
+            return rootModule;
         }
 
         Module& root_module() {
-            return m_root_module;
+            return rootModule;
         }
 
         void set_crate_name(std::string name);
@@ -127,10 +127,10 @@ namespace AST {
     /// Representation of an imported crate
     class ExternCrate {
     public:
-        RcString m_name;
-        RcString m_short_name;
-        ::std::string m_filename;
-        ::HIR::Crate* m_hir = nullptr;
+        RcString mName;
+        RcString shortName;
+        ::std::string filename;
+        ::HIR::Crate* hir = nullptr;
 
         ExternCrate(stl::ObjPool* pool, HIR::TypeInterner& types, const RcString& name, const ::std::string& path);
 

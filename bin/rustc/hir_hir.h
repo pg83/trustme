@@ -105,20 +105,20 @@ namespace HIR {
     class Static {
     public:
         // NOTE: The generics can't influence the value of this `const`
-        GenericParams m_params;
+        GenericParams mParams;
 
-        Linkage m_linkage;
-        bool m_is_mut;
-        TypeRef m_type;
+        Linkage linkage;
+        bool isMut;
+        TypeRef mType;
 
-        ExprPtr m_value;
+        ExprPtr mValue;
 
-        EncodedLiteral m_value_res;
-        bool m_value_generated = false;
-        bool m_save_literal = false;
-        bool m_no_emit_value = false;
+        EncodedLiteral valueRes;
+        bool valueGenerated = false;
+        bool saveLiteral = false;
+        bool noEmitValue = false;
 
-        mutable ::std::map<::HIR::Path, EncodedLiteral> m_monomorph_cache;
+        mutable ::std::map<::HIR::Path, EncodedLiteral> monomorphCache;
 
         Static(Linkage linkage, bool is_mut, TypeRef type, ExprPtr value);
     };
@@ -126,21 +126,21 @@ namespace HIR {
     class Constant {
     public:
         // NOTE: The generics can't influence the value of this `const`
-        GenericParams m_params;
+        GenericParams mParams;
 
-        TypeRef m_type;
-        ExprPtr m_value;
+        TypeRef mType;
+        ExprPtr mValue;
 
-        EncodedLiteral m_value_res;
+        EncodedLiteral valueRes;
         enum class ValueState {
             Unknown,
             Generic,
             Known
-        } m_value_state = ValueState::Unknown;
+        } valueState = ValueState::Unknown;
 
         // A cache of monomorphised versions when the `const` depends on generics for its value
         // TODO: Wait, how?
-        mutable ::std::map<::HIR::Path, EncodedLiteral> m_monomorph_cache;
+        mutable ::std::map<::HIR::Path, EncodedLiteral> monomorphCache;
 
         Constant();
 
@@ -163,22 +163,22 @@ namespace HIR {
 
         typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> args_t;
 
-        bool m_save_code = false; // Filled by enumerate, defaults to false
-        Linkage m_linkage;
+        bool saveCode = false; // Filled by enumerate, defaults to false
+        Linkage linkage;
 
-        Receiver m_receiver = Receiver::Free;
-        ::std::optional<HIR::TypeRef> m_receiver_type; // Present only for a custom receiver
-        RcString m_abi = RcString::new_interned(ABI_RUST);
-        bool m_unsafe = false;
-        bool m_const = false;
+        Receiver receiver = Receiver::Free;
+        ::std::optional<HIR::TypeRef> receiverType; // Present only for a custom receiver
+        RcString mAbi = RcString::new_interned(ABI_RUST);
+        bool unsafe = false;
+        bool isConst = false;
 
-        GenericParams m_params;
+        GenericParams mParams;
 
-        args_t m_args;
-        bool m_variadic = false;
-        TypeRef m_return;
+        args_t mArgs;
+        bool variadic = false;
+        TypeRef returnType;
 
-        ExprPtr m_code;
+        ExprPtr mCode;
 
         struct Markings {
             std::vector<unsigned> rustc_legacy_const_generics;
@@ -191,7 +191,7 @@ namespace HIR {
                 Normal, // #[inline]
                 Always  // #[inline(always)]
             } inline_type = Inline::Auto;
-        } m_markings;
+        } markings;
 
         Function();
 
@@ -204,13 +204,13 @@ namespace HIR {
     // Type structures
     // --------------------------------------------------------------------
     struct TypeAlias {
-        GenericParams m_params;
-        ::HIR::TypeRef m_type;
+        GenericParams mParams;
+        ::HIR::TypeRef mType;
     };
 
     struct TraitAlias {
-        GenericParams m_params;
-        ::std::vector<::HIR::TraitPath> m_traits;
+        GenericParams mParams;
+        ::std::vector<::HIR::TraitPath> traits;
     };
 
     typedef ::std::vector<VisEnt<::HIR::TypeRef>> t_tuple_fields;
@@ -292,7 +292,7 @@ namespace HIR {
     class ExternType {
     public:
         // TODO: do extern types need any associated data?
-        TraitMarkings m_markings;
+        TraitMarkings markings;
     };
 
     class Enum {
@@ -332,18 +332,18 @@ namespace HIR {
 
         TAGGED_UNION(Class, Data, (Data, ::std::vector<DataVariant>), (Value, struct { ::std::vector<ValueVariant> variants; }));
 
-        GenericParams m_params;
-        bool m_is_c_repr;
-        Repr m_tag_repr;
-        Class m_data;
+        GenericParams mParams;
+        bool isCRepr;
+        Repr tagRepr;
+        Class mData;
 
         // Flag indicating that constant evaluation has completed
         bool discriminants_evaluated;
 
-        TraitMarkings m_markings;
+        TraitMarkings markings;
 
         size_t num_variants() const {
-            return (m_data.is_Data() ? m_data.as_Data().size() : m_data.as_Value().variants.size());
+            return (mData.is_Data() ? mData.as_Data().size() : mData.as_Value().variants.size());
         }
 
         size_t find_variant(const RcString&) const;
@@ -380,14 +380,14 @@ namespace HIR {
 
         Struct(GenericParams params, Repr repr, Data data, unsigned align, TraitMarkings tm, StructMarkings sm);
 
-        GenericParams m_params;
-        Repr m_repr;
-        Data m_data;
-        unsigned m_forced_alignment = 0;
-        unsigned m_max_field_alignment = 0; // for packed
+        GenericParams mParams;
+        Repr repr;
+        Data mData;
+        unsigned forcedAlignment = 0;
+        unsigned maxFieldAlignment = 0; // for packed
 
-        TraitMarkings m_markings;
-        StructMarkings m_struct_markings;
+        TraitMarkings markings;
+        StructMarkings structMarkings;
 
         ConstEvalState const_eval_state = ConstEvalState::None;
     };
@@ -402,20 +402,20 @@ namespace HIR {
             Transparent,
         };
 
-        GenericParams m_params;
-        Repr m_repr;
-        t_struct_fields m_variants;
+        GenericParams mParams;
+        Repr repr;
+        t_struct_fields mVariants;
 
-        TraitMarkings m_markings;
+        TraitMarkings markings;
     };
 
     struct AssociatedType {
-        ::HIR::GenericParams m_generics;
+        ::HIR::GenericParams generics;
         bool is_sized;
-        LifetimeRef m_lifetime_bound;
-        ::std::vector<::HIR::TraitPath> m_trait_bounds;
-        bool m_has_default;
-        ::HIR::TypeRef m_default;
+        LifetimeRef lifetimeBound;
+        ::std::vector<::HIR::TraitPath> traitBounds;
+        bool hasDefault;
+        ::HIR::TypeRef defaultValue;
 
         AssociatedType(
             ::HIR::GenericParams generics,
@@ -430,35 +430,35 @@ namespace HIR {
 
     class Trait {
     public:
-        GenericParams m_params;
-        LifetimeRef m_lifetime;
+        GenericParams mParams;
+        LifetimeRef lifetime;
         // NOTE: Not serialised!
-        ::std::vector<::HIR::TraitPath> m_parent_traits;
+        ::std::vector<::HIR::TraitPath> parentTraits;
 
-        bool m_is_marker; // aka auto trait/OIBIT
-        bool m_is_const;
+        bool isMarker; // aka auto trait/OIBIT
+        bool isConst;
         /// Auto traits and traits carrying `#[rustc_coinductive]` admit
         /// productive recursive goals in the trait solver.
-        bool m_is_coinductive;
+        bool isCoinductive;
         /// `#[fundamental]`: absence of an impl for this trait can be used by
         /// coherence once downstream impls have been excluded.
-        bool m_is_fundamental;
+        bool isFundamental;
 
-        ::std::unordered_map<RcString, AssociatedType> m_types;
-        ::std::unordered_map<RcString, TraitValueItem> m_values;
+        ::std::unordered_map<RcString, AssociatedType> types;
+        ::std::unordered_map<RcString, TraitValueItem> values;
 
         // Indexes into the vtable for each present method and value
         // - TODO: Find an easier way of having this be `(GenericPath,RcString) -> unsigned`
-        ::std::unordered_multimap<RcString, ::std::pair<unsigned int, ::HIR::GenericPath>> m_value_indexes;
+        ::std::unordered_multimap<RcString, ::std::pair<unsigned int, ::HIR::GenericPath>> valueIndexes;
         // Indexes in the vtable parameter list for each associated type
-        ::std::unordered_map<RcString, unsigned int> m_type_indexes;
+        ::std::unordered_map<RcString, unsigned int> typeIndexes;
         /// Index of the first vtable entry for parent traits
-        unsigned m_vtable_parent_traits_start;
+        unsigned vtableParentTraitsStart;
 
         // Flattend set of parent traits (monomorphised and associated types fixed)
-        ::std::vector<::HIR::TraitPath> m_all_parent_traits;
+        ::std::vector<::HIR::TraitPath> allParentTraits;
         // VTable path
-        ::HIR::SimplePath m_vtable_path;
+        ::HIR::SimplePath vtablePath;
 
         Trait(GenericParams gps, LifetimeRef lifetime, ::std::vector<::HIR::TraitPath> parents);
 
@@ -486,16 +486,16 @@ namespace HIR {
     class Module {
     public:
         // List of in-scope traits in this module
-        ::std::vector<::HIR::SimplePath> m_traits;
+        ::std::vector<::HIR::SimplePath> traits;
 
         // Contains all values and functions (including type constructors)
-        ::std::unordered_map<RcString, ::std::unique_ptr<VisEnt<ValueItem>>> m_value_items;
+        ::std::unordered_map<RcString, ::std::unique_ptr<VisEnt<ValueItem>>> valueItems;
         // Contains types, traits, and modules
-        ::std::unordered_map<RcString, ::std::unique_ptr<VisEnt<TypeItem>>> m_mod_items;
+        ::std::unordered_map<RcString, ::std::unique_ptr<VisEnt<TypeItem>>> modItems;
         // Macros!
-        ::std::unordered_map<RcString, ::std::unique_ptr<VisEnt<MacroItem>>> m_macro_items;
+        ::std::unordered_map<RcString, ::std::unique_ptr<VisEnt<MacroItem>>> macroItems;
 
-        ::std::vector<::std::pair<RcString, std::unique_ptr<Static>>> m_inline_statics;
+        ::std::vector<::std::pair<RcString, std::unique_ptr<Static>>> inlineStatics;
 
         Module();
 
@@ -553,14 +553,14 @@ namespace HIR {
             T data;
         };
 
-        ::HIR::GenericParams m_params;
-        ::HIR::TypeRef m_type;
+        ::HIR::GenericParams mParams;
+        ::HIR::TypeRef mType;
 
-        ::std::map<RcString, VisImplEnt<::HIR::Function>> m_methods;
-        ::std::map<RcString, VisImplEnt<::HIR::Constant>> m_constants;
-        ::std::map<RcString, VisImplEnt<::HIR::TypeAlias>> m_types;
+        ::std::map<RcString, VisImplEnt<::HIR::Function>> methods;
+        ::std::map<RcString, VisImplEnt<::HIR::Constant>> constants;
+        ::std::map<RcString, VisImplEnt<::HIR::TypeAlias>> types;
 
-        ::HIR::SimplePath m_src_module;
+        ::HIR::SimplePath srcModule;
 
         bool matches_type(const ::HIR::TypeData* tr, t_cb_resolve_type ty_res) const;
 
@@ -577,18 +577,18 @@ namespace HIR {
             T data;
         };
 
-        ::HIR::GenericParams m_params;
-        ::HIR::PathParams m_trait_args;
-        ::HIR::TypeRef m_type;
+        ::HIR::GenericParams mParams;
+        ::HIR::PathParams traitArgs;
+        ::HIR::TypeRef mType;
 
-        ::std::map<RcString, ImplEnt<::HIR::Function>> m_methods;
-        ::std::map<RcString, ImplEnt<::HIR::Constant>> m_constants;
-        ::std::map<RcString, ImplEnt<::HIR::Static>> m_statics;
+        ::std::map<RcString, ImplEnt<::HIR::Function>> methods;
+        ::std::map<RcString, ImplEnt<::HIR::Constant>> constants;
+        ::std::map<RcString, ImplEnt<::HIR::Static>> statics;
 
-        ::std::map<RcString, ImplEnt<::HIR::TypeRef>> m_types;
+        ::std::map<RcString, ImplEnt<::HIR::TypeRef>> types;
 
-        ::HIR::SimplePath m_src_module;
-        bool m_is_const = false;
+        ::HIR::SimplePath srcModule;
+        bool isConst = false;
 
         //
         //const TraitImpl*    m_parent_spec_impl;
@@ -605,12 +605,12 @@ namespace HIR {
 
     class MarkerImpl {
     public:
-        ::HIR::GenericParams m_params;
-        ::HIR::PathParams m_trait_args;
+        ::HIR::GenericParams mParams;
+        ::HIR::PathParams traitArgs;
         bool is_positive;
-        ::HIR::TypeRef m_type;
+        ::HIR::TypeRef mType;
 
-        ::HIR::SimplePath m_src_module;
+        ::HIR::SimplePath srcModule;
 
         bool matches_type(const ::HIR::TypeData* tr, t_cb_resolve_type ty_res) const;
 
@@ -621,16 +621,16 @@ namespace HIR {
 
     class GlobalAssembly {
     public:
-        ::std::vector<AsmCommon::Line> m_lines;
-        ::std::vector<HIR::Path> m_symbols;
-        AsmCommon::Options m_options;
+        ::std::vector<AsmCommon::Line> lines;
+        ::std::vector<HIR::Path> symbols;
+        AsmCommon::Options options;
     };
 
     class ExternCrate {
     public:
-        ::HIR::Crate* m_data = nullptr;
-        ::std::string m_basename; // Just the filename (serialised)
-        ::std::string m_path;     // The path used to load this crate
+        ::HIR::Crate* mData = nullptr;
+        ::std::string basename; // Just the filename (serialised)
+        ::std::string mPath;     // The path used to load this crate
     };
 
     class ExternLibrary {
@@ -640,26 +640,26 @@ namespace HIR {
 
     class Crate {
     public:
-        stl::ObjPool* m_pool;
-        TypeInterner& m_types;
+        stl::ObjPool* pool;
+        TypeInterner& types;
         // Synthetic compiler item. Its signature uses this crate's interned
         // types, so it must not live in process-global storage.
-        mutable ValueItem m_intrinsic_offsetof;
-        RcString m_crate_name;
-        AST::Edition m_edition;
+        mutable ValueItem intrinsicOffsetof;
+        RcString crateName;
+        AST::Edition edition;
         // Compile-local crate configuration. This is not serialised because an
         // external crate can never provide this crate's executable entrypoint.
-        bool m_is_no_core = false;
-        bool m_no_main = false;
+        bool isNoCore = false;
+        bool noMain = false;
         // Enabled language features affect type checking of this crate only;
         // consumers of its metadata use their own feature set.
-        ::std::set<RcString> m_features;
+        ::std::set<RcString> features;
 
-        Module m_root_module;
+        Module rootModule;
 
         // Placeholder for types created during constant evaluation
-        mutable std::vector<std::pair<RcString, std::unique_ptr<VisEnt<TypeItem>>>> m_new_types;
-        mutable std::vector<std::pair<RcString, std::unique_ptr<VisEnt<ValueItem>>>> m_new_values;
+        mutable std::vector<std::pair<RcString, std::unique_ptr<VisEnt<TypeItem>>>> newTypes;
+        mutable std::vector<std::pair<RcString, std::unique_ptr<VisEnt<ValueItem>>>> newValues;
 
         template <typename T>
         struct ImplGroup {
@@ -697,38 +697,38 @@ namespace HIR {
         // - Named type (sorted on the path)
         // - Primitive types
         // - Unsorted (generics, and everything before outer type resolution)
-        ImplGroup<::std::unique_ptr<::HIR::TypeImpl>> m_type_impls;
+        ImplGroup<::std::unique_ptr<::HIR::TypeImpl>> typeImpls;
 
         /// CACHE: Cache of all inherent (non-trait) methods (for faster lookup)
-        InherentCache m_inherent_method_cache;
+        InherentCache inherentMethodCache;
 
         /// Impl blocks
-        ::std::map<::HIR::SimplePath, ImplGroup<::std::unique_ptr<::HIR::TraitImpl>>> m_trait_impls;
-        ::std::map<::HIR::SimplePath, ImplGroup<::std::unique_ptr<::HIR::MarkerImpl>>> m_marker_impls;
+        ::std::map<::HIR::SimplePath, ImplGroup<::std::unique_ptr<::HIR::TraitImpl>>> traitImpls;
+        ::std::map<::HIR::SimplePath, ImplGroup<::std::unique_ptr<::HIR::MarkerImpl>>> markerImpls;
 
         /// Global assembly items
-        ::std::vector<::HIR::GlobalAssembly> m_global_asm;
+        ::std::vector<::HIR::GlobalAssembly> globalAsm;
 
         /// Merged index versions of the above
-        ImplGroup<const ::HIR::TypeImpl*> m_all_type_impls;
-        ::std::map<::HIR::SimplePath, ImplGroup<const ::HIR::TraitImpl*>> m_all_trait_impls;
-        ::std::map<::HIR::SimplePath, ImplGroup<const ::HIR::MarkerImpl*>> m_all_marker_impls;
+        ImplGroup<const ::HIR::TypeImpl*> allTypeImpls;
+        ::std::map<::HIR::SimplePath, ImplGroup<const ::HIR::TraitImpl*>> allTraitImpls;
+        ::std::map<::HIR::SimplePath, ImplGroup<const ::HIR::MarkerImpl*>> allMarkerImpls;
 
         /// List of legacy-exported macros
-        std::vector<RcString> m_exported_macro_names;
+        std::vector<RcString> exportedMacroNames;
 
         /// Language items avaliable through this crate (includes ones from loaded externs)
-        ::std::unordered_map<::std::string, ::HIR::SimplePath> m_lang_items;
+        ::std::unordered_map<::std::string, ::HIR::SimplePath> mLangItems;
 
         /// Referenced crates (in load order) - Used to ensure final linking order is sane
         // NOT SERIALISED
-        ::std::vector<RcString> m_ext_crates_ordered;
+        ::std::vector<RcString> extCratesOrdered;
         /// Referenced crates
-        ::std::unordered_map<RcString, ExternCrate> m_ext_crates;
+        ::std::unordered_map<RcString, ExternCrate> extCrates;
         /// Referenced system libraries
-        ::std::vector<ExternLibrary> m_ext_libs;
+        ::std::vector<ExternLibrary> extLibs;
         /// Extra paths for the linker
-        ::std::vector<::std::string> m_link_paths;
+        ::std::vector<::std::string> linkPaths;
 
         Crate(stl::ObjPool* pool, TypeInterner& types);
 
@@ -740,7 +740,7 @@ namespace HIR {
         const ::HIR::SimplePath& get_lang_item_path_opt(const char* name) const;
 
         bool feature_enabled(const char* name) const {
-            return m_features.count(RcString::new_interned(name)) != 0;
+            return features.count(RcString::new_interned(name)) != 0;
         }
 
         const ::HIR::MacroItem& get_macroitem_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name = false, bool ignore_last_node = false) const;

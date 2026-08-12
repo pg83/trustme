@@ -27,9 +27,9 @@ namespace HIR {
         class ReaderInner;
 
         class Writer {
-            WriterInner* m_inner;
-            ::std::map<RcString, unsigned> m_istring_cache;
-            ::std::map<const char*, unsigned> m_objname_cache;
+            WriterInner* inner;
+            ::std::map<RcString, unsigned> istringCache;
+            ::std::map<const char*, unsigned> objnameCache;
 
         public:
             Writer();
@@ -112,14 +112,14 @@ namespace HIR {
         };
 
         class ReadBuffer {
-            ::std::vector<uint8_t> m_backing;
-            unsigned int m_ofs;
+            ::std::vector<uint8_t> backing;
+            unsigned int ofs;
 
         public:
             ReadBuffer(size_t size);
 
             size_t capacity() const {
-                return m_backing.capacity();
+                return backing.capacity();
             }
 
             size_t read(void* dst, size_t len);
@@ -127,12 +127,12 @@ namespace HIR {
         };
 
         class Reader {
-            ReaderInner* m_inner;
-            ReadBuffer m_buffer;
-            size_t m_pos;
-            ::std::vector<RcString> m_strings;
+            ReaderInner* inner;
+            ReadBuffer buffer;
+            size_t pos;
+            ::std::vector<RcString> strings;
 
-            ::std::vector<std::string> m_objname_cache;
+            ::std::vector<std::string> objnameCache;
 
         public:
             Reader(const ::std::string& path);
@@ -141,7 +141,7 @@ namespace HIR {
             ~Reader();
 
             size_t get_pos() const {
-                return m_pos;
+                return pos;
             }
 
             void read(void* dst, size_t count);

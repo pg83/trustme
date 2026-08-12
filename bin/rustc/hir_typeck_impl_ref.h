@@ -37,8 +37,8 @@ struct ImplRef {
         })
     );
 
-    Data m_data;
-    bool m_is_ambiguous_identity = false;
+    Data mData;
+    bool isAmbiguousIdentity = false;
 
     ImplRef();
 
@@ -53,15 +53,15 @@ struct ImplRef {
     ImplRef(::HIR::PathParams hrls, ::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assoc_list_t assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
 
     bool is_valid() const {
-        return !(m_data.is_TraitImpl() && m_data.as_TraitImpl().impl == nullptr);
+        return !(mData.is_TraitImpl() && mData.as_TraitImpl().impl == nullptr);
     }
 
     bool is_ambiguous_identity() const {
-        return m_is_ambiguous_identity;
+        return isAmbiguousIdentity;
     }
 
     void mark_ambiguous_identity() {
-        m_is_ambiguous_identity = true;
+        isAmbiguousIdentity = true;
     }
 
     ::HIR::BoundConstness bound_constness() const;

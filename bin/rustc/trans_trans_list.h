@@ -98,14 +98,14 @@ struct TransListConst {
 class TransList {
     // Translation erases regions, so an exact HIR path is not the identity of
     // an emitted symbol. Keep the ABI identity alongside the exact-path maps.
-    ::std::unordered_map<::std::string, ::HIR::Path> m_function_symbols;
-    ::std::unordered_map<::std::string, ::HIR::Path> m_static_symbols;
+    ::std::unordered_map<::std::string, ::HIR::Path> functionSymbols;
+    ::std::unordered_map<::std::string, ::HIR::Path> staticSymbols;
     struct TypeEmissionState {
         ::HIR::TypeRef canonical;
         bool has_prototype;
         bool has_definition;
     };
-    ::std::unordered_map<::std::string, TypeEmissionState> m_type_symbols;
+    ::std::unordered_map<::std::string, TypeEmissionState> typeSymbols;
 
 public:
     TransList() = default;
@@ -115,19 +115,19 @@ public:
     TransList& operator=(const TransList&) = delete;
 
     /// Root-level items (exposed globals)
-    ::std::vector<HIR::Path> m_roots;
+    ::std::vector<HIR::Path> roots;
 
-    ::std::map<::HIR::Path, ::std::unique_ptr<TransListFunction>> m_functions;
-    ::std::map<::HIR::Path, ::std::unique_ptr<TransListStatic>> m_statics;
+    ::std::map<::HIR::Path, ::std::unique_ptr<TransListFunction>> functions;
+    ::std::map<::HIR::Path, ::std::unique_ptr<TransListStatic>> statics;
     /// Constants that are still Defer
-    ::std::map<::HIR::Path, ::std::unique_ptr<TransListConst>> m_constants;
-    ::std::map<::HIR::Path, TransParams> m_vtables;
+    ::std::map<::HIR::Path, ::std::unique_ptr<TransListConst>> constants;
+    ::std::map<::HIR::Path, TransParams> vtables;
     /// Required type_id values
-    ::std::set<::HIR::TypeRef> m_typeids;
+    ::std::set<::HIR::TypeRef> typeids;
     // Required drop glue
-    ::std::set<::HIR::TypeRef> m_drop_glue;
+    ::std::set<::HIR::TypeRef> dropGlue;
     /// Required struct/enum constructor impls
-    ::std::set<::HIR::GenericPath> m_constructors;
+    ::std::set<::HIR::GenericPath> constructors;
     // Automatic Clone impls
     ::std::set<::HIR::TypeRef> auto_clone_impls;
     // Automatic FnPtr impls
@@ -135,11 +135,11 @@ public:
     // Trait methods
     ::std::set<::HIR::Path> trait_object_methods;
 
-    ::std::vector<::std::unique_ptr<::HIR::Static>> m_auto_statics;
-    ::std::vector<::std::unique_ptr<::HIR::Function>> m_auto_functions;
+    ::std::vector<::std::unique_ptr<::HIR::Static>> autoStatics;
+    ::std::vector<::std::unique_ptr<::HIR::Function>> autoFunctions;
 
     // .second is `true` if this is a from a reference to the type
-    ::std::vector<::std::pair<::HIR::TypeRef, bool>> m_types;
+    ::std::vector<::std::pair<::HIR::TypeRef, bool>> types;
 
     TransListFunction* add_function(HIR::TypeInterner& types, ::HIR::Path p);
     TransListStatic* add_static(HIR::TypeInterner& types, ::HIR::Path p);
@@ -151,6 +151,6 @@ public:
     void clear_types();
 
     bool add_vtable(::HIR::Path p, TransParams pp) {
-        return m_vtables.insert(::std::make_pair(mv$(p), mv$(pp))).second;
+        return vtables.insert(::std::make_pair(mv$(p), mv$(pp))).second;
     }
 };

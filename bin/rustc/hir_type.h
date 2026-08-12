@@ -110,22 +110,22 @@ namespace HIR {
         ::std::unique_ptr<::HIR::GenericParams> hrtbs; // HRTBs for vtable paths ONLY
 
         bool is_closure() const {
-            return path.m_data.is_Generic() && path.m_data.as_Generic().m_path.components().back().size() > 8 && path.m_data.as_Generic().m_path.components().back().compare(0, strlen(CLOSURE_PATH_PREFIX), CLOSURE_PATH_PREFIX) == 0;
+            return path.mData.is_Generic() && path.mData.as_Generic().mPath.components().back().size() > 8 && path.mData.as_Generic().mPath.components().back().compare(0, strlen(CLOSURE_PATH_PREFIX), CLOSURE_PATH_PREFIX) == 0;
         }
 
         bool is_generator() const {
-            return path.m_data.is_Generic() && path.m_data.as_Generic().m_path.components().back().size() > 8 && path.m_data.as_Generic().m_path.components().back().compare(0, strlen(GENERATOR_PATH_PREFIX), GENERATOR_PATH_PREFIX) == 0;
+            return path.mData.is_Generic() && path.mData.as_Generic().mPath.components().back().size() > 8 && path.mData.as_Generic().mPath.components().back().compare(0, strlen(GENERATOR_PATH_PREFIX), GENERATOR_PATH_PREFIX) == 0;
         }
 
         bool is_future() const {
-            return path.m_data.is_Generic() && path.m_data.as_Generic().m_path.components().back().size() > 8 && path.m_data.as_Generic().m_path.components().back().compare(0, strlen(PATH_PREFIX_FUTURE), PATH_PREFIX_FUTURE) == 0;
+            return path.mData.is_Generic() && path.mData.as_Generic().mPath.components().back().size() > 8 && path.mData.as_Generic().mPath.components().back().compare(0, strlen(PATH_PREFIX_FUTURE), PATH_PREFIX_FUTURE) == 0;
         }
     };
 
     struct TypeDataTraitObject {
-        ::HIR::TraitPath m_trait;
-        ::std::vector<::HIR::GenericPath> m_markers;
-        ::HIR::LifetimeRef m_lifetime;
+        ::HIR::TraitPath mTrait;
+        ::std::vector<::HIR::GenericPath> markers;
+        ::HIR::LifetimeRef lifetime;
     };
 
     struct TypeDataErasedTypeAliasInner {
@@ -142,8 +142,8 @@ namespace HIR {
         Alias,
         (Fcn,
          struct {
-             ::HIR::Path m_origin;
-             unsigned int m_index;
+             ::HIR::Path origin;
+             unsigned int index;
          }),
         (Known, HIR::TypeRef),
         (Alias, struct {
@@ -167,12 +167,12 @@ static inline bool operator!=(const HIR::TypeDataErasedTypeInner& a, const HIR::
 namespace HIR {
 
     struct TypeDataErasedType {
-        bool m_is_sized;
-        ::std::vector<::HIR::TraitPath> m_traits;
-        ::std::vector<::HIR::LifetimeRef> m_lifetime_bounds;
-        TypeDataErasedTypeInner m_inner;
+        bool isSized;
+        ::std::vector<::HIR::TraitPath> traits;
+        ::std::vector<::HIR::LifetimeRef> lifetimeBounds;
+        TypeDataErasedTypeInner inner;
         /// Contents of the `use<...>` annotation/bound
-        ::HIR::PathParams m_use;
+        ::HIR::PathParams use;
         /// Indicates if `use<...>` was present (and what edition)
         enum class Use {
             /// @brief Omitted, but pre-2024 edition: Uses types/lifetimes present in bounds
@@ -181,16 +181,16 @@ namespace HIR {
             Omitted2024,
             /// @brief `use<...>` was present
             Present,
-        } m_use_present;
+        } usePresent;
     };
 
     struct TypeDataFunctionPointer {
         GenericParams hrls; // Higher-ranked lifetimes
         bool is_unsafe;
         bool is_variadic;
-        RcString m_abi; // RcString is usually used for identifiers, but ABI names also form a small interned set.
-        TypeRef m_rettype;
-        ::std::vector<TypeRef> m_arg_types;
+        RcString mAbi; // RcString is usually used for identifiers, but ABI names also form a small interned set.
+        TypeRef mRettype;
+        ::std::vector<TypeRef> argTypes;
     };
 
     TAGGED_UNION_EX(
@@ -275,8 +275,8 @@ namespace HIR {
          }),
         (Function, TypeDataFunctionPointer), // TODO: Pointer wrap, this is quite large
         (NodeType, TypeDataNodeType)),
-        (, m_flags(x.m_flags)),
-        (m_flags = x.m_flags;),
+        (, flags(x.flags)),
+        (flags = x.flags;),
         (
             enum TypeFlags : uint32_t {
                 HAS_TYPE_INFER = 1u << 0,
@@ -287,16 +287,16 @@ namespace HIR {
                 HAS_DEFERRED_CONST = 1u << 5,
             };
 
-            uint32_t m_flags = 0;
+            uint32_t flags = 0;
 
-            bool has_type_infer() const { return m_flags & HAS_TYPE_INFER; }
+            bool has_type_infer() const { return flags & HAS_TYPE_INFER; }
             bool needs_monomorphisation(bool ignore_lifetimes = false) const {
                 const auto mask = HAS_TYPE_PARAM | HAS_UNEVALUATED_CONST
                     | (ignore_lifetimes ? 0u : HAS_LIFETIME_PARAM);
-                return m_flags & mask;
+                return flags & mask;
             }
             bool may_have_associated_type() const {
-                return m_flags & (HAS_ASSOCIATED_TYPE | HAS_TYPE_INFER);
+                return flags & (HAS_ASSOCIATED_TYPE | HAS_TYPE_INFER);
             }
 
             TypeData clone_data() const;
@@ -313,8 +313,8 @@ namespace HIR {
     );
 
     class TypeInterner {
-        stl::ObjPool& m_pool;
-        ::std::unordered_multimap<size_t, TypeRef> m_nodes;
+        stl::ObjPool& pool;
+        ::std::unordered_multimap<size_t, TypeRef> nodes;
 
     public:
         explicit TypeInterner(stl::ObjPool& pool);

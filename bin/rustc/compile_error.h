@@ -13,7 +13,7 @@ namespace CompileError {
     };
 
     class Generic: public Base {
-        ::std::string m_message;
+        ::std::string message;
 
     public:
         Generic(::std::string message);
@@ -23,7 +23,7 @@ namespace CompileError {
     };
 
     class BugCheck: public Base {
-        ::std::string m_message;
+        ::std::string message;
 
     public:
         BugCheck(::std::string message);
@@ -33,7 +33,7 @@ namespace CompileError {
     };
 
     class Todo: public Base {
-        ::std::string m_message;
+        ::std::string message;
 
     public:
         Todo(::std::string message);

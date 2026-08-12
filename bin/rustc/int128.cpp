@@ -8,7 +8,7 @@ U128::U128(uint64_t lo, uint64_t hi)
     : lo(lo)
     , hi(hi) {
 }
-uint64_t U128::encode_float(int m_bits, int zero_exp) const {
+uint64_t U128::encode_float(int bits, int zero_exp) const {
     // Adapted from https://blog.m-ou.se/floats/
     //int n = intrinsic_ctlz_u128(v).lo;
     int n;
@@ -22,12 +22,12 @@ uint64_t U128::encode_float(int m_bits, int zero_exp) const {
         n = 128 - nset;
     }
     U128 y = *this << n;
-    uint64_t a = (y.hi >> ((128 - (m_bits + 1)) - 64));
-    int s = 64 - (m_bits + 1); // A shift required to move the bits removed in `a` into the low 64-bits
+    uint64_t a = (y.hi >> ((128 - (bits + 1)) - 64));
+    int s = 64 - (bits + 1); // A shift required to move the bits removed in `a` into the low 64-bits
     uint64_t b = (y >> s).lo | (y.lo & ((1ull << s) - 1));
     uint64_t m = a + ((b - (b >> 63 & ~a)) >> 63);
     uint64_t e = (*this == U128(0)) ? 0 : (127 - n) + zero_exp - 1;
-    return (e << m_bits) + m;
+    return (e << bits) + m;
 }
 double U128::to_double() const {
     uint64_t vi = encode_float(52, 1023);

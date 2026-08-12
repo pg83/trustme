@@ -573,8 +573,8 @@ namespace {
 }
 
 Float128::Float128()
-    : m_lo(0)
-    , m_hi(0)
+    : lo(0)
+    , hi(0)
 {
 }
 
@@ -588,7 +588,7 @@ Float128::Float128(double value) {
     if (biased == 0x7FF) {
         if (fraction != 0) {
             *this = canonical_nan();
-            m_hi |= negative ? 0x8000'0000'0000'0000ull : 0;
+            hi |= negative ? 0x8000'0000'0000'0000ull : 0;
         } else {
             *this = infinity(negative);
         }
@@ -615,8 +615,8 @@ Float128::Float128(double value) {
 
 Float128 Float128::from_bits(uint64_t hi, uint64_t lo) {
     Float128 r;
-    r.m_hi = hi;
-    r.m_lo = lo;
+    r.hi = hi;
+    r.lo = lo;
     return r;
 }
 
@@ -629,23 +629,23 @@ Float128 Float128::infinity(bool negative) {
 }
 
 uint64_t Float128::bits_hi() const {
-    return m_hi;
+    return hi;
 }
 
 uint64_t Float128::bits_lo() const {
-    return m_lo;
+    return lo;
 }
 
 bool Float128::is_nan() const {
-    return unpack(m_hi, m_lo).kind == Kind::NotANumber;
+    return unpack(hi, lo).kind == Kind::NotANumber;
 }
 
 bool Float128::is_infinite() const {
-    return unpack(m_hi, m_lo).kind == Kind::Infinity;
+    return unpack(hi, lo).kind == Kind::Infinity;
 }
 
 Float128::operator float() const {
-    const auto value = unpack(m_hi, m_lo);
+    const auto value = unpack(hi, lo);
     uint32_t bits = 0;
     switch (value.kind) {
         case Kind::Zero:
@@ -671,7 +671,7 @@ Float128::operator float() const {
 }
 
 Float128::operator double() const {
-    const auto value = unpack(m_hi, m_lo);
+    const auto value = unpack(hi, lo);
     uint64_t bits = 0;
     switch (value.kind) {
         case Kind::Zero:
@@ -697,7 +697,7 @@ Float128::operator double() const {
 }
 
 Float128::operator int64_t() const {
-    const auto value = unpack(m_hi, m_lo);
+    const auto value = unpack(hi, lo);
     switch (value.kind) {
         case Kind::Zero:
         case Kind::NotANumber:
@@ -721,7 +721,7 @@ Float128::operator int64_t() const {
 }
 
 Float128::operator uint64_t() const {
-    const auto value = unpack(m_hi, m_lo);
+    const auto value = unpack(hi, lo);
     switch (value.kind) {
         case Kind::Zero:
         case Kind::NotANumber:
@@ -741,12 +741,12 @@ Float128::operator uint64_t() const {
 }
 
 Float128 Float128::operator-() const {
-    return from_bits(m_hi ^ 0x8000'0000'0000'0000ull, m_lo);
+    return from_bits(hi ^ 0x8000'0000'0000'0000ull, lo);
 }
 
 Float128 Float128::operator+(const Float128& other) const {
-    const auto a = unpack(m_hi, m_lo);
-    const auto b = unpack(other.m_hi, other.m_lo);
+    const auto a = unpack(hi, lo);
+    const auto b = unpack(other.hi, other.lo);
     if (a.kind == Kind::NotANumber || b.kind == Kind::NotANumber) {
         return canonical_nan();
     }
@@ -799,8 +799,8 @@ Float128 Float128::operator-(const Float128& other) const {
 }
 
 Float128 Float128::operator*(const Float128& other) const {
-    const auto a = unpack(m_hi, m_lo);
-    const auto b = unpack(other.m_hi, other.m_lo);
+    const auto a = unpack(hi, lo);
+    const auto b = unpack(other.hi, other.lo);
     if (a.kind == Kind::NotANumber || b.kind == Kind::NotANumber) {
         return canonical_nan();
     }
@@ -830,8 +830,8 @@ Float128 Float128::operator*(const Float128& other) const {
 }
 
 Float128 Float128::operator/(const Float128& other) const {
-    const auto a = unpack(m_hi, m_lo);
-    const auto b = unpack(other.m_hi, other.m_lo);
+    const auto a = unpack(hi, lo);
+    const auto b = unpack(other.hi, other.lo);
     if (a.kind == Kind::NotANumber || b.kind == Kind::NotANumber) {
         return canonical_nan();
     }
@@ -872,20 +872,20 @@ Float128 Float128::operator/(const Float128& other) const {
 }
 
 bool Float128::operator==(const Float128& other) const {
-    const auto a = unpack(m_hi, m_lo);
-    const auto b = unpack(other.m_hi, other.m_lo);
+    const auto a = unpack(hi, lo);
+    const auto b = unpack(other.hi, other.lo);
     if (a.kind == Kind::NotANumber || b.kind == Kind::NotANumber) {
         return false;
     }
     if (a.kind == Kind::Zero && b.kind == Kind::Zero) {
         return true;
     }
-    return m_hi == other.m_hi && m_lo == other.m_lo;
+    return hi == other.hi && lo == other.lo;
 }
 
 bool Float128::operator!=(const Float128& other) const {
-    const auto a = unpack(m_hi, m_lo);
-    const auto b = unpack(other.m_hi, other.m_lo);
+    const auto a = unpack(hi, lo);
+    const auto b = unpack(other.hi, other.lo);
     if (a.kind == Kind::NotANumber || b.kind == Kind::NotANumber) {
         return true;
     }
@@ -893,8 +893,8 @@ bool Float128::operator!=(const Float128& other) const {
 }
 
 bool Float128::operator<(const Float128& other) const {
-    const auto a = unpack(m_hi, m_lo);
-    const auto b = unpack(other.m_hi, other.m_lo);
+    const auto a = unpack(hi, lo);
+    const auto b = unpack(other.hi, other.lo);
     if (a.kind == Kind::NotANumber || b.kind == Kind::NotANumber) {
         return false;
     }
@@ -942,11 +942,11 @@ bool Float128::operator>=(const Float128& other) const {
 }
 
 Float128 Float128::abs() const {
-    return from_bits(m_hi & ~0x8000'0000'0000'0000ull, m_lo);
+    return from_bits(hi & ~0x8000'0000'0000'0000ull, lo);
 }
 
 Float128 Float128::trunc() const {
-    const auto value = unpack(m_hi, m_lo);
+    const auto value = unpack(hi, lo);
     if (value.kind != Kind::Finite || value.exponent >= significand_bits) {
         return *this;
     }
@@ -958,7 +958,7 @@ Float128 Float128::trunc() const {
 }
 
 Float128 Float128::floor() const {
-    const auto value = unpack(m_hi, m_lo);
+    const auto value = unpack(hi, lo);
     if (value.kind != Kind::Finite || value.exponent >= significand_bits) {
         return *this;
     }
@@ -970,7 +970,7 @@ Float128 Float128::floor() const {
 }
 
 Float128 Float128::ceil() const {
-    const auto value = unpack(m_hi, m_lo);
+    const auto value = unpack(hi, lo);
     if (value.kind != Kind::Finite || value.exponent >= significand_bits) {
         return *this;
     }
@@ -982,7 +982,7 @@ Float128 Float128::ceil() const {
 }
 
 Float128 Float128::round() const {
-    const auto value = unpack(m_hi, m_lo);
+    const auto value = unpack(hi, lo);
     if (value.kind != Kind::Finite || value.exponent >= significand_bits) {
         return *this;
     }
@@ -1003,7 +1003,7 @@ Float128 Float128::round() const {
 }
 
 Float128 Float128::round_even() const {
-    const auto value = unpack(m_hi, m_lo);
+    const auto value = unpack(hi, lo);
     if (value.kind != Kind::Finite || value.exponent >= significand_bits) {
         return *this;
     }
@@ -1035,8 +1035,8 @@ Float128 Float128::round_even() const {
 }
 
 Float128 Float128::remainder(const Float128& numerator, const Float128& denominator) {
-    const auto a = unpack(numerator.m_hi, numerator.m_lo);
-    const auto b = unpack(denominator.m_hi, denominator.m_lo);
+    const auto a = unpack(numerator.hi, numerator.lo);
+    const auto b = unpack(denominator.hi, denominator.lo);
     if (a.kind == Kind::NotANumber || b.kind == Kind::NotANumber) {
         return canonical_nan();
     }
@@ -1190,7 +1190,7 @@ Float128 Float128::parse_decimal(const char* text) {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const Float128& value) {
-    const auto unpacked = unpack(value.m_hi, value.m_lo);
+    const auto unpacked = unpack(value.hi, value.lo);
     if (unpacked.kind == Kind::NotANumber) {
         return os << (unpacked.negative ? "-nan" : "nan");
     }

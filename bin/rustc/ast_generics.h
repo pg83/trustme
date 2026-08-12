@@ -8,11 +8,11 @@
 namespace AST {
 
     class TypeParam {
-        ::AST::AttributeList m_attrs;
-        Span m_span;
+        ::AST::AttributeList mAttrs;
+        Span mSpan;
         // TODO: use an Ident?
-        RcString m_name;
-        ::TypeRef m_default;
+        RcString mName;
+        ::TypeRef defaultValue;
 
     public:
         TypeParam(TypeParam&& x) = default;
@@ -25,32 +25,32 @@ namespace AST {
         void setDefault(TypeRef type);
 
         const ::AST::AttributeList& attrs() const {
-            return m_attrs;
+            return mAttrs;
         }
 
         const Span& span() const {
-            return m_span;
+            return mSpan;
         }
 
         const RcString& name() const {
-            return m_name;
+            return mName;
         }
 
         const TypeRef& get_default() const {
-            return m_default;
+            return defaultValue;
         }
 
         TypeRef& get_default() {
-            return m_default;
+            return defaultValue;
         }
 
         friend ::std::ostream& operator<<(::std::ostream& os, const TypeParam& tp);
     };
 
     class LifetimeParam {
-        ::AST::AttributeList m_attrs;
-        Span m_span;
-        Ident m_name;
+        ::AST::AttributeList mAttrs;
+        Span mSpan;
+        Ident mName;
 
     public:
         LifetimeParam(Span sp, ::AST::AttributeList attrs, Ident name);
@@ -60,26 +60,26 @@ namespace AST {
         explicit LifetimeParam(const LifetimeParam&) = default;
 
         const ::AST::AttributeList& attrs() const {
-            return m_attrs;
+            return mAttrs;
         }
 
         const Span& span() const {
-            return m_span;
+            return mSpan;
         }
 
         const Ident& name() const {
-            return m_name;
+            return mName;
         }
 
         friend ::std::ostream& operator<<(::std::ostream& os, const LifetimeParam& p);
     };
 
     class ValueParam {
-        ::AST::AttributeList m_attrs;
-        Span m_span;
-        Ident m_name;
-        TypeRef m_type;
-        Expr m_default;
+        ::AST::AttributeList mAttrs;
+        Span mSpan;
+        Ident mName;
+        TypeRef mType;
+        Expr defaultValue;
 
     public:
         ValueParam(Span sp, ::AST::AttributeList attrs, Ident name, TypeRef type, Expr val);
@@ -90,31 +90,31 @@ namespace AST {
         explicit ValueParam(const ValueParam& x);
 
         const ::AST::AttributeList& attrs() const {
-            return m_attrs;
+            return mAttrs;
         }
 
         const Span& span() const {
-            return m_span;
+            return mSpan;
         }
 
         const Ident& name() const {
-            return m_name;
+            return mName;
         }
 
         const TypeRef& type() const {
-            return m_type;
+            return mType;
         }
 
         TypeRef& type() {
-            return m_type;
+            return mType;
         }
 
         const Expr& default_value() const {
-            return m_default;
+            return defaultValue;
         }
 
         Expr& default_value() {
-            return m_default;
+            return defaultValue;
         }
 
         friend ::std::ostream& operator<<(::std::ostream& os, const ValueParam& p);
@@ -196,8 +196,8 @@ namespace AST {
 
     class GenericParams {
     public:
-        ::std::vector<GenericParam> m_params;
-        ::std::vector<GenericBound> m_bounds;
+        ::std::vector<GenericParam> mParams;
+        ::std::vector<GenericBound> bounds;
 
         GenericParams();
 
@@ -226,11 +226,11 @@ namespace AST {
         }
 
         void add_value_param(Span sp, AttributeList attrs, Ident name, TypeRef ty, Expr val) {
-            m_params.push_back(ValueParam(mv$(sp), mv$(attrs), mv$(name), mv$(ty), mv$(val)));
+            mParams.push_back(ValueParam(mv$(sp), mv$(attrs), mv$(name), mv$(ty), mv$(val)));
         }
 
         void add_bound(GenericBound bound) {
-            m_bounds.push_back(::std::move(bound));
+            bounds.push_back(::std::move(bound));
         }
 
         int find_name(const char* name) const;

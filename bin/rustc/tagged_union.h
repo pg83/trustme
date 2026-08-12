@@ -190,13 +190,13 @@
 // Internals of TU_CONS
 #define TU_CONS_I(__name, __tag, __type)               \
     __name(__type&& v)                                 \
-        : m_tag(TAG_##__tag) {                         \
-        TUMoveInplace(m_data.__tag, ::std::move(v)); \
+        : mTag(TAG_##__tag) {                         \
+        TUMoveInplace(mData.__tag, ::std::move(v)); \
     }                                                  \
     template <typename _TU_Dummy = void>               \
     __name(const __type& v)                            \
-        : m_tag(TAG_##__tag) {                         \
-        TUCopyInplace(m_data.__tag, v);              \
+        : mTag(TAG_##__tag) {                         \
+        TUCopyInplace(mData.__tag, v);              \
     }                                                  \
     static self_t make_##__tag(__type&& v) {           \
         return __name(::std::move(v));                 \
@@ -206,25 +206,25 @@
         return __name(v);                              \
     }                                                  \
     bool is_##__tag() const {                          \
-        return m_tag == TAG_##__tag;                   \
+        return mTag == TAG_##__tag;                   \
     }                                                  \
     const __type* opt_##__tag() const {                \
-        if (m_tag == TAG_##__tag)                      \
-            return &m_data.__tag;                      \
+        if (mTag == TAG_##__tag)                      \
+            return &mData.__tag;                      \
         return nullptr;                                \
     }                                                  \
     __type* opt_##__tag() {                            \
-        if (m_tag == TAG_##__tag)                      \
-            return &m_data.__tag;                      \
+        if (mTag == TAG_##__tag)                      \
+            return &mData.__tag;                      \
         return nullptr;                                \
     }                                                  \
     const __type& as_##__tag() const {                 \
-        assert(m_tag == TAG_##__tag);                  \
-        return m_data.__tag;                           \
+        assert(mTag == TAG_##__tag);                  \
+        return mData.__tag;                           \
     }                                                  \
     __type& as_##__tag() {                             \
-        assert(m_tag == TAG_##__tag);                  \
-        return m_data.__tag;                           \
+        assert(mTag == TAG_##__tag);                  \
+        return mData.__tag;                           \
     }                                                  \
     template <typename _TU_Type = __type>              \
     _TU_Type unwrap_##__tag() {                        \
@@ -239,25 +239,25 @@
     __name(__type v);                         \
     static self_t make_##__tag(__type v);     \
     bool is_##__tag() const {                 \
-        return m_tag == TAG_##__tag;          \
+        return mTag == TAG_##__tag;          \
     }                                         \
     const __type* opt_##__tag() const {       \
-        if (m_tag == TAG_##__tag)             \
-            return &m_data.__tag;             \
+        if (mTag == TAG_##__tag)             \
+            return &mData.__tag;             \
         return nullptr;                       \
     }                                         \
     __type* opt_##__tag() {                   \
-        if (m_tag == TAG_##__tag)             \
-            return &m_data.__tag;             \
+        if (mTag == TAG_##__tag)             \
+            return &mData.__tag;             \
         return nullptr;                       \
     }                                         \
     const __type& as_##__tag() const {        \
-        assert(m_tag == TAG_##__tag);         \
-        return m_data.__tag;                  \
+        assert(mTag == TAG_##__tag);         \
+        return mData.__tag;                  \
     }                                         \
     __type& as_##__tag() {                    \
-        assert(m_tag == TAG_##__tag);         \
-        return m_data.__tag;                  \
+        assert(mTag == TAG_##__tag);         \
+        return mData.__tag;                  \
     }                                         \
     __type unwrap_##__tag();
 
@@ -265,8 +265,8 @@
 
 #define TU_CONS_IMPL(__name, name, ...)                               \
     __name::__name(__name::TU_DATANAME(name) v)                       \
-        : m_tag(TAG_##name) {                                         \
-        new (&m_data.name) __name::TU_DATANAME(name)(::std::move(v)); \
+        : mTag(TAG_##name) {                                         \
+        new (&mData.name) __name::TU_DATANAME(name)(::std::move(v)); \
     }                                                                 \
     __name __name::make_##name(__name::TU_DATANAME(name) v) {         \
         return __name(::std::move(v));                                \
@@ -285,14 +285,14 @@
 // Destructor internals
 #define TU_DEST_CASE(tag, ...)           \
     case TAG_##tag:                      \
-        TUDestructInplace(m_data.tag); \
+        TUDestructInplace(mData.tag); \
         break; /*
 */
 
 // move constructor internals
 #define TU_MOVE_CASE(tag, ...)                                  \
     case TAG_##tag:                                             \
-        TUMoveInplace(m_data.tag, ::std::move(x.m_data.tag)); \
+        TUMoveInplace(mData.tag, ::std::move(x.mData.tag)); \
         break; /*
 */
 
@@ -359,40 +359,40 @@
         }; /*
 */                                                                                  \
     private:                                                                                   \
-        Tag m_tag;                                                                             \
+        Tag mTag;                                                                             \
         union DataUnion {                                                                      \
             TU_UNION_FIELDS _variants DataUnion() {                                            \
             }                                                                                  \
             ~DataUnion() {                                                                     \
             }                                                                                  \
-        } m_data; /*
+        } mData; /*
 */                                                                           \
     public:                                                                                    \
         _name()                                                                                \
-            : m_tag(TAG_##_def) {                                                              \
-            new (&m_data._def) TU_DATANAME(_def)();                                            \
+            : mTag(TAG_##_def) {                                                              \
+            new (&mData._def) TU_DATANAME(_def)();                                            \
         } /*
 */                                                                                   \
         _name(const _name&) = delete; /*
 */                                                       \
         _name(_name&& x) noexcept                                                              \
-            : m_tag(x.m_tag) TU_EXP _extra_move {                                              \
-            switch (m_tag) {                                                                   \
+            : mTag(x.mTag) TU_EXP _extra_move {                                              \
+            switch (mTag) {                                                                   \
                 case TAGDEAD:                                                                  \
                     break;                                                                     \
                     TU_MOVE_CASES _variants                                                    \
             }                                                                                  \
-            x.m_tag = TAGDEAD;                                                                 \
+            x.mTag = TAGDEAD;                                                                 \
         } /*
 */                                                                                   \
         _name& operator=(_name&& x) {                                                          \
-            switch (m_tag) {                                                                   \
+            switch (mTag) {                                                                   \
                 case TAGDEAD:                                                                  \
                     break;                                                                     \
                     TU_DEST_CASES _variants                                                    \
             }                                                                                  \
-            m_tag = x.m_tag;                                                                   \
-            TU_EXP _extra_assign switch (m_tag) {                                              \
+            mTag = x.mTag;                                                                   \
+            TU_EXP _extra_assign switch (mTag) {                                              \
                 case TAGDEAD:                                                                  \
                     break;                                                                     \
                     TU_MOVE_CASES _variants                                                    \
@@ -401,19 +401,19 @@
         } /*
 */                                                                                   \
         ~_name() {                                                                             \
-            switch (m_tag) {                                                                   \
+            switch (mTag) {                                                                   \
                 case TAGDEAD:                                                                  \
                     break;                                                                     \
                     TU_DEST_CASES _variants                                                    \
             }                                                                                  \
-            m_tag = TAGDEAD;                                                                   \
+            mTag = TAGDEAD;                                                                   \
         }                                                                                      \
                                                                                                \
         Tag tag() const {                                                                      \
-            return m_tag;                                                                      \
+            return mTag;                                                                      \
         }                                                                                      \
         const char* tag_str() const {                                                          \
-            return tag_to_str(m_tag);                                                          \
+            return tag_to_str(mTag);                                                          \
         }                                                                                      \
         TU_CONSS(_name, TU_EXP _variants)                                                      \
         /*
@@ -469,13 +469,13 @@
         }; /*
 */                                                                     \
     private:                                                                      \
-        Tag m_tag;                                                                \
+        Tag mTag;                                                                \
         union DataUnion {                                                         \
             TU_UNION_FIELDS _variants DataUnion() {                               \
             }                                                                     \
             ~DataUnion() {                                                        \
             }                                                                     \
-        } m_data; /*
+        } mData; /*
 */                                                              \
     public:                                                                       \
         _name();                      /*
@@ -489,10 +489,10 @@
         ~_name();                                                                 \
                                                                                   \
         Tag tag() const {                                                         \
-            return m_tag;                                                         \
+            return mTag;                                                         \
         }                                                                         \
         const char* tag_str() const {                                             \
-            return tag_to_str(m_tag);                                             \
+            return tag_to_str(mTag);                                             \
         }                                                                         \
         TU_CONSS_DECL(_name, TU_EXP _variants)                                    \
         /*
@@ -521,26 +521,26 @@
 
 #define TAGGED_UNION_OUT_OF_LINE_IMPL(_name, _def, ...) \
     _name::_name()                                      \
-        : m_tag(TAG_##_def) {                           \
-        new (&m_data._def) TU_DATANAME(_def)();         \
+        : mTag(TAG_##_def) {                           \
+        new (&mData._def) TU_DATANAME(_def)();         \
     }                                                   \
     _name::_name(_name&& x) noexcept                    \
-        : m_tag(x.m_tag) {                              \
-        switch (m_tag) {                                \
+        : mTag(x.mTag) {                              \
+        switch (mTag) {                                \
             case TAGDEAD:                               \
                 break;                                  \
                 TU_MOVE_CASES(TU_EXP(__VA_ARGS__))      \
         }                                               \
-        x.m_tag = TAGDEAD;                              \
+        x.mTag = TAGDEAD;                              \
     }                                                   \
     _name& _name::operator=(_name&& x) {                \
-        switch (m_tag) {                                \
+        switch (mTag) {                                \
             case TAGDEAD:                               \
                 break;                                  \
                 TU_DEST_CASES(TU_EXP(__VA_ARGS__))      \
         }                                               \
-        m_tag = x.m_tag;                                \
-        switch (m_tag) {                                \
+        mTag = x.mTag;                                \
+        switch (mTag) {                                \
             case TAGDEAD:                               \
                 break;                                  \
                 TU_MOVE_CASES(TU_EXP(__VA_ARGS__))      \
@@ -548,12 +548,12 @@
         return *this;                                   \
     }                                                   \
     _name::~_name() {                                   \
-        switch (m_tag) {                                \
+        switch (mTag) {                                \
             case TAGDEAD:                               \
                 break;                                  \
                 TU_DEST_CASES(TU_EXP(__VA_ARGS__))      \
         }                                               \
-        m_tag = TAGDEAD;                                \
+        mTag = TAGDEAD;                                \
     }                                                   \
     TU_CONSS_IMPL(_name, TU_EXP(__VA_ARGS__))
 

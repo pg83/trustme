@@ -17,8 +17,8 @@ namespace AST {
     class NodeVisitor;
 
     class ExprNode {
-        AttributeList m_attrs;
-        Span m_span;
+        AttributeList mAttrs;
+        Span mSpan;
 
     public:
         virtual ~ExprNode() = 0;
@@ -29,17 +29,17 @@ namespace AST {
         virtual unsigned int node_kind() const = 0;
 
         void set_span(Span s) {
-            m_span = ::std::move(s);
+            mSpan = ::std::move(s);
         }
 
         const Span& span() const {
-            return m_span;
+            return mSpan;
         }
 
         void set_attrs(AttributeList&& mi);
 
         AttributeList& attrs() {
-            return m_attrs;
+            return mAttrs;
         }
     };
 
@@ -49,16 +49,16 @@ namespace AST {
             Unsafe,
             Const,
         };
-        Type m_block_type;
-        Ident m_label;
-        ::std::shared_ptr<AST::Module> m_local_mod;
+        Type blockType;
+        Ident label;
+        ::std::shared_ptr<AST::Module> localMod;
 
         struct Line {
             bool has_semicolon;
             ExprNodeP node;
         };
 
-        ::std::vector<Line> m_nodes;
+        ::std::vector<Line> nodes;
 
         ExprNodeBlock(::std::vector<Line> nodes = {});
 
@@ -68,11 +68,11 @@ namespace AST {
         ExprNodeBlock(Type type, ::std::vector<Line> nodes, ::std::shared_ptr<AST::Module> local_mod);
 
         void push_stmt(AST::ExprNodeP node) {
-            m_nodes.push_back({true, std::move(node)});
+            nodes.push_back({true, std::move(node)});
         }
 
         void push_tail_expr(AST::ExprNodeP node) {
-            m_nodes.push_back({false, std::move(node)});
+            nodes.push_back({false, std::move(node)});
         }
 
         static constexpr unsigned int kind = 1;
@@ -83,8 +83,8 @@ namespace AST {
     };
 
     struct ExprNodeAsyncBlock: public ExprNode {
-        ExprNodeP m_inner;
-        bool m_is_move;
+        ExprNodeP inner;
+        bool isMove;
 
         ExprNodeAsyncBlock(ExprNodeP inner, bool is_move);
 
@@ -96,8 +96,8 @@ namespace AST {
     };
 
     struct ExprNodeGeneratorBlock: public ExprNode {
-        ExprNodeP m_inner;
-        bool m_is_move;
+        ExprNodeP inner;
+        bool isMove;
 
         ExprNodeGeneratorBlock(ExprNodeP inner, bool is_move);
 
@@ -109,7 +109,7 @@ namespace AST {
     };
 
     struct ExprNodeTry: public ExprNode {
-        ExprNodeP m_inner;
+        ExprNodeP inner;
 
         ExprNodeTry(ExprNodeP inner);
 
@@ -121,11 +121,11 @@ namespace AST {
     };
 
     struct ExprNodeMacro: public ExprNode {
-        AST::Path m_path;
-        RcString m_ident;
-        ::TokenTree m_tokens;
-        bool m_is_braced;
-        Ident::Hygiene m_definition_hygiene;
+        AST::Path mPath;
+        RcString ident;
+        ::TokenTree tokens;
+        bool isBraced;
+        Ident::Hygiene definitionHygiene;
 
         ExprNodeMacro(AST::Path name, RcString ident, ::TokenTree&& tokens, bool is_braced = false, Ident::Hygiene definition_hygiene = {});
 
@@ -143,11 +143,11 @@ namespace AST {
             ExprNodeP value;
         };
 
-        ::std::string m_text;
-        ::std::vector<ValRef> m_output;
-        ::std::vector<ValRef> m_input;
-        ::std::vector<::std::string> m_clobbers;
-        ::std::vector<::std::string> m_flags;
+        ::std::string text;
+        ::std::vector<ValRef> output;
+        ::std::vector<ValRef> input;
+        ::std::vector<::std::string> clobbers;
+        ::std::vector<::std::string> flags;
 
         ExprNodeAsm(::std::string text, ::std::vector<ValRef> output, ::std::vector<ValRef> input, ::std::vector<::std::string> clobbers, ::std::vector<::std::string> flags);
 
@@ -179,9 +179,9 @@ namespace AST {
             })
         );
 
-        AsmCommon::Options m_options;
-        std::vector<AsmCommon::Line> m_lines;
-        std::vector<Param> m_params;
+        AsmCommon::Options options;
+        std::vector<AsmCommon::Line> lines;
+        std::vector<Param> mParams;
 
         ExprNodeAsm2(AsmCommon::Options options, std::vector<AsmCommon::Line> lines, std::vector<Param> params);
 
@@ -201,10 +201,10 @@ namespace AST {
             BREAK,
             // `do yeet value` - a failed `?`
             YEET,
-        } m_type;
+        } mType;
 
-        Ident m_target;
-        ExprNodeP m_value;
+        Ident target;
+        ExprNodeP mValue;
 
         ExprNodeFlow(Type type, Ident target, ExprNodeP value);
 
@@ -216,13 +216,13 @@ namespace AST {
     };
 
     struct ExprNodeLetBinding: public ExprNode {
-        Pattern m_pat;
-        TypeRef m_type;
-        ExprNodeP m_value;
-        ExprNodeP m_else;
-        bool m_is_super;
+        Pattern pat;
+        TypeRef mType;
+        ExprNodeP mValue;
+        ExprNodeP elseNode;
+        bool isSuper;
         /// Allocated binding slots/indexes for the pattern in `let-else`
-        ::std::pair<unsigned, unsigned> m_letelse_slots;
+        ::std::pair<unsigned, unsigned> letelseSlots;
 
         ExprNodeLetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP else_arm = {}, bool is_super = false);
 
@@ -246,10 +246,10 @@ namespace AST {
             XOR,
             SHR,
             SHL,
-        } m_op;
+        } op;
 
-        ExprNodeP m_slot;
-        ExprNodeP m_value;
+        ExprNodeP slot;
+        ExprNodeP mValue;
 
         ExprNodeAssign();
 
@@ -263,8 +263,8 @@ namespace AST {
     };
 
     struct ExprNodeCallPath: public ExprNode {
-        Path m_path;
-        ::std::vector<ExprNodeP> m_args;
+        Path mPath;
+        ::std::vector<ExprNodeP> mArgs;
 
         ExprNodeCallPath(Path&& path, ::std::vector<ExprNodeP>&& args);
 
@@ -276,9 +276,9 @@ namespace AST {
     };
 
     struct ExprNodeCallMethod: public ExprNode {
-        ExprNodeP m_val;
-        PathNode m_method;
-        ::std::vector<ExprNodeP> m_args;
+        ExprNodeP val;
+        PathNode method;
+        ::std::vector<ExprNodeP> mArgs;
 
         ExprNodeCallMethod(ExprNodeP obj, PathNode method, ::std::vector<ExprNodeP> args);
 
@@ -291,8 +291,8 @@ namespace AST {
 
     // Call an object (Fn/FnMut/FnOnce)
     struct ExprNodeCallObject: public ExprNode {
-        ExprNodeP m_val;
-        ::std::vector<ExprNodeP> m_args;
+        ExprNodeP val;
+        ::std::vector<ExprNodeP> mArgs;
 
         ExprNodeCallObject(ExprNodeP val, ::std::vector<ExprNodeP>&& args);
 
@@ -304,8 +304,8 @@ namespace AST {
     };
 
     struct ExprNodeLoop: public ExprNode {
-        Ident m_label;
-        ExprNodeP m_code;
+        Ident label;
+        ExprNodeP mCode;
 
         ExprNodeLoop();
 
@@ -319,10 +319,10 @@ namespace AST {
     };
 
     struct ExprNodeFor: public ExprNode {
-        Ident m_label;
-        AST::Pattern m_pattern;
-        ExprNodeP m_value;
-        ExprNodeP m_code;
+        Ident label;
+        AST::Pattern pattern;
+        ExprNodeP mValue;
+        ExprNodeP mCode;
 
         ExprNodeFor(Ident label, AST::Pattern pattern, ExprNodeP val, ExprNodeP code);
 
@@ -339,9 +339,9 @@ namespace AST {
     };
 
     struct ExprNodeWhile: public ExprNode {
-        Ident m_label;
-        std::vector<IfLetCondition> m_conditions;
-        ExprNodeP m_code;
+        Ident label;
+        std::vector<IfLetCondition> conditions;
+        ExprNodeP mCode;
 
         ExprNodeWhile(Ident label, std::vector<IfLetCondition> conditions, ExprNodeP code);
 
@@ -353,11 +353,11 @@ namespace AST {
     };
 
     struct ExprNodeMatchArm {
-        AttributeList m_attrs;
-        ::std::vector<Pattern> m_patterns;
-        std::vector<IfLetCondition> m_guard;
+        AttributeList mAttrs;
+        ::std::vector<Pattern> patterns;
+        std::vector<IfLetCondition> guard;
 
-        ExprNodeP m_code;
+        ExprNodeP mCode;
 
         ExprNodeMatchArm();
 
@@ -365,8 +365,8 @@ namespace AST {
     };
 
     struct ExprNodeMatch: public ExprNode {
-        ExprNodeP m_val;
-        ::std::vector<ExprNodeMatchArm> m_arms;
+        ExprNodeP val;
+        ::std::vector<ExprNodeMatchArm> arms;
 
         ExprNodeMatch(ExprNodeP val, ::std::vector<ExprNodeMatchArm> arms);
 
@@ -379,12 +379,12 @@ namespace AST {
 
     struct ExprNodeIf: public ExprNode {
         struct Arm {
-            std::vector<IfLetCondition> m_conditions;
-            ExprNodeP m_body;
+            std::vector<IfLetCondition> conditions;
+            ExprNodeP body;
         };
 
-        std::vector<Arm> m_arms;
-        ExprNodeP m_else;
+        std::vector<Arm> arms;
+        ExprNodeP elseNode;
 
         ExprNodeIf(std::vector<Arm> arms, ExprNodeP else_code);
 
@@ -406,8 +406,8 @@ namespace AST {
 
     // Literal integer
     struct ExprNodeInteger: public ExprNode {
-        enum eCoreType m_datatype;
-        U128 m_value;
+        enum eCoreType datatype;
+        U128 mValue;
 
         ExprNodeInteger(U128 value, enum eCoreType datatype);
 
@@ -420,8 +420,8 @@ namespace AST {
 
     // Literal float
     struct ExprNodeFloat: public ExprNode {
-        enum eCoreType m_datatype;
-        FloatValue m_value;
+        enum eCoreType datatype;
+        FloatValue mValue;
 
         ExprNodeFloat(FloatValue value, enum eCoreType datatype);
 
@@ -434,7 +434,7 @@ namespace AST {
 
     // Literal boolean
     struct ExprNodeBool: public ExprNode {
-        bool m_value;
+        bool mValue;
 
         ExprNodeBool(bool value);
 
@@ -447,9 +447,9 @@ namespace AST {
 
     // Literal string
     struct ExprNodeString: public ExprNode {
-        ::std::string m_value;
+        ::std::string mValue;
         /// Hygiene for format strings
-        Ident::Hygiene m_hygiene;
+        Ident::Hygiene mHygiene;
 
         ExprNodeString(::std::string value, Ident::Hygiene h = {});
 
@@ -462,7 +462,7 @@ namespace AST {
 
     // Literal byte string
     struct ExprNodeByteString: public ExprNode {
-        ::std::string m_value;
+        ::std::string mValue;
 
         ExprNodeByteString(::std::string value);
 
@@ -475,7 +475,7 @@ namespace AST {
 
     // Literal C string
     struct ExprNodeCString: public ExprNode {
-        ::std::string m_value;
+        ::std::string mValue;
 
         ExprNodeCString(::std::string value);
 
@@ -490,18 +490,18 @@ namespace AST {
     struct ExprNodeClosure: public ExprNode {
         typedef ::std::vector<::std::pair<AST::Pattern, TypeRef>> args_t;
 
-        args_t m_args;
-        TypeRef m_return;
-        ExprNodeP m_code;
-        bool m_is_move;   //< The closure takes ownership of all values
-        bool m_is_pinned; //< The closure cannot be moved (this is for generators)
+        args_t mArgs;
+        TypeRef returnType;
+        ExprNodeP mCode;
+        bool isMove;   //< The closure takes ownership of all values
+        bool isPinned; //< The closure cannot be moved (this is for generators)
 
         ExprNodeClosure(args_t args, TypeRef rv, ExprNodeP code, bool is_move, bool is_pinned)
-            : m_args(::std::move(args))
-            , m_return(::std::move(rv))
-            , m_code(::std::move(code))
-            , m_is_move(is_move)
-            , m_is_pinned(is_pinned)
+            : mArgs(::std::move(args))
+            , returnType(::std::move(rv))
+            , mCode(::std::move(code))
+            , isMove(is_move)
+            , isPinned(is_pinned)
         {
         }
 
@@ -521,9 +521,9 @@ namespace AST {
         };
 
         typedef ::std::vector<Ent> t_values;
-        Path m_path;
-        ExprNodeP m_base_value;
-        t_values m_values;
+        Path mPath;
+        ExprNodeP baseValue;
+        t_values values;
 
         ExprNodeStructLiteral(Path path, ExprNodeP base_value, t_values&& values);
 
@@ -538,8 +538,8 @@ namespace AST {
     // This implicitly has a `..` in it
     struct ExprNodeStructLiteralPattern: public ExprNode {
         typedef ::std::vector<ExprNodeStructLiteral::Ent> t_values;
-        Path m_path;
-        t_values m_values;
+        Path mPath;
+        t_values values;
 
         ExprNodeStructLiteralPattern(Path path, t_values&& values);
 
@@ -552,8 +552,8 @@ namespace AST {
 
     // Array
     struct ExprNodeArray: public ExprNode {
-        ExprNodeP m_size; // if non-NULL, it's a sized array
-        ::std::vector<ExprNodeP> m_values;
+        ExprNodeP mSize; // if non-NULL, it's a sized array
+        ::std::vector<ExprNodeP> values;
 
         ExprNodeArray(::std::vector<ExprNodeP> vals);
 
@@ -568,7 +568,7 @@ namespace AST {
 
     // Tuple
     struct ExprNodeTuple: public ExprNode {
-        ::std::vector<ExprNodeP> m_values;
+        ::std::vector<ExprNodeP> values;
 
         ExprNodeTuple(::std::vector<ExprNodeP> vals);
 
@@ -581,7 +581,7 @@ namespace AST {
 
     // Variable / Constant
     struct ExprNodeNamedValue: public ExprNode {
-        Path m_path;
+        Path mPath;
 
         ExprNodeNamedValue(Path path);
 
@@ -594,8 +594,8 @@ namespace AST {
 
     // Field dereference
     struct ExprNodeField: public ExprNode {
-        ExprNodeP m_obj;
-        RcString m_name;
+        ExprNodeP obj;
+        RcString mName;
 
         ExprNodeField(ExprNodeP obj, RcString name);
 
@@ -607,8 +607,8 @@ namespace AST {
     };
 
     struct ExprNodeIndex: public ExprNode {
-        ExprNodeP m_obj;
-        ExprNodeP m_idx;
+        ExprNodeP obj;
+        ExprNodeP idx;
 
         ExprNodeIndex(ExprNodeP obj, ExprNodeP idx);
 
@@ -621,7 +621,7 @@ namespace AST {
 
     // Pointer dereference
     struct ExprNodeDeref: public ExprNode {
-        ExprNodeP m_value;
+        ExprNodeP mValue;
 
         ExprNodeDeref(ExprNodeP value);
 
@@ -634,8 +634,8 @@ namespace AST {
 
     // Type cast ('as')
     struct ExprNodeCast: public ExprNode {
-        ExprNodeP m_value;
-        TypeRef m_type;
+        ExprNodeP mValue;
+        TypeRef mType;
 
         ExprNodeCast(ExprNodeP value, TypeRef&& dst_type);
 
@@ -648,8 +648,8 @@ namespace AST {
 
     // Type annotation (': _')
     struct ExprNodeTypeAnnotation: public ExprNode {
-        ExprNodeP m_value;
-        TypeRef m_type;
+        ExprNodeP mValue;
+        TypeRef mType;
 
         ExprNodeTypeAnnotation(ExprNodeP value, TypeRef&& dst_type);
 
@@ -691,9 +691,9 @@ namespace AST {
             PLACE_IN, // `in PLACE { expr }` or `PLACE <- expr`
         };
 
-        Type m_type;
-        ExprNodeP m_left;
-        ExprNodeP m_right;
+        Type mType;
+        ExprNodeP left;
+        ExprNodeP right;
 
         ExprNodeBinOp(Type type, ExprNodeP left, ExprNodeP right);
 
@@ -717,8 +717,8 @@ namespace AST {
             AWait,  // `.await`
         };
 
-        enum Type m_type;
-        ExprNodeP m_value;
+        enum Type mType;
+        ExprNodeP mValue;
 
         ExprNodeUniOp(Type type, ExprNodeP value);
 
@@ -733,9 +733,9 @@ namespace AST {
     // preserves it until local-variable and label resolution have crossed the
     // definition at the correct source position.
     struct ExprNodeMacroDefinition: public ExprNode {
-        unsigned int m_definition_id;
-        Ident::Hygiene m_token_hygiene;
-        Ident::Hygiene m_definition_hygiene;
+        unsigned int definitionId;
+        Ident::Hygiene tokenHygiene;
+        Ident::Hygiene definitionHygiene;
 
         ExprNodeMacroDefinition(unsigned int definition_id, Ident::Hygiene token_hygiene, Ident::Hygiene definition_hygiene);
 

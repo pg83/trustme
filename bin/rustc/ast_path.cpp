@@ -58,17 +58,17 @@ namespace AST {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const PathParams& x) {
-        if (x.m_is_paren) {
-            auto& t = x.m_entries.at(0).as_Type();
+        if (x.isParen) {
+            auto& t = x.entries.at(0).as_Type();
             os << t; // Should be a tuple
-            auto& rv = x.m_entries.at(1).as_AssociatedTyEqual();
+            auto& rv = x.entries.at(1).as_AssociatedTyEqual();
             os << "->";
             os << rv.second;
             return os;
         }
         bool needs_comma = false;
-        os << (x.m_is_paren ? "(" : "<");
-        for (const auto& e : x.m_entries) {
+        os << (x.isParen ? "(" : "<");
+        for (const auto& e : x.entries) {
             if (e.is_Null()) {
                 continue;
             }
@@ -79,7 +79,7 @@ namespace AST {
 
             e.fmt(os);
         }
-        os << (x.m_is_paren ? ")" : ">");
+        os << (x.isParen ? ")" : ">");
         return os;
     }
 
@@ -89,16 +89,16 @@ namespace AST {
     PathParams& PathParams::operator=(PathParams&&) = default;
 
     PathParams::PathParams(const PathParams& x)
-        : m_is_paren(x.m_is_paren)
+        : isParen(x.isParen)
     {
-        m_entries.reserve(x.m_entries.size());
-        for (const auto& e : x.m_entries) {
-            m_entries.push_back(e.clone());
+        entries.reserve(x.entries.size());
+        for (const auto& e : x.entries) {
+            entries.push_back(e.clone());
         }
     }
 
     Ordering PathParams::ord(const PathParams& x) const {
-        return ::ord(m_entries, x.m_entries);
+        return ::ord(entries, x.entries);
     }
 
     PathParamEnt PathParamEnt::clone() const {
@@ -183,18 +183,18 @@ namespace AST {
 
     // --- AST::PathNode
     PathNode::PathNode(RcString name, PathParams args)
-        : m_name(mv$(name))
-        , m_params(mv$(args))
+        : mName(mv$(name))
+        , mParams(mv$(args))
     {
     }
 
     Ordering PathNode::ord(const PathNode& x) const {
         Ordering rv;
-        rv = ::ord(m_name, x.m_name);
+        rv = ::ord(mName, x.mName);
         if (rv != OrdEqual) {
             return rv;
         }
-        rv = m_params.ord(x.m_params);
+        rv = mParams.ord(x.mParams);
         if (rv != OrdEqual) {
             return rv;
         }
@@ -202,12 +202,12 @@ namespace AST {
     }
 
     void PathNode::print_pretty(::std::ostream& os, bool is_type_context) const {
-        os << m_name;
-        if (!m_params.is_empty()) {
+        os << mName;
+        if (!mParams.is_empty()) {
             if (!is_type_context) {
                 os << "::";
             }
-            os << m_params;
+            os << mParams;
         }
     }
 
@@ -237,18 +237,18 @@ namespace AST {
     }
 
     AST::Path::Path(const Path& x)
-        : m_class()
-        , m_bindings(x.m_bindings.clone())
+        : cls()
+        , mBindings(x.mBindings.clone())
     {
-        TU_MATCH(Class, (x.m_class), (ent), (Invalid, m_class = Class::make_Invalid({});), (Local, m_class = Class::make_Local({ent.name});), (Relative, m_class = Class::make_Relative({ent.hygiene, ent.nodes});), (Self, m_class = Class::make_Self({ent.nodes});), (Super, m_class = Class::make_Super({ent.count, ent.nodes});), (Absolute, m_class = Class::make_Absolute({ent.crate, ent.nodes});), (UFCS, if (ent.trait) m_class = Class::make_UFCS({box$(ent.type->clone()), ::std::unique_ptr<Path>(new Path(*ent.trait)), ent.nodes}); else m_class = Class::make_UFCS({box$(ent.type->clone()), nullptr, ent.nodes});))
+        TU_MATCH(Class, (x.cls), (ent), (Invalid, cls = Class::make_Invalid({});), (Local, cls = Class::make_Local({ent.name});), (Relative, cls = Class::make_Relative({ent.hygiene, ent.nodes});), (Self, cls = Class::make_Self({ent.nodes});), (Super, cls = Class::make_Super({ent.count, ent.nodes});), (Absolute, cls = Class::make_Absolute({ent.crate, ent.nodes});), (UFCS, if (ent.trait) cls = Class::make_UFCS({box$(ent.type->clone()), ::std::unique_ptr<Path>(new Path(*ent.trait)), ent.nodes}); else cls = Class::make_UFCS({box$(ent.type->clone()), nullptr, ent.nodes});))
     }
 
     bool Path::is_parent_of(const Path& x) const {
-        if (!this->m_class.is_Absolute() || !x.m_class.is_Absolute()) {
+        if (!this->cls.is_Absolute() || !x.cls.is_Absolute()) {
             return false;
         }
-        const auto& te = this->m_class.as_Absolute();
-        const auto& xe = x.m_class.as_Absolute();
+        const auto& te = this->cls.as_Absolute();
+        const auto& xe = x.cls.as_Absolute();
 
         if (te.crate != xe.crate) {
             return false;
@@ -268,7 +268,7 @@ namespace AST {
     }
 
     void Path::bind_variable(unsigned int slot) {
-        m_bindings.value.set(AST::AbsolutePath(), PathBindingValue::make_Variable({slot}));
+        mBindings.value.set(AST::AbsolutePath(), PathBindingValue::make_Variable({slot}));
     }
 
     Path& Path::operator+=(const Path& other) {
@@ -276,25 +276,25 @@ namespace AST {
             append(node);
         }
         // If the path is modified, clear the binding
-        m_bindings = Bindings();
+        mBindings = Bindings();
         return *this;
     }
 
     Ordering Path::ord(const Path& x) const {
         Ordering rv;
 
-        rv = ::ord((unsigned)m_class.tag(), (unsigned)x.m_class.tag());
+        rv = ::ord((unsigned)cls.tag(), (unsigned)x.cls.tag());
         if (rv != OrdEqual) {
             return rv;
         }
 
-        TU_MATCH(Path::Class, (m_class, x.m_class), (ent, x_ent), (Invalid, return OrdEqual;), (Local, return ::ord(ent.name, x_ent.name);), (Relative, return ::ord(ent.nodes, x_ent.nodes);), (Self, return ::ord(ent.nodes, x_ent.nodes);), (Super, return ::ord(ent.nodes, x_ent.nodes);), (Absolute, rv = ::ord(ent.crate, x_ent.crate); if (rv != OrdEqual) return rv; return ::ord(ent.nodes, x_ent.nodes);), (UFCS, rv = ent.type->ord(*x_ent.type); if (rv != OrdEqual) return rv; rv = ent.trait->ord(*x_ent.trait); if (rv != OrdEqual) return rv; return ::ord(ent.nodes, x_ent.nodes);))
+        TU_MATCH(Path::Class, (cls, x.cls), (ent, x_ent), (Invalid, return OrdEqual;), (Local, return ::ord(ent.name, x_ent.name);), (Relative, return ::ord(ent.nodes, x_ent.nodes);), (Self, return ::ord(ent.nodes, x_ent.nodes);), (Super, return ::ord(ent.nodes, x_ent.nodes);), (Absolute, rv = ::ord(ent.crate, x_ent.crate); if (rv != OrdEqual) return rv; return ::ord(ent.nodes, x_ent.nodes);), (UFCS, rv = ent.type->ord(*x_ent.type); if (rv != OrdEqual) return rv; rv = ent.trait->ord(*x_ent.trait); if (rv != OrdEqual) return rv; return ::ord(ent.nodes, x_ent.nodes);))
 
         return OrdEqual;
     }
 
     void Path::print_pretty(::std::ostream& os, bool is_type_context, bool is_debug) const {
-    TU_MATCH_HDRA( (m_class), {)
+    TU_MATCH_HDRA( (cls), {)
     TU_ARMA(Invalid, ent) {
                 os << "/*inv*/";
                 // NOTE: Don't print the binding for invalid paths
@@ -302,12 +302,12 @@ namespace AST {
             }
             TU_ARMA(Local, ent) {
                 // Only print comment if there's no binding
-                if (m_bindings.value.is_Unbound() && m_bindings.type.is_Unbound()) {
+                if (mBindings.value.is_Unbound() && mBindings.type.is_Unbound()) {
                     if (is_debug) {
                         os << "/*var*/";
                     }
                 } else {
-                    assert(m_bindings.value.binding.is_Variable() || m_bindings.value.binding.is_Generic() || m_bindings.type.binding.is_TypeParameter());
+                    assert(mBindings.value.binding.is_Variable() || mBindings.value.binding.is_Generic() || mBindings.type.binding.is_TypeParameter());
                 }
                 os << ent.name;
             }
@@ -354,7 +354,7 @@ namespace AST {
                 //os << "/*ufcs*/";
                 if (ent.trait) {
                     os << "<" << *ent.type << " as ";
-                    if (ent.trait->m_class.is_Invalid()) {
+                    if (ent.trait->cls.is_Invalid()) {
                         os << "_";
                     } else {
                         os << *ent.trait;
@@ -372,25 +372,25 @@ namespace AST {
     if( is_debug ) {
             os << "/*";
             bool printed = false;
-            if (!m_bindings.value.is_Unbound()) {
+            if (!mBindings.value.is_Unbound()) {
                 if (printed) {
                     os << ",";
                 }
-                os << "v:" << m_bindings.value;
+                os << "v:" << mBindings.value;
                 printed = true;
             }
-            if (!m_bindings.type.is_Unbound()) {
+            if (!mBindings.type.is_Unbound()) {
                 if (printed) {
                     os << ",";
                 }
-                os << "t:" << m_bindings.type;
+                os << "t:" << mBindings.type;
                 printed = true;
             }
-            if (!m_bindings.macro.is_Unbound()) {
+            if (!mBindings.macro.is_Unbound()) {
                 if (printed) {
                     os << ",";
                 }
-                os << "m:" << m_bindings.macro;
+                os << "m:" << mBindings.macro;
                 printed = true;
             }
             if (!printed) {
@@ -462,19 +462,19 @@ void Path::Bindings::merge_from(const Bindings& x) {
     }
 }
 Path::Path(Class c)
-    : m_class(::std::move(c)) {
+    : cls(::std::move(c)) {
 }
 // INVALID
 Path::Path()
-    : m_class() {
+    : cls() {
 }
 // ABSOLUTE
 Path::Path(RcString crate, ::std::vector<PathNode> nodes)
-    : m_class(Class::make_Absolute({mv$(crate), mv$(nodes)})) {
+    : cls(Class::make_Absolute({mv$(crate), mv$(nodes)})) {
 }
 Path::Path(const AbsolutePath& p)
-    : m_class(Class::make_Absolute({p.crate, {}})) {
-    auto& n = m_class.as_Absolute().nodes;
+    : cls(Class::make_Absolute({p.crate, {}})) {
+    auto& n = cls.as_Absolute().nodes;
     n.reserve(p.nodes.size());
     for (const auto& v : p.nodes) {
         n.push_back(v);
@@ -482,19 +482,19 @@ Path::Path(const AbsolutePath& p)
 }
 Path::Path(const PathBinding<PathBindingValue>& pb)
     : Path(pb.path) {
-    this->m_bindings.value = pb.clone();
+    this->mBindings.value = pb.clone();
 }
 Path::Path(const PathBinding<PathBindingType>& pb)
     : Path(pb.path) {
-    this->m_bindings.type = pb.clone();
+    this->mBindings.type = pb.clone();
 }
 Path::Path(const PathBinding<PathBindingMacro>& pb)
     : Path(pb.path) {
-    this->m_bindings.macro = pb.clone();
+    this->mBindings.macro = pb.clone();
 }
 Path::Path(const AbsolutePath& p, ::AST::PathParams pp)
     : Path(p) {
-    auto& n = m_class.as_Absolute().nodes;
+    auto& n = cls.as_Absolute().nodes;
     assert(n.size() > 0);
     n.back().args() = ::std::move(pp);
 }
@@ -513,7 +513,7 @@ Path& Path::operator+=(PathNode pn) {
     return *this;
 }
 const RcString& Path::as_trivial() const {
-TU_MATCH_HDRA( (m_class), {)
+TU_MATCH_HDRA( (cls), {)
 default:
     break;
         TU_ARMA(Local, e) {
@@ -526,11 +526,11 @@ default:
 throw std::runtime_error("as_trivial on non-trivial path");
 }
 size_t Path::size() const {
-    TU_MATCH(Class, (m_class), (ent), (Invalid, assert(!m_class.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");), (Local, return 1;), (Relative, return ent.nodes.size();), (Self, return ent.nodes.size();), (Super, return ent.nodes.size();), (Absolute, return ent.nodes.size();), (UFCS, return ent.nodes.size();))
+    TU_MATCH(Class, (cls), (ent), (Invalid, assert(!cls.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");), (Local, return 1;), (Relative, return ent.nodes.size();), (Self, return ent.nodes.size();), (Super, return ent.nodes.size();), (Absolute, return ent.nodes.size();), (UFCS, return ent.nodes.size();))
     throw ::std::runtime_error("Path::nodes() fell off");
 }
 ::std::vector<PathNode>& Path::nodes() {
-    TU_MATCH(Class, (m_class), (ent), (Invalid, assert(!m_class.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");), (Local, assert(!m_class.is_Local()); throw ::std::runtime_error("Path::nodes() on Local");), (Relative, return ent.nodes;), (Self, return ent.nodes;), (Super, return ent.nodes;), (Absolute, return ent.nodes;), (UFCS, return ent.nodes;))
+    TU_MATCH(Class, (cls), (ent), (Invalid, assert(!cls.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");), (Local, assert(!cls.is_Local()); throw ::std::runtime_error("Path::nodes() on Local");), (Relative, return ent.nodes;), (Self, return ent.nodes;), (Super, return ent.nodes;), (Absolute, return ent.nodes;), (UFCS, return ent.nodes;))
     throw ::std::runtime_error("Path::nodes() fell off");
 }
 }

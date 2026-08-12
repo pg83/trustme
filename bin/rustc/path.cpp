@@ -10,22 +10,22 @@
 #include <limits.h> // PATH_MAX
 
 helpers::path::path(const char* s)
-    : m_str(s)
+    : mStr(s)
 {
     // 1. Normalise path separators to the system specified separator
-    for (size_t i = 0; i < m_str.size(); i++) {
-        if (m_str[i] == '/' || m_str[i] == '\\') {
-            m_str[i] = SEP;
+    for (size_t i = 0; i < mStr.size(); i++) {
+        if (mStr[i] == '/' || mStr[i] == '\\') {
+            mStr[i] = SEP;
         }
     }
 
     // 2. Remove any trailing separators
-    if (!m_str.empty()) {
-        while (!m_str.empty() && m_str.back() == SEP) {
-            m_str.pop_back();
+    if (!mStr.empty()) {
+        while (!mStr.empty() && mStr.back() == SEP) {
+            mStr.pop_back();
         }
-        if (m_str.empty()) {
-            m_str.push_back(SEP);
+        if (mStr.empty()) {
+            mStr.push_back(SEP);
         }
     } else {
         throw ::std::runtime_error("Empty path being constructed");
@@ -37,7 +37,7 @@ helpers::path helpers::path::to_absolute() const {
         throw ::std::runtime_error("Calling to_absolute() on an invalid path");
     }
 
-    if (this->m_str[0] == SEP) {
+    if (this->mStr[0] == SEP) {
         return *this;
     }
 
@@ -60,46 +60,46 @@ helpers::path helpers::path::to_absolute() const {
 
 helpers::path helpers::path::normalise() const {
     path rv;
-    rv.m_str.reserve(m_str.size() + 1);
+    rv.mStr.reserve(mStr.size() + 1);
 
     for (auto comp : *this) {
         if (comp == ".") {
             // Ignore.
         } else if (comp == "..") {
             // If the path is empty, OR the last element is a "..", push the element
-            if (rv.m_str.empty() || (rv.m_str.size() == 3 && rv.m_str[0] == '.' && rv.m_str[1] == '.' && rv.m_str[2] == SEP) || (rv.m_str.size() > 4 && *(rv.m_str.end() - 4) == SEP && *(rv.m_str.end() - 3) == '.' && *(rv.m_str.end() - 2) == '.' && *(rv.m_str.end() - 1) == SEP)) {
+            if (rv.mStr.empty() || (rv.mStr.size() == 3 && rv.mStr[0] == '.' && rv.mStr[1] == '.' && rv.mStr[2] == SEP) || (rv.mStr.size() > 4 && *(rv.mStr.end() - 4) == SEP && *(rv.mStr.end() - 3) == '.' && *(rv.mStr.end() - 2) == '.' && *(rv.mStr.end() - 1) == SEP)) {
                 // Push
-                rv.m_str += comp;
-                rv.m_str += SEP;
+                rv.mStr += comp;
+                rv.mStr += SEP;
             } else {
-                rv.m_str.pop_back();
-                auto pos = rv.m_str.find_last_of(SEP);
+                rv.mStr.pop_back();
+                auto pos = rv.mStr.find_last_of(SEP);
                 if (pos == ::std::string::npos) {
-                    rv.m_str.resize(0);
+                    rv.mStr.resize(0);
                 } else if (pos == 0) {
                     // Keep.
                 } else {
-                    rv.m_str.resize(pos + 1);
+                    rv.mStr.resize(pos + 1);
                 }
             }
         } else {
-            rv.m_str += comp;
-            rv.m_str += SEP;
+            rv.mStr += comp;
+            rv.mStr += SEP;
         }
     }
-    rv.m_str.pop_back();
+    rv.mStr.pop_back();
     return rv;
 }
 
 
 void helpers::path::ComponentsIter::operator++() {
-    if (end == p.m_str.size()) {
+    if (end == p.mStr.size()) {
         pos = end;
     } else {
         pos = end + 1;
-        end = p.m_str.find(SEP, pos);
+        end = p.mStr.find(SEP, pos);
         if (end == ::std::string::npos) {
-            end = p.m_str.size();
+            end = p.mStr.size();
         }
     }
 }
@@ -116,7 +116,7 @@ path& path::operator/=(const path& p) {
         throw ::std::runtime_error("Appending from an invalid path");
     }
 
-    return *this /= p.m_str.c_str();
+    return *this /= p.mStr.c_str();
 }
 path& path::operator/=(const char* o) {
     if (!this->is_valid()) {
@@ -125,8 +125,8 @@ path& path::operator/=(const char* o) {
     if (o[0] == '/') {
         throw ::std::runtime_error("Appending an absolute path to another path");
     }
-    this->m_str.push_back(SEP);
-    this->m_str.append(o);
+    this->mStr.push_back(SEP);
+    this->mStr.append(o);
     return *this;
 }
 path& path::operator/=(::std::string_view o) {
@@ -136,8 +136,8 @@ path& path::operator/=(::std::string_view o) {
     if (o[0] == '/') {
         throw ::std::runtime_error("Appending an absolute path to another path");
     }
-    this->m_str.push_back(SEP);
-    this->m_str.append(o);
+    this->mStr.push_back(SEP);
+    this->mStr.append(o);
     return *this;
 }
 path path::operator/(const path& p) const {
@@ -160,18 +160,18 @@ path path::operator+(const char* o) const {
         throw ::std::runtime_error("Appending a string containing the path separator (with operator+)");
     }
     auto rv = *this;
-    rv.m_str.append(o);
+    rv.mStr.append(o);
     return rv;
 }
 bool path::pop_component() {
     if (!this->is_valid()) {
         throw ::std::runtime_error("Calling pop_component() on an invalid path");
     }
-    auto pos = m_str.find_last_of(SEP);
+    auto pos = mStr.find_last_of(SEP);
     if (pos == ::std::string::npos || pos == 0) {
         return false;
     } else {
-        this->m_str.resize(pos);
+        this->mStr.resize(pos);
         return true;
     }
 }
@@ -179,12 +179,12 @@ path path::parent() const {
     if (!this->is_valid()) {
         throw ::std::runtime_error("Calling parent() on an invalid path");
     }
-    auto pos = m_str.find_last_of(SEP);
+    auto pos = mStr.find_last_of(SEP);
     if (pos == ::std::string::npos) {
         return path();
     } else {
         path rv;
-        rv.m_str = m_str.substr(0, pos);
+        rv.mStr = mStr.substr(0, pos);
         return rv;
     }
 }
@@ -193,19 +193,19 @@ path path::parent() const {
         throw ::std::runtime_error("Calling basename() on an invalid path");
     }
 
-    auto pos = m_str.find_last_of(SEP);
+    auto pos = mStr.find_last_of(SEP);
     if (pos == ::std::string::npos) {
-        return m_str;
+        return mStr;
     } else {
-        return m_str.substr(pos + 1);
+        return mStr.substr(pos + 1);
     }
 }
 path::ComponentsIter::ComponentsIter(const path& p, size_t i)
     : p(p)
     , pos(i) {
-    end = p.m_str.find(SEP, pos);
+    end = p.mStr.find(SEP, pos);
     if (end == ::std::string::npos) {
-        end = p.m_str.size();
+        end = p.mStr.size();
     }
 }
 }

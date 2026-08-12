@@ -7,34 +7,34 @@
 #include "ast_expr.h" // for reasons
 
 Token::~Token() {
-    switch (m_type) {
+    switch (mType) {
         case TOK_INTERPOLATED_TYPE:
-            delete reinterpret_cast<TypeRef*>(m_data.as_Fragment());
+            delete reinterpret_cast<TypeRef*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_PATTERN:
-            delete reinterpret_cast<AST::Pattern*>(m_data.as_Fragment());
+            delete reinterpret_cast<AST::Pattern*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_PATH:
-            delete reinterpret_cast<AST::Path*>(m_data.as_Fragment());
+            delete reinterpret_cast<AST::Path*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_EXPR:
-            delete reinterpret_cast<AST::ExprNode*>(m_data.as_Fragment());
+            delete reinterpret_cast<AST::ExprNode*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_STMT:
-            delete reinterpret_cast<AST::ExprNode*>(m_data.as_Fragment());
+            delete reinterpret_cast<AST::ExprNode*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_STMT_ITEM:
         case TOK_INTERPOLATED_ITEM:
-            delete reinterpret_cast<AST::Named<AST::Item>*>(m_data.as_Fragment());
+            delete reinterpret_cast<AST::Named<AST::Item>*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_BLOCK:
-            delete reinterpret_cast<AST::ExprNode*>(m_data.as_Fragment());
+            delete reinterpret_cast<AST::ExprNode*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_META:
-            delete reinterpret_cast<AST::Attribute*>(m_data.as_Fragment());
+            delete reinterpret_cast<AST::Attribute*>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_VIS:
-            delete reinterpret_cast<AST::Visibility*>(m_data.as_Fragment());
+            delete reinterpret_cast<AST::Visibility*>(mData.as_Fragment());
             break;
         default:
             break;
@@ -42,37 +42,37 @@ Token::~Token() {
 }
 
 Token::Token()
-    : m_type(TOK_NULL)
+    : mType(TOK_NULL)
 {
 }
 
 Token::Token(enum eTokenType type)
-    : m_type(type)
+    : mType(type)
 {
 }
 
 Token::Token(enum eTokenType type, Ident i)
-    : m_type(type)
-    , m_data(mv$(i))
+    : mType(type)
+    , mData(mv$(i))
 {
 }
 
 Token::Token(enum eTokenType type, ::std::string str, Ident::Hygiene h)
-    : m_type(type)
-    , m_data(Data::make_String(mv$(str)))
-    , m_hygiene(std::move(h))
+    : mType(type)
+    , mData(Data::make_String(mv$(str)))
+    , mHygiene(std::move(h))
 {
 }
 
 Token::Token(U128 val, enum eCoreType datatype)
-    : m_type(TOK_INTEGER)
-    , m_data(Data::make_Integer({datatype, val}))
+    : mType(TOK_INTEGER)
+    , mData(Data::make_Integer({datatype, val}))
 {
 }
 
 Token Token::make_float(FloatValue val, enum eCoreType datatype) {
     auto rv = Token(TOK_FLOAT);
-    rv.m_data = Data::make_Float({datatype, val});
+    rv.mData = Data::make_Float({datatype, val});
     switch (datatype) {
         case CORETYPE_F16:
         case CORETYPE_F32:
@@ -87,210 +87,210 @@ Token Token::make_float(FloatValue val, enum eCoreType datatype) {
 }
 
 Token::Token(const InterpolatedFragment& frag) {
-    switch (frag.m_type) {
+    switch (frag.mType) {
         case InterpolatedFragment::TT:
             throw "";
         case InterpolatedFragment::VIS:
-            m_type = TOK_INTERPOLATED_VIS;
-            m_data = new AST::Visibility(*reinterpret_cast<const AST::Visibility*>(frag.m_ptr));
+            mType = TOK_INTERPOLATED_VIS;
+            mData = new AST::Visibility(*reinterpret_cast<const AST::Visibility*>(frag.ptr));
             break;
         case InterpolatedFragment::TYPE:
-            m_type = TOK_INTERPOLATED_TYPE;
-            m_data = new TypeRef(reinterpret_cast<const TypeRef*>(frag.m_ptr)->clone());
+            mType = TOK_INTERPOLATED_TYPE;
+            mData = new TypeRef(reinterpret_cast<const TypeRef*>(frag.ptr)->clone());
             break;
         case InterpolatedFragment::PAT:
-            m_type = TOK_INTERPOLATED_PATTERN;
-            m_data = new AST::Pattern(reinterpret_cast<const AST::Pattern*>(frag.m_ptr)->clone());
+            mType = TOK_INTERPOLATED_PATTERN;
+            mData = new AST::Pattern(reinterpret_cast<const AST::Pattern*>(frag.ptr)->clone());
             break;
         case InterpolatedFragment::PATH:
-            m_type = TOK_INTERPOLATED_PATH;
-            m_data = new AST::Path(*reinterpret_cast<const AST::Path*>(frag.m_ptr));
+            mType = TOK_INTERPOLATED_PATH;
+            mData = new AST::Path(*reinterpret_cast<const AST::Path*>(frag.ptr));
             break;
         case InterpolatedFragment::EXPR:
-            m_type = TOK_INTERPOLATED_EXPR;
+            mType = TOK_INTERPOLATED_EXPR;
             if (0) {
                 case InterpolatedFragment::STMT:
-                    m_type = TOK_INTERPOLATED_STMT;
+                    mType = TOK_INTERPOLATED_STMT;
             }
             if (0) {
                 case InterpolatedFragment::BLOCK:
-                    m_type = TOK_INTERPOLATED_BLOCK;
+                    mType = TOK_INTERPOLATED_BLOCK;
             }
 
-            m_data = reinterpret_cast<const AST::ExprNode*>(frag.m_ptr)->clone().release();
+            mData = reinterpret_cast<const AST::ExprNode*>(frag.ptr)->clone().release();
             break;
         case InterpolatedFragment::META:
-            m_type = TOK_INTERPOLATED_META;
-            m_data = new AST::Attribute(reinterpret_cast<const AST::Attribute*>(frag.m_ptr)->clone());
+            mType = TOK_INTERPOLATED_META;
+            mData = new AST::Attribute(reinterpret_cast<const AST::Attribute*>(frag.ptr)->clone());
             break;
         case InterpolatedFragment::STMT_ITEM:
         case InterpolatedFragment::ITEM: {
-            m_type = frag.m_type == InterpolatedFragment::STMT_ITEM ? TOK_INTERPOLATED_STMT_ITEM : TOK_INTERPOLATED_ITEM;
-            const auto& named = *reinterpret_cast<const AST::Named<AST::Item>*>(frag.m_ptr);
+            mType = frag.mType == InterpolatedFragment::STMT_ITEM ? TOK_INTERPOLATED_STMT_ITEM : TOK_INTERPOLATED_ITEM;
+            const auto& named = *reinterpret_cast<const AST::Named<AST::Item>*>(frag.ptr);
             auto item = named.data.clone();
-            m_data = new AST::Named<AST::Item>(named.span, named.attrs.clone(), named.vis, named.name, mv$(item));
+            mData = new AST::Named<AST::Item>(named.span, named.attrs.clone(), named.vis, named.name, mv$(item));
             break;
         }
     }
 }
 
 Token::Token(TagTakeIP, InterpolatedFragment frag) {
-    switch (frag.m_type) {
+    switch (frag.mType) {
         case InterpolatedFragment::TT:
             throw "";
         case InterpolatedFragment::VIS:
-            m_type = TOK_INTERPOLATED_VIS;
-            m_data = frag.m_ptr;
-            frag.m_ptr = nullptr;
+            mType = TOK_INTERPOLATED_VIS;
+            mData = frag.ptr;
+            frag.ptr = nullptr;
             break;
         case InterpolatedFragment::TYPE:
-            m_type = TOK_INTERPOLATED_TYPE;
-            m_data = frag.m_ptr;
-            frag.m_ptr = nullptr;
+            mType = TOK_INTERPOLATED_TYPE;
+            mData = frag.ptr;
+            frag.ptr = nullptr;
             break;
         case InterpolatedFragment::PAT:
-            m_type = TOK_INTERPOLATED_PATTERN;
-            m_data = frag.m_ptr;
-            frag.m_ptr = nullptr;
+            mType = TOK_INTERPOLATED_PATTERN;
+            mData = frag.ptr;
+            frag.ptr = nullptr;
             break;
         case InterpolatedFragment::PATH:
-            m_type = TOK_INTERPOLATED_PATH;
-            m_data = frag.m_ptr;
-            frag.m_ptr = nullptr;
+            mType = TOK_INTERPOLATED_PATH;
+            mData = frag.ptr;
+            frag.ptr = nullptr;
             break;
         case InterpolatedFragment::EXPR:
-            m_type = TOK_INTERPOLATED_EXPR;
+            mType = TOK_INTERPOLATED_EXPR;
             if (0) {
                 case InterpolatedFragment::STMT:
-                    m_type = TOK_INTERPOLATED_STMT;
+                    mType = TOK_INTERPOLATED_STMT;
             }
             if (0) {
                 case InterpolatedFragment::BLOCK:
-                    m_type = TOK_INTERPOLATED_BLOCK;
+                    mType = TOK_INTERPOLATED_BLOCK;
             }
 
-            m_data = reinterpret_cast<AST::ExprNode*>(frag.m_ptr);
-            frag.m_ptr = nullptr;
+            mData = reinterpret_cast<AST::ExprNode*>(frag.ptr);
+            frag.ptr = nullptr;
             break;
         case InterpolatedFragment::STMT_ITEM:
         case InterpolatedFragment::ITEM:
-            m_type = frag.m_type == InterpolatedFragment::STMT_ITEM ? TOK_INTERPOLATED_STMT_ITEM : TOK_INTERPOLATED_ITEM;
-            m_data = frag.m_ptr;
-            frag.m_ptr = nullptr;
+            mType = frag.mType == InterpolatedFragment::STMT_ITEM ? TOK_INTERPOLATED_STMT_ITEM : TOK_INTERPOLATED_ITEM;
+            mData = frag.ptr;
+            frag.ptr = nullptr;
             break;
         case InterpolatedFragment::META:
-            m_type = TOK_INTERPOLATED_META;
-            m_data = frag.m_ptr;
-            frag.m_ptr = nullptr;
+            mType = TOK_INTERPOLATED_META;
+            mData = frag.ptr;
+            frag.ptr = nullptr;
             break;
     }
 }
 
 Token::Token(const Token& t)
-    : m_type(t.m_type)
-    , m_data(Data::make_None({}))
-    , m_pos(t.m_pos)
-    , m_hygiene(t.m_hygiene)
+    : mType(t.mType)
+    , mData(Data::make_None({}))
+    , pos(t.pos)
+    , mHygiene(t.mHygiene)
 {
-    assert(t.m_data.tag() != Data::TAGDEAD);
-    TU_MATCH_HDRA( (t.m_data), {)
+    assert(t.mData.tag() != Data::TAGDEAD);
+    TU_MATCH_HDRA( (t.mData), {)
     TU_ARMA(None, e) {
         }
         TU_ARMA(Ident, e) {
-            m_data = Data::make_Ident(e);
+            mData = Data::make_Ident(e);
         }
         TU_ARMA(String, e) {
-            m_data = Data::make_String(e);
+            mData = Data::make_String(e);
         }
         TU_ARMA(Integer, e) {
-            m_data = Data::make_Integer(e);
+            mData = Data::make_Integer(e);
         }
         TU_ARMA(Float, e) {
-            m_data = Data::make_Float(e);
+            mData = Data::make_Float(e);
         }
         TU_ARMA(Fragment, e) {
-            BUG(Span(Span(), t.m_pos), "Attempted to copy a fragment - " << t);
+            BUG(Span(Span(), t.pos), "Attempted to copy a fragment - " << t);
         }
     }
 }
 
 Token Token::clone() const {
-    Token rv(m_type);
-    rv.m_pos = m_pos;
-    rv.m_hygiene = m_hygiene;
+    Token rv(mType);
+    rv.pos = pos;
+    rv.mHygiene = mHygiene;
 
-    assert(m_data.tag() != Data::TAGDEAD);
-    TU_MATCH(Data, (m_data), (e), (None, ), (Ident, rv.m_data = Data::make_Ident(e);), (String, rv.m_data = Data::make_String(e);), (Integer, rv.m_data = Data::make_Integer(e);), (Float, rv.m_data = Data::make_Float(e);), (Fragment, assert(e); switch (m_type) {
+    assert(mData.tag() != Data::TAGDEAD);
+    TU_MATCH(Data, (mData), (e), (None, ), (Ident, rv.mData = Data::make_Ident(e);), (String, rv.mData = Data::make_String(e);), (Integer, rv.mData = Data::make_Integer(e);), (Float, rv.mData = Data::make_Float(e);), (Fragment, assert(e); switch (mType) {
                  case TOK_INTERPOLATED_TYPE:
-                     rv.m_data = new TypeRef(reinterpret_cast<TypeRef*>(e)->clone());
+                     rv.mData = new TypeRef(reinterpret_cast<TypeRef*>(e)->clone());
                      break;
                  case TOK_INTERPOLATED_PATTERN:
-                     rv.m_data = new AST::Pattern(reinterpret_cast<AST::Pattern*>(e)->clone());
+                     rv.mData = new AST::Pattern(reinterpret_cast<AST::Pattern*>(e)->clone());
                      break;
                  case TOK_INTERPOLATED_PATH:
-                     rv.m_data = new AST::Path(*reinterpret_cast<AST::Path*>(e));
+                     rv.mData = new AST::Path(*reinterpret_cast<AST::Path*>(e));
                      break;
                  case TOK_INTERPOLATED_EXPR:
-                     rv.m_data = reinterpret_cast<AST::ExprNode*>(e)->clone().release();
+                     rv.mData = reinterpret_cast<AST::ExprNode*>(e)->clone().release();
                      break;
                  case TOK_INTERPOLATED_STMT:
-                     rv.m_data = reinterpret_cast<AST::ExprNode*>(e)->clone().release();
+                     rv.mData = reinterpret_cast<AST::ExprNode*>(e)->clone().release();
                      break;
                  case TOK_INTERPOLATED_BLOCK:
-                     rv.m_data = reinterpret_cast<AST::ExprNode*>(e)->clone().release();
+                     rv.mData = reinterpret_cast<AST::ExprNode*>(e)->clone().release();
                      break;
                  case TOK_INTERPOLATED_META:
-                     rv.m_data = new AST::Attribute(reinterpret_cast<AST::Attribute*>(e)->clone());
+                     rv.mData = new AST::Attribute(reinterpret_cast<AST::Attribute*>(e)->clone());
                      break;
                  case TOK_INTERPOLATED_STMT_ITEM:
                  case TOK_INTERPOLATED_ITEM: {
                      const auto& named = *reinterpret_cast<AST::Named<AST::Item>*>(e);
                      auto item = named.data.clone();
-                     rv.m_data = new AST::Named<AST::Item>(named.span, named.attrs.clone(), named.vis, named.name, mv$(item));
+                     rv.mData = new AST::Named<AST::Item>(named.span, named.attrs.clone(), named.vis, named.name, mv$(item));
                      break;
                  }
                  default:
-                     BUG(Span(Span(), m_pos), "Fragment with invalid token type (" << *this << ")");
+                     BUG(Span(Span(), pos), "Fragment with invalid token type (" << *this << ")");
                      break;
-             } assert(rv.m_data.is_Fragment());))
+             } assert(rv.mData.is_Fragment());))
     return rv;
 }
 
 AST::ExprNode& Token::frag_node() {
-    assert(m_type == TOK_INTERPOLATED_EXPR || m_type == TOK_INTERPOLATED_STMT || m_type == TOK_INTERPOLATED_BLOCK);
-    auto ptr = m_data.as_Fragment();
+    assert(mType == TOK_INTERPOLATED_EXPR || mType == TOK_INTERPOLATED_STMT || mType == TOK_INTERPOLATED_BLOCK);
+    auto ptr = mData.as_Fragment();
     return *reinterpret_cast<AST::ExprNode*>(ptr);
 }
 
 ::std::unique_ptr<AST::ExprNode> Token::take_frag_node() {
-    assert(m_type == TOK_INTERPOLATED_EXPR || m_type == TOK_INTERPOLATED_STMT || m_type == TOK_INTERPOLATED_BLOCK);
-    auto ptr = m_data.as_Fragment();
-    m_data.as_Fragment() = nullptr;
+    assert(mType == TOK_INTERPOLATED_EXPR || mType == TOK_INTERPOLATED_STMT || mType == TOK_INTERPOLATED_BLOCK);
+    auto ptr = mData.as_Fragment();
+    mData.as_Fragment() = nullptr;
     return ::std::unique_ptr<AST::ExprNode>(reinterpret_cast<AST::ExprNode*>(ptr));
 }
 
 ::AST::Named<AST::Item> Token::take_frag_item() {
-    assert(m_type == TOK_INTERPOLATED_ITEM);
-    auto ptr = reinterpret_cast<AST::Named<AST::Item>*>(m_data.as_Fragment());
-    m_data.as_Fragment() = nullptr;
+    assert(mType == TOK_INTERPOLATED_ITEM);
+    auto ptr = reinterpret_cast<AST::Named<AST::Item>*>(mData.as_Fragment());
+    mData.as_Fragment() = nullptr;
     auto rv = mv$(*ptr);
     delete ptr;
     return mv$(rv);
 }
 
 ::AST::Named<AST::Item> Token::take_frag_stmt_item() {
-    assert(m_type == TOK_INTERPOLATED_STMT_ITEM);
-    auto ptr = reinterpret_cast<AST::Named<AST::Item>*>(m_data.as_Fragment());
-    m_data.as_Fragment() = nullptr;
+    assert(mType == TOK_INTERPOLATED_STMT_ITEM);
+    auto ptr = reinterpret_cast<AST::Named<AST::Item>*>(mData.as_Fragment());
+    mData.as_Fragment() = nullptr;
     auto rv = mv$(*ptr);
     delete ptr;
     return mv$(rv);
 }
 
 ::AST::Visibility Token::take_frag_vis() {
-    assert(m_type == TOK_INTERPOLATED_VIS);
-    auto ptr = reinterpret_cast<AST::Visibility*>(m_data.as_Fragment());
-    m_data.as_Fragment() = nullptr;
+    assert(mType == TOK_INTERPOLATED_VIS);
+    auto ptr = reinterpret_cast<AST::Visibility*>(mData.as_Fragment());
+    mData.as_Fragment() = nullptr;
     auto rv = mv$(*ptr);
     delete ptr;
     return mv$(rv);
@@ -354,7 +354,7 @@ struct EscapedString {
 
 ::std::string Token::to_str() const {
     ::std::stringstream ss;
-    switch (m_type) {
+    switch (mType) {
         case TOK_NULL:
             return "/*null*/";
         case TOK_EOF:
@@ -365,21 +365,21 @@ struct EscapedString {
         case TOK_WHITESPACE:
             return " ";
         case TOK_COMMENT:
-            return "/*" + m_data.as_String() + "*/";
+            return "/*" + mData.as_String() + "*/";
         case TOK_INTERPOLATED_TYPE:
-            reinterpret_cast<const ::TypeRef*>(m_data.as_Fragment())->print(ss, false);
+            reinterpret_cast<const ::TypeRef*>(mData.as_Fragment())->print(ss, false);
             return ss.str();
         case TOK_INTERPOLATED_PATH:
-            reinterpret_cast<const ::AST::Path*>(m_data.as_Fragment())->print_pretty(ss, true);
+            reinterpret_cast<const ::AST::Path*>(mData.as_Fragment())->print_pretty(ss, true);
             return ss.str();
         case TOK_INTERPOLATED_PATTERN:
             // TODO: Use a pretty printer too?
-            return FMT(*reinterpret_cast<const ::AST::Pattern*>(m_data.as_Fragment()));
+            return FMT(*reinterpret_cast<const ::AST::Pattern*>(mData.as_Fragment()));
         case TOK_INTERPOLATED_STMT:
         case TOK_INTERPOLATED_BLOCK:
         case TOK_INTERPOLATED_EXPR: {
             ::std::stringstream ss;
-            reinterpret_cast<const ::AST::ExprNode*>(m_data.as_Fragment())->print(ss);
+            reinterpret_cast<const ::AST::ExprNode*>(mData.as_Fragment())->print(ss);
             return ss.str();
         }
         case TOK_INTERPOLATED_META:
@@ -390,17 +390,17 @@ struct EscapedString {
             return "/*:item*/";
         case TOK_INTERPOLATED_VIS: {
             ::std::stringstream ss;
-            ss << *reinterpret_cast<const ::AST::Visibility*>(m_data.as_Fragment());
+            ss << *reinterpret_cast<const ::AST::Visibility*>(mData.as_Fragment());
             return ss.str();
         }
         // Value tokens
         case TOK_IDENT:
-            return m_data.as_Ident().name.c_str();
+            return mData.as_Ident().name.c_str();
         case TOK_LIFETIME:
-            return FMT("'" << m_data.as_Ident().name.c_str());
+            return FMT("'" << mData.as_Ident().name.c_str());
         case TOK_INTEGER: {
-            auto v = m_data.as_Integer().m_intval;
-            switch (m_data.as_Integer().m_datatype) {
+            auto v = mData.as_Integer().intval;
+            switch (mData.as_Integer().datatype) {
                 case CORETYPE_CHAR:
                     if (v >= 0x20 && v < 128) {
                         switch (v.truncate_u64()) {
@@ -414,26 +414,26 @@ struct EscapedString {
                     }
                     return FMT("'\\u{" << ::std::hex << v << ::std::dec << "}'");
                 case CORETYPE_ANY:
-                    return FMT(m_data.as_Integer().m_intval);
+                    return FMT(mData.as_Integer().intval);
                 default:
-                    return FMT(m_data.as_Integer().m_intval << "_" << coretype_name(m_data.as_Integer().m_datatype));
+                    return FMT(mData.as_Integer().intval << "_" << coretype_name(mData.as_Integer().datatype));
             }
             break;
         }
         case TOK_CHAR:
-            return FMT("'\\u{" << ::std::hex << m_data.as_Integer().m_intval << "}");
+            return FMT("'\\u{" << ::std::hex << mData.as_Integer().intval << "}");
         case TOK_FLOAT:
-            if (m_data.as_Float().m_datatype == CORETYPE_ANY) {
-                return FMT(m_data.as_Float().m_floatval);
+            if (mData.as_Float().datatype == CORETYPE_ANY) {
+                return FMT(mData.as_Float().floatval);
             } else {
-                return FMT(m_data.as_Float().m_floatval << "_" << m_data.as_Float().m_datatype);
+                return FMT(mData.as_Float().floatval << "_" << mData.as_Float().datatype);
             }
         case TOK_STRING:
-            return FMT("\"" << EscapedString(m_data.as_String()) << "\"");
+            return FMT("\"" << EscapedString(mData.as_String()) << "\"");
         case TOK_CSTRING:
-            return FMT("c\"" << EscapedString(m_data.as_String()) << "\"");
+            return FMT("c\"" << EscapedString(mData.as_String()) << "\"");
         case TOK_BYTESTRING:
-            return FMT("b\"" << m_data.as_String() << "\"");
+            return FMT("b\"" << mData.as_String() << "\"");
         case TOK_HASH:
             return "#";
         case TOK_UNDERSCORE:
@@ -675,57 +675,57 @@ struct EscapedString {
     switch (tok.type()) {
         case TOK_STRING:
         case TOK_BYTESTRING:
-            if (tok.m_data.is_String()) {
+            if (tok.mData.is_String()) {
                 os << "\"" << EscapedString(tok.str()) << "\"";
-            } else if (tok.m_data.is_None())
+            } else if (tok.mData.is_None())
                 ;
             else {
                 os << "?inner?";
             }
-            os << tok.m_hygiene;
+            os << tok.mHygiene;
             break;
         case TOK_IDENT:
         case TOK_LIFETIME:
-            if (const auto* td = tok.m_data.opt_Ident()) {
+            if (const auto* td = tok.mData.opt_Ident()) {
                 os << "\"" << td->name << "\"" << td->hygiene;
-            } else if (tok.m_data.is_None())
+            } else if (tok.mData.is_None())
                 ;
             else {
                 os << "?inner?";
             }
             break;
         case TOK_INTEGER:
-            if (tok.m_data.is_Integer()) {
+            if (tok.mData.is_Integer()) {
                 os << ":" << tok.intval();
             }
             break;
         case TOK_INTERPOLATED_TYPE:
-            os << ":" << *reinterpret_cast<TypeRef*>(tok.m_data.as_Fragment());
+            os << ":" << *reinterpret_cast<TypeRef*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_PATTERN:
-            os << ":" << *reinterpret_cast<AST::Pattern*>(tok.m_data.as_Fragment());
+            os << ":" << *reinterpret_cast<AST::Pattern*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_PATH:
-            os << ":" << *reinterpret_cast<AST::Path*>(tok.m_data.as_Fragment());
+            os << ":" << *reinterpret_cast<AST::Path*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_EXPR:
-            os << ":" << *reinterpret_cast<const AST::ExprNode*>(tok.m_data.as_Fragment());
+            os << ":" << *reinterpret_cast<const AST::ExprNode*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_STMT:
-            os << ":" << *reinterpret_cast<const AST::ExprNode*>(tok.m_data.as_Fragment());
+            os << ":" << *reinterpret_cast<const AST::ExprNode*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_STMT_ITEM: {
-            const auto& named_item = *reinterpret_cast<const AST::Named<AST::Item>*>(tok.m_data.as_Fragment());
+            const auto& named_item = *reinterpret_cast<const AST::Named<AST::Item>*>(tok.mData.as_Fragment());
             os << ":" << named_item.data.tag_str() << "(" << named_item.name << ")";
         } break;
         case TOK_INTERPOLATED_BLOCK:
-            os << ":" << *reinterpret_cast<const AST::ExprNode*>(tok.m_data.as_Fragment());
+            os << ":" << *reinterpret_cast<const AST::ExprNode*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_META:
-            os << ":" << *reinterpret_cast<AST::Attribute*>(tok.m_data.as_Fragment());
+            os << ":" << *reinterpret_cast<AST::Attribute*>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_ITEM: {
-            const auto& named_item = *reinterpret_cast<const AST::Named<AST::Item>*>(tok.m_data.as_Fragment());
+            const auto& named_item = *reinterpret_cast<const AST::Named<AST::Item>*>(tok.mData.as_Fragment());
             os << ":" << named_item.data.tag_str() << "(" << named_item.name << ")";
         } break;
         default:
@@ -758,9 +758,9 @@ Position::Position(RcString filename, unsigned int line, unsigned int ofs)
 // Only for strings, for formatting
 
 Token::Token(enum eTokenType t, Data d, Position p)
-    : m_type(t)
-    , m_data(::std::move(d))
-    , m_pos(::std::move(p)) {
+    : mType(t)
+    , mData(::std::move(d))
+    , pos(::std::move(p)) {
 }
 Token& Token::operator=(Token&& t) {
     if (this == &t) {
@@ -771,11 +771,11 @@ Token& Token::operator=(Token&& t) {
     return *this;
 }
 Token::Token(Token&& t)
-    : m_type(t.m_type)
-    , m_data(::std::move(t.m_data))
-    , m_pos(::std::move(t.m_pos))
-    , m_hygiene(std::move(t.m_hygiene)) {
-    t.m_type = TOK_NULL;
+    : mType(t.mType)
+    , mData(::std::move(t.mData))
+    , pos(::std::move(t.pos))
+    , mHygiene(std::move(t.mHygiene)) {
+    t.mType = TOK_NULL;
 }
 Token& Token::operator=(const Token& t) {
     this->~Token();
@@ -784,25 +784,25 @@ Token& Token::operator=(const Token& t) {
 }
 // TODO: Replace these with a way of getting a InterpolatedFragment&
 TypeRef& Token::frag_type() {
-    assert(m_type == TOK_INTERPOLATED_TYPE);
-    return *reinterpret_cast<TypeRef*>(m_data.as_Fragment());
+    assert(mType == TOK_INTERPOLATED_TYPE);
+    return *reinterpret_cast<TypeRef*>(mData.as_Fragment());
 }
 AST::Path& Token::frag_path() {
-    assert(m_type == TOK_INTERPOLATED_PATH);
-    return *reinterpret_cast<AST::Path*>(m_data.as_Fragment());
+    assert(mType == TOK_INTERPOLATED_PATH);
+    return *reinterpret_cast<AST::Path*>(mData.as_Fragment());
 }
 AST::Pattern& Token::frag_pattern() {
-    assert(m_type == TOK_INTERPOLATED_PATTERN);
-    return *reinterpret_cast<AST::Pattern*>(m_data.as_Fragment());
+    assert(mType == TOK_INTERPOLATED_PATTERN);
+    return *reinterpret_cast<AST::Pattern*>(mData.as_Fragment());
 }
 AST::Attribute& Token::frag_meta() {
-    assert(m_type == TOK_INTERPOLATED_META);
-    return *reinterpret_cast<AST::Attribute*>(m_data.as_Fragment());
+    assert(mType == TOK_INTERPOLATED_META);
+    return *reinterpret_cast<AST::Attribute*>(mData.as_Fragment());
 }
 bool Token::operator==(const Token& r) const {
     if (type() != r.type()) {
         return false;
     }
-    TU_MATCH(Data, (m_data, r.m_data), (e, re), (None, return true;), (Ident, return e.same_name(re);), (String, return e == re;), (Integer, return e.m_datatype == re.m_datatype && e.m_intval == re.m_intval;), (Float, return e.m_datatype == re.m_datatype && e.m_floatval == re.m_floatval;), (Fragment, assert(!"Token equality on Fragment");))
+    TU_MATCH(Data, (mData, r.mData), (e, re), (None, return true;), (Ident, return e.same_name(re);), (String, return e == re;), (Integer, return e.datatype == re.datatype && e.intval == re.intval;), (Float, return e.datatype == re.datatype && e.floatval == re.floatval;), (Fragment, assert(!"Token equality on Fragment");))
     throw "";
 }

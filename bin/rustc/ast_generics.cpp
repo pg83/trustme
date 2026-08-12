@@ -3,57 +3,57 @@
 namespace AST {
 
 TypeParam::TypeParam(const TypeParam& x)
-    : m_attrs(x.m_attrs)
-    , m_span(x.m_span)
-    , m_name(x.m_name)
-    , m_default(x.m_default.clone()) {
+    : mAttrs(x.mAttrs)
+    , mSpan(x.mSpan)
+    , mName(x.mName)
+    , defaultValue(x.defaultValue.clone()) {
 }
 TypeParam::TypeParam(Span sp, ::AST::AttributeList attrs, RcString name)
-    : m_attrs(::std::move(attrs))
-    , m_span(::std::move(sp))
-    , m_name(::std::move(name))
-    , m_default(m_span) {
+    : mAttrs(::std::move(attrs))
+    , mSpan(::std::move(sp))
+    , mName(::std::move(name))
+    , defaultValue(mSpan) {
 }
 void TypeParam::setDefault(TypeRef type) {
-    assert(m_default.is_wildcard());
-    m_default = ::std::move(type);
+    assert(defaultValue.is_wildcard());
+    defaultValue = ::std::move(type);
 }
 LifetimeParam::LifetimeParam(Span sp, ::AST::AttributeList attrs, Ident name)
-    : m_attrs(::std::move(attrs))
-    , m_span(::std::move(sp))
-    , m_name(::std::move(name)) {
+    : mAttrs(::std::move(attrs))
+    , mSpan(::std::move(sp))
+    , mName(::std::move(name)) {
 }
 ValueParam::ValueParam(Span sp, ::AST::AttributeList attrs, Ident name, TypeRef type, Expr val)
-    : m_attrs(::std::move(attrs))
-    , m_span(::std::move(sp))
-    , m_name(::std::move(name))
-    , m_type(::std::move(type))
-    , m_default(::std::move(val)) {
+    : mAttrs(::std::move(attrs))
+    , mSpan(::std::move(sp))
+    , mName(::std::move(name))
+    , mType(::std::move(type))
+    , defaultValue(::std::move(val)) {
 }
 ValueParam::ValueParam(const ValueParam& x)
-    : m_attrs(x.m_attrs)
-    , m_span(x.m_span)
-    , m_name(x.m_name)
-    , m_type(x.m_type.clone())
-    , m_default(x.m_default ? x.m_default.clone() : Expr()) {
+    : mAttrs(x.mAttrs)
+    , mSpan(x.mSpan)
+    , mName(x.mName)
+    , mType(x.mType.clone())
+    , defaultValue(x.defaultValue ? x.defaultValue.clone() : Expr()) {
 }
 GenericParams::GenericParams() {
 }
 GenericParams GenericParams::clone() const {
     GenericParams rv;
-    rv.m_params.reserve(m_params.size());
-    for (const auto& e : m_params) {
-        rv.m_params.push_back(e.clone());
+    rv.mParams.reserve(mParams.size());
+    for (const auto& e : mParams) {
+        rv.mParams.push_back(e.clone());
     }
-    rv.m_bounds.reserve(m_bounds.size());
-    for (auto& e : m_bounds) {
-        rv.m_bounds.push_back(e.clone());
+    rv.bounds.reserve(bounds.size());
+    for (auto& e : bounds) {
+        rv.bounds.push_back(e.clone());
     }
     return rv;
 }
 void GenericParams::add_param(GenericParam gp, size_t bounds_start, size_t bounds_end) {
-    m_params.push_back(::std::move(gp));
-    m_params.back().bounds_start = bounds_start;
-    m_params.back().bounds_end = bounds_end;
+    mParams.push_back(::std::move(gp));
+    mParams.back().bounds_start = bounds_start;
+    mParams.back().bounds_end = bounds_end;
 }
 }

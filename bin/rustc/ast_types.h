@@ -33,7 +33,7 @@ namespace AST {
     // Defined here for dependency reasons
     class HigherRankedBounds {
     public:
-        ::std::vector<LifetimeParam> m_lifetimes;
+        ::std::vector<LifetimeParam> mLifetimes;
         //::std::vector<TypeParam>    m_types;
         //::std::vector<GenericBound>    m_bounds;
 
@@ -51,7 +51,7 @@ namespace AST {
 }
 
 class PrettyPrintType {
-    const TypeRef& m_type;
+    const TypeRef& mType;
 
 public:
     PrettyPrintType(const TypeRef& ty);
@@ -64,9 +64,9 @@ public:
 struct TypeFunction {
     AST::HigherRankedBounds hrbs;
     bool is_unsafe;
-    ::std::string m_abi;
-    ::std::unique_ptr<TypeRef> m_rettype;
-    ::std::vector<TypeRef> m_arg_types;
+    ::std::string mAbi;
+    ::std::unique_ptr<TypeRef> mRettype;
+    ::std::vector<TypeRef> argTypes;
     bool is_variadic;
 
     TypeFunction();
@@ -146,10 +146,10 @@ TAGGED_UNION_OUT_OF_LINE(
 
 /// A type
 class TypeRef {
-    Span m_span;
+    Span mSpan;
 
 public:
-    TypeData m_data;
+    TypeData mData;
 
     ~TypeRef();
 
@@ -161,13 +161,13 @@ public:
     TypeRef& operator=(const TypeRef& other) = delete;
 #else
     TypeRef(const TypeRef& other)
-        : m_span(other.m_span)
+        : mSpan(other.mSpan)
     {
         *this = other.clone();
     }
 
     TypeRef& operator=(const TypeRef& other) {
-        m_data = mv$(other.clone().m_data);
+        mData = mv$(other.clone().mData);
         return *this;
     }
 #endif
@@ -232,69 +232,69 @@ public:
     TypeRef(Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<AST::LifetimeRef> lifetimes);
 
     const Span& span() const {
-        return m_span;
+        return mSpan;
     }
 
     bool is_valid() const {
-        return !m_data.is_None();
+        return !mData.is_None();
     }
 
     bool is_unbounded() const {
-        return m_data.is_Any();
+        return mData.is_Any();
     }
 
     bool is_wildcard() const {
-        return m_data.is_Any();
+        return mData.is_Any();
     }
 
     bool is_unit() const {
-        return m_data.is_Unit();
+        return mData.is_Unit();
     }
 
     bool is_primitive() const {
-        return m_data.is_Primitive();
+        return mData.is_Primitive();
     }
 
     bool is_path() const {
-        return m_data.is_Path();
+        return mData.is_Path();
     }
 
     const AST::Path& path() const {
-        return *m_data.as_Path();
+        return *mData.as_Path();
     }
 
     AST::Path& path() {
-        return *m_data.as_Path();
+        return *mData.as_Path();
     }
 
     bool is_type_param() const {
-        return m_data.is_Generic();
+        return mData.is_Generic();
     }
 
     const RcString& type_param() const {
-        return m_data.as_Generic().name;
+        return mData.as_Generic().name;
     }
 
     bool is_reference() const {
-        return m_data.is_Borrow();
+        return mData.is_Borrow();
     }
 
     bool is_pointer() const {
-        return m_data.is_Pointer();
+        return mData.is_Pointer();
     }
 
     bool is_tuple() const {
-        return m_data.is_Tuple();
+        return mData.is_Tuple();
     }
 
     TypeRef clone() const;
 
     const TypeRef& inner_type() const {
-        TU_MATCH_DEF(TypeData, (m_data), (e), (throw ::std::runtime_error("Called inner_type on non-wrapper");), (Borrow, return *e.inner;), (Pointer, return *e.inner;), (Array, return *e.inner;))
+        TU_MATCH_DEF(TypeData, (mData), (e), (throw ::std::runtime_error("Called inner_type on non-wrapper");), (Borrow, return *e.inner;), (Pointer, return *e.inner;), (Array, return *e.inner;))
     }
 
     TypeRef& inner_type() {
-        TU_MATCH_DEF(TypeData, (m_data), (e), (throw ::std::runtime_error("Called inner_type on non-wrapper");), (Borrow, return *e.inner;), (Pointer, return *e.inner;), (Array, return *e.inner;))
+        TU_MATCH_DEF(TypeData, (mData), (e), (throw ::std::runtime_error("Called inner_type on non-wrapper");), (Borrow, return *e.inner;), (Pointer, return *e.inner;), (Array, return *e.inner;))
     }
 
     Ordering ord(const TypeRef& x) const;

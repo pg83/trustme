@@ -34,9 +34,9 @@
 #define NEWNODE(ty, ...) ::AST::ExprNodeP(new ::AST::ExprNode##ty(__VA_ARGS__))
 
 void ExpandTestHarness(::AST::Crate& crate) {
-    ASSERT_BUG(Span(), crate.m_ext_cratename_test != "", "Crate `test` not loaded");
-    ASSERT_BUG(Span(), crate.m_ext_cratename_std != "", "Crate `std` not loaded");
-    auto c_test = crate.m_ext_cratename_test;
+    ASSERT_BUG(Span(), crate.extCratenameTest != "", "Crate `test` not loaded");
+    ASSERT_BUG(Span(), crate.extCratenameStd != "", "Crate `std` not loaded");
+    auto c_test = crate.extCratenameTest;
     // Create the following module:
     // ```
     // mod `#test` {
@@ -61,7 +61,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
     // ---- test list ----
     ::std::vector<::AST::ExprNodeP> test_nodes;
 
-    for (const auto& test : crate.m_tests) {
+    for (const auto& test : crate.tests) {
         ::AST::ExprNodeStructLiteral::t_values desc_vals;
         // `name: "foo",`
         desc_vals.push_back({{}, "name", NEWNODE(CallPath, ::AST::Path(c_test, {::AST::PathNode("StaticTestName")}), ::make_vec1(NEWNODE(String, test.name)))});
@@ -90,7 +90,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
             desc_vals.push_back({{}, "test_type", NEWNODE(NamedValue, ::AST::Path(c_test, {AST::PathNode("TestType"), AST::PathNode("UnitTest")}))});
         }
         {
-            desc_vals.push_back({{}, "ignore_message", NEWNODE(NamedValue, ::AST::Path(crate.m_ext_cratename_std, {AST::PathNode("option"), AST::PathNode("Option"), AST::PathNode("None")}))});
+            desc_vals.push_back({{}, "ignore_message", NEWNODE(NamedValue, ::AST::Path(crate.extCratenameStd, {AST::PathNode("option"), AST::PathNode("Option"), AST::PathNode("None")}))});
             auto sp = test.span.get_top_file_span();
             desc_vals.push_back({{}, "source_file", NEWNODE(String, sp.filename.c_str())});
             desc_vals.push_back({{}, "start_line", NEWNODE(Integer, U128(sp.start_line), CORETYPE_UINT)});
@@ -120,7 +120,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
     }
     auto* tests_array = new ::AST::ExprNodeArray(mv$(test_nodes));
 
-    size_t test_count = tests_array->m_values.size();
+    size_t test_count = tests_array->values.size();
     auto list_item_ty = TypeRef(Span(), ::AST::Path(c_test, {::AST::PathNode("TestDescAndFn")}));
     // NOTE: 1.39+ needs &TestDescAndFn here
     {
@@ -139,8 +139,8 @@ void ExpandTestHarness(::AST::Crate& crate) {
     newmod.add_item(Span(), vis_private, "main", mv$(main_fn), {});
     newmod.add_item(Span(), vis_private, "TESTS", mv$(tests_list), {});
 
-    crate.m_root_module.add_item(Span(), vis_private, "test#", mv$(newmod), {});
-    crate.m_lang_items["mrustc-main"] = ::AST::AbsolutePath("", {"test#", "main"});
+    crate.rootModule.add_item(Span(), vis_private, "test#", mv$(newmod), {});
+    crate.mLangItems["mrustc-main"] = ::AST::AbsolutePath("", {"test#", "main"});
 }
 
 #undef NEWNODE
@@ -387,8 +387,8 @@ int main(int argc, char* argv[]) {
             return ParseCrate(pool, *types, params.infile, params.edition);
         });
         AST::Crate& crate = *crate_ptr;
-        crate.m_test_harness = params.test_harness;
-        crate.m_crate_name_suffix = params.crate_name_suffix;
+        crate.testHarness = params.test_harness;
+        crate.crateNameSuffix = params.crate_name_suffix;
         //crate.m_crate_name = params.crate_name;
 
         if (params.last_stage == ProgramParams::STAGE_PARSE) {
@@ -414,16 +414,16 @@ int main(int argc, char* argv[]) {
             // Extract the crate type and name from the crate attributes
             auto crate_type = params.crate_type;
             if (crate_type == ::AST::Crate::Type::Unknown) {
-                crate_type = crate.m_crate_type;
+                crate_type = crate.crateType;
             }
             if (crate_type == ::AST::Crate::Type::Unknown) {
                 // Assume to be executable
                 crate_type = ::AST::Crate::Type::Executable;
             }
-            crate.m_crate_type = crate_type;
+            crate.crateType = crate_type;
 
             crate.set_crate_name(params.crate_name);
-            crate.m_crate_type = ::AST::Crate::Type::Unknown;
+            crate.crateType = ::AST::Crate::Type::Unknown;
         }
 
         // Iterate all items in the AST, applying syntax extensions
@@ -438,21 +438,21 @@ int main(int argc, char* argv[]) {
         // Extract the crate type and name from the crate attributes
         auto crate_type = params.crate_type;
         if (crate_type == ::AST::Crate::Type::Unknown) {
-            crate_type = crate.m_crate_type;
+            crate_type = crate.crateType;
         }
         if (crate_type == ::AST::Crate::Type::Unknown) {
             // Assume to be executable
             crate_type = ::AST::Crate::Type::Executable;
         }
-        crate.m_crate_type = crate_type;
+        crate.crateType = crate_type;
 
-        if (crate.m_crate_type == ::AST::Crate::Type::ProcMacro) {
+        if (crate.crateType == ::AST::Crate::Type::ProcMacro) {
             ExpandProcMacroHarness(crate);
         }
 
         auto crate_name = params.crate_name;
         if (crate_name == "") {
-            crate_name = crate.m_crate_name_set;
+            crate_name = crate.crateNameSet;
         }
         if (crate_name == "") {
             auto s = params.infile.find_last_of('/');
@@ -491,18 +491,18 @@ int main(int argc, char* argv[]) {
         crate.set_crate_name(crate_name);
 
         if (params.outfile == "") {
-            switch (crate.m_crate_type) {
+            switch (crate.crateType) {
                 case ::AST::Crate::Type::RustLib:
-                    params.outfile = FMT(params.output_dir << "lib" << crate.m_crate_name_set << ".rlib");
+                    params.outfile = FMT(params.output_dir << "lib" << crate.crateNameSet << ".rlib");
                     break;
                 case ::AST::Crate::Type::Executable:
-                    params.outfile = FMT(params.output_dir << crate.m_crate_name_set);
+                    params.outfile = FMT(params.output_dir << crate.crateNameSet);
                     break;
                 case ::AST::Crate::Type::ProcMacro:
-                    params.outfile = FMT(params.output_dir << "lib" << crate.m_crate_name_set << "-plugin");
+                    params.outfile = FMT(params.output_dir << "lib" << crate.crateNameSet << "-plugin");
                     break;
                 default:
-                    params.outfile = FMT(params.output_dir << crate.m_crate_name_set << ".o");
+                    params.outfile = FMT(params.output_dir << crate.crateNameSet << ".o");
                     break;
             }
             DEBUG("params.outfile = " << params.outfile);
@@ -521,26 +521,26 @@ int main(int argc, char* argv[]) {
 
         // Allocator and panic strategies
         CompilePhaseV("Implicit Crates", [&]() {
-            if (crate.m_crate_type == ::AST::Crate::Type::Executable || params.test_harness || crate.m_crate_type == ::AST::Crate::Type::ProcMacro) {
+            if (crate.crateType == ::AST::Crate::Type::Executable || params.test_harness || crate.crateType == ::AST::Crate::Type::ProcMacro) {
                 bool allocator_crate_loaded = false;
                 RcString alloc_crate_name;
                 bool panic_runtime_loaded = false;
                 RcString panic_crate_name;
                 bool panic_runtime_needed = false;
-                for (const auto& ec : crate.m_extern_crates) {
+                for (const auto& ec : crate.externCrates) {
                     ::std::ostringstream ss;
-                    for (const auto& e : ec.second.m_hir->m_lang_items) {
+                    for (const auto& e : ec.second.hir->mLangItems) {
                         ss << e << ",";
                     }
                     DEBUG("Looking at lang items from " << ec.first << " : " << ss.str());
-                    if (ec.second.m_hir->m_lang_items.count("mrustc-allocator")) {
+                    if (ec.second.hir->mLangItems.count("mrustc-allocator")) {
                         if (allocator_crate_loaded) {
                             ERROR(Span(), E0000, "Multiple allocator crates loaded - " << alloc_crate_name << " and " << ec.first);
                         }
                         alloc_crate_name = ec.first;
                         allocator_crate_loaded = true;
                     }
-                    if (ec.second.m_hir->m_lang_items.count("mrustc-panic_runtime")) {
+                    if (ec.second.hir->mLangItems.count("mrustc-panic_runtime")) {
                         if (panic_runtime_loaded) {
                             //ERROR(Span(), E0000, "Multiple panic_runtime crates loaded - " << panic_crate_name << " and " << ec.first);
                             WARNING(Span(), W0000, "Multiple panic_runtime crates loaded - " << panic_crate_name << " and " << ec.first);
@@ -549,7 +549,7 @@ int main(int argc, char* argv[]) {
                             panic_runtime_loaded = true;
                         }
                     }
-                    if (ec.second.m_hir->m_lang_items.count("mrustc-needs_panic_runtime")) {
+                    if (ec.second.hir->mLangItems.count("mrustc-needs_panic_runtime")) {
                         panic_runtime_needed = true;
                     }
                 }
@@ -565,8 +565,8 @@ int main(int argc, char* argv[]) {
                 }
 
                 // - `mrustc-main` lang item default
-                if (!crate.m_no_main) {
-                    crate.m_lang_items.insert(::std::make_pair(::std::string("mrustc-main"), ::AST::AbsolutePath("", {"main"})));
+                if (!crate.noMain) {
+                    crate.mLangItems.insert(::std::make_pair(::std::string("mrustc-main"), ::AST::AbsolutePath("", {"main"})));
                 }
             }
         });
@@ -578,14 +578,14 @@ int main(int argc, char* argv[]) {
                 ::std::vector<::std::string> out;
 
                 void visit_module(::AST::Module& mod) {
-                    if (mod.m_file_info.path != "!" && mod.m_file_info.path.back() != '/') {
-                        out.push_back(mod.m_file_info.path);
+                    if (mod.fileInfo.path != "!" && mod.fileInfo.path.back() != '/') {
+                        out.push_back(mod.fileInfo.path);
                     }
                     // TODO: Should we check anon modules?
                     //for(auto& amod : mod.anon_mods()) {
                     //    this->visit_module(*amod);
                     //}
-                    for (auto& i : mod.m_items) {
+                    for (auto& i : mod.mItems) {
                         if (i->data.is_Module()) {
                             this->visit_module(i->data.as_Module());
                         }
@@ -594,7 +594,7 @@ int main(int argc, char* argv[]) {
             };
 
             PathEnumerator pe;
-            pe.visit_module(crate.m_root_module);
+            pe.visit_module(crate.rootModule);
 
             ::std::ofstream of{params.emit_depfile};
             // TODO: Escape spaces and colons in these paths
@@ -606,8 +606,8 @@ int main(int argc, char* argv[]) {
 
             of << params.outfile << ":";
             // - Iterate all loaded crates files
-            for (const auto& ec : crate.m_extern_crates) {
-                of << " " << ec.second.m_filename;
+            for (const auto& ec : crate.externCrates) {
+                of << " " << ec.second.filename;
             }
             // - Iterate all extra files (include! and friends)
         }
@@ -853,10 +853,10 @@ int main(int argc, char* argv[]) {
         trans_opt.panic_crate = "panic_" + params.codegen.panic_type;
         for (const char* libdir : params.lib_search_dirs) {
             // Store these paths for use in final linking.
-            hir_crate->m_link_paths.push_back(libdir);
+            hir_crate->linkPaths.push_back(libdir);
         }
         for (const char* libname : params.libraries) {
-            hir_crate->m_ext_libs.push_back(::HIR::ExternLibrary{libname});
+            hir_crate->extLibs.push_back(::HIR::ExternLibrary{libname});
         }
         trans_opt.debug_info = params.debug_info;
 
@@ -871,15 +871,15 @@ int main(int argc, char* argv[]) {
             // - Save a very basic HIR dump, making sure that there's no lang items in it (e.g. `mrustc-main`)
             CompilePhaseV("HIR Serialise", [&]() {
                 HIR::Crate crate_for_ser(pool, *types);
-                crate_for_ser.m_crate_name = hir_crate->m_crate_name;
-                crate_for_ser.m_edition = hir_crate->m_edition;
-                for (const auto& i : hir_crate->m_root_module.m_macro_items) {
+                crate_for_ser.crateName = hir_crate->crateName;
+                crate_for_ser.edition = hir_crate->edition;
+                for (const auto& i : hir_crate->rootModule.macroItems) {
                     DEBUG(i.first << ": " << i.second->ent.tag_str());
                     if (const auto* e = i.second->ent.opt_ProcMacro()) {
-                        crate_for_ser.m_root_module.m_macro_items.insert(std::make_pair(i.first, box$(HIR::VisEnt<HIR::MacroItem>{i.second->publicity, *e})));
+                        crate_for_ser.rootModule.macroItems.insert(std::make_pair(i.first, box$(HIR::VisEnt<HIR::MacroItem>{i.second->publicity, *e})));
                     }
                 }
-                crate_for_ser.m_exported_macro_names = hir_crate->m_exported_macro_names;
+                crate_for_ser.exportedMacroNames = hir_crate->exportedMacroNames;
                 HIRSerialise(params.outfile + ".hir", crate_for_ser);
             });
         }

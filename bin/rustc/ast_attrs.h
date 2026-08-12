@@ -16,7 +16,7 @@ namespace AST {
     /// A list of attributes on an item (searchable by the attribute name)
     class AttributeList {
     public:
-        ::std::vector<Attribute> m_items;
+        ::std::vector<Attribute> mItems;
 
         AttributeList();
         AttributeList(::std::vector<Attribute> items);
@@ -81,11 +81,11 @@ namespace AST {
     // - an associated (string) literal
 
     class Attribute {
-        Span m_span;
-        AttributeName m_name;
-        TokenTree m_data;
+        Span mSpan;
+        AttributeName mName;
+        TokenTree mData;
         /// @brief Indicates that this attribute has been used by a derive, and shouldn't be otherwise resolved
-        mutable bool m_is_inert;
+        mutable bool isInert;
         // TODO: Parse as a TT then expand?
     public:
         Attribute(Span sp, AttributeName name, TokenTree data);
@@ -99,27 +99,27 @@ namespace AST {
         void fmt(std::ostream& os) const;
 
         void mark_inert() const {
-            m_is_inert = true;
+            isInert = true;
         }
 
         bool is_inert() const {
-            return m_is_inert;
+            return isInert;
         }
 
         const Span& span() const {
-            return m_span;
+            return mSpan;
         }
 
         const AttributeName& name() const {
-            return m_name;
+            return mName;
         }
 
         const TokenTree& data() const {
-            return m_data;
+            return mData;
         }
 
         TokenTree& data_mut() {
-            return m_data;
+            return mData;
         }
 
         /// Parses the data as a `="string"` and returns the string

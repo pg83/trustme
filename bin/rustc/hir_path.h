@@ -89,7 +89,7 @@ namespace HIR {
         friend HirDeserialiser;
 
     private:
-        ThinVector<RcString> m_members;
+        ThinVector<RcString> members;
 
         SimplePath(ThinVector<RcString> members);
 
@@ -112,7 +112,7 @@ namespace HIR {
         const RcString& crate_name() const;
 
         ::std::span<const RcString> components() const {
-            return m_members.empty() ? std::span<const RcString>() : std::span<const RcString>(m_members.begin() + 1, m_members.end());
+            return members.empty() ? std::span<const RcString>() : std::span<const RcString>(members.begin() + 1, members.end());
         }
 
         ::std::vector<RcString> components_vec() const;
@@ -138,7 +138,7 @@ namespace HIR {
         }
 
         Ordering ord(const SimplePath& x) const {
-            return ::ord(m_members, x.m_members);
+            return ::ord(members, x.members);
         }
 
         bool starts_with(const SimplePath& x, bool skip_last = false) const;
@@ -146,9 +146,9 @@ namespace HIR {
     };
 
     struct PathParams {
-        ThinVector<LifetimeRef> m_lifetimes;
-        ThinVector<TypeRef> m_types;
-        ThinVector<HIR::ConstGeneric> m_values;
+        ThinVector<LifetimeRef> mLifetimes;
+        ThinVector<TypeRef> types;
+        ThinVector<HIR::ConstGeneric> values;
 
         PathParams();
         PathParams(::HIR::TypeRef);
@@ -166,7 +166,7 @@ namespace HIR {
         /// Indicates that params exist (and thus the target requires monomorphisation)
         /// - Ignores lifetime params
         bool has_params() const {
-            return !m_types.empty() || !m_values.empty();
+            return !types.empty() || !values.empty();
         }
 
         bool operator==(const PathParams& x) const {
@@ -189,8 +189,8 @@ namespace HIR {
     /// Generic path - Simple path with one lot of generic params
     class GenericPath {
     public:
-        SimplePath m_path;
-        PathParams m_params;
+        SimplePath mPath;
+        PathParams mParams;
 
         GenericPath();
         GenericPath(::HIR::SimplePath sp);
@@ -248,16 +248,16 @@ namespace HIR {
 
         typedef ::std::map<RcString, AtyEqual> assoc_list_t;
 
-        ::std::unique_ptr<GenericParams> m_hrtbs;
-        GenericPath m_path;
-        assoc_list_t m_type_bounds;
-        ::std::map<RcString, AtyBound> m_trait_bounds;
-        BoundConstness m_constness = BoundConstness::Never;
+        ::std::unique_ptr<GenericParams> hrtbs;
+        GenericPath mPath;
+        assoc_list_t typeBounds;
+        ::std::map<RcString, AtyBound> traitBounds;
+        BoundConstness constness = BoundConstness::Never;
         // Parenthesised Fn-trait syntax uses function lifetime-elision rules.
         // This is consumed and cleared by ConvertHIR_LifetimeElision.
-        bool m_lifetime_elision = false;
+        bool lifetimeElision = false;
 
-        const ::HIR::Trait* m_trait_ptr;
+        const ::HIR::Trait* traitPtr;
 
         TraitPath();
         TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path);
@@ -319,7 +319,7 @@ namespace HIR {
             })
         );
 
-        Data m_data;
+        Data mData;
 
         Path(Data data);
 

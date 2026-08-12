@@ -27,7 +27,7 @@ namespace {
         components.push_back(RcString::new_interned(name));
         HIR::GenericPath path(HIR::SimplePath(RcString::new_interned("test"), std::move(components)));
         HIR::TraitPath trait(std::move(hrtbs), std::move(path));
-        trait.m_lifetime_elision = apply_elision;
+        trait.lifetimeElision = apply_elision;
         return trait;
     }
 }

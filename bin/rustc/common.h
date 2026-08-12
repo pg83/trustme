@@ -191,17 +191,17 @@ Ordering ord(const ::std::map<T, U>& l, const ::std::map<T, U>& r) {
 
 template <typename T>
 struct LList {
-    const LList* m_prev;
-    T m_item{};
+    const LList* prev;
+    T item{};
 
     LList()
-        : m_prev(nullptr)
+        : prev(nullptr)
     {
     }
 
     LList(const LList* prev, T item)
-        : m_prev(prev)
-        , m_item(::std::move(item))
+        : prev(prev)
+        , item(::std::move(item))
     {
     }
 
@@ -214,20 +214,20 @@ struct LList {
     }
 
     bool operator==(const LList& x) {
-        return m_prev == x.m_prev;
+        return prev == x.prev;
     }
 
     bool operator!=(const LList& x) {
-        return m_prev != x.m_prev;
+        return prev != x.prev;
     }
 
     void operator++() {
-        assert(m_prev);
-        *this = *m_prev;
+        assert(prev);
+        *this = *prev;
     }
 
     const T& operator*() const {
-        return m_item;
+        return item;
     }
 };
 
@@ -464,48 +464,48 @@ class ThinVector {
         size_t cap;
     };
 
-    T* m_ptr;
+    T* ptr;
 
 public:
     ~ThinVector() {
-        if (m_ptr) {
+        if (ptr) {
             auto* m = meta();
             auto len = m->len;
             m->len = 0;
             for (size_t i = 0; i < len; i++) {
-                m_ptr[i].~T();
+                ptr[i].~T();
             }
             free(m);
-            m_ptr = nullptr;
+            ptr = nullptr;
         }
     }
 
     ThinVector()
-        : m_ptr(nullptr)
+        : ptr(nullptr)
     {
     }
 
     explicit ThinVector(size_t len)
-        : m_ptr(nullptr)
+        : ptr(nullptr)
     {
         if (len > 0) {
             this->reserve_init(len);
             auto* meta = this->meta();
             for (size_t i = 0; i < len; i++) {
-                new (&m_ptr[i]) T;
+                new (&ptr[i]) T;
                 meta->len++;
             }
         }
     }
 
     ThinVector(const T* begin, const T* end)
-        : m_ptr(nullptr)
+        : ptr(nullptr)
     {
         if (begin != end) {
             this->reserve_init(end - begin);
             auto* meta = this->meta();
             for (auto it = begin; it != end; ++it) {
-                new (&m_ptr[meta->len]) T(*it);
+                new (&ptr[meta->len]) T(*it);
                 meta->len++;
             }
         }
@@ -522,9 +522,9 @@ public:
     }
 
     ThinVector(ThinVector&& x)
-        : m_ptr(x.m_ptr)
+        : ptr(x.ptr)
     {
-        x.m_ptr = nullptr;
+        x.ptr = nullptr;
     }
 
     ThinVector& operator=(const ThinVector& x) {
@@ -535,8 +535,8 @@ public:
 
     ThinVector& operator=(ThinVector&& x) {
         this->~ThinVector();
-        this->m_ptr = x.m_ptr;
-        x.m_ptr = nullptr;
+        this->ptr = x.ptr;
+        x.ptr = nullptr;
         return *this;
     }
 
@@ -556,7 +556,7 @@ public:
         if (m) {
             while (m->len > len) {
                 m->len--;
-                m_ptr[m->len].~T();
+                ptr[m->len].~T();
             }
             while (m->len < len) {
                 assert(meta() == m);
@@ -566,7 +566,7 @@ public:
     }
 
     void reserve_init(size_t cap) {
-        if (m_ptr) {
+        if (ptr) {
             throw std::runtime_error("Initialising an initialised ThinVector");
         }
         if (cap > 0) {
@@ -575,7 +575,7 @@ public:
                 throw ::std::bad_alloc();
             }
             auto* meta = (Meta*)p;
-            m_ptr = p + metadata_len();
+            ptr = p + metadata_len();
             meta->cap = cap;
             meta->len = 0;
         }
@@ -589,7 +589,7 @@ public:
         } else if (len >= meta()->cap) {
             this->reserve((len + 1) * 3 / 2);
         }
-        new (&m_ptr[len]) T(std::move(v)...);
+        new (&ptr[len]) T(std::move(v)...);
         this->meta()->len++;
     }
 
@@ -601,7 +601,7 @@ public:
         auto* m = this->meta();
         if (m && m->len > 0) {
             m->len--;
-            m_ptr[m->len].~T();
+            ptr[m->len].~T();
         }
     }
 
@@ -609,78 +609,78 @@ public:
         if (this->size() == 0) {
             throw std::out_of_range("ThinVector::front");
         }
-        return *m_ptr;
+        return *ptr;
     }
 
     T& front() {
         if (this->size() == 0) {
             throw std::out_of_range("ThinVector::front");
         }
-        return *m_ptr;
+        return *ptr;
     }
 
     const T& back() const {
         if (this->size() == 0) {
             throw std::out_of_range("ThinVector::back");
         }
-        return m_ptr[size() - 1];
+        return ptr[size() - 1];
     }
 
     T& back() {
         if (this->size() == 0) {
             throw std::out_of_range("ThinVector::back");
         }
-        return m_ptr[size() - 1];
+        return ptr[size() - 1];
     }
 
     const T* begin() const {
-        return m_ptr;
+        return ptr;
     }
 
     T* begin() {
-        return m_ptr;
+        return ptr;
     }
 
     const T* end() const {
-        return m_ptr + size();
+        return ptr + size();
     }
 
     T* end() {
-        return m_ptr + size();
+        return ptr + size();
     }
 
     const T& operator[](size_t i) const {
-        return m_ptr[i];
+        return ptr[i];
     }
 
     T& operator[](size_t i) {
-        return m_ptr[i];
+        return ptr[i];
     }
 
     const T& at(size_t i) const {
         if (i >= this->size()) {
             throw std::out_of_range("ThinVector::at");
         }
-        return m_ptr[i];
+        return ptr[i];
     }
 
     T& at(size_t i) {
         if (i >= this->size()) {
             throw std::out_of_range("ThinVector::at");
         }
-        return m_ptr[i];
+        return ptr[i];
     }
 
     const T* data() const {
-        return m_ptr;
+        return ptr;
     }
 
     T* data() {
-        return m_ptr;
+        return ptr;
     }
 
     size_t size() const {
-        if (m_ptr) {
+        if (ptr) {
             return meta()->len;
         } else {
             return 0;
@@ -688,7 +688,7 @@ public:
     }
 
     size_t capacity() const {
-        if (m_ptr) {
+        if (ptr) {
             return meta()->cap;
         } else {
             return 0;
@@ -696,7 +696,7 @@ public:
     }
 
     bool empty() const {
-        return m_ptr == nullptr;
+        return ptr == nullptr;
     }
 
     Ordering ord(const ThinVector<T>& x) const {
@@ -728,11 +728,11 @@ private:
     }
 
     const Meta* meta() const {
-        return m_ptr ? (const Meta*)(m_ptr - metadata_len()) : nullptr;
+        return ptr ? (const Meta*)(ptr - metadata_len()) : nullptr;
     }
 
     Meta* meta() {
-        return m_ptr ? (Meta*)(m_ptr - metadata_len()) : nullptr;
+        return ptr ? (Meta*)(ptr - metadata_len()) : nullptr;
     }
 };
 

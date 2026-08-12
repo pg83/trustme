@@ -189,8 +189,8 @@ namespace MIR {
             }
         };
 
-        Storage m_root;
-        ::std::vector<Wrapper> m_wrappers;
+        Storage root;
+        ::std::vector<Wrapper> wrappers;
 
         LValue();
 
@@ -221,25 +221,25 @@ namespace MIR {
         static LValue newIndex(LValue lv, unsigned local_idx);
 
         bool is_Return() const {
-            return m_wrappers.empty() && m_root.is_Return();
+            return wrappers.empty() && root.is_Return();
         }
 
         bool is_Local() const {
-            return m_wrappers.empty() && m_root.is_Local();
+            return wrappers.empty() && root.is_Local();
         }
 
         unsigned as_Local() const;
 
         bool is_Deref() const {
-            return m_wrappers.size() > 0 && m_wrappers.back().is_Deref();
+            return wrappers.size() > 0 && wrappers.back().is_Deref();
         }
 
         bool is_Field() const {
-            return m_wrappers.size() > 0 && m_wrappers.back().is_Field();
+            return wrappers.size() > 0 && wrappers.back().is_Field();
         }
 
         bool is_Downcast() const {
-            return m_wrappers.size() > 0 && m_wrappers.back().is_Downcast();
+            return wrappers.size() > 0 && wrappers.back().is_Downcast();
         }
 
         unsigned as_Field() const;
@@ -254,25 +254,25 @@ namespace MIR {
 
         //LValue monomorphise(const TransParams& ms, unsigned local_offset=0);
         LValue clone() const {
-            return LValue(m_root.clone(), m_wrappers);
+            return LValue(root.clone(), wrappers);
         }
 
         LValue clone_wrapped(::std::vector<Wrapper> wrappers) const;
 
         template <typename It>
         LValue clone_wrapped(It begin_it, It end_it) const {
-            ::std::vector<Wrapper> wrappers;
-            wrappers.reserve(m_wrappers.size() + ::std::distance(begin_it, end_it));
-            wrappers.insert(wrappers.end(), m_wrappers.begin(), m_wrappers.end());
-            wrappers.insert(wrappers.end(), begin_it, end_it);
-            return LValue(m_root.clone(), ::std::move(wrappers));
+            ::std::vector<Wrapper> newWrappers;
+            newWrappers.reserve(wrappers.size() + ::std::distance(begin_it, end_it));
+            newWrappers.insert(newWrappers.end(), wrappers.begin(), wrappers.end());
+            newWrappers.insert(newWrappers.end(), begin_it, end_it);
+            return LValue(root.clone(), ::std::move(newWrappers));
         }
 
         LValue clone_unwrapped(unsigned count = 1) const;
 
         // Returns true if this LValue is a subset of the other (e.g. `_1.0` is a subset of `_1.0*`)
         bool is_subset_of(const LValue& other) const {
-            return m_root == other.m_root && other.m_wrappers.size() >= m_wrappers.size() && std::equal(m_wrappers.begin(), m_wrappers.end(), other.m_wrappers.begin());
+            return root == other.root && other.wrappers.size() >= wrappers.size() && std::equal(wrappers.begin(), wrappers.end(), other.wrappers.begin());
         }
 
         // Returns true if one lvalue is a subset of the other
@@ -282,22 +282,22 @@ namespace MIR {
         /// Helper class that represents a LValue unwrapped to a certain degree
         class RefCommon {
         protected:
-            const LValue* m_lv;
-            size_t m_wrapper_count;
+            const LValue* mLv;
+            size_t wrapperCount;
 
             RefCommon(const LValue& lv, size_t wrapper_count);
 
         public:
             LValue clone() const {
-                return ::MIR::LValue(m_lv->m_root.clone(), ::std::vector<Wrapper>(m_lv->m_wrappers.begin(), m_lv->m_wrappers.begin() + m_wrapper_count));
+                return ::MIR::LValue(mLv->root.clone(), ::std::vector<Wrapper>(mLv->wrappers.begin(), mLv->wrappers.begin() + wrapperCount));
             }
 
             const LValue& lv() const {
-                return *m_lv;
+                return *mLv;
             }
 
             size_t wrapper_count() const {
-                return m_wrapper_count;
+                return wrapperCount;
             }
 
             /// Unwrap one level, returning false if already at the root
@@ -318,35 +318,35 @@ namespace MIR {
             Tag tag() const;
 
             bool is_Local() const {
-                return m_wrapper_count == 0 && m_lv->m_root.is_Local();
+                return wrapperCount == 0 && mLv->root.is_Local();
             }
 
             bool is_Return() const {
-                return m_wrapper_count == 0 && m_lv->m_root.is_Return();
+                return wrapperCount == 0 && mLv->root.is_Return();
             }
 
             bool is_Argument() const {
-                return m_wrapper_count == 0 && m_lv->m_root.is_Argument();
+                return wrapperCount == 0 && mLv->root.is_Argument();
             }
 
             bool is_Static() const {
-                return m_wrapper_count == 0 && m_lv->m_root.is_Static();
+                return wrapperCount == 0 && mLv->root.is_Static();
             }
 
             bool is_Deref() const {
-                return m_wrapper_count >= 1 && m_lv->m_wrappers[m_wrapper_count - 1].is_Deref();
+                return wrapperCount >= 1 && mLv->wrappers[wrapperCount - 1].is_Deref();
             }
 
             bool is_Field() const {
-                return m_wrapper_count >= 1 && m_lv->m_wrappers[m_wrapper_count - 1].is_Field();
+                return wrapperCount >= 1 && mLv->wrappers[wrapperCount - 1].is_Field();
             }
 
             bool is_Downcast() const {
-                return m_wrapper_count >= 1 && m_lv->m_wrappers[m_wrapper_count - 1].is_Downcast();
+                return wrapperCount >= 1 && mLv->wrappers[wrapperCount - 1].is_Downcast();
             }
 
             bool is_Index() const {
-                return m_wrapper_count >= 1 && m_lv->m_wrappers[m_wrapper_count - 1].is_Index();
+                return wrapperCount >= 1 && mLv->wrappers[wrapperCount - 1].is_Index();
             }
 
             unsigned as_Local() const;
@@ -394,7 +394,7 @@ namespace MIR {
             MRef(LValue& lv);
 
             operator CRef() const {
-                return CRef(*m_lv, m_wrapper_count);
+                return CRef(*mLv, wrapperCount);
             }
 
             MRef inner_ref();
@@ -836,7 +836,7 @@ namespace MIR {
     };
 
     class Cloner {
-        ::std::unique_ptr<MonomorphiserNop> m_nop;
+        ::std::unique_ptr<MonomorphiserNop> nop;
 
     public:
         const Span& sp;

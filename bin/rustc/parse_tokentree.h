@@ -9,10 +9,10 @@ namespace AST {
 }
 
 class TokenTree {
-    AST::Edition m_edition = (AST::Edition)0; // 2015
-    Ident::Hygiene m_hygiene;
-    Token m_tok;
-    ::std::vector<TokenTree> m_subtrees;
+    AST::Edition edition = (AST::Edition)0; // 2015
+    Ident::Hygiene mHygiene;
+    Token mTok;
+    ::std::vector<TokenTree> subtrees;
 
 public:
     virtual ~TokenTree();
@@ -35,11 +35,11 @@ public:
     TokenTree clone() const;
 
     bool is_token() const {
-        return m_tok.type() != TOK_NULL;
+        return mTok.type() != TOK_NULL;
     }
 
     size_t size() const {
-        return m_subtrees.size();
+        return subtrees.size();
     }
 
     const TokenTree& operator[](unsigned int idx) const;
@@ -47,19 +47,19 @@ public:
     TokenTree& operator[](unsigned int idx);
 
     const Token& tok() const {
-        return m_tok;
+        return mTok;
     }
 
     Token& tok() {
-        return m_tok;
+        return mTok;
     }
 
     const Ident::Hygiene& hygiene() const {
-        return m_hygiene;
+        return mHygiene;
     }
 
     const AST::Edition& get_edition() const {
-        return m_edition;
+        return edition;
     }
 
     friend ::std::ostream& operator<<(::std::ostream& os, const TokenTree& tt);

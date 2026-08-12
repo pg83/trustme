@@ -28,7 +28,7 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
 
     // 1. Emit structure/type definitions.
     // - Emit in the order they're needed.
-    for (const auto& ty : list.m_types) {
+    for (const auto& ty : list.types) {
         if (ty.second) {
             codegen->emit_type_proto(ty.first);
         } else {
@@ -42,114 +42,114 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
                         ExternType,
                         //codegen->emit_extern_type(sp, te->path.m_data.as_Generic(), *tpb);
                     ),
-                    (Struct, codegen->emit_struct(sp, te->path.m_data.as_Generic(), *tpb);),
-                    (Union, codegen->emit_union(sp, te->path.m_data.as_Generic(), *tpb);),
-                    (Enum, codegen->emit_enum(sp, te->path.m_data.as_Generic(), *tpb);)
+                    (Struct, codegen->emit_struct(sp, te->path.mData.as_Generic(), *tpb);),
+                    (Union, codegen->emit_union(sp, te->path.mData.as_Generic(), *tpb);),
+                    (Enum, codegen->emit_enum(sp, te->path.mData.as_Generic(), *tpb);)
                 )
             }
             codegen->emit_type(ty.first);
         }
     }
     list.clear_types();
-    for (const auto& ty : list.m_typeids) {
+    for (const auto& ty : list.typeids) {
         codegen->emit_type_id(ty);
     }
-    list.m_typeids.clear();
+    list.typeids.clear();
     // Emit required constructor methods (and other wrappers)
-    for (const auto& path : list.m_constructors) {
+    for (const auto& path : list.constructors) {
         // Get the item type
         // - Function (must be an intrinsic)
         // - Struct (must be a tuple struct)
         // - Enum variant (must be a tuple variant)
         const ::HIR::Module* mod_ptr = nullptr;
-        if (path.m_path.components().size() > 1) {
-            const auto& nse = crate_ptr->get_typeitem_by_path(sp, path.m_path, false, true);
+        if (path.mPath.components().size() > 1) {
+            const auto& nse = crate_ptr->get_typeitem_by_path(sp, path.mPath, false, true);
             if (const auto* e = nse.opt_Enum()) {
-                auto var_idx = e->find_variant(path.m_path.components().back());
+                auto var_idx = e->find_variant(path.mPath.components().back());
                 codegen->emit_constructor_enum(sp, path, *e, var_idx);
                 continue;
             }
             mod_ptr = &nse.as_Module();
         } else {
-            mod_ptr = &crate_ptr->get_mod_by_path(sp, path.m_path, true);
+            mod_ptr = &crate_ptr->get_mod_by_path(sp, path.mPath, true);
         }
 
         // Not an enum, currently must be a struct
-        const auto& te = mod_ptr->m_mod_items.at(path.m_path.components().back())->ent;
+        const auto& te = mod_ptr->modItems.at(path.mPath.components().back())->ent;
         codegen->emit_constructor_struct(sp, path, te.as_Struct());
     }
-    list.m_constructors.clear();
+    list.constructors.clear();
 
     // 2. Emit function prototypes
-    for (const auto& ent : list.m_functions) {
+    for (const auto& ent : list.functions) {
         DEBUG("FUNCTION " << ent.first);
         assert(ent.second->ptr);
         const auto& fcn = *ent.second->ptr;
         // Extern if there isn't any HIR
-        bool is_extern = !static_cast<bool>(fcn.m_code);
-        if (fcn.m_code.m_mir && !ent.second->force_prototype) {
+        bool is_extern = !static_cast<bool>(fcn.mCode);
+        if (fcn.mCode.mir && !ent.second->force_prototype) {
             codegen->emit_function_proto(ent.first, fcn, ent.second->pp, is_extern);
         }
     }
     // - External functions
-    for (const auto& ent : list.m_functions) {
+    for (const auto& ent : list.functions) {
         //DEBUG("FUNCTION " << ent.first);
         assert(ent.second->ptr);
         const auto& fcn = *ent.second->ptr;
-        if (fcn.m_code.m_mir && !ent.second->force_prototype) {
+        if (fcn.mCode.mir && !ent.second->force_prototype) {
         } else {
             // TODO: Why would an intrinsic be in the queue?
             // - If it's exported it does.
-            if (fcn.m_abi == "rust-intrinsic") {
+            if (fcn.mAbi == "rust-intrinsic") {
             } else {
                 codegen->emit_function_ext(ent.first, fcn, ent.second->pp);
             }
         }
     }
     // VTables (may be needed by statics)
-    assert(list.m_vtables.empty());
+    assert(list.vtables.empty());
     // 3. Emit statics
-    for (const auto& ent : list.m_statics) {
+    for (const auto& ent : list.statics) {
         assert(ent.second->ptr);
         const auto& stat = *ent.second->ptr;
 
         DEBUG(
             "STATIC proto " << ent.first << ": "
-                            << "(m_value_generated=" << stat.m_value_generated << " && !m_no_emit_value=" << stat.m_no_emit_value << ") || is_generic=" << stat.m_params.is_generic()
+                            << "(m_value_generated=" << stat.valueGenerated << " && !m_no_emit_value=" << stat.noEmitValue << ") || is_generic=" << stat.mParams.is_generic()
         );
-        if ((stat.m_value_generated && !stat.m_no_emit_value) || stat.m_params.is_generic()) {
+        if ((stat.valueGenerated && !stat.noEmitValue) || stat.mParams.is_generic()) {
             codegen->emit_static_proto(ent.first, stat, ent.second->pp);
         } else {
             codegen->emit_static_ext(ent.first, stat, ent.second->pp);
         }
     }
-    for (const auto& ent : list.m_statics) {
+    for (const auto& ent : list.statics) {
         DEBUG("STATIC " << ent.first);
         assert(ent.second->ptr);
         const auto& stat = *ent.second->ptr;
 
-        if (stat.m_params.is_generic()) {
-            codegen->emit_static_local(ent.first, stat, ent.second->pp, stat.m_monomorph_cache.at(ent.first));
-        } else if (stat.m_value_generated && !stat.m_no_emit_value) {
-            codegen->emit_static_local(ent.first, stat, ent.second->pp, stat.m_value_res);
+        if (stat.mParams.is_generic()) {
+            codegen->emit_static_local(ent.first, stat, ent.second->pp, stat.monomorphCache.at(ent.first));
+        } else if (stat.valueGenerated && !stat.noEmitValue) {
+            codegen->emit_static_local(ent.first, stat, ent.second->pp, stat.valueRes);
         } else {
         }
     }
-    list.m_statics.clear();
+    list.statics.clear();
 
     // 4. Emit function code
-    for (const auto& ent : list.m_functions) {
-        if (ent.second->ptr && ent.second->ptr->m_code.m_mir && !ent.second->force_prototype) {
+    for (const auto& ent : list.functions) {
+        if (ent.second->ptr && ent.second->ptr->mCode.mir && !ent.second->force_prototype) {
             const auto& path = ent.first;
             const auto& fcn = *ent.second->ptr;
             const auto& pp = ent.second->pp;
             TRACE_FUNCTION_F(path);
             DEBUG("FUNCTION CODE " << path);
             // `is_extern` is set if there's no HIR (i.e. this function is from an external crate)
-            bool is_extern = !static_cast<bool>(fcn.m_code);
+            bool is_extern = !static_cast<bool>(fcn.mCode);
             // If this is a provided trait method, it needs to be monomorphised too.
-            bool is_method = (fcn.m_args.size() > 0 && visit_ty_with(fcn.m_args[0].second, [&](const auto& x) {
-                return x == crate_ptr->m_types.self();
+            bool is_method = (fcn.mArgs.size() > 0 && visit_ty_with(fcn.mArgs[0].second, [&](const auto& x) {
+                return x == crate_ptr->types.self();
             }));
 
             bool is_monomorph = pp.has_types() || is_method;
@@ -159,13 +159,13 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
                 codegen->emit_function_code(path, fcn, pp, is_extern, ent.second->monomorphised.code);
             } else {
                 ASSERT_BUG(sp, !is_monomorph, "Function that required monomorphisation wasn't monomorphised");
-                codegen->emit_function_code(path, fcn, pp, is_extern, fcn.m_code.m_mir);
+                codegen->emit_function_code(path, fcn, pp, is_extern, fcn.mCode.mir);
             }
         }
     }
-    list.m_functions.clear();
+    list.functions.clear();
 
-    for (const auto& a : crate_ptr->m_global_asm) {
+    for (const auto& a : crate_ptr->globalAsm) {
         codegen->emit_global_asm(a);
     }
 
@@ -223,7 +223,7 @@ namespace {
                 BUG(Span(), "" << x.e);
             }
             TU_ARMA(TraitObject, te) {
-                auto path = te.m_trait.m_path.clone();
+                auto path = te.mTrait.mPath.clone();
                 os << "dyn " << TransMangle(path);
             }
             TU_ARMA(ErasedType, te) {
@@ -277,14 +277,14 @@ namespace {
                 if (e.is_unsafe) {
                     os << "unsafe ";
                 }
-                if (e.m_abi != "") {
-                    os << "extern \"" << e.m_abi << "\" ";
+                if (e.mAbi != "") {
+                    os << "extern \"" << e.mAbi << "\" ";
                 }
                 os << "fn(";
-                for (const auto& t : e.m_arg_types) {
+                for (const auto& t : e.argTypes) {
                     os << fmt(t) << ", ";
                 }
-                os << ") -> " << fmt(e.m_rettype);
+                os << ") -> " << fmt(e.mRettype);
             }
             break;
             case ::HIR::TypeData::TAG_NodeType:
@@ -295,14 +295,14 @@ namespace {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<::MIR::LValue>& x) {
-        for (const auto& w : ::reverse(x.e.m_wrappers)) {
+        for (const auto& w : ::reverse(x.e.wrappers)) {
             if (w.is_Deref()) {
                 os << "(*";
             }
         }
-        TU_MATCHA((x.e.m_root), (e), (Return, os << "RETURN";), (Local, os << "var" << e;), (Argument, os << "arg" << e;), (Static, os << fmt(e);))
+        TU_MATCHA((x.e.root), (e), (Return, os << "RETURN";), (Local, os << "var" << e;), (Argument, os << "arg" << e;), (Static, os << fmt(e);))
         bool was_num = false;
-        for (const auto& w : x.e.m_wrappers) {
+        for (const auto& w : x.e.wrappers) {
             bool prev_was_num = was_num;
             was_num = false;
             switch (w.tag()) {
@@ -420,78 +420,78 @@ namespace {
 
         static Span sp;
 
-        const ::HIR::Crate& m_crate;
-        ::StaticTraitResolve m_resolve;
+        const ::HIR::Crate& crate;
+        ::StaticTraitResolve mResolve;
 
-        ::std::string m_outfile_path;
-        ::std::ofstream m_of;
-        const ::MIR::TypeResolve* m_mir_res;
+        ::std::string outfilePath;
+        ::std::ofstream of;
+        const ::MIR::TypeResolve* mirRes;
 
     public:
         CodeGeneratorMonoMir(const ::HIR::Crate& crate, const ::std::string& outfile)
-            : m_crate(crate)
-            , m_resolve(crate)
-            , m_outfile_path(outfile)
-            , m_of(m_outfile_path + ".mir")
+            : crate(crate)
+            , mResolve(crate)
+            , outfilePath(outfile)
+            , of(outfilePath + ".mir")
         {
-            for (const auto& crate_name : m_crate.m_ext_crates_ordered) {
-                m_of << "crate \"" << FmtEscaped(m_crate.m_ext_crates.at(crate_name).m_path) << ".mir\";\n";
+            for (const auto& crate_name : crate.extCratesOrdered) {
+                of << "crate \"" << FmtEscaped(crate.extCrates.at(crate_name).mPath) << ".mir\";\n";
             }
         }
 
         void finalise(const TransOptions& opt, CodegenOutput out_ty, const ::std::string& hir_file) override {
             if (out_ty == CodegenOutput::Executable) {
-                if (!m_crate.m_no_main) {
-                    m_of << "fn main#(isize, *const *const i8): isize {\n";
-                    auto c_start_path = m_resolve.m_crate.get_lang_item_path_opt("mrustc-start");
+                if (!crate.noMain) {
+                    of << "fn main#(isize, *const *const i8): isize {\n";
+                    auto c_start_path = mResolve.crate.get_lang_item_path_opt("mrustc-start");
                     if (c_start_path == ::HIR::SimplePath()) {
-                        auto main_path = m_resolve.m_crate.get_lang_item_path(Span(), "mrustc-main");
-                        const auto& start_path = m_resolve.m_crate.get_lang_item_path_opt("start");
-                        if (m_crate.m_is_no_core && start_path == ::HIR::SimplePath()) {
-                            const auto& main_fcn = m_crate.get_function_by_path(Span(), main_path);
-                            m_of << "\tlet direct_main_result: " << fmt(main_fcn.m_return) << ";\n";
-                            m_of << "\t0: {\n";
-                            m_of << "\t\tCALL direct_main_result = " << fmt(::HIR::GenericPath(main_path)) << "() goto 1 else 1\n";
+                        auto main_path = mResolve.crate.get_lang_item_path(Span(), "mrustc-main");
+                        const auto& start_path = mResolve.crate.get_lang_item_path_opt("start");
+                        if (crate.isNoCore && start_path == ::HIR::SimplePath()) {
+                            const auto& main_fcn = crate.get_function_by_path(Span(), main_path);
+                            of << "\tlet direct_main_result: " << fmt(main_fcn.returnType) << ";\n";
+                            of << "\t0: {\n";
+                            of << "\t\tCALL direct_main_result = " << fmt(::HIR::GenericPath(main_path)) << "() goto 1 else 1\n";
                         } else {
-                            m_of << "\tlet m: fn();\n";
-                            m_of << "\t0: {\n";
-                            m_of << "\t\tASSIGN m = ADDROF " << fmt(::HIR::GenericPath(main_path)) << ";\n";
-                            m_of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(m_resolve.m_crate.get_lang_item_path(Span(), "start"))) << "(m, arg0, arg1) goto 1 else 1\n";
+                            of << "\tlet m: fn();\n";
+                            of << "\t0: {\n";
+                            of << "\t\tASSIGN m = ADDROF " << fmt(::HIR::GenericPath(main_path)) << ";\n";
+                            of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(mResolve.crate.get_lang_item_path(Span(), "start"))) << "(m, arg0, arg1) goto 1 else 1\n";
                         }
                     } else {
-                        m_of << "\t0: {\n";
-                        m_of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(c_start_path)) << "(arg0, arg1) goto 1 else 1;\n";
+                        of << "\t0: {\n";
+                        of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(c_start_path)) << "(arg0, arg1) goto 1 else 1;\n";
                     }
-                    m_of << "\t}\n";
-                    m_of << "\t1: {\n";
-                    m_of << "\t\tRETURN\n";
-                    m_of << "\t}\n";
-                    m_of << "}\n";
+                    of << "\t}\n";
+                    of << "\t1: {\n";
+                    of << "\t\tRETURN\n";
+                    of << "\t}\n";
+                    of << "}\n";
                 }
 
                 // Bind `panic_impl` lang item to the item tagged with `panic_implementation`.
-                const auto& panic_impl_path = m_crate.get_lang_item_path_opt("mrustc-panic_implementation");
+                const auto& panic_impl_path = crate.get_lang_item_path_opt("mrustc-panic_implementation");
                 if (panic_impl_path != ::HIR::SimplePath()) {
-                    m_of << "fn panic_impl#(usize): u32 = \"panic_impl\":\"Rust\" {\n";
-                    m_of << "\t0: {\n";
-                    m_of << "\t\tCALL RETURN = " << fmt(panic_impl_path) << "(arg0) goto 1 else 2\n";
-                    m_of << "\t}\n";
-                    m_of << "\t1: { RETURN }\n";
-                    m_of << "\t2: { DIVERGE }\n";
-                    m_of << "}\n";
-                } else if (!m_crate.m_is_no_core) {
-                    m_crate.get_lang_item_path(Span(), "mrustc-panic_implementation");
+                    of << "fn panic_impl#(usize): u32 = \"panic_impl\":\"Rust\" {\n";
+                    of << "\t0: {\n";
+                    of << "\t\tCALL RETURN = " << fmt(panic_impl_path) << "(arg0) goto 1 else 2\n";
+                    of << "\t}\n";
+                    of << "\t1: { RETURN }\n";
+                    of << "\t2: { DIVERGE }\n";
+                    of << "}\n";
+                } else if (!crate.isNoCore) {
+                    crate.get_lang_item_path(Span(), "mrustc-panic_implementation");
                 }
 
                 // TODO: OOM impl?
             }
 
-            m_of.flush();
-            m_of.close();
+            of.flush();
+            of.close();
 
             // The requested output is a completion marker; MonoMIR is stored in the sibling `.mir` file.
             {
-                ::std::ofstream of(m_outfile_path);
+                ::std::ofstream of(outfilePath);
                 if (!of.good()) {
                     // TODO: Error?
                 }
@@ -502,32 +502,32 @@ namespace {
             TRACE_FUNCTION_F(ty);
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
-                sp, m_resolve, FMT_CB(ss, ss << "type " << ty;), ::HIR::TypeRef(), {}, empty_fcn
+                sp, mResolve, FMT_CB(ss, ss << "type " << ty;), ::HIR::TypeRef(), {}, empty_fcn
             };
-            m_mir_res = &top_mir_res;
+            mirRes = &top_mir_res;
 
             if (const auto* te = ty->opt_Tuple()) {
                 if (te->size() > 0) {
-                    const auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
-                    MIR_ASSERT(*m_mir_res, repr, "No repr for tuple " << ty);
+                    const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
+                    MIR_ASSERT(*mirRes, repr, "No repr for tuple " << ty);
 
-                    bool has_drop_glue = m_resolve.type_needs_drop_glue(sp, ty);
+                    bool has_drop_glue = mResolve.type_needs_drop_glue(sp, ty);
                     auto drop_glue_path = ::HIR::Path(ty, "#drop_glue");
 
-                    m_of << "type " << fmt(ty) << " {\n";
-                    m_of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
+                    of << "type " << fmt(ty) << " {\n";
+                    of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
                     if (has_drop_glue) {
-                        m_of << "\tDROP " << fmt(drop_glue_path) << ";\n";
+                        of << "\tDROP " << fmt(drop_glue_path) << ";\n";
                     }
                     for (const auto& e : repr->fields) {
-                        m_of << "\t" << e.offset << " = " << fmt(e.ty) << ";\n";
+                        of << "\t" << e.offset << " = " << fmt(e.ty) << ";\n";
                     }
-                    m_of << "}\n";
+                    of << "}\n";
                 }
             } else {
             }
 
-            m_mir_res = nullptr;
+            mirRes = nullptr;
         }
 
         // TODO: Move this to a more common location
@@ -540,17 +540,17 @@ namespace {
                 const auto& te = ty->as_Path();
                 switch (te.binding.tag()) {
                     TU_ARM(te.binding, Struct, tpb) {
-                        switch (tpb->m_struct_markings.dst_type) {
+                        switch (tpb->structMarkings.dst_type) {
                             case ::HIR::StructMarkings::DstType::None:
                                 return MetadataType::None;
                             case ::HIR::StructMarkings::DstType::Possible: {
                                 // TODO: How to figure out? Lazy way is to check the monomorpised type of the last field (structs only)
-                                const auto& path = ty->as_Path().path.m_data.as_Generic();
+                                const auto& path = ty->as_Path().path.mData.as_Generic();
                                 const auto& str = *ty->as_Path().binding.as_Struct();
                                 auto monomorph = [&](const auto& tpl) {
-                                    return m_resolve.monomorph_expand(sp, tpl, MonomorphStatePtr(m_crate.m_types, nullptr, &path.m_params, nullptr));
+                                    return mResolve.monomorph_expand(sp, tpl, MonomorphStatePtr(crate.types, nullptr, &path.mParams, nullptr));
                                 };
-                                TU_MATCHA((str.m_data), (se), (Unit, MIR_BUG(*m_mir_res, "Unit-like struct with DstType::Possible");), (Tuple, return metadata_type(monomorph(se.back().ent));), (Named, return metadata_type(monomorph(se.back().ty));))
+                                TU_MATCHA((str.mData), (se), (Unit, MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");), (Tuple, return metadata_type(monomorph(se.back().ent));), (Named, return metadata_type(monomorph(se.back().ty));))
                                 //MIR_TODO(*m_mir_res, "Determine DST type when ::Possible - " << ty);
                                 return MetadataType::None;
                             }
@@ -567,7 +567,7 @@ namespace {
                     TU_ARM(te.binding, Enum, tpb)
                     return MetadataType::None;
                     default:
-                        MIR_BUG(*m_mir_res, "Unbound/opaque path in trans - " << ty);
+                        MIR_BUG(*mirRes, "Unbound/opaque path in trans - " << ty);
                 }
                 throw "";
             } else {
@@ -578,32 +578,32 @@ namespace {
         void emit_struct(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Struct& item) override {
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
-                sp, m_resolve, FMT_CB(ss, ss << "struct " << p;), ::HIR::TypeRef(), {}, empty_fcn
+                sp, mResolve, FMT_CB(ss, ss << "struct " << p;), ::HIR::TypeRef(), {}, empty_fcn
             };
-            m_mir_res = &top_mir_res;
+            mirRes = &top_mir_res;
 
-            auto drop_glue_path = ::HIR::Path(m_crate.m_types.path(p.clone(), &item), "#drop_glue");
+            auto drop_glue_path = ::HIR::Path(crate.types.path(p.clone(), &item), "#drop_glue");
 
             TRACE_FUNCTION_F(p);
-            ::HIR::TypeRef ty = m_crate.m_types.path(p.clone(), &item);
+            ::HIR::TypeRef ty = crate.types.path(p.clone(), &item);
 
             struct H {
                 static ::HIR::TypeRef get_metadata_type(const Span& sp, const ::StaticTraitResolve& resolve, const TypeRepr& r) {
                     ASSERT_BUG(sp, r.fields.size() > 0, "");
                     auto& t = r.fields.back().ty;
                     if (t->is_Primitive() && t->as_Primitive() == ::HIR::CoreType::Str) {
-                        return resolve.m_crate.m_types.primitive(::HIR::CoreType::Usize);
+                        return resolve.crate.types.primitive(::HIR::CoreType::Usize);
                     } else if (t->is_Slice()) {
-                        return resolve.m_crate.m_types.primitive(::HIR::CoreType::Usize);
+                        return resolve.crate.types.primitive(::HIR::CoreType::Usize);
                     } else if (t->is_TraitObject()) {
                         const auto& te = t->as_TraitObject();
                         //auto vtp = t.m_data.as_TraitObject().m_trait.m_path;
 
-                        const auto& trait = resolve.m_crate.get_trait_by_path(sp, te.m_trait.m_path.m_path);
-                        auto vtable_ty = trait.get_vtable_type(sp, resolve.m_crate, te);
-                        return resolve.m_crate.m_types.pointer(::HIR::BorrowType::Shared, vtable_ty);
+                        const auto& trait = resolve.crate.get_trait_by_path(sp, te.mTrait.mPath.mPath);
+                        auto vtable_ty = trait.get_vtable_type(sp, resolve.crate, te);
+                        return resolve.crate.types.pointer(::HIR::BorrowType::Shared, vtable_ty);
                     } else if (t->is_Path() && t->as_Path().binding.is_ExternType()) {
-                        return resolve.m_crate.m_types.unit();
+                        return resolve.crate.types.unit();
                     } else if (t->is_Path()) {
                         auto* repr = TargetGetTypeRepr(sp, resolve, t);
                         ASSERT_BUG(sp, repr, "No repr for " << t);
@@ -615,158 +615,158 @@ namespace {
             };
 
             // Generate the drop glue (and determine if there is any)
-            bool has_drop_glue = m_resolve.type_needs_drop_glue(sp, ty);
+            bool has_drop_glue = mResolve.type_needs_drop_glue(sp, ty);
 
-            const auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
-            MIR_ASSERT(*m_mir_res, repr, "No repr for struct " << ty);
-            m_of << "type " << TransMangle(p) << " {\n";
-            m_of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
+            const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
+            MIR_ASSERT(*mirRes, repr, "No repr for struct " << ty);
+            of << "type " << TransMangle(p) << " {\n";
+            of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
             if (repr->size == SIZE_MAX) {
-                m_of << "\tDSTMETA " << H::get_metadata_type(sp, m_resolve, *repr) << ";\n";
+                of << "\tDSTMETA " << H::get_metadata_type(sp, mResolve, *repr) << ";\n";
             }
             if (has_drop_glue) {
-                m_of << "\tDROP " << fmt(drop_glue_path) << ";\n";
+                of << "\tDROP " << fmt(drop_glue_path) << ";\n";
             }
             for (const auto& e : repr->fields) {
-                m_of << "\t" << e.offset << " = " << fmt(e.ty) << ";\n";
+                of << "\t" << e.offset << " = " << fmt(e.ty) << ";\n";
             }
-            m_of << "}\n";
+            of << "}\n";
 
-            m_mir_res = nullptr;
+            mirRes = nullptr;
         }
 
         void emit_constructor_enum(const Span& sp, const ::HIR::GenericPath& var_path, const ::HIR::Enum& item, size_t var_idx) override {
             TRACE_FUNCTION_F(var_path);
 
             ::HIR::TypeRef tmp;
-            MonomorphStatePtr ms(m_crate.m_types, nullptr, &var_path.m_params, nullptr);
+            MonomorphStatePtr ms(crate.types, nullptr, &var_path.mParams, nullptr);
             auto monomorph = [&](const auto& x) {
-                return m_resolve.monomorph_expand_opt(sp, tmp, x, ms);
+                return mResolve.monomorph_expand_opt(sp, tmp, x, ms);
             };
 
             auto enum_path = var_path.clone();
-            enum_path.m_path.pop_component();
+            enum_path.mPath.pop_component();
 
             // Create constructor function
-            const auto& var_ty = item.m_data.as_Data().at(var_idx).type;
-            const auto& e = var_ty->as_Path().binding.as_Struct()->m_data.as_Tuple();
-            m_of << "/* " << var_path << " */\n";
-            m_of << "fn " << fmt(var_path) << "(";
+            const auto& var_ty = item.mData.as_Data().at(var_idx).type;
+            const auto& e = var_ty->as_Path().binding.as_Struct()->mData.as_Tuple();
+            of << "/* " << var_path << " */\n";
+            of << "fn " << fmt(var_path) << "(";
             for (unsigned int i = 0; i < e.size(); i++) {
                 if (i != 0) {
-                    m_of << ", ";
+                    of << ", ";
                 }
-                m_of << fmt(monomorph(e[i].ent));
+                of << fmt(monomorph(e[i].ent));
             }
-            m_of << "): " << fmt(enum_path) << " {\n";
-            m_of << "\t0: {\n";
-            m_of << "\t\tASSIGN RETURN = ENUM " << fmt(enum_path) << " " << var_idx << " { ";
+            of << "): " << fmt(enum_path) << " {\n";
+            of << "\t0: {\n";
+            of << "\t\tASSIGN RETURN = ENUM " << fmt(enum_path) << " " << var_idx << " { ";
             for (unsigned int i = 0; i < e.size(); i++) {
                 if (i != 0) {
-                    m_of << ", ";
+                    of << ", ";
                 }
-                m_of << "arg" << i;
+                of << "arg" << i;
             }
-            m_of << " };\n";
-            m_of << "\t\tRETURN\n";
-            m_of << "\t}\n";
-            m_of << "}";
+            of << " };\n";
+            of << "\t\tRETURN\n";
+            of << "\t}\n";
+            of << "}";
         }
 
         void emit_constructor_struct(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Struct& item) override {
             TRACE_FUNCTION_F(p);
             ::HIR::TypeRef tmp;
-            MonomorphStatePtr ms(m_crate.m_types, nullptr, &p.m_params, nullptr);
+            MonomorphStatePtr ms(crate.types, nullptr, &p.mParams, nullptr);
             auto monomorph = [&](const auto& x) {
-                return m_resolve.monomorph_expand_opt(sp, tmp, x, ms);
+                return mResolve.monomorph_expand_opt(sp, tmp, x, ms);
             };
             // Create constructor function
-            const auto& e = item.m_data.as_Tuple();
-            m_of << "/* " << p << " */\n";
-            m_of << "fn " << fmt(p) << "(";
+            const auto& e = item.mData.as_Tuple();
+            of << "/* " << p << " */\n";
+            of << "fn " << fmt(p) << "(";
             for (unsigned int i = 0; i < e.size(); i++) {
                 if (i != 0) {
-                    m_of << ", ";
+                    of << ", ";
                 }
-                m_of << fmt(monomorph(e[i].ent));
+                of << fmt(monomorph(e[i].ent));
             }
-            m_of << "): " << fmt(p) << " {\n";
-            m_of << "\t0: {\n";
-            m_of << "\t\tASSIGN RETURN = { ";
+            of << "): " << fmt(p) << " {\n";
+            of << "\t0: {\n";
+            of << "\t\tASSIGN RETURN = { ";
             for (unsigned int i = 0; i < e.size(); i++) {
                 if (i != 0) {
-                    m_of << ", ";
+                    of << ", ";
                 }
-                m_of << "arg" << i;
+                of << "arg" << i;
             }
-            m_of << " }: " << fmt(p) << ";\n";
-            m_of << "\t\tRETURN\n";
-            m_of << "\t}\n";
-            m_of << "}\n";
+            of << " }: " << fmt(p) << ";\n";
+            of << "\t\tRETURN\n";
+            of << "\t}\n";
+            of << "}\n";
         }
 
         void emit_union(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Union& item) override {
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
-                sp, m_resolve, FMT_CB(ss, ss << "union " << p;), ::HIR::TypeRef(), {}, empty_fcn
+                sp, mResolve, FMT_CB(ss, ss << "union " << p;), ::HIR::TypeRef(), {}, empty_fcn
             };
-            m_mir_res = &top_mir_res;
+            mirRes = &top_mir_res;
 
             TRACE_FUNCTION_F(p);
-            ::HIR::TypeRef ty = m_crate.m_types.path(p.clone(), &item);
+            ::HIR::TypeRef ty = crate.types.path(p.clone(), &item);
 
-            bool has_drop_glue = m_resolve.type_needs_drop_glue(sp, ty);
+            bool has_drop_glue = mResolve.type_needs_drop_glue(sp, ty);
             auto drop_glue_path = ::HIR::Path(ty, "#drop_glue");
 
-            const auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
-            MIR_ASSERT(*m_mir_res, repr, "No repr for union " << ty);
-            m_of << "type " << fmt(p) << " {\n";
-            m_of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
+            const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
+            MIR_ASSERT(*mirRes, repr, "No repr for union " << ty);
+            of << "type " << fmt(p) << " {\n";
+            of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
             if (has_drop_glue) {
-                m_of << "\tDROP " << fmt(drop_glue_path) << ";\n";
+                of << "\tDROP " << fmt(drop_glue_path) << ";\n";
             }
             for (const auto& e : repr->fields) {
-                m_of << "\t" << e.offset << " = " << fmt(e.ty) << ";\n";
+                of << "\t" << e.offset << " = " << fmt(e.ty) << ";\n";
             }
-            m_of << "}\n";
+            of << "}\n";
         }
 
         void emit_enum(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Enum& item) override {
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
-                sp, m_resolve, FMT_CB(ss, ss << "enum " << p;), ::HIR::TypeRef(), {}, empty_fcn
+                sp, mResolve, FMT_CB(ss, ss << "enum " << p;), ::HIR::TypeRef(), {}, empty_fcn
             };
-            m_mir_res = &top_mir_res;
+            mirRes = &top_mir_res;
 
             TRACE_FUNCTION_F(p);
-            ::HIR::TypeRef ty = m_crate.m_types.path(p.clone(), &item);
+            ::HIR::TypeRef ty = crate.types.path(p.clone(), &item);
 
             // Generate the drop glue (and determine if there is any)
-            bool has_drop_glue = m_resolve.type_needs_drop_glue(sp, ty);
+            bool has_drop_glue = mResolve.type_needs_drop_glue(sp, ty);
             auto drop_glue_path = ::HIR::Path(ty, "#drop_glue");
 
-            const auto* repr = TargetGetTypeRepr(sp, m_resolve, ty);
-            MIR_ASSERT(*m_mir_res, repr, "No repr for enum " << ty);
-            m_of << "type " << fmt(p) << " {\n";
-            m_of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
+            const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
+            MIR_ASSERT(*mirRes, repr, "No repr for enum " << ty);
+            of << "type " << fmt(p) << " {\n";
+            of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
             if (has_drop_glue) {
-                m_of << "\tDROP " << fmt(drop_glue_path) << ";\n";
+                of << "\tDROP " << fmt(drop_glue_path) << ";\n";
             }
             for (const auto& e : repr->fields) {
-                m_of << "\t" << e.offset << " = " << fmt(e.ty) << ";\n";
+                of << "\t" << e.offset << " = " << fmt(e.ty) << ";\n";
             }
 
             auto emit_value = [&](const TypeRepr::FieldPath& path, U128 v) {
-                m_of << "\"";
+                of << "\"";
                 for (size_t i = 0; i < path.size; i++) {
                     int val = ((v >> (i * 8)) & U128(0xFF)).truncate_u64();
                     if (val < 16) {
-                        m_of << ::std::hex << "\\x0" << val << ::std::dec;
+                        of << ::std::hex << "\\x0" << val << ::std::dec;
                     } else {
-                        m_of << ::std::hex << "\\x" << val << ::std::dec;
+                        of << ::std::hex << "\\x" << val << ::std::dec;
                     }
                 }
-                m_of << "\"";
+                of << "\"";
             };
 
             switch (repr->variants.tag()) {
@@ -775,412 +775,412 @@ namespace {
                     TU_ARM(repr->variants, None, _e) {
                     }
                     TU_ARM(repr->variants, Linear, e) {
-                        m_of << "\t@[" << e.field.index << ", " << e.field.sub_fields << "] = {\n";
+                        of << "\t@[" << e.field.index << ", " << e.field.sub_fields << "] = {\n";
                         for (size_t i = 0; i < e.num_variants; i++) {
-                            m_of << "\t\t";
+                            of << "\t\t";
 
                             if (e.is_niche(i)) {
-                                m_of << "*";
+                                of << "*";
                             } else {
                                 emit_value(e.field, U128(e.offset + i));
                             }
                             // - Data field number (optional)
                             if (!item.is_value()) {
-                                m_of << " =" << i;
+                                of << " =" << i;
                             }
-                            m_of << ",\n";
+                            of << ",\n";
                         }
-                        m_of << "\t\t}\n";
+                        of << "\t\t}\n";
                     }
                     TU_ARM(repr->variants, Values, e) {
-                        m_of << "\t@[" << e.field.index << ", " << e.field.sub_fields << "] = {\n";
+                        of << "\t@[" << e.field.index << ", " << e.field.sub_fields << "] = {\n";
                         for (size_t idx = 0; idx < e.values.size(); idx++) {
-                            m_of << "\t\t";
+                            of << "\t\t";
                             // - Tag value
                             emit_value(e.field, e.values[idx]);
                             // - Data field number (optional)
                             if (!item.is_value()) {
-                                m_of << " =" << idx;
+                                of << " =" << idx;
                             }
-                            m_of << ",\n";
+                            of << ",\n";
                         }
-                        m_of << "\t}\n";
+                        of << "\t}\n";
                     }
                     TU_ARM(repr->variants, NonZero, e) {
-                        m_of << "\t@[" << e.field.index << ", " << e.field.sub_fields << "] = { ";
+                        of << "\t@[" << e.field.index << ", " << e.field.sub_fields << "] = { ";
                         for (size_t i = 0; i < 2; i++) {
                             if (i == 1) {
-                                m_of << ", ";
+                                of << ", ";
                             }
 
                             if (e.zero_variant == i) {
-                                m_of << "\"";
+                                of << "\"";
                                 for (size_t i = 0; i < e.field.size; i++) {
-                                    m_of << "\\0";
+                                    of << "\\0";
                                 }
-                                m_of << "\"";
+                                of << "\"";
                             } else {
-                                m_of << "* =" << i;
+                                of << "* =" << i;
                             }
                         }
-                        m_of << " }\n";
+                        of << " }\n";
                     }
             }
-            m_of << "}\n";
+            of << "}\n";
 
-            m_mir_res = nullptr;
+            mirRes = nullptr;
         }
 
         void emit_str_byte(uint8_t b) {
             if (b == 0) {
-                m_of << "\\0";
+                of << "\\0";
             } else if (b == '\\') {
-                m_of << "\\\\";
+                of << "\\\\";
             } else if (b == '"') {
-                m_of << "\\\"";
+                of << "\\\"";
             } else if (' ' <= b && b <= 'z' && b != '\\') {
-                m_of << b;
+                of << b;
             } else if (b < 16) {
-                m_of << "\\x0" << ::std::hex << int(b) << ::std::dec;
+                of << "\\x0" << ::std::hex << int(b) << ::std::dec;
             } else {
-                m_of << "\\x" << ::std::hex << int(b) << ::std::dec;
+                of << "\\x" << ::std::hex << int(b) << ::std::dec;
             }
         }
 
         void emit_static_local(const ::HIR::Path& p, const ::HIR::Static& item, const TransParams& params, const EncodedLiteral& encoded) override {
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
-                sp, m_resolve, FMT_CB(ss, ss << "static " << p;), ::HIR::TypeRef(), {}, empty_fcn
+                sp, mResolve, FMT_CB(ss, ss << "static " << p;), ::HIR::TypeRef(), {}, empty_fcn
             };
-            m_mir_res = &top_mir_res;
+            mirRes = &top_mir_res;
 
             TRACE_FUNCTION_F(p);
 
-            auto type = params.monomorph(m_resolve, item.m_type);
+            auto type = params.monomorph(mResolve, item.mType);
 
-            m_of << "static " << fmt(p) << ": " << fmt(type) << " = \"";
+            of << "static " << fmt(p) << ": " << fmt(type) << " = \"";
             for (auto b : encoded.bytes) {
                 emit_str_byte(b);
             }
-            m_of << "\"";
-            m_of << "{";
+            of << "\"";
+            of << "{";
             for (const auto& r : encoded.relocations) {
-                m_of << "@" << r.ofs << "+" << r.len << " = ";
+                of << "@" << r.ofs << "+" << r.len << " = ";
                 if (r.p) {
-                    m_of << fmt(*r.p);
+                    of << fmt(*r.p);
                 } else {
-                    m_of << "\"" << FmtEscaped(r.bytes) << "\"";
+                    of << "\"" << FmtEscaped(r.bytes) << "\"";
                 }
-                m_of << ",";
+                of << ",";
             }
-            m_of << "}";
-            m_of << ";\n";
+            of << "}";
+            of << ";\n";
 
-            m_mir_res = nullptr;
+            mirRes = nullptr;
         }
 
         void emit_function_ext(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params) override {
             ::MIR::Function empty_fcn;
             ::MIR::TypeResolve top_mir_res {
-                sp, m_resolve, FMT_CB(ss, ss << "extern fn " << p;), ::HIR::TypeRef(), {}, empty_fcn
+                sp, mResolve, FMT_CB(ss, ss << "extern fn " << p;), ::HIR::TypeRef(), {}, empty_fcn
             };
-            m_mir_res = &top_mir_res;
+            mirRes = &top_mir_res;
             TRACE_FUNCTION_F(p);
 
             // If the function is a C external, emit as such
-            if (item.m_linkage.name != "") {
+            if (item.linkage.name != "") {
                 ::HIR::TypeRef ret_type_tmp;
                 const auto& ret_type = monomorphise_fcn_return(ret_type_tmp, item, params);
 
-                m_of << "/* " << p << " */\n";
-                m_of << "fn " << fmt(p) << "(";
-                for (unsigned int i = 0; i < item.m_args.size(); i++) {
+                of << "/* " << p << " */\n";
+                of << "fn " << fmt(p) << "(";
+                for (unsigned int i = 0; i < item.mArgs.size(); i++) {
                     if (i != 0) {
-                        m_of << ", ";
+                        of << ", ";
                     }
-                    m_of << fmt(params.monomorph(m_resolve, item.m_args[i].second));
+                    of << fmt(params.monomorph(mResolve, item.mArgs[i].second));
                 }
-                m_of << "): " << fmt(ret_type) << " = \"" << item.m_linkage.name << "\":\"" << item.m_abi << "\";\n";
+                of << "): " << fmt(ret_type) << " = \"" << item.linkage.name << "\":\"" << item.mAbi << "\";\n";
             }
 
-            m_mir_res = nullptr;
+            mirRes = nullptr;
         }
 
         void emit_function_code(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool is_extern_def, const ::MIR::FunctionPointer& code) override {
             TRACE_FUNCTION_F(p);
 
             ::MIR::TypeResolve::args_t arg_types;
-            for (const auto& ent : item.m_args) {
-                arg_types.push_back(::std::make_pair(::HIR::Pattern{}, params.monomorph(m_resolve, ent.second)));
+            for (const auto& ent : item.mArgs) {
+                arg_types.push_back(::std::make_pair(::HIR::Pattern{}, params.monomorph(mResolve, ent.second)));
             }
 
             ::HIR::TypeRef ret_type_tmp;
             const auto& ret_type = monomorphise_fcn_return(ret_type_tmp, item, params);
 
             ::MIR::TypeResolve mir_res {
-                sp, m_resolve, FMT_CB(ss, ss << p;), ret_type, arg_types, *code
+                sp, mResolve, FMT_CB(ss, ss << p;), ret_type, arg_types, *code
             };
-            m_mir_res = &mir_res;
+            mirRes = &mir_res;
 
             // - Signature
-            m_of << "/* " << p << " */\n";
-            m_of << "fn " << fmt(p) << "(";
-            for (unsigned int i = 0; i < item.m_args.size(); i++) {
+            of << "/* " << p << " */\n";
+            of << "fn " << fmt(p) << "(";
+            for (unsigned int i = 0; i < item.mArgs.size(); i++) {
                 if (i != 0) {
-                    m_of << ", ";
+                    of << ", ";
                 }
-                m_of << fmt(params.monomorph(m_resolve, item.m_args[i].second));
+                of << fmt(params.monomorph(mResolve, item.mArgs[i].second));
             }
-            m_of << "): " << fmt(ret_type);
-            if (item.m_linkage.name != "") {
-                m_of << " = \"" << item.m_linkage.name << "\":\"" << item.m_abi << "\"";
+            of << "): " << fmt(ret_type);
+            if (item.linkage.name != "") {
+                of << " = \"" << item.linkage.name << "\":\"" << item.mAbi << "\"";
             }
-            m_of << " {\n";
+            of << " {\n";
             // - Locals
             for (unsigned int i = 0; i < code->locals.size(); i++) {
                 DEBUG("var" << i << " : " << code->locals[i]);
-                m_of << "\tlet var" << i << ": " << fmt(code->locals[i]) << ";\n";
+                of << "\tlet var" << i << ": " << fmt(code->locals[i]) << ";\n";
             }
             for (unsigned int i = 0; i < code->drop_flags.size(); i++) {
-                m_of << "\tlet df" << i << " = " << code->drop_flags[i] << ";\n";
+                of << "\tlet df" << i << " = " << code->drop_flags[i] << ";\n";
             }
 
             for (unsigned int i = 0; i < code->blocks.size(); i++) {
                 TRACE_FUNCTION_F(p << " bb" << i);
 
-                m_of << "\t" << i << ": {\n";
+                of << "\t" << i << ": {\n";
 
                 for (const auto& stmt : code->blocks[i].statements) {
-                    m_of << "\t\t";
+                    of << "\t\t";
                     mir_res.set_cur_stmt(i, (&stmt - &code->blocks[i].statements.front()));
                     DEBUG(stmt);
                     switch (stmt.tag()) {
                         case ::MIR::Statement::TAGDEAD:
                             throw "";
                             TU_ARM(stmt, Assign, se) {
-                                m_of << "ASSIGN " << fmt(se.dst) << " = ";
+                                of << "ASSIGN " << fmt(se.dst) << " = ";
                                 switch (se.src.tag()) {
                                     case ::MIR::RValue::TAGDEAD:
                                         throw "";
                                         TU_ARM(se.src, Use, e)
-                                        m_of << "=" << fmt(e);
+                                        of << "=" << fmt(e);
                                         break;
                                         TU_ARM(se.src, Constant, e)
-                                        m_of << fmt(e);
+                                        of << fmt(e);
                                         break;
                                         TU_ARM(se.src, SizedArray, e)
-                                        m_of << "[" << fmt(e.val) << "; " << e.count << "]";
+                                        of << "[" << fmt(e.val) << "; " << e.count << "]";
                                         break;
                                         TU_ARM(se.src, Borrow, e) {
-                                            m_of << "&";
+                                            of << "&";
                                             switch (e.type) {
                                                 case ::HIR::BorrowType::Shared:
                                                     break;
                                                 case ::HIR::BorrowType::Unique:
-                                                    m_of << "mut ";
+                                                    of << "mut ";
                                                     break;
                                                 case ::HIR::BorrowType::Owned:
-                                                    m_of << "move ";
+                                                    of << "move ";
                                                     break;
                                             }
-                                            m_of << fmt(e.val);
+                                            of << fmt(e.val);
                                         }
                                         break;
                                         TU_ARM(se.src, Cast, e)
-                                        m_of << "CAST " << fmt(e.val) << " as " << fmt(e.type);
+                                        of << "CAST " << fmt(e.val) << " as " << fmt(e.type);
                                         break;
                                         TU_ARM(se.src, BinOp, e) {
-                                            m_of << "BINOP " << fmt(e.val_l) << " ";
+                                            of << "BINOP " << fmt(e.val_l) << " ";
                                             switch (e.op) {
                                                 case ::MIR::eBinOp::ADD:
-                                                    m_of << "+";
+                                                    of << "+";
                                                     break;
                                                 case ::MIR::eBinOp::ADD_OV:
-                                                    m_of << "+^";
+                                                    of << "+^";
                                                     break;
                                                 case ::MIR::eBinOp::SUB:
-                                                    m_of << "-";
+                                                    of << "-";
                                                     break;
                                                 case ::MIR::eBinOp::SUB_OV:
-                                                    m_of << "-^";
+                                                    of << "-^";
                                                     break;
                                                 case ::MIR::eBinOp::MUL:
-                                                    m_of << "*";
+                                                    of << "*";
                                                     break;
                                                 case ::MIR::eBinOp::MUL_OV:
-                                                    m_of << "*^";
+                                                    of << "*^";
                                                     break;
                                                 case ::MIR::eBinOp::DIV:
-                                                    m_of << "/";
+                                                    of << "/";
                                                     break;
                                                 case ::MIR::eBinOp::DIV_OV:
-                                                    m_of << "/^";
+                                                    of << "/^";
                                                     break;
                                                 case ::MIR::eBinOp::MOD:
-                                                    m_of << "%";
+                                                    of << "%";
                                                     break;
                                                 case ::MIR::eBinOp::BIT_OR:
-                                                    m_of << "|";
+                                                    of << "|";
                                                     break;
                                                 case ::MIR::eBinOp::BIT_AND:
-                                                    m_of << "&";
+                                                    of << "&";
                                                     break;
                                                 case ::MIR::eBinOp::BIT_XOR:
-                                                    m_of << "^";
+                                                    of << "^";
                                                     break;
                                                 case ::MIR::eBinOp::BIT_SHR:
-                                                    m_of << ">>";
+                                                    of << ">>";
                                                     break;
                                                 case ::MIR::eBinOp::BIT_SHL:
-                                                    m_of << "<<";
+                                                    of << "<<";
                                                     break;
                                                 case ::MIR::eBinOp::NE:
-                                                    m_of << "!=";
+                                                    of << "!=";
                                                     break;
                                                 case ::MIR::eBinOp::EQ:
-                                                    m_of << "==";
+                                                    of << "==";
                                                     break;
                                                 case ::MIR::eBinOp::GT:
-                                                    m_of << ">";
+                                                    of << ">";
                                                     break;
                                                 case ::MIR::eBinOp::GE:
-                                                    m_of << ">=";
+                                                    of << ">=";
                                                     break;
                                                 case ::MIR::eBinOp::LT:
-                                                    m_of << "<";
+                                                    of << "<";
                                                     break;
                                                 case ::MIR::eBinOp::LE:
-                                                    m_of << "<=";
+                                                    of << "<=";
                                                     break;
                                             }
-                                            m_of << " " << fmt(e.val_r);
+                                            of << " " << fmt(e.val_r);
                                         }
                                         break;
                                         TU_ARM(se.src, UniOp, e) {
-                                            m_of << "UNIOP ";
+                                            of << "UNIOP ";
                                             switch (e.op) {
                                                 case ::MIR::eUniOp::INV:
-                                                    m_of << "!";
+                                                    of << "!";
                                                     break;
                                                 case ::MIR::eUniOp::NEG:
-                                                    m_of << "-";
+                                                    of << "-";
                                                     break;
                                             }
-                                            m_of << " " << fmt(e.val);
+                                            of << " " << fmt(e.val);
                                         }
                                         break;
                                         TU_ARM(se.src, DstMeta, e)
-                                        m_of << "DSTMETA " << fmt(e.val);
+                                        of << "DSTMETA " << fmt(e.val);
                                         break;
                                         TU_ARM(se.src, DstPtr, e)
-                                        m_of << "DSTPTR " << fmt(e.val);
+                                        of << "DSTPTR " << fmt(e.val);
                                         break;
                                         TU_ARM(se.src, MakeDst, e)
-                                        m_of << "MAKEDST " << fmt(e.ptr_val) << ", " << fmt(e.meta_val);
+                                        of << "MAKEDST " << fmt(e.ptr_val) << ", " << fmt(e.meta_val);
                                         break;
                                         TU_ARM(se.src, UnionVariant, e)
-                                        m_of << "UNION " << fmt(e.path) << " " << e.index << " " << fmt(e.val);
+                                        of << "UNION " << fmt(e.path) << " " << e.index << " " << fmt(e.val);
                                         break;
                                         TU_ARM(se.src, EnumVariant, e) {
-                                            m_of << "ENUM " << fmt(e.path) << " " << e.index << " { ";
+                                            of << "ENUM " << fmt(e.path) << " " << e.index << " { ";
                                             for (const auto& v : e.vals) {
-                                                m_of << fmt(v) << ", ";
+                                                of << fmt(v) << ", ";
                                             }
-                                            m_of << "}";
+                                            of << "}";
                                         }
                                         break;
                                         TU_ARM(se.src, Array, e) {
-                                            m_of << "[ ";
+                                            of << "[ ";
                                             for (const auto& v : e.vals) {
-                                                m_of << fmt(v) << ", ";
+                                                of << fmt(v) << ", ";
                                             }
-                                            m_of << "]";
+                                            of << "]";
                                         }
                                         break;
                                         TU_ARM(se.src, Tuple, e) {
-                                            m_of << "( ";
+                                            of << "( ";
                                             for (const auto& v : e.vals) {
-                                                m_of << fmt(v) << ", ";
+                                                of << fmt(v) << ", ";
                                             }
-                                            m_of << ")";
+                                            of << ")";
                                         }
                                         break;
                                         TU_ARM(se.src, Struct, e) {
-                                            m_of << "{ ";
+                                            of << "{ ";
                                             for (const auto& v : e.vals) {
-                                                m_of << fmt(v) << ", ";
+                                                of << fmt(v) << ", ";
                                             }
-                                            m_of << "}: " << fmt(e.path);
+                                            of << "}: " << fmt(e.path);
                                         }
                                         break;
                                 }
                             }
                             break;
                             TU_ARM(stmt, SetDropFlag, se) {
-                                m_of << "SETFLAG df" << se.idx << " = ";
+                                of << "SETFLAG df" << se.idx << " = ";
                                 if (se.other == ~0u) {
-                                    m_of << se.new_val;
+                                    of << se.new_val;
                                 } else {
-                                    m_of << (se.new_val ? "" : "!") << "df" << se.other;
+                                    of << (se.new_val ? "" : "!") << "df" << se.other;
                                 }
                             }
                             break;
                             TU_ARM(stmt, LoadDropFlag, se) {
-                                m_of << "LOADFLAG df" << se.idx << " = " << fmt(se.slot) << " BIT " << se.bit_index;
+                                of << "LOADFLAG df" << se.idx << " = " << fmt(se.slot) << " BIT " << se.bit_index;
                             }
                             break;
                             TU_ARM(stmt, SaveDropFlag, se) {
-                                m_of << "SAVEFLAG " << fmt(se.slot) << " BIT " << se.bit_index << " = df" << se.idx;
+                                of << "SAVEFLAG " << fmt(se.slot) << " BIT " << se.bit_index << " = df" << se.idx;
                             }
                             break;
                             TU_ARM(stmt, Asm, se) {
-                                m_of << "ASM (";
+                                of << "ASM (";
                                 for (const auto& v : se.outputs) {
-                                    m_of << "\"" << v.first << "\" : " << fmt(v.second) << ", ";
+                                    of << "\"" << v.first << "\" : " << fmt(v.second) << ", ";
                                 }
-                                m_of << ") = \"" << FmtEscaped(se.tpl) << "\"(";
+                                of << ") = \"" << FmtEscaped(se.tpl) << "\"(";
                                 for (const auto& v : se.inputs) {
-                                    m_of << "\"" << v.first << "\" : " << fmt(v.second) << ", ";
+                                    of << "\"" << v.first << "\" : " << fmt(v.second) << ", ";
                                 }
-                                m_of << ") [";
+                                of << ") [";
 
                                 for (const auto& v : se.clobbers) {
-                                    m_of << "\"" << v << "\", ";
+                                    of << "\"" << v << "\", ";
                                 }
-                                m_of << ":" << se.flags << "]";
+                                of << ":" << se.flags << "]";
                             }
                             break;
                             TU_ARM(stmt, Asm2, se) {
-                                m_of << "ASM2 (";
+                                of << "ASM2 (";
                                 for (const auto& l : se.lines) {
-                                    m_of << l;
+                                    of << l;
                                 }
                                 for (const auto& p : se.params) {
-                                    m_of << ", ";
+                                    of << ", ";
                             TU_MATCH_HDRA((p), {)
                             TU_ARMA(Const, v)
-                                m_of << "const " << fmt(v);
+                                of << "const " << fmt(v);
                                         TU_ARMA(Sym, v)
-                                        m_of << "sym " << fmt(v);
+                                        of << "sym " << fmt(v);
                                         TU_ARMA(Reg, v) {
-                                            m_of << "reg(" << v.dir << " " << v.spec << ") ";
+                                            of << "reg(" << v.dir << " " << v.spec << ") ";
                                             if (v.input) {
-                                                m_of << fmt(*v.input);
+                                                of << fmt(*v.input);
                                             } else {
-                                                m_of << "_";
+                                                of << "_";
                                             }
-                                            m_of << " => ";
+                                            of << " => ";
                                             if (v.output) {
-                                                m_of << fmt(*v.output);
+                                                of << fmt(*v.output);
                                             } else {
-                                                m_of << "_";
+                                                of << "_";
                                             }
                                         }
                             }
                                 }
-                                m_of << ", ";
-                                se.options.fmt(m_of);
-                                m_of << ")";
+                                of << ", ";
+                                se.options.fmt(of);
+                                of << ")";
                             }
                             break;
                             TU_ARM(stmt, ScopeEnd, se) {
@@ -1189,88 +1189,88 @@ namespace {
                             }
                             break;
                     }
-                    m_of << ";\n";
+                    of << ";\n";
                 }
 
                 mir_res.set_cur_stmt_term(i);
                 const auto& term = code->blocks[i].terminator;
                 DEBUG("- " << term);
-                m_of << "\t\t";
+                of << "\t\t";
                 switch (term.tag()) {
                     case ::MIR::Terminator::TAGDEAD:
                         throw "";
                         TU_ARM(term, Incomplete, _e)(void) _e;
-                        m_of << "INCOMPLETE\n";
+                        of << "INCOMPLETE\n";
                         break;
                         TU_ARM(term, Return, _e)(void) _e;
-                        m_of << "RETURN\n";
+                        of << "RETURN\n";
                         break;
                         TU_ARM(term, UnwindResume, _e)(void) _e;
-                        m_of << "UNWIND RESUME\n";
+                        of << "UNWIND RESUME\n";
                         break;
                         TU_ARM(term, UnwindTerminate, _e)(void) _e;
-                        m_of << "UNWIND TERMINATE\n";
+                        of << "UNWIND TERMINATE\n";
                         break;
                         TU_ARM(term, Unreachable, _e)(void) _e;
-                        m_of << "UNREACHABLE\n";
+                        of << "UNREACHABLE\n";
                         break;
                         TU_ARM(term, Goto, e)
-                        m_of << "GOTO " << e << "\n";
+                        of << "GOTO " << e << "\n";
                         break;
                         TU_ARM(term, If, e)
-                        m_of << "IF " << fmt(e.cond) << " goto " << e.bb_true << " else " << e.bb_false << "\n";
+                        of << "IF " << fmt(e.cond) << " goto " << e.bb_true << " else " << e.bb_false << "\n";
                         break;
                         TU_ARM(term, Switch, e) {
-                            m_of << "SWITCH " << fmt(e.val) << " { ";
-                            m_of << e.targets;
-                            m_of << " }\n";
+                            of << "SWITCH " << fmt(e.val) << " { ";
+                            of << e.targets;
+                            of << " }\n";
                         }
                         break;
                         TU_ARM(term, SwitchValue, e) {
-                            m_of << "SWITCHVALUE " << fmt(e.val) << " { ";
+                            of << "SWITCHVALUE " << fmt(e.val) << " { ";
                             switch (e.values.tag()) {
                                 case ::MIR::SwitchValues::TAGDEAD:
                                     throw "";
                                     TU_ARM(e.values, String, ve)
                                     for (size_t i = 0; i < ve.size(); i++) {
-                                        m_of << "\"" << FmtEscaped(ve[i]) << "\" = " << e.targets[i] << ",";
+                                        of << "\"" << FmtEscaped(ve[i]) << "\" = " << e.targets[i] << ",";
                                     }
                                     break;
                                     TU_ARM(e.values, ByteString, ve) {
                                         for (size_t j = 0; j < ve.size(); j++) {
-                                            m_of << "b\"";
+                                            of << "b\"";
                                             for (size_t i = 0; i < ve[j].size(); i++) {
                                                 auto b = ve[j][i];
                                                 switch (b) {
                                                     case '\\':
-                                                        m_of << "\\\\";
+                                                        of << "\\\\";
                                                         break;
                                                     case '\"':
-                                                        m_of << "\\\"";
+                                                        of << "\\\"";
                                                         break;
                                                     default:
                                                         if (' ' <= b && b < 0x7f) {
-                                                            m_of << char(ve[j][i]);
+                                                            of << char(ve[j][i]);
                                                         } else {
-                                                            m_of << "\\x";
-                                                            m_of << "0123456789ABCDEF"[b >> 4];
-                                                            m_of << "0123456789ABCDEF"[b & 15];
+                                                            of << "\\x";
+                                                            of << "0123456789ABCDEF"[b >> 4];
+                                                            of << "0123456789ABCDEF"[b & 15];
                                                         }
                                                         break;
                                                 }
                                             }
-                                            m_of << "\" = " << e.targets[i] << ",";
+                                            of << "\" = " << e.targets[i] << ",";
                                         }
                                     }
                                     break;
                                     TU_ARM(e.values, Unsigned, ve)
                                     for (size_t i = 0; i < ve.size(); i++) {
-                                        m_of << ve[i] << " = " << e.targets[i] << ",";
+                                        of << ve[i] << " = " << e.targets[i] << ",";
                                     }
                                     break;
                                     TU_ARM(e.values, Signed, ve)
                                     for (size_t i = 0; i < ve.size(); i++) {
-                                        m_of << (ve[i] < 0 ? "" : "+") << ve[i] << " = " << e.targets[i] << ",";
+                                        of << (ve[i] < 0 ? "" : "+") << ve[i] << " = " << e.targets[i] << ",";
                                     }
                                     break;
                             }
@@ -1279,60 +1279,60 @@ namespace {
                             //{
                             //    m_of << ", ";
                             //}
-                            m_of << "_ = " << e.def_target;
-                            m_of << " }\n";
+                            of << "_ = " << e.def_target;
+                            of << " }\n";
                         }
                         break;
                         TU_ARM(term, Drop, e) {
-                            m_of << "DROP " << fmt(e.slot);
-                            if (e.kind == ::MIR::eDropKind::SHALLOW) m_of << " SHALLOW";
-                            if (e.flag_idx != ~0u) m_of << " IF df" << e.flag_idx;
-                            m_of << " goto " << e.target << " unwind " << e.unwind.tag_str() << "\n";
+                            of << "DROP " << fmt(e.slot);
+                            if (e.kind == ::MIR::eDropKind::SHALLOW) of << " SHALLOW";
+                            if (e.flag_idx != ~0u) of << " IF df" << e.flag_idx;
+                            of << " goto " << e.target << " unwind " << e.unwind.tag_str() << "\n";
                         }
                         break;
                         TU_ARM(term, Call, e) {
                             if (const auto* f_p = e.fcn.opt_Intrinsic()) {
                                 if (f_p->name == "offset_of") {
-                                    size_t val = mir_res.intrinsic_offset_of(f_p->params.m_types.at(0), e.args);
-                                    m_of << fmt(e.ret_val) << " = " << val << " usize;\n";
-                                    m_of << "\t\tGOTO " << e.ret_block;
+                                    size_t val = mir_res.intrinsic_offset_of(f_p->params.types.at(0), e.args);
+                                    of << fmt(e.ret_val) << " = " << val << " usize;\n";
+                                    of << "\t\tGOTO " << e.ret_block;
                                     break;
                                 }
                             }
-                            m_of << "CALL " << fmt(e.ret_val) << " = ";
+                            of << "CALL " << fmt(e.ret_val) << " = ";
                             switch (e.fcn.tag()) {
                                 case ::MIR::CallTarget::TAGDEAD:
                                     throw "";
                                     TU_ARM(e.fcn, Intrinsic, f) {
-                                        m_of << "\"" << f.name << "\"";
-                                        if (f.params.m_types.size() > 0) {
-                                            m_of << "<";
-                                            for (const auto& t : f.params.m_types) {
-                                                m_of << fmt(t) << ",";
+                                        of << "\"" << f.name << "\"";
+                                        if (f.params.types.size() > 0) {
+                                            of << "<";
+                                            for (const auto& t : f.params.types) {
+                                                of << fmt(t) << ",";
                                             }
-                                            m_of << ">";
+                                            of << ">";
                                         }
                                     }
                                     break;
-                                    TU_ARM(e.fcn, Value, f) m_of << "(" << fmt(f) << ")";
+                                    TU_ARM(e.fcn, Value, f) of << "(" << fmt(f) << ")";
                                     break;
-                                    TU_ARM(e.fcn, Path, f) m_of << fmt(f);
+                                    TU_ARM(e.fcn, Path, f) of << fmt(f);
                                     break;
                             }
-                            m_of << "(";
+                            of << "(";
                             for (const auto& a : e.args) {
-                                m_of << fmt(a) << ", ";
+                                of << fmt(a) << ", ";
                             }
-                            m_of << ") goto " << e.ret_block << " unwind " << e.unwind.tag_str() << "\n";
+                            of << ") goto " << e.ret_block << " unwind " << e.unwind.tag_str() << "\n";
                         }
                         break;
                 }
-                m_of << "\t}\n";
+                of << "\t}\n";
             }
 
-            m_of << "}\n";
+            of << "}\n";
 
-            m_mir_res = nullptr;
+            mirRes = nullptr;
         }
 
         void emit_global_asm(const ::HIR::GlobalAssembly&) override {
@@ -1341,17 +1341,17 @@ namespace {
 
     private:
         const ::HIR::TypeData* monomorphise_fcn_return(::HIR::TypeRef& tmp, const ::HIR::Function& item, const TransParams& params) {
-            bool has_erased = visit_ty_with(item.m_return, [&](const auto& x) {
+            bool has_erased = visit_ty_with(item.returnType, [&](const auto& x) {
                 return x->is_ErasedType();
             });
 
-            if (has_erased || monomorphise_type_needed(item.m_return)) {
+            if (has_erased || monomorphise_type_needed(item.returnType)) {
                 // If there's an erased type, make a copy with the erased type expanded
                 if (has_erased) {
-                    tmp = clone_ty_with(m_crate.m_types, sp, item.m_return, [&](const auto& x, auto& out) {
+                    tmp = clone_ty_with(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
                         if (const auto* te = x->opt_ErasedType()) {
-                            if (const auto* e = te->m_inner.opt_Fcn()) {
-                                out = item.m_code.m_erased_types.at(e->m_index);
+                            if (const auto* e = te->inner.opt_Fcn()) {
+                                out = item.mCode.erasedTypes.at(e->index);
                                 return true;
                             }
                         }
@@ -1359,12 +1359,12 @@ namespace {
                     });
                     tmp = params.monomorph_type(Span(), tmp);
                 } else {
-                    tmp = params.monomorph_type(Span(), item.m_return);
+                    tmp = params.monomorph_type(Span(), item.returnType);
                 }
-                m_resolve.expand_associated_types(Span(), tmp);
+                mResolve.expand_associated_types(Span(), tmp);
                 return tmp;
             } else {
-                return item.m_return;
+                return item.returnType;
             }
         }
     };

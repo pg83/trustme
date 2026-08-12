@@ -19,21 +19,21 @@ std::ostream& operator<<(std::ostream& os, const MetadataType& x);
 class StaticTraitResolve: public TraitResolveCommon {
     class NextSolverBridge;
 
-    MetadataType m_self_metadata = MetadataType::Unknown;
-    mutable ::std::map<::HIR::TypeRef, bool> m_copy_cache;
-    mutable ::std::map<::HIR::TypeRef, bool> m_clone_cache;
-    mutable ::std::map<::HIR::TypeRef, bool> m_drop_cache;
-    mutable ::std::map<std::string, HIR::TypeRef> m_aty_cache;
+    MetadataType selfMetadata = MetadataType::Unknown;
+    mutable ::std::map<::HIR::TypeRef, bool> copyCache;
+    mutable ::std::map<::HIR::TypeRef, bool> cloneCache;
+    mutable ::std::map<::HIR::TypeRef, bool> dropCache;
+    mutable ::std::map<std::string, HIR::TypeRef> atyCache;
 
     /// Cache of the result of find_impl__check_crate_raw
-    mutable ::std::map<std::string, std::pair<HIR::PathParams, HIR::Compare>> m_cached_impl_checks;
+    mutable ::std::map<std::string, std::pair<HIR::PathParams, HIR::Compare>> cachedImplChecks;
     mutable ::std::vector<::std::tuple<
         const ::HIR::SimplePath*,
         const ::HIR::PathParams*,
         const ::HIR::TypeData*
-    >> m_find_impl_stack;
+    >> findImplStack;
     // Owned by the crate ObjPool and reused across all fully-static goals.
-    mutable NextSolverBridge* m_next_solver = nullptr;
+    mutable NextSolverBridge* nextSolver = nullptr;
 
 public:
     explicit StaticTraitResolve(const ::HIR::Crate& crate);

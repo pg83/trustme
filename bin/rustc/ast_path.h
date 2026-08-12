@@ -225,8 +225,8 @@ namespace AST {
     class PathParamEnt;
 
     struct PathParams {
-        ::std::vector<PathParamEnt> m_entries;
-        bool m_is_paren = false;
+        ::std::vector<PathParamEnt> entries;
+        bool isParen = false;
 
         PathParams(PathParams&& x);
         PathParams(const PathParams& x);
@@ -237,7 +237,7 @@ namespace AST {
         PathParams& operator=(const PathParams& x) = delete;
 
         bool is_empty() const {
-            return m_entries.empty();
+            return entries.empty();
         }
 
         Ordering ord(const PathParams& x) const;
@@ -246,8 +246,8 @@ namespace AST {
     };
 
     class PathNode {
-        RcString m_name;
-        PathParams m_params;
+        RcString mName;
+        PathParams mParams;
 
     public:
         PathNode();
@@ -255,15 +255,15 @@ namespace AST {
         PathNode(RcString name, PathParams args = {});
 
         const RcString& name() const {
-            return m_name;
+            return mName;
         }
 
         const ::AST::PathParams& args() const {
-            return m_params;
+            return mParams;
         }
 
         ::AST::PathParams& args() {
-            return m_params;
+            return mParams;
         }
 
         Ordering ord(const PathNode& x) const;
@@ -347,8 +347,8 @@ namespace AST {
         };
 
     public:
-        Class m_class;
-        Bindings m_bindings;
+        Class cls;
+        Bindings mBindings;
 
         virtual ~Path();
 
@@ -378,7 +378,7 @@ namespace AST {
 
         // Local (variable/type param)
         Path(RcString name)
-            : m_class(Class::make_Local({mv$(name)}))
+            : cls(Class::make_Local({mv$(name)}))
         {
         }
 
@@ -418,30 +418,30 @@ namespace AST {
 
     #if 1
         void append(PathNode node) {
-            assert(!m_class.is_Invalid());
+            assert(!cls.is_Invalid());
             //if( m_class.is_Invalid() )
             //    m_class = Class::make_Relative({});
             nodes().push_back(mv$(node));
-            m_bindings = Bindings();
+            mBindings = Bindings();
         }
     #endif
 
         bool is_trivial() const {
-            TU_MATCH_DEF(Class, (m_class), (e), (return false;), (Local, return true;), (Relative, return e.nodes.size() == 1 && e.nodes[0].args().is_empty();))
+            TU_MATCH_DEF(Class, (cls), (e), (return false;), (Local, return true;), (Relative, return e.nodes.size() == 1 && e.nodes[0].args().is_empty();))
         }
 
         const RcString& as_trivial() const;
 
         bool is_valid() const {
-            return !m_class.is_Invalid();
+            return !cls.is_Invalid();
         }
 
         bool is_absolute() const {
-            return m_class.is_Absolute();
+            return cls.is_Absolute();
         }
 
         bool is_relative() const {
-            return m_class.is_Relative() || m_class.is_Super() || m_class.is_Self();
+            return cls.is_Relative() || cls.is_Super() || cls.is_Self();
         }
 
         size_t size() const;

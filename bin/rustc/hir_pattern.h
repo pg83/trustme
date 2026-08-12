@@ -22,15 +22,15 @@ namespace HIR {
             MutRef,
         };
 
-        bool m_mutable;
-        Type m_type;
-        RcString m_name;
-        unsigned int m_slot;
+        bool isMutable;
+        Type mType;
+        RcString mName;
+        unsigned int slot;
 
-        unsigned m_implicit_deref_count = 0;
+        unsigned implicitDerefCount = 0;
 
         bool is_valid() const {
-            return m_name != "";
+            return mName != "";
         }
 
         PatternBinding();
@@ -167,9 +167,9 @@ namespace HIR {
             })
         );
 
-        std::vector<PatternBinding> m_bindings;
-        Data m_data;
-        unsigned m_implicit_deref_count = 0;
+        std::vector<PatternBinding> mBindings;
+        Data mData;
+        unsigned implicitDerefCount = 0;
 
         Pattern();
 

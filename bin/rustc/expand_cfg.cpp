@@ -39,8 +39,8 @@ namespace {
     } g_check_cfg;
 
     class CfgSpecParser {
-        const ::std::string& m_input;
-        size_t m_pos = 0;
+        const ::std::string& input;
+        size_t pos = 0;
 
     public:
         struct CheckSpec {
@@ -50,7 +50,7 @@ namespace {
         };
 
         explicit CfgSpecParser(const ::std::string& input)
-            : m_input(input)
+            : input(input)
         {
         }
 
@@ -59,19 +59,19 @@ namespace {
         }
 
         void skip_ws() {
-            while (m_pos < m_input.size()) {
-                const auto c = static_cast<unsigned char>(m_input[m_pos]);
+            while (pos < input.size()) {
+                const auto c = static_cast<unsigned char>(input[pos]);
                 if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
                     break;
                 }
-                m_pos += 1;
+                pos += 1;
             }
         }
 
         bool take(char c) {
             skip_ws();
-            if (m_pos < m_input.size() && m_input[m_pos] == c) {
-                m_pos += 1;
+            if (pos < input.size() && input[pos] == c) {
+                pos += 1;
                 return true;
             }
             return false;
@@ -93,15 +93,15 @@ namespace {
 
         ::std::string ident() {
             skip_ws();
-            const auto start = m_pos;
-            if (m_pos >= m_input.size() || !is_ident_start(static_cast<unsigned char>(m_input[m_pos]))) {
+            const auto start = pos;
+            if (pos >= input.size() || !is_ident_start(static_cast<unsigned char>(input[pos]))) {
                 fail("expected an identifier");
             }
-            m_pos += 1;
-            while (m_pos < m_input.size() && is_ident_continue(static_cast<unsigned char>(m_input[m_pos]))) {
-                m_pos += 1;
+            pos += 1;
+            while (pos < input.size() && is_ident_continue(static_cast<unsigned char>(input[pos]))) {
+                pos += 1;
             }
-            return m_input.substr(start, m_pos - start);
+            return input.substr(start, pos - start);
         }
 
         static unsigned hex_digit(char c) {
@@ -119,13 +119,13 @@ namespace {
 
         ::std::string string_literal() {
             skip_ws();
-            if (m_pos >= m_input.size() || m_input[m_pos] != '"') {
+            if (pos >= input.size() || input[pos] != '"') {
                 fail("expected a string literal");
             }
-            m_pos += 1;
+            pos += 1;
             ::std::string rv;
-            while (m_pos < m_input.size()) {
-                auto c = m_input[m_pos++];
+            while (pos < input.size()) {
+                auto c = input[pos++];
                 if (c == '"') {
                     return rv;
                 }
@@ -133,10 +133,10 @@ namespace {
                     rv += c;
                     continue;
                 }
-                if (m_pos >= m_input.size()) {
+                if (pos >= input.size()) {
                     fail("unterminated string escape");
                 }
-                c = m_input[m_pos++];
+                c = input[pos++];
                 switch (c) {
                     case '\\': rv += '\\'; break;
                     case '"': rv += '"'; break;
@@ -145,16 +145,16 @@ namespace {
                     case 't': rv += '\t'; break;
                     case '0': rv += '\0'; break;
                     case 'x': {
-                        if (m_pos + 2 > m_input.size()) {
+                        if (pos + 2 > input.size()) {
                             fail("incomplete hexadecimal string escape");
                         }
-                        const auto hi = hex_digit(m_input[m_pos]);
-                        const auto lo = hex_digit(m_input[m_pos + 1]);
+                        const auto hi = hex_digit(input[pos]);
+                        const auto lo = hex_digit(input[pos + 1]);
                         if (hi >= 16 || lo >= 16) {
                             fail("invalid hexadecimal string escape");
                         }
                         rv += static_cast<char>((hi << 4) | lo);
-                        m_pos += 2;
+                        pos += 2;
                         break;
                     }
                     default:
@@ -166,7 +166,7 @@ namespace {
 
         bool at_end() {
             skip_ws();
-            return m_pos == m_input.size();
+            return pos == input.size();
         }
 
         ::std::pair<::std::string, ::std::optional<::std::string>> parse_cfg_option() {
@@ -217,7 +217,7 @@ namespace {
                         if (!take(')')) {
                             for (;;) {
                                 skip_ws();
-                                if (m_pos < m_input.size() && m_input[m_pos] == '"') {
+                                if (pos < input.size() && input[pos] == '"') {
                                     if (saw_any) {
                                         fail("`values()` cannot combine string literals with `any()`");
                                     }
@@ -510,7 +510,7 @@ namespace {
                     auto n = lex.getTokenCheck(TOK_INTERPOLATED_EXPR).take_frag_node();
                     const auto* np = cast<AST::ExprNodeString>(n.get());
                     ASSERT_BUG(n->span(), np, "");
-                    val = np->m_value;
+                    val = np->mValue;
                 } else {
                     GET_CHECK_TOK(tok, lex, TOK_STRING);
                     val = tok.str();
@@ -629,7 +629,7 @@ bool check_cfg(const Span& sp, const ::AST::Attribute& mi) {
 }
 
 bool check_cfg_attrs(const ::AST::AttributeList& attrs) {
-    for (auto& a : attrs.m_items) {
+    for (auto& a : attrs.mItems) {
         if (a.name() == rcstring_cfg) {
             if (!check_cfg(a.span(), a)) {
                 return false;
@@ -699,7 +699,7 @@ class CCfgHandler: public ExpandDecorator {
         if (check_cfg(sp, mi)) {
         } else {
             // Remove all items (can't remove the module)
-            crate.m_root_module.m_items.clear();
+            crate.rootModule.mItems.clear();
         }
     }
 
@@ -742,28 +742,28 @@ class CCfgHandler: public ExpandDecorator {
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::StructItem& si) const override {
         DEBUG("#[cfg] struct item - " << mi);
         if (!check_cfg(sp, mi)) {
-            si.m_name = RcString();
+            si.mName = RcString();
         }
     }
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::TupleItem& i) const override {
         DEBUG("#[cfg] tuple item - " << mi);
         if (!check_cfg(sp, mi)) {
-            i.m_type = ::TypeRef(sp);
+            i.mType = ::TypeRef(sp);
         }
     }
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::EnumVariant& i) const override {
         DEBUG("#[cfg] enum variant - " << mi);
         if (!check_cfg(sp, mi)) {
-            i.m_name = RcString();
+            i.mName = RcString();
         }
     }
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNodeMatchArm& i) const override {
         DEBUG("#[cfg] match arm - " << mi);
         if (!check_cfg(sp, mi)) {
-            i.m_patterns.clear();
+            i.patterns.clear();
         }
     }
 

@@ -23,10 +23,10 @@ namespace HIR {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x) {
-        if (x.m_mutable) {
+        if (x.isMutable) {
             os << "mut ";
         }
-        switch (x.m_type) {
+        switch (x.mType) {
             case PatternBinding::Type::Move:
                 break;
             case PatternBinding::Type::Ref:
@@ -36,18 +36,18 @@ namespace HIR {
                 os << "ref mut ";
                 break;
         }
-        os << x.m_name << "/*" << x.m_slot << "*/" << " @ ";
+        os << x.mName << "/*" << x.slot << "*/" << " @ ";
         return os;
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Pattern& x) {
-        for (const auto& pb : x.m_bindings) {
+        for (const auto& pb : x.mBindings) {
             os << pb;
         }
-        if (x.m_implicit_deref_count > 0) {
-            os << "&*" << x.m_implicit_deref_count;
+        if (x.implicitDerefCount > 0) {
+            os << "&*" << x.implicitDerefCount;
         }
-        TU_MATCH_HDRA( (x.m_data), {)
+        TU_MATCH_HDRA( (x.mData), {)
         TU_ARMA(Any, e) {
                 os << "_";
             }
@@ -163,12 +163,12 @@ namespace HIR {
 
 namespace {
     void visit_pattern_declaration_slots(const ::HIR::Pattern& pattern, ::std::vector<unsigned>& slots) {
-        for (const auto& binding : pattern.m_bindings) {
-            slots.push_back(binding.m_slot);
+        for (const auto& binding : pattern.mBindings) {
+            slots.push_back(binding.slot);
         }
 
         TU_MATCHA(
-            (pattern.m_data),
+            (pattern.mData),
             (e),
             (Any, ),
             (Box, visit_pattern_declaration_slots(*e.sub, slots);),
@@ -181,7 +181,7 @@ namespace {
             (Value, ),
             (Range, ),
             (Slice, for (const auto& subpattern : e.sub_patterns) { visit_pattern_declaration_slots(subpattern, slots); }),
-            (SplitSlice, for (const auto& subpattern : e.leading) { visit_pattern_declaration_slots(subpattern, slots); } if (e.extra_bind.is_valid()) { slots.push_back(e.extra_bind.m_slot); } for (const auto& subpattern : e.trailing) { visit_pattern_declaration_slots(subpattern, slots); }),
+            (SplitSlice, for (const auto& subpattern : e.leading) { visit_pattern_declaration_slots(subpattern, slots); } if (e.extra_bind.is_valid()) { slots.push_back(e.extra_bind.slot); } for (const auto& subpattern : e.trailing) { visit_pattern_declaration_slots(subpattern, slots); }),
             (Or, assert(!e.empty()); visit_pattern_declaration_slots(e.front(), slots);)
         )
     }
@@ -191,7 +191,7 @@ namespace {
         ::std::function<void(const ::HIR::Pattern&)> visit_immediate;
         visit_immediate = [&](const ::HIR::Pattern& current) {
             TU_MATCHA(
-                (current.m_data),
+                (current.mData),
                 (e),
                 (Any, ),
                 (Box, visit_immediate(*e.sub);),
@@ -206,21 +206,21 @@ namespace {
                 (Slice, for (const auto& subpattern : e.sub_patterns) { visit_immediate(subpattern); }),
                 (SplitSlice,
                  for (const auto& subpattern : e.leading) { visit_immediate(subpattern); }
-                 if (e.extra_bind.is_valid()) { slots.push_back(e.extra_bind.m_slot); }
+                 if (e.extra_bind.is_valid()) { slots.push_back(e.extra_bind.slot); }
                  for (auto it = e.trailing.rbegin(); it != e.trailing.rend(); ++it) { visit_immediate(*it); }),
                 (Or, assert(!e.empty()); deferred_or_patterns.push_back(&current);)
             )
 
             // HIR stores `outer @ inner @ pattern` bindings outermost first,
             // while rustc establishes the inner binding first.
-            for (auto it = current.m_bindings.rbegin(); it != current.m_bindings.rend(); ++it) {
-                slots.push_back(it->m_slot);
+            for (auto it = current.mBindings.rbegin(); it != current.mBindings.rend(); ++it) {
+                slots.push_back(it->slot);
             }
         };
 
         visit_immediate(pattern);
         for (const auto* or_pattern : deferred_or_patterns) {
-            const auto& alternatives = or_pattern->m_data.as_Or();
+            const auto& alternatives = or_pattern->mData.as_Or();
             visit_pattern_candidate_slots(
                 use_last_alternative ? alternatives.back() : alternatives.front(),
                 use_last_alternative,
@@ -274,8 +274,8 @@ namespace {
 } // namespace
 
 namespace {
-    ::HIR::Pattern::Data clone_pattern_data(const ::HIR::Pattern::Data& m_data) {
-    TU_MATCH_HDRA( (m_data), {)
+    ::HIR::Pattern::Data clone_pattern_data(const ::HIR::Pattern::Data& mData) {
+    TU_MATCH_HDRA( (mData), {)
     TU_ARMA(Any, e) {
                 return ::HIR::Pattern::Data::make_Any({});
             }
@@ -323,37 +323,37 @@ namespace {
 }
 
 ::HIR::Pattern HIR::Pattern::clone() const {
-    auto rv = Pattern(m_bindings, clone_pattern_data(m_data));
-    rv.m_implicit_deref_count = m_implicit_deref_count;
+    auto rv = Pattern(mBindings, clone_pattern_data(mData));
+    rv.implicitDerefCount = implicitDerefCount;
     return rv;
 }
 
 namespace HIR {
 
 PatternBinding::PatternBinding()
-    : m_mutable(false)
-    , m_type(Type::Move)
-    , m_name("")
-    , m_slot(0)
-    , m_implicit_deref_count(0) {
+    : isMutable(false)
+    , mType(Type::Move)
+    , mName("")
+    , slot(0)
+    , implicitDerefCount(0) {
 }
 PatternBinding::PatternBinding(bool mut, Type type, RcString name, unsigned int slot)
-    : m_mutable(mut)
-    , m_type(type)
-    , m_name(mv$(name))
-    , m_slot(slot)
-    , m_implicit_deref_count(0) {
+    : isMutable(mut)
+    , mType(type)
+    , mName(mv$(name))
+    , slot(slot)
+    , implicitDerefCount(0) {
 }
 Pattern::Pattern() {
 }
 Pattern::Pattern(std::vector<PatternBinding> pbs, Data d)
-    : m_bindings(mv$(pbs))
-    , m_data(mv$(d)) {
+    : mBindings(mv$(pbs))
+    , mData(mv$(d)) {
 }
 Pattern::Pattern(PatternBinding pb, Data d)
-    : m_data(mv$(d)) {
+    : mData(mv$(d)) {
     if (pb.is_valid()) {
-        m_bindings.push_back(std::move(pb));
+        mBindings.push_back(std::move(pb));
     }
 }
 }

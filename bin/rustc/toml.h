@@ -22,10 +22,10 @@ struct TomlToken;
 class TomlLexer {
     friend class TomlFile;
     /// Input file stream
-    ::std::ifstream m_if;
+    ::std::ifstream input;
 
-    ::std::string m_filename;
-    unsigned m_line;
+    ::std::string filename;
+    unsigned line;
 
 protected:
     TomlLexer(const ::std::string& filename);
@@ -37,19 +37,19 @@ public:
 
 class TomlFile {
     /// Input file stream
-    TomlLexer m_lexer;
+    TomlLexer mLexer;
 
     /// Name of the current `[]` block
-    ::std::vector<::std::string> m_current_block;
+    ::std::vector<::std::string> currentBlock;
 
     /// Path suffix of the current composite (none if empty)
-    ::std::vector<std::vector<std::string>> m_current_composite;
+    ::std::vector<std::vector<std::string>> currentComposite;
 
     /// Index of the next array field (if zero, not parsing an array)
-    unsigned int m_next_array_index;
+    unsigned int nextArrayIndex;
 
     /// Next indexes if top-level defined arrays (e.g. `[[foo]]`)
-    ::std::unordered_map<::std::string, unsigned> m_array_counts;
+    ::std::unordered_map<::std::string, unsigned> arrayCounts;
 
 public:
     TomlFile(const ::std::string& filename);
@@ -61,7 +61,7 @@ public:
     TomlKeyValue get_next_value();
 
     const TomlLexer& lexer() const {
-        return m_lexer;
+        return mLexer;
     }
 
 private:
@@ -100,10 +100,10 @@ struct TomlValue {
         friend ::std::ostream& operator<<(::std::ostream& os, const TypeError& e);
     };
 
-    Type m_type;
-    uint64_t m_int_value;
-    ::std::string m_str_value;
-    ::std::vector<TomlValue> m_sub_values;
+    Type mType;
+    uint64_t intValue;
+    ::std::string strValue;
+    ::std::vector<TomlValue> subValues;
 
     TomlValue();
 
@@ -135,21 +135,21 @@ struct TomlKeyValue {
 
 class TomlFileIter {
     friend class TomlFile;
-    TomlFile& m_reader;
-    TomlKeyValue m_cur_value;
+    TomlFile& reader;
+    TomlKeyValue curValue;
 
     TomlFileIter(TomlFile& tf);
 
 public:
     TomlKeyValue operator*() const {
-        return m_cur_value;
+        return curValue;
     }
 
     void operator++() {
-        m_cur_value = m_reader.get_next_value();
+        curValue = reader.get_next_value();
     }
 
     bool operator!=(const TomlFileIter& x) const {
-        return m_cur_value.path != x.m_cur_value.path;
+        return curValue.path != x.curValue.path;
     }
 };

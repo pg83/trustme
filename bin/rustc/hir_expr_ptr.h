@@ -99,13 +99,13 @@ namespace HIR {
 
     public:
         //::std::vector< ::HIR::TypeRef>  m_type_table;
-        ::std::vector<::HIR::TypeRef> m_bindings;
-        ::std::vector<::HIR::TypeRef> m_erased_types;
+        ::std::vector<::HIR::TypeRef> mBindings;
+        ::std::vector<::HIR::TypeRef> erasedTypes;
 
         // Public because too much relies on access to it
-        ::MIR::FunctionPointer m_mir;
+        ::MIR::FunctionPointer mir;
 
-        ::HIR::ExprStatePtr m_state;
+        ::HIR::ExprStatePtr state;
 
     public:
         ExprPtr();

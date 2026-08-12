@@ -34,10 +34,10 @@ public:
         META,
         ITEM,
         VIS,
-    } m_type;
+    } mType;
 
     // Owned type-pruned pointer
-    void* m_ptr;
+    void* ptr;
 
     InterpolatedFragment(InterpolatedFragment&&);
     InterpolatedFragment& operator=(InterpolatedFragment&&);

@@ -108,9 +108,9 @@ void DebugLeaveScope(const char* name, dbg_cb_t cb) {
 }
 
 DebugFunctionScope::DebugFunctionScope(const char* name, dbg_cb_t cb)
-    : m_name(name) {
-    DebugEnterScope(m_name, cb);
+    : mName(name) {
+    DebugEnterScope(mName, cb);
 }
 DebugFunctionScope::~DebugFunctionScope() {
-    DebugLeaveScope(m_name, [](auto&) {});
+    DebugLeaveScope(mName, [](auto&) {});
 }

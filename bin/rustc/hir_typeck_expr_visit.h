@@ -9,15 +9,15 @@ namespace HIR {
 
 namespace typeck {
     struct ModuleState {
-        const ::HIR::Crate& m_crate;
+        const ::HIR::Crate& crate;
 
-        const ::HIR::GenericPath* m_current_trait;
-        const ::HIR::TraitImpl* m_current_trait_impl;
-        const ::HIR::GenericParams* m_impl_generics;
-        const ::HIR::GenericParams* m_item_generics;
+        const ::HIR::GenericPath* currentTrait;
+        const ::HIR::TraitImpl* currentTraitImpl;
+        const ::HIR::GenericParams* implGenerics;
+        const ::HIR::GenericParams* itemGenerics;
 
-        ::std::vector<::std::pair<const ::HIR::SimplePath*, const ::HIR::Trait*>> m_traits;
-        ::std::vector<HIR::SimplePath> m_mod_paths;
+        ::std::vector<::std::pair<const ::HIR::SimplePath*, const ::HIR::Trait*>> traits;
+        ::std::vector<HIR::SimplePath> modPaths;
 
         ModuleState(const ::HIR::Crate& crate);
 

@@ -5,61 +5,61 @@
 namespace AST {
 
     ExprNodeP::~ExprNodeP() {
-        if (m_ptr) {
-            delete m_ptr;
+        if (ptr) {
+            delete ptr;
         }
-        m_ptr = nullptr;
+        ptr = nullptr;
     }
 
     ExprNodeP::ExprNodeP(std::unique_ptr<ExprNode> node)
-        : m_ptr(node.release())
+        : ptr(node.release())
     {
     }
 
     const char* ExprNodeP::type_name() const {
-        return typeid(*m_ptr).name();
+        return typeid(*ptr).name();
     }
 
     Expr::Expr(ExprNodeP node)
-        : m_node(node.release())
+        : mNode(node.release())
     {
     }
 
     Expr::Expr(ExprNode* node)
-        : m_node(node)
+        : mNode(node)
     {
     }
 
     Expr::Expr()
-        : m_node(nullptr)
+        : mNode(nullptr)
     {
     }
 
     void Expr::visit_nodes(NodeVisitor& v) {
-        if (m_node) {
-            m_node->visit(v);
+        if (mNode) {
+            mNode->visit(v);
         }
     }
 
     void Expr::visit_nodes(NodeVisitor& v) const {
-        if (m_node) {
+        if (mNode) {
             assert(v.is_const());
             //const_cast<const ExprNode*>(m_node.get())->visit(v);
-            m_node->visit(v);
+            mNode->visit(v);
         }
     }
 
     Expr Expr::clone() const {
-        if (m_node) {
-            return Expr(m_node->clone());
+        if (mNode) {
+            return Expr(mNode->clone());
         } else {
             return Expr();
         }
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Expr& pat) {
-        if (pat.m_node.get()) {
-            return os << *pat.m_node;
+        if (pat.mNode.get()) {
+            return os << *pat.mNode;
         } else {
             return os << "/* null */";
         }
@@ -134,68 +134,68 @@ namespace AST {
         ExprNodeBlock,
         {
             os << "{";
-            for (const auto& n : m_nodes) {
+            for (const auto& n : nodes) {
                 os << *n.node << (n.has_semicolon ? ";" : "");
             }
             os << "}";
         },
         {
-            ::std::vector<Line> nodes;
-            for (const auto& n : m_nodes) {
-                nodes.push_back({n.has_semicolon, n.node->clone()});
+            ::std::vector<Line> newNodes;
+            for (const auto& n : nodes) {
+                newNodes.push_back({n.has_semicolon, n.node->clone()});
             }
-            return NEWNODE(ExprNodeBlock, m_block_type, mv$(nodes), m_local_mod);
+            return NEWNODE(ExprNodeBlock, blockType, mv$(newNodes), localMod);
         }
     )
 
-    NODE(ExprNodeAsyncBlock, { os << "async " << (m_is_move ? "move " : "") << *m_inner; }, { return NEWNODE(ExprNodeAsyncBlock, m_inner->clone(), m_is_move); })
-    NODE(ExprNodeGeneratorBlock, { os << "gen " << (m_is_move ? "move " : "") << *m_inner; }, { return NEWNODE(ExprNodeGeneratorBlock, m_inner->clone(), m_is_move); })
-    NODE(ExprNodeTry, { os << "try " << *m_inner; }, { return NEWNODE(ExprNodeTry, m_inner->clone()); })
+    NODE(ExprNodeAsyncBlock, { os << "async " << (isMove ? "move " : "") << *inner; }, { return NEWNODE(ExprNodeAsyncBlock, inner->clone(), isMove); })
+    NODE(ExprNodeGeneratorBlock, { os << "gen " << (isMove ? "move " : "") << *inner; }, { return NEWNODE(ExprNodeGeneratorBlock, inner->clone(), isMove); })
+    NODE(ExprNodeTry, { os << "try " << *inner; }, { return NEWNODE(ExprNodeTry, inner->clone()); })
 
     NODE(
         ExprNodeMacro,
         {
-            os << m_path << "!";
-            if (m_ident.size() > 0) {
-                os << " " << m_ident << " ";
+            os << mPath << "!";
+            if (ident.size() > 0) {
+                os << " " << ident << " ";
             }
             os << "(" << " /*TODO*/ " << ")";
         },
-        { return NEWNODE(ExprNodeMacro, AST::Path(m_path), m_ident, m_tokens.clone(), m_is_braced, m_definition_hygiene); }
+        { return NEWNODE(ExprNodeMacro, AST::Path(mPath), ident, tokens.clone(), isBraced, definitionHygiene); }
     )
 
     NODE(
         ExprNodeAsm,
         {
-            os << "llvm_asm!( \"" << m_text << "\"";
+            os << "llvm_asm!( \"" << text << "\"";
             os << " :";
-            for (const auto& v : m_output) {
+            for (const auto& v : output) {
                 os << " \"" << v.name << "\" (" << *v.value << "),";
             }
             os << " :";
-            for (const auto& v : m_input) {
+            for (const auto& v : input) {
                 os << " \"" << v.name << "\" (" << *v.value << "),";
             }
             os << " :";
-            for (const auto& v : m_clobbers) {
+            for (const auto& v : clobbers) {
                 os << " \"" << v << "\",";
             }
             os << " :";
-            for (const auto& v : m_flags) {
+            for (const auto& v : flags) {
                 os << " \"" << v << "\",";
             }
             os << " )";
         },
         {
             ::std::vector<ExprNodeAsm::ValRef> outputs;
-            for (const auto& v : m_output) {
+            for (const auto& v : output) {
                 outputs.push_back(ExprNodeAsm::ValRef{v.name, v.value->clone()});
             }
             ::std::vector<ExprNodeAsm::ValRef> inputs;
-            for (const auto& v : m_input) {
+            for (const auto& v : input) {
                 inputs.push_back(ExprNodeAsm::ValRef{v.name, v.value->clone()});
             }
-            return NEWNODE(ExprNodeAsm, m_text, mv$(outputs), mv$(inputs), m_clobbers, m_flags);
+            return NEWNODE(ExprNodeAsm, text, mv$(outputs), mv$(inputs), clobbers, flags);
         }
     )
 }
@@ -238,11 +238,11 @@ namespace AST {
         ExprNodeAsm2,
         {
             os << "asm!( ";
-            for (const auto& l : m_lines) {
+            for (const auto& l : lines) {
                 l.fmt(os);
                 os << ", ";
             }
-            for (const auto& p : m_params) {
+            for (const auto& p : mParams) {
         TU_MATCH_HDRA( (p), {)
         TU_ARMA(Const, e) {
                     os << "const " << *e;
@@ -275,7 +275,7 @@ namespace AST {
         {
             std::vector<Param> params;
 
-            for (const auto& p : m_params) {
+            for (const auto& p : mParams) {
         TU_MATCH_HDRA( (p), { )
         TU_ARMA(Const, e) {
                     params.push_back(Param::make_Const(e->clone()));
@@ -292,14 +292,14 @@ namespace AST {
         }
             }
 
-            return NEWNODE(ExprNodeAsm2, m_options, m_lines, std::move(params));
+            return NEWNODE(ExprNodeAsm2, options, lines, std::move(params));
         }
     )
 
     NODE(
         ExprNodeFlow,
         {
-            switch (m_type) {
+            switch (mType) {
                 case RETURN:
                     os << "return";
                     break;
@@ -316,92 +316,92 @@ namespace AST {
                     os << "do yeet";
                     break;
             }
-            if (m_value) {
-                os << " " << *m_value;
+            if (mValue) {
+                os << " " << *mValue;
             }
         },
-        { return NEWNODE(ExprNodeFlow, m_type, m_target, m_value ? m_value->clone() : nullptr); }
+        { return NEWNODE(ExprNodeFlow, mType, target, mValue ? mValue->clone() : nullptr); }
     )
 
     NODE(
         ExprNodeLetBinding,
         {
-            os << (m_is_super ? "super let " : "let ") << m_pat << ": " << m_type;
-            if (m_value) {
-                os << " = " << *m_value;
-                if (m_else) {
-                    os << " else " << *m_else;
+            os << (isSuper ? "super let " : "let ") << pat << ": " << mType;
+            if (mValue) {
+                os << " = " << *mValue;
+                if (elseNode) {
+                    os << " else " << *elseNode;
                 }
             }
         },
-        { return NEWNODE(ExprNodeLetBinding, m_pat.clone(), m_type.clone(), OPT_CLONE(m_value), OPT_CLONE(m_else), m_is_super); }
+        { return NEWNODE(ExprNodeLetBinding, pat.clone(), mType.clone(), OPT_CLONE(mValue), OPT_CLONE(elseNode), isSuper); }
     )
 
-    NODE(ExprNodeAssign, { os << *m_slot << " = " << *m_value; }, { return NEWNODE(ExprNodeAssign, m_op, m_slot->clone(), m_value->clone()); })
+    NODE(ExprNodeAssign, { os << *slot << " = " << *mValue; }, { return NEWNODE(ExprNodeAssign, op, slot->clone(), mValue->clone()); })
 
     NODE(
         ExprNodeCallPath,
         {
-            os << m_path << "(";
-            for (const auto& a : m_args) {
+            os << mPath << "(";
+            for (const auto& a : mArgs) {
                 os << *a << ",";
             }
             os << ")";
         },
         {
             ::std::vector<ExprNodeP> args;
-            for (const auto& a : m_args) {
+            for (const auto& a : mArgs) {
                 args.push_back(a->clone());
             }
-            return NEWNODE(ExprNodeCallPath, AST::Path(m_path), mv$(args));
+            return NEWNODE(ExprNodeCallPath, AST::Path(mPath), mv$(args));
         }
     )
 
     NODE(
         ExprNodeCallMethod,
         {
-            os << "(" << *m_val << ")." << m_method << "(";
-            for (const auto& a : m_args) {
+            os << "(" << *val << ")." << method << "(";
+            for (const auto& a : mArgs) {
                 os << *a << ",";
             }
             os << ")";
         },
         {
             ::std::vector<ExprNodeP> args;
-            for (const auto& a : m_args) {
+            for (const auto& a : mArgs) {
                 args.push_back(a->clone());
             }
-            return NEWNODE(ExprNodeCallMethod, m_val->clone(), m_method, mv$(args));
+            return NEWNODE(ExprNodeCallMethod, val->clone(), method, mv$(args));
         }
     )
 
     NODE(
         ExprNodeCallObject,
         {
-            os << "(" << *m_val << ")(";
-            for (const auto& a : m_args) {
+            os << "(" << *val << ")(";
+            for (const auto& a : mArgs) {
                 os << *a << ",";
             }
             os << ")";
         },
         {
             ::std::vector<ExprNodeP> args;
-            for (const auto& a : m_args) {
+            for (const auto& a : mArgs) {
                 args.push_back(a->clone());
             }
-            return NEWNODE(ExprNodeCallObject, m_val->clone(), mv$(args));
+            return NEWNODE(ExprNodeCallObject, val->clone(), mv$(args));
         }
     )
 
-    NODE(ExprNodeLoop, { os << "LOOP [" << m_label << "] " << *m_code; }, { return NEWNODE(ExprNodeLoop, m_label, m_code->clone()); })
+    NODE(ExprNodeLoop, { os << "LOOP [" << label << "] " << *mCode; }, { return NEWNODE(ExprNodeLoop, label, mCode->clone()); })
 
     NODE(
         ExprNodeFor,
         {
-            os << "FOR [" << m_label << "] " << m_pattern << "in" << *m_value;
-            os << " " << *m_code;
+            os << "FOR [" << label << "] " << pattern << "in" << *mValue;
+            os << " " << *mCode;
         },
-        { return NEWNODE(ExprNodeFor, m_label, m_pattern.clone(), m_value->clone(), m_code->clone()); }
+        { return NEWNODE(ExprNodeFor, label, pattern.clone(), mValue->clone(), mCode->clone()); }
     )
 
     namespace {
@@ -436,72 +436,72 @@ namespace AST {
     NODE(
         ExprNodeWhile,
         {
-            if (m_label != "") {
-                os << "'" << m_label << ": ";
+            if (label != "") {
+                os << "'" << label << ": ";
             }
             os << "while ";
-            fmt_iflet_conditions(os, m_conditions);
-            os << " { " << *m_code << " }";
+            fmt_iflet_conditions(os, conditions);
+            os << " { " << *mCode << " }";
         },
         {
-            auto new_conds = clone_iflet_conditions(m_conditions);
-            return NEWNODE(ExprNodeWhile, m_label, mv$(new_conds), m_code->clone());
+            auto new_conds = clone_iflet_conditions(conditions);
+            return NEWNODE(ExprNodeWhile, label, mv$(new_conds), mCode->clone());
         }
     )
 
     NODE(
         ExprNodeMatch,
         {
-            os << "match (" << *m_val << ") {";
-            for (const auto& arm : m_arms) {
-                for (const auto& pat : arm.m_patterns) {
+            os << "match (" << *val << ") {";
+            for (const auto& arm : arms) {
+                for (const auto& pat : arm.patterns) {
                     os << " " << pat;
                 }
-                if (arm.m_guard.size() > 0) {
+                if (arm.guard.size() > 0) {
                     os << " if ";
-                    fmt_iflet_conditions(os, arm.m_guard);
+                    fmt_iflet_conditions(os, arm.guard);
                 }
 
-                os << " => " << *arm.m_code << ",";
+                os << " => " << *arm.mCode << ",";
             }
             os << "}";
         },
         {
-            ::std::vector<ExprNodeMatchArm> arms;
-            for (const auto& arm : m_arms) {
+            ::std::vector<ExprNodeMatchArm> newArms;
+            for (const auto& arm : arms) {
                 ::std::vector<AST::Pattern> patterns;
-                for (const auto& pat : arm.m_patterns) {
+                for (const auto& pat : arm.patterns) {
                     patterns.push_back(pat.clone());
                 }
-                arms.push_back(ExprNodeMatchArm(mv$(patterns), clone_iflet_conditions(arm.m_guard), arm.m_code->clone()));
-                arms.back().m_attrs = arm.m_attrs.clone();
+                newArms.push_back(ExprNodeMatchArm(mv$(patterns), clone_iflet_conditions(arm.guard), arm.mCode->clone()));
+                newArms.back().mAttrs = arm.mAttrs.clone();
             }
-            return NEWNODE(ExprNodeMatch, m_val->clone(), mv$(arms));
+            return NEWNODE(ExprNodeMatch, val->clone(), mv$(newArms));
         }
     )
 
     NODE(
         ExprNodeIf,
         {
-            for (const auto& arm : m_arms) {
-                if (&arm != m_arms.data()) {
+            for (const auto& arm : arms) {
+                if (&arm != arms.data()) {
                     os << " else ";
                 }
                 os << "if ";
-                fmt_iflet_conditions(os, arm.m_conditions);
-                os << " { " << *arm.m_body << " }";
+                fmt_iflet_conditions(os, arm.conditions);
+                os << " { " << *arm.body << " }";
             }
-            if (m_else) {
-                os << " else { " << *m_else << " }";
+            if (elseNode) {
+                os << " else { " << *elseNode << " }";
             }
         },
         {
-            std::vector<Arm> arms;
-            arms.reserve(m_arms.size());
-            for (const auto& arm : m_arms) {
-                arms.push_back(ExprNodeIf::Arm{clone_iflet_conditions(arm.m_conditions), arm.m_body->clone()});
+            std::vector<Arm> newArms;
+            newArms.reserve(arms.size());
+            for (const auto& arm : arms) {
+                newArms.push_back(ExprNodeIf::Arm{clone_iflet_conditions(arm.conditions), arm.body->clone()});
             }
-            return NEWNODE(ExprNodeIf, std::move(arms), OPT_CLONE(m_else));
+            return NEWNODE(ExprNodeIf, std::move(newArms), OPT_CLONE(elseNode));
         }
     )
 
@@ -509,78 +509,78 @@ namespace AST {
     NODE(
         ExprNodeInteger,
         {
-            if (m_datatype == CORETYPE_CHAR) {
-                os << "'\\u{" << ::std::hex << m_value << ::std::dec << "}'";
+            if (datatype == CORETYPE_CHAR) {
+                os << "'\\u{" << ::std::hex << mValue << ::std::dec << "}'";
             } else {
-                os << m_value;
-                if (m_datatype == CORETYPE_ANY)
+                os << mValue;
+                if (datatype == CORETYPE_ANY)
                     ;
                 else {
-                    os << "_" << coretype_name(m_datatype);
+                    os << "_" << coretype_name(datatype);
                 }
             }
         },
-        { return NEWNODE(ExprNodeInteger, m_value, m_datatype); }
+        { return NEWNODE(ExprNodeInteger, mValue, datatype); }
     )
-    NODE(ExprNodeFloat, { os << m_value << "_" << m_datatype; }, { return NEWNODE(ExprNodeFloat, m_value, m_datatype); })
-    NODE(ExprNodeBool, { os << m_value; }, { return NEWNODE(ExprNodeBool, m_value); })
-    NODE(ExprNodeString, { os << "\"" << m_value << "\""; }, { return NEWNODE(ExprNodeString, m_value, m_hygiene); })
-    NODE(ExprNodeByteString, { os << "b\"" << m_value << "\""; }, { return NEWNODE(ExprNodeByteString, m_value); })
-    NODE(ExprNodeCString, { os << "c\"" << m_value << "\""; }, { return NEWNODE(ExprNodeCString, m_value); })
+    NODE(ExprNodeFloat, { os << mValue << "_" << datatype; }, { return NEWNODE(ExprNodeFloat, mValue, datatype); })
+    NODE(ExprNodeBool, { os << mValue; }, { return NEWNODE(ExprNodeBool, mValue); })
+    NODE(ExprNodeString, { os << "\"" << mValue << "\""; }, { return NEWNODE(ExprNodeString, mValue, mHygiene); })
+    NODE(ExprNodeByteString, { os << "b\"" << mValue << "\""; }, { return NEWNODE(ExprNodeByteString, mValue); })
+    NODE(ExprNodeCString, { os << "c\"" << mValue << "\""; }, { return NEWNODE(ExprNodeCString, mValue); })
 
     NODE(
         ExprNodeClosure,
         {
-            if (m_is_pinned) {
+            if (isPinned) {
                 os << "static ";
             }
-            if (m_is_move) {
+            if (isMove) {
                 os << "move ";
             }
             os << "|";
-            for (const auto& a : m_args) {
+            for (const auto& a : mArgs) {
                 os << a.first << ": " << a.second << ",";
             }
             os << "|";
-            os << "->" << m_return;
-            os << " " << *m_code;
+            os << "->" << returnType;
+            os << " " << *mCode;
         },
         {
             ExprNodeClosure::args_t args;
-            for (const auto& a : m_args) {
+            for (const auto& a : mArgs) {
                 args.push_back(::std::make_pair(a.first.clone(), a.second.clone()));
             }
-            return NEWNODE(ExprNodeClosure, mv$(args), m_return.clone(), m_code->clone(), m_is_move, m_is_pinned);
+            return NEWNODE(ExprNodeClosure, mv$(args), returnType.clone(), mCode->clone(), isMove, isPinned);
         }
     );
 
     NODE(
         ExprNodeStructLiteral,
         {
-            os << m_path << " { ";
-            for (const auto& v : m_values) {
+            os << mPath << " { ";
+            for (const auto& v : values) {
                 os << v.name << ": " << *v.value << ", ";
             }
-            if (m_base_value) {
-                os << ".." << *m_base_value;
+            if (baseValue) {
+                os << ".." << *baseValue;
             }
             os << "}";
         },
         {
             ExprNodeStructLiteral::t_values vals;
 
-            for (const auto& v : m_values) {
+            for (const auto& v : values) {
                 vals.push_back({v.attrs.clone(), v.name, v.value->clone()});
             }
 
-            return NEWNODE(ExprNodeStructLiteral, AST::Path(m_path), OPT_CLONE(m_base_value), mv$(vals));
+            return NEWNODE(ExprNodeStructLiteral, AST::Path(mPath), OPT_CLONE(baseValue), mv$(vals));
         }
     )
     NODE(
         ExprNodeStructLiteralPattern,
         {
-            os << m_path << " /*pat*/ { ";
-            for (const auto& v : m_values) {
+            os << mPath << " /*pat*/ { ";
+            for (const auto& v : values) {
                 os << v.name << ": " << *v.value << ", ";
             }
             os << ".. }";
@@ -588,11 +588,11 @@ namespace AST {
         {
             ExprNodeStructLiteral::t_values vals;
 
-            for (const auto& v : m_values) {
+            for (const auto& v : values) {
                 vals.push_back({v.attrs.clone(), v.name, v.value->clone()});
             }
 
-            return NEWNODE(ExprNodeStructLiteralPattern, AST::Path(m_path), mv$(vals));
+            return NEWNODE(ExprNodeStructLiteralPattern, AST::Path(mPath), mv$(vals));
         }
     )
 
@@ -600,21 +600,21 @@ namespace AST {
         ExprNodeArray,
         {
             os << "[";
-            if (m_size.get()) {
-                os << *m_values[0] << "; " << *m_size;
+            if (mSize.get()) {
+                os << *values[0] << "; " << *mSize;
             } else {
-                for (const auto& a : m_values) {
+                for (const auto& a : values) {
                     os << *a << ",";
                 }
             }
             os << "]";
         },
         {
-            if (m_size.get()) {
-                return NEWNODE(ExprNodeArray, m_values[0]->clone(), m_size->clone());
+            if (mSize.get()) {
+                return NEWNODE(ExprNodeArray, values[0]->clone(), mSize->clone());
             } else {
                 ::std::vector<ExprNodeP> nodes;
-                for (const auto& n : m_values) {
+                for (const auto& n : values) {
                     nodes.push_back(n->clone());
                 }
                 return NEWNODE(ExprNodeArray, mv$(nodes));
@@ -626,14 +626,14 @@ namespace AST {
         ExprNodeTuple,
         {
             os << "(";
-            for (const auto& a : m_values) {
+            for (const auto& a : values) {
                 os << *a << ",";
             }
             os << ")";
         },
         {
             ::std::vector<ExprNodeP> nodes;
-            for (const auto& n : m_values) {
+            for (const auto& n : values) {
                 nodes.push_back(n->clone());
             }
             return NEWNODE(ExprNodeTuple, mv$(nodes));
@@ -643,47 +643,47 @@ namespace AST {
     NODE(
         ExprNodeNamedValue,
         {
-            m_path.print_pretty(os, false);
+            mPath.print_pretty(os, false);
             //os << m_path;
         },
-        { return NEWNODE(ExprNodeNamedValue, AST::Path(m_path)); }
+        { return NEWNODE(ExprNodeNamedValue, AST::Path(mPath)); }
     )
 
-    NODE(ExprNodeField, { os << "(" << *m_obj << ")." << m_name; }, { return NEWNODE(ExprNodeField, m_obj->clone(), m_name); })
+    NODE(ExprNodeField, { os << "(" << *obj << ")." << mName; }, { return NEWNODE(ExprNodeField, obj->clone(), mName); })
 
-    NODE(ExprNodeIndex, { os << "(" << *m_obj << ")[" << *m_idx << "]"; }, { return NEWNODE(ExprNodeIndex, m_obj->clone(), m_idx->clone()); })
+    NODE(ExprNodeIndex, { os << "(" << *obj << ")[" << *idx << "]"; }, { return NEWNODE(ExprNodeIndex, obj->clone(), idx->clone()); })
 
-    NODE(ExprNodeDeref, { os << "*(" << *m_value << ")"; }, { return NEWNODE(ExprNodeDeref, m_value->clone()); });
+    NODE(ExprNodeDeref, { os << "*(" << *mValue << ")"; }, { return NEWNODE(ExprNodeDeref, mValue->clone()); });
 
-    NODE(ExprNodeCast, { os << "(" << *m_value << " as " << m_type << ")"; }, { return NEWNODE(ExprNodeCast, m_value->clone(), m_type.clone()); })
-    NODE(ExprNodeTypeAnnotation, { os << "(" << *m_value << ": " << m_type << ")"; }, { return NEWNODE(ExprNodeTypeAnnotation, m_value->clone(), m_type.clone()); })
+    NODE(ExprNodeCast, { os << "(" << *mValue << " as " << mType << ")"; }, { return NEWNODE(ExprNodeCast, mValue->clone(), mType.clone()); })
+    NODE(ExprNodeTypeAnnotation, { os << "(" << *mValue << ": " << mType << ")"; }, { return NEWNODE(ExprNodeTypeAnnotation, mValue->clone(), mType.clone()); })
 
     NODE(
         ExprNodeBinOp,
         {
-            if (m_type == RANGE_INC) {
+            if (mType == RANGE_INC) {
                 os << "(";
-                if (m_left) {
-                    os << *m_left << " ";
+                if (left) {
+                    os << *left << " ";
                 }
-                os << "... " << *m_right;
+                os << "... " << *right;
                 os << ")";
                 return;
             }
-            if (m_type == RANGE) {
+            if (mType == RANGE) {
                 os << "(";
-                if (m_left) {
-                    os << *m_left;
+                if (left) {
+                    os << *left;
                 }
                 os << "..";
-                if (m_right) {
-                    os << " " << *m_right;
+                if (right) {
+                    os << " " << *right;
                 }
                 os << ")";
                 return;
             }
-            os << "(" << *m_left << " ";
-            switch (m_type) {
+            os << "(" << *left << " ";
+            switch (mType) {
                 case CMPEQU:
                     os << "==";
                     break;
@@ -748,15 +748,15 @@ namespace AST {
                     os << "<-";
                     break;
             }
-            os << " " << *m_right << ")";
+            os << " " << *right << ")";
         },
-        { return NEWNODE(ExprNodeBinOp, m_type, OPT_CLONE(m_left), OPT_CLONE(m_right)); }
+        { return NEWNODE(ExprNodeBinOp, mType, OPT_CLONE(left), OPT_CLONE(right)); }
     )
 
     NODE(
         ExprNodeUniOp,
         {
-            switch (m_type) {
+            switch (mType) {
                 case NEGATE:
                     os << "(-";
                     break;
@@ -779,21 +779,21 @@ namespace AST {
                     os << "(&raw mut ";
                     break;
                 case QMARK:
-                    os << "(" << *m_value << "?)";
+                    os << "(" << *mValue << "?)";
                     return;
                 case AWait:
-                    os << "((" << *m_value << ").await)";
+                    os << "((" << *mValue << ").await)";
                     return;
             }
-            os << *m_value << ")";
+            os << *mValue << ")";
         },
-        { return NEWNODE(ExprNodeUniOp, m_type, m_value->clone()); }
+        { return NEWNODE(ExprNodeUniOp, mType, mValue->clone()); }
     )
 
     NODE(
         ExprNodeMacroDefinition,
-        { os << "/* macro definition #" << m_definition_id << " */"; },
-        { return NEWNODE(ExprNodeMacroDefinition, m_definition_id, m_token_hygiene, m_definition_hygiene); }
+        { os << "/* macro definition #" << definitionId << " */"; },
+        { return NEWNODE(ExprNodeMacroDefinition, definitionId, tokenHygiene, definitionHygiene); }
     )
 
 #define NV(type, actions)                                              \
@@ -804,25 +804,25 @@ namespace AST {
 
     NV(ExprNodeBlock, {
         //INDENT();
-        for (auto& child : node.m_nodes) {
+        for (auto& child : node.nodes) {
             visit(child.node);
         }
         //UNINDENT();
     })
-    NV(ExprNodeAsyncBlock, { visit(node.m_inner); })
-    NV(ExprNodeGeneratorBlock, { visit(node.m_inner); })
-    NV(ExprNodeTry, { visit(node.m_inner); })
+    NV(ExprNodeAsyncBlock, { visit(node.inner); })
+    NV(ExprNodeGeneratorBlock, { visit(node.inner); })
+    NV(ExprNodeTry, { visit(node.inner); })
     NV(ExprNodeMacro, { BUG(node.span(), "Hit unexpanded macro in expression - " << node); })
     NV(ExprNodeAsm, {
-        for (auto& v : node.m_output) {
+        for (auto& v : node.output) {
             visit(v.value);
         }
-        for (auto& v : node.m_input) {
+        for (auto& v : node.input) {
             visit(v.value);
         }
     })
     NV(ExprNodeAsm2, {
-        for (auto& v : node.m_params) {
+        for (auto& v : node.mParams) {
         TU_MATCH_HDRA((v), {)
         TU_ARMA(Const, e) {
                     visit(e);
@@ -840,80 +840,80 @@ namespace AST {
         }
         }
     })
-    NV(ExprNodeFlow, { visit(node.m_value); })
+    NV(ExprNodeFlow, { visit(node.mValue); })
     NV(ExprNodeLetBinding, {
         // TODO: Handle recurse into Let pattern?
-        visit(node.m_value);
-        visit(node.m_else);
+        visit(node.mValue);
+        visit(node.elseNode);
     })
     NV(ExprNodeAssign, {
         INDENT();
-        visit(node.m_slot);
-        visit(node.m_value);
+        visit(node.slot);
+        visit(node.mValue);
         UNINDENT();
     })
     NV(ExprNodeCallPath, {
         INDENT();
-        for (auto& arg : node.m_args) {
+        for (auto& arg : node.mArgs) {
             visit(arg);
         }
         UNINDENT();
     })
     NV(ExprNodeCallMethod, {
         INDENT();
-        visit(node.m_val);
-        for (auto& arg : node.m_args) {
+        visit(node.val);
+        for (auto& arg : node.mArgs) {
             visit(arg);
         }
         UNINDENT();
     })
     NV(ExprNodeCallObject, {
         INDENT();
-        visit(node.m_val);
-        for (auto& arg : node.m_args) {
+        visit(node.val);
+        for (auto& arg : node.mArgs) {
             visit(arg);
         }
         UNINDENT();
     })
     NV(ExprNodeLoop, {
         INDENT();
-        visit(node.m_code);
+        visit(node.mCode);
         UNINDENT();
     })
     NV(ExprNodeFor, {
         INDENT();
-        visit(node.m_value);
-        visit(node.m_code);
+        visit(node.mValue);
+        visit(node.mCode);
         UNINDENT();
     })
     NV(ExprNodeWhile, {
         INDENT();
-        for (auto& c : node.m_conditions) {
+        for (auto& c : node.conditions) {
             visit(c.value);
         }
-        visit(node.m_code);
+        visit(node.mCode);
         UNINDENT();
     })
     NV(ExprNodeMatch, {
         INDENT();
-        visit(node.m_val);
-        for (auto& arm : node.m_arms) {
-            for (auto& c : arm.m_guard) {
+        visit(node.val);
+        for (auto& arm : node.arms) {
+            for (auto& c : arm.guard) {
                 visit(c.value);
             }
-            visit(arm.m_code);
+            visit(arm.mCode);
         }
         UNINDENT();
     })
     NV(ExprNodeIf, {
         INDENT();
-        for (auto& a : node.m_arms) {
-            for (auto& c : a.m_conditions) {
+        for (auto& a : node.arms) {
+            for (auto& c : a.conditions) {
                 visit(c.value);
             }
-            visit(a.m_body);
+            visit(a.body);
         }
-        visit(node.m_else);
+        visit(node.elseNode);
         UNINDENT();
     })
 
@@ -925,26 +925,26 @@ namespace AST {
     NV(ExprNodeByteString, { (void)node; })
     NV(ExprNodeCString, { (void)node; })
 
-    NV(ExprNodeClosure, { visit(node.m_code); });
+    NV(ExprNodeClosure, { visit(node.mCode); });
     NV(ExprNodeStructLiteral, {
-        visit(node.m_base_value);
-        for (auto& val : node.m_values) {
+        visit(node.baseValue);
+        for (auto& val : node.values) {
             visit(val.value);
         }
     })
     NV(ExprNodeStructLiteralPattern, {
-        for (auto& val : node.m_values) {
+        for (auto& val : node.values) {
             visit(val.value);
         }
     })
     NV(ExprNodeArray, {
-        visit(node.m_size);
-        for (auto& val : node.m_values) {
+        visit(node.mSize);
+        for (auto& val : node.values) {
             visit(val);
         }
     })
     NV(ExprNodeTuple, {
-        for (auto& val : node.m_values) {
+        for (auto& val : node.values) {
             visit(val);
         }
     })
@@ -953,19 +953,19 @@ namespace AST {
         // LEAF
     })
 
-    NV(ExprNodeField, { visit(node.m_obj); })
+    NV(ExprNodeField, { visit(node.obj); })
     NV(ExprNodeIndex, {
-        visit(node.m_obj);
-        visit(node.m_idx);
+        visit(node.obj);
+        visit(node.idx);
     })
-    NV(ExprNodeDeref, { visit(node.m_value); })
-    NV(ExprNodeCast, { visit(node.m_value); })
-    NV(ExprNodeTypeAnnotation, { visit(node.m_value); })
+    NV(ExprNodeDeref, { visit(node.mValue); })
+    NV(ExprNodeCast, { visit(node.mValue); })
+    NV(ExprNodeTypeAnnotation, { visit(node.mValue); })
     NV(ExprNodeBinOp, {
-        visit(node.m_left);
-        visit(node.m_right);
+        visit(node.left);
+        visit(node.right);
     })
-    NV(ExprNodeUniOp, { visit(node.m_value); })
+    NV(ExprNodeUniOp, { visit(node.mValue); })
     NV(ExprNodeMacroDefinition, {})
 #undef NV
 
@@ -974,200 +974,200 @@ namespace AST {
 namespace AST {
 
 void ExprNode::set_attrs(AttributeList&& mi) {
-    for (auto& i : mi.m_items) {
-        m_attrs.m_items.push_back(mv$(i));
+    for (auto& i : mi.mItems) {
+        mAttrs.mItems.push_back(mv$(i));
     }
-    mi.m_items.clear();
+    mi.mItems.clear();
 }
 ExprNodeBlock::ExprNodeBlock(::std::vector<Line> nodes)
-    : m_block_type(Type::Bare)
-    , m_label("")
-    , m_local_mod()
-    , m_nodes(::std::move(nodes)) {
+    : blockType(Type::Bare)
+    , label("")
+    , localMod()
+    , nodes(::std::move(nodes)) {
 }
 /// Shortcut for a block that returns a contained node
 ExprNodeBlock::ExprNodeBlock(ExprNodeP value)
     : ExprNodeBlock() {
     set_span(value->span());
-    m_nodes.push_back({false, std::move(value)});
+    nodes.push_back({false, std::move(value)});
 }
 ExprNodeBlock::ExprNodeBlock(Type type, ::std::vector<Line> nodes, ::std::shared_ptr<AST::Module> local_mod)
-    : m_block_type(type)
-    , m_label("")
-    , m_local_mod(::std::move(local_mod))
-    , m_nodes(::std::move(nodes)) {
+    : blockType(type)
+    , label("")
+    , localMod(::std::move(local_mod))
+    , nodes(::std::move(nodes)) {
 }
 ExprNodeAsyncBlock::ExprNodeAsyncBlock(ExprNodeP inner, bool is_move)
-    : m_inner(std::move(inner))
-    , m_is_move(is_move) {
+    : inner(std::move(inner))
+    , isMove(is_move) {
 }
 ExprNodeGeneratorBlock::ExprNodeGeneratorBlock(ExprNodeP inner, bool is_move)
-    : m_inner(std::move(inner))
-    , m_is_move(is_move) {
+    : inner(std::move(inner))
+    , isMove(is_move) {
 }
 ExprNodeTry::ExprNodeTry(ExprNodeP inner)
-    : m_inner(::std::move(inner)) {
+    : inner(::std::move(inner)) {
 }
 ExprNodeMacro::ExprNodeMacro(AST::Path name, RcString ident, ::TokenTree&& tokens, bool is_braced, Ident::Hygiene definition_hygiene)
-    : m_path(::std::move(name))
-    , m_ident(ident)
-    , m_tokens(::std::move(tokens))
-    , m_is_braced(is_braced)
-    , m_definition_hygiene(::std::move(definition_hygiene)) {
+    : mPath(::std::move(name))
+    , ident(ident)
+    , tokens(::std::move(tokens))
+    , isBraced(is_braced)
+    , definitionHygiene(::std::move(definition_hygiene)) {
 }
 ExprNodeAsm::ExprNodeAsm(::std::string text, ::std::vector<ValRef> output, ::std::vector<ValRef> input, ::std::vector<::std::string> clobbers, ::std::vector<::std::string> flags)
-    : m_text(::std::move(text))
-    , m_output(::std::move(output))
-    , m_input(::std::move(input))
-    , m_clobbers(::std::move(clobbers))
-    , m_flags(::std::move(flags)) {
+    : text(::std::move(text))
+    , output(::std::move(output))
+    , input(::std::move(input))
+    , clobbers(::std::move(clobbers))
+    , flags(::std::move(flags)) {
 }
 ExprNodeAsm2::ExprNodeAsm2(AsmCommon::Options options, std::vector<AsmCommon::Line> lines, std::vector<Param> params)
-    : m_options(options)
-    , m_lines(::std::move(lines))
-    , m_params(::std::move(params)) {
+    : options(options)
+    , lines(::std::move(lines))
+    , mParams(::std::move(params)) {
 }
 ExprNodeFlow::ExprNodeFlow(Type type, Ident target, ExprNodeP value)
-    : m_type(type)
-    , m_target(::std::move(target))
-    , m_value(::std::move(value)) {
+    : mType(type)
+    , target(::std::move(target))
+    , mValue(::std::move(value)) {
 }
 ExprNodeLetBinding::ExprNodeLetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP else_arm, bool is_super)
-    : m_pat(::std::move(pat))
-    , m_type(::std::move(type))
-    , m_value(::std::move(value))
-    , m_else(::std::move(else_arm))
-    , m_is_super(is_super) {
+    : pat(::std::move(pat))
+    , mType(::std::move(type))
+    , mValue(::std::move(value))
+    , elseNode(::std::move(else_arm))
+    , isSuper(is_super) {
 }
 ExprNodeAssign::ExprNodeAssign()
-    : m_op(NONE) {
+    : op(NONE) {
 }
 ExprNodeAssign::ExprNodeAssign(Operation op, ExprNodeP slot, ExprNodeP value)
-    : m_op(op)
-    , m_slot(::std::move(slot))
-    , m_value(::std::move(value)) {
+    : op(op)
+    , slot(::std::move(slot))
+    , mValue(::std::move(value)) {
 }
 ExprNodeCallPath::ExprNodeCallPath(Path&& path, ::std::vector<ExprNodeP>&& args)
-    : m_path(::std::move(path))
-    , m_args(::std::move(args)) {
+    : mPath(::std::move(path))
+    , mArgs(::std::move(args)) {
 }
 ExprNodeCallMethod::ExprNodeCallMethod(ExprNodeP obj, PathNode method, ::std::vector<ExprNodeP> args)
-    : m_val(::std::move(obj))
-    , m_method(::std::move(method))
-    , m_args(::std::move(args)) {
+    : val(::std::move(obj))
+    , method(::std::move(method))
+    , mArgs(::std::move(args)) {
 }
 ExprNodeCallObject::ExprNodeCallObject(ExprNodeP val, ::std::vector<ExprNodeP>&& args)
-    : m_val(::std::move(val))
-    , m_args(::std::move(args)) {
+    : val(::std::move(val))
+    , mArgs(::std::move(args)) {
 }
 ExprNodeLoop::ExprNodeLoop()
-    : m_label("") {
+    : label("") {
 }
 ExprNodeLoop::ExprNodeLoop(Ident label, ExprNodeP code)
-    : m_label(::std::move(label))
-    , m_code(::std::move(code)) {
+    : label(::std::move(label))
+    , mCode(::std::move(code)) {
 }
 ExprNodeFor::ExprNodeFor(Ident label, AST::Pattern pattern, ExprNodeP val, ExprNodeP code)
-    : m_label(::std::move(label))
-    , m_pattern(::std::move(pattern))
-    , m_value(::std::move(val))
-    , m_code(::std::move(code)) {
+    : label(::std::move(label))
+    , pattern(::std::move(pattern))
+    , mValue(::std::move(val))
+    , mCode(::std::move(code)) {
 }
 ExprNodeWhile::ExprNodeWhile(Ident label, std::vector<IfLetCondition> conditions, ExprNodeP code)
-    : m_label(::std::move(label))
-    , m_conditions(::std::move(conditions))
-    , m_code(::std::move(code)) {
+    : label(::std::move(label))
+    , conditions(::std::move(conditions))
+    , mCode(::std::move(code)) {
 }
 ExprNodeMatchArm::ExprNodeMatchArm() {
 }
 ExprNodeMatchArm::ExprNodeMatchArm(::std::vector<Pattern> patterns, std::vector<IfLetCondition> guard, ExprNodeP code)
-    : m_patterns(mv$(patterns))
-    , m_guard(mv$(guard))
-    , m_code(mv$(code)) {
+    : patterns(mv$(patterns))
+    , guard(mv$(guard))
+    , mCode(mv$(code)) {
 }
 ExprNodeMatch::ExprNodeMatch(ExprNodeP val, ::std::vector<ExprNodeMatchArm> arms)
-    : m_val(::std::move(val))
-    , m_arms(::std::move(arms)) {
+    : val(::std::move(val))
+    , arms(::std::move(arms)) {
 }
 ExprNodeIf::ExprNodeIf(std::vector<Arm> arms, ExprNodeP else_code)
-    : m_arms(::std::move(arms))
-    , m_else(::std::move(else_code)) {
+    : arms(::std::move(arms))
+    , elseNode(::std::move(else_code)) {
 }
 ExprNodeInteger::ExprNodeInteger(U128 value, enum eCoreType datatype)
-    : m_datatype(datatype)
-    , m_value(value) {
+    : datatype(datatype)
+    , mValue(value) {
 }
 ExprNodeFloat::ExprNodeFloat(FloatValue value, enum eCoreType datatype)
-    : m_datatype(datatype)
-    , m_value(value) {
+    : datatype(datatype)
+    , mValue(value) {
 }
 ExprNodeBool::ExprNodeBool(bool value)
-    : m_value(value) {
+    : mValue(value) {
 }
 ExprNodeString::ExprNodeString(::std::string value, Ident::Hygiene h)
-    : m_value(::std::move(value))
-    , m_hygiene(::std::move(h)) {
+    : mValue(::std::move(value))
+    , mHygiene(::std::move(h)) {
 }
 ExprNodeByteString::ExprNodeByteString(::std::string value)
-    : m_value(::std::move(value)) {
+    : mValue(::std::move(value)) {
 }
 ExprNodeCString::ExprNodeCString(::std::string value)
-    : m_value(::std::move(value)) {
+    : mValue(::std::move(value)) {
 }
 ExprNodeStructLiteral::ExprNodeStructLiteral(Path path, ExprNodeP base_value, t_values&& values)
-    : m_path(std::move(path))
-    , m_base_value(std::move(base_value))
-    , m_values(std::move(values)) {
+    : mPath(std::move(path))
+    , baseValue(std::move(base_value))
+    , values(std::move(values)) {
 }
 ExprNodeStructLiteralPattern::ExprNodeStructLiteralPattern(Path path, t_values&& values)
-    : m_path(std::move(path))
-    , m_values(std::move(values)) {
+    : mPath(std::move(path))
+    , values(std::move(values)) {
 }
 ExprNodeArray::ExprNodeArray(::std::vector<ExprNodeP> vals)
-    : m_values(::std::move(vals)) {
+    : values(::std::move(vals)) {
 }
 ExprNodeArray::ExprNodeArray(ExprNodeP val, ExprNodeP size)
-    : m_size(::std::move(size)) {
-    m_values.push_back(::std::move(val));
+    : mSize(::std::move(size)) {
+    values.push_back(::std::move(val));
 }
 ExprNodeTuple::ExprNodeTuple(::std::vector<ExprNodeP> vals)
-    : m_values(::std::move(vals)) {
+    : values(::std::move(vals)) {
 }
 ExprNodeNamedValue::ExprNodeNamedValue(Path path)
-    : m_path(::std::move(path)) {
+    : mPath(::std::move(path)) {
 }
 ExprNodeField::ExprNodeField(ExprNodeP obj, RcString name)
-    : m_obj(::std::move(obj))
-    , m_name(::std::move(name)) {
+    : obj(::std::move(obj))
+    , mName(::std::move(name)) {
 }
 ExprNodeIndex::ExprNodeIndex(ExprNodeP obj, ExprNodeP idx)
-    : m_obj(::std::move(obj))
-    , m_idx(::std::move(idx)) {
+    : obj(::std::move(obj))
+    , idx(::std::move(idx)) {
 }
 ExprNodeDeref::ExprNodeDeref(ExprNodeP value)
-    : m_value(::std::move(value)) {
+    : mValue(::std::move(value)) {
 }
 ExprNodeCast::ExprNodeCast(ExprNodeP value, TypeRef&& dst_type)
-    : m_value(::std::move(value))
-    , m_type(::std::move(dst_type)) {
+    : mValue(::std::move(value))
+    , mType(::std::move(dst_type)) {
 }
 ExprNodeTypeAnnotation::ExprNodeTypeAnnotation(ExprNodeP value, TypeRef&& dst_type)
-    : m_value(::std::move(value))
-    , m_type(::std::move(dst_type)) {
+    : mValue(::std::move(value))
+    , mType(::std::move(dst_type)) {
 }
 ExprNodeBinOp::ExprNodeBinOp(Type type, ExprNodeP left, ExprNodeP right)
-    : m_type(type)
-    , m_left(::std::move(left))
-    , m_right(::std::move(right)) {
+    : mType(type)
+    , left(::std::move(left))
+    , right(::std::move(right)) {
 }
 ExprNodeUniOp::ExprNodeUniOp(Type type, ExprNodeP value)
-    : m_type(type)
-    , m_value(::std::move(value)) {
+    : mType(type)
+    , mValue(::std::move(value)) {
 }
 ExprNodeMacroDefinition::ExprNodeMacroDefinition(unsigned int definition_id, Ident::Hygiene token_hygiene, Ident::Hygiene definition_hygiene)
-    : m_definition_id(definition_id)
-    , m_token_hygiene(::std::move(token_hygiene))
-    , m_definition_hygiene(::std::move(definition_hygiene)) {
+    : definitionId(definition_id)
+    , tokenHygiene(::std::move(token_hygiene))
+    , definitionHygiene(::std::move(definition_hygiene)) {
 }
 void NodeVisitor::visit(ExprNodeP& cnode) {
     if (cnode.get()) {

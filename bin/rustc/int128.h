@@ -35,7 +35,7 @@ public:
         return lo;
     }
 
-    uint64_t encode_float(int m_bits, int zero_exp) const;
+    uint64_t encode_float(int bits, int zero_exp) const;
 
     double to_double() const;
 

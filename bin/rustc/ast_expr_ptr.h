@@ -11,7 +11,7 @@ namespace AST {
     extern ::std::ostream& operator<<(::std::ostream& os, const ExprNode& node);
 
     class ExprNodeP {
-        ExprNode* m_ptr;
+        ExprNode* ptr;
 
     public:
         ~ExprNodeP();
@@ -23,9 +23,9 @@ namespace AST {
         ExprNodeP(std::unique_ptr<ExprNode> node); //: m_ptr(node.release()) {}
 
         ExprNodeP(ExprNodeP&& x)
-            : m_ptr(x.m_ptr)
+            : ptr(x.ptr)
         {
-            x.m_ptr = nullptr;
+            x.ptr = nullptr;
         }
 
         ExprNodeP(const ExprNodeP& x) = delete;
@@ -39,31 +39,31 @@ namespace AST {
         }
 
         bool is_valid() const {
-            return m_ptr != nullptr;
+            return ptr != nullptr;
         }
 
         ExprNode& operator*() {
-            return *m_ptr;
+            return *ptr;
         }
 
         const ExprNode& operator*() const {
-            return *m_ptr;
+            return *ptr;
         }
 
         ExprNode* operator->() {
-            return m_ptr;
+            return ptr;
         }
 
         const ExprNode* operator->() const {
-            return m_ptr;
+            return ptr;
         }
 
         ExprNode* get() {
-            return m_ptr;
+            return ptr;
         }
 
         const ExprNode* get() const {
-            return m_ptr;
+            return ptr;
         }
 
         ExprNode* release();
@@ -74,7 +74,7 @@ namespace AST {
     };
 
     class Expr {
-        ::std::shared_ptr<ExprNode> m_node;
+        ::std::shared_ptr<ExprNode> mNode;
 
     public:
         Expr(ExprNodeP node);
@@ -86,7 +86,7 @@ namespace AST {
         }
 
         bool is_valid() const {
-            return m_node.get() != nullptr;
+            return mNode.get() != nullptr;
         }
 
         const ExprNode& node() const;

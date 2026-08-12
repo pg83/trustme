@@ -6,9 +6,9 @@
 
 // NOTE: The default architecture is an unnamed 32-bit little-endian arch with all types natively aligned
 struct TargetArch {
-    ::std::string m_name;
-    unsigned m_pointer_bits;
-    bool m_big_endian;
+    ::std::string mName;
+    unsigned pointerBits;
+    bool bigEndian;
 
     struct Atomics {
         bool u8 = true;
@@ -18,7 +18,7 @@ struct TargetArch {
         bool ptr = true;
 
         Atomics(bool u8 = true, bool u16 = true, bool u32 = true, bool u64 = false, bool ptr = true);
-    } m_atomics;
+    } atomics;
 
     struct Alignments {
         uint8_t u16;
@@ -30,24 +30,24 @@ struct TargetArch {
         uint8_t ptr;
 
         Alignments(uint8_t u16 = 2, uint8_t u32 = 4, uint8_t u64 = 8, uint8_t u128 = 16, uint8_t f32 = 4, uint8_t f64 = 8, uint8_t ptr = 4);
-    } m_alignments;
+    } alignments;
 };
 
 struct BackendOptsC {
-    bool m_emulated_i128;       // Influences the chosen alignment for i128/u128
-    ::std::string m_c_compiler; // GNU target triplet
-    ::std::vector<::std::string> m_compiler_opts;
-    ::std::vector<::std::string> m_linker_opts_pre;
-    ::std::vector<::std::string> m_linker_opts_post;
+    bool emulatedI128;       // Influences the chosen alignment for i128/u128
+    ::std::string cCompiler; // GNU target triplet
+    ::std::vector<::std::string> compilerOpts;
+    ::std::vector<::std::string> linkerOptsPre;
+    ::std::vector<::std::string> linkerOptsPost;
 };
 
 struct TargetSpec {
-    ::std::string m_family;
-    ::std::string m_os_name;
-    ::std::string m_env_name;
+    ::std::string family;
+    ::std::string osName;
+    ::std::string envName;
 
-    BackendOptsC m_backend_c;
-    TargetArch m_arch;
+    BackendOptsC backendC;
+    TargetArch arch;
 };
 
 struct TypeRepr {
@@ -147,7 +147,7 @@ extern void TargetSetCfg(const ::std::string& target_name);
 extern void TargetExportCurSpec(const ::std::string& filename);
 
 static inline unsigned TargetGetPointerBits() {
-    return TargetGetCurSpec().m_arch.m_pointer_bits;
+    return TargetGetCurSpec().arch.pointerBits;
 }
 
 extern bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size);

@@ -5,35 +5,35 @@
 #include "common.h"
 
 Span::Span(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int end_line, unsigned int end_ofs)
-    : m_ptr(SpanInnerSource::alloc(parent, ::std::move(filename), start_line, start_ofs, end_line, end_ofs))
+    : ptr(SpanInnerSource::alloc(parent, ::std::move(filename), start_line, start_ofs, end_line, end_ofs))
 {
 }
 
 Span::Span(Span parent, const Position& pos)
-    : m_ptr(SpanInnerSource::alloc(parent, pos.filename, pos.line, pos.ofs, pos.line, pos.ofs))
+    : ptr(SpanInnerSource::alloc(parent, pos.filename, pos.line, pos.ofs, pos.line, pos.ofs))
 {
 }
 
 Span::Span(Span parent, RcString source_crate, RcString macro_name)
-    : m_ptr(SpanInnerMacro::alloc(parent, source_crate, macro_name))
+    : ptr(SpanInnerMacro::alloc(parent, source_crate, macro_name))
 {
 }
 
 Span::Span(const Span& x)
-    : m_ptr(x.m_ptr)
+    : ptr(x.ptr)
 {
-    if (m_ptr) {
-        m_ptr->reference_count += 1;
+    if (ptr) {
+        ptr->reference_count += 1;
     }
 }
 
 Span::~Span() {
-    if (m_ptr) {
-        m_ptr->reference_count--;
-        if (m_ptr->reference_count == 0) {
-            delete m_ptr;
+    if (ptr) {
+        ptr->reference_count--;
+        if (ptr->reference_count == 0) {
+            delete ptr;
         }
-        m_ptr = nullptr;
+        ptr = nullptr;
     }
 }
 
@@ -135,8 +135,8 @@ void SpanInnerMacro::fmt(::std::ostream& os) const {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const Span& sp) {
-    if (sp.m_ptr) {
-        sp.m_ptr->fmt(os);
+    if (sp.ptr) {
+        sp.ptr->fmt(os);
     } else {
         os << "<null>";
     }
@@ -145,11 +145,11 @@ void SpanInnerMacro::fmt(::std::ostream& os) const {
 
 Span::Span()
     //: m_ptr(&s_empty_span)
-    : m_ptr(nullptr) {
+    : ptr(nullptr) {
 }
 Span::Span(Span&& x)
-    : m_ptr(x.m_ptr) {
-    x.m_ptr = nullptr;
+    : ptr(x.ptr) {
+    x.ptr = nullptr;
 }
 Span& Span::operator=(const Span& x) {
     this->~Span();

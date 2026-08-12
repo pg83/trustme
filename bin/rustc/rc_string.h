@@ -10,7 +10,7 @@ class RcString {
         unsigned int size;
         unsigned int ordering; // Populated only for interned strings, 0 otherwise
         unsigned int data[1];  // Actually arbitary
-    }* m_ptr;
+    }* ptr;
 
 public:
     RcString();
@@ -50,11 +50,11 @@ public:
     }
 
     bool is_interned() const {
-        return m_ptr && m_ptr->ordering != 0;
+        return ptr && ptr->ordering != 0;
     }
 
     size_t size() const {
-        return m_ptr ? m_ptr->size : 0;
+        return ptr ? ptr->size : 0;
     }
 
     const char* c_str() const;

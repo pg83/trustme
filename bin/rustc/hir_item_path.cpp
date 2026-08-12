@@ -31,8 +31,8 @@ ItemPath::ItemPath(const ::HIR::SimplePath& path)
 }
 ::HIR::SimplePath ItemPath::get_simple_path() const {
     if (wrapped) {
-        assert(wrapped->m_data.is_Generic());
-        return wrapped->m_data.as_Generic().m_path;
+        assert(wrapped->mData.is_Generic());
+        return wrapped->mData.as_Generic().mPath;
     } else if (trait && !name) {
         return trait->clone();
     } else if (parent) {

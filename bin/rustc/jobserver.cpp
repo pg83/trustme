@@ -19,52 +19,52 @@
     #include <vector>
 
 class JobServerClient: public JobServer {
-    int m_fd_read;
-    int m_fd_write;
-    std::vector<uint8_t> m_held_tokens;
+    int fdRead;
+    int fdWrite;
+    std::vector<uint8_t> heldTokens;
     //::std::semaphore    m_sem;
 public:
     JobServerClient(int fd_read, int fd_write = -1)
-        : m_fd_read(fd_read)
-        , m_fd_write(fd_write)
+        : fdRead(fd_read)
+        , fdWrite(fd_write)
     {
         assert(fd_read >= 0);
     }
 
     ~JobServerClient() {
-        if (m_fd_write == -1) {
-            close(m_fd_read);
+        if (fdWrite == -1) {
+            close(fdRead);
         }
     }
 
     bool take_one(unsigned long timeout_ms) override {
         if (timeout_ms != ~0ul) {
-            assert(m_fd_read >= 0);
+            assert(fdRead >= 0);
             struct timeval timeout;
             timeout.tv_sec = timeout_ms / 1000;
             timeout.tv_usec = (timeout_ms % 1000) * 1000;
             fd_set fds;
             FD_ZERO(&fds);
-            FD_SET(m_fd_read, &fds);
-            if (select(m_fd_read + 1, &fds, nullptr, nullptr, &timeout) != 1) {
+            FD_SET(fdRead, &fds);
+            if (select(fdRead + 1, &fds, nullptr, nullptr, &timeout) != 1) {
                 return false;
             }
         }
         uint8_t token;
-        int rv = read(m_fd_read, &token, 1);
+        int rv = read(fdRead, &token, 1);
         if (rv != 1) {
             perror("JobServer_Client::take_one read");
             return false;
         }
-        m_held_tokens.push_back(token);
+        heldTokens.push_back(token);
         return true;
     }
 
     void return_one() override {
-        assert(!m_held_tokens.empty());
-        auto t = m_held_tokens.back();
-        m_held_tokens.pop_back();
-        if (write(m_fd_write == -1 ? m_fd_read : m_fd_write, &t, 1) != 1) {
+        assert(!heldTokens.empty());
+        auto t = heldTokens.back();
+        heldTokens.pop_back();
+        if (write(fdWrite == -1 ? fdRead : fdWrite, &t, 1) != 1) {
             // What can be done if the write fails?
             perror("JobServer_Client write");
         }
@@ -73,25 +73,25 @@ public:
 
 class JobServerServer: public JobServer {
     class ServerInner {
-        ::std::string m_path;
-        int m_wr_fd;
-        int m_rd_fd;
+        ::std::string mPath;
+        int wrFd;
+        int rdFd;
 
     public:
         ServerInner(size_t max_jobs)
-            : m_path()
-            , m_wr_fd(-1)
-            , m_rd_fd(-1)
+            : mPath()
+            , wrFd(-1)
+            , rdFd(-1)
         {
     #if 1 && (_POSIX_C_SOURCE >= 200809L)
             char buf[] = "/tmp/mrustc-jobserverXXXXXX";
-            m_path = ::std::string(mkdtemp(buf));
-            if (mkfifo((m_path + "/fifo").c_str(), 0600) != 0) {
+            mPath = ::std::string(mkdtemp(buf));
+            if (mkfifo((mPath + "/fifo").c_str(), 0600) != 0) {
                 perror("JobServer_Server mkfifo");
                 throw std::runtime_error("JobServer_Server mkfifo");
             }
-            m_wr_fd = open((m_path + "/fifo").c_str(), O_RDWR | O_CLOEXEC);
-            if (m_wr_fd < 0) {
+            wrFd = open((mPath + "/fifo").c_str(), O_RDWR | O_CLOEXEC);
+            if (wrFd < 0) {
                 perror("JobServer_Server open");
                 throw std::runtime_error("JobServer_Server open");
             }
@@ -102,63 +102,63 @@ class JobServerServer: public JobServer {
             if (pipe(pipe_fds) != 0) {
                 throw std::runtime_error("pipe failed");
             }
-            m_rd_fd = pipe_fds[0];
-            m_wr_fd = pipe_fds[1];
+            rdFd = pipe_fds[0];
+            wrFd = pipe_fds[1];
     #endif
             for (size_t i = 0; i < max_jobs; i++) {
                 uint8_t t = 100;
-                if (write(m_wr_fd, &t, 1) != 1) {
+                if (write(wrFd, &t, 1) != 1) {
                     perror("ServerInner() write");
                 }
             }
         }
 
         ~ServerInner() {
-            if (m_rd_fd != -1) {
-                close(m_rd_fd);
+            if (rdFd != -1) {
+                close(rdFd);
             }
-            close(m_wr_fd);
-            if (!m_path.empty()) {
-                if (unlink((m_path + "/fifo").c_str()) != 0) {
+            close(wrFd);
+            if (!mPath.empty()) {
+                if (unlink((mPath + "/fifo").c_str()) != 0) {
                     perror("~ServerInner unlink fifo");
                 }
-                if (rmdir(m_path.c_str()) != 0) {
+                if (rmdir(mPath.c_str()) != 0) {
                     perror("~ServerInner unlink dir");
                 }
             }
         }
 
         int get_client_read_fd() const {
-            return m_rd_fd == -1 ? m_wr_fd : m_rd_fd;
+            return rdFd == -1 ? wrFd : rdFd;
         }
 
         int get_client_write_fd() const {
-            return m_wr_fd;
+            return wrFd;
         }
 
         void dump_desc(::std::ostream& os) const {
-            if (m_rd_fd == -1) {
-                os << "fifo:" << m_path << "/fifo";
+            if (rdFd == -1) {
+                os << "fifo:" << mPath << "/fifo";
             } else {
-                os << m_rd_fd << "," << m_wr_fd;
+                os << rdFd << "," << wrFd;
             }
         }
     };
 
-    ServerInner m_server;
-    JobServerClient m_client;
+    ServerInner server;
+    JobServerClient client;
 
 public:
     JobServerServer(size_t max_jobs)
-        : m_server(max_jobs)
-        , m_client(m_server.get_client_read_fd(), m_server.get_client_write_fd())
+        : server(max_jobs)
+        , client(server.get_client_read_fd(), server.get_client_write_fd())
     {
         ::std::stringstream ss;
         if (const auto* makeflags = getenv("MAKEFLAGS")) {
             ss << makeflags << " ";
         }
         ss << "--jobserver-auth=";
-        m_server.dump_desc(ss);
+        server.dump_desc(ss);
         setenv("MAKEFLAGS", ss.str().c_str(), /*overwrite=*/1);
     }
 
@@ -166,11 +166,11 @@ public:
     }
 
     bool take_one(unsigned long timeout_ms) override {
-        return m_client.take_one(timeout_ms);
+        return client.take_one(timeout_ms);
     }
 
     void return_one() override {
-        return m_client.return_one();
+        return client.return_one();
     }
 };
 

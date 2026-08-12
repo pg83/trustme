@@ -24,7 +24,7 @@ const TargetArch ARCH_X32 = {
     "x86_64",
     32,
     false,
-    ARCH_X86_64.m_atomics,
+    ARCH_X86_64.atomics,
     TargetArch::Alignments(2, 4, 8, 16, 4, 8, 4) // x86_64 w/4-byte ptr
 };
 const TargetArch ARCH_X86 = {
@@ -90,33 +90,33 @@ namespace {
                     check_path_length_min(key_val, 2);
                     if (key_val.path[1] == "family") {
                         check_path_length(key_val, 2);
-                        rv.m_family = key_val.value.as_string();
+                        rv.family = key_val.value.as_string();
                     } else if (key_val.path[1] == "os-name") {
                         check_path_length(key_val, 2);
-                        rv.m_os_name = key_val.value.as_string();
+                        rv.osName = key_val.value.as_string();
                     } else if (key_val.path[1] == "env-name") {
                         check_path_length(key_val, 2);
-                        rv.m_env_name = key_val.value.as_string();
+                        rv.envName = key_val.value.as_string();
                     } else if (key_val.path[1] == "arch") {
                         check_path_length(key_val, 2);
-                        if (key_val.value.as_string() == ARCH_ARM32.m_name) {
-                            rv.m_arch = ARCH_ARM32;
-                        } else if (key_val.value.as_string() == ARCH_ARM64.m_name) {
-                            rv.m_arch = ARCH_ARM64;
-                        } else if (key_val.value.as_string() == ARCH_X86.m_name) {
-                            rv.m_arch = ARCH_X86;
-                        } else if (key_val.value.as_string() == ARCH_X86_64.m_name) {
-                            rv.m_arch = ARCH_X86_64;
-                        } else if (key_val.value.as_string() == ARCH_M68K.m_name) {
-                            rv.m_arch = ARCH_M68K;
-                        } else if (key_val.value.as_string() == ARCH_POWERPC.m_name) {
-                            rv.m_arch = ARCH_POWERPC;
-                        } else if (key_val.value.as_string() == ARCH_POWERPC64.m_name) {
-                            rv.m_arch = ARCH_POWERPC64;
-                        } else if (key_val.value.as_string() == ARCH_POWERPC64LE.m_name) {
-                            rv.m_arch = ARCH_POWERPC64LE;
-                        } else if (key_val.value.as_string() == ARCH_RISCV64.m_name) {
-                            rv.m_arch = ARCH_RISCV64;
+                        if (key_val.value.as_string() == ARCH_ARM32.mName) {
+                            rv.arch = ARCH_ARM32;
+                        } else if (key_val.value.as_string() == ARCH_ARM64.mName) {
+                            rv.arch = ARCH_ARM64;
+                        } else if (key_val.value.as_string() == ARCH_X86.mName) {
+                            rv.arch = ARCH_X86;
+                        } else if (key_val.value.as_string() == ARCH_X86_64.mName) {
+                            rv.arch = ARCH_X86_64;
+                        } else if (key_val.value.as_string() == ARCH_M68K.mName) {
+                            rv.arch = ARCH_M68K;
+                        } else if (key_val.value.as_string() == ARCH_POWERPC.mName) {
+                            rv.arch = ARCH_POWERPC;
+                        } else if (key_val.value.as_string() == ARCH_POWERPC64.mName) {
+                            rv.arch = ARCH_POWERPC64;
+                        } else if (key_val.value.as_string() == ARCH_POWERPC64LE.mName) {
+                            rv.arch = ARCH_POWERPC64LE;
+                        } else if (key_val.value.as_string() == ARCH_RISCV64.mName) {
+                            rv.arch = ARCH_RISCV64;
                         } else {
                             // Error.
                             ::std::cerr << "ERROR: Unknown architecture name '" << key_val.value.as_string() << "' in " << filename << ::std::endl;
@@ -139,24 +139,24 @@ namespace {
                             }
                         } else if (key_val.path[2] == "target") {
                             check_path_length(key_val, 3);
-                            rv.m_backend_c.m_c_compiler = key_val.value.as_string();
+                            rv.backendC.cCompiler = key_val.value.as_string();
                         } else if (key_val.path[2] == "emulate-i128") {
                             check_path_length(key_val, 3);
-                            rv.m_backend_c.m_emulated_i128 = key_val.value.as_bool();
+                            rv.backendC.emulatedI128 = key_val.value.as_bool();
                         } else if (key_val.path[2] == "compiler-opts") {
                             check_path_length(key_val, 3);
                             for (const auto& v : key_val.value.as_list()) {
-                                rv.m_backend_c.m_compiler_opts.push_back(v.as_string());
+                                rv.backendC.compilerOpts.push_back(v.as_string());
                             }
                         } else if (key_val.path[2] == "linker-opts-pre") {
                             check_path_length(key_val, 3);
                             for (const auto& v : key_val.value.as_list()) {
-                                rv.m_backend_c.m_linker_opts_pre.push_back(v.as_string());
+                                rv.backendC.linkerOptsPre.push_back(v.as_string());
                             }
                         } else if (key_val.path[2] == "linker-opts" || key_val.path[2] == "linker-opts-post") {
                             check_path_length(key_val, 3);
                             for (const auto& v : key_val.value.as_list()) {
-                                rv.m_backend_c.m_linker_opts_post.push_back(v.as_string());
+                                rv.backendC.linkerOptsPost.push_back(v.as_string());
                             }
                         } else {
                             ::std::cerr << "WARNING: Unknown field backend.c." << key_val.path[2] << " in " << filename << ::std::endl;
@@ -170,48 +170,48 @@ namespace {
                     check_path_length_min(key_val, 2);
                     if (key_val.path[1] == "name") {
                         check_path_length(key_val, 2);
-                        if (rv.m_arch.m_name != "") {
-                            ::std::cerr << "ERROR: Architecture already specified to be '" << rv.m_arch.m_name << "'" << ::std::endl;
+                        if (rv.arch.mName != "") {
+                            ::std::cerr << "ERROR: Architecture already specified to be '" << rv.arch.mName << "'" << ::std::endl;
                             exit(1);
                         }
-                        rv.m_arch.m_name = key_val.value.as_string();
+                        rv.arch.mName = key_val.value.as_string();
                     } else if (key_val.path[1] == "pointer-bits") {
                         check_path_length(key_val, 2);
-                        rv.m_arch.m_pointer_bits = key_val.value.as_int();
+                        rv.arch.pointerBits = key_val.value.as_int();
                     } else if (key_val.path[1] == "is-big-endian") {
                         check_path_length(key_val, 2);
-                        rv.m_arch.m_big_endian = key_val.value.as_bool();
+                        rv.arch.bigEndian = key_val.value.as_bool();
                     } else if (key_val.path[1] == "has-atomic-u8") {
                         check_path_length(key_val, 2);
-                        rv.m_arch.m_atomics.u8 = key_val.value.as_bool();
+                        rv.arch.atomics.u8 = key_val.value.as_bool();
                     } else if (key_val.path[1] == "has-atomic-u16") {
                         check_path_length(key_val, 2);
-                        rv.m_arch.m_atomics.u16 = key_val.value.as_bool();
+                        rv.arch.atomics.u16 = key_val.value.as_bool();
                     } else if (key_val.path[1] == "has-atomic-u32") {
                         check_path_length(key_val, 2);
-                        rv.m_arch.m_atomics.u32 = key_val.value.as_bool();
+                        rv.arch.atomics.u32 = key_val.value.as_bool();
                     } else if (key_val.path[1] == "has-atomic-u64") {
                         check_path_length(key_val, 2);
-                        rv.m_arch.m_atomics.u64 = key_val.value.as_bool();
+                        rv.arch.atomics.u64 = key_val.value.as_bool();
                     } else if (key_val.path[1] == "has-atomic-ptr") {
                         check_path_length(key_val, 2);
-                        rv.m_arch.m_atomics.ptr = key_val.value.as_bool();
+                        rv.arch.atomics.ptr = key_val.value.as_bool();
                     } else if (key_val.path[1] == "alignments") {
                         check_path_length(key_val, 3);
                         if (key_val.path[2] == "u16") {
-                            rv.m_arch.m_alignments.u16 = key_val.value.as_int();
+                            rv.arch.alignments.u16 = key_val.value.as_int();
                         } else if (key_val.path[2] == "u32") {
-                            rv.m_arch.m_alignments.u32 = key_val.value.as_int();
+                            rv.arch.alignments.u32 = key_val.value.as_int();
                         } else if (key_val.path[2] == "u64") {
-                            rv.m_arch.m_alignments.u64 = key_val.value.as_int();
+                            rv.arch.alignments.u64 = key_val.value.as_int();
                         } else if (key_val.path[2] == "u128") {
-                            rv.m_arch.m_alignments.u128 = key_val.value.as_int();
+                            rv.arch.alignments.u128 = key_val.value.as_int();
                         } else if (key_val.path[2] == "f32") {
-                            rv.m_arch.m_alignments.f32 = key_val.value.as_int();
+                            rv.arch.alignments.f32 = key_val.value.as_int();
                         } else if (key_val.path[2] == "f64") {
-                            rv.m_arch.m_alignments.f64 = key_val.value.as_int();
+                            rv.arch.alignments.f64 = key_val.value.as_int();
                         } else if (key_val.path[2] == "ptr") {
-                            rv.m_arch.m_alignments.ptr = key_val.value.as_int();
+                            rv.arch.alignments.ptr = key_val.value.as_int();
                         } else {
                             ::std::cerr << "WARNING: Unknown field arch.alignments." << key_val.path[1] << " in " << filename << ::std::endl;
                         }
@@ -228,11 +228,11 @@ namespace {
         }
 
         // TODO: Ensure that everything is set
-        if (rv.m_arch.m_name == "") {
+        if (rv.arch.mName == "") {
             ::std::cerr << "ERROR: Architecture not specified in " << filename << ::std::endl;
             exit(1);
         }
-        if (rv.m_family == "windows" || rv.m_os_name == "windows") {
+        if (rv.family == "windows" || rv.osName == "windows") {
             ::std::cerr << "ERROR: Windows targets are not supported in " << filename << ::std::endl;
             exit(1);
         }
@@ -252,48 +252,48 @@ namespace {
         };
 
         of << "[target]\n"
-           << "family = \"" << spec.m_family << "\"\n"
-           << "os-name = \"" << spec.m_os_name << "\"\n"
-           << "env-name = \"" << spec.m_env_name
+           << "family = \"" << spec.family << "\"\n"
+           << "os-name = \"" << spec.osName << "\"\n"
+           << "env-name = \"" << spec.envName
            << "\"\n"
            //<< "arch = \"" << spec.m_arch.m_name << "\"\n"
            << "\n"
            << "[backend.c]\n"
            << "variant = \"gnu\"\n"
-           << "target = \"" << spec.m_backend_c.m_c_compiler << "\"\n"
+           << "target = \"" << spec.backendC.cCompiler << "\"\n"
            << "compiler-opts = [";
-        for (const auto& s : spec.m_backend_c.m_compiler_opts) {
+        for (const auto& s : spec.backendC.compilerOpts) {
             of << "\"" << s << "\",";
         }
         of << "]\n"
            << "linker-opts-pre = [";
-        for (const auto& s : spec.m_backend_c.m_linker_opts_pre) {
+        for (const auto& s : spec.backendC.linkerOptsPre) {
             of << "\"" << s << "\",";
         }
         of << "]\n"
            << "linker-opts-post = [";
-        for (const auto& s : spec.m_backend_c.m_linker_opts_post) {
+        for (const auto& s : spec.backendC.linkerOptsPost) {
             of << "\"" << s << "\",";
         }
         of << "]\n"
            << "\n"
            << "[arch]\n"
-           << "name = \"" << spec.m_arch.m_name << "\"\n"
-           << "pointer-bits = " << spec.m_arch.m_pointer_bits << "\n"
-           << "is-big-endian = " << H::tfstr(spec.m_arch.m_big_endian) << "\n"
-           << "has-atomic-u8 = " << H::tfstr(spec.m_arch.m_atomics.u8) << "\n"
-           << "has-atomic-u16 = " << H::tfstr(spec.m_arch.m_atomics.u16) << "\n"
-           << "has-atomic-u32 = " << H::tfstr(spec.m_arch.m_atomics.u32) << "\n"
-           << "has-atomic-u64 = " << H::tfstr(spec.m_arch.m_atomics.u64) << "\n"
-           << "has-atomic-ptr = " << H::tfstr(spec.m_arch.m_atomics.ptr) << "\n"
+           << "name = \"" << spec.arch.mName << "\"\n"
+           << "pointer-bits = " << spec.arch.pointerBits << "\n"
+           << "is-big-endian = " << H::tfstr(spec.arch.bigEndian) << "\n"
+           << "has-atomic-u8 = " << H::tfstr(spec.arch.atomics.u8) << "\n"
+           << "has-atomic-u16 = " << H::tfstr(spec.arch.atomics.u16) << "\n"
+           << "has-atomic-u32 = " << H::tfstr(spec.arch.atomics.u32) << "\n"
+           << "has-atomic-u64 = " << H::tfstr(spec.arch.atomics.u64) << "\n"
+           << "has-atomic-ptr = " << H::tfstr(spec.arch.atomics.ptr) << "\n"
            << "alignments = {"
-           << " u16 = " << static_cast<int>(spec.m_arch.m_alignments.u16) << ","
-           << " u32 = " << static_cast<int>(spec.m_arch.m_alignments.u32) << ","
-           << " u64 = " << static_cast<int>(spec.m_arch.m_alignments.u64) << ","
-           << " u128 = " << static_cast<int>(spec.m_arch.m_alignments.u128) << ","
-           << " f32 = " << static_cast<int>(spec.m_arch.m_alignments.f32) << ","
-           << " f64 = " << static_cast<int>(spec.m_arch.m_alignments.f64) << ","
-           << " ptr = " << static_cast<int>(spec.m_arch.m_alignments.ptr) << " }\n"
+           << " u16 = " << static_cast<int>(spec.arch.alignments.u16) << ","
+           << " u32 = " << static_cast<int>(spec.arch.alignments.u32) << ","
+           << " u64 = " << static_cast<int>(spec.arch.alignments.u64) << ","
+           << " u128 = " << static_cast<int>(spec.arch.alignments.u128) << ","
+           << " f32 = " << static_cast<int>(spec.arch.alignments.f32) << ","
+           << " f64 = " << static_cast<int>(spec.arch.alignments.f64) << ","
+           << " ptr = " << static_cast<int>(spec.arch.alignments.ptr) << " }\n"
            << "\n";
     }
 
@@ -388,87 +388,87 @@ void TargetExportCurSpec(const ::std::string& filename) {
 void TargetSetCfg(const ::std::string& target_name) {
     g_target = init_from_spec_name(target_name);
 
-    if (g_target.m_family == "unix") {
+    if (g_target.family == "unix") {
         CfgSetFlag("unix");
     }
-    CfgSetValue("target_family", g_target.m_family);
+    CfgSetValue("target_family", g_target.family);
 
-    if (g_target.m_os_name == "linux") {
+    if (g_target.osName == "linux") {
         CfgSetFlag("linux");
         CfgSetValue("target_vendor", "gnu");
     }
 
-    if (g_target.m_os_name == "macos") {
+    if (g_target.osName == "macos") {
         CfgSetFlag("apple");
         CfgSetValue("target_vendor", "apple");
     }
 
-    if (g_target.m_os_name == "freebsd") {
+    if (g_target.osName == "freebsd") {
         CfgSetFlag("freebsd");
         CfgSetValue("target_vendor", "unknown");
     }
 
-    if (g_target.m_os_name == "netbsd") {
+    if (g_target.osName == "netbsd") {
         CfgSetFlag("netbsd");
         CfgSetValue("target_vendor", "unknown");
     }
 
-    if (g_target.m_os_name == "openbsd") {
+    if (g_target.osName == "openbsd") {
         CfgSetFlag("openbsd");
         CfgSetValue("target_vendor", "unknown");
     }
 
-    if (g_target.m_os_name == "dragonfly") {
+    if (g_target.osName == "dragonfly") {
         CfgSetFlag("dragonfly");
         CfgSetValue("target_vendor", "unknown");
     }
 
     CfgSetValue("target_vendor", ""); // NOTE: Doesn't override a pre-set value
-    CfgSetValue("target_env", g_target.m_env_name);
-    CfgSetValue("target_os", g_target.m_os_name);
-    CfgSetValue("target_pointer_width", FMT(g_target.m_arch.m_pointer_bits));
-    CfgSetValue("target_endian", g_target.m_arch.m_big_endian ? "big" : "little");
-    CfgSetValue("target_arch", g_target.m_arch.m_name);
+    CfgSetValue("target_env", g_target.envName);
+    CfgSetValue("target_os", g_target.osName);
+    CfgSetValue("target_pointer_width", FMT(g_target.arch.pointerBits));
+    CfgSetValue("target_endian", g_target.arch.bigEndian ? "big" : "little");
+    CfgSetValue("target_arch", g_target.arch.mName);
     CfgSetValue("target_abi", "llvm"); // This is a lie, but hopefully works?
     // target_has_atomic_equal_alignment="N" means align_of::<AtomicN>() == align_of::<N>().
     // Since libcore declares AtomicN with repr(align(sizeof(N))), only set it when the
     // primitive's natural alignment already matches its size (e.g. u64 on x86 has align 4,
     // so target_has_atomic_equal_alignment="64" must be unset there even with cmpxchg8b).
-    if (g_target.m_arch.m_atomics.u8) {
+    if (g_target.arch.atomics.u8) {
         CfgSetValue("target_has_atomic", "8");
         CfgSetValue("target_has_atomic_load_store", "8");
         CfgSetValue("target_has_atomic_equal_alignment", "8");
     }
-    if (g_target.m_arch.m_atomics.u16) {
+    if (g_target.arch.atomics.u16) {
         CfgSetValue("target_has_atomic", "16");
         CfgSetValue("target_has_atomic_load_store", "16");
-        if (g_target.m_arch.m_alignments.u16 >= 2) {
+        if (g_target.arch.alignments.u16 >= 2) {
             CfgSetValue("target_has_atomic_equal_alignment", "16");
         }
     }
-    if (g_target.m_arch.m_atomics.u32) {
+    if (g_target.arch.atomics.u32) {
         CfgSetValue("target_has_atomic", "32");
         CfgSetValue("target_has_atomic_load_store", "32");
-        if (g_target.m_arch.m_alignments.u32 >= 4) {
+        if (g_target.arch.alignments.u32 >= 4) {
             CfgSetValue("target_has_atomic_equal_alignment", "32");
         }
     }
-    if (g_target.m_arch.m_atomics.u64) {
+    if (g_target.arch.atomics.u64) {
         CfgSetValue("target_has_atomic", "64");
         CfgSetValue("target_has_atomic_load_store", "64");
-        if (g_target.m_arch.m_alignments.u64 >= 8) {
+        if (g_target.arch.alignments.u64 >= 8) {
             CfgSetValue("target_has_atomic_equal_alignment", "64");
         }
     }
-    if (g_target.m_arch.m_atomics.ptr) {
+    if (g_target.arch.atomics.ptr) {
         CfgSetValue("target_has_atomic", "ptr");
         CfgSetValue("target_has_atomic_load_store", "ptr");
-        if (g_target.m_arch.m_alignments.ptr * 8u >= g_target.m_arch.m_pointer_bits) {
+        if (g_target.arch.alignments.ptr * 8u >= g_target.arch.pointerBits) {
             CfgSetValue("target_has_atomic_equal_alignment", "ptr");
         }
     }
     // TODO: Atomic compare-and-set option
-    if (g_target.m_arch.m_atomics.ptr) {
+    if (g_target.arch.atomics.ptr) {
         CfgSetValue("target_has_atomic", "cas");
     }
     CfgSetValueCb("target_feature", [](const ::std::string& s) {
@@ -499,33 +499,33 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                 case ::HIR::CoreType::U16:
                 case ::HIR::CoreType::I16:
                     out_size = 2;
-                    out_align = g_target.m_arch.m_alignments.u16;
+                    out_align = g_target.arch.alignments.u16;
                     return true;
                 case ::HIR::CoreType::U32:
                 case ::HIR::CoreType::I32:
                 case ::HIR::CoreType::Char:
                     out_size = 4;
-                    out_align = g_target.m_arch.m_alignments.u32;
+                    out_align = g_target.arch.alignments.u32;
                     return true;
                 case ::HIR::CoreType::U64:
                 case ::HIR::CoreType::I64:
                     out_size = 8;
-                    out_align = g_target.m_arch.m_alignments.u64;
+                    out_align = g_target.arch.alignments.u64;
                     return true;
                 case ::HIR::CoreType::U128:
                 case ::HIR::CoreType::I128:
                     out_size = 16;
                     // TODO: If i128 is emulated, this can be 8 (as it is on x86, where it's actually 4 due to the above comment)
-                    if (g_target.m_backend_c.m_emulated_i128) {
-                        out_align = g_target.m_arch.m_alignments.u64;
+                    if (g_target.backendC.emulatedI128) {
+                        out_align = g_target.arch.alignments.u64;
                     } else {
-                        out_align = g_target.m_arch.m_alignments.u128;
+                        out_align = g_target.arch.alignments.u128;
                     }
                     return true;
                 case ::HIR::CoreType::Usize:
                 case ::HIR::CoreType::Isize:
-                    out_size = g_target.m_arch.m_pointer_bits / 8;
-                    out_align = g_target.m_arch.m_alignments.ptr;
+                    out_size = g_target.arch.pointerBits / 8;
+                    out_align = g_target.arch.alignments.ptr;
                     return true;
                 case ::HIR::CoreType::F16:
                     out_size = 2;
@@ -533,15 +533,15 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                     return true;
                 case ::HIR::CoreType::F32:
                     out_size = 4;
-                    out_align = g_target.m_arch.m_alignments.f32;
+                    out_align = g_target.arch.alignments.f32;
                     return true;
                 case ::HIR::CoreType::F64:
                     out_size = 8;
-                    out_align = g_target.m_arch.m_alignments.f64;
+                    out_align = g_target.arch.alignments.f64;
                     return true;
                 case ::HIR::CoreType::F128:
                     out_size = 16;
-                    out_align = g_target.m_arch.m_alignments.f64; //f128;
+                    out_align = g_target.arch.alignments.f64; //f128;
                     return true;
                 case ::HIR::CoreType::Str:
                     DEBUG("sizeof on a `str` - unsized");
@@ -624,7 +624,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         TU_ARMA(Borrow, te) {
             // - Alignment is machine native
-            out_align = g_target.m_arch.m_pointer_bits / 8;
+            out_align = g_target.arch.pointerBits / 8;
             // - Size depends on Sized-nes of the parameter
             // TODO: Handle different types of Unsized (ones with different pointer sizes)
             switch (resolve.metadata_type(sp, te.inner)) {
@@ -632,29 +632,29 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                     return false;
                 case MetadataType::None:
                 case MetadataType::Zero:
-                    out_size = g_target.m_arch.m_pointer_bits / 8;
+                    out_size = g_target.arch.pointerBits / 8;
                     break;
                 case MetadataType::Slice:
                 case MetadataType::TraitObject:
-                    out_size = g_target.m_arch.m_pointer_bits / 8 * 2;
+                    out_size = g_target.arch.pointerBits / 8 * 2;
                     break;
             }
             return true;
         }
         TU_ARMA(Pointer, te) {
             // - Alignment is machine native
-            out_align = g_target.m_arch.m_pointer_bits / 8;
+            out_align = g_target.arch.pointerBits / 8;
             // - Size depends on Sized-nes of the parameter
             switch (resolve.metadata_type(sp, te.inner)) {
                 case MetadataType::Unknown:
                     return false;
                 case MetadataType::None:
                 case MetadataType::Zero:
-                    out_size = g_target.m_arch.m_pointer_bits / 8;
+                    out_size = g_target.arch.pointerBits / 8;
                     break;
                 case MetadataType::Slice:
                 case MetadataType::TraitObject:
-                    out_size = g_target.m_arch.m_pointer_bits / 8 * 2;
+                    out_size = g_target.arch.pointerBits / 8 * 2;
                     break;
             }
             return true;
@@ -667,8 +667,8 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         TU_ARMA(Function, te) {
             // Pointer size
-            out_size = g_target.m_arch.m_pointer_bits / 8;
-            out_align = g_target.m_arch.m_pointer_bits / 8;
+            out_size = g_target.arch.pointerBits / 8;
+            out_align = g_target.arch.pointerBits / 8;
             return true;
         }
         TU_ARMA(NodeType, te) {
@@ -730,11 +730,11 @@ namespace {
         const auto& te = ty->as_Path();
         const auto& str = *te.binding.as_Struct();
         // TODO: Wipe lifetimes?
-        auto monomorph_cb = MonomorphStatePtr(resolve.m_crate.m_types, nullptr, &te.path.m_data.as_Generic().m_params, nullptr);
+        auto monomorph_cb = MonomorphStatePtr(resolve.crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorph_expand(sp, tpl, monomorph_cb);
         };
-        TU_MATCH_HDRA( (str.m_data), {)
+        TU_MATCH_HDRA( (str.mData), {)
         TU_ARMA(Unit, se) {
             }
             TU_ARMA(Tuple, se) {
@@ -904,10 +904,10 @@ namespace {
                 return nullptr;
             }
 
-            forced_alignment = str.m_forced_alignment;
-            max_alignment = str.m_max_field_alignment;
+            forced_alignment = str.forcedAlignment;
+            max_alignment = str.maxFieldAlignment;
             sorting = StructSorting::None; // Defensive default for if repr is invalid
-            switch (str.m_repr) {
+            switch (str.repr) {
                 case ::HIR::Struct::Repr::C:
                 case ::HIR::Struct::Repr::Simd:
                     // No sorting, no packing
@@ -915,7 +915,7 @@ namespace {
                     break;
                 case ::HIR::Struct::Repr::Transparent:
                 case ::HIR::Struct::Repr::Rust:
-                    if (str.m_struct_markings.dst_type != HIR::StructMarkings::DstType::None) {
+                    if (str.structMarkings.dst_type != HIR::StructMarkings::DstType::None) {
                         sorting = StructSorting::AllButFinal;
                     } else {
                         sorting = StructSorting::All;
@@ -1006,7 +1006,7 @@ namespace {
                     }
                     // Preserve the full invalid range for the general niche
                     // layout instead of collapsing it to the zero value.
-                    if (str->m_struct_markings.bounded_max && (r->fields.size() != 1 || !bounded_max_is_full_range(r->fields[0].ty, str->m_struct_markings.bounded_max_value))) {
+                    if (str->structMarkings.bounded_max && (r->fields.size() != 1 || !bounded_max_is_full_range(r->fields[0].ty, str->structMarkings.bounded_max_value))) {
                         return false;
                     }
                     for (size_t i = 0; i < r->fields.size(); i++) {
@@ -1016,7 +1016,7 @@ namespace {
                         }
                     }
                     // 1.39 marks these with #[rustc_nonnull_optimization_guaranteed] instead
-                    if (str->m_struct_markings.is_nonzero) {
+                    if (str->structMarkings.is_nonzero) {
                         DEBUG(ty << " tagged NonZero");
                         out_path.sub_fields.push_back(0);
                         out_path.size = r->size;
@@ -1125,8 +1125,8 @@ namespace {
                     }
 
                     // Handle bounded
-                    if (str->m_struct_markings.bounded_max) {
-                        if (str->m_struct_markings.bounded_max_value >= UINT_MAX) {
+                    if (str->structMarkings.bounded_max) {
+                        if (str->structMarkings.bounded_max_value >= UINT_MAX) {
                             return 0;
                         }
                         if (min_offset != 0) {
@@ -1141,7 +1141,7 @@ namespace {
                         }
                         out_path.sub_fields.push_back(0);
                         out_path.size = size;
-                        return str->m_struct_markings.bounded_max_value.truncate_u64() + 1;
+                        return str->structMarkings.bounded_max_value.truncate_u64() + 1;
                     }
 
                     for (size_t i = 0; i < r->fields.size(); i++) {
@@ -1241,24 +1241,24 @@ namespace {
         const auto& te = ty->as_Path();
         const auto& enm = *te.binding.as_Enum();
 
-        auto monomorph_cb = MonomorphStatePtr(resolve.m_crate.m_types, nullptr, &te.path.m_data.as_Generic().m_params, nullptr);
+        auto monomorph_cb = MonomorphStatePtr(resolve.crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorph_expand(sp, tpl, monomorph_cb);
         };
 
         if (!enm.discriminants_evaluated) {
-            ConvertHIRConstantEvaluateEnum(resolve.m_crate, te.path.m_data.as_Generic().m_path, enm);
+            ConvertHIRConstantEvaluateEnum(resolve.crate, te.path.mData.as_Generic().mPath, enm);
             assert(enm.discriminants_evaluated);
         }
 
         TypeRepr rv;
-        switch (enm.m_data.tag()) {
+        switch (enm.mData.tag()) {
             case ::HIR::Enum::Class::TAGDEAD:
                 throw "";
-                TU_ARM(enm.m_data, Data, e) {
+                TU_ARM(enm.mData, Data, e) {
                     // repr(C) enums - they have different rules
                     // - A data enum with `repr(C)` puts the tag before the data
-                    if (enm.m_is_c_repr) {
+                    if (enm.isCRepr) {
                         size_t max_size = 0;
                         size_t max_align = 0;
                         for (const auto& var : e) {
@@ -1279,8 +1279,8 @@ namespace {
                         }
                         DEBUG("max_size = " << max_size << ", max_align = " << max_align);
 
-                        auto tag_ty = enm.m_tag_repr == ::HIR::Enum::Repr::Auto ? ::HIR::CoreType::U32 : enm.get_repr_type(enm.m_tag_repr);
-                        rv.fields.push_back(TypeRepr::Field{0, resolve.m_crate.m_types.primitive(tag_ty)});
+                        auto tag_ty = enm.tagRepr == ::HIR::Enum::Repr::Auto ? ::HIR::CoreType::U32 : enm.get_repr_type(enm.tagRepr);
+                        rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(tag_ty)});
                         size_t tag_size, tag_align;
                         TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, tag_size, tag_align);
                         size_t data_ofs = tag_size;
@@ -1298,7 +1298,7 @@ namespace {
                             rv.size++;
                         }
                         rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tag_size, {}}, 0, e.size()});
-                    } else if (enm.m_tag_repr == ::HIR::Enum::Repr::Auto && e.size() <= 1) {
+                    } else if (enm.tagRepr == ::HIR::Enum::Repr::Auto && e.size() <= 1) {
                         // If there are not multiple variants, then only include the one body
                         if (e.size() == 1) {
                             auto t = monomorph(e[0].type);
@@ -1336,10 +1336,10 @@ namespace {
                             }
 
                             auto variant_type = monomorph(var.type);
-                            auto forced_alignment = variant_type->is_Path() && variant_type->as_Path().binding.is_Struct() ? variant_type->as_Path().binding.as_Struct()->m_forced_alignment : 0;
+                            auto forced_alignment = variant_type->is_Path() && variant_type->as_Path().binding.is_Struct() ? variant_type->as_Path().binding.as_Struct()->forcedAlignment : 0;
                             variants.push_back({mv$(variant_type), {}, forced_alignment});
                             TRACE_FUNCTION_F("Variant #" << (&var - e.data()));
-                            if (var.type == resolve.m_crate.m_types.unit()) {
+                            if (var.type == resolve.crate.types.unit()) {
                                 continue;
                             }
                             if (!struct_enumerate_fields(sp, resolve, variants.back().type, variants.back().ents)) {
@@ -1349,7 +1349,7 @@ namespace {
                             DEBUG(variants.back().type << ": " << variants.back().ents);
                         }
 
-                        if (enm.m_tag_repr == ::HIR::Enum::Repr::Auto) {
+                        if (enm.tagRepr == ::HIR::Enum::Repr::Auto) {
                             ASSERT_BUG(sp, !has_explcit_value, "Explicit tag without a repr");
                             // Non-zero optimisation
                             if (rv.variants.is_None() && variants.size() == 2) {
@@ -1544,16 +1544,16 @@ namespace {
                                     ::HIR::TypeRef niche_ty;
                                     switch (niche_path.size) {
                                         case 1:
-                                            niche_ty = resolve.m_crate.m_types.primitive(::HIR::CoreType::U8);
+                                            niche_ty = resolve.crate.types.primitive(::HIR::CoreType::U8);
                                             break;
                                         case 2:
-                                            niche_ty = resolve.m_crate.m_types.primitive(::HIR::CoreType::U16);
+                                            niche_ty = resolve.crate.types.primitive(::HIR::CoreType::U16);
                                             break;
                                         case 4:
-                                            niche_ty = resolve.m_crate.m_types.primitive(::HIR::CoreType::U32);
+                                            niche_ty = resolve.crate.types.primitive(::HIR::CoreType::U32);
                                             break;
                                         case 8:
-                                            niche_ty = resolve.m_crate.m_types.primitive(::HIR::CoreType::U64);
+                                            niche_ty = resolve.crate.types.primitive(::HIR::CoreType::U64);
                                             break;
                                         default:
                                             BUG(sp, "Unknown niche size: " << niche_path);
@@ -1565,7 +1565,7 @@ namespace {
                                     size_t final_size = 0;
                                     size_t final_align = 1;
                                     for (size_t i = 0; i < reprs.size(); i++) {
-                                        if (e[i].type != resolve.m_crate.m_types.unit()) {
+                                        if (e[i].type != resolve.crate.types.unit()) {
                                             // If the tag is leading, then add to all other variants and update reprs
                                             if (i == biggest_var) {
                                             } else if (niche_before_data) {
@@ -1673,21 +1673,21 @@ namespace {
                         if (rv.variants.is_None()) {
                             ::HIR::TypeRef tag_ty;
                             // If the tag size is specified, then force that
-                            if (enm.m_tag_repr != HIR::Enum::Repr::Auto) {
-                                tag_ty = resolve.m_crate.m_types.primitive(enm.get_repr_type(enm.m_tag_repr));
+                            if (enm.tagRepr != HIR::Enum::Repr::Auto) {
+                                tag_ty = resolve.crate.types.primitive(enm.get_repr_type(enm.tagRepr));
                             } else {
                                 ASSERT_BUG(sp, !has_explcit_value, "Explicit tag without a repr");
                                 if (e.size() <= 1) {
                                     // Unreachable
                                     BUG(sp, "Reached auto tag type logic with zero/one-sized enum");
                                 } else if (e.size() <= 255) {
-                                    tag_ty = resolve.m_crate.m_types.primitive(::HIR::CoreType::U8);
+                                    tag_ty = resolve.crate.types.primitive(::HIR::CoreType::U8);
                                     DEBUG("u8 data tag");
                                 } else if (e.size() <= UINT16_MAX) {
-                                    tag_ty = resolve.m_crate.m_types.primitive(::HIR::CoreType::U16);
+                                    tag_ty = resolve.crate.types.primitive(::HIR::CoreType::U16);
                                 } else {
                                     ASSERT_BUG(sp, e.size() <= UINT32_MAX, "");
-                                    tag_ty = resolve.m_crate.m_types.primitive(::HIR::CoreType::U32);
+                                    tag_ty = resolve.crate.types.primitive(::HIR::CoreType::U32);
                                 }
                             }
 
@@ -1702,8 +1702,8 @@ namespace {
                             for (size_t var_i = 0; var_i < variants.size(); var_i++) {
                                 auto& ents = variants[var_i].ents;
                                 auto& var_ty = variants[var_i].type;
-                                if (e[var_i].type != resolve.m_crate.m_types.unit()) {
-                                    if (enm.m_tag_repr == HIR::Enum::Repr::Auto) {
+                                if (e[var_i].type != resolve.crate.types.unit()) {
+                                    if (enm.tagRepr == HIR::Enum::Repr::Auto) {
                                         ::std::sort(ents.begin(), ents.end(), sortfn_enum_variant_fields);
                                     }
                                     // - Add tag
@@ -1746,13 +1746,13 @@ namespace {
                     }
                 }
                 break;
-                TU_ARM(enm.m_data, Value, e) {
+                TU_ARM(enm.mData, Value, e) {
                     // TODO: If the values aren't yet populated, force const evaluation
-                    switch (enm.m_tag_repr) {
+                    switch (enm.tagRepr) {
                         case ::HIR::Enum::Repr::Auto:
-                            if (enm.m_is_c_repr) {
+                            if (enm.isCRepr) {
                                 // No auto-sizing, just i32?
-                                rv.fields.push_back(TypeRepr::Field{0, resolve.m_crate.m_types.primitive(::HIR::CoreType::U32)});
+                                rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(::HIR::CoreType::U32)});
                             } else if (!e.variants.empty()) {
                                 int64_t min_value = INT64_MAX;
                                 int64_t max_value = INT64_MIN;
@@ -1783,11 +1783,11 @@ namespace {
                                 } else {
                                     tag_type = ::HIR::CoreType::I64;
                                 }
-                                rv.fields.push_back(TypeRepr::Field{0, resolve.m_crate.m_types.primitive(tag_type)});
+                                rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(tag_type)});
                             }
                             break;
                         default:
-                            rv.fields.push_back(TypeRepr::Field{0, resolve.m_crate.m_types.primitive(enm.get_repr_type(enm.m_tag_repr))});
+                            rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(enm.get_repr_type(enm.tagRepr))});
                             break;
                     }
                     if (rv.fields.size() > 0) {
@@ -1834,7 +1834,7 @@ namespace {
         const auto& te = ty->as_Path();
         const auto& unn = *te.binding.as_Union();
 
-        auto monomorph_cb = MonomorphStatePtr(resolve.m_crate.m_types, nullptr, &te.path.m_data.as_Generic().m_params, nullptr);
+        auto monomorph_cb = MonomorphStatePtr(resolve.crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorph_expand(sp, tpl, monomorph_cb);
         };
@@ -1842,7 +1842,7 @@ namespace {
         TypeRepr rv;
         // codegen_c pins union alignment with an explicit `__attribute__((aligned))`, which gcc counts as user-alignment - so a union, and anything containing it, is exempt from the cap.
         rv.user_align = true;
-        for (const auto& var : unn.m_variants) {
+        for (const auto& var : unn.mVariants) {
             rv.fields.push_back({0, monomorph(var.ty)});
             size_t size, align;
             if (!TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, size, align)) {
@@ -1949,7 +1949,7 @@ void TargetForceTypeRepr(const Span& sp, const ::HIR::TypeData* ty, TypeRepr rep
 }
 
 bool TargetCapsMemberAlignment() {
-    return TargetGetCurSpec().m_arch.m_name == "powerpc";
+    return TargetGetCurSpec().arch.mName == "powerpc";
 }
 
 bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {

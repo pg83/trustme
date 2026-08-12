@@ -9,22 +9,22 @@
 namespace {
 
     class MirDumper {
-        ::std::ostream& m_os;
-        unsigned int m_indent_level;
+        ::std::ostream& os;
+        unsigned int indentLevel;
 
     public:
         MirDumper(::std::ostream& os, unsigned int il)
-            : m_os(os)
-            , m_indent_level(il)
+            : os(os)
+            , indentLevel(il)
         {
         }
 
         void dump_mir(const ::MIR::Function& fcn) {
             for (size_t i = 0; i < fcn.locals.size(); i++) {
-                m_os << indent() << "let _$" << i << ": " << fcn.locals[i] << ";\n";
+                os << indent() << "let _$" << i << ": " << fcn.locals[i] << ";\n";
             }
             for (unsigned int i = 0; i < fcn.drop_flags.size(); i++) {
-                m_os << indent() << "let df$" << i << " = " << fcn.drop_flags[i] << ";\n";
+                os << indent() << "let df$" << i << " = " << fcn.drop_flags[i] << ";\n";
             }
 
 #define FMT_M(x) FMT_CB(os, this->fmt_val(os, x);)
@@ -32,160 +32,160 @@ namespace {
                 const auto& block = fcn.blocks[i];
                 //DEBUG("BB" << i);
 
-                m_os << indent() << "bb" << i << ": {\n";
+                os << indent() << "bb" << i << ": {\n";
                 inc_indent();
                 for (const auto& stmt : block.statements) {
-                    m_os << indent();
+                    os << indent();
 
                     TU_MATCH_HDRA( (stmt), {)
                     TU_ARMA(Assign, e) {
                             //DEBUG("- Assign " << e.dst << " = " << e.src);
-                            m_os << FMT_M(e.dst) << " = " << FMT_M(e.src) << ";\n";
+                            os << FMT_M(e.dst) << " = " << FMT_M(e.src) << ";\n";
                         }
                         TU_ARMA(Asm, e) {
                             //DEBUG("- Asm");
-                            m_os << "(";
+                            os << "(";
                             for (const auto& v : e.outputs) {
-                                m_os << "\"" << ::FmtEscaped(v.first) << "\"=" << FMT_M(v.second) << ",";
+                                os << "\"" << ::FmtEscaped(v.first) << "\"=" << FMT_M(v.second) << ",";
                             }
-                            m_os << ") = asm! \"";
-                            m_os << ::FmtEscaped(e.tpl);
-                            m_os << "\"(";
+                            os << ") = asm! \"";
+                            os << ::FmtEscaped(e.tpl);
+                            os << "\"(";
                             for (const auto& v : e.inputs) {
-                                m_os << "\"" << ::FmtEscaped(v.first) << "\"=" << FMT_M(v.second) << ",";
+                                os << "\"" << ::FmtEscaped(v.first) << "\"=" << FMT_M(v.second) << ",";
                             }
-                            m_os << " : ";
+                            os << " : ";
                             for (const auto& v : e.clobbers) {
-                                m_os << "\"" << v << "\",";
+                                os << "\"" << v << "\",";
                             }
-                            m_os << ")";
+                            os << ")";
                             for (const auto& v : e.flags) {
-                                m_os << " \"" << v << "\"";
+                                os << " \"" << v << "\"";
                             }
-                            m_os << ";\n";
+                            os << ";\n";
                         }
                         TU_ARMA(Asm2, e) {
-                            m_os << "asm2!(";
+                            os << "asm2!(";
                             for (const auto& l : e.lines) {
-                                l.fmt(m_os);
+                                l.fmt(os);
                             }
                             for (const auto& p : e.params) {
-                                m_os << ", ";
+                                os << ", ";
                             TU_MATCH_HDRA( (p), { )
                             TU_ARMA(Const, v) {
-                                        m_os << "const " << v;
+                                        os << "const " << v;
                                     }
                                     TU_ARMA(Sym, v) {
-                                        m_os << "sym " << v;
+                                        os << "sym " << v;
                                     }
                                     TU_ARMA(Reg, v) {
-                                        m_os << "reg " << v.dir << " " << v.spec;
+                                        os << "reg " << v.dir << " " << v.spec;
                                         if (v.input) {
-                                            m_os << FMT_M(*v.input);
+                                            os << FMT_M(*v.input);
                                         } else {
-                                            m_os << "_";
+                                            os << "_";
                                         }
-                                        m_os << " => ";
+                                        os << " => ";
                                         if (v.output) {
-                                            m_os << FMT_M(*v.output);
+                                            os << FMT_M(*v.output);
                                         } else {
-                                            m_os << "_";
+                                            os << "_";
                                         }
                                     }
                             }
                             }
                             if (e.options.any()) {
-                                e.options.fmt(m_os);
+                                e.options.fmt(os);
                             }
-                            m_os << ")";
+                            os << ")";
                         }
                         TU_ARMA(SetDropFlag, e) {
-                            m_os << "df$" << e.idx << " = ";
+                            os << "df$" << e.idx << " = ";
                             if (e.other == ~0u) {
-                                m_os << e.new_val;
+                                os << e.new_val;
                             } else if (!e.new_val) {
-                                m_os << "df$" << e.other;
+                                os << "df$" << e.other;
                             } else {
-                                m_os << "! df$" << e.other;
+                                os << "! df$" << e.other;
                             }
-                            m_os << ";\n";
+                            os << ";\n";
                         }
                         TU_ARMA(SaveDropFlag, e) {
-                            m_os << "SaveDropFlag(" << FMT_M(e.slot) << " BIT " << e.bit_index << " = df$" << e.idx << ")";
+                            os << "SaveDropFlag(" << FMT_M(e.slot) << " BIT " << e.bit_index << " = df$" << e.idx << ")";
                         }
                         TU_ARMA(LoadDropFlag, e) {
-                            m_os << "LoadDropFlag(df$" << e.idx << " = " << FMT_M(e.slot) << " BIT " << e.bit_index << ")";
+                            os << "LoadDropFlag(df$" << e.idx << " = " << FMT_M(e.slot) << " BIT " << e.bit_index << ")";
                         }
                         TU_ARMA(ScopeEnd, e) {
-                            m_os << "// Scope End: ";
+                            os << "// Scope End: ";
                             for (auto idx : e.slots) {
-                                m_os << "_$" << idx << ",";
+                                os << "_$" << idx << ",";
                             }
-                            m_os << "\n";
+                            os << "\n";
                         }
                     }
                 }
 
-                m_os << indent();
+                os << indent();
                 auto fmt_unwind = [this](const ::MIR::UnwindAction& action) {
                     TU_MATCHA((action), (ue),
-                        (Continue, m_os << "continue";),
-                        (Cleanup, m_os << "cleanup bb" << ue;),
-                        (Terminate, m_os << "terminate";),
-                        (Unreachable, m_os << "unreachable";)
+                        (Continue, os << "continue";),
+                        (Cleanup, os << "cleanup bb" << ue;),
+                        (Terminate, os << "terminate";),
+                        (Unreachable, os << "unreachable";)
                     )
                 };
                 TU_MATCHA(
                     (block.terminator),
                     (e),
-                    (Incomplete, m_os << "INVALID;\n";),
-                    (Return, m_os << "return;\n";),
-                    (UnwindResume, m_os << "unwind resume;\n";),
-                    (UnwindTerminate, m_os << "unwind terminate;\n";),
-                    (Unreachable, m_os << "unreachable;\n";),
-                    (Goto, m_os << "goto bb" << e << ";\n";),
-                    (If, m_os << "if " << FMT_M(e.cond) << " { goto bb" << e.bb_true << "; } else { goto bb" << e.bb_false << "; }\n";),
-                    (Switch, m_os << "switch " << FMT_M(e.val) << " {"; for (unsigned int j = 0; j < e.targets.size(); j++) m_os << j << " => bb" << e.targets[j] << ", "; m_os << "}\n";),
-                    (SwitchValue, m_os << "switch " << FMT_M(e.val) << " {"; TU_MATCHA(
+                    (Incomplete, os << "INVALID;\n";),
+                    (Return, os << "return;\n";),
+                    (UnwindResume, os << "unwind resume;\n";),
+                    (UnwindTerminate, os << "unwind terminate;\n";),
+                    (Unreachable, os << "unreachable;\n";),
+                    (Goto, os << "goto bb" << e << ";\n";),
+                    (If, os << "if " << FMT_M(e.cond) << " { goto bb" << e.bb_true << "; } else { goto bb" << e.bb_false << "; }\n";),
+                    (Switch, os << "switch " << FMT_M(e.val) << " {"; for (unsigned int j = 0; j < e.targets.size(); j++) os << j << " => bb" << e.targets[j] << ", "; os << "}\n";),
+                    (SwitchValue, os << "switch " << FMT_M(e.val) << " {"; TU_MATCHA(
                                                                                  (e.values),
                                                                                  (ve),
-                                                                                 (Unsigned, for (unsigned int j = 0; j < e.targets.size(); j++) m_os << ve[j] << " => bb" << e.targets[j] << ", ";),
-                                                                                 (Signed, for (unsigned int j = 0; j < e.targets.size(); j++) m_os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";),
-                                                                                 (String, for (unsigned int j = 0; j < e.targets.size(); j++) m_os << "\"" << FmtEscaped(ve[j]) << "\" => bb" << e.targets[j] << ", ";),
+                                                                                 (Unsigned, for (unsigned int j = 0; j < e.targets.size(); j++) os << ve[j] << " => bb" << e.targets[j] << ", ";),
+                                                                                 (Signed, for (unsigned int j = 0; j < e.targets.size(); j++) os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";),
+                                                                                 (String, for (unsigned int j = 0; j < e.targets.size(); j++) os << "\"" << FmtEscaped(ve[j]) << "\" => bb" << e.targets[j] << ", ";),
                                                                                  (ByteString,
                                                                                   for (unsigned int j = 0; j < e.targets.size(); j++) {
-                                                                                      m_os << "b\"";
+                                                                                      os << "b\"";
                                                                                       for (size_t i = 0; i < ve[j].size(); i++) {
                                                                                           auto b = ve[j][i];
                                                                                           switch (b) {
                                                                                               case '\\':
-                                                                                                  m_os << "\\\\";
+                                                                                                  os << "\\\\";
                                                                                                   break;
                                                                                               case '\"':
-                                                                                                  m_os << "\\\"";
+                                                                                                  os << "\\\"";
                                                                                                   break;
                                                                                               default:
                                                                                                   if (' ' <= b && b < 0x7f) {
-                                                                                                      m_os << char(ve[j][i]);
+                                                                                                      os << char(ve[j][i]);
                                                                                                   } else {
-                                                                                                      m_os << "\\x";
-                                                                                                      m_os << "0123456789ABCDEF"[b >> 4];
-                                                                                                      m_os << "0123456789ABCDEF"[b & 15];
+                                                                                                      os << "\\x";
+                                                                                                      os << "0123456789ABCDEF"[b >> 4];
+                                                                                                      os << "0123456789ABCDEF"[b & 15];
                                                                                                   }
                                                                                                   break;
                                                                                           }
                                                                                       }
-                                                                                      m_os << "\" => bb" << e.targets[j] << ", ";
+                                                                                      os << "\" => bb" << e.targets[j] << ", ";
                                                                                   })
-                                                                             ) m_os
+                                                                             ) os
                                                                              << "_ => bb" << e.def_target << "}\n";),
-                    (Drop, m_os << "drop(" << FMT_M(e.slot); if (e.kind == ::MIR::eDropKind::SHALLOW) m_os << " SHALLOW"; if (e.flag_idx != ~0u) m_os << " IF df$" << e.flag_idx; m_os << ") goto bb" << e.target << " unwind "; fmt_unwind(e.unwind); m_os << "\n";),
-                    (Call, m_os << FMT_M(e.ret_val) << " = "; TU_MATCHA((e.fcn), (e2), (Value, m_os << "(" << FMT_M(e2) << ")";), (Path, m_os << e2;), (Intrinsic, m_os << "\"" << e2.name << "\"::" << e2.params;)) m_os << "( "; for (const auto& arg : e.args) m_os << FMT_M(arg) << ", "; m_os << ") goto bb" << e.ret_block << " unwind "; fmt_unwind(e.unwind); m_os << "\n";)
+                    (Drop, os << "drop(" << FMT_M(e.slot); if (e.kind == ::MIR::eDropKind::SHALLOW) os << " SHALLOW"; if (e.flag_idx != ~0u) os << " IF df$" << e.flag_idx; os << ") goto bb" << e.target << " unwind "; fmt_unwind(e.unwind); os << "\n";),
+                    (Call, os << FMT_M(e.ret_val) << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << FMT_M(e2) << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << FMT_M(arg) << ", "; os << ") goto bb" << e.ret_block << " unwind "; fmt_unwind(e.unwind); os << "\n";)
                 )
                 dec_indent();
-                m_os << indent() << "}\n";
+                os << indent() << "}\n";
 
-                m_os.flush();
+                os.flush();
             }
 #undef FMT
         }
@@ -359,15 +359,15 @@ namespace {
 
     private:
         RepeatLitStr indent() const {
-            return RepeatLitStr{"   ", static_cast<int>(m_indent_level)};
+            return RepeatLitStr{"   ", static_cast<int>(indentLevel)};
         }
 
         void inc_indent() {
-            m_indent_level++;
+            indentLevel++;
         }
 
         void dec_indent() {
-            m_indent_level--;
+            indentLevel--;
         }
     };
 
@@ -377,180 +377,180 @@ namespace {
     }
 
     class TreeVisitor: public ::HIR::Visitor {
-        ::std::ostream& m_os;
-        unsigned int m_indent_level;
-        bool m_short_item_name = false;
+        ::std::ostream& os;
+        unsigned int indentLevel;
+        bool shortItemName = false;
 
     public:
         TreeVisitor(::HIR::TypeInterner& types, ::std::ostream& os)
             : ::HIR::Visitor(nullptr, types)
-            , m_os(os)
-            , m_indent_level(0)
+            , os(os)
+            , indentLevel(0)
         {
         }
 
         void visit_type_impl(::HIR::TypeImpl& impl) override {
-            m_short_item_name = true;
+            shortItemName = true;
 
-            m_os << indent() << "impl" << impl.m_params.fmt_args() << " " << impl.m_type << "\n";
-            if (!impl.m_params.m_bounds.empty()) {
-                m_os << indent() << " " << impl.m_params.fmt_bounds() << "\n";
+            os << indent() << "impl" << impl.mParams.fmt_args() << " " << impl.mType << "\n";
+            if (!impl.mParams.bounds.empty()) {
+                os << indent() << " " << impl.mParams.fmt_bounds() << "\n";
             }
-            m_os << indent() << "{\n";
+            os << indent() << "{\n";
             inc_indent();
             ::HIR::Visitor::visit_type_impl(impl);
             dec_indent();
-            m_os << indent() << "}\n";
+            os << indent() << "}\n";
 
-            m_short_item_name = false;
+            shortItemName = false;
         }
 
         virtual void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
-            m_short_item_name = true;
+            shortItemName = true;
 
-            m_os << indent() << "impl" << impl.m_params.fmt_args() << " " << trait_path << impl.m_trait_args << " for " << impl.m_type << "\n";
-            if (!impl.m_params.m_bounds.empty()) {
-                m_os << indent() << " " << impl.m_params.fmt_bounds() << "\n";
+            os << indent() << "impl" << impl.mParams.fmt_args() << " " << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
+            if (!impl.mParams.bounds.empty()) {
+                os << indent() << " " << impl.mParams.fmt_bounds() << "\n";
             }
-            m_os << indent() << "{\n";
+            os << indent() << "{\n";
             inc_indent();
             ::HIR::Visitor::visit_trait_impl(trait_path, impl);
             dec_indent();
-            m_os << indent() << "}\n";
+            os << indent() << "}\n";
 
-            m_short_item_name = false;
+            shortItemName = false;
         }
 
         void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
-            m_short_item_name = true;
+            shortItemName = true;
 
-            m_os << indent() << "impl" << impl.m_params.fmt_args() << " " << (impl.is_positive ? "" : "!") << trait_path << impl.m_trait_args << " for " << impl.m_type << "\n";
-            if (!impl.m_params.m_bounds.empty()) {
-                m_os << indent() << " " << impl.m_params.fmt_bounds() << "\n";
+            os << indent() << "impl" << impl.mParams.fmt_args() << " " << (impl.is_positive ? "" : "!") << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
+            if (!impl.mParams.bounds.empty()) {
+                os << indent() << " " << impl.mParams.fmt_bounds() << "\n";
             }
-            m_os << indent() << "{ }\n";
+            os << indent() << "{ }\n";
 
-            m_short_item_name = false;
+            shortItemName = false;
         }
 
         // - Type Items
         void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
-            m_short_item_name = true;
+            shortItemName = true;
 
-            m_os << indent() << "trait " << p << item.m_params.fmt_args() << "\n";
-            if (!item.m_params.m_bounds.empty()) {
-                m_os << indent() << " " << item.m_params.fmt_bounds() << "\n";
+            os << indent() << "trait " << p << item.mParams.fmt_args() << "\n";
+            if (!item.mParams.bounds.empty()) {
+                os << indent() << " " << item.mParams.fmt_bounds() << "\n";
             }
-            m_os << indent() << "{\n";
+            os << indent() << "{\n";
             inc_indent();
             ::HIR::Visitor::visit_trait(p, item);
             dec_indent();
-            m_os << indent() << "}\n";
+            os << indent() << "}\n";
 
-            m_short_item_name = false;
+            shortItemName = false;
         }
 
         void visit_function(::HIR::ItemPath p, ::HIR::Function& item) override {
-            m_os << indent();
-            if (item.m_const) {
-                m_os << "const ";
+            os << indent();
+            if (item.isConst) {
+                os << "const ";
             }
-            if (item.m_unsafe) {
-                m_os << "unsafe ";
+            if (item.unsafe) {
+                os << "unsafe ";
             }
-            if (item.m_abi != ABI_RUST) {
-                m_os << "extern \"" << item.m_abi << "\" ";
+            if (item.mAbi != ABI_RUST) {
+                os << "extern \"" << item.mAbi << "\" ";
             }
-            m_os << "fn ";
-            if (m_short_item_name) {
-                m_os << p.get_name();
+            os << "fn ";
+            if (shortItemName) {
+                os << p.get_name();
             } else {
-                m_os << p;
+                os << p;
             }
-            m_os << item.m_params.fmt_args() << "(";
-            for (unsigned int i = 0; i < item.m_args.size(); i++) {
-                if (i == 0 && item.m_args[i].first.m_bindings.size() > 0 && item.m_args[i].first.m_bindings[0].m_name == "self") {
-                    m_os << "self=";
+            os << item.mParams.fmt_args() << "(";
+            for (unsigned int i = 0; i < item.mArgs.size(); i++) {
+                if (i == 0 && item.mArgs[i].first.mBindings.size() > 0 && item.mArgs[i].first.mBindings[0].mName == "self") {
+                    os << "self=";
                 }
-                m_os << "arg$" << i << ": " << item.m_args[i].second << ", ";
+                os << "arg$" << i << ": " << item.mArgs[i].second << ", ";
             }
-            m_os << ") -> " << item.m_return << "\n";
-            if (!item.m_params.m_bounds.empty()) {
-                m_os << indent() << " " << item.m_params.fmt_bounds() << "\n";
+            os << ") -> " << item.returnType << "\n";
+            if (!item.mParams.bounds.empty()) {
+                os << indent() << " " << item.mParams.fmt_bounds() << "\n";
             }
 
-            if (item.m_code) {
-                m_os << indent() << "{\n";
+            if (item.mCode) {
+                os << indent() << "{\n";
                 inc_indent();
-                dump_mir(m_os, m_indent_level, item.m_code.get_mir_or_error(Span()));
+                dump_mir(os, indentLevel, item.mCode.get_mir_or_error(Span()));
                 dec_indent();
-                m_os << indent() << "}\n";
+                os << indent() << "}\n";
             } else {
-                m_os << indent() << "  ;\n";
+                os << indent() << "  ;\n";
             }
         }
 
         void visit_constant(::HIR::ItemPath p, ::HIR::Constant& item) override {
-            m_os << indent();
-            m_os << "const ";
-            if (m_short_item_name) {
-                m_os << p.get_name();
+            os << indent();
+            os << "const ";
+            if (shortItemName) {
+                os << p.get_name();
             } else {
-                m_os << p;
+                os << p;
             }
-            m_os << ": " << item.m_type;
-            if (item.m_value) {
+            os << ": " << item.mType;
+            if (item.mValue) {
                 inc_indent();
-                m_os << " = {\n";
+                os << " = {\n";
                 inc_indent();
-                dump_mir(m_os, m_indent_level, item.m_value.get_mir_or_error(Span()));
+                dump_mir(os, indentLevel, item.mValue.get_mir_or_error(Span()));
                 dec_indent();
-                m_os << indent() << "} /* = " << item.m_value_res << "*/;\n";
+                os << indent() << "} /* = " << item.valueRes << "*/;\n";
                 dec_indent();
             } else {
-                m_os << ";\n";
+                os << ";\n";
             }
         }
 
         void visit_static(::HIR::ItemPath p, ::HIR::Static& item) override {
-            m_os << indent();
-            m_os << "static ";
-            if (m_short_item_name) {
-                m_os << p.get_name();
+            os << indent();
+            os << "static ";
+            if (shortItemName) {
+                os << p.get_name();
             } else {
-                m_os << p;
+                os << p;
             }
-            m_os << ": " << item.m_type;
-            if (item.m_value) {
+            os << ": " << item.mType;
+            if (item.mValue) {
                 inc_indent();
-                m_os << " = {\n";
+                os << " = {\n";
                 inc_indent();
-                dump_mir(m_os, m_indent_level, item.m_value.get_mir_or_error(Span()));
+                dump_mir(os, indentLevel, item.mValue.get_mir_or_error(Span()));
                 dec_indent();
-                m_os << indent() << "} /* = " << item.m_value_res << "*/;\n";
+                os << indent() << "} /* = " << item.valueRes << "*/;\n";
                 dec_indent();
             } else {
-                m_os << ";\n";
+                os << ";\n";
             }
         }
 
     private:
         RepeatLitStr indent() const {
-            return RepeatLitStr{"   ", static_cast<int>(m_indent_level)};
+            return RepeatLitStr{"   ", static_cast<int>(indentLevel)};
         }
 
         void inc_indent() {
-            m_indent_level++;
+            indentLevel++;
         }
 
         void dec_indent() {
-            m_indent_level--;
+            indentLevel--;
         }
     };
 }
 
 void MIRDump(::std::ostream& sink, const ::HIR::Crate& crate) {
-    TreeVisitor tv{crate.m_types, sink};
+    TreeVisitor tv{crate.types, sink};
 
     tv.visit_crate(const_cast<::HIR::Crate&>(crate));
 }

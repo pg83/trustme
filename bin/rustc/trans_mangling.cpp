@@ -8,12 +8,12 @@
 #include <cmath>     // ceil/log10
 
 class Mangler {
-    ::std::ostream& m_os;
-    std::vector<RcString> m_name_cache;
+    ::std::ostream& os;
+    std::vector<RcString> nameCache;
 
 public:
     Mangler(::std::ostream& os)
-        : m_os(os)
+        : os(os)
     {
     }
 
@@ -22,11 +22,11 @@ public:
     void fmt_base26_int(unsigned val) {
         // Lower-case:
         while (val >= 26) {
-            m_os << char('a' + (val % 26));
+            os << char('a' + (val % 26));
             val /= 26;
         }
         assert(val < 26);
-        m_os << char('A' + val);
+        os << char('A' + val);
     }
 
     // Reference-counted item names
@@ -35,18 +35,18 @@ public:
     // - Otherwise, emitted as a raw string (see below)
     void fmt_name(const RcString& s) {
         // Support back-references to names (if shorter than the literal name)
-        auto it = std::find(m_name_cache.begin(), m_name_cache.end(), s);
-        if (it != m_name_cache.end()) {
-            auto idx = it - m_name_cache.begin();
+        auto it = std::find(nameCache.begin(), nameCache.end(), s);
+        if (it != nameCache.end()) {
+            auto idx = it - nameCache.begin();
             // Only emit this way if shorter than the formatted name would be.
             auto len = 1 + static_cast<unsigned>(std::ceil(std::log10(idx + 1) / std::log10(26)));
             if (len < s.size()) {
-                m_os << "_";
+                os << "_";
                 fmt_base26_int(idx);
                 return;
             }
         } else {
-            m_name_cache.push_back(s);
+            nameCache.push_back(s);
         }
 
         this->fmt_name(s.c_str());
@@ -107,40 +107,40 @@ public:
                 // An encoding that allows this pattern
                 fmt_base26_int(size - 1);
                 ASSERT_BUG(Span(), hash_pos[1] != '_', "Leading underscore not valid in '" << name << "'");
-                m_os << '_';
-                m_os << hash_pos + 1;
+                os << '_';
+                os << hash_pos + 1;
             } else {
                 // <pos:base26> <len:int> <body1> <body2>
                 fmt_base26_int(pre_hash_len);
                 bool needs_leading_escape = (isdigit(static_cast<unsigned char>(name[0])) || name[0] == '_');
-                m_os << size - 1 + (needs_leading_escape ? 1 : 0);
+                os << size - 1 + (needs_leading_escape ? 1 : 0);
                 // If the string starts with a digit or underscrore, then escape it with another underscore.
                 if (needs_leading_escape) {
-                    m_os << '_';
+                    os << '_';
                 }
                 for (const char* c = name; c != hash_pos; ++c) {
                     if (*c == '-' || *c == '#') {
-                        m_os << '_';
+                        os << '_';
                     } else {
-                        m_os << *c;
+                        os << *c;
                     }
                 }
-                m_os << hash_pos + 1;
+                os << hash_pos + 1;
             }
         } else {
             bool needs_leading_escape = (isdigit(static_cast<unsigned char>(name[0])) || name[0] == '_');
-            m_os << size + (needs_leading_escape ? 1 : 0);
+            os << size + (needs_leading_escape ? 1 : 0);
             if (needs_leading_escape) {
-                m_os << '_';
+                os << '_';
             }
-            m_os << name;
+            os << name;
         }
     }
 
     // SimplePath : <ncomp> 'c' [<RcString> ...]
     void fmt_simple_path(const ::HIR::SimplePath& sp) {
-        m_os << sp.components().size();
-        m_os << "c"; // Needed to separate the component count from the crate name
+        os << sp.components().size();
+        os << "c"; // Needed to separate the component count from the crate name
         this->fmt_name(sp.crate_name());
         for (const auto& c : sp.components()) {
             this->fmt_name(c);
@@ -150,27 +150,27 @@ public:
     // PathParams : <ntys> 'g' [<TypeRef> ...]
     void fmt_path_params(const ::HIR::PathParams& pp) {
         // Type Parameter count
-        m_os << pp.m_types.size();
-        if (pp.m_values.size() > 0) {
-            m_os << "v";
-            m_os << pp.m_values.size();
+        os << pp.types.size();
+        if (pp.values.size() > 0) {
+            os << "v";
+            os << pp.values.size();
         }
-        m_os << "g";
-        for (const auto& ty : pp.m_types) {
+        os << "g";
+        for (const auto& ty : pp.types) {
             fmt_type(ty);
         }
-        for (const auto& v : pp.m_values) {
+        for (const auto& v : pp.values) {
             const auto& ev = *v.as_Evaluated();
-            m_os << "V";
-            m_os << ev.bytes.size();
-            m_os << "_";
+            os << "V";
+            os << ev.bytes.size();
+            os << "_";
             // TODO: Base64 data? (`_` and `$` as the other two?)
             for (size_t i = 0; i < ev.bytes.size(); i++) {
-                m_os << "0123456789abcdef"[ev.bytes[i] >> 4];
-                m_os << "0123456789abcdef"[ev.bytes[i] & 0xF];
+                os << "0123456789abcdef"[ev.bytes[i] >> 4];
+                os << "0123456789abcdef"[ev.bytes[i] & 0xF];
             }
             if (ev.relocations.size() > 0) {
-                m_os << "_" << ev.relocations.size() << "R";
+                os << "_" << ev.relocations.size() << "R";
                 TODO(Span(), "Mangle relocated values");
             }
         }
@@ -178,8 +178,8 @@ public:
 
     // GenericPath : <SimplePath> <PathParams>
     void fmt_generic_path(const ::HIR::GenericPath& gp) {
-        this->fmt_simple_path(gp.m_path);
-        this->fmt_path_params(gp.m_params);
+        this->fmt_simple_path(gp.mPath);
+        this->fmt_path_params(gp.mParams);
     }
 
     void fmt_path(const ::HIR::Path& p) {
@@ -188,19 +188,19 @@ public:
         // - Inherent: Starts with `I`
         // - Trait: Starts with `Q` (qualified)
         // - bare type: Starts with `T` (see Trans_MangleType)
-        TU_MATCH_HDRA( (p.m_data), {)
+        TU_MATCH_HDRA( (p.mData), {)
         TU_ARMA(Generic, e) {
-                m_os << "G";
+                os << "G";
                 this->fmt_generic_path(e);
             }
             TU_ARMA(UfcsInherent, e) {
-                m_os << "I";
+                os << "I";
                 this->fmt_type(e.type);
                 this->fmt_name(e.item);
                 this->fmt_path_params(e.params);
             }
             TU_ARMA(UfcsKnown, e) {
-                m_os << "Q";
+                os << "Q";
                 this->fmt_type(e.type);
                 this->fmt_generic_path(e.trait);
                 this->fmt_name(e.item);
@@ -250,83 +250,83 @@ public:
         case ::HIR::TypeData::TAG_NodeType:
             BUG(Span(), "Non-encodable type " << ty);
             TU_ARMA(Tuple, e) {
-                m_os << "T" << e.size();
+                os << "T" << e.size();
                 for (const auto& sty : e) {
                     this->fmt_type(sty);
                 }
             }
             TU_ARMA(Slice, e) {
-                m_os << "S";
+                os << "S";
                 this->fmt_type(e.inner);
             }
             TU_ARMA(Array, e) {
-                m_os << "A" << e.size.as_Known();
+                os << "A" << e.size.as_Known();
                 this->fmt_type(e.inner);
             }
             TU_ARMA(Path, e) {
-                m_os << "G";
-                ASSERT_BUG(Span(), e.path.m_data.is_Generic(), "Type path not Generic - " << ty);
-                this->fmt_generic_path(e.path.m_data.as_Generic());
+                os << "G";
+                ASSERT_BUG(Span(), e.path.mData.is_Generic(), "Type path not Generic - " << ty);
+                this->fmt_generic_path(e.path.mData.as_Generic());
             }
             TU_ARMA(TraitObject, e) {
                 // - TraitObject: 'D' <data:GenericPath> <naty> [<TypeRef> ...] <nmarker> [markers: <GenericPath> ...]
-                m_os << "D";
-                this->fmt_generic_path(e.m_trait.m_path);
-                m_os << e.m_trait.m_type_bounds.size();
+                os << "D";
+                this->fmt_generic_path(e.mTrait.mPath);
+                os << e.mTrait.typeBounds.size();
                 // HACK: Assume all TraitObject types have the same aty set (std::map is deterministic)
-                for (const auto& aty : e.m_trait.m_type_bounds) {
+                for (const auto& aty : e.mTrait.typeBounds) {
                     this->fmt_type(aty.second.type);
                 }
-                m_os << e.m_markers.size();
-                for (const auto& p : e.m_markers) {
+                os << e.markers.size();
+                for (const auto& p : e.markers) {
                     this->fmt_generic_path(p);
                 }
             }
             TU_ARMA(NamedFunction, e) {
                 // - Named function: 'f' <path>
-                m_os << "f";
+                os << "f";
                 this->fmt_path(e.path);
             }
             TU_ARMA(Function, e) {
                 // - Function: 'F' <abi:RcString> <nargs> [args: <TypeRef> ...] <ret:TypeRef>
-                m_os << "F";
-                m_os << (e.is_unsafe ? "u" : ""); // Optional allowed, next is a number
-                if (e.m_abi != ABI_RUST) {
-                    m_os << "e";
-                    this->fmt_name(e.m_abi.c_str());
+                os << "F";
+                os << (e.is_unsafe ? "u" : ""); // Optional allowed, next is a number
+                if (e.mAbi != ABI_RUST) {
+                    os << "e";
+                    this->fmt_name(e.mAbi.c_str());
                 }
-                m_os << e.m_arg_types.size();
-                for (const auto& t : e.m_arg_types) {
+                os << e.argTypes.size();
+                for (const auto& t : e.argTypes) {
                     this->fmt_type(t);
                 }
-                this->fmt_type(e.m_rettype);
+                this->fmt_type(e.mRettype);
             }
             TU_ARMA(Borrow, e) {
-                m_os << "B";
+                os << "B";
                 switch (e.type) {
                     case ::HIR::BorrowType::Shared:
-                        m_os << "s";
+                        os << "s";
                         break;
                     case ::HIR::BorrowType::Unique:
-                        m_os << "u";
+                        os << "u";
                         break;
                     case ::HIR::BorrowType::Owned:
-                        m_os << "o";
+                        os << "o";
                         break;
                 }
                 this->fmt_type(e.inner);
             }
             TU_ARMA(Pointer, e) {
-                m_os << "P";
+                os << "P";
                 switch (e.type) {
                     case ::HIR::BorrowType::Shared:
-                        m_os << "s";
+                        os << "s";
                         break;
                     case ::HIR::BorrowType::Unique:
-                        m_os << "u";
+                        os << "u";
                         break;
                     case ::HIR::BorrowType::Owned:
-                        m_os << "o";
+                        os << "o";
                         break;
                 }
                 this->fmt_type(e.inner);
@@ -334,66 +334,66 @@ public:
             TU_ARMA(Primitive, e) {
                 switch (e) {
                     case ::HIR::CoreType::U8:
-                        m_os << 'C' << 'a';
+                        os << 'C' << 'a';
                         break;
                     case ::HIR::CoreType::I8:
-                        m_os << 'C' << 'b';
+                        os << 'C' << 'b';
                         break;
                     case ::HIR::CoreType::U16:
-                        m_os << 'C' << 'c';
+                        os << 'C' << 'c';
                         break;
                     case ::HIR::CoreType::I16:
-                        m_os << 'C' << 'd';
+                        os << 'C' << 'd';
                         break;
                     case ::HIR::CoreType::U32:
-                        m_os << 'C' << 'e';
+                        os << 'C' << 'e';
                         break;
                     case ::HIR::CoreType::I32:
-                        m_os << 'C' << 'f';
+                        os << 'C' << 'f';
                         break;
                     case ::HIR::CoreType::U64:
-                        m_os << 'C' << 'g';
+                        os << 'C' << 'g';
                         break;
                     case ::HIR::CoreType::I64:
-                        m_os << 'C' << 'h';
+                        os << 'C' << 'h';
                         break;
                     case ::HIR::CoreType::U128:
-                        m_os << 'C' << 'i';
+                        os << 'C' << 'i';
                         break;
                     case ::HIR::CoreType::I128:
-                        m_os << 'C' << 'j';
+                        os << 'C' << 'j';
                         break;
                     case ::HIR::CoreType::F16:
-                        m_os << 'C' << 'm';
+                        os << 'C' << 'm';
                         break;
                     case ::HIR::CoreType::F32:
-                        m_os << 'C' << 'n';
+                        os << 'C' << 'n';
                         break;
                     case ::HIR::CoreType::F64:
-                        m_os << 'C' << 'o';
+                        os << 'C' << 'o';
                         break;
                     case ::HIR::CoreType::F128:
-                        m_os << 'C' << 'p';
+                        os << 'C' << 'p';
                         break;
                     case ::HIR::CoreType::Usize:
-                        m_os << 'C' << 'u';
+                        os << 'C' << 'u';
                         break;
                     case ::HIR::CoreType::Isize:
-                        m_os << 'C' << 'v';
+                        os << 'C' << 'v';
                         break;
                     case ::HIR::CoreType::Bool:
-                        m_os << 'C' << 'w';
+                        os << 'C' << 'w';
                         break;
                     case ::HIR::CoreType::Char:
-                        m_os << 'C' << 'x';
+                        os << 'C' << 'x';
                         break;
                     case ::HIR::CoreType::Str:
-                        m_os << 'C' << 'y';
+                        os << 'C' << 'y';
                         break;
                 }
             }
             TU_ARMA(Diverge, _e) {
-                m_os << 'C' << 'z';
+                os << 'C' << 'z';
             }
         }
     }

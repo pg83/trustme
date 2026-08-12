@@ -82,7 +82,7 @@ AST::HigherRankedBounds& AST::HigherRankedBounds::operator=(HigherRankedBounds&&
 AST::HigherRankedBounds::HigherRankedBounds(const HigherRankedBounds&) = default;
 
 bool AST::HigherRankedBounds::empty() const {
-    return m_lifetimes.empty();
+    return mLifetimes.empty();
 }
 
 TypeFunction::TypeFunction() = default;
@@ -90,9 +90,9 @@ TypeFunction::TypeFunction() = default;
 TypeFunction::TypeFunction(AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool is_variadic)
     : hrbs(mv$(hrbs))
     , is_unsafe(is_unsafe)
-    , m_abi(mv$(abi))
-    , m_rettype(mv$(ret))
-    , m_arg_types(mv$(args))
+    , mAbi(mv$(abi))
+    , mRettype(mv$(ret))
+    , argTypes(mv$(args))
     , is_variadic(is_variadic)
 {
 }
@@ -165,41 +165,41 @@ const char* coretype_name(const eCoreType ct) {
 TypeFunction::TypeFunction(const TypeFunction& other)
     : hrbs(other.hrbs)
     , is_unsafe(other.is_unsafe)
-    , m_abi(other.m_abi)
-    , m_rettype(box$(other.m_rettype->clone()))
+    , mAbi(other.mAbi)
+    , mRettype(box$(other.mRettype->clone()))
     , is_variadic(other.is_variadic)
 {
-    for (const auto& at : other.m_arg_types) {
-        m_arg_types.push_back(at.clone());
+    for (const auto& at : other.argTypes) {
+        argTypes.push_back(at.clone());
     }
 }
 
 Ordering TypeFunction::ord(const TypeFunction& x) const {
     Ordering rv;
 
-    rv = ::ord(m_abi, x.m_abi);
+    rv = ::ord(mAbi, x.mAbi);
     if (rv != OrdEqual) {
         return rv;
     }
-    rv = ::ord(m_arg_types, x.m_arg_types);
+    rv = ::ord(argTypes, x.argTypes);
     if (rv != OrdEqual) {
         return rv;
     }
-    return (*m_rettype).ord(*x.m_rettype);
+    return (*mRettype).ord(*x.mRettype);
 }
 
 TypeRef::~TypeRef() {
 }
 
 TypeRef::TypeRef(TagMacro, ::AST::MacroInvocation inv)
-    : m_span(inv.span())
-    , m_data(TypeData::make_Macro({box$(inv)}))
+    : mSpan(inv.span())
+    , mData(TypeData::make_Macro({box$(inv)}))
 {
 }
 
 TypeRef::TypeRef(TagPath, Span sp, AST::Path path)
-    : m_span(mv$(sp))
-    , m_data(TypeData::make_Path(box$(path)))
+    : mSpan(mv$(sp))
+    , mData(TypeData::make_Path(box$(path)))
 {
 }
 
@@ -220,17 +220,17 @@ TypeRef TypeRef::clone() const {
         }
     };
 
-    switch (m_data.tag()) {
+    switch (mData.tag()) {
         case TypeData::TAGDEAD:
             assert(!"Copying a destructed type");
 #define _COPY(VAR)                                                       \
     case TypeData::TAG_##VAR:                                            \
-        return TypeRef(m_span, TypeData::make_##VAR(m_data.as_##VAR())); \
+        return TypeRef(mSpan, TypeData::make_##VAR(mData.as_##VAR())); \
         break;
 #define _CLONE(VAR, ...)                                           \
     case TypeData::TAG_##VAR: {                                    \
-        auto& old = m_data.as_##VAR();                             \
-        return TypeRef(m_span, TypeData::make_##VAR(__VA_ARGS__)); \
+        auto& old = mData.as_##VAR();                             \
+        return TypeRef(mSpan, TypeData::make_##VAR(__VA_ARGS__)); \
     } break;
             _COPY(None)
             _COPY(Any)
@@ -292,13 +292,13 @@ Ordering TypeTraitPath::ord(const TypeTraitPath& x) const {
 Ordering TypeRef::ord(const TypeRef& x) const {
     Ordering rv;
 
-    rv = ::ord((unsigned)m_data.tag(), (unsigned)x.m_data.tag());
+    rv = ::ord((unsigned)mData.tag(), (unsigned)x.mData.tag());
     if (rv != OrdEqual) {
         return rv;
     }
 
-    TU_MATCH(TypeData, (m_data, x.m_data), (ent, x_ent), (None, return OrdEqual;), (Macro, throw CompileError::BugCheck("TypeRef::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.core_type, (unsigned)x_ent.core_type);), (Function, return ent.info.ord(x_ent.info);), (Tuple, return ::ord(ent.inner_types, x_ent.inner_types);), (Borrow, rv = ::ord(ent.is_mut, x_ent.is_mut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*x_ent.inner);), (Pointer, rv = ::ord(ent.is_mut, x_ent.is_mut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*x_ent.inner);), (Array, rv = (*ent.inner).ord(*x_ent.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return (*ent.inner).ord(*x_ent.inner);), (Generic, return ::ord(ent.name, x_ent.name);), (Path, return ent->ord(*x_ent);), (TraitObject, return ::ord(ent.traits, x_ent.traits);), (ErasedType, ORD(ent->traits, x_ent->traits); ORD(ent->maybe_traits, x_ent->maybe_traits); ORD(ent->lifetimes, x_ent->lifetimes); ORD(ent->use != 0, x_ent->use != 0); if (ent->use) { ORD(*ent->use, *x_ent->use); } ORD(ent->is_edition_2024_or_later, x_ent->is_edition_2024_or_later); return OrdEqual;))
-    throw ::std::runtime_error(FMT("BUGCHECK - Unhandled TypeRef class '" << m_data.tag() << "'"));
+    TU_MATCH(TypeData, (mData, x.mData), (ent, x_ent), (None, return OrdEqual;), (Macro, throw CompileError::BugCheck("TypeRef::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.core_type, (unsigned)x_ent.core_type);), (Function, return ent.info.ord(x_ent.info);), (Tuple, return ::ord(ent.inner_types, x_ent.inner_types);), (Borrow, rv = ::ord(ent.is_mut, x_ent.is_mut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*x_ent.inner);), (Pointer, rv = ::ord(ent.is_mut, x_ent.is_mut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*x_ent.inner);), (Array, rv = (*ent.inner).ord(*x_ent.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return (*ent.inner).ord(*x_ent.inner);), (Generic, return ::ord(ent.name, x_ent.name);), (Path, return ent->ord(*x_ent);), (TraitObject, return ::ord(ent.traits, x_ent.traits);), (ErasedType, ORD(ent->traits, x_ent->traits); ORD(ent->maybe_traits, x_ent->maybe_traits); ORD(ent->lifetimes, x_ent->lifetimes); ORD(ent->use != 0, x_ent->use != 0); if (ent->use) { ORD(*ent->use, *x_ent->use); } ORD(ent->is_edition_2024_or_later, x_ent->is_edition_2024_or_later); return OrdEqual;))
+    throw ::std::runtime_error(FMT("BUGCHECK - Unhandled TypeRef class '" << mData.tag() << "'"));
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const eCoreType ct) {
@@ -309,15 +309,15 @@ void TypeRef::print(::std::ostream& os, bool is_debug /*=false*/) const {
 //os << "TypeRef(";
 #define _(VAR, ...)                                \
     case TypeData::TAG_##VAR: {                    \
-        const auto& ent = this->m_data.as_##VAR(); \
+        const auto& ent = this->mData.as_##VAR(); \
         (void)&ent;                                \
         __VA_ARGS__                                \
     } break;
 #define _2(VAR, brace)                             \
     case TypeData::TAG_##VAR: {                    \
-        const auto& ent = this->m_data.as_##VAR(); \
+        const auto& ent = this->mData.as_##VAR(); \
         (void)&ent;
-    switch (this->m_data.tag()) {
+    switch (this->mData.tag()) {
         case TypeData::TAGDEAD:
             throw "";
             _(None, os << "!/*none*/!";)
@@ -326,22 +326,22 @@ void TypeRef::print(::std::ostream& os, bool is_debug /*=false*/) const {
             _(Macro, os << *ent.inv;)
             _(Unit, os << "()";)
             _(Primitive, os << ent.core_type;)
-            TU_ARM(m_data, Function, ent) {
+            TU_ARM(mData, Function, ent) {
                 os << ent.info.hrbs;
-                if (ent.info.m_abi != "") {
-                    os << "extern \"" << ent.info.m_abi << "\" ";
+                if (ent.info.mAbi != "") {
+                    os << "extern \"" << ent.info.mAbi << "\" ";
                 }
                 if (ent.info.is_unsafe) {
                     os << "unsafe ";
                 }
                 os << "fn(";
-                for (const auto& arg : ent.info.m_arg_types) {
+                for (const auto& arg : ent.info.argTypes) {
                     arg.print(os, is_debug);
                     os << ", ";
                 }
                 os << ")";
-                if (!ent.info.m_rettype->is_unit()) {
-                    os << " -> " << *ent.info.m_rettype;
+                if (!ent.info.mRettype->is_unit()) {
+                    os << " -> " << *ent.info.mRettype;
                 }
             }
             break;
@@ -349,7 +349,7 @@ void TypeRef::print(::std::ostream& os, bool is_debug /*=false*/) const {
                 it.print(os, is_debug);
                 os << ", ";
             } os << ")";)
-            TU_ARM(m_data, Borrow, ent) {
+            TU_ARM(mData, Borrow, ent) {
                 os << "&";
                 if (ent.lifetime != AST::LifetimeRef()) {
                     os << ent.lifetime << " ";
@@ -413,22 +413,22 @@ void TypeRef::print(::std::ostream& os, bool is_debug /*=false*/) const {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const PrettyPrintType& x) {
-    x.m_type.print(os, false);
+    x.mType.print(os, false);
     return os;
 }
 
 namespace AST {
     ::std::ostream& operator<<(::std::ostream& os, const LifetimeRef& x) {
-        if (x.m_binding == LifetimeRef::BINDING_STATIC) {
+        if (x.mBinding == LifetimeRef::BINDING_STATIC) {
             os << "'static";
-        } else if (x.m_binding == LifetimeRef::BINDING_INFER) {
+        } else if (x.mBinding == LifetimeRef::BINDING_INFER) {
             os << "'_";
-        } else if (x.m_binding == LifetimeRef::BINDING_UNSPECIFIED) {
+        } else if (x.mBinding == LifetimeRef::BINDING_UNSPECIFIED) {
             os << "/*'UNSPEC*/";
         } else {
-            os << "'" << x.m_name.name;
-            if (x.m_binding != LifetimeRef::BINDING_UNBOUND) {
-                os << "/*" << x.m_binding << "*/";
+            os << "'" << x.mName.name;
+            if (x.mBinding != LifetimeRef::BINDING_UNBOUND) {
+                os << "/*" << x.mBinding << "*/";
             }
         }
         return os;
@@ -436,66 +436,66 @@ namespace AST {
 }
 
 PrettyPrintType::PrettyPrintType(const TypeRef& ty)
-    : m_type(ty) {
+    : mType(ty) {
 }
 TypeRef::TypeRef(Span sp)
-    : m_span(mv$(sp))
-    , m_data(TypeData::make_Any({})) {
+    : mSpan(mv$(sp))
+    , mData(TypeData::make_Any({})) {
 }
 TypeRef::TypeRef(Span sp, TypeData data)
-    : m_span(mv$(sp))
-    , m_data(mv$(data)) {
+    : mSpan(mv$(sp))
+    , mData(mv$(data)) {
 }
 TypeRef::TypeRef(TagInvalid, Span sp)
-    : m_span(mv$(sp))
-    , m_data(TypeData::make_None({})) {
+    : mSpan(mv$(sp))
+    , mData(TypeData::make_None({})) {
 }
 // unit maps to a zero-length tuple, just easier to type
 
 TypeRef::TypeRef(TagUnit, Span sp)
-    : m_span(mv$(sp))
-    , m_data(TypeData::make_Unit({})) {
+    : mSpan(mv$(sp))
+    , mData(TypeData::make_Unit({})) {
 }
 TypeRef::TypeRef(TagPrimitive, Span sp, enum eCoreType type)
-    : m_span(mv$(sp))
-    , m_data(TypeData::make_Primitive({type})) {
+    : mSpan(mv$(sp))
+    , mData(TypeData::make_Primitive({type})) {
 }
 TypeRef::TypeRef(Span sp, enum eCoreType type)
-    : m_span(mv$(sp))
-    , m_data(TypeData::make_Primitive({type})) {
+    : mSpan(mv$(sp))
+    , mData(TypeData::make_Primitive({type})) {
 }
 TypeRef::TypeRef(TagTuple, Span sp, ::std::vector<TypeRef> inner_types)
-    : m_span(mv$(sp))
-    , m_data(TypeData::make_Tuple({::std::move(inner_types)})) {
+    : mSpan(mv$(sp))
+    , mData(TypeData::make_Tuple({::std::move(inner_types)})) {
 }
 TypeRef::TypeRef(TagFunction, Span sp, AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::vector<TypeRef> args, bool is_variadic, TypeRef ret)
-    : m_span(mv$(sp))
-    , m_data(TypeData::make_Function({TypeFunction(mv$(hrbs), is_unsafe, abi, box$(ret), mv$(args), is_variadic)})) {
+    : mSpan(mv$(sp))
+    , mData(TypeData::make_Function({TypeFunction(mv$(hrbs), is_unsafe, abi, box$(ret), mv$(args), is_variadic)})) {
 }
 TypeRef::TypeRef(TagReference, Span sp, AST::LifetimeRef lft, bool is_mut, TypeRef inner_type)
-    : m_span(mv$(sp))
-    , m_data(TypeData::make_Borrow({::std::move(lft), is_mut, ::make_unique_ptr(mv$(inner_type))})) {
+    : mSpan(mv$(sp))
+    , mData(TypeData::make_Borrow({::std::move(lft), is_mut, ::make_unique_ptr(mv$(inner_type))})) {
 }
 TypeRef::TypeRef(TagPointer, Span sp, bool is_mut, TypeRef inner_type)
-    : m_span(mv$(sp))
-    , m_data(TypeData::make_Pointer({is_mut, ::make_unique_ptr(mv$(inner_type))})) {
+    : mSpan(mv$(sp))
+    , mData(TypeData::make_Pointer({is_mut, ::make_unique_ptr(mv$(inner_type))})) {
 }
 TypeRef::TypeRef(TagSizedArray, Span sp, TypeRef inner_type, ::std::shared_ptr<AST::ExprNode> size)
-    : m_span(mv$(sp))
-    , m_data(TypeData::make_Array({::make_unique_ptr(mv$(inner_type)), mv$(size)})) {
+    : mSpan(mv$(sp))
+    , mData(TypeData::make_Array({::make_unique_ptr(mv$(inner_type)), mv$(size)})) {
 }
 TypeRef::TypeRef(TagUnsizedArray, Span sp, TypeRef inner_type)
-    : m_span(mv$(sp))
-    , m_data(TypeData::make_Slice({::make_unique_ptr(mv$(inner_type))})) {
+    : mSpan(mv$(sp))
+    , mData(TypeData::make_Slice({::make_unique_ptr(mv$(inner_type))})) {
 }
 TypeRef::TypeRef(TagArg, Span sp, RcString name, unsigned int binding)
-    : m_span(mv$(sp))
-    , m_data(TypeData::make_Generic({name, binding})) {
+    : mSpan(mv$(sp))
+    , mData(TypeData::make_Generic({name, binding})) {
 }
 TypeRef::TypeRef(Span sp, RcString name, unsigned int binding)
     : TypeRef(TagArg(), mv$(sp), mv$(name), binding) {
 }
 TypeRef::TypeRef(Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<AST::LifetimeRef> lifetimes)
-    : m_span(mv$(sp))
-    , m_data(TypeData::make_TraitObject({::std::move(traits), mv$(lifetimes)})) {
+    : mSpan(mv$(sp))
+    , mData(TypeData::make_TraitObject({::std::move(traits), mv$(lifetimes)})) {
 }

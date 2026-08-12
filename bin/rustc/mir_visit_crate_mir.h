@@ -10,8 +10,8 @@ namespace MIR {
         typedef ::std::function<void(const StaticTraitResolve& resolve, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& expr, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type)> cb_t;
 
     private:
-        StaticTraitResolve m_resolve;
-        cb_t m_cb;
+        StaticTraitResolve mResolve;
+        cb_t cb;
 
     public:
         OuterVisitor(const ::HIR::Crate& crate, cb_t cb);

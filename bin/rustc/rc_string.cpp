@@ -5,15 +5,15 @@
 #include <algorithm> // std::max
 
 RcString::RcString(const char* s, size_t len)
-    : m_ptr(nullptr)
+    : ptr(nullptr)
 {
     if (len > 0) {
         size_t nwords = (len + 1 + sizeof(unsigned int) - 1) / sizeof(unsigned int);
-        m_ptr = reinterpret_cast<Inner*>(malloc(sizeof(Inner) + (nwords - 1) * sizeof(unsigned int)));
-        m_ptr->refcount = 1;
-        m_ptr->size = static_cast<unsigned>(len);
-        m_ptr->ordering = 0;
-        char* data_mut = reinterpret_cast<char*>(m_ptr->data);
+        ptr = reinterpret_cast<Inner*>(malloc(sizeof(Inner) + (nwords - 1) * sizeof(unsigned int)));
+        ptr->refcount = 1;
+        ptr->size = static_cast<unsigned>(len);
+        ptr->ordering = 0;
+        char* data_mut = reinterpret_cast<char*>(ptr->data);
         for (unsigned int j = 0; j < len; j++) {
             data_mut[j] = s[j];
         }
@@ -22,13 +22,13 @@ RcString::RcString(const char* s, size_t len)
 }
 
 RcString::~RcString() {
-    if (m_ptr) {
-        m_ptr->refcount -= 1;
+    if (ptr) {
+        ptr->refcount -= 1;
         //::std::cout << "RcString(" << m_ptr << " \"" << *this << "\") - " << *m_ptr << " refs left (drop)" << ::std::endl;
-        if (m_ptr->refcount == 0) {
-            free(m_ptr);
+        if (ptr->refcount == 0) {
+            free(ptr);
         }
-        m_ptr = nullptr;
+        ptr = nullptr;
     }
 }
 
@@ -45,7 +45,7 @@ Ordering RcString::ord(const char* s, size_t len) const {
 }
 
 Ordering RcString::ord(const char* s) const {
-    if (m_ptr == nullptr) {
+    if (ptr == nullptr) {
         return (*s == '\0' ? OrdEqual : OrdLess);
     }
 
@@ -253,7 +253,7 @@ RcString RcString::new_interned(const char* s, size_t len) {
     auto ret = RcStringInternedStrings->lookup_or_add(StringView{s, len});
     // Set interned and invalidate the cache if an insert happened
     if (ret.second) {
-        ret.first->m_ptr->ordering = 1;
+        ret.first->ptr->ordering = 1;
         RcStringInternedOrderingValid = false;
     }
     //assert( ret.first->ord(s, len) == 0 );
@@ -267,11 +267,11 @@ Ordering RcString::ord_interned(const RcString& s) const {
         unsigned i = 1;
         assert(RcStringInternedStrings);
         for (auto& e : *RcStringInternedStrings) {
-            e.m_ptr->ordering = i++;
+            e.ptr->ordering = i++;
         }
         RcStringInternedOrderingValid = true;
     }
-    return ::ord(this->m_ptr->ordering, s.m_ptr->ordering);
+    return ::ord(this->ptr->ordering, s.ptr->ordering);
 }
 
 size_t std::hash<RcString>::operator()(const RcString& s) const noexcept {
@@ -285,7 +285,7 @@ size_t std::hash<RcString>::operator()(const RcString& s) const noexcept {
 }
 
 RcString::RcString()
-    : m_ptr(nullptr) {
+    : ptr(nullptr) {
 }
 RcString::RcString(const char* s)
     : RcString(s, ::std::strlen(s)) {
@@ -294,21 +294,21 @@ RcString::RcString(const ::std::string& s)
     : RcString(s.data(), s.size()) {
 }
 RcString::RcString(const RcString& x)
-    : m_ptr(x.m_ptr) {
-    if (m_ptr) {
-        m_ptr->refcount += 1;
+    : ptr(x.ptr) {
+    if (ptr) {
+        ptr->refcount += 1;
     }
 }
 RcString::RcString(RcString&& x)
-    : m_ptr(x.m_ptr) {
-    x.m_ptr = nullptr;
+    : ptr(x.ptr) {
+    x.ptr = nullptr;
 }
 RcString& RcString::operator=(const RcString& x) {
     if (&x != this) {
         this->~RcString();
-        m_ptr = x.m_ptr;
-        if (m_ptr) {
-            m_ptr->refcount += 1;
+        ptr = x.ptr;
+        if (ptr) {
+            ptr->refcount += 1;
         }
     }
     return *this;
@@ -316,14 +316,14 @@ RcString& RcString::operator=(const RcString& x) {
 RcString& RcString::operator=(RcString&& x) {
     if (&x != this) {
         this->~RcString();
-        m_ptr = x.m_ptr;
-        x.m_ptr = nullptr;
+        ptr = x.ptr;
+        x.ptr = nullptr;
     }
     return *this;
 }
 const char* RcString::c_str() const {
-    if (m_ptr) {
-        return reinterpret_cast<const char*>(m_ptr->data);
+    if (ptr) {
+        return reinterpret_cast<const char*>(ptr->data);
     } else {
         return "";
     }
@@ -333,11 +333,11 @@ char RcString::back() const {
     return *(c_str() + size() - 1);
 }
 Ordering RcString::ord(const RcString& s) const {
-    if (m_ptr == s.m_ptr) {
+    if (ptr == s.ptr) {
         return OrdEqual;
     }
-    if (!m_ptr || !s.m_ptr) {
-        return m_ptr ? OrdGreater : OrdLess;
+    if (!ptr || !s.ptr) {
+        return ptr ? OrdGreater : OrdLess;
     }
     // If both are interned, then use stored sorting
     if (is_interned() && s.is_interned()) {
@@ -351,7 +351,7 @@ bool RcString::operator==(const RcString& s) const {
     }
     // If both are interned, then just compare pointers
     if (is_interned() && s.is_interned()) {
-        return m_ptr == s.m_ptr;
+        return ptr == s.ptr;
     }
     return this->ord(s) == OrdEqual;
 }

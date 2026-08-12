@@ -21,9 +21,9 @@ namespace AST {
         };
 
     private:
-        ::std::shared_ptr<AST::Path> m_in_path;          // Only valid when
-        ::std::shared_ptr<AST::AbsolutePath> m_vis_path; // if null, then global
-        Ty m_ty;
+        ::std::shared_ptr<AST::Path> inPath;          // Only valid when
+        ::std::shared_ptr<AST::AbsolutePath> visPath; // if null, then global
+        Ty mTy;
 
         Visibility();
 
@@ -38,11 +38,11 @@ namespace AST {
         friend std::ostream& operator<<(::std::ostream& os, const Visibility& x);
 
         Ty ty() const {
-            return m_ty;
+            return mTy;
         }
 
         bool is_global() const {
-            return m_ty == Ty::Pub;
+            return mTy == Ty::Pub;
         }
 
         const AST::Path& in_path() const;

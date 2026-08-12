@@ -7,13 +7,13 @@
 
 namespace {
     class Cloner: public ::MIR::Cloner {
-        const ::StaticTraitResolve& m_resolve;
+        const ::StaticTraitResolve& mResolve;
         const TransParams& params;
 
     public:
         Cloner(const Span& sp, const ::StaticTraitResolve& resolve, const TransParams& params)
-            : ::MIR::Cloner(sp, resolve.m_crate.m_types)
-            , m_resolve(resolve)
+            : ::MIR::Cloner(sp, resolve.crate.types)
+            , mResolve(resolve)
             , params(params)
         {
         }
@@ -21,11 +21,11 @@ namespace {
         const HIR::TypeData* value_generic_type(HIR::GenericRef g) const override {
             switch (g.group()) {
                 case 0:
-                    ASSERT_BUG(sp, g.idx() < m_resolve.impl_generics().m_values.size(), "Value generic " << g << " out of bounds in impl: " << m_resolve.impl_generics().m_values.size());
-                    return m_resolve.impl_generics().m_values.at(g.idx()).m_type;
+                    ASSERT_BUG(sp, g.idx() < mResolve.impl_generics().values.size(), "Value generic " << g << " out of bounds in impl: " << mResolve.impl_generics().values.size());
+                    return mResolve.impl_generics().values.at(g.idx()).mType;
                 case 1:
-                    ASSERT_BUG(sp, g.idx() < m_resolve.item_generics().m_values.size(), "Value generic " << g << " out of bounds in fcn: " << m_resolve.item_generics().m_values.size());
-                    return m_resolve.item_generics().m_values.at(g.idx()).m_type;
+                    ASSERT_BUG(sp, g.idx() < mResolve.item_generics().values.size(), "Value generic " << g << " out of bounds in fcn: " << mResolve.item_generics().values.size());
+                    return mResolve.item_generics().values.at(g.idx()).mType;
                 default:
                     BUG(Span(), "");
             }
@@ -36,7 +36,7 @@ namespace {
         }
 
         const StaticTraitResolve* resolve() const override {
-            return &m_resolve;
+            return &mResolve;
         }
     };
 }
@@ -111,81 +111,81 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
             out.add_type(type, false);
             auto name = RcString::new_interned(FMT("ConstEvalMonomorph#" << count));
             count++;
-            auto p = ::HIR::SimplePath(crate.m_crate_name, {name});
+            auto p = ::HIR::SimplePath(crate.crateName, {name});
             auto ent = std::make_unique<HIR::VisEnt<HIR::ValueItem>>(HIR::VisEnt<HIR::ValueItem>{HIR::Publicity::new_global(), HIR::ValueItem(::HIR::Static(HIR::Linkage(), false, std::move(type), HIR::ExprPtr()))});
 
             {
                 auto& s = ent->ent.as_Static();
-                s.m_value_generated = true;
-                s.m_value_res = std::move(value);
-                s.m_save_literal = false;
+                s.valueGenerated = true;
+                s.valueRes = std::move(value);
+                s.saveLiteral = false;
                 added.push_back(std::make_pair(p, &s));
             }
-            const_cast<HIR::Module&>(crate.m_root_module).m_value_items.insert(std::make_pair(name, std::move(ent)));
+            const_cast<HIR::Module&>(crate.rootModule).valueItems.insert(std::make_pair(name, std::move(ent)));
             return p;
         }
     } nvs{list, crate};
 
     // Also do constants and statics (stored in where?)
     // - NOTE: Done in reverse order, because consteval needs used constants to be evaluated
-    for (auto& ent : reverse(list.m_constants)) {
+    for (auto& ent : reverse(list.constants)) {
         const auto& path = ent.first;
         const auto& pp = ent.second->pp;
         const auto& c = *ent.second->ptr;
         TRACE_FUNCTION_FR("CONSTANT " << path, "CONSTANT " << path);
-        auto ty = pp.monomorph(resolve, c.m_type);
+        auto ty = pp.monomorph(resolve, c.mType);
         // 1. Evaluate the constant
         auto eval = ::HIR::Evaluator{pp.sp, crate, nvs};
-        eval.resolve.set_both_generics_raw(pp.gdef_impl, &c.m_params);
-        MonomorphState ms(crate.m_types);
+        eval.resolve.set_both_generics_raw(pp.gdef_impl, &c.mParams);
+        MonomorphState ms(crate.types);
         ms.self_ty = pp.self_type;
         ms.pp_impl = &pp.pp_impl;
         ms.pp_method = &pp.pp_method;
         DEBUG("ms = " << ms);
         try {
-            auto new_lit = eval.evaluate_constant(path, c.m_value, ::std::move(ty), ::std::move(ms));
+            auto new_lit = eval.evaluate_constant(path, c.mValue, ::std::move(ty), ::std::move(ms));
             // 2. Store evaluated HIR::Literal in c.m_monomorph_cache
-            c.m_monomorph_cache.insert(::std::make_pair(path.clone(), ::std::move(new_lit)));
+            c.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(new_lit)));
         } catch (...) {
             // Deferred - no update
             BUG(Span(), "Exception thrown during evaluation of: " << path);
         }
     }
 
-    for (auto& ent : list.m_statics) {
+    for (auto& ent : list.statics) {
         const auto& path = ent.first;
         const auto& pp = ent.second->pp;
         const auto& s = *ent.second->ptr;
 
-        if (!s.m_params.is_generic()) {
+        if (!s.mParams.is_generic()) {
             continue;
         }
 
         TRACE_FUNCTION_FR("STATIC " << path, "STATIC " << path);
-        auto ty = pp.monomorph(resolve, s.m_type);
+        auto ty = pp.monomorph(resolve, s.mType);
         // 1. Evaluate the constant
         auto eval = ::HIR::Evaluator{pp.sp, crate, nvs};
-        eval.resolve.set_both_generics_raw(pp.gdef_impl, &s.m_params);
-        MonomorphState ms(crate.m_types);
+        eval.resolve.set_both_generics_raw(pp.gdef_impl, &s.mParams);
+        MonomorphState ms(crate.types);
         ms.self_ty = pp.self_type;
         ms.pp_impl = &pp.pp_impl;
         ms.pp_method = &pp.pp_method;
         DEBUG("ms = " << ms);
         try {
-            auto new_lit = eval.evaluate_constant(path, s.m_value, ::std::move(ty), ::std::move(ms));
+            auto new_lit = eval.evaluate_constant(path, s.mValue, ::std::move(ty), ::std::move(ms));
             // 2. Store evaluated HIR::Literal in s.m_monomorph_cache
-            s.m_monomorph_cache.insert(::std::make_pair(path.clone(), ::std::move(new_lit)));
+            s.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(new_lit)));
         } catch (...) {
             // Deferred - no update
             BUG(Span(), "Exception thrown during evaluation of: " << path);
         }
     }
 
-    for (auto& fcn_ent : list.m_functions) {
+    for (auto& fcn_ent : list.functions) {
         const auto& fcn = *fcn_ent.second->ptr;
         // Trait methods (which are the only case where `Self` can exist in the argument list at this stage) always need to be monomorphised.
-        bool is_method = (fcn.m_args.size() > 0 && visit_ty_with(fcn.m_args[0].second, [&](const auto& x) {
-            return x == crate.m_types.self();
+        bool is_method = (fcn.mArgs.size() > 0 && visit_ty_with(fcn.mArgs[0].second, [&](const auto& x) {
+            return x == crate.types.self();
         }));
         bool monomorph_needed = fcn_ent.second->pp.has_types() || is_method;
 
@@ -193,20 +193,20 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
             const auto& path = fcn_ent.first;
             const auto& pp = fcn_ent.second->pp;
             TRACE_FUNCTION_FR("FUNCTION " << path, "FUNCTION " << path);
-            ASSERT_BUG(Span(), fcn.m_code.m_mir, "No code for " << path);
+            ASSERT_BUG(Span(), fcn.mCode.mir, "No code for " << path);
 
             // TODO: Get the item params too
             if (fcn_ent.second->pp.pp_impl.has_params()) {
                 assert(pp.gdef_impl);
             }
-            resolve.set_both_generics_raw(pp.gdef_impl, &fcn.m_params);
+            resolve.set_both_generics_raw(pp.gdef_impl, &fcn.mParams);
 
-            auto mir = TransMonomorphise(resolve, fcn_ent.second->pp, fcn.m_code.m_mir);
+            auto mir = TransMonomorphise(resolve, fcn_ent.second->pp, fcn.mCode.mir);
 
             // TODO: Should these be moved to their own pass? Potentially not, the extra pass should just be an inlining optimise pass
-            auto ret_type = pp.monomorph(resolve, fcn.m_return);
+            auto ret_type = pp.monomorph(resolve, fcn.returnType);
             ::HIR::Function::args_t args;
-            for (const auto& a : fcn.m_args) {
+            for (const auto& a : fcn.mArgs) {
                 args.push_back(::std::make_pair(::HIR::Pattern{}, pp.monomorph(resolve, a.second)));
             }
 
@@ -231,7 +231,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
     }
 
     for (auto& v : nvs.added) {
-        auto* o = list.add_static(crate.m_types, HIR::Path(v.first));
+        auto* o = list.add_static(crate.types, HIR::Path(v.first));
         ASSERT_BUG(Span(), o, "Generated static " << v.first << " already in TransList?");
         o->ptr = v.second;
     }

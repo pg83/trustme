@@ -4,144 +4,144 @@
 #include "ast_expr.h" // For definition of ExprNode
 
 InterpolatedFragment::~InterpolatedFragment() {
-    if (m_ptr) {
-        switch (m_type) {
+    if (ptr) {
+        switch (mType) {
             case InterpolatedFragment::TT:
-                delete reinterpret_cast<TokenTree*>(m_ptr);
+                delete reinterpret_cast<TokenTree*>(ptr);
                 break;
             case InterpolatedFragment::PAT:
-                delete reinterpret_cast<AST::Pattern*>(m_ptr);
+                delete reinterpret_cast<AST::Pattern*>(ptr);
                 break;
             case InterpolatedFragment::PATH:
-                delete reinterpret_cast<AST::Path*>(m_ptr);
+                delete reinterpret_cast<AST::Path*>(ptr);
                 break;
             case InterpolatedFragment::TYPE:
-                delete reinterpret_cast<TypeRef*>(m_ptr);
+                delete reinterpret_cast<TypeRef*>(ptr);
                 break;
             case InterpolatedFragment::EXPR:
             case InterpolatedFragment::STMT:
             case InterpolatedFragment::BLOCK:
-                delete reinterpret_cast<AST::ExprNode*>(m_ptr);
+                delete reinterpret_cast<AST::ExprNode*>(ptr);
                 break;
             case InterpolatedFragment::META:
-                delete reinterpret_cast<AST::Attribute*>(m_ptr);
+                delete reinterpret_cast<AST::Attribute*>(ptr);
                 break;
             case InterpolatedFragment::STMT_ITEM:
             case InterpolatedFragment::ITEM:
-                delete reinterpret_cast<AST::Named<AST::Item>*>(m_ptr);
+                delete reinterpret_cast<AST::Named<AST::Item>*>(ptr);
                 break;
             case InterpolatedFragment::VIS:
-                delete reinterpret_cast<AST::Visibility*>(m_ptr);
+                delete reinterpret_cast<AST::Visibility*>(ptr);
                 break;
         }
     }
 }
 
 InterpolatedFragment::InterpolatedFragment(InterpolatedFragment&& x)
-    : m_type(x.m_type)
+    : mType(x.mType)
 {
-    m_ptr = x.m_ptr, x.m_ptr = nullptr;
+    ptr = x.ptr, x.ptr = nullptr;
 }
 
 InterpolatedFragment& InterpolatedFragment::operator=(InterpolatedFragment&& x) {
-    m_type = x.m_type;
-    m_ptr = x.m_ptr, x.m_ptr = nullptr;
+    mType = x.mType;
+    ptr = x.ptr, x.ptr = nullptr;
     return *this;
 }
 
 InterpolatedFragment::InterpolatedFragment(InterpolatedFragment::Type type, AST::ExprNode* ptr)
-    : m_type(type)
-    , m_ptr(ptr)
+    : mType(type)
+    , ptr(ptr)
 {
 }
 
 InterpolatedFragment::InterpolatedFragment(AST::Attribute v)
-    : m_type(InterpolatedFragment::META)
-    , m_ptr(new AST::Attribute(mv$(v)))
+    : mType(InterpolatedFragment::META)
+    , ptr(new AST::Attribute(mv$(v)))
 {
 }
 
 InterpolatedFragment::InterpolatedFragment(::AST::Named<::AST::Item> v)
-    : m_type(InterpolatedFragment::ITEM)
-    , m_ptr(new ::AST::Named<::AST::Item>(mv$(v)))
+    : mType(InterpolatedFragment::ITEM)
+    , ptr(new ::AST::Named<::AST::Item>(mv$(v)))
 {
 }
 
 InterpolatedFragment::InterpolatedFragment(InterpolatedFragment::Type type, ::AST::Named<::AST::Item> v)
-    : m_type(type)
-    , m_ptr(new ::AST::Named<::AST::Item>(mv$(v)))
+    : mType(type)
+    , ptr(new ::AST::Named<::AST::Item>(mv$(v)))
 {
     assert(type == InterpolatedFragment::STMT_ITEM || type == InterpolatedFragment::ITEM);
 }
 
 InterpolatedFragment::InterpolatedFragment(TokenTree v)
-    : m_type(InterpolatedFragment::TT)
-    , m_ptr(new TokenTree(mv$(v)))
+    : mType(InterpolatedFragment::TT)
+    , ptr(new TokenTree(mv$(v)))
 {
 }
 
 InterpolatedFragment::InterpolatedFragment(AST::Path v)
-    : m_type(InterpolatedFragment::PATH)
-    , m_ptr(new AST::Path(mv$(v)))
+    : mType(InterpolatedFragment::PATH)
+    , ptr(new AST::Path(mv$(v)))
 {
 }
 
 InterpolatedFragment::InterpolatedFragment(AST::Pattern v)
-    : m_type(InterpolatedFragment::PAT)
-    , m_ptr(new AST::Pattern(mv$(v)))
+    : mType(InterpolatedFragment::PAT)
+    , ptr(new AST::Pattern(mv$(v)))
 {
 }
 
 InterpolatedFragment::InterpolatedFragment(TypeRef v)
-    : m_type(InterpolatedFragment::TYPE)
-    , m_ptr(new TypeRef(mv$(v)))
+    : mType(InterpolatedFragment::TYPE)
+    , ptr(new TypeRef(mv$(v)))
 {
 }
 
 InterpolatedFragment::InterpolatedFragment(AST::Visibility v)
-    : m_type(InterpolatedFragment::VIS)
-    , m_ptr(new AST::Visibility(mv$(v)))
+    : mType(InterpolatedFragment::VIS)
+    , ptr(new AST::Visibility(mv$(v)))
 {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, InterpolatedFragment const& x) {
-    switch (x.m_type) {
+    switch (x.mType) {
         case InterpolatedFragment::TT:
             os << "tt[" << x.as_tt() << "]";
             break;
         case InterpolatedFragment::PAT:
-            os << "pat[" << *reinterpret_cast<AST::Pattern*>(x.m_ptr) << "]";
+            os << "pat[" << *reinterpret_cast<AST::Pattern*>(x.ptr) << "]";
             break;
         case InterpolatedFragment::PATH:
-            os << "path[" << *reinterpret_cast<AST::Path*>(x.m_ptr) << "]";
+            os << "path[" << *reinterpret_cast<AST::Path*>(x.ptr) << "]";
             break;
         case InterpolatedFragment::TYPE:
-            os << "type[" << *reinterpret_cast<TypeRef*>(x.m_ptr) << "]";
+            os << "type[" << *reinterpret_cast<TypeRef*>(x.ptr) << "]";
             break;
 
         case InterpolatedFragment::EXPR:
-            os << "expr[" << *reinterpret_cast<const AST::ExprNode*>(x.m_ptr) << "]";
+            os << "expr[" << *reinterpret_cast<const AST::ExprNode*>(x.ptr) << "]";
             break;
         case InterpolatedFragment::STMT:
-            os << "stmt[" << *reinterpret_cast<const AST::ExprNode*>(x.m_ptr) << "]";
+            os << "stmt[" << *reinterpret_cast<const AST::ExprNode*>(x.ptr) << "]";
             break;
         case InterpolatedFragment::STMT_ITEM: {
-            const auto& named_item = *reinterpret_cast<const AST::Named<AST::Item>*>(x.m_ptr);
+            const auto& named_item = *reinterpret_cast<const AST::Named<AST::Item>*>(x.ptr);
             os << "stmt-item[" << named_item.data.tag_str() << "(" << named_item.name << ")]";
         } break;
         case InterpolatedFragment::BLOCK:
-            os << "block[" << *reinterpret_cast<const AST::ExprNode*>(x.m_ptr) << "]";
+            os << "block[" << *reinterpret_cast<const AST::ExprNode*>(x.ptr) << "]";
             break;
 
         case InterpolatedFragment::META:
-            os << "meta[" << *reinterpret_cast<const AST::Attribute*>(x.m_ptr) << "]";
+            os << "meta[" << *reinterpret_cast<const AST::Attribute*>(x.ptr) << "]";
             break;
         case InterpolatedFragment::ITEM: {
-            const auto& named_item = *reinterpret_cast<const AST::Named<AST::Item>*>(x.m_ptr);
+            const auto& named_item = *reinterpret_cast<const AST::Named<AST::Item>*>(x.ptr);
             os << "item[" << named_item.data.tag_str() << "(" << named_item.name << ")]";
         } break;
         case InterpolatedFragment::VIS:
-            os << "vis[" << *reinterpret_cast<const AST::Visibility*>(x.m_ptr) << "]";
+            os << "vis[" << *reinterpret_cast<const AST::Visibility*>(x.ptr) << "]";
             break;
     }
     return os;
@@ -150,10 +150,10 @@ InterpolatedFragment::InterpolatedFragment(AST::Visibility v)
 // :vis
 
 TokenTree& InterpolatedFragment::as_tt() {
-    assert(m_type == TT);
-    return *reinterpret_cast<TokenTree*>(m_ptr);
+    assert(mType == TT);
+    return *reinterpret_cast<TokenTree*>(ptr);
 }
 const TokenTree& InterpolatedFragment::as_tt() const {
-    assert(m_type == TT);
-    return *reinterpret_cast<TokenTree*>(m_ptr);
+    assert(mType == TT);
+    return *reinterpret_cast<TokenTree*>(ptr);
 }

@@ -14,10 +14,10 @@ void MIR::OuterVisitor::visit_type(::HIR::TypeRef& ty) {
         DEBUG("Array size " << ty);
         if (auto* se1 = e->size.opt_Unevaluated()) {
             if (auto* se = se1->opt_Unevaluated()) {
-                m_cb(m_resolve, ::HIR::ItemPath(""), *(*se)->expr, {}, m_resolve.m_crate.m_types.primitive(::HIR::CoreType::Usize));
+                cb(mResolve, ::HIR::ItemPath(""), *(*se)->expr, {}, mResolve.crate.types.primitive(::HIR::CoreType::Usize));
             }
         }
-        ty = m_resolve.m_crate.m_types.intern(mv$(data));
+        ty = mResolve.crate.types.intern(mv$(data));
     } else {
         ::HIR::Visitor::visit_type(ty);
     }
@@ -26,87 +26,87 @@ void MIR::OuterVisitor::visit_type(::HIR::TypeRef& ty) {
 void MIR::OuterVisitor::visit_constgeneric(::HIR::ConstGeneric& value) {
     if (auto* unevaluated = value.opt_Unevaluated()) {
         auto& expr = *(**unevaluated).expr;
-        m_cb(m_resolve, ::HIR::ItemPath(""), expr, {}, expr->m_res_type);
+        cb(mResolve, ::HIR::ItemPath(""), expr, {}, expr->resType);
     }
 }
 
 void MIR::OuterVisitor::visit_function(::HIR::ItemPath p, ::HIR::Function& item) {
-    auto _ = this->m_resolve.set_item_generics(item.m_params);
-    if (item.m_code || item.m_code.m_mir) {
+    auto _ = this->mResolve.set_item_generics(item.mParams);
+    if (item.mCode || item.mCode.mir) {
         DEBUG("Function code " << p);
 
         ::HIR::TypeRef tmp;
-        const auto& sp = item.m_code ? item.m_code->span() : Span();
-        const auto& ret_ty = m_resolve.fix_trait_default_return(sp, p, item.m_return, tmp);
-        m_cb(m_resolve, p, item.m_code, item.m_args, ret_ty);
+        const auto& sp = item.mCode ? item.mCode->span() : Span();
+        const auto& ret_ty = mResolve.fix_trait_default_return(sp, p, item.returnType, tmp);
+        cb(mResolve, p, item.mCode, item.mArgs, ret_ty);
     }
 }
 
 void MIR::OuterVisitor::visit_static(::HIR::ItemPath p, ::HIR::Static& item) {
-    auto _ = this->m_resolve.set_item_generics(item.m_params);
-    if (item.m_value) {
+    auto _ = this->mResolve.set_item_generics(item.mParams);
+    if (item.mValue) {
         DEBUG("`static` value " << p);
-        m_cb(m_resolve, p, item.m_value, {}, item.m_type);
+        cb(mResolve, p, item.mValue, {}, item.mType);
     }
 }
 
 void MIR::OuterVisitor::visit_constant(::HIR::ItemPath p, ::HIR::Constant& item) {
-    auto _ = this->m_resolve.set_item_generics(item.m_params);
-    if (item.m_value) {
+    auto _ = this->mResolve.set_item_generics(item.mParams);
+    if (item.mValue) {
         DEBUG("`const` value " << p);
-        m_cb(m_resolve, p, item.m_value, {}, item.m_type);
+        cb(mResolve, p, item.mValue, {}, item.mType);
     }
 }
 
 void MIR::OuterVisitor::visit_struct(::HIR::ItemPath p, ::HIR::Struct& item) {
-    auto _ = this->m_resolve.set_impl_generics(item.m_struct_markings.dst_type, item.m_params);
+    auto _ = this->mResolve.set_impl_generics(item.structMarkings.dst_type, item.mParams);
     ::HIR::Visitor::visit_struct(p, item);
 }
 
 void MIR::OuterVisitor::visit_union(::HIR::ItemPath p, ::HIR::Union& item) {
-    auto _ = this->m_resolve.set_impl_generics(MetadataType::Unknown, item.m_params);
+    auto _ = this->mResolve.set_impl_generics(MetadataType::Unknown, item.mParams);
     ::HIR::Visitor::visit_union(p, item);
 }
 
 void MIR::OuterVisitor::visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) {
-    auto _ = this->m_resolve.set_impl_generics(MetadataType::None, item.m_params);
+    auto _ = this->mResolve.set_impl_generics(MetadataType::None, item.mParams);
 
-    if (auto* e = item.m_data.opt_Value()) {
-        auto enum_type = m_resolve.m_crate.m_types.primitive(::HIR::Enum::get_repr_type(item.m_tag_repr));
+    if (auto* e = item.mData.opt_Value()) {
+        auto enum_type = mResolve.crate.types.primitive(::HIR::Enum::get_repr_type(item.tagRepr));
 
         for (auto& var : e->variants) {
             if (var.expr) {
-                m_cb(m_resolve, p + var.name, var.expr, {}, enum_type);
+                cb(mResolve, p + var.name, var.expr, {}, enum_type);
             }
         }
     }
 }
 
 void MIR::OuterVisitor::visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) {
-    auto _ = this->m_resolve.set_impl_generics(MetadataType::TraitObject, item.m_params);
+    auto _ = this->mResolve.set_impl_generics(MetadataType::TraitObject, item.mParams);
     ::HIR::Visitor::visit_trait(p, item);
 }
 
 void MIR::OuterVisitor::visit_type_impl(::HIR::TypeImpl& impl) {
-    auto _ = this->m_resolve.set_impl_generics(impl.m_type, impl.m_params);
+    auto _ = this->mResolve.set_impl_generics(impl.mType, impl.mParams);
     ::HIR::Visitor::visit_type_impl(impl);
 }
 
 void MIR::OuterVisitor::visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) {
-    auto _ = this->m_resolve.set_item_generics(item.m_params);
+    auto _ = this->mResolve.set_item_generics(item.mParams);
     ::HIR::Visitor::visit_inherent_type(p, item);
 }
 
 void MIR::OuterVisitor::visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) {
-    auto _ = this->m_resolve.set_impl_generics(impl.m_type, impl.m_params);
+    auto _ = this->mResolve.set_impl_generics(impl.mType, impl.mParams);
     ::HIR::Visitor::visit_trait_impl(trait_path, impl);
 }
 
 namespace MIR {
 
 OuterVisitor::OuterVisitor(const ::HIR::Crate& crate, cb_t cb)
-    : HIR::Visitor(nullptr, crate.m_types)
-    , m_resolve(crate)
-    , m_cb(cb) {
+    : HIR::Visitor(nullptr, crate.types)
+    , mResolve(crate)
+    , cb(cb) {
 }
 }

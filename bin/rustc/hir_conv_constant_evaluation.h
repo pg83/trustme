@@ -28,7 +28,7 @@ namespace HIR {
         };
 
         class CsePtr {
-            ::MIR::eval::CallStackEntry* m_inner;
+            ::MIR::eval::CallStackEntry* inner;
 
         public:
             ~CsePtr();
@@ -43,11 +43,11 @@ namespace HIR {
             CsePtr& operator=(CsePtr&& x);
 
             ::MIR::eval::CallStackEntry* operator->() {
-                return m_inner;
+                return inner;
             }
 
             ::MIR::eval::CallStackEntry& operator*() {
-                return *m_inner;
+                return *inner;
             }
         };
 

@@ -7,7 +7,7 @@
 extern bool monomorphise_pathparams_needed(const ::HIR::PathParams& tpl, bool ignore_lifetimes = false);
 
 static inline bool monomorphise_genericpath_needed(const ::HIR::GenericPath& tpl, bool ignore_lifetimes = false) {
-    return monomorphise_pathparams_needed(tpl.m_params, ignore_lifetimes);
+    return monomorphise_pathparams_needed(tpl.mParams, ignore_lifetimes);
 }
 
 extern bool monomorphise_path_needed(const ::HIR::Path& tpl, bool ignore_lifetimes = false);
@@ -16,7 +16,7 @@ extern bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lif
 
 class Monomorphiser: virtual public HIR::TrackHrbStack {
 protected:
-    HIR::TypeInterner& m_types;
+    HIR::TypeInterner& types;
 
 private:
     const HIR::Crate* consteval_crate;
@@ -27,7 +27,7 @@ public:
 
     virtual ~Monomorphiser() = default;
 
-    HIR::TypeInterner& type_interner() const { return m_types; }
+    HIR::TypeInterner& type_interner() const { return types; }
 
     void set_consteval_state(const HIR::Crate& crate, HIR::ItemPath ip);
 
@@ -68,7 +68,7 @@ public:
     using Monomorphiser::Monomorphiser;
 
     ::HIR::TypeRef get_type(const Span& sp, const ::HIR::GenericRef& ty) const override {
-        return m_types.generic(ty.name, ty.binding);
+        return types.generic(ty.name, ty.binding);
     }
 
     ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& val) const override {

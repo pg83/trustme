@@ -22,10 +22,10 @@ namespace AST {
             REF,
             MUTREF,
         };
-        Ident m_name;
-        Type m_type;
-        bool m_mutable;
-        unsigned int m_slot;
+        Ident mName;
+        Type mType;
+        bool isMutable;
+        unsigned int slot;
 
         PatternBinding();
 
@@ -36,7 +36,7 @@ namespace AST {
         PatternBinding& operator=(PatternBinding&& x) = default;
 
         bool is_valid() const {
-            return m_name.name != "";
+            return mName.name != "";
         }
     };
 
@@ -114,9 +114,9 @@ namespace AST {
         );
 
     private:
-        Span m_span;
-        std::vector<PatternBinding> m_bindings;
-        Data m_data;
+        Span mSpan;
+        std::vector<PatternBinding> mBindings;
+        Data mData;
 
     public:
         virtual ~Pattern();
@@ -169,34 +169,34 @@ namespace AST {
         Pattern(TagStruct, Span sp, Path path, ::std::vector<StructPatternEntry> sub_patterns, bool is_exhaustive);
 
         const Span& span() const {
-            return m_span;
+            return mSpan;
         }
 
         Pattern clone() const;
 
         // Accessors
         std::vector<PatternBinding>& bindings() {
-            return m_bindings;
+            return mBindings;
         }
 
         const std::vector<PatternBinding>& bindings() const {
-            return m_bindings;
+            return mBindings;
         }
 
         Data& data() {
-            return m_data;
+            return mData;
         }
 
         const Data& data() const {
-            return m_data;
+            return mData;
         }
 
         Path& path() {
-            return m_data.as_StructTuple().path;
+            return mData.as_StructTuple().path;
         }
 
         const Path& path() const {
-            return m_data.as_StructTuple().path;
+            return mData.as_StructTuple().path;
         }
 
         friend ::std::ostream& operator<<(::std::ostream& os, const Pattern& pat);

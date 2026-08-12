@@ -40,7 +40,7 @@ public: // ?? - Needed once, anymore?
         }
     };
 
-    ::std::vector<IVar> m_ivars;
+    ::std::vector<IVar> ivars;
 
     struct IVarValue {
         unsigned int alias;
@@ -53,17 +53,17 @@ public: // ?? - Needed once, anymore?
         }
     };
 
-    ::std::vector<IVarValue> m_values;
+    ::std::vector<IVarValue> values;
 
-    HIR::TypeInterner& m_types;
-    bool m_has_changed;
-    ::std::vector<::HIR::TypeRef> m_expand_stack;
+    HIR::TypeInterner& types;
+    bool hasChanged;
+    ::std::vector<::HIR::TypeRef> expandStack;
 
 public:
     explicit HMTypeInferrence(HIR::TypeInterner& types);
 
     bool peek_changed() const {
-        return m_has_changed;
+        return hasChanged;
     }
 
     bool take_changed();
@@ -94,7 +94,7 @@ public:
     void add_ivars_params(::HIR::PathParams& params);
 
     struct ResolvePlaceholders: public HIR::ResolvePlaceholders {
-        const HMTypeInferrence& m_parent;
+        const HMTypeInferrence& parent;
 
         ResolvePlaceholders(const HMTypeInferrence& parent);
 
@@ -147,15 +147,15 @@ private:
 class NextTraitGoalEvaluator;
 
 class TraitResolution: public TraitResolveCommon {
-    const HIR::SimplePath& m_lang_Deref;
-    const HMTypeInferrence& m_ivars;
+    const HIR::SimplePath& mLangDeref;
+    const HMTypeInferrence& ivars;
 
 public:
-    const ::HIR::SimplePath& m_vis_path;
+    const ::HIR::SimplePath& visPath;
 
 private:
-    const ::HIR::GenericPath* m_current_trait_path;
-    const ::HIR::Trait* m_current_trait_ptr;
+    const ::HIR::GenericPath* currentTraitPath;
+    const ::HIR::Trait* currentTraitPtr;
 
     // A legacy solver invocation only needs this stack while it is actively
     // resolving nested trait bounds.  The goal is canonicalised before it is
@@ -181,18 +181,18 @@ private:
         ) const;
     };
 
-    mutable ::std::vector<LegacyTraitGoal> m_legacy_trait_goal_stack;
-    mutable uint64_t m_fresh_impl_placeholder_counter = 0;
-    mutable ::std::map<std::string, HIR::TypeRef> m_eat_cache;
-    mutable ::std::vector<::HIR::TypeRef> m_eat_active_stack;
+    mutable ::std::vector<LegacyTraitGoal> legacyTraitGoalStack;
+    mutable uint64_t freshImplPlaceholderCounter = 0;
+    mutable ::std::map<std::string, HIR::TypeRef> eatCache;
+    mutable ::std::vector<::HIR::TypeRef> eatActiveStack;
     // Owned by the crate ObjPool.  TraitResolution only keeps a stable
     // pointer into the compiler-lifetime arena.
-    mutable NextTraitGoalEvaluator* m_next_solver = nullptr;
+    mutable NextTraitGoalEvaluator* nextSolver = nullptr;
     // Coherence probes use an isolated inference table, so overlap checks
     // cannot bind or append variables in the caller's type-checking context.
-    mutable HMTypeInferrence m_coherence_ivars;
-    mutable TraitResolution* m_coherence_resolve = nullptr;
-    ::std::function<void(const Span&, const ::HIR::TypeData*, const ::HIR::TypeData*)> m_inherent_type_constraint;
+    mutable HMTypeInferrence coherenceIvars;
+    mutable TraitResolution* coherenceResolve = nullptr;
+    ::std::function<void(const Span&, const ::HIR::TypeData*, const ::HIR::TypeData*)> inherentTypeConstraint;
 
 public:
     TraitResolution(const HMTypeInferrence& ivars, const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params, const ::HIR::SimplePath& vis_path, const ::HIR::GenericPath* current_trait);
@@ -201,32 +201,32 @@ public:
     void set_generic_context(const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params);
 
     void set_inherent_type_constraint(::std::function<void(const Span&, const ::HIR::TypeData*, const ::HIR::TypeData*)> constraint) {
-        m_inherent_type_constraint = mv$(constraint);
+        inherentTypeConstraint = mv$(constraint);
     }
 
     const ::HIR::GenericPath* current_trait_path() const {
-        return m_current_trait_path;
+        return currentTraitPath;
     }
 
     ::HIR::Compare compare_pp(const Span& sp, const ::HIR::PathParams& left, const ::HIR::PathParams& right) const;
 
     const ::HIR::TypeData* resolve_type(const ::HIR::TypeData* type) const {
-        return m_ivars.get_type(type);
+        return ivars.get_type(type);
     }
 
     ::HIR::Compare compare_ty(const Span& sp, const ::HIR::TypeData* left, const ::HIR::TypeData* right) const {
-        return left->compare_with_placeholders(sp, right, m_ivars.callback_resolve_infer());
+        return left->compare_with_placeholders(sp, right, ivars.callback_resolve_infer());
     }
 
     bool type_contains_ivars(const ::HIR::TypeData* type) const {
-        return m_ivars.type_contains_ivars(type, false);
+        return ivars.type_contains_ivars(type, false);
     }
 
     bool params_contain_ivars(const ::HIR::PathParams& params) const {
-        return m_ivars.pathparams_contain_ivars(params, false);
+        return ivars.pathparams_contain_ivars(params, false);
     }
 
-    void compact_ivars(HMTypeInferrence& m_ivars);
+    void compact_ivars(HMTypeInferrence& ivars);
 
     bool has_associated_type(const ::HIR::TypeData* ty) const;
 

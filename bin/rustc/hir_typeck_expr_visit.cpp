@@ -5,10 +5,10 @@
 #include "hir_expr_state.h"
 
 void TypecheckCode(const typeck::ModuleState& ms, t_args& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr) {
-    if (expr.m_state->stage < ::HIR::ExprState::Stage::Typecheck) {
+    if (expr.state->stage < ::HIR::ExprState::Stage::Typecheck) {
         //Typecheck_Code_Simple(ms, args, result_type, expr);
         TypecheckCodeCS(ms, args, result_type, expr);
-        expr.m_state->stage = ::HIR::ExprState::Stage::Typecheck;
+        expr.state->stage = ::HIR::ExprState::Stage::Typecheck;
     }
 }
 
@@ -21,19 +21,19 @@ namespace typeck {
             static const ::HIR::Module& get_mod_for_ip(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip) {
                 if (ip.parent) {
                     const auto& mod = H::get_mod_for_ip(crate, *ip.parent);
-                    return mod.m_mod_items.at(ip.name)->ent.as_Module();
+                    return mod.modItems.at(ip.name)->ent.as_Module();
                 } else {
                     assert(ip.crate_name);
-                    return (ip.crate_name[0] ? crate.m_ext_crates.at(ip.crate_name).m_data->m_root_module : crate.m_root_module);
+                    return (ip.crate_name[0] ? crate.extCrates.at(ip.crate_name).mData->rootModule : crate.rootModule);
                 }
             }
 
             static void add_traits_from_mod(ModuleState& ms, const ::HIR::Module& mod) {
                 // In-scope traits.
-                ms.m_traits.clear();
-                for (const auto& tp : mod.m_traits) {
-                    const auto& trait = ms.m_crate.get_trait_by_path(sp, tp);
-                    ms.m_traits.push_back(::std::make_pair(&tp, &trait));
+                ms.traits.clear();
+                for (const auto& tp : mod.traits) {
+                    const auto& trait = ms.crate.get_trait_by_path(sp, tp);
+                    ms.traits.push_back(::std::make_pair(&tp, &trait));
                 }
             }
         };
@@ -45,17 +45,17 @@ namespace typeck {
             // Trait definition
             //const auto& trait_mod = H::get_mod_for_ip(m_crate, *ip.parent->trait->parent);
             //const auto& trait = trait_mod.m_mod_items.at(ip.parent->trait->name).ent.as_Trait();
-            const auto& trait = m_crate.get_trait_by_path(sp, *ip.parent->trait);
-            const auto& item = trait.m_values.at(ip.name);
+            const auto& trait = crate.get_trait_by_path(sp, *ip.parent->trait);
+            const auto& item = trait.values.at(ip.name);
             TU_MATCH_HDRA( (item), { )
             TU_ARMA(Function, e) {
-                    m_item_generics = &e.m_params;
+                    itemGenerics = &e.mParams;
                 }
                 TU_ARMA(Constant, e) {
-                    m_item_generics = &e.m_params;
+                    itemGenerics = &e.mParams;
                 }
                 TU_ARMA(Static, e) {
-                    m_item_generics = nullptr;
+                    itemGenerics = nullptr;
                 }
             }
         } else if (ip.parent->ty) {
@@ -63,19 +63,19 @@ namespace typeck {
             TODO(sp, "prepare_from_path - Type impl " << ip);
         } else {
             // Namespace path
-            const auto& mod = H::get_mod_for_ip(m_crate, *ip.parent);
+            const auto& mod = H::get_mod_for_ip(crate, *ip.parent);
             H::add_traits_from_mod(*this, mod);
-            const auto& item = mod.m_value_items.at(ip.name)->ent;
-            m_impl_generics = nullptr;
+            const auto& item = mod.valueItems.at(ip.name)->ent;
+            implGenerics = nullptr;
             TU_MATCH_HDRA( (item), { )
             TU_ARMA(Constant, e) {
-                    m_item_generics = &e.m_params;
+                    itemGenerics = &e.mParams;
                 }
                 TU_ARMA(Static, e) {
                     //m_item_generics = &e.m_params;
                 }
                 TU_ARMA(Function, e) {
-                    m_item_generics = &e.m_params;
+                    itemGenerics = &e.mParams;
                 }
                 TU_ARMA(StructConstant, _e) BUG(sp, ip << " is StructConstant");
                 TU_ARMA(StructConstructor, _e) BUG(sp, ip << " is StructConstructor");
@@ -88,77 +88,77 @@ namespace typeck {
 namespace {
 
     class OuterVisitor: public ::HIR::Visitor {
-        ::typeck::ModuleState m_ms;
+        ::typeck::ModuleState ms;
 
     public:
         OuterVisitor(::HIR::Crate& crate)
-            : ::HIR::Visitor(nullptr, crate.m_types)
-            , m_ms(crate)
+            : ::HIR::Visitor(nullptr, crate.types)
+            , ms(crate)
         {
         }
 
     public:
         void visit_module(::HIR::ItemPath p, ::HIR::Module& mod) override {
-            m_ms.push_traits(p, mod);
+            ms.push_traits(p, mod);
             ::HIR::Visitor::visit_module(p, mod);
-            m_ms.pop_traits(mod);
+            ms.pop_traits(mod);
         }
 
         // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
         void visit_expr(::HIR::ExprPtr& exp) override {
-            if (exp.m_mir) {
+            if (exp.mir) {
                 return;
             }
-            BUG(exp->m_span, "Reached expression");
+            BUG(exp->mSpan, "Reached expression");
         }
 
         void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
             HIR::GenericPath trait_gpath;
-            trait_gpath.m_path = p.get_simple_path();
-            for (size_t i = 0; i < item.m_params.m_types.size(); i++) {
-                trait_gpath.m_params.m_types.push_back(m_ms.m_crate.m_types.generic(item.m_params.m_types[i].m_name, i));
+            trait_gpath.mPath = p.get_simple_path();
+            for (size_t i = 0; i < item.mParams.types.size(); i++) {
+                trait_gpath.mParams.types.push_back(ms.crate.types.generic(item.mParams.types[i].mName, i));
             }
-            for (size_t i = 0; i < item.m_params.m_values.size(); i++) {
-                trait_gpath.m_params.m_values.push_back(HIR::GenericRef(item.m_params.m_values[i].m_name, i));
+            for (size_t i = 0; i < item.mParams.values.size(); i++) {
+                trait_gpath.mParams.values.push_back(HIR::GenericRef(item.mParams.values[i].mName, i));
             }
-            auto _1 = this->m_ms.set_current_trait(trait_gpath);
-            auto _ = this->m_ms.set_impl_generics(item.m_params);
+            auto _1 = this->ms.set_current_trait(trait_gpath);
+            auto _ = this->ms.set_impl_generics(item.mParams);
             ::HIR::Visitor::visit_trait(p, item);
         }
 
         void visit_type_impl(::HIR::TypeImpl& impl) override {
-            TRACE_FUNCTION_F("impl " << impl.m_type);
-            auto _ = this->m_ms.set_impl_generics(impl.m_params);
+            TRACE_FUNCTION_F("impl " << impl.mType);
+            auto _ = this->ms.set_impl_generics(impl.mParams);
 
-            const auto& mod = this->m_ms.m_crate.get_mod_by_path(Span(), impl.m_src_module);
-            m_ms.push_traits(impl.m_src_module, mod);
+            const auto& mod = this->ms.crate.get_mod_by_path(Span(), impl.srcModule);
+            ms.push_traits(impl.srcModule, mod);
             ::HIR::Visitor::visit_type_impl(impl);
-            m_ms.pop_traits(mod);
+            ms.pop_traits(mod);
         }
 
         void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
-            TRACE_FUNCTION_F("impl " << trait_path << impl.m_trait_args << " for " << impl.m_type);
-            auto trait_gpath = ::HIR::GenericPath(trait_path, impl.m_trait_args.clone());
-            auto _0 = this->m_ms.set_current_trait_impl(impl);
-            auto _1 = this->m_ms.set_current_trait(trait_gpath);
-            auto _ = this->m_ms.set_impl_generics(impl.m_params);
+            TRACE_FUNCTION_F("impl " << trait_path << impl.traitArgs << " for " << impl.mType);
+            auto trait_gpath = ::HIR::GenericPath(trait_path, impl.traitArgs.clone());
+            auto _0 = this->ms.set_current_trait_impl(impl);
+            auto _1 = this->ms.set_current_trait(trait_gpath);
+            auto _ = this->ms.set_impl_generics(impl.mParams);
 
-            const auto& mod = this->m_ms.m_crate.get_mod_by_path(Span(), impl.m_src_module);
-            m_ms.push_traits(impl.m_src_module, mod);
-            m_ms.m_traits.push_back(::std::make_pair(&trait_path, &this->m_ms.m_crate.get_trait_by_path(Span(), trait_path)));
+            const auto& mod = this->ms.crate.get_mod_by_path(Span(), impl.srcModule);
+            ms.push_traits(impl.srcModule, mod);
+            ms.traits.push_back(::std::make_pair(&trait_path, &this->ms.crate.get_trait_by_path(Span(), trait_path)));
             ::HIR::Visitor::visit_trait_impl(trait_path, impl);
-            m_ms.m_traits.pop_back();
-            m_ms.pop_traits(mod);
+            ms.traits.pop_back();
+            ms.pop_traits(mod);
         }
 
         void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
-            TRACE_FUNCTION_F("impl " << trait_path << " for " << impl.m_type << " { }");
-            auto _ = this->m_ms.set_impl_generics(impl.m_params);
+            TRACE_FUNCTION_F("impl " << trait_path << " for " << impl.mType << " { }");
+            auto _ = this->ms.set_impl_generics(impl.mParams);
 
-            const auto& mod = this->m_ms.m_crate.get_mod_by_path(Span(), impl.m_src_module);
-            m_ms.push_traits(impl.m_src_module, mod);
+            const auto& mod = this->ms.crate.get_mod_by_path(Span(), impl.srcModule);
+            ms.push_traits(impl.srcModule, mod);
             ::HIR::Visitor::visit_marker_impl(trait_path, impl);
-            m_ms.pop_traits(mod);
+            ms.pop_traits(mod);
         }
 
         void visit_type(::HIR::TypeRef& ty) override {
@@ -170,10 +170,10 @@ namespace {
                 t_args tmp;
                 if (auto* se = e.size.opt_Unevaluated()) {
                     if (se->is_Unevaluated()) {
-                        TypecheckCode(m_ms, tmp, m_ms.m_crate.m_types.primitive(::HIR::CoreType::Usize), *se->as_Unevaluated()->expr);
+                        TypecheckCode(ms, tmp, ms.crate.types.primitive(::HIR::CoreType::Usize), *se->as_Unevaluated()->expr);
                     }
                 }
-                ty = m_ms.m_crate.m_types.intern(std::move(data));
+                ty = ms.crate.types.intern(std::move(data));
             } else {
                 ::HIR::Visitor::visit_type(ty);
             }
@@ -183,10 +183,10 @@ namespace {
         // Code-containing items
         // ------
         void visit_function(::HIR::ItemPath p, ::HIR::Function& item) override {
-            auto _ = this->m_ms.set_item_generics(item.m_params);
-            if (item.m_code) {
+            auto _ = this->ms.set_item_generics(item.mParams);
+            if (item.mCode) {
                 DEBUG("Function code " << p);
-                TypecheckCode(m_ms, item.m_args, item.m_return, item.m_code);
+                TypecheckCode(ms, item.mArgs, item.returnType, item.mCode);
             } else {
                 DEBUG("Function code " << p << " (none)");
             }
@@ -194,33 +194,33 @@ namespace {
 
         void visit_static(::HIR::ItemPath p, ::HIR::Static& item) override {
             //auto _ = this->m_ms.set_item_generics(item.m_params);
-            if (item.m_value) {
+            if (item.mValue) {
                 DEBUG("Static value " << p);
                 t_args tmp;
-                TypecheckCode(m_ms, tmp, item.m_type, item.m_value);
+                TypecheckCode(ms, tmp, item.mType, item.mValue);
             }
         }
 
         void visit_constant(::HIR::ItemPath p, ::HIR::Constant& item) override {
-            auto _ = this->m_ms.set_item_generics(item.m_params);
-            if (item.m_value) {
+            auto _ = this->ms.set_item_generics(item.mParams);
+            if (item.mValue) {
                 DEBUG("Const value " << p);
                 t_args tmp;
-                TypecheckCode(m_ms, tmp, item.m_type, item.m_value);
+                TypecheckCode(ms, tmp, item.mType, item.mValue);
             }
         }
 
         void visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) override {
-            auto _ = this->m_ms.set_item_generics(item.m_params);
+            auto _ = this->ms.set_item_generics(item.mParams);
 
-            if (auto* e = item.m_data.opt_Value()) {
-                auto enum_type = ::HIR::Enum::get_repr_type(item.m_tag_repr);
+            if (auto* e = item.mData.opt_Value()) {
+                auto enum_type = ::HIR::Enum::get_repr_type(item.tagRepr);
 
                 for (auto& var : e->variants) {
                     DEBUG("Enum value " << p << " - " << var.name);
                     if (var.expr) {
                         t_args tmp;
-                        TypecheckCode(m_ms, tmp, m_ms.m_crate.m_types.primitive(enum_type), var.expr);
+                        TypecheckCode(ms, tmp, ms.crate.types.primitive(enum_type), var.expr);
                     }
                 }
             }
@@ -236,49 +236,49 @@ void TypecheckExpressions(::HIR::Crate& crate) {
 namespace typeck {
 
 ModuleState::ModuleState(const ::HIR::Crate& crate)
-    : m_crate(crate)
-    , m_current_trait(nullptr)
-    , m_current_trait_impl(nullptr)
-    , m_impl_generics(nullptr)
-    , m_item_generics(nullptr) {
+    : crate(crate)
+    , currentTrait(nullptr)
+    , currentTraitImpl(nullptr)
+    , implGenerics(nullptr)
+    , itemGenerics(nullptr) {
 }
 ModuleState::NullOnDrop<const ::HIR::GenericPath> ModuleState::set_current_trait(const ::HIR::GenericPath& p) {
-    assert(!m_current_trait);
-    m_current_trait = &p;
-    return NullOnDrop<const ::HIR::GenericPath>(m_current_trait);
+    assert(!currentTrait);
+    currentTrait = &p;
+    return NullOnDrop<const ::HIR::GenericPath>(currentTrait);
 }
 ModuleState::NullOnDrop<const ::HIR::TraitImpl> ModuleState::set_current_trait_impl(const ::HIR::TraitImpl& impl) {
-    assert(!m_current_trait_impl);
-    m_current_trait_impl = &impl;
-    return NullOnDrop<const ::HIR::TraitImpl>(m_current_trait_impl);
+    assert(!currentTraitImpl);
+    currentTraitImpl = &impl;
+    return NullOnDrop<const ::HIR::TraitImpl>(currentTraitImpl);
 }
 ModuleState::NullOnDrop<const ::HIR::GenericParams> ModuleState::set_impl_generics(const ::HIR::GenericParams& gps) {
-    assert(!m_impl_generics);
-    m_impl_generics = &gps;
-    return NullOnDrop<const ::HIR::GenericParams>(m_impl_generics);
+    assert(!implGenerics);
+    implGenerics = &gps;
+    return NullOnDrop<const ::HIR::GenericParams>(implGenerics);
 }
 ModuleState::NullOnDrop<const ::HIR::GenericParams> ModuleState::set_item_generics(const ::HIR::GenericParams& gps) {
-    assert(!m_item_generics);
-    m_item_generics = &gps;
-    return NullOnDrop<const ::HIR::GenericParams>(m_item_generics);
+    assert(!itemGenerics);
+    itemGenerics = &gps;
+    return NullOnDrop<const ::HIR::GenericParams>(itemGenerics);
 }
 void ModuleState::push_traits(::HIR::ItemPath p, const ::HIR::Module& mod) {
     auto sp = Span();
-    m_mod_paths.push_back(p.get_simple_path());
-    DEBUG("Module has " << mod.m_traits.size() << " in-scope traits");
+    modPaths.push_back(p.get_simple_path());
+    DEBUG("Module has " << mod.traits.size() << " in-scope traits");
     // - Push a NULL entry to prevent parent module import lists being searched
-    m_traits.push_back(::std::make_pair(nullptr, nullptr));
-    for (const auto& trait_path : mod.m_traits) {
+    traits.push_back(::std::make_pair(nullptr, nullptr));
+    for (const auto& trait_path : mod.traits) {
         DEBUG("Push " << trait_path);
-        m_traits.push_back(::std::make_pair(&trait_path, &this->m_crate.get_trait_by_path(sp, trait_path)));
+        traits.push_back(::std::make_pair(&trait_path, &this->crate.get_trait_by_path(sp, trait_path)));
     }
 }
 void ModuleState::pop_traits(const ::HIR::Module& mod) {
-    DEBUG("Module has " << mod.m_traits.size() << " in-scope traits");
-    for (unsigned int i = 0; i < mod.m_traits.size(); i++) {
-        m_traits.pop_back();
+    DEBUG("Module has " << mod.traits.size() << " in-scope traits");
+    for (unsigned int i = 0; i < mod.traits.size(); i++) {
+        traits.pop_back();
     }
-    m_traits.pop_back();
-    m_mod_paths.pop_back();
+    traits.pop_back();
+    modPaths.pop_back();
 }
 }

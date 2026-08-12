@@ -5,7 +5,7 @@
 class MacroRules;
 
 class MacroRulesPtr {
-    MacroRules* m_ptr;
+    MacroRules* ptr;
 
 public:
     MacroRulesPtr();
@@ -19,7 +19,7 @@ public:
     ~MacroRulesPtr();
 
     operator bool() const {
-        return m_ptr != nullptr;
+        return ptr != nullptr;
     }
 
     const MacroRules& operator*() const;

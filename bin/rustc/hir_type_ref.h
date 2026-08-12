@@ -49,7 +49,7 @@ namespace HIR {
     using t_cb_resolve_type = const ResolvePlaceholders&;
 
     class TrackHrbStack {
-        mutable std::vector<const HIR::GenericParams*> m_hrb_stack;
+        mutable std::vector<const HIR::GenericParams*> hrbStack;
 
     public:
         class PopOnDrop {
@@ -69,7 +69,7 @@ namespace HIR {
         PopOnDrop push_hrb(const std::unique_ptr<HIR::GenericParams>& params) const;
         PopOnDrop push_hrb(const HIR::GenericParams& params) const;
         const HIR::GenericParams* has_hrb() const {
-            return m_hrb_stack.empty() ? nullptr : m_hrb_stack.back();
+            return hrbStack.empty() ? nullptr : hrbStack.back();
         }
     };
 

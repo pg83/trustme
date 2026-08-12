@@ -19,8 +19,8 @@
 #include <iosfwd>
 
 class Float128 {
-    uint64_t m_lo;
-    uint64_t m_hi;
+    uint64_t lo;
+    uint64_t hi;
 
 public:
     Float128();

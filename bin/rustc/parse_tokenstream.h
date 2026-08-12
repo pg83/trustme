@@ -38,10 +38,10 @@ public:
 class TokenStream {
     friend class TTLexer; // needs access to internals to know what was consumed
 
-    bool m_cache_valid;
-    Token m_cache;
-    Ident::Hygiene m_hygiene;
-    AST::Edition m_edition;
+    bool cacheValid;
+    Token cache;
+    Ident::Hygiene mHygiene;
+    AST::Edition edition;
 
     struct LookaheadEnt {
         Token tok;
@@ -49,8 +49,8 @@ class TokenStream {
         Ident::Hygiene hygiene;
     };
 
-    ::std::vector<LookaheadEnt> m_lookahead;
-    ParseState m_parse_state;
+    ::std::vector<LookaheadEnt> mLookahead;
+    ParseState parseState;
 
 public:
     TokenStream(ParseState ps);
@@ -77,19 +77,19 @@ public:
     }
 
     ParseState& parse_state() {
-        return m_parse_state;
+        return parseState;
     }
 
     AST::Edition get_edition() const {
-        return m_edition;
+        return edition;
     }
 
     bool edition_after(AST::Edition e) const {
-        return m_edition >= e;
+        return edition >= e;
     }
 
     bool edition_before(AST::Edition e) const {
-        return m_edition < e;
+        return edition < e;
     }
 
     ProtoSpan start_span() const;
@@ -116,8 +116,8 @@ private:
 };
 
 class SavedParseState {
-    TokenStream& m_lex;
-    ParseState m_state;
+    TokenStream& lex;
+    ParseState state;
 
 public:
     SavedParseState(TokenStream& lex, ParseState state);
