@@ -2840,7 +2840,7 @@ namespace {
 
             // 3. Rewrite usage of saved values
             // - Note: Need to allocate new temporaries if indexing by an updated lvalue
-            class Rewriter: public ::MIR::visit::VisitorMut {
+            class Rewriter: public ::MIR::MIRVisitorMut {
                 /// Remapped locals (indexes into coroutine struct, not just into the state)
                 ///
                 /// From `Pin<&mut self>`, these are appended to `self.pin.*`
@@ -2862,7 +2862,7 @@ namespace {
                 {
                 }
 
-                bool visitLvalue(::MIR::LValue& lv, ::MIR::visit::ValUsage u) override {
+                bool visitLvalue(::MIR::LValue& lv, ::MIR::MIRValUsage u) override {
                     if (lv.root.is_Local()) {
                         auto it = mMappings.find(lv.root.as_Local());
                         if (it != mMappings.end()) {
@@ -2923,7 +2923,7 @@ namespace {
                     } else {
                         // Doesn't use drop flags, no changes/rewrites needed
                     }
-                    return ::MIR::visit::VisitorMut::visitStmt(stmt);
+                    return ::MIR::MIRVisitorMut::visitStmt(stmt);
                 }
 
                 void pushStatements(::MIR::BasicBlock& bb, size_t& ofs) {

@@ -95,21 +95,20 @@ namespace {
 }
 
 namespace MIR {
-    namespace eval {
-        class Allocation;
-        class Constant;
-        class StaticRef;
-        class RelocPtr;
+        class MIREvalAllocation;
+        class MIREvalConstant;
+        class MIREvalStaticRef;
+        class MIREvalRelocPtr;
 
         template <typename T>
-        class EvalPtr {
-            friend class RelocPtr;
+        class MIREvalPtr {
+            friend class MIREvalRelocPtr;
 
         protected:
             T* ptr;
 
         public:
-            EvalPtr()
+            MIREvalPtr()
                 : ptr(nullptr)
             {
             }
@@ -136,22 +135,22 @@ namespace MIR {
         };
 
         /// "Statically allocated" constant data
-        class ConstantPtr final: public EvalPtr<Constant> {
+        class MIREvalConstantPtr final: public MIREvalPtr<MIREvalConstant> {
         public:
-            static ConstantPtr allocate(stl::ObjPool* pool, const void* data, size_t len);
+            static MIREvalConstantPtr allocate(stl::ObjPool* pool, const void* data, size_t len);
         };
 
         /// Mutable allocation
-        class AllocationPtr final: public EvalPtr<Allocation> {
+        class MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
         public:
-            static AllocationPtr allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeData* ty);
-            static AllocationPtr allocateRo(stl::ObjPool* pool, const void* data, size_t len);
+            static MIREvalAllocationPtr allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeData* ty);
+            static MIREvalAllocationPtr allocateRo(stl::ObjPool* pool, const void* data, size_t len);
         };
 
         /// Reference to a `static`
-        class StaticRefPtr final: public EvalPtr<StaticRef> {
+        class MIREvalStaticRefPtr final: public MIREvalPtr<MIREvalStaticRef> {
         public:
-            static StaticRefPtr allocate(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit);
+            static MIREvalStaticRefPtr allocate(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit);
         };
 
         /// Common interface for data storage
@@ -173,12 +172,12 @@ namespace MIR {
 
             virtual void writeMaskFrom(size_t ofs, const IValue& src, size_t srcOfs, size_t len) = 0;
 
-            virtual RelocPtr getReloc(size_t ofs) const = 0;
-            virtual void setReloc(size_t ofs, RelocPtr ptr) = 0;
+            virtual MIREvalRelocPtr getReloc(size_t ofs) const = 0;
+            virtual void setReloc(size_t ofs, MIREvalRelocPtr ptr) = 0;
         };
 
         /// Pointer wrapping a reference-counted allocation
-        class RelocPtr {
+        class MIREvalRelocPtr {
             uintptr_t ptr;
 
             enum Tag {
@@ -188,30 +187,30 @@ namespace MIR {
             };
 
         public:
-            ~RelocPtr() = default;
-            RelocPtr(const RelocPtr&) = default;
-            RelocPtr(RelocPtr&&) = default;
-            RelocPtr& operator=(const RelocPtr&) = default;
-            RelocPtr& operator=(RelocPtr&&) = default;
+            ~MIREvalRelocPtr() = default;
+            MIREvalRelocPtr(const MIREvalRelocPtr&) = default;
+            MIREvalRelocPtr(MIREvalRelocPtr&&) = default;
+            MIREvalRelocPtr& operator=(const MIREvalRelocPtr&) = default;
+            MIREvalRelocPtr& operator=(MIREvalRelocPtr&&) = default;
 
-            RelocPtr()
+            MIREvalRelocPtr()
                 : ptr(0)
             {
             }
 
-            RelocPtr(AllocationPtr p)
+            MIREvalRelocPtr(MIREvalAllocationPtr p)
                 : ptr(0)
             {
                 set(reinterpret_cast<uintptr_t>(p.ptr), TAG_Allocation);
             }
 
-            RelocPtr(ConstantPtr p)
+            MIREvalRelocPtr(MIREvalConstantPtr p)
                 : ptr(0)
             {
                 set(reinterpret_cast<uintptr_t>(p.ptr), TAG_Constant);
             }
 
-            RelocPtr(StaticRefPtr p)
+            MIREvalRelocPtr(MIREvalStaticRefPtr p)
                 : ptr(0)
             {
                 set(reinterpret_cast<uintptr_t>(p.ptr), TAG_StaticRef);
@@ -221,7 +220,7 @@ namespace MIR {
                 return ptr != 0;
             }
 
-            bool operator==(const RelocPtr& x) const {
+            bool operator==(const MIREvalRelocPtr& x) const {
                 return ptr == x.ptr;
             }
 
@@ -233,19 +232,19 @@ namespace MIR {
                 return *asValuePtr();
             }
 
-            Allocation* asAllocation() const {
-                return (ptr != 0 && (ptr & 3) == TAG_Allocation) ? reinterpret_cast<Allocation*>(ptr - TAG_Allocation) : nullptr;
+            MIREvalAllocation* asAllocation() const {
+                return (ptr != 0 && (ptr & 3) == TAG_Allocation) ? reinterpret_cast<MIREvalAllocation*>(ptr - TAG_Allocation) : nullptr;
             }
 
-            Constant* asConstant() const {
-                return (ptr != 0 && (ptr & 3) == TAG_Constant) ? reinterpret_cast<Constant*>(ptr - TAG_Constant) : nullptr;
+            MIREvalConstant* asConstant() const {
+                return (ptr != 0 && (ptr & 3) == TAG_Constant) ? reinterpret_cast<MIREvalConstant*>(ptr - TAG_Constant) : nullptr;
             }
 
-            StaticRef* asStaticref() const {
-                return (ptr != 0 && (ptr & 3) == TAG_StaticRef) ? reinterpret_cast<StaticRef*>(ptr - TAG_StaticRef) : nullptr;
+            MIREvalStaticRef* asStaticref() const {
+                return (ptr != 0 && (ptr & 3) == TAG_StaticRef) ? reinterpret_cast<MIREvalStaticRef*>(ptr - TAG_StaticRef) : nullptr;
             }
 
-            friend std::ostream& operator<<(std::ostream& os, const RelocPtr& ptr) {
+            friend std::ostream& operator<<(std::ostream& os, const MIREvalRelocPtr& ptr) {
                 if (ptr.ptr) {
                     ptr.asValuePtr()->fmtIdent(os);
                 } else {
@@ -275,13 +274,13 @@ namespace MIR {
         }
 
         /// Constant data
-        class Constant final: public IValue {
-            friend struct stl::Embed<Constant>;
-            friend class ConstantPtr;
+        class MIREvalConstant final: public IValue {
+            friend struct stl::Embed<MIREvalConstant>;
+            friend class MIREvalConstantPtr;
             unsigned const length;
             const uint8_t* const data;
 
-            Constant(const void* data, size_t len)
+            MIREvalConstant(const void* data, size_t len)
                 : length(len)
                 , data(reinterpret_cast<const uint8_t*>(data))
             {
@@ -340,23 +339,23 @@ namespace MIR {
                 abort();
             }
 
-            RelocPtr getReloc(size_t ofs) const override {
-                return RelocPtr();
+            MIREvalRelocPtr getReloc(size_t ofs) const override {
+                return MIREvalRelocPtr();
             }
 
-            void setReloc(size_t ofs, RelocPtr ptr) override {
+            void setReloc(size_t ofs, MIREvalRelocPtr ptr) override {
                 abort();
             }
         };
 
-        class Allocation final: public IValue {
-            friend struct stl::Embed<Allocation>;
-            friend class AllocationPtr;
+        class MIREvalAllocation final: public IValue {
+            friend struct stl::Embed<MIREvalAllocation>;
+            friend class MIREvalAllocationPtr;
 
         public:
             struct Reloc {
                 size_t offset;
-                RelocPtr ptr;
+                MIREvalRelocPtr ptr;
             };
 
         private:
@@ -366,7 +365,7 @@ namespace MIR {
             std::vector<Reloc> relocations;
             uint8_t* data;
 
-            Allocation(uint8_t* data, size_t len, const ::HIR::TypeData* ty)
+            MIREvalAllocation(uint8_t* data, size_t len, const ::HIR::TypeData* ty)
                 : length(len)
                 , isReadonly(false)
                 , mType(ty)
@@ -375,8 +374,8 @@ namespace MIR {
                 memset(data, 0, len + (len + 7) / 8);
             }
 
-            Allocation(const Allocation&) = delete;
-            Allocation& operator=(const Allocation&) = delete;
+            MIREvalAllocation(const MIREvalAllocation&) = delete;
+            MIREvalAllocation& operator=(const MIREvalAllocation&) = delete;
 
         public:
             void fmtIdent(std::ostream& os) const override {
@@ -503,16 +502,16 @@ namespace MIR {
                 src.readMask(getMask(), ofs, srcOfs, len);
             }
 
-            RelocPtr getReloc(size_t ofs) const override {
+            MIREvalRelocPtr getReloc(size_t ofs) const override {
                 for (const auto& r : this->relocations) {
                     if (r.offset == ofs) {
                         return r.ptr;
                     }
                 }
-                return RelocPtr();
+                return MIREvalRelocPtr();
             }
 
-            void setReloc(size_t ofs, RelocPtr ptr) override {
+            void setReloc(size_t ofs, MIREvalRelocPtr ptr) override {
                 assert(ofs % (TargetGetPointerBits() / 8) == 0);
                 auto it = std::lower_bound(this->relocations.begin(), this->relocations.end(), ofs, [](const Reloc& r, size_t ofs) {
                     return r.offset < ofs;
@@ -549,15 +548,15 @@ namespace MIR {
             }
         };
 
-        class StaticRef final: public IValue {
-            friend struct stl::Embed<StaticRef>;
-            friend class StaticRefPtr;
+        class MIREvalStaticRef final: public IValue {
+            friend struct stl::Embed<MIREvalStaticRef>;
+            friend class MIREvalStaticRefPtr;
 
             stl::ObjPool* pool;
             ::HIR::Path mPath;
             const EncodedLiteral* encoded;
 
-            StaticRef(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit = nullptr)
+            MIREvalStaticRef(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit = nullptr)
                 : pool(pool)
                 , mPath(std::move(p))
                 , encoded(lit)
@@ -627,24 +626,24 @@ namespace MIR {
                 abort();
             }
 
-            RelocPtr getReloc(size_t ofs) const override {
+            MIREvalRelocPtr getReloc(size_t ofs) const override {
                 if (encoded) {
                     for (const auto& r : encoded->relocations) {
                         if (r.ofs == ofs) {
-                            RelocPtr reloc;
+                            MIREvalRelocPtr reloc;
                             if (r.p) {
-                                return RelocPtr(StaticRefPtr::allocate(pool, r.p->clone(), nullptr));
+                                return MIREvalRelocPtr(MIREvalStaticRefPtr::allocate(pool, r.p->clone(), nullptr));
                                 TODO(Span(), "Convert relocation pointer - " << *r.p);
                             } else {
-                                return RelocPtr(AllocationPtr::allocateRo(pool, r.bytes.data(), r.bytes.size()));
+                                return MIREvalRelocPtr(MIREvalAllocationPtr::allocateRo(pool, r.bytes.data(), r.bytes.size()));
                             }
                         }
                     }
                 }
-                return RelocPtr();
+                return MIREvalRelocPtr();
             }
 
-            void setReloc(size_t ofs, RelocPtr ptr) override {
+            void setReloc(size_t ofs, MIREvalRelocPtr ptr) override {
                 abort();
             }
 
@@ -654,20 +653,20 @@ namespace MIR {
         };
 
         /// Reference to a value
-        class ValueRef {
-            RelocPtr storage;
+        class MIREvalValueRef {
+            MIREvalRelocPtr storage;
             uint32_t ofs;
             uint32_t len;
 
         public:
-            ValueRef()
+            MIREvalValueRef()
                 : storage()
                 , ofs(0)
                 , len(0)
             {
             }
 
-            ValueRef(RelocPtr alloc, size_t ofs = 0)
+            MIREvalValueRef(MIREvalRelocPtr alloc, size_t ofs = 0)
                 : storage(alloc)
                 , ofs(ofs)
                 , len(0)
@@ -678,17 +677,17 @@ namespace MIR {
                 }
             }
 
-            ValueRef slice(size_t ofs, size_t len) {
+            MIREvalValueRef slice(size_t ofs, size_t len) {
                 ASSERT_BUG(Span(), ofs <= this->len && ofs + len <= this->len, "ValueRef::slice: " << ofs << "+" << len << " out of range (" << this->len << ")");
 
-                ValueRef rv;
+                MIREvalValueRef rv;
                 rv.storage = storage;
                 rv.ofs = this->ofs + ofs;
                 rv.len = len;
                 return rv;
             }
 
-            ValueRef slice(size_t ofs) {
+            MIREvalValueRef slice(size_t ofs) {
                 ASSERT_BUG(Span(), ofs <= this->len, "ValueRef::slice: " << ofs << " out of range (" << this->len << ")");
                 return slice(ofs, this->len - ofs);
             }
@@ -697,7 +696,7 @@ namespace MIR {
                 return storage;
             }
 
-            RelocPtr getStorage() const {
+            MIREvalRelocPtr getStorage() const {
                 return storage;
             }
 
@@ -709,7 +708,7 @@ namespace MIR {
                 return len;
             }
 
-            void copyFrom(const MIR::TypeResolve& state, const ValueRef& other) {
+            void copyFrom(const MIR::TypeResolve& state, const MIREvalValueRef& other) {
                 size_t len = std::min(this->len, other.len);
                 // Check that there's no overlap
                 if (this->storage == other.storage) {
@@ -802,12 +801,12 @@ namespace MIR {
                 }
             }
 
-            void writePtr(const MIR::TypeResolve& state, uint64_t val, RelocPtr reloc) {
+            void writePtr(const MIR::TypeResolve& state, uint64_t val, MIREvalRelocPtr reloc) {
                 writeUint(state, TargetGetPointerBits(), U128(val));
                 storage.asValue().setReloc(ofs, std::move(reloc));
             }
 
-            void setReloc(RelocPtr reloc) {
+            void setReloc(MIREvalRelocPtr reloc) {
                 storage.asValue().setReloc(ofs, std::move(reloc));
             }
 
@@ -879,14 +878,14 @@ namespace MIR {
                 return readUint(state, TargetGetPointerBits()).truncateU64();
             }
 
-            std::pair<uint64_t, RelocPtr> readPtr(const ::MIR::TypeResolve& state) const {
+            std::pair<uint64_t, MIREvalRelocPtr> readPtr(const ::MIR::TypeResolve& state) const {
                 return std::make_pair(readUsize(state), storage.asValue().getReloc(ofs));
             }
 
-            friend std::ostream& operator<<(std::ostream& os, const ValueRef& vr);
+            friend std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr);
         };
 
-        std::ostream& operator<<(std::ostream& os, const ValueRef& vr) {
+        std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr) {
             if (!vr.storage) {
                 os << "ValueRef(null)";
             } else {
@@ -897,49 +896,49 @@ namespace MIR {
             return os;
         }
 
-        std::ostream& operator<<(std::ostream& os, const AllocationPtr& ap) {
-            os << ValueRef(ap);
+        std::ostream& operator<<(std::ostream& os, const MIREvalAllocationPtr& ap) {
+            os << MIREvalValueRef(ap);
             return os;
         }
 
         // ---
-        ConstantPtr ConstantPtr::allocate(stl::ObjPool* pool, const void* data, size_t len) {
-            ConstantPtr rv;
-            rv.ptr = pool->make<Constant>(data, len);
+        MIREvalConstantPtr MIREvalConstantPtr::allocate(stl::ObjPool* pool, const void* data, size_t len) {
+            MIREvalConstantPtr rv;
+            rv.ptr = pool->make<MIREvalConstant>(data, len);
             return rv;
         }
 
         // ---
-        AllocationPtr AllocationPtr::allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeData* ty) {
+        MIREvalAllocationPtr MIREvalAllocationPtr::allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeData* ty) {
             size_t len;
             if (!TargetGetSizeOf(Span(), resolve, ty, len)) {
                 throw Defer();
             }
             auto* data = static_cast<uint8_t*>(pool->allocate(len + ((len + 7) / 8)));
-            AllocationPtr rv;
+            MIREvalAllocationPtr rv;
             // TODO: Include the current location from `state` in the allocation header
-            rv.ptr = pool->make<Allocation>(data, len, ty);
+            rv.ptr = pool->make<MIREvalAllocation>(data, len, ty);
             return rv;
         }
 
-        AllocationPtr AllocationPtr::allocateRo(stl::ObjPool* pool, const void* dataIn, size_t len) {
+        MIREvalAllocationPtr MIREvalAllocationPtr::allocateRo(stl::ObjPool* pool, const void* dataIn, size_t len) {
             auto* data = static_cast<uint8_t*>(pool->allocate(len + ((len + 7) / 8)));
-            AllocationPtr rv;
-            rv.ptr = pool->make<Allocation>(data, len, HIR::TypeRef());
+            MIREvalAllocationPtr rv;
+            rv.ptr = pool->make<MIREvalAllocation>(data, len, HIR::TypeRef());
             rv->writeBytes(0, dataIn, len);
             rv->isReadonly = true;
             return rv;
         }
 
         // ---
-        StaticRefPtr StaticRefPtr::allocate(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit) {
-            StaticRefPtr rv;
-            rv.ptr = pool->make<StaticRef>(pool, std::move(p), lit);
+        MIREvalStaticRefPtr MIREvalStaticRefPtr::allocate(stl::ObjPool* pool, ::HIR::Path p, const EncodedLiteral* lit) {
+            MIREvalStaticRefPtr rv;
+            rv.ptr = pool->make<MIREvalStaticRef>(pool, std::move(p), lit);
             return rv;
         }
 
         // --- RelocPtr ---
-        IValue* RelocPtr::asValuePtr() const {
+        IValue* MIREvalRelocPtr::asValuePtr() const {
             assert(ptr);
             switch (ptr & 3) {
                 case TAG_Allocation:
@@ -956,7 +955,6 @@ namespace MIR {
             }
             abort();
         }
-    }
 } // namespace MIR::eval
 
 namespace {
@@ -1128,9 +1126,8 @@ namespace {
 } // namespace <anon>
 
 namespace MIR {
-    namespace eval {
 
-        class CallStackEntry {
+        class MIREvalCallStackEntry {
         public:
             stl::ObjPool* const valuePool;
             const unsigned frameIndex;
@@ -1144,19 +1141,19 @@ namespace MIR {
             // Monomorphiser from the function
             MonomorphState ms;
 
-            ::MIR::eval::AllocationPtr retval;
+            ::MIR::MIREvalAllocationPtr retval;
 
-            ::std::vector<::MIR::eval::AllocationPtr> args;
+            ::std::vector<::MIR::MIREvalAllocationPtr> args;
 
             ::std::vector<HIR::TypeRef> localTypes;
-            ::std::vector<::MIR::eval::AllocationPtr> locals;
+            ::std::vector<::MIR::MIREvalAllocationPtr> locals;
             ::std::vector<bool> dropFlags;
 
             // ---
-            CallStackEntry(const CallStackEntry&) = delete;
-            CallStackEntry(CallStackEntry&&) = delete;
+            MIREvalCallStackEntry(const MIREvalCallStackEntry&) = delete;
+            MIREvalCallStackEntry(MIREvalCallStackEntry&&) = delete;
 
-            CallStackEntry(
+            MIREvalCallStackEntry(
                 stl::ObjPool* valuePool,
                 unsigned frameIndex,
                 const Span& rootSpan,
@@ -1169,7 +1166,7 @@ namespace MIR {
                 const MIR::Function& fcn,
                 // Monomorphisation rules
                 MonomorphState ms,
-                ::std::vector<AllocationPtr> args,
+                ::std::vector<MIREvalAllocationPtr> args,
                 const ::HIR::GenericParams* itemParamsDef,
                 const ::HIR::GenericParams* implParamsDef
             )
@@ -1181,7 +1178,7 @@ namespace MIR {
                 , resolve(resolve.crate)
                 , state{rootSpan, this->resolve, std::move(pathStr), this->retType, this->argDefs, fcn}
                 , ms(std::move(ms))
-                , retval(AllocationPtr::allocate(valuePool, rootResolve, state, retType))
+                , retval(MIREvalAllocationPtr::allocate(valuePool, rootResolve, state, retType))
                 , args(args)
                 , dropFlags(fcn.dropFlags)
             {
@@ -1190,7 +1187,7 @@ namespace MIR {
                 locals.reserve(state.fcn.locals.size());
                 for (size_t i = 0; i < state.fcn.locals.size(); i++) {
                     localTypes.push_back(state.mResolve.monomorphExpand(state.sp, state.fcn.locals[i], this->ms));
-                    locals.push_back(AllocationPtr::allocate(valuePool, rootResolve, state, localTypes.back()));
+                    locals.push_back(MIREvalAllocationPtr::allocate(valuePool, rootResolve, state, localTypes.back()));
                 }
 
                 state.monomorphedRettype = retType;
@@ -1201,7 +1198,7 @@ namespace MIR {
                 return this->resolve.monomorphExpand(this->state.sp, ty, this->ms);
             }
 
-            unsigned readEnumVariant(const HIR::TypeData* ty, ValueRef value) const {
+            unsigned readEnumVariant(const HIR::TypeData* ty, MIREvalValueRef value) const {
                 auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
                 MIR_ASSERT(state, repr, "No representation for enum " << ty);
 
@@ -1234,7 +1231,7 @@ namespace MIR {
                 return variant;
             }
 
-            static bool allocationReachableFrom(const Allocation* allocation, const Allocation* target, ::std::set<const Allocation*>& visited) {
+            static bool allocationReachableFrom(const MIREvalAllocation* allocation, const MIREvalAllocation* target, ::std::set<const MIREvalAllocation*>& visited) {
                 if (allocation == target) {
                     return true;
                 }
@@ -1251,16 +1248,16 @@ namespace MIR {
                 return false;
             }
 
-            bool valueReachableFromReturn(ValueRef value) const {
+            bool valueReachableFromReturn(MIREvalValueRef value) const {
                 const auto* target = value.getStorage().asAllocation();
                 if (!target) {
                     return false;
                 }
-                ::std::set<const Allocation*> visited;
+                ::std::set<const MIREvalAllocation*> visited;
                 return allocationReachableFrom(retval.operator->(), target, visited);
             }
 
-            bool valueNeedsNonConstDrop(const HIR::TypeData* ty, ValueRef value) const {
+            bool valueNeedsNonConstDrop(const HIR::TypeData* ty, MIREvalValueRef value) const {
                 if (!rootResolve.typeNeedsDropGlue(state.sp, ty)) {
                     return false;
                 }
@@ -1308,7 +1305,7 @@ namespace MIR {
                         auto pointer = value.readPtr(state);
                         MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, "Invalid owned pointer while checking a constant drop");
                         auto size = sizeOfOrBug(te.inner);
-                        auto inner = ValueRef(pointer.second, pointer.first - EncodedLiteral::PTR_BASE).slice(0, size);
+                        auto inner = MIREvalValueRef(pointer.second, pointer.first - EncodedLiteral::PTR_BASE).slice(0, size);
                         return valueNeedsNonConstDrop(te.inner, inner);
                     }
                     TU_ARMA(Path, te) {
@@ -1396,12 +1393,12 @@ namespace MIR {
                 throw std::runtime_error("Unreachable type while checking a constant drop");
             }
 
-            StaticRefPtr getStaticrefMono(const ::HIR::Path& p, HIR::TypeRef* outTy = nullptr) const {
+            MIREvalStaticRefPtr getStaticrefMono(const ::HIR::Path& p, HIR::TypeRef* outTy = nullptr) const {
                 // NOTE: Value won't need to be monomorphed, as it shouldn't be generic
                 return getStaticref(ms.monomorphPath(state.sp, p), outTy);
             }
 
-            StaticRefPtr getStaticref(::HIR::Path p, HIR::TypeRef* outTy = nullptr) const {
+            MIREvalStaticRefPtr getStaticref(::HIR::Path p, HIR::TypeRef* outTy = nullptr) const {
                 // If there's any mention of generics in this path, then return Literal::Defer
                 if (visitPathTysWith(p, [&](const auto& ty) -> bool {
                     return ty->is_Generic();
@@ -1420,7 +1417,7 @@ namespace MIR {
                         // If there's no MIR and no HIR then this is an external static (which can only be borrowed)
                         if (!s.mValue && !s.mValue.mir) {
                             DEBUG("No value and no mir");
-                            return StaticRefPtr::allocate(valuePool, std::move(p), nullptr);
+                            return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr);
                         }
 
                         auto& item = const_cast<::HIR::Static&>(s);
@@ -1456,39 +1453,39 @@ namespace MIR {
                         // Does this need monomorph? No, becuase the value is known and thus not generic?
                         *outTy = s.mType;
                     }
-                    return StaticRefPtr::allocate(valuePool, std::move(p), &s.valueRes);
+                    return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), &s.valueRes);
                 } else {
                     DEBUG(ent.tagStr() << " " << p);
                     if (outTy) {
                         MIR_TODO(state, "Get type for " << ent.tagStr() << " (" << p << ")");
                     }
-                    return StaticRefPtr::allocate(valuePool, std::move(p), nullptr);
+                    return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr);
                 }
             }
 
-            ValueRef getLval(const ::MIR::LValue& lv, ValueRef* meta = nullptr) {
+            MIREvalValueRef getLval(const ::MIR::LValue& lv, MIREvalValueRef* meta = nullptr) {
                 ::HIR::TypeRef tmpTy;
                 const ::HIR::TypeData* typ = nullptr;
-                ValueRef metadata;
-                ValueRef val;
+                MIREvalValueRef metadata;
+                MIREvalValueRef val;
                 //TRACE_FUNCTION_FR(lv, val);
             TU_MATCH_HDRA( (lv.root), {)
             TU_ARMA(Return, e) {
                         typ = retType;
-                        val = ValueRef(retval);
+                        val = MIREvalValueRef(retval);
                     }
                     TU_ARMA(Local, e) {
                         MIR_ASSERT(state, e < locals.size(), "Local index out of range - " << e << " >= " << locals.size());
                         typ = localTypes[e];
-                        val = ValueRef(locals[e]);
+                        val = MIREvalValueRef(locals[e]);
                     }
                     TU_ARMA(Argument, e) {
                         MIR_ASSERT(state, e < args.size(), "Argument index out of range - " << e << " >= " << args.size());
                         typ = state.mArgs[e].second;
-                        val = ValueRef(args[e]);
+                        val = MIREvalValueRef(args[e]);
                     }
                     TU_ARMA(Static, e) {
-                        val = ValueRef(getStaticrefMono(e, lv.wrappers.empty() ? nullptr : &tmpTy));
+                        val = MIREvalValueRef(getStaticrefMono(e, lv.wrappers.empty() ? nullptr : &tmpTy));
                         if (!lv.wrappers.empty()) {
                             MIR_ASSERT(state, tmpTy != HIR::TypeRef(), "Type not set?");
                         }
@@ -1515,7 +1512,7 @@ namespace MIR {
                                 } else {
                                     throw "";
                                 }
-                                metadata = ValueRef();
+                                metadata = MIREvalValueRef();
                                 size_t sz, al;
                                 if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
                                     throw Defer();
@@ -1535,7 +1532,7 @@ namespace MIR {
                             MIR_ASSERT(state, repr, "No repr for " << typ);
                             MIR_ASSERT(state, e < repr->fields.size(), "LValue::Field index out of range");
                             if (repr->size != SIZE_MAX) {
-                                metadata = ValueRef();
+                                metadata = MIREvalValueRef();
                             }
                             auto ofs = repr->fields[e].offset;
                             typ = repr->fields[e].ty;
@@ -1572,12 +1569,12 @@ namespace MIR {
                             auto p = val.readPtr(state);
                             MIR_ASSERT(state, p.first >= EncodedLiteral::PTR_BASE, "Null (<PTR_BASE) pointer deref");
                             MIR_ASSERT(state, p.first % al == 0, "Unaligned pointer deref");
-                            DEBUG("> " << ValueRef(p.second) << " - o=" << (p.first - EncodedLiteral::PTR_BASE) << " sz=" << sz << " " << typ);
+                            DEBUG("> " << MIREvalValueRef(p.second) << " - o=" << (p.first - EncodedLiteral::PTR_BASE) << " sz=" << sz << " " << typ);
                             // TODO: Determine size using metadata?
                             if (sz == SIZE_MAX) {
-                                val = ValueRef(p.second, p.first - EncodedLiteral::PTR_BASE);
+                                val = MIREvalValueRef(p.second, p.first - EncodedLiteral::PTR_BASE);
                             } else {
-                                val = ValueRef(p.second, p.first - EncodedLiteral::PTR_BASE).slice(0, sz);
+                                val = MIREvalValueRef(p.second, p.first - EncodedLiteral::PTR_BASE).slice(0, sz);
                             }
                         }
                         TU_ARMA(Index, e) {
@@ -1593,14 +1590,14 @@ namespace MIR {
                             } else {
                                 MIR_BUG(state, "Index of unsupported type - " << typ);
                             }
-                            metadata = ValueRef();
+                            metadata = MIREvalValueRef();
                             size_t sz, al;
                             if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
                                 throw Defer();
                             }
                             MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << typ);
                             MIR_ASSERT(state, e < locals.size(), "LValue::Index index local out of range");
-                            size_t index = ValueRef(locals[e]).readUsize(state);
+                            size_t index = MIREvalValueRef(locals[e]).readUsize(state);
                             MIR_ASSERT(state, index < size, "LValue::Index index out of range - " << index << " >= " << size);
                             val = val.slice(index * sz, sz);
                         }
@@ -1609,7 +1606,7 @@ namespace MIR {
                             MIR_ASSERT(state, repr, "No repr for " << typ);
                             MIR_ASSERT(state, e < repr->fields.size(), "LValue::Downcast index out of range");
                             if (repr->size != SIZE_MAX) {
-                                metadata = ValueRef();
+                                metadata = MIREvalValueRef();
                             }
                             typ = repr->fields[e].ty;
                             val = val.slice(repr->fields[e].offset, sizeOfOrBug(typ));
@@ -1686,21 +1683,21 @@ namespace MIR {
                 }
             }
 
-            void writeEncoded(ValueRef dst, const EncodedLiteral& encoded) {
+            void writeEncoded(MIREvalValueRef dst, const EncodedLiteral& encoded) {
                 // Write the encoded value into the destination
                 dst.writeBytes(state, encoded.bytes.data(), encoded.bytes.size());
                 for (const auto& r : encoded.relocations) {
-                    RelocPtr reloc;
+                    MIREvalRelocPtr reloc;
                     if (r.p) {
-                        reloc = RelocPtr(getStaticref(r.p->clone()));
+                        reloc = MIREvalRelocPtr(getStaticref(r.p->clone()));
                     } else {
-                        reloc = RelocPtr(AllocationPtr::allocateRo(valuePool, r.bytes.data(), r.bytes.size()));
+                        reloc = MIREvalRelocPtr(MIREvalAllocationPtr::allocateRo(valuePool, r.bytes.data(), r.bytes.size()));
                     }
                     dst.slice(r.ofs, r.len).setReloc(std::move(reloc));
                 }
             }
 
-            void writeConst(ValueRef dst, const ::MIR::Constant& c) {
+            void writeConst(MIREvalValueRef dst, const ::MIR::Constant& c) {
             TU_MATCH_HDR( (c), {)
             TU_ARM(c, Int, e2) {
                         dst.writeSint(state, dst.getLen() * 8, e2.v);
@@ -1715,10 +1712,10 @@ namespace MIR {
                         dst.writeUint(state, 1, e2.v);
                     }
                     TU_ARM(c, Bytes, e2) {
-                        dst.writePtr(state, EncodedLiteral::PTR_BASE, ConstantPtr::allocate(valuePool, e2.data(), e2.size()));
+                        dst.writePtr(state, EncodedLiteral::PTR_BASE, MIREvalConstantPtr::allocate(valuePool, e2.data(), e2.size()));
                     }
                     TU_ARM(c, StaticString, e2) {
-                        dst.writePtr(state, EncodedLiteral::PTR_BASE, ConstantPtr::allocate(valuePool, e2.data(), e2.size()));
+                        dst.writePtr(state, EncodedLiteral::PTR_BASE, MIREvalConstantPtr::allocate(valuePool, e2.data(), e2.size()));
                         dst.slice(TargetGetPointerBits() / 8).writeUint(state, TargetGetPointerBits(), e2.size());
                     }
                     TU_ARM(c, Const, e2) {
@@ -1754,8 +1751,8 @@ namespace MIR {
             }
 
             /// Write a borrow of the given lvalue
-            void writeBorrow(ValueRef dst, ::HIR::BorrowType bt, const ::MIR::LValue& lv) {
-                ValueRef meta;
+            void writeBorrow(MIREvalValueRef dst, ::HIR::BorrowType bt, const ::MIR::LValue& lv) {
+                MIREvalValueRef meta;
                 auto val = this->getLval(lv, &meta);
                 dst.writePtr(state, EncodedLiteral::PTR_BASE + val.getOfs(), val.getStorage());
                 if (meta.isValid()) {
@@ -1764,7 +1761,7 @@ namespace MIR {
                 }
             }
 
-            void writeParam(ValueRef dst, const ::MIR::Param& p) {
+            void writeParam(MIREvalValueRef dst, const ::MIR::Param& p) {
             TU_MATCH_HDRA( (p), { )
             TU_ARMA(LValue, e)
                 dst.copyFrom( state, this->getLval(e) );
@@ -1804,7 +1801,7 @@ namespace MIR {
             FloatValue readParamFloat(unsigned bits, const ::MIR::Param& p) const {
             TU_MATCH_HDRA( (p), {)
             TU_ARMA(LValue, e)
-                return const_cast<CallStackEntry*>(this)->getLval(e).readFloat(state, bits);
+                return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readFloat(state, bits);
                     TU_ARMA(Borrow, e)
                     MIR_BUG(state, "Expected a float, got a MIR::Param::Borrow");
                     TU_ARMA(Constant, e) {
@@ -1829,7 +1826,7 @@ namespace MIR {
             U128 readParamUint(unsigned bits, const ::MIR::Param& p) const {
             TU_MATCH_HDRA( (p), { )
             TU_ARMA(LValue, e)
-                return const_cast<CallStackEntry*>(this)->getLval(e).readUint(state, bits);
+                return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readUint(state, bits);
                     TU_ARMA(Borrow, e)
                     MIR_BUG(state, "Expected an integer, got a MIR::Param::Borrow");
                     TU_ARMA(Constant, e) {
@@ -1860,7 +1857,7 @@ namespace MIR {
             S128 readParamSint(unsigned bits, const ::MIR::Param& p) const {
             TU_MATCH_HDRA( (p), { )
             TU_ARMA(LValue, e)
-                return const_cast<CallStackEntry*>(this)->getLval(e).readSint(state, bits);
+                return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readSint(state, bits);
                     TU_ARMA(Borrow, e)
                     MIR_BUG(state, "Expected an integer, got a MIR::Param::Borrow");
                     TU_ARMA(Constant, e) {
@@ -1882,10 +1879,10 @@ namespace MIR {
             abort();
             }
 
-            std::pair<uint64_t, RelocPtr> readParamPtr(const ::MIR::Param& p) const {
+            std::pair<uint64_t, MIREvalRelocPtr> readParamPtr(const ::MIR::Param& p) const {
             TU_MATCH_HDRA( (p), {)
             TU_ARMA(LValue, e) {
-                        return const_cast<CallStackEntry*>(this)->getLval(e).readPtr(state);
+                        return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readPtr(state);
                     }
                     TU_ARMA(Borrow, e) {
                         MIR_TODO(state, "read_param_ptr - " << p);
@@ -1896,7 +1893,7 @@ namespace MIR {
                         }
                         MIR_ASSERT(state, e.as_ItemAddr().offset.isU64(), "Item address offset is too large: " << e.as_ItemAddr().offset);
                         // TODO: Look up the static
-                        return ::std::make_pair(EncodedLiteral::PTR_BASE + e.as_ItemAddr().offset.truncateU64(), RelocPtr(getStaticrefMono(*e.as_ItemAddr())));
+                        return ::std::make_pair(EncodedLiteral::PTR_BASE + e.as_ItemAddr().offset.truncateU64(), MIREvalRelocPtr(getStaticrefMono(*e.as_ItemAddr())));
                     }
             }
             abort();
@@ -1911,11 +1908,10 @@ namespace MIR {
             }
         };
 
-    }
 } // namespace ::MIR::eval
 
 namespace {
-    ::std::pair<::MIR::eval::ValueRef, ::MIR::eval::ValueRef> getTupleTBool(const ::MIR::eval::CallStackEntry& localState, ::MIR::eval::ValueRef& src, const HIR::TypeData* t) {
+    ::std::pair<::MIR::MIREvalValueRef, ::MIR::MIREvalValueRef> getTupleTBool(const ::MIR::MIREvalCallStackEntry& localState, ::MIR::MIREvalValueRef& src, const HIR::TypeData* t) {
         auto tupleT = localState.rootResolve.crate.types.tuple({t, localState.rootResolve.crate.types.primitive(::HIR::CoreType::Bool)});
         auto* repr = TargetGetTypeRepr(localState.state.sp, localState.rootResolve, tupleT);
         MIR_ASSERT(localState.state, repr, "No repr for " << tupleT);
@@ -1924,9 +1920,9 @@ namespace {
     }
 
     bool doArithChecked(
-        ::MIR::eval::CallStackEntry& localState,
+        ::MIR::MIREvalCallStackEntry& localState,
         const HIR::TypeData* ty,
-        ::MIR::eval::ValueRef& dst,
+        ::MIR::MIREvalValueRef& dst,
         const ::MIR::Param& valL,
         ::MIR::eBinOp op,
         const ::MIR::Param& valR,
@@ -2268,11 +2264,11 @@ namespace {
                 const auto* borrowTy = ty->opt_Borrow();
                 if (borrowTy && ((borrowTy->inner->is_Slice() && borrowTy->inner->as_Slice().inner == HIR::CoreType::U8) || borrowTy->inner == HIR::CoreType::Str)) {
                     struct P {
-                        ::MIR::eval::RelocPtr reloc;
+                        ::MIR::MIREvalRelocPtr reloc;
                         const void* data;
                         size_t len;
 
-                        P(::MIR::eval::CallStackEntry& localState, const ::MIR::Param& p) {
+                        P(::MIR::MIREvalCallStackEntry& localState, const ::MIR::Param& p) {
                             auto vr = localState.getLval(p.as_LValue());
                             auto ptr = vr.readPtr(localState.state);
                             this->len = vr.slice(TargetGetPointerBits() / 8).readUsize(localState.state);
@@ -2323,7 +2319,6 @@ namespace {
 
 namespace HIR {
 
-    using namespace ::MIR::eval;
 
     unsigned int Evaluator::sNextEvalIndex = 0;
 
@@ -2334,12 +2329,12 @@ namespace HIR {
         }
     }
 
-    void Evaluator::pushStackEntry(::FmtLambda printPath, const ::MIR::Function& fcn, MonomorphState ms, ::HIR::TypeRef exp, ::HIR::Function::argsT argDefs, ::std::vector<::MIR::eval::AllocationPtr> args, const ::HIR::GenericParams* itemParamsDef, const ::HIR::GenericParams* implParamsDef) {
-        this->callStack.push_back(new CallStackEntry(this->valuePool.mutPtr(), this->numFrames, this->rootSpan, this->resolve, std::move(printPath), std::move(exp), std::move(argDefs), fcn, std::move(ms), std::move(args), itemParamsDef, implParamsDef));
+    void Evaluator::pushStackEntry(::FmtLambda printPath, const ::MIR::Function& fcn, MonomorphState ms, ::HIR::TypeRef exp, ::HIR::Function::argsT argDefs, ::std::vector<::MIR::MIREvalAllocationPtr> args, const ::HIR::GenericParams* itemParamsDef, const ::HIR::GenericParams* implParamsDef) {
+        this->callStack.push_back(new MIR::MIREvalCallStackEntry(this->valuePool.mutPtr(), this->numFrames, this->rootSpan, this->resolve, std::move(printPath), std::move(exp), std::move(argDefs), fcn, std::move(ms), std::move(args), itemParamsDef, implParamsDef));
         this->numFrames += 1;
     }
 
-    AllocationPtr Evaluator::runUntilStackEmpty() {
+    MIR::MIREvalAllocationPtr Evaluator::runUntilStackEmpty() {
         const unsigned MAX_BLOCK_COUNT = 4'000'000;
         const unsigned MAX_STMT_COUNT = 8'000'000;
         assert(!this->callStack.empty());
@@ -2364,7 +2359,7 @@ namespace HIR {
                 case TERM_RET_PUSHED:
                     continue;
                 case TERM_RET_RETURN: {
-                    MIR::eval::AllocationPtr rv = std::move(this->callStack.back()->retval);
+                    MIR::MIREvalAllocationPtr rv = std::move(this->callStack.back()->retval);
                     this->callStack.pop_back();
                     if (this->callStack.empty() == 1) {
                         return rv;
@@ -2373,7 +2368,7 @@ namespace HIR {
                         const auto& term = nextState.state.fcn.blocks[nextState.state.getCurBlock()].terminator;
                         const auto& te = term.as_Call();
                         auto dst = nextState.getLval(te.retVal);
-                        dst.copyFrom(nextState.state, ValueRef(rv));
+                        dst.copyFrom(nextState.state, MIR::MIREvalValueRef(rv));
                         nextState.state.setCurStmt(te.retBlock, 0);
                     }
                     break;
@@ -2385,7 +2380,7 @@ namespace HIR {
         ERROR(this->rootSpan, E0000, "Constant evaluation ran for too long - " << numStmtsRun << " statements, " << idx << " blocks");
     }
 
-    void Evaluator::runStatement(::MIR::eval::CallStackEntry& localState, const ::MIR::Statement& stmt) {
+    void Evaluator::runStatement(::MIR::MIREvalCallStackEntry& localState, const ::MIR::Statement& stmt) {
         const auto& state = localState.state;
         DEBUG("E" << this->evalIndex << " F" << localState.frameIndex << " " << state << stmt);
 
@@ -2803,7 +2798,7 @@ namespace HIR {
         DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << sa.dst << " := " << dst);
     }
 
-    unsigned Evaluator::runTerminator(::MIR::eval::CallStackEntry& localState, const ::MIR::Terminator& terminator) {
+    unsigned Evaluator::runTerminator(::MIR::MIREvalCallStackEntry& localState, const ::MIR::Terminator& terminator) {
         const auto& state = localState.state;
         DEBUG("E" << this->evalIndex << " F" << localState.frameIndex << " " << state << terminator);
 
@@ -2933,11 +2928,11 @@ namespace HIR {
                     } else if (te->name == "type_name") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         auto name = state.intrinsicTypeName(ty);
-                        dst.writePtr(state, EncodedLiteral::PTR_BASE, AllocationPtr::allocateRo(localState.valuePool, name.data(), name.size()));
+                        dst.writePtr(state, EncodedLiteral::PTR_BASE, MIR::MIREvalAllocationPtr::allocateRo(localState.valuePool, name.data(), name.size()));
                         dst.slice(TargetGetPointerBits() / 8).writeUint(state, TargetGetPointerBits(), name.size());
                     } else if (te->name == "type_id") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
-                        dst.writePtr(state, EncodedLiteral::PTR_BASE, StaticRefPtr::allocate(localState.valuePool, HIR::Path(mv$(ty), "#type_id"), nullptr));
+                        dst.writePtr(state, EncodedLiteral::PTR_BASE, MIR::MIREvalStaticRefPtr::allocate(localState.valuePool, HIR::Path(mv$(ty), "#type_id"), nullptr));
                     } else if (te->name == "needs_drop") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         dst.writeUint(state, 8, resolve.typeNeedsDropGlue(state.sp, ty) ? 1 : 0);
@@ -2947,9 +2942,9 @@ namespace HIR {
                         auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
                         MIR_ASSERT(state, repr, "No repr for panic::Location?");
                         MIR_ASSERT(state, repr->fields.size() == 4, "Unexpected item count in panic::Location");
-                        auto val = RelocPtr(AllocationPtr::allocate(localState.valuePool, resolve, state, ty));
+                        auto val = MIR::MIREvalRelocPtr(MIR::MIREvalAllocationPtr::allocate(localState.valuePool, resolve, state, ty));
                         dst.writePtr(state, EncodedLiteral::PTR_BASE, val);
-                        auto rv = ValueRef(val);
+                        auto rv = MIR::MIREvalValueRef(val);
                         auto pb = TargetGetPointerBits() / 8;
                         const SpanInnerSource* caller = nullptr;
                         for (const Span* span = &state.sp; span->get(); span = &span->get()->parentSpan) {
@@ -2960,7 +2955,7 @@ namespace HIR {
                         }
                         const auto* filename = caller ? caller->filename.c_str() : "";
                         const auto filenameLen = caller ? caller->filename.size() : 0;
-                        rv.slice(repr->fields[0].offset + 0, pb).writePtr(state, EncodedLiteral::PTR_BASE, ConstantPtr::allocate(localState.valuePool, filename, filenameLen + 1)); // file.ptr, including trailing NUL
+                        rv.slice(repr->fields[0].offset + 0, pb).writePtr(state, EncodedLiteral::PTR_BASE, MIR::MIREvalConstantPtr::allocate(localState.valuePool, filename, filenameLen + 1)); // file.ptr, including trailing NUL
                         rv.slice(repr->fields[0].offset + pb, pb).writeUint(state, TargetGetPointerBits(), filenameLen);                                                            // file.len
                         rv.slice(repr->fields[1].offset, 4).writeUint(state, 32, caller ? caller->startLine : 0);                                                                   // line: u32
                         rv.slice(repr->fields[2].offset, 4).writeUint(state, 32, 0);                                                                                                // col: u32 (expression AST stores only the end point)
@@ -3266,12 +3261,12 @@ namespace HIR {
                     }
 
                     // Argument values
-                    ::std::vector<AllocationPtr>  callArgs;
+                    ::std::vector<MIR::MIREvalAllocationPtr>  callArgs;
                     callArgs.reserve( repr->fields.size() );
                     for(const auto& f : repr->fields) {
                             auto size = localState.sizeOfOrBug(f.ty);
-                            callArgs.push_back(AllocationPtr::allocate(localState.valuePool, resolve, state, f.ty));
-                            auto vr = ValueRef(callArgs.back());
+                            callArgs.push_back(MIR::MIREvalAllocationPtr::allocate(localState.valuePool, resolve, state, f.ty));
+                            auto vr = MIR::MIREvalValueRef(callArgs.back());
                             vr.copyFrom(state, argVal.slice(f.offset, size));
                     }
 
@@ -3294,8 +3289,8 @@ namespace HIR {
                         size_t nbytes = elementSize * count.truncateU64();
                         MIR_ASSERT(state, ptrSrc.first >= EncodedLiteral::PTR_BASE, "");
                         MIR_ASSERT(state, ptrDst.first >= EncodedLiteral::PTR_BASE, "");
-                        auto vrSrc = ValueRef(ptrSrc.second, ptrSrc.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
-                        auto vrDst = ValueRef(ptrDst.second, ptrDst.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
+                        auto vrSrc = MIR::MIREvalValueRef(ptrSrc.second, ptrSrc.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
+                        auto vrDst = MIR::MIREvalValueRef(ptrDst.second, ptrDst.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
                         vrDst.copyFrom(state, vrSrc);
                     } else if (te->name == "offset") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0)->as_Pointer().inner);
@@ -3337,13 +3332,13 @@ namespace HIR {
                         MIR_ASSERT(state, count * elementSize < U128(SIZE_MAX), "Excessive size in `" << te->name << "`");
                         size_t nbytes = elementSize * count.truncateU64();
                         MIR_ASSERT(state, ptrDst.first >= EncodedLiteral::PTR_BASE, "");
-                        ValueRef vrDst = ValueRef(ptrDst.second, ptrDst.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
+                        MIR::MIREvalValueRef vrDst = MIR::MIREvalValueRef(ptrDst.second, ptrDst.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
                         memset(vrDst.extWriteBytes(state, nbytes), val.truncateU64(), nbytes);
                     }
                     // Innards of `core::ptr::read` (on 1.90+)
                     else if (te->name == "read_via_copy") {
                         auto ptrSrc = localState.readParamPtr(e.args.at(0));
-                        auto vrSrc = ValueRef(ptrSrc.second, ptrSrc.first - EncodedLiteral::PTR_BASE);
+                        auto vrSrc = MIR::MIREvalValueRef(ptrSrc.second, ptrSrc.first - EncodedLiteral::PTR_BASE);
                         dst.copyFrom(state, vrSrc);
                     } else if (te->name == "discriminant_value") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
@@ -3355,13 +3350,13 @@ namespace HIR {
                                 throw Defer();
                             }
 
-                            ValueRef value;
+                            MIR::MIREvalValueRef value;
                             if (const auto* arg = e.args.at(0).opt_Borrow()) {
                                 value = localState.getLval(arg->val);
                             } else {
                                 auto ptr = localState.readParamPtr(e.args.at(0));
                                 MIR_ASSERT(state, ptr.first >= EncodedLiteral::PTR_BASE, "Null pointer passed to `discriminant_value`");
-                                value = ValueRef(ptr.second, ptr.first - EncodedLiteral::PTR_BASE);
+                                value = MIR::MIREvalValueRef(ptr.second, ptr.first - EncodedLiteral::PTR_BASE);
                             }
 
                         TU_MATCH_HDRA( (repr->variants), { )
@@ -3420,13 +3415,13 @@ namespace HIR {
                     auto fcnp = std::make_shared<HIR::Path>(ms.monomorphPath(state.sp, fcnpRaw));
 
                     // Argument values
-                    ::std::vector<AllocationPtr> callArgs;
+                    ::std::vector<MIR::MIREvalAllocationPtr> callArgs;
                     callArgs.reserve(e.args.size());
                     for (const auto& a : e.args) {
                         ::HIR::TypeRef tmp;
                         const auto& ty = state.getParamType(tmp, a);
-                        callArgs.push_back(AllocationPtr::allocate(localState.valuePool, resolve, state, ty));
-                        auto vr = ValueRef(callArgs.back());
+                        callArgs.push_back(MIR::MIREvalAllocationPtr::allocate(localState.valuePool, resolve, state, ty));
+                        auto vr = MIR::MIREvalValueRef(callArgs.back());
                         localState.writeParam(vr, a);
                     }
 
@@ -3451,7 +3446,7 @@ namespace HIR {
     /// @param fcn_path
     /// @param call_args
     /// @return `true` is a new stack frame was pushed
-    bool Evaluator::callFunction(CallStackEntry& localState, const MIR::LValue& rvSlot, ::std::shared_ptr<HIR::Path> fcnPath, ::std::vector<AllocationPtr> callArgs) {
+    bool Evaluator::callFunction(MIR::MIREvalCallStackEntry& localState, const MIR::LValue& rvSlot, ::std::shared_ptr<HIR::Path> fcnPath, ::std::vector<MIR::MIREvalAllocationPtr> callArgs) {
         const auto& state = localState.state;
         MonomorphState fcnMs(resolve.crate.types);
         const ::HIR::GenericParams* implParamsDef = nullptr;
@@ -3469,13 +3464,13 @@ namespace HIR {
                     const auto& argTupleTy = e->trait.mParams.types.at(0);
                     const auto* argTupleRepr = TargetGetTypeRepr(state.sp, state.mResolve, argTupleTy);
                     auto argTupleV = std::move(callArgs.at(1));
-                    ValueRef argTuple(argTupleV);
+                    MIR::MIREvalValueRef argTuple(argTupleV);
                     callArgs.clear();
                     callArgs.reserve(argTupleRepr->fields.size());
                     for (const auto& fld : argTupleRepr->fields) {
                         auto size = localState.sizeOfOrBug(fld.ty);
-                        callArgs.push_back(AllocationPtr::allocate(localState.valuePool, state.mResolve, state, fld.ty));
-                        auto vr = ValueRef(callArgs.back());
+                        callArgs.push_back(MIR::MIREvalAllocationPtr::allocate(localState.valuePool, state.mResolve, state, fld.ty));
+                        auto vr = MIR::MIREvalValueRef(callArgs.back());
                         vr.copyFrom(state, argTuple.slice(fld.offset, size));
                     }
                 } else {
@@ -3574,7 +3569,7 @@ namespace HIR {
             for (size_t i = 0; i < callArgs.size(); i++) {
                 size_t sz = localState.sizeOfOrBug(repr->fields[i].ty);
                 auto localDst = dst.slice(repr->fields[i].offset, sz);
-                localDst.copyFrom(state, ValueRef(callArgs[i]));
+                localDst.copyFrom(state, MIR::MIREvalValueRef(callArgs[i]));
                 DEBUG("@" << repr->fields[i].offset << " = " << localDst);
             }
             return false;
@@ -3583,7 +3578,7 @@ namespace HIR {
         }
     }
 
-    EncodedLiteral Evaluator::allocationToEncoded(const ::HIR::TypeData* ty, const ::MIR::eval::Allocation& a) {
+    EncodedLiteral Evaluator::allocationToEncoded(const ::HIR::TypeData* ty, const ::MIR::MIREvalAllocation& a) {
         //const auto* a_bytes = a.get_bytes(0, a.size(), true);
         const auto* aBytes = a.getBytes(0, a.size(), false); // NOTE: Read the uninitialised bytes (they _should_ be zeroes)
         ASSERT_BUG(this->rootSpan, aBytes, "Unable to get entire allocation - " << FMT_CB(ss, a.fmt(ss, 0, a.size())));
@@ -3687,7 +3682,7 @@ namespace HIR {
             auto rvRaw = this->runUntilStackEmpty();
 
             ASSERT_BUG(this->rootSpan, rvRaw, "evaluate_constant_mir returned null allocation");
-            DEBUG(ip << " = " << ::MIR::eval::ValueRef(rvRaw));
+            DEBUG(ip << " = " << ::MIR::MIREvalValueRef(rvRaw));
 
             return this->allocationToEncoded(exp, *rvRaw);
         } else {
@@ -4457,7 +4452,7 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const ::HIR::Crate& 
 
 namespace HIR {
 
-    Evaluator::CsePtr::CsePtr(::MIR::eval::CallStackEntry* ptr)
+    Evaluator::CsePtr::CsePtr(::MIR::MIREvalCallStackEntry* ptr)
         : inner(ptr)
     {
     }

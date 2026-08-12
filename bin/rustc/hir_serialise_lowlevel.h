@@ -21,21 +21,20 @@
 #include "rc_string.h"
 
 namespace HIR {
-    namespace serialise {
 
-        class WriterInner;
-        class ReaderInner;
+        class HIRSerialiseWriterInner;
+        class HIRSerialiseReaderInner;
 
-        class Writer {
-            WriterInner* inner;
+        class HIRSerialiseWriter {
+            HIRSerialiseWriterInner* inner;
             ::std::map<RcString, unsigned> istringCache;
             ::std::map<const char*, unsigned> objnameCache;
 
         public:
-            Writer();
-            Writer(const Writer&) = delete;
-            Writer(Writer&&) = delete;
-            ~Writer();
+            HIRSerialiseWriter();
+            HIRSerialiseWriter(const HIRSerialiseWriter&) = delete;
+            HIRSerialiseWriter(HIRSerialiseWriter&&) = delete;
+            ~HIRSerialiseWriter();
 
             void open(const ::std::string& filename);
             void write(const void* data, size_t count);
@@ -91,10 +90,10 @@ namespace HIR {
             void rawWriteBytes(size_t len, const void* data);
 
             class CloseOnDrop {
-                friend class Writer;
-                Writer* r;
+                friend class HIRSerialiseWriter;
+                HIRSerialiseWriter* r;
 
-                CloseOnDrop(Writer& r);
+                CloseOnDrop(HIRSerialiseWriter& r);
 
             public:
                 CloseOnDrop(CloseOnDrop&& x);
@@ -111,34 +110,34 @@ namespace HIR {
             }
         };
 
-        class ReadBuffer {
+        class HIRSerialiseReadBuffer {
             ::std::vector<uint8_t> backing;
             unsigned int ofs;
 
         public:
-            ReadBuffer(size_t size);
+            HIRSerialiseReadBuffer(size_t size);
 
             size_t capacity() const {
                 return backing.capacity();
             }
 
             size_t read(void* dst, size_t len);
-            void populate(ReaderInner& is);
+            void populate(HIRSerialiseReaderInner& is);
         };
 
-        class Reader {
-            ReaderInner* inner;
-            ReadBuffer buffer;
+        class HIRSerialiseReader {
+            HIRSerialiseReaderInner* inner;
+            HIRSerialiseReadBuffer buffer;
             size_t pos;
             ::std::vector<RcString> strings;
 
             ::std::vector<std::string> objnameCache;
 
         public:
-            Reader(const ::std::string& path);
-            Reader(const Writer&) = delete;
-            Reader(Writer&&) = delete;
-            ~Reader();
+            HIRSerialiseReader(const ::std::string& path);
+            HIRSerialiseReader(const HIRSerialiseWriter&) = delete;
+            HIRSerialiseReader(HIRSerialiseWriter&&) = delete;
+            ~HIRSerialiseReader();
 
             size_t getPos() const {
                 return pos;
@@ -193,10 +192,10 @@ namespace HIR {
             std::string rawReadBytesStdstring();
 
             class CloseOnDrop {
-                friend class Reader;
-                Reader* r;
+                friend class HIRSerialiseReader;
+                HIRSerialiseReader* r;
 
-                CloseOnDrop(Reader& r);
+                CloseOnDrop(HIRSerialiseReader& r);
 
             public:
                 CloseOnDrop(const CloseOnDrop&) = delete;
@@ -213,5 +212,4 @@ namespace HIR {
             void closeObject();
         };
 
-    } // namespace serialise
 } // namespace HIR

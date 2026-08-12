@@ -8,11 +8,9 @@
 #include <std/mem/obj_pool.h>
 
 namespace MIR {
-    namespace eval {
-        class AllocationPtr;
-        class Allocation;
-        class CallStackEntry;
-    }
+        class MIREvalAllocationPtr;
+        class MIREvalAllocation;
+        class MIREvalCallStackEntry;
     class LValue;
     class Statement;
     class Terminator;
@@ -28,12 +26,12 @@ namespace HIR {
         };
 
         class CsePtr {
-            ::MIR::eval::CallStackEntry* inner;
+            ::MIR::MIREvalCallStackEntry* inner;
 
         public:
             ~CsePtr();
 
-            CsePtr(::MIR::eval::CallStackEntry* ptr);
+            CsePtr(::MIR::MIREvalCallStackEntry* ptr);
 
             CsePtr(const CsePtr&) = delete;
             CsePtr& operator=(const CsePtr&) = delete;
@@ -42,11 +40,11 @@ namespace HIR {
 
             CsePtr& operator=(CsePtr&& x);
 
-            ::MIR::eval::CallStackEntry* operator->() {
+            ::MIR::MIREvalCallStackEntry* operator->() {
                 return inner;
             }
 
-            ::MIR::eval::CallStackEntry& operator*() {
+            ::MIR::MIREvalCallStackEntry& operator*() {
                 return *inner;
             }
         };
@@ -84,15 +82,15 @@ namespace HIR {
         }
 
     private:
-        void pushStackEntry(::FmtLambda printPath, const ::MIR::Function& fcn, MonomorphState ms, ::HIR::TypeRef exp, ::HIR::Function::argsT argDefs, ::std::vector<::MIR::eval::AllocationPtr> args, const ::HIR::GenericParams* itemParamsDef, const ::HIR::GenericParams* implParamsDef);
+        void pushStackEntry(::FmtLambda printPath, const ::MIR::Function& fcn, MonomorphState ms, ::HIR::TypeRef exp, ::HIR::Function::argsT argDefs, ::std::vector<::MIR::MIREvalAllocationPtr> args, const ::HIR::GenericParams* itemParamsDef, const ::HIR::GenericParams* implParamsDef);
 
-        ::MIR::eval::AllocationPtr runUntilStackEmpty();
-        void runStatement(::MIR::eval::CallStackEntry& localState, const ::MIR::Statement& stmt);
+        ::MIR::MIREvalAllocationPtr runUntilStackEmpty();
+        void runStatement(::MIR::MIREvalCallStackEntry& localState, const ::MIR::Statement& stmt);
         // Returns UINT_MAX on return
-        unsigned runTerminator(::MIR::eval::CallStackEntry& localState, const ::MIR::Terminator& stmt);
-        bool callFunction(::MIR::eval::CallStackEntry& localState, const MIR::LValue& rvSlot, ::std::shared_ptr<::HIR::Path> path, ::std::vector<::MIR::eval::AllocationPtr> callArgs);
+        unsigned runTerminator(::MIR::MIREvalCallStackEntry& localState, const ::MIR::Terminator& stmt);
+        bool callFunction(::MIR::MIREvalCallStackEntry& localState, const MIR::LValue& rvSlot, ::std::shared_ptr<::HIR::Path> path, ::std::vector<::MIR::MIREvalAllocationPtr> callArgs);
 
-        EncodedLiteral allocationToEncoded(const ::HIR::TypeData* ty, const ::MIR::eval::Allocation& a);
+        EncodedLiteral allocationToEncoded(const ::HIR::TypeData* ty, const ::MIR::MIREvalAllocation& a);
     };
 
 } // namespace HIR

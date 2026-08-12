@@ -756,7 +756,7 @@ namespace {
                     this->visitType(ty);
                 }
 
-                struct MirVisitor: public ::MIR::visit::VisitorMut {
+                struct MirVisitor: public ::MIR::MIRVisitorMut {
                     BindVisitor& upperVisitor;
 
                     MirVisitor(BindVisitor& upperVisitor)
@@ -772,7 +772,7 @@ namespace {
                         upperVisitor.visitPath(p, ::HIR::Visitor::PathContext::VALUE);
                     }
 
-                    bool visitLvalue(::MIR::LValue& lv, ::MIR::visit::ValUsage u) override {
+                    bool visitLvalue(::MIR::LValue& lv, ::MIR::MIRValUsage u) override {
                         if (lv.root.is_Static()) {
                             upperVisitor.visitPath(lv.root.as_Static(), ::HIR::Visitor::PathContext::VALUE);
                         }
@@ -1244,7 +1244,7 @@ namespace {
                     this->visitType(ty);
                 }
 
-                struct MirVisitor: public ::MIR::visit::VisitorMut {
+                struct MirVisitor: public ::MIR::MIRVisitorMut {
                     VisitorPost& upperVisitor;
 
                     MirVisitor(VisitorPost& upperVisitor)
@@ -1260,7 +1260,7 @@ namespace {
                         upperVisitor.visitPath(p, ::HIR::Visitor::PathContext::VALUE);
                     }
 
-                    bool visitLvalue(::MIR::LValue& lv, ::MIR::visit::ValUsage u) override {
+                    bool visitLvalue(::MIR::LValue& lv, ::MIR::MIRValUsage u) override {
                         if (lv.root.is_Static()) {
                             upperVisitor.visitPath(lv.root.as_Static(), ::HIR::Visitor::PathContext::VALUE);
                         }

@@ -2397,7 +2397,7 @@ namespace {
                 if (!cleanupBlocks.insert(blockIndex).second) {
                     continue;
                 }
-                ::MIR::visit::visitTerminatorTarget(code->blocks[blockIndex].terminator, [&](const auto& target) {
+                ::MIR::visitTerminatorTarget(code->blocks[blockIndex].terminator, [&](const auto& target) {
                     pendingCleanupBlocks.push_back(target);
                 });
             }

@@ -411,48 +411,46 @@ std::string MIR::TypeResolve::intrinsicTypeName(const ::HIR::TypeData* ty) const
     return FMT(ty);
 }
 
-using namespace MIR::visit;
 
 namespace MIR {
 
-    namespace visit {
-        struct LValueCbVisitor: public Visitor {
-            ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb;
+        struct LValueCbVisitor: public MIRVisitor {
+            ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb;
 
-            LValueCbVisitor(::std::function<bool(const ::MIR::LValue&, ValUsage)> cb)
+            LValueCbVisitor(::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb)
                 : cb(std::move(cb))
             {
             }
 
-            bool visitLvalue(const ::MIR::LValue& lv, ValUsage u) override {
+            bool visitLvalue(const ::MIR::LValue& lv, MIRValUsage u) override {
                 if (cb(lv, u)) {
                     return true;
                 }
-                return Visitor::visitLvalue(lv, u);
+                return MIRVisitor::visitLvalue(lv, u);
             }
         };
 
-        bool visitMirLvalue(const ::MIR::LValue& lv, ValUsage u, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
+        bool visitMirLvalue(const ::MIR::LValue& lv, MIRValUsage u, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb) {
             LValueCbVisitor v{mv$(cb)};
             return v.visitLvalue(lv, u);
         }
 
-        bool visitMirLvalue(const ::MIR::Param& p, ValUsage u, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
+        bool visitMirLvalue(const ::MIR::Param& p, MIRValUsage u, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb) {
             LValueCbVisitor v{mv$(cb)};
             return v.visitParam(p, u);
         }
 
-        bool visitMirLvalues(const ::MIR::RValue& rval, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
+        bool visitMirLvalues(const ::MIR::RValue& rval, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb) {
             LValueCbVisitor v{mv$(cb)};
             return v.visitRvalue(rval);
         }
 
-        bool visitMirLvalues(const ::MIR::Statement& stmt, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
+        bool visitMirLvalues(const ::MIR::Statement& stmt, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb) {
             LValueCbVisitor v{mv$(cb)};
             return v.visitStmt(stmt);
         }
 
-        bool visitMirLvalues(const ::MIR::Terminator& term, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb) {
+        bool visitMirLvalues(const ::MIR::Terminator& term, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb) {
             LValueCbVisitor v{mv$(cb)};
             return v.visitTerminator(term);
         }
@@ -481,7 +479,7 @@ namespace MIR {
     */
 
         void visitTerminatorTargetMut(::MIR::Terminator& term, ::std::function<void(::MIR::BasicBlockId&)> cb) {
-            struct TermCbVisitorMut: public VisitorMut {
+            struct TermCbVisitorMut: public MIRVisitorMut {
                 ::std::function<void(::MIR::BasicBlockId&)> cb;
 
                 bool visitBlockId(::MIR::BasicBlockId& x) override {
@@ -497,7 +495,6 @@ namespace MIR {
         void visitTerminatorTarget(const ::MIR::Terminator& term, ::std::function<void(const ::MIR::BasicBlockId&)> cb) {
             visitTerminatorTargetMut(const_cast<::MIR::Terminator&>(term), cb);
         }
-    } // namespace visit
 } // namespace MIR
 
 // --------------------------------------------------------------------
@@ -575,9 +572,9 @@ void MIRHelperGetLifetimesDetermineValueLifetime(::MIR::TypeResolve& state, cons
             b.resize(statementCount);
         }
         size_t pos = 0;
-        auto useCb = [&](const ::MIR::LValue& tlv, ValUsage vu) {
+        auto useCb = [&](const ::MIR::LValue& tlv, MIR::MIRValUsage vu) {
             if (tlv.root.is_Local()) {
-                if (vu != ValUsage::Write) {
+                if (vu != MIR::MIRValUsage::Write) {
                     slotReadBitmaps[tlv.root.as_Local()][pos] = true;
                 }
             }
@@ -814,12 +811,12 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             auto visitCb = [&](const auto& lv, auto vu) {
                 if (lv.root == mLv.root) {
                     switch (vu) {
-                        case ValUsage::Read:
+                        case MIR::MIRValUsage::Read:
                             DEBUG(mirRes << "Used");
                             state.markRead(stmtIdx);
                             wasUpdated = true;
                             break;
-                        case ValUsage::Move:
+                        case MIR::MIRValUsage::Move:
                             if (lv.wrappers.size() == mLv.wrappers.size()) {
                                 DEBUG(mirRes << (isCopy ? "Read" : "Moved"));
                                 state.markRead(stmtIdx);
@@ -830,12 +827,12 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                                 wasUpdated = true;
                             }
                             break;
-                        case ValUsage::Borrow:
+                        case MIR::MIRValUsage::Borrow:
                             DEBUG(mirRes << "Borrowed");
                             state.markBorrowed(stmtIdx);
                             wasUpdated = true;
                             break;
-                        case ValUsage::Write:
+                        case MIR::MIRValUsage::Write:
                             // Don't care
                             break;
                     }
@@ -1614,30 +1611,29 @@ void ValueLifetime::unify(const ValueLifetime& x) {
 }
 }
 
-namespace MIR { namespace visit {
 
-bool Visitor::visitLvalue(const ::MIR::LValue& lv, ValUsage u) {
+bool MIR::MIRVisitor::visitLvalue(const ::MIR::LValue& lv, MIRValUsage u) {
     if (lv.root.is_Static()) {
         visitPath(lv.root.as_Static());
     }
 
     for (auto& w : lv.wrappers) {
         if (w.is_Index()) {
-            if (visitLvalue(LValue::newLocal(w.as_Index()), ValUsage::Read)) {
+            if (visitLvalue(LValue::newLocal(w.as_Index()), MIRValUsage::Read)) {
                 return true;
             }
         }
     }
     return false;
 }
-bool VisitorMut::visitLvalue(::MIR::LValue& lv, ValUsage u) {
+bool MIR::MIRVisitorMut::visitLvalue(::MIR::LValue& lv, MIRValUsage u) {
     if (lv.root.is_Static()) {
         visitPath(lv.root.as_Static());
     }
     for (auto& w : lv.wrappers) {
         if (w.is_Index()) {
             auto lv = LValue::newLocal(w.as_Index());
-            bool rv = visitLvalue(lv, ValUsage::Read);
+            bool rv = visitLvalue(lv, MIRValUsage::Read);
             ASSERT_BUG(Span(), lv.is_Local(), "visit_lvalue on Index mutated the index to a non-local");
             w = ::MIR::LValue::Wrapper::newIndex(lv.as_Local());
             if (rv) {
@@ -1647,7 +1643,6 @@ bool VisitorMut::visitLvalue(::MIR::LValue& lv, ValUsage u) {
     }
     return false;
 }
-}}
 
 namespace MIR {
 

@@ -42,11 +42,11 @@ struct D {};
 class HirDeserialiser {
     RcString crateName;
     ::std::vector<HIR::TypeRef> types;
-    ::HIR::serialise::Reader& in;
+    ::HIR::HIRSerialiseReader& in;
     ::HIR::TypeInterner& typeInterner;
 
 public:
-    HirDeserialiser(::HIR::serialise::Reader& in, ::HIR::TypeInterner& typeInterner)
+    HirDeserialiser(::HIR::HIRSerialiseReader& in, ::HIR::TypeInterner& typeInterner)
         : in(in)
         , typeInterner(typeInterner)
     {
@@ -1609,7 +1609,7 @@ void HirDeserialiser::deserialiseCrate(::HIR::Crate& rv) {
 
 ::HIR::Crate* HIRDeserialise(stl::ObjPool* pool, ::HIR::TypeInterner& types, const ::std::string& filename) {
     try {
-        ::HIR::serialise::Reader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
+        ::HIR::HIRSerialiseReader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
         HirDeserialiser s{in, types};
 
         auto* rv = pool->make<::HIR::Crate>(pool, types);
@@ -1625,7 +1625,7 @@ void HirDeserialiser::deserialiseCrate(::HIR::Crate& rv) {
 
 RcString HIRDeserialiseJustName(const ::std::string& filename) {
     try {
-        ::HIR::serialise::Reader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
+        ::HIR::HIRSerialiseReader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
 
         // NOTE: This is the first item loaded by deserialise_crate
         auto crateName = in.readIstring();
@@ -2483,11 +2483,11 @@ void HIRDumpExpr(::std::ostream& sink, const ::HIR::ExprPtr& expr) {
 //namespace {
 class HirSerialiser {
     ::std::map<std::string, size_t> types;
-    ::HIR::serialise::Writer& out;
+    ::HIR::HIRSerialiseWriter& out;
     ::HIR::TypeInterner& typeInterner;
 
 public:
-    HirSerialiser(::HIR::serialise::Writer& out, ::HIR::TypeInterner& typeInterner)
+    HirSerialiser(::HIR::HIRSerialiseWriter& out, ::HIR::TypeInterner& typeInterner)
         : out(out)
         , typeInterner(typeInterner)
     {
@@ -3741,7 +3741,7 @@ public:
 //}
 
 void HIRSerialise(const ::std::string& filename, const ::HIR::Crate& crate) {
-    ::HIR::serialise::Writer out;
+    ::HIR::HIRSerialiseWriter out;
     HirSerialiser s{out, crate.types};
     s.serialiseCrate(crate);
     s.clear();

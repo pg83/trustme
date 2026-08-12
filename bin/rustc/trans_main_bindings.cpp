@@ -2370,7 +2370,7 @@ namespace {
                 ::HIR::TypeRef emptyTy;
                 ::MIR::TypeResolve localMirRes(sp, tv.mResolve, FMT_CB(fcnPath), /*ret_ty=*/emptyTy, emptyArgs, mir);
                 for (const auto& block : mir.blocks) {
-                    struct MirVisitor: public ::MIR::visit::Visitor {
+                    struct MirVisitor: public ::MIR::MIRVisitor {
                         const Span& sp;
                         TypeVisitor& tv;
                         const TransParams& pp;
@@ -2386,7 +2386,7 @@ namespace {
                         {
                         }
 
-                        bool visitLvalue(const ::MIR::LValue& lv, MIR::visit::ValUsage /*vu*/) override {
+                        bool visitLvalue(const ::MIR::LValue& lv, MIR::MIRValUsage /*vu*/) override {
                             TRACE_FUNCTION_F(lv);
                             if (::std::none_of(lv.wrappers.begin(), lv.wrappers.end(), [](const auto& w) {
                                 return w.is_Deref();

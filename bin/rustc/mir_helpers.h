@@ -181,37 +181,36 @@ namespace MIR {
         }
     };
 
-    namespace visit {
-        enum class ValUsage {
+        enum class MIRValUsage {
             Move,
             Read,
             Write,
             Borrow,
         };
 
-        extern bool visitMirLvalue(const ::MIR::LValue& lv, ValUsage u, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb);
-        extern bool visitMirLvalue(const ::MIR::Param& p, ValUsage u, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb);
-        extern bool visitMirLvalues(const ::MIR::RValue& rval, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb);
-        extern bool visitMirLvalues(const ::MIR::Statement& stmt, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb);
-        extern bool visitMirLvalues(const ::MIR::Terminator& term, ::std::function<bool(const ::MIR::LValue&, ValUsage)> cb);
+        extern bool visitMirLvalue(const ::MIR::LValue& lv, MIRValUsage u, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb);
+        extern bool visitMirLvalue(const ::MIR::Param& p, MIRValUsage u, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb);
+        extern bool visitMirLvalues(const ::MIR::RValue& rval, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb);
+        extern bool visitMirLvalues(const ::MIR::Statement& stmt, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb);
+        extern bool visitMirLvalues(const ::MIR::Terminator& term, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb);
 
         extern void visitTerminatorTargetMut(::MIR::Terminator& term, ::std::function<void(::MIR::BasicBlockId&)> cb);
         extern void visitTerminatorTarget(const ::MIR::Terminator& term, ::std::function<void(const ::MIR::BasicBlockId&)> cb);
 
         template <typename Inner>
-        class DecMut {
+        class MIRDecMut {
         public:
             typedef Inner Type;
         };
 
         template <typename Inner>
-        class DecConst {
+        class MIRDecConst {
         public:
             typedef const Inner Type;
         };
 
         template <template <typename> class Dec>
-        class VisitorBase {
+        class MIRVisitorBase {
         public:
             using TypeVisitArg = ::std::conditional_t<
                 ::std::is_const_v<typename Dec<int>::Type>,
@@ -254,7 +253,7 @@ namespace MIR {
                 }
             }
 
-            virtual bool visitLvalue(typename Dec<::MIR::LValue>::Type& lv, ValUsage u) = 0;
+            virtual bool visitLvalue(typename Dec<::MIR::LValue>::Type& lv, MIRValUsage u) = 0;
 
             virtual bool visitConst(typename Dec<::MIR::Constant>::Type& c) {
             TU_MATCH_HDRA( (c), {)
@@ -270,13 +269,13 @@ namespace MIR {
             return false;
             }
 
-            virtual bool visitParam(typename Dec<::MIR::Param>::Type& p, ValUsage u) {
+            virtual bool visitParam(typename Dec<::MIR::Param>::Type& p, MIRValUsage u) {
             TU_MATCH_HDRA( (p), {)
             TU_ARMA(LValue, e) {
                         return visitLvalue(e, u);
                     }
                     TU_ARMA(Borrow, e) {
-                        return visitLvalue(e.val, ValUsage::Borrow);
+                        return visitLvalue(e.val, MIRValUsage::Borrow);
                     }
                     TU_ARMA(Constant, e) {
                         return visitConst(e);
@@ -289,65 +288,65 @@ namespace MIR {
                 bool rv = false;
             TU_MATCH_HDRA( (rval), {)
             TU_ARMA(Use, se) {
-                        rv |= visitLvalue(se, ValUsage::Move);
+                        rv |= visitLvalue(se, MIRValUsage::Move);
                     }
                     TU_ARMA(Constant, se) {
                         rv |= visitConst(se);
                     }
                     TU_ARMA(SizedArray, se) {
-                        rv |= visitParam(se.val, ValUsage::Read);
+                        rv |= visitParam(se.val, MIRValUsage::Read);
                     }
                     TU_ARMA(Borrow, se) {
-                        rv |= visitLvalue(se.val, ValUsage::Borrow);
+                        rv |= visitLvalue(se.val, MIRValUsage::Borrow);
                     }
                     TU_ARMA(Cast, se) {
-                        rv |= visitLvalue(se.val, ValUsage::Move);
+                        rv |= visitLvalue(se.val, MIRValUsage::Move);
                         visitType(se.type);
                     }
                     TU_ARMA(BinOp, se) {
-                        rv |= visitParam(se.valL, ValUsage::Read);
-                        rv |= visitParam(se.valR, ValUsage::Read);
+                        rv |= visitParam(se.valL, MIRValUsage::Read);
+                        rv |= visitParam(se.valR, MIRValUsage::Read);
                     }
                     TU_ARMA(UniOp, se) {
-                        rv |= visitLvalue(se.val, ValUsage::Read);
+                        rv |= visitLvalue(se.val, MIRValUsage::Read);
                     }
                     TU_ARMA(DstMeta, se) {
-                        rv |= visitLvalue(se.val, ValUsage::Read);
+                        rv |= visitLvalue(se.val, MIRValUsage::Read);
                     }
                     TU_ARMA(DstPtr, se) {
-                        rv |= visitLvalue(se.val, ValUsage::Read);
+                        rv |= visitLvalue(se.val, MIRValUsage::Read);
                     }
                     TU_ARMA(MakeDst, se) {
-                        rv |= visitParam(se.ptrVal, ValUsage::Move);
+                        rv |= visitParam(se.ptrVal, MIRValUsage::Move);
                         if (TU_TEST2(se.metaVal, Constant, , ItemAddr, .get() == nullptr)) {
                         } else {
-                            rv |= visitParam(se.metaVal, ValUsage::Move);
+                            rv |= visitParam(se.metaVal, MIRValUsage::Move);
                         }
                     }
                     TU_ARMA(Tuple, se) {
                         for (auto& v : se.vals) {
-                            rv |= visitParam(v, ValUsage::Move);
+                            rv |= visitParam(v, MIRValUsage::Move);
                         }
                     }
                     TU_ARMA(Array, se) {
                         for (auto& v : se.vals) {
-                            rv |= visitParam(v, ValUsage::Move);
+                            rv |= visitParam(v, MIRValUsage::Move);
                         }
                     }
                     TU_ARMA(UnionVariant, se) {
                         visitGenericpath(se.path);
-                        rv |= visitParam(se.val, ValUsage::Move);
+                        rv |= visitParam(se.val, MIRValUsage::Move);
                     }
                     TU_ARMA(EnumVariant, se) {
                         visitGenericpath(se.path);
                         for (auto& v : se.vals) {
-                            rv |= visitParam(v, ValUsage::Move);
+                            rv |= visitParam(v, MIRValUsage::Move);
                         }
                     }
                     TU_ARMA(Struct, se) {
                         visitGenericpath(se.path);
                         for (auto& v : se.vals) {
-                            rv |= visitParam(v, ValUsage::Move);
+                            rv |= visitParam(v, MIRValUsage::Move);
                         }
                     }
             }
@@ -359,14 +358,14 @@ namespace MIR {
             TU_MATCH_HDRA( (stmt), {)
             TU_ARMA(Assign, e) {
                         rv |= visitRvalue(e.src);
-                        rv |= visitLvalue(e.dst, ValUsage::Write);
+                        rv |= visitLvalue(e.dst, MIRValUsage::Write);
                     }
                     TU_ARMA(Asm, e) {
                         for (auto& v : e.inputs) {
-                            rv |= visitLvalue(v.second, ValUsage::Read);
+                            rv |= visitLvalue(v.second, MIRValUsage::Read);
                         }
                         for (auto& v : e.outputs) {
-                            rv |= visitLvalue(v.second, ValUsage::Write);
+                            rv |= visitLvalue(v.second, MIRValUsage::Write);
                         }
                     }
                     TU_ARMA(Asm2, e) {
@@ -378,10 +377,10 @@ namespace MIR {
                                 /*rv |= */ visitPath(v);
                                 TU_ARMA(Reg, v) {
                                     if (v.input) {
-                                        rv |= visitParam(*v.input, ValUsage::Read);
+                                        rv |= visitParam(*v.input, MIRValUsage::Read);
                                     }
                                     if (v.output) {
-                                        rv |= visitLvalue(*v.output, ValUsage::Write);
+                                        rv |= visitLvalue(*v.output, MIRValUsage::Write);
                                     }
                                 }
                     }
@@ -390,10 +389,10 @@ namespace MIR {
                     TU_ARMA(SetDropFlag, e) {
                     }
                     TU_ARMA(SaveDropFlag, e) {
-                        rv |= visitLvalue(e.slot, ValUsage::Write);
+                        rv |= visitLvalue(e.slot, MIRValUsage::Write);
                     }
                     TU_ARMA(LoadDropFlag, e) {
-                        rv |= visitLvalue(e.slot, ValUsage::Read);
+                        rv |= visitLvalue(e.slot, MIRValUsage::Read);
                     }
                     TU_ARMA(ScopeEnd, e) {
                     }
@@ -422,12 +421,12 @@ namespace MIR {
                         visitBlockId(e);
                     }
                     TU_ARMA(If, e) {
-                        rv |= visitLvalue(e.cond, ValUsage::Read);
+                        rv |= visitLvalue(e.cond, MIRValUsage::Read);
                         rv |= visitBlockId(e.bbTrue);
                         rv |= visitBlockId(e.bbFalse);
                     }
                     TU_ARMA(Switch, e) {
-                        rv |= visitLvalue(e.val, ValUsage::Read);
+                        rv |= visitLvalue(e.val, MIRValUsage::Read);
                         for (auto& target : e.targets) {
                             rv |= visitBlockId(target);
                         }
@@ -436,21 +435,21 @@ namespace MIR {
                         }
                     }
                     TU_ARMA(SwitchValue, e) {
-                        rv |= visitLvalue(e.val, ValUsage::Read);
+                        rv |= visitLvalue(e.val, MIRValUsage::Read);
                         for (auto& target : e.targets) {
                             rv |= visitBlockId(target);
                         }
                         rv |= visitBlockId(e.defTarget);
                     }
                     TU_ARMA(Drop, e) {
-                        rv |= visitLvalue(e.slot, ValUsage::Move);
+                        rv |= visitLvalue(e.slot, MIRValUsage::Move);
                         rv |= visitBlockId(e.target);
                         TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, rv |= visitBlockId(target);)
                     }
                     TU_ARMA(Call, e) {
                 TU_MATCH_HDRA( (e.fcn), {)
                 TU_ARMA(Value, ce) {
-                                rv |= visitLvalue(ce, ValUsage::Read);
+                                rv |= visitLvalue(ce, MIRValUsage::Read);
                             }
                             TU_ARMA(Path, ce) {
                                 visitPath(ce);
@@ -460,8 +459,8 @@ namespace MIR {
                             }
                 }
                 for(auto& v : e.args)
-                    rv |= visitParam(v, ValUsage::Read);
-                rv |= visitLvalue(e.retVal, ValUsage::Write);
+                    rv |= visitParam(v, MIRValUsage::Read);
+                rv |= visitLvalue(e.retVal, MIRValUsage::Write);
                 rv |= visitBlockId(e.retBlock);
                 TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, rv |= visitBlockId(target);)
                     }
@@ -489,16 +488,15 @@ namespace MIR {
             }
         };
 
-        class Visitor: public VisitorBase<DecConst> {
+        class MIRVisitor: public MIRVisitorBase<MIRDecConst> {
         public:
-            virtual bool visitLvalue(const ::MIR::LValue& lv, ValUsage u) override;
+            virtual bool visitLvalue(const ::MIR::LValue& lv, MIRValUsage u) override;
         };
 
-        class VisitorMut: public VisitorBase<DecMut> {
+        class MIRVisitorMut: public MIRVisitorBase<MIRDecMut> {
         public:
-            virtual bool visitLvalue(::MIR::LValue& lv, ValUsage u) override;
+            virtual bool visitLvalue(::MIR::LValue& lv, MIRValUsage u) override;
         };
-    } // namespace visit
 
 } // namespace MIR
 
