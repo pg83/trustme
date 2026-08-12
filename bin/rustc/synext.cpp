@@ -114,7 +114,7 @@ class CMacroUseHandler: public ExpandDecorator {
                         continue;
                     }
                     ASSERT_BUG(sp, crate.externCrates.count(imp->path.crateName()), "Crate `" << imp->path.crateName() << "` not loaded");
-                    const ::HIR::Module& mod = crate.externCrates.at(imp->path.crateName()).hir->getModByPath(sp, imp->path, /*ignore_last_node*/ true, /*ignore_crate_name*/ true);
+                    const HIRModule& mod = crate.externCrates.at(imp->path.crateName()).hir->getModByPath(sp, imp->path, /*ignore_last_node*/ true, /*ignore_crate_name*/ true);
 
                     ASSERT_BUG(sp, mod.macroItems.count(imp->path.components().back()), "Failed to find final component of " << imp->path);
                     e = &*mod.macroItems.at(imp->path.components().back());

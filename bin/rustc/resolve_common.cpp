@@ -23,7 +23,7 @@
 
 namespace {
 
-    ASTAbsolutePath spToAp(const HIR::SimplePath& sp) {
+    ASTAbsolutePath spToAp(const HIRSimplePath& sp) {
         return ASTAbsolutePath(sp.crateName(), sp.componentsVec());
     }
 
@@ -75,7 +75,7 @@ namespace {
                         if (mp.crate != "") {
                             ASSERT_BUG(sp, this->crate.externCrates.count(mp.crate), "Crate not loaded for " << mp);
                             const auto& crate = this->crate.externCrates.at(mp.crate);
-                            const HIR::Module* mod = &crate.hir->mRootModule;
+                            const HIRModule* mod = &crate.hir->mRootModule;
                             for (const auto& n : mp.ents) {
                                 ASSERT_BUG(sp, mod->modItems.count(n), "Node `" << n << "` missing in path " << mp);
                                 const auto& i = *mod->modItems.at(n);
@@ -342,9 +342,9 @@ namespace {
             return ResolveModuleRef(mod);
         }
 
-        ResolveModuleRef getModuleHir(const HIR::Module& startMod, const ASTPath& path, size_t startOffset, bool ignoreLast, ASTAbsolutePath* outPath) {
+        ResolveModuleRef getModuleHir(const HIRModule& startMod, const ASTPath& path, size_t startOffset, bool ignoreLast, ASTAbsolutePath* outPath) {
             TRACE_FUNCTION_F("path=" << path << ", start_offset=" << startOffset << ", ignore_last=" << ignoreLast);
-            const HIR::Module* mod = &startMod;
+            const HIRModule* mod = &startMod;
             ASSERT_BUG(Span(), path.nodes().size() >= (ignoreLast ? 1 : 0), "" << path);
             for (size_t i = startOffset; i < path.nodes().size() - (ignoreLast ? 1 : 0); i++) {
                 const auto& name = path.nodes()[i].name();
@@ -706,19 +706,19 @@ namespace {
         }
 
         /// Locate the named item in HIR (resolving `Import` references too)
-        ResolveItemRef findItemHir(const HIR::Module& mod, const RcString& itemName, ResolveNamespace ns, ASTAbsolutePath* outPath = nullptr, const ::HIR::SimplePath* visPathP = nullptr) {
-            const auto& visPath = visPathP ? *visPathP : ::HIR::SimplePath();
+        ResolveItemRef findItemHir(const HIRModule& mod, const RcString& itemName, ResolveNamespace ns, ASTAbsolutePath* outPath = nullptr, const HIRSimplePath* visPathP = nullptr) {
+            const auto& visPath = visPathP ? *visPathP : HIRSimplePath();
             TRACE_FUNCTION_F(itemName);
             if (outPath) {
                 ASSERT_BUG(sp, outPath->crate != "", "Crate not filled");
             }
 
             struct H {
-                static const HIR::Crate& getCrate(const Span& sp, const ASTCrate& crate, const HIR::SimplePath& p) {
+                static const HIRCrate& getCrate(const Span& sp, const ASTCrate& crate, const HIRSimplePath& p) {
                     return *crate.externCrates.at(p.crateName()).hir;
                 }
 
-                static const HIR::Module& getModForHirPath(const Span& sp, const ASTCrate& crate, const HIR::SimplePath& p) {
+                static const HIRModule& getModForHirPath(const Span& sp, const ASTCrate& crate, const HIRSimplePath& p) {
                     const auto& hirCrate = *crate.externCrates.at(p.crateName()).hir;
                     return hirCrate.getModByPath(sp, p, /*ignore_last*/ true, /*ingore_crate*/ true);
                 }
@@ -730,7 +730,7 @@ namespace {
                     auto it = mod.modItems.find(itemName);
                     if (it != mod.modItems.end() && it->second->publicity.isVisible(visPath)) {
                         DEBUG("Found `" << itemName << "` in HIR namespace");
-                        const HIR::TypeItem* ti;
+                        const HIRTypeItem* ti;
                         if (const auto* p = it->second->ent.opt_Import()) {
                             if (outPath) {
                                 *outPath = spToAp(p->path);
@@ -754,7 +754,7 @@ namespace {
                     auto it = mod.valueItems.find(itemName);
                     if (it != mod.valueItems.end() && it->second->publicity.isVisible(visPath)) {
                         DEBUG("Found `" << itemName << "` in HIR value");
-                        const HIR::ValueItem* vi;
+                        const HIRValueItem* vi;
                         if (const auto* p = it->second->ent.opt_Import()) {
                             if (outPath) {
                                 *outPath = spToAp(p->path);
@@ -778,7 +778,7 @@ namespace {
                         DEBUG("Found `" << itemName << "` in HIR macro - but not public, ignoring");
                     } else {
                         DEBUG("Found `" << itemName << "` in HIR macro");
-                        const HIR::MacroItem* mi;
+                        const HIRMacroItem* mi;
                         if (const auto* p = it->second->ent.opt_Import()) {
                             if (outPath) {
                                 *outPath = spToAp(p->path);
@@ -872,11 +872,11 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const ASTCrate& crate, 
             return std::move(rv.as_Macro());
         }
         TU_ARMA(Hir, modPtr) {
-            const ::HIR::SimplePath* visPath = nullptr;
-            ::HIR::SimplePath tmpP;
+            const HIRSimplePath* visPath = nullptr;
+            HIRSimplePath tmpP;
             if (path.cls.is_Relative() && path.cls.as_Relative().hygiene.hasModPath()) {
                 const auto& inP = path.cls.as_Relative().hygiene.modPath();
-                tmpP = HIR::SimplePath(inP.crate, inP.ents);
+                tmpP = HIRSimplePath(inP.crate, inP.ents);
                 DEBUG("vis_path=" << tmpP);
                 visPath = &tmpP;
             }

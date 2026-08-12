@@ -3,22 +3,20 @@
 #include "hir_hir.h"
 #include "hir_item_path.h"
 
-namespace HIR {
-    class TraitImpl;
-}
+    class HIRTraitImpl;
 
 struct TypeckModuleState {
-    const ::HIR::Crate& crate;
+    const HIRCrate& crate;
 
-    const ::HIR::GenericPath* currentTrait;
-    const ::HIR::TraitImpl* currentTraitImpl;
-    const ::HIR::GenericParams* mImplGenerics;
-    const ::HIR::GenericParams* mItemGenerics;
+    const HIRGenericPath* currentTrait;
+    const HIRTraitImpl* currentTraitImpl;
+    const HIRGenericParams* mImplGenerics;
+    const HIRGenericParams* mItemGenerics;
 
-    ::std::vector<::std::pair<const ::HIR::SimplePath*, const ::HIR::Trait*>> traits;
-    ::std::vector<HIR::SimplePath> modPaths;
+    ::std::vector<::std::pair<const HIRSimplePath*, const HIRTrait*>> traits;
+    ::std::vector<HIRSimplePath> modPaths;
 
-    TypeckModuleState(const ::HIR::Crate& crate);
+    TypeckModuleState(const HIRCrate& crate);
 
     template <typename T>
     class NullOnDrop {
@@ -35,23 +33,23 @@ struct TypeckModuleState {
         }
     };
 
-    NullOnDrop<const ::HIR::GenericPath> setCurrentTrait(const ::HIR::GenericPath& p);
+    NullOnDrop<const HIRGenericPath> setCurrentTrait(const HIRGenericPath& p);
 
-    NullOnDrop<const ::HIR::TraitImpl> setCurrentTraitImpl(const ::HIR::TraitImpl& impl);
+    NullOnDrop<const HIRTraitImpl> setCurrentTraitImpl(const HIRTraitImpl& impl);
 
-    NullOnDrop<const ::HIR::GenericParams> setImplGenerics(const ::HIR::GenericParams& gps);
+    NullOnDrop<const HIRGenericParams> setImplGenerics(const HIRGenericParams& gps);
 
-    NullOnDrop<const ::HIR::GenericParams> setItemGenerics(const ::HIR::GenericParams& gps);
+    NullOnDrop<const HIRGenericParams> setItemGenerics(const HIRGenericParams& gps);
 
-    void prepareFromPath(const ::HIR::ItemPath& ip);
+    void prepareFromPath(const HIRItemPath& ip);
 
-    void pushTraits(::HIR::ItemPath p, const ::HIR::Module& mod);
+    void pushTraits(HIRItemPath p, const HIRModule& mod);
 
-    void popTraits(const ::HIR::Module& mod);
+    void popTraits(const HIRModule& mod);
 };
 
-typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> tArgs;
+typedef ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> tArgs;
 // Needs to mutate the pattern
-extern void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr);
-extern void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr);
-extern void TypecheckCodeSimple(const TypeckModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr);
+extern void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr);
+extern void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr);
+extern void TypecheckCodeSimple(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr);

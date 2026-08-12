@@ -4602,7 +4602,7 @@ void ParseModRoot(TokenStream& lex, ASTModule& mod, ASTAttributeList& modAttrs) 
     lex.parseState().module = prevMod;
 }
 
-ASTCrate* ParseCrate(stl::ObjPool* pool, HIR::TypeInterner& types, ::std::string mainfile, ASTEdition edition) {
+ASTCrate* ParseCrate(stl::ObjPool* pool, HIRTypeInterner& types, ::std::string mainfile, ASTEdition edition) {
     Token tok;
 
     Lexer lex(mainfile, edition, ParseState());

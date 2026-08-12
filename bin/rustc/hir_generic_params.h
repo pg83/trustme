@@ -7,52 +7,51 @@
 #include "hir_path.h"
 #include "hir_type_ref.h"
 
-namespace HIR {
 
-    struct TypeParamDef {
+    struct HIRTypeParamDef {
         RcString mName;
-        ::HIR::TypeRef defaultValue;
+        HIRTypeRef defaultValue;
         bool isSized;
 
-        Ordering ord(const TypeParamDef& x) const;
+        Ordering ord(const HIRTypeParamDef& x) const;
     };
 
-    struct LifetimeDef {
+    struct HIRLifetimeDef {
         RcString mName;
 
-        Ordering ord(const LifetimeDef& x) const;
+        Ordering ord(const HIRLifetimeDef& x) const;
     };
 
-    struct ValueParamDef {
+    struct HIRValueParamDef {
         RcString mName;
-        ::HIR::TypeRef mType;
-        ConstGeneric defaultValue;
+        HIRTypeRef mType;
+        HIRConstGeneric defaultValue;
 
-        Ordering ord(const ValueParamDef& x) const;
+        Ordering ord(const HIRValueParamDef& x) const;
     };
 
-    class GenericParams;
+    class HIRGenericParams;
 
     TAGGED_UNION_EX(
-        GenericBound,
+        HIRGenericBound,
         (),
         Lifetime,
         ((Lifetime,
           struct {
-              LifetimeRef test;
-              LifetimeRef validFor;
+              HIRLifetimeRef test;
+              HIRLifetimeRef validFor;
           }),
          (TypeLifetime,
           struct {
-              ::HIR::TypeRef type;
-              LifetimeRef validFor;
+              HIRTypeRef type;
+              HIRLifetimeRef validFor;
           }),
          (TraitBound,
           struct {
-              ::std::unique_ptr<::HIR::GenericParams> hrtbs;
-              ::HIR::TypeRef type;
-              ::HIR::TraitPath trait;
-              BoundConstness constness = BoundConstness::Never;
+              ::std::unique_ptr<HIRGenericParams> hrtbs;
+              HIRTypeRef type;
+              HIRTraitPath trait;
+              HIRBoundConstness constness = HIRBoundConstness::Never;
           }) /*,
     (NotTrait, struct {
         ::HIR::TypeRef  type;
@@ -61,40 +60,40 @@ namespace HIR {
          ,
          (TypeEquality,
           struct {
-              ::HIR::TypeRef type;
-              ::HIR::TypeRef otherType;
+              HIRTypeRef type;
+              HIRTypeRef otherType;
           })),
         (),
         (),
-        (GenericBound clone() const; Ordering ord(const GenericBound& x) const;)
+        (HIRGenericBound clone() const; Ordering ord(const HIRGenericBound& x) const;)
     );
-    extern ::std::ostream& operator<<(::std::ostream& os, const GenericBound& x);
+    extern ::std::ostream& operator<<(::std::ostream& os, const HIRGenericBound& x);
 
-    class GenericParams {
+    class HIRGenericParams {
     public:
-        ::std::vector<TypeParamDef> types;
-        ::std::vector<LifetimeDef> mLifetimes;
-        ::std::vector<ValueParamDef> values;
+        ::std::vector<HIRTypeParamDef> types;
+        ::std::vector<HIRLifetimeDef> mLifetimes;
+        ::std::vector<HIRValueParamDef> values;
 
-        ::std::vector<GenericBound> bounds;
+        ::std::vector<HIRGenericBound> bounds;
 
         //GenericParams() {}
 
-        GenericParams clone() const;
+        HIRGenericParams clone() const;
 
         bool isEmpty() const;
 
         bool isGeneric() const;
 
         /// Create a PathParams instance that doesn't monomorphise at all
-        PathParams makeNopParams(TypeInterner& types, unsigned level, bool lifetimesOnly = false) const;
+        HIRPathParams makeNopParams(HIRTypeInterner& types, unsigned level, bool lifetimesOnly = false) const;
 
-        PathParams makeEmptyParams(bool lifetimesOnly = false) const;
+        HIRPathParams makeEmptyParams(bool lifetimesOnly = false) const;
 
         struct PrintArgs {
-            const GenericParams& gp;
+            const HIRGenericParams& gp;
 
-            PrintArgs(const GenericParams& gp);
+            PrintArgs(const HIRGenericParams& gp);
 
             friend ::std::ostream& operator<<(::std::ostream& os, const PrintArgs& x);
         };
@@ -104,9 +103,9 @@ namespace HIR {
         }
 
         struct PrintBounds {
-            const GenericParams& gp;
+            const HIRGenericParams& gp;
 
-            PrintBounds(const GenericParams& gp);
+            PrintBounds(const HIRGenericParams& gp);
 
             friend ::std::ostream& operator<<(::std::ostream& os, const PrintBounds& x);
         };
@@ -115,7 +114,6 @@ namespace HIR {
             return PrintBounds(*this);
         }
 
-        Ordering ord(const HIR::GenericParams& x) const;
+        Ordering ord(const HIRGenericParams& x) const;
     };
 
-} // namespace HIR

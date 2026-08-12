@@ -31,7 +31,7 @@ namespace {
         return enabled > 1;
     }
 
-    ::HIR::Publicity gVisPrivate = ::HIR::Publicity::newNone();
+    HIRPublicity gVisPrivate = HIRPublicity::newNone();
 }
 
 //namespace {
@@ -41,12 +41,12 @@ struct D {};
 
 class HirDeserialiser {
     RcString crateName;
-    ::std::vector<HIR::TypeRef> types;
-    ::HIR::HIRSerialiseReader& in;
-    ::HIR::TypeInterner& typeInterner;
+    ::std::vector<HIRTypeRef> types;
+    HIRSerialiseReader& in;
+    HIRTypeInterner& typeInterner;
 
 public:
-    HirDeserialiser(::HIR::HIRSerialiseReader& in, ::HIR::TypeInterner& typeInterner)
+    HirDeserialiser(HIRSerialiseReader& in, HIRTypeInterner& typeInterner)
         : in(in)
         , typeInterner(typeInterner)
     {
@@ -155,10 +155,10 @@ public:
     }
 
     template <typename V>
-    ::std::map<::HIR::SimplePath, V> deserialisePathmap() {
+    ::std::map<HIRSimplePath, V> deserialisePathmap() {
         TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
         size_t n = in.readCount();
-        ::std::map<::HIR::SimplePath, V> rv;
+        ::std::map<HIRSimplePath, V> rv;
         //rv.reserve(n);
         for (size_t i = 0; i < n; i++) {
             auto s = deserialiseSimplepath();
@@ -223,13 +223,13 @@ public:
         return rv;
     }
 
-    ::HIR::Publicity deserialisePub() {
-        return (in.readBool() ? ::HIR::Publicity::newGlobal() : gVisPrivate);
+    HIRPublicity deserialisePub() {
+        return (in.readBool() ? HIRPublicity::newGlobal() : gVisPrivate);
     }
 
     template <typename T>
-    ::HIR::VisEnt<T> deserialiseVisent() {
-        return ::HIR::VisEnt<T>{deserialisePub(), D<T>::des(*this)};
+    HIRVisEnt<T> deserialiseVisent() {
+        return HIRVisEnt<T>{deserialisePub(), D<T>::des(*this)};
     }
 
     template <typename T>
@@ -237,38 +237,38 @@ public:
         return box$(D<T>::des(*this));
     }
 
-    ::HIR::LifetimeDef deserialiseLifetimedef();
-    ::HIR::LifetimeRef deserialiseLifetimeref();
-    ::HIR::ArraySize deserialiseArraysize();
-    ::HIR::GenericRef deserialiseGenericref();
-    ::HIR::TypeRef deserialiseType();
-    ::HIR::SimplePath deserialiseSimplepath();
-    ::HIR::PathParams deserialisePathparams();
-    ::HIR::GenericPath deserialiseGenericpath();
-    ::HIR::TraitPath deserialiseTraitpath();
-    ::HIR::Path deserialisePath();
+    HIRLifetimeDef deserialiseLifetimedef();
+    HIRLifetimeRef deserialiseLifetimeref();
+    HIRArraySize deserialiseArraysize();
+    HIRGenericRef deserialiseGenericref();
+    HIRTypeRef deserialiseType();
+    HIRSimplePath deserialiseSimplepath();
+    HIRPathParams deserialisePathparams();
+    HIRGenericPath deserialiseGenericpath();
+    HIRTraitPath deserialiseTraitpath();
+    HIRPath deserialisePath();
 
-    ::HIR::GenericParams deserialiseGenericparams();
-    ::HIR::TypeParamDef deserialiseTyparamdef();
-    ::HIR::ValueParamDef deserialiseValueparamdef();
-    ::HIR::GenericBound deserialiseGenericbound();
+    HIRGenericParams deserialiseGenericparams();
+    HIRTypeParamDef deserialiseTyparamdef();
+    HIRValueParamDef deserialiseValueparamdef();
+    HIRGenericBound deserialiseGenericbound();
 
-    void deserialiseCrate(::HIR::Crate& rv);
-    ::HIR::ExternLibrary deserialiseExtlib();
-    ::HIR::Module deserialiseModule();
+    void deserialiseCrate(HIRCrate& rv);
+    HIRExternLibrary deserialiseExtlib();
+    HIRModule deserialiseModule();
 
-    ::HIR::ProcMacro deserialiseProcmacro() {
-        ::HIR::ProcMacro pm;
+    HIRProcMacro deserialiseProcmacro() {
+        HIRProcMacro pm;
         TRACE_FUNCTION_FR("", "ProcMacro { " << pm.name << ", " << pm.path << ", [" << pm.attributes << "]}");
         switch (in.readTag()) {
             case 0:
-                pm.ty = ::HIR::ProcMacro::Ty::Function;
+                pm.ty = HIRProcMacro::Ty::Function;
                 break;
             case 1:
-                pm.ty = ::HIR::ProcMacro::Ty::Derive;
+                pm.ty = HIRProcMacro::Ty::Derive;
                 break;
             case 2:
-                pm.ty = ::HIR::ProcMacro::Ty::Attribute;
+                pm.ty = HIRProcMacro::Ty::Attribute;
                 break;
         }
         pm.name = in.readIstring();
@@ -278,8 +278,8 @@ public:
         return pm;
     }
 
-    ::HIR::TypeImpl deserialiseTypeimpl() {
-        ::HIR::TypeImpl rv;
+    HIRTypeImpl deserialiseTypeimpl() {
+        HIRTypeImpl rv;
         TRACE_FUNCTION_FR("", "impl" << rv.mParams.fmtArgs() << " " << rv.mType);
 
         rv.mParams = deserialiseGenericparams();
@@ -288,24 +288,24 @@ public:
         size_t methodCount = in.readCount();
         for (size_t i = 0; i < methodCount; i++) {
             auto name = in.readIstring();
-            rv.methods.insert(::std::make_pair(mv$(name), ::HIR::TypeImpl::VisImplEnt<::HIR::Function>{deserialisePub(), in.readBool(), deserialiseFunction()}));
+            rv.methods.insert(::std::make_pair(mv$(name), HIRTypeImpl::VisImplEnt<HIRFunction>{deserialisePub(), in.readBool(), deserialiseFunction()}));
         }
         size_t constCount = in.readCount();
         for (size_t i = 0; i < constCount; i++) {
             auto name = in.readIstring();
-            rv.constants.insert(::std::make_pair(mv$(name), ::HIR::TypeImpl::VisImplEnt<::HIR::Constant>{deserialisePub(), in.readBool(), deserialiseConstant()}));
+            rv.constants.insert(::std::make_pair(mv$(name), HIRTypeImpl::VisImplEnt<HIRConstant>{deserialisePub(), in.readBool(), deserialiseConstant()}));
         }
         size_t typeCount = in.readCount();
         for (size_t i = 0; i < typeCount; i++) {
             auto name = in.readIstring();
-            rv.types.insert(::std::make_pair(mv$(name), ::HIR::TypeImpl::VisImplEnt<::HIR::TypeAlias>{deserialisePub(), in.readBool(), deserialiseTypealias()}));
+            rv.types.insert(::std::make_pair(mv$(name), HIRTypeImpl::VisImplEnt<HIRTypeAlias>{deserialisePub(), in.readBool(), deserialiseTypealias()}));
         }
         // m_src_module doesn't matter after typeck
         return rv;
     }
 
-    ::HIR::TraitImpl deserialiseTraitimpl() {
-        ::HIR::TraitImpl rv;
+    HIRTraitImpl deserialiseTraitimpl() {
+        HIRTraitImpl rv;
         TRACE_FUNCTION_FR("", "impl" << rv.mParams.fmtArgs() << " ?" << rv.traitArgs << " for " << rv.mType);
 
         rv.mParams = deserialiseGenericparams();
@@ -319,40 +319,40 @@ public:
             auto name = in.readIstring();
             auto isSpec = in.readBool();
             DEBUG((isSpec ? "default " : "") << "fn " << name);
-            rv.methods.insert(::std::make_pair(mv$(name), ::HIR::TraitImpl::ImplEnt<::HIR::Function>{isSpec, deserialiseFunction()}));
+            rv.methods.insert(::std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRFunction>{isSpec, deserialiseFunction()}));
         }
         size_t constCount = in.readCount();
         for (size_t i = 0; i < constCount; i++) {
             auto name = in.readIstring();
             auto isSpec = in.readBool();
             DEBUG((isSpec ? "default " : "") << "const " << name);
-            rv.constants.insert(::std::make_pair(mv$(name), ::HIR::TraitImpl::ImplEnt<::HIR::Constant>{isSpec, deserialiseConstant()}));
+            rv.constants.insert(::std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRConstant>{isSpec, deserialiseConstant()}));
         }
         size_t staticCount = in.readCount();
         for (size_t i = 0; i < staticCount; i++) {
             auto name = in.readIstring();
             auto isSpec = in.readBool();
             DEBUG((isSpec ? "default " : "") << "static " << name);
-            rv.statics.insert(::std::make_pair(mv$(name), ::HIR::TraitImpl::ImplEnt<::HIR::Static>{isSpec, deserialiseStatic()}));
+            rv.statics.insert(::std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRStatic>{isSpec, deserialiseStatic()}));
         }
         size_t typeCount = in.readCount();
         for (size_t i = 0; i < typeCount; i++) {
             auto name = in.readIstring();
             auto isSpec = in.readBool();
             DEBUG((isSpec ? "default " : "") << "type " << name);
-            rv.types.insert(::std::make_pair(mv$(name), ::HIR::TraitImpl::ImplEnt<::HIR::TypeRef>{isSpec, deserialiseType()}));
+            rv.types.insert(::std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRTypeRef>{isSpec, deserialiseType()}));
         }
 
         // m_src_module doesn't matter after typeck
         return rv;
     }
 
-    ::HIR::MarkerImpl deserialiseMarkerimpl() {
+    HIRMarkerImpl deserialiseMarkerimpl() {
         auto generics = deserialiseGenericparams();
         auto params = deserialisePathparams();
         auto isNeg = in.readBool();
         auto ty = deserialiseType();
-        return ::HIR::MarkerImpl{mv$(generics), mv$(params), isNeg, mv$(ty)};
+        return HIRMarkerImpl{mv$(generics), mv$(params), isNeg, mv$(ty)};
     }
 
     Ident::Hygiene deserialiseHygine() {
@@ -539,17 +539,17 @@ public:
         }
     }
 
-    ::HIR::ConstGenericUnevaluated deserialiseConstgenericUnevaluated();
-    ::HIR::ConstGeneric deserialiseConstgeneric();
+    HIRConstGenericUnevaluated deserialiseConstgenericUnevaluated();
+    HIRConstGeneric deserialiseConstgeneric();
     EncodedLiteral deserialiseEncodedliteral();
 
-    ::HIR::ExprPtr deserialiseExprptr() {
-        ::HIR::ExprPtr rv;
+    HIRExprPtr deserialiseExprptr() {
+        HIRExprPtr rv;
         auto _ = in.openObject("HIR::ExprPtr");
         if (in.readBool()) {
             rv.mir = deserialiseMir();
         }
-        rv.erasedTypes = deserialiseVec<::HIR::TypeRef>();
+        rv.erasedTypes = deserialiseVec<HIRTypeRef>();
         return rv;
     }
 
@@ -572,7 +572,7 @@ public:
             case MIRParam::TAG_LValue:
                 return deserialiseMirLvalue();
             case MIRParam::TAG_Borrow:
-                return MIRParam::make_Borrow({static_cast<::HIR::BorrowType>(in.readTag()), deserialiseMirLvalue()});
+                return MIRParam::make_Borrow({static_cast<HIRBorrowType>(in.readTag()), deserialiseMirLvalue()});
             case MIRParam::TAG_Constant:
                 return deserialiseMirConstant();
             default:
@@ -607,7 +607,7 @@ public:
             _(Use, deserialiseMirLvalue())
             _(Constant, deserialiseMirConstant())
             _(SizedArray, {deserialiseMirParam(), deserialiseArraysize()})
-            _(Borrow, {static_cast<::HIR::BorrowType>(in.readTag()), in.readBool(), deserialiseMirLvalue()})
+            _(Borrow, {static_cast<HIRBorrowType>(in.readTag()), in.readBool(), deserialiseMirLvalue()})
             _(Cast, {deserialiseMirLvalue(), deserialiseType()})
             _(BinOp, {deserialiseMirParam(), static_cast<MIRBinOp>(in.readTag()), deserialiseMirParam()})
             _(UniOp, {deserialiseMirLvalue(), static_cast<MIRUniOp>(in.readTag())})
@@ -633,9 +633,9 @@ public:
     case MIRConstant::TAG_##x: \
         DEBUG("- " #x);        \
         return MIRConstant::make_##x(__VA_ARGS__);
-            _(Int, {in.readI128(), static_cast<::HIR::CoreType>(in.readTag())})
-            _(Uint, {in.readU128(), static_cast<::HIR::CoreType>(in.readTag())})
-            _(Float, {in.readFloatValue(), static_cast<::HIR::CoreType>(in.readTag())})
+            _(Int, {in.readI128(), static_cast<HIRCoreType>(in.readTag())})
+            _(Uint, {in.readU128(), static_cast<HIRCoreType>(in.readTag())})
+            _(Float, {in.readFloatValue(), static_cast<HIRCoreType>(in.readTag())})
             _(Bool, {in.readBool()})
             case MIRConstant::TAG_Bytes: {
                 ::std::vector<unsigned char> bytes;
@@ -654,97 +654,97 @@ public:
         }
     }
 
-    ::HIR::ExternType deserialiseExterntype() {
-        return ::HIR::ExternType{deserialiseMarkings()};
+    HIRExternType deserialiseExterntype() {
+        return HIRExternType{deserialiseMarkings()};
     }
 
-    ::HIR::TraitAlias deserialiseTraitalias() {
-        return ::HIR::TraitAlias{deserialiseGenericparams(), deserialiseVec<HIR::TraitPath>()};
+    HIRTraitAlias deserialiseTraitalias() {
+        return HIRTraitAlias{deserialiseGenericparams(), deserialiseVec<HIRTraitPath>()};
     }
 
-    ::HIR::TypeItem deserialiseTypeitem() {
+    HIRTypeItem deserialiseTypeitem() {
         switch (auto tag = in.readTag()) {
             case 0: {
                 auto spath = deserialiseSimplepath();
                 auto isVariant = in.readBool();
-                return ::HIR::TypeItem::make_Import({mv$(spath), isVariant, static_cast<unsigned int>(in.readCount())});
+                return HIRTypeItem::make_Import({mv$(spath), isVariant, static_cast<unsigned int>(in.readCount())});
             }
             case 1:
-                return ::HIR::TypeItem(deserialiseModule());
+                return HIRTypeItem(deserialiseModule());
             case 2:
-                return ::HIR::TypeItem(deserialiseTypealias());
+                return HIRTypeItem(deserialiseTypealias());
             case 3:
-                return ::HIR::TypeItem(deserialiseEnum());
+                return HIRTypeItem(deserialiseEnum());
             case 4:
-                return ::HIR::TypeItem(deserialiseStruct());
+                return HIRTypeItem(deserialiseStruct());
             case 5:
-                return ::HIR::TypeItem(deserialiseTrait());
+                return HIRTypeItem(deserialiseTrait());
             case 6:
-                return ::HIR::TypeItem(deserialiseUnion());
+                return HIRTypeItem(deserialiseUnion());
             case 7:
-                return ::HIR::TypeItem(deserialiseExterntype());
+                return HIRTypeItem(deserialiseExterntype());
             case 8:
-                return ::HIR::TypeItem(deserialiseTraitalias());
+                return HIRTypeItem(deserialiseTraitalias());
             default:
                 BUG(Span(), "Bad tag for HIR::TypeItem - " << tag);
         }
     }
 
-    ::HIR::ValueItem deserialiseValueitem() {
+    HIRValueItem deserialiseValueitem() {
         switch (auto tag = in.readTag()) {
             case 0: {
                 auto spath = deserialiseSimplepath();
                 auto isVariant = in.readBool();
-                return ::HIR::ValueItem::make_Import({mv$(spath), isVariant, static_cast<unsigned int>(in.readCount())});
+                return HIRValueItem::make_Import({mv$(spath), isVariant, static_cast<unsigned int>(in.readCount())});
             }
             case 1:
-                return ::HIR::ValueItem(deserialiseConstant());
+                return HIRValueItem(deserialiseConstant());
             case 2:
-                return ::HIR::ValueItem(deserialiseStatic());
+                return HIRValueItem(deserialiseStatic());
             case 3:
-                return ::HIR::ValueItem::make_StructConstant({deserialiseSimplepath()});
+                return HIRValueItem::make_StructConstant({deserialiseSimplepath()});
             case 4:
-                return ::HIR::ValueItem(deserialiseFunction());
+                return HIRValueItem(deserialiseFunction());
             case 5:
-                return ::HIR::ValueItem::make_StructConstructor({deserialiseSimplepath()});
+                return HIRValueItem::make_StructConstructor({deserialiseSimplepath()});
             default:
                 BUG(Span(), "Bad tag for HIR::ValueItem - " << tag);
         }
     }
 
-    ::HIR::MacroItem deserialiseMacroitem() {
+    HIRMacroItem deserialiseMacroitem() {
         auto _ = in.openObject("HIR::MacroItem");
         auto tag = in.readTag();
         switch (tag) {
-            case HIR::MacroItem::TAG_Import:
-                return HIR::MacroItem::Data_Import{deserialiseSimplepath()};
-            case HIR::MacroItem::TAG_MacroRules:
+            case HIRMacroItem::TAG_Import:
+                return HIRMacroItem::Data_Import{deserialiseSimplepath()};
+            case HIRMacroItem::TAG_MacroRules:
                 return deserialiseMacrorulesptr();
-            case HIR::MacroItem::TAG_ProcMacro:
+            case HIRMacroItem::TAG_ProcMacro:
                 return deserialiseProcmacro();
         }
 
         TODO(Span(), "Bad tag for MacroItem - " << tag);
     }
 
-    ::HIR::Linkage deserialiseLinkage() {
-        ::HIR::Linkage l;
-        l.type = ::HIR::Linkage::Type::Auto;
+    HIRLinkage deserialiseLinkage() {
+        HIRLinkage l;
+        l.type = HIRLinkage::Type::Auto;
         l.name = in.readString();
         return l;
     }
 
     // - Value items
-    ::HIR::Function deserialiseFunction() {
+    HIRFunction deserialiseFunction() {
         TRACE_FUNCTION;
         auto _ = in.openObject("HIR::Function");
 
-        ::HIR::Function rv;
+        HIRFunction rv;
         rv.saveCode = false;
         rv.linkage = deserialiseLinkage();
-        rv.receiver = static_cast<::HIR::Function::Receiver>(in.readTag());
+        rv.receiver = static_cast<HIRFunction::Receiver>(in.readTag());
         auto receiverType = deserialiseType();
-        if (rv.receiver == ::HIR::Function::Receiver::Custom) {
+        if (rv.receiver == HIRFunction::Receiver::Custom) {
             rv.receiverType = receiverType;
         }
         rv.mAbi = in.readIstring();
@@ -759,42 +759,42 @@ public:
         return rv;
     }
 
-    ::HIR::Function::Markings deserialiseFunctionMarkings() {
+    HIRFunction::Markings deserialiseFunctionMarkings() {
         auto _ = in.openObject("HIR::Function::Markings");
-        ::HIR::Function::Markings rv;
+        HIRFunction::Markings rv;
         rv.rustcLegacyConstGenerics = deserialiseVec<unsigned>();
         rv.trackCaller = in.readBool();
         return rv;
     }
 
-    ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> deserialiseFcnargs() {
+    ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> deserialiseFcnargs() {
         size_t n = in.readCount();
-        ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> rv;
+        ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> rv;
         rv.reserve(n);
         for (size_t i = 0; i < n; i++) {
-            rv.push_back(::std::make_pair(::HIR::Pattern{}, deserialiseType()));
+            rv.push_back(::std::make_pair(HIRPattern{}, deserialiseType()));
         }
         DEBUG("rv = " << rv);
         return rv;
     }
 
-    ::HIR::Constant deserialiseConstant() {
+    HIRConstant deserialiseConstant() {
         TRACE_FUNCTION;
 
-        ::HIR::Constant rv;
+        HIRConstant rv;
         rv.mParams = deserialiseGenericparams();
         rv.mType = deserialiseType();
         rv.mValue = deserialiseExprptr();
         if (in.readBool()) {
             rv.valueRes = deserialiseEncodedliteral();
-            rv.valueState = ::HIR::Constant::ValueState::Known;
+            rv.valueState = HIRConstant::ValueState::Known;
         } else {
-            rv.valueState = ::HIR::Constant::ValueState::Generic;
+            rv.valueState = HIRConstant::ValueState::Generic;
         }
         return rv;
     }
 
-    ::HIR::Static deserialiseStatic() {
+    HIRStatic deserialiseStatic() {
         TRACE_FUNCTION;
 
         auto linkage = deserialiseLinkage();
@@ -807,7 +807,7 @@ public:
         BIT(1, saveLiteral);
 #undef BIT
         auto ty = deserialiseType();
-        auto rv = ::HIR::Static(mv$(linkage), isMut, mv$(ty), {});
+        auto rv = HIRStatic(mv$(linkage), isMut, mv$(ty), {});
         if (params.isGeneric()) {
             rv.mValue = deserialiseExprptr();
         }
@@ -821,12 +821,12 @@ public:
     }
 
     // - Type items
-    ::HIR::TypeAlias deserialiseTypealias() {
-        return ::HIR::TypeAlias{deserialiseGenericparams(), deserialiseType()};
+    HIRTypeAlias deserialiseTypealias() {
+        return HIRTypeAlias{deserialiseGenericparams(), deserialiseType()};
     }
 
-    ::HIR::TraitMarkings deserialiseMarkings() {
-        ::HIR::TraitMarkings m;
+    HIRTraitMarkings deserialiseMarkings() {
+        HIRTraitMarkings m;
         uint8_t bitflag1 = in.readU8();
 #define BIT(i, fld) fld = (bitflag1 & (1 << (i))) != 0;
         BIT(0, m.hasADeref)
@@ -837,8 +837,8 @@ public:
         return m;
     }
 
-    ::HIR::StructMarkings deserialiseStrMarkings() {
-        ::HIR::StructMarkings m;
+    HIRStructMarkings deserialiseStrMarkings() {
+        HIRStructMarkings m;
         uint8_t bitflag1 = in.readU8();
 #define BIT(i, fld) fld = (bitflag1 & (1 << (i))) != 0;
         BIT(0, m.canUnsize)
@@ -846,8 +846,8 @@ public:
         BIT(2, m.boundedMax)
         BIT(3, m.isFundamental)
 #undef BIT
-        m.dstType = static_cast<::HIR::StructMarkings::DstType>(in.readTag());
-        m.coerceUnsized = static_cast<::HIR::StructMarkings::Coerce>(in.readTag());
+        m.dstType = static_cast<HIRStructMarkings::DstType>(in.readTag());
+        m.coerceUnsized = static_cast<HIRStructMarkings::Coerce>(in.readTag());
         m.coerceUnsizedIndex = in.readCount();
         m.coerceParam = in.readCount();
         m.unsizedField = in.readCount();
@@ -859,21 +859,21 @@ public:
         return m;
     }
 
-    ::HIR::Enum deserialiseEnum();
-    ::HIR::Enum::DataVariant deserialiseEnumdatavariant();
-    ::HIR::Enum::ValueVariant deserialiseEnumvaluevariant();
+    HIREnum deserialiseEnum();
+    HIREnum::DataVariant deserialiseEnumdatavariant();
+    HIREnum::ValueVariant deserialiseEnumvaluevariant();
 
-    ::HIR::Struct deserialiseStruct();
-    ::HIR::StructField deserialiseStructField();
-    ::HIR::Union deserialiseUnion();
-    ::HIR::Trait deserialiseTrait();
+    HIRStruct deserialiseStruct();
+    HIRStructField deserialiseStructField();
+    HIRUnion deserialiseUnion();
+    HIRTrait deserialiseTrait();
 
-    ::HIR::TraitValueItem deserialiseTraitvalueitem() {
+    HIRTraitValueItem deserialiseTraitvalueitem() {
         switch (auto tag = in.readTag()) {
 #define _(x, ...)                                            \
-    case ::HIR::TraitValueItem::TAG_##x:                     \
+    case HIRTraitValueItem::TAG_##x:                     \
         DEBUG("- " #x);                                      \
-        return ::HIR::TraitValueItem::make_##x(__VA_ARGS__); \
+        return HIRTraitValueItem::make_##x(__VA_ARGS__); \
         break;
             _(Constant, deserialiseConstant())
             _(Static, deserialiseStatic())
@@ -884,8 +884,8 @@ public:
         }
     }
 
-    ::HIR::AssociatedType deserialiseAssociatedtype() {
-        return ::HIR::AssociatedType{deserialiseGenericparams(), in.readBool(), deserialiseLifetimeref(), deserialiseVec<::HIR::TraitPath>(), deserialiseType()};
+    HIRAssociatedType deserialiseAssociatedtype() {
+        return HIRAssociatedType{deserialiseGenericparams(), in.readBool(), deserialiseLifetimeref(), deserialiseVec<HIRTraitPath>(), deserialiseType()};
     }
 };
 
@@ -919,49 +919,49 @@ struct D<::std::pair<T, U>> {
 };
 
 template <typename T>
-DEF_D(::HIR::VisEnt<T>, return d.deserialiseVisent<T>();)
+DEF_D(HIRVisEnt<T>, return d.deserialiseVisent<T>();)
 
 template <>
-DEF_D(::HIR::LifetimeDef, return d.deserialiseLifetimedef();)
+DEF_D(HIRLifetimeDef, return d.deserialiseLifetimedef();)
 template <>
-DEF_D(::HIR::LifetimeRef, return d.deserialiseLifetimeref();)
+DEF_D(HIRLifetimeRef, return d.deserialiseLifetimeref();)
 template <>
-DEF_D(::HIR::TypeRef, return d.deserialiseType();)
+DEF_D(HIRTypeRef, return d.deserialiseType();)
 template <>
-DEF_D(::HIR::SimplePath, return d.deserialiseSimplepath();)
+DEF_D(HIRSimplePath, return d.deserialiseSimplepath();)
 template <>
-DEF_D(::HIR::GenericPath, return d.deserialiseGenericpath();)
+DEF_D(HIRGenericPath, return d.deserialiseGenericpath();)
 template <>
-DEF_D(::HIR::TraitPath, return d.deserialiseTraitpath();)
+DEF_D(HIRTraitPath, return d.deserialiseTraitpath();)
 
 template <>
-DEF_D(::HIR::TypeParamDef, return d.deserialiseTyparamdef();)
+DEF_D(HIRTypeParamDef, return d.deserialiseTyparamdef();)
 template <>
-DEF_D(::HIR::ValueParamDef, return d.deserialiseValueparamdef();)
+DEF_D(HIRValueParamDef, return d.deserialiseValueparamdef();)
 template <>
-DEF_D(::HIR::GenericBound, return d.deserialiseGenericbound();)
+DEF_D(HIRGenericBound, return d.deserialiseGenericbound();)
 
 template <>
-DEF_D(::HIR::ValueItem, return d.deserialiseValueitem();)
+DEF_D(HIRValueItem, return d.deserialiseValueitem();)
 template <>
-DEF_D(::HIR::TypeItem, return d.deserialiseTypeitem();)
+DEF_D(HIRTypeItem, return d.deserialiseTypeitem();)
 template <>
-DEF_D(::HIR::MacroItem, return d.deserialiseMacroitem();)
+DEF_D(HIRMacroItem, return d.deserialiseMacroitem();)
 
 template <>
-DEF_D(::HIR::Enum::ValueVariant, return d.deserialiseEnumvaluevariant();)
+DEF_D(HIREnum::ValueVariant, return d.deserialiseEnumvaluevariant();)
 template <>
-DEF_D(::HIR::Enum::DataVariant, return d.deserialiseEnumdatavariant();)
+DEF_D(HIREnum::DataVariant, return d.deserialiseEnumdatavariant();)
 template <>
-DEF_D(::HIR::StructField, return d.deserialiseStructField();)
+DEF_D(HIRStructField, return d.deserialiseStructField();)
 //template<> DEF_D( ::HIR::Literal, return d.deserialise_literal(); )
 template <>
-DEF_D(::HIR::ConstGeneric, return d.deserialiseConstgeneric();)
+DEF_D(HIRConstGeneric, return d.deserialiseConstgeneric();)
 
 template <>
-DEF_D(::HIR::AssociatedType, return d.deserialiseAssociatedtype();)
+DEF_D(HIRAssociatedType, return d.deserialiseAssociatedtype();)
 template <>
-DEF_D(::HIR::TraitValueItem, return d.deserialiseTraitvalueitem();)
+DEF_D(HIRTraitValueItem, return d.deserialiseTraitvalueitem();)
 
 template <>
 DEF_D(MIRParam, return d.deserialiseMirParam();)
@@ -981,50 +981,50 @@ template <>
 DEF_D(MIRBasicBlock, return d.deserialiseMirBasicblock();)
 
 template <>
-DEF_D(::HIR::TraitPath::AtyEqual, auto src = d.deserialiseGenericpath(); return ::HIR::TraitPath::AtyEqual{mv$(src), d.deserialisePathparams(), d.deserialiseType()};)
+DEF_D(HIRTraitPath::AtyEqual, auto src = d.deserialiseGenericpath(); return HIRTraitPath::AtyEqual{mv$(src), d.deserialisePathparams(), d.deserialiseType()};)
 template <>
-DEF_D(::HIR::TraitPath::AtyBound, auto src = d.deserialiseGenericpath(); return ::HIR::TraitPath::AtyBound{mv$(src), d.deserialisePathparams(), d.deserialiseVec<HIR::TraitPath>()};);
+DEF_D(HIRTraitPath::AtyBound, auto src = d.deserialiseGenericpath(); return HIRTraitPath::AtyBound{mv$(src), d.deserialisePathparams(), d.deserialiseVec<HIRTraitPath>()};);
 
 template <>
-DEF_D(::HIR::ProcMacro, return d.deserialiseProcmacro();)
+DEF_D(HIRProcMacro, return d.deserialiseProcmacro();)
 template <>
-DEF_D(::HIR::TypeImpl, return d.deserialiseTypeimpl();)
+DEF_D(HIRTypeImpl, return d.deserialiseTypeimpl();)
 template <>
-DEF_D(::HIR::TraitImpl, return d.deserialiseTraitimpl();)
+DEF_D(HIRTraitImpl, return d.deserialiseTraitimpl();)
 template <>
-DEF_D(::HIR::MarkerImpl, return d.deserialiseMarkerimpl();)
+DEF_D(HIRMarkerImpl, return d.deserialiseMarkerimpl();)
 template <>
 DEF_D(::MacroRulesPtr, return d.deserialiseMacrorulesptr();)
 template <>
 DEF_D(unsigned int, return static_cast<unsigned int>(d.deserialiseCount());)
 
 template <typename T>
-DEF_D(::HIR::Crate::ImplGroup<std::unique_ptr<T>>, ::HIR::Crate::ImplGroup<std::unique_ptr<T>> rv; rv.named = d.deserialisePathmap<::std::vector<::std::unique_ptr<T>>>(); rv.nonNamed = d.deserialiseVec<::std::unique_ptr<T>>(); rv.generic = d.deserialiseVec<::std::unique_ptr<T>>(); return rv;)
+DEF_D(HIRCrate::ImplGroup<std::unique_ptr<T>>, HIRCrate::ImplGroup<std::unique_ptr<T>> rv; rv.named = d.deserialisePathmap<::std::vector<::std::unique_ptr<T>>>(); rv.nonNamed = d.deserialiseVec<::std::unique_ptr<T>>(); rv.generic = d.deserialiseVec<::std::unique_ptr<T>>(); return rv;)
 template <>
-DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
+DEF_D(HIRExternLibrary, return d.deserialiseExtlib();)
 
-    ::HIR::LifetimeDef HirDeserialiser::deserialiseLifetimedef() {
-    ::HIR::LifetimeDef rv;
+    HIRLifetimeDef HirDeserialiser::deserialiseLifetimedef() {
+    HIRLifetimeDef rv;
     rv.mName = in.readIstring();
     return rv;
 }
 
-::HIR::LifetimeRef HirDeserialiser::deserialiseLifetimeref() {
-    ::HIR::LifetimeRef rv;
+HIRLifetimeRef HirDeserialiser::deserialiseLifetimeref() {
+    HIRLifetimeRef rv;
     rv.binding = static_cast<uint32_t>(in.readCount());
     return rv;
 }
 
-::HIR::GenericRef HirDeserialiser::deserialiseGenericref() {
-    return HIR::GenericRef{in.readIstring(), in.readU16()};
+HIRGenericRef HirDeserialiser::deserialiseGenericref() {
+    return HIRGenericRef{in.readIstring(), in.readU16()};
 }
 
-::HIR::ArraySize HirDeserialiser::deserialiseArraysize() {
+HIRArraySize HirDeserialiser::deserialiseArraysize() {
     switch (auto tag = in.readTag()) {
 #define _(x, ...)                   \
-    case ::HIR::ArraySize::TAG_##x: \
+    case HIRArraySize::TAG_##x: \
         DEBUG("- " #x);             \
-        return HIR::ArraySize::make_##x(__VA_ARGS__);
+        return HIRArraySize::make_##x(__VA_ARGS__);
         _(Known, in.readU64c())
         _(Unevaluated, deserialiseConstgeneric())
         default:
@@ -1033,8 +1033,8 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
     }
 }
 
-::HIR::TypeRef HirDeserialiser::deserialiseType() {
-    ::HIR::TypeRef rv;
+HIRTypeRef HirDeserialiser::deserialiseType() {
+    HIRTypeRef rv;
     TRACE_FUNCTION_FR("", rv);
 
     auto idx = in.readCount();
@@ -1049,17 +1049,17 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
 
     switch (auto tag = in.readTag()) {
 #define _(x, ...)                                                         \
-    case ::HIR::TypeData::TAG_##x:                                        \
+    case HIRTypeData::TAG_##x:                                        \
         DEBUG("- " #x);                                                   \
-        rv = typeInterner.intern(::HIR::TypeData::make_##x(__VA_ARGS__)); \
+        rv = typeInterner.intern(HIRTypeData::make_##x(__VA_ARGS__)); \
         break;
-        _(Infer, {~0u, HIR::InferClass::None})
+        _(Infer, {~0u, HIRInferClass::None})
         _(Diverge, {})
-        _(Primitive, static_cast<::HIR::CoreType>(in.readTag()))
+        _(Primitive, static_cast<HIRCoreType>(in.readTag()))
         _(Path, {deserialisePath(), {}, in.readBool() ? box$(deserialiseGenericparams()) : nullptr})
         _(Generic, deserialiseGenericref())
-        _(TraitObject, {deserialiseTraitpath(), deserialiseVec<::HIR::GenericPath>(), deserialiseLifetimeref()})
-        case ::HIR::TypeData::TAG_ErasedType:
+        _(TraitObject, {deserialiseTraitpath(), deserialiseVec<HIRGenericPath>(), deserialiseLifetimeref()})
+        case HIRTypeData::TAG_ErasedType:
             TODO(Span(), "ErasedType");
             //_(ErasedType, {
             //    m_in.read_bool(),
@@ -1069,11 +1069,11 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
             //    })
             _(Array, {deserialiseType(), deserialiseArraysize()})
             _(Slice, {deserialiseType()})
-            _(Tuple, deserialiseVec<::HIR::TypeRef>())
-            _(Borrow, {deserialiseLifetimeref(), static_cast<::HIR::BorrowType>(in.readTag()), deserialiseType()})
-            _(Pointer, {static_cast<::HIR::BorrowType>(in.readTag()), deserialiseType()})
+            _(Tuple, deserialiseVec<HIRTypeRef>())
+            _(Borrow, {deserialiseLifetimeref(), static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
+            _(Pointer, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(NamedFunction, {deserialisePath()})
-            _(Function, {deserialiseGenericparams(), in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVec<::HIR::TypeRef>()})
+            _(Function, {deserialiseGenericparams(), in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVec<HIRTypeRef>()})
 #undef _
         default:
             BUG(Span(), "Bad tag for HIR::TypeRef - " << tag);
@@ -1082,9 +1082,9 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
     return rv;
 }
 
-::HIR::SimplePath HirDeserialiser::deserialiseSimplepath() {
+HIRSimplePath HirDeserialiser::deserialiseSimplepath() {
     TRACE_FUNCTION;
-    auto rv = ::HIR::SimplePath{deserialiseThinvec<RcString>()};
+    auto rv = HIRSimplePath{deserialiseThinvec<RcString>()};
     // HACK! If the read crate name is empty, replace it with the name we're loaded with
     if (rv.crateName() == "" && rv.components().size() > 0) {
         assert(crateName != "");
@@ -1093,112 +1093,112 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
     return rv;
 }
 
-::HIR::PathParams HirDeserialiser::deserialisePathparams() {
-    ::HIR::PathParams rv;
+HIRPathParams HirDeserialiser::deserialisePathparams() {
+    HIRPathParams rv;
     TRACE_FUNCTION_FR("", rv);
-    rv.mLifetimes = deserialiseThinvec<::HIR::LifetimeRef>();
-    rv.types = deserialiseThinvec<::HIR::TypeRef>();
-    rv.values = deserialiseThinvec<::HIR::ConstGeneric>();
+    rv.mLifetimes = deserialiseThinvec<HIRLifetimeRef>();
+    rv.types = deserialiseThinvec<HIRTypeRef>();
+    rv.values = deserialiseThinvec<HIRConstGeneric>();
     return rv;
 }
 
-::HIR::GenericPath HirDeserialiser::deserialiseGenericpath() {
-    ::HIR::GenericPath rv;
+HIRGenericPath HirDeserialiser::deserialiseGenericpath() {
+    HIRGenericPath rv;
     TRACE_FUNCTION_FR("", rv);
     rv.mPath = deserialiseSimplepath();
     rv.mParams = deserialisePathparams();
     return rv;
 }
 
-::HIR::TraitPath HirDeserialiser::deserialiseTraitpath() {
+HIRTraitPath HirDeserialiser::deserialiseTraitpath() {
     auto _ = in.openObject("HIR::TraitPath");
-    auto hrls = in.readBool() ? box$(deserialiseGenericparams()) : std::unique_ptr<HIR::GenericParams>();
+    auto hrls = in.readBool() ? box$(deserialiseGenericparams()) : std::unique_ptr<HIRGenericParams>();
     auto gpath = deserialiseGenericpath();
-    auto tys = deserialiseIstrmap<::HIR::TraitPath::AtyEqual>();
-    auto bounds = deserialiseIstrmap<::HIR::TraitPath::AtyBound>();
-    auto constness = static_cast<::HIR::BoundConstness>(in.readU8());
-    return ::HIR::TraitPath{std::move(hrls), mv$(gpath), mv$(tys), mv$(bounds), nullptr, constness};
+    auto tys = deserialiseIstrmap<HIRTraitPath::AtyEqual>();
+    auto bounds = deserialiseIstrmap<HIRTraitPath::AtyBound>();
+    auto constness = static_cast<HIRBoundConstness>(in.readU8());
+    return HIRTraitPath{std::move(hrls), mv$(gpath), mv$(tys), mv$(bounds), nullptr, constness};
 }
 
-::HIR::Path HirDeserialiser::deserialisePath() {
+HIRPath HirDeserialiser::deserialisePath() {
     TRACE_FUNCTION;
     switch (auto tag = in.readTag()) {
         case 0:
             DEBUG("Generic");
-            return ::HIR::Path(deserialiseGenericpath());
+            return HIRPath(deserialiseGenericpath());
         case 1:
             DEBUG("Inherent");
-            return ::HIR::Path(::HIR::Path::Data::Data_UfcsInherent{deserialiseType(), in.readIstring(), deserialisePathparams(), deserialisePathparams()});
+            return HIRPath(HIRPath::Data::Data_UfcsInherent{deserialiseType(), in.readIstring(), deserialisePathparams(), deserialisePathparams()});
         case 2:
         case 3: {
-            std::unique_ptr<HIR::GenericParams> hrtbs;
+            std::unique_ptr<HIRGenericParams> hrtbs;
             if (tag == 3) {
-                hrtbs = std::make_unique<HIR::GenericParams>(deserialiseGenericparams());
+                hrtbs = std::make_unique<HIRGenericParams>(deserialiseGenericparams());
             }
             DEBUG("Known");
-            return ::HIR::Path(::HIR::Path::Data::Data_UfcsKnown{deserialiseType(), deserialiseGenericpath(), in.readIstring(), deserialisePathparams(), std::move(hrtbs)});
+            return HIRPath(HIRPath::Data::Data_UfcsKnown{deserialiseType(), deserialiseGenericpath(), in.readIstring(), deserialisePathparams(), std::move(hrtbs)});
         }
         default:
             BUG(Span(), "Bad tag for HIR::Path - " << tag);
     }
 }
 
-::HIR::GenericParams HirDeserialiser::deserialiseGenericparams() {
+HIRGenericParams HirDeserialiser::deserialiseGenericparams() {
     TRACE_FUNCTION;
-    ::HIR::GenericParams params;
-    params.types = deserialiseVec<::HIR::TypeParamDef>();
-    params.values = deserialiseVec<::HIR::ValueParamDef>();
-    params.mLifetimes = deserialiseVec<::HIR::LifetimeDef>();
-    params.bounds = deserialiseVec<::HIR::GenericBound>();
+    HIRGenericParams params;
+    params.types = deserialiseVec<HIRTypeParamDef>();
+    params.values = deserialiseVec<HIRValueParamDef>();
+    params.mLifetimes = deserialiseVec<HIRLifetimeDef>();
+    params.bounds = deserialiseVec<HIRGenericBound>();
     DEBUG("params = " << params.fmtArgs() << ", " << params.fmtBounds());
     return params;
 }
 
-::HIR::TypeParamDef HirDeserialiser::deserialiseTyparamdef() {
-    auto rv = ::HIR::TypeParamDef{in.readIstring(), deserialiseType(), in.readBool()};
+HIRTypeParamDef HirDeserialiser::deserialiseTyparamdef() {
+    auto rv = HIRTypeParamDef{in.readIstring(), deserialiseType(), in.readBool()};
     DEBUG("::HIR::TypeParamDef { " << rv.mName << ", " << rv.defaultValue << ", " << rv.isSized << "}");
     return rv;
 }
 
-::HIR::ValueParamDef HirDeserialiser::deserialiseValueparamdef() {
-    auto rv = ::HIR::ValueParamDef{in.readIstring(), deserialiseType()};
+HIRValueParamDef HirDeserialiser::deserialiseValueparamdef() {
+    auto rv = HIRValueParamDef{in.readIstring(), deserialiseType()};
     rv.defaultValue = deserialiseConstgeneric();
     DEBUG("::HIR::ValueParamDef { " << rv.mName << ": " << rv.mType << " = " << rv.defaultValue << "}");
     return rv;
 }
 
-::HIR::GenericBound HirDeserialiser::deserialiseGenericbound() {
+HIRGenericBound HirDeserialiser::deserialiseGenericbound() {
     switch (auto tag = in.readTag()) {
         case 0:
-            return ::HIR::GenericBound::make_Lifetime({deserialiseLifetimeref(), deserialiseLifetimeref()});
+            return HIRGenericBound::make_Lifetime({deserialiseLifetimeref(), deserialiseLifetimeref()});
         case 1:
-            return ::HIR::GenericBound::make_TypeLifetime({deserialiseType(), deserialiseLifetimeref()});
+            return HIRGenericBound::make_TypeLifetime({deserialiseType(), deserialiseLifetimeref()});
         case 2: {
             auto hrtbs = in.readBool() ? box$(deserialiseGenericparams()) : nullptr;
             auto type = deserialiseType();
             auto trait = deserialiseTraitpath();
-            auto constness = static_cast<::HIR::BoundConstness>(in.readU8());
-            return ::HIR::GenericBound::make_TraitBound({mv$(hrtbs), mv$(type), mv$(trait), constness});
+            auto constness = static_cast<HIRBoundConstness>(in.readU8());
+            return HIRGenericBound::make_TraitBound({mv$(hrtbs), mv$(type), mv$(trait), constness});
         }
         case 3:
-            return ::HIR::GenericBound::make_TypeEquality({deserialiseType(), deserialiseType()});
+            return HIRGenericBound::make_TypeEquality({deserialiseType(), deserialiseType()});
         default:
             BUG(Span(), "Bad tag for HIR::GenericBound - " << tag);
     }
 }
 
-::HIR::Enum HirDeserialiser::deserialiseEnum() {
+HIREnum HirDeserialiser::deserialiseEnum() {
     TRACE_FUNCTION;
     auto _ = in.openObject("HIR::Enum");
 
     struct H {
-        static ::HIR::Enum::Class deserialiseEnumclass(HirDeserialiser& des) {
+        static HIREnum::Class deserialiseEnumclass(HirDeserialiser& des) {
             switch (auto tag = des.in.readTag()) {
-                case ::HIR::Enum::Class::TAG_Data:
-                    return ::HIR::Enum::Class::make_Data(des.deserialiseVec<::HIR::Enum::DataVariant>());
-                case ::HIR::Enum::Class::TAG_Value:
-                    return ::HIR::Enum::Class::make_Value({
-                        des.deserialiseVec<::HIR::Enum::ValueVariant>(),
+                case HIREnum::Class::TAG_Data:
+                    return HIREnum::Class::make_Data(des.deserialiseVec<HIREnum::DataVariant>());
+                case HIREnum::Class::TAG_Value:
+                    return HIREnum::Class::make_Value({
+                        des.deserialiseVec<HIREnum::ValueVariant>(),
                     });
                 default:
                     BUG(Span(), "Bad tag for HIR::Enum::Class - " << tag);
@@ -1206,51 +1206,51 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
         }
     };
 
-    return ::HIR::Enum{deserialiseGenericparams(), in.readBool(), static_cast<::HIR::Enum::Repr>(in.readTag()), H::deserialiseEnumclass(*this), true, deserialiseMarkings()};
+    return HIREnum{deserialiseGenericparams(), in.readBool(), static_cast<HIREnum::Repr>(in.readTag()), H::deserialiseEnumclass(*this), true, deserialiseMarkings()};
 }
 
-::HIR::Enum::DataVariant HirDeserialiser::deserialiseEnumdatavariant() {
+HIREnum::DataVariant HirDeserialiser::deserialiseEnumdatavariant() {
     auto name = in.readIstring();
     DEBUG("Enum::DataVariant " << name);
-    return ::HIR::Enum::DataVariant{mv$(name), in.readBool(), deserialiseType(), ::HIR::ExprPtr{}, U128(in.readU64())};
+    return HIREnum::DataVariant{mv$(name), in.readBool(), deserialiseType(), HIRExprPtr{}, U128(in.readU64())};
 }
 
-::HIR::Enum::ValueVariant HirDeserialiser::deserialiseEnumvaluevariant() {
+HIREnum::ValueVariant HirDeserialiser::deserialiseEnumvaluevariant() {
     auto name = in.readIstring();
     DEBUG("Enum::ValueVariant " << name);
-    return ::HIR::Enum::ValueVariant{mv$(name), ::HIR::ExprPtr{}, U128(in.readU64())};
+    return HIREnum::ValueVariant{mv$(name), HIRExprPtr{}, U128(in.readU64())};
 }
 
-::HIR::Union HirDeserialiser::deserialiseUnion() {
+HIRUnion HirDeserialiser::deserialiseUnion() {
     TRACE_FUNCTION;
     auto params = deserialiseGenericparams();
-    auto repr = static_cast<::HIR::Union::Repr>(in.readTag());
-    auto variants = deserialiseVec<HIR::StructField>();
+    auto repr = static_cast<HIRUnion::Repr>(in.readTag());
+    auto variants = deserialiseVec<HIRStructField>();
     auto markings = deserialiseMarkings();
 
-    return ::HIR::Union{mv$(params), repr, mv$(variants), mv$(markings)};
+    return HIRUnion{mv$(params), repr, mv$(variants), mv$(markings)};
 }
 
-::HIR::Struct HirDeserialiser::deserialiseStruct() {
+HIRStruct HirDeserialiser::deserialiseStruct() {
     TRACE_FUNCTION_FR("", in.getPos());
     auto _ = in.openObject("HIR::Struct");
     auto params = deserialiseGenericparams();
     DEBUG("params = " << params.fmtArgs() << params.fmtBounds());
-    auto repr = static_cast<::HIR::Struct::Repr>(in.readTag());
+    auto repr = static_cast<HIRStruct::Repr>(in.readTag());
 
-    ::HIR::Struct::Data data;
+    HIRStruct::Data data;
     switch (auto tag = in.readTag()) {
-        case ::HIR::Struct::Data::TAG_Unit:
+        case HIRStruct::Data::TAG_Unit:
             DEBUG("Unit");
-            data = ::HIR::Struct::Data::make_Unit({});
+            data = HIRStruct::Data::make_Unit({});
             break;
-        case ::HIR::Struct::Data::TAG_Tuple:
+        case HIRStruct::Data::TAG_Tuple:
             DEBUG("Tuple");
-            data = ::HIR::Struct::Data(deserialiseVec<::HIR::VisEnt<::HIR::TypeRef>>());
+            data = HIRStruct::Data(deserialiseVec<HIRVisEnt<HIRTypeRef>>());
             break;
-        case ::HIR::Struct::Data::TAG_Named:
+        case HIRStruct::Data::TAG_Named:
             DEBUG("Named");
-            data = ::HIR::Struct::Data(deserialiseVec<HIR::StructField>());
+            data = HIRStruct::Data(deserialiseVec<HIRStructField>());
             break;
         default:
             BUG(Span(), "Bad tag for HIR::Struct::Data - " << tag);
@@ -1261,22 +1261,22 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
     auto markings = deserialiseMarkings();
     auto strMarkings = deserialiseStrMarkings();
 
-    auto rv = ::HIR::Struct{mv$(params), repr, mv$(data), forcedAlignment, mv$(markings), mv$(strMarkings)};
+    auto rv = HIRStruct{mv$(params), repr, mv$(data), forcedAlignment, mv$(markings), mv$(strMarkings)};
     rv.maxFieldAlignment = maxFieldAlignment;
     return rv;
 }
 
-::HIR::StructField HirDeserialiser::deserialiseStructField() {
-    return HIR::StructField{in.readIstring(), deserialisePub(), deserialiseType(), in.readBool() ? ::std::make_unique<HIR::GenericPath>(deserialiseGenericpath()) : nullptr};
+HIRStructField HirDeserialiser::deserialiseStructField() {
+    return HIRStructField{in.readIstring(), deserialisePub(), deserialiseType(), in.readBool() ? ::std::make_unique<HIRGenericPath>(deserialiseGenericpath()) : nullptr};
 }
 
-::HIR::Trait HirDeserialiser::deserialiseTrait() {
+HIRTrait HirDeserialiser::deserialiseTrait() {
     TRACE_FUNCTION;
     auto _ = in.openObject("HIR::Trait");
 
-    ::HIR::Trait rv{
+    HIRTrait rv{
         deserialiseGenericparams(),
-        ::HIR::LifetimeRef(), // TODO: Better type for lifetime
+        HIRLifetimeRef(), // TODO: Better type for lifetime
         {}
     };
     rv.lifetime = deserialiseLifetimeref();
@@ -1285,34 +1285,34 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
     rv.isFundamental = traitFlags & 2;
     rv.isCoinductive = (traitFlags & 4) || rv.mIsMarker;
     rv.isConst = traitFlags & 8;
-    rv.types = deserialiseIstrumap<::HIR::AssociatedType>();
-    rv.values = deserialiseIstrumap<::HIR::TraitValueItem>();
-    rv.valueIndexes = deserialiseIstrummap<::std::pair<unsigned int, ::HIR::GenericPath>>();
+    rv.types = deserialiseIstrumap<HIRAssociatedType>();
+    rv.values = deserialiseIstrumap<HIRTraitValueItem>();
+    rv.valueIndexes = deserialiseIstrummap<::std::pair<unsigned int, HIRGenericPath>>();
     rv.typeIndexes = deserialiseIstrumap<unsigned int>();
     rv.vtableParentTraitsStart = in.readCount();
-    rv.allParentTraits = deserialiseVec<::HIR::TraitPath>();
+    rv.allParentTraits = deserialiseVec<HIRTraitPath>();
     rv.vtablePath = deserialiseSimplepath();
     return rv;
 }
 
-::HIR::ConstGenericUnevaluated HirDeserialiser::deserialiseConstgenericUnevaluated() {
+HIRConstGenericUnevaluated HirDeserialiser::deserialiseConstgenericUnevaluated() {
     auto pI = deserialisePathparams();
     auto pM = deserialisePathparams();
-    auto rv = ::HIR::ConstGenericUnevaluated(deserialiseExprptr());
+    auto rv = HIRConstGenericUnevaluated(deserialiseExprptr());
     rv.paramsImpl = std::move(pI);
     rv.paramsItem = std::move(pM);
     return rv;
 }
 
-::HIR::ConstGeneric HirDeserialiser::deserialiseConstgeneric() {
+HIRConstGeneric HirDeserialiser::deserialiseConstgeneric() {
     switch (auto tag = in.readTag()) {
 #define _(x, ...)                      \
-    case ::HIR::ConstGeneric::TAG_##x: \
-        return ::HIR::ConstGeneric::make_##x(__VA_ARGS__);
+    case HIRConstGeneric::TAG_##x: \
+        return HIRConstGeneric::make_##x(__VA_ARGS__);
         _(Infer, {})
-        _(Unevaluated, std::make_unique<HIR::ConstGenericUnevaluated>(deserialiseConstgenericUnevaluated()))
+        _(Unevaluated, std::make_unique<HIRConstGenericUnevaluated>(deserialiseConstgenericUnevaluated()))
         _(Generic, deserialiseGenericref())
-        _(Evaluated, HIR::EncodedLiteralPtr(deserialiseEncodedliteral()))
+        _(Evaluated, HIREncodedLiteralPtr(deserialiseEncodedliteral()))
 #undef _
         default:
             BUG(Span(), "Unknown HIR::ConstGeneric tag when deserialising - " << tag);
@@ -1347,7 +1347,7 @@ MIRFunctionPointer HirDeserialiser::deserialiseMir() {
 
     MIRFunction rv;
 
-    rv.locals = deserialiseVec<::HIR::TypeRef>();
+    rv.locals = deserialiseVec<HIRTypeRef>();
     //rv.local_names = deserialise_vec< ::std::string>( );
     rv.dropFlags = deserialiseVec<bool>();
     rv.blocks = deserialiseVec<MIRBasicBlock>();
@@ -1551,55 +1551,55 @@ MIRCallTarget HirDeserialiser::deserialiseMirCalltarget() {
     }
 }
 
-::HIR::Module HirDeserialiser::deserialiseModule() {
+HIRModule HirDeserialiser::deserialiseModule() {
     TRACE_FUNCTION;
     auto _ = in.openObject("HIR::Module");
 
-    ::HIR::Module rv;
+    HIRModule rv;
 
     // m_traits doesn't need to be serialised
-    rv.valueItems = deserialiseIstrumap<::std::unique_ptr<::HIR::VisEnt<::HIR::ValueItem>>>();
-    rv.modItems = deserialiseIstrumap<::std::unique_ptr<::HIR::VisEnt<::HIR::TypeItem>>>();
-    rv.macroItems = deserialiseIstrumap<::std::unique_ptr<::HIR::VisEnt<::HIR::MacroItem>>>();
+    rv.valueItems = deserialiseIstrumap<::std::unique_ptr<HIRVisEnt<HIRValueItem>>>();
+    rv.modItems = deserialiseIstrumap<::std::unique_ptr<HIRVisEnt<HIRTypeItem>>>();
+    rv.macroItems = deserialiseIstrumap<::std::unique_ptr<HIRVisEnt<HIRMacroItem>>>();
 
     return rv;
 }
 
-::HIR::ExternLibrary HirDeserialiser::deserialiseExtlib() {
-    return ::HIR::ExternLibrary{in.readString()};
+HIRExternLibrary HirDeserialiser::deserialiseExtlib() {
+    return HIRExternLibrary{in.readString()};
 }
 
-void HirDeserialiser::deserialiseCrate(::HIR::Crate& rv) {
+void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
     // NOTE: This MUST be the first item
     this->crateName = in.readIstring();
     assert(this->crateName != "" && "Empty crate name loaded from metadata");
-    gVisPrivate = ::HIR::Publicity::newPriv(::HIR::SimplePath(this->crateName));
+    gVisPrivate = HIRPublicity::newPriv(HIRSimplePath(this->crateName));
     rv.crateName = this->crateName;
     rv.edition = static_cast<ASTEdition>(in.readTag());
     rv.mRootModule = deserialiseModule();
 
-    rv.typeImpls = D<::HIR::Crate::ImplGroup<std::unique_ptr<::HIR::TypeImpl>>>::des(*this);
-    rv.traitImpls = deserialisePathmap<::HIR::Crate::ImplGroup<std::unique_ptr<::HIR::TraitImpl>>>();
-    rv.markerImpls = deserialisePathmap<::HIR::Crate::ImplGroup<std::unique_ptr<::HIR::MarkerImpl>>>();
+    rv.typeImpls = D<HIRCrate::ImplGroup<std::unique_ptr<HIRTypeImpl>>>::des(*this);
+    rv.traitImpls = deserialisePathmap<HIRCrate::ImplGroup<std::unique_ptr<HIRTraitImpl>>>();
+    rv.markerImpls = deserialisePathmap<HIRCrate::ImplGroup<std::unique_ptr<HIRMarkerImpl>>>();
 
     rv.exportedMacroNames = deserialiseVec<::RcString>();
     //rv.m_exported_macros = deserialise_istrumap< ::MacroRulesPtr>();
     //rv.m_proc_macro_reexports = deserialise_istrumap< ::HIR::Crate::MacroImport>();
-    rv.mLangItems = deserialiseStrumap<::HIR::SimplePath>();
+    rv.mLangItems = deserialiseStrumap<HIRSimplePath>();
 
     {
         size_t n = in.readCount();
         for (size_t i = 0; i < n; i++) {
             auto extCrateName = in.readIstring();
             auto extCrateFile = in.readString();
-            auto extCrate = ::HIR::ExternCrate{};
+            auto extCrate = HIRExternCrate{};
             extCrate.basename = extCrateFile;
             extCrate.mPath = extCrateFile;
             rv.extCrates.insert(::std::make_pair(mv$(extCrateName), mv$(extCrate)));
         }
     }
 
-    rv.extLibs = deserialiseVec<::HIR::ExternLibrary>();
+    rv.extLibs = deserialiseVec<HIRExternLibrary>();
     rv.linkPaths = deserialiseVec<::std::string>();
 
     //rv.m_proc_macros = deserialise_vec< ::HIR::ProcMacro>();
@@ -1607,12 +1607,12 @@ void HirDeserialiser::deserialiseCrate(::HIR::Crate& rv) {
 
 //}
 
-::HIR::Crate* HIRDeserialise(stl::ObjPool* pool, ::HIR::TypeInterner& types, const ::std::string& filename) {
+HIRCrate* HIRDeserialise(stl::ObjPool* pool, HIRTypeInterner& types, const ::std::string& filename) {
     try {
-        ::HIR::HIRSerialiseReader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
+        HIRSerialiseReader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
         HirDeserialiser s{in, types};
 
-        auto* rv = pool->make<::HIR::Crate>(pool, types);
+        auto* rv = pool->make<HIRCrate>(pool, types);
         s.deserialiseCrate(*rv);
         return rv;
     } catch (int) {
@@ -1625,7 +1625,7 @@ void HirDeserialiser::deserialiseCrate(::HIR::Crate& rv) {
 
 RcString HIRDeserialiseJustName(const ::std::string& filename) {
     try {
-        ::HIR::HIRSerialiseReader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
+        HIRSerialiseReader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
 
         // NOTE: This is the first item loaded by deserialise_crate
         auto crateName = in.readIstring();
@@ -1643,23 +1643,23 @@ RcString HIRDeserialiseJustName(const ::std::string& filename) {
 #define DEBUG_EXTRA_ENABLE
 #undef DEF_D
 
-#define NODE_IS(valptr, tysuf) (cast<const ::HIR::ExprNode##tysuf>(&*valptr) != nullptr)
+#define NODE_IS(valptr, tysuf) (cast<const HIRExprNode##tysuf>(&*valptr) != nullptr)
 
 namespace {
 
-    class TreeVisitor: public ::HIR::Visitor, public ::HIR::ExprVisitor {
+    class TreeVisitor: public HIRVisitor, public HIRExprVisitor {
         ::std::ostream& os;
         unsigned int indentLevel;
 
     public:
-        TreeVisitor(::HIR::TypeInterner& types, ::std::ostream& os)
-            : ::HIR::Visitor(nullptr, types)
+        TreeVisitor(HIRTypeInterner& types, ::std::ostream& os)
+            : HIRVisitor(nullptr, types)
             , os(os)
             , indentLevel(0)
         {
         }
 
-        void visitModule(::HIR::ItemPath p, ::HIR::Module& mod) override {
+        void visitModule(HIRItemPath p, HIRModule& mod) override {
             if (p.getName()[0]) {
                 os << indent() << "mod " << p.getName() << " {\n";
                 incIndent();
@@ -1672,7 +1672,7 @@ namespace {
                 }
             }
             // TODO: Print publicitiy.
-            ::HIR::Visitor::visitModule(p, mod);
+            HIRVisitor::visitModule(p, mod);
 
             if (p.getName()[0]) {
                 decIndent();
@@ -1680,19 +1680,19 @@ namespace {
             }
         }
 
-        void visitTypeImpl(::HIR::TypeImpl& impl) override {
+        void visitTypeImpl(HIRTypeImpl& impl) override {
             os << indent() << "impl" << impl.mParams.fmtArgs() << " " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
                 os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
             incIndent();
-            ::HIR::Visitor::visitTypeImpl(impl);
+            HIRVisitor::visitTypeImpl(impl);
             decIndent();
             os << indent() << "}\n";
         }
 
-        virtual void visitTraitImpl(const ::HIR::SimplePath& traitPath, ::HIR::TraitImpl& impl) override {
+        virtual void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
             os << indent() << "impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
                 os << indent() << " " << impl.mParams.fmtBounds() << "\n";
@@ -1702,12 +1702,12 @@ namespace {
             for (auto& ent : impl.types) {
                 os << indent() << "type " << ent.first << " = " << ent.second.data << "\n";
             }
-            ::HIR::Visitor::visitTraitImpl(traitPath, impl);
+            HIRVisitor::visitTraitImpl(traitPath, impl);
             decIndent();
             os << indent() << "}\n";
         }
 
-        void visitMarkerImpl(const ::HIR::SimplePath& traitPath, ::HIR::MarkerImpl& impl) override {
+        void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override {
             os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.isPositive ? "" : "!") << traitPath << impl.traitArgs << " for " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
                 os << indent() << " " << impl.mParams.fmtBounds() << "\n";
@@ -1716,15 +1716,15 @@ namespace {
         }
 
         // - Type Items
-        void visitTypeAlias(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+        void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override {
             os << indent() << "type " << p.getName() << item.mParams.fmtArgs() << " = " << item.mType << item.mParams.fmtBounds() << "\n";
         }
 
-        void visitInherentType(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
+        void visitInherentType(HIRItemPath p, HIRTypeAlias& item) override {
             this->visitTypeAlias(p, item);
         }
 
-        void visitTrait(::HIR::ItemPath p, ::HIR::Trait& item) override {
+        void visitTrait(HIRItemPath p, HIRTrait& item) override {
             os << indent() << "trait " << p.getName() << item.mParams.fmtArgs() << " : " << item.lifetime << "\n";
             if (!item.parentTraits.empty()) {
                 os << indent() << "  " << ": ";
@@ -1767,13 +1767,13 @@ namespace {
                 os << ";\n";
             }
 
-            ::HIR::Visitor::visitTrait(p, item);
+            HIRVisitor::visitTrait(p, item);
 
             decIndent();
             os << indent() << "}\n";
         }
 
-        void visitStruct(::HIR::ItemPath p, ::HIR::Struct& item) override {
+        void visitStruct(HIRItemPath p, HIRStruct& item) override {
             os << indent() << "struct " << p.getName() << item.mParams.fmtArgs();
             TU_MATCH_HDRA( (item.mData), {)
             TU_ARMA(Unit, flds) {
@@ -1818,7 +1818,7 @@ namespace {
             }
         }
 
-        void visitEnum(::HIR::ItemPath p, ::HIR::Enum& item) override {
+        void visitEnum(HIRItemPath p, HIREnum& item) override {
             os << indent() << "enum " << p.getName() << item.mParams.fmtArgs() << "\n";
             if (!item.mParams.bounds.empty()) {
                 os << indent() << " " << item.mParams.fmtBounds() << "\n";
@@ -1845,7 +1845,7 @@ namespace {
         }
 
         // - Value Items
-        void visitFunction(::HIR::ItemPath p, ::HIR::Function& item) override {
+        void visitFunction(HIRItemPath p, HIRFunction& item) override {
             os << indent();
             if (item.isConst) {
                 os << "const ";
@@ -1867,7 +1867,7 @@ namespace {
 
             if (item.mCode) {
                 os << indent();
-                if (cast<::HIR::ExprNodeBlock>(&*item.mCode)) {
+                if (cast<HIRExprNodeBlock>(&*item.mCode)) {
                     item.mCode->visit(*this);
                 } else {
                     os << "{\n";
@@ -1887,7 +1887,7 @@ namespace {
             }
         }
 
-        void visitStatic(::HIR::ItemPath p, ::HIR::Static& item) override {
+        void visitStatic(HIRItemPath p, HIRStatic& item) override {
             if (item.linkage.name != "") {
                 os << indent() << "#[link_name=\"" << item.linkage.name << "\"]\n";
             }
@@ -1904,7 +1904,7 @@ namespace {
             os << ";\n";
         }
 
-        void visitConstant(::HIR::ItemPath p, ::HIR::Constant& item) override {
+        void visitConstant(HIRItemPath p, HIRConstant& item) override {
             os << indent() << "const " << p.getName() << ": " << item.mType << " = " << item.valueRes;
             if (item.mValue /*&& item.m_value_state != HIR::Constant::ValueState::Known*/) {
                 os << " /*= ";
@@ -1916,7 +1916,7 @@ namespace {
 
         // - Misc
 
-        bool nodeIsLeaf(const ::HIR::ExprNode& node) {
+        bool nodeIsLeaf(const HIRExprNode& node) {
             if (NODE_IS(&node, PathValue)) {
                 return true;
             }
@@ -1935,12 +1935,12 @@ namespace {
             return false;
         }
 
-        void visitNodePtr(::HIR::ExprNodeP& nodePtr) override {
-            HIR::ExprVisitor::visitNodePtr(nodePtr);
+        void visitNodePtr(HIRExprNodeP& nodePtr) override {
+            HIRExprVisitor::visitNodePtr(nodePtr);
             os << "/*: " << nodePtr->resType << " */";
         }
 
-        void visit(::HIR::ExprNodeBlock& node) override {
+        void visit(HIRExprNodeBlock& node) override {
             os << "{\n";
             incIndent();
             for (auto& sn : node.nodes) {
@@ -1957,22 +1957,22 @@ namespace {
             os << indent() << "}";
         }
 
-        void visit(::HIR::ExprNodeConstBlock& node) override {
+        void visit(HIRExprNodeConstBlock& node) override {
             os << "const ";
             node.inner->visit(*this);
         }
 
-        void visit(::HIR::ExprNodeAsm& node) override {
+        void visit(HIRExprNodeAsm& node) override {
             os << "llvm_asm!(";
             os << ")";
         }
 
-        void visit(::HIR::ExprNodeAsm2& node) override {
+        void visit(HIRExprNodeAsm2& node) override {
             os << "asm!(";
             os << ")";
         }
 
-        void visit(::HIR::ExprNodeReturn& node) override {
+        void visit(HIRExprNodeReturn& node) override {
             os << "return";
             if (node.mValue) {
                 os << " ";
@@ -1980,7 +1980,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeYield& node) override {
+        void visit(HIRExprNodeYield& node) override {
             os << "yield";
             if (node.mValue) {
                 os << " ";
@@ -1988,13 +1988,13 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeAWait& node) override {
+        void visit(HIRExprNodeAWait& node) override {
             os << "(";
             this->visitNodePtr(node.mValue);
             os << ").await";
         }
 
-        void visit(::HIR::ExprNodeLet& node) override {
+        void visit(HIRExprNodeLet& node) override {
             os << "let " << node.pattern << ": " << node.mType;
             if (node.mValue) {
                 os << " = ";
@@ -2003,7 +2003,7 @@ namespace {
             os << ";";
         }
 
-        void visit(::HIR::ExprNodeLoop& node) override {
+        void visit(HIRExprNodeLoop& node) override {
             if (node.label != "") {
                 os << "'" << node.label << ": ";
             }
@@ -2011,7 +2011,7 @@ namespace {
             this->visitNodePtr(node.mCode);
         }
 
-        void visit(::HIR::ExprNodeLoopControl& node) override {
+        void visit(HIRExprNodeLoopControl& node) override {
             os << (node.isContinue ? "continue" : "break");
             if (node.label != "") {
                 os << " '" << node.label;
@@ -2022,7 +2022,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeMatch& node) override {
+        void visit(HIRExprNodeMatch& node) override {
             os << "match ";
             this->visitNodePtr(node.mValue);
             os << " {\n";
@@ -2052,28 +2052,28 @@ namespace {
             os << indent() << "}";
         }
 
-        void visit(::HIR::ExprNodeAssign& node) override {
+        void visit(HIRExprNodeAssign& node) override {
             this->visitNodePtr(node.slot);
-            os << " " << ::HIR::ExprNodeAssign::opname(node.op) << "= ";
+            os << " " << HIRExprNodeAssign::opname(node.op) << "= ";
             this->visitNodePtr(node.mValue);
         }
 
-        void visit(::HIR::ExprNodeBinOp& node) override {
+        void visit(HIRExprNodeBinOp& node) override {
             os << "(";
             this->visitNodePtr(node.left);
             os << ")";
-            os << " " << ::HIR::ExprNodeBinOp::opname(node.op) << " ";
+            os << " " << HIRExprNodeBinOp::opname(node.op) << " ";
             os << "(";
             this->visitNodePtr(node.right);
             os << ")";
         }
 
-        void visit(::HIR::ExprNodeUniOp& node) override {
+        void visit(HIRExprNodeUniOp& node) override {
             switch (node.op) {
-                case ::HIR::ExprNodeUniOp::Op::Invert:
+                case HIRExprNodeUniOp::Op::Invert:
                     os << "!";
                     break;
-                case ::HIR::ExprNodeUniOp::Op::Negate:
+                case HIRExprNodeUniOp::Op::Negate:
                     os << "-";
                     break;
             }
@@ -2082,15 +2082,15 @@ namespace {
             os << ")";
         }
 
-        void visit(::HIR::ExprNodeBorrow& node) override {
+        void visit(HIRExprNodeBorrow& node) override {
             os << "&";
             switch (node.mType) {
-                case ::HIR::BorrowType::Shared:
+                case HIRBorrowType::Shared:
                     break;
-                case ::HIR::BorrowType::Unique:
+                case HIRBorrowType::Unique:
                     os << "mut ";
                     break;
-                case ::HIR::BorrowType::Owned:
+                case HIRBorrowType::Owned:
                     os << "move ";
                     break;
             }
@@ -2105,15 +2105,15 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeRawBorrow& node) override {
+        void visit(HIRExprNodeRawBorrow& node) override {
             os << "&raw ";
             switch (node.mType) {
-                case ::HIR::BorrowType::Shared:
+                case HIRBorrowType::Shared:
                     break;
-                case ::HIR::BorrowType::Unique:
+                case HIRBorrowType::Unique:
                     os << "mut ";
                     break;
-                case ::HIR::BorrowType::Owned:
+                case HIRBorrowType::Owned:
                     os << "move ";
                     break;
             }
@@ -2128,17 +2128,17 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeCast& node) override {
+        void visit(HIRExprNodeCast& node) override {
             this->visitNodePtr(node.mValue);
             os << " as " << node.dstType;
         }
 
-        void visit(::HIR::ExprNodeUnsize& node) override {
+        void visit(HIRExprNodeUnsize& node) override {
             this->visitNodePtr(node.mValue);
             os << " : " << node.dstType;
         }
 
-        void visit(::HIR::ExprNodeIndex& node) override {
+        void visit(HIRExprNodeIndex& node) override {
             // TODO: Avoid parens
             os << "(";
             this->visitNodePtr(node.mValue);
@@ -2148,7 +2148,7 @@ namespace {
             os << "]";
         }
 
-        void visit(::HIR::ExprNodeDeref& node) override {
+        void visit(HIRExprNodeDeref& node) override {
             os << "*";
 
             bool skipParens = this->nodeIsLeaf(*node.mValue);
@@ -2161,8 +2161,8 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeEmplace& node) override {
-            if (node.mType == ::HIR::ExprNodeEmplace::Type::Noop) {
+        void visit(HIRExprNodeEmplace& node) override {
+            if (node.mType == HIRExprNodeEmplace::Type::Noop) {
                 return node.mValue->visit(*this);
             }
             os << "(";
@@ -2170,10 +2170,10 @@ namespace {
             os << " <- ";
             this->visitNodePtr(node.mValue);
             os << ")";
-            os << "/*" << (node.mType == ::HIR::ExprNodeEmplace::Type::Boxer ? "box" : "place") << "*/";
+            os << "/*" << (node.mType == HIRExprNodeEmplace::Type::Boxer ? "box" : "place") << "*/";
         }
 
-        void visit(::HIR::ExprNodeTupleVariant& node) override {
+        void visit(HIRExprNodeTupleVariant& node) override {
             os << node.mPath;
             os << "(";
             for (/*const*/ auto& arg : node.mArgs) {
@@ -2183,7 +2183,7 @@ namespace {
             os << ")";
         }
 
-        void visit(::HIR::ExprNodeCallPath& node) override {
+        void visit(HIRExprNodeCallPath& node) override {
             os << node.mPath;
             os << "(";
             for (/*const*/ auto& arg : node.mArgs) {
@@ -2194,7 +2194,7 @@ namespace {
             os << "/* : " << node.resType << " */";
         }
 
-        void visit(::HIR::ExprNodeCallValue& node) override {
+        void visit(HIRExprNodeCallValue& node) override {
             // TODO: Avoid brackets if not needed
             os << "(";
             this->visitNodePtr(node.mValue);
@@ -2207,7 +2207,7 @@ namespace {
             os << ")";
         }
 
-        void visit(::HIR::ExprNodeCallMethod& node) override {
+        void visit(HIRExprNodeCallMethod& node) override {
             // TODO: Avoid brackets if not needed
             os << "(";
             this->visitNodePtr(node.mValue);
@@ -2223,7 +2223,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeField& node) override {
+        void visit(HIRExprNodeField& node) override {
             // TODO: Avoid brackets if not needed
             os << "(";
             this->visitNodePtr(node.mValue);
@@ -2231,41 +2231,41 @@ namespace {
             os << "." << node.field;
         }
 
-        void visit(::HIR::ExprNodeLiteral& node) override {
+        void visit(HIRExprNodeLiteral& node) override {
             TU_MATCH_HDRA( (node.mData), {)
             TU_ARMA(Integer, e) {
                     switch (e.mType) {
-                        case ::HIR::CoreType::U8:
+                        case HIRCoreType::U8:
                             os << e.mValue << "_u8";
                             break;
-                        case ::HIR::CoreType::U16:
+                        case HIRCoreType::U16:
                             os << e.mValue << "_u16";
                             break;
-                        case ::HIR::CoreType::U32:
+                        case HIRCoreType::U32:
                             os << e.mValue << "_u32";
                             break;
-                        case ::HIR::CoreType::U64:
+                        case HIRCoreType::U64:
                             os << e.mValue << "_u64";
                             break;
-                        case ::HIR::CoreType::Usize:
+                        case HIRCoreType::Usize:
                             os << e.mValue << "_usize";
                             break;
-                        case ::HIR::CoreType::I8:
+                        case HIRCoreType::I8:
                             os << /*I128*/ (e.mValue) << "_i8";
                             break;
-                        case ::HIR::CoreType::I16:
+                        case HIRCoreType::I16:
                             os << /*I128*/ (e.mValue) << "_i16";
                             break;
-                        case ::HIR::CoreType::I32:
+                        case HIRCoreType::I32:
                             os << /*I128*/ (e.mValue) << "_i32";
                             break;
-                        case ::HIR::CoreType::I64:
+                        case HIRCoreType::I64:
                             os << /*I128*/ (e.mValue) << "_i64";
                             break;
-                        case ::HIR::CoreType::Isize:
+                        case HIRCoreType::Isize:
                             os << /*I128*/ (e.mValue) << "_isize";
                             break;
-                        case ::HIR::CoreType::Char: {
+                        case HIRCoreType::Char: {
                             auto v = e.mValue.truncateU64();
                             if (v == '\\' || v == '\'') {
                                 os << "'\\" << static_cast<char>(v) << "'";
@@ -2282,10 +2282,10 @@ namespace {
                 }
                 TU_ARMA(Float, e) {
                     switch (e.mType) {
-                        case ::HIR::CoreType::F32:
+                        case HIRCoreType::F32:
                             os << e.mValue << "_f32";
                             break;
-                        case ::HIR::CoreType::F64:
+                        case HIRCoreType::F64:
                             os << e.mValue << "_f64";
                             break;
                         default:
@@ -2320,23 +2320,23 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeUnitVariant& node) override {
+        void visit(HIRExprNodeUnitVariant& node) override {
             os << node.mPath;
         }
 
-        void visit(::HIR::ExprNodePathValue& node) override {
+        void visit(HIRExprNodePathValue& node) override {
             os << node.mPath;
         }
 
-        void visit(::HIR::ExprNodeVariable& node) override {
+        void visit(HIRExprNodeVariable& node) override {
             os << node.mName << "#" << node.slot;
         }
 
-        void visit(::HIR::ExprNodeConstParam& node) override {
+        void visit(HIRExprNodeConstParam& node) override {
             os << node.mName << "#" << node.mBinding;
         }
 
-        void visit(::HIR::ExprNodeStructLiteral& node) override {
+        void visit(HIRExprNodeStructLiteral& node) override {
             os << node.mType << " {\n";
             incIndent();
             for (/*const*/ auto& val : node.values) {
@@ -2353,7 +2353,7 @@ namespace {
             decIndent();
         }
 
-        void visit(::HIR::ExprNodeTuple& node) override {
+        void visit(HIRExprNodeTuple& node) override {
             os << "(";
             for (/*const*/ auto& val : node.vals) {
                 this->visitNodePtr(val);
@@ -2362,7 +2362,7 @@ namespace {
             os << ")";
         }
 
-        void visit(::HIR::ExprNodeArrayList& node) override {
+        void visit(HIRExprNodeArrayList& node) override {
             os << "[";
             for (/*const*/ auto& val : node.vals) {
                 this->visitNodePtr(val);
@@ -2371,14 +2371,14 @@ namespace {
             os << "]";
         }
 
-        void visit(::HIR::ExprNodeArraySized& node) override {
+        void visit(HIRExprNodeArraySized& node) override {
             os << "[";
             this->visitNodePtr(node.val);
             os << "; " << node.mSize;
             os << "]";
         }
 
-        void visit(::HIR::ExprNodeClosure& node) override {
+        void visit(HIRExprNodeClosure& node) override {
             if (node.mCode) {
                 if (node.isMove) {
                     os << " move";
@@ -2399,7 +2399,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeGenerator& node) override {
+        void visit(HIRExprNodeGenerator& node) override {
             if (node.mCode) {
                 os << "/*gen*/";
                 if (node.isPinned) {
@@ -2423,7 +2423,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeGeneratorWrapper& node) override {
+        void visit(HIRExprNodeGeneratorWrapper& node) override {
             os << "/*gen body*/";
             os << "|";
             //for(const auto& arg : node.m_args)
@@ -2432,7 +2432,7 @@ namespace {
             this->visitNodePtr(node.mCode);
         }
 
-        void visit(::HIR::ExprNodeAsyncBlock& node) override {
+        void visit(HIRExprNodeAsyncBlock& node) override {
             if (node.isMove) {
                 os << "move ";
             }
@@ -2460,13 +2460,13 @@ namespace {
     };
 }
 
-void HIRDump(::std::ostream& sink, const ::HIR::Crate& crate) {
+void HIRDump(::std::ostream& sink, const HIRCrate& crate) {
     TreeVisitor tv{crate.types, sink};
 
-    tv.visitCrate(const_cast<::HIR::Crate&>(crate));
+    tv.visitCrate(const_cast<HIRCrate&>(crate));
 }
 
-void HIRDumpExpr(::std::ostream& sink, const ::HIR::ExprPtr& expr) {
+void HIRDumpExpr(::std::ostream& sink, const HIRExprPtr& expr) {
     if (!expr) {
         sink << "/*NULL*/";
         return;
@@ -2475,7 +2475,7 @@ void HIRDumpExpr(::std::ostream& sink, const ::HIR::ExprPtr& expr) {
     assert(expr.state);
     TreeVisitor tv{expr.state->types, sink};
 
-    const_cast<HIR::ExprPtr&>(expr)->visit(tv);
+    const_cast<HIRExprPtr&>(expr)->visit(tv);
 }
 
 #undef NODE_IS
@@ -2483,11 +2483,11 @@ void HIRDumpExpr(::std::ostream& sink, const ::HIR::ExprPtr& expr) {
 //namespace {
 class HirSerialiser {
     ::std::map<std::string, size_t> types;
-    ::HIR::HIRSerialiseWriter& out;
-    ::HIR::TypeInterner& typeInterner;
+    HIRSerialiseWriter& out;
+    HIRTypeInterner& typeInterner;
 
 public:
-    HirSerialiser(::HIR::HIRSerialiseWriter& out, ::HIR::TypeInterner& typeInterner)
+    HirSerialiser(HIRSerialiseWriter& out, HIRTypeInterner& typeInterner)
         : out(out)
         , typeInterner(typeInterner)
     {
@@ -2517,7 +2517,7 @@ public:
     }
 
     template <typename V>
-    void serialisePathmap(const ::std::map<::HIR::SimplePath, V>& map) {
+    void serialisePathmap(const ::std::map<HIRSimplePath, V>& map) {
         out.writeCount(map.size());
         for (const auto& v : map) {
             DEBUG("- " << v.first);
@@ -2601,12 +2601,12 @@ public:
         }
     }
 
-    void serialise(const ::HIR::Publicity& pub) {
+    void serialise(const HIRPublicity& pub) {
         out.writeBool(pub.isGlobal());
     }
 
     template <typename T>
-    void serialise(const ::HIR::VisEnt<T>& e) {
+    void serialise(const HIRVisEnt<T>& e) {
         serialise(e.publicity);
         serialise(e.ent);
     }
@@ -2658,20 +2658,20 @@ public:
         out.writeI64c(v);
     };
 
-    void serialise(const ::HIR::LifetimeDef& ld) {
+    void serialise(const HIRLifetimeDef& ld) {
         out.writeString(ld.mName);
     }
 
-    void serialise(const ::HIR::LifetimeRef& lr) {
+    void serialise(const HIRLifetimeRef& lr) {
         out.writeCount(lr.binding);
     }
 
-    void serialise(const ::HIR::GenericRef& ge) {
+    void serialise(const HIRGenericRef& ge) {
         out.writeString(ge.name);
         out.writeU16(ge.binding);
     }
 
-    void serialiseArraysize(const ::HIR::ArraySize& as) {
+    void serialiseArraysize(const HIRArraySize& as) {
         out.writeTag(static_cast<int>(as.tag()));
             TU_MATCH_HDRA( (as), { )
             TU_ARMA(Unevaluated, se) {
@@ -2683,7 +2683,7 @@ public:
             }
     }
 
-    void serialiseType(const ::HIR::TypeData* ty) {
+    void serialiseType(const HIRTypeData* ty) {
         // Use string comparison to ensure that lifetimes are checked
         auto tyStr = FMT(ty);
         if (tyStr[0] == '{') {
@@ -2767,7 +2767,7 @@ public:
                 serialiseVec(e.argTypes);
             }
             break;
-            case ::HIR::TypeData::TAG_NodeType:
+            case HIRTypeData::TAG_NodeType:
                 BUG(Span(), "Encountered invalid type when serialising - " << ty);
                 break;
             }
@@ -2775,28 +2775,28 @@ public:
             types.insert(std::make_pair( std::move(tyStr), types.size() ));
     }
 
-    void serialiseSimplepath(const ::HIR::SimplePath& path) {
+    void serialiseSimplepath(const HIRSimplePath& path) {
         TRACE_FUNCTION_F(path);
         serialiseVec(path.members);
     }
 
-    void serialisePathparams(const ::HIR::PathParams& pp) {
+    void serialisePathparams(const HIRPathParams& pp) {
         serialiseVec(pp.mLifetimes);
         serialiseVec(pp.types);
         serialiseVec(pp.values);
     }
 
-    void serialiseGenericpath(const ::HIR::GenericPath& path) {
+    void serialiseGenericpath(const HIRGenericPath& path) {
         TRACE_FUNCTION_F(path);
         serialiseSimplepath(path.mPath);
         serialisePathparams(path.mParams);
     }
 
-    void serialise(const ::HIR::GenericPath& path) {
+    void serialise(const HIRGenericPath& path) {
         serialiseGenericpath(path);
     }
 
-    void serialiseTraitpath(const ::HIR::TraitPath& path) {
+    void serialiseTraitpath(const HIRTraitPath& path) {
         auto _ = out.openObject("HIR::TraitPath");
         assert(!path.lifetimeElision);
         out.writeBool(static_cast<bool>(path.hrtbs));
@@ -2809,19 +2809,19 @@ public:
         out.writeU8(static_cast<uint8_t>(path.constness));
     }
 
-    void serialise(const ::HIR::TraitPath::AtyEqual& e) {
+    void serialise(const HIRTraitPath::AtyEqual& e) {
         serialise(e.sourceTrait);
         serialisePathparams(e.atyParams);
         serialise(e.type);
     }
 
-    void serialise(const ::HIR::TraitPath::AtyBound& e) {
+    void serialise(const HIRTraitPath::AtyBound& e) {
         serialise(e.sourceTrait);
         serialisePathparams(e.atyParams);
         serialiseVec(e.traits);
     }
 
-    void serialisePath(const ::HIR::Path& path) {
+    void serialisePath(const HIRPath& path) {
         TRACE_FUNCTION_F("path=" << path);
             TU_MATCH_HDRA( (path.mData), {)
             TU_ARMA(Generic, e) {
@@ -2854,7 +2854,7 @@ public:
             }
     }
 
-    void serialiseGenerics(const ::HIR::GenericParams& params) {
+    void serialiseGenerics(const HIRGenericParams& params) {
         DEBUG("params = " << params.fmtArgs() << ", " << params.fmtBounds());
         serialiseVec(params.types);
         serialiseVec(params.values);
@@ -2862,19 +2862,19 @@ public:
         serialiseVec(params.bounds);
     }
 
-    void serialise(const ::HIR::TypeParamDef& pd) {
+    void serialise(const HIRTypeParamDef& pd) {
         out.writeString(pd.mName);
         serialiseType(pd.defaultValue);
         out.writeBool(pd.isSized);
     }
 
-    void serialise(const ::HIR::ValueParamDef& pd) {
+    void serialise(const HIRValueParamDef& pd) {
         out.writeString(pd.mName);
         serialiseType(pd.mType);
         serialise(pd.defaultValue);
     }
 
-    void serialise(const ::HIR::GenericBound& b) {
+    void serialise(const HIRGenericBound& b) {
         TRACE_FUNCTION_F(b);
             TU_MATCH_HDRA( (b), {)
             TU_ARMA(Lifetime, e) {
@@ -2905,16 +2905,16 @@ public:
             }
     }
 
-    void serialise(const ::HIR::ProcMacro& pm) {
+    void serialise(const HIRProcMacro& pm) {
         TRACE_FUNCTION_F("pm = ProcMacro { " << pm.name << ", " << pm.path << ", [" << pm.attributes << "] }");
         switch (pm.ty) {
-            case ::HIR::ProcMacro::Ty::Function:
+            case HIRProcMacro::Ty::Function:
                 out.writeTag(0);
                 break;
-            case ::HIR::ProcMacro::Ty::Derive:
+            case HIRProcMacro::Ty::Derive:
                 out.writeTag(1);
                 break;
-            case ::HIR::ProcMacro::Ty::Attribute:
+            case HIRProcMacro::Ty::Attribute:
                 out.writeTag(2);
                 break;
         }
@@ -2924,13 +2924,13 @@ public:
     }
 
     template <typename T>
-    void serialise(const ::HIR::Crate::ImplGroup<T>& ig) {
+    void serialise(const HIRCrate::ImplGroup<T>& ig) {
         serialisePathmap(ig.named);
         serialiseVec(ig.nonNamed);
         serialiseVec(ig.generic);
     }
 
-    void serialiseCrate(const ::HIR::Crate& crate) {
+    void serialiseCrate(const HIRCrate& crate) {
         out.writeString(crate.crateName);
         out.writeTag(static_cast<int>(crate.edition));
         serialiseModule(crate.mRootModule);
@@ -2961,11 +2961,11 @@ public:
         serialiseVec(crate.linkPaths);
     }
 
-    void serialise(const ::HIR::ExternLibrary& lib) {
+    void serialise(const HIRExternLibrary& lib) {
         out.writeString(lib.name);
     }
 
-    void serialiseModule(const ::HIR::Module& mod) {
+    void serialiseModule(const HIRModule& mod) {
         TRACE_FUNCTION;
         auto _ = out.openObject("HIR::Module");
 
@@ -2976,7 +2976,7 @@ public:
         serialiseStrmap(mod.macroItems);
     }
 
-    void serialiseTypeimpl(const ::HIR::TypeImpl& impl) {
+    void serialiseTypeimpl(const HIRTypeImpl& impl) {
         TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << impl.mType);
         serialiseGenerics(impl.mParams);
         serialiseType(impl.mType);
@@ -3005,11 +3005,11 @@ public:
         // m_src_module doesn't matter after typeck
     }
 
-    void serialise(const ::HIR::TypeImpl& impl) {
+    void serialise(const HIRTypeImpl& impl) {
         serialiseTypeimpl(impl);
     }
 
-    void serialiseTraitimpl(const ::HIR::TraitImpl& impl) {
+    void serialiseTraitimpl(const HIRTraitImpl& impl) {
         TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " ?" << impl.traitArgs << " for " << impl.mType);
         serialiseGenerics(impl.mParams);
         serialisePathparams(impl.traitArgs);
@@ -3047,30 +3047,30 @@ public:
         // m_src_module doesn't matter after typeck
     }
 
-    void serialise(const ::HIR::TraitImpl& impl) {
+    void serialise(const HIRTraitImpl& impl) {
         serialiseTraitimpl(impl);
     }
 
-    void serialiseMarkerimpl(const ::HIR::MarkerImpl& impl) {
+    void serialiseMarkerimpl(const HIRMarkerImpl& impl) {
         serialiseGenerics(impl.mParams);
         serialisePathparams(impl.traitArgs);
         out.writeBool(impl.isPositive);
         serialiseType(impl.mType);
     }
 
-    void serialise(const ::HIR::MarkerImpl& impl) {
+    void serialise(const HIRMarkerImpl& impl) {
         serialiseMarkerimpl(impl);
     }
 
-    void serialise(const ::HIR::TypeData* ty) {
+    void serialise(const HIRTypeData* ty) {
         serialiseType(ty);
     }
 
-    void serialise(const ::HIR::SimplePath& p) {
+    void serialise(const HIRSimplePath& p) {
         serialiseSimplepath(p);
     }
 
-    void serialise(const ::HIR::TraitPath& p) {
+    void serialise(const HIRTraitPath& p) {
         serialiseTraitpath(p);
     }
 
@@ -3249,14 +3249,14 @@ public:
         }
     }
 
-    void serialise(const ::HIR::ConstGenericUnevaluated& v) {
+    void serialise(const HIRConstGenericUnevaluated& v) {
         ASSERT_BUG(v.expr->span(), v.expr->mir, "Encountered non-translated value in ConstGeneric: " << v);
         serialisePathparams(v.paramsImpl);
         serialisePathparams(v.paramsItem);
         serialise(*v.expr);
     }
 
-    void serialise(const ::HIR::ConstGeneric& v) {
+    void serialise(const HIRConstGeneric& v) {
         out.writeTag(v.tag());
             TU_MATCH_HDRA( (v), {)
             TU_ARMA(Infer, e) {
@@ -3271,7 +3271,7 @@ public:
             }
     }
 
-    void serialise(const ::HIR::ExprPtr& exp, bool saveMir = true) {
+    void serialise(const HIRExprPtr& exp, bool saveMir = true) {
         auto _ = out.openObject("HIR::ExprPtr");
         saveMir &= static_cast<bool>(exp.mir);
         out.writeBool(saveMir);
@@ -3487,11 +3487,11 @@ public:
         TU_MATCHA((v), (e), (Int, out.writeU128(e.v.getInner()); out.writeTag(static_cast<unsigned>(e.t));), (Uint, out.writeU128(e.v); out.writeTag(static_cast<unsigned>(e.t));), (Float, out.writeFloatValue(e.v); out.writeTag(static_cast<unsigned>(e.t));), (Bool, out.writeBool(e.v);), (Bytes, out.writeCount(e.size()); out.write(e.data(), e.size());), (StaticString, out.writeString(e);), (Const, ASSERT_BUG(Span(), monomorphisePathNeeded(*e.p), "Unexpected Constant: " << *e.p); serialisePath(*e.p);), (Generic, serialise(e);), (Function, serialisePath(*e.p);), (ItemAddr, serialisePath(*e); out.writeU128(e.offset);))
     }
 
-    void serialise(const ::HIR::TypeItem& item) {
+    void serialise(const HIRTypeItem& item) {
         TU_MATCHA((item), (e), (Import, out.writeTag(0); serialiseSimplepath(e.path); out.writeBool(e.isVariant); out.writeCount(e.idx);), (Module, out.writeTag(1); serialiseModule(e);), (TypeAlias, out.writeTag(2); serialise(e);), (Enum, out.writeTag(3); serialise(e);), (Struct, out.writeTag(4); serialise(e);), (Trait, out.writeTag(5); serialise(e);), (Union, out.writeTag(6); serialise(e);), (ExternType, out.writeTag(7); serialise(e);), (TraitAlias, out.writeTag(8); serialise(e);))
     }
 
-    void serialise(const ::HIR::MacroItem& item) {
+    void serialise(const HIRMacroItem& item) {
         auto _ = out.openObject("HIR::MacroItem");
         out.writeTag(item.tag());
             TU_MATCH_HDRA( (item), {)
@@ -3507,17 +3507,17 @@ public:
             }
     }
 
-    void serialise(const ::HIR::ValueItem& item) {
+    void serialise(const HIRValueItem& item) {
         TU_MATCHA((item), (e), (Import, out.writeTag(0); serialiseSimplepath(e.path); out.writeBool(e.isVariant); out.writeCount(e.idx);), (Constant, out.writeTag(1); serialise(e);), (Static, out.writeTag(2); serialise(e);), (StructConstant, out.writeTag(3); serialiseSimplepath(e.ty);), (Function, out.writeTag(4); serialise(e);), (StructConstructor, out.writeTag(5); serialiseSimplepath(e.ty);))
     }
 
-    void serialise(const ::HIR::Linkage& linkage) {
+    void serialise(const HIRLinkage& linkage) {
         //m_out.write_tag( static_cast<int>(linkage.type) );
         out.writeString(linkage.name);
     }
 
     // - Value items
-    void serialise(const ::HIR::Function& fcn) {
+    void serialise(const HIRFunction& fcn) {
         TRACE_FUNCTION_F("_function:");
         auto _ = out.openObject("HIR::Function");
 
@@ -3542,26 +3542,26 @@ public:
         serialise(fcn.mCode, fcn.saveCode || fcn.isConst);
     }
 
-    void serialise(const ::HIR::Function::Markings& m) {
+    void serialise(const HIRFunction::Markings& m) {
         auto _ = out.openObject("HIR::Function::Markings");
         serialiseVec(m.rustcLegacyConstGenerics);
         out.writeBool(m.trackCaller);
     }
 
-    void serialise(const ::HIR::Constant& item) {
+    void serialise(const HIRConstant& item) {
         TRACE_FUNCTION_F("_constant:");
 
         serialiseGenerics(item.mParams);
         serialise(item.mType);
         serialise(item.mValue);
-        bool writeVal = item.valueState == ::HIR::Constant::ValueState::Known;
+        bool writeVal = item.valueState == HIRConstant::ValueState::Known;
         out.writeBool(writeVal);
         if (writeVal) {
             serialise(item.valueRes);
         }
     }
 
-    void serialise(const ::HIR::Static& item) {
+    void serialise(const HIRStatic& item) {
         TRACE_FUNCTION_F("_static:");
 
         serialise(item.linkage);
@@ -3588,17 +3588,17 @@ public:
     }
 
     // - Type items
-    void serialise(const ::HIR::TypeAlias& ta) {
+    void serialise(const HIRTypeAlias& ta) {
         serialiseGenerics(ta.mParams);
         serialiseType(ta.mType);
     }
 
-    void serialise(const ::HIR::TraitAlias& ta) {
+    void serialise(const HIRTraitAlias& ta) {
         serialiseGenerics(ta.mParams);
         serialiseVec(ta.traits);
     }
 
-    void serialise(const ::HIR::Enum& item) {
+    void serialise(const HIREnum& item) {
         auto _ = out.openObject("HIR::Enum");
         serialiseGenerics(item.mParams);
         out.writeBool(item.isCRepr);
@@ -3608,25 +3608,25 @@ public:
         serialise(item.markings);
     }
 
-    void serialise(const ::HIR::Enum::Class& v) {
+    void serialise(const HIREnum::Class& v) {
         out.writeTag(v.tag());
         TU_MATCHA((v), (e), (Value, serialiseVec(e.variants);), (Data, serialiseVec(e);))
     }
 
-    void serialise(const ::HIR::Enum::ValueVariant& v) {
+    void serialise(const HIREnum::ValueVariant& v) {
         out.writeString(v.name);
         // NOTE: No expr, no longer needed
         out.writeU64(v.val.truncateU64());
     }
 
-    void serialise(const ::HIR::Enum::DataVariant& v) {
+    void serialise(const HIREnum::DataVariant& v) {
         out.writeString(v.name);
         out.writeBool(v.isStruct);
         serialise(v.type);
         out.writeU64(v.discriminantValue.truncateU64());
     }
 
-    void serialise(const ::HIR::TraitMarkings& m) {
+    void serialise(const HIRTraitMarkings& m) {
         uint8_t bitflag1 = 0;
 #define BIT(i, fld) \
     if (fld)        \
@@ -3640,7 +3640,7 @@ public:
         // TODO: auto_impls
     }
 
-    void serialise(const ::HIR::StructMarkings& m) {
+    void serialise(const HIRStructMarkings& m) {
         uint8_t bitflag1 = 0;
 #define BIT(i, fld) \
     if (fld)        \
@@ -3664,7 +3664,7 @@ public:
         // TODO: auto_impls
     }
 
-    void serialise(const ::HIR::Struct& item) {
+    void serialise(const HIRStruct& item) {
         TRACE_FUNCTION_F("Struct");
         auto _ = out.openObject("HIR::Struct");
 
@@ -3680,7 +3680,7 @@ public:
         serialise(item.structMarkings);
     }
 
-    void serialise(const ::HIR::StructField& fld) {
+    void serialise(const HIRStructField& fld) {
         serialise(fld.name);
         serialise(fld.vis);
         serialise(fld.ty);
@@ -3690,7 +3690,7 @@ public:
         }
     }
 
-    void serialise(const ::HIR::Union& item) {
+    void serialise(const HIRUnion& item) {
         TRACE_FUNCTION_F("Union");
 
         serialiseGenerics(item.mParams);
@@ -3701,12 +3701,12 @@ public:
         serialise(item.markings);
     }
 
-    void serialise(const ::HIR::ExternType& item) {
+    void serialise(const HIRExternType& item) {
         TRACE_FUNCTION_F("ExternType");
         serialise(item.markings);
     }
 
-    void serialise(const ::HIR::Trait& item) {
+    void serialise(const HIRTrait& item) {
         TRACE_FUNCTION_F("_trait:");
         auto _ = out.openObject("HIR::Trait");
 
@@ -3724,12 +3724,12 @@ public:
         serialise(item.vtablePath);
     }
 
-    void serialise(const ::HIR::TraitValueItem& tvi) {
+    void serialise(const HIRTraitValueItem& tvi) {
         out.writeTag(tvi.tag());
         TU_MATCHA((tvi), (e), (Constant, DEBUG("Constant"); serialise(e);), (Static, DEBUG("Static"); serialise(e);), (Function, DEBUG("Function"); serialise(e);))
     }
 
-    void serialise(const ::HIR::AssociatedType& at) {
+    void serialise(const HIRAssociatedType& at) {
         serialiseGenerics(at.generics);
         out.writeBool(at.isSized);
         serialise(at.lifetimeBound);
@@ -3740,8 +3740,8 @@ public:
 
 //}
 
-void HIRSerialise(const ::std::string& filename, const ::HIR::Crate& crate) {
-    ::HIR::HIRSerialiseWriter out;
+void HIRSerialise(const ::std::string& filename, const HIRCrate& crate) {
+    HIRSerialiseWriter out;
     HirSerialiser s{out, crate.types};
     s.serialiseCrate(crate);
     s.clear();

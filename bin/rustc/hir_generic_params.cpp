@@ -1,13 +1,12 @@
 #include "hir_generic_params.h"
 #include "hir_type.h"
 
-namespace HIR {
-    ::std::ostream& operator<<(::std::ostream& os, const GenericBound& x) {
-        TU_MATCH(::HIR::GenericBound, (x), (e), (Lifetime, os << e.test << ": " << e.validFor;), (TypeLifetime, os << e.type << ": " << e.validFor;), (TraitBound, os << e.type << ": " << e.trait /*.m_path*/;), (TypeEquality, os << e.type << " = " << e.otherType;))
+    ::std::ostream& operator<<(::std::ostream& os, const HIRGenericBound& x) {
+        TU_MATCH(HIRGenericBound, (x), (e), (Lifetime, os << e.test << ": " << e.validFor;), (TypeLifetime, os << e.type << ": " << e.validFor;), (TraitBound, os << e.type << ": " << e.trait /*.m_path*/;), (TypeEquality, os << e.type << " = " << e.otherType;))
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const ::HIR::GenericParams::PrintArgs& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const HIRGenericParams::PrintArgs& x) {
         if (x.gp.mLifetimes.size() > 0 || x.gp.types.size() > 0 || x.gp.values.size() > 0) {
             os << "<";
             for (const auto& lft : x.gp.mLifetimes) {
@@ -37,7 +36,7 @@ namespace HIR {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const ::HIR::GenericParams::PrintBounds& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const HIRGenericParams::PrintBounds& x) {
         if (x.gp.bounds.size() > 0) {
             os << " where ";
             bool commaNeeded = false;
@@ -51,9 +50,8 @@ namespace HIR {
         }
         return os;
     }
-}
 
-Ordering HIR::GenericBound::ord(const HIR::GenericBound& b) const {
+Ordering HIRGenericBound::ord(const HIRGenericBound& b) const {
     if (this->tag() != b.tag()) {
         return this->tag() < b.tag() ? OrdLess : OrdGreater;
     }
@@ -61,35 +59,35 @@ Ordering HIR::GenericBound::ord(const HIR::GenericBound& b) const {
     return OrdEqual;
 }
 
-HIR::PathParams HIR::GenericParams::makeNopParams(TypeInterner& types, unsigned level, bool lifetimesOnly /*=false*/) const {
+HIRPathParams HIRGenericParams::makeNopParams(HIRTypeInterner& types, unsigned level, bool lifetimesOnly /*=false*/) const {
     assert(!lifetimesOnly || this->types.empty());
     assert(!lifetimesOnly || this->values.empty());
 
-    HIR::PathParams rv;
-    rv.mLifetimes = ThinVector<HIR::LifetimeRef>(this->mLifetimes.size());
-    rv.types = ThinVector<HIR::TypeRef>(this->types.size());
-    rv.values = ThinVector<HIR::ConstGeneric>(this->values.size());
+    HIRPathParams rv;
+    rv.mLifetimes = ThinVector<HIRLifetimeRef>(this->mLifetimes.size());
+    rv.types = ThinVector<HIRTypeRef>(this->types.size());
+    rv.values = ThinVector<HIRConstGeneric>(this->values.size());
     for (size_t i = 0; i < this->mLifetimes.size(); i++) {
-        rv.mLifetimes[i] = HIR::LifetimeRef(256 * level + i);
+        rv.mLifetimes[i] = HIRLifetimeRef(256 * level + i);
     }
     for (size_t i = 0; i < this->types.size(); i++) {
         rv.types[i] = types.generic(this->types[i].mName, 256 * level + i);
     }
     for (size_t i = 0; i < this->values.size(); i++) {
-        rv.values[i] = HIR::GenericRef(this->values[i].mName, 256 * level + i);
+        rv.values[i] = HIRGenericRef(this->values[i].mName, 256 * level + i);
     }
     return rv;
 }
 
-::HIR::GenericParams HIR::GenericParams::clone() const {
-    ::HIR::GenericParams rv;
+HIRGenericParams HIRGenericParams::clone() const {
+    HIRGenericParams rv;
     rv.types.reserve(types.size());
     for (const auto& type : types) {
-        rv.types.push_back(::HIR::TypeParamDef{type.mName, type.defaultValue, type.isSized});
+        rv.types.push_back(HIRTypeParamDef{type.mName, type.defaultValue, type.isSized});
     }
     rv.values.reserve(values.size());
     for (const auto& type : values) {
-        rv.values.push_back(::HIR::ValueParamDef{type.mName, type.mType, type.defaultValue.clone()});
+        rv.values.push_back(HIRValueParamDef{type.mName, type.mType, type.defaultValue.clone()});
     }
     rv.mLifetimes = mLifetimes;
     rv.bounds.reserve(bounds.size());
@@ -99,16 +97,16 @@ HIR::PathParams HIR::GenericParams::makeNopParams(TypeInterner& types, unsigned 
     return rv;
 }
 
-::HIR::GenericBound HIR::GenericBound::clone() const {
+HIRGenericBound HIRGenericBound::clone() const {
     TU_MATCH_HDRA( (*this), {)
     TU_ARMA(Lifetime, e) {
-            return ::HIR::GenericBound::make_Lifetime(e);
+            return HIRGenericBound::make_Lifetime(e);
         }
         TU_ARMA(TypeLifetime, e) {
-            return ::HIR::GenericBound::make_TypeLifetime({e.type, e.validFor});
+            return HIRGenericBound::make_TypeLifetime({e.type, e.validFor});
         }
         TU_ARMA(TraitBound, e) {
-            return ::HIR::GenericBound::make_TraitBound({e.hrtbs ? box$(e.hrtbs->clone()) : nullptr, e.type, e.trait.clone(), e.constness});
+            return HIRGenericBound::make_TraitBound({e.hrtbs ? box$(e.hrtbs->clone()) : nullptr, e.type, e.trait.clone(), e.constness});
         } /*
     TU_ARMA(NotTrait, e) {
         return ::HIR::GenericBound::make_NotTrait({
@@ -117,31 +115,30 @@ HIR::PathParams HIR::GenericParams::makeNopParams(TypeInterner& types, unsigned 
             });
         }*/
         TU_ARMA(TypeEquality, e) {
-            return ::HIR::GenericBound::make_TypeEquality({e.type, e.otherType});
+            return HIRGenericBound::make_TypeEquality({e.type, e.otherType});
         }
     }
     throw "Unreachable";
 }
 
-namespace HIR {
 
-Ordering TypeParamDef::ord(const TypeParamDef& x) const {
+Ordering HIRTypeParamDef::ord(const HIRTypeParamDef& x) const {
     ORD(mName, x.mName);
     ORD(defaultValue, x.defaultValue);
     ORD(isSized, x.isSized);
     return OrdEqual;
 }
-Ordering LifetimeDef::ord(const LifetimeDef& x) const {
+Ordering HIRLifetimeDef::ord(const HIRLifetimeDef& x) const {
     ORD(mName, x.mName);
     return OrdEqual;
 }
-Ordering ValueParamDef::ord(const ValueParamDef& x) const {
+Ordering HIRValueParamDef::ord(const HIRValueParamDef& x) const {
     ORD(mName, x.mName);
     ORD(mType, x.mType);
     //ORD(m_default, x.m_default);
     return OrdEqual;
 }
-bool GenericParams::isEmpty() const {
+bool HIRGenericParams::isEmpty() const {
     if (!types.empty()) {
         return false;
     }
@@ -156,7 +153,7 @@ bool GenericParams::isEmpty() const {
     }
     return true;
 }
-bool GenericParams::isGeneric() const {
+bool HIRGenericParams::isGeneric() const {
     if (!types.empty()) {
         return true;
     }
@@ -166,23 +163,22 @@ bool GenericParams::isGeneric() const {
     }
     return false;
 }
-PathParams GenericParams::makeEmptyParams(bool lifetimesOnly) const {
+HIRPathParams HIRGenericParams::makeEmptyParams(bool lifetimesOnly) const {
     assert(lifetimesOnly);
-    PathParams rv;
-    rv.mLifetimes = ThinVector<LifetimeRef>(mLifetimes.size());
+    HIRPathParams rv;
+    rv.mLifetimes = ThinVector<HIRLifetimeRef>(mLifetimes.size());
     return rv;
 }
-GenericParams::PrintArgs::PrintArgs(const GenericParams& gp)
+HIRGenericParams::PrintArgs::PrintArgs(const HIRGenericParams& gp)
     : gp(gp) {
 }
-GenericParams::PrintBounds::PrintBounds(const GenericParams& gp)
+HIRGenericParams::PrintBounds::PrintBounds(const HIRGenericParams& gp)
     : gp(gp) {
 }
-Ordering GenericParams::ord(const HIR::GenericParams& x) const {
+Ordering HIRGenericParams::ord(const HIRGenericParams& x) const {
     ORD(types, x.types);
     ORD(mLifetimes, x.mLifetimes);
     ORD(values, x.values);
     ORD(bounds, x.bounds);
     return OrdEqual;
-}
 }

@@ -1,9 +1,7 @@
 #pragma once
 
-namespace HIR {
-    class Crate;
-};
+    class HIRCrate;
 
-extern void TypecheckModuleLevel(::HIR::Crate& crate);
-extern void TypecheckExpressions(::HIR::Crate& crate);
-extern void TypecheckExpressionsValidate(::HIR::Crate& crate);
+extern void TypecheckModuleLevel(HIRCrate& crate);
+extern void TypecheckExpressions(HIRCrate& crate);
+extern void TypecheckExpressionsValidate(HIRCrate& crate);

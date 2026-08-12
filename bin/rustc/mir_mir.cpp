@@ -462,11 +462,11 @@ bool MIRSwitchValues::operator==(const MIRSwitchValues& x) const {
     return true;
 }
 
-const HIR::TypeData* MIRCloner::valueGenericType(HIR::GenericRef ce) const {
+const HIRTypeData* MIRCloner::valueGenericType(HIRGenericRef ce) const {
     TODO(sp, "`value_generic_type` not implemented, shouldn't be called unless `monomorpiser` has been overridden");
 }
 
-MIRCloner::MIRCloner(const Span& sp, HIR::TypeInterner& types)
+MIRCloner::MIRCloner(const Span& sp, HIRTypeInterner& types)
     : nop(new MonomorphiserNop(types))
     , sp(sp)
 {
@@ -478,7 +478,7 @@ const Monomorphiser& MIRCloner::monomorphiser() const {
     return *nop;
 }
 
-::HIR::TypeRef MIRCloner::monomorph(const ::HIR::TypeData* ty) const {
+HIRTypeRef MIRCloner::monomorph(const HIRTypeData* ty) const {
     TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorphType(sp, ty);
     if (auto* r = resolve()) {
@@ -487,7 +487,7 @@ const Monomorphiser& MIRCloner::monomorphiser() const {
     return rv;
 }
 
-::HIR::GenericPath MIRCloner::monomorph(const ::HIR::GenericPath& ty) const {
+HIRGenericPath MIRCloner::monomorph(const HIRGenericPath& ty) const {
     TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorphGenericpath(sp, ty, false);
     if (const auto* r = resolve()) {
@@ -499,12 +499,12 @@ const Monomorphiser& MIRCloner::monomorphiser() const {
     return rv;
 }
 
-::HIR::Path MIRCloner::monomorph(const ::HIR::Path& ty) const {
+HIRPath MIRCloner::monomorph(const HIRPath& ty) const {
     TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorphPath(sp, ty, false);
     if (const auto* r = resolve()) {
         TU_MATCH(
-            ::HIR::Path::Data,
+            HIRPath::Data,
             (rv.mData),
             (e2),
             (Generic, r->evaluatePathParams(sp, e2.mParams); for (auto& arg : e2.mParams.types) r->expandAssociatedTypes(sp, arg);),
@@ -518,7 +518,7 @@ const Monomorphiser& MIRCloner::monomorphiser() const {
     return rv;
 }
 
-::HIR::PathParams MIRCloner::monomorph(const ::HIR::PathParams& ty) const {
+HIRPathParams MIRCloner::monomorph(const HIRPathParams& ty) const {
     TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorphPathParams(sp, ty, false);
     if (const auto* r = resolve()) {
@@ -711,32 +711,32 @@ MIRConstant MIRCloner::cloneConstant(const MIRConstant& src) const {
                     ASSERT_BUG(sp, ty->is_Primitive(), "Handle non-primitive const generic: " << ty);
                     // TODO: This is duplicated in `mir/from_hir_match.cpp` - De-duplicate?
                     switch (ty->as_Primitive()) {
-                        case ::HIR::CoreType::Bool:
+                        case HIRCoreType::Bool:
                             return MIRConstant::make_Bool({v.readUint(1) != 0});
-                        case ::HIR::CoreType::U8:
-                        case ::HIR::CoreType::U16:
-                        case ::HIR::CoreType::U32:
-                        case ::HIR::CoreType::U64:
-                        case ::HIR::CoreType::U128:
+                        case HIRCoreType::U8:
+                        case HIRCoreType::U16:
+                        case HIRCoreType::U32:
+                        case HIRCoreType::U64:
+                        case HIRCoreType::U128:
                             return MIRConstant::make_Uint({v.readUint(ve->bytes.size()), ty->as_Primitive()});
-                        case ::HIR::CoreType::Usize:
+                        case HIRCoreType::Usize:
                             return MIRConstant::make_Uint({v.readUint(TargetGetPointerBits() / 8), ty->as_Primitive()});
-                        case ::HIR::CoreType::I8:
-                        case ::HIR::CoreType::I16:
-                        case ::HIR::CoreType::I32:
-                        case ::HIR::CoreType::I64:
-                        case ::HIR::CoreType::I128:
+                        case HIRCoreType::I8:
+                        case HIRCoreType::I16:
+                        case HIRCoreType::I32:
+                        case HIRCoreType::I64:
+                        case HIRCoreType::I128:
                             return MIRConstant::make_Int({v.readSint(ve->bytes.size()), ty->as_Primitive()});
-                        case ::HIR::CoreType::Isize:
+                        case HIRCoreType::Isize:
                             return MIRConstant::make_Int({v.readSint(TargetGetPointerBits() / 8), ty->as_Primitive()});
-                        case ::HIR::CoreType::F16:
-                        case ::HIR::CoreType::F32:
-                        case ::HIR::CoreType::F64:
-                        case ::HIR::CoreType::F128:
+                        case HIRCoreType::F16:
+                        case HIRCoreType::F32:
+                        case HIRCoreType::F64:
+                        case HIRCoreType::F128:
                             return MIRConstant::make_Float({v.readFloat(ve->bytes.size()), ty->as_Primitive()});
-                        case ::HIR::CoreType::Char:
+                        case HIRCoreType::Char:
                             return MIRConstant::make_Uint({v.readUint(4), ty->as_Primitive()});
-                        case ::HIR::CoreType::Str:
+                        case HIRCoreType::Str:
                             BUG(sp, "`str` const generic");
                     }
                 }
@@ -838,7 +838,7 @@ MIRLValue::Storage& MIRLValue::Storage::operator=(Storage&& x) {
 
 MIRLValue::Storage::~Storage() {
     if (is_Static()) {
-        delete reinterpret_cast<::HIR::Path*>(val & ~3ull);
+        delete reinterpret_cast<HIRPath*>(val & ~3ull);
         val = 0;
     }
 }
@@ -853,8 +853,8 @@ MIRLValue::Storage MIRLValue::Storage::newLocal(unsigned idx) {
     return Storage((idx << 2) | 1);
 }
 
-MIRLValue::Storage MIRLValue::Storage::newStatic(::HIR::Path p) {
-    ::HIR::Path* ptr = new ::HIR::Path(::std::move(p));
+MIRLValue::Storage MIRLValue::Storage::newStatic(HIRPath p) {
+    HIRPath* ptr = new HIRPath(::std::move(p));
     return Storage(reinterpret_cast<uintptr_t>(ptr) | 2);
 }
 
@@ -890,14 +890,14 @@ unsigned MIRLValue::Storage::as_Local() const {
     return static_cast<unsigned>(val >> 2);
 }
 
-const ::HIR::Path& MIRLValue::Storage::as_Static() const {
+const HIRPath& MIRLValue::Storage::as_Static() const {
     assert(is_Static());
-    return *reinterpret_cast<const ::HIR::Path*>(val & ~3llu);
+    return *reinterpret_cast<const HIRPath*>(val & ~3llu);
 }
 
-::HIR::Path& MIRLValue::Storage::as_Static() {
+HIRPath& MIRLValue::Storage::as_Static() {
     assert(is_Static());
-    return *reinterpret_cast<::HIR::Path*>(val & ~3llu);
+    return *reinterpret_cast<HIRPath*>(val & ~3llu);
 }
 
 MIRLValue::Wrapper::Wrapper(uint32_t v)
@@ -1085,7 +1085,7 @@ unsigned MIRLValue::RefCommon::as_Argument() const {
     return mLv->root.as_Argument();
 }
 
-const HIR::Path& MIRLValue::RefCommon::as_Static() const {
+const HIRPath& MIRLValue::RefCommon::as_Static() const {
     assert(is_Static());
     return mLv->root.as_Static();
 }
@@ -1156,7 +1156,7 @@ void MIRLValue::MRef::replace(MIRLValue x) {
     mutLv = ::std::move(x);
 }
 
-ItemAddress::ItemAddress(::std::unique_ptr<::HIR::Path> p, U128 offset)
+ItemAddress::ItemAddress(::std::unique_ptr<HIRPath> p, U128 offset)
     : p(::std::move(p))
     , offset(offset)
 {

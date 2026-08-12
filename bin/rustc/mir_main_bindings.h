@@ -5,15 +5,15 @@
 
 class TransList;
 
-extern void HIRGenerateMIR(::HIR::Crate& crate);
-extern void MIRDump(::std::ostream& sink, const ::HIR::Crate& crate);
-extern void MIRCheckCrate(/*const*/ ::HIR::Crate& crate);
-extern void MIRCheckCrateFull(/*const*/ ::HIR::Crate& crate);
-extern void MIRBorrowCheckCrate(::HIR::Crate& crate);
+extern void HIRGenerateMIR(HIRCrate& crate);
+extern void MIRDump(::std::ostream& sink, const HIRCrate& crate);
+extern void MIRCheckCrate(/*const*/ HIRCrate& crate);
+extern void MIRCheckCrateFull(/*const*/ HIRCrate& crate);
+extern void MIRBorrowCheckCrate(HIRCrate& crate);
 
-extern void MIRCleanupCrate(::HIR::Crate& crate);
+extern void MIRCleanupCrate(HIRCrate& crate);
 extern void MIRCleanupSetPostMonomorph();
-extern void MIROptimiseCrate(::HIR::Crate& crate, unsigned optLevel, bool enableInlining);
-extern void MIROptimiseCrateInlining(const ::HIR::Crate& crate, TransList& list, bool postSave, unsigned optLevel, bool enableInlining);
+extern void MIROptimiseCrate(HIRCrate& crate, unsigned optLevel, bool enableInlining);
+extern void MIROptimiseCrateInlining(const HIRCrate& crate, TransList& list, bool postSave, unsigned optLevel, bool enableInlining);
 
-extern void HIRGenerateMIRExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& path, ::HIR::ExprPtr& exprPtr, const ::HIR::Function::argsT& args, const ::HIR::TypeData* resTy);
+extern void HIRGenerateMIRExpr(const HIRCrate& crate, const HIRItemPath& path, HIRExprPtr& exprPtr, const HIRFunction::argsT& args, const HIRTypeData* resTy);

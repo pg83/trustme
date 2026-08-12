@@ -19,7 +19,7 @@ namespace {
         {
         }
 
-        const HIR::TypeData* valueGenericType(HIR::GenericRef g) const override {
+        const HIRTypeData* valueGenericType(HIRGenericRef g) const override {
             switch (g.group()) {
                 case 0:
                     ASSERT_BUG(sp, g.idx() < mResolve.implGenerics().values.size(), "Value generic " << g << " out of bounds in impl: " << mResolve.implGenerics().values.size());
@@ -91,29 +91,29 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
 }
 
 /// Monomorphise all functions in a TransList
-void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned mirOptLevel) {
+void TransMonomorphiseList(const HIRCrate& crate, TransList& list, unsigned mirOptLevel) {
     ::StaticTraitResolve resolve{crate};
 
-    struct Nvs: public ::HIR::Evaluator::Newval {
+    struct Nvs: public HIREvaluator::Newval {
         TransList& out;
-        const HIR::Crate& crate;
+        const HIRCrate& crate;
         unsigned count;
-        ::std::vector<std::pair<HIR::SimplePath, HIR::Static*>> added;
+        ::std::vector<std::pair<HIRSimplePath, HIRStatic*>> added;
 
-        Nvs(TransList& out, const HIR::Crate& crate)
+        Nvs(TransList& out, const HIRCrate& crate)
             : out(out)
             , crate(crate)
             , count(0)
         {
         }
 
-        ::HIR::Path newStatic(::HIR::TypeRef type, EncodedLiteral value) override {
+        HIRPath newStatic(HIRTypeRef type, EncodedLiteral value) override {
             // Ensure that the type is in enumeration (it should have been, but maybe not?)
             out.addType(type, false);
             auto name = RcString::newInterned(FMT("ConstEvalMonomorph#" << count));
             count++;
-            auto p = ::HIR::SimplePath(crate.crateName, {name});
-            auto ent = std::make_unique<HIR::VisEnt<HIR::ValueItem>>(HIR::VisEnt<HIR::ValueItem>{HIR::Publicity::newGlobal(), HIR::ValueItem(::HIR::Static(HIR::Linkage(), false, std::move(type), HIR::ExprPtr()))});
+            auto p = HIRSimplePath(crate.crateName, {name});
+            auto ent = std::make_unique<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newGlobal(), HIRValueItem(HIRStatic(HIRLinkage(), false, std::move(type), HIRExprPtr()))});
 
             {
                 auto& s = ent->ent.as_Static();
@@ -122,7 +122,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
                 s.saveLiteral = false;
                 added.push_back(std::make_pair(p, &s));
             }
-            const_cast<HIR::Module&>(crate.mRootModule).valueItems.insert(std::make_pair(name, std::move(ent)));
+            const_cast<HIRModule&>(crate.mRootModule).valueItems.insert(std::make_pair(name, std::move(ent)));
             return p;
         }
     } nvs{list, crate};
@@ -136,7 +136,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         TRACE_FUNCTION_FR("CONSTANT " << path, "CONSTANT " << path);
         auto ty = pp.monomorph(resolve, c.mType);
         // 1. Evaluate the constant
-        auto eval = ::HIR::Evaluator{pp.sp, crate, nvs};
+        auto eval = HIREvaluator{pp.sp, crate, nvs};
         eval.resolve.setBothGenericsRaw(pp.gdefImpl, &c.mParams);
         MonomorphState ms(crate.types);
         ms.selfTy = pp.selfType;
@@ -165,7 +165,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         TRACE_FUNCTION_FR("STATIC " << path, "STATIC " << path);
         auto ty = pp.monomorph(resolve, s.mType);
         // 1. Evaluate the constant
-        auto eval = ::HIR::Evaluator{pp.sp, crate, nvs};
+        auto eval = HIREvaluator{pp.sp, crate, nvs};
         eval.resolve.setBothGenericsRaw(pp.gdefImpl, &s.mParams);
         MonomorphState ms(crate.types);
         ms.selfTy = pp.selfType;
@@ -206,13 +206,13 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
 
             // TODO: Should these be moved to their own pass? Potentially not, the extra pass should just be an inlining optimise pass
             auto retType = pp.monomorph(resolve, fcn.returnType);
-            ::HIR::Function::argsT args;
+            HIRFunction::argsT args;
             for (const auto& a : fcn.mArgs) {
-                args.push_back(::std::make_pair(::HIR::Pattern{}, pp.monomorph(resolve, a.second)));
+                args.push_back(::std::make_pair(HIRPattern{}, pp.monomorph(resolve, a.second)));
             }
 
             //::std::string s = FMT(path);
-            ::HIR::ItemPath ip(path);
+            HIRItemPath ip(path);
             MIRValidate(resolve, ip, *mir, args, retType);
             MIRCleanup(resolve, ip, *mir, args, retType);
             if (mirOptLevel == 0) {
@@ -232,7 +232,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
     }
 
     for (auto& v : nvs.added) {
-        auto* o = list.addStatic(crate.types, HIR::Path(v.first));
+        auto* o = list.addStatic(crate.types, HIRPath(v.first));
         ASSERT_BUG(Span(), o, "Generated static " << v.first << " already in TransList?");
         o->ptr = v.second;
     }

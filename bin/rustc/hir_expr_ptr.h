@@ -11,139 +11,138 @@ namespace stl {
     class ObjPool;
 }
 
-namespace HIR {
 
-    class TypeData;
-    using TypeRef = const TypeData*;
-    class ExprNode;
-    class Crate;
-    class ExprState;
+    class HIRTypeData;
+    using HIRTypeRef = const HIRTypeData*;
+    class HIRExprNode;
+    class HIRCrate;
+    class HIRExprState;
 
-    class ExprNodeP {
-        ::HIR::ExprNode* ptr;
+    class HIRExprNodeP {
+        HIRExprNode* ptr;
 
     public:
-        ExprNodeP();
+        HIRExprNodeP();
 
-        ExprNodeP(::HIR::ExprNode* p);
+        HIRExprNodeP(HIRExprNode* p);
 
-        ExprNodeP(ExprNodeP&& x);
+        HIRExprNodeP(HIRExprNodeP&& x);
 
-        ExprNodeP(const ExprNodeP&) = delete;
-        ~ExprNodeP() = default;
+        HIRExprNodeP(const HIRExprNodeP&) = delete;
+        ~HIRExprNodeP() = default;
 
-        ExprNodeP& operator=(ExprNodeP&& x);
+        HIRExprNodeP& operator=(HIRExprNodeP&& x);
 
-        ExprNodeP& operator=(const ExprNodeP&) = delete;
+        HIRExprNodeP& operator=(const HIRExprNodeP&) = delete;
 
         operator bool() const {
             return ptr != nullptr;
         }
 
-        ::HIR::ExprNode* get() const {
+        HIRExprNode* get() const {
             return ptr;
         }
 
-        void reset(::HIR::ExprNode* p = nullptr) {
+        void reset(HIRExprNode* p = nullptr) {
             ptr = p;
         }
 
-        ::HIR::ExprNode* release();
+        HIRExprNode* release();
 
-        void swap(ExprNodeP& x);
+        void swap(HIRExprNodeP& x);
 
-        ::HIR::ExprNode& operator*();
+        HIRExprNode& operator*();
 
-        const ::HIR::ExprNode& operator*() const;
+        const HIRExprNode& operator*() const;
 
-        ::HIR::ExprNode* operator->();
+        HIRExprNode* operator->();
 
-        const ::HIR::ExprNode* operator->() const;
+        const HIRExprNode* operator->() const;
     };
 
-    class ExprStatePtr {
-        ::HIR::ExprState* ptr;
+    class HIRExprStatePtr {
+        HIRExprState* ptr;
 
     public:
-        ExprStatePtr();
+        HIRExprStatePtr();
 
-        ExprStatePtr(stl::ObjPool* pool, ExprState);
-        ExprStatePtr(const ExprStatePtr&) = delete;
+        HIRExprStatePtr(stl::ObjPool* pool, HIRExprState);
+        HIRExprStatePtr(const HIRExprStatePtr&) = delete;
 
-        ExprStatePtr(ExprStatePtr&& x);
+        HIRExprStatePtr(HIRExprStatePtr&& x);
 
-        ~ExprStatePtr();
+        ~HIRExprStatePtr();
 
-        ExprStatePtr& operator=(const ExprStatePtr&) = delete;
+        HIRExprStatePtr& operator=(const HIRExprStatePtr&) = delete;
 
-        ExprStatePtr& operator=(ExprStatePtr&& x);
+        HIRExprStatePtr& operator=(HIRExprStatePtr&& x);
 
         operator bool() const {
             return ptr != nullptr;
         }
 
-        ExprStatePtr clone(stl::ObjPool* pool) const;
+        HIRExprStatePtr clone(stl::ObjPool* pool) const;
 
-        ::HIR::ExprState& operator*();
+        HIRExprState& operator*();
 
-        const ::HIR::ExprState& operator*() const;
+        const HIRExprState& operator*() const;
 
-        ::HIR::ExprState* operator->();
+        HIRExprState* operator->();
 
-        const ::HIR::ExprState* operator->() const;
+        const HIRExprState* operator->() const;
     };
 
-    class ExprPtr {
+    class HIRExprPtr {
         //::HIR::Path m_path;
-        ::HIR::ExprNodeP node;
+        HIRExprNodeP node;
 
     public:
         //::std::vector< ::HIR::TypeRef>  m_type_table;
-        ::std::vector<::HIR::TypeRef> mBindings;
-        ::std::vector<::HIR::TypeRef> erasedTypes;
+        ::std::vector<HIRTypeRef> mBindings;
+        ::std::vector<HIRTypeRef> erasedTypes;
 
         // Public because too much relies on access to it
         MIRFunctionPointer mir;
 
-        ::HIR::ExprStatePtr state;
+        HIRExprStatePtr state;
 
     public:
-        ExprPtr();
-        ExprPtr(::HIR::ExprNodeP node);
-        ~ExprPtr();
-        ExprPtr(const ExprPtr&) = delete;
-        ExprPtr(ExprPtr&&);
-        ExprPtr& operator=(ExprPtr&&);
+        HIRExprPtr();
+        HIRExprPtr(HIRExprNodeP node);
+        ~HIRExprPtr();
+        HIRExprPtr(const HIRExprPtr&) = delete;
+        HIRExprPtr(HIRExprPtr&&);
+        HIRExprPtr& operator=(HIRExprPtr&&);
 
-        ::HIR::ExprNodeP takeNode();
+        HIRExprNodeP takeNode();
 
         operator bool() const {
             return node;
         }
 
-        ::HIR::ExprNode* get() const {
+        HIRExprNode* get() const {
             return node.get();
         }
 
-        void reset(::HIR::ExprNode* p) {
+        void reset(HIRExprNode* p) {
             node.reset(p);
         }
 
         const Span& span() const;
 
-        ::HIR::ExprNode& operator*() {
+        HIRExprNode& operator*() {
             return *node;
         }
 
-        const ::HIR::ExprNode& operator*() const {
+        const HIRExprNode& operator*() const {
             return *node;
         }
 
-        ::HIR::ExprNode* operator->() {
+        HIRExprNode* operator->() {
             return &*node;
         }
 
-        const ::HIR::ExprNode* operator->() const {
+        const HIRExprNode* operator->() const {
             return &*node;
         }
 
@@ -159,4 +158,3 @@ namespace HIR {
         void setMir(MIRFunctionPointer mir);
     };
 
-} // namespace HIR

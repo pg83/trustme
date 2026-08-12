@@ -201,12 +201,12 @@ namespace {
                 (LValue, fmtVal(os, e);),
                 (
                     Borrow, os << "&"; switch (e.type) {
-                        case ::HIR::BorrowType::Shared:
+                        case HIRBorrowType::Shared:
                             break;
-                        case ::HIR::BorrowType::Unique:
+                        case HIRBorrowType::Unique:
                             os << "mut ";
                             break;
-                        case ::HIR::BorrowType::Owned:
+                        case HIRBorrowType::Owned:
                             os << "move ";
                             break;
                     } os << "(";
@@ -228,12 +228,12 @@ namespace {
                     Borrow, os << "&";
                     //os << e.region;
                     switch (e.type) {
-                        case ::HIR::BorrowType::Shared:
+                        case HIRBorrowType::Shared:
                             break;
-                        case ::HIR::BorrowType::Unique:
+                        case HIRBorrowType::Unique:
                             os << "mut ";
                             break;
-                        case ::HIR::BorrowType::Owned:
+                        case HIRBorrowType::Owned:
                             os << "move ";
                             break;
                     } os
@@ -372,20 +372,20 @@ namespace {
         md.dumpMir(fcn);
     }
 
-    class TreeVisitor: public ::HIR::Visitor {
+    class TreeVisitor: public HIRVisitor {
         ::std::ostream& os;
         unsigned int indentLevel;
         bool shortItemName = false;
 
     public:
-        TreeVisitor(::HIR::TypeInterner& types, ::std::ostream& os)
-            : ::HIR::Visitor(nullptr, types)
+        TreeVisitor(HIRTypeInterner& types, ::std::ostream& os)
+            : HIRVisitor(nullptr, types)
             , os(os)
             , indentLevel(0)
         {
         }
 
-        void visitTypeImpl(::HIR::TypeImpl& impl) override {
+        void visitTypeImpl(HIRTypeImpl& impl) override {
             shortItemName = true;
 
             os << indent() << "impl" << impl.mParams.fmtArgs() << " " << impl.mType << "\n";
@@ -394,14 +394,14 @@ namespace {
             }
             os << indent() << "{\n";
             incIndent();
-            ::HIR::Visitor::visitTypeImpl(impl);
+            HIRVisitor::visitTypeImpl(impl);
             decIndent();
             os << indent() << "}\n";
 
             shortItemName = false;
         }
 
-        virtual void visitTraitImpl(const ::HIR::SimplePath& traitPath, ::HIR::TraitImpl& impl) override {
+        virtual void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
             shortItemName = true;
 
             os << indent() << "impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType << "\n";
@@ -410,14 +410,14 @@ namespace {
             }
             os << indent() << "{\n";
             incIndent();
-            ::HIR::Visitor::visitTraitImpl(traitPath, impl);
+            HIRVisitor::visitTraitImpl(traitPath, impl);
             decIndent();
             os << indent() << "}\n";
 
             shortItemName = false;
         }
 
-        void visitMarkerImpl(const ::HIR::SimplePath& traitPath, ::HIR::MarkerImpl& impl) override {
+        void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override {
             shortItemName = true;
 
             os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.isPositive ? "" : "!") << traitPath << impl.traitArgs << " for " << impl.mType << "\n";
@@ -430,7 +430,7 @@ namespace {
         }
 
         // - Type Items
-        void visitTrait(::HIR::ItemPath p, ::HIR::Trait& item) override {
+        void visitTrait(HIRItemPath p, HIRTrait& item) override {
             shortItemName = true;
 
             os << indent() << "trait " << p << item.mParams.fmtArgs() << "\n";
@@ -439,14 +439,14 @@ namespace {
             }
             os << indent() << "{\n";
             incIndent();
-            ::HIR::Visitor::visitTrait(p, item);
+            HIRVisitor::visitTrait(p, item);
             decIndent();
             os << indent() << "}\n";
 
             shortItemName = false;
         }
 
-        void visitFunction(::HIR::ItemPath p, ::HIR::Function& item) override {
+        void visitFunction(HIRItemPath p, HIRFunction& item) override {
             os << indent();
             if (item.isConst) {
                 os << "const ";
@@ -486,7 +486,7 @@ namespace {
             }
         }
 
-        void visitConstant(::HIR::ItemPath p, ::HIR::Constant& item) override {
+        void visitConstant(HIRItemPath p, HIRConstant& item) override {
             os << indent();
             os << "const ";
             if (shortItemName) {
@@ -508,7 +508,7 @@ namespace {
             }
         }
 
-        void visitStatic(::HIR::ItemPath p, ::HIR::Static& item) override {
+        void visitStatic(HIRItemPath p, HIRStatic& item) override {
             os << indent();
             os << "static ";
             if (shortItemName) {
@@ -545,10 +545,10 @@ namespace {
     };
 }
 
-void MIRDump(::std::ostream& sink, const ::HIR::Crate& crate) {
+void MIRDump(::std::ostream& sink, const HIRCrate& crate) {
     TreeVisitor tv{crate.types, sink};
 
-    tv.visitCrate(const_cast<::HIR::Crate&>(crate));
+    tv.visitCrate(const_cast<HIRCrate&>(crate));
 }
 
 void MIRDumpFcn(::std::ostream& sink, const MIRFunction& fcn, unsigned int il) {

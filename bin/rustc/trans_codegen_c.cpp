@@ -171,7 +171,7 @@ namespace {
     class CodeGeneratorC: public CodeGenerator {
         static Span sp;
 
-        const ::HIR::Crate& crate;
+        const HIRCrate& crate;
         ::StaticTraitResolve mResolve;
 
         ::std::string outfilePath;
@@ -185,11 +185,11 @@ namespace {
             bool disallowEmptyStructs = false;
         } options;
 
-        ::std::set<::HIR::TypeRef> emittedFnTypes;
+        ::std::set<HIRTypeRef> emittedFnTypes;
         ::std::set<const TypeRepr*> embeddedTags;
 
     public:
-        CodeGeneratorC(const ::HIR::Crate& crate, const ::std::string& outfile)
+        CodeGeneratorC(const HIRCrate& crate, const ::std::string& outfile)
             : crate(crate)
             , mResolve(crate)
             , outfilePath(outfile)
@@ -492,27 +492,27 @@ namespace {
                 of << "}\n";
                 of << "int main(int argc, const char* argv[]) {\n";
                 auto cStartPath = mResolve.crate.getLangItemPathOpt("mrustc-start");
-                if (cStartPath == ::HIR::SimplePath()) {
+                if (cStartPath == HIRSimplePath()) {
                     auto mainPath = crate.getLangItemPath(Span(), "mrustc-main");
                     const auto& mainFcn = crate.getFunctionByPath(sp, mainPath);
 
                     const auto& startPath = mResolve.crate.getLangItemPathOpt("start");
-                    if (crate.isNoCore && startPath == ::HIR::SimplePath()) {
+                    if (crate.isNoCore && startPath == HIRSimplePath()) {
                         // A no_core binary has no standard entrypoint protocol.
                         // Call its ordinary main directly instead of inventing a
                         // `start` language item.
-                        of << "\t" << TransMangle(::HIR::GenericPath(mainPath)) << "();\n";
+                        of << "\t" << TransMangle(HIRGenericPath(mainPath)) << "();\n";
                         of << "\treturn 0;\n";
                     } else {
-                        auto startGpath = ::HIR::GenericPath(mResolve.crate.getLangItemPath(Span(), "start"));
+                        auto startGpath = HIRGenericPath(mResolve.crate.getLangItemPath(Span(), "start"));
                         startGpath.mParams.types.push_back(mainFcn.returnType);
-                        of << "\treturn " << TransMangle(startGpath) << "(" << TransMangle(::HIR::GenericPath(mainPath)) << ", argc, (uint8_t**)argv";
+                        of << "\treturn " << TransMangle(startGpath) << "(" << TransMangle(HIRGenericPath(mainPath)) << ", argc, (uint8_t**)argv";
                         of << ", 0"; // `sigpipe` setting
                         // 0: Default, 1: Inherit, 2: SIG_IGN, 3: SIG_DFL
                         of << ");\n";
                     }
                 } else {
-                    of << "\treturn " << TransMangle(::HIR::GenericPath(cStartPath)) << "(argc, (uint8_t**)argv);\n";
+                    of << "\treturn " << TransMangle(HIRGenericPath(cStartPath)) << "(argc, (uint8_t**)argv);\n";
                 }
                 of << "}\n";
                 of << "extern \"C\" {\n";
@@ -524,7 +524,7 @@ namespace {
                 {
                     const auto allocatorIt = crate.mLangItems.find(GLOBAL_ALLOCATOR_LANG_ITEM);
                     const bool hasGlobalAllocator = allocatorIt != crate.mLangItems.end();
-                    const HIR::Static* globalAllocator = hasGlobalAllocator ? &crate.getStaticByPath(Span(), allocatorIt->second) : nullptr;
+                    const HIRStatic* globalAllocator = hasGlobalAllocator ? &crate.getStaticByPath(Span(), allocatorIt->second) : nullptr;
                     for (size_t i = 0; i < NUM_ALLOCATOR_METHODS; i++) {
                         struct H {
                             static void tyArgs(::std::vector<const char*>& out, AllocatorDataTy t) {
@@ -618,7 +618,7 @@ namespace {
                             }
 
                             const auto methodPath = TransAllocatorMethodPath(crate, globalAllocator->mType, method);
-                            const HIR::Path staticPath = HIR::GenericPath(allocatorIt->second);
+                            const HIRPath staticPath = HIRGenericPath(allocatorIt->second);
                             of << "\t";
                             if (method.ret != AllocatorDataTy::Unit) {
                                 of << "return reinterpret_cast<int8_t*>(";
@@ -663,8 +663,8 @@ namespace {
                         of << "uint8_t __rust_alloc_error_handler_should_panic = 0;\n";
                         of << "uint8_t __rust_no_alloc_shim_is_unstable = 0;\n";
 
-                        auto layoutPath = ::HIR::SimplePath("core", {"alloc", "Layout"});
-                        if (oomMethod != HIR::SimplePath()) {
+                        auto layoutPath = HIRSimplePath("core", {"alloc", "Layout"});
+                        if (oomMethod != HIRSimplePath()) {
                             of << "struct s_" << TransMangle(layoutPath) << "_A { uintptr_t a, b; };\n";
                             of << "void oom_impl(struct s_" << TransMangle(layoutPath) << "_A l) {"
                                << " extern void " << TransMangle(oomMethod) << "(struct s_" << TransMangle(layoutPath) << "_A l);"
@@ -675,7 +675,7 @@ namespace {
                         // Force abort on alloc error, rustc uses `-Zoom={panic,abort}` to select this
                         of << "uint8_t __rust_alloc_error_handler_should_panic_v2() { return 0; }";
                         of << "void __rust_alloc_error_handler(uintptr_t s, uintptr_t a) {\n";
-                        if (oomMethod == HIR::SimplePath()) {
+                        if (oomMethod == HIRSimplePath()) {
                             of << "\tvoid __rdl_oom(uintptr_t, uintptr_t);\n";
                             of << "\t__rdl_oom(s,a);\n";
                         } else {
@@ -691,7 +691,7 @@ namespace {
                     // a panic implementation. A no_core binary without one can
                     // still be valid when no generated code uses it.
                     const auto& panicImplPath = crate.getLangItemPathOpt("mrustc-panic_implementation");
-                    if (panicImplPath != ::HIR::SimplePath()) {
+                    if (panicImplPath != HIRSimplePath()) {
                         of << "uint32_t panic_impl(uintptr_t payload) {";
                         of << "extern uint32_t " << TransMangle(panicImplPath) << "(uintptr_t payload);";
                         of << "return " << TransMangle(panicImplPath) << "(payload);";
@@ -802,7 +802,7 @@ namespace {
                 case CodegenOutput::DynamicLibrary:
                     for (const auto& crateName : crate.extCratesOrdered) {
                         const auto& extCrate = crate.extCrates.at(crateName);
-                        auto isDylib = [](const ::HIR::ExternCrate& c) {
+                        auto isDylib = [](const HIRExternCrate& c) {
                             bool rv = false;
                             // TODO: Better rule than this
                             rv |= (c.mPath.compare(c.mPath.size() - 3, 3, ".so") == 0);
@@ -1100,14 +1100,14 @@ namespace {
             }
         }
 
-        void emitBoxDrop(unsigned indentLevel, const ::HIR::TypeData* innerType, const ::HIR::TypeData* boxType, const MIRLValue& slot, bool runDestructor) {
+        void emitBoxDrop(unsigned indentLevel, const HIRTypeData* innerType, const HIRTypeData* boxType, const MIRLValue& slot, bool runDestructor) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
             if (runDestructor) {
                 auto innerPtr = MIRLValue::newField(MIRLValue::newField(MIRLValue::newField(slot.clone(), 0), 0), 0);
                 emitDestructorCall(MIRLValue::newDeref(mv$(innerPtr)), innerType, /*unsized_valid=*/true, indentLevel);
             }
 
-            auto p = ::HIR::Path(boxType, crate.getLangItemPath(Span(), "drop"), "drop");
+            auto p = HIRPath(boxType, crate.getLangItemPath(Span(), "drop"), "drop");
             of << indent << TransMangle(p) << "(&";
             emitLvalue(slot);
             of << ");\n";
@@ -1125,7 +1125,7 @@ namespace {
             }
         }
 
-        void emitGlobalAsm(const ::HIR::GlobalAssembly& se) override {
+        void emitGlobalAsm(const HIRGlobalAssembly& se) override {
             of << "__asm__ (\"";
             if ((TargetGetCurSpec().arch.mName == "x86" || TargetGetCurSpec().arch.mName == "x86_64") && !se.options.attSyntax) {
                 of << ".intel_syntax noprefix; ";
@@ -1145,11 +1145,11 @@ namespace {
             of << "\");\n";
         }
 
-        void emitTypeId(const ::HIR::TypeData* ty) override {
+        void emitTypeId(const HIRTypeData* ty) override {
             of << "tTYPEID __typeid_" << TransMangle(ty) << " __attribute__((weak));\n";
         }
 
-        void emitTypeProto(const ::HIR::TypeData* ty) override {
+        void emitTypeProto(const HIRTypeData* ty) override {
             TRACE_FUNCTION_F(ty);
             TU_MATCH_HDRA( (*ty), {)
             default:
@@ -1206,7 +1206,7 @@ namespace {
             }
         }
 
-        void emitTypeFn(const ::HIR::TypeData* ty) {
+        void emitTypeFn(const HIRTypeData* ty) {
             if (emittedFnTypes.count(ty)) {
                 return;
             }
@@ -1244,7 +1244,7 @@ namespace {
         }
 
         // Shared logic between `emit_struct` and `emit_type` (w/ Tuple)
-        void emitStructInner(const ::HIR::TypeData* ty, const TypeRepr* repr, unsigned packingMaxAlign) {
+        void emitStructInner(const HIRTypeData* ty, const TypeRepr* repr, unsigned packingMaxAlign) {
             // Fill `fields` with ascending indexes (for sorting)
             // AND: Determine if the type has a a zero-sized item that has an alignment equal to the structure's alignment
             ::std::vector<unsigned> fields;
@@ -1351,7 +1351,7 @@ namespace {
                 } else if (ty->is_TraitObject()) {
                     of << "unsigned char _" << fld << "[0]";
                     hasUnsized = true;
-                } else if (ty == ::HIR::CoreType::Str) {
+                } else if (ty == HIRCoreType::Str) {
                     of << "uint8_t _" << fld << "[0]";
                     hasUnsized = true;
                 } else if (TU_TEST1(*ty, Path, .binding.is_ExternType())) {
@@ -1396,10 +1396,10 @@ namespace {
             }
         }
 
-        void emitType(const ::HIR::TypeData* ty) override {
+        void emitType(const HIRTypeData* ty) override {
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "type " << ty;), ::HIR::TypeRef(), {}, emptyFcn
+                sp, mResolve, FMT_CB(ss, ss << "type " << ty;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -1482,16 +1482,16 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emitStruct(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Struct& item) override {
+        void emitStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override {
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "struct " << p;), ::HIR::TypeRef(), {}, emptyFcn
+                sp, mResolve, FMT_CB(ss, ss << "struct " << p;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
             // TODO: repr(transparent) and repr(align(foo))
 
             TRACE_FUNCTION_F(p);
-            auto itemTy = crate.types.path(p.clone(), ::HIR::TypePathBinding::make_Struct(&item));
+            auto itemTy = crate.types.path(p.clone(), HIRTypePathBinding::make_Struct(&item));
             const auto* repr = TargetGetTypeRepr(sp, mResolve, itemTy);
             MIR_ASSERT(*mirRes, repr, "No repr for struct " << p);
 
@@ -1508,15 +1508,15 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emitUnion(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Union& item) override {
+        void emitUnion(const Span& sp, const HIRGenericPath& p, const HIRUnion& item) override {
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "union " << p;), ::HIR::TypeRef(), {}, emptyFcn
+                sp, mResolve, FMT_CB(ss, ss << "union " << p;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
             TRACE_FUNCTION_F(p);
-            auto itemTy = crate.types.path(p.clone(), ::HIR::TypePathBinding::make_Union(&item));
+            auto itemTy = crate.types.path(p.clone(), HIRTypePathBinding::make_Union(&item));
             const auto* repr = TargetGetTypeRepr(sp, mResolve, itemTy);
             MIR_ASSERT(*mirRes, repr != nullptr, "No repr for union " << itemTy);
 
@@ -1550,7 +1550,7 @@ namespace {
             return false;
         }
 
-        const HIR::TypeData* emitEnumPath(const TypeRepr* repr, const TypeRepr::FieldPath& path) {
+        const HIRTypeData* emitEnumPath(const TypeRepr* repr, const TypeRepr::FieldPath& path) {
             if (isEnumTag(repr, path.index)) {
                 // Some enums have the tag outside, some inside
                 if (embeddedTags.count(repr)) {
@@ -1597,15 +1597,15 @@ namespace {
             return *ty;
         }
 
-        void emitEnum(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Enum& item) override {
+        void emitEnum(const Span& sp, const HIRGenericPath& p, const HIREnum& item) override {
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "enum " << p;), ::HIR::TypeRef(), {}, emptyFcn
+                sp, mResolve, FMT_CB(ss, ss << "enum " << p;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
             TRACE_FUNCTION_F(p);
-            auto itemTy = crate.types.path(p.clone(), ::HIR::TypePathBinding::make_Enum(&item));
+            auto itemTy = crate.types.path(p.clone(), HIRTypePathBinding::make_Enum(&item));
             const auto* repr = TargetGetTypeRepr(sp, mResolve, itemTy);
 
             // 1. Enumerate fields with the same offset as the first (these go into a union)
@@ -1717,15 +1717,15 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emitConstructorEnum(const Span& sp, const ::HIR::GenericPath& path, const ::HIR::Enum& item, size_t varIdx) override {
+        void emitConstructorEnum(const Span& sp, const HIRGenericPath& path, const HIREnum& item, size_t varIdx) override {
             TRACE_FUNCTION_F(path << " var_idx=" << varIdx);
 
             auto p = path.clone();
             p.mPath.popComponent();
-            auto ty = crate.types.path(p.clone(), ::HIR::TypePathBinding::make_Enum(&item));
+            auto ty = crate.types.path(p.clone(), HIRTypePathBinding::make_Enum(&item));
 
             MonomorphStatePtr ms(crate.types, nullptr, &path.mParams, nullptr);
-            ::HIR::TypeRef tmp;
+            HIRTypeRef tmp;
             auto monomorph = [&](const auto& x) {
                 return mResolve.monomorphExpandOpt(sp, tmp, x, ms);
             };
@@ -1737,9 +1737,9 @@ namespace {
             ASSERT_BUG(sp, str.mData.is_Tuple(), "");
             const auto& e = str.mData.as_Tuple();
 
-            HIR::Function::argsT args;
+            HIRFunction::argsT args;
             for (unsigned int i = 0; i < e.size(); i++) {
-                args.push_back(::std::make_pair(HIR::Pattern(), monomorph(e[i].ent)));
+                args.push_back(::std::make_pair(HIRPattern(), monomorph(e[i].ent)));
             }
 
             MIRFunction emptyFcn;
@@ -1773,9 +1773,9 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emitConstructorStruct(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Struct& item) override {
+        void emitConstructorStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override {
             TRACE_FUNCTION_F(p);
-            ::HIR::TypeRef tmp;
+            HIRTypeRef tmp;
             MonomorphStatePtr ms(crate.types, nullptr, &p.mParams, nullptr);
             auto monomorph = [&](const auto& x) {
                 return mResolve.monomorphExpandOpt(sp, tmp, x, ms);
@@ -1815,7 +1815,7 @@ namespace {
         }
 
         // Returns `true` if the type is pointer-aligned (i.e. it could contain a pointer)
-        bool emitStaticTy(const HIR::TypeData* type, const ::HIR::Path& p, bool isProto) {
+        bool emitStaticTy(const HIRTypeData* type, const HIRPath& p, bool isProto) {
             size_t size = 0, align = 0;
             TargetGetSizeAndAlignOf(sp, mResolve, type, size, align);
             bool rv = (align * 8 >= TargetGetCurSpec().arch.pointerBits);
@@ -1835,10 +1835,10 @@ namespace {
             return rv;
         }
 
-        void emitStaticExt(const ::HIR::Path& p, const ::HIR::Static& item, const TransParams& params) override {
+        void emitStaticExt(const HIRPath& p, const HIRStatic& item, const TransParams& params) override {
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "extern static " << p;), ::HIR::TypeRef(), {}, emptyFcn
+                sp, mResolve, FMT_CB(ss, ss << "extern static " << p;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
             TRACE_FUNCTION_F(p);
@@ -1851,7 +1851,7 @@ namespace {
                 linkageName = linkageName.substr(1);
             }
 
-            if (item.linkage.type == HIR::Linkage::Type::ExternWeak) {
+            if (item.linkage.type == HIRLinkage::Type::ExternWeak) {
                 ASSERT_BUG(sp, linkageName != "", "");
                 of << "extern char ";
                 of << "__attribute__((weak)) ";
@@ -1885,25 +1885,25 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emitStaticProto(const ::HIR::Path& p, const ::HIR::Static& item, const TransParams& params) override {
+        void emitStaticProto(const HIRPath& p, const HIRStatic& item, const TransParams& params) override {
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "static " << p;), ::HIR::TypeRef(), {}, emptyFcn
+                sp, mResolve, FMT_CB(ss, ss << "static " << p;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
             TRACE_FUNCTION_F(p);
             auto type = params.monomorph(mResolve, item.mType);
             switch (item.linkage.type) {
-                case HIR::Linkage::Type::External:
+                case HIRLinkage::Type::External:
                     break;
-                case HIR::Linkage::Type::Auto:
+                case HIRLinkage::Type::Auto:
                     break;
-                case HIR::Linkage::Type::Weak:
+                case HIRLinkage::Type::Weak:
                     of << "__attribute__((weak)) ";
 
                     break;
-                case HIR::Linkage::Type::ExternWeak:
+                case HIRLinkage::Type::ExternWeak:
                     of << "__attribute__((weak_import)) ";
 
                     break;
@@ -1923,10 +1923,10 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emitStaticLocal(const ::HIR::Path& p, const ::HIR::Static& item, const TransParams& params, const EncodedLiteral& encoded) override {
+        void emitStaticLocal(const HIRPath& p, const HIRStatic& item, const TransParams& params, const EncodedLiteral& encoded) override {
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "static " << p;), ::HIR::TypeRef(), {}, emptyFcn
+                sp, mResolve, FMT_CB(ss, ss << "static " << p;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -2011,19 +2011,19 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emitFloat(FloatValue v, HIR::CoreType ty) {
-            if (ty == HIR::CoreType::F16) {
+        void emitFloat(FloatValue v, HIRCoreType ty) {
+            if (ty == HIRCoreType::F16) {
                 of << "f16_disabled()";
-            } else if (ty == HIR::CoreType::F128) {
+            } else if (ty == HIRCoreType::F128) {
                 const F128 bits(v);
                 of << "make_f128_bits(0x" << ::std::hex << bits.hi << "ull, 0x" << bits.lo << "ull)" << ::std::dec;
             } else if (floatValueIsNan(v)) {
-                of << (ty == HIR::CoreType::F32 ? "__builtin_nanf(\"\")" : "__builtin_nan(\"\")");
+                of << (ty == HIRCoreType::F32 ? "__builtin_nanf(\"\")" : "__builtin_nan(\"\")");
             } else if (floatValueIsInfinite(v)) {
                 of << (v < 0 ? "-" : "");
-                of << (ty == HIR::CoreType::F32 ? "__builtin_inff()" : "__builtin_inf()");
+                of << (ty == HIRCoreType::F32 ? "__builtin_inff()" : "__builtin_inf()");
             } else {
-                if (ty == HIR::CoreType::F32) {
+                if (ty == HIRCoreType::F32) {
                     of.precision(::std::numeric_limits<float>::max_digits10 + 1);
                     of << ::std::scientific << v << "f";
                 } else {
@@ -2094,10 +2094,10 @@ namespace {
             of << "\"" << ::std::dec;
         }
 
-        void emitFunctionExt(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params) override {
+        void emitFunctionExt(const HIRPath& p, const HIRFunction& item, const TransParams& params) override {
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "extern fn " << p;), ::HIR::TypeRef(), {}, emptyFcn
+                sp, mResolve, FMT_CB(ss, ss << "extern fn " << p;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
             TRACE_FUNCTION_F(p);
@@ -2294,10 +2294,10 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emitFunctionProto(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool isExternDef) override {
+        void emitFunctionProto(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef) override {
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "/*proto*/ fn " << p;), ::HIR::TypeRef(), {}, emptyFcn
+                sp, mResolve, FMT_CB(ss, ss << "/*proto*/ fn " << p;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -2311,15 +2311,15 @@ namespace {
                 of << "static ";
             }
             switch (item.linkage.type) {
-                case HIR::Linkage::Type::External:
+                case HIRLinkage::Type::External:
                     break;
-                case HIR::Linkage::Type::Auto:
+                case HIRLinkage::Type::Auto:
                     break;
-                case HIR::Linkage::Type::Weak:
+                case HIRLinkage::Type::Weak:
                     of << "__attribute__((weak)) ";
 
                     break;
-                case HIR::Linkage::Type::ExternWeak:
+                case HIRLinkage::Type::ExternWeak:
                     BUG(Span(), "unexpected ExternWeak on function");
             }
             emitFunctionHeader(p, item, params);
@@ -2328,15 +2328,15 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emitFunctionCode(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code) override {
+        void emitFunctionCode(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code) override {
             TRACE_FUNCTION_F(p);
 
             MIRTypeResolve::argsT argTypes;
             for (const auto& ent : item.mArgs) {
-                argTypes.push_back(::std::make_pair(::HIR::Pattern{}, params.monomorph(mResolve, ent.second)));
+                argTypes.push_back(::std::make_pair(HIRPattern{}, params.monomorph(mResolve, ent.second)));
             }
 
-            ::HIR::TypeRef retTypeTmp;
+            HIRTypeRef retTypeTmp;
             const auto& retType = monomorphiseFcnReturn(retTypeTmp, item, params);
 
             MIRTypeResolve localMirRes {
@@ -2545,12 +2545,12 @@ namespace {
             of << "\t};\n";
         }
 
-        bool typeIsEmulatedI128(const ::HIR::TypeData* ty) const {
-            return options.emulatedI128 && (ty == ::HIR::CoreType::I128 || ty == ::HIR::CoreType::U128);
+        bool typeIsEmulatedI128(const HIRTypeData* ty) const {
+            return options.emulatedI128 && (ty == HIRCoreType::I128 || ty == HIRCoreType::U128);
         }
 
         // Returns true if the input type is a ZST and ZSTs are not being emitted
-        bool typeIsBadZst(const ::HIR::TypeData* ty) const {
+        bool typeIsBadZst(const HIRTypeData* ty) const {
             if (options.disallowEmptyStructs) {
                 // TODO: Extern types are also ZSTs?
                 size_t size, align;
@@ -2564,7 +2564,7 @@ namespace {
 
         bool lvalueIsBadZst(const MIRLValue& lv) const {
             if (options.disallowEmptyStructs) {
-                HIR::TypeRef tmp;
+                HIRTypeRef tmp;
                 return typeIsBadZst(mirRes->getLvalueType(tmp, lv));
             } else {
                 return false;
@@ -2575,7 +2575,7 @@ namespace {
         // projection from such a local has no C lvalue to take the address of.
         bool lvalueRootIsBadZst(const MIRLValue& lv) const {
             if (options.disallowEmptyStructs) {
-                HIR::TypeRef tmp;
+                HIRTypeRef tmp;
                 return typeIsBadZst(mirRes->getLvalueType(tmp, lv, lv.wrappers.size()));
             } else {
                 return false;
@@ -2590,7 +2590,7 @@ namespace {
             auto rv = lv.clone();
             while (MIRLValue::CRef(rv).is_Index()) {
                 auto inner = MIRLValue::CRef(rv).innerRef();
-                HIR::TypeRef tmp;
+                HIRTypeRef tmp;
                 if (!this->typeIsBadZst(mirRes->getLvalueType(tmp, inner))) {
                     break;
                 }
@@ -2599,8 +2599,8 @@ namespace {
             return rv;
         }
 
-        void emitBorrow(const MIRTypeResolve& localMirRes, HIR::BorrowType bt, const MIRLValue& val) {
-            ::HIR::TypeRef tmp;
+        void emitBorrow(const MIRTypeResolve& localMirRes, HIRBorrowType bt, const MIRLValue& val) {
+            HIRTypeRef tmp;
             const auto& ty = localMirRes.getLvalueType(tmp, val);
 
             if (this->typeIsBadZst(ty) && !this->lvalueRootIsBadZst(val)) {
@@ -2645,7 +2645,7 @@ namespace {
                             break;
                     }
                     if (metaTy == MetadataType::TraitObject) {
-                        ::HIR::TypeRef baseTmp;
+                        HIRTypeRef baseTmp;
                         const auto& baseTy = localMirRes.getLvalueType(baseTmp, baseVal.clone());
                         const auto baseParam = MIRParam::make_LValue(basePtr.clone());
                         if (getInnerUnsizedType(baseTy)->is_TraitObject()) {
@@ -2685,9 +2685,9 @@ namespace {
             auto valRef = MIRLValue::CRef(val);
             if (!special && options.disallowEmptyStructs && valRef.is_Index() && this->typeIsBadZst(ty)) {
                 auto inner = valRef.innerRef();
-                ::HIR::TypeRef tmp;
+                HIRTypeRef tmp;
                 const auto& parentTy = localMirRes.getLvalueType(tmp, inner);
-                const ::HIR::TypeData* elementTy = nullptr;
+                const HIRTypeData* elementTy = nullptr;
                 if (const auto* array = parentTy->opt_Array()) {
                     elementTy = array->inner;
                 } else if (const auto* slice = parentTy->opt_Slice()) {
@@ -2714,7 +2714,7 @@ namespace {
                 auto valFp = MIRLValue::CRef(val);
                 assert(valFp.is_Field());
                 while (valFp.innerRef().is_Field()) {
-                    ::HIR::TypeRef tmp;
+                    HIRTypeRef tmp;
                     const auto& ty = localMirRes.getLvalueType(tmp, valFp.innerRef());
                     if (!this->typeIsBadZst(ty)) {
                         break;
@@ -2730,7 +2730,7 @@ namespace {
                     of << "(void*)& ";
                     emitLvalue(fieldInner.innerRef());
                 } else if (valFp.as_Field() == 0) {
-                    ::HIR::TypeRef tmp;
+                    HIRTypeRef tmp;
                     const auto& parentTy = localMirRes.getLvalueType(tmp, fieldInner);
                     if (parentTy->is_Slice()) {
                         MIR_ASSERT(localMirRes, fieldInner.is_Deref(), "Raw slice lvalue in ZST borrow path");
@@ -2742,9 +2742,9 @@ namespace {
                         emitLvalue(fieldInner);
                     }
                 } else {
-                    ::HIR::TypeRef tmp;
+                    HIRTypeRef tmp;
                     const auto& parentTy = localMirRes.getLvalueType(tmp, fieldInner);
-                    const ::HIR::TypeData* elementTy = nullptr;
+                    const HIRTypeData* elementTy = nullptr;
                     if (const auto* array = parentTy->opt_Array()) {
                         elementTy = array->inner;
                     } else if (const auto* slice = parentTy->opt_Slice()) {
@@ -2815,7 +2815,7 @@ namespace {
             bool hasEmitted = prependNewline;
             for (unsigned int j = 0; j < vals.size(); j++) {
                 if (options.disallowEmptyStructs) {
-                    ::HIR::TypeRef tmp;
+                    HIRTypeRef tmp;
                     const auto& ty = localMirRes.getParamType(tmp, vals[j]);
 
                     // Don't emit assignment of PhantomData
@@ -2842,7 +2842,7 @@ namespace {
 
         void emitDropOperation(const MIRTypeResolve& localMirRes, const MIRTerminator::Data_Drop& e, unsigned indentLevel) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
-            ::HIR::TypeRef tmp;
+            HIRTypeRef tmp;
             const auto& ty = localMirRes.getLvalueType(tmp, e.slot);
             if (e.flagIdx != ~0u) {
                 of << indent << "if( df" << e.flagIdx << " ) {\n";
@@ -2916,7 +2916,7 @@ namespace {
                     DEBUG("- " << e.dst << " = " << e.src);
                     of << indent;
 
-                    ::HIR::TypeRef tmp;
+                    HIRTypeRef tmp;
                     const auto& ty = localMirRes.getLvalueType(tmp, e.dst);
                     if (/*(e.dst.is_Deref() || e.dst.is_Field()) &&*/ this->typeIsBadZst(ty)) {
                         of << "/* ZST assign */\n";
@@ -2925,7 +2925,7 @@ namespace {
 
                 TU_MATCH_HDRA( (e.src), {)
                 TU_ARMA(Use, ve) {
-                            ::HIR::TypeRef tmp;
+                            HIRTypeRef tmp;
                             const auto& ty = localMirRes.getLvalueType(tmp, ve);
                             if (ty == crate.types.diverge()) {
                                 of << "abort()";
@@ -2985,7 +2985,7 @@ namespace {
                         }
                         TU_ARMA(Borrow, ve) {
                             emitLvalue(e.dst);
-                            const ::HIR::TypeData* pointeeTy;
+                            const HIRTypeData* pointeeTy;
                             if (const auto* borrow = ty->opt_Borrow()) {
                                 pointeeTy = borrow->inner;
                             } else if (const auto* pointer = ty->opt_Pointer()) {
@@ -3010,7 +3010,7 @@ namespace {
                         TU_ARMA(BinOp, ve) {
                             emitLvalue(e.dst);
                             of << " = ";
-                            ::HIR::TypeRef tmp, tmpR;
+                            HIRTypeRef tmp, tmpR;
                             const auto& ty = localMirRes.getParamType(tmp, ve.valL);
                             const auto& tyR = localMirRes.getParamType(tmpR, ve.valR);
                             if (ty->is_Borrow()) {
@@ -3096,9 +3096,9 @@ namespace {
                                     emitParam(ve.valR);
                                 }
                                 break;
-                            } else if (ve.op == MIRBinOp::MOD && (ty == ::HIR::CoreType::F32 || ty == ::HIR::CoreType::F64)) {
+                            } else if (ve.op == MIRBinOp::MOD && (ty == HIRCoreType::F32 || ty == HIRCoreType::F64)) {
                                 of << "__builtin_";
-                                if (ty == ::HIR::CoreType::F32) {
+                                if (ty == HIRCoreType::F32) {
                                     of << "remainderf";
                                 } else {
                                     of << "remainder";
@@ -3109,8 +3109,8 @@ namespace {
                                 emitParam(ve.valR);
                                 of << ")";
                                 break;
-                            } else if (ty == ::HIR::CoreType::F16 || ty == ::HIR::CoreType::F128) {
-                                auto tyS = ty == ::HIR::CoreType::F16 ? "f16" : "f128";
+                            } else if (ty == HIRCoreType::F16 || ty == HIRCoreType::F128) {
+                                auto tyS = ty == HIRCoreType::F16 ? "f16" : "f128";
                                 switch (ve.op) {
                                     case MIRBinOp::EQ:
                                         of << "0 == ";
@@ -3178,7 +3178,7 @@ namespace {
                                             case MIRBinOp::BIT_XOR:
                                                 of << "xor128";
                                         }
-                                        if (ty == ::HIR::CoreType::I128) {
+                                        if (ty == HIRCoreType::I128) {
                                             of << "s";
                                         }
                                         of << "(";
@@ -3193,14 +3193,14 @@ namespace {
                                             case MIRBinOp::BIT_SHL:
                                                 of << "shl128";
                                         }
-                                        if (ty == ::HIR::CoreType::I128) {
+                                        if (ty == HIRCoreType::I128) {
                                             of << "s";
                                         }
                                         of << "(";
                                         emitParam(ve.valL);
                                         of << ", ";
                                         emitParam(ve.valR);
-                                        if ((tyR == ::HIR::CoreType::I128 || tyR == ::HIR::CoreType::U128)) {
+                                        if ((tyR == HIRCoreType::I128 || tyR == HIRCoreType::U128)) {
                                             of << ".lo";
                                         }
                                         of << ")";
@@ -3230,7 +3230,7 @@ namespace {
                                         }
                                         // NOTE: Reversed order due to reversed logic above
                                         of << "cmp128";
-                                        if (ty == ::HIR::CoreType::I128) {
+                                        if (ty == HIRCoreType::I128) {
                                             of << "s";
                                         }
                                         of << "(";
@@ -3316,7 +3316,7 @@ namespace {
                             }
                         }
                         TU_ARMA(UniOp, ve) {
-                            ::HIR::TypeRef tmp;
+                            HIRTypeRef tmp;
                             const auto& ty = localMirRes.getLvalueType(tmp, e.dst);
 
                             if (typeIsEmulatedI128(ty)) {
@@ -3339,7 +3339,7 @@ namespace {
                                         break;
                                 }
                                 break;
-                            } else if (ty == ::HIR::CoreType::F16) {
+                            } else if (ty == HIRCoreType::F16) {
                                 switch (ve.op) {
                                     case MIRUniOp::NEG:
                                         emitLvalue(e.dst);
@@ -3352,7 +3352,7 @@ namespace {
                                         break;
                                 }
                                 break;
-                            } else if (ty == ::HIR::CoreType::F128) {
+                            } else if (ty == HIRCoreType::F128) {
                                 switch (ve.op) {
                                     case MIRUniOp::NEG:
                                         emitLvalue(e.dst);
@@ -3374,7 +3374,7 @@ namespace {
                                     of << "-";
                                     break;
                                 case MIRUniOp::INV:
-                                    if (ty == ::HIR::CoreType::Bool) {
+                                    if (ty == HIRCoreType::Bool) {
                                         of << "!";
                                     } else {
                                         of << "~";
@@ -3468,7 +3468,7 @@ namespace {
                             MIR_ASSERT(localMirRes, tyi.is_Enum(), "");
                             const auto* enmP = &tyi.as_Enum();
 
-                            ::HIR::TypeRef tmp;
+                            HIRTypeRef tmp;
                             const auto& ty = localMirRes.getLvalueType(tmp, e.dst);
                             auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
 
@@ -3586,7 +3586,7 @@ namespace {
                 return;
             }
 
-            ::HIR::TypeRef tmp;
+            HIRTypeRef tmp;
             const auto& ty = localMirRes.getLvalueType(tmp, ve.val);
 
             // A cast to a fat pointer doesn't actually change the C type.
@@ -3608,14 +3608,14 @@ namespace {
             }
 
             // Emulated i128/u128 support
-            if (options.emulatedI128 && (ve.type == ::HIR::CoreType::U128 || ve.type == ::HIR::CoreType::I128 || ty == ::HIR::CoreType::U128 || ty == ::HIR::CoreType::I128)) {
+            if (options.emulatedI128 && (ve.type == HIRCoreType::U128 || ve.type == HIRCoreType::I128 || ty == HIRCoreType::U128 || ty == HIRCoreType::I128)) {
                 // Destination
                 MIR_ASSERT(localMirRes, ve.type->is_Primitive(), "i128/u128 cast to non-primitive - " << ve.type);
                 MIR_ASSERT(localMirRes, ty->is_Primitive() || (ty->is_Path() && ty->as_Path().binding.is_Enum()), "i128/u128 cast from non-primitive - " << ty);
                 switch (ve.type->as_Primitive()) {
-                    case ::HIR::CoreType::I128:
-                    case ::HIR::CoreType::U128:
-                        if (ty == ::HIR::CoreType::I128 || ty == ::HIR::CoreType::U128) {
+                    case HIRCoreType::I128:
+                    case HIRCoreType::U128:
+                        if (ty == HIRCoreType::I128 || ty == HIRCoreType::U128) {
                             // Cast between i128 and u128
                             emitLvalue(dst);
                             of << ".lo = ";
@@ -3646,21 +3646,21 @@ namespace {
                             of << " < 0 ? -1 : 0";
                         }
                         break;
-                    case ::HIR::CoreType::I8:
-                    case ::HIR::CoreType::I16:
-                    case ::HIR::CoreType::I32:
-                    case ::HIR::CoreType::I64:
-                    case ::HIR::CoreType::Isize:
-                    case ::HIR::CoreType::U8:
-                    case ::HIR::CoreType::U16:
-                    case ::HIR::CoreType::U32:
-                    case ::HIR::CoreType::U64:
-                    case ::HIR::CoreType::Usize:
+                    case HIRCoreType::I8:
+                    case HIRCoreType::I16:
+                    case HIRCoreType::I32:
+                    case HIRCoreType::I64:
+                    case HIRCoreType::Isize:
+                    case HIRCoreType::U8:
+                    case HIRCoreType::U16:
+                    case HIRCoreType::U32:
+                    case HIRCoreType::U64:
+                    case HIRCoreType::Usize:
                         emitLvalue(dst);
                         of << " = ";
                         switch (ty->as_Primitive()) {
-                            case ::HIR::CoreType::U128:
-                            case ::HIR::CoreType::I128:
+                            case HIRCoreType::U128:
+                            case HIRCoreType::I128:
                                 emitLvalue(ve.val);
                                 of << ".lo";
                                 break;
@@ -3668,18 +3668,18 @@ namespace {
                                 MIR_BUG(localMirRes, "Unreachable");
                         }
                         break;
-                    case ::HIR::CoreType::F16:
+                    case HIRCoreType::F16:
                         MIR_TODO(localMirRes, "f16 from i128/u128");
-                    case ::HIR::CoreType::F32:
+                    case HIRCoreType::F32:
                         emitLvalue(dst);
                         of << " = ";
                         switch (ty->as_Primitive()) {
-                            case ::HIR::CoreType::U128:
+                            case HIRCoreType::U128:
                                 of << "cast128_float(";
                                 emitLvalue(ve.val);
                                 of << ")";
                                 break;
-                            case ::HIR::CoreType::I128:
+                            case HIRCoreType::I128:
                                 of << "cast128s_float(";
                                 emitLvalue(ve.val);
                                 of << ")";
@@ -3688,16 +3688,16 @@ namespace {
                                 MIR_BUG(localMirRes, "Unreachable");
                         }
                         break;
-                    case ::HIR::CoreType::F64:
+                    case HIRCoreType::F64:
                         emitLvalue(dst);
                         of << " = ";
                         switch (ty->as_Primitive()) {
-                            case ::HIR::CoreType::U128:
+                            case HIRCoreType::U128:
                                 of << "cast128_double(";
                                 emitLvalue(ve.val);
                                 of << ")";
                                 break;
-                            case ::HIR::CoreType::I128:
+                            case HIRCoreType::I128:
                                 of << "cast128s_double(";
                                 emitLvalue(ve.val);
                                 of << ")";
@@ -3706,20 +3706,20 @@ namespace {
                                 MIR_BUG(localMirRes, "Unreachable");
                         }
                         break;
-                    case ::HIR::CoreType::F128:
+                    case HIRCoreType::F128:
                         MIR_TODO(localMirRes, "f128 from i128/u128");
                     default:
                         MIR_BUG(localMirRes, "Bad i128/u128 cast - " << ty << " to " << ve.type);
                 }
                 return;
             }
-            if (ve.type == ::HIR::CoreType::F16 || ve.type == ::HIR::CoreType::F128 || ty == ::HIR::CoreType::F16 || ty == ::HIR::CoreType::F128) {
+            if (ve.type == HIRCoreType::F16 || ve.type == HIRCoreType::F128 || ty == HIRCoreType::F16 || ty == HIRCoreType::F128) {
                 of << "abort()";
                 return;
             }
 
             // Standard cast
-            ::HIR::TypeRef dstTmp;
+            HIRTypeRef dstTmp;
             const auto& dstTy = localMirRes.getLvalueType(dstTmp, dst);
             emitLvalue(dst);
             of << " = ";
@@ -3755,7 +3755,7 @@ namespace {
         void emitTermSwitch(const MIRTypeResolve& localMirRes, const MIRLValue& val, size_t nArms, unsigned indentLevel, ::std::function<void(size_t)> cb, size_t oddArm = -1) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
 
-            ::HIR::TypeRef tmp;
+            HIRTypeRef tmp;
             const auto& ty = localMirRes.getLvalueType(tmp, val);
             MIR_ASSERT(localMirRes, ty->is_Path(), "Switch over non-Path type");
             MIR_ASSERT(localMirRes, ty->as_Path().binding.is_Enum(), "Switch over non-enum");
@@ -3814,18 +3814,18 @@ namespace {
                     const bool pointerTag = tagTy->is_Pointer() || tagTy->is_Borrow() || tagTy->is_Function();
                     if (!pointerTag) {
                         switch (tagTy->as_Primitive()) {
-                            case ::HIR::CoreType::Bool:
-                            case ::HIR::CoreType::U8:
-                            case ::HIR::CoreType::I8:
-                            case ::HIR::CoreType::U16:
-                            case ::HIR::CoreType::I16:
-                            case ::HIR::CoreType::U32:
-                            case ::HIR::CoreType::I32:
-                            case ::HIR::CoreType::U64:
-                            case ::HIR::CoreType::I64:
-                            case ::HIR::CoreType::Usize:
-                            case ::HIR::CoreType::Isize:
-                            case ::HIR::CoreType::Char:
+                            case HIRCoreType::Bool:
+                            case HIRCoreType::U8:
+                            case HIRCoreType::I8:
+                            case HIRCoreType::U16:
+                            case HIRCoreType::I16:
+                            case HIRCoreType::U32:
+                            case HIRCoreType::I32:
+                            case HIRCoreType::U64:
+                            case HIRCoreType::I64:
+                            case HIRCoreType::Usize:
+                            case HIRCoreType::Isize:
+                            case HIRCoreType::Char:
                                 break;
                             default:
                                 MIR_BUG(localMirRes, "Invalid tag type?! " << tagTy);
@@ -3898,35 +3898,35 @@ namespace {
                     const auto& tagTy = TargetGetInnerType(sp, mResolve, *repr, e.field.index, e.field.subFields);
                     bool is_signed = false;
                     switch (tagTy->as_Primitive()) {
-                        case ::HIR::CoreType::I8:
-                        case ::HIR::CoreType::I16:
-                        case ::HIR::CoreType::I32:
-                        case ::HIR::CoreType::I64:
-                        case ::HIR::CoreType::Isize:
-                        case ::HIR::CoreType::I128:
+                        case HIRCoreType::I8:
+                        case HIRCoreType::I16:
+                        case HIRCoreType::I32:
+                        case HIRCoreType::I64:
+                        case HIRCoreType::Isize:
+                        case HIRCoreType::I128:
                             is_signed = true;
                             break;
-                        case ::HIR::CoreType::Bool:
-                        case ::HIR::CoreType::U8:
-                        case ::HIR::CoreType::U16:
-                        case ::HIR::CoreType::U32:
-                        case ::HIR::CoreType::U64:
-                        case ::HIR::CoreType::Usize:
-                        case ::HIR::CoreType::Char:
-                        case ::HIR::CoreType::U128:
+                        case HIRCoreType::Bool:
+                        case HIRCoreType::U8:
+                        case HIRCoreType::U16:
+                        case HIRCoreType::U32:
+                        case HIRCoreType::U64:
+                        case HIRCoreType::Usize:
+                        case HIRCoreType::Char:
+                        case HIRCoreType::U128:
                             is_signed = false;
                             break;
-                        case ::HIR::CoreType::F16:
-                        case ::HIR::CoreType::F32:
-                        case ::HIR::CoreType::F64:
-                        case ::HIR::CoreType::F128:
+                        case HIRCoreType::F16:
+                        case HIRCoreType::F32:
+                        case HIRCoreType::F64:
+                        case HIRCoreType::F128:
                             MIR_TODO(localMirRes, "Floating point enum tag.");
                             break;
-                        case ::HIR::CoreType::Str:
+                        case HIRCoreType::Str:
                             MIR_BUG(localMirRes, "Unsized tag?!");
                     }
 
-                    const bool is128 = tagTy == ::HIR::CoreType::I128 || tagTy == ::HIR::CoreType::U128;
+                    const bool is128 = tagTy == HIRCoreType::I128 || tagTy == HIRCoreType::U128;
                     const bool emulated128 = typeIsEmulatedI128(tagTy);
                     auto emitTag = [&]() {
                         emitLvalue(val);
@@ -3997,7 +3997,7 @@ namespace {
         void emitTermSwitchvalue(const MIRTypeResolve& localMirRes, const MIRLValue& val, const MIRSwitchValues& values, unsigned indentLevel, ::std::function<void(size_t)> cb) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
 
-            ::HIR::TypeRef tmp;
+            HIRTypeRef tmp;
             const auto& ty = localMirRes.getLvalueType(tmp, val);
             if (const auto* ve = values.opt_String()) {
                 of << indent << "{ static SLICE_PTR switch_strings[] = {";
@@ -4027,7 +4027,7 @@ namespace {
                     of << "," << v.size() << "},";
                 }
                 of << " {0,0} };\n";
-                HIR::TypeRef tmp;
+                HIRTypeRef tmp;
                 const auto& ty = localMirRes.getLvalueType(tmp, val);
                 of << indent << "switch( mrustc_string_search_linear(";
                 if (const auto* a = ty->as_Borrow().inner->opt_Array()) {
@@ -4049,7 +4049,7 @@ namespace {
                 of << "\n";
                 of << indent << "} }\n";
             } else if (const auto* ve = values.opt_Unsigned()) {
-                const bool emulatedU128 = options.emulatedI128 && ty == ::HIR::CoreType::U128;
+                const bool emulatedU128 = options.emulatedI128 && ty == HIRCoreType::U128;
                 if (emulatedU128) {
                     of << indent << "if(";
                     emitLvalue(val);
@@ -4074,7 +4074,7 @@ namespace {
                 of << indent << "}\n";
             } else if (const auto* ve = values.opt_Signed()) {
                 //assert(ve->size() == e.targets.size());
-                const bool emulatedI128 = options.emulatedI128 && ty == ::HIR::CoreType::I128;
+                const bool emulatedI128 = options.emulatedI128 && ty == HIRCoreType::I128;
                 if (emulatedI128) {
                     of << indent << "if(";
                     emitLvalue(val);
@@ -4119,7 +4119,7 @@ namespace {
 
             bool hasZst = false;
             for (unsigned int j = 0; j < e.args.size(); j++) {
-                ::HIR::TypeRef tmp;
+                HIRTypeRef tmp;
                 const auto& ty = mirRes->getParamType(tmp, e.args[j]);
                 if (options.disallowEmptyStructs /*&& TU_TEST1(e.args[j], LValue, .is_Field())*/) {
                     if (this->typeIsBadZst(ty)) {
@@ -4142,7 +4142,7 @@ namespace {
             // If the return type is `()`, omit the assignment (all `()` returning functions are marked as returning
             // void)
             {
-                ::HIR::TypeRef tmp;
+                HIRTypeRef tmp;
                 if (mirRes->getLvalueType(tmp, e.retVal) == crate.types.unit()) {
                     omitAssign = true;
                 }
@@ -4155,7 +4155,7 @@ namespace {
             TU_MATCH_HDRA( (e.fcn), {)
             TU_ARMA(Value, e2) {
                     {
-                        ::HIR::TypeRef tmp;
+                        HIRTypeRef tmp;
                         const auto& ty = localMirRes.getLvalueType(tmp, e2);
                         MIR_ASSERT(localMirRes, ty->is_Function(), "Call::Value on non-function - " << ty);
 
@@ -4182,7 +4182,7 @@ namespace {
                             }
                             TU_ARMA(UfcsInherent, pe) {
                                 // Check if the return type is !
-                                omitAssign |= mResolve.crate.findTypeImpls(pe.type, HIR::ResolvePlaceholdersNop(), [&](const auto& impl) {
+                                omitAssign |= mResolve.crate.findTypeImpls(pe.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
                                     // Associated functions
                                     {
                                         auto it = impl.methods.find(pe.item);
@@ -4238,7 +4238,7 @@ namespace {
                     of << ",";
                 }
                 of << " ";
-                ::HIR::TypeRef tmp;
+                HIRTypeRef tmp;
                 const auto& ty = mirRes->getParamType(tmp, e.args[j]);
 
                 if (this->typeIsBadZst(ty)) {
@@ -4911,7 +4911,7 @@ namespace {
                                 of << indent;
                                 emitLvalue(*pe->output);
                                 of << " = ";
-                                HIR::TypeRef tmp;
+                                HIRTypeRef tmp;
                                 of << "(";
                                 emitCtype(mirRes->getLvalueType(tmp, *pe->output));
                                 of << ")";
@@ -4927,7 +4927,7 @@ namespace {
         }
 
     private:
-        const ::HIR::TypeData* monomorphiseFcnReturn(::HIR::TypeRef& tmp, const ::HIR::Function& item, const TransParams& params) {
+        const HIRTypeData* monomorphiseFcnReturn(HIRTypeRef& tmp, const HIRFunction& item, const TransParams& params) {
             bool hasErased = visitTyWith(item.returnType, [&](const auto& x) {
                 return x->is_ErasedType();
             });
@@ -4955,8 +4955,8 @@ namespace {
             }
         }
 
-        void emitFunctionHeader(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params) {
-            ::HIR::TypeRef tmp;
+        void emitFunctionHeader(const HIRPath& p, const HIRFunction& item, const TransParams& params) {
+            HIRTypeRef tmp;
             const auto& retTy = monomorphiseFcnReturn(tmp, item, params);
             if (item.markings.isNaked) {
                 of << "__attribute__((naked)) ";
@@ -4991,7 +4991,7 @@ namespace {
             of << " // -> " << retTy << "\n";
         }
 
-        void emitIntrinsicCall(const RcString& name, const ::HIR::PathParams& params, const MIRTerminator::Data_Call& e) {
+        void emitIntrinsicCall(const RcString& name, const HIRPathParams& params, const MIRTerminator::Data_Call& e) {
             const auto& localMirRes = *mirRes;
             enum class Ordering {
                 SeqCst,
@@ -5039,7 +5039,7 @@ namespace {
                 }
                 throw "";
             };
-            auto getPrimSize = [&localMirRes](const ::HIR::TypeData* ty) -> unsigned {
+            auto getPrimSize = [&localMirRes](const HIRTypeData* ty) -> unsigned {
                 if (ty->is_Pointer()) {
                     return TargetGetCurSpec().arch.pointerBits;
                 }
@@ -5047,45 +5047,45 @@ namespace {
                     MIR_BUG(localMirRes, "Unknown type for getting primitive size - " << ty);
                 }
                 switch (ty->as_Primitive()) {
-                    case ::HIR::CoreType::U8:
-                    case ::HIR::CoreType::I8:
+                    case HIRCoreType::U8:
+                    case HIRCoreType::I8:
                         return 8;
-                    case ::HIR::CoreType::U16:
-                    case ::HIR::CoreType::I16:
+                    case HIRCoreType::U16:
+                    case HIRCoreType::I16:
                         return 16;
-                    case ::HIR::CoreType::U32:
-                    case ::HIR::CoreType::I32:
+                    case HIRCoreType::U32:
+                    case HIRCoreType::I32:
                         return 32;
-                    case ::HIR::CoreType::U64:
-                    case ::HIR::CoreType::I64:
+                    case HIRCoreType::U64:
+                    case HIRCoreType::I64:
                         return 64;
-                    case ::HIR::CoreType::U128:
-                    case ::HIR::CoreType::I128:
+                    case HIRCoreType::U128:
+                    case HIRCoreType::I128:
                         return 128;
-                    case ::HIR::CoreType::Usize:
-                    case ::HIR::CoreType::Isize:
+                    case HIRCoreType::Usize:
+                    case HIRCoreType::Isize:
                         // TODO: Is this a good idea?
                         return TargetGetCurSpec().arch.pointerBits;
                     default:
                         MIR_BUG(localMirRes, "Unknown primitive for getting size- " << ty);
                 }
             };
-            auto getRealPrimTy = [](HIR::CoreType ct) -> HIR::CoreType {
+            auto getRealPrimTy = [](HIRCoreType ct) -> HIRCoreType {
                 switch (ct) {
-                    case HIR::CoreType::Usize:
+                    case HIRCoreType::Usize:
                         if (TargetGetCurSpec().arch.pointerBits == 64) {
-                            return ::HIR::CoreType::U64;
+                            return HIRCoreType::U64;
                         }
                         if (TargetGetCurSpec().arch.pointerBits == 32) {
-                            return ::HIR::CoreType::U32;
+                            return HIRCoreType::U32;
                         }
                         BUG(Span(), "");
-                    case HIR::CoreType::Isize:
+                    case HIRCoreType::Isize:
                         if (TargetGetCurSpec().arch.pointerBits == 64) {
-                            return ::HIR::CoreType::I64;
+                            return HIRCoreType::I64;
                         }
                         if (TargetGetCurSpec().arch.pointerBits == 32) {
-                            return ::HIR::CoreType::I32;
+                            return HIRCoreType::I32;
                         }
                         BUG(Span(), "");
                     default:
@@ -5204,20 +5204,20 @@ namespace {
                 const auto& ty = params.types.at(0);
                 // Get the unsized type and use that in place of MetadataType
                 auto innerTy = getInnerUnsizedType(ty);
-                if (innerTy == ::HIR::TypeRef()) {
+                if (innerTy == HIRTypeRef()) {
                     size_t size = 0;
                     MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, mResolve, ty, size), "Can't get size of " << ty);
                     of << size;
                 }
                 // slice metadata (`[T]` and `str`)
-                else if (innerTy->is_Slice() || innerTy == ::HIR::CoreType::Str) {
+                else if (innerTy->is_Slice() || innerTy == HIRCoreType::Str) {
                     bool alignNeeded = false;
                     size_t itemSize = 0;
                     size_t itemAlign = 0;
                     if (const auto* te = innerTy->opt_Slice()) {
                         MIR_ASSERT(localMirRes, TargetGetSizeAndAlignOf(sp, mResolve, te->inner, itemSize, itemAlign), "Can't get size of " << te->inner);
                     } else {
-                        assert(innerTy == ::HIR::CoreType::Str);
+                        assert(innerTy == HIRCoreType::Str);
                         itemSize = 1;
                         itemAlign = 1;
                     }
@@ -5253,7 +5253,7 @@ namespace {
                 const auto& ty = params.types.at(0);
 #if 1
                 auto innerTy = getInnerUnsizedType(ty);
-                if (innerTy == ::HIR::TypeRef()) {
+                if (innerTy == HIRTypeRef()) {
                     of << "ALIGNOF(";
                     emitCtype(ty);
                     of << ")";
@@ -5265,7 +5265,7 @@ namespace {
                         emitCtype(ty);
                     }
                     of << ")";
-                } else if (innerTy == ::HIR::CoreType::Str) {
+                } else if (innerTy == HIRCoreType::Str) {
                     if (!ty->is_Primitive()) {
                         of << "ALIGNOF(";
                         emitCtype(ty);
@@ -5345,7 +5345,7 @@ namespace {
             } else if (name == "transmute" || name == "transmute_unchecked") {
                 const auto& tySrc = params.types.at(0);
                 const auto& tyDst = params.types.at(1);
-                auto isPtr = [](const ::HIR::TypeData* ty) {
+                auto isPtr = [](const HIRTypeData* ty) {
                     return ty->is_Borrow() || ty->is_Pointer();
                 };
                 if (this->typeIsBadZst(tyDst)) {
@@ -5418,7 +5418,7 @@ namespace {
                 if (this->typeIsEmulatedI128(dstTy)) {
                     of << "abort()";
                     //emit_lvalue(e.ret_val); m_of << " = ("; emit_ctype(dst_ty); m_of << ")"; emit_param(e.args.at(0));
-                } else if (srcTy == HIR::CoreType::F16 || srcTy == HIR::CoreType::F128) {
+                } else if (srcTy == HIRCoreType::F16 || srcTy == HIRCoreType::F128) {
                     of << "abort()";
                 } else {
                     emitLvalue(e.retVal);
@@ -5496,7 +5496,7 @@ namespace {
                 if (typeIsEmulatedI128(t)) {
                     emitLvalue(e.retVal);
                     of << ".TAG = ";
-                    of << (t == ::HIR::CoreType::U128 ? "cmp128" : "cmp128s");
+                    of << (t == HIRCoreType::U128 ? "cmp128" : "cmp128s");
                     of << "(";
                     emitParam(e.args.at(0));
                     of << ", ";
@@ -5573,7 +5573,7 @@ namespace {
                 //m_of << "abort()";
                 auto p = crate.getLangItemPathOpt("panic_location");
                 of << "static struct ";
-                if (p == HIR::SimplePath()) {
+                if (p == HIRSimplePath()) {
                     of << "s_ZRG2cE9core0_0_05panic8Location0g";
                 } else {
                     of << "s_" << TransMangle(p);
@@ -5636,7 +5636,7 @@ namespace {
             else if (name == "bswap") {
                 const auto& ty = params.types.at(0);
                 MIR_ASSERT(localMirRes, ty->is_Primitive(), "Invalid type passed to bwsap, must be a primitive, got " << ty);
-                if (ty == ::HIR::CoreType::U8 || ty == ::HIR::CoreType::I8) {
+                if (ty == HIRCoreType::U8 || ty == HIRCoreType::I8) {
                     // Nop.
                     emitLvalue(e.retVal);
                     of << " = ";
@@ -5777,7 +5777,7 @@ namespace {
             // Overflowing Arithmetic
             // Overflowing arithmetic maps to compiler intrinsics, with software handling for emulated i128.
             else if (name == "add_with_overflow") {
-                if (options.emulatedI128 && params.types.at(0) == ::HIR::CoreType::U128) {
+                if (options.emulatedI128 && params.types.at(0) == HIRCoreType::U128) {
                     emitLvalue(e.retVal);
                     of << "._1 = add128_o";
                     of << "(";
@@ -5787,7 +5787,7 @@ namespace {
                     of << ", &";
                     emitLvalue(e.retVal);
                     of << "._0)";
-                } else if (options.emulatedI128 && params.types.at(0) == ::HIR::CoreType::I128) {
+                } else if (options.emulatedI128 && params.types.at(0) == HIRCoreType::I128) {
                     emitLvalue(e.retVal);
                     of << "._1 = add128s_o";
                     of << "(";
@@ -5811,7 +5811,7 @@ namespace {
                     of << "._0)";
                 }
             } else if (name == "sub_with_overflow") {
-                if (options.emulatedI128 && params.types.at(0) == ::HIR::CoreType::U128) {
+                if (options.emulatedI128 && params.types.at(0) == HIRCoreType::U128) {
                     emitLvalue(e.retVal);
                     of << "._1 = sub128_o";
                     of << "(";
@@ -5821,7 +5821,7 @@ namespace {
                     of << ", &";
                     emitLvalue(e.retVal);
                     of << "._0)";
-                } else if (options.emulatedI128 && params.types.at(0) == ::HIR::CoreType::I128) {
+                } else if (options.emulatedI128 && params.types.at(0) == HIRCoreType::I128) {
                     emitLvalue(e.retVal);
                     of << "._1 = sub128s_o";
                     of << "(";
@@ -5843,7 +5843,7 @@ namespace {
                     of << "._0)";
                 }
             } else if (name == "mul_with_overflow") {
-                if (options.emulatedI128 && params.types.at(0) == ::HIR::CoreType::U128) {
+                if (options.emulatedI128 && params.types.at(0) == HIRCoreType::U128) {
                     emitLvalue(e.retVal);
                     of << "._1 = mul128_o";
                     of << "(";
@@ -5853,7 +5853,7 @@ namespace {
                     of << ", &";
                     emitLvalue(e.retVal);
                     of << "._0)";
-                } else if (options.emulatedI128 && params.types.at(0) == ::HIR::CoreType::I128) {
+                } else if (options.emulatedI128 && params.types.at(0) == HIRCoreType::I128) {
                     emitLvalue(e.retVal);
                     of << "._1 = mul128s_o";
                     of << "(";
@@ -5880,7 +5880,7 @@ namespace {
                     of << "if( ";
                 }
 
-                if (options.emulatedI128 && ty == ::HIR::CoreType::U128) {
+                if (options.emulatedI128 && ty == HIRCoreType::U128) {
                     of << "add128_o";
                     of << "(";
                     emitParam(e.args.at(0));
@@ -5889,7 +5889,7 @@ namespace {
                     of << ", &";
                     emitLvalue(e.retVal);
                     of << ")";
-                } else if (options.emulatedI128 && ty == ::HIR::CoreType::I128) {
+                } else if (options.emulatedI128 && ty == HIRCoreType::I128) {
                     of << "add128s_o";
                     of << "(";
                     emitParam(e.args.at(0));
@@ -5914,13 +5914,13 @@ namespace {
                     emitLvalue(e.retVal);
                     of << " = ";
                     switch (getRealPrimTy(ty->as_Primitive())) {
-                        case ::HIR::CoreType::U8:
-                        case ::HIR::CoreType::U16:
-                        case ::HIR::CoreType::U32:
-                        case ::HIR::CoreType::U64:
+                        case HIRCoreType::U8:
+                        case HIRCoreType::U16:
+                        case HIRCoreType::U32:
+                        case HIRCoreType::U64:
                             of << "-1"; // -1 should extend to MAX
                             break;
-                        case ::HIR::CoreType::U128:
+                        case HIRCoreType::U128:
                             if (options.emulatedI128) {
                                 of << "make128_raw(-1, -1)";
                             } else {
@@ -5928,29 +5928,29 @@ namespace {
                             }
                             break;
                         // If the LHS is negative, then the only way overflow can happen is if the RHS is also negative, so saturate at negative.
-                        case ::HIR::CoreType::I8:
+                        case HIRCoreType::I8:
                             of << "(";
                             emitParam(e.args.at(0));
                             of << " < 0 ? -0x80 : 0x7F)";
                             break;
-                        case ::HIR::CoreType::I16:
+                        case HIRCoreType::I16:
                             of << "(";
                             emitParam(e.args.at(0));
                             of << " < 0 ? -0x8000 : 0x7FFF)";
                             break;
-                        case ::HIR::CoreType::I32:
+                        case HIRCoreType::I32:
                             of << "(";
                             emitParam(e.args.at(0));
                             of << " < 0 ? -0x8000000l : 0x7FFFFFFFl)";
                             break;
-                        case ::HIR::CoreType::I64:
+                        case HIRCoreType::I64:
                             of << "(";
                             emitParam(e.args.at(0));
                             of << " < 0 ? -0x8000000"
                                   "00000000ll : 0x7FFFFFFF"
                                   "FFFFFFFFll)";
                             break;
-                        case ::HIR::CoreType::I128:
+                        case HIRCoreType::I128:
                             if (options.emulatedI128) {
                                 of << "( (int64_t)(";
                                 emitParam(e.args.at(0));
@@ -5973,7 +5973,7 @@ namespace {
                 if (name == "saturating_sub") {
                     of << "if( ";
                 }
-                if (options.emulatedI128 && ty == ::HIR::CoreType::U128) {
+                if (options.emulatedI128 && ty == HIRCoreType::U128) {
                     of << "sub128_o";
                     of << "(";
                     emitParam(e.args.at(0));
@@ -5982,7 +5982,7 @@ namespace {
                     of << ", &";
                     emitLvalue(e.retVal);
                     of << ")";
-                } else if (options.emulatedI128 && ty == ::HIR::CoreType::I128) {
+                } else if (options.emulatedI128 && ty == HIRCoreType::I128) {
                     of << "sub128s_o";
                     of << "(";
                     emitParam(e.args.at(0));
@@ -6007,42 +6007,42 @@ namespace {
                     emitLvalue(e.retVal);
                     of << " = ";
                     switch (getRealPrimTy(ty->as_Primitive())) {
-                        case ::HIR::CoreType::U8:
-                        case ::HIR::CoreType::U16:
-                        case ::HIR::CoreType::U32:
-                        case ::HIR::CoreType::U64:
+                        case HIRCoreType::U8:
+                        case HIRCoreType::U16:
+                        case HIRCoreType::U32:
+                        case HIRCoreType::U64:
                             of << "0";
                             break;
-                        case ::HIR::CoreType::U128:
+                        case HIRCoreType::U128:
                             if (options.emulatedI128) {
                                 of << "make128(0)";
                             } else {
                                 of << "0";
                             }
                             break;
-                        case ::HIR::CoreType::I8:
+                        case HIRCoreType::I8:
                             of << "(";
                             emitParam(e.args.at(0));
                             of << " < 0 ? -0x80 : 0x7F)";
                             break;
-                        case ::HIR::CoreType::I16:
+                        case HIRCoreType::I16:
                             of << "(";
                             emitParam(e.args.at(0));
                             of << " < 0 ? -0x8000 : 0x7FFF)";
                             break;
-                        case ::HIR::CoreType::I32:
+                        case HIRCoreType::I32:
                             of << "(";
                             emitParam(e.args.at(0));
                             of << " < 0 ? -0x8000000l : 0x7FFFFFFFl)";
                             break;
-                        case ::HIR::CoreType::I64:
+                        case HIRCoreType::I64:
                             of << "(";
                             emitParam(e.args.at(0));
                             of << " < 0 ? -0x8000000"
                                   "00000000ll : 0x7FFFFFFF"
                                   "FFFFFFFFll)";
                             break;
-                        case ::HIR::CoreType::I128:
+                        case HIRCoreType::I128:
                             if (options.emulatedI128) {
                                 of << "( (int64_t)(";
                                 emitParam(e.args.at(0));
@@ -6061,7 +6061,7 @@ namespace {
                     of << "; }";
                 }
             } else if (name == "overflowing_mul" || name == "wrapping_mul" || name == "unchecked_mul") {
-                if (options.emulatedI128 && params.types.at(0) == ::HIR::CoreType::U128) {
+                if (options.emulatedI128 && params.types.at(0) == HIRCoreType::U128) {
                     of << "mul128_o";
                     of << "(";
                     emitParam(e.args.at(0));
@@ -6070,7 +6070,7 @@ namespace {
                     of << ", &";
                     emitLvalue(e.retVal);
                     of << ")";
-                } else if (options.emulatedI128 && params.types.at(0) == ::HIR::CoreType::I128) {
+                } else if (options.emulatedI128 && params.types.at(0) == HIRCoreType::I128) {
                     of << "mul128s_o";
                     of << "(";
                     emitParam(e.args.at(0));
@@ -6097,7 +6097,7 @@ namespace {
                 of << " = ";
                 if (typeIsEmulatedI128(params.types.at(0))) {
                     of << "div128";
-                    if (params.types.at(0) == ::HIR::CoreType::I128) {
+                    if (params.types.at(0) == HIRCoreType::I128) {
                         of << "s";
                     }
                     of << "(";
@@ -6115,7 +6115,7 @@ namespace {
                 of << " = ";
                 if (typeIsEmulatedI128(params.types.at(0))) {
                     of << "mod128";
-                    if (params.types.at(0) == ::HIR::CoreType::I128) {
+                    if (params.types.at(0) == HIRCoreType::I128) {
                         of << "s";
                     }
                     of << "(";
@@ -6133,7 +6133,7 @@ namespace {
                 of << " = ";
                 if (typeIsEmulatedI128(params.types.at(0))) {
                     of << "shl128";
-                    if (params.types.at(0) == ::HIR::CoreType::I128) {
+                    if (params.types.at(0) == HIRCoreType::I128) {
                         of << "s";
                     }
                     of << "(";
@@ -6141,9 +6141,9 @@ namespace {
                     of << ", ";
                     emitParam(e.args.at(1));
                     // If the shift type is a u128/i128, get the inner
-                    ::HIR::TypeRef tmp;
+                    HIRTypeRef tmp;
                     const auto& shiftTy = localMirRes.getParamType(tmp, e.args.at(1));
-                    if (shiftTy == ::HIR::CoreType::I128 || shiftTy == ::HIR::CoreType::U128) {
+                    if (shiftTy == HIRCoreType::I128 || shiftTy == HIRCoreType::U128) {
                         of << ".lo";
                     }
                     of << ")";
@@ -6157,7 +6157,7 @@ namespace {
                 of << " = ";
                 if (typeIsEmulatedI128(params.types.at(0))) {
                     of << "shr128";
-                    if (params.types.at(0) == ::HIR::CoreType::I128) {
+                    if (params.types.at(0) == HIRCoreType::I128) {
                         of << "s";
                     }
                     of << "(";
@@ -6165,9 +6165,9 @@ namespace {
                     of << ", ";
                     emitParam(e.args.at(1));
                     // If the shift type is a u128/i128, get the inner
-                    ::HIR::TypeRef tmp;
+                    HIRTypeRef tmp;
                     const auto& shiftTy = localMirRes.getParamType(tmp, e.args.at(1));
-                    if (shiftTy == ::HIR::CoreType::I128 || shiftTy == ::HIR::CoreType::U128) {
+                    if (shiftTy == HIRCoreType::I128 || shiftTy == HIRCoreType::U128) {
                         of << ".lo";
                     }
                     of << ")";
@@ -6181,8 +6181,8 @@ namespace {
             else if (name == "rotate_left") {
                 const auto& ty = params.types.at(0);
                 switch (getRealPrimTy(ty->as_Primitive())) {
-                    case ::HIR::CoreType::I8:
-                    case ::HIR::CoreType::U8:
+                    case HIRCoreType::I8:
+                    case HIRCoreType::U8:
                         of << "{";
                         of << " uint8_t v = ";
                         emitParam(e.args.at(0));
@@ -6195,8 +6195,8 @@ namespace {
                         of << " = shift == 0 ? v : (v << shift) | (v >> (8 - shift));";
                         of << "}";
                         break;
-                    case ::HIR::CoreType::I16:
-                    case ::HIR::CoreType::U16:
+                    case HIRCoreType::I16:
+                    case HIRCoreType::U16:
                         of << "{";
                         of << " uint16_t v = ";
                         emitParam(e.args.at(0));
@@ -6209,8 +6209,8 @@ namespace {
                         of << " = shift == 0 ? v : (v << shift) | (v >> (16 - shift));";
                         of << "}";
                         break;
-                    case ::HIR::CoreType::I32:
-                    case ::HIR::CoreType::U32:
+                    case HIRCoreType::I32:
+                    case HIRCoreType::U32:
                         of << "{";
                         of << " uint32_t v = ";
                         emitParam(e.args.at(0));
@@ -6223,8 +6223,8 @@ namespace {
                         of << " = shift == 0 ? v : (v << shift) | (v >> (32 - shift));";
                         of << "}";
                         break;
-                    case ::HIR::CoreType::I64:
-                    case ::HIR::CoreType::U64:
+                    case HIRCoreType::I64:
+                    case HIRCoreType::U64:
                         of << "{";
                         of << " uint64_t v = ";
                         emitParam(e.args.at(0));
@@ -6237,8 +6237,8 @@ namespace {
                         of << " = shift == 0 ? v : (v << shift) | (v >> (64 - shift));";
                         of << "}";
                         break;
-                    case ::HIR::CoreType::I128:
-                    case ::HIR::CoreType::U128:
+                    case HIRCoreType::I128:
+                    case HIRCoreType::U128:
                         of << "{";
                         of << " uint128_t v = ";
                         emitParam(e.args.at(0));
@@ -6287,8 +6287,8 @@ namespace {
             } else if (name == "rotate_right") {
                 const auto& ty = params.types.at(0);
                 switch (getRealPrimTy(ty->as_Primitive())) {
-                    case ::HIR::CoreType::I8:
-                    case ::HIR::CoreType::U8:
+                    case HIRCoreType::I8:
+                    case HIRCoreType::U8:
                         of << "{";
                         of << " uint8_t v = ";
                         emitParam(e.args.at(0));
@@ -6301,8 +6301,8 @@ namespace {
                         of << " = shift == 0 ? v : (v >> shift) | (v << (8 - shift));";
                         of << "}";
                         break;
-                    case ::HIR::CoreType::I16:
-                    case ::HIR::CoreType::U16:
+                    case HIRCoreType::I16:
+                    case HIRCoreType::U16:
                         of << "{";
                         of << " uint16_t v = ";
                         emitParam(e.args.at(0));
@@ -6315,8 +6315,8 @@ namespace {
                         of << " = shift == 0 ? v : (v >> shift) | (v << (16 - shift));";
                         of << "}";
                         break;
-                    case ::HIR::CoreType::I32:
-                    case ::HIR::CoreType::U32:
+                    case HIRCoreType::I32:
+                    case HIRCoreType::U32:
                         of << "{";
                         of << " uint32_t v = ";
                         emitParam(e.args.at(0));
@@ -6329,8 +6329,8 @@ namespace {
                         of << " = shift == 0 ? v : (v >> shift) | (v << (32 - shift));";
                         of << "}";
                         break;
-                    case ::HIR::CoreType::I64:
-                    case ::HIR::CoreType::U64:
+                    case HIRCoreType::I64:
+                    case HIRCoreType::U64:
                         of << "{";
                         of << " uint64_t v = ";
                         emitParam(e.args.at(0));
@@ -6343,8 +6343,8 @@ namespace {
                         of << " = shift == 0 ? v : (v >> shift) | (v << (64 - shift));";
                         of << "}";
                         break;
-                    case ::HIR::CoreType::I128:
-                    case ::HIR::CoreType::U128:
+                    case HIRCoreType::I128:
+                    case HIRCoreType::U128:
                         of << "{";
                         of << " uint128_t v = ";
                         emitParam(e.args.at(0));
@@ -6401,8 +6401,8 @@ namespace {
                 const auto& ty = params.types.at(0);
                 emitLvalue(e.retVal);
                 of << " = (";
-                if (ty == ::HIR::CoreType::U128 || ty == ::HIR::CoreType::I128) {
-                    if (ty == ::HIR::CoreType::I128) {
+                if (ty == HIRCoreType::U128 || ty == HIRCoreType::I128) {
+                    if (ty == HIRCoreType::I128) {
                         if (options.emulatedI128) {
                             of << "uint128_to_int128(";
                         } else {
@@ -6414,7 +6414,7 @@ namespace {
                     } else {
                         of << "intrinsic_cttz_u128(";
                     }
-                    if (ty == ::HIR::CoreType::I128) {
+                    if (ty == HIRCoreType::I128) {
                         if (options.emulatedI128) {
                             of << "int128_to_uint128(";
                         } else {
@@ -6423,7 +6423,7 @@ namespace {
                     }
                     emitParam(e.args.at(0));
                     of << ")";
-                    if (ty == ::HIR::CoreType::I128 && options.emulatedI128) {
+                    if (ty == HIRCoreType::I128 && options.emulatedI128) {
                         of << ")";
                         of << ")";
                     } else {
@@ -6434,7 +6434,7 @@ namespace {
                     }
                     of << ";";
                     return;
-                } else if (ty == ::HIR::CoreType::U64 || (ty == ::HIR::CoreType::Usize && TargetGetPointerBits() > 32)) {
+                } else if (ty == HIRCoreType::U64 || (ty == HIRCoreType::Usize && TargetGetPointerBits() > 32)) {
                     emitParam(e.args.at(0));
                     of << " != 0 ? ";
                     if (name == "ctlz" || name == "ctlz_nonzero") {
@@ -6451,19 +6451,19 @@ namespace {
                     of << " != 0 ? ";
                     if (name == "ctlz" || name == "ctlz_nonzero") {
                         of << "__builtin_clz(";
-                        if (ty == ::HIR::CoreType::U8 || ty == ::HIR::CoreType::I8) {
+                        if (ty == HIRCoreType::U8 || ty == HIRCoreType::I8) {
                             of << "(uint8_t)(";
-                        } else if (ty == ::HIR::CoreType::U16 || ty == ::HIR::CoreType::I16) {
+                        } else if (ty == HIRCoreType::U16 || ty == HIRCoreType::I16) {
                             of << "(uint16_t)(";
                         }
                         emitParam(e.args.at(0));
-                        if (ty == ::HIR::CoreType::U8 || ty == ::HIR::CoreType::I8 || ty == ::HIR::CoreType::U16 || ty == ::HIR::CoreType::I16) {
+                        if (ty == HIRCoreType::U8 || ty == HIRCoreType::I8 || ty == HIRCoreType::U16 || ty == HIRCoreType::I16) {
                             of << ")";
                         }
                         of << ")";
-                        if (ty == ::HIR::CoreType::U8 || ty == ::HIR::CoreType::I8) {
+                        if (ty == HIRCoreType::U8 || ty == HIRCoreType::I8) {
                             of << " - 24";
-                        } else if (ty == ::HIR::CoreType::U16 || ty == ::HIR::CoreType::I16) {
+                        } else if (ty == HIRCoreType::U16 || ty == HIRCoreType::I16) {
                             of << " - 16";
                         }
                     } else {
@@ -6815,7 +6815,7 @@ namespace {
                         Unsigned,
                     } ty;
 
-                    static SimdInfo forTy(const CodeGeneratorC& self, const HIR::TypeData* ty) {
+                    static SimdInfo forTy(const CodeGeneratorC& self, const HIRTypeData* ty) {
                         const auto* tyRepr = TargetGetTypeRepr(self.sp, self.mirRes->mResolve, ty);
                         MIR_ASSERT(*self.mirRes, tyRepr, "No repr for " << ty);
                         size_t sizeSlot = tyRepr->size;
@@ -6834,42 +6834,42 @@ namespace {
                         rv.itemSize = sizeVal;
                         rv.count = sizeSlot == 0 ? 0 : sizeSlot / sizeVal;
                         switch (tyVal->as_Primitive()) {
-                            case ::HIR::CoreType::I8:
+                            case HIRCoreType::I8:
                                 rv.ty = Signed;
                                 break;
-                            case ::HIR::CoreType::I16:
+                            case HIRCoreType::I16:
                                 rv.ty = Signed;
                                 break;
-                            case ::HIR::CoreType::I32:
+                            case HIRCoreType::I32:
                                 rv.ty = Signed;
                                 break;
-                            case ::HIR::CoreType::I64:
+                            case HIRCoreType::I64:
                                 rv.ty = Signed;
                                 break;
                             //case ::HIR::CoreType::I128: rv.ty = Signed; break;
-                            case ::HIR::CoreType::U8:
+                            case HIRCoreType::U8:
                                 rv.ty = Unsigned;
                                 break;
-                            case ::HIR::CoreType::U16:
+                            case HIRCoreType::U16:
                                 rv.ty = Unsigned;
                                 break;
-                            case ::HIR::CoreType::U32:
+                            case HIRCoreType::U32:
                                 rv.ty = Unsigned;
                                 break;
-                            case ::HIR::CoreType::U64:
+                            case HIRCoreType::U64:
                                 rv.ty = Unsigned;
                                 break;
                             //case ::HIR::CoreType::U128: rv.ty = Unsigned; break;
-                            case ::HIR::CoreType::F16:
+                            case HIRCoreType::F16:
                                 rv.ty = Float;
                                 break;
-                            case ::HIR::CoreType::F32:
+                            case HIRCoreType::F32:
                                 rv.ty = Float;
                                 break;
-                            case ::HIR::CoreType::F64:
+                            case HIRCoreType::F64:
                                 rv.ty = Float;
                                 break;
-                            case ::HIR::CoreType::F128:
+                            case HIRCoreType::F128:
                                 rv.ty = Float;
                                 break;
                             default:
@@ -7225,7 +7225,7 @@ namespace {
             of << ";\n";
         }
 
-        void emitDestructorLoop(const MIRLValue& slot, const ::HIR::TypeData* elementTy, ::std::function<void()> emitCount, unsigned indentLevel) {
+        void emitDestructorLoop(const MIRLValue& slot, const HIRTypeData* elementTy, ::std::function<void()> emitCount, unsigned indentLevel) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
             auto element = MIRLValue::newIndex(slot.clone(), MIRLValue::Storage::MAX_ARG);
 
@@ -7247,9 +7247,9 @@ namespace {
             of << indent << "}";
         }
 
-        void emitTupleDestructor(const MIRLValue& slot, const ::HIR::TypeData::Data_Tuple& tuple, bool unsizedValid, unsigned indentLevel) {
+        void emitTupleDestructor(const MIRLValue& slot, const HIRTypeData::Data_Tuple& tuple, bool unsizedValid, unsigned indentLevel) {
             ::std::vector<MIRLValue> fields;
-            ::std::vector<const ::HIR::TypeData*> fieldTypes;
+            ::std::vector<const HIRTypeData*> fieldTypes;
             ::std::vector<bool> fieldUnsized;
             auto field = MIRLValue::newField(slot.clone(), 0);
             for (size_t i = 0; i < tuple.size(); i++) {
@@ -7288,7 +7288,7 @@ namespace {
         /// ty :: Type of value to be dropped
         /// unsized_valid ::
         /// indent_level :: (formatting) Current amount of indenting
-        void emitDestructorCall(const MIRLValue& slot, const ::HIR::TypeData* ty, bool unsizedValid, unsigned indentLevel) {
+        void emitDestructorCall(const MIRLValue& slot, const HIRTypeData* ty, bool unsizedValid, unsigned indentLevel) {
             // If the type doesn't need dropping, don't try.
             if (!mResolve.typeNeedsDropGlue(sp, ty)) {
                 return;
@@ -7318,7 +7318,7 @@ namespace {
                 }
                 // Has drop glue/destructors
                 TU_ARMA(Borrow, te) {
-                    if (te.type == ::HIR::BorrowType::Owned) {
+                    if (te.type == HIRBorrowType::Owned) {
                         // Call drop glue on inner.
                         emitDestructorCall(MIRLValue::newDeref(slot.clone()), te.inner, true, indentLevel);
                     }
@@ -7326,7 +7326,7 @@ namespace {
                 TU_ARMA(Path, te) {
                     // Call drop glue
                     // - TODO: If the destructor is known to do nothing, don't call it.
-                    auto p = ::HIR::Path(ty, "#drop_glue");
+                    auto p = HIRPath(ty, "#drop_glue");
                     const char* makeFcn = nullptr;
                     switch (metadataType(ty)) {
                         case MetadataType::Unknown:
@@ -7345,12 +7345,12 @@ namespace {
                                 of << indent << TransMangle(p) << "((";
                                 emitCtype(ty);
                                 of << "*)";
-                                emitBorrow(*mirRes, ::HIR::BorrowType::Unique, slot);
+                                emitBorrow(*mirRes, HIRBorrowType::Unique, slot);
                                 of << ");\n";
                             } else if (this->typeIsBadZst(ty) && (slot.is_Field() || slot.is_Downcast())) {
                                 // May need to back the slot out too, as we might be dropping a ZST tuple
                                 auto v = MIRLValue::CRef(slot).innerRef();
-                                ::HIR::TypeRef tmp;
+                                HIRTypeRef tmp;
                                 if (this->typeIsBadZst(mirRes->getLvalueType(tmp, v)) && (v.is_Field() || v.is_Downcast())) {
                                     v = v.innerRef();
                                 }
@@ -7448,49 +7448,49 @@ namespace {
             const auto& ve = repr->variants.as_Values();
             const auto& tagTy = TargetGetInnerType(sp, mResolve, *repr, ve.field.index, ve.field.subFields);
             switch (tagTy->as_Primitive()) {
-                case ::HIR::CoreType::I8:
-                case ::HIR::CoreType::I16:
-                case ::HIR::CoreType::I32:
-                case ::HIR::CoreType::I64:
-                case ::HIR::CoreType::Isize:
+                case HIRCoreType::I8:
+                case HIRCoreType::I16:
+                case HIRCoreType::I32:
+                case HIRCoreType::I64:
+                case HIRCoreType::Isize:
                     of << S128(ve.values[idx]).truncateI64() << "ll";
                     break;
-                case ::HIR::CoreType::Bool:
-                case ::HIR::CoreType::U8:
-                case ::HIR::CoreType::U16:
-                case ::HIR::CoreType::U32:
-                case ::HIR::CoreType::U64:
-                case ::HIR::CoreType::Usize:
-                case ::HIR::CoreType::Char:
+                case HIRCoreType::Bool:
+                case HIRCoreType::U8:
+                case HIRCoreType::U16:
+                case HIRCoreType::U32:
+                case HIRCoreType::U64:
+                case HIRCoreType::Usize:
+                case HIRCoreType::Char:
                     of << ve.values[idx].truncateU64() << "ull";
                     break;
-                case ::HIR::CoreType::I128:
+                case HIRCoreType::I128:
                     if (options.emulatedI128) {
                         of << "make128s_raw(" << ve.values[idx].getHi() << "ull, " << ve.values[idx].getLo() << "ull)";
                     } else {
                         of << "((int128_t)(((uint128_t)" << ve.values[idx].getHi() << "ull << 64) | (uint128_t)" << ve.values[idx].getLo() << "ull))";
                     }
                     break;
-                case ::HIR::CoreType::U128:
+                case HIRCoreType::U128:
                     if (options.emulatedI128) {
                         of << "make128_raw(" << ve.values[idx].getHi() << "ull, " << ve.values[idx].getLo() << "ull)";
                     } else {
                         of << "(((uint128_t)" << ve.values[idx].getHi() << "ull << 64) | (uint128_t)" << ve.values[idx].getLo() << "ull)";
                     }
                     break;
-                case ::HIR::CoreType::F16:
-                case ::HIR::CoreType::F32:
-                case ::HIR::CoreType::F64:
-                case ::HIR::CoreType::F128:
+                case HIRCoreType::F16:
+                case HIRCoreType::F32:
+                case HIRCoreType::F64:
+                case HIRCoreType::F128:
                     MIR_TODO(*mirRes, "Floating point enum tag.");
                     break;
-                case ::HIR::CoreType::Str:
+                case HIRCoreType::Str:
                     MIR_BUG(*mirRes, "Unsized tag?!");
             }
         }
 
         // returns whether a literal can be represented as zeroed memory.
-        bool isZeroLiteral(const ::HIR::TypeData* ty, const EncodedLiteral& lit, const TransParams& params) {
+        bool isZeroLiteral(const HIRTypeData* ty, const EncodedLiteral& lit, const TransParams& params) {
             for (auto v : lit.bytes) {
                 if (v) {
                     return false;
@@ -7522,7 +7522,7 @@ namespace {
                     of << ".val";
                 }
                 TU_ARMA(Field, fieldIndex) {
-                    ::HIR::TypeRef tmp;
+                    HIRTypeRef tmp;
                     auto inner = val.innerRef();
                     const auto& ty = mirRes->getLvalueType(tmp, inner);
                     if (ty->is_Slice()) {
@@ -7558,7 +7558,7 @@ namespace {
                 }
                 TU_ARMA(Deref, _e) {
                     auto inner = val.innerRef();
-                    ::HIR::TypeRef tmp;
+                    HIRTypeRef tmp;
                     const auto& ty = mirRes->getLvalueType(tmp, val);
                     auto dstType = metadataType(ty);
                     // If the type is unsized, then this pointer is a fat pointer, so we need to cast the data pointer.
@@ -7576,7 +7576,7 @@ namespace {
                 }
                 TU_ARMA(Index, indexLocal) {
                     auto inner = val.innerRef();
-                    ::HIR::TypeRef tmp;
+                    HIRTypeRef tmp;
                     const auto& ty = mirRes->getLvalueType(tmp, inner);
                     of << "(";
                     if (ty->is_Slice()) {
@@ -7601,7 +7601,7 @@ namespace {
                 }
                 TU_ARMA(Downcast, variantIndex) {
                     auto inner = val.innerRef();
-                    ::HIR::TypeRef tmp;
+                    HIRTypeRef tmp;
                     const auto& ty = mirRes->getLvalueType(tmp, inner);
                     emitLvalue(inner);
                     MIR_ASSERT(*mirRes, ty->is_Path(), "Downcast on non-Path type - " << ty);
@@ -7622,17 +7622,17 @@ namespace {
             TU_ARMA(Int, c) {
                     switch (c.t) {
                         // TODO: These should already have been truncated/reinterpreted, but just in case.
-                        case ::HIR::CoreType::I8:
+                        case HIRCoreType::I8:
                             of << static_cast<int>(static_cast<int8_t>(c.v.truncateI64())); // cast to int, because `int8_t` is printed as a `char`
                             break;
-                        case ::HIR::CoreType::I16:
+                        case HIRCoreType::I16:
                             of << static_cast<int16_t>(c.v.truncateI64());
                             break;
-                        case ::HIR::CoreType::I32:
+                        case HIRCoreType::I32:
                             of << static_cast<int32_t>(c.v.truncateI64());
                             break;
-                        case ::HIR::CoreType::I64:
-                        case ::HIR::CoreType::Isize:
+                        case HIRCoreType::I64:
+                        case HIRCoreType::Isize:
                             if (c.v.truncateI64() == INT64_MIN) {
                                 of << "INT64_MIN";
                             } else if (c.v.truncateI64() == INT64_MAX) {
@@ -7642,7 +7642,7 @@ namespace {
                                 of << "ll";
                             }
                             break;
-                        case ::HIR::CoreType::I128:
+                        case HIRCoreType::I128:
                             if (options.emulatedI128) {
                                 of << "make128s_raw(" << c.v.getInner().getHi() << "ull, " << c.v.getInner().getLo() << "ull)";
                             } else if (c.v.isI64() && c.v.truncateI64() != INT64_MIN) {
@@ -7660,20 +7660,20 @@ namespace {
                 }
                 TU_ARMA(Uint, c) {
                     switch (c.t) {
-                        case ::HIR::CoreType::U8:
+                        case HIRCoreType::U8:
                             of << ::std::hex << "0x" << (c.v.truncateU64() & 0xFF) << ::std::dec;
                             break;
-                        case ::HIR::CoreType::U16:
+                        case HIRCoreType::U16:
                             of << ::std::hex << "0x" << (c.v.truncateU64() & 0xFFFF) << ::std::dec;
                             break;
-                        case ::HIR::CoreType::U32:
+                        case HIRCoreType::U32:
                             of << ::std::hex << "0x" << (c.v.truncateU64() & 0xFFFFFFFF) << ::std::dec;
                             break;
-                        case ::HIR::CoreType::U64:
-                        case ::HIR::CoreType::Usize:
+                        case HIRCoreType::U64:
+                        case HIRCoreType::Usize:
                             of << ::std::hex << "0x" << c.v.truncateU64() << "ull" << ::std::dec;
                             break;
-                        case ::HIR::CoreType::U128:
+                        case HIRCoreType::U128:
                             if (options.emulatedI128) {
                                 of << "make128_raw(" << c.v.getHi() << "ull, " << c.v.getLo() << "ull)";
                             } else if (c.v.isU64()) {
@@ -7683,7 +7683,7 @@ namespace {
                                 of << std::hex << "( ((uint128_t)0x" << c.v.getHi() << "ull << 64) | (uint128_t)0x" << c.v.getLo() << "ull)" << std::dec;
                             }
                             break;
-                        case ::HIR::CoreType::Char:
+                        case HIRCoreType::Char:
                             assert(c.v <= 0x10FFFF);
                             if (c.v < 256) {
                                 of << c.v;
@@ -7760,7 +7760,7 @@ namespace {
                 }
                 TU_ARMA(Constant, e) {
                     if (typeBytes && e.is_Bytes()) {
-                        ::HIR::TypeRef tmp;
+                        HIRTypeRef tmp;
                         of << "static_cast<";
                         emitCtype(mirRes->getParamType(tmp, p));
                         of << ">(";
@@ -7774,7 +7774,7 @@ namespace {
         }
 
         void emitTraitMetadataParam(const MIRTypeResolve& localMirRes, const MIRParam& param) {
-            ::HIR::TypeRef tmp;
+            HIRTypeRef tmp;
             const auto& ty = localMirRes.getParamType(tmp, param);
             emitParam(param);
             if (const auto* te = ty->opt_Path()) {
@@ -7784,11 +7784,11 @@ namespace {
             }
         }
 
-        void emitCtype(const ::HIR::TypeData* ty) {
+        void emitCtype(const HIRTypeData* ty) {
             emitCtype(ty, FMT_CB(_, ));
         }
 
-        void emitCtype(const ::HIR::TypeData* ty, ::FmtLambda inner, bool isExternC = false) {
+        void emitCtype(const HIRTypeData* ty, ::FmtLambda inner, bool isExternC = false) {
             TU_MATCH_HDRA( (*ty), {)
             TU_ARMA(Infer, te) {
                     of << "@" << ty << "@" << inner;
@@ -7798,63 +7798,63 @@ namespace {
                 }
                 TU_ARMA(Primitive, te) {
                     switch (te) {
-                        case ::HIR::CoreType::Usize:
+                        case HIRCoreType::Usize:
                             of << "uintptr_t";
                             break;
-                        case ::HIR::CoreType::Isize:
+                        case HIRCoreType::Isize:
                             of << "intptr_t";
                             break;
-                        case ::HIR::CoreType::U8:
+                        case HIRCoreType::U8:
                             of << "uint8_t";
                             break;
-                        case ::HIR::CoreType::I8:
+                        case HIRCoreType::I8:
                             of << "int8_t";
                             break;
-                        case ::HIR::CoreType::U16:
+                        case HIRCoreType::U16:
                             of << "uint16_t";
                             break;
-                        case ::HIR::CoreType::I16:
+                        case HIRCoreType::I16:
                             of << "int16_t";
                             break;
-                        case ::HIR::CoreType::U32:
+                        case HIRCoreType::U32:
                             of << "uint32_t";
                             break;
-                        case ::HIR::CoreType::I32:
+                        case HIRCoreType::I32:
                             of << "int32_t";
                             break;
-                        case ::HIR::CoreType::U64:
+                        case HIRCoreType::U64:
                             of << "uint64_t";
                             break;
-                        case ::HIR::CoreType::I64:
+                        case HIRCoreType::I64:
                             of << "int64_t";
                             break;
-                        case ::HIR::CoreType::U128:
+                        case HIRCoreType::U128:
                             of << "uint128_t";
                             break;
-                        case ::HIR::CoreType::I128:
+                        case HIRCoreType::I128:
                             of << "int128_t";
                             break;
 
-                        case ::HIR::CoreType::F16:
+                        case HIRCoreType::F16:
                             of << "f16";
                             break;
-                        case ::HIR::CoreType::F32:
+                        case HIRCoreType::F32:
                             of << "float";
                             break;
-                        case ::HIR::CoreType::F64:
+                        case HIRCoreType::F64:
                             of << "double";
                             break;
-                        case ::HIR::CoreType::F128:
+                        case HIRCoreType::F128:
                             of << "f128";
                             break;
 
-                        case ::HIR::CoreType::Bool:
+                        case HIRCoreType::Bool:
                             of << "RUST_BOOL";
                             break;
-                        case ::HIR::CoreType::Char:
+                        case HIRCoreType::Char:
                             of << "RUST_CHAR";
                             break;
-                        case ::HIR::CoreType::Str:
+                        case HIRCoreType::Str:
                             MIR_BUG(*mirRes, "Raw str");
                     }
                     of << " " << inner;
@@ -7927,14 +7927,14 @@ namespace {
                     of << "t_" << TransMangle(ty) << " " << inner;
                 }
                 break;
-                case ::HIR::TypeData::TAG_NodeType:
+                case HIRTypeData::TAG_NodeType:
                     MIR_BUG(*mirRes, "NodeType during trans - " << ty);
                     break;
             }
         }
 
-        ::HIR::TypeRef getInnerUnsizedType(const ::HIR::TypeData* ty) {
-            if (ty == ::HIR::CoreType::Str || ty->is_Slice()) {
+        HIRTypeRef getInnerUnsizedType(const HIRTypeData* ty) {
+            if (ty == HIRCoreType::Str || ty->is_Slice()) {
                 return ty;
             } else if (ty->is_TraitObject()) {
                 return ty;
@@ -7945,11 +7945,11 @@ namespace {
                     throw "";
                     TU_ARMA(Struct, tpb) {
                         switch (tpb->structMarkings.dstType) {
-                            case ::HIR::StructMarkings::DstType::None:
-                                return ::HIR::TypeRef();
-                            case ::HIR::StructMarkings::DstType::Slice:
-                            case ::HIR::StructMarkings::DstType::TraitObject:
-                            case ::HIR::StructMarkings::DstType::Possible: {
+                            case HIRStructMarkings::DstType::None:
+                                return HIRTypeRef();
+                            case HIRStructMarkings::DstType::Slice:
+                            case HIRStructMarkings::DstType::TraitObject:
+                            case HIRStructMarkings::DstType::Possible: {
                                 // TODO: How to figure out? Lazy way is to check the monomorpised type of the last field (structs only)
                                 const auto& path = ty->as_Path().path.mData.as_Generic();
                                 const auto& str = *ty->as_Path().binding.as_Struct();
@@ -7966,19 +7966,19 @@ namespace {
                         }
                     }
                     TU_ARMA(Union, tpb) {
-                        return ::HIR::TypeRef();
+                        return HIRTypeRef();
                     }
                     TU_ARMA(Enum, tpb) {
-                        return ::HIR::TypeRef();
+                        return HIRTypeRef();
                     }
                 }
                 throw "";
             } else {
-                return ::HIR::TypeRef();
+                return HIRTypeRef();
             }
         }
 
-        unsigned getPackingMaxAlign(const ::HIR::TypeData* ty) const {
+        unsigned getPackingMaxAlign(const HIRTypeData* ty) const {
             if (ty->is_Path() && ty->as_Path().binding.is_Struct()) {
                 return ty->as_Path().binding.as_Struct()->maxFieldAlignment;
             }
@@ -7997,7 +7997,7 @@ namespace {
             of << ".META)->align";
         }
 
-        void emitTraitObjectDstTailAlign(const ::HIR::TypeData* outerTy, const ::HIR::TypeData* tailTy, const MIRParam& value) {
+        void emitTraitObjectDstTailAlign(const HIRTypeData* outerTy, const HIRTypeData* tailTy, const MIRParam& value) {
             const auto maxAlign = getPackingMaxAlign(outerTy);
             if (maxAlign != 0) {
                 of << "mrustc_min(";
@@ -8008,7 +8008,7 @@ namespace {
             }
         }
 
-        void emitTraitObjectDstAlign(const ::HIR::TypeData* ty, const MIRParam& value) {
+        void emitTraitObjectDstAlign(const HIRTypeData* ty, const MIRParam& value) {
             if (ty->is_TraitObject()) {
                 emitTraitObjectVtableAlign(value);
                 return;
@@ -8021,7 +8021,7 @@ namespace {
             of << ")";
         }
 
-        void emitTraitObjectDstSize(const ::HIR::TypeData* ty, const MIRParam& value) {
+        void emitTraitObjectDstSize(const HIRTypeData* ty, const MIRParam& value) {
             if (ty->is_TraitObject()) {
                 emitTraitObjectVtableSize(value);
                 return;
@@ -8039,7 +8039,7 @@ namespace {
             of << ")";
         }
 
-        void emitTraitObjectDstFieldOffset(const ::HIR::TypeData* ty, size_t fieldIdx, const MIRParam& value) {
+        void emitTraitObjectDstFieldOffset(const HIRTypeData* ty, size_t fieldIdx, const MIRParam& value) {
             const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
             MIR_ASSERT(*mirRes, repr && fieldIdx < repr->fields.size(), "Invalid DST field " << fieldIdx << " on " << ty);
             const auto& field = repr->fields[fieldIdx];
@@ -8050,11 +8050,11 @@ namespace {
             of << ")";
         }
 
-        MetadataType metadataType(const ::HIR::TypeData* ty) const {
+        MetadataType metadataType(const HIRTypeData* ty) const {
             return mResolve.metadataType(mirRes ? mirRes->sp : sp, ty);
         }
 
-        void emitCtypePtr(const ::HIR::TypeData* innerTy, ::FmtLambda inner) {
+        void emitCtypePtr(const HIRTypeData* innerTy, ::FmtLambda inner) {
             //if( inner_ty->is_Array() ) {
             //    emit_ctype(inner_ty, FMT_CB(ss, ss << "(*" << inner << ")";));
             //}
@@ -8077,7 +8077,7 @@ namespace {
             }
         }
 
-        bool isDst(const ::HIR::TypeData* ty) const {
+        bool isDst(const HIRTypeData* ty) const {
             switch (this->metadataType(ty)) {
                 case MetadataType::Unknown:
                     BUG(sp, ty << " unknown metadata type");
@@ -8095,6 +8095,6 @@ namespace {
     Span CodeGeneratorC::sp;
 }
 
-::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorC(const ::HIR::Crate& crate, const ::std::string& outfile) {
+::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorC(const HIRCrate& crate, const ::std::string& outfile) {
     return ::std::unique_ptr<CodeGenerator>(new CodeGeneratorC(crate, outfile));
 }

@@ -13,31 +13,30 @@ class Monomorphiser;
 class HirSerialiser;
 class HirDeserialiser;
 
-namespace HIR {
-    enum class BoundConstness : uint8_t {
+    enum class HIRBoundConstness : uint8_t {
         Never,
         Always,
         Maybe,
     };
 
 
-    class EncodedLiteralPtr {
+    class HIREncodedLiteralPtr {
         EncodedLiteral* p;
 
     public:
-        ~EncodedLiteralPtr();
+        ~HIREncodedLiteralPtr();
 
-        EncodedLiteralPtr();
+        HIREncodedLiteralPtr();
 
-        EncodedLiteralPtr(EncodedLiteral e);
+        HIREncodedLiteralPtr(EncodedLiteral e);
 
-        EncodedLiteralPtr(EncodedLiteralPtr&& x);
+        HIREncodedLiteralPtr(HIREncodedLiteralPtr&& x);
 
-        EncodedLiteralPtr(const EncodedLiteralPtr& x) = delete;
+        HIREncodedLiteralPtr(const HIREncodedLiteralPtr& x) = delete;
 
-        EncodedLiteralPtr& operator=(EncodedLiteralPtr&& x);
+        HIREncodedLiteralPtr& operator=(HIREncodedLiteralPtr&& x);
 
-        EncodedLiteralPtr& operator=(const EncodedLiteralPtr& x) = delete;
+        HIREncodedLiteralPtr& operator=(const HIREncodedLiteralPtr& x) = delete;
 
         EncodedLiteral& operator*();
 
@@ -47,67 +46,67 @@ namespace HIR {
 
         const EncodedLiteral* operator->() const;
     };
-    struct ConstGenericUnevaluated;
+    struct HIRConstGenericUnevaluated;
     TAGGED_UNION_EX(
-        ConstGeneric,
+        HIRConstGeneric,
         (),
         Infer,
         (
             (Infer,
-             struct InferData { // To be inferred
+             struct HIRInferData { // To be inferred
                  unsigned index;
                  // NOTE: Workaround for VS2014, which can't use initialiser lists when a default is specified
-                 InferData(unsigned index = ~0u)
+                 HIRInferData(unsigned index = ~0u)
                      : index(index)
                  {
                  }
              }),
             // NOTE: This is a `unique_ptr` because it contains two PathParams and a shared (2*3 pointers + 2 pointers)
             // The rest of the variants here are two pointers
-            (Unevaluated, std::unique_ptr<ConstGenericUnevaluated>), // Unevaluated (or evaluation deferred)
+            (Unevaluated, std::unique_ptr<HIRConstGenericUnevaluated>), // Unevaluated (or evaluation deferred)
             //(Unevaluated, std::shared_ptr<HIR::ExprPtr>),   // Unevaluated (or evaluation deferred)
-            (Generic, GenericRef),         // A single generic reference
-            (Evaluated, EncodedLiteralPtr) // A fully known literal
+            (Generic, HIRGenericRef),         // A single generic reference
+            (Evaluated, HIREncodedLiteralPtr) // A fully known literal
         ),
         /*extra_move=*/(),
         /*extra_assign=*/(),
-        /*extra=*/(ConstGeneric clone() const; bool operator==(const ConstGeneric& x) const; bool operator!=(const ConstGeneric& x) const { return !(*this == x); } Ordering ord(const ConstGeneric& x) const;)
+        /*extra=*/(HIRConstGeneric clone() const; bool operator==(const HIRConstGeneric& x) const; bool operator!=(const HIRConstGeneric& x) const { return !(*this == x); } Ordering ord(const HIRConstGeneric& x) const;)
     );
-    ::std::ostream& operator<<(::std::ostream& os, const ConstGeneric& x);
+    ::std::ostream& operator<<(::std::ostream& os, const HIRConstGeneric& x);
 
-    class Trait;
-    class GenericParams;
+    class HIRTrait;
+    class HIRGenericParams;
 
-    ::std::ostream& operator<<(::std::ostream& os, const Compare& x);
+    ::std::ostream& operator<<(::std::ostream& os, const HIRCompare& x);
 
-    Compare& operator&=(Compare& x, const Compare& y);
+    HIRCompare& operator&=(HIRCompare& x, const HIRCompare& y);
 
     /// Simple path - Absolute with no generic parameters
     // TODO: Maybe make this de-duplicated? Not sure about the overheads involved vs the gain - some paths are very common, others are only used once
-    struct SimplePath {
+    struct HIRSimplePath {
         friend HirSerialiser;
         friend HirDeserialiser;
 
     private:
         ThinVector<RcString> members;
 
-        SimplePath(ThinVector<RcString> members);
+        HIRSimplePath(ThinVector<RcString> members);
 
     public:
-        SimplePath();
+        HIRSimplePath();
 
-        SimplePath(RcString crate);
+        HIRSimplePath(RcString crate);
 
-        SimplePath(RcString crate, ::std::vector<RcString> components);
+        HIRSimplePath(RcString crate, ::std::vector<RcString> components);
 
-        SimplePath(RcString crate, ::std::span<RcString> components);
+        HIRSimplePath(RcString crate, ::std::span<RcString> components);
 
-        SimplePath(RcString crate, ::std::span<const RcString> components);
+        HIRSimplePath(RcString crate, ::std::span<const RcString> components);
 
-        SimplePath(RcString crate, ::std::initializer_list<RcString> components);
+        HIRSimplePath(RcString crate, ::std::initializer_list<RcString> components);
 
-        SimplePath clone() const;
-        SimplePath parent() const;
+        HIRSimplePath clone() const;
+        HIRSimplePath parent() const;
 
         const RcString& crateName() const;
 
@@ -117,7 +116,7 @@ namespace HIR {
 
         ::std::vector<RcString> componentsVec() const;
 
-        SimplePath operator+(const RcString& s) const;
+        HIRSimplePath operator+(const RcString& s) const;
 
         void operator+=(const RcString& s);
         RcString popComponent();
@@ -125,43 +124,43 @@ namespace HIR {
         void updateCrateName(RcString v);
         void updateLastComponent(RcString v);
 
-        bool operator==(const SimplePath& x) const {
+        bool operator==(const HIRSimplePath& x) const {
             return ord(x) == OrdEqual;
         }
 
-        bool operator!=(const SimplePath& x) const {
+        bool operator!=(const HIRSimplePath& x) const {
             return !(*this == x);
         }
 
-        bool operator<(const SimplePath& x) const {
+        bool operator<(const HIRSimplePath& x) const {
             return ord(x) == OrdLess;
         }
 
-        Ordering ord(const SimplePath& x) const {
+        Ordering ord(const HIRSimplePath& x) const {
             return ::ord(members, x.members);
         }
 
-        bool startsWith(const SimplePath& x, bool skipLast = false) const;
-        friend ::std::ostream& operator<<(::std::ostream& os, const SimplePath& x);
+        bool startsWith(const HIRSimplePath& x, bool skipLast = false) const;
+        friend ::std::ostream& operator<<(::std::ostream& os, const HIRSimplePath& x);
     };
 
-    struct PathParams {
-        ThinVector<LifetimeRef> mLifetimes;
-        ThinVector<TypeRef> types;
-        ThinVector<HIR::ConstGeneric> values;
+    struct HIRPathParams {
+        ThinVector<HIRLifetimeRef> mLifetimes;
+        ThinVector<HIRTypeRef> types;
+        ThinVector<HIRConstGeneric> values;
 
-        PathParams();
-        PathParams(::HIR::TypeRef);
-        PathParams(::HIR::LifetimeRef);
-        PathParams clone() const;
-        PathParams(const PathParams&) = delete;
-        PathParams& operator=(const PathParams&) = delete;
-        PathParams(PathParams&&) = default;
-        PathParams& operator=(PathParams&&) = default;
+        HIRPathParams();
+        HIRPathParams(HIRTypeRef);
+        HIRPathParams(HIRLifetimeRef);
+        HIRPathParams clone() const;
+        HIRPathParams(const HIRPathParams&) = delete;
+        HIRPathParams& operator=(const HIRPathParams&) = delete;
+        HIRPathParams(HIRPathParams&&) = default;
+        HIRPathParams& operator=(HIRPathParams&&) = default;
 
-        Compare compareWithPlaceholders(const Span& sp, const PathParams& x, tCbResolveType resolvePlaceholder) const;
-        Compare matchTestGenericsFuzz(const Span& sp, const PathParams& x, tCbResolveType resolvePlaceholder, ::HIR::MatchGenerics& match) const;
-        bool equalsIgnoringRegions(const PathParams& x) const;
+        HIRCompare compareWithPlaceholders(const Span& sp, const HIRPathParams& x, tCbResolveType resolvePlaceholder) const;
+        HIRCompare matchTestGenericsFuzz(const Span& sp, const HIRPathParams& x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& match) const;
+        bool equalsIgnoringRegions(const HIRPathParams& x) const;
 
         /// Indicates that params exist (and thus the target requires monomorphisation)
         /// - Ignores lifetime params
@@ -169,62 +168,62 @@ namespace HIR {
             return !types.empty() || !values.empty();
         }
 
-        bool operator==(const PathParams& x) const {
+        bool operator==(const HIRPathParams& x) const {
             return ord(x) == OrdEqual;
         }
 
-        bool operator!=(const PathParams& x) const {
+        bool operator!=(const HIRPathParams& x) const {
             return ord(x) != OrdEqual;
         }
 
-        bool operator<(const PathParams& x) const {
+        bool operator<(const HIRPathParams& x) const {
             return ord(x) == OrdLess;
         }
 
-        Ordering ord(const PathParams& x) const;
+        Ordering ord(const HIRPathParams& x) const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const PathParams& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const HIRPathParams& x);
     };
 
     /// Generic path - Simple path with one lot of generic params
-    class GenericPath {
+    class HIRGenericPath {
     public:
-        SimplePath mPath;
-        PathParams mParams;
+        HIRSimplePath mPath;
+        HIRPathParams mParams;
 
-        GenericPath();
-        GenericPath(::HIR::SimplePath sp);
-        GenericPath(::HIR::SimplePath sp, ::HIR::PathParams params);
-        GenericPath(::HIR::GenericParams hrls, ::HIR::SimplePath sp, ::HIR::PathParams params);
+        HIRGenericPath();
+        HIRGenericPath(HIRSimplePath sp);
+        HIRGenericPath(HIRSimplePath sp, HIRPathParams params);
+        HIRGenericPath(HIRGenericParams hrls, HIRSimplePath sp, HIRPathParams params);
 
-        GenericPath clone() const;
-        Compare compareWithPlaceholders(const Span& sp, const GenericPath& x, tCbResolveType resolvePlaceholder) const;
-        bool equalsIgnoringRegions(const GenericPath& x) const;
+        HIRGenericPath clone() const;
+        HIRCompare compareWithPlaceholders(const Span& sp, const HIRGenericPath& x, tCbResolveType resolvePlaceholder) const;
+        bool equalsIgnoringRegions(const HIRGenericPath& x) const;
 
-        bool operator==(const GenericPath& x) const {
+        bool operator==(const HIRGenericPath& x) const {
             return ord(x) == OrdEqual;
         }
 
-        bool operator!=(const GenericPath& x) const {
+        bool operator!=(const HIRGenericPath& x) const {
             return ord(x) != OrdEqual;
         }
 
-        bool operator<(const GenericPath& x) const {
+        bool operator<(const HIRGenericPath& x) const {
             return ord(x) == OrdLess;
         }
 
-        Ordering ord(const GenericPath& x) const;
+        Ordering ord(const HIRGenericPath& x) const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const GenericPath& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const HIRGenericPath& x);
     };
 
-    class TraitPath {
+    class HIRTraitPath {
     public:
         // TODO: Each bound should list its origin trait
         struct AtyEqual {
-            ::HIR::GenericPath sourceTrait;
-            ::HIR::PathParams atyParams;
-            ::HIR::TypeRef type;
+            HIRGenericPath sourceTrait;
+            HIRPathParams atyParams;
+            HIRTypeRef type;
 
             Ordering ord(const AtyEqual& x) const;
 
@@ -237,9 +236,9 @@ namespace HIR {
 
         /// Associated type trait bounds (`Type: Trait`)
         struct AtyBound {
-            ::HIR::GenericPath sourceTrait;
-            ::HIR::PathParams atyParams;
-            std::vector<::HIR::TraitPath> traits;
+            HIRGenericPath sourceTrait;
+            HIRPathParams atyParams;
+            std::vector<HIRTraitPath> traits;
 
             Ordering ord(const AtyBound& x) const;
 
@@ -248,46 +247,46 @@ namespace HIR {
 
         typedef ::std::map<RcString, AtyEqual> assocListT;
 
-        ::std::unique_ptr<GenericParams> hrtbs;
-        GenericPath mPath;
+        ::std::unique_ptr<HIRGenericParams> hrtbs;
+        HIRGenericPath mPath;
         assocListT typeBounds;
         ::std::map<RcString, AtyBound> traitBounds;
-        BoundConstness constness = BoundConstness::Never;
+        HIRBoundConstness constness = HIRBoundConstness::Never;
         // Parenthesised Fn-trait syntax uses function lifetime-elision rules.
         // This is consumed and cleared by ConvertHIR_LifetimeElision.
         bool lifetimeElision = false;
 
-        const ::HIR::Trait* traitPtr;
+        const HIRTrait* traitPtr;
 
-        TraitPath();
-        TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path);
-        TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const ::HIR::Trait* traitPtr = nullptr, BoundConstness constness = BoundConstness::Never);
-        ~TraitPath();
-        TraitPath(TraitPath&&);
-        TraitPath& operator=(TraitPath&&);
+        HIRTraitPath();
+        HIRTraitPath(::std::unique_ptr<HIRGenericParams> hrtbs, HIRGenericPath path);
+        HIRTraitPath(::std::unique_ptr<HIRGenericParams> hrtbs, HIRGenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr = nullptr, HIRBoundConstness constness = HIRBoundConstness::Never);
+        ~HIRTraitPath();
+        HIRTraitPath(HIRTraitPath&&);
+        HIRTraitPath& operator=(HIRTraitPath&&);
 
-        TraitPath clone() const;
-        Compare compareWithPlaceholders(const Span& sp, const TraitPath& x, tCbResolveType resolvePlaceholder) const;
-        bool equalsIgnoringRegions(const TraitPath& x) const;
+        HIRTraitPath clone() const;
+        HIRCompare compareWithPlaceholders(const Span& sp, const HIRTraitPath& x, tCbResolveType resolvePlaceholder) const;
+        bool equalsIgnoringRegions(const HIRTraitPath& x) const;
 
-        bool operator==(const TraitPath& x) const {
+        bool operator==(const HIRTraitPath& x) const {
             return ord(x) == OrdEqual;
         }
 
-        bool operator!=(const TraitPath& x) const {
+        bool operator!=(const HIRTraitPath& x) const {
             return ord(x) != OrdEqual;
         }
 
-        bool operator<(const TraitPath& x) const {
+        bool operator<(const HIRTraitPath& x) const {
             return ord(x) == OrdLess;
         }
 
-        Ordering ord(const TraitPath& x) const;
+        Ordering ord(const HIRTraitPath& x) const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const TraitPath& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const HIRTraitPath& x);
     };
 
-    class Path {
+    class HIRPath {
     public:
         // Two possibilities
         // - UFCS
@@ -295,76 +294,75 @@ namespace HIR {
         TAGGED_UNION(
             Data,
             Generic,
-            (Generic, GenericPath),
+            (Generic, HIRGenericPath),
             (UfcsInherent,
              struct {
-                 TypeRef type;
+                 HIRTypeRef type;
                  RcString item;
-                 PathParams params;
-                 PathParams implParams;
+                 HIRPathParams params;
+                 HIRPathParams implParams;
              }),
             (UfcsKnown,
              struct {
-                 TypeRef type;
-                 GenericPath trait;
+                 HIRTypeRef type;
+                 HIRGenericPath trait;
                  RcString item;
-                 PathParams params;
-                 std::unique_ptr<GenericParams> hrtbs;
+                 HIRPathParams params;
+                 std::unique_ptr<HIRGenericParams> hrtbs;
              }),
             (UfcsUnknown, struct {
-                TypeRef type;
+                HIRTypeRef type;
                 //GenericPath ??;
                 RcString item;
-                PathParams params;
+                HIRPathParams params;
             })
         );
 
         Data mData;
 
-        Path(Data data);
+        HIRPath(Data data);
 
-        Path(GenericPath _);
-        Path(SimplePath _);
+        HIRPath(HIRGenericPath _);
+        HIRPath(HIRSimplePath _);
 
-        Path(TypeRef ty, RcString item, PathParams itemParams = PathParams());
-        Path(TypeRef ty, GenericPath trait, RcString item, PathParams itemParams = PathParams());
-        Path(TypeRef ty, GenericParams hrtbs, GenericPath trait, RcString item, PathParams itemParams = PathParams());
+        HIRPath(HIRTypeRef ty, RcString item, HIRPathParams itemParams = HIRPathParams());
+        HIRPath(HIRTypeRef ty, HIRGenericPath trait, RcString item, HIRPathParams itemParams = HIRPathParams());
+        HIRPath(HIRTypeRef ty, HIRGenericParams hrtbs, HIRGenericPath trait, RcString item, HIRPathParams itemParams = HIRPathParams());
 
-        Path clone() const;
-        Compare compareWithPlaceholders(const Span& sp, const Path& x, tCbResolveType resolvePlaceholder) const;
-        bool equalsIgnoringRegions(const Path& x) const;
+        HIRPath clone() const;
+        HIRCompare compareWithPlaceholders(const Span& sp, const HIRPath& x, tCbResolveType resolvePlaceholder) const;
+        bool equalsIgnoringRegions(const HIRPath& x) const;
 
-        Ordering ord(const Path& x) const;
+        Ordering ord(const HIRPath& x) const;
 
-        bool operator==(const Path& x) const;
+        bool operator==(const HIRPath& x) const;
 
-        bool operator!=(const Path& x) const {
+        bool operator!=(const HIRPath& x) const {
             return !(*this == x);
         }
 
-        bool operator<(const Path& x) const {
+        bool operator<(const HIRPath& x) const {
             return ord(x) == OrdLess;
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const Path& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const HIRPath& x);
     };
 
-    struct ConstGenericUnevaluated {
+    struct HIRConstGenericUnevaluated {
         /// Impl-level parameters to the expression
-        HIR::PathParams paramsImpl;
-        HIR::PathParams paramsItem;
+        HIRPathParams paramsImpl;
+        HIRPathParams paramsItem;
         /// HIR/MIR for this unevaluated parameter
-        std::shared_ptr<HIR::ExprPtr> expr;
+        std::shared_ptr<HIRExprPtr> expr;
 
-        ConstGenericUnevaluated(HIR::ExprPtr ep);
-        ConstGenericUnevaluated clone() const;
-        ConstGenericUnevaluated monomorph(const Span& sp, const Monomorphiser& ms, bool allowInfer = true) const;
-        bool equivalent(const ConstGenericUnevaluated& x) const;
-        Ordering ord(const ConstGenericUnevaluated& x) const;
+        HIRConstGenericUnevaluated(HIRExprPtr ep);
+        HIRConstGenericUnevaluated clone() const;
+        HIRConstGenericUnevaluated monomorph(const Span& sp, const Monomorphiser& ms, bool allowInfer = true) const;
+        bool equivalent(const HIRConstGenericUnevaluated& x) const;
+        Ordering ord(const HIRConstGenericUnevaluated& x) const;
         void fmt(::std::ostream& os) const;
 
     private:
-        ConstGenericUnevaluated();
+        HIRConstGenericUnevaluated();
     };
 
-} // namespace HIR

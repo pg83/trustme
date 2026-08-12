@@ -4,9 +4,7 @@
 #include "hir_hir.h"
 #include "hir_typeck_monomorph.h"
 
-namespace HIR {
-    class TraitImpl;
-}
+    class HIRTraitImpl;
 
 struct ImplRef {
     TAGGED_UNION(
@@ -14,26 +12,26 @@ struct ImplRef {
         TraitImpl,
         (TraitImpl,
          struct {
-             HIR::PathParams implParams;
-             const ::HIR::Trait* traitPtr;
-             const ::HIR::SimplePath* traitPath;
-             const ::HIR::TraitImpl* impl;
-             mutable ::HIR::TypeRef selfCache;
+             HIRPathParams implParams;
+             const HIRTrait* traitPtr;
+             const HIRSimplePath* traitPath;
+             const HIRTraitImpl* impl;
+             mutable HIRTypeRef selfCache;
          }),
         (BoundedPtr,
          struct {
-             ::HIR::PathParams hrls;
-             const ::HIR::TypeData* type;
-             const ::HIR::PathParams* traitArgs;
-             const ::HIR::TraitPath::assocListT* assoc;
-             ::HIR::BoundConstness constness;
+             HIRPathParams hrls;
+             const HIRTypeData* type;
+             const HIRPathParams* traitArgs;
+             const HIRTraitPath::assocListT* assoc;
+             HIRBoundConstness constness;
          }),
         (Bounded, struct {
-            ::HIR::PathParams hrls;
-            ::HIR::TypeRef type;
-            ::HIR::PathParams traitArgs;
-            ::HIR::TraitPath::assocListT assoc;
-            ::HIR::BoundConstness constness;
+            HIRPathParams hrls;
+            HIRTypeRef type;
+            HIRPathParams traitArgs;
+            HIRTraitPath::assocListT assoc;
+            HIRBoundConstness constness;
         })
     );
 
@@ -42,15 +40,15 @@ struct ImplRef {
 
     ImplRef();
 
-    ImplRef(HIR::PathParams implParams, const HIR::Trait& traitRef, const ::HIR::SimplePath& trait, const ::HIR::TraitImpl& impl);
+    ImplRef(HIRPathParams implParams, const HIRTrait& traitRef, const HIRSimplePath& trait, const HIRTraitImpl& impl);
 
-    ImplRef(const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assocListT* assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
+    ImplRef(const HIRTypeData* type, const HIRPathParams* args, const HIRTraitPath::assocListT* assoc, HIRBoundConstness constness = HIRBoundConstness::Never);
 
-    ImplRef(::HIR::PathParams hrls, const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assocListT* assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
+    ImplRef(HIRPathParams hrls, const HIRTypeData* type, const HIRPathParams* args, const HIRTraitPath::assocListT* assoc, HIRBoundConstness constness = HIRBoundConstness::Never);
 
-    ImplRef(::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assocListT assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
+    ImplRef(HIRTypeRef type, HIRPathParams args, HIRTraitPath::assocListT assoc, HIRBoundConstness constness = HIRBoundConstness::Never);
 
-    ImplRef(::HIR::PathParams hrls, ::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assocListT assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
+    ImplRef(HIRPathParams hrls, HIRTypeRef type, HIRPathParams args, HIRTraitPath::assocListT assoc, HIRBoundConstness constness = HIRBoundConstness::Never);
 
     bool isValid() const {
         return !(mData.is_TraitImpl() && mData.as_TraitImpl().impl == nullptr);
@@ -64,10 +62,10 @@ struct ImplRef {
         mIsAmbiguousIdentity = true;
     }
 
-    ::HIR::BoundConstness boundConstness() const;
+    HIRBoundConstness boundConstness() const;
 
-    bool moreSpecificThan(HIR::TypeInterner& types, const ImplRef& other) const;
-    bool overlapsWith(const ::HIR::Crate& crate, const ImplRef& other) const;
+    bool moreSpecificThan(HIRTypeInterner& types, const ImplRef& other) const;
+    bool overlapsWith(const HIRCrate& crate, const ImplRef& other) const;
 
     bool hasMagicParams() const;
 
@@ -75,24 +73,24 @@ struct ImplRef {
     class Monomorph: public Monomorphiser {
         friend struct ImplRef;
         const ImplRef::Data::Data_TraitImpl& ti;
-        const ::HIR::PathParams& params;
+        const HIRPathParams& params;
 
-        Monomorph(HIR::TypeInterner& types, const ImplRef::Data::Data_TraitImpl& ti, const ::HIR::PathParams& params);
+        Monomorph(HIRTypeInterner& types, const ImplRef::Data::Data_TraitImpl& ti, const HIRPathParams& params);
 
-        ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& ty) const override;
-        ::HIR::ConstGeneric getValue(const Span& sp, const ::HIR::GenericRef& val) const override;
-        ::HIR::LifetimeRef getLifetime(const Span& sp, const ::HIR::GenericRef& val) const override;
+        HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override;
+        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
+        HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& val) const override;
     };
 
-    Monomorph getCbMonomorphTraitimpl(HIR::TypeInterner& types, const Span& sp, const ::HIR::PathParams& params) const;
+    Monomorph getCbMonomorphTraitimpl(HIRTypeInterner& types, const Span& sp, const HIRPathParams& params) const;
 
-    ::HIR::TypeRef getImplType(HIR::TypeInterner& types) const;
-    ::HIR::PathParams getTraitParams(HIR::TypeInterner& types) const;
+    HIRTypeRef getImplType(HIRTypeInterner& types) const;
+    HIRPathParams getTraitParams(HIRTypeInterner& types) const;
 
-    ::HIR::TypeRef getTraitTyParam(HIR::TypeInterner& types, unsigned int) const;
+    HIRTypeRef getTraitTyParam(HIRTypeInterner& types, unsigned int) const;
 
     bool typeIsSpecialisable(const char* name) const;
-    ::HIR::TypeRef getType(HIR::TypeInterner& types, const char* name, const HIR::PathParams& params) const;
+    HIRTypeRef getType(HIRTypeInterner& types, const char* name, const HIRPathParams& params) const;
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ImplRef& x);
 };

@@ -1,30 +1,30 @@
 #include "hir_typeck_monomorph.h"
 
-Monomorphiser::Monomorphiser(HIR::TypeInterner& types)
+Monomorphiser::Monomorphiser(HIRTypeInterner& types)
     : types(types)
     , constevalCrate(nullptr)
     , constevalPath("") {
 }
-void Monomorphiser::setConstevalState(const HIR::Crate& crate, HIR::ItemPath ip) {
+void Monomorphiser::setConstevalState(const HIRCrate& crate, HIRItemPath ip) {
     this->constevalCrate = &crate;
     this->constevalPath = ip;
 }
-const ::HIR::TypeData* Monomorphiser::maybeMonomorphType(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* ty, bool allowInfer) const {
+const HIRTypeData* Monomorphiser::maybeMonomorphType(const Span& sp, HIRTypeRef& tmp, const HIRTypeData* ty, bool allowInfer) const {
     if (monomorphiseTypeNeeded(ty)) {
         return tmp = monomorphType(sp, ty, allowInfer);
     } else {
         return ty;
     }
 }
-MonomorphiserPP::MonomorphiserPP(HIR::TypeInterner& types): Monomorphiser(types) {}
-MonomorphStatePtr::MonomorphStatePtr(HIR::TypeInterner& types)
+MonomorphiserPP::MonomorphiserPP(HIRTypeInterner& types): Monomorphiser(types) {}
+MonomorphStatePtr::MonomorphStatePtr(HIRTypeInterner& types)
     : MonomorphiserPP(types)
     , selfTy(nullptr)
     , ppImpl(nullptr)
     , ppMethod(nullptr)
     , ppHrb(nullptr) {
 }
-MonomorphStatePtr::MonomorphStatePtr(HIR::TypeInterner& types, const ::HIR::TypeData* selfTy, const ::HIR::PathParams* paramsI, const ::HIR::PathParams* paramsM, const ::HIR::PathParams* paramsP, const ::HIR::PathParams* paramsH)
+MonomorphStatePtr::MonomorphStatePtr(HIRTypeInterner& types, const HIRTypeData* selfTy, const HIRPathParams* paramsI, const HIRPathParams* paramsM, const HIRPathParams* paramsP, const HIRPathParams* paramsH)
     : MonomorphiserPP(types)
     , selfTy(selfTy)
     , ppImpl(paramsI)
@@ -45,11 +45,11 @@ MonomorphStatePtr& MonomorphStatePtr::operator=(MonomorphStatePtr&& x) {
     ppHrb = x.ppHrb;
     return *this;
 }
-MonomorphHrlsOnly::MonomorphHrlsOnly(HIR::TypeInterner& types, const ::HIR::PathParams& paramsH)
+MonomorphHrlsOnly::MonomorphHrlsOnly(HIRTypeInterner& types, const HIRPathParams& paramsH)
     : Monomorphiser(types)
     , ppHrb(&paramsH) {
 }
-MonomorphState::MonomorphState(HIR::TypeInterner& types)
+MonomorphState::MonomorphState(HIRTypeInterner& types)
     : MonomorphiserPP(types)
     , selfTy()
     , ppImpl(nullptr)
@@ -74,33 +74,33 @@ MonomorphState MonomorphState::clone() const {
     rv.ppMethod = this->ppMethod;
     return rv;
 }
-void MonomorphState::setImplParams(HIR::PathParams pp) {
+void MonomorphState::setImplParams(HIRPathParams pp) {
     ppImpl = &ppImplData;
     ppImplData = std::move(pp);
 }
 
-::HIR::TypeRef MonomorphHrlsOnly::getType(const Span& sp, const ::HIR::GenericRef& ty) const {
+HIRTypeRef MonomorphHrlsOnly::getType(const Span& sp, const HIRGenericRef& ty) const {
     if (ty.group() == 3) {
         ASSERT_BUG(sp, ty.idx() < ppHrb->types.size(), ty << " out of bounds (" << ppHrb->types.size() << ")");
         return ppHrb->types.at(ty.idx());
     }
     return types.generic(ty.name, ty.binding);
 }
-::HIR::ConstGeneric MonomorphHrlsOnly::getValue(const Span& sp, const ::HIR::GenericRef& val) const {
+HIRConstGeneric MonomorphHrlsOnly::getValue(const Span& sp, const HIRGenericRef& val) const {
     if (val.group() == 3) {
         ASSERT_BUG(sp, val.idx() < ppHrb->values.size(), val << " out of bounds (" << ppHrb->values.size() << ")");
         return ppHrb->values.at(val.idx()).clone();
     }
-    return HIR::ConstGeneric(val);
+    return HIRConstGeneric(val);
 }
-::HIR::LifetimeRef MonomorphHrlsOnly::getLifetime(const Span& sp, const ::HIR::GenericRef& lftRef) const {
+HIRLifetimeRef MonomorphHrlsOnly::getLifetime(const Span& sp, const HIRGenericRef& lftRef) const {
     if (lftRef.group() == 3) {
         // If the HRL batch does not cover this index, pass the lifetime through rather than abort: not reliably in range for nested binders, and erased before codegen.
         if (lftRef.idx() >= ppHrb->mLifetimes.size()) {
             DEBUG("HRL " << lftRef << " out of bounds (" << ppHrb->mLifetimes.size() << ") - passthrough");
-            return ::HIR::LifetimeRef(lftRef.binding);
+            return HIRLifetimeRef(lftRef.binding);
         }
         return ppHrb->mLifetimes.at(lftRef.idx());
     }
-    return ::HIR::LifetimeRef(lftRef.binding);
+    return HIRLifetimeRef(lftRef.binding);
 }

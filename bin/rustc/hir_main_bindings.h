@@ -7,18 +7,16 @@ class RcString;
 
 class ASTCrate;
 
-namespace HIR {
-    class Crate;
-    class TypeInterner;
-}
+    class HIRCrate;
+    class HIRTypeInterner;
 
 namespace stl {
     class ObjPool;
 }
 
-extern void HIRDump(::std::ostream& sink, const ::HIR::Crate& crate);
-extern ::HIR::Crate* LowerHIRFromAST(stl::ObjPool* pool, ASTCrate& crate);
-extern void HIRSerialise(const ::std::string& filename, const ::HIR::Crate& crate);
+extern void HIRDump(::std::ostream& sink, const HIRCrate& crate);
+extern HIRCrate* LowerHIRFromAST(stl::ObjPool* pool, ASTCrate& crate);
+extern void HIRSerialise(const ::std::string& filename, const HIRCrate& crate);
 
-extern ::HIR::Crate* HIRDeserialise(stl::ObjPool* pool, ::HIR::TypeInterner& types, const ::std::string& filename);
+extern HIRCrate* HIRDeserialise(stl::ObjPool* pool, HIRTypeInterner& types, const ::std::string& filename);
 extern RcString HIRDeserialiseJustName(const ::std::string& filename);

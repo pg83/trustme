@@ -1,195 +1,195 @@
 #include "hir_expr.h"
 
-::HIR::ExprNode::~ExprNode() {
+HIRExprNode::~HIRExprNode() {
 }
 
-unsigned int ::HIR::ExprNodeBlock::nodeKind() const {
-    return ::HIR::ExprNodeBlock::kind;
+unsigned int HIRExprNodeBlock::nodeKind() const {
+    return HIRExprNodeBlock::kind;
 }
 
-unsigned int ::HIR::ExprNodeConstBlock::nodeKind() const {
-    return ::HIR::ExprNodeConstBlock::kind;
+unsigned int HIRExprNodeConstBlock::nodeKind() const {
+    return HIRExprNodeConstBlock::kind;
 }
 
-unsigned int ::HIR::ExprNodeAsm::nodeKind() const {
-    return ::HIR::ExprNodeAsm::kind;
+unsigned int HIRExprNodeAsm::nodeKind() const {
+    return HIRExprNodeAsm::kind;
 }
 
-unsigned int ::HIR::ExprNodeAsm2::nodeKind() const {
-    return ::HIR::ExprNodeAsm2::kind;
+unsigned int HIRExprNodeAsm2::nodeKind() const {
+    return HIRExprNodeAsm2::kind;
 }
 
-unsigned int ::HIR::ExprNodeReturn::nodeKind() const {
-    return ::HIR::ExprNodeReturn::kind;
+unsigned int HIRExprNodeReturn::nodeKind() const {
+    return HIRExprNodeReturn::kind;
 }
 
-unsigned int ::HIR::ExprNodeYield::nodeKind() const {
-    return ::HIR::ExprNodeYield::kind;
+unsigned int HIRExprNodeYield::nodeKind() const {
+    return HIRExprNodeYield::kind;
 }
 
-unsigned int ::HIR::ExprNodeAWait::nodeKind() const {
-    return ::HIR::ExprNodeAWait::kind;
+unsigned int HIRExprNodeAWait::nodeKind() const {
+    return HIRExprNodeAWait::kind;
 }
 
-unsigned int ::HIR::ExprNodeLoop::nodeKind() const {
-    return ::HIR::ExprNodeLoop::kind;
+unsigned int HIRExprNodeLoop::nodeKind() const {
+    return HIRExprNodeLoop::kind;
 }
 
-unsigned int ::HIR::ExprNodeLoopControl::nodeKind() const {
-    return ::HIR::ExprNodeLoopControl::kind;
+unsigned int HIRExprNodeLoopControl::nodeKind() const {
+    return HIRExprNodeLoopControl::kind;
 }
 
-unsigned int ::HIR::ExprNodeLet::nodeKind() const {
-    return ::HIR::ExprNodeLet::kind;
+unsigned int HIRExprNodeLet::nodeKind() const {
+    return HIRExprNodeLet::kind;
 }
 
-unsigned int ::HIR::ExprNodeMatch::nodeKind() const {
-    return ::HIR::ExprNodeMatch::kind;
+unsigned int HIRExprNodeMatch::nodeKind() const {
+    return HIRExprNodeMatch::kind;
 }
 
-unsigned int ::HIR::ExprNodeAssign::nodeKind() const {
-    return ::HIR::ExprNodeAssign::kind;
+unsigned int HIRExprNodeAssign::nodeKind() const {
+    return HIRExprNodeAssign::kind;
 }
 
-unsigned int ::HIR::ExprNodeBinOp::nodeKind() const {
-    return ::HIR::ExprNodeBinOp::kind;
+unsigned int HIRExprNodeBinOp::nodeKind() const {
+    return HIRExprNodeBinOp::kind;
 }
 
-unsigned int ::HIR::ExprNodeUniOp::nodeKind() const {
-    return ::HIR::ExprNodeUniOp::kind;
+unsigned int HIRExprNodeUniOp::nodeKind() const {
+    return HIRExprNodeUniOp::kind;
 }
 
-unsigned int ::HIR::ExprNodeBorrow::nodeKind() const {
-    return ::HIR::ExprNodeBorrow::kind;
+unsigned int HIRExprNodeBorrow::nodeKind() const {
+    return HIRExprNodeBorrow::kind;
 }
 
-unsigned int ::HIR::ExprNodeRawBorrow::nodeKind() const {
-    return ::HIR::ExprNodeRawBorrow::kind;
+unsigned int HIRExprNodeRawBorrow::nodeKind() const {
+    return HIRExprNodeRawBorrow::kind;
 }
 
-unsigned int ::HIR::ExprNodeCast::nodeKind() const {
-    return ::HIR::ExprNodeCast::kind;
+unsigned int HIRExprNodeCast::nodeKind() const {
+    return HIRExprNodeCast::kind;
 }
 
-unsigned int ::HIR::ExprNodeUnsize::nodeKind() const {
-    return ::HIR::ExprNodeUnsize::kind;
+unsigned int HIRExprNodeUnsize::nodeKind() const {
+    return HIRExprNodeUnsize::kind;
 }
 
-unsigned int ::HIR::ExprNodeIndex::nodeKind() const {
-    return ::HIR::ExprNodeIndex::kind;
+unsigned int HIRExprNodeIndex::nodeKind() const {
+    return HIRExprNodeIndex::kind;
 }
 
-unsigned int ::HIR::ExprNodeDeref::nodeKind() const {
-    return ::HIR::ExprNodeDeref::kind;
+unsigned int HIRExprNodeDeref::nodeKind() const {
+    return HIRExprNodeDeref::kind;
 }
 
-unsigned int ::HIR::ExprNodeEmplace::nodeKind() const {
-    return ::HIR::ExprNodeEmplace::kind;
+unsigned int HIRExprNodeEmplace::nodeKind() const {
+    return HIRExprNodeEmplace::kind;
 }
 
-unsigned int ::HIR::ExprNodeTupleVariant::nodeKind() const {
-    return ::HIR::ExprNodeTupleVariant::kind;
+unsigned int HIRExprNodeTupleVariant::nodeKind() const {
+    return HIRExprNodeTupleVariant::kind;
 }
 
-unsigned int ::HIR::ExprNodeCallPath::nodeKind() const {
-    return ::HIR::ExprNodeCallPath::kind;
+unsigned int HIRExprNodeCallPath::nodeKind() const {
+    return HIRExprNodeCallPath::kind;
 }
 
-unsigned int ::HIR::ExprNodeCallValue::nodeKind() const {
-    return ::HIR::ExprNodeCallValue::kind;
+unsigned int HIRExprNodeCallValue::nodeKind() const {
+    return HIRExprNodeCallValue::kind;
 }
 
-unsigned int ::HIR::ExprNodeCallMethod::nodeKind() const {
-    return ::HIR::ExprNodeCallMethod::kind;
+unsigned int HIRExprNodeCallMethod::nodeKind() const {
+    return HIRExprNodeCallMethod::kind;
 }
 
-unsigned int ::HIR::ExprNodeField::nodeKind() const {
-    return ::HIR::ExprNodeField::kind;
+unsigned int HIRExprNodeField::nodeKind() const {
+    return HIRExprNodeField::kind;
 }
 
-unsigned int ::HIR::ExprNodeLiteral::nodeKind() const {
-    return ::HIR::ExprNodeLiteral::kind;
+unsigned int HIRExprNodeLiteral::nodeKind() const {
+    return HIRExprNodeLiteral::kind;
 }
 
-unsigned int ::HIR::ExprNodeUnitVariant::nodeKind() const {
-    return ::HIR::ExprNodeUnitVariant::kind;
+unsigned int HIRExprNodeUnitVariant::nodeKind() const {
+    return HIRExprNodeUnitVariant::kind;
 }
 
-unsigned int ::HIR::ExprNodePathValue::nodeKind() const {
-    return ::HIR::ExprNodePathValue::kind;
+unsigned int HIRExprNodePathValue::nodeKind() const {
+    return HIRExprNodePathValue::kind;
 }
 
-unsigned int ::HIR::ExprNodeVariable::nodeKind() const {
-    return ::HIR::ExprNodeVariable::kind;
+unsigned int HIRExprNodeVariable::nodeKind() const {
+    return HIRExprNodeVariable::kind;
 }
 
-unsigned int ::HIR::ExprNodeConstParam::nodeKind() const {
-    return ::HIR::ExprNodeConstParam::kind;
+unsigned int HIRExprNodeConstParam::nodeKind() const {
+    return HIRExprNodeConstParam::kind;
 }
 
-unsigned int ::HIR::ExprNodeStructLiteral::nodeKind() const {
-    return ::HIR::ExprNodeStructLiteral::kind;
+unsigned int HIRExprNodeStructLiteral::nodeKind() const {
+    return HIRExprNodeStructLiteral::kind;
 }
 
-unsigned int ::HIR::ExprNodeTuple::nodeKind() const {
-    return ::HIR::ExprNodeTuple::kind;
+unsigned int HIRExprNodeTuple::nodeKind() const {
+    return HIRExprNodeTuple::kind;
 }
 
-unsigned int ::HIR::ExprNodeArrayList::nodeKind() const {
-    return ::HIR::ExprNodeArrayList::kind;
+unsigned int HIRExprNodeArrayList::nodeKind() const {
+    return HIRExprNodeArrayList::kind;
 }
 
-unsigned int ::HIR::ExprNodeArraySized::nodeKind() const {
-    return ::HIR::ExprNodeArraySized::kind;
+unsigned int HIRExprNodeArraySized::nodeKind() const {
+    return HIRExprNodeArraySized::kind;
 }
 
-unsigned int ::HIR::ExprNodeClosure::nodeKind() const {
-    return ::HIR::ExprNodeClosure::kind;
+unsigned int HIRExprNodeClosure::nodeKind() const {
+    return HIRExprNodeClosure::kind;
 }
 
-unsigned int ::HIR::ExprNodeGenerator::nodeKind() const {
-    return ::HIR::ExprNodeGenerator::kind;
+unsigned int HIRExprNodeGenerator::nodeKind() const {
+    return HIRExprNodeGenerator::kind;
 }
 
-unsigned int ::HIR::ExprNodeGeneratorWrapper::nodeKind() const {
-    return ::HIR::ExprNodeGeneratorWrapper::kind;
+unsigned int HIRExprNodeGeneratorWrapper::nodeKind() const {
+    return HIRExprNodeGeneratorWrapper::kind;
 }
 
-unsigned int ::HIR::ExprNodeAsyncBlock::nodeKind() const {
-    return ::HIR::ExprNodeAsyncBlock::kind;
+unsigned int HIRExprNodeAsyncBlock::nodeKind() const {
+    return HIRExprNodeAsyncBlock::kind;
 }
 
 #define DEF_VISIT_H(nt, n)                   \
-    void ::HIR::nt::visit(ExprVisitor& nv) { \
+    void nt::visit(HIRExprVisitor& nv) { \
         nv.visitNode(*this);                 \
         nv.visit(*this);                     \
     }                                        \
-    void ::HIR::ExprVisitorDef::visit(::HIR::nt& n)
+    void HIRExprVisitorDef::visit(nt& n)
 #define DEF_VISIT(nt, n, code) \
     DEF_VISIT_H(nt, n) {       \
         code                   \
     }
 
-const char* ::HIR::ExprNode::typeName() const {
+const char* HIRExprNode::typeName() const {
     return typeid(*this).name();
 }
 
-void ::HIR::ExprVisitor::visitNodePtr(::HIR::ExprNodeP& nodePtr) {
+void HIRExprVisitor::visitNodePtr(HIRExprNodeP& nodePtr) {
     assert(nodePtr);
     nodePtr->visit(*this);
 }
 
-void ::HIR::ExprVisitor::visitNode(::HIR::ExprNode& node) {
+void HIRExprVisitor::visitNode(HIRExprNode& node) {
 }
 
-void ::HIR::ExprVisitorDef::visitNodePtr(::HIR::ExprNodeP& nodePtr) {
+void HIRExprVisitorDef::visitNodePtr(HIRExprNodeP& nodePtr) {
     assert(nodePtr);
     TRACE_FUNCTION_F(&*nodePtr << " " << nodePtr->typeName());
     nodePtr->visit(*this);
     visitType(nodePtr->resType);
 }
 
-DEF_VISIT_H(ExprNodeBlock, node) {
+DEF_VISIT_H(HIRExprNodeBlock, node) {
     TRACE_FUNCTION_F("_Block");
     for (auto& subnode : node.nodes) {
         visitNodePtr(subnode);
@@ -199,12 +199,12 @@ DEF_VISIT_H(ExprNodeBlock, node) {
     }
 }
 
-DEF_VISIT_H(ExprNodeConstBlock, node) {
+DEF_VISIT_H(HIRExprNodeConstBlock, node) {
     TRACE_FUNCTION_F("_ConstBlock");
     visitNodePtr(node.inner);
 }
 
-DEF_VISIT_H(ExprNodeAsm, node) {
+DEF_VISIT_H(HIRExprNodeAsm, node) {
     TRACE_FUNCTION_F("_Asm");
     for (auto& v : node.outputs) {
         visitNodePtr(v.value);
@@ -214,7 +214,7 @@ DEF_VISIT_H(ExprNodeAsm, node) {
     }
 }
 
-DEF_VISIT_H(ExprNodeAsm2, node) {
+DEF_VISIT_H(HIRExprNodeAsm2, node) {
     TRACE_FUNCTION_F("_Asm2");
     for (auto& v : node.mParams) {
         TU_MATCH_HDRA( (v), { )
@@ -222,7 +222,7 @@ DEF_VISIT_H(ExprNodeAsm2, node) {
                 visitNodePtr(e);
             }
             TU_ARMA(Sym, e) {
-                visitPath(::HIR::Visitor::PathContext::VALUE, e);
+                visitPath(HIRVisitor::PathContext::VALUE, e);
             }
             TU_ARMA(RegSingle, e) {
                 visitNodePtr(e.val);
@@ -239,22 +239,22 @@ DEF_VISIT_H(ExprNodeAsm2, node) {
     }
 }
 
-DEF_VISIT_H(ExprNodeReturn, node) {
+DEF_VISIT_H(HIRExprNodeReturn, node) {
     TRACE_FUNCTION_F("_Return");
     visitNodePtr(node.mValue);
 }
 
-DEF_VISIT_H(ExprNodeYield, node) {
+DEF_VISIT_H(HIRExprNodeYield, node) {
     TRACE_FUNCTION_F("_Yield");
     visitNodePtr(node.mValue);
 }
 
-DEF_VISIT_H(ExprNodeAWait, node) {
+DEF_VISIT_H(HIRExprNodeAWait, node) {
     TRACE_FUNCTION_F("_AWait");
     visitNodePtr(node.mValue);
 }
 
-DEF_VISIT_H(ExprNodeLet, node) {
+DEF_VISIT_H(HIRExprNodeLet, node) {
     TRACE_FUNCTION_F("_Let: " << node.pattern);
     // Visit the value FIRST as it's evaluated before the variable is defined
     if (node.mValue) {
@@ -264,19 +264,19 @@ DEF_VISIT_H(ExprNodeLet, node) {
     visitType(node.mType);
 }
 
-DEF_VISIT_H(ExprNodeLoop, node) {
+DEF_VISIT_H(HIRExprNodeLoop, node) {
     TRACE_FUNCTION_F("_Loop");
     visitNodePtr(node.mCode);
 }
 
-DEF_VISIT_H(ExprNodeLoopControl, node) {
+DEF_VISIT_H(HIRExprNodeLoopControl, node) {
     TRACE_FUNCTION_F("_LoopControl");
     if (node.mValue) {
         visitNodePtr(node.mValue);
     }
 }
 
-DEF_VISIT_H(ExprNodeMatch, node) {
+DEF_VISIT_H(HIRExprNodeMatch, node) {
     TRACE_FUNCTION_F("_Match");
     visitNodePtr(node.mValue);
     for (auto& arm : node.arms) {
@@ -291,36 +291,36 @@ DEF_VISIT_H(ExprNodeMatch, node) {
     }
 }
 
-DEF_VISIT(ExprNodeAssign, node, TRACE_FUNCTION_F("_Assign"); visitNodePtr(node.slot); visitNodePtr(node.mValue);)
-DEF_VISIT(ExprNodeBinOp, node, TRACE_FUNCTION_F("_BinOp"); visitNodePtr(node.left); visitNodePtr(node.right);)
-DEF_VISIT(ExprNodeUniOp, node, TRACE_FUNCTION_F("_UniOp"); visitNodePtr(node.mValue);)
-DEF_VISIT(ExprNodeBorrow, node, TRACE_FUNCTION_F("_Borrow"); visitNodePtr(node.mValue);)
-DEF_VISIT(ExprNodeRawBorrow, node, visitNodePtr(node.mValue);)
+DEF_VISIT(HIRExprNodeAssign, node, TRACE_FUNCTION_F("_Assign"); visitNodePtr(node.slot); visitNodePtr(node.mValue);)
+DEF_VISIT(HIRExprNodeBinOp, node, TRACE_FUNCTION_F("_BinOp"); visitNodePtr(node.left); visitNodePtr(node.right);)
+DEF_VISIT(HIRExprNodeUniOp, node, TRACE_FUNCTION_F("_UniOp"); visitNodePtr(node.mValue);)
+DEF_VISIT(HIRExprNodeBorrow, node, TRACE_FUNCTION_F("_Borrow"); visitNodePtr(node.mValue);)
+DEF_VISIT(HIRExprNodeRawBorrow, node, visitNodePtr(node.mValue);)
 
-DEF_VISIT_H(ExprNodeCast, node) {
+DEF_VISIT_H(HIRExprNodeCast, node) {
     TRACE_FUNCTION_F("_Cast " << node.dstType);
     visitType(node.dstType);
     visitNodePtr(node.mValue);
 }
 
-DEF_VISIT_H(ExprNodeUnsize, node) {
+DEF_VISIT_H(HIRExprNodeUnsize, node) {
     TRACE_FUNCTION_F("_Unsize " << node.dstType);
     visitType(node.dstType);
     visitNodePtr(node.mValue);
 }
 
-DEF_VISIT_H(ExprNodeIndex, node) {
+DEF_VISIT_H(HIRExprNodeIndex, node) {
     TRACE_FUNCTION_F("_Index");
     visitNodePtr(node.mValue);
     visitNodePtr(node.index);
 }
 
-DEF_VISIT_H(ExprNodeDeref, node) {
+DEF_VISIT_H(HIRExprNodeDeref, node) {
     TRACE_FUNCTION_F("_Deref");
     visitNodePtr(node.mValue);
 }
 
-DEF_VISIT_H(ExprNodeEmplace, node) {
+DEF_VISIT_H(HIRExprNodeEmplace, node) {
     TRACE_FUNCTION_F("_Emplace");
     if (node.place) {
         visitNodePtr(node.place);
@@ -328,12 +328,12 @@ DEF_VISIT_H(ExprNodeEmplace, node) {
     visitNodePtr(node.mValue);
 }
 
-DEF_VISIT_H(ExprNodeTupleVariant, node) {
+DEF_VISIT_H(HIRExprNodeTupleVariant, node) {
     TRACE_FUNCTION_F("_TupleVariant: " << node.mPath);
-    visitGenericPath(::HIR::Visitor::PathContext::VALUE, node.mPath);
+    visitGenericPath(HIRVisitor::PathContext::VALUE, node.mPath);
 
     for (auto& ty : node.argTypes) {
-        if (ty != HIR::TypeRef()) {
+        if (ty != HIRTypeRef()) {
             visitType(ty);
         }
     }
@@ -343,19 +343,19 @@ DEF_VISIT_H(ExprNodeTupleVariant, node) {
     }
 }
 
-DEF_VISIT_H(ExprNodeCallPath, node) {
+DEF_VISIT_H(HIRExprNodeCallPath, node) {
     TRACE_FUNCTION_F("_CallPath: " << node.mPath);
     for (auto& ty : node.cache.argTypes) {
         visitType(ty);
     }
 
-    visitPath(::HIR::Visitor::PathContext::VALUE, node.mPath);
+    visitPath(HIRVisitor::PathContext::VALUE, node.mPath);
     for (auto& arg : node.mArgs) {
         visitNodePtr(arg);
     }
 }
 
-DEF_VISIT_H(ExprNodeCallValue, node) {
+DEF_VISIT_H(HIRExprNodeCallValue, node) {
     TRACE_FUNCTION_F("_CallValue:");
     for (auto& ty : node.argTypes) {
         visitType(ty);
@@ -367,14 +367,14 @@ DEF_VISIT_H(ExprNodeCallValue, node) {
     }
 }
 
-DEF_VISIT_H(ExprNodeCallMethod, node) {
+DEF_VISIT_H(HIRExprNodeCallMethod, node) {
     TRACE_FUNCTION_FR("_CallMethod: " << node.method, "_CallMethod: " << node.method);
     visitPathParams(node.mParams);
     for (auto& ty : node.cache.argTypes) {
         visitType(ty);
     }
 
-    visitPath(::HIR::Visitor::PathContext::VALUE, node.methodPath);
+    visitPath(HIRVisitor::PathContext::VALUE, node.methodPath);
 
     visitNodePtr(node.mValue);
     for (auto& arg : node.mArgs) {
@@ -382,20 +382,20 @@ DEF_VISIT_H(ExprNodeCallMethod, node) {
     }
 }
 
-DEF_VISIT_H(ExprNodeField, node) {
+DEF_VISIT_H(HIRExprNodeField, node) {
     TRACE_FUNCTION_F("_Field: " << node.field);
     visitNodePtr(node.mValue);
 }
 
-DEF_VISIT(ExprNodeLiteral, node, TRACE_FUNCTION_F("_Literal");)
-DEF_VISIT(ExprNodeUnitVariant, node, TRACE_FUNCTION_F("_UnitVariant: " << node.mPath); visitGenericPath(::HIR::Visitor::PathContext::VALUE, node.mPath);)
-DEF_VISIT(ExprNodePathValue, node, TRACE_FUNCTION_F("_PathValue: " << node.mPath); visitPath(::HIR::Visitor::PathContext::VALUE, node.mPath);)
-DEF_VISIT(ExprNodeVariable, node, TRACE_FUNCTION_F("_Variable: #" << node.slot);)
-DEF_VISIT(ExprNodeConstParam, node, TRACE_FUNCTION_F("_ConstParam");)
+DEF_VISIT(HIRExprNodeLiteral, node, TRACE_FUNCTION_F("_Literal");)
+DEF_VISIT(HIRExprNodeUnitVariant, node, TRACE_FUNCTION_F("_UnitVariant: " << node.mPath); visitGenericPath(HIRVisitor::PathContext::VALUE, node.mPath);)
+DEF_VISIT(HIRExprNodePathValue, node, TRACE_FUNCTION_F("_PathValue: " << node.mPath); visitPath(HIRVisitor::PathContext::VALUE, node.mPath);)
+DEF_VISIT(HIRExprNodeVariable, node, TRACE_FUNCTION_F("_Variable: #" << node.slot);)
+DEF_VISIT(HIRExprNodeConstParam, node, TRACE_FUNCTION_F("_ConstParam");)
 
-DEF_VISIT_H(ExprNodeStructLiteral, node) {
+DEF_VISIT_H(HIRExprNodeStructLiteral, node) {
     TRACE_FUNCTION_F("_StructLiteral: " << node.realPath);
-    if (node.mType != HIR::TypeRef()) {
+    if (node.mType != HIRTypeRef()) {
         visitType(node.mType);
     }
     if (node.baseValue) {
@@ -405,30 +405,30 @@ DEF_VISIT_H(ExprNodeStructLiteral, node) {
         visitNodePtr(val.second);
     }
 
-    visitGenericPath(::HIR::Visitor::PathContext::TYPE, node.realPath);
+    visitGenericPath(HIRVisitor::PathContext::TYPE, node.realPath);
 }
 
-DEF_VISIT_H(ExprNodeTuple, node) {
+DEF_VISIT_H(HIRExprNodeTuple, node) {
     TRACE_FUNCTION_F("_Tuple");
     for (auto& val : node.vals) {
         visitNodePtr(val);
     }
 }
 
-DEF_VISIT_H(ExprNodeArrayList, node) {
+DEF_VISIT_H(HIRExprNodeArrayList, node) {
     TRACE_FUNCTION_F("_ArrayList");
     for (auto& val : node.vals) {
         visitNodePtr(val);
     }
 }
 DEF_VISIT(
-    ExprNodeArraySized, node, TRACE_FUNCTION_F("_ArraySized"); visitNodePtr(node.val);
+    HIRExprNodeArraySized, node, TRACE_FUNCTION_F("_ArraySized"); visitNodePtr(node.val);
     //visit_arraysize(node.m_size); // Don't do this, array sizes are not part of the normal expression tree
 )
 
-DEF_VISIT_H(ExprNodeClosure, node) {
+DEF_VISIT_H(HIRExprNodeClosure, node) {
     TRACE_FUNCTION_F("_Closure");
-    if (node.objPath != HIR::GenericPath()) {
+    if (node.objPath != HIRGenericPath()) {
         for (auto& cap : node.captures) {
             visitNodePtr(cap);
         }
@@ -442,8 +442,7 @@ DEF_VISIT_H(ExprNodeClosure, node) {
     }
 }
 
-namespace HIR {
-    ::std::ostream& operator<<(::std::ostream& os, const ExprNodeClosure::AvuCache::Capture& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const HIRExprNodeClosure::AvuCache::Capture& x) {
         os << "#" << x.rootSlot;
         for (const auto& n : x.fields) {
             if (n == RcString()) {
@@ -455,9 +454,8 @@ namespace HIR {
         os << "[" << x.usage << "]";
         return os;
     }
-}
 
-DEF_VISIT_H(ExprNodeGenerator, node) {
+DEF_VISIT_H(HIRExprNodeGenerator, node) {
     TRACE_FUNCTION_F("_Generator");
     //for(auto& arg : node.m_args) {
     //    visit_pattern(node.span(), arg.first);
@@ -475,7 +473,7 @@ DEF_VISIT_H(ExprNodeGenerator, node) {
     }
 }
 
-DEF_VISIT_H(ExprNodeGeneratorWrapper, node) {
+DEF_VISIT_H(HIRExprNodeGeneratorWrapper, node) {
     //for(auto& arg : node.m_args) {
     //    visit_pattern(node.span(), arg.first);
     //    visit_type(arg.second);
@@ -487,7 +485,7 @@ DEF_VISIT_H(ExprNodeGeneratorWrapper, node) {
     }
 }
 
-DEF_VISIT_H(ExprNodeAsyncBlock, node) {
+DEF_VISIT_H(HIRExprNodeAsyncBlock, node) {
     TRACE_FUNCTION_F("_AsyncBlock");
     if (node.mCode) {
         visitNodePtr(node.mCode);
@@ -499,7 +497,7 @@ DEF_VISIT_H(ExprNodeAsyncBlock, node) {
 #undef DEF_VISIT_H
 
 // TODO: Merge this with the stuff in ::HIR::Visitor
-void ::HIR::ExprVisitorDef::visitPattern(const Span& sp, ::HIR::Pattern& pat) {
+void HIRExprVisitorDef::visitPattern(const Span& sp, HIRPattern& pat) {
     TU_MATCH_HDRA( (pat.mData), {)
     TU_ARMA(Any, e) {
         }
@@ -524,10 +522,10 @@ void ::HIR::ExprVisitorDef::visitPattern(const Span& sp, ::HIR::Pattern& pat) {
         }
         TU_ARMA(PathValue, e) {
             // Nothing.
-            this->visitPath(HIR::Visitor::PathContext::VALUE, e.path);
+            this->visitPath(HIRVisitor::PathContext::VALUE, e.path);
         }
         TU_ARMA(PathTuple, e) {
-            this->visitPath(HIR::Visitor::PathContext::VALUE, e.path);
+            this->visitPath(HIRVisitor::PathContext::VALUE, e.path);
             for (auto& subpat : e.leading) {
                 this->visitPattern(sp, subpat);
             }
@@ -536,7 +534,7 @@ void ::HIR::ExprVisitorDef::visitPattern(const Span& sp, ::HIR::Pattern& pat) {
             }
         }
         TU_ARMA(PathNamed, e) {
-            this->visitPath(HIR::Visitor::PathContext::TYPE, e.path);
+            this->visitPath(HIRVisitor::PathContext::TYPE, e.path);
             for (auto& fldPat : e.subPatterns) {
                 this->visitPattern(sp, fldPat.second);
             }
@@ -566,9 +564,9 @@ void ::HIR::ExprVisitorDef::visitPattern(const Span& sp, ::HIR::Pattern& pat) {
     }
 }
 
-void ::HIR::ExprVisitorDef::visitType(::HIR::TypeRef& ty) {
+void HIRExprVisitorDef::visitType(HIRTypeRef& ty) {
     auto data = ty->cloneData();
-    TU_MATCH(::HIR::TypeData, (data), (e),
+    TU_MATCH(HIRTypeData, (data), (e),
     (Infer,
         ),
     (Diverge,
@@ -576,14 +574,14 @@ void ::HIR::ExprVisitorDef::visitType(::HIR::TypeRef& ty) {
     (Primitive,
         ),
     (Path,
-        this->visitPath(::HIR::Visitor::PathContext::TYPE, e.path);
+        this->visitPath(HIRVisitor::PathContext::TYPE, e.path);
         ),
     (Generic,
         ),
     (TraitObject,
         this->visitTraitPath(e.mTrait);
         for(auto& trait : e.markers) {
-        this->visitGenericPath(::HIR::Visitor::PathContext::TYPE, trait);
+        this->visitGenericPath(HIRVisitor::PathContext::TYPE, trait);
         }
         ),
     (ErasedType,
@@ -596,7 +594,7 @@ void ::HIR::ExprVisitorDef::visitType(::HIR::TypeRef& ty) {
 }
 
 TU_ARMA(Fcn, ee) {
-    this->visitPath(::HIR::Visitor::PathContext::TYPE, ee.origin);
+    this->visitPath(HIRVisitor::PathContext::TYPE, ee.origin);
 }
 
 TU_ARMA(Alias, ee) {
@@ -621,7 +619,7 @@ TU_ARMA(Alias, ee) {
         this->visitType( e.inner );
         ),
     (NamedFunction,
-        this->visitPath(::HIR::Visitor::PathContext::VALUE, e.path);
+        this->visitPath(HIRVisitor::PathContext::VALUE, e.path);
         ),
     (Function,
         for(auto& t : e.argTypes) {
@@ -635,14 +633,14 @@ TU_ARMA(Alias, ee) {
     ty = types.intern(std::move(data));
         }
 
-        void ::HIR::ExprVisitorDef::visitPathParams(::HIR::PathParams& pp) {
+        void HIRExprVisitorDef::visitPathParams(HIRPathParams& pp) {
             for (auto& ty : pp.types) {
                 visitType(ty);
             }
         }
 
-        void ::HIR::ExprVisitorDef::visitTraitPath(::HIR::TraitPath& p) {
-            this->visitGenericPath(::HIR::Visitor::PathContext::TYPE, p.mPath);
+        void HIRExprVisitorDef::visitTraitPath(HIRTraitPath& p) {
+            this->visitGenericPath(HIRVisitor::PathContext::TYPE, p.mPath);
             for (auto& assoc : p.typeBounds) {
                 this->visitType(assoc.second.type);
             }
@@ -653,69 +651,68 @@ TU_ARMA(Alias, ee) {
             }
         }
 
-        void ::HIR::ExprVisitorDef::visitPath(::HIR::Visitor::PathContext pc, ::HIR::Path& path) {
+        void HIRExprVisitorDef::visitPath(HIRVisitor::PathContext pc, HIRPath& path) {
             TU_MATCHA((path.mData), (e), (Generic, visitGenericPath(pc, e);), (UfcsKnown, visitType(e.type); visitGenericPath(pc, e.trait); visitPathParams(e.params);), (UfcsUnknown, visitType(e.type); visitPathParams(e.params);), (UfcsInherent, visitType(e.type); visitPathParams(e.params); visitPathParams(e.implParams);))
         }
 
-        void ::HIR::ExprVisitorDef::visitGenericPath(::HIR::Visitor::PathContext pc, ::HIR::GenericPath& path) {
+        void HIRExprVisitorDef::visitGenericPath(HIRVisitor::PathContext pc, HIRGenericPath& path) {
             visitPathParams(path.mParams);
         }
 
-        namespace HIR {
 
-            ExprNode::ExprNode(Span sp)
+            HIRExprNode::HIRExprNode(Span sp)
                 : mSpan(mv$(sp))
             {
             }
 
-            ExprNodeBlock::ExprNodeBlock(Span sp)
-                : ExprNode(mv$(sp))
+            HIRExprNodeBlock::HIRExprNodeBlock(Span sp)
+                : HIRExprNode(mv$(sp))
                 , mIsUnsafe(false)
             {
             }
 
-            ExprNodeBlock::ExprNodeBlock(Span sp, bool isUnsafe, ::std::vector<ExprNodeP> nodes, ExprNodeP valueNode)
-                : ExprNode(mv$(sp))
+            HIRExprNodeBlock::HIRExprNodeBlock(Span sp, bool isUnsafe, ::std::vector<HIRExprNodeP> nodes, HIRExprNodeP valueNode)
+                : HIRExprNode(mv$(sp))
                 , mIsUnsafe(isUnsafe)
                 , nodes(mv$(nodes))
                 , valueNode(mv$(valueNode))
             {
             }
 
-            ExprNodeConstBlock::ExprNodeConstBlock(Span sp, ExprNodeP inner)
-                : ExprNode(mv$(sp))
+            HIRExprNodeConstBlock::HIRExprNodeConstBlock(Span sp, HIRExprNodeP inner)
+                : HIRExprNode(mv$(sp))
                 , inner(mv$(inner))
             {
             }
 
-            ExprNodeAsm2::ExprNodeAsm2(Span sp, AsmOptions options, std::vector<AsmLine> lines, std::vector<Param> params)
-                : ExprNode(mv$(sp))
+            HIRExprNodeAsm2::HIRExprNodeAsm2(Span sp, AsmOptions options, std::vector<AsmLine> lines, std::vector<Param> params)
+                : HIRExprNode(mv$(sp))
                 , options(options)
                 , lines(::std::move(lines))
                 , mParams(::std::move(params))
             {
             }
 
-            ExprNodeReturn::ExprNodeReturn(Span sp, ::HIR::ExprNodeP value)
-                : ExprNode(mv$(sp))
+            HIRExprNodeReturn::HIRExprNodeReturn(Span sp, HIRExprNodeP value)
+                : HIRExprNode(mv$(sp))
                 , mValue(mv$(value))
             {
             }
 
-            ExprNodeYield::ExprNodeYield(Span sp, ::HIR::ExprNodeP value)
-                : ExprNode(mv$(sp))
+            HIRExprNodeYield::HIRExprNodeYield(Span sp, HIRExprNodeP value)
+                : HIRExprNode(mv$(sp))
                 , mValue(mv$(value))
             {
             }
 
-            ExprNodeAWait::ExprNodeAWait(Span sp, ::HIR::ExprNodeP value)
-                : ExprNode(mv$(sp))
+            HIRExprNodeAWait::HIRExprNodeAWait(Span sp, HIRExprNodeP value)
+                : HIRExprNode(mv$(sp))
                 , mValue(mv$(value))
             {
             }
 
-            ExprNodeLoop::ExprNodeLoop(Span sp, RcString label, ::HIR::ExprNodeP code, bool requireLabel)
-                : ExprNode(mv$(sp))
+            HIRExprNodeLoop::HIRExprNodeLoop(Span sp, RcString label, HIRExprNodeP code, bool requireLabel)
+                : HIRExprNode(mv$(sp))
                 , label(mv$(label))
                 , mCode(mv$(code))
                 , requireLabel(requireLabel)
@@ -724,8 +721,8 @@ TU_ARMA(Alias, ee) {
 
             // populated by expr_cs__enum.cpp
 
-            ExprNodeLoopControl::ExprNodeLoopControl(Span sp, RcString label, bool cont, ::HIR::ExprNodeP value)
-                : ExprNode(mv$(sp))
+            HIRExprNodeLoopControl::HIRExprNodeLoopControl(Span sp, RcString label, bool cont, HIRExprNodeP value)
+                : HIRExprNode(mv$(sp))
                 , label(mv$(label))
                 , isContinue(cont)
                 , mValue(mv$(value))
@@ -733,8 +730,8 @@ TU_ARMA(Alias, ee) {
             {
             }
 
-            ExprNodeLet::ExprNodeLet(Span sp, ::HIR::Pattern pat, ::HIR::TypeRef ty, ::HIR::ExprNodeP val, bool isSuper)
-                : ExprNode(mv$(sp))
+            HIRExprNodeLet::HIRExprNodeLet(Span sp, HIRPattern pat, HIRTypeRef ty, HIRExprNodeP val, bool isSuper)
+                : HIRExprNode(mv$(sp))
                 , pattern(mv$(pat))
                 , mType(mv$(ty))
                 , mValue(mv$(val))
@@ -742,15 +739,15 @@ TU_ARMA(Alias, ee) {
             {
             }
 
-            ExprNodeMatch::ExprNodeMatch(Span sp, ::HIR::ExprNodeP val, ::std::vector<Arm> arms, bool isLetElse)
-                : ExprNode(mv$(sp))
+            HIRExprNodeMatch::HIRExprNodeMatch(Span sp, HIRExprNodeP val, ::std::vector<Arm> arms, bool isLetElse)
+                : HIRExprNode(mv$(sp))
                 , mValue(mv$(val))
                 , arms(mv$(arms))
                 , isLetElse(isLetElse)
             {
             }
 
-            const char* ExprNodeAssign::opname(Op v) {
+            const char* HIRExprNodeAssign::opname(Op v) {
                 switch (v) {
                     case Op::None:
                         return "";
@@ -780,15 +777,15 @@ TU_ARMA(Alias, ee) {
                 throw "";
             }
 
-            ExprNodeAssign::ExprNodeAssign(Span sp, Op op, ::HIR::ExprNodeP slot, ::HIR::ExprNodeP value)
-                : ExprNode(mv$(sp))
+            HIRExprNodeAssign::HIRExprNodeAssign(Span sp, Op op, HIRExprNodeP slot, HIRExprNodeP value)
+                : HIRExprNode(mv$(sp))
                 , op(op)
                 , slot(mv$(slot))
                 , mValue(mv$(value))
             {
             }
 
-            const char* ExprNodeBinOp::opname(Op v) {
+            const char* HIRExprNodeBinOp::opname(Op v) {
                 switch (v) {
                     case Op::CmpEqu:
                         return "==";
@@ -834,15 +831,15 @@ TU_ARMA(Alias, ee) {
                 return "??";
             }
 
-            ExprNodeBinOp::ExprNodeBinOp(Span sp, Op op, ::HIR::ExprNodeP left, ::HIR::ExprNodeP right)
-                : ExprNode(mv$(sp))
+            HIRExprNodeBinOp::HIRExprNodeBinOp(Span sp, Op op, HIRExprNodeP left, HIRExprNodeP right)
+                : HIRExprNode(mv$(sp))
                 , op(op)
                 , left(mv$(left))
                 , right(mv$(right))
             {
             }
 
-            const char* ExprNodeUniOp::opname(Op v) {
+            const char* HIRExprNodeUniOp::opname(Op v) {
                 switch (v) {
                     case Op::Invert:
                         return "!";
@@ -852,141 +849,141 @@ TU_ARMA(Alias, ee) {
                 throw "";
             }
 
-            ExprNodeUniOp::ExprNodeUniOp(Span sp, Op op, ::HIR::ExprNodeP value)
-                : ExprNode(mv$(sp))
+            HIRExprNodeUniOp::HIRExprNodeUniOp(Span sp, Op op, HIRExprNodeP value)
+                : HIRExprNode(mv$(sp))
                 , op(op)
                 , mValue(mv$(value))
             {
             }
 
-            ExprNodeBorrow::ExprNodeBorrow(Span sp, ::HIR::BorrowType bt, ::HIR::ExprNodeP value)
-                : ExprNode(mv$(sp))
+            HIRExprNodeBorrow::HIRExprNodeBorrow(Span sp, HIRBorrowType bt, HIRExprNodeP value)
+                : HIRExprNode(mv$(sp))
                 , mType(bt)
                 , mValue(mv$(value))
                 , isValidStaticBorrowConstant(false)
             {
             }
 
-            ExprNodeRawBorrow::ExprNodeRawBorrow(Span sp, ::HIR::BorrowType bt, ::HIR::ExprNodeP value)
-                : ExprNode(mv$(sp))
+            HIRExprNodeRawBorrow::HIRExprNodeRawBorrow(Span sp, HIRBorrowType bt, HIRExprNodeP value)
+                : HIRExprNode(mv$(sp))
                 , mType(bt)
                 , mValue(mv$(value))
             {
             }
 
-            ExprNodeCast::ExprNodeCast(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dstType)
-                : ExprNode(mv$(sp))
+            HIRExprNodeCast::HIRExprNodeCast(Span sp, HIRExprNodeP value, HIRTypeRef dstType)
+                : HIRExprNode(mv$(sp))
                 , mValue(mv$(value))
                 , dstType(mv$(dstType))
             {
             }
 
-            ExprNodeUnsize::ExprNodeUnsize(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dstType)
-                : ExprNode(mv$(sp))
+            HIRExprNodeUnsize::HIRExprNodeUnsize(Span sp, HIRExprNodeP value, HIRTypeRef dstType)
+                : HIRExprNode(mv$(sp))
                 , mValue(mv$(value))
                 , dstType(mv$(dstType))
             {
             }
 
-            ExprNodeIndex::ExprNodeIndex(Span sp, ::HIR::ExprNodeP val, ::HIR::ExprNodeP index)
-                : ExprNode(mv$(sp))
+            HIRExprNodeIndex::HIRExprNodeIndex(Span sp, HIRExprNodeP val, HIRExprNodeP index)
+                : HIRExprNode(mv$(sp))
                 , mValue(mv$(val))
                 , index(mv$(index))
             {
             }
 
-            ExprNodeDeref::ExprNodeDeref(Span sp, ::HIR::ExprNodeP val)
-                : ExprNode(mv$(sp))
+            HIRExprNodeDeref::HIRExprNodeDeref(Span sp, HIRExprNodeP val)
+                : HIRExprNode(mv$(sp))
                 , mValue(mv$(val))
                 , traitUsed(TraitUsed::Unknown)
             {
             }
 
-            ExprNodeEmplace::ExprNodeEmplace(Span sp, Type ty, ::HIR::ExprNodeP place, ::HIR::ExprNodeP val)
-                : ExprNode(mv$(sp))
+            HIRExprNodeEmplace::HIRExprNodeEmplace(Span sp, Type ty, HIRExprNodeP place, HIRExprNodeP val)
+                : HIRExprNode(mv$(sp))
                 , mType(ty)
                 , place(mv$(place))
                 , mValue(mv$(val))
             {
             }
 
-            ExprNodeTupleVariant::ExprNodeTupleVariant(Span sp, ::HIR::GenericPath path, bool isStruct, ::std::vector<::HIR::ExprNodeP> args)
-                : ExprNode(mv$(sp))
+            HIRExprNodeTupleVariant::HIRExprNodeTupleVariant(Span sp, HIRGenericPath path, bool isStruct, ::std::vector<HIRExprNodeP> args)
+                : HIRExprNode(mv$(sp))
                 , mPath(mv$(path))
                 , isStruct(isStruct)
                 , mArgs(mv$(args))
             {
             }
 
-            ExprNodeCallPath::ExprNodeCallPath(Span sp, ::HIR::Path path, ::std::vector<::HIR::ExprNodeP> args)
-                : ExprNode(mv$(sp))
+            HIRExprNodeCallPath::HIRExprNodeCallPath(Span sp, HIRPath path, ::std::vector<HIRExprNodeP> args)
+                : HIRExprNode(mv$(sp))
                 , mPath(mv$(path))
                 , mArgs(mv$(args))
             {
             }
 
-            ExprNodeCallValue::ExprNodeCallValue(Span sp, ::HIR::ExprNodeP val, ::std::vector<::HIR::ExprNodeP> args)
-                : ExprNode(mv$(sp))
+            HIRExprNodeCallValue::HIRExprNodeCallValue(Span sp, HIRExprNodeP val, ::std::vector<HIRExprNodeP> args)
+                : HIRExprNode(mv$(sp))
                 , mValue(mv$(val))
                 , mArgs(mv$(args))
             {
             }
 
-            ExprNodeCallMethod::ExprNodeCallMethod(Span sp, ::HIR::ExprNodeP val, RcString methodName, ::HIR::PathParams params, ::std::vector<::HIR::ExprNodeP> args)
-                : ExprNode(mv$(sp))
+            HIRExprNodeCallMethod::HIRExprNodeCallMethod(Span sp, HIRExprNodeP val, RcString methodName, HIRPathParams params, ::std::vector<HIRExprNodeP> args)
+                : HIRExprNode(mv$(sp))
                 , mValue(mv$(val))
                 , method(mv$(methodName))
                 , mParams(mv$(params))
                 , mArgs(mv$(args))
                 ,
 
-                methodPath(::HIR::SimplePath("", {}))
+                methodPath(HIRSimplePath("", {}))
             {
             }
 
-            ExprNodeField::ExprNodeField(Span sp, ::HIR::ExprNodeP val, RcString field)
-                : ExprNode(mv$(sp))
+            HIRExprNodeField::HIRExprNodeField(Span sp, HIRExprNodeP val, RcString field)
+                : HIRExprNode(mv$(sp))
                 , mValue(mv$(val))
                 , field(mv$(field))
             {
             }
 
-            ExprNodeLiteral::ExprNodeLiteral(Span sp, Data data)
-                : ExprNode(mv$(sp))
+            HIRExprNodeLiteral::HIRExprNodeLiteral(Span sp, Data data)
+                : HIRExprNode(mv$(sp))
                 , mData(mv$(data))
             {
             }
 
-            ExprNodeUnitVariant::ExprNodeUnitVariant(Span sp, ::HIR::GenericPath path, bool isStruct)
-                : ExprNode(mv$(sp))
+            HIRExprNodeUnitVariant::HIRExprNodeUnitVariant(Span sp, HIRGenericPath path, bool isStruct)
+                : HIRExprNode(mv$(sp))
                 , mPath(mv$(path))
                 , isStruct(isStruct)
             {
             }
 
-            ExprNodePathValue::ExprNodePathValue(Span sp, ::HIR::Path path, Target target)
-                : ExprNode(mv$(sp))
+            HIRExprNodePathValue::HIRExprNodePathValue(Span sp, HIRPath path, Target target)
+                : HIRExprNode(mv$(sp))
                 , mPath(mv$(path))
                 , target(target)
             {
             }
 
-            ExprNodeVariable::ExprNodeVariable(Span sp, RcString name, unsigned int slot)
-                : ExprNode(mv$(sp))
+            HIRExprNodeVariable::HIRExprNodeVariable(Span sp, RcString name, unsigned int slot)
+                : HIRExprNode(mv$(sp))
                 , mName(mv$(name))
                 , slot(slot)
             {
             }
 
-            ExprNodeConstParam::ExprNodeConstParam(Span sp, RcString name, unsigned int binding)
-                : ExprNode(mv$(sp))
+            HIRExprNodeConstParam::HIRExprNodeConstParam(Span sp, RcString name, unsigned int binding)
+                : HIRExprNode(mv$(sp))
                 , mName(mv$(name))
                 , mBinding(binding)
             {
             }
 
-            ExprNodeStructLiteral::ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool isStruct, ::HIR::ExprNodeP baseValue, tValues values)
-                : ExprNode(mv$(sp))
+            HIRExprNodeStructLiteral::HIRExprNodeStructLiteral(Span sp, HIRTypeRef ty, bool isStruct, HIRExprNodeP baseValue, tValues values)
+                : HIRExprNode(mv$(sp))
                 , mType(mv$(ty))
                 , isStruct(isStruct)
                 , baseValue(mv$(baseValue))
@@ -994,8 +991,8 @@ TU_ARMA(Alias, ee) {
             {
             }
 
-            ExprNodeStructLiteral::ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool isStruct, bool, tValues values)
-                : ExprNode(mv$(sp))
+            HIRExprNodeStructLiteral::HIRExprNodeStructLiteral(Span sp, HIRTypeRef ty, bool isStruct, bool, tValues values)
+                : HIRExprNode(mv$(sp))
                 , mType(mv$(ty))
                 , isStruct(isStruct)
                 , useDefaults(true)
@@ -1003,27 +1000,27 @@ TU_ARMA(Alias, ee) {
             {
             }
 
-            ExprNodeTuple::ExprNodeTuple(Span sp, ::std::vector<::HIR::ExprNodeP> vals)
-                : ExprNode(mv$(sp))
+            HIRExprNodeTuple::HIRExprNodeTuple(Span sp, ::std::vector<HIRExprNodeP> vals)
+                : HIRExprNode(mv$(sp))
                 , vals(mv$(vals))
             {
             }
 
-            ExprNodeArrayList::ExprNodeArrayList(Span sp, ::std::vector<::HIR::ExprNodeP> vals)
-                : ExprNode(mv$(sp))
+            HIRExprNodeArrayList::HIRExprNodeArrayList(Span sp, ::std::vector<HIRExprNodeP> vals)
+                : HIRExprNode(mv$(sp))
                 , vals(mv$(vals))
             {
             }
 
-            ExprNodeArraySized::ExprNodeArraySized(Span sp, ::HIR::ExprNodeP val, ::HIR::ExprPtr size)
-                : ExprNode(mv$(sp))
+            HIRExprNodeArraySized::HIRExprNodeArraySized(Span sp, HIRExprNodeP val, HIRExprPtr size)
+                : HIRExprNode(mv$(sp))
                 , val(mv$(val))
-                , mSize(HIR::ConstGeneric(std::make_unique<HIR::ConstGenericUnevaluated>(mv$(size))))
+                , mSize(HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(mv$(size))))
             {
             }
 
-            ExprNodeClosure::ExprNodeClosure(Span sp, argsT args, ::HIR::TypeRef rv, ::HIR::ExprNodeP code, bool isMove)
-                : ExprNode(mv$(sp))
+            HIRExprNodeClosure::HIRExprNodeClosure(Span sp, argsT args, HIRTypeRef rv, HIRExprNodeP code, bool isMove)
+                : HIRExprNode(mv$(sp))
                 , mArgs(::std::move(args))
                 , returnType(::std::move(rv))
                 , mCode(::std::move(code))
@@ -1031,8 +1028,8 @@ TU_ARMA(Alias, ee) {
             {
             }
 
-            ExprNodeGenerator::ExprNodeGenerator(Span sp, ::HIR::TypeRef rv, ::HIR::TypeRef resumeTy, ::HIR::TypeRef yieldTy, ::HIR::ExprNodeP code, bool isMove, bool isPinned)
-                : ExprNode(mv$(sp))
+            HIRExprNodeGenerator::HIRExprNodeGenerator(Span sp, HIRTypeRef rv, HIRTypeRef resumeTy, HIRTypeRef yieldTy, HIRExprNodeP code, bool isMove, bool isPinned)
+                : HIRExprNode(mv$(sp))
                 , returnType(::std::move(rv))
                 , resumeTy(resumeTy)
                 , yieldTy(yieldTy)
@@ -1042,8 +1039,8 @@ TU_ARMA(Alias, ee) {
             {
             }
 
-            ExprNodeGeneratorWrapper::ExprNodeGeneratorWrapper(Span sp, ::HIR::TypeRef rv, ::HIR::TypeRef yieldTy, ::HIR::ExprNodeP code, bool isFuture)
-                : ExprNode(mv$(sp))
+            HIRExprNodeGeneratorWrapper::HIRExprNodeGeneratorWrapper(Span sp, HIRTypeRef rv, HIRTypeRef yieldTy, HIRExprNodeP code, bool isFuture)
+                : HIRExprNode(mv$(sp))
                 , isFuture(isFuture)
                 , returnType(rv)
                 , yieldTy(yieldTy)
@@ -1051,36 +1048,33 @@ TU_ARMA(Alias, ee) {
             {
             }
 
-            ExprNodeAsyncBlock::ExprNodeAsyncBlock(Span sp, ::HIR::ExprNodeP code, bool isMove)
-                : ExprNode(mv$(sp))
+            HIRExprNodeAsyncBlock::HIRExprNodeAsyncBlock(Span sp, HIRExprNodeP code, bool isMove)
+                : HIRExprNode(mv$(sp))
                 , mCode(std::move(code))
                 , isMove(isMove)
             {
             }
 
-            ExprVisitorDef::ExprVisitorDef(TypeInterner& types)
+            HIRExprVisitorDef::HIRExprVisitorDef(HIRTypeInterner& types)
                 : types(types)
             {
             }
-        }
 
-        namespace HIR {
 
-            ::std::ostream& operator<<(::std::ostream& os, const ValueUsage& x) {
+            ::std::ostream& operator<<(::std::ostream& os, const HIRValueUsage& x) {
                 switch (x) {
-                    case ValueUsage::Unknown:
+                    case HIRValueUsage::Unknown:
                         os << "Unknown";
                         break;
-                    case ValueUsage::Borrow:
+                    case HIRValueUsage::Borrow:
                         os << "Borrow";
                         break;
-                    case ValueUsage::Mutate:
+                    case HIRValueUsage::Mutate:
                         os << "Mutate";
                         break;
-                    case ValueUsage::Move:
+                    case HIRValueUsage::Move:
                         os << "Move";
                         break;
                 }
                 return os;
             }
-        }

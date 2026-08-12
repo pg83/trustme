@@ -153,10 +153,10 @@ struct fieldPathT {
 /// Binding from an expanded pattern
 struct PatternBinding {
     fieldPathT field;
-    const ::HIR::PatternBinding* binding;
+    const HIRPatternBinding* binding;
     std::pair<size_t, size_t> splitSlice;
 
-    PatternBinding(fieldPathT field, const ::HIR::PatternBinding& binding);
+    PatternBinding(fieldPathT field, const HIRPatternBinding& binding);
 
     bool isSplitSlice() const {
         return splitSlice.first != SIZE_MAX;
@@ -175,11 +175,11 @@ class MirBuilder {
 
     const Span& rootSpan;
     const StaticTraitResolve& mResolve;
-    const ::HIR::TypeData* retTy;
-    const ::HIR::Function::argsT& mArgs;
+    const HIRTypeData* retTy;
+    const HIRFunction::argsT& mArgs;
     MIRFunction& output;
 
-    const ::HIR::SimplePath* mLangBox;
+    const HIRSimplePath* mLangBox;
 
     unsigned int currentBlock;
     bool mBlockActive;
@@ -222,7 +222,7 @@ class MirBuilder {
     ::std::vector<unsigned int> scopeStack;
     ScopeHandle mFcnScope;
 
-    typedef std::pair<HIR::PatternBinding::Type, MIRLValue> varAliasT;
+    typedef std::pair<HIRPatternBinding::Type, MIRLValue> varAliasT;
     ::std::vector<varAliasT> variableAliases;
 
     // LValue used only for the condition of `if`
@@ -231,15 +231,15 @@ class MirBuilder {
     MIRLValue ifCondLval;
 
 public:
-    MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* retTy, const ::HIR::Function::argsT& args, MIRFunction& output);
+    MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* retTy, const HIRFunction::argsT& args, MIRFunction& output);
 
     void finalCleanup();
 
-    const ::HIR::SimplePath* langBox() const {
+    const HIRSimplePath* langBox() const {
         return mLangBox;
     }
 
-    const ::HIR::Crate& crate() const {
+    const HIRCrate& crate() const {
         return mResolve.crate;
     }
 
@@ -248,7 +248,7 @@ public:
     }
 
     /// Check if the passed type is Box<T> and returns a pointer to the T type if so, otherwise nullptr
-    const ::HIR::TypeData* isTypeOwnedBox(const ::HIR::TypeData* ty) const;
+    const HIRTypeData* isTypeOwnedBox(const HIRTypeData* ty) const;
 
     class SavedAliases {
         friend class MirBuilder;
@@ -262,15 +262,15 @@ public:
     void restoreAliases(SavedAliases a);
 
     // Variable aliases (used for match guards)
-    void addVariableAlias(const Span& sp, unsigned idx, HIR::PatternBinding::Type ty, MIRLValue lv);
+    void addVariableAlias(const Span& sp, unsigned idx, HIRPatternBinding::Type ty, MIRLValue lv);
 
     const varAliasT* getVariableAlias(const Span& sp, unsigned idx) const;
 
     // - Values
     MIRLValue getVariable(const Span& sp, unsigned idx) const;
 
-    MIRLValue newTemporary(const ::HIR::TypeData* ty);
-    MIRLValue lvalueOrTemp(const Span& sp, const ::HIR::TypeData* ty, MIRRValue val);
+    MIRLValue newTemporary(const HIRTypeData* ty);
+    MIRLValue lvalueOrTemp(const Span& sp, const HIRTypeData* ty, MIRRValue val);
 
     size_t localCount() const {
         return output.locals.size();
@@ -285,9 +285,9 @@ public:
     /// Obtains the result, unwrapping into a LValue (and erroring if not)
     MIRLValue getResultUnwrapLvalue(const Span& sp);
     /// Obtains the result, copying into a temporary if required
-    MIRLValue getResultInLvalue(const Span& sp, const ::HIR::TypeData* ty, bool allowMissingValue = false);
+    MIRLValue getResultInLvalue(const Span& sp, const HIRTypeData* ty, bool allowMissingValue = false);
     /// Obtains a result in a param (or a lvalue)
-    MIRParam getResultInParam(const Span& sp, const ::HIR::TypeData* ty, bool allowMissingValue = false);
+    MIRParam getResultInParam(const Span& sp, const HIRTypeData* ty, bool allowMissingValue = false);
 
     MIRLValue getIfCond() const {
         return ifCondLval.clone();
@@ -449,7 +449,7 @@ private:
     void completeScope(ScopeDef& sd);
 
 public:
-    void withValType(const Span& sp, const MIRLValue& val, ::std::function<void(const ::HIR::TypeData*)> cb, const MIRLValue::Wrapper* stopWrapper = nullptr) const;
+    void withValType(const Span& sp, const MIRLValue& val, ::std::function<void(const HIRTypeData*)> cb, const MIRLValue::Wrapper* stopWrapper = nullptr) const;
     bool lvalueIsCopy(const Span& sp, const MIRLValue& lv) const;
 
     // Obtain the base fat poiner for a dst reference. Errors if it wasn't via a fat pointer
@@ -500,32 +500,32 @@ SaveAndEditVal<T> saveAndEdit(T& dst, typename ::std::remove_reference<T&>::type
     return SaveAndEditVal<T>{dst, mv$(newval)};
 }
 
-using PatternDropOrder = ::HIR::PatternBindingOrder;
+using PatternDropOrder = HIRPatternBindingOrder;
 
 /// Wrapper interfae
-class MirConverter: public ::HIR::ExprVisitor {
+class MirConverter: public HIRExprVisitor {
 public:
     //virtual void destructure_from(const Span& sp, const ::HIR::Pattern& pat, ::MIR::LValue lval, bool allow_refutable=false) = 0;
-    virtual void schedulePatternDrops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
-    virtual void registerPatternVariables(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
-    virtual void scheduleRegisteredPatternDrops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
+    virtual void schedulePatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) = 0;
+    virtual void registerPatternVariables(const Span& sp, const HIRPattern& pat, PatternDropOrder order) = 0;
+    virtual void scheduleRegisteredPatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) = 0;
 
-    virtual void destructureFromList(const Span& sp, const ::HIR::TypeData* ty, MIRLValue lval, const ::std::vector<PatternBinding>& bindings, bool updateStates = true) = 0;
-    virtual MIRLValue getValueForBindingPath(const Span& sp, const ::HIR::TypeData* outerTy, const MIRLValue& outerLval, const PatternBinding& b) = 0;
-    virtual const HIR::TypeData* getBindingType(const Span& sp, unsigned index) const = 0;
+    virtual void destructureFromList(const Span& sp, const HIRTypeData* ty, MIRLValue lval, const ::std::vector<PatternBinding>& bindings, bool updateStates = true) = 0;
+    virtual MIRLValue getValueForBindingPath(const Span& sp, const HIRTypeData* outerTy, const MIRLValue& outerLval, const PatternBinding& b) = 0;
+    virtual const HIRTypeData* getBindingType(const Span& sp, unsigned index) const = 0;
 
     virtual SaveAndEditVal<const ScopeHandle*> disableBorrowExtension() = 0;
 };
 
-extern void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, MIRLValue matchVal, const std::vector<unsigned>& letElseInitializerTemps);
-extern void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const ::HIR::Pattern& pat, MIRLValue val, const ::HIR::ExprNode* elseNode);
+extern void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const std::vector<unsigned>& letElseInitializerTemps);
+extern void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRPattern& pat, MIRLValue val, const HIRExprNode* elseNode);
 
 extern void MIRLowerHIRGetTypeValueForPath(
     const Span& sp,
     MirBuilder& builder,
-    const ::HIR::TypeData* topTy,
+    const HIRTypeData* topTy,
     const MIRLValue& topVal,
     const fieldPathT& fieldPath, // unsigned int field_path_ofs,
-    /*Out ->*/ ::HIR::TypeRef& outTy,
+    /*Out ->*/ HIRTypeRef& outTy,
     MIRLValue& outVal
 );

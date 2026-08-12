@@ -6,58 +6,57 @@
 #include "rc_string.h"
 #include "span.h"
 
-namespace HIR {
 
-    class TypeData;
-    using TypeRef = const TypeData*;
-    class TypeInterner;
+    class HIRTypeData;
+    using HIRTypeRef = const HIRTypeData*;
+    class HIRTypeInterner;
 
-    struct GenericRef;
-    struct LifetimeRef;
-    struct SimplePath;
-    class Path;
-    class ConstGeneric;
-    class GenericParams;
+    struct HIRGenericRef;
+    struct HIRLifetimeRef;
+    struct HIRSimplePath;
+    class HIRPath;
+    class HIRConstGeneric;
+    class HIRGenericParams;
 
-    class ExprPtr;
-    struct ExprNodeClosure;
-    struct ExprNodeGenerator;
-    struct ExprNodeAsyncBlock;
+    class HIRExprPtr;
+    struct HIRExprNodeClosure;
+    struct HIRExprNodeGenerator;
+    struct HIRExprNodeAsyncBlock;
 
-    enum Compare {
+    enum HIRCompare {
         Equal,
         Fuzzy,
         Unequal,
     };
 
-    class ResolvePlaceholders {
+    class HIRResolvePlaceholders {
     public:
-        virtual const ::HIR::TypeData* getType(const Span& sp, const HIR::TypeData* ty) const = 0;
-        virtual const ::HIR::ConstGeneric& getVal(const Span& sp, const HIR::ConstGeneric& v) const = 0;
+        virtual const HIRTypeData* getType(const Span& sp, const HIRTypeData* ty) const = 0;
+        virtual const HIRConstGeneric& getVal(const Span& sp, const HIRConstGeneric& v) const = 0;
     };
 
-    class ResolvePlaceholdersNop: public ResolvePlaceholders {
-        const ::HIR::TypeData* getType(const Span&, const ::HIR::TypeData* ty) const override {
+    class HIRResolvePlaceholdersNop: public HIRResolvePlaceholders {
+        const HIRTypeData* getType(const Span&, const HIRTypeData* ty) const override {
             return ty;
         }
 
-        const ::HIR::ConstGeneric& getVal(const Span&, const ::HIR::ConstGeneric& v) const override {
+        const HIRConstGeneric& getVal(const Span&, const HIRConstGeneric& v) const override {
             return v;
         }
     };
 
-    using tCbResolveType = const ResolvePlaceholders&;
+    using tCbResolveType = const HIRResolvePlaceholders&;
 
-    class TrackHrbStack {
-        mutable std::vector<const HIR::GenericParams*> hrbStack;
+    class HIRTrackHrbStack {
+        mutable std::vector<const HIRGenericParams*> hrbStack;
 
     public:
         class PopOnDrop {
-            friend class TrackHrbStack;
-            std::vector<const HIR::GenericParams*>* v;
+            friend class HIRTrackHrbStack;
+            std::vector<const HIRGenericParams*>* v;
 
             PopOnDrop();
-            explicit PopOnDrop(std::vector<const HIR::GenericParams*>& v);
+            explicit PopOnDrop(std::vector<const HIRGenericParams*>& v);
 
         public:
             ~PopOnDrop();
@@ -66,34 +65,33 @@ namespace HIR {
             PopOnDrop(PopOnDrop&& x);
         };
 
-        PopOnDrop pushHrb(const std::unique_ptr<HIR::GenericParams>& params) const;
-        PopOnDrop pushHrb(const HIR::GenericParams& params) const;
-        const HIR::GenericParams* hasHrb() const {
+        PopOnDrop pushHrb(const std::unique_ptr<HIRGenericParams>& params) const;
+        PopOnDrop pushHrb(const HIRGenericParams& params) const;
+        const HIRGenericParams* hasHrb() const {
             return hrbStack.empty() ? nullptr : hrbStack.back();
         }
     };
 
-    class MatchGenerics: virtual public TrackHrbStack {
+    class HIRMatchGenerics: virtual public HIRTrackHrbStack {
     public:
-        ::HIR::Compare cmpPath(const Span& sp, const ::HIR::Path& tyL, const ::HIR::Path& tyR, tCbResolveType resolveCb);
-        virtual ::HIR::Compare cmpType(const Span& sp, const ::HIR::TypeData* tyL, const ::HIR::TypeData* tyR, tCbResolveType resolveCb);
+        HIRCompare cmpPath(const Span& sp, const HIRPath& tyL, const HIRPath& tyR, tCbResolveType resolveCb);
+        virtual HIRCompare cmpType(const Span& sp, const HIRTypeData* tyL, const HIRTypeData* tyR, tCbResolveType resolveCb);
 
-        virtual ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, tCbResolveType resolveCb) = 0;
-        virtual ::HIR::Compare matchVal(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) = 0;
-        virtual ::HIR::Compare matchLft(const ::HIR::GenericRef&, const ::HIR::LifetimeRef&) {
-            return HIR::Compare::Equal;
+        virtual HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) = 0;
+        virtual HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) = 0;
+        virtual HIRCompare matchLft(const HIRGenericRef&, const HIRLifetimeRef&) {
+            return HIRCompare::Equal;
         }
     };
 
-    enum class InferClass {
+    enum class HIRInferClass {
         None,
         Integer,
         Float,
     };
 
-    enum class CoreType;
-    enum class BorrowType;
-    struct TypeDataFunctionPointer;
-    class TypePathBinding;
+    enum class HIRCoreType;
+    enum class HIRBorrowType;
+    struct HIRTypeDataFunctionPointer;
+    class HIRTypePathBinding;
 
-} // namespace HIR

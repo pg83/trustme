@@ -1,8 +1,7 @@
 #include "hir_expr_state.h"
 
-namespace HIR {
 
-ExprState::ExprState(::HIR::TypeInterner& types, const ::HIR::Module& modPtr, ::HIR::SimplePath modPath)
+HIRExprState::HIRExprState(HIRTypeInterner& types, const HIRModule& modPtr, HIRSimplePath modPath)
     : types(types)
     , modPath(::std::move(modPath))
     , mModule(modPtr)
@@ -10,5 +9,4 @@ ExprState::ExprState(::HIR::TypeInterner& types, const ::HIR::Module& modPtr, ::
     , mItemGenerics(nullptr)
     , currentTraitImpl(nullptr)
     , stage(Stage::Created) {
-}
 }

@@ -1,35 +1,34 @@
 #include "hir_item_path.h"
 
-namespace HIR {
 
-ItemPath::ItemPath(const char* crate)
+HIRItemPath::HIRItemPath(const char* crate)
     : crateName(crate) {
 }
-ItemPath::ItemPath(const ::std::string& crate)
+HIRItemPath::HIRItemPath(const ::std::string& crate)
     : crateName(crate.c_str()) {
 }
-ItemPath::ItemPath(const RcString& crate)
+HIRItemPath::HIRItemPath(const RcString& crate)
     : crateName(crate.c_str()) {
 }
-ItemPath::ItemPath(const ItemPath& p, const char* n)
+HIRItemPath::HIRItemPath(const HIRItemPath& p, const char* n)
     : parent(&p)
     , name(n) {
 }
-ItemPath::ItemPath(const ::HIR::Path& p)
+HIRItemPath::HIRItemPath(const HIRPath& p)
     : wrapped(&p) {
 }
-ItemPath::ItemPath(const ::HIR::TypeData* type)
+HIRItemPath::HIRItemPath(const HIRTypeData* type)
     : ty(type) {
 }
-ItemPath::ItemPath(const ::HIR::TypeData* type, const ::HIR::SimplePath& path, const ::HIR::PathParams& params)
+HIRItemPath::HIRItemPath(const HIRTypeData* type, const HIRSimplePath& path, const HIRPathParams& params)
     : ty(type)
     , trait(&path)
     , traitParams(&params) {
 }
-ItemPath::ItemPath(const ::HIR::SimplePath& path)
+HIRItemPath::HIRItemPath(const HIRSimplePath& path)
     : trait(&path) {
 }
-::HIR::SimplePath ItemPath::getSimplePath() const {
+HIRSimplePath HIRItemPath::getSimplePath() const {
     if (wrapped) {
         assert(wrapped->mData.is_Generic());
         return wrapped->mData.as_Generic().mPath;
@@ -41,10 +40,10 @@ ItemPath::ItemPath(const ::HIR::SimplePath& path)
     } else {
         assert(!name);
         assert(crateName);
-        return ::HIR::SimplePath(RcString::newInterned(crateName));
+        return HIRSimplePath(RcString::newInterned(crateName));
     }
 }
-::HIR::Path ItemPath::getFullPath() const {
+HIRPath HIRItemPath::getFullPath() const {
     if (wrapped) {
         return wrapped->clone();
     }
@@ -57,19 +56,19 @@ ItemPath::ItemPath(const ::HIR::SimplePath& path)
     } else if (parent->trait) {
         assert(parent->ty);
         assert(parent->traitParams);
-        return ::HIR::Path(parent->ty, ::HIR::GenericPath(parent->trait->clone(), parent->traitParams->clone()), RcString::newInterned(name));
+        return HIRPath(parent->ty, HIRGenericPath(parent->trait->clone(), parent->traitParams->clone()), RcString::newInterned(name));
     } else {
         assert(parent->ty);
-        return ::HIR::Path(parent->ty, RcString::newInterned(name));
+        return HIRPath(parent->ty, RcString::newInterned(name));
     }
 }
-const ItemPath& ItemPath::getTopIp() const {
+const HIRItemPath& HIRItemPath::getTopIp() const {
     if (this->parent) {
         return this->parent->getTopIp();
     }
     return *this;
 }
-bool ItemPath::operator==(const ::HIR::SimplePath& sp) const {
+bool HIRItemPath::operator==(const HIRSimplePath& sp) const {
     if (sp.crateName() != "") {
         return false;
     }
@@ -90,11 +89,9 @@ bool ItemPath::operator==(const ::HIR::SimplePath& sp) const {
     }
     return true;
 }
-}
 
-namespace HIR {
 
-::std::ostream& operator<<(::std::ostream& os, const ItemPath& x) {
+::std::ostream& operator<<(::std::ostream& os, const HIRItemPath& x) {
     if (x.wrapped) {
         return os << *x.wrapped;
     }
@@ -118,5 +115,4 @@ namespace HIR {
         os << "::\"" << x.crateName << "\"";
     }
     return os;
-}
 }

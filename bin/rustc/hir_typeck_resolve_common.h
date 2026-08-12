@@ -9,30 +9,30 @@
 #include "range_vec_map.h"
 
 struct TraitResolveCommon {
-    const ::HIR::Crate& crate;
+    const HIRCrate& crate;
 
-    const ::HIR::GenericParams* mImplGenerics;
-    const ::HIR::GenericParams* mItemGenerics;
+    const HIRGenericParams* mImplGenerics;
+    const HIRGenericParams* mItemGenerics;
 
     struct CachedEquality {
-        ::HIR::GenericParams hrbs;
-        ::HIR::TypeRef ty;
+        HIRGenericParams hrbs;
+        HIRTypeRef ty;
     };
 
-    ::std::map<::HIR::TypeRef, CachedEquality> typeEqualities;
+    ::std::map<HIRTypeRef, CachedEquality> typeEqualities;
 
     // A pre-calculated list of trait bounds
     struct CachedBound {
-        HIR::GenericParams hrbs;
-        const HIR::Trait* traitPtr;
-        HIR::TraitPath::assocListT assoc;
-        HIR::BoundConstness constness = HIR::BoundConstness::Never;
+        HIRGenericParams hrbs;
+        const HIRTrait* traitPtr;
+        HIRTraitPath::assocListT assoc;
+        HIRBoundConstness constness = HIRBoundConstness::Never;
     };
 
     struct CachedBoundCmp {
-        typedef std::pair<::HIR::TypeRef, ::HIR::GenericPath> keyT;
-        typedef std::pair<const ::HIR::TypeData*, const ::HIR::GenericPath&> refT;
-        typedef std::pair<const ::HIR::TypeData*, const ::HIR::SimplePath&> refSpT;
+        typedef std::pair<HIRTypeRef, HIRGenericPath> keyT;
+        typedef std::pair<const HIRTypeData*, const HIRGenericPath&> refT;
+        typedef std::pair<const HIRTypeData*, const HIRSimplePath&> refSpT;
 
         Ordering ord(const keyT& a, const keyT& b) const {
             return ::ord(a, b);
@@ -63,51 +63,51 @@ struct TraitResolveCommon {
         }
     };
 
-    typedef RangeVecMap<std::pair<::HIR::TypeRef, ::HIR::GenericPath>, CachedBound, CachedBoundCmp> cachedBoundsT;
+    typedef RangeVecMap<std::pair<HIRTypeRef, HIRGenericPath>, CachedBound, CachedBoundCmp> cachedBoundsT;
     cachedBoundsT traitBounds;
 
-    ::HIR::SimplePath mLangCopy;
-    ::HIR::SimplePath mLangClone; // 1.29
-    ::HIR::SimplePath mLangDrop;
-    ::HIR::SimplePath mLangSized;
-    ::HIR::SimplePath mLangUnsize;
-    ::HIR::SimplePath mLangFn;
-    ::HIR::SimplePath mLangFnMut;
-    ::HIR::SimplePath mLangFnOnce;
-    ::HIR::SimplePath mLangBox;
-    ::HIR::SimplePath mLangPhantomData;
-    ::HIR::SimplePath mLangGenerator;        // 1.39
-    ::HIR::SimplePath mLangDiscriminantKind; // 1.54
-    ::HIR::SimplePath mLangPointee;          // 1.54
-    ::HIR::SimplePath mLangDynMetadata;      // 1.54
-    ::HIR::SimplePath mLangPointeeSized;     // 1.90
-    ::HIR::SimplePath mLangMetaSized;        // 1.90
-    ::HIR::SimplePath mLangDestruct;         // 1.90
-    ::HIR::SimplePath mLangFuture;           // 1.90 (well, added earlier)
+    HIRSimplePath mLangCopy;
+    HIRSimplePath mLangClone; // 1.29
+    HIRSimplePath mLangDrop;
+    HIRSimplePath mLangSized;
+    HIRSimplePath mLangUnsize;
+    HIRSimplePath mLangFn;
+    HIRSimplePath mLangFnMut;
+    HIRSimplePath mLangFnOnce;
+    HIRSimplePath mLangBox;
+    HIRSimplePath mLangPhantomData;
+    HIRSimplePath mLangGenerator;        // 1.39
+    HIRSimplePath mLangDiscriminantKind; // 1.54
+    HIRSimplePath mLangPointee;          // 1.54
+    HIRSimplePath mLangDynMetadata;      // 1.54
+    HIRSimplePath mLangPointeeSized;     // 1.90
+    HIRSimplePath mLangMetaSized;        // 1.90
+    HIRSimplePath mLangDestruct;         // 1.90
+    HIRSimplePath mLangFuture;           // 1.90 (well, added earlier)
 
-    TraitResolveCommon(const ::HIR::Crate& crate);
+    TraitResolveCommon(const HIRCrate& crate);
 
     bool hasSelf() const {
         return mImplGenerics ? true : false;
     }
 
-    const ::HIR::GenericParams& implGenerics() const;
+    const HIRGenericParams& implGenerics() const;
 
-    const ::HIR::GenericParams& itemGenerics() const;
+    const HIRGenericParams& itemGenerics() const;
 
     /// <summary>
     /// Obtain the type for a given constant parameter
     /// </summary>
-    const ::HIR::TypeData* getConstParamType(const Span& sp, unsigned binding) const;
+    const HIRTypeData* getConstParamType(const Span& sp, unsigned binding) const;
 
     void prepIndexes(const Span& sp);
 
 protected:
-    void prepIndexesAddEquality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef longTy, ::HIR::TypeRef shortTy);
-    void prepIndexesAddTraitBound(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef type, ::HIR::TraitPath traitPath, bool addParents = true);
+    void prepIndexesAddEquality(const Span& sp, const HIRGenericParams* hrtbs, HIRTypeRef longTy, HIRTypeRef shortTy);
+    void prepIndexesAddTraitBound(const Span& sp, const HIRGenericParams* hrtbs, HIRTypeRef type, HIRTraitPath traitPath, bool addParents = true);
 
     /// Iterate over in-scope bounds (function then type)
-    bool iterateBounds(::std::function<bool(const ::HIR::GenericBound&)> cb) const;
+    bool iterateBounds(::std::function<bool(const HIRGenericBound&)> cb) const;
 };
 
 extern ::std::ostream& operator<<(::std::ostream& s, const TraitResolveCommon::CachedEquality& x);

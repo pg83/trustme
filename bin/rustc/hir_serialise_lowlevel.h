@@ -20,7 +20,6 @@
 #include <assert.h>
 #include "rc_string.h"
 
-namespace HIR {
 
     class HIRSerialiseWriterInner;
     class HIRSerialiseReaderInner;
@@ -212,4 +211,3 @@ namespace HIR {
         void closeObject();
     };
 
-} // namespace HIR

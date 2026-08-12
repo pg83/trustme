@@ -11,14 +11,12 @@ class ASTPath;
 struct ASTPathParams;
 class ASTPattern;
 
-namespace HIR {
-    class Crate;
-    class GenericPath;
-    class Path;
-    struct PathParams;
-    struct Pattern;
-    struct SimplePath;
-}
+    class HIRCrate;
+    class HIRGenericPath;
+    class HIRPath;
+    struct HIRPathParams;
+    struct HIRPattern;
+    struct HIRSimplePath;
 
 enum class FromASTPathClass {
     Type,
@@ -26,14 +24,14 @@ enum class FromASTPathClass {
     Macro,
 };
 
-extern ::HIR::ExprPtr LowerHIRExprNode(const ASTExprNode& e);
-extern ::HIR::Path LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClass pc);
-extern ::HIR::GenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc = false);
-extern ::HIR::SimplePath LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowFinalGeneric = false);
-extern ::HIR::PathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc);
-extern ::HIR::TypeRef LowerHIRType(const ::TypeRef& ty);
-extern ::HIR::Pattern LowerHIRPattern(const ASTPattern& pat);
+extern HIRExprPtr LowerHIRExprNode(const ASTExprNode& e);
+extern HIRPath LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClass pc);
+extern HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc = false);
+extern HIRSimplePath LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowFinalGeneric = false);
+extern HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc);
+extern HIRTypeRef LowerHIRType(const ::TypeRef& ty);
+extern HIRPattern LowerHIRPattern(const ASTPattern& pat);
 
 extern RcString gCoreCrate;
 extern RcString gCrateName;
-extern ::HIR::Crate* gCratePtr;
+extern HIRCrate* gCratePtr;

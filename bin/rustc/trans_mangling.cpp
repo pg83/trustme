@@ -138,7 +138,7 @@ public:
     }
 
     // SimplePath : <ncomp> 'c' [<RcString> ...]
-    void fmtSimplePath(const ::HIR::SimplePath& sp) {
+    void fmtSimplePath(const HIRSimplePath& sp) {
         os << sp.components().size();
         os << "c"; // Needed to separate the component count from the crate name
         this->fmtName(sp.crateName());
@@ -148,7 +148,7 @@ public:
     }
 
     // PathParams : <ntys> 'g' [<TypeRef> ...]
-    void fmtPathParams(const ::HIR::PathParams& pp) {
+    void fmtPathParams(const HIRPathParams& pp) {
         // Type Parameter count
         os << pp.types.size();
         if (pp.values.size() > 0) {
@@ -177,12 +177,12 @@ public:
     }
 
     // GenericPath : <SimplePath> <PathParams>
-    void fmtGenericPath(const ::HIR::GenericPath& gp) {
+    void fmtGenericPath(const HIRGenericPath& gp) {
         this->fmtSimplePath(gp.mPath);
         this->fmtPathParams(gp.mParams);
     }
 
-    void fmtPath(const ::HIR::Path& p) {
+    void fmtPath(const HIRPath& p) {
         // Path type
         // - Generic: starts with `G`
         // - Inherent: Starts with `I`
@@ -242,12 +242,12 @@ public:
     //   - char : 'C' 'x'
     //   - str  : 'C' 'y'
     // - Diverge: 'C' 'z'
-    void fmtType(const ::HIR::TypeData* ty) {
+    void fmtType(const HIRTypeData* ty) {
         TU_MATCH_HDRA( ((*ty)), { )
-        case ::HIR::TypeData::TAG_Infer:
-        case ::HIR::TypeData::TAG_Generic:
-        case ::HIR::TypeData::TAG_ErasedType:
-        case ::HIR::TypeData::TAG_NodeType:
+        case HIRTypeData::TAG_Infer:
+        case HIRTypeData::TAG_Generic:
+        case HIRTypeData::TAG_ErasedType:
+        case HIRTypeData::TAG_NodeType:
             BUG(Span(), "Non-encodable type " << ty);
             TU_ARMA(Tuple, e) {
                 os << "T" << e.size();
@@ -304,13 +304,13 @@ public:
             TU_ARMA(Borrow, e) {
                 os << "B";
                 switch (e.type) {
-                    case ::HIR::BorrowType::Shared:
+                    case HIRBorrowType::Shared:
                         os << "s";
                         break;
-                    case ::HIR::BorrowType::Unique:
+                    case HIRBorrowType::Unique:
                         os << "u";
                         break;
-                    case ::HIR::BorrowType::Owned:
+                    case HIRBorrowType::Owned:
                         os << "o";
                         break;
                 }
@@ -319,13 +319,13 @@ public:
             TU_ARMA(Pointer, e) {
                 os << "P";
                 switch (e.type) {
-                    case ::HIR::BorrowType::Shared:
+                    case HIRBorrowType::Shared:
                         os << "s";
                         break;
-                    case ::HIR::BorrowType::Unique:
+                    case HIRBorrowType::Unique:
                         os << "u";
                         break;
-                    case ::HIR::BorrowType::Owned:
+                    case HIRBorrowType::Owned:
                         os << "o";
                         break;
                 }
@@ -333,61 +333,61 @@ public:
             }
             TU_ARMA(Primitive, e) {
                 switch (e) {
-                    case ::HIR::CoreType::U8:
+                    case HIRCoreType::U8:
                         os << 'C' << 'a';
                         break;
-                    case ::HIR::CoreType::I8:
+                    case HIRCoreType::I8:
                         os << 'C' << 'b';
                         break;
-                    case ::HIR::CoreType::U16:
+                    case HIRCoreType::U16:
                         os << 'C' << 'c';
                         break;
-                    case ::HIR::CoreType::I16:
+                    case HIRCoreType::I16:
                         os << 'C' << 'd';
                         break;
-                    case ::HIR::CoreType::U32:
+                    case HIRCoreType::U32:
                         os << 'C' << 'e';
                         break;
-                    case ::HIR::CoreType::I32:
+                    case HIRCoreType::I32:
                         os << 'C' << 'f';
                         break;
-                    case ::HIR::CoreType::U64:
+                    case HIRCoreType::U64:
                         os << 'C' << 'g';
                         break;
-                    case ::HIR::CoreType::I64:
+                    case HIRCoreType::I64:
                         os << 'C' << 'h';
                         break;
-                    case ::HIR::CoreType::U128:
+                    case HIRCoreType::U128:
                         os << 'C' << 'i';
                         break;
-                    case ::HIR::CoreType::I128:
+                    case HIRCoreType::I128:
                         os << 'C' << 'j';
                         break;
-                    case ::HIR::CoreType::F16:
+                    case HIRCoreType::F16:
                         os << 'C' << 'm';
                         break;
-                    case ::HIR::CoreType::F32:
+                    case HIRCoreType::F32:
                         os << 'C' << 'n';
                         break;
-                    case ::HIR::CoreType::F64:
+                    case HIRCoreType::F64:
                         os << 'C' << 'o';
                         break;
-                    case ::HIR::CoreType::F128:
+                    case HIRCoreType::F128:
                         os << 'C' << 'p';
                         break;
-                    case ::HIR::CoreType::Usize:
+                    case HIRCoreType::Usize:
                         os << 'C' << 'u';
                         break;
-                    case ::HIR::CoreType::Isize:
+                    case HIRCoreType::Isize:
                         os << 'C' << 'v';
                         break;
-                    case ::HIR::CoreType::Bool:
+                    case HIRCoreType::Bool:
                         os << 'C' << 'w';
                         break;
-                    case ::HIR::CoreType::Char:
+                    case HIRCoreType::Char:
                         os << 'C' << 'x';
                         break;
-                    case ::HIR::CoreType::Str:
+                    case HIRCoreType::Str:
                         os << 'C' << 'y';
                         break;
                 }
@@ -399,19 +399,19 @@ public:
     }
 };
 
-::FmtLambda TransManglePath(const ::HIR::Path& p) {
+::FmtLambda TransManglePath(const HIRPath& p) {
     return FMT_CB(os, os << "ZR"; Mangler(os).fmtPath(p));
 }
 
-::FmtLambda TransMangleSimplePath(const ::HIR::SimplePath& p) {
+::FmtLambda TransMangleSimplePath(const HIRSimplePath& p) {
     return FMT_CB(os, os << "ZRG"; Mangler(os).fmtSimplePath(p); Mangler(os).fmtPathParams({}););
 }
 
-::FmtLambda TransMangleGenericPath(const ::HIR::GenericPath& p) {
+::FmtLambda TransMangleGenericPath(const HIRGenericPath& p) {
     return FMT_CB(os, os << "ZRG"; Mangler(os).fmtGenericPath(p));
 }
 
-::FmtLambda TransMangleTypeRef(const ::HIR::TypeData* p) {
+::FmtLambda TransMangleTypeRef(const HIRTypeData* p) {
     return ::FmtLambda([p](::std::ostream& os) {
         os << "ZRT";
         Mangler(os).fmtType(p);
@@ -439,14 +439,14 @@ namespace {
 }
 
 // TODO: If the mangled name exceeds a limit, stop emitting the real name and start hashing the rest.
-#define DO_MANGLE(ty)                              \
-    ::FmtLambda TransMangle(const ::HIR::ty& v) { \
-        return maxLen(TransMangle##ty(v));       \
+#define DO_MANGLE(ty, suffix)                      \
+    ::FmtLambda TransMangle(const ty& v) { \
+        return maxLen(TransMangle##suffix(v));   \
     }
-DO_MANGLE(SimplePath)
-DO_MANGLE(GenericPath)
-DO_MANGLE(Path)
+DO_MANGLE(HIRSimplePath, SimplePath)
+DO_MANGLE(HIRGenericPath, GenericPath)
+DO_MANGLE(HIRPath, Path)
 
-::FmtLambda TransMangle(const ::HIR::TypeData* v) {
+::FmtLambda TransMangle(const HIRTypeData* v) {
     return maxLen(TransMangleTypeRef(v));
 }

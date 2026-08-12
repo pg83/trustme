@@ -8,14 +8,13 @@
 #include "hir_path.h"
 #include "hir_type.h"
 
-namespace HIR {
 
-    class Struct;
-    class Union;
-    class Enum;
-    class Constant;
+    class HIRStruct;
+    class HIRUnion;
+    class HIREnum;
+    class HIRConstant;
 
-    struct PatternBinding {
+    struct HIRPatternBinding {
         enum class Type {
             Move,
             Ref,
@@ -33,41 +32,41 @@ namespace HIR {
             return mName != "";
         }
 
-        PatternBinding();
+        HIRPatternBinding();
 
-        PatternBinding(bool mut, Type type, RcString name, unsigned int slot);
+        HIRPatternBinding(bool mut, Type type, RcString name, unsigned int slot);
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const HIRPatternBinding& x);
     };
 
-    enum class PatternBindingOrder {
+    enum class HIRPatternBindingOrder {
         Declaration,
         FirstCandidate,
         LastCandidate,
     };
 
-    struct Pattern {
+    struct HIRPattern {
         TAGGED_UNION(
             Value,
             String,
             (Integer,
              struct {
-                 ::HIR::CoreType type; // Str == _
+                 HIRCoreType type; // Str == _
                  U128 value;           // Signed numbers are encoded as 2's complement
              }),
             (Float,
              struct {
-                 ::HIR::CoreType type; // Str == _
+                 HIRCoreType type; // Str == _
                  FloatValue value;
              }),
             (String, ::std::string),
             (ByteString, struct { ::std::string v; }),
             (Named, struct {
-                Path path;
-                const ::HIR::Constant* binding;
+                HIRPath path;
+                const HIRConstant* binding;
             })
         );
-        friend ::std::ostream& operator<<(::std::ostream& os, const Pattern::Value& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const HIRPattern::Value& x);
 
         enum class GlobPos {
             None,
@@ -80,11 +79,11 @@ namespace HIR {
             (),
             Unbound,
             ((Unbound, struct {}),
-             (Struct, const Struct*),
-             (Union, const Union*),
+             (Struct, const HIRStruct*),
+             (Union, const HIRUnion*),
              (Enum,
               struct {
-                  const Enum* ptr;
+                  const HIREnum* ptr;
                   unsigned varIdx;
               })),
             (),
@@ -105,44 +104,44 @@ namespace HIR {
             Any,
             // Irrefutable / destructuring
             (Any, struct {}),
-            (Box, struct { ::std::unique_ptr<Pattern> sub; }),
+            (Box, struct { ::std::unique_ptr<HIRPattern> sub; }),
             (Ref,
              struct {
-                 ::HIR::BorrowType type;
-                 ::std::unique_ptr<Pattern> sub;
+                 HIRBorrowType type;
+                 ::std::unique_ptr<HIRPattern> sub;
              }),
-            (Tuple, struct { ::std::vector<Pattern> subPatterns; }),
+            (Tuple, struct { ::std::vector<HIRPattern> subPatterns; }),
             (SplitTuple,
              struct {
-                 ::std::vector<Pattern> leading;
-                 ::std::vector<Pattern> trailing;
+                 ::std::vector<HIRPattern> leading;
+                 ::std::vector<HIRPattern> trailing;
                  unsigned int totalSize;
              }),
             // Maybe refutable
             // - Can be converted into `Value`, or resolved to be an enum/struct value
             (PathValue,
              struct {
-                 ::HIR::Path path;
+                 HIRPath path;
                  PathBinding binding;
              }),
             // - Tuple-like enum/struct value
             (PathTuple,
              struct {
-                 ::HIR::Path path;
+                 HIRPath path;
                  PathBinding binding;
-                 ::std::vector<Pattern> leading;
+                 ::std::vector<HIRPattern> leading;
                  bool isSplit;
-                 ::std::vector<Pattern> trailing;
+                 ::std::vector<HIRPattern> trailing;
                  // Cache making MIR gen easier for split patterns
                  unsigned int totalSize;
              }),
             // - Struct-like enum/struct value
             (PathNamed,
              struct {
-                 ::HIR::Path path;
+                 HIRPath path;
                  PathBinding binding;
 
-                 ::std::vector<::std::pair<RcString, Pattern>> subPatterns;
+                 ::std::vector<::std::pair<RcString, HIRPattern>> subPatterns;
                  bool isExhaustive;
 
                  bool isWildcard() const {
@@ -150,7 +149,7 @@ namespace HIR {
                  }
              }),
             // Split/or patterns
-            (Or, std::vector<Pattern>),
+            (Or, std::vector<HIRPattern>),
             // Always refutable
             (Value, struct { Value val; }),
             (Range,
@@ -159,34 +158,33 @@ namespace HIR {
                  std::unique_ptr<Value> end;
                  bool isInclusive;
              }),
-            (Slice, struct { ::std::vector<Pattern> subPatterns; }),
+            (Slice, struct { ::std::vector<HIRPattern> subPatterns; }),
             (SplitSlice, struct {
-                ::std::vector<Pattern> leading;
-                PatternBinding extraBind;
-                ::std::vector<Pattern> trailing;
+                ::std::vector<HIRPattern> leading;
+                HIRPatternBinding extraBind;
+                ::std::vector<HIRPattern> trailing;
             })
         );
 
-        std::vector<PatternBinding> mBindings;
+        std::vector<HIRPatternBinding> mBindings;
         Data mData;
         unsigned implicitDerefCount = 0;
 
-        Pattern();
+        HIRPattern();
 
-        Pattern(std::vector<PatternBinding> pbs, Data d);
+        HIRPattern(std::vector<HIRPatternBinding> pbs, Data d);
 
-        Pattern(PatternBinding pb, Data d);
+        HIRPattern(HIRPatternBinding pb, Data d);
 
-        Pattern(const Pattern&) = delete;
-        Pattern(Pattern&&) = default;
-        Pattern& operator=(const Pattern&) = delete;
-        Pattern& operator=(Pattern&&) = default;
+        HIRPattern(const HIRPattern&) = delete;
+        HIRPattern(HIRPattern&&) = default;
+        HIRPattern& operator=(const HIRPattern&) = delete;
+        HIRPattern& operator=(HIRPattern&&) = default;
 
-        Pattern clone() const;
+        HIRPattern clone() const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const Pattern& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const HIRPattern& x);
     };
 
-    std::vector<unsigned> patternBindingSlots(const Pattern& pattern, PatternBindingOrder order);
+    std::vector<unsigned> patternBindingSlots(const HIRPattern& pattern, HIRPatternBindingOrder order);
 
-}

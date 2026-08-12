@@ -11,10 +11,10 @@
 struct Reloc {
     size_t ofs;
     size_t len;
-    ::std::unique_ptr<::HIR::Path> p;
+    ::std::unique_ptr<HIRPath> p;
     ::std::string bytes;
 
-    static Reloc newNamed(size_t ofs, size_t len, ::HIR::Path p) {
+    static Reloc newNamed(size_t ofs, size_t len, HIRPath p) {
         return Reloc{ofs, len, box$(p), ""};
     }
 

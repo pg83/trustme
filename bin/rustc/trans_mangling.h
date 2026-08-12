@@ -3,15 +3,13 @@
 #include <string>
 #include "debug.h"
 
-namespace HIR {
-    struct SimplePath;
-    class GenericPath;
-    class Path;
-    class TypeData;
-    using TypeRef = const TypeData*;
-}
+    struct HIRSimplePath;
+    class HIRGenericPath;
+    class HIRPath;
+    class HIRTypeData;
+    using HIRTypeRef = const HIRTypeData*;
 
-extern ::FmtLambda TransMangle(const ::HIR::SimplePath& path);
-extern ::FmtLambda TransMangle(const ::HIR::GenericPath& path);
-extern ::FmtLambda TransMangle(const ::HIR::Path& path);
-extern ::FmtLambda TransMangle(const ::HIR::TypeData* ty);
+extern ::FmtLambda TransMangle(const HIRSimplePath& path);
+extern ::FmtLambda TransMangle(const HIRGenericPath& path);
+extern ::FmtLambda TransMangle(const HIRPath& path);
+extern ::FmtLambda TransMangle(const HIRTypeData* ty);

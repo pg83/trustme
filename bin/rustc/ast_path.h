@@ -18,15 +18,13 @@
 
 class MacroRules;
 
-namespace HIR {
-    class Module;
-    class Trait;
-    struct TraitAlias;
-    class Enum;
-    class Struct;
-    class Union;
-    class Static;
-} // namespace HIR
+    class HIRModule;
+    class HIRTrait;
+    struct HIRTraitAlias;
+    class HIREnum;
+    class HIRStruct;
+    class HIRUnion;
+    class HIRStatic;
 
 class ASTLifetimeRef;
 class ASTGenericParams;
@@ -72,19 +70,19 @@ TAGGED_UNION_EX(
      (Struct,
       struct {
           const ASTStruct* struct_;
-          const ::HIR::Struct* hir;
+          const HIRStruct* hir;
       }),
      (Static,
       struct {
           const ASTStatic* static_;
-          const ::HIR::Static* hir; // if nullptr and static_ == nullptr, points to a `const`
+          const HIRStatic* hir; // if nullptr and static_ == nullptr, points to a `const`
       }),
      (Function, struct { const ASTFunction* func_; }),
      (EnumVar,
       struct {
           const ASTEnum* enum_;
           unsigned int idx;
-          const ::HIR::Enum* hir;
+          const HIREnum* hir;
       }),
      (Generic, struct { unsigned int index; }),
      (Variable, struct { unsigned int slot; })),
@@ -104,40 +102,40 @@ TAGGED_UNION_EX(
           const ASTModule* module_;
           struct Hir {
               const ASTExternCrate* crate;
-              const ::HIR::Module* mod;
+              const HIRModule* mod;
           } hir;
       }),
      (Struct,
       struct {
           const ASTStruct* struct_;
-          const ::HIR::Struct* hir;
+          const HIRStruct* hir;
       }),
      (Enum,
       struct {
           const ASTEnum* enum_;
-          const ::HIR::Enum* hir;
+          const HIREnum* hir;
       }),
      (Union,
       struct {
           const ASTUnion* union_;
-          const ::HIR::Union* hir;
+          const HIRUnion* hir;
       }),
      (Trait,
       struct {
           const ASTTrait* trait_;
-          const ::HIR::Trait* hir;
+          const HIRTrait* hir;
       }),
      (TraitAlias,
       struct {
           const ASTTraitAlias* trait_;
-          const ::HIR::TraitAlias* hir;
+          const HIRTraitAlias* hir;
       }),
 
      (EnumVar,
       struct {
           const ASTEnum* enum_;
           unsigned int idx;
-          const ::HIR::Enum* hir;
+          const HIREnum* hir;
       }),
      (TypeAlias, struct { const ASTTypeAlias* alias_; }),
 

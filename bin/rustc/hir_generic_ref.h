@@ -8,26 +8,25 @@
 /// `Self` in the context of an erased type
 #define GENERICErasedSelf 0xFFFE
 
-namespace HIR {
 
-    enum GenericGroup {
+    enum HIRGenericGroup {
         GENERICImpl,
         GENERICItem,
         GENERICPlaceholder,
         GENERICHrtb,
     };
 
-    struct GenericRef {
+    struct HIRGenericRef {
         RcString name;
         // 0xFFFF = Self, 0-255 = Type/Trait, 256-511 = Method, 512-767 = Placeholder
         uint32_t binding;
 
-        GenericRef(RcString name, uint32_t binding);
+        HIRGenericRef(RcString name, uint32_t binding);
 
-        GenericRef(RcString name, GenericGroup group, uint16_t idx);
+        HIRGenericRef(RcString name, HIRGenericGroup group, uint16_t idx);
 
-        static GenericRef newSelf() {
-            return GenericRef(RcString::newInterned("Self"), GENERICSelf);
+        static HIRGenericRef newSelf() {
+            return HIRGenericRef(RcString::newInterned("Self"), GENERICSelf);
         }
 
         bool isSelf() const {
@@ -46,26 +45,26 @@ namespace HIR {
             return (binding >> 8) == GENERICPlaceholder;
         }
 
-        Ordering ord(const GenericRef& x) const;
+        Ordering ord(const HIRGenericRef& x) const;
 
-        bool operator==(const GenericRef& x) const {
+        bool operator==(const HIRGenericRef& x) const {
             return this->ord(x) == OrdEqual;
         }
 
-        bool operator!=(const GenericRef& x) const {
+        bool operator!=(const HIRGenericRef& x) const {
             return this->ord(x) != OrdEqual;
         }
 
-        bool operator<(const GenericRef& x) const {
+        bool operator<(const HIRGenericRef& x) const {
             return this->ord(x) == OrdLess;
         }
 
         void fmt(::std::ostream& os) const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const GenericRef& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const HIRGenericRef& x);
     };
 
-    struct LifetimeRef {
+    struct HIRLifetimeRef {
         static const uint32_t STATIC = 0xFFFF;  // `'static`
         static const uint32_t UNKNOWN = 0xFFFE; // omitted
         static const uint32_t INFER = 0xFFFD;   // `'_`
@@ -75,39 +74,38 @@ namespace HIR {
         // Values below 2^16 are parameters/static, values above are per-function region IDs allocated during region inferrence.
         uint32_t binding = UNKNOWN;
 
-        LifetimeRef();
+        HIRLifetimeRef();
 
-        LifetimeRef(uint32_t binding);
+        HIRLifetimeRef(uint32_t binding);
 
-        static LifetimeRef newStatic();
+        static HIRLifetimeRef newStatic();
 
         bool isParam() const {
             return binding < 0xFF00;
         }
 
-        GenericRef asParam() const;
+        HIRGenericRef asParam() const;
 
         bool isHrl() const {
             return isParam() && asParam().group() == 3;
         }
 
-        Ordering ord(const LifetimeRef& x) const {
+        Ordering ord(const HIRLifetimeRef& x) const {
             return ::ord(binding, x.binding);
         }
 
-        bool operator<(const LifetimeRef& x) const {
+        bool operator<(const HIRLifetimeRef& x) const {
             return this->ord(x) == OrdLess;
         }
 
-        bool operator==(const LifetimeRef& x) const {
+        bool operator==(const HIRLifetimeRef& x) const {
             return binding == x.binding;
         }
 
-        bool operator!=(const LifetimeRef& x) const {
+        bool operator!=(const HIRLifetimeRef& x) const {
             return !(*this == x);
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const LifetimeRef& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const HIRLifetimeRef& x);
     };
 
-}

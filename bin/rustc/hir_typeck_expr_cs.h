@@ -22,15 +22,15 @@ struct Context {
 
     struct Binding {
         RcString name;
-        ::HIR::TypeRef ty;
+        HIRTypeRef ty;
         //unsigned int ivar;
     };
 
     /// Inferrence variable equalities
     struct Coercion {
         unsigned ruleIdx;
-        ::HIR::TypeRef leftTy;
-        ::HIR::ExprNodeP* rightNodePtr;
+        HIRTypeRef leftTy;
+        HIRExprNodeP* rightNodePtr;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const Coercion& v);
     };
@@ -42,9 +42,9 @@ struct Context {
                 Unsizing,
             } op;
 
-            ::HIR::TypeRef ty;
+            HIRTypeRef ty;
 
-            CoerceTy(::HIR::TypeRef ty, bool isCoerce);
+            CoerceTy(HIRTypeRef ty, bool isCoerce);
         };
 
         // Strong disable (depends on a trait impl)
@@ -65,9 +65,9 @@ struct Context {
         // Source types for coercion/unsizing (these types are known to exist in the function)
         ::std::vector<CoerceTy> typesCoerceFrom;
         // Possible default types (from generic defaults)
-        ::std::set<::HIR::TypeRef> typesDefault;
+        ::std::set<HIRTypeRef> typesDefault;
 
-        ::std::vector<::HIR::TypeRef> bounded;
+        ::std::vector<HIRTypeRef> bounded;
 
         void reset();
 
@@ -79,7 +79,7 @@ struct Context {
     struct Associated {
         struct StallDependency {
             unsigned index;
-            ::HIR::TypeRef resolved;
+            HIRTypeRef resolved;
         };
 
         struct CapturedIvarPossible {
@@ -89,13 +89,13 @@ struct Context {
 
         unsigned ruleIdx;
         Span span;
-        ::HIR::TypeRef leftTy;
+        HIRTypeRef leftTy;
 
-        ::HIR::SimplePath trait;
-        ::HIR::PathParams params;
-        ::HIR::TypeRef implTy;
+        HIRSimplePath trait;
+        HIRPathParams params;
+        HIRTypeRef implTy;
         RcString name; // if "", no type is used (and left is ignored) - Just does trait selection
-        ::HIR::PathParams atyPp;
+        HIRPathParams atyPp;
 
         // HACK: operators are special - the result when both types are primitives is ALWAYS the lefthand side
         bool isOperator;
@@ -108,8 +108,8 @@ struct Context {
         friend ::std::ostream& operator<<(::std::ostream& os, const Associated& v);
     };
 
-    const ::HIR::Crate& crate;
-    const ::HIR::TraitImpl* currentTraitImpl;
+    const HIRCrate& crate;
+    const HIRTraitImpl* currentTraitImpl;
 
     ::std::vector<Binding> mBindings;
     HMTypeInferrence ivars;
@@ -120,10 +120,10 @@ struct Context {
     ::std::vector<::std::unique_ptr<Coercion>> linkCoerce;
     // Expected types are available while aggregate fields are enumerated,
     // before the corresponding coercion rules are solved.
-    ::std::unordered_map<const ::HIR::ExprNode*, ::HIR::TypeRef> coercionHints;
+    ::std::unordered_map<const HIRExprNode*, HIRTypeRef> coercionHints;
     ::std::vector<Associated> linkAssoc;
     /// Nodes that need revisiting (e.g. method calls when the receiver isn't known)
-    ::std::vector<::HIR::ExprNode*> toVisit;
+    ::std::vector<HIRExprNode*> toVisit;
     /// Callback-based revisits (e.g. for slice patterns handling slices/arrays)
     ::std::vector<::std::unique_ptr<Revisitor>> advRevisits;
 
@@ -136,17 +136,17 @@ struct Context {
     IVarPossible* getPossibleIvarSink(unsigned index);
 
     struct TaitEntry {
-        HIR::PathParams params;
-        HIR::TypeRef ourType;
+        HIRPathParams params;
+        HIRTypeRef ourType;
 
-        TaitEntry(const HIR::PathParams& p, HIR::TypeRef t);
+        TaitEntry(const HIRPathParams& p, HIRTypeRef t);
     };
 
-    ::std::map<HIR::TypeDataErasedTypeAliasInner*, TaitEntry> erasedTypeAliases;
+    ::std::map<HIRTypeDataErasedTypeAliasInner*, TaitEntry> erasedTypeAliases;
 
-    const ::HIR::SimplePath mLangBox;
+    const HIRSimplePath mLangBox;
 
-    Context(const ::HIR::Crate& crate, const ::HIR::GenericParams* implParams, const ::HIR::GenericParams* itemParams, const ::HIR::SimplePath& modPath, const ::HIR::GenericPath* currentTrait, const ::HIR::TraitImpl* currentTraitImpl);
+    Context(const HIRCrate& crate, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& modPath, const HIRGenericPath* currentTrait, const HIRTraitImpl* currentTraitImpl);
 
     void dump() const;
 
@@ -158,38 +158,38 @@ struct Context {
         return !(linkCoerce.empty() && linkAssoc.empty() && toVisit.empty() && advRevisits.empty());
     }
 
-    inline void addIvars(::HIR::TypeRef& ty) {
+    inline void addIvars(HIRTypeRef& ty) {
         ivars.addIvars(ty);
     }
 
     // - Equate two types, with no possibility of coercion
     //  > Errors if the types are incompatible.
     //  > Forces types if one side is an infer
-    void equateTypes(const Span& sp, const ::HIR::TypeData* l, const ::HIR::TypeData* r);
-    void equateTypesInner(const Span& sp, const ::HIR::TypeData* l, const ::HIR::TypeData* r);
+    void equateTypes(const Span& sp, const HIRTypeData* l, const HIRTypeData* r);
+    void equateTypesInner(const Span& sp, const HIRTypeData* l, const HIRTypeData* r);
     // - Equate two types, allowing inferrence
-    void equateTypesCoerce(const Span& sp, const ::HIR::TypeData* l, ::HIR::ExprNodeP& nodePtr);
-    void recordCoercionHint(const ::HIR::TypeData* type, ::HIR::ExprNodeP& nodePtr);
+    void equateTypesCoerce(const Span& sp, const HIRTypeData* l, HIRExprNodeP& nodePtr);
+    void recordCoercionHint(const HIRTypeData* type, HIRExprNodeP& nodePtr);
 
-    const ::HIR::TypeData* coercionHint(const ::HIR::ExprNode& node) const;
+    const HIRTypeData* coercionHint(const HIRExprNode& node) const;
     // - Equate a type to an associated type (if name == "", no equation is done, but trait is searched)
-    void equateTypesAssoc(const Span& sp, const ::HIR::TypeData* l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeData* implTy, const char* name, const ::HIR::PathParams& atyPp, bool isOp = false, TypeckPrimitiveOperator operatorKind = TypeckPrimitiveOperator::None);
+    void equateTypesAssoc(const Span& sp, const HIRTypeData* l, const HIRSimplePath& trait, HIRPathParams params, const HIRTypeData* implTy, const char* name, const HIRPathParams& atyPp, bool isOp = false, TypeckPrimitiveOperator operatorKind = TypeckPrimitiveOperator::None);
 
     bool isCurrentOperatorImpl(const ImplRef& impl) const;
 
     // A Deref implementation for a native pointer/reference receives `&Self`.
     // Dereferencing that receiver is the native step needed to recover `Self`,
     // not another dispatch through a potentially overlapping Deref impl.
-    bool isCurrentNativeDerefReceiver(const ::HIR::SimplePath& derefTrait, const ::HIR::TypeData* operand) const;
+    bool isCurrentNativeDerefReceiver(const HIRSimplePath& derefTrait, const HIRTypeData* operand) const;
 
     // Equate const generics (values)
-    void equateValues(const Span& sp, const ::HIR::ConstGeneric& rl, const ::HIR::ConstGeneric& rr);
+    void equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRConstGeneric& rr);
 
     /// Adds a `ty: Sized` bound to the contained ivars.
-    void requireSized(const Span& sp, const ::HIR::TypeData* ty);
+    void requireSized(const Span& sp, const HIRTypeData* ty);
 
     // - Add a trait bound (gets encoded as an associated type bound)
-    void addTraitBound(const Span& sp, const ::HIR::TypeData* implTy, const ::HIR::SimplePath& trait, ::HIR::PathParams params) {
+    void addTraitBound(const Span& sp, const HIRTypeData* implTy, const HIRSimplePath& trait, HIRPathParams params) {
         equateTypesAssoc(sp, crate.types.infer(), trait, mv$(params), implTy, "", {}, false);
     }
 
@@ -206,9 +206,9 @@ struct Context {
         Bound,
     };
     /// Type is unknown (e.g. no used/results from a trait impl that can't be looked up)
-    void possibleEquateTypeUnknown(const Span& sp, const ::HIR::TypeData* ty, IvarUnknownType srcTy);
+    void possibleEquateTypeUnknown(const Span& sp, const HIRTypeData* ty, IvarUnknownType srcTy);
     /// Type must be one of the provided set
-    void possibleEquateTypeBounds(const Span& sp, const ::HIR::TypeData* ty, ::std::vector<::HIR::TypeRef> t);
+    void possibleEquateTypeBounds(const Span& sp, const HIRTypeData* ty, ::std::vector<HIRTypeRef> t);
 
     // ----
     // IVar possibilties
@@ -225,9 +225,9 @@ struct Context {
     //void possible_equate_ivar_def(unsigned int ivar_index, const ::HIR::TypeData* t);
 
     /// Record that the IVar may be this type (and what the source is)
-    void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const ::HIR::TypeData* t, PossibleTypeSource srcTy);
+    void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRTypeData* t, PossibleTypeSource srcTy);
     /// Add a possible type for an ivar (which is used if only one possibility meets available bounds)
-    void possibleEquateIvarBounds(const Span& sp, unsigned int ivarIndex, ::std::vector<::HIR::TypeRef> t);
+    void possibleEquateIvarBounds(const Span& sp, unsigned int ivarIndex, ::std::vector<HIRTypeRef> t);
     /// Record that the IVar is equated to an unknown type
     void possibleEquateIvarUnknown(const Span& sp, unsigned int ivarIndex, IvarUnknownType srcTy);
 
@@ -236,30 +236,30 @@ struct Context {
     // ----
 
     // - Add a pattern binding (forcing the type to match)
-    void handlePattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeData* type, bool isIrrefutable = false);
-    void handlePatternDirectInner(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeData* type);
-    void addBindingInner(const Span& sp, const ::HIR::PatternBinding& pb, ::HIR::TypeRef type);
+    void handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* type, bool isIrrefutable = false);
+    void handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HIRTypeData* type);
+    void addBindingInner(const Span& sp, const HIRPatternBinding& pb, HIRTypeRef type);
 
-    void addVar(const Span& sp, unsigned int index, const RcString& name, ::HIR::TypeRef type);
-    const ::HIR::TypeData* getVar(const Span& sp, unsigned int idx) const;
+    void addVar(const Span& sp, unsigned int index, const RcString& name, HIRTypeRef type);
+    const HIRTypeData* getVar(const Span& sp, unsigned int idx) const;
 
     // - Add a revisit entry
-    void addRevisit(::HIR::ExprNode& node);
+    void addRevisit(HIRExprNode& node);
     void addRevisitAdv(::std::unique_ptr<Revisitor> ent);
 
-    const ::HIR::TypeData* getType(const ::HIR::TypeData* ty) const {
+    const HIRTypeData* getType(const HIRTypeData* ty) const {
         return ivars.getType(ty);
     }
 
     /// Create an autoderef operation from val_node->m_res_type to ty_dst (handling implicit unsizing)
-    ::HIR::ExprNodeP createAutoderef(::HIR::ExprNodeP valNode, ::HIR::TypeRef tyDst) const;
+    HIRExprNodeP createAutoderef(HIRExprNodeP valNode, HIRTypeRef tyDst) const;
 
 private:
-    void addIvarsParams(::HIR::PathParams& params) {
+    void addIvarsParams(HIRPathParams& params) {
         ivars.addIvarsParams(params);
     }
 };
 
-extern bool visitCallPopulateCache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) __attribute__((warnUnusedResult));
+extern bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) __attribute__((warnUnusedResult));
 
-extern void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr);
+extern void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr, HIRExprNodeP& rootPtr);

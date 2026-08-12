@@ -2,12 +2,10 @@
 
 #include <cstddef>
 
-namespace HIR {
-    class Crate;
-    class Path;
-    class SimplePath;
-    class TypeData;
-}
+    class HIRCrate;
+    class HIRPath;
+    class HIRSimplePath;
+    class HIRTypeData;
 
 enum class AllocatorDataTy {
     // - Return
@@ -35,7 +33,7 @@ extern const AllocatorMethod ALLOCATOR_METHODS[];
 extern const size_t NUM_ALLOCATOR_METHODS;
 
 extern const char GLOBAL_ALLOCATOR_LANG_ITEM[];
-HIR::SimplePath TransAllocatorTraitPath(const HIR::Crate& crate);
-const HIR::SimplePath& TransAllocatorLayoutPath(const HIR::Crate& crate);
-HIR::Path TransAllocatorLayoutCtorPath(const HIR::Crate& crate);
-HIR::Path TransAllocatorMethodPath(const HIR::Crate& crate, const HIR::TypeData* allocatorType, const AllocatorMethod& method);
+HIRSimplePath TransAllocatorTraitPath(const HIRCrate& crate);
+const HIRSimplePath& TransAllocatorLayoutPath(const HIRCrate& crate);
+HIRPath TransAllocatorLayoutCtorPath(const HIRCrate& crate);
+HIRPath TransAllocatorMethodPath(const HIRCrate& crate, const HIRTypeData* allocatorType, const AllocatorMethod& method);

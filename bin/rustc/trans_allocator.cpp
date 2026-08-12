@@ -15,32 +15,32 @@ const size_t NUM_ALLOCATOR_METHODS = sizeof(ALLOCATOR_METHODS) / sizeof(ALLOCATO
 
 const char GLOBAL_ALLOCATOR_LANG_ITEM[] = "mrustc-global_allocator";
 
-HIR::SimplePath TransAllocatorTraitPath(const HIR::Crate& crate) {
+HIRSimplePath TransAllocatorTraitPath(const HIRCrate& crate) {
     const auto& layoutPath = TransAllocatorLayoutPath(crate);
-    return HIR::SimplePath(layoutPath.crateName(), {"alloc", "global", "GlobalAlloc"});
+    return HIRSimplePath(layoutPath.crateName(), {"alloc", "global", "GlobalAlloc"});
 }
 
-const HIR::SimplePath& TransAllocatorLayoutPath(const HIR::Crate& crate) {
+const HIRSimplePath& TransAllocatorLayoutPath(const HIRCrate& crate) {
     return crate.getLangItemPath(Span(), "alloc_layout");
 }
 
-HIR::Path TransAllocatorLayoutCtorPath(const HIR::Crate& crate) {
+HIRPath TransAllocatorLayoutCtorPath(const HIRCrate& crate) {
     const auto& layoutPath = TransAllocatorLayoutPath(crate);
     const auto& layoutStruct = crate.getStructByPath(Span(), layoutPath);
     const auto layoutType = crate.types.path(
-        HIR::GenericPath(layoutPath),
-        HIR::TypePathBinding(&layoutStruct)
+        HIRGenericPath(layoutPath),
+        HIRTypePathBinding(&layoutStruct)
     );
-    return HIR::Path(layoutType, RcString::newInterned("from_size_align_unchecked"));
+    return HIRPath(layoutType, RcString::newInterned("from_size_align_unchecked"));
 }
 
-HIR::Path TransAllocatorMethodPath(const HIR::Crate& crate, const HIR::TypeData* allocatorType, const AllocatorMethod& method) {
+HIRPath TransAllocatorMethodPath(const HIRCrate& crate, const HIRTypeData* allocatorType, const AllocatorMethod& method) {
     const auto traitPath = TransAllocatorTraitPath(crate);
     const auto& trait = crate.getTraitByPath(Span(), traitPath);
     const auto& function = trait.values.at(method.name).as_Function();
-    return HIR::Path(
+    return HIRPath(
         allocatorType,
-        HIR::GenericPath(traitPath),
+        HIRGenericPath(traitPath),
         RcString::newInterned(method.name),
         function.mParams.makeEmptyParams(true)
     );

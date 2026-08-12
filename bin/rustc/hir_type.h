@@ -18,19 +18,18 @@ constexpr const char* ATY_PREFIX_ERASED = "erased#";
 
 namespace stl { class ObjPool; }
 
-namespace HIR {
 
-    struct TraitMarkings;
-    class ExternType;
-    class Struct;
-    class Union;
-    class Enum;
-    class Function;
-    class ItemPath;
-    struct ExprNodeClosure;
-    struct ExprNodeGenerator;
+    struct HIRTraitMarkings;
+    class HIRExternType;
+    class HIRStruct;
+    class HIRUnion;
+    class HIREnum;
+    class HIRFunction;
+    class HIRItemPath;
+    struct HIRExprNodeClosure;
+    struct HIRExprNodeGenerator;
 
-    enum class CoreType {
+    enum class HIRCoreType {
         Usize,
         Isize,
         U8,
@@ -53,61 +52,61 @@ namespace HIR {
         Char,
         Str,
     };
-    extern ::std::ostream& operator<<(::std::ostream& os, const CoreType& ct);
+    extern ::std::ostream& operator<<(::std::ostream& os, const HIRCoreType& ct);
 
-    bool isInteger(const CoreType& v);
+    bool isInteger(const HIRCoreType& v);
 
-    bool isFloat(const CoreType& v);
+    bool isFloat(const HIRCoreType& v);
 
-    enum class BorrowType {
+    enum class HIRBorrowType {
         Shared,
         Unique,
         Owned,
     };
-    extern ::std::ostream& operator<<(::std::ostream& os, const BorrowType& bt);
+    extern ::std::ostream& operator<<(::std::ostream& os, const HIRBorrowType& bt);
 
     /// Array size used for types AND array literals
     TAGGED_UNION_EX(
-        ArraySize,
+        HIRArraySize,
         (),
         Unevaluated,
         (
             /// Un-evaluated size
-            (Unevaluated, ConstGeneric),
+            (Unevaluated, HIRConstGeneric),
             /// Fully known
             (Known, uint64_t)
         ),
         /*extra_move=*/(),
         /*extra_assign=*/(),
-        /*extra=*/(ArraySize clone() const; Ordering ord(const ArraySize& x) const; bool operator==(const ArraySize& x) const { return ord(x) == OrdEqual; } bool operator!=(const ArraySize& x) const { return !operator==(x); })
+        /*extra=*/(HIRArraySize clone() const; Ordering ord(const HIRArraySize& x) const; bool operator==(const HIRArraySize& x) const { return ord(x) == OrdEqual; } bool operator!=(const HIRArraySize& x) const { return !operator==(x); })
     );
-    extern ::std::ostream& operator<<(::std::ostream& os, const ArraySize& x);
+    extern ::std::ostream& operator<<(::std::ostream& os, const HIRArraySize& x);
 
     TAGGED_UNION_EX(
-        TypePathBinding,
+        HIRTypePathBinding,
         (),
         Unbound,
         ((Unbound, struct {}), // Not yet bound, either during lowering OR during resolution (when associated and still being resolved)
          (Opaque, struct {}),  // Opaque, i.e. An associated type of a generic (or Self in a trait)
-         (ExternType, const ::HIR::ExternType*),
-         (Struct, const ::HIR::Struct*),
-         (Union, const ::HIR::Union*),
-         (Enum, const ::HIR::Enum*)),
+         (ExternType, const HIRExternType*),
+         (Struct, const HIRStruct*),
+         (Union, const HIRUnion*),
+         (Enum, const HIREnum*)),
         (),
         (),
-        (TypePathBinding clone() const;
+        (HIRTypePathBinding clone() const;
 
-         const GenericParams* getGenerics() const;
-         const TraitMarkings* getTraitMarkings() const;
+         const HIRGenericParams* getGenerics() const;
+         const HIRTraitMarkings* getTraitMarkings() const;
 
-         bool operator==(const TypePathBinding & x) const;
-         bool operator!=(const TypePathBinding & x) const { return !(*this == x); })
+         bool operator==(const HIRTypePathBinding & x) const;
+         bool operator!=(const HIRTypePathBinding & x) const { return !(*this == x); })
     );
 
-    struct TypeDataPath {
-        ::HIR::Path path;
-        TypePathBinding binding;
-        ::std::unique_ptr<::HIR::GenericParams> hrtbs; // HRTBs for vtable paths ONLY
+    struct HIRTypeDataPath {
+        HIRPath path;
+        HIRTypePathBinding binding;
+        ::std::unique_ptr<HIRGenericParams> hrtbs; // HRTBs for vtable paths ONLY
 
         bool isClosure() const {
             return path.mData.is_Generic() && path.mData.as_Generic().mPath.components().back().size() > 8 && path.mData.as_Generic().mPath.components().back().compare(0, strlen(CLOSURE_PATH_PREFIX), CLOSURE_PATH_PREFIX) == 0;
@@ -122,19 +121,19 @@ namespace HIR {
         }
     };
 
-    struct TypeDataTraitObject {
-        ::HIR::TraitPath mTrait;
-        ::std::vector<::HIR::GenericPath> markers;
-        ::HIR::LifetimeRef lifetime;
+    struct HIRTypeDataTraitObject {
+        HIRTraitPath mTrait;
+        ::std::vector<HIRGenericPath> markers;
+        HIRLifetimeRef lifetime;
     };
 
-    struct TypeDataErasedTypeAliasInner {
-        HIR::GenericParams generics;
-        HIR::SimplePath path;
-        HIR::TypeRef type;
+    struct HIRTypeDataErasedTypeAliasInner {
+        HIRGenericParams generics;
+        HIRSimplePath path;
+        HIRTypeRef type;
 
-        TypeDataErasedTypeAliasInner(const HIR::ItemPath& p, const HIR::GenericParams& params);
-        bool isPublicTo(const HIR::SimplePath& p) const;
+        HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, const HIRGenericParams& params);
+        bool isPublicTo(const HIRSimplePath& p) const;
     };
 
     TAGGED_UNION(
@@ -142,37 +141,35 @@ namespace HIR {
         Alias,
         (Fcn,
          struct {
-             ::HIR::Path origin;
+             HIRPath origin;
              unsigned int index;
          }),
-        (Known, HIR::TypeRef),
+        (Known, HIRTypeRef),
         (Alias, struct {
-            ::HIR::PathParams params;
-            ::std::shared_ptr<TypeDataErasedTypeAliasInner> inner;
+            HIRPathParams params;
+            ::std::shared_ptr<HIRTypeDataErasedTypeAliasInner> inner;
         })
     );
 
-} // namespace HIR
 
-extern Ordering ord(const HIR::TypeDataErasedTypeInner& a, const HIR::TypeDataErasedTypeInner& b);
+extern Ordering ord(const TypeDataErasedTypeInner& a, const TypeDataErasedTypeInner& b);
 
-static inline bool operator==(const HIR::TypeDataErasedTypeInner& a, const HIR::TypeDataErasedTypeInner& b) {
+static inline bool operator==(const TypeDataErasedTypeInner& a, const TypeDataErasedTypeInner& b) {
     return ord(a, b) == OrdEqual;
 }
 
-static inline bool operator!=(const HIR::TypeDataErasedTypeInner& a, const HIR::TypeDataErasedTypeInner& b) {
+static inline bool operator!=(const TypeDataErasedTypeInner& a, const TypeDataErasedTypeInner& b) {
     return ord(a, b) != OrdEqual;
 }
 
-namespace HIR {
 
-    struct TypeDataErasedType {
+    struct HIRTypeDataErasedType {
         bool isSized;
-        ::std::vector<::HIR::TraitPath> traits;
-        ::std::vector<::HIR::LifetimeRef> lifetimeBounds;
+        ::std::vector<HIRTraitPath> traits;
+        ::std::vector<HIRLifetimeRef> lifetimeBounds;
         TypeDataErasedTypeInner inner;
         /// Contents of the `use<...>` annotation/bound
-        ::HIR::PathParams use;
+        HIRPathParams use;
         /// Indicates if `use<...>` was present (and what edition)
         enum class Use {
             /// @brief Omitted, but pre-2024 edition: Uses types/lifetimes present in bounds
@@ -184,101 +181,101 @@ namespace HIR {
         } usePresent;
     };
 
-    struct TypeDataFunctionPointer {
-        GenericParams hrls; // Higher-ranked lifetimes
+    struct HIRTypeDataFunctionPointer {
+        HIRGenericParams hrls; // Higher-ranked lifetimes
         bool isUnsafe;
         bool isVariadic;
         RcString mAbi; // RcString is usually used for identifiers, but ABI names also form a small interned set.
-        TypeRef mRettype;
-        ::std::vector<TypeRef> argTypes;
+        HIRTypeRef mRettype;
+        ::std::vector<HIRTypeRef> argTypes;
     };
 
     TAGGED_UNION_EX(
-        TypeDataNamedFunctionTy,
+        HIRTypeDataNamedFunctionTy,
         (),
         Function,
-        ((Function, const ::HIR::Function*),
+        ((Function, const HIRFunction*),
          (EnumConstructor,
           struct {
-              const ::HIR::Enum* e;
+              const HIREnum* e;
               size_t v;
           }),
-         (StructConstructor, const ::HIR::Struct*)),
+         (StructConstructor, const HIRStruct*)),
         (),
         (),
-        (TypeDataNamedFunctionTy clone() const;)
+        (HIRTypeDataNamedFunctionTy clone() const;)
     );
     /// "magic structs": Any type generated from a node
     TAGGED_UNION_EX(
-        TypeDataNodeType,
+        HIRTypeDataNodeType,
         (),
         Closure,
-        ((Closure, const ::HIR::ExprNodeClosure*),
-         (Generator, const ::HIR::ExprNodeGenerator*), // Aka a coroutine
-         (Async, const ::HIR::ExprNodeAsyncBlock*)),
+        ((Closure, const HIRExprNodeClosure*),
+         (Generator, const HIRExprNodeGenerator*), // Aka a coroutine
+         (Async, const HIRExprNodeAsyncBlock*)),
         (),
         (),
-        (bool operator==(const TypeDataNodeType& x) const; bool operator!=(const TypeDataNodeType& x) const { return !(*this == x); } Ordering ord(const ::HIR::TypeDataNodeType& x) const; TypeDataNodeType clone() const; void fmt(::std::ostream& os) const;)
+        (bool operator==(const HIRTypeDataNodeType& x) const; bool operator!=(const HIRTypeDataNodeType& x) const { return !(*this == x); } Ordering ord(const HIRTypeDataNodeType& x) const; HIRTypeDataNodeType clone() const; void fmt(::std::ostream& os) const;)
     );
 
     TAGGED_UNION_EX(
-        TypeData,
+        HIRTypeData,
         (),
         Diverge,
         ((Infer,
          struct {
              unsigned int index;
-             InferClass tyClass;
+             HIRInferClass tyClass;
 
              /// Returns true if the ivar is a literal
              bool isLit() const {
                  switch (this->tyClass) {
-                     case InferClass::None:
+                     case HIRInferClass::None:
                          return false;
-                     case InferClass::Integer:
-                     case InferClass::Float:
+                     case HIRInferClass::Integer:
+                     case HIRInferClass::Float:
                          return true;
                  }
                  throw "";
              }
          }),
         (Diverge, struct {}),
-        (Primitive, ::HIR::CoreType),
-        (Path, TypeDataPath), // TODO: Pointer wrap
-        (Generic, GenericRef),
-        (TraitObject, TypeDataTraitObject),                      // TODO: Pointer wrap
-        (ErasedType, /*::std::unique_ptr<*/ TypeDataErasedType), // TODO: Pointer wrap
+        (Primitive, HIRCoreType),
+        (Path, HIRTypeDataPath), // TODO: Pointer wrap
+        (Generic, HIRGenericRef),
+        (TraitObject, HIRTypeDataTraitObject),                      // TODO: Pointer wrap
+        (ErasedType, /*::std::unique_ptr<*/ HIRTypeDataErasedType), // TODO: Pointer wrap
         (Array,
          struct {
-             TypeRef inner;
-             ArraySize size;
+             HIRTypeRef inner;
+             HIRArraySize size;
          }),
-        (Slice, struct { TypeRef inner; }),
-        (Tuple, ::std::vector<TypeRef>),
+        (Slice, struct { HIRTypeRef inner; }),
+        (Tuple, ::std::vector<HIRTypeRef>),
         (Borrow,
          struct {
-             ::HIR::LifetimeRef lifetime;
-             ::HIR::BorrowType type;
-             TypeRef inner;
+             HIRLifetimeRef lifetime;
+             HIRBorrowType type;
+             HIRTypeRef inner;
          }),
         (Pointer,
          struct {
-             ::HIR::BorrowType type;
-             TypeRef inner;
+             HIRBorrowType type;
+             HIRTypeRef inner;
          }),
         (NamedFunction,
          struct {
-             ::HIR::Path path;
-             TypeDataNamedFunctionTy def;
+             HIRPath path;
+             HIRTypeDataNamedFunctionTy def;
 
-             TypeDataFunctionPointer decay(TypeInterner& types, const Span& sp) const;
+             HIRTypeDataFunctionPointer decay(HIRTypeInterner& types, const Span& sp) const;
          }),
-        (Function, TypeDataFunctionPointer), // TODO: Pointer wrap, this is quite large
-        (NodeType, TypeDataNodeType)),
+        (Function, HIRTypeDataFunctionPointer), // TODO: Pointer wrap, this is quite large
+        (NodeType, HIRTypeDataNodeType)),
         (, flags(x.flags)),
         (flags = x.flags;),
         (
-            enum TypeFlags : uint32_t {
+            enum HIRTypeFlags : uint32_t {
                 HAS_TYPE_INFER = 1u << 0,
                 HAS_TYPE_PARAM = 1u << 1,
                 HAS_LIFETIME_PARAM = 1u << 2,
@@ -299,52 +296,51 @@ namespace HIR {
                 return flags & (HAS_ASSOCIATED_TYPE | HAS_TYPE_INFER);
             }
 
-            TypeData cloneData() const;
+            HIRTypeData cloneData() const;
             void fmt(::std::ostream& os) const;
 
             // Deliberately semantic relations. Plain TypeRef equality is pointer identity.
-            bool equalsIgnoringRegions(::HIR::TypeRef x) const;
-            Ordering ordIgnoringRegions(::HIR::TypeRef x) const;
-            bool matchTestGenerics(const Span& sp, ::HIR::TypeRef x, tCbResolveType resolvePlaceholder, MatchGenerics& callback) const;
-            ::HIR::Compare matchTestGenericsFuzz(const Span& sp, ::HIR::TypeRef x, tCbResolveType resolvePlaceholder, MatchGenerics& callback) const;
-            Compare compareWithPlaceholders(const Span& sp, ::HIR::TypeRef x, tCbResolveType resolvePlaceholder) const;
-            const ::HIR::SimplePath* getSortPath() const;
+            bool equalsIgnoringRegions(HIRTypeRef x) const;
+            Ordering ordIgnoringRegions(HIRTypeRef x) const;
+            bool matchTestGenerics(const Span& sp, HIRTypeRef x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const;
+            HIRCompare matchTestGenericsFuzz(const Span& sp, HIRTypeRef x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const;
+            HIRCompare compareWithPlaceholders(const Span& sp, HIRTypeRef x, tCbResolveType resolvePlaceholder) const;
+            const HIRSimplePath* getSortPath() const;
         )
     );
 
-    class TypeInterner {
+    class HIRTypeInterner {
         stl::ObjPool& pool;
-        ::std::unordered_multimap<size_t, TypeRef> nodes;
+        ::std::unordered_multimap<size_t, HIRTypeRef> nodes;
 
     public:
-        explicit TypeInterner(stl::ObjPool& pool);
+        explicit HIRTypeInterner(stl::ObjPool& pool);
 
-        TypeRef intern(TypeData data);
-        TypeRef infer(unsigned int idx = ~0u, InferClass tyClass = InferClass::None);
-        TypeRef primitive(CoreType ct);
-        TypeRef generic(RcString name, unsigned int slot);
-        TypeRef self();
-        TypeRef unit();
-        TypeRef diverge();
-        TypeRef borrow(BorrowType bt, TypeRef inner, LifetimeRef lft = LifetimeRef());
-        TypeRef pointer(BorrowType bt, TypeRef inner);
-        TypeRef tuple(::std::vector<TypeRef> types);
-        TypeRef slice(TypeRef inner);
-        TypeRef array(TypeRef inner, ArraySize size);
-        TypeRef array(TypeRef inner, uint64_t size);
-        TypeRef array(TypeRef inner, ConstGeneric size);
-        TypeRef path(Path path, TypePathBinding binding, ::std::unique_ptr<GenericParams> hrtbs = {});
-        TypeRef function(TypeDataFunctionPointer ft);
-        TypeRef closure(ExprNodeClosure* node);
-        TypeRef generator(ExprNodeGenerator* node);
-        TypeRef asyncBlock(ExprNodeAsyncBlock* node);
+        HIRTypeRef intern(HIRTypeData data);
+        HIRTypeRef infer(unsigned int idx = ~0u, HIRInferClass tyClass = HIRInferClass::None);
+        HIRTypeRef primitive(HIRCoreType ct);
+        HIRTypeRef generic(RcString name, unsigned int slot);
+        HIRTypeRef self();
+        HIRTypeRef unit();
+        HIRTypeRef diverge();
+        HIRTypeRef borrow(HIRBorrowType bt, HIRTypeRef inner, HIRLifetimeRef lft = HIRLifetimeRef());
+        HIRTypeRef pointer(HIRBorrowType bt, HIRTypeRef inner);
+        HIRTypeRef tuple(::std::vector<HIRTypeRef> types);
+        HIRTypeRef slice(HIRTypeRef inner);
+        HIRTypeRef array(HIRTypeRef inner, HIRArraySize size);
+        HIRTypeRef array(HIRTypeRef inner, uint64_t size);
+        HIRTypeRef array(HIRTypeRef inner, HIRConstGeneric size);
+        HIRTypeRef path(HIRPath path, HIRTypePathBinding binding, ::std::unique_ptr<HIRGenericParams> hrtbs = {});
+        HIRTypeRef function(HIRTypeDataFunctionPointer ft);
+        HIRTypeRef closure(HIRExprNodeClosure* node);
+        HIRTypeRef generator(HIRExprNodeGenerator* node);
+        HIRTypeRef asyncBlock(HIRExprNodeAsyncBlock* node);
     };
 
-    inline bool operator==(TypeRef ty, CoreType ct) {
+    inline bool operator==(HIRTypeRef ty, HIRCoreType ct) {
         return ty && ty->is_Primitive() && ty->as_Primitive() == ct;
     }
-    inline bool operator!=(TypeRef ty, CoreType ct) { return !(ty == ct); }
+    inline bool operator!=(HIRTypeRef ty, HIRCoreType ct) { return !(ty == ct); }
 
-    extern ::std::ostream& operator<<(::std::ostream& os, const ::HIR::TypeData* ty);
+    extern ::std::ostream& operator<<(::std::ostream& os, const HIRTypeData* ty);
 
-} // namespace HIR

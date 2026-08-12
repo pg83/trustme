@@ -6,10 +6,8 @@
 
 #include <set>
 
-namespace HIR {
-    class Crate;
-    class TypeInterner;
-}
+    class HIRCrate;
+    class HIRTypeInterner;
 
 namespace stl {
     class ObjPool;
@@ -51,7 +49,7 @@ public:
 class ASTCrate {
 public:
     stl::ObjPool* pool;
-    HIR::TypeInterner& types;
+    HIRTypeInterner& types;
     ASTAttributeList mAttrs;
 
     ::std::map<::std::string, ASTAbsolutePath> mLangItems;
@@ -103,7 +101,7 @@ public:
     RcString crateNameReal;        // user name '-' suffix
     ASTPath preludePath;
 
-    ASTCrate(stl::ObjPool* pool, HIR::TypeInterner& types);
+    ASTCrate(stl::ObjPool* pool, HIRTypeInterner& types);
 
     const ASTModule& rootModule() const {
         return mRootModule;
@@ -129,9 +127,9 @@ public:
     RcString mName;
     RcString shortName;
     ::std::string filename;
-    ::HIR::Crate* hir = nullptr;
+    HIRCrate* hir = nullptr;
 
-    ASTExternCrate(stl::ObjPool* pool, HIR::TypeInterner& types, const RcString& name, const ::std::string& path);
+    ASTExternCrate(stl::ObjPool* pool, HIRTypeInterner& types, const RcString& name, const ::std::string& path);
 
     ASTExternCrate(ASTExternCrate&&) = default;
     ASTExternCrate& operator=(ASTExternCrate&&) = default;

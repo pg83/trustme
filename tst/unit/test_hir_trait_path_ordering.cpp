@@ -10,23 +10,23 @@
 // This unit links hir_path.cpp without the rest of the compiler. Its path
 // parameters are empty, so neither encoded constants nor their ordering can be
 // reached; provide the two otherwise-unresolved out-of-line members explicitly.
-HIR::EncodedLiteralPtr::~EncodedLiteralPtr() = default;
+HIREncodedLiteralPtr::~HIREncodedLiteralPtr() = default;
 
-Ordering HIR::ConstGeneric::ord(const HIR::ConstGeneric&) const {
+Ordering HIRConstGeneric::ord(const HIRConstGeneric&) const {
     std::abort();
 }
 
 namespace {
-    HIR::TraitPath makeTraitPath(const char* name, bool applyElision) {
-        std::unique_ptr<HIR::GenericParams> hrtbs;
+    HIRTraitPath makeTraitPath(const char* name, bool applyElision) {
+        std::unique_ptr<HIRGenericParams> hrtbs;
         if (applyElision) {
-            hrtbs = std::make_unique<HIR::GenericParams>();
+            hrtbs = std::make_unique<HIRGenericParams>();
         }
 
         std::vector<RcString> components;
         components.push_back(RcString::newInterned(name));
-        HIR::GenericPath path(HIR::SimplePath(RcString::newInterned("test"), std::move(components)));
-        HIR::TraitPath trait(std::move(hrtbs), std::move(path));
+        HIRGenericPath path(HIRSimplePath(RcString::newInterned("test"), std::move(components)));
+        HIRTraitPath trait(std::move(hrtbs), std::move(path));
         trait.lifetimeElision = applyElision;
         return trait;
     }

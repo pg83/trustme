@@ -15,12 +15,11 @@ class MIRStatement;
 class MIRTerminator;
 class MIRTypeResolve;
 
-namespace HIR {
 
-    struct Evaluator {
+    struct HIREvaluator {
         class Newval {
         public:
-            virtual ::HIR::Path newStatic(::HIR::TypeRef type, EncodedLiteral value) = 0;
+            virtual HIRPath newStatic(HIRTypeRef type, EncodedLiteral value) = 0;
         };
 
         class CsePtr {
@@ -63,13 +62,13 @@ namespace HIR {
         static unsigned sNextEvalIndex;
 
     public:
-        Evaluator(const Span& sp, const ::HIR::Crate& crate, Newval& nvs);
+        HIREvaluator(const Span& sp, const HIRCrate& crate, Newval& nvs);
 
-        Evaluator(Evaluator&&) = default;
-        Evaluator(const Evaluator&) = delete;
+        HIREvaluator(HIREvaluator&&) = default;
+        HIREvaluator(const HIREvaluator&) = delete;
 
-        EncodedLiteral evaluateConstant(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& expr, ::HIR::TypeRef exp);
-        EncodedLiteral evaluateConstant(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& expr, ::HIR::TypeRef exp, MonomorphState ms);
+        EncodedLiteral evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, HIRTypeRef exp);
+        EncodedLiteral evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, HIRTypeRef exp, MonomorphState ms);
 
         void setRequireConstCalls() {
             requireConstCalls = true;
@@ -80,15 +79,14 @@ namespace HIR {
         }
 
     private:
-        void pushStackEntry(::FmtLambda printPath, const MIRFunction& fcn, MonomorphState ms, ::HIR::TypeRef exp, ::HIR::Function::argsT argDefs, ::std::vector<MIREvalAllocationPtr> args, const ::HIR::GenericParams* itemParamsDef, const ::HIR::GenericParams* implParamsDef);
+        void pushStackEntry(::FmtLambda printPath, const MIRFunction& fcn, MonomorphState ms, HIRTypeRef exp, HIRFunction::argsT argDefs, ::std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef);
 
         MIREvalAllocationPtr runUntilStackEmpty();
         void runStatement(MIREvalCallStackEntry& localState, const MIRStatement& stmt);
         // Returns UINT_MAX on return
         unsigned runTerminator(MIREvalCallStackEntry& localState, const MIRTerminator& stmt);
-        bool callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, ::std::shared_ptr<::HIR::Path> path, ::std::vector<MIREvalAllocationPtr> callArgs);
+        bool callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, ::std::shared_ptr<HIRPath> path, ::std::vector<MIREvalAllocationPtr> callArgs);
 
-        EncodedLiteral allocationToEncoded(const ::HIR::TypeData* ty, const MIREvalAllocation& a);
+        EncodedLiteral allocationToEncoded(const HIRTypeData* ty, const MIREvalAllocation& a);
     };
 
-} // namespace HIR

@@ -24,7 +24,7 @@ namespace {
     class ExprVisitorConv: public MirConverter {
         MirBuilder& builder;
 
-        const ::std::vector<::HIR::TypeRef>& variableTypes;
+        const ::std::vector<HIRTypeRef>& variableTypes;
 
         /// Generators do some different codegen quirks
         bool isGenerator;
@@ -71,14 +71,14 @@ namespace {
             std::set<unsigned> savedDropFlags;
 
             /// Path to the enum used for the state index field (used to generate enum variant construction)
-            ::HIR::SimplePath stateIdxEnmPath;
+            HIRSimplePath stateIdxEnmPath;
 
             /// Is this coroutine a future? (as opposed to a generator)
             bool isFuture = false;
         } generatorState;
 
     public:
-        ExprVisitorConv(MirBuilder& builder, const ::std::vector<::HIR::TypeRef>& varTypes, const ::HIR::ExprNodeGeneratorWrapper* isGenerator)
+        ExprVisitorConv(MirBuilder& builder, const ::std::vector<HIRTypeRef>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator)
             : builder(builder)
             , variableTypes(varTypes)
             , isGenerator(isGenerator != nullptr)
@@ -113,11 +113,11 @@ namespace {
             return generatorState.savedDropFlags;
         }
 
-        std::set<unsigned> generatorFinalise(const Span& sp, ::HIR::Enum& stateEnm) {
+        std::set<unsigned> generatorFinalise(const Span& sp, HIREnum& stateEnm) {
             std::set<unsigned> usedVars;
             std::vector<MIRBasicBlockId> armTargets;
             armTargets.reserve(generatorState.states.size() + 1);
-            ::std::vector<HIR::Enum::ValueVariant> enumVariants;
+            ::std::vector<HIREnum::ValueVariant> enumVariants;
             enumVariants.reserve(generatorState.states.size() + 1);
             for (const auto& s : generatorState.states) {
                 armTargets.push_back(builder.newBbUnlinked());
@@ -126,7 +126,7 @@ namespace {
                 builder.pushStmtAssign(sp, generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath, static_cast<unsigned>(generatorState.states.size()), {}}));
                 builder.endBlock(MIRTerminator::make_Goto(s.entrypoint));
 
-                enumVariants.push_back(HIR::Enum::ValueVariant{RcString(), ::HIR::ExprPtr(), U128(armTargets.size() - 1)});
+                enumVariants.push_back(HIREnum::ValueVariant{RcString(), HIRExprPtr(), U128(armTargets.size() - 1)});
                 for (const auto& e : s.saved) {
                     usedVars.insert(e.first);
                 }
@@ -136,8 +136,8 @@ namespace {
             builder.setCurBlock(armTargets.back());
             builder.endBlock(MIRTerminator::make_Unreachable({}));
 
-            enumVariants.push_back(HIR::Enum::ValueVariant{RcString::newInterned("END"), ::HIR::ExprPtr(), U128(armTargets.size() - 1)});
-            stateEnm.mData = ::HIR::Enum::Class::make_Value({mv$(enumVariants)});
+            enumVariants.push_back(HIREnum::ValueVariant{RcString::newInterned("END"), HIRExprPtr(), U128(armTargets.size() - 1)});
+            stateEnm.mData = HIREnum::Class::make_Value({mv$(enumVariants)});
 
             builder.setCurBlock(generatorState.bbOpen);
 
@@ -223,48 +223,48 @@ namespace {
             outBuilder.endBlock(MIRTerminator::make_Switch({mv$(stmtIdxLv), mv$(arms)}));
         }
 
-        void visitPatternSlots(const ::HIR::Pattern& pat, PatternDropOrder order, const std::function<void(unsigned)>& visitSlot) {
-            for (const auto slot : ::HIR::patternBindingSlots(pat, order)) {
+        void visitPatternSlots(const HIRPattern& pat, PatternDropOrder order, const std::function<void(unsigned)>& visitSlot) {
+            for (const auto slot : patternBindingSlots(pat, order)) {
                 visitSlot(slot);
             }
         }
 
-        void schedulePatternDrops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) override {
+        void schedulePatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) override {
             (void)sp;
             visitPatternSlots(pat, order, [&](unsigned slot) {
                 builder.scheduleVariableDrop(slot);
             });
         }
 
-        void registerPatternVariables(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) override {
+        void registerPatternVariables(const Span& sp, const HIRPattern& pat, PatternDropOrder order) override {
             (void)sp;
             visitPatternSlots(pat, order, [&](unsigned slot) {
                 builder.registerVariableState(slot);
             });
         }
 
-        void scheduleRegisteredPatternDrops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) override {
+        void scheduleRegisteredPatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) override {
             (void)sp;
             visitPatternSlots(pat, order, [&](unsigned slot) {
                 builder.scheduleRegisteredVariableDrop(slot);
             });
         }
 
-        MIRLValue getValueForBindingPath(const Span& sp, const ::HIR::TypeData* outerTy, const MIRLValue& outerLval, const PatternBinding& b) {
-            HIR::TypeRef ty;
+        MIRLValue getValueForBindingPath(const Span& sp, const HIRTypeData* outerTy, const MIRLValue& outerLval, const PatternBinding& b) {
+            HIRTypeRef ty;
             MIRLValue lval;
             MIRLowerHIRGetTypeValueForPath(sp, builder, outerTy, outerLval, b.field, ty, lval);
 
             if (b.isSplitSlice()) {
                 struct H {
-                    static ::HIR::BorrowType getBorrowType(const Span& sp, const ::HIR::PatternBinding& pb) {
+                    static HIRBorrowType getBorrowType(const Span& sp, const HIRPatternBinding& pb) {
                         switch (pb.mType) {
-                            case ::HIR::PatternBinding::Type::Move:
+                            case HIRPatternBinding::Type::Move:
                                 BUG(sp, "By-value pattern binding of a slice");
-                            case ::HIR::PatternBinding::Type::Ref:
-                                return ::HIR::BorrowType::Shared;
-                            case ::HIR::PatternBinding::Type::MutRef:
-                                return ::HIR::BorrowType::Unique;
+                            case HIRPatternBinding::Type::Ref:
+                                return HIRBorrowType::Shared;
+                            case HIRPatternBinding::Type::MutRef:
+                                return HIRBorrowType::Unique;
                         }
                         throw "";
                     }
@@ -277,7 +277,7 @@ namespace {
                     auto len = tep->size.as_Known() - subValI;
                     auto retTy = types.array(innerType, len);
 
-                    if (b.binding->mType == ::HIR::PatternBinding::Type::Move) {
+                    if (b.binding->mType == HIRPatternBinding::Type::Move) {
                         // Create a new array value
                         std::vector<MIRParam> arrayVals;
                         for (size_t i = b.splitSlice.first; i < tep->size.as_Known() - b.splitSlice.second; i++) {
@@ -286,7 +286,7 @@ namespace {
                         lval = builder.lvalueOrTemp(sp, mv$(retTy), MIRRValue::make_Array({std::move(arrayVals)}));
                     } else {
                         // Create a pointer to this array, by casting a raw pointer to its first element
-                        ::HIR::BorrowType bt = H::getBorrowType(sp, *b.binding);
+                        HIRBorrowType bt = H::getBorrowType(sp, *b.binding);
                         MIRLValue ptrVal = builder.lvalueOrTemp(sp, types.pointer(bt, innerType), MIRRValue::make_Borrow({bt, true, MIRLValue::newField(lval.clone(), static_cast<unsigned int>(b.splitSlice.first))}));
 
                         // 3. Create a slice pointer
@@ -299,15 +299,15 @@ namespace {
                     auto innerType = tep->inner;
 
                     // 1. Obtain remaining length
-                    auto usizeTy = types.primitive(::HIR::CoreType::Usize);
+                    auto usizeTy = types.primitive(HIRCoreType::Usize);
                     auto srcLenLval = builder.lvalueOrTemp(sp, usizeTy, MIRRValue::make_DstMeta({builder.getPtrToDst(sp, lval)}));
-                    auto subVal = MIRParam(MIRConstant::make_Uint({U128(subValI), ::HIR::CoreType::Usize}));
+                    auto subVal = MIRParam(MIRConstant::make_Uint({U128(subValI), HIRCoreType::Usize}));
                     MIRLValue lenVal = builder.lvalueOrTemp(sp, usizeTy, MIRRValue::make_BinOp({mv$(srcLenLval), MIRBinOp::SUB, mv$(subVal)}));
 
                     // 2. Obtain pointer to the first element
                     // TODO: This currently emits a borrow to that element, but we need a raw pointer (to avoid being technically out-of-bounds)
                     // - Should add a MIR op for `BorrowRaw`
-                    ::HIR::BorrowType bt = H::getBorrowType(sp, *b.binding);
+                    HIRBorrowType bt = H::getBorrowType(sp, *b.binding);
                     MIRLValue ptrVal = builder.lvalueOrTemp(sp, types.pointer(bt, innerType), MIRRValue::make_Borrow({bt, true, MIRLValue::newField(lval.clone(), static_cast<unsigned int>(b.splitSlice.first))}));
 
                     // 3. Create a slice pointer
@@ -322,7 +322,7 @@ namespace {
             return lval;
         }
 
-        void destructureFromList(const Span& sp, const ::HIR::TypeData* outerTy, MIRLValue outerLval, const ::std::vector<PatternBinding>& bindings, bool updateStates /*=true*/) override {
+        void destructureFromList(const Span& sp, const HIRTypeData* outerTy, MIRLValue outerLval, const ::std::vector<PatternBinding>& bindings, bool updateStates /*=true*/) override {
             TRACE_FUNCTION_F(outerLval << ": " << outerTy << " [" << bindings << "]");
             // Reverse order to avoid potential use-after-move for `foo @ Bar(baz, ..)`
             for (size_t i = bindings.size(); i--;) {
@@ -331,23 +331,23 @@ namespace {
 
                 MIRRValue rv;
                 switch (b.binding->mType) {
-                    case ::HIR::PatternBinding::Type::Move:
+                    case HIRPatternBinding::Type::Move:
                         rv = mv$(lval);
                         break;
-                    case ::HIR::PatternBinding::Type::Ref:
+                    case HIRPatternBinding::Type::Ref:
                         if (borrowRaiseTarget) {
                             DEBUG("- Raising destructure borrow of " << lval << " to scope " << *borrowRaiseTarget);
                             builder.raiseTemporaries(sp, lval, *borrowRaiseTarget);
                         }
 
-                        rv = MIRRValue::make_Borrow({::HIR::BorrowType::Shared, false, mv$(lval)});
+                        rv = MIRRValue::make_Borrow({HIRBorrowType::Shared, false, mv$(lval)});
                         break;
-                    case ::HIR::PatternBinding::Type::MutRef:
+                    case HIRPatternBinding::Type::MutRef:
                         if (borrowRaiseTarget) {
                             DEBUG("- Raising destructure borrow of " << lval << " to scope " << *borrowRaiseTarget);
                             builder.raiseTemporaries(sp, lval, *borrowRaiseTarget);
                         }
-                        rv = MIRRValue::make_Borrow({::HIR::BorrowType::Unique, false, mv$(lval)});
+                        rv = MIRRValue::make_Borrow({HIRBorrowType::Unique, false, mv$(lval)});
                         break;
                 }
                 // NOTE: Don't drop the destination, as `match` does some tricky things with calling destructure multiple times (to handle or-patterns)
@@ -355,7 +355,7 @@ namespace {
             }
         }
 
-        const HIR::TypeData* getBindingType(const Span& sp, unsigned index) const {
+        const HIRTypeData* getBindingType(const Span& sp, unsigned index) const {
             return variableTypes.at(index);
         }
 
@@ -365,12 +365,12 @@ namespace {
         }
 
         // -- ExprVisitor
-        void visitNodePtr(::HIR::ExprNodeP& nodeP) override {
+        void visitNodePtr(HIRExprNodeP& nodeP) override {
             DEBUG(nodeP.get());
-            ::HIR::ExprVisitor::visitNodePtr(nodeP);
+            HIRExprVisitor::visitNodePtr(nodeP);
         }
 
-        void visit(::HIR::ExprNodeBlock& node) override {
+        void visit(HIRExprNodeBlock& node) override {
             TRACE_FUNCTION_F("_Block");
             // NOTE: This doesn't create a BB, as BBs are not needed for scoping
             bool diverged = false;
@@ -390,10 +390,10 @@ namespace {
                 const Span& sp = subnode->span();
 
                 auto localStmtScope = builder.newScopeTemp(sp);
-                const auto* letNode = cast<::HIR::ExprNodeLet>(subnode.get());
+                const auto* letNode = cast<HIRExprNodeLet>(subnode.get());
                 auto _super_let_scope = saveAndEdit(superLetScope, letNode && letNode->isSuper ? superLetScope : &localStmtScope);
                 // NOTE: Only set the statement scope if processing a block
-                auto _stmt_scope_push = saveAndEdit(stmtScope, cast<::HIR::ExprNodeBlock>(subnode.get()) ? &localStmtScope : nullptr);
+                auto _stmt_scope_push = saveAndEdit(stmtScope, cast<HIRExprNodeBlock>(subnode.get()) ? &localStmtScope : nullptr);
                 this->visitNodePtr(subnode);
 
                 if (builder.blockActive() || builder.hasResult()) {
@@ -457,15 +457,15 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeConstBlock& node) override {
-            if (cast<HIR::ExprNodePathValue>(node.inner.get())) {
+        void visit(HIRExprNodeConstBlock& node) override {
+            if (cast<HIRExprNodePathValue>(node.inner.get())) {
                 this->visitNodePtr(node.inner);
             } else {
                 BUG(node.span(), "Const block shouldn't have reached MIR generation");
             }
         }
 
-        void visit(::HIR::ExprNodeAsm& node) override {
+        void visit(HIRExprNodeAsm& node) override {
             TRACE_FUNCTION_F("_Asm");
 
             ::std::vector<::std::pair<::std::string, MIRLValue>> inputs;
@@ -496,7 +496,7 @@ namespace {
             builder.setResult(node.span(), MIRRValue::make_Tuple({}));
         }
 
-        void visit(::HIR::ExprNodeAsm2& node) override {
+        void visit(HIRExprNodeAsm2& node) override {
             TRACE_FUNCTION_F("_Asm2");
 
             // TODO: How to represent inout in the MIR?
@@ -599,19 +599,19 @@ namespace {
         }
 
         // Common code used by both `ExprNodeReturn` and the final return of a GeneratorWrapper
-        void coroutineReturn(const Span& sp, const ::HIR::TypeData* valueTy) {
+        void coroutineReturn(const Span& sp, const HIRTypeData* valueTy) {
             static RcString rcstringComplete = RcString::newInterned("Complete");
             static RcString rcstringReady = RcString::newInterned("Ready"); // TODO: This is a lang item
             const auto& variantName = generatorState.isFuture ? rcstringReady : rcstringComplete;
             // TODO: Handle difference between generators and futures (different return/yield types)
-            ::HIR::GenericPath enmPath;
+            HIRGenericPath enmPath;
             size_t variantIndex = SIZE_MAX;
-            builder.withValType(sp, MIRLValue::newReturn(), [&](const ::HIR::TypeData* ty) {
+            builder.withValType(sp, MIRLValue::newReturn(), [&](const HIRTypeData* ty) {
                 const auto& te = ty->as_Path();
                 enmPath = te.path.mData.as_Generic().clone();
                 variantIndex = te.binding.as_Enum()->findVariant(variantName);
             });
-            ASSERT_BUG(sp, enmPath.mPath != HIR::SimplePath(), "Failed to get path from return type?");
+            ASSERT_BUG(sp, enmPath.mPath != HIRSimplePath(), "Failed to get path from return type?");
             ASSERT_BUG(sp, variantIndex != SIZE_MAX, "Unable to find variant " << variantName << " in " << enmPath << " for coroutine return");
 
             ::std::vector<MIRParam> values;
@@ -620,7 +620,7 @@ namespace {
             builder.pushStmtAssign(sp, MIRLValue::newReturn(), std::move(res));
         }
 
-        void visit(::HIR::ExprNodeReturn& node) override {
+        void visit(HIRExprNodeReturn& node) override {
             TRACE_FUNCTION_F("_Return");
             this->visitNodePtr(node.mValue);
 
@@ -637,13 +637,13 @@ namespace {
             builder.endBlock(MIRTerminator::make_Return({}));
         }
 
-        void visit(::HIR::ExprNodeYield& node) override {
+        void visit(HIRExprNodeYield& node) override {
             TRACE_FUNCTION_F("_Yield");
             if (isGenerator) {
                 ASSERT_BUG(node.span(), !generatorState.isFuture, "");
 
-                ::HIR::GenericPath enmPath;
-                builder.withValType(node.span(), MIRLValue::newReturn(), [&](const ::HIR::TypeData* ty) {
+                HIRGenericPath enmPath;
+                builder.withValType(node.span(), MIRLValue::newReturn(), [&](const HIRTypeData* ty) {
                     const auto& te = ty->as_Path();
                     enmPath = te.path.mData.as_Generic().clone();
                     ASSERT_BUG(node.span(), te.binding.as_Enum()->findVariant("Yielded") == 0, "");
@@ -673,7 +673,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeAWait& node) override {
+        void visit(HIRExprNodeAWait& node) override {
             const Span& sp = node.span();
             TRACE_FUNCTION_F("_AWait");
             ASSERT_BUG(node.span(), isGenerator && generatorState.isFuture, "`.await` not in an async block/function");
@@ -691,16 +691,16 @@ namespace {
             // Create `Pin<&mut >` as the reciever, using `Pin::new_unchecked`
             const auto& langPin = builder.resolve().crate.getLangItemPath(sp, "pin");
             auto& types = builder.resolve().crate.types;
-            auto typeMut = types.borrow(::HIR::BorrowType::Unique, tyInner);
-            auto pinPath = ::HIR::GenericPath(langPin, ::HIR::PathParams(typeMut));
+            auto typeMut = types.borrow(HIRBorrowType::Unique, tyInner);
+            auto pinPath = HIRGenericPath(langPin, HIRPathParams(typeMut));
             auto typePin = types.path(std::move(pinPath), &builder.resolve().crate.getStructByPath(sp, langPin));
 
-            auto lvMut = builder.lvalueOrTemp(sp, typeMut, MIRRValue::make_Borrow({::HIR::BorrowType::Unique, false, std::move(lvRes)}));
+            auto lvMut = builder.lvalueOrTemp(sp, typeMut, MIRRValue::make_Borrow({HIRBorrowType::Unique, false, std::move(lvRes)}));
             auto lvPin = builder.newTemporary(typePin);
             {
                 auto bbRet = builder.newBbUnlinked();
                 auto bbPanic = builder.newBbUnlinked();
-                builder.endBlock(MIRTerminator::make_Call({bbRet, MIRUnwindAction::make_Cleanup(bbPanic), lvPin.clone(), ::HIR::Path(typePin, "new_unchecked"), makeVec1(MIRParam(lvMut.clone()))}));
+                builder.endBlock(MIRTerminator::make_Call({bbRet, MIRUnwindAction::make_Cleanup(bbPanic), lvPin.clone(), HIRPath(typePin, "new_unchecked"), makeVec1(MIRParam(lvMut.clone()))}));
                 builder.movedLvalue(node.span(), std::move(lvMut));
                 builder.setCurBlock(bbPanic);
                 emitUnwind(sp);
@@ -708,7 +708,7 @@ namespace {
             }
             // Call `Future::poll`
             const auto& langPoll = builder.resolve().crate.getLangItemPath(sp, "Poll");
-            auto typePoll = types.path(::HIR::GenericPath(langPoll, ::HIR::PathParams(node.resType)), &builder.resolve().crate.getEnumByPath(sp, langPoll));
+            auto typePoll = types.path(HIRGenericPath(langPoll, HIRPathParams(node.resType)), &builder.resolve().crate.getEnumByPath(sp, langPoll));
             auto lvPoll = builder.newTemporary(typePoll);
             {
                 auto bbRet = builder.newBbUnlinked();
@@ -718,11 +718,11 @@ namespace {
                         {bbRet,
                          MIRUnwindAction::make_Cleanup(bbPanic),
                          lvPoll.clone(),
-                         ::HIR::Path(tyInner, builder.resolve().mLangFuture, "poll"),
+                         HIRPath(tyInner, builder.resolve().mLangFuture, "poll"),
                          makeVec2(
                              MIRParam(lvPin.clone()),
                              MIRParam::make_Borrow({
-                                 ::HIR::BorrowType::Unique,
+                                 HIRBorrowType::Unique,
                                  MIRLValue::newDeref(MIRLValue::newArgument(1)) // Context is the second argument (first is `self`)
                              })
                          )}
@@ -744,8 +744,8 @@ namespace {
                 builder.setCurBlock(bbPending);
 
                 // `retval = ::core::task::Poll::Pending; RETURN`
-                HIR::GenericPath pathLocalPoll;
-                builder.withValType(sp, MIRLValue::newReturn(), [&](const ::HIR::TypeData* ty) {
+                HIRGenericPath pathLocalPoll;
+                builder.withValType(sp, MIRLValue::newReturn(), [&](const HIRTypeData* ty) {
                     pathLocalPoll = ty->as_Path().path.mData.as_Generic().clone();
                 });
                 builder.pushStmtAssign(node.span(), MIRLValue::newReturn(), MIRRValue::make_EnumVariant({std::move(pathLocalPoll), 1, {}}));
@@ -758,7 +758,7 @@ namespace {
             builder.setResult(node.span(), MIRLValue::newField(MIRLValue::newDowncast(std::move(lvPoll), variantReady), 0));
         }
 
-        void visit(::HIR::ExprNodeLet& node) override {
+        void visit(HIRExprNodeLet& node) override {
             TRACE_FUNCTION_F("_Let " << node.pattern);
             if (node.mValue) {
                 auto _ = saveAndEdit(borrowRaiseTarget, blockTmpScope);
@@ -771,8 +771,8 @@ namespace {
                 auto res = builder.getResult(node.span());
 
                 // Shortcut for `let foo = bar;` (avoids the extra temporary that would need to be optimised out)
-                if (node.pattern.mData.is_Any() && !node.pattern.mBindings.empty() && std::all_of(node.pattern.mBindings.begin(), node.pattern.mBindings.end(), [](const HIR::PatternBinding& pb) {
-                    return pb.mType == ::HIR::PatternBinding::Type::Move;
+                if (node.pattern.mData.is_Any() && !node.pattern.mBindings.empty() && std::all_of(node.pattern.mBindings.begin(), node.pattern.mBindings.end(), [](const HIRPatternBinding& pb) {
+                    return pb.mType == HIRPatternBinding::Type::Move;
                 })) {
                     this->schedulePatternDrops(node.span(), node.pattern, PatternDropOrder::FirstCandidate);
                     for (const auto& pb : node.pattern.mBindings) {
@@ -793,14 +793,14 @@ namespace {
             }
             if (node.isSuper) {
                 ASSERT_BUG(node.span(), superLetScope, "`super let` without an enclosing expression scope");
-                for (const auto slot : ::HIR::patternBindingSlots(node.pattern, PatternDropOrder::FirstCandidate)) {
+                for (const auto slot : patternBindingSlots(node.pattern, PatternDropOrder::FirstCandidate)) {
                     builder.moveVariableToScope(node.span(), slot, *superLetScope);
                 }
             }
             builder.setResult(node.span(), MIRRValue::make_Tuple({}));
         }
 
-        void visit(::HIR::ExprNodeLoop& node) override {
+        void visit(HIRExprNodeLoop& node) override {
             TRACE_FUNCTION_FR("_Loop", "_Loop");
             auto loopBlock = builder.newBbLinked();
             auto loopBodyScope = builder.newScopeLoop(node.span());
@@ -877,7 +877,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeLoopControl& node) override {
+        void visit(HIRExprNodeLoopControl& node) override {
             TRACE_FUNCTION_F("_LoopControl \"" << node.label << "\"");
             if (loopStack.size() == 0) {
                 BUG(node.span(), "Loop control outside of a loop");
@@ -917,7 +917,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeMatch& node) override {
+        void visit(HIRExprNodeMatch& node) override {
             TRACE_FUNCTION_FR("_Match", "_Match");
             std::vector<unsigned> letElseInitializerTemps;
             size_t letElseFirstTemporary = 0;
@@ -967,15 +967,15 @@ namespace {
             }
         } // ExprNodeMatch
 
-        void emitIf(/*const*/ ::HIR::ExprNodeP& cond, MIRBasicBlockId trueBranch, MIRBasicBlockId falseBranch) {
+        void emitIf(/*const*/ HIRExprNodeP& cond, MIRBasicBlockId trueBranch, MIRBasicBlockId falseBranch) {
             TRACE_FUNCTION_F("true=bb" << trueBranch << ", false=bb" << falseBranch);
             auto* condP = &cond;
 
             // - Convert ! into a reverse of the branches
             {
                 bool reverse = false;
-                while (auto* condUni = cast<::HIR::ExprNodeUniOp>(condP->get())) {
-                    ASSERT_BUG(condUni->span(), condUni->op == ::HIR::ExprNodeUniOp::Op::Invert, "Unexpected UniOp on boolean in `if` condition");
+                while (auto* condUni = cast<HIRExprNodeUniOp>(condP->get())) {
+                    ASSERT_BUG(condUni->span(), condUni->op == HIRExprNodeUniOp::Op::Invert, "Unexpected UniOp on boolean in `if` condition");
                     condP = &condUni->mValue;
                     reverse = !reverse;
                 }
@@ -986,12 +986,12 @@ namespace {
             }
 
             // Short-circuit && and ||
-            if (auto* condBin = cast<::HIR::ExprNodeBinOp>(condP->get())) {
+            if (auto* condBin = cast<HIRExprNodeBinOp>(condP->get())) {
                 switch (condBin->op) {
-                    case ::HIR::ExprNodeBinOp::Op::BoolAnd:
-                    case ::HIR::ExprNodeBinOp::Op::BoolOr: {
+                    case HIRExprNodeBinOp::Op::BoolAnd:
+                    case HIRExprNodeBinOp::Op::BoolOr: {
                         // TODO: Generate a SplitScope
-                        if (condBin->op == ::HIR::ExprNodeBinOp::Op::BoolAnd) {
+                        if (condBin->op == HIRExprNodeBinOp::Op::BoolAnd) {
                             DEBUG("- Short-circuit BoolAnd");
 
                             // IF left false: go to false immediately
@@ -1030,7 +1030,7 @@ namespace {
                 }
             }
 
-            if (auto* condLit = cast<::HIR::ExprNodeLiteral>(condP->get())) {
+            if (auto* condLit = cast<HIRExprNodeLiteral>(condP->get())) {
                 DEBUG("- constant condition");
                 if (condLit->mData.as_Boolean()) {
                     builder.endBlock(MIRTerminator::make_Goto(trueBranch));
@@ -1045,7 +1045,7 @@ namespace {
             {
                 auto scope = builder.newScopeTemp(cond->span());
                 this->visitNodePtr(*condP);
-                ASSERT_BUG(cond->span(), cond->resType == ::HIR::CoreType::Bool, "If condition wasn't a bool");
+                ASSERT_BUG(cond->span(), cond->resType == HIRCoreType::Bool, "If condition wasn't a bool");
                 decisionVal = builder.getResultInIfCond(cond->span());
                 builder.terminateScope(cond->span(), mv$(scope));
             }
@@ -1053,7 +1053,7 @@ namespace {
             builder.endBlock(MIRTerminator::make_If({mv$(decisionVal), trueBranch, falseBranch}));
         }
 
-        void generateCheckedBinop(const Span& sp, MIRLValue resSlot, MIRBinOp op, MIRParam valL, const ::HIR::TypeData* tyL, MIRParam valR, const ::HIR::TypeData* tyR) {
+        void generateCheckedBinop(const Span& sp, MIRLValue resSlot, MIRBinOp op, MIRParam valL, const HIRTypeData* tyL, MIRParam valR, const HIRTypeData* tyR) {
             switch (op) {
                 case MIRBinOp::EQ:
                 case MIRBinOp::NE:
@@ -1071,7 +1071,7 @@ namespace {
                         }
                         // TODO: Should straight comparisons on &str be supported here?
                         TU_ARMA(Primitive, e) {
-                            if (e == ::HIR::CoreType::Str) {
+                            if (e == HIRCoreType::Str) {
                                 BUG(sp, "Invalid type in comparison - " << tyL);
                             }
                         }
@@ -1086,10 +1086,10 @@ namespace {
                 ASSERT_BUG(sp, tyL->is_Primitive(), "Only primitives allowed in bitwise operators");
                 switch(tyL->as_Primitive())
                 {
-                        case ::HIR::CoreType::Str:
-                        case ::HIR::CoreType::Char:
-                        case ::HIR::CoreType::F32:
-                        case ::HIR::CoreType::F64:
+                        case HIRCoreType::Str:
+                        case HIRCoreType::Char:
+                        case HIRCoreType::F32:
+                        case HIRCoreType::F64:
                             BUG(sp, "Invalid type for bitwise operator - " << tyL);
                         default:
                             break;
@@ -1105,9 +1105,9 @@ namespace {
                 ASSERT_BUG(sp, tyL->is_Primitive(), "Only primitives allowed in arithmatic operators");
                 switch(tyL->as_Primitive())
                 {
-                        case ::HIR::CoreType::Str:
-                        case ::HIR::CoreType::Char:
-                        case ::HIR::CoreType::Bool:
+                        case HIRCoreType::Str:
+                        case HIRCoreType::Char:
+                        case HIRCoreType::Bool:
                             BUG(sp, "Invalid type for arithmatic operator - " << tyL);
                         default:
                             break;
@@ -1122,20 +1122,20 @@ namespace {
                 ASSERT_BUG(sp, tyR->is_Primitive(), "Only primitives allowed in arithmatic operators");
                 switch(tyL->as_Primitive())
                 {
-                        case ::HIR::CoreType::Str:
-                        case ::HIR::CoreType::Char:
-                        case ::HIR::CoreType::F32:
-                        case ::HIR::CoreType::F64:
+                        case HIRCoreType::Str:
+                        case HIRCoreType::Char:
+                        case HIRCoreType::F32:
+                        case HIRCoreType::F64:
                             BUG(sp, "Invalid type for shift op-assignment - " << tyL);
                         default:
                             break;
                 }
                 switch(tyR->as_Primitive())
                 {
-                        case ::HIR::CoreType::Str:
-                        case ::HIR::CoreType::Char:
-                        case ::HIR::CoreType::F32:
-                        case ::HIR::CoreType::F64:
+                        case HIRCoreType::Str:
+                        case HIRCoreType::Char:
+                        case HIRCoreType::F32:
+                        case HIRCoreType::F64:
                             BUG(sp, "Invalid type for shift op-assignment - " << tyR);
                         default:
                             break;
@@ -1146,7 +1146,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeAssign& node) override {
+        void visit(HIRExprNodeAssign& node) override {
             TRACE_FUNCTION_F("_Assign");
             const auto& sp = node.span();
             auto _ = disableBorrowExtension(); // A bit of a hack
@@ -1160,7 +1160,7 @@ namespace {
             const auto& tySlot = node.slot->resType;
             const auto& tyVal = node.mValue->resType;
 
-            if (node.op != ::HIR::ExprNodeAssign::Op::None) {
+            if (node.op != HIRExprNodeAssign::Op::None) {
                 auto dstClone = dst.clone();
                 MIRParam valP;
                 if (auto* e = val.opt_Use()) {
@@ -1174,7 +1174,7 @@ namespace {
                 ASSERT_BUG(sp, tySlot->is_Primitive(), "Assignment operator overloads are only valid on primitives - ty_slot=" << tySlot);
                 ASSERT_BUG(sp, tyVal->is_Primitive(), "Assignment operator overloads are only valid on primitives - ty_val=" << tyVal);
 
-#define _(v) ::HIR::ExprNodeAssign::Op::v
+#define _(v) HIRExprNodeAssign::Op::v
                 MIRBinOp op;
                 switch (node.op) {
                     case _(None):
@@ -1228,7 +1228,7 @@ namespace {
             builder.setResult(node.span(), MIRRValue::make_Tuple({}));
         }
 
-        void visit(::HIR::ExprNodeBinOp& node) override {
+        void visit(HIRExprNodeBinOp& node) override {
             const auto& sp = node.span();
             TRACE_FUNCTION_F("_BinOp");
 
@@ -1237,7 +1237,7 @@ namespace {
             auto res = builder.newTemporary(node.resType);
 
             // Short-circuiting boolean operations
-            if (node.op == ::HIR::ExprNodeBinOp::Op::BoolAnd || node.op == ::HIR::ExprNodeBinOp::Op::BoolOr) {
+            if (node.op == HIRExprNodeBinOp::Op::BoolAnd || node.op == HIRExprNodeBinOp::Op::BoolOr) {
                 DEBUG("- ShortCircuit Left");
                 this->visitNodePtr(node.left);
                 if (!builder.blockActive()) {
@@ -1253,7 +1253,7 @@ namespace {
                 // Generate a SplitScope to handle the conditional nature of the next code
                 auto splitScope = builder.newScopeSplit(node.span());
 
-                if (node.op == ::HIR::ExprNodeBinOp::Op::BoolOr) {
+                if (node.op == HIRExprNodeBinOp::Op::BoolOr) {
                     DEBUG("- ShortCircuit ||");
                     // If left is true, assign result true and return
                     builder.setCurBlock(bbTrue);
@@ -1312,84 +1312,84 @@ namespace {
 
             MIRBinOp op;
             switch (node.op) {
-                case ::HIR::ExprNodeBinOp::Op::CmpEqu:
+                case HIRExprNodeBinOp::Op::CmpEqu:
                     op = MIRBinOp::EQ;
                     if (0) {
-                        case ::HIR::ExprNodeBinOp::Op::CmpNEqu:
+                        case HIRExprNodeBinOp::Op::CmpNEqu:
                             op = MIRBinOp::NE;
                     }
                     if (0) {
-                        case ::HIR::ExprNodeBinOp::Op::CmpLt:
+                        case HIRExprNodeBinOp::Op::CmpLt:
                             op = MIRBinOp::LT;
                     }
                     if (0) {
-                        case ::HIR::ExprNodeBinOp::Op::CmpLtE:
+                        case HIRExprNodeBinOp::Op::CmpLtE:
                             op = MIRBinOp::LE;
                     }
                     if (0) {
-                        case ::HIR::ExprNodeBinOp::Op::CmpGt:
+                        case HIRExprNodeBinOp::Op::CmpGt:
                             op = MIRBinOp::GT;
                     }
                     if (0) {
-                        case ::HIR::ExprNodeBinOp::Op::CmpGtE:
+                        case HIRExprNodeBinOp::Op::CmpGtE:
                             op = MIRBinOp::GE;
                     }
                     this->generateCheckedBinop(sp, res.clone(), op, mv$(left), tyL, mv$(right), tyR);
                     break;
 
-                case ::HIR::ExprNodeBinOp::Op::Xor:
+                case HIRExprNodeBinOp::Op::Xor:
                     op = MIRBinOp::BIT_XOR;
                     if (0) {
-                        case ::HIR::ExprNodeBinOp::Op::Or:
+                        case HIRExprNodeBinOp::Op::Or:
                             op = MIRBinOp::BIT_OR;
                     }
                     if (0) {
-                        case ::HIR::ExprNodeBinOp::Op::And:
+                        case HIRExprNodeBinOp::Op::And:
                             op = MIRBinOp::BIT_AND;
                     }
                     this->generateCheckedBinop(sp, res.clone(), op, mv$(left), tyL, mv$(right), tyR);
                     break;
 
-                case ::HIR::ExprNodeBinOp::Op::Shr:
+                case HIRExprNodeBinOp::Op::Shr:
                     op = MIRBinOp::BIT_SHR;
                     if (0) {
-                        case ::HIR::ExprNodeBinOp::Op::Shl:
+                        case HIRExprNodeBinOp::Op::Shl:
                             op = MIRBinOp::BIT_SHL;
                     }
                     this->generateCheckedBinop(sp, res.clone(), op, mv$(left), tyL, mv$(right), tyR);
                     break;
 
-                case ::HIR::ExprNodeBinOp::Op::Add:
+                case HIRExprNodeBinOp::Op::Add:
                     op = MIRBinOp::ADD;
                     if (0) {
-                        case ::HIR::ExprNodeBinOp::Op::Sub:
+                        case HIRExprNodeBinOp::Op::Sub:
                             op = MIRBinOp::SUB;
                     }
                     if (0) {
-                        case ::HIR::ExprNodeBinOp::Op::Mul:
+                        case HIRExprNodeBinOp::Op::Mul:
                             op = MIRBinOp::MUL;
                     }
                     if (0) {
-                        case ::HIR::ExprNodeBinOp::Op::Div:
+                        case HIRExprNodeBinOp::Op::Div:
                             op = MIRBinOp::DIV;
                     }
                     if (0) {
-                        case ::HIR::ExprNodeBinOp::Op::Mod:
+                        case HIRExprNodeBinOp::Op::Mod:
                             op = MIRBinOp::MOD;
                     }
                     this->generateCheckedBinop(sp, res.clone(), op, mv$(left), tyL, mv$(right), tyR);
                     break;
 
                 // Short-circuiting boolean operations
-                case ::HIR::ExprNodeBinOp::Op::BoolAnd:
-                case ::HIR::ExprNodeBinOp::Op::BoolOr:
+                case HIRExprNodeBinOp::Op::BoolAnd:
+                case HIRExprNodeBinOp::Op::BoolOr:
                     BUG(node.span(), "");
                     break;
             }
             builder.setResult(node.span(), mv$(res));
         }
 
-        void visit(::HIR::ExprNodeUniOp& node) override {
+        void visit(HIRExprNodeUniOp& node) override {
             TRACE_FUNCTION_F("_UniOp");
 
             const auto& tyVal = node.mValue->resType;
@@ -1398,13 +1398,13 @@ namespace {
 
             MIRRValue res;
             switch (node.op) {
-                case ::HIR::ExprNodeUniOp::Op::Invert:
+                case HIRExprNodeUniOp::Op::Invert:
                     if (tyVal->is_Primitive()) {
                         switch (tyVal->as_Primitive()) {
-                            case ::HIR::CoreType::Str:
-                            case ::HIR::CoreType::Char:
-                            case ::HIR::CoreType::F32:
-                            case ::HIR::CoreType::F64:
+                            case HIRCoreType::Str:
+                            case HIRCoreType::Char:
+                            case HIRCoreType::F32:
+                            case HIRCoreType::F64:
                                 BUG(node.span(), "`!` operator on invalid type - " << tyVal);
                                 break;
                             default:
@@ -1415,20 +1415,20 @@ namespace {
                     }
                     res = MIRRValue::make_UniOp({mv$(val), MIRUniOp::INV});
                     break;
-                case ::HIR::ExprNodeUniOp::Op::Negate:
+                case HIRExprNodeUniOp::Op::Negate:
                     if (tyVal->is_Primitive()) {
                         switch (tyVal->as_Primitive()) {
-                            case ::HIR::CoreType::Str:
-                            case ::HIR::CoreType::Char:
-                            case ::HIR::CoreType::Bool:
+                            case HIRCoreType::Str:
+                            case HIRCoreType::Char:
+                            case HIRCoreType::Bool:
                                 BUG(node.span(), "`-` operator on invalid type - " << tyVal);
                                 break;
-                            case ::HIR::CoreType::U8:
-                            case ::HIR::CoreType::U16:
-                            case ::HIR::CoreType::U32:
-                            case ::HIR::CoreType::U64:
-                            case ::HIR::CoreType::U128:
-                            case ::HIR::CoreType::Usize:
+                            case HIRCoreType::U8:
+                            case HIRCoreType::U16:
+                            case HIRCoreType::U32:
+                            case HIRCoreType::U64:
+                            case HIRCoreType::U128:
+                            case HIRCoreType::Usize:
                                 BUG(node.span(), "`-` operator on unsigned integer - " << tyVal);
                                 break;
                             default:
@@ -1443,7 +1443,7 @@ namespace {
             builder.setResult(node.span(), mv$(res));
         }
 
-        void visit(::HIR::ExprNodeBorrow& node) override {
+        void visit(HIRExprNodeBorrow& node) override {
             TRACE_FUNCTION_F("_Borrow");
 
             auto _ = saveAndEdit(inBorrow, true);
@@ -1460,7 +1460,7 @@ namespace {
             builder.setResult(node.span(), MIRRValue::make_Borrow({node.mType, false, mv$(val)}));
         }
 
-        void visit(::HIR::ExprNodeRawBorrow& node) override {
+        void visit(HIRExprNodeRawBorrow& node) override {
             TRACE_FUNCTION_F("_RawBorrow");
 
             auto _ = saveAndEdit(inBorrow, true);
@@ -1477,7 +1477,7 @@ namespace {
             builder.setResult(node.span(), MIRRValue::make_Borrow({node.mType, true, mv$(val)}));
         }
 
-        void visit(::HIR::ExprNodeCast& node) override {
+        void visit(HIRExprNodeCast& node) override {
             TRACE_FUNCTION_F("_Cast " << node.resType);
             this->visitNodePtr(node.mValue);
 
@@ -1509,11 +1509,11 @@ namespace {
                     if (tyIn->is_Primitive()) {
                         const auto& ie = tyIn->as_Primitive();
                         switch (ie) {
-                            case ::HIR::CoreType::Bool:
-                            case ::HIR::CoreType::Char:
-                            case ::HIR::CoreType::Str:
-                            case ::HIR::CoreType::F32:
-                            case ::HIR::CoreType::F64:
+                            case HIRCoreType::Bool:
+                            case HIRCoreType::Char:
+                            case HIRCoreType::Str:
+                            case HIRCoreType::F32:
+                            case HIRCoreType::F64:
                                 BUG(node.span(), "Cannot cast to pointer from " << tyIn);
                             default:
                                 break;
@@ -1545,26 +1545,26 @@ namespace {
                 }
                 TU_ARMA(Primitive, de) {
                     switch (de) {
-                        case ::HIR::CoreType::Str:
+                        case HIRCoreType::Str:
                             BUG(node.span(), "Cannot cast to str");
                             break;
-                        case ::HIR::CoreType::Char:
-                            if (tyIn->is_Primitive() && tyIn->as_Primitive() == ::HIR::CoreType::U8) {
+                        case HIRCoreType::Char:
+                            if (tyIn->is_Primitive() && tyIn->as_Primitive() == HIRCoreType::U8) {
                                 // Valid
                             } else {
                                 BUG(node.span(), "Cannot cast to char from " << tyIn);
                             }
                             break;
-                        case ::HIR::CoreType::Bool:
+                        case HIRCoreType::Bool:
                             BUG(node.span(), "Cannot cast to bool");
                             break;
-                        case ::HIR::CoreType::F32:
-                        case ::HIR::CoreType::F64:
+                        case HIRCoreType::F32:
+                        case HIRCoreType::F64:
                             if (tyIn->is_Primitive()) {
                                 switch (de) {
-                                    case ::HIR::CoreType::Str:
-                                    case ::HIR::CoreType::Char:
-                                    case ::HIR::CoreType::Bool:
+                                    case HIRCoreType::Str:
+                                    case HIRCoreType::Char:
+                                    case HIRCoreType::Bool:
                                         BUG(node.span(), "Cannot cast to " << tyOut << " from " << tyIn);
                                         break;
                                     default:
@@ -1578,7 +1578,7 @@ namespace {
                         default:
                             if (tyIn->opt_Primitive()) {
                                 switch (de) {
-                                    case ::HIR::CoreType::Str:
+                                    case HIRCoreType::Str:
                                         BUG(node.span(), "Cannot cast to " << tyOut << " from " << tyIn);
                                     default:
                                         // Valid
@@ -1594,9 +1594,9 @@ namespace {
                             // NOTE: Valid for all integer types
                             else if (tyIn->is_Pointer()) {
                                 // TODO: Only valid for T: Sized?
-                            } else if (de == ::HIR::CoreType::Usize && tyIn->is_Function()) {
+                            } else if (de == HIRCoreType::Usize && tyIn->is_Function()) {
                                 // TODO: Always valid?
-                            } else if (de == ::HIR::CoreType::Usize && tyIn->is_NamedFunction()) {
+                            } else if (de == HIRCoreType::Usize && tyIn->is_NamedFunction()) {
                                 // TODO: Always valid?
                             } else {
                                 BUG(node.span(), "Cannot cast to " << tyOut << " from " << tyIn);
@@ -1610,7 +1610,7 @@ namespace {
             builder.setResult( node.span(), mv$(res) );
         }
 
-        void visit(::HIR::ExprNodeUnsize& node) override {
+        void visit(HIRExprNodeUnsize& node) override {
             TRACE_FUNCTION_F("_Unsize");
             this->visitNodePtr(node.mValue);
 
@@ -1631,7 +1631,7 @@ namespace {
                 TU_MATCH_HDRA( (*tyOut), {)
                 default: {
                         const auto& langUnsize = builder.crate().getLangItemPath(node.span(), "unsize");
-                        if (builder.resolve().findImpl(node.span(), langUnsize, ::HIR::PathParams(tyOut), tyIn, [](auto, bool) {
+                        if (builder.resolve().findImpl(node.span(), langUnsize, HIRPathParams(tyOut), tyIn, [](auto, bool) {
                             return true;
                         })) {
                             // - HACK: Emit a cast operation on the pointers. Leave it up to monomorph to 'fix' it
@@ -1656,7 +1656,7 @@ namespace {
                             }
                                 }
                                 TU_ARMA(Known, se) {
-                                    sizeVal = MIRConstant::make_Uint({U128(se), ::HIR::CoreType::Usize});
+                                    sizeVal = MIRConstant::make_Uint({U128(se), HIRCoreType::Usize});
                                 }
                         }
                         builder.setResult( node.span(), MIRRValue::make_MakeDst({ mv$(ptrLval), mv$(sizeVal) }) );
@@ -1685,7 +1685,7 @@ namespace {
             }
         }
 
-        void visitIndexOperator(::HIR::ExprNodeIndex& node, const ::HIR::TypeData* tyVal, MIRLValue value, const ::HIR::TypeData* tyIdx, MIRLValue index) {
+        void visitIndexOperator(HIRExprNodeIndex& node, const HIRTypeData* tyVal, MIRLValue value, const HIRTypeData* tyIdx, MIRLValue index) {
             DEBUG("");
             const Span& sp = node.span();
 
@@ -1697,20 +1697,20 @@ namespace {
 
             const char* langitem = nullptr;
             const char* method = nullptr;
-            ::HIR::BorrowType bt;
+            HIRBorrowType bt;
             switch (node.mValue->usage) {
-                case ::HIR::ValueUsage::Unknown:
+                case HIRValueUsage::Unknown:
                     BUG(sp, "Usage of index reciever is still `Unknown`");
                     break;
-                case ::HIR::ValueUsage::Borrow:
-                    bt = ::HIR::BorrowType::Shared;
+                case HIRValueUsage::Borrow:
+                    bt = HIRBorrowType::Shared;
                     langitem = method = "index";
                     break;
-                case ::HIR::ValueUsage::Mutate:
-                    bt = ::HIR::BorrowType::Unique;
+                case HIRValueUsage::Mutate:
+                    bt = HIRBorrowType::Unique;
                     langitem = method = "index_mut";
                     break;
-                case ::HIR::ValueUsage::Move:
+                case HIRValueUsage::Move:
                     TODO(sp, "Support moving out of indexed values");
                     break;
             }
@@ -1719,13 +1719,13 @@ namespace {
             assert(method);
 
             // - Construct trait path - Index*<IdxTy>
-            ::HIR::PathParams ppTrait;
+            HIRPathParams ppTrait;
             ppTrait.types.push_back(tyIdx);
-            ::HIR::GenericPath trait{builder.resolve().crate.getLangItemPath(node.span(), langitem), std::move(ppTrait)};
+            HIRGenericPath trait{builder.resolve().crate.getLangItemPath(node.span(), langitem), std::move(ppTrait)};
 
-            ::HIR::PathParams ppMethod;
-            ppMethod.mLifetimes.push_back(HIR::LifetimeRef());
-            auto methodPath = ::HIR::Path(tyVal, std::move(trait), RcString::newInterned(method), std::move(ppMethod));
+            HIRPathParams ppMethod;
+            ppMethod.mLifetimes.push_back(HIRLifetimeRef());
+            auto methodPath = HIRPath(tyVal, std::move(trait), RcString::newInterned(method), std::move(ppMethod));
 
             // Store a borrow of the input value
             ::std::vector<MIRParam> args;
@@ -1746,7 +1746,7 @@ namespace {
             builder.setResult(node.span(), MIRLValue::newDeref(std::move(resVal)));
         }
 
-        void visit(::HIR::ExprNodeIndex& node) override {
+        void visit(HIRExprNodeIndex& node) override {
             TRACE_FUNCTION_F("_Index");
 
             // NOTE: Calculate the index first (so if it borrows from the source, it's over by the time that's needed)
@@ -1758,7 +1758,7 @@ namespace {
             this->visitNodePtr(node.mValue);
             auto value = builder.getResultInLvalue(node.mValue->span(), tyVal);
 
-            if (tyIdx != ::HIR::CoreType::Usize) {
+            if (tyIdx != HIRCoreType::Usize) {
                 DEBUG("non-usize index");
                 visitIndexOperator(node, tyVal, std::move(value), tyIdx, std::move(index));
                 return;
@@ -1780,7 +1780,7 @@ namespace {
                             BUG(node.span(), "Indexing with unknown size - " << e.size);
                         }
                         TU_ARMA(Known, se) {
-                            limitVal = MIRConstant::make_Uint({U128(se), ::HIR::CoreType::Usize});
+                            limitVal = MIRConstant::make_Uint({U128(se), HIRCoreType::Usize});
                         }
                 }
                 }
@@ -1792,7 +1792,7 @@ namespace {
             {
                 auto limitLval = builder.lvalueOrTemp(node.span(), tyIdx, mv$(limitVal));
 
-                auto cmpRes = builder.newTemporary(builder.resolve().crate.types.primitive(::HIR::CoreType::Bool));
+                auto cmpRes = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Bool));
                 builder.pushStmtAssign(node.span(), cmpRes.clone(), MIRRValue::make_BinOp({index.clone(), MIRBinOp::GE, limitLval.clone()}));
                 auto armPanic = builder.newBbUnlinked();
                 auto armContinue = builder.newBbUnlinked();
@@ -1808,7 +1808,7 @@ namespace {
                         panicReturn,
                         MIRUnwindAction::make_Cleanup(panicUnwind),
                         std::move(panicResult),
-                        ::HIR::Path(panicBoundsCheck),
+                        HIRPath(panicBoundsCheck),
                         makeVec2<MIRParam>(index.clone(), limitLval.clone()),
                     })
                 );
@@ -1824,14 +1824,14 @@ namespace {
 
             if( !index.is_Local())
             {
-                auto localIdx = builder.newTemporary(builder.resolve().crate.types.primitive(::HIR::CoreType::Usize));
+                auto localIdx = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Usize));
                 builder.pushStmtAssign(node.span(), localIdx.clone(), mv$(index));
                 index = mv$(localIdx);
             }
             builder.setResult( node.span(), MIRLValue::newIndex( mv$(value), index.root.as_Local() ) );
         }
 
-        void visit(::HIR::ExprNodeDeref& node) override {
+        void visit(HIRExprNodeDeref& node) override {
             const Span& sp = node.span();
             TRACE_FUNCTION_F("_Deref");
 
@@ -1839,8 +1839,8 @@ namespace {
             this->visitNodePtr(node.mValue);
             auto val = builder.getResultInLvalue(node.mValue->span(), tyVal);
 
-            bool useTrait = node.traitUsed == ::HIR::ExprNodeDeref::TraitUsed::Trait;
-            if (node.traitUsed == ::HIR::ExprNodeDeref::TraitUsed::Unknown) {
+            bool useTrait = node.traitUsed == HIRExprNodeDeref::TraitUsed::Trait;
+            if (node.traitUsed == HIRExprNodeDeref::TraitUsed::Unknown) {
                 useTrait = !tyVal->is_Pointer() && !tyVal->is_Borrow() && !builder.isTypeOwnedBox(tyVal);
             }
 
@@ -1855,28 +1855,28 @@ namespace {
 
                 const char* langitem = nullptr;
                 const char* method = nullptr;
-                ::HIR::BorrowType bt;
+                HIRBorrowType bt;
                 // - Uses the value's usage beacuse for T: Copy node.m_value->m_usage is Borrow, but node.m_usage is Move
                 switch (node.mValue->usage) {
-                    case ::HIR::ValueUsage::Unknown:
+                    case HIRValueUsage::Unknown:
                         BUG(sp, "Unknown usage type of deref value - " << tyVal);
                         break;
-                    case ::HIR::ValueUsage::Borrow:
-                        bt = ::HIR::BorrowType::Shared;
+                    case HIRValueUsage::Borrow:
+                        bt = HIRBorrowType::Shared;
                         langitem = method = "deref";
                         break;
-                    case ::HIR::ValueUsage::Mutate:
-                        bt = ::HIR::BorrowType::Unique;
+                    case HIRValueUsage::Mutate:
+                        bt = HIRBorrowType::Unique;
                         langitem = method = "deref_mut";
                         break;
-                    case ::HIR::ValueUsage::Move:
+                    case HIRValueUsage::Move:
                         TODO(sp, "ValueUsage::Move for desugared Deref of " << node.mValue->resType);
                         break;
                 }
                 assert(langitem);
                 assert(method);
 
-                auto methodPath = ::HIR::Path(tyVal, ::HIR::GenericPath(builder.resolve().crate.getLangItemPath(node.span(), langitem), {}), method, HIR::PathParams(HIR::LifetimeRef()));
+                auto methodPath = HIRPath(tyVal, HIRGenericPath(builder.resolve().crate.getLangItemPath(node.span(), langitem), {}), method, HIRPathParams(HIRLifetimeRef()));
 
                 ::std::vector<MIRParam> args;
                 args.push_back(builder.lvalueOrTemp(sp, builder.resolve().crate.types.borrow(bt, node.mValue->resType), MIRRValue::make_Borrow({bt, false, mv$(val)})));
@@ -1894,8 +1894,8 @@ namespace {
             builder.setResult(node.span(), MIRLValue::newDeref(mv$(val)));
         }
 
-        void visit(::HIR::ExprNodeEmplace& node) override {
-            assert(node.mType == ::HIR::ExprNodeEmplace::Type::Boxer);
+        void visit(HIRExprNodeEmplace& node) override {
+            assert(node.mType == HIRExprNodeEmplace::Type::Boxer);
             const auto& dataTy = node.mValue->resType;
 
             node.mValue->visit(*this);
@@ -1904,11 +1904,11 @@ namespace {
             return boxNew(node, dataTy, std::move(val));
         }
 
-        void boxNew(::HIR::ExprNode& node, const ::HIR::TypeData* dataTy, MIRRValue val) {
+        void boxNew(HIRExprNode& node, const HIRTypeData* dataTy, MIRRValue val) {
             const auto& langExchangeMalloc = builder.crate().getLangItemPath(node.span(), "exchange_malloc");
             //const auto& lang_owned_box = m_builder.crate().get_lang_item_path(node.span(), "owned_box");
 
-            ::HIR::PathParams traitParamsData;
+            HIRPathParams traitParamsData;
             traitParamsData.types.push_back(dataTy);
             auto& types = builder.resolve().crate.types;
 
@@ -1916,18 +1916,18 @@ namespace {
             MIRParam sizeParam, alignParam;
             size_t itemSize, itemAlign;
             if (TargetGetSizeAndAlignOf(node.span(), builder.resolve(), dataTy, itemSize, itemAlign)) {
-                sizeParam = MIRConstant::make_Uint({U128(itemSize), ::HIR::CoreType::Usize});
-                alignParam = MIRConstant::make_Uint({U128(itemAlign), ::HIR::CoreType::Usize});
+                sizeParam = MIRConstant::make_Uint({U128(itemSize), HIRCoreType::Usize});
+                alignParam = MIRConstant::make_Uint({U128(itemAlign), HIRCoreType::Usize});
             } else {
                 // Insert calls to "size_of" and "align_of" intrinsics
-                auto sizeSlot = builder.newTemporary(types.primitive(::HIR::CoreType::Usize));
+                auto sizeSlot = builder.newTemporary(types.primitive(HIRCoreType::Usize));
                 auto sizePanic = builder.newBbUnlinked();
                 auto sizeOk = builder.newBbUnlinked();
                 builder.endBlock(MIRTerminator::make_Call({sizeOk, MIRUnwindAction::make_Cleanup(sizePanic), sizeSlot.clone(), MIRCallTarget::make_Intrinsic({"size_of", traitParamsData.clone()}), {}}));
                 builder.setCurBlock(sizePanic);
                 emitUnwind(node.span());
                 builder.setCurBlock(sizeOk);
-                auto alignSlot = builder.newTemporary(types.primitive(::HIR::CoreType::Usize));
+                auto alignSlot = builder.newTemporary(types.primitive(HIRCoreType::Usize));
                 auto alignPanic = builder.newBbUnlinked();
                 auto alignOk = builder.newBbUnlinked();
                 builder.endBlock(MIRTerminator::make_Call({alignOk, MIRUnwindAction::make_Cleanup(alignPanic), alignSlot.clone(), MIRCallTarget::make_Intrinsic({"align_of", traitParamsData.clone()}), {}}));
@@ -1941,17 +1941,17 @@ namespace {
 
             // 2. Call the allocator function and get a pointer
             // - NOTE: "exchange_malloc" returns a `*mut u8`, need to cast that to the target type
-            auto placeRawType = types.pointer(::HIR::BorrowType::Unique, types.primitive(::HIR::CoreType::U8));
+            auto placeRawType = types.pointer(HIRBorrowType::Unique, types.primitive(HIRCoreType::U8));
             auto placeRaw = builder.newTemporary(placeRawType);
 
             auto placePanic = builder.newBbUnlinked();
             auto placeOk = builder.newBbUnlinked();
-            builder.endBlock(MIRTerminator::make_Call({placeOk, MIRUnwindAction::make_Cleanup(placePanic), placeRaw.clone(), ::HIR::Path(langExchangeMalloc), makeVec2<MIRParam>(::std::move(sizeParam), ::std::move(alignParam))}));
+            builder.endBlock(MIRTerminator::make_Call({placeOk, MIRUnwindAction::make_Cleanup(placePanic), placeRaw.clone(), HIRPath(langExchangeMalloc), makeVec2<MIRParam>(::std::move(sizeParam), ::std::move(alignParam))}));
             builder.setCurBlock(placePanic);
             emitUnwind(node.span());
             builder.setCurBlock(placeOk);
 
-            auto placeType = types.pointer(::HIR::BorrowType::Unique, dataTy);
+            auto placeType = types.pointer(HIRBorrowType::Unique, dataTy);
             auto place = builder.newTemporary(placeType);
             builder.pushStmtAssign(node.span(), place.clone(), MIRRValue::make_Cast({mv$(placeRaw), placeType}));
             // 3. Do a non-dropping write into the target location (i.e. just a MIR assignment)
@@ -1961,7 +1961,7 @@ namespace {
             auto res = builder.newTemporary(resType);
             auto castPanic = builder.newBbUnlinked();
             auto castOk = builder.newBbUnlinked();
-            ::HIR::PathParams transmuteParams;
+            HIRPathParams transmuteParams;
             transmuteParams.types.push_back(resType);
             transmuteParams.types.push_back(placeType);
             builder.endBlock(MIRTerminator::make_Call({castOk, MIRUnwindAction::make_Cleanup(castPanic), res.clone(), MIRCallTarget::make_Intrinsic({"transmute", mv$(transmuteParams)}), makeVec1(MIRParam(mv$(place)))}));
@@ -1972,7 +1972,7 @@ namespace {
             builder.setResult(node.span(), mv$(res));
         }
 
-        void visit(::HIR::ExprNodeTupleVariant& node) override {
+        void visit(HIRExprNodeTupleVariant& node) override {
             const Span& sp = node.span();
             TRACE_FUNCTION_F("_TupleVariant");
             ::std::vector<MIRParam> values;
@@ -2003,7 +2003,7 @@ namespace {
             }
         }
 
-        ::std::vector<MIRParam> getArgs(/*const*/ ::std::vector<::HIR::ExprNodeP>& args) {
+        ::std::vector<MIRParam> getArgs(/*const*/ ::std::vector<HIRExprNodeP>& args) {
             ::std::vector<MIRParam> values;
             values.reserve(args.size());
             for (auto& arg : args) {
@@ -2035,7 +2035,7 @@ namespace {
             return values;
         }
 
-        void visit(::HIR::ExprNodeCallPath& node) override {
+        void visit(HIRExprNodeCallPath& node) override {
             TRACE_FUNCTION_F("_CallPath " << node.mPath);
             // TODO: if this is a `<foo as Index[Mut]>::index[_mut]` call then allow the borrow raise to go through to the receiver
             ::std::vector<MIRParam> values;
@@ -2110,7 +2110,7 @@ namespace {
                                 slot = std::move(v.val);
                             }
                         }
-                        MIRLValue   indexLv = builder.newTemporary(builder.resolve().crate.types.primitive(HIR::CoreType::Usize));
+                        MIRLValue   indexLv = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Usize));
                         TU_MATCH_HDRA((values[1]), {)
                         TU_ARMA(LValue, lv) {
                                 builder.pushStmtAssign(node.span(), indexLv.clone(), std::move(lv));
@@ -2214,7 +2214,7 @@ namespace {
             builder.setResult(node.span(), mv$(res));
         }
 
-        void visit(::HIR::ExprNodeCallValue& node) override {
+        void visit(HIRExprNodeCallValue& node) override {
             TRACE_FUNCTION_F("_CallValue " << node.mValue->resType);
             auto _ = saveAndEdit(borrowRaiseTarget, nullptr);
 
@@ -2248,12 +2248,12 @@ namespace {
             builder.setResult(node.span(), mv$(res));
         }
 
-        void visit(::HIR::ExprNodeCallMethod& node) override {
+        void visit(HIRExprNodeCallMethod& node) override {
             // TODO: Allow use on trait objects? May not be needed, depends.
             BUG(node.span(), "Leftover _CallMethod");
         }
 
-        void visit(::HIR::ExprNodeField& node) override {
+        void visit(HIRExprNodeField& node) override {
             TRACE_FUNCTION_F("_Field \"" << node.field << "\"");
             this->visitNodePtr(node.mValue);
             auto val = builder.getResultInLvalue(node.mValue->span(), node.mValue->resType);
@@ -2284,30 +2284,30 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeLiteral& node) override {
+        void visit(HIRExprNodeLiteral& node) override {
             TRACE_FUNCTION_F("_Literal");
             TU_MATCH_HDRA( (node.mData), {)
             TU_ARMA(Integer, e) {
                     ASSERT_BUG(node.span(), node.resType->is_Primitive(), "Non-primitive return type for Integer literal - " << node.resType);
                     auto ity = node.resType->as_Primitive();
                     switch (ity) {
-                        case ::HIR::CoreType::U8:
-                        case ::HIR::CoreType::U16:
-                        case ::HIR::CoreType::U32:
-                        case ::HIR::CoreType::U64:
-                        case ::HIR::CoreType::U128:
-                        case ::HIR::CoreType::Usize:
+                        case HIRCoreType::U8:
+                        case HIRCoreType::U16:
+                        case HIRCoreType::U32:
+                        case HIRCoreType::U64:
+                        case HIRCoreType::U128:
+                        case HIRCoreType::Usize:
                             builder.setResult(node.span(), MIRConstant::make_Uint({e.mValue, ity}));
                             break;
-                        case ::HIR::CoreType::Char:
+                        case HIRCoreType::Char:
                             builder.setResult(node.span(), MIRConstant::make_Uint({e.mValue, ity}));
                             break;
-                        case ::HIR::CoreType::I8:
-                        case ::HIR::CoreType::I16:
-                        case ::HIR::CoreType::I32:
-                        case ::HIR::CoreType::I64:
-                        case ::HIR::CoreType::I128:
-                        case ::HIR::CoreType::Isize:
+                        case HIRCoreType::I8:
+                        case HIRCoreType::I16:
+                        case HIRCoreType::I32:
+                        case HIRCoreType::I64:
+                        case HIRCoreType::I128:
+                        case HIRCoreType::Isize:
                             builder.setResult(node.span(), MIRConstant::make_Int({S128(e.mValue), ity}));
                             break;
                         default:
@@ -2334,9 +2334,9 @@ namespace {
 
                     auto castPanic = builder.newBbUnlinked();
                     auto castOk = builder.newBbUnlinked();
-                    ::HIR::PathParams transmuteParams;
+                    HIRPathParams transmuteParams;
                     transmuteParams.types.push_back(node.resType);
-                    transmuteParams.types.push_back(builder.resolve().crate.types.borrow(::HIR::BorrowType::Shared, builder.resolve().crate.types.primitive(::HIR::CoreType::Str)));
+                    transmuteParams.types.push_back(builder.resolve().crate.types.borrow(HIRBorrowType::Shared, builder.resolve().crate.types.primitive(HIRCoreType::Str)));
                     builder.endBlock(MIRTerminator::make_Call({castOk, MIRUnwindAction::make_Cleanup(castPanic), res.clone(), MIRCallTarget::make_Intrinsic({"transmute", mv$(transmuteParams)}), makeVec1(MIRParam(MIRConstant(std::move(s))))}));
                     builder.setCurBlock(castPanic);
                     emitUnwind(node.span());
@@ -2351,7 +2351,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeUnitVariant& node) override {
+        void visit(HIRExprNodeUnitVariant& node) override {
             const Span& sp = node.span();
             TRACE_FUNCTION_F("_UnitVariant");
             if (!node.isStruct) {
@@ -2376,10 +2376,10 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodePathValue& node) override {
+        void visit(HIRExprNodePathValue& node) override {
             const auto& sp = node.span();
             TRACE_FUNCTION_F("_PathValue - " << node.mPath);
-            if (node.resType->is_NamedFunction() && node.target != ::HIR::ExprNodePathValue::STATIC && node.target != ::HIR::ExprNodePathValue::CONSTANT) {
+            if (node.resType->is_NamedFunction() && node.target != HIRExprNodePathValue::STATIC && node.target != HIRExprNodePathValue::CONSTANT) {
                 auto tmp = builder.newTemporary(node.resType);
                 builder.pushStmtAssign(sp, tmp.clone(), MIRConstant::make_Function({box$(node.mPath.clone())}));
                 //m_builder.push_stmt_assign( sp, tmp.clone(), ::MIR::Constant::make_ItemAddr({ box$(node.m_path.clone()) }) );
@@ -2389,7 +2389,7 @@ namespace {
             TU_MATCH_HDRA( (node.mPath.mData), { )
             TU_ARMA(Generic, pe) {
                     // Enum variant constructor.
-                    if (node.target == ::HIR::ExprNodePathValue::ENUM_VAR_CONSTR) {
+                    if (node.target == HIRExprNodePathValue::ENUM_VAR_CONSTR) {
                         BUG(node.span(), "Should have produced a NamedFunction type and have been handled above");
                     }
                     const auto& vi = builder.crate().getValitemByPath(node.span(), pe.mPath);
@@ -2430,7 +2430,7 @@ namespace {
                 }
                 TU_ARMA(UfcsInherent, pe) {
                     // 1. Find item in an impl block
-                    auto rv = builder.crate().findTypeImpls(pe.type, HIR::ResolvePlaceholdersNop(), [&](const auto& impl) {
+                    auto rv = builder.crate().findTypeImpls(pe.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
                         DEBUG("- impl" << impl.mParams.fmtArgs() << " " << impl.mType);
                         // Associated functions
                         {
@@ -2459,20 +2459,20 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeVariable& node) override {
+        void visit(HIRExprNodeVariable& node) override {
             TRACE_FUNCTION_F("_Variable - " << node.mName << " #" << node.slot);
 #if 1
             // If there's an alias active, emit that
             if (const auto* a = builder.getVariableAlias(node.span(), node.slot)) {
                 switch (a->first) {
-                    case ::HIR::PatternBinding::Type::Move:
+                    case HIRPatternBinding::Type::Move:
                         builder.setResult(node.span(), a->second.clone());
                         break;
-                    case ::HIR::PatternBinding::Type::Ref:
-                        builder.setResult(node.span(), MIRRValue::make_Borrow({::HIR::BorrowType::Shared, false, a->second.clone()}));
+                    case HIRPatternBinding::Type::Ref:
+                        builder.setResult(node.span(), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, a->second.clone()}));
                         break;
-                    case ::HIR::PatternBinding::Type::MutRef:
-                        builder.setResult(node.span(), MIRRValue::make_Borrow({::HIR::BorrowType::Unique, false, a->second.clone()}));
+                    case HIRPatternBinding::Type::MutRef:
+                        builder.setResult(node.span(), MIRRValue::make_Borrow({HIRBorrowType::Unique, false, a->second.clone()}));
                         break;
                 }
                 return;
@@ -2481,16 +2481,16 @@ namespace {
             builder.setResult(node.span(), builder.getVariable(node.span(), node.slot));
         }
 
-        void visit(::HIR::ExprNodeConstParam& node) override {
+        void visit(HIRExprNodeConstParam& node) override {
             TRACE_FUNCTION_F("_ConstParam - " << node.mName << " #" << node.mBinding);
             builder.setResult(node.span(), MIRConstant::make_Generic({node.mName, node.mBinding}));
         }
 
-        void visitSlInner(::HIR::ExprNodeStructLiteral& node, const ::HIR::Struct& str, const ::HIR::GenericPath& path) {
+        void visitSlInner(HIRExprNodeStructLiteral& node, const HIRStruct& str, const HIRGenericPath& path) {
             const Span& sp = node.span();
 
             ASSERT_BUG(sp, str.mData.is_Named(), "");
-            const ::HIR::tStructFields& fields = str.mData.as_Named();
+            const tStructFields& fields = str.mData.as_Named();
 
             ::std::vector<bool> valuesSet;
             ::std::vector<MIRParam> values;
@@ -2537,7 +2537,7 @@ namespace {
                     } else if (fields[i].defaultValue) {
                         const auto& v = *fields[i].defaultValue;
                         auto ms = MonomorphStatePtr(builder.resolve().crate.types, nullptr, &path.mParams, nullptr);
-                        values[i] = builder.lvalueOrTemp(sp, ms.monomorphType(sp, fields[i].ty), MIRConstant::make_Const({::std::make_unique<HIR::Path>(ms.monomorphGenericpath(sp, v))}));
+                        values[i] = builder.lvalueOrTemp(sp, ms.monomorphType(sp, fields[i].ty), MIRConstant::make_Const({::std::make_unique<HIRPath>(ms.monomorphGenericpath(sp, v))}));
                     } else {
                         ERROR(node.span(), E0000, "Field '" << fields[i].name << "' not specified");
                     }
@@ -2549,7 +2549,7 @@ namespace {
             builder.setResult(node.span(), MIRRValue::make_Struct({path.clone(), mv$(values)}));
         }
 
-        void visit(::HIR::ExprNodeStructLiteral& node) override {
+        void visit(HIRExprNodeStructLiteral& node) override {
             TRACE_FUNCTION_F("_StructLiteral");
 
             const auto& tyPath = node.realPath;
@@ -2571,7 +2571,7 @@ namespace {
                     const auto& str = *varTy->as_Path().binding.as_Struct();
 
                     // Take advantage of the identical generics to cheaply clone/monomorph the path.
-                    ::HIR::GenericPath structPath = tyPath.clone();
+                    HIRGenericPath structPath = tyPath.clone();
                     structPath.mPath = varTy->as_Path().path.mData.as_Generic().mPath;
 
                     this->visitSlInner(node, str, structPath);
@@ -2593,7 +2593,7 @@ namespace {
                     auto val = builder.getResultInLvalue(valueNode->span(), valueNode->resType);
 
                     const auto& unm = *e;
-                    auto it = ::std::find_if(unm.mVariants.begin(), unm.mVariants.end(), [&](const HIR::StructField& v) -> auto {
+                    auto it = ::std::find_if(unm.mVariants.begin(), unm.mVariants.end(), [&](const HIRStructField& v) -> auto {
                         return v.name == variantName;
                     });
                     assert(it != unm.mVariants.end());
@@ -2615,7 +2615,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNodeTuple& node) override {
+        void visit(HIRExprNodeTuple& node) override {
             TRACE_FUNCTION_F("_Tuple");
             auto values = getArgs(node.vals);
             if (!builder.blockActive()) {
@@ -2625,7 +2625,7 @@ namespace {
             builder.setResult(node.span(), MIRRValue::make_Tuple({mv$(values)}));
         }
 
-        void visit(::HIR::ExprNodeArrayList& node) override {
+        void visit(HIRExprNodeArrayList& node) override {
             TRACE_FUNCTION_F("_ArrayList");
             auto values = getArgs(node.vals);
             if (!builder.blockActive()) {
@@ -2635,7 +2635,7 @@ namespace {
             builder.setResult(node.span(), MIRRValue::make_Array({mv$(values)}));
         }
 
-        void visit(::HIR::ExprNodeArraySized& node) override {
+        void visit(HIRExprNodeArraySized& node) override {
             TRACE_FUNCTION_F("_ArraySized");
             this->visitNodePtr(node.val);
             if (!builder.blockActive()) {
@@ -2645,10 +2645,10 @@ namespace {
 
             builder.setResult(node.span(), MIRRValue::make_SizedArray({mv$(value), std::move(node.mSize)}));
             // Ensure that the size is valid (avoids crashes when debug is enabled)
-            node.mSize = HIR::ArraySize();
+            node.mSize = HIRArraySize();
         }
 
-        void visit(::HIR::ExprNodeClosure& node) override {
+        void visit(HIRExprNodeClosure& node) override {
             TRACE_FUNCTION_F("_Closure - " << node.objPath);
             auto _ = saveAndEdit(borrowRaiseTarget, nullptr);
 
@@ -2662,7 +2662,7 @@ namespace {
             builder.setResult(node.span(), MIRRValue::make_Struct({node.objPath.clone(), mv$(vals)}));
         }
 
-        void visitCommonCr(const Span& sp, const HIR::GenericPath& objPath, const HIR::TypeData* stateType, ::std::vector<::HIR::ExprNodeP>& captures) {
+        void visitCommonCr(const Span& sp, const HIRGenericPath& objPath, const HIRTypeData* stateType, ::std::vector<HIRExprNodeP>& captures) {
             auto _ = saveAndEdit(borrowRaiseTarget, nullptr);
 
             ::std::vector<MIRParam> vals;
@@ -2672,7 +2672,7 @@ namespace {
             {
                 const auto& langMaybeUninit = builder.resolve().crate.getLangItemPath(sp, "maybe_uninit");
                 const auto& unmMaybeUninit = builder.resolve().crate.getUnionByPath(sp, langMaybeUninit);
-                auto slotType = builder.resolve().crate.types.path(::HIR::GenericPath(langMaybeUninit, ::HIR::PathParams(stateType)), &unmMaybeUninit);
+                auto slotType = builder.resolve().crate.types.path(HIRGenericPath(langMaybeUninit, HIRPathParams(stateType)), &unmMaybeUninit);
 
                 auto resSlot = builder.newTemporary(slotType);
                 auto sizePanic = builder.newBbUnlinked();
@@ -2682,7 +2682,7 @@ namespace {
                         {sizeOk,
                          MIRUnwindAction::make_Cleanup(sizePanic),
                          resSlot.clone(),
-                         MIRCallTarget::make_Intrinsic({"init", ::HIR::PathParams(mv$(slotType))}), // I.e. `mem::zeroed`
+                         MIRCallTarget::make_Intrinsic({"init", HIRPathParams(mv$(slotType))}), // I.e. `mem::zeroed`
                          {}}
                     )
                 );
@@ -2700,7 +2700,7 @@ namespace {
             builder.setResult(sp, MIRRValue::make_Struct({objPath.clone(), mv$(vals)}));
         }
 
-        void visit(::HIR::ExprNodeGenerator& node) override {
+        void visit(HIRExprNodeGenerator& node) override {
             TRACE_FUNCTION_F("_Generator - " << node.objPath);
             ASSERT_BUG(node.span(), node.objPtr, "Generator not created");
             ASSERT_BUG(node.span(), !node.mCode, "Encountered outer generator wrapper");
@@ -2708,11 +2708,11 @@ namespace {
             visitCommonCr(node.span(), node.objPath, node.stateDataType, node.captures);
         }
 
-        void visit(::HIR::ExprNodeGeneratorWrapper& node) override {
+        void visit(HIRExprNodeGeneratorWrapper& node) override {
             BUG(node.span(), "Unexpected");
         }
 
-        void visit(::HIR::ExprNodeAsyncBlock& node) override {
+        void visit(HIRExprNodeAsyncBlock& node) override {
             TRACE_FUNCTION_F("_AsyncBlock - " << node.objPath);
             ASSERT_BUG(node.span(), node.objPtr, "Future not created");
             ASSERT_BUG(node.span(), !node.mCode, "Encountered code inside post-expand async block");
@@ -2722,7 +2722,7 @@ namespace {
     };
 }
 
-MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, const ::HIR::ExprPtr& ptr, const ::HIR::TypeData* retTy, const ::HIR::Function::argsT& args) {
+MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath& path, const HIRExprPtr& ptr, const HIRTypeData* retTy, const HIRFunction::argsT& args) {
     TRACE_FUNCTION_F(path);
 
     MIRFunction fcn;
@@ -2735,9 +2735,9 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const ::HIR::Item
     {
         const Span& sp = ptr->span();
 
-        ::HIR::ExprNode& rootNode = const_cast<::HIR::ExprNode&>(*ptr);
+        HIRExprNode& rootNode = const_cast<HIRExprNode&>(*ptr);
         MirBuilder builder{ptr->span(), resolve, retTy, args, fcn};
-        ExprVisitorConv ev{builder, ptr.mBindings, cast<::HIR::ExprNodeGeneratorWrapper>(&rootNode)};
+        ExprVisitorConv ev{builder, ptr.mBindings, cast<HIRExprNodeGeneratorWrapper>(&rootNode)};
 
         // 1. Apply destructuring to arguments
         unsigned int i = 0;
@@ -2745,7 +2745,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const ::HIR::Item
             const auto& pat = arg.first;
             builder.scheduleArgumentDrop(i);
             // If the binding is set (i.e. this isn't destructuring) then the table populated by `MirBuilder::MirBuilder(...)` will be used
-            if (pat.mBindings.size() == 1 && pat.mBindings[0].mType == ::HIR::PatternBinding::Type::Move && pat.mData.is_Any()) {
+            if (pat.mBindings.size() == 1 && pat.mBindings[0].mType == HIRPatternBinding::Type::Move && pat.mData.is_Any()) {
                 // Simple `var: Type` arguments are handled by `MirBuilder.m_var_arg_mappings`
             } else {
                 DEBUG("Argument a" << i << " - " << pat);
@@ -2756,25 +2756,25 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const ::HIR::Item
         }
 
         // 2. Destructure code
-        if (auto* genNode = cast<::HIR::ExprNodeGeneratorWrapper>(&rootNode)) {
+        if (auto* genNode = cast<HIRExprNodeGeneratorWrapper>(&rootNode)) {
             // Mark all capture locals as valid (for later rewrite into variable acesses)
             ::std::map<unsigned, std::vector<MIRLValue::Wrapper>> mappings;
             for (size_t i = 0; i < genNode->captureUsages.size(); i++) {
                 unsigned idx = args.size() + i;
                 builder.scheduleVariableDrop(idx);
                 switch (genNode->captureUsages[i]) {
-                    case ::HIR::ValueUsage::Borrow:
-                    case ::HIR::ValueUsage::Mutate: {
+                    case HIRValueUsage::Borrow:
+                    case HIRValueUsage::Mutate: {
                         // TODO: Use `m_variable_aliases` for by-borrow captures, to avoid them being dropped
                         auto lv = MIRLValue::newArgument(0);
                         lv.wrappers.push_back(MIRLValue::Wrapper::newField(0)); // Pin.ptr
                         lv.wrappers.push_back(MIRLValue::Wrapper::newDeref());  // *
                         lv.wrappers.push_back(MIRLValue::Wrapper::newField(1 + i));
                         lv.wrappers.push_back(MIRLValue::Wrapper::newDeref());
-                        builder.addVariableAlias(rootNode.span(), idx, ::HIR::PatternBinding::Type::Move, std::move(lv));
+                        builder.addVariableAlias(rootNode.span(), idx, HIRPatternBinding::Type::Move, std::move(lv));
                     } break;
-                    case ::HIR::ValueUsage::Move:
-                    case ::HIR::ValueUsage::Unknown:
+                    case HIRValueUsage::Move:
+                    case HIRValueUsage::Unknown:
                         builder.markValueAssigned(rootNode.span(), MIRLValue::newLocal(idx));
                         mappings.insert(std::make_pair(idx, ::makeVec1(MIRLValue::Wrapper::newField(1 + i))));
                         break;
@@ -2792,9 +2792,9 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const ::HIR::Item
             // ------------
 
             // 1. Generate the state machine switch (and enumerate saved variables)
-            std::set<unsigned> saved = ev.generatorFinalise(genNode->span(), const_cast<HIR::Enum&>(resolve.crate.getEnumByPath(sp, genNode->stateIdxEnum)));
+            std::set<unsigned> saved = ev.generatorFinalise(genNode->span(), const_cast<HIREnum&>(resolve.crate.getEnumByPath(sp, genNode->stateIdxEnum)));
             // 2. Populate state structure
-            auto& stateTy = const_cast<HIR::Struct&>(*genNode->stateDataType->as_Path().binding.as_Struct());
+            auto& stateTy = const_cast<HIRStruct&>(*genNode->stateDataType->as_Path().binding.as_Struct());
             unsigned valueVarIdx;
             {
                 const auto& unmMaybeUninit = resolve.crate.getUnionByPath(sp, resolve.crate.getLangItemPath(genNode->span(), "maybe_uninit"));
@@ -2811,7 +2811,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const ::HIR::Item
                 } else {
                     auto fieldIdx = fields.size();
                     ASSERT_BUG(sp, idx < fcn.locals.size(), idx << " >= " << fcn.locals.size());
-                    fields.push_back(::HIR::VisEnt<HIR::TypeRef>{HIR::Publicity::newNone(), fcn.locals.at(idx)});
+                    fields.push_back(HIRVisEnt<HIRTypeRef>{HIRPublicity::newNone(), fcn.locals.at(idx)});
                     // self.state(0).value(?#1).value(?0).IDX
                     mappings.insert(
                         std::make_pair(
@@ -2836,7 +2836,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const ::HIR::Item
             }
             // Add drop flags to the end
             auto dropFlagsFieldIdx = fields.size();
-            fields.push_back(::HIR::VisEnt<HIR::TypeRef>{HIR::Publicity::newNone(), resolve.crate.types.array(resolve.crate.types.primitive(::HIR::CoreType::U8), (dropFlagMapping.size() + 7) / 8)});
+            fields.push_back(HIRVisEnt<HIRTypeRef>{HIRPublicity::newNone(), resolve.crate.types.array(resolve.crate.types.primitive(HIRCoreType::U8), (dropFlagMapping.size() + 7) / 8)});
 
             // 3. Rewrite usage of saved values
             // - Note: Need to allocate new temporaries if indexing by an updated lvalue
@@ -3015,7 +3015,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const ::HIR::Item
 
 // --------------------------------------------------------------------
 
-void HIRGenerateMIRExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& path, ::HIR::ExprPtr& exprPtr, const ::HIR::Function::argsT& args, const ::HIR::TypeData* resTy) {
+void HIRGenerateMIRExpr(const HIRCrate& crate, const HIRItemPath& path, HIRExprPtr& exprPtr, const HIRFunction::argsT& args, const HIRTypeData* resTy) {
     if (!exprPtr.mir) {
         TRACE_FUNCTION;
         StaticTraitResolve resolve{crate};
@@ -3031,8 +3031,8 @@ void HIRGenerateMIRExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& path, 
     }
 }
 
-void HIRGenerateMIR(::HIR::Crate& crate) {
-    MIROuterVisitor ov{crate, [&](const auto& res, const auto& p, ::HIR::ExprPtr& exprPtr, const auto& args, const auto& ty) {
+void HIRGenerateMIR(HIRCrate& crate) {
+    MIROuterVisitor ov{crate, [&](const auto& res, const auto& p, HIRExprPtr& exprPtr, const auto& args, const auto& ty) {
         if (!exprPtr.getMirOpt()) {
             exprPtr.setMir(LowerMIR(res, p, exprPtr, ty, args));
         }
@@ -3040,17 +3040,17 @@ void HIRGenerateMIR(::HIR::Crate& crate) {
     ov.visitCrate(crate);
 }
 
-void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, MIRLValue matchVal, const std::vector<unsigned>& letElseInitializerTemps);
+void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const std::vector<unsigned>& letElseInitializerTemps);
 
 namespace {
     void getTyAndVal(
         const Span& sp,
         MirBuilder& builder,
-        const ::HIR::TypeData* topTy,
+        const HIRTypeData* topTy,
         const MIRLValue& topVal,
         const fieldPathT& fieldPath,
         unsigned int fieldPathOfs,
-        /*Out ->*/ ::HIR::TypeRef& outTy,
+        /*Out ->*/ HIRTypeRef& outTy,
         MIRLValue& outVal
     );
 }
@@ -3058,10 +3058,10 @@ namespace {
 void MIRLowerHIRGetTypeValueForPath(
     const Span& sp,
     MirBuilder& builder,
-    const ::HIR::TypeData* topTy,
+    const HIRTypeData* topTy,
     const MIRLValue& topVal,
     const fieldPathT& fieldPath,
-    /*Out ->*/ ::HIR::TypeRef& outTy,
+    /*Out ->*/ HIRTypeRef& outTy,
     MIRLValue& outVal
 ) {
     getTyAndVal(sp, builder, topTy, topVal, fieldPath, 0, outTy, outVal);
@@ -3128,10 +3128,10 @@ struct PatternRuleset {
 
 struct PatternDump {
     const StaticTraitResolve& resolve;
-    const HIR::TypeData* ty;
+    const HIRTypeData* ty;
     const ::std::vector<PatternRule>& rules;
 
-    PatternDump(const StaticTraitResolve& resolve, const HIR::TypeData* ty, const ::std::vector<PatternRule>& rules)
+    PatternDump(const StaticTraitResolve& resolve, const HIRTypeData* ty, const ::std::vector<PatternRule>& rules)
         : resolve(resolve)
         , ty(ty)
         , rules(rules)
@@ -3160,15 +3160,15 @@ struct ArmCode {
 
 typedef ::std::vector<PatternRuleset> tArmRules;
 
-void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armCode, MIRBasicBlockId firstCmpBlock);
-int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int numRules, const ::HIR::TypeData* topTy, const MIRLValue& topVal, unsigned int fieldPathOfs, MIRBasicBlockId failBb);
-void MIRLowerHIRMatchGrouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIR::TypeData* matchTy, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock);
-void MIRLowerHIRMatchDecisionTree(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armCode, MIRBasicBlockId firstCmpBlock);
+void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armCode, MIRBasicBlockId firstCmpBlock);
+int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int numRules, const HIRTypeData* topTy, const MIRLValue& topVal, unsigned int fieldPathOfs, MIRBasicBlockId failBb);
+void MIRLowerHIRMatchGrouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRTypeData* matchTy, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock);
+void MIRLowerHIRMatchDecisionTree(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armCode, MIRBasicBlockId firstCmpBlock);
 
 /// Helper to construct rules from a passed pattern
 struct PatternRulesetBuilder {
     const StaticTraitResolve& mResolve;
-    const ::HIR::SimplePath* mLangBox = nullptr;
+    const HIRSimplePath* mLangBox = nullptr;
 
     // NOTE: Multiple rulesets to handle or-patterns (which multiply the pattern set)
     struct Ruleset {
@@ -3213,8 +3213,8 @@ struct PatternRulesetBuilder {
         }
     }
 
-    void appendFromLit(const Span& sp, EncodedLiteralSlice lit, const ::HIR::TypeData* ty);
-    void appendFrom(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::TypeData* ty);
+    void appendFromLit(const Span& sp, EncodedLiteralSlice lit, const HIRTypeData* ty);
+    void appendFrom(const Span& sp, const HIRPattern& pat, const HIRTypeData* ty);
 
 private:
     void pushRule(PatternRule r);
@@ -3304,11 +3304,11 @@ void sortRulesetsInner(RulesetRef rulesets, size_t idx);
 /// `let` (also used for destructuring arguments) - Introduces arguments into the current scope
 ///
 /// If `else_node` is non-null, a `_` "arm" is added to invoke that block (which must diverge)
-void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const ::HIR::Pattern& pat, MIRLValue val, const ::HIR::ExprNode* elseNode) {
+void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRPattern& pat, MIRLValue val, const HIRExprNode* elseNode) {
     TRACE_FUNCTION;
 
-    HIR::TypeRef outerTy;
-    builder.withValType(sp, val, [&](const HIR::TypeData* ty) {
+    HIRTypeRef outerTy;
+    builder.withValType(sp, val, [&](const HIRTypeData* ty) {
         outerTy = ty;
     });
 
@@ -3359,7 +3359,7 @@ void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, con
 // Handles lowering non-trivial matches to MIR
 // - Non-trivial means that there's more than one pattern
 // - Trivial matches are handled using `MIR_LowerHIR_Let`
-void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, MIRLValue matchVal, const std::vector<unsigned>& letElseInitializerTemps) {
+void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const std::vector<unsigned>& letElseInitializerTemps) {
     TRACE_FUNCTION;
     // NOTE: Lowers to the following pattern:
     // ```
@@ -3471,28 +3471,28 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMa
             std::vector<unsigned> bindingTemps;
             std::vector<unsigned> bindingTempsAlt(bindings0.size(), ~0u);
             for (const auto& b : bindings0) {
-                HIR::TypeRef finalTy = conv.getBindingType(sp, b.binding->slot);
+                HIRTypeRef finalTy = conv.getBindingType(sp, b.binding->slot);
                 const Span& sp = arm.mCode->span();
                 auto val = conv.getValueForBindingPath(sp, matchTy, matchVal, b);
                 DEBUG("Set alias for: " << *b.binding << " := " << val);
-                if (b.binding->mType != ::HIR::PatternBinding::Type::Move) {
+                if (b.binding->mType != HIRPatternBinding::Type::Move) {
                     const auto& borrow = finalTy->as_Borrow();
-                    finalTy = builder.resolve().crate.types.borrow(::HIR::BorrowType::Shared, borrow.inner, borrow.lifetime);
+                    finalTy = builder.resolve().crate.types.borrow(HIRBorrowType::Shared, borrow.inner, borrow.lifetime);
                     // Not a move binding, still need to borrow but no deref
                     // - Or, make another temporary for the borrow (no scope needed)
                     auto tmp2 = builder.newTemporary(finalTy);
                     bindingTempsAlt[bindingTemps.size()] = tmp2.as_Local();
-                    builder.pushStmtAssign(sp, tmp2.clone(), MIRRValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
+                    builder.pushStmtAssign(sp, tmp2.clone(), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, std::move(val)}));
                     val = std::move(tmp2);
                 }
                 // Allocate a temporary to hold a borrow of that type
-                auto tmp = builder.newTemporary(builder.resolve().crate.types.borrow(::HIR::BorrowType::Shared, finalTy));
+                auto tmp = builder.newTemporary(builder.resolve().crate.types.borrow(HIRBorrowType::Shared, finalTy));
                 // - Store the temporary index so later copies can write to it
                 bindingTemps.push_back(tmp.as_Local());
                 // Assign the temporary with a borrow of the other slot
-                builder.pushStmtAssign(sp, tmp.clone(), MIRRValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
+                builder.pushStmtAssign(sp, tmp.clone(), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, std::move(val)}));
                 // And set an alias to point to `*temp`
-                builder.addVariableAlias(sp, b.binding->slot, ::HIR::PatternBinding::Type::Move, MIRLValue::newDeref(std::move(tmp)));
+                builder.addVariableAlias(sp, b.binding->slot, HIRPatternBinding::Type::Move, MIRLValue::newDeref(std::move(tmp)));
             }
 
             // Require that either there's no guards, or that there's only one rule
@@ -3642,21 +3642,21 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMa
                     for (size_t j = 0; j < bindingTemps.size(); j++) {
                         const auto& b = armRules[i].mBindings[j];
                         auto val = conv.getValueForBindingPath(sp, matchTy, matchVal, b);
-                        if (b.binding->mType != ::HIR::PatternBinding::Type::Move) {
+                        if (b.binding->mType != HIRPatternBinding::Type::Move) {
                             MIRLValue tmp2;
                             if (bindingTempsAlt[j] == ~0u) {
                                 auto finalTy = conv.getBindingType(sp, b.binding->slot);
                                 const auto& borrow = finalTy->as_Borrow();
-                                finalTy = builder.resolve().crate.types.borrow(::HIR::BorrowType::Shared, borrow.inner, borrow.lifetime);
+                                finalTy = builder.resolve().crate.types.borrow(HIRBorrowType::Shared, borrow.inner, borrow.lifetime);
                                 tmp2 = builder.newTemporary(finalTy);
                                 bindingTempsAlt[j] = tmp2.as_Local();
                             } else {
                                 tmp2 = MIRLValue::newLocal(bindingTempsAlt[j]);
                             }
-                            builder.pushStmtAssign(sp, tmp2.clone(), MIRRValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
+                            builder.pushStmtAssign(sp, tmp2.clone(), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, std::move(val)}));
                             val = std::move(tmp2);
                         }
-                        builder.pushStmtAssign(sp, MIRLValue::newLocal(bindingTemps[j]), MIRRValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
+                        builder.pushStmtAssign(sp, MIRLValue::newLocal(bindingTemps[j]), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, std::move(val)}));
                     }
                     builder.insertCloned(sp, guardCode, mapper);
                     ASSERT_BUG(sp, !builder.blockActive(), "Diverging guard clone remained reachable");
@@ -3743,23 +3743,23 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMa
                     const auto& b = armRules[i].mBindings[j];
                     auto val = conv.getValueForBindingPath(sp, matchTy, matchVal, b);
                     DEBUG("Set alias for: " << *b.binding << " := " << val);
-                    if (b.binding->mType != ::HIR::PatternBinding::Type::Move) {
+                    if (b.binding->mType != HIRPatternBinding::Type::Move) {
                         MIRLValue tmp2;
                         if (bindingTempsAlt[j] == ~0u) {
                             // Not a move binding, still need to borrow but no deref
                             // - Or, make another temporary for the borrow (no scope needed)
                             auto finalTy = conv.getBindingType(sp, b.binding->slot);
                             const auto& borrow = finalTy->as_Borrow();
-                            finalTy = builder.resolve().crate.types.borrow(::HIR::BorrowType::Shared, borrow.inner, borrow.lifetime);
+                            finalTy = builder.resolve().crate.types.borrow(HIRBorrowType::Shared, borrow.inner, borrow.lifetime);
                             tmp2 = builder.newTemporary(finalTy);
                             bindingTempsAlt[j] = tmp2.as_Local();
                         } else {
                             tmp2 = MIRLValue::newLocal(bindingTempsAlt[j]);
                         }
-                        builder.pushStmtAssign(sp, tmp2.clone(), MIRRValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
+                        builder.pushStmtAssign(sp, tmp2.clone(), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, std::move(val)}));
                         val = std::move(tmp2);
                     }
-                    builder.pushStmtAssign(sp, MIRLValue::newLocal(bindingTemps[j]), MIRRValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
+                    builder.pushStmtAssign(sp, MIRLValue::newLocal(bindingTemps[j]), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, std::move(val)}));
                 }
                 // Clone the guard contents with updated block references
                 builder.insertCloned(sp, guardCode, mapper);
@@ -4228,7 +4228,7 @@ void PatternRulesetBuilder::multiplyRulesets(size_t n, std::function<void(size_t
     }
 }
 
-void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice lit, const ::HIR::TypeData* ty) {
+void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice lit, const HIRTypeData* ty) {
     TRACE_FUNCTION_F("lit=" << lit << ", ty=" << ty << ",   m_field_path=[" << fieldPath << "]");
 
     TU_MATCH_HDRA( (*ty), {)
@@ -4236,65 +4236,65 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
         TU_ARMA(Diverge, e) BUG(sp, "Diverge in match type");
         TU_ARMA(Primitive, e) {
             switch (e) {
-                case ::HIR::CoreType::F16:
+                case HIRCoreType::F16:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Float({lit.readFloat(2), e})));
                     break;
-                case ::HIR::CoreType::F32:
+                case HIRCoreType::F32:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Float({lit.readFloat(4), e})));
                     break;
-                case ::HIR::CoreType::F64:
+                case HIRCoreType::F64:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Float({lit.readFloat(8), e})));
                     break;
-                case ::HIR::CoreType::F128:
+                case HIRCoreType::F128:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Float({lit.readFloat(16), e})));
                     break;
 
-                case ::HIR::CoreType::U8:
+                case HIRCoreType::U8:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({lit.readUint(1), e})));
                     break;
-                case ::HIR::CoreType::U16:
+                case HIRCoreType::U16:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({lit.readUint(2), e})));
                     break;
-                case ::HIR::CoreType::U32:
+                case HIRCoreType::U32:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({lit.readUint(4), e})));
                     break;
-                case ::HIR::CoreType::U64:
+                case HIRCoreType::U64:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({lit.readUint(8), e})));
                     break;
-                case ::HIR::CoreType::U128:
+                case HIRCoreType::U128:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({lit.readUint(16), e})));
                     break;
-                case ::HIR::CoreType::Usize:
+                case HIRCoreType::Usize:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({lit.readUint(TargetGetPointerBits() / 8), e})));
                     break;
 
-                case ::HIR::CoreType::I8:
+                case HIRCoreType::I8:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Int({lit.readSint(1), e})));
                     break;
-                case ::HIR::CoreType::I16:
+                case HIRCoreType::I16:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Int({lit.readSint(2), e})));
                     break;
-                case ::HIR::CoreType::I32:
+                case HIRCoreType::I32:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Int({lit.readSint(4), e})));
                     break;
-                case ::HIR::CoreType::I64:
+                case HIRCoreType::I64:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Int({lit.readSint(8), e})));
                     break;
-                case ::HIR::CoreType::I128:
+                case HIRCoreType::I128:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Int({lit.readSint(16), e})));
                     break;
-                case ::HIR::CoreType::Isize:
+                case HIRCoreType::Isize:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Int({lit.readSint(TargetGetPointerBits() / 8), e})));
                     break;
 
-                case ::HIR::CoreType::Bool:
+                case HIRCoreType::Bool:
                     this->pushRule(PatternRule::make_Bool(lit.readUint(1) != 0));
                     break;
                 // Char is just another name for 'u32'... but with a restricted range
-                case ::HIR::CoreType::Char:
+                case HIRCoreType::Char:
                     this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({lit.readUint(4), e})));
                     break;
-                case ::HIR::CoreType::Str:
+                case HIRCoreType::Str:
                     BUG(sp, "Hit match over `str` - must be `&str`");
                     break;
             }
@@ -4408,7 +4408,7 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
         }
         TU_ARMA(Borrow, e) {
             fieldPath.push_back(FIELD_DEREF);
-            if (e.inner == ::HIR::CoreType::Str) {
+            if (e.inner == HIRCoreType::Str) {
                 auto ptrSize = TargetGetPointerBits() / 8;
                 auto ptr = lit.readUint(ptrSize).truncateU64();
                 auto len = lit.slice(ptrSize, ptrSize).readUint(ptrSize).truncateU64();
@@ -4423,7 +4423,7 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                 ASSERT_BUG(sp, ptr + len <= r->bytes.size(), "");
 
                 this->pushRule(PatternRule::make_Value(std::string(r->bytes.data() + ptr, r->bytes.data() + ptr + len)));
-            } else if (e.inner->is_Slice() && e.inner->as_Slice().inner == ::HIR::CoreType::U8) {
+            } else if (e.inner->is_Slice() && e.inner->as_Slice().inner == HIRCoreType::U8) {
                 auto ptrSize = TargetGetPointerBits() / 8;
                 auto ptr = lit.readUint(ptrSize).truncateU64();
                 auto len = lit.slice(ptrSize, ptrSize).readUint(ptrSize).truncateU64();
@@ -4437,7 +4437,7 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                     MonomorphState valParams(mResolve.crate.types);
                     auto v = mResolve.getValue(sp, *r->p, valParams);
                     ASSERT_BUG(sp, v.is_Static(), "&[u8] match with borrow of non-static (" << *r->p << ") - " << v.tagStr());
-                    const HIR::Static& s = *v.as_Static();
+                    const HIRStatic& s = *v.as_Static();
                     ASSERT_BUG(sp, s.valueGenerated, "&[u8] match with borrow of non-resolved static (" << *r->p << ")");
                     const EncodedLiteral& val = s.valueRes;
                     ASSERT_BUG(sp, ptr <= val.bytes.size(), "");
@@ -4459,7 +4459,7 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
         }
         TU_ARMA(Pointer, e) {
             // Need to be able to tell downstream to cast to integer before comparison?
-            this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({lit.readUint(TargetGetPointerBits() / 8), HIR::CoreType::Usize})));
+            this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({lit.readUint(TargetGetPointerBits() / 8), HIRCoreType::Usize})));
             //TODO(sp, "Match literal with pointer? " << lit);
         }
         TU_ARMA(NamedFunction, e) {
@@ -4474,125 +4474,125 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
     }
 }
 
-void PatternRulesetBuilder::appendFrom(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::TypeData* topTy) {
-    static ::HIR::Pattern emptyPattern;
+void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, const HIRTypeData* topTy) {
+    static HIRPattern emptyPattern;
     TRACE_FUNCTION_F("pat=" << pat << ", ty=" << topTy << ",   m_field_path=[" << fieldPath << "]");
 
     struct H {
-        static U128 getPatternValueInt(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::Pattern::Value& val) {
-            TU_MATCH_DEF(::HIR::Pattern::Value, (val), (e), (BUG(sp, "Invalid Value type in " << pat);), (Integer, return e.value;), (Named, assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readUint();))
+        static U128 getPatternValueInt(const Span& sp, const HIRPattern& pat, const HIRPattern::Value& val) {
+            TU_MATCH_DEF(HIRPattern::Value, (val), (e), (BUG(sp, "Invalid Value type in " << pat);), (Integer, return e.value;), (Named, assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readUint();))
             throw "";
         }
 
-        static S128 getPatternValueSigned(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::Pattern::Value& val) {
-            TU_MATCH_DEF(::HIR::Pattern::Value, (val), (e), (BUG(sp, "Invalid signed Value type in " << pat);), (Integer, return S128(e.value);), (Named, assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readSint();))
+        static S128 getPatternValueSigned(const Span& sp, const HIRPattern& pat, const HIRPattern::Value& val) {
+            TU_MATCH_DEF(HIRPattern::Value, (val), (e), (BUG(sp, "Invalid signed Value type in " << pat);), (Integer, return S128(e.value);), (Named, assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readSint();))
             throw "";
         }
 
-        static FloatValue getPatternValueFloat(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::Pattern::Value& val) {
-            TU_MATCH_DEF(::HIR::Pattern::Value, (val), (e), (BUG(sp, "Invalid Value type in " << pat);), (Float, return e.value;), (Named, assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readFloat();))
+        static FloatValue getPatternValueFloat(const Span& sp, const HIRPattern& pat, const HIRPattern::Value& val) {
+            TU_MATCH_DEF(HIRPattern::Value, (val), (e), (BUG(sp, "Invalid Value type in " << pat);), (Float, return e.value;), (Named, assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readFloat();))
             throw "";
         }
 
-        static MIRConstant getPatternValue(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::Pattern::Value& val, const ::HIR::CoreType& e) {
+        static MIRConstant getPatternValue(const Span& sp, const HIRPattern& pat, const HIRPattern::Value& val, const HIRCoreType& e) {
             switch (e) {
-                case ::HIR::CoreType::F16:
-                case ::HIR::CoreType::F32:
-                case ::HIR::CoreType::F64:
-                case ::HIR::CoreType::F128:
+                case HIRCoreType::F16:
+                case HIRCoreType::F32:
+                case HIRCoreType::F64:
+                case HIRCoreType::F128:
                     // Yes, this is valid.
                     return MIRConstant::make_Float({H::getPatternValueFloat(sp, pat, val), e});
-                case ::HIR::CoreType::U8:
-                case ::HIR::CoreType::U16:
-                case ::HIR::CoreType::U32:
-                case ::HIR::CoreType::U64:
-                case ::HIR::CoreType::U128:
-                case ::HIR::CoreType::Usize:
+                case HIRCoreType::U8:
+                case HIRCoreType::U16:
+                case HIRCoreType::U32:
+                case HIRCoreType::U64:
+                case HIRCoreType::U128:
+                case HIRCoreType::Usize:
                     return MIRConstant::make_Uint({H::getPatternValueInt(sp, pat, val), e});
-                case ::HIR::CoreType::I8:
-                case ::HIR::CoreType::I16:
-                case ::HIR::CoreType::I32:
-                case ::HIR::CoreType::I64:
-                case ::HIR::CoreType::I128:
-                case ::HIR::CoreType::Isize:
+                case HIRCoreType::I8:
+                case HIRCoreType::I16:
+                case HIRCoreType::I32:
+                case HIRCoreType::I64:
+                case HIRCoreType::I128:
+                case HIRCoreType::Isize:
                     return MIRConstant::make_Int({H::getPatternValueSigned(sp, pat, val), e});
-                case ::HIR::CoreType::Bool:
+                case HIRCoreType::Bool:
                     BUG(sp, "Can't range match on Bool");
                     break;
-                case ::HIR::CoreType::Char:
+                case HIRCoreType::Char:
                     // Char is just another name for 'u32'... but with a restricted range
                     return MIRConstant::make_Uint({H::getPatternValueInt(sp, pat, val), e});
-                case ::HIR::CoreType::Str:
+                case HIRCoreType::Str:
                     BUG(sp, "Hit match over `str` - must be `&str`");
                     break;
             }
             throw "";
         }
 
-        static MIRConstant getPatternValueMin(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::CoreType& e) {
+        static MIRConstant getPatternValueMin(const Span& sp, const HIRPattern& pat, const HIRCoreType& e) {
             switch (e) {
-                case ::HIR::CoreType::F16:
-                case ::HIR::CoreType::F32:
-                case ::HIR::CoreType::F64:
-                case ::HIR::CoreType::F128:
+                case HIRCoreType::F16:
+                case HIRCoreType::F32:
+                case HIRCoreType::F64:
+                case HIRCoreType::F128:
                     // Yes, this is valid.
                     return MIRConstant::make_Float({-std::numeric_limits<double>::infinity(), e});
-                case ::HIR::CoreType::U8:
-                case ::HIR::CoreType::U16:
-                case ::HIR::CoreType::U32:
-                case ::HIR::CoreType::U64:
-                case ::HIR::CoreType::U128:
-                case ::HIR::CoreType::Usize:
+                case HIRCoreType::U8:
+                case HIRCoreType::U16:
+                case HIRCoreType::U32:
+                case HIRCoreType::U64:
+                case HIRCoreType::U128:
+                case HIRCoreType::Usize:
                     return MIRConstant::make_Uint({U128(0), e});
-                case ::HIR::CoreType::I8:
-                case ::HIR::CoreType::I16:
-                case ::HIR::CoreType::I32:
-                case ::HIR::CoreType::I64:
-                case ::HIR::CoreType::I128:
-                case ::HIR::CoreType::Isize:
+                case HIRCoreType::I8:
+                case HIRCoreType::I16:
+                case HIRCoreType::I32:
+                case HIRCoreType::I64:
+                case HIRCoreType::I128:
+                case HIRCoreType::Isize:
                     return MIRConstant::make_Int({S128::min(), e});
-                case ::HIR::CoreType::Bool:
+                case HIRCoreType::Bool:
                     BUG(sp, "Can't range match on Bool");
                     break;
-                case ::HIR::CoreType::Char:
+                case HIRCoreType::Char:
                     // Char is just another name for 'u32'... but with a restricted range
                     return MIRConstant::make_Uint({U128(0), e});
-                case ::HIR::CoreType::Str:
+                case HIRCoreType::Str:
                     BUG(sp, "Hit match over `str` - must be `&str`");
                     break;
             }
             throw "";
         }
 
-        static MIRConstant getPatternValueMax(const Span& sp, const ::HIR::Pattern& pat, const ::HIR::CoreType& e) {
+        static MIRConstant getPatternValueMax(const Span& sp, const HIRPattern& pat, const HIRCoreType& e) {
             switch (e) {
-                case ::HIR::CoreType::F16:
-                case ::HIR::CoreType::F32:
-                case ::HIR::CoreType::F64:
-                case ::HIR::CoreType::F128:
+                case HIRCoreType::F16:
+                case HIRCoreType::F32:
+                case HIRCoreType::F64:
+                case HIRCoreType::F128:
                     // Yes, this is valid.
                     return MIRConstant::make_Float({std::numeric_limits<double>::infinity(), e});
-                case ::HIR::CoreType::U8:
-                case ::HIR::CoreType::U16:
-                case ::HIR::CoreType::U32:
-                case ::HIR::CoreType::U64:
-                case ::HIR::CoreType::U128:
-                case ::HIR::CoreType::Usize:
+                case HIRCoreType::U8:
+                case HIRCoreType::U16:
+                case HIRCoreType::U32:
+                case HIRCoreType::U64:
+                case HIRCoreType::U128:
+                case HIRCoreType::Usize:
                     return MIRConstant::make_Uint({U128::max(), e});
-                case ::HIR::CoreType::I8:
-                case ::HIR::CoreType::I16:
-                case ::HIR::CoreType::I32:
-                case ::HIR::CoreType::I64:
-                case ::HIR::CoreType::I128:
-                case ::HIR::CoreType::Isize:
+                case HIRCoreType::I8:
+                case HIRCoreType::I16:
+                case HIRCoreType::I32:
+                case HIRCoreType::I64:
+                case HIRCoreType::I128:
+                case HIRCoreType::Isize:
                     return MIRConstant::make_Int({S128::max(), e});
-                case ::HIR::CoreType::Bool:
+                case HIRCoreType::Bool:
                     BUG(sp, "Can't range match on Bool");
                     break;
-                case ::HIR::CoreType::Char:
+                case HIRCoreType::Char:
                     // Char is just another name for 'u32'... but with a restricted range
                     return MIRConstant::make_Uint({U128::max(), e});
-                case ::HIR::CoreType::Str:
+                case HIRCoreType::Str:
                     BUG(sp, "Hit match over `str` - must be `&str`");
                     break;
             }
@@ -4627,13 +4627,13 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const ::HIR::Pattern& pat
         if (const auto* pve = pe->val.opt_Named()) {
             if (pve->binding) {
                 // Request consteval
-                if (pve->binding->valueState == HIR::Constant::ValueState::Unknown) {
+                if (pve->binding->valueState == HIRConstant::ValueState::Unknown) {
                     MonomorphState unusedMs(mResolve.crate.types);
-                    const HIR::GenericParams* implDef = nullptr;
+                    const HIRGenericParams* implDef = nullptr;
                     auto v = mResolve.getValue(sp, pve->path, unusedMs, false, &implDef);
-                    ConvertHIRConstantEvaluateConstant(mResolve.crate, implDef, pve->path, const_cast<HIR::Constant&>(*pve->binding));
+                    ConvertHIRConstantEvaluateConstant(mResolve.crate, implDef, pve->path, const_cast<HIRConstant&>(*pve->binding));
                 }
-                ASSERT_BUG(sp, pve->binding->valueState == HIR::Constant::ValueState::Known, "Match with an unresolved constant - " << pve->path);
+                ASSERT_BUG(sp, pve->binding->valueState == HIRConstant::ValueState::Known, "Match with an unresolved constant - " << pve->path);
                 this->appendFromLit(sp, pve->binding->valueRes, ty);
                 for (size_t i = 0; i < pat.implicitDerefCount; i++) {
                     fieldPath.pop_back();
@@ -4692,7 +4692,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const ::HIR::Pattern& pat
                 }
                 TU_ARM(pat.mData, Value, pe) {
                     switch (e) {
-                        case ::HIR::CoreType::Bool:
+                        case HIRCoreType::Bool:
                             // TODO: Support values from `const` too
                             this->pushRule(PatternRule::make_Bool(pe.val.as_Integer().value != 0));
                             break;
@@ -4706,7 +4706,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const ::HIR::Pattern& pat
         TU_ARMA(Tuple, e) {
             fieldPath.push_back(0);
             TU_MATCH_DEF(
-                ::HIR::Pattern::Data,
+                HIRPattern::Data,
                 (pat.mData),
                 (pe),
                 (BUG(sp, "Matching tuple with invalid pattern - " << pat);),
@@ -4737,8 +4737,8 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const ::HIR::Pattern& pat
         }
         TU_ARMA(Path, e) {
             struct PH {
-                static void pushPatternTuple(PatternRulesetBuilder& builder, const Span& sp, const ::HIR::Pattern::Data::Data_PathTuple& pe, std::function<const HIR::TypeData*(const HIR::TypeData*)> maybeMonomorph) {
-                    const auto& sd = ::HIR::patternGetTuple(sp, pe.path, pe.binding);
+                static void pushPatternTuple(PatternRulesetBuilder& builder, const Span& sp, const HIRPattern::Data::Data_PathTuple& pe, std::function<const HIRTypeData*(const HIRTypeData*)> maybeMonomorph) {
+                    const auto& sd = patternGetTuple(sp, pe.path, pe.binding);
                     assert(sd.size() >= pe.leading.size() + pe.trailing.size());
                     size_t trailingStart = sd.size() - pe.trailing.size();
                     for (unsigned int i = 0; i < sd.size(); i++) {
@@ -4754,8 +4754,8 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const ::HIR::Pattern& pat
                         builder.fieldPath.back()++;
                     }
                 }
-                static void pushPatternStruct(PatternRulesetBuilder& builder, const Span& sp, const ::HIR::Pattern::Data::Data_PathNamed& pe, std::function<const HIR::TypeData*(const HIR::TypeData*)> maybeMonomorph) {
-                    const auto& sd = ::HIR::patternGetNamed(sp, pe.path, pe.binding);
+                static void pushPatternStruct(PatternRulesetBuilder& builder, const Span& sp, const HIRPattern::Data::Data_PathNamed& pe, std::function<const HIRTypeData*(const HIRTypeData*)> maybeMonomorph) {
+                    const auto& sd = patternGetNamed(sp, pe.path, pe.binding);
                     // NOTE: Iterates in field order (not pattern order) to ensure that patterns are in order between arms
                     for (const auto& fld : sd) {
                         const auto& styMono = maybeMonomorph(fld.ty);
@@ -4772,8 +4772,8 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const ::HIR::Pattern& pat
                     }
                 }
             };
-            ::HIR::TypeRef tmp;
-            auto maybeMonomorph = [&](const ::HIR::TypeData* ty) -> const ::HIR::TypeData* {
+            HIRTypeRef tmp;
+            auto maybeMonomorph = [&](const HIRTypeData* ty) -> const HIRTypeData* {
                 if (monomorphiseTypeNeeded(ty)) {
                     tmp = MonomorphStatePtr(mResolve.crate.types, nullptr, &e.path.mData.as_Generic().mParams, nullptr).monomorphType(sp, ty);
                     this->mResolve.expandAssociatedTypes(sp, tmp);
@@ -4788,7 +4788,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const ::HIR::Pattern& pat
                     BUG(sp, "Encounterd unbound path - " << e.path);
                 }
                 TU_ARMA(Opaque, be) {
-                    TU_MATCH_DEF(::HIR::Pattern::Data, (pat.mData), (pe), (BUG(sp, "Matching opaque type with invalid pattern - " << pat);), (Any, this->pushRule(PatternRule::make_Any({}));))
+                    TU_MATCH_DEF(HIRPattern::Data, (pat.mData), (pe), (BUG(sp, "Matching opaque type with invalid pattern - " << pat);), (Any, this->pushRule(PatternRule::make_Any({}));))
                 }
                 TU_ARMA(Struct, pbe) {
                     const auto& strData = pbe->mData;
@@ -4796,7 +4796,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const ::HIR::Pattern& pat
                     if (mLangBox && e.path.mData.as_Generic().mPath == *mLangBox) {
                         const auto& innerTy = e.path.mData.as_Generic().mParams.types.at(0);
                         TU_MATCH_DEF(
-                            ::HIR::Pattern::Data,
+                            HIRPattern::Data,
                             (pat.mData),
                             (pe),
                             (BUG(sp, "Match not allowed, " << ty << " with " << pat);),
@@ -4973,7 +4973,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const ::HIR::Pattern& pat
                                 assert(pe.subPatterns.empty());
                             } else if (!be.ptr->mData.as_Data().at(be.varIdx).isStruct) {
                                 assert(pe.subPatterns.empty());
-                                const auto& sd = ::HIR::patternGetTuple(sp, pe.path, pe.binding);
+                                const auto& sd = patternGetTuple(sp, pe.path, pe.binding);
                                 for (unsigned int i = 0; i < sd.size(); i++) {
                                     const auto& fld = sd[i];
                                     subBuilder.appendFrom(sp, emptyPattern, maybeMonomorph(fld.ent));
@@ -4998,7 +4998,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const ::HIR::Pattern& pat
         }
         TU_ARMA(Generic, e) {
             // Generics don't destructure, so the only valid pattern is `_`
-            TU_MATCH_DEF(::HIR::Pattern::Data, (pat.mData), (pe), (BUG(sp, "Match not allowed, " << ty << " with " << pat);), (Any, this->pushRule(PatternRule::make_Any({}));))
+            TU_MATCH_DEF(HIRPattern::Data, (pat.mData), (pe), (BUG(sp, "Match not allowed, " << ty << " with " << pat);), (Any, this->pushRule(PatternRule::make_Any({}));))
         }
         TU_ARMA(TraitObject, e) {
             if (pat.mData.is_Any()) {
@@ -5173,7 +5173,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const ::HIR::Pattern& pat
                             ASSERT_BUG(sp, ae.size.is_Known() && ae.size.as_Known() == s.size(), "Byte string pattern size mismatch - " << pat << " vs " << e.inner);
                             fieldPath.push_back(0);
                             for (auto c : s) {
-                                this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({U128(static_cast<uint8_t>(c)), ::HIR::CoreType::U8})));
+                                this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({U128(static_cast<uint8_t>(c)), HIRCoreType::U8})));
                                 fieldPath.back()++;
                             }
                             fieldPath.pop_back();
@@ -5487,17 +5487,17 @@ namespace {
     void getTyAndVal(
         const Span& sp,
         MirBuilder& builder,
-        const ::HIR::TypeData* topTy,
+        const HIRTypeData* topTy,
         const MIRLValue& topVal,
         const fieldPathT& fieldPath,
         unsigned int fieldPathOfs,
-        /*Out ->*/ ::HIR::TypeRef& outTy,
+        /*Out ->*/ HIRTypeRef& outTy,
         MIRLValue& outVal
     ) {
         const StaticTraitResolve& resolve = builder.resolve();
         MIRLValue lval = topVal.clone();
-        ::HIR::TypeRef tmpTy;
-        const ::HIR::TypeData* curTy = topTy;
+        HIRTypeRef tmpTy;
+        const HIRTypeData* curTy = topTy;
 
         // TODO: Cache the correspondance of path->type (lval can be inferred)
         ASSERT_BUG(sp, fieldPathOfs <= fieldPath.size(), "Field path offset " << fieldPathOfs << " is larger than the path [" << fieldPath << "]");
@@ -5522,7 +5522,7 @@ namespace {
                         curTy = newTy;
                         break;
                     }
-                    auto monomorphToPtr = [&](const ::HIR::TypeData* ty) -> const ::HIR::TypeData* {
+                    auto monomorphToPtr = [&](const HIRTypeData* ty) -> const HIRTypeData* {
                         if (monomorphiseTypeNeeded(ty)) {
                             auto rv = MonomorphStatePtr(resolve.crate.types, nullptr, &e.path.mData.as_Generic().mParams, nullptr).monomorphType(sp, ty);
                             resolve.expandAssociatedTypes(sp, rv);
@@ -5607,9 +5607,9 @@ namespace {
                         idx -= FIELD_INDEX_MAX;
                         idx = FIELD_INDEX_MAX - idx;
                         // 1. Create an LValue containing the size of this slice subtract `idx`
-                        auto lenLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Usize), MIRRValue::make_DstMeta({builder.getPtrToDst(sp, lval)}));
-                        auto subVal = MIRParam(MIRConstant::make_Uint({U128(idx), ::HIR::CoreType::Usize}));
-                        auto ofsVal = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Usize), MIRRValue::make_BinOp({mv$(lenLval), MIRBinOp::SUB, mv$(subVal)}));
+                        auto lenLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Usize), MIRRValue::make_DstMeta({builder.getPtrToDst(sp, lval)}));
+                        auto subVal = MIRParam(MIRConstant::make_Uint({U128(idx), HIRCoreType::Usize}));
+                        auto ofsVal = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Usize), MIRRValue::make_BinOp({mv$(lenLval), MIRBinOp::SUB, mv$(subVal)}));
                         // 2. Return _Index with that value
                         lval = MIRLValue::newIndex(mv$(lval), ofsVal.as_Local());
                     }
@@ -5645,7 +5645,7 @@ namespace {
 // Dumb and Simple
 // --------------------------------------------------------------------
 
-void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock) {
+void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock) {
     TRACE_FUNCTION;
 
     // 1. Generate pattern matches
@@ -5689,7 +5689,7 @@ void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, ::HIR::Expr
     builder.endBlock(MIRTerminator::make_Unreachable({}));
 }
 
-int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int numRules, const ::HIR::TypeData* topTy, const MIRLValue& topVal, unsigned int fieldPathOfs, MIRBasicBlockId failBb) {
+int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int numRules, const HIRTypeData* topTy, const MIRLValue& topVal, unsigned int fieldPathOfs, MIRBasicBlockId failBb) {
     TRACE_FUNCTION_F("top_ty = " << topTy << ", rules = [" << FMT_CB(os, for (size_t i = 0; i < numRules; i++) os << rules[i] << ",";));
     for (unsigned int ruleIdx = 0; ruleIdx < numRules; ruleIdx++) {
         const auto& rule = rules[ruleIdx];
@@ -5701,7 +5701,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
         }
 
         MIRLValue val;
-        ::HIR::TypeRef ity;
+        HIRTypeRef ity;
 
         getTyAndVal(sp, builder, topTy, topVal, rule.fieldPath, fieldPathOfs, ity, val);
         DEBUG("ty = " << ity << ", val = " << val);
@@ -5716,7 +5716,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
             }
             TU_ARMA(Primitive, te) {
                 switch (te) {
-                    case ::HIR::CoreType::Bool: {
+                    case HIRCoreType::Bool: {
                         ASSERT_BUG(sp, rule.is_Bool(), "PatternRule for bool isn't _Bool");
                         bool testVal = rule.as_Bool();
 
@@ -5729,12 +5729,12 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                         }
                         builder.setCurBlock(succBb);
                     } break;
-                    case ::HIR::CoreType::U8:
-                    case ::HIR::CoreType::U16:
-                    case ::HIR::CoreType::U32:
-                    case ::HIR::CoreType::U64:
-                    case ::HIR::CoreType::U128:
-                    case ::HIR::CoreType::Usize:
+                    case HIRCoreType::U8:
+                    case HIRCoreType::U16:
+                    case HIRCoreType::U32:
+                    case HIRCoreType::U64:
+                    case HIRCoreType::U128:
+                    case HIRCoreType::Usize:
                 TU_MATCH_HDRA((rule), {)
                 default:
                     BUG(sp, "PatternRule for integer is not Value or ValueRange");
@@ -5753,7 +5753,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                                 if (re.first.as_Uint().v != 0) {
                                     auto testBb2 = builder.newBbUnlinked();
                                     auto testLtVal = MIRParam(MIRConstant::make_Uint({re.first.as_Uint().v, te}));
-                                    auto cmpLtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::LT, mv$(testLtVal)}));
+                                    auto cmpLtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::LT, mv$(testLtVal)}));
                                     builder.endBlock(MIRTerminator::make_If({mv$(cmpLtLval), failBb, testBb2}));
 
                                     builder.setCurBlock(testBb2);
@@ -5765,7 +5765,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                                 } else {
                                     auto testGtVal = MIRParam(MIRConstant::make_Uint({re.last.as_Uint().v, te}));
                                     auto op = re.isInclusive ? MIRBinOp::GT : MIRBinOp::GE;
-                                    auto cmpGtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), op, mv$(testGtVal)}));
+                                    auto cmpGtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), op, mv$(testGtVal)}));
                                     builder.endBlock(MIRTerminator::make_If({mv$(cmpGtLval), failBb, succBb}));
                                 }
 
@@ -5773,12 +5773,12 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                             }
                 }
                 break;
-            case ::HIR::CoreType::I8:
-            case ::HIR::CoreType::I16:
-            case ::HIR::CoreType::I32:
-            case ::HIR::CoreType::I64:
-            case ::HIR::CoreType::I128:
-            case ::HIR::CoreType::Isize:
+            case HIRCoreType::I8:
+            case HIRCoreType::I16:
+            case HIRCoreType::I32:
+            case HIRCoreType::I64:
+            case HIRCoreType::I128:
+            case HIRCoreType::Isize:
                 TU_MATCH_HDRA((rule), {)
                 default:
                     BUG(sp, "PatternRule for integer is not Value or ValueRange");
@@ -5786,7 +5786,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                                 auto succBb = builder.newBbUnlinked();
 
                                 auto testVal = MIRParam(MIRConstant::make_Int({re.as_Int().v, te}));
-                                auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({val.clone(), MIRBinOp::EQ, mv$(testVal)}));
+                                auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({val.clone(), MIRBinOp::EQ, mv$(testVal)}));
                                 builder.endBlock(MIRTerminator::make_If({mv$(cmpLval), succBb, failBb}));
                                 builder.setCurBlock(succBb);
                             }
@@ -5797,7 +5797,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                                 if (re.first.as_Int().v != S128::min()) {
                                     auto testBb2 = builder.newBbUnlinked();
                                     auto testLtVal = MIRParam(MIRConstant::make_Int({re.first.as_Int().v, te}));
-                                    auto cmpLtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::LT, mv$(testLtVal)}));
+                                    auto cmpLtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::LT, mv$(testLtVal)}));
                                     builder.endBlock(MIRTerminator::make_If({mv$(cmpLtLval), failBb, testBb2}));
                                     builder.setCurBlock(testBb2);
                                 }
@@ -5808,7 +5808,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                                 } else {
                                     auto testGtVal = MIRParam(MIRConstant::make_Int({re.last.as_Int().v, te}));
                                     auto op = re.isInclusive ? MIRBinOp::GT : MIRBinOp::GE;
-                                    auto cmpGtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), op, mv$(testGtVal)}));
+                                    auto cmpGtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), op, mv$(testGtVal)}));
                                     builder.endBlock(MIRTerminator::make_If({mv$(cmpGtLval), failBb, succBb}));
                                 }
 
@@ -5816,7 +5816,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                             }
                 }
                 break;
-            case ::HIR::CoreType::Char:
+            case HIRCoreType::Char:
                 TU_MATCH_DEF( PatternRule, (rule), (re),
                 (
                     BUG(sp, "PatternRule for char is not Value or ValueRange");
@@ -5825,7 +5825,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                     auto succBb = builder.newBbUnlinked();
 
                     auto testVal = MIRParam(MIRConstant::make_Uint({ re.as_Uint().v, te }));
-                    auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({ MIRParam(val.clone()), MIRBinOp::EQ, mv$(testVal) }));
+                    auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({ MIRParam(val.clone()), MIRBinOp::EQ, mv$(testVal) }));
                     builder.endBlock( MIRTerminator::make_If({ mv$(cmpLval), succBb, failBb }) );
                     builder.setCurBlock(succBb);
                     ),
@@ -5837,7 +5837,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                             auto testBb2 = builder.newBbUnlinked();
 
                             auto testLtVal = MIRParam(MIRConstant::make_Uint({re.first.as_Uint().v, te}));
-                            auto cmpLtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::LT, mv$(testLtVal)}));
+                            auto cmpLtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::LT, mv$(testLtVal)}));
                             builder.endBlock(MIRTerminator::make_If({mv$(cmpLtLval), failBb, testBb2}));
 
                             builder.setCurBlock(testBb2);
@@ -5851,7 +5851,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                     else {
                             auto testGtVal = MIRParam(MIRConstant::make_Uint({re.last.as_Uint().v, te}));
                             auto op = re.isInclusive ? MIRBinOp::GT : MIRBinOp::GE;
-                            auto cmpGtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), op, mv$(testGtVal)}));
+                            auto cmpGtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), op, mv$(testGtVal)}));
                             builder.endBlock(MIRTerminator::make_If({mv$(cmpGtLval), failBb, succBb}));
                     }
 
@@ -5859,10 +5859,10 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                     )
                 )
                 break;
-            case ::HIR::CoreType::F16:
-            case ::HIR::CoreType::F32:
-            case ::HIR::CoreType::F64:
-            case ::HIR::CoreType::F128:
+            case HIRCoreType::F16:
+            case HIRCoreType::F32:
+            case HIRCoreType::F64:
+            case HIRCoreType::F128:
                 TU_MATCH_DEF( PatternRule, (rule), (re),
                 (
                     BUG(sp, "PatternRule for float is not Value or ValueRange");
@@ -5871,7 +5871,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                     auto succBb = builder.newBbUnlinked();
 
                     auto testVal = MIRParam(MIRConstant::make_Float({ re.as_Float().v, te }));
-                    auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({ val.clone(), MIRBinOp::EQ, mv$(testVal) }));
+                    auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({ val.clone(), MIRBinOp::EQ, mv$(testVal) }));
                     builder.endBlock( MIRTerminator::make_If({ mv$(cmpLval), succBb, failBb }) );
                     builder.setCurBlock(succBb);
                     ),
@@ -5884,7 +5884,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                     else {
                             auto testBb2 = builder.newBbUnlinked();
                             auto testLtVal = MIRParam(MIRConstant::make_Float({re.first.as_Float().v, te}));
-                            auto cmpLtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::LT, mv$(testLtVal)}));
+                            auto cmpLtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::LT, mv$(testLtVal)}));
                             builder.endBlock(MIRTerminator::make_If({mv$(cmpLtLval), failBb, testBb2}));
                             builder.setCurBlock(testBb2);
                     }
@@ -5896,7 +5896,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                     else {
                             auto testGtVal = MIRParam(MIRConstant::make_Float({re.last.as_Float().v, te}));
                             auto op = re.isInclusive ? MIRBinOp::GT : MIRBinOp::GE;
-                            auto cmpGtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), op, mv$(testGtVal)}));
+                            auto cmpGtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), op, mv$(testGtVal)}));
                             builder.endBlock(MIRTerminator::make_If({mv$(cmpGtLval), failBb, succBb}));
                     }
 
@@ -5904,7 +5904,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                     )
                 )
                 break;
-            case ::HIR::CoreType::Str: {
+            case HIRCoreType::Str: {
                             ASSERT_BUG(sp, rule.is_Value() && rule.as_Value().is_StaticString(), "Unexpected use of non-value pattern on `str`");
                             const auto& v = rule.as_Value();
                             ASSERT_BUG(sp, val.is_Deref(), "");
@@ -5914,7 +5914,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                             auto succBb = builder.newBbUnlinked();
 
                             auto testVal = MIRParam(MIRConstant(v.as_StaticString()));
-                            auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({mv$(strVal), MIRBinOp::EQ, mv$(testVal)}));
+                            auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({mv$(strVal), MIRBinOp::EQ, mv$(testVal)}));
                             builder.endBlock(MIRTerminator::make_If({mv$(cmpLval), succBb, failBb}));
                             builder.setCurBlock(succBb);
                 } break;
@@ -5972,7 +5972,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                             ASSERT_BUG(sp, pbe->mData.is_Data(), "Sub-rules present for non-data enum");
                             const auto& variants = pbe->mData.as_Data();
                             const auto& varTy = variants.at(re.idx).type;
-                            ::HIR::TypeRef tmp;
+                            HIRTypeRef tmp;
                             const auto& varTyM = (monomorphiseTypeNeeded(varTy) ? tmp = monomorph(varTy) : varTy);
 
                             // Recurse with the new ruleset
@@ -5996,9 +5996,9 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
             TU_ARMA(Slice, te) {
                 ASSERT_BUG(sp, rule.is_Slice() || rule.is_SplitSlice() || (rule.is_Value() && rule.as_Value().is_Bytes()), "Can only match slice with Bytes or Slice rules - " << rule);
                 if (rule.is_Value()) {
-                    ASSERT_BUG(sp, te.inner == ::HIR::CoreType::U8, "Bytes pattern on non-&[u8]");
+                    ASSERT_BUG(sp, te.inner == HIRCoreType::U8, "Bytes pattern on non-&[u8]");
                     auto clonedVal = MIRConstant(rule.as_Value().as_Bytes());
-                    auto sizeVal = MIRConstant::make_Uint({U128(rule.as_Value().as_Bytes().size()), ::HIR::CoreType::Usize});
+                    auto sizeVal = MIRConstant::make_Uint({U128(rule.as_Value().as_Bytes().size()), HIRCoreType::Usize});
 
                     auto succBb = builder.newBbUnlinked();
 
@@ -6006,17 +6006,17 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                     auto innerVal = val.cloneUnwrapped();
 
                     auto sliceRval = MIRRValue::make_MakeDst({mv$(clonedVal), mv$(sizeVal)});
-                    auto testLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.borrow(::HIR::BorrowType::Shared, ty), mv$(sliceRval));
-                    auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({mv$(innerVal), MIRBinOp::EQ, mv$(testLval)}));
+                    auto testLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.borrow(HIRBorrowType::Shared, ty), mv$(sliceRval));
+                    auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({mv$(innerVal), MIRBinOp::EQ, mv$(testLval)}));
                     builder.endBlock(MIRTerminator::make_If({mv$(cmpLval), succBb, failBb}));
                     builder.setCurBlock(succBb);
                 } else if (rule.is_Slice()) {
                     const auto& re = rule.as_Slice();
 
                     // Compare length
-                    auto testVal = MIRParam(MIRConstant::make_Uint({U128(re.len), ::HIR::CoreType::Usize}));
-                    auto lenVal = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Usize), MIRRValue::make_DstMeta({builder.getPtrToDst(sp, val)}));
-                    auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({mv$(lenVal), MIRBinOp::EQ, mv$(testVal)}));
+                    auto testVal = MIRParam(MIRConstant::make_Uint({U128(re.len), HIRCoreType::Usize}));
+                    auto lenVal = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Usize), MIRRValue::make_DstMeta({builder.getPtrToDst(sp, val)}));
+                    auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({mv$(lenVal), MIRBinOp::EQ, mv$(testVal)}));
 
                     auto lenSuccBb = builder.newBbUnlinked();
                     builder.endBlock(MIRTerminator::make_If({mv$(cmpLval), lenSuccBb, failBb}));
@@ -6028,9 +6028,9 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                     const auto& re = rule.as_SplitSlice();
 
                     // Compare length
-                    auto testVal = MIRParam(MIRConstant::make_Uint({U128(re.minLen), ::HIR::CoreType::Usize}));
-                    auto lenVal = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Usize), MIRRValue::make_DstMeta({builder.getPtrToDst(sp, val)}));
-                    auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({mv$(lenVal), MIRBinOp::LT, mv$(testVal)}));
+                    auto testVal = MIRParam(MIRConstant::make_Uint({U128(re.minLen), HIRCoreType::Usize}));
+                    auto lenVal = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Usize), MIRRValue::make_DstMeta({builder.getPtrToDst(sp, val)}));
+                    auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({mv$(lenVal), MIRBinOp::LT, mv$(testVal)}));
 
                     auto lenSuccBb = builder.newBbUnlinked();
                     builder.endBlock(MIRTerminator::make_If({mv$(cmpLval), failBb, lenSuccBb})); // if len < test : FAIL
@@ -6194,14 +6194,14 @@ public:
 class MatchGenGrouped {
     const Span& sp;
     MirBuilder& builder;
-    const ::HIR::TypeData* topTy;
+    const HIRTypeData* topTy;
     const MIRLValue& topVal;
     const ::std::vector<ArmCode>& armsCode;
 
     size_t fieldPathOfs;
 
 public:
-    MatchGenGrouped(MirBuilder& builder, const Span& sp, const ::HIR::TypeData* topTy, const MIRLValue& topVal, const ::std::vector<ArmCode>& armsCode, size_t fieldPathOfs)
+    MatchGenGrouped(MirBuilder& builder, const Span& sp, const HIRTypeData* topTy, const MIRLValue& topVal, const ::std::vector<ArmCode>& armsCode, size_t fieldPathOfs)
         : sp(sp)
         , builder(builder)
         , topTy(topTy)
@@ -6213,15 +6213,15 @@ public:
 
     void genForSlice(tRulesSubset rules, size_t ofs, MIRBasicBlockId defaultArm);
     void genDispatch(const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-    void genDispatchPrimitive(::HIR::TypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-    void genDispatchEnum(::HIR::TypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
-    void genDispatchSlice(::HIR::TypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+    void genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+    void genDispatchEnum(HIRTypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
+    void genDispatchSlice(HIRTypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk);
 
     void genDispatchRange(const fieldPathT& fieldPath, const MIRConstant& first, const MIRConstant& last, bool isInclusive, MIRBasicBlockId defBlk);
     void genDispatchSplitslice(const fieldPathT& fieldPath, const PatternRule::Data_SplitSlice& e, MIRBasicBlockId defBlk);
 
     MIRLValue pushCompare(MIRLValue left, MIRBinOp op, MIRParam right) {
-        return builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({mv$(left), op, mv$(right)}));
+        return builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({mv$(left), op, mv$(right)}));
     }
 };
 
@@ -6285,7 +6285,7 @@ namespace {
     }
 }
 
-void MIRLowerHIRMatchGrouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIR::TypeData* matchTy, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock) {
+void MIRLowerHIRMatchGrouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRTypeData* matchTy, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock) {
     TRACE_FUNCTION_F("");
 
     // The grouped matcher consumes one constructor or field test per matrix
@@ -6533,7 +6533,7 @@ void MatchGenGrouped::genDispatch(const ::std::vector<tRulesSubset>& rules, size
     }
 
     MIRLValue val;
-    ::HIR::TypeRef ty;
+    HIRTypeRef ty;
     getTyAndVal(sp, builder, topTy, topVal, fieldPath, fieldPathOfs, ty, val);
     DEBUG("ty = " << ty << ", val = " << val);
 
@@ -6630,9 +6630,9 @@ void MatchGenGrouped::genDispatch(const ::std::vector<tRulesSubset>& rules, size
             BUG(sp, "Match directly on borrow");
         }
         TU_ARMA(Pointer, te) {
-            auto valUsize = builder.newTemporary(builder.resolve().crate.types.primitive(HIR::CoreType::Usize));
-            builder.pushStmtAssign(sp, valUsize.clone(), MIRRValue::make_Cast({mv$(val), builder.resolve().crate.types.primitive(::HIR::CoreType::Usize)}));
-            this->genDispatchPrimitive(builder.resolve().crate.types.primitive(HIR::CoreType::Usize), mv$(valUsize), rules, ofs, armTargets, defBlk);
+            auto valUsize = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Usize));
+            builder.pushStmtAssign(sp, valUsize.clone(), MIRRValue::make_Cast({mv$(val), builder.resolve().crate.types.primitive(HIRCoreType::Usize)}));
+            this->genDispatchPrimitive(builder.resolve().crate.types.primitive(HIRCoreType::Usize), mv$(valUsize), rules, ofs, armTargets, defBlk);
         }
         TU_ARMA(NamedFunction, te) {
             BUG(sp, "Attempting to match a function pointer - " << ty);
@@ -6654,10 +6654,10 @@ namespace {
     }
 }
 
-void MatchGenGrouped::genDispatchPrimitive(::HIR::TypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
+void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
     auto te = ty->as_Primitive();
     switch (te) {
-        case ::HIR::CoreType::Bool: {
+        case HIRCoreType::Bool: {
             ASSERT_BUG(sp, rules.size() <= 2, "More than 2 rules for boolean");
             for (size_t i = 0; i < rules.size(); i++) {
                 ASSERT_BUG(sp, rules[i][0][ofs].is_Bool(), "PatternRule for bool isn't _Bool");
@@ -6669,14 +6669,14 @@ void MatchGenGrouped::genDispatchPrimitive(::HIR::TypeRef ty, MIRLValue val, con
 
             builder.endBlock(MIRTerminator::make_If({mv$(val), succBb, failBb}));
         } break;
-        case ::HIR::CoreType::U8:
-        case ::HIR::CoreType::U16:
-        case ::HIR::CoreType::U32:
-        case ::HIR::CoreType::U64:
-        case ::HIR::CoreType::U128:
-        case ::HIR::CoreType::Usize:
+        case HIRCoreType::U8:
+        case HIRCoreType::U16:
+        case HIRCoreType::U32:
+        case HIRCoreType::U64:
+        case HIRCoreType::U128:
+        case HIRCoreType::Usize:
 
-        case ::HIR::CoreType::Char:
+        case HIRCoreType::Char:
             if (rules.size() == 1) {
                 // Special case, single option, equality only
                 const auto& r = rules[0][0][ofs];
@@ -6730,12 +6730,12 @@ void MatchGenGrouped::genDispatchPrimitive(::HIR::TypeRef ty, MIRLValue val, con
             }
             break;
 
-        case ::HIR::CoreType::I8:
-        case ::HIR::CoreType::I16:
-        case ::HIR::CoreType::I32:
-        case ::HIR::CoreType::I64:
-        case ::HIR::CoreType::I128:
-        case ::HIR::CoreType::Isize:
+        case HIRCoreType::I8:
+        case HIRCoreType::I16:
+        case HIRCoreType::I32:
+        case HIRCoreType::I64:
+        case HIRCoreType::I128:
+        case HIRCoreType::Isize:
             if (rules.size() == 1) {
                 // Special case, single option, equality only
                 const auto& r = rules[0][0][ofs];
@@ -6773,10 +6773,10 @@ void MatchGenGrouped::genDispatchPrimitive(::HIR::TypeRef ty, MIRLValue val, con
             }
             break;
 
-        case ::HIR::CoreType::F16:
-        case ::HIR::CoreType::F32:
-        case ::HIR::CoreType::F64:
-        case ::HIR::CoreType::F128: {
+        case HIRCoreType::F16:
+        case HIRCoreType::F32:
+        case HIRCoreType::F64:
+        case HIRCoreType::F128: {
             // NOTE: Rules are currently sorted
             // TODO: If there are Constant::Const values in the list, they need to come first!
             size_t tgtOfs = 0;
@@ -6795,7 +6795,7 @@ void MatchGenGrouped::genDispatchPrimitive(::HIR::TypeRef ty, MIRLValue val, con
                 // IF v < tst : def_blk
                 {
                     auto cmpEqBlk = builder.newBbUnlinked();
-                    auto cmpLvalLt = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({val.clone(), MIRBinOp::LT, MIRParam(re.clone())}));
+                    auto cmpLvalLt = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({val.clone(), MIRBinOp::LT, MIRParam(re.clone())}));
                     builder.endBlock(MIRTerminator::make_If({mv$(cmpLvalLt), defBlk, cmpEqBlk}));
                     builder.setCurBlock(cmpEqBlk);
                 }
@@ -6803,7 +6803,7 @@ void MatchGenGrouped::genDispatchPrimitive(::HIR::TypeRef ty, MIRLValue val, con
                 // IF v == tst : target
                 {
                     auto nextCmpBlk = builder.newBbUnlinked();
-                    auto cmpLvalEq = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Bool), MIRRValue::make_BinOp({val.clone(), MIRBinOp::EQ, MIRParam(re.clone())}));
+                    auto cmpLvalEq = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({val.clone(), MIRBinOp::EQ, MIRParam(re.clone())}));
                     builder.endBlock(MIRTerminator::make_If({mv$(cmpLvalEq), armTargets[tgtOfs], nextCmpBlk}));
                     builder.setCurBlock(nextCmpBlk);
                 }
@@ -6812,7 +6812,7 @@ void MatchGenGrouped::genDispatchPrimitive(::HIR::TypeRef ty, MIRLValue val, con
             }
             builder.endBlock(MIRTerminator::make_Goto(defBlk));
         } break;
-        case ::HIR::CoreType::Str: {
+        case HIRCoreType::Str: {
             // Remove the deref on the &str
             ASSERT_BUG(sp, !val.wrappers.empty() && val.wrappers.back().is_Deref(), "&str match on non-Deref lvalue - " << val);
             val.wrappers.pop_back();
@@ -6842,7 +6842,7 @@ void MatchGenGrouped::genDispatchPrimitive(::HIR::TypeRef ty, MIRLValue val, con
     }
 }
 
-void MatchGenGrouped::genDispatchEnum(::HIR::TypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
+void MatchGenGrouped::genDispatchEnum(HIRTypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
     TRACE_FUNCTION;
     auto& te = ty->as_Path();
     const auto& pbe = te.binding.as_Enum();
@@ -6871,8 +6871,8 @@ void MatchGenGrouped::genDispatchEnum(::HIR::TypeRef ty, MIRLValue val, const ::
     builder.endBlock(MIRTerminator::make_Switch({mv$(val), mv$(arms)}));
 }
 
-void MatchGenGrouped::genDispatchSlice(::HIR::TypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
-    auto valLen = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Usize), MIRRValue::make_DstMeta({builder.getPtrToDst(sp, val)}));
+void MatchGenGrouped::genDispatchSlice(HIRTypeRef ty, MIRLValue val, const ::std::vector<tRulesSubset>& rules, size_t ofs, const ::std::vector<MIRBasicBlockId>& armTargets, MIRBasicBlockId defBlk) {
+    auto valLen = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Usize), MIRRValue::make_DstMeta({builder.getPtrToDst(sp, val)}));
 
     // TODO: Re-sort the rules list to interleve Constant::Bytes and Slice
 
@@ -6882,7 +6882,7 @@ void MatchGenGrouped::genDispatchSlice(::HIR::TypeRef ty, MIRLValue val, const :
         const auto& r = rules[i][0][ofs];
         if (const auto* re = r.opt_Slice()) {
             ASSERT_BUG(sp, re->subRules.size() == 0, "Sub-rules in MatchGenGrouped");
-            auto valTst = MIRConstant::make_Uint({U128(re->len), ::HIR::CoreType::Usize});
+            auto valTst = MIRConstant::make_Uint({U128(re->len), HIRCoreType::Usize});
 
             for (size_t j = 0; j < rules[i].size(); j++) {
                 assert(armTargets[tgtOfs] == armTargets[tgtOfs + j]);
@@ -6907,7 +6907,7 @@ void MatchGenGrouped::genDispatchSlice(::HIR::TypeRef ty, MIRLValue val, const :
             ASSERT_BUG(sp, re->is_Bytes(), "Slice with non-Bytes value - " << *re);
             const auto& b = re->as_Bytes();
 
-            auto valTstLen = MIRConstant::make_Uint({U128(b.size()), ::HIR::CoreType::Usize});
+            auto valTstLen = MIRConstant::make_Uint({U128(b.size()), HIRCoreType::Usize});
 
             // IF v == tst : target
             {
@@ -6916,7 +6916,7 @@ void MatchGenGrouped::genDispatchSlice(::HIR::TypeRef ty, MIRLValue val, const :
                 // TODO: What if `val` isn't a Deref?
                 ASSERT_BUG(sp, !val.wrappers.empty() && val.wrappers.back().is_Deref(), "TODO: Handle non-Deref matches of byte strings - " << val);
                 auto& types = builder.resolve().crate.types;
-                auto cmpSliceVal = builder.lvalueOrTemp(sp, types.borrow(::HIR::BorrowType::Shared, types.slice(types.primitive(::HIR::CoreType::U8))), MIRRValue::make_MakeDst({MIRParam(re->clone()), valTstLen.clone()}));
+                auto cmpSliceVal = builder.lvalueOrTemp(sp, types.borrow(HIRBorrowType::Shared, types.slice(types.primitive(HIRCoreType::U8))), MIRRValue::make_MakeDst({MIRParam(re->clone()), valTstLen.clone()}));
                 auto cmpLvalEq = this->pushCompare(val.cloneUnwrapped(), MIRBinOp::EQ, mv$(cmpSliceVal));
                 builder.endBlock(MIRTerminator::make_If({mv$(cmpLvalEq), armTargets[tgtOfs], nextCmpBlk}));
 
@@ -6934,7 +6934,7 @@ void MatchGenGrouped::genDispatchSlice(::HIR::TypeRef ty, MIRLValue val, const :
 void MatchGenGrouped::genDispatchRange(const fieldPathT& fieldPath, const MIRConstant& first, const MIRConstant& last, bool isInclusive, MIRBasicBlockId defBlk) {
     TRACE_FUNCTION_F("field_path=" << fieldPath << ", " << first << " .." << (isInclusive ? "=" : "") << " " << last);
     MIRLValue val;
-    ::HIR::TypeRef ty;
+    HIRTypeRef ty;
     getTyAndVal(sp, builder, topTy, topVal, fieldPath, fieldPathOfs, ty, val);
     DEBUG("ty = " << ty << ", val = " << val);
 
@@ -6945,40 +6945,40 @@ void MatchGenGrouped::genDispatchRange(const fieldPathT& fieldPath, const MIRCon
         bool upperPossible = true;
 
         switch (te) {
-            case ::HIR::CoreType::Bool:
+            case HIRCoreType::Bool:
                 BUG(sp, "Range match over Bool");
                 break;
-            case ::HIR::CoreType::Str:
+            case HIRCoreType::Str:
                 BUG(sp, "Range match over Str - is this valid?");
                 break;
-            case ::HIR::CoreType::U8:
-            case ::HIR::CoreType::U16:
-            case ::HIR::CoreType::U32:
-            case ::HIR::CoreType::U64:
-            case ::HIR::CoreType::U128:
-            case ::HIR::CoreType::Usize:
+            case HIRCoreType::U8:
+            case HIRCoreType::U16:
+            case HIRCoreType::U32:
+            case HIRCoreType::U64:
+            case HIRCoreType::U128:
+            case HIRCoreType::Usize:
                 lowerPossible = (first.as_Uint().v > 0);
                 // TODO: Should this also check for the end being the max value of the type?
                 // - Can just leave that to the optimiser
                 upperPossible = isInclusive ? (last.as_Uint().v < U128::max()) : true;
                 break;
-            case ::HIR::CoreType::I8:
-            case ::HIR::CoreType::I16:
-            case ::HIR::CoreType::I32:
-            case ::HIR::CoreType::I64:
-            case ::HIR::CoreType::I128:
-            case ::HIR::CoreType::Isize:
+            case HIRCoreType::I8:
+            case HIRCoreType::I16:
+            case HIRCoreType::I32:
+            case HIRCoreType::I64:
+            case HIRCoreType::I128:
+            case HIRCoreType::Isize:
                 lowerPossible = (first.as_Int().v > S128::min());
                 upperPossible = isInclusive ? (last.as_Int().v < S128::max()) : true;
                 break;
-            case ::HIR::CoreType::Char:
+            case HIRCoreType::Char:
                 lowerPossible = (first.as_Uint().v > 0);
                 upperPossible = isInclusive ? (last.as_Uint().v <= 0x10FFFF) : (last.as_Uint().v < 0x10FFFF);
                 break;
-            case ::HIR::CoreType::F16:
-            case ::HIR::CoreType::F32:
-            case ::HIR::CoreType::F64:
-            case ::HIR::CoreType::F128:
+            case HIRCoreType::F16:
+            case HIRCoreType::F32:
+            case HIRCoreType::F64:
+            case HIRCoreType::F128:
                 // NOTE: No upper or lower limits
                 lowerPossible = (first.as_Float().v > -std::numeric_limits<double>::infinity());
                 upperPossible = (last.as_Float().v < std::numeric_limits<double>::infinity());
@@ -7012,7 +7012,7 @@ void MatchGenGrouped::genDispatchRange(const fieldPathT& fieldPath, const MIRCon
 void MatchGenGrouped::genDispatchSplitslice(const fieldPathT& fieldPath, const PatternRule::Data_SplitSlice& e, MIRBasicBlockId defBlk) {
     TRACE_FUNCTION_F("field_path=" << fieldPath << ", [" << e.leading << ", .., " << e.trailing << "]");
     MIRLValue val;
-    ::HIR::TypeRef ty;
+    HIRTypeRef ty;
     getTyAndVal(sp, builder, topTy, topVal, fieldPath, fieldPathOfs, ty, val);
     DEBUG("ty = " << ty << ", val = " << val);
 
@@ -7020,13 +7020,13 @@ void MatchGenGrouped::genDispatchSplitslice(const fieldPathT& fieldPath, const P
     ASSERT_BUG(sp, ty->is_Slice(), "SplitSlice pattern on non-slice - " << ty);
 
     // Obtain slice length
-    auto valLen = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(::HIR::CoreType::Usize), MIRRValue::make_DstMeta({builder.getPtrToDst(sp, val)}));
+    auto valLen = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Usize), MIRRValue::make_DstMeta({builder.getPtrToDst(sp, val)}));
 
     // 1. Check that length is sufficient for the pattern to be used
     // `IF len < min_len : def_blk, next
     {
         auto next = builder.newBbUnlinked();
-        auto cmpVal = this->pushCompare(valLen.clone(), MIRBinOp::LT, MIRConstant::make_Uint({U128(e.minLen), ::HIR::CoreType::Usize}));
+        auto cmpVal = this->pushCompare(valLen.clone(), MIRBinOp::LT, MIRConstant::make_Uint({U128(e.minLen), HIRCoreType::Usize}));
         builder.endBlock(MIRTerminator::make_If({mv$(cmpVal), defBlk, next}));
         builder.setCurBlock(next);
     }
@@ -7058,7 +7058,7 @@ void MatchGenGrouped::genDispatchSplitslice(const fieldPathT& fieldPath, const P
 // --------------------------------------------------------------------
 // MirBuilder
 // --------------------------------------------------------------------
-MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* retTy, const ::HIR::Function::argsT& args, MIRFunction& output)
+MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* retTy, const HIRFunction::argsT& args, MIRFunction& output)
     : rootSpan(sp)
     , mResolve(resolve)
     , retTy(retTy)
@@ -7088,12 +7088,12 @@ MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const 
     firstTempIdx = output.locals.size();
     DEBUG("First temporary will be " << firstTempIdx);
 
-    ifCondLval = this->newTemporary(mResolve.crate.types.primitive(::HIR::CoreType::Bool));
+    ifCondLval = this->newTemporary(mResolve.crate.types.primitive(HIRCoreType::Bool));
 
     // Determine which variables can be replaced by arguents
     for (size_t i = 0; i < args.size(); i++) {
         const auto& pat = args[i].first;
-        if (pat.mBindings.size() == 1 && pat.mBindings[0].mType == ::HIR::PatternBinding::Type::Move) {
+        if (pat.mBindings.size() == 1 && pat.mBindings[0].mType == HIRPatternBinding::Type::Move) {
             DEBUG("Argument shortcut: " << pat.mBindings[0] << " -> a" << i);
             varArgMappings[pat.mBindings[0].slot] = i;
         }
@@ -7170,7 +7170,7 @@ void MirBuilder::finalCleanup() {
     }
 }
 
-const ::HIR::TypeData* MirBuilder::isTypeOwnedBox(const ::HIR::TypeData* ty) const {
+const HIRTypeData* MirBuilder::isTypeOwnedBox(const HIRTypeData* ty) const {
     if (mLangBox) {
         if (!ty->is_Path()) {
             return nullptr;
@@ -7360,7 +7360,7 @@ void MirBuilder::dropLvalue(const Span& sp, const MIRLValue& value) {
     dropValueFromState(sp, *state, value.clone());
 }
 
-MIRLValue MirBuilder::newTemporary(const ::HIR::TypeData* ty) {
+MIRLValue MirBuilder::newTemporary(const HIRTypeData* ty) {
     unsigned int rv = output.locals.size();
     DEBUG("DEFINE (temp) _" << rv << ": " << ty);
 
@@ -7397,7 +7397,7 @@ MIRLValue MirBuilder::newTemporary(const ::HIR::TypeData* ty) {
     return MIRLValue::newLocal(rv);
 }
 
-MIRLValue MirBuilder::lvalueOrTemp(const Span& sp, const ::HIR::TypeData* ty, MIRRValue val) {
+MIRLValue MirBuilder::lvalueOrTemp(const Span& sp, const HIRTypeData* ty, MIRRValue val) {
     TU_IFLET(MIRRValue, val, Use, e, return mv$(e);)
     else {
         auto temp = newTemporary(ty);
@@ -7424,7 +7424,7 @@ MIRLValue MirBuilder::getResultUnwrapLvalue(const Span& sp) {
     }
 }
 
-MIRLValue MirBuilder::getResultInLvalue(const Span& sp, const ::HIR::TypeData* ty, bool allowMissingValue /*=false*/) {
+MIRLValue MirBuilder::getResultInLvalue(const Span& sp, const HIRTypeData* ty, bool allowMissingValue /*=false*/) {
     if (allowMissingValue && !blockActive()) {
         return newTemporary(ty);
     }
@@ -7437,7 +7437,7 @@ MIRLValue MirBuilder::getResultInLvalue(const Span& sp, const ::HIR::TypeData* t
     }
 }
 
-MIRParam MirBuilder::getResultInParam(const Span& sp, const ::HIR::TypeData* ty, bool allowMissingValue) {
+MIRParam MirBuilder::getResultInParam(const Span& sp, const HIRTypeData* ty, bool allowMissingValue) {
     if (allowMissingValue && !blockActive()) {
         return newTemporary(ty);
     }
@@ -7482,7 +7482,7 @@ void MirBuilder::pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bo
         (Constant, ),
         (SizedArray, movedParam(e.val);),
         (Borrow,
-         if (e.type == ::HIR::BorrowType::Owned) {
+         if (e.type == HIRBorrowType::Owned) {
              TODO(sp, "Move using &move");
              // Likely would require a marker that ensures that the memory isn't reused.
              this->movedLvalue(sp, e.val);
@@ -7814,7 +7814,7 @@ void MirBuilder::insertCloned(const Span& sp, const SavedCode& c, CloneMapper& m
             CloneMapper& mapper;
             std::map<unsigned, unsigned> newBlockMap;
 
-            Cloner(const Span& sp, CloneMapper& mapper, HIR::TypeInterner& types)
+            Cloner(const Span& sp, CloneMapper& mapper, HIRTypeInterner& types)
                 : MIRCloner(sp, types)
                 , mapper(mapper)
             {
@@ -8822,9 +8822,9 @@ void MirBuilder::completeScope(ScopeDef& sd) {
     }
 }
 
-void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::function<void(const ::HIR::TypeData*)> cb, const MIRLValue::Wrapper* stopWrapper /*=nullptr*/) const {
-    ::HIR::TypeRef tmp;
-    const ::HIR::TypeData* ty = nullptr;
+void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::function<void(const HIRTypeData*)> cb, const MIRLValue::Wrapper* stopWrapper /*=nullptr*/) const {
+    HIRTypeRef tmp;
+    const HIRTypeData* ty = nullptr;
     TU_MATCHA((val.root), (e), (Return, ty = retTy;), (Argument, ty = mArgs.at(e).second;), (Local, ty = output.locals.at(e);), (Static, TU_MATCHA((e.mData), (pe), (Generic, ASSERT_BUG(sp, pe.mParams.types.empty(), "Path params on static"); const auto& s = mResolve.crate.getStaticByPath(sp, pe.mPath); ty = s.mType;), (UfcsKnown, TODO(sp, "Static - UfcsKnown - " << e);), (UfcsUnknown, BUG(sp, "Encountered UfcsUnknown in Static - " << e);), (UfcsInherent, TODO(sp, "Static - UfcsInherent - " << e);))))
     assert(ty);
     for (const auto& w : val.wrappers) {
@@ -8835,7 +8835,7 @@ void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::functi
         const auto* currentTy = ty;
         ty = nullptr;
         //DEBUG(ty << " " << w);
-        auto maybeMonomorph = [&](const ::HIR::GenericParams& paramsDef, const ::HIR::Path& p, const ::HIR::TypeData* t) -> const ::HIR::TypeData* {
+        auto maybeMonomorph = [&](const HIRGenericParams& paramsDef, const HIRPath& p, const HIRTypeData* t) -> const HIRTypeData* {
             if (monomorphiseTypeNeeded(t)) {
                 tmp = MonomorphStatePtr(mResolve.crate.types, nullptr, &p.mData.as_Generic().mParams, nullptr).monomorphType(sp, t);
                 mResolve.expandAssociatedTypes(sp, tmp);
@@ -8891,7 +8891,7 @@ void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::functi
             }
             }
             TU_ARMA(Index, _index_val) {
-                TU_MATCH_DEF(::HIR::TypeData, (*currentTy), (te), (BUG(sp, "Index on unexpected type - " << currentTy);), (Slice, ty = te.inner;), (Array, ty = te.inner;))
+                TU_MATCH_DEF(HIRTypeData, (*currentTy), (te), (BUG(sp, "Index on unexpected type - " << currentTy);), (Slice, ty = te.inner;), (Array, ty = te.inner;))
             }
             TU_ARMA(Downcast, variantIndex) {
             TU_MATCH_HDRA( (*currentTy), { )
@@ -9505,7 +9505,7 @@ ScopeHandle::ScopeHandle(ScopeHandle&& x)
     x.idx = ~0;
 }
 
-PatternBinding::PatternBinding(fieldPathT field, const ::HIR::PatternBinding& binding)
+PatternBinding::PatternBinding(fieldPathT field, const HIRPatternBinding& binding)
     : field(std::move(field))
     , binding(&binding)
     , splitSlice(SIZE_MAX, SIZE_MAX)
@@ -9543,7 +9543,7 @@ void MirBuilder::restoreAliases(SavedAliases a) {
 }
 
 // Variable aliases (used for match guards)
-void MirBuilder::addVariableAlias(const Span& sp, unsigned idx, HIR::PatternBinding::Type ty, MIRLValue lv) {
+void MirBuilder::addVariableAlias(const Span& sp, unsigned idx, HIRPatternBinding::Type ty, MIRLValue lv) {
     DEBUG("#" << idx << " = " << int(ty) << " " << lv);
     ASSERT_BUG(sp, idx < variableAliases.size(), "Variable alias #" << idx << " out of bounds");
     ASSERT_BUG(sp, variableAliases[idx].second == MIRLValue(), "Variable alias #" << idx << " already exists: " << variableAliases[idx].second << " setting " << lv);

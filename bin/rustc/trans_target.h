@@ -116,7 +116,7 @@ struct TypeRepr {
 
     struct Field {
         size_t offset;
-        ::HIR::TypeRef ty;
+        HIRTypeRef ty;
     };
 
     ::std::vector<Field> fields;
@@ -150,17 +150,17 @@ static inline unsigned TargetGetPointerBits() {
     return TargetGetCurSpec().arch.pointerBits;
 }
 
-extern bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& outSize);
-extern bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& outAlign);
-extern bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& outSize, size_t& outAlign);
+extern bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize);
+extern bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outAlign);
+extern bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign);
 
 /// Does this target's C ABI cap the alignment of a non-first struct member? (Darwin/PowerPC "power" alignment)
 extern bool TargetCapsMemberAlignment();
 /// gcc's `TYPE_USER_ALIGN`: such a type is exempt from the member-alignment cap above, wherever it appears.
-extern bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty);
+extern bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty);
 
 /// This function is for the MIR Optimisation tool, which has to be able to read and use existing layouts
-extern void TargetForceTypeRepr(const Span& sp, const ::HIR::TypeData* ty, TypeRepr repr);
-extern const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty);
+extern void TargetForceTypeRepr(const Span& sp, const HIRTypeData* ty, TypeRepr repr);
+extern const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty);
 
-extern const ::HIR::TypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& subFields = {}, size_t ofs = 0);
+extern const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& subFields = {}, size_t ofs = 0);

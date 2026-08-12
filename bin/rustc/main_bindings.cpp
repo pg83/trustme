@@ -380,7 +380,7 @@ int main(int argc, char* argv[]) {
 #else
     auto* pool = stl::ObjPool::fromMemoryRaw();
 #endif
-    auto* types = pool->make<HIR::TypeInterner>(*pool);
+    auto* types = pool->make<HIRTypeInterner>(*pool);
 
     try {
         // Parse the crate into AST
@@ -641,7 +641,7 @@ int main(int argc, char* argv[]) {
         // HIR Section
         // --------------------------------------
         // Construct the HIR beside the AST in the compilation object pool.
-        ::HIR::Crate* hirCrate = CompilePhase<::HIR::Crate*>("HIR Lower", [&]() {
+        HIRCrate* hirCrate = CompilePhase<HIRCrate*>("HIR Lower", [&]() {
             return LowerHIRFromAST(pool, crate);
         });
         memoryDump("HIR Gen");
@@ -857,7 +857,7 @@ int main(int argc, char* argv[]) {
             hirCrate->linkPaths.push_back(libdir);
         }
         for (const char* libname : params.libraries) {
-            hirCrate->extLibs.push_back(::HIR::ExternLibrary{libname});
+            hirCrate->extLibs.push_back(HIRExternLibrary{libname});
         }
         transOpt.debugInfo = params.debugInfo;
 
@@ -871,13 +871,13 @@ int main(int argc, char* argv[]) {
         if (crateType == ASTCrate::Type::ProcMacro) {
             // - Save a very basic HIR dump, making sure that there's no lang items in it (e.g. `mrustc-main`)
             CompilePhaseV("HIR Serialise", [&]() {
-                HIR::Crate crateForSer(pool, *types);
+                HIRCrate crateForSer(pool, *types);
                 crateForSer.crateName = hirCrate->crateName;
                 crateForSer.edition = hirCrate->edition;
                 for (const auto& i : hirCrate->mRootModule.macroItems) {
                     DEBUG(i.first << ": " << i.second->ent.tagStr());
                     if (const auto* e = i.second->ent.opt_ProcMacro()) {
-                        crateForSer.mRootModule.macroItems.insert(std::make_pair(i.first, box$(HIR::VisEnt<HIR::MacroItem>{i.second->publicity, *e})));
+                        crateForSer.mRootModule.macroItems.insert(std::make_pair(i.first, box$(HIRVisEnt<HIRMacroItem>{i.second->publicity, *e})));
                     }
                 }
                 crateForSer.exportedMacroNames = hirCrate->exportedMacroNames;

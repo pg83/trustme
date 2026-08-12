@@ -1,18 +1,16 @@
 #include "hir_type_ref.h"
 
-namespace HIR {
 
-TrackHrbStack::PopOnDrop::PopOnDrop(): v(nullptr) {}
-TrackHrbStack::PopOnDrop::PopOnDrop(std::vector<const HIR::GenericParams*>& v): v(&v) {}
-TrackHrbStack::PopOnDrop::~PopOnDrop() {
+HIRTrackHrbStack::PopOnDrop::PopOnDrop(): v(nullptr) {}
+HIRTrackHrbStack::PopOnDrop::PopOnDrop(std::vector<const HIRGenericParams*>& v): v(&v) {}
+HIRTrackHrbStack::PopOnDrop::~PopOnDrop() {
     if (v) {
         assert(!v->empty());
         v->pop_back();
     }
 }
-TrackHrbStack::PopOnDrop::PopOnDrop(PopOnDrop&& x): v(x.v) { x.v = nullptr; }
-TrackHrbStack::PopOnDrop TrackHrbStack::pushHrb(const HIR::GenericParams& params) const {
+HIRTrackHrbStack::PopOnDrop::PopOnDrop(PopOnDrop&& x): v(x.v) { x.v = nullptr; }
+HIRTrackHrbStack::PopOnDrop HIRTrackHrbStack::pushHrb(const HIRGenericParams& params) const {
     hrbStack.push_back(&params);
     return PopOnDrop(hrbStack);
-}
 }

@@ -48,7 +48,7 @@ struct MIRLValue {
 
         static Storage newLocal(unsigned idx);
 
-        static Storage newStatic(::HIR::Path p);
+        static Storage newStatic(HIRPath p);
 
         Storage clone() const;
 
@@ -88,9 +88,9 @@ struct MIRLValue {
 
         unsigned as_Local() const;
 
-        const ::HIR::Path& as_Static() const;
+        const HIRPath& as_Static() const;
 
-        ::HIR::Path& as_Static();
+        HIRPath& as_Static();
 
         Ordering ord(const Storage& x) const;
 
@@ -207,7 +207,7 @@ struct MIRLValue {
         return MIRLValue(Storage::newLocal(idx), {});
     }
 
-    static MIRLValue newStatic(::HIR::Path p) {
+    static MIRLValue newStatic(HIRPath p) {
         return MIRLValue(Storage::newStatic(::std::move(p)), {});
     }
 
@@ -354,7 +354,7 @@ struct MIRLValue {
 
         unsigned as_Argument() const;
 
-        const HIR::Path& as_Static() const;
+        const HIRPath& as_Static() const;
 
         char as_Deref() const;
 
@@ -473,36 +473,36 @@ enum class MIRUniOp {
 // offset.  The path names the allocation; `offset` selects an address within
 // it.  A null path is reserved for the unresolved MakeDst metadata marker.
 struct ItemAddress {
-    ::std::unique_ptr<::HIR::Path> p;
+    ::std::unique_ptr<HIRPath> p;
     U128 offset;
 
-    ItemAddress(::std::unique_ptr<::HIR::Path> p = {}, U128 offset = U128(0));
+    ItemAddress(::std::unique_ptr<HIRPath> p = {}, U128 offset = U128(0));
 
     explicit operator bool() const {
         return static_cast<bool>(p);
     }
 
-    const ::HIR::Path* get() const {
+    const HIRPath* get() const {
         return p.get();
     }
 
-    ::HIR::Path* get() {
+    HIRPath* get() {
         return p.get();
     }
 
-    const ::HIR::Path& operator*() const {
+    const HIRPath& operator*() const {
         return *p;
     }
 
-    ::HIR::Path& operator*() {
+    HIRPath& operator*() {
         return *p;
     }
 
-    const ::HIR::Path* operator->() const {
+    const HIRPath* operator->() const {
         return p.get();
     }
 
-    ::HIR::Path* operator->() {
+    HIRPath* operator->() {
         return p.get();
     }
 
@@ -519,17 +519,17 @@ TAGGED_UNION_EX(
     ((Int,
       struct {
           S128 v;
-          ::HIR::CoreType t;
+          HIRCoreType t;
       }),
      (Uint,
       struct {
           U128 v;
-          ::HIR::CoreType t;
+          HIRCoreType t;
       }),
      (Float,
       struct {
           FloatValue v;
-          ::HIR::CoreType t;
+          HIRCoreType t;
       }),
      (Bool,
       struct {
@@ -539,10 +539,10 @@ TAGGED_UNION_EX(
      (StaticString, ::std::string),          // String
      // NOTE: These are behind pointers to save inline space (HIR::Path is ~11
      // words, compared to 4 for MIR::Constant without it)
-     (Const, struct { ::std::unique_ptr<::HIR::Path> p; }), // `const`
-     (Generic, ::HIR::GenericRef),
+     (Const, struct { ::std::unique_ptr<HIRPath> p; }), // `const`
+     (Generic, HIRGenericRef),
      // ZST function type, NOT its address
-     (Function, struct { ::std::unique_ptr<::HIR::Path> p; }),
+     (Function, struct { ::std::unique_ptr<HIRPath> p; }),
      // Address within a named allocation
      (ItemAddr, ItemAddress)),
     (),
@@ -560,7 +560,7 @@ TAGGED_UNION_EX(
      // TODO: Add `Borrow` here (makes some MIR manipulation more complex, but simplifies emitted code)
      (Borrow,
       struct {
-          ::HIR::BorrowType type;
+          HIRBorrowType type;
           MIRLValue val;
       }),
      (Constant, MIRConstant)),
@@ -578,7 +578,7 @@ TAGGED_UNION_EX(
         (Use, MIRLValue),
         (Borrow,
          struct {
-             ::HIR::BorrowType type;
+             HIRBorrowType type;
              bool isRaw;
              MIRLValue val;
          }),
@@ -586,13 +586,13 @@ TAGGED_UNION_EX(
         (SizedArray,
          struct {
              MIRParam val;
-             ::HIR::ArraySize count;
+             HIRArraySize count;
          }),
         // Cast on primitives (thin pointers, integers, floats)
         (Cast,
          struct {
              MIRLValue val;
-             ::HIR::TypeRef type;
+             HIRTypeRef type;
          }),
         // Binary operation on primitives
         (BinOp,
@@ -625,7 +625,7 @@ TAGGED_UNION_EX(
         // Create a new instance of a union
         (UnionVariant,
          struct {
-             ::HIR::GenericPath path;
+             HIRGenericPath path;
              unsigned int index;
              MIRParam val;
          }),
@@ -633,14 +633,14 @@ TAGGED_UNION_EX(
         // - Separate from UnionVariant, as the contents is needed when creating the body
         (EnumVariant,
          struct {
-             ::HIR::GenericPath path;
+             HIRGenericPath path;
              unsigned int index;
              ::std::vector<MIRParam> vals;
          }),
         // Create a new instance of a struct
         (Struct,
          struct {
-             ::HIR::GenericPath path;
+             HIRGenericPath path;
              ::std::vector<MIRParam> vals;
          })
     ),
@@ -655,9 +655,9 @@ static inline bool operator!=(const MIRRValue& a, const MIRRValue& b) {
     return !(a == b);
 }
 
-TAGGED_UNION(MIRCallTarget, Intrinsic, (Value, MIRLValue), (Path, ::HIR::Path), (Intrinsic, struct {
+TAGGED_UNION(MIRCallTarget, Intrinsic, (Value, MIRLValue), (Path, HIRPath), (Intrinsic, struct {
                  RcString name;
-                 ::HIR::PathParams params;
+                 HIRPathParams params;
              }));
 TAGGED_UNION_EX(MIRSwitchValues, (), Unsigned, ((Unsigned, ::std::vector<uint64_t>), (Signed, ::std::vector<int64_t>), (String, ::std::vector<::std::string>), (ByteString, ::std::vector<::std::vector<uint8_t>>)), (), (), (MIRSwitchValues clone() const; bool operator==(const MIRSwitchValues& x) const; bool operator!=(const MIRSwitchValues& x) const { return !(*this == x); }));
 
@@ -720,7 +720,7 @@ static inline bool operator!=(const MIRTerminator& a, const MIRTerminator& b) {
     return !(a == b);
 }
 
-TAGGED_UNION(MIRAsmParam, Const, (Const, MIRConstant), (Sym, ::HIR::Path), (Reg, struct {
+TAGGED_UNION(MIRAsmParam, Const, (Const, MIRConstant), (Sym, HIRPath), (Reg, struct {
                  AsmDirection dir;
                  AsmRegisterSpec spec;
                  std::unique_ptr<MIRParam> input;
@@ -824,7 +824,7 @@ public:
 
 class MIRFunction {
 public:
-    ::std::vector<::HIR::TypeRef> locals;
+    ::std::vector<HIRTypeRef> locals;
     //::std::vector< RcString>   local_names;
     ::std::vector<bool> dropFlags;
 
@@ -840,7 +840,7 @@ class MIRCloner {
 public:
     const Span& sp;
 
-    MIRCloner(const Span& sp, HIR::TypeInterner& types);
+    MIRCloner(const Span& sp, HIRTypeInterner& types);
     virtual ~MIRCloner();
 
     virtual MIRBasicBlockId mapBbIdx(MIRBasicBlockId idx) const {
@@ -855,7 +855,7 @@ public:
         return f;
     }
 
-    virtual const HIR::TypeData* valueGenericType(HIR::GenericRef ce) const;
+    virtual const HIRTypeData* valueGenericType(HIRGenericRef ce) const;
     virtual const Monomorphiser& monomorphiser() const;
 
     virtual const StaticTraitResolve* resolve() const {
@@ -876,8 +876,8 @@ public:
     ::std::vector<MIRLValue> cloneLvalVec(const ::std::vector<MIRLValue>& src) const;
 
     // -- Monomorphise various types
-    ::HIR::TypeRef monomorph(const ::HIR::TypeData* x) const;
-    ::HIR::GenericPath monomorph(const ::HIR::GenericPath& x) const;
-    ::HIR::Path monomorph(const ::HIR::Path& x) const;
-    ::HIR::PathParams monomorph(const ::HIR::PathParams& x) const;
+    HIRTypeRef monomorph(const HIRTypeData* x) const;
+    HIRGenericPath monomorph(const HIRGenericPath& x) const;
+    HIRPath monomorph(const HIRPath& x) const;
+    HIRPathParams monomorph(const HIRPathParams& x) const;
 };

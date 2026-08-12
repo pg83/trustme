@@ -3,7 +3,6 @@
 #include "tagged_union.h"
 #include "hir_generic_ref.h"
 
-namespace HIR {
 
     //enum class LiteralExprOp
     //{
@@ -17,4 +16,3 @@ namespace HIR {
     //    ConstGeneric,
     //};
 
-}

@@ -200,7 +200,7 @@ enum class FragType {
 struct ProcMacroInv: public TokenStream {
     Span parentSpan;
     Span thisSpan;
-    const ::HIR::ProcMacro& procMacroDesc;
+    const HIRProcMacro& procMacroDesc;
     ASTEdition edition;
     ::std::ofstream dumpFileOut;
     ::std::ofstream dumpFileRes;
@@ -229,7 +229,7 @@ struct ProcMacroInv: public TokenStream {
     bool eofHit = false;
 
 public:
-    ProcMacroInv(const Span& sp, ASTEdition edition, const char* executable, const ::HIR::ProcMacro& procMacroDesc);
+    ProcMacroInv(const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc);
     ProcMacroInv(const ProcMacroInv&) = delete;
     ProcMacroInv(ProcMacroInv&&) = default;
     ProcMacroInv& operator=(const ProcMacroInv&) = delete;
@@ -438,7 +438,7 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const ASTCrate& crate, const ::s
     ASSERT_BUG(sp, crate.externCrates.count(crateName), "Crate not loaded for macro: [" << macPath << "]");
     const auto& extCrate = crate.externCrates.at(crateName);
     // TODO: Ensure that this macro is in the listed crate.
-    const ::HIR::ProcMacro* pmp = nullptr;
+    const HIRProcMacro* pmp = nullptr;
     for (const auto& mi : extCrate.hir->mRootModule.macroItems) {
         if (!mi.second->ent.is_ProcMacro()) {
             continue;
@@ -1873,7 +1873,7 @@ namespace {
     });
 }
 
-ProcMacroInv::ProcMacroInv(const Span& sp, ASTEdition edition, const char* executable, const ::HIR::ProcMacro& procMacroDesc)
+ProcMacroInv::ProcMacroInv(const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc)
     : TokenStream(ParseState())
     , parentSpan(sp)
     , thisSpan(Span(parentSpan, procMacroDesc.path.crateName(), procMacroDesc.name))

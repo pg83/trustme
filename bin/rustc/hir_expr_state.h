@@ -2,25 +2,24 @@
 
 #include "hir_hir.h"
 
-namespace HIR {
 
-    class ExprState {
+    class HIRExprState {
     public:
-        ::HIR::TypeInterner& types;
-        ::HIR::SimplePath modPath;
-        const ::HIR::Module& mModule;
+        HIRTypeInterner& types;
+        HIRSimplePath modPath;
+        const HIRModule& mModule;
 
-        const ::HIR::GenericParams* mImplGenerics;
-        const ::HIR::GenericParams* mItemGenerics;
+        const HIRGenericParams* mImplGenerics;
+        const HIRGenericParams* mItemGenerics;
 
         // The owner trait implementation is needed when this expression is
         // typechecked or expanded lazily (e.g. while evaluating a const
         // generic).  The normal whole-crate visitors keep this on their
         // traversal stack, but that stack is absent for lazy processing.
-        ::HIR::SimplePath mCurrentTraitPath;
-        const ::HIR::TraitImpl* currentTraitImpl;
+        HIRSimplePath mCurrentTraitPath;
+        const HIRTraitImpl* currentTraitImpl;
 
-        ::std::vector<::std::pair<const ::HIR::SimplePath*, const ::HIR::Trait*>> traits;
+        ::std::vector<::std::pair<const HIRSimplePath*, const HIRTrait*>> traits;
 
         enum class Stage {
             Created,
@@ -39,7 +38,6 @@ namespace HIR {
         };
         mutable Stage stage;
 
-        ExprState(::HIR::TypeInterner& types, const ::HIR::Module& modPtr, ::HIR::SimplePath modPath);
+        HIRExprState(HIRTypeInterner& types, const HIRModule& modPtr, HIRSimplePath modPath);
     };
 
-}

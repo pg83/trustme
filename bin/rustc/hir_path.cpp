@@ -7,20 +7,19 @@ namespace {
     bool gCompareHrls = false;
 }
 
-namespace HIR {
-    TraitPath::TraitPath()
+    HIRTraitPath::HIRTraitPath()
         : traitPtr(nullptr)
     {
     }
 
-    TraitPath::TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path)
+    HIRTraitPath::HIRTraitPath(::std::unique_ptr<HIRGenericParams> hrtbs, HIRGenericPath path)
         : hrtbs(::std::move(hrtbs))
         , mPath(::std::move(path))
         , traitPtr(nullptr)
     {
     }
 
-    TraitPath::TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const ::HIR::Trait* traitPtr, BoundConstness constness)
+    HIRTraitPath::HIRTraitPath(::std::unique_ptr<HIRGenericParams> hrtbs, HIRGenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr, HIRBoundConstness constness)
         : hrtbs(::std::move(hrtbs))
         , mPath(::std::move(path))
         , typeBounds(::std::move(typeBounds))
@@ -30,11 +29,11 @@ namespace HIR {
     {
     }
 
-    TraitPath::~TraitPath() = default;
-    TraitPath::TraitPath(TraitPath&&) = default;
-    TraitPath& TraitPath::operator=(TraitPath&&) = default;
+    HIRTraitPath::~HIRTraitPath() = default;
+    HIRTraitPath::HIRTraitPath(HIRTraitPath&&) = default;
+    HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
 
-    ::std::ostream& operator<<(::std::ostream& os, const ::HIR::SimplePath& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const HIRSimplePath& x) {
         if (x.crateName() != "") {
             os << "::\"" << x.crateName() << "\"";
         } else if (x.components().size() == 0) {
@@ -47,7 +46,7 @@ namespace HIR {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const PathParams& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const HIRPathParams& x) {
         bool hasArgs = (x.mLifetimes.size() > 0 || x.types.size() > 0 || x.values.size() > 0);
 
         if (hasArgs) {
@@ -68,15 +67,15 @@ namespace HIR {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const GenericPath& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const HIRGenericPath& x) {
         os << x.mPath << x.mParams;
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const TraitPath& x) {
-        if (x.constness == BoundConstness::Always) {
+    ::std::ostream& operator<<(::std::ostream& os, const HIRTraitPath& x) {
+        if (x.constness == HIRBoundConstness::Always) {
             os << "const ";
-        } else if (x.constness == BoundConstness::Maybe) {
+        } else if (x.constness == HIRBoundConstness::Maybe) {
             os << "[const] ";
         }
         if (x.hrtbs) {
@@ -111,29 +110,28 @@ namespace HIR {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Path& x) {
-        TU_MATCH(::HIR::Path::Data, (x.mData), (e), (Generic, return os << e;), (UfcsInherent, return os << "<" << e.type << " /*- " << e.implParams << "*/>::" << e.item << e.params;), (UfcsKnown, os << "<" << e.type << " as "; if (e.hrtbs) { os << "for" << e.hrtbs->fmtArgs() << " "; } os << e.trait << ">::" << e.item << e.params; return os;), (UfcsUnknown, return os << "<" << e.type << " as _>::" << e.item << e.params;))
+    ::std::ostream& operator<<(::std::ostream& os, const HIRPath& x) {
+        TU_MATCH(HIRPath::Data, (x.mData), (e), (Generic, return os << e;), (UfcsInherent, return os << "<" << e.type << " /*- " << e.implParams << "*/>::" << e.item << e.params;), (UfcsKnown, os << "<" << e.type << " as "; if (e.hrtbs) { os << "for" << e.hrtbs->fmtArgs() << " "; } os << e.trait << ">::" << e.item << e.params; return os;), (UfcsUnknown, return os << "<" << e.type << " as _>::" << e.item << e.params;))
         return os;
     }
+
+HIRSimplePath HIRSimplePath::clone() const {
+    return HIRSimplePath(members);
 }
 
-::HIR::SimplePath HIR::SimplePath::clone() const {
-    return SimplePath(members);
-}
-
-::HIR::SimplePath HIR::SimplePath::parent() const {
+HIRSimplePath HIRSimplePath::parent() const {
     if (members.size() > 1) {
-        return SimplePath(ThinVector<RcString>(members.begin(), members.end() - 1));
+        return HIRSimplePath(ThinVector<RcString>(members.begin(), members.end() - 1));
     } else {
         return this->clone();
     }
 }
 
-::HIR::SimplePath HIR::SimplePath::operator+(const RcString& s) const {
+HIRSimplePath HIRSimplePath::operator+(const RcString& s) const {
     if (members.empty()) {
         return ThinVector<RcString>({RcString(), s});
     } else {
-        SimplePath rv;
+        HIRSimplePath rv;
         rv.members.reserve(members.size());
         for (const auto& v : members) {
             rv.members.push_back(v);
@@ -143,7 +141,7 @@ namespace HIR {
     }
 }
 
-void HIR::SimplePath::operator+=(const RcString& s) {
+void HIRSimplePath::operator+=(const RcString& s) {
     if (members.empty()) {
         members = ThinVector<RcString>({RcString(), s});
     } else {
@@ -151,7 +149,7 @@ void HIR::SimplePath::operator+=(const RcString& s) {
     }
 }
 
-RcString HIR::SimplePath::popComponent() {
+RcString HIRSimplePath::popComponent() {
     if (members.size() <= 1) {
         return RcString();
     } else {
@@ -164,7 +162,7 @@ RcString HIR::SimplePath::popComponent() {
     }
 }
 
-void HIR::SimplePath::updateCrateName(RcString v) {
+void HIRSimplePath::updateCrateName(RcString v) {
     if (members.empty()) {
         members.push_back(v);
     } else if (v.c_str()[0] == '\0' && members.size() == 1) {
@@ -174,12 +172,12 @@ void HIR::SimplePath::updateCrateName(RcString v) {
     }
 }
 
-void HIR::SimplePath::updateLastComponent(RcString v) {
+void HIRSimplePath::updateLastComponent(RcString v) {
     assert(members.size() >= 2);
     members.back() = std::move(v);
 }
 
-bool HIR::SimplePath::startsWith(const HIR::SimplePath& p, bool skipLast /*=false*/) const {
+bool HIRSimplePath::startsWith(const HIRSimplePath& p, bool skipLast /*=false*/) const {
     if (p.members.empty()) {
         return crateName() == RcString();
     }
@@ -195,21 +193,21 @@ bool HIR::SimplePath::startsWith(const HIR::SimplePath& p, bool skipLast /*=fals
     return true;
 }
 
-::HIR::PathParams::PathParams() {
+HIRPathParams::HIRPathParams() {
 }
 
-::HIR::PathParams::PathParams(::HIR::TypeRef ty0) {
-    types = ThinVector<HIR::TypeRef>(1);
+HIRPathParams::HIRPathParams(HIRTypeRef ty0) {
+    types = ThinVector<HIRTypeRef>(1);
     types[0] = std::move(ty0);
 }
 
-HIR::PathParams::PathParams(::HIR::LifetimeRef lft) {
-    mLifetimes = ThinVector<HIR::LifetimeRef>(1);
+HIRPathParams::HIRPathParams(HIRLifetimeRef lft) {
+    mLifetimes = ThinVector<HIRLifetimeRef>(1);
     mLifetimes[0] = std::move(lft);
 }
 
-::HIR::PathParams HIR::PathParams::clone() const {
-    PathParams rv;
+HIRPathParams HIRPathParams::clone() const {
+    HIRPathParams rv;
     rv.mLifetimes = this->mLifetimes;
     rv.types.reserve(types.size());
     for (const auto& t : types) {
@@ -222,31 +220,31 @@ HIR::PathParams::PathParams(::HIR::LifetimeRef lft) {
     return rv;
 }
 
-::HIR::GenericPath::GenericPath() {
+HIRGenericPath::HIRGenericPath() {
 }
 
-::HIR::GenericPath::GenericPath(::HIR::SimplePath sp)
+HIRGenericPath::HIRGenericPath(HIRSimplePath sp)
     : mPath(mv$(sp))
 {
 }
 
-::HIR::GenericPath::GenericPath(::HIR::SimplePath sp, ::HIR::PathParams params)
-    : mPath(mv$(sp))
-    , mParams(mv$(params))
-{
-}
-
-::HIR::GenericPath::GenericPath(::HIR::GenericParams hrls, ::HIR::SimplePath sp, ::HIR::PathParams params)
+HIRGenericPath::HIRGenericPath(HIRSimplePath sp, HIRPathParams params)
     : mPath(mv$(sp))
     , mParams(mv$(params))
 {
 }
 
-::HIR::GenericPath HIR::GenericPath::clone() const {
-    return GenericPath(mPath.clone(), mParams.clone());
+HIRGenericPath::HIRGenericPath(HIRGenericParams hrls, HIRSimplePath sp, HIRPathParams params)
+    : mPath(mv$(sp))
+    , mParams(mv$(params))
+{
 }
 
-bool HIR::PathParams::equalsIgnoringRegions(const HIR::PathParams& x) const {
+HIRGenericPath HIRGenericPath::clone() const {
+    return HIRGenericPath(mPath.clone(), mParams.clone());
+}
+
+bool HIRPathParams::equalsIgnoringRegions(const HIRPathParams& x) const {
     if (types.size() != x.types.size() || values.size() != x.values.size()) {
         return false;
     }
@@ -263,11 +261,11 @@ bool HIR::PathParams::equalsIgnoringRegions(const HIR::PathParams& x) const {
     return true;
 }
 
-bool HIR::GenericPath::equalsIgnoringRegions(const HIR::GenericPath& x) const {
+bool HIRGenericPath::equalsIgnoringRegions(const HIRGenericPath& x) const {
     return mPath == x.mPath && mParams.equalsIgnoringRegions(x.mParams);
 }
 
-Ordering HIR::GenericPath::ord(const HIR::GenericPath& x) const {
+Ordering HIRGenericPath::ord(const HIRGenericPath& x) const {
     ORD(mPath, x.mPath);
     //DEBUG("\n  " << *this << "\n  " << x);
     ORD(mParams, x.mParams);
@@ -275,8 +273,8 @@ Ordering HIR::GenericPath::ord(const HIR::GenericPath& x) const {
     return OrdEqual;
 }
 
-::HIR::TraitPath HIR::TraitPath::clone() const {
-    ::HIR::TraitPath rv{hrtbs ? box$(hrtbs->clone()) : nullptr, mPath.clone(), {}, {}, traitPtr, constness};
+HIRTraitPath HIRTraitPath::clone() const {
+    HIRTraitPath rv{hrtbs ? box$(hrtbs->clone()) : nullptr, mPath.clone(), {}, {}, traitPtr, constness};
     rv.lifetimeElision = lifetimeElision;
 
     for (const auto& assoc : typeBounds) {
@@ -289,7 +287,7 @@ Ordering HIR::GenericPath::ord(const HIR::GenericPath& x) const {
     return rv;
 }
 
-bool HIR::TraitPath::equalsIgnoringRegions(const TraitPath& x) const {
+bool HIRTraitPath::equalsIgnoringRegions(const HIRTraitPath& x) const {
     if (!mPath.equalsIgnoringRegions(x.mPath)
         || typeBounds.size() != x.typeBounds.size()
         || traitBounds.size() != x.traitBounds.size()) {
@@ -329,7 +327,7 @@ bool HIR::TraitPath::equalsIgnoringRegions(const TraitPath& x) const {
     return true;
 }
 
-Ordering HIR::TraitPath::ord(const TraitPath& x) const {
+Ordering HIRTraitPath::ord(const HIRTraitPath& x) const {
     // NOTE: An empty set is treated as the same as none
     if (gCompareHrls) {
         ORD(hrtbs.get() && !hrtbs->isEmpty(), x.hrtbs.get() && !x.hrtbs->isEmpty());
@@ -345,41 +343,41 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
     return OrdEqual;
 }
 
-::HIR::Path::Path(::HIR::GenericPath gp)
-    : mData(::HIR::Path::Data::make_Generic(mv$(gp)))
+HIRPath::HIRPath(HIRGenericPath gp)
+    : mData(HIRPath::Data::make_Generic(mv$(gp)))
 {
 }
 
-::HIR::Path::Path(::HIR::SimplePath sp)
-    : mData(::HIR::Path::Data::make_Generic(::HIR::GenericPath(mv$(sp))))
+HIRPath::HIRPath(HIRSimplePath sp)
+    : mData(HIRPath::Data::make_Generic(HIRGenericPath(mv$(sp))))
 {
 }
 
-::HIR::Path::Path(TypeRef ty, RcString item, PathParams itemParams)
+HIRPath::HIRPath(HIRTypeRef ty, RcString item, HIRPathParams itemParams)
     : mData(Data::make_UfcsInherent({mv$(ty), mv$(item), mv$(itemParams)}))
 {
 }
 
-::HIR::Path::Path(TypeRef ty, GenericPath trait, RcString item, PathParams itemParams)
+HIRPath::HIRPath(HIRTypeRef ty, HIRGenericPath trait, RcString item, HIRPathParams itemParams)
     : mData(Data::make_UfcsKnown({mv$(ty), mv$(trait), mv$(item), mv$(itemParams)}))
 {
 }
 
-::HIR::Path::Path(TypeRef ty, GenericParams hrtbs, GenericPath trait, RcString item, PathParams itemParams)
+HIRPath::HIRPath(HIRTypeRef ty, HIRGenericParams hrtbs, HIRGenericPath trait, RcString item, HIRPathParams itemParams)
     : mData(Data::make_UfcsKnown({mv$(ty), mv$(trait), mv$(item), mv$(itemParams), box$(hrtbs)}))
 {
 }
 
-::HIR::Path HIR::Path::clone() const {
+HIRPath HIRPath::clone() const {
     TU_MATCH_HDRA((mData), {)
     TU_ARMA(Generic, e) {
-            return Path(Data::make_Generic(e.clone()));
+            return HIRPath(Data::make_Generic(e.clone()));
         }
         TU_ARMA(UfcsInherent, e) {
-            return Path(Data::make_UfcsInherent({e.type, e.item, e.params.clone(), e.implParams.clone()}));
+            return HIRPath(Data::make_UfcsInherent({e.type, e.item, e.params.clone(), e.implParams.clone()}));
         }
         TU_ARMA(UfcsKnown, e) {
-            return Path(
+            return HIRPath(
                 Data::make_UfcsKnown({
                     e.type,
                     e.trait.clone(),
@@ -390,34 +388,33 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
             );
         }
         TU_ARMA(UfcsUnknown, e) {
-            return Path(Data::make_UfcsUnknown({e.type, e.item, e.params.clone()}));
+            return HIRPath(Data::make_UfcsUnknown({e.type, e.item, e.params.clone()}));
         }
     }
     throw "";
 }
 
-::HIR::Compare HIR::PathParams::compareWithPlaceholders(const Span& sp, const ::HIR::PathParams& x, ::HIR::tCbResolveType resolvePlaceholder) const {
-    using ::HIR::Compare;
+HIRCompare HIRPathParams::compareWithPlaceholders(const Span& sp, const HIRPathParams& x, tCbResolveType resolvePlaceholder) const {
 
-    auto rv = Compare::Equal;
+    auto rv = HIRCompare::Equal;
     if (this->types.size() > 0 || x.types.size() > 0) {
         if (this->types.size() != x.types.size()) {
-            return Compare::Unequal;
+            return HIRCompare::Unequal;
         }
         for (unsigned int i = 0; i < x.types.size(); i++) {
             auto rv2 = this->types[i]->compareWithPlaceholders(sp, x.types[i], resolvePlaceholder);
-            if (rv2 == Compare::Unequal) {
-                return Compare::Unequal;
+            if (rv2 == HIRCompare::Unequal) {
+                return HIRCompare::Unequal;
             }
-            if (rv2 == Compare::Fuzzy) {
-                rv = Compare::Fuzzy;
+            if (rv2 == HIRCompare::Fuzzy) {
+                rv = HIRCompare::Fuzzy;
             }
         }
     }
 #if 1
     if (this->values.size() > 0 || x.values.size() > 0) {
         if (this->values.size() != x.values.size()) {
-            return Compare::Unequal;
+            return HIRCompare::Unequal;
         }
         for (unsigned int i = 0; i < x.values.size(); i++) {
             const auto& valT = resolvePlaceholder.getVal(sp, this->values[i]);
@@ -432,13 +429,13 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
                 // TODO: Look up the the ivars?
                 if (valT.is_Infer() || valX.is_Infer()) {
                     //return Compare::Fuzzy;
-                    rv = Compare::Fuzzy;
+                    rv = HIRCompare::Fuzzy;
                 } else if (valT != valX) {
                     if (valT.is_Unevaluated() || valX.is_Unevaluated()) {
                         //return Compare::Fuzzy;
-                        rv = Compare::Fuzzy;
+                        rv = HIRCompare::Fuzzy;
                     } else {
-                        return Compare::Unequal;
+                        return HIRCompare::Unequal;
                     }
                 }
             }
@@ -448,43 +445,42 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
     return rv;
 }
 
-::HIR::Compare HIR::PathParams::matchTestGenericsFuzz(const Span& sp, const PathParams& x, tCbResolveType resolvePlaceholder, ::HIR::MatchGenerics& match) const {
-    using ::HIR::Compare;
-    auto rv = Compare::Equal;
+HIRCompare HIRPathParams::matchTestGenericsFuzz(const Span& sp, const HIRPathParams& x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& match) const {
+    auto rv = HIRCompare::Equal;
     TRACE_FUNCTION_F("(PathParams) " << *this << " with " << x);
 
     if (this->types.size() != x.types.size()) {
-        return Compare::Unequal;
+        return HIRCompare::Unequal;
     }
     for (unsigned int i = 0; i < x.types.size(); i++) {
         rv &= this->types[i]->matchTestGenericsFuzz(sp, x.types[i], resolvePlaceholder, match);
-        if (rv == Compare::Unequal) {
-            return Compare::Unequal;
+        if (rv == HIRCompare::Unequal) {
+            return HIRCompare::Unequal;
         }
     }
 
     if (this->values.size() != x.values.size()) {
-        return Compare::Unequal;
+        return HIRCompare::Unequal;
     }
     for (unsigned int i = 0; i < x.values.size(); i++) {
         const auto& valT = resolvePlaceholder.getVal(sp, this->values[i]);
         const auto& valX = resolvePlaceholder.getVal(sp, x.values[i]);
         if (const auto* ge = valT.opt_Generic()) {
             rv &= match.matchVal(*ge, valX);
-            if (rv == Compare::Unequal) {
-                return Compare::Unequal;
+            if (rv == HIRCompare::Unequal) {
+                return HIRCompare::Unequal;
             }
         } else {
             // TODO: Look up the the ivars?
             if (valT.is_Infer() || valX.is_Infer()) {
-                return Compare::Fuzzy;
+                return HIRCompare::Fuzzy;
             }
 
             // An unevaluated value that is a plain integer literal can still be compared
             // exactly; treating it as fuzzy made impl selection on const generics pick the
             // first candidate (harfrust's `SelectAtomic<8/16/32>`).
             struct H2 {
-                static bool getLiteral(const ::HIR::ConstGeneric& v, U128& out) {
+                static bool getLiteral(const HIRConstGeneric& v, U128& out) {
                     if (const auto* ev = v.opt_Evaluated()) {
                         auto sl = EncodedLiteralSlice(**ev);
                         if (sl.mSize == 0 || sl.mSize > 16) {
@@ -498,7 +494,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
                             return false;
                         }
                         const auto& node = **(*uev)->expr;
-                        if (const auto* lit = cast<const ::HIR::ExprNodeLiteral>(&node)) {
+                        if (const auto* lit = cast<const HIRExprNodeLiteral>(&node)) {
                             if (const auto* i = lit->mData.opt_Integer()) {
                                 out = i->mValue;
                                 return true;
@@ -513,14 +509,14 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
             U128 litT, litX;
             if (H2::getLiteral(valT, litT) && H2::getLiteral(valX, litX)) {
                 if (litT != litX) {
-                    return Compare::Unequal;
+                    return HIRCompare::Unequal;
                 }
                 // Equal literals: continue (leaves `rv` as-is)
             } else if (valT != valX) {
                 if (valT.is_Unevaluated() || valX.is_Unevaluated()) {
-                    return Compare::Fuzzy;
+                    return HIRCompare::Fuzzy;
                 }
-                return Compare::Unequal;
+                return HIRCompare::Unequal;
             }
         }
     }
@@ -545,20 +541,20 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
     return rv;
 }
 
-::HIR::Compare HIR::GenericPath::compareWithPlaceholders(const Span& sp, const ::HIR::GenericPath& x, ::HIR::tCbResolveType resolvePlaceholder) const {
+HIRCompare HIRGenericPath::compareWithPlaceholders(const Span& sp, const HIRGenericPath& x, tCbResolveType resolvePlaceholder) const {
     if (this->mPath != x.mPath) {
-        return ::HIR::Compare::Unequal;
+        return HIRCompare::Unequal;
     }
 
     return this->mParams.compareWithPlaceholders(sp, x.mParams, resolvePlaceholder);
 }
 
 namespace {
-    ::HIR::Compare compareWithPlaceholders(const Span& sp, const ::HIR::PathParams& l, const ::HIR::PathParams& r, ::HIR::tCbResolveType resolvePlaceholder) {
+    HIRCompare compareWithPlaceholders(const Span& sp, const HIRPathParams& l, const HIRPathParams& r, tCbResolveType resolvePlaceholder) {
         return l.compareWithPlaceholders(sp, r, resolvePlaceholder);
     }
 
-    ::HIR::Compare compareWithPlaceholders(const Span& sp, const ::HIR::GenericPath& l, const ::HIR::GenericPath& r, ::HIR::tCbResolveType resolvePlaceholder) {
+    HIRCompare compareWithPlaceholders(const Span& sp, const HIRGenericPath& l, const HIRGenericPath& r, tCbResolveType resolvePlaceholder) {
         return l.compareWithPlaceholders(sp, r, resolvePlaceholder);
     }
 }
@@ -566,19 +562,19 @@ namespace {
 #define CMP(rv, cmp)                            \
     do {                                        \
         switch (cmp) {                          \
-            case ::HIR::Compare::Unequal:       \
-                return ::HIR::Compare::Unequal; \
-            case ::HIR::Compare::Fuzzy:         \
-                rv = ::HIR::Compare::Fuzzy;     \
+            case HIRCompare::Unequal:       \
+                return HIRCompare::Unequal; \
+            case HIRCompare::Fuzzy:         \
+                rv = HIRCompare::Fuzzy;     \
                 break;                          \
-            case ::HIR::Compare::Equal:         \
+            case HIRCompare::Equal:         \
                 break;                          \
         }                                       \
     } while (0)
 
-::HIR::Compare HIR::TraitPath::compareWithPlaceholders(const Span& sp, const TraitPath& x, tCbResolveType resolvePlaceholder) const {
+HIRCompare HIRTraitPath::compareWithPlaceholders(const Span& sp, const HIRTraitPath& x, tCbResolveType resolvePlaceholder) const {
     auto rv = mPath.compareWithPlaceholders(sp, x.mPath, resolvePlaceholder);
-    if (rv == Compare::Unequal) {
+    if (rv == HIRCompare::Unequal) {
         return rv;
     }
 
@@ -587,11 +583,11 @@ namespace {
 #if 1
     if (gCompareHrls) {
         if ((this->hrtbs && !this->hrtbs->isEmpty()) != (x.hrtbs && !x.hrtbs->isEmpty())) {
-            return Compare::Unequal;
+            return HIRCompare::Unequal;
         }
         if (this->hrtbs && x.hrtbs) {
             if (this->hrtbs->mLifetimes.size() != x.hrtbs->mLifetimes.size()) {
-                return Compare::Unequal;
+                return HIRCompare::Unequal;
             }
         }
     }
@@ -601,7 +597,7 @@ namespace {
     auto itR = x.typeBounds.begin();
     while (itL != typeBounds.end() && itR != x.typeBounds.end()) {
         if (itL->first != itR->first) {
-            return Compare::Unequal;
+            return HIRCompare::Unequal;
         }
         CMP(rv, itL->second.type->compareWithPlaceholders(sp, itR->second.type, resolvePlaceholder));
         ++itL;
@@ -609,15 +605,15 @@ namespace {
     }
 
     if (itL != typeBounds.end() || itR != x.typeBounds.end()) {
-        return Compare::Unequal;
+        return HIRCompare::Unequal;
     }
 
     return rv;
 }
 
-::HIR::Compare HIR::Path::compareWithPlaceholders(const Span& sp, const Path& x, tCbResolveType resolvePlaceholder) const {
+HIRCompare HIRPath::compareWithPlaceholders(const Span& sp, const HIRPath& x, tCbResolveType resolvePlaceholder) const {
     if (this->mData.tag() != x.mData.tag()) {
-        return Compare::Unequal;
+        return HIRCompare::Unequal;
     }
     TU_MATCH_HDRA( (this->mData, x.mData), {)
     TU_ARMA(Generic, ple, pre) {
@@ -625,26 +621,26 @@ namespace {
         }
         TU_ARMA(UfcsUnknown, ple, pre) {
             if (ple.item != pre.item) {
-                return Compare::Unequal;
+                return HIRCompare::Unequal;
             }
 
             TODO(sp, "Path::compare_with_placeholders - UfcsUnknown");
         }
         TU_ARMA(UfcsInherent, ple, pre) {
             if (ple.item != pre.item) {
-                return Compare::Unequal;
+                return HIRCompare::Unequal;
             }
-            ::HIR::Compare rv = ::HIR::Compare::Equal;
+            HIRCompare rv = HIRCompare::Equal;
             CMP(rv, ple.type->compareWithPlaceholders(sp, pre.type, resolvePlaceholder));
             CMP(rv, ::compareWithPlaceholders(sp, ple.params, pre.params, resolvePlaceholder));
             return rv;
         }
         TU_ARMA(UfcsKnown, ple, pre) {
             if (ple.item != pre.item) {
-                return Compare::Unequal;
+                return HIRCompare::Unequal;
             }
 
-            ::HIR::Compare rv = ::HIR::Compare::Equal;
+            HIRCompare rv = HIRCompare::Equal;
             CMP(rv, ple.type->compareWithPlaceholders(sp, pre.type, resolvePlaceholder));
             CMP(rv, ::compareWithPlaceholders(sp, ple.trait, pre.trait, resolvePlaceholder));
             CMP(rv, ::compareWithPlaceholders(sp, ple.params, pre.params, resolvePlaceholder));
@@ -654,13 +650,13 @@ namespace {
     throw "";
 }
 
-Ordering HIR::Path::ord(const ::HIR::Path& x) const {
+Ordering HIRPath::ord(const HIRPath& x) const {
     ORD((unsigned)mData.tag(), (unsigned)x.mData.tag());
-    TU_MATCH(::HIR::Path::Data, (this->mData, x.mData), (tpe, xpe), (Generic, return ::ord(tpe, xpe);), (UfcsInherent, ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);), (UfcsKnown, ORD(tpe.type, xpe.type); ORD(tpe.trait, xpe.trait); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);), (UfcsUnknown, ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);))
+    TU_MATCH(HIRPath::Data, (this->mData, x.mData), (tpe, xpe), (Generic, return ::ord(tpe, xpe);), (UfcsInherent, ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);), (UfcsKnown, ORD(tpe.type, xpe.type); ORD(tpe.trait, xpe.trait); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);), (UfcsUnknown, ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);))
     throw "";
 }
 
-bool HIR::Path::equalsIgnoringRegions(const Path& x) const {
+bool HIRPath::equalsIgnoringRegions(const HIRPath& x) const {
     if (mData.tag() != x.mData.tag()) {
         return false;
     }
@@ -689,53 +685,52 @@ bool HIR::Path::equalsIgnoringRegions(const Path& x) const {
     throw "";
 }
 
-bool ::HIR::Path::operator==(const Path & x) const {
+bool HIRPath::operator==(const HIRPath & x) const {
     return this->ord(x) == ::OrdEqual;
 }
 
-namespace HIR {
 
-EncodedLiteralPtr::EncodedLiteralPtr()
+HIREncodedLiteralPtr::HIREncodedLiteralPtr()
     : p(nullptr) {
 }
-EncodedLiteralPtr::EncodedLiteralPtr(EncodedLiteralPtr&& x)
+HIREncodedLiteralPtr::HIREncodedLiteralPtr(HIREncodedLiteralPtr&& x)
     : p(x.p) {
     x.p = nullptr;
 }
-EncodedLiteralPtr& EncodedLiteralPtr::operator=(EncodedLiteralPtr&& x) {
-    this->~EncodedLiteralPtr();
+HIREncodedLiteralPtr& HIREncodedLiteralPtr::operator=(HIREncodedLiteralPtr&& x) {
+    this->~HIREncodedLiteralPtr();
     this->p = x.p;
     x.p = nullptr;
     return *this;
 }
-EncodedLiteral& EncodedLiteralPtr::operator*() {
+EncodedLiteral& HIREncodedLiteralPtr::operator*() {
     assert(p);
     return *p;
 }
-const EncodedLiteral& EncodedLiteralPtr::operator*() const {
+const EncodedLiteral& HIREncodedLiteralPtr::operator*() const {
     assert(p);
     return *p;
 }
-EncodedLiteral* EncodedLiteralPtr::operator->() {
+EncodedLiteral* HIREncodedLiteralPtr::operator->() {
     assert(p);
     return p;
 }
-const EncodedLiteral* EncodedLiteralPtr::operator->() const {
+const EncodedLiteral* HIREncodedLiteralPtr::operator->() const {
     assert(p);
     return p;
 }
-SimplePath::SimplePath(ThinVector<RcString> members)
+HIRSimplePath::HIRSimplePath(ThinVector<RcString> members)
     : members(std::move(members)) {
 }
-SimplePath::SimplePath() {
+HIRSimplePath::HIRSimplePath() {
 }
-SimplePath::SimplePath(RcString crate)
-    : SimplePath(crate, ::std::span<RcString>()) {
+HIRSimplePath::HIRSimplePath(RcString crate)
+    : HIRSimplePath(crate, ::std::span<RcString>()) {
 }
-SimplePath::SimplePath(RcString crate, ::std::vector<RcString> components)
-    : SimplePath(crate, ::std::span<RcString>(components)) {
+HIRSimplePath::HIRSimplePath(RcString crate, ::std::vector<RcString> components)
+    : HIRSimplePath(crate, ::std::span<RcString>(components)) {
 }
-SimplePath::SimplePath(RcString crate, ::std::span<RcString> components) {
+HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<RcString> components) {
     // NOTE: Ensure that it's impossible for the crate name to be empty with only one value in `m_members`, simplifies comparison logic
     if (crate.c_str()[0] != '\0' || !components.empty()) {
         members.reserve(1 + components.size());
@@ -745,7 +740,7 @@ SimplePath::SimplePath(RcString crate, ::std::span<RcString> components) {
         }
     }
 }
-SimplePath::SimplePath(RcString crate, ::std::span<const RcString> components) {
+HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<const RcString> components) {
     if (crate.c_str()[0] != '\0' || !components.empty()) {
         members.reserve(1 + components.size());
         members.push_back(std::move(crate));
@@ -754,18 +749,18 @@ SimplePath::SimplePath(RcString crate, ::std::span<const RcString> components) {
         }
     }
 }
-SimplePath::SimplePath(RcString crate, ::std::initializer_list<RcString> components)
-    : SimplePath(std::move(crate), ::std::span<const RcString>(components.begin(), components.end())) {
+HIRSimplePath::HIRSimplePath(RcString crate, ::std::initializer_list<RcString> components)
+    : HIRSimplePath(std::move(crate), ::std::span<const RcString>(components.begin(), components.end())) {
 }
-const RcString& SimplePath::crateName() const {
+const RcString& HIRSimplePath::crateName() const {
     static RcString empty;
     return members.empty() ? empty : members.front();
 }
-::std::vector<RcString> SimplePath::componentsVec() const {
+::std::vector<RcString> HIRSimplePath::componentsVec() const {
     const auto values = components();
     return {values.begin(), values.end()};
 }
-Ordering PathParams::ord(const PathParams& x) const {
+Ordering HIRPathParams::ord(const HIRPathParams& x) const {
     //if(auto cmp = ::ord(m_lifetimes, x.m_lifetimes)) return cmp;
     if (auto cmp = ::ord(types, x.types)) {
         return cmp;
@@ -775,62 +770,59 @@ Ordering PathParams::ord(const PathParams& x) const {
     }
     return OrdEqual;
 }
-Ordering TraitPath::AtyEqual::ord(const AtyEqual& x) const {
+Ordering HIRTraitPath::AtyEqual::ord(const AtyEqual& x) const {
     ORD(sourceTrait, x.sourceTrait);
     ORD(atyParams, x.atyParams);
     ORD(type, x.type);
     return OrdEqual;
 }
-Ordering TraitPath::AtyBound::ord(const AtyBound& x) const {
+Ordering HIRTraitPath::AtyBound::ord(const AtyBound& x) const {
     ORD(sourceTrait, x.sourceTrait);
     ORD(atyParams, x.atyParams);
     ORD(traits, x.traits);
     return OrdEqual;
 }
-TraitPath::AtyBound TraitPath::AtyBound::clone() const {
-    std::vector<::HIR::TraitPath> newTraits;
+HIRTraitPath::AtyBound HIRTraitPath::AtyBound::clone() const {
+    std::vector<HIRTraitPath> newTraits;
     newTraits.reserve(traits.size());
     for (const auto& t : traits) {
         newTraits.push_back(t.clone());
     }
     return AtyBound{sourceTrait.clone(), atyParams.clone(), ::std::move(newTraits)};
 }
-Path::Path(Data data)
+HIRPath::HIRPath(Data data)
     : mData(mv$(data)) {
 }
-ConstGenericUnevaluated::ConstGenericUnevaluated() {
-}
+HIRConstGenericUnevaluated::HIRConstGenericUnevaluated() {
 }
 
-namespace HIR {
 
-::std::ostream& operator<<(::std::ostream& os, const Compare& x) {
+::std::ostream& operator<<(::std::ostream& os, const HIRCompare& x) {
     switch (x) {
-        case Compare::Equal:
+        case HIRCompare::Equal:
             os << "Equal";
             break;
-        case Compare::Fuzzy:
+        case HIRCompare::Fuzzy:
             os << "Fuzzy";
             break;
-        case Compare::Unequal:
+        case HIRCompare::Unequal:
             os << "Unequal";
             break;
     }
     return os;
 }
-Compare& operator&=(Compare& x, const Compare& y) {
-    if (x == Compare::Unequal) {
-    } else if (y == Compare::Unequal) {
-        x = Compare::Unequal;
-    } else if (y == Compare::Fuzzy) {
-        x = Compare::Fuzzy;
+HIRCompare& operator&=(HIRCompare& x, const HIRCompare& y) {
+    if (x == HIRCompare::Unequal) {
+    } else if (y == HIRCompare::Unequal) {
+        x = HIRCompare::Unequal;
+    } else if (y == HIRCompare::Fuzzy) {
+        x = HIRCompare::Fuzzy;
     } else {
         // keep as-is
     }
     return x;
 }
-::std::ostream& operator<<(::std::ostream& os, const TraitPath::AtyEqual& x) {
+::std::ostream& operator<<(::std::ostream& os, const HIRTraitPath::AtyEqual& x) {
     os << x.type;
     return os;
-}
 }

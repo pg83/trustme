@@ -2,9 +2,7 @@
 
 #include "trans_trans_list.h"
 
-namespace HIR {
-    class Crate;
-}
+    class HIRCrate;
 
 enum class OptimizationLevel : unsigned {
     None,
@@ -43,15 +41,15 @@ enum class CodegenOutput {
     Executable,     // no suffix, includes main stub (TODO: Can't that just be added earlier?)
 };
 
-extern TransList TransEnumerateMain(const ::HIR::Crate& crate);
+extern TransList TransEnumerateMain(const HIRCrate& crate);
 // NOTE: This also sets the saveout flags
-extern TransList TransEnumeratePublic(::HIR::Crate& crate);
+extern TransList TransEnumeratePublic(HIRCrate& crate);
 
 /// Re-run enumeration on monomorphised functions, removing now-unused items
-extern void TransEnumerateCleanup(const ::HIR::Crate& crate, TransList& list);
+extern void TransEnumerateCleanup(const HIRCrate& crate, TransList& list);
 
-extern void TransAutoImpls(::HIR::Crate& crate, TransList& transList);
+extern void TransAutoImpls(HIRCrate& crate, TransList& transList);
 
-extern void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned mirOptLevel);
+extern void TransMonomorphiseList(const HIRCrate& crate, TransList& list, unsigned mirOptLevel);
 
-extern void TransCodegen(const ::std::string& outfile, CodegenOutput outTy, const TransOptions& opt, ::HIR::Crate* crate, TransList list, const ::std::string& hirFile);
+extern void TransCodegen(const ::std::string& outfile, CodegenOutput outTy, const TransOptions& opt, HIRCrate* crate, TransList list, const ::std::string& hirFile);

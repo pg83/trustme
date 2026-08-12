@@ -57,7 +57,7 @@ const TargetArch ARCH_POWERPC = {
 const TargetArch ARCH_RISCV64 = {"riscv64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
 TargetSpec gTarget;
 
-bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& outSize, size_t& outAlign);
+bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign);
 
 namespace {
     TargetSpec loadSpecFromFile(const ::std::string& filename) {
@@ -477,7 +477,7 @@ void TargetSetCfg(const ::std::string& targetName) {
     });
 }
 
-bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& outSize, size_t& outAlign) {
+bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign) {
     //TRACE_FUNCTION_FR(ty, "size=" << out_size << ", align=" << out_align);
     TU_MATCH_HDRA( (*ty), {)
     TU_ARMA(Infer, te) {
@@ -490,30 +490,30 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         TU_ARMA(Primitive, te) {
             switch (te) {
-                case ::HIR::CoreType::Bool:
-                case ::HIR::CoreType::U8:
-                case ::HIR::CoreType::I8:
+                case HIRCoreType::Bool:
+                case HIRCoreType::U8:
+                case HIRCoreType::I8:
                     outSize = 1;
                     outAlign = 1; // u8 is always 1 aligned
                     return true;
-                case ::HIR::CoreType::U16:
-                case ::HIR::CoreType::I16:
+                case HIRCoreType::U16:
+                case HIRCoreType::I16:
                     outSize = 2;
                     outAlign = gTarget.arch.alignments.u16;
                     return true;
-                case ::HIR::CoreType::U32:
-                case ::HIR::CoreType::I32:
-                case ::HIR::CoreType::Char:
+                case HIRCoreType::U32:
+                case HIRCoreType::I32:
+                case HIRCoreType::Char:
                     outSize = 4;
                     outAlign = gTarget.arch.alignments.u32;
                     return true;
-                case ::HIR::CoreType::U64:
-                case ::HIR::CoreType::I64:
+                case HIRCoreType::U64:
+                case HIRCoreType::I64:
                     outSize = 8;
                     outAlign = gTarget.arch.alignments.u64;
                     return true;
-                case ::HIR::CoreType::U128:
-                case ::HIR::CoreType::I128:
+                case HIRCoreType::U128:
+                case HIRCoreType::I128:
                     outSize = 16;
                     // TODO: If i128 is emulated, this can be 8 (as it is on x86, where it's actually 4 due to the above comment)
                     if (gTarget.backendC.emulatedI128) {
@@ -522,28 +522,28 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                         outAlign = gTarget.arch.alignments.u128;
                     }
                     return true;
-                case ::HIR::CoreType::Usize:
-                case ::HIR::CoreType::Isize:
+                case HIRCoreType::Usize:
+                case HIRCoreType::Isize:
                     outSize = gTarget.arch.pointerBits / 8;
                     outAlign = gTarget.arch.alignments.ptr;
                     return true;
-                case ::HIR::CoreType::F16:
+                case HIRCoreType::F16:
                     outSize = 2;
                     outAlign = 2; //g_target.m_arch.m_alignments.f32; //f16;
                     return true;
-                case ::HIR::CoreType::F32:
+                case HIRCoreType::F32:
                     outSize = 4;
                     outAlign = gTarget.arch.alignments.f32;
                     return true;
-                case ::HIR::CoreType::F64:
+                case HIRCoreType::F64:
                     outSize = 8;
                     outAlign = gTarget.arch.alignments.f64;
                     return true;
-                case ::HIR::CoreType::F128:
+                case HIRCoreType::F128:
                     outSize = 16;
                     outAlign = gTarget.arch.alignments.f64; //f128;
                     return true;
-                case ::HIR::CoreType::Str:
+                case HIRCoreType::Str:
                     DEBUG("sizeof on a `str` - unsized");
                     outSize = SIZE_MAX;
                     outAlign = 1;
@@ -679,7 +679,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
     return false;
 }
 
-bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& outSize) {
+bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize) {
     size_t ignoreAlign;
     bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, outSize, ignoreAlign);
     if (rv && outSize == SIZE_MAX) {
@@ -688,7 +688,7 @@ bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const ::
     return rv;
 }
 
-bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& outAlign) {
+bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outAlign) {
     size_t ignoreSize;
     bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, ignoreSize, outAlign);
     if (rv && ignoreSize == SIZE_MAX) {
@@ -698,13 +698,13 @@ bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const :
 }
 
 namespace {
-    void setTypeRepr(const Span& sp, const ::HIR::TypeData* ty, ::std::unique_ptr<TypeRepr> repr);
+    void setTypeRepr(const Span& sp, const HIRTypeData* ty, ::std::unique_ptr<TypeRepr> repr);
 
     struct Ent {
         unsigned int field;
         size_t size;
         size_t align;
-        HIR::TypeRef ty;
+        HIRTypeRef ty;
         /// `align` came from an explicit `repr(align(N))` somewhere inside `ty`.
         bool userAlign = false;
     };
@@ -714,19 +714,19 @@ namespace {
         return os;
     }
 
-    bool makeFieldEnt(const Span& sp, const StaticTraitResolve& resolve, unsigned idx, ::HIR::TypeRef ty, Ent& out) {
+    bool makeFieldEnt(const Span& sp, const StaticTraitResolve& resolve, unsigned idx, HIRTypeRef ty, Ent& out) {
         size_t size, align;
         if (!TargetGetSizeAndAlignOf(sp, resolve, ty, size, align)) {
             DEBUG("Can't get size/align of " << ty);
             return false;
         }
-        out = Ent{idx, size, align, HIR::TypeRef(), false};
+        out = Ent{idx, size, align, HIRTypeRef(), false};
         out.userAlign = TargetTypeHasUserAlignment(sp, resolve, ty);
         out.ty = mv$(ty);
         return true;
     }
 
-    bool structEnumerateFields(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, ::std::vector<Ent>& ents) {
+    bool structEnumerateFields(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, ::std::vector<Ent>& ents) {
         const auto& te = ty->as_Path();
         const auto& str = *te.binding.as_Struct();
         // TODO: Wipe lifetimes?
@@ -791,7 +791,7 @@ namespace {
     /// Generate a struct representation using the provided entries
     ///
     /// - Handles (optional) sorting and packing
-    ::std::unique_ptr<TypeRepr> makeTypeReprStructInner(const Span& sp, const ::HIR::TypeData* ty, ::std::vector<Ent>& ents, StructSorting sorting, unsigned forcedAlignment, unsigned maxAlignment) {
+    ::std::unique_ptr<TypeRepr> makeTypeReprStructInner(const Span& sp, const HIRTypeData* ty, ::std::vector<Ent>& ents, StructSorting sorting, unsigned forcedAlignment, unsigned maxAlignment) {
         if (ents.size() > 0) {
             auto sortFields = [&](auto first, auto last) {
                 ::std::stable_sort(first, last, [&](const Ent& a, const Ent& b) {
@@ -853,7 +853,7 @@ namespace {
             // Forced padding is indicated by setting the field index to -1
             if (e.field != ~0u) {
                 ASSERT_BUG(sp, e.field < fields.size(), "Field index out of range");
-                ASSERT_BUG(sp, fields[e.field].ty == HIR::TypeRef(), "Dupliate field index");
+                ASSERT_BUG(sp, fields[e.field].ty == HIRTypeRef(), "Dupliate field index");
                 fields[e.field].offset = curOfs;
                 fields[e.field].ty = e.ty;
             }
@@ -879,7 +879,7 @@ namespace {
             }
         }
         for (const auto& f : fields) {
-            ASSERT_BUG(sp, f.ty != HIR::TypeRef(), "Uninitialised field found - " << (&f - &fields[0]));
+            ASSERT_BUG(sp, f.ty != HIRTypeRef(), "Uninitialised field found - " << (&f - &fields[0]));
         }
         // Aligment is 1 for packed structs, and `max_align` otherwise
         rv.align = maxAlign;
@@ -890,7 +890,7 @@ namespace {
     }
 
     // Returns NULL when the repr can't be determined
-    ::std::unique_ptr<TypeRepr> makeTypeReprStruct(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+    ::std::unique_ptr<TypeRepr> makeTypeReprStruct(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
         TRACE_FUNCTION_F(ty);
         ::std::vector<Ent> ents;
         StructSorting sorting;
@@ -908,14 +908,14 @@ namespace {
             maxAlignment = str.maxFieldAlignment;
             sorting = StructSorting::None; // Defensive default for if repr is invalid
             switch (str.repr) {
-                case ::HIR::Struct::Repr::C:
-                case ::HIR::Struct::Repr::Simd:
+                case HIRStruct::Repr::C:
+                case HIRStruct::Repr::Simd:
                     // No sorting, no packing
                     sorting = StructSorting::None;
                     break;
-                case ::HIR::Struct::Repr::Transparent:
-                case ::HIR::Struct::Repr::Rust:
-                    if (str.structMarkings.dstType != HIR::StructMarkings::DstType::None) {
+                case HIRStruct::Repr::Transparent:
+                case HIRStruct::Repr::Rust:
+                    if (str.structMarkings.dstType != HIRStructMarkings::DstType::None) {
                         sorting = StructSorting::AllButFinal;
                     } else {
                         sorting = StructSorting::All;
@@ -944,26 +944,26 @@ namespace {
         return makeTypeReprStructInner(sp, ty, ents, sorting, forcedAlignment, maxAlignment);
     }
 
-    bool boundedMaxIsFullRange(const ::HIR::TypeData* ty, U128 boundedMax) {
+    bool boundedMaxIsFullRange(const HIRTypeData* ty, U128 boundedMax) {
         if (const auto* primitive = ty->opt_Primitive()) {
             switch (*primitive) {
-                case ::HIR::CoreType::U8:
-                case ::HIR::CoreType::I8:
+                case HIRCoreType::U8:
+                case HIRCoreType::I8:
                     return boundedMax == U128(UINT8_MAX);
-                case ::HIR::CoreType::U16:
-                case ::HIR::CoreType::I16:
+                case HIRCoreType::U16:
+                case HIRCoreType::I16:
                     return boundedMax == U128(UINT16_MAX);
-                case ::HIR::CoreType::U32:
-                case ::HIR::CoreType::I32:
+                case HIRCoreType::U32:
+                case HIRCoreType::I32:
                     return boundedMax == U128(UINT32_MAX);
-                case ::HIR::CoreType::U64:
-                case ::HIR::CoreType::I64:
+                case HIRCoreType::U64:
+                case HIRCoreType::I64:
                     return boundedMax == U128(UINT64_MAX);
-                case ::HIR::CoreType::U128:
-                case ::HIR::CoreType::I128:
+                case HIRCoreType::U128:
+                case HIRCoreType::I128:
                     return boundedMax == U128(UINT64_MAX, UINT64_MAX);
-                case ::HIR::CoreType::Usize:
-                case ::HIR::CoreType::Isize:
+                case HIRCoreType::Usize:
+                case HIRCoreType::Isize:
                     return boundedMax == (TargetGetPointerBits() == 64 ? U128(UINT64_MAX) : U128(UINT32_MAX));
                 default:
                     return false;
@@ -975,7 +975,7 @@ namespace {
         return false;
     }
 
-    bool getNonzeroPath(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, TypeRepr::FieldPath& outPath) {
+    bool getNonzeroPath(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, TypeRepr::FieldPath& outPath) {
         switch (ty->tag()) {
             TU_ARM(*ty, Tuple, te) {
                 const TypeRepr* repr = TargetGetTypeRepr(sp, resolve, ty);
@@ -1058,7 +1058,7 @@ namespace {
         return false;
     }
 
-    size_t getSizeOrZero(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+    size_t getSizeOrZero(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
         size_t size = 0;
         TargetGetSizeOf(sp, resolve, ty, size);
         return size;
@@ -1093,7 +1093,7 @@ namespace {
     /// <param name="ty"></param>
     /// <param name="out_path">Path to the variant field</param>
     /// <returns>zero for no niche found, or the number of entries already used in the niche</returns>
-    unsigned getVariantNichePath(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t minOffset, size_t maxOffset, TypeRepr::FieldPath& outPath) {
+    unsigned getVariantNichePath(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t minOffset, size_t maxOffset, TypeRepr::FieldPath& outPath) {
         TRACE_FUNCTION_F(ty << " min_offset=" << minOffset << " max_offset=" << maxOffset);
         switch (ty->tag()) {
             TU_ARM(*ty, Tuple, te) {
@@ -1213,14 +1213,14 @@ namespace {
             break;
             TU_ARM(*ty, Primitive, te) {
                 switch (te) {
-                    case ::HIR::CoreType::Char:
+                    case HIRCoreType::Char:
                         // Only valid if the min offset is zero
                         if (minOffset == 0 && maxOffset >= 4) {
                             outPath.size = 4;
                             return 0x10FFFF + 1;
                         }
                         break;
-                    case ::HIR::CoreType::Bool:
+                    case HIRCoreType::Bool:
                         if (minOffset == 0 && maxOffset >= 1) {
                             outPath.size = 1;
                             return 2;
@@ -1236,7 +1236,7 @@ namespace {
         return 0;
     }
 
-    ::std::unique_ptr<TypeRepr> makeTypeReprEnum(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+    ::std::unique_ptr<TypeRepr> makeTypeReprEnum(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
         TRACE_FUNCTION_F(ty);
         const auto& te = ty->as_Path();
         const auto& enm = *te.binding.as_Enum();
@@ -1253,7 +1253,7 @@ namespace {
 
         TypeRepr rv;
         switch (enm.mData.tag()) {
-            case ::HIR::Enum::Class::TAGDEAD:
+            case HIREnum::Class::TAGDEAD:
                 throw "";
                 TU_ARM(enm.mData, Data, e) {
                     // repr(C) enums - they have different rules
@@ -1279,7 +1279,7 @@ namespace {
                         }
                         DEBUG("max_size = " << maxSize << ", max_align = " << maxAlign);
 
-                        auto tagTy = enm.tagRepr == ::HIR::Enum::Repr::Auto ? ::HIR::CoreType::U32 : enm.getReprType(enm.tagRepr);
+                        auto tagTy = enm.tagRepr == HIREnum::Repr::Auto ? HIRCoreType::U32 : enm.getReprType(enm.tagRepr);
                         rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(tagTy)});
                         size_t tagSize, tagAlign;
                         TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, tagSize, tagAlign);
@@ -1298,7 +1298,7 @@ namespace {
                             rv.size++;
                         }
                         rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tagSize, {}}, 0, e.size()});
-                    } else if (enm.tagRepr == ::HIR::Enum::Repr::Auto && e.size() <= 1) {
+                    } else if (enm.tagRepr == HIREnum::Repr::Auto && e.size() <= 1) {
                         // If there are not multiple variants, then only include the one body
                         if (e.size() == 1) {
                             auto t = monomorph(e[0].type);
@@ -1321,7 +1321,7 @@ namespace {
 
                         // repr(Rust) - allows interesting optimisations
                         struct Variant {
-                            ::HIR::TypeRef type;
+                            HIRTypeRef type;
                             ::std::vector<Ent> ents;
                             unsigned forcedAlignment;
                         };
@@ -1349,7 +1349,7 @@ namespace {
                             DEBUG(variants.back().type << ": " << variants.back().ents);
                         }
 
-                        if (enm.tagRepr == ::HIR::Enum::Repr::Auto) {
+                        if (enm.tagRepr == HIREnum::Repr::Auto) {
                             ASSERT_BUG(sp, !hasExplcitValue, "Explicit tag without a repr");
                             // Non-zero optimisation
                             if (rv.variants.is_None() && variants.size() == 2) {
@@ -1541,19 +1541,19 @@ namespace {
                                 if (!rv.variants.is_None()) {
                                     const auto& nichePath = rv.variants.as_Linear().field;
 
-                                    ::HIR::TypeRef nicheTy;
+                                    HIRTypeRef nicheTy;
                                     switch (nichePath.size) {
                                         case 1:
-                                            nicheTy = resolve.crate.types.primitive(::HIR::CoreType::U8);
+                                            nicheTy = resolve.crate.types.primitive(HIRCoreType::U8);
                                             break;
                                         case 2:
-                                            nicheTy = resolve.crate.types.primitive(::HIR::CoreType::U16);
+                                            nicheTy = resolve.crate.types.primitive(HIRCoreType::U16);
                                             break;
                                         case 4:
-                                            nicheTy = resolve.crate.types.primitive(::HIR::CoreType::U32);
+                                            nicheTy = resolve.crate.types.primitive(HIRCoreType::U32);
                                             break;
                                         case 8:
-                                            nicheTy = resolve.crate.types.primitive(::HIR::CoreType::U64);
+                                            nicheTy = resolve.crate.types.primitive(HIRCoreType::U64);
                                             break;
                                         default:
                                             BUG(sp, "Unknown niche size: " << nichePath);
@@ -1671,9 +1671,9 @@ namespace {
                         // }
                         // ```
                         if (rv.variants.is_None()) {
-                            ::HIR::TypeRef tagTy;
+                            HIRTypeRef tagTy;
                             // If the tag size is specified, then force that
-                            if (enm.tagRepr != HIR::Enum::Repr::Auto) {
+                            if (enm.tagRepr != HIREnum::Repr::Auto) {
                                 tagTy = resolve.crate.types.primitive(enm.getReprType(enm.tagRepr));
                             } else {
                                 ASSERT_BUG(sp, !hasExplcitValue, "Explicit tag without a repr");
@@ -1681,13 +1681,13 @@ namespace {
                                     // Unreachable
                                     BUG(sp, "Reached auto tag type logic with zero/one-sized enum");
                                 } else if (e.size() <= 255) {
-                                    tagTy = resolve.crate.types.primitive(::HIR::CoreType::U8);
+                                    tagTy = resolve.crate.types.primitive(HIRCoreType::U8);
                                     DEBUG("u8 data tag");
                                 } else if (e.size() <= UINT16_MAX) {
-                                    tagTy = resolve.crate.types.primitive(::HIR::CoreType::U16);
+                                    tagTy = resolve.crate.types.primitive(HIRCoreType::U16);
                                 } else {
                                     ASSERT_BUG(sp, e.size() <= UINT32_MAX, "");
-                                    tagTy = resolve.crate.types.primitive(::HIR::CoreType::U32);
+                                    tagTy = resolve.crate.types.primitive(HIRCoreType::U32);
                                 }
                             }
 
@@ -1703,7 +1703,7 @@ namespace {
                                 auto& ents = variants[varI].ents;
                                 auto& varTy = variants[varI].type;
                                 if (e[varI].type != resolve.crate.types.unit()) {
-                                    if (enm.tagRepr == HIR::Enum::Repr::Auto) {
+                                    if (enm.tagRepr == HIREnum::Repr::Auto) {
                                         ::std::sort(ents.begin(), ents.end(), sortfnEnumVariantFields);
                                     }
                                     // - Add tag
@@ -1749,10 +1749,10 @@ namespace {
                 TU_ARM(enm.mData, Value, e) {
                     // TODO: If the values aren't yet populated, force const evaluation
                     switch (enm.tagRepr) {
-                        case ::HIR::Enum::Repr::Auto:
+                        case HIREnum::Repr::Auto:
                             if (enm.isCRepr) {
                                 // No auto-sizing, just i32?
-                                rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(::HIR::CoreType::U32)});
+                                rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(HIRCoreType::U32)});
                             } else if (!e.variants.empty()) {
                                 int64_t minValue = INT64_MAX;
                                 int64_t maxValue = INT64_MIN;
@@ -1762,26 +1762,26 @@ namespace {
                                     maxValue = std::max(maxValue, value);
                                 }
 
-                                ::HIR::CoreType tagType;
+                                HIRCoreType tagType;
                                 if (minValue >= 0) {
                                     const auto maxUnsigned = static_cast<uint64_t>(maxValue);
                                     if (maxUnsigned <= UINT8_MAX) {
-                                        tagType = ::HIR::CoreType::U8;
+                                        tagType = HIRCoreType::U8;
                                     } else if (maxUnsigned <= UINT16_MAX) {
-                                        tagType = ::HIR::CoreType::U16;
+                                        tagType = HIRCoreType::U16;
                                     } else if (maxUnsigned <= UINT32_MAX) {
-                                        tagType = ::HIR::CoreType::U32;
+                                        tagType = HIRCoreType::U32;
                                     } else {
-                                        tagType = ::HIR::CoreType::U64;
+                                        tagType = HIRCoreType::U64;
                                     }
                                 } else if (minValue >= INT8_MIN && maxValue <= INT8_MAX) {
-                                    tagType = ::HIR::CoreType::I8;
+                                    tagType = HIRCoreType::I8;
                                 } else if (minValue >= INT16_MIN && maxValue <= INT16_MAX) {
-                                    tagType = ::HIR::CoreType::I16;
+                                    tagType = HIRCoreType::I16;
                                 } else if (minValue >= INT32_MIN && maxValue <= INT32_MAX) {
-                                    tagType = ::HIR::CoreType::I32;
+                                    tagType = HIRCoreType::I32;
                                 } else {
-                                    tagType = ::HIR::CoreType::I64;
+                                    tagType = HIRCoreType::I64;
                                 }
                                 rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(tagType)});
                             }
@@ -1830,7 +1830,7 @@ namespace {
         return box$(rv);
     }
 
-    ::std::unique_ptr<TypeRepr> makeTypeReprUnion(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+    ::std::unique_ptr<TypeRepr> makeTypeReprUnion(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
         const auto& te = ty->as_Path();
         const auto& unn = *te.binding.as_Union();
 
@@ -1867,41 +1867,41 @@ namespace {
         return box$(rv);
     }
 
-    ::std::unique_ptr<TypeRepr> make_type_repr_(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+    ::std::unique_ptr<TypeRepr> make_type_repr_(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
         switch (ty->tag()) {
-            case ::HIR::TypeData::TAGDEAD:
+            case HIRTypeData::TAGDEAD:
                 abort();
-            case ::HIR::TypeData::TAG_Tuple:
+            case HIRTypeData::TAG_Tuple:
                 return makeTypeReprStruct(sp, resolve, ty);
-            case ::HIR::TypeData::TAG_Path:
+            case HIRTypeData::TAG_Path:
                 switch (ty->as_Path().binding.tag()) {
-                    case ::HIR::TypePathBinding::TAGDEAD:
+                    case HIRTypePathBinding::TAGDEAD:
                         abort();
-                    case ::HIR::TypePathBinding::TAG_Struct:
+                    case HIRTypePathBinding::TAG_Struct:
                         return makeTypeReprStruct(sp, resolve, ty);
-                    case ::HIR::TypePathBinding::TAG_Union:
+                    case HIRTypePathBinding::TAG_Union:
                         return makeTypeReprUnion(sp, resolve, ty);
-                    case ::HIR::TypePathBinding::TAG_Enum:
+                    case HIRTypePathBinding::TAG_Enum:
                         return makeTypeReprEnum(sp, resolve, ty);
-                    case ::HIR::TypePathBinding::TAG_ExternType:
+                    case HIRTypePathBinding::TAG_ExternType:
                         // TODO: Do extern types need anything?
                         return nullptr;
-                    case ::HIR::TypePathBinding::TAG_Opaque:
-                    case ::HIR::TypePathBinding::TAG_Unbound:
+                    case HIRTypePathBinding::TAG_Opaque:
+                    case HIRTypePathBinding::TAG_Unbound:
                         BUG(sp, "Encountered invalid type in make_type_repr - " << ty);
                 }
                 throw "unreachable";
             // TODO: Why is `make_type_repr` being called on these?
-            case ::HIR::TypeData::TAG_Primitive:
-            case ::HIR::TypeData::TAG_Borrow:
-            case ::HIR::TypeData::TAG_Pointer:
+            case HIRTypeData::TAG_Primitive:
+            case HIRTypeData::TAG_Borrow:
+            case HIRTypeData::TAG_Pointer:
                 return nullptr;
             default:
                 TODO(sp, "Type repr for " << ty);
         }
     }
 
-    ::std::unique_ptr<TypeRepr> makeTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+    ::std::unique_ptr<TypeRepr> makeTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
         ::std::unique_ptr<TypeRepr> rv;
         TRACE_FUNCTION_FR(ty, ty << " " << FMT_CB(ss, if (rv) { ss << "size=" << rv->size << ", align=" << rv->align; } else { ss << "NONE"; }));
         rv = make_type_repr_(sp, resolve, ty);
@@ -1909,7 +1909,7 @@ namespace {
     }
 
     struct CachedTypeRepr {
-        ::HIR::TypeRef canonical;
+        HIRTypeRef canonical;
         ::std::unique_ptr<TypeRepr> repr;
     };
 
@@ -1917,17 +1917,17 @@ namespace {
     // layout engine too. Keep one representation per emitted type, with an
     // exact-pointer alias so repeated queries stay O(1).
     static ::std::unordered_map<::std::string, CachedTypeRepr> sCache;
-    static ::std::unordered_map<::HIR::TypeRef, ::std::unique_ptr<TypeRepr>> sUnencodedCache;
-    static ::std::unordered_map<::HIR::TypeRef, const TypeRepr*> sCacheExact;
+    static ::std::unordered_map<HIRTypeRef, ::std::unique_ptr<TypeRepr>> sUnencodedCache;
+    static ::std::unordered_map<HIRTypeRef, const TypeRepr*> sCacheExact;
 
-    bool hasAbiIdentity(::HIR::TypeRef ty) {
+    bool hasAbiIdentity(HIRTypeRef ty) {
         return !monomorphiseTypeNeeded(ty, /*ignore_lifetimes=*/true)
             && !ty->is_Infer()
             && !ty->is_ErasedType()
             && !ty->is_NodeType();
     }
 
-    void setTypeRepr(const Span& sp, const ::HIR::TypeData* ty, ::std::unique_ptr<TypeRepr> repr) {
+    void setTypeRepr(const Span& sp, const HIRTypeData* ty, ::std::unique_ptr<TypeRepr> repr) {
         if (!hasAbiIdentity(ty)) {
             const auto* reprPtr = repr.get();
             auto ires = sUnencodedCache.emplace(ty, mv$(repr));
@@ -1944,7 +1944,7 @@ namespace {
     }
 }
 
-void TargetForceTypeRepr(const Span& sp, const ::HIR::TypeData* ty, TypeRepr repr) {
+void TargetForceTypeRepr(const Span& sp, const HIRTypeData* ty, TypeRepr repr) {
     setTypeRepr(sp, ty, box$(repr));
 }
 
@@ -1952,7 +1952,7 @@ bool TargetCapsMemberAlignment() {
     return TargetGetCurSpec().arch.mName == "powerpc";
 }
 
-bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
     // Arrays and slices inherit it from the element type, as in gcc's `layout_type`
     if (const auto* te = ty->opt_Array()) {
         return TargetTypeHasUserAlignment(sp, resolve, te->inner);
@@ -1968,7 +1968,7 @@ bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolv
     return false;
 }
 
-const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
     auto exact = sCacheExact.find(ty);
     if (exact != sCacheExact.end()) {
         return exact->second;
@@ -2003,7 +2003,7 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
     return rv;
 }
 
-const ::HIR::TypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& subFields, size_t ofs) {
+const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& subFields, size_t ofs) {
     const auto* ty = &repr.fields.at(idx).ty;
     while (ofs < subFields.size()) {
         const auto field = subFields[ofs++];

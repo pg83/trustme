@@ -15,19 +15,17 @@ class ASTPath;
 
 struct ASTAbsolutePath;
 
-namespace HIR {
-    class Crate;
-    class Module;
-    class ProcMacro;
-    class TypeItem;
-    class ValueItem;
-};
+    class HIRCrate;
+    class HIRModule;
+    class HIRProcMacro;
+    class HIRTypeItem;
+    class HIRValueItem;
 
-TAGGED_UNION(ResolveModuleRef, None, (None, struct {}), (ImplicitPrelude, struct {}), (Ast, const ASTModule*), (Hir, const HIR::Module*));
+TAGGED_UNION(ResolveModuleRef, None, (None, struct {}), (ImplicitPrelude, struct {}), (Ast, const ASTModule*), (Hir, const HIRModule*));
 
-TAGGED_UNION(ResolveItemRefMacro, None, (None, struct {}), (InternalMacro, ExpandProcMacro*), (ProcMacro, const HIR::ProcMacro*), (MacroRules, const MacroRules*));
-TAGGED_UNION(ResolveItemRefType, None, (None, struct {}), (Ast, const ASTItem*), (Hir, const HIR::TypeItem*), (HirRoot, const HIR::Crate*), (AstRoot, const ASTModule*));
-TAGGED_UNION(ResolveItemRefValue, None, (None, struct {}), (Ast, const ASTItem*), (Hir, const HIR::ValueItem*));
+TAGGED_UNION(ResolveItemRefMacro, None, (None, struct {}), (InternalMacro, ExpandProcMacro*), (ProcMacro, const HIRProcMacro*), (MacroRules, const MacroRules*));
+TAGGED_UNION(ResolveItemRefType, None, (None, struct {}), (Ast, const ASTItem*), (Hir, const HIRTypeItem*), (HirRoot, const HIRCrate*), (AstRoot, const ASTModule*));
+TAGGED_UNION(ResolveItemRefValue, None, (None, struct {}), (Ast, const ASTItem*), (Hir, const HIRValueItem*));
 
 TAGGED_UNION(ResolveItemRef, None, (None, struct {}), (Namespace, ResolveItemRefType), (Value, ResolveItemRefValue), (Macro, ResolveItemRefMacro));
 

@@ -4,114 +4,114 @@
 #include "hir_item_path.h"
 #include "hir_generic_params.h"
 
-extern bool monomorphisePathparamsNeeded(const ::HIR::PathParams& tpl, bool ignoreLifetimes = false);
+extern bool monomorphisePathparamsNeeded(const HIRPathParams& tpl, bool ignoreLifetimes = false);
 
-static inline bool monomorphiseGenericpathNeeded(const ::HIR::GenericPath& tpl, bool ignoreLifetimes = false) {
+static inline bool monomorphiseGenericpathNeeded(const HIRGenericPath& tpl, bool ignoreLifetimes = false) {
     return monomorphisePathparamsNeeded(tpl.mParams, ignoreLifetimes);
 }
 
-extern bool monomorphisePathNeeded(const ::HIR::Path& tpl, bool ignoreLifetimes = false);
-extern bool monomorphiseTraitpathNeeded(const ::HIR::TraitPath& tpl, bool ignoreLifetimes = false);
-extern bool monomorphiseTypeNeeded(const ::HIR::TypeData* tpl, bool ignoreLifetimes = false);
+extern bool monomorphisePathNeeded(const HIRPath& tpl, bool ignoreLifetimes = false);
+extern bool monomorphiseTraitpathNeeded(const HIRTraitPath& tpl, bool ignoreLifetimes = false);
+extern bool monomorphiseTypeNeeded(const HIRTypeData* tpl, bool ignoreLifetimes = false);
 
-class Monomorphiser: virtual public HIR::TrackHrbStack {
+class Monomorphiser: virtual public HIRTrackHrbStack {
 protected:
-    HIR::TypeInterner& types;
+    HIRTypeInterner& types;
 
 private:
-    const HIR::Crate* constevalCrate;
-    HIR::ItemPath constevalPath;
+    const HIRCrate* constevalCrate;
+    HIRItemPath constevalPath;
 
 public:
-    explicit Monomorphiser(HIR::TypeInterner& types);
+    explicit Monomorphiser(HIRTypeInterner& types);
 
     virtual ~Monomorphiser() = default;
 
-    HIR::TypeInterner& typeInterner() const { return types; }
+    HIRTypeInterner& typeInterner() const { return types; }
 
-    void setConstevalState(const HIR::Crate& crate, HIR::ItemPath ip);
+    void setConstevalState(const HIRCrate& crate, HIRItemPath ip);
 
-    virtual ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& g) const = 0;
-    virtual ::HIR::ConstGeneric getValue(const Span& sp, const ::HIR::GenericRef& g) const = 0;
-    virtual ::HIR::LifetimeRef getLifetime(const Span& sp, const ::HIR::GenericRef& g) const = 0;
+    virtual HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const = 0;
+    virtual HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const = 0;
+    virtual HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const = 0;
 
-    virtual ::HIR::TypeRef monomorphType(const Span& sp, const ::HIR::TypeData* ty, bool allowInfer = true) const;
-    virtual ::HIR::LifetimeRef monomorphLifetime(const Span& sp, const ::HIR::LifetimeRef& tpl) const;
-    ::HIR::Path monomorphPath(const Span& sp, const ::HIR::Path& tpl, bool allowInfer = true) const;
-    ::HIR::TraitPath monomorphTraitpath(const Span& sp, const ::HIR::TraitPath& tpl, bool allowInfer, bool ignoreHrls = false) const;
-    ::HIR::TraitPath::AtyEqual monomorphTpAtyEqual(const Span& sp, const ::HIR::TraitPath::AtyEqual& tpl, bool allowInfer) const;
-    ::HIR::PathParams monomorphPathParams(const Span& sp, const ::HIR::PathParams& tpl, bool allowInfer) const;
-    virtual ::HIR::GenericPath monomorphGenericpath(const Span& sp, const ::HIR::GenericPath& tpl, bool allowInfer = true, bool ignoreHrls = false) const;
+    virtual HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const;
+    virtual HIRLifetimeRef monomorphLifetime(const Span& sp, const HIRLifetimeRef& tpl) const;
+    HIRPath monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer = true) const;
+    HIRTraitPath monomorphTraitpath(const Span& sp, const HIRTraitPath& tpl, bool allowInfer, bool ignoreHrls = false) const;
+    HIRTraitPath::AtyEqual monomorphTpAtyEqual(const Span& sp, const HIRTraitPath::AtyEqual& tpl, bool allowInfer) const;
+    HIRPathParams monomorphPathParams(const Span& sp, const HIRPathParams& tpl, bool allowInfer) const;
+    virtual HIRGenericPath monomorphGenericpath(const Span& sp, const HIRGenericPath& tpl, bool allowInfer = true, bool ignoreHrls = false) const;
 
-    ::HIR::ConstGeneric monomorphConstgeneric(const Span& sp, const ::HIR::ConstGeneric& val, bool allowInfer) const;
-    ::HIR::ArraySize monomorphArraysize(const Span& sp, const ::HIR::ArraySize& tpl) const;
+    HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const;
+    HIRArraySize monomorphArraysize(const Span& sp, const HIRArraySize& tpl) const;
 
-    const ::HIR::TypeData* maybeMonomorphType(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* ty, bool allowInfer = true) const;
+    const HIRTypeData* maybeMonomorphType(const Span& sp, HIRTypeRef& tmp, const HIRTypeData* ty, bool allowInfer = true) const;
 };
 
 class MonomorphiserPP: public Monomorphiser {
 public:
-    explicit MonomorphiserPP(HIR::TypeInterner& types);
+    explicit MonomorphiserPP(HIRTypeInterner& types);
 
-    virtual const ::HIR::TypeData* getSelfType() const = 0;
-    virtual const ::HIR::PathParams* getImplParams() const = 0;
-    virtual const ::HIR::PathParams* getMethodParams() const = 0;
-    virtual const ::HIR::PathParams* getHrbParams() const = 0;
+    virtual const HIRTypeData* getSelfType() const = 0;
+    virtual const HIRPathParams* getImplParams() const = 0;
+    virtual const HIRPathParams* getMethodParams() const = 0;
+    virtual const HIRPathParams* getHrbParams() const = 0;
 
-    ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& ty) const override;
-    ::HIR::ConstGeneric getValue(const Span& sp, const ::HIR::GenericRef& val) const override;
-    ::HIR::LifetimeRef getLifetime(const Span& sp, const ::HIR::GenericRef& lftRef) const override;
+    HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override;
+    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
+    HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& lftRef) const override;
 };
 
 class MonomorphiserNop: public Monomorphiser {
 public:
     using Monomorphiser::Monomorphiser;
 
-    ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& ty) const override {
+    HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override {
         return types.generic(ty.name, ty.binding);
     }
 
-    ::HIR::ConstGeneric getValue(const Span& sp, const ::HIR::GenericRef& val) const override {
-        return HIR::ConstGeneric(val);
+    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override {
+        return HIRConstGeneric(val);
     }
 
-    ::HIR::LifetimeRef getLifetime(const Span& sp, const ::HIR::GenericRef& lftRef) const override {
-        return ::HIR::LifetimeRef(lftRef.binding);
+    HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& lftRef) const override {
+        return HIRLifetimeRef(lftRef.binding);
     }
 };
 
 // Wrappers to only monomorphise if required
-static inline const ::HIR::TypeData* monomorphiseTypeWithOpt(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* tpl, const Monomorphiser& mono, bool allowInfer = true) {
+static inline const HIRTypeData* monomorphiseTypeWithOpt(const Span& sp, HIRTypeRef& tmp, const HIRTypeData* tpl, const Monomorphiser& mono, bool allowInfer = true) {
     return (monomorphiseTypeNeeded(tpl) ? tmp = mono.monomorphType(sp, tpl, allowInfer) : tpl);
 }
 
-static inline const ::HIR::Path& monomorphisePathWithOpt(const Span& sp, ::HIR::Path& tmp, const ::HIR::Path& tpl, const Monomorphiser& mono, bool allowInfer = true) {
+static inline const HIRPath& monomorphisePathWithOpt(const Span& sp, HIRPath& tmp, const HIRPath& tpl, const Monomorphiser& mono, bool allowInfer = true) {
     return (monomorphisePathNeeded(tpl) ? tmp = mono.monomorphPath(sp, tpl, allowInfer) : tpl);
 }
 
-static inline const ::HIR::GenericPath& monomorphiseGenericpathWithOpt(const Span& sp, ::HIR::GenericPath& tmp, const ::HIR::GenericPath& tpl, const Monomorphiser& mono, bool allowInfer = true) {
+static inline const HIRGenericPath& monomorphiseGenericpathWithOpt(const Span& sp, HIRGenericPath& tmp, const HIRGenericPath& tpl, const Monomorphiser& mono, bool allowInfer = true) {
     return (monomorphiseGenericpathNeeded(tpl) ? tmp = mono.monomorphGenericpath(sp, tpl, allowInfer, false) : tpl);
 }
 
-static inline const ::HIR::TraitPath& monomorphiseTraitpathWithOpt(const Span& sp, ::HIR::TraitPath& tmp, const ::HIR::TraitPath& tpl, const Monomorphiser& mono, bool allowInfer = true) {
+static inline const HIRTraitPath& monomorphiseTraitpathWithOpt(const Span& sp, HIRTraitPath& tmp, const HIRTraitPath& tpl, const Monomorphiser& mono, bool allowInfer = true) {
     return (monomorphiseTraitpathNeeded(tpl) ? tmp = mono.monomorphTraitpath(sp, tpl, allowInfer, false) : tpl);
 }
 
-static inline const ::HIR::PathParams& monomorphisePathparamsWithOpt(const Span& sp, ::HIR::PathParams& tmp, const ::HIR::PathParams& tpl, const Monomorphiser& mono, bool allowInfer = true) {
+static inline const HIRPathParams& monomorphisePathparamsWithOpt(const Span& sp, HIRPathParams& tmp, const HIRPathParams& tpl, const Monomorphiser& mono, bool allowInfer = true) {
     return (monomorphisePathparamsNeeded(tpl) ? tmp = mono.monomorphPathParams(sp, tpl, allowInfer) : tpl);
 }
 
 // Helper for passing a group of params around
 struct MonomorphStatePtr: public MonomorphiserPP {
-    const ::HIR::TypeData* selfTy;
-    const ::HIR::PathParams* ppImpl;
-    const ::HIR::PathParams* ppMethod;
+    const HIRTypeData* selfTy;
+    const HIRPathParams* ppImpl;
+    const HIRPathParams* ppMethod;
     //const ::HIR::PathParams*    pp_placeholder;
-    const ::HIR::PathParams* ppHrb;
+    const HIRPathParams* ppHrb;
 
-    explicit MonomorphStatePtr(HIR::TypeInterner& types);
+    explicit MonomorphStatePtr(HIRTypeInterner& types);
 
-    MonomorphStatePtr(HIR::TypeInterner& types, const ::HIR::TypeData* selfTy, const ::HIR::PathParams* paramsI, const ::HIR::PathParams* paramsM, const ::HIR::PathParams* paramsP = nullptr, const ::HIR::PathParams* paramsH = nullptr);
+    MonomorphStatePtr(HIRTypeInterner& types, const HIRTypeData* selfTy, const HIRPathParams* paramsI, const HIRPathParams* paramsM, const HIRPathParams* paramsP = nullptr, const HIRPathParams* paramsH = nullptr);
 
     MonomorphStatePtr(MonomorphStatePtr&& x);
 
@@ -119,19 +119,19 @@ struct MonomorphStatePtr: public MonomorphiserPP {
 
     MonomorphStatePtr& operator=(MonomorphStatePtr&& x);
 
-    const ::HIR::TypeData* getSelfType() const override {
+    const HIRTypeData* getSelfType() const override {
         return selfTy;
     }
 
-    const ::HIR::PathParams* getImplParams() const override {
+    const HIRPathParams* getImplParams() const override {
         return ppImpl;
     }
 
-    const ::HIR::PathParams* getMethodParams() const override {
+    const HIRPathParams* getMethodParams() const override {
         return ppMethod;
     }
 
-    const ::HIR::PathParams* getHrbParams() const override {
+    const HIRPathParams* getHrbParams() const override {
         return ppHrb;
     }
 };
@@ -139,26 +139,26 @@ struct MonomorphStatePtr: public MonomorphiserPP {
 //extern ::std::ostream& operator<<(::std::ostream& os, const MonomorphStatePtr& ms);
 
 struct MonomorphHrlsOnly: public Monomorphiser {
-    const ::HIR::PathParams* ppHrb;
+    const HIRPathParams* ppHrb;
 
-    MonomorphHrlsOnly(HIR::TypeInterner& types, const ::HIR::PathParams& paramsH);
+    MonomorphHrlsOnly(HIRTypeInterner& types, const HIRPathParams& paramsH);
 
-    ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& ty) const override;
+    HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override;
 
-    ::HIR::ConstGeneric getValue(const Span& sp, const ::HIR::GenericRef& val) const override;
+    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
 
-    ::HIR::LifetimeRef getLifetime(const Span& sp, const ::HIR::GenericRef& lftRef) const override;
+    HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& lftRef) const override;
 };
 
 // Helper for passing a group of params around
 struct MonomorphState: public MonomorphiserPP {
-    ::HIR::TypeRef selfTy;
-    const ::HIR::PathParams* ppImpl;
-    const ::HIR::PathParams* ppMethod;
+    HIRTypeRef selfTy;
+    const HIRPathParams* ppImpl;
+    const HIRPathParams* ppMethod;
 
-    ::HIR::PathParams ppImplData;
+    HIRPathParams ppImplData;
 
-    explicit MonomorphState(HIR::TypeInterner& types);
+    explicit MonomorphState(HIRTypeInterner& types);
 
     MonomorphState(MonomorphState&& x);
 
@@ -166,25 +166,25 @@ struct MonomorphState: public MonomorphiserPP {
 
     MonomorphState clone() const;
 
-    void setImplParams(HIR::PathParams pp);
+    void setImplParams(HIRPathParams pp);
 
     bool hasTypes() const {
         return (ppMethod && ppMethod->hasParams()) || (ppImpl && ppImpl->hasParams());
     }
 
-    const ::HIR::TypeData* getSelfType() const override {
+    const HIRTypeData* getSelfType() const override {
         return selfTy;
     }
 
-    const ::HIR::PathParams* getImplParams() const override {
+    const HIRPathParams* getImplParams() const override {
         return ppImpl;
     }
 
-    const ::HIR::PathParams* getMethodParams() const override {
+    const HIRPathParams* getMethodParams() const override {
         return ppMethod;
     }
 
-    const ::HIR::PathParams* getHrbParams() const override {
+    const HIRPathParams* getHrbParams() const override {
         return nullptr;
     }
 };

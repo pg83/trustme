@@ -1,17 +1,16 @@
 #include "hir_generic_ref.h"
 
-namespace HIR {
 
-GenericRef::GenericRef(RcString name, uint32_t binding)
+HIRGenericRef::HIRGenericRef(RcString name, uint32_t binding)
     : name(::std::move(name))
     , binding(binding) {
 }
-GenericRef::GenericRef(RcString name, GenericGroup group, uint16_t idx)
+HIRGenericRef::HIRGenericRef(RcString name, HIRGenericGroup group, uint16_t idx)
     : name(::std::move(name))
     , binding(group * 256 + idx) {
     assert(idx < 256);
 }
-Ordering GenericRef::ord(const GenericRef& x) const {
+Ordering HIRGenericRef::ord(const HIRGenericRef& x) const {
     auto rv = ::ord(binding, x.binding);
     if (rv) {
         return rv;
@@ -21,39 +20,35 @@ Ordering GenericRef::ord(const GenericRef& x) const {
     }
     return rv;
 }
-}
 
-namespace HIR {
 
-::std::ostream& operator<<(::std::ostream& os, const GenericRef& x) {
+::std::ostream& operator<<(::std::ostream& os, const HIRGenericRef& x) {
     x.fmt(os);
     return os;
 }
-}
 
-namespace HIR {
 
-LifetimeRef::LifetimeRef()
-    : binding(LifetimeRef::UNKNOWN) {
+HIRLifetimeRef::HIRLifetimeRef()
+    : binding(HIRLifetimeRef::UNKNOWN) {
 }
-LifetimeRef::LifetimeRef(uint32_t binding)
+HIRLifetimeRef::HIRLifetimeRef(uint32_t binding)
     : binding(binding) {
 }
-LifetimeRef LifetimeRef::newStatic() {
-    LifetimeRef rv;
-    rv.binding = LifetimeRef::STATIC;
+HIRLifetimeRef HIRLifetimeRef::newStatic() {
+    HIRLifetimeRef rv;
+    rv.binding = HIRLifetimeRef::STATIC;
     return rv;
 }
-GenericRef LifetimeRef::asParam() const {
+HIRGenericRef HIRLifetimeRef::asParam() const {
     assert(isParam());
-    return GenericRef(RcString(), binding);
+    return HIRGenericRef(RcString(), binding);
 }
-::std::ostream& operator<<(::std::ostream& os, const LifetimeRef& x) {
-    if (x.binding == LifetimeRef::INFER) {
+::std::ostream& operator<<(::std::ostream& os, const HIRLifetimeRef& x) {
+    if (x.binding == HIRLifetimeRef::INFER) {
         os << "'_";
-    } else if (x.binding == LifetimeRef::UNKNOWN) {
+    } else if (x.binding == HIRLifetimeRef::UNKNOWN) {
         os << "'#omitted";
-    } else if (x.binding == LifetimeRef::STATIC) {
+    } else if (x.binding == HIRLifetimeRef::STATIC) {
         os << "'static";
     } else if (x.binding < 0xFFFF) {
         switch ((x.binding & 0xFF00) >> 8) {
@@ -73,11 +68,10 @@ GenericRef LifetimeRef::asParam() const {
                 os << "'unk" << std::hex << x.binding << std::dec;
                 break;
         }
-    } else if (x.binding < LifetimeRef::MAX_LOCAL) {
+    } else if (x.binding < HIRLifetimeRef::MAX_LOCAL) {
         os << "'#local" << (x.binding - 0x1'0000);
     } else {
-        os << "'#ivar" << (x.binding - LifetimeRef::MAX_LOCAL);
+        os << "'#ivar" << (x.binding - HIRLifetimeRef::MAX_LOCAL);
     }
     return os;
-}
 }

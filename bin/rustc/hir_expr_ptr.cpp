@@ -5,30 +5,30 @@
 
 #include <std/mem/obj_pool.h>
 
-::HIR::ExprPtr::ExprPtr() = default;
+HIRExprPtr::HIRExprPtr() = default;
 
-::HIR::ExprPtr::ExprPtr(::HIR::ExprNodeP v)
+HIRExprPtr::HIRExprPtr(HIRExprNodeP v)
     : node(mv$(v))
 {
 }
 
-::HIR::ExprPtr::~ExprPtr() = default;
-::HIR::ExprPtr::ExprPtr(ExprPtr&&) = default;
-::HIR::ExprPtr& ::HIR::ExprPtr::operator=(ExprPtr&&) = default;
+HIRExprPtr::~HIRExprPtr() = default;
+HIRExprPtr::HIRExprPtr(HIRExprPtr&&) = default;
+HIRExprPtr& HIRExprPtr::operator=(HIRExprPtr&&) = default;
 
-::HIR::ExprNodeP HIR::ExprPtr::takeNode() {
-    return ::HIR::ExprNodeP(node.release());
+HIRExprNodeP HIRExprPtr::takeNode() {
+    return HIRExprNodeP(node.release());
 }
 
-::HIR::ExprStatePtr::ExprStatePtr(stl::ObjPool* pool, ExprState x)
-    : ptr(pool->make<ExprState>(::std::move(x)))
+HIRExprStatePtr::HIRExprStatePtr(stl::ObjPool* pool, HIRExprState x)
+    : ptr(pool->make<HIRExprState>(::std::move(x)))
 {
 }
 
-::HIR::ExprStatePtr::~ExprStatePtr() = default;
+HIRExprStatePtr::~HIRExprStatePtr() = default;
 
-::HIR::ExprStatePtr HIR::ExprStatePtr::clone(stl::ObjPool* pool) const {
-    auto rv = ::HIR::ExprStatePtr(pool, ::HIR::ExprState((*this)->types, (*this)->mModule, (*this)->modPath));
+HIRExprStatePtr HIRExprStatePtr::clone(stl::ObjPool* pool) const {
+    auto rv = HIRExprStatePtr(pool, HIRExprState((*this)->types, (*this)->mModule, (*this)->modPath));
     rv->traits = (*this)->traits;
     rv->mImplGenerics = (*this)->mImplGenerics;
     rv->mItemGenerics = (*this)->mItemGenerics;
@@ -38,7 +38,7 @@
     return rv;
 }
 
-const Span& HIR::ExprPtr::span() const {
+const Span& HIRExprPtr::span() const {
     static Span staticSp;
     if (*this) {
         return (*this)->span();
@@ -46,28 +46,28 @@ const Span& HIR::ExprPtr::span() const {
     return staticSp;
 }
 
-const MIRFunction* HIR::ExprPtr::getMirOpt() const {
+const MIRFunction* HIRExprPtr::getMirOpt() const {
     if (!this->mir) {
         return nullptr;
     }
     return &*this->mir;
 }
 
-const MIRFunction& HIR::ExprPtr::getMirOrError(const Span& sp) const {
+const MIRFunction& HIRExprPtr::getMirOrError(const Span& sp) const {
     if (!this->mir) {
         BUG(sp, "No MIR");
     }
     return *this->mir;
 }
 
-MIRFunction& HIR::ExprPtr::getMirOrErrorMut(const Span& sp) {
+MIRFunction& HIRExprPtr::getMirOrErrorMut(const Span& sp) {
     if (!this->mir) {
         BUG(sp, "No MIR");
     }
     return *this->mir;
 }
 
-const MIRFunction* HIR::ExprPtr::getExtMir() const {
+const MIRFunction* HIRExprPtr::getExtMir() const {
     if (this->node) {
         return nullptr;
     }
@@ -77,7 +77,7 @@ const MIRFunction* HIR::ExprPtr::getExtMir() const {
     return &*this->mir;
 }
 
-MIRFunction* HIR::ExprPtr::getExtMirMut() {
+MIRFunction* HIRExprPtr::getExtMirMut() {
     if (this->node) {
         return nullptr;
     }
@@ -87,101 +87,99 @@ MIRFunction* HIR::ExprPtr::getExtMirMut() {
     return &*this->mir;
 }
 
-void HIR::ExprPtr::setMir(MIRFunctionPointer mir) {
+void HIRExprPtr::setMir(MIRFunctionPointer mir) {
     assert(!this->mir);
     this->mir = ::std::move(mir);
 }
 
-namespace HIR {
 
-    ExprNodeP::ExprNodeP()
+    HIRExprNodeP::HIRExprNodeP()
         : ptr(nullptr)
     {
     }
 
-    ExprNodeP::ExprNodeP(::HIR::ExprNode* p)
+    HIRExprNodeP::HIRExprNodeP(HIRExprNode* p)
         : ptr(p)
     {
     }
 
-    ExprNodeP::ExprNodeP(ExprNodeP&& x)
+    HIRExprNodeP::HIRExprNodeP(HIRExprNodeP&& x)
         : ptr(x.ptr)
     {
         x.ptr = nullptr;
     }
 
-    ExprNodeP& ExprNodeP::operator=(ExprNodeP&& x) {
+    HIRExprNodeP& HIRExprNodeP::operator=(HIRExprNodeP&& x) {
         ptr = x.ptr;
         x.ptr = nullptr;
         return *this;
     }
 
-    ::HIR::ExprNode* ExprNodeP::release() {
+    HIRExprNode* HIRExprNodeP::release() {
         auto* rv = ptr;
         ptr = nullptr;
         return rv;
     }
 
-    void ExprNodeP::swap(ExprNodeP& x) {
+    void HIRExprNodeP::swap(HIRExprNodeP& x) {
         auto* p = ptr;
         ptr = x.ptr;
         x.ptr = p;
     }
 
-    ::HIR::ExprNode& ExprNodeP::operator*() {
+    HIRExprNode& HIRExprNodeP::operator*() {
         assert(ptr);
         return *ptr;
     }
 
-    const ::HIR::ExprNode& ExprNodeP::operator*() const {
+    const HIRExprNode& HIRExprNodeP::operator*() const {
         assert(ptr);
         return *ptr;
     }
 
-    ::HIR::ExprNode* ExprNodeP::operator->() {
+    HIRExprNode* HIRExprNodeP::operator->() {
         assert(ptr);
         return ptr;
     }
 
-    const ::HIR::ExprNode* ExprNodeP::operator->() const {
+    const HIRExprNode* HIRExprNodeP::operator->() const {
         assert(ptr);
         return ptr;
     }
 
-    ExprStatePtr::ExprStatePtr()
+    HIRExprStatePtr::HIRExprStatePtr()
         : ptr(nullptr)
     {
     }
 
-    ExprStatePtr::ExprStatePtr(ExprStatePtr&& x)
+    HIRExprStatePtr::HIRExprStatePtr(HIRExprStatePtr&& x)
         : ptr(x.ptr)
     {
         x.ptr = nullptr;
     }
 
-    ExprStatePtr& ExprStatePtr::operator=(ExprStatePtr&& x) {
+    HIRExprStatePtr& HIRExprStatePtr::operator=(HIRExprStatePtr&& x) {
         ptr = x.ptr;
         x.ptr = nullptr;
         return *this;
     }
 
-    ::HIR::ExprState& ExprStatePtr::operator*() {
+    HIRExprState& HIRExprStatePtr::operator*() {
         assert(ptr);
         return *ptr;
     }
 
-    const ::HIR::ExprState& ExprStatePtr::operator*() const {
+    const HIRExprState& HIRExprStatePtr::operator*() const {
         assert(ptr);
         return *ptr;
     }
 
-    ::HIR::ExprState* ExprStatePtr::operator->() {
+    HIRExprState* HIRExprStatePtr::operator->() {
         assert(ptr);
         return ptr;
     }
 
-    const ::HIR::ExprState* ExprStatePtr::operator->() const {
+    const HIRExprState* HIRExprStatePtr::operator->() const {
         assert(ptr);
         return ptr;
     }
-}

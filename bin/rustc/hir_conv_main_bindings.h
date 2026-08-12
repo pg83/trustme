@@ -5,47 +5,45 @@
 
 struct Span;
 
-namespace HIR {
-    class Crate;
-    class ItemPath;
-    class ExprPtr;
-    struct Pattern;
-    class Enum;
-    class Constant;
-    class TypeData;
-    using TypeRef = const TypeData*;
-    class TypeInterner;
-    struct SimplePath;
-    struct GenericPath;
-    class GenericParams;
-    struct PathParams;
-    class ConstGeneric;
-    class ArraySize;
-};
+    class HIRCrate;
+    class HIRItemPath;
+    class HIRExprPtr;
+    struct HIRPattern;
+    class HIREnum;
+    class HIRConstant;
+    class HIRTypeData;
+    using HIRTypeRef = const HIRTypeData*;
+    class HIRTypeInterner;
+    struct HIRSimplePath;
+    struct HIRGenericPath;
+    class HIRGenericParams;
+    struct HIRPathParams;
+    class HIRConstGeneric;
+    class HIRArraySize;
 
-extern void ConvertHIRLifetimeElision(::HIR::Crate& crate);
-extern ::HIR::PathParams ConvertHIRCompleteAliasParams(::HIR::TypeInterner& types, const Span& sp, const ::HIR::GenericParams& paramsDef, const ::HIR::GenericPath& path, bool isExpr);
-extern void ConvertHIRExpandAliases(::HIR::Crate& crate);
-extern void ConvertHIRExpandAliasesSelf(::HIR::Crate& crate);
+extern void ConvertHIRLifetimeElision(HIRCrate& crate);
+extern HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& paramsDef, const HIRGenericPath& path, bool isExpr);
+extern void ConvertHIRExpandAliases(HIRCrate& crate);
+extern void ConvertHIRExpandAliasesSelf(HIRCrate& crate);
 extern void ConvertHIRExpandAliasesSelfExpr(
-    const ::HIR::Crate& crate,
-    const ::HIR::TypeData* implType,
-    ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args,
-    ::HIR::TypeRef& retTy,
-    ::HIR::ExprPtr& expr
+    const HIRCrate& crate,
+    const HIRTypeData* implType,
+    ::std::vector<::std::pair<HIRPattern, HIRTypeRef>>& args,
+    HIRTypeRef& retTy,
+    HIRExprPtr& expr
     );
-extern void ConvertHIRBind(::HIR::Crate& crate);
-extern void ConvertHIRResolveUFCSSortImpls(::HIR::Crate& crate);
-extern void ConvertHIRResolveUFCSOuter(::HIR::Crate& crate);
-extern void ConvertHIRResolveUFCS(::HIR::Crate& crate);
-extern void ConvertHIRMarkings(::HIR::Crate& crate);
-extern void ConvertHIRConstantEvaluate(::HIR::Crate& hirCrate);
+extern void ConvertHIRBind(HIRCrate& crate);
+extern void ConvertHIRResolveUFCSSortImpls(HIRCrate& crate);
+extern void ConvertHIRResolveUFCSOuter(HIRCrate& crate);
+extern void ConvertHIRResolveUFCS(HIRCrate& crate);
+extern void ConvertHIRMarkings(HIRCrate& crate);
+extern void ConvertHIRConstantEvaluate(HIRCrate& hirCrate);
 
-extern void ConvertHIRResolveUFCSExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exprPtr);
-extern void ConvertHIRConstantEvaluateExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp);
-extern void ConvertHIRConstantEvaluateEnum(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, const ::HIR::Enum& enm);
-extern void ConvertHIRConstantEvaluateConstant(const ::HIR::Crate& crate, const ::HIR::GenericParams* implParams, const ::HIR::ItemPath& ip, ::HIR::Constant& e);
-extern void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const ::HIR::Crate& crate, const HIR::SimplePath& modPath, const ::HIR::GenericParams* implGenerics, const ::HIR::GenericParams* itemGenerics, const ::HIR::GenericParams* paramsDef, ::HIR::PathParams& params);
-extern void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const ::HIR::Crate& crate, const HIR::TypeData* ty, ::HIR::ConstGeneric& cg);
-extern void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const ::HIR::Crate& crate, ::HIR::ConstGeneric& cg);
-extern void ConvertHIRConstantEvaluateArraySize(const Span& sp, const ::HIR::Crate& crate, const ::HIR::SimplePath& path, ::HIR::ArraySize& size);
+extern void ConvertHIRResolveUFCSExpr(const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exprPtr);
+extern void ConvertHIRConstantEvaluateExpr(const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp);
+extern void ConvertHIRConstantEvaluateEnum(const HIRCrate& crate, const HIRItemPath& ip, const HIREnum& enm);
+extern void ConvertHIRConstantEvaluateConstant(const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRConstant& e);
+extern void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const HIRCrate& crate, const HIRSimplePath& modPath, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRGenericParams* paramsDef, HIRPathParams& params);
+extern void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const HIRCrate& crate, const HIRTypeData* ty, HIRConstGeneric& cg);
+extern void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const HIRCrate& crate, HIRConstGeneric& cg);
+extern void ConvertHIRConstantEvaluateArraySize(const Span& sp, const HIRCrate& crate, const HIRSimplePath& path, HIRArraySize& size);

@@ -40,7 +40,7 @@ namespace {
     }
 }
 
-ASTCrate::ASTCrate(stl::ObjPool* pool, HIR::TypeInterner& types)
+ASTCrate::ASTCrate(stl::ObjPool* pool, HIRTypeInterner& types)
     : pool(pool)
     , types(types)
     , mRootModule(ASTAbsolutePath())
@@ -266,7 +266,7 @@ RcString ASTCrate::loadExternCrate(Span sp, const RcString& name, const ::std::s
     return realName;
 }
 
-ASTExternCrate::ASTExternCrate(stl::ObjPool* pool, HIR::TypeInterner& types, const RcString& name, const ::std::string& path)
+ASTExternCrate::ASTExternCrate(stl::ObjPool* pool, HIRTypeInterner& types, const RcString& name, const ::std::string& path)
     : mName(name)
     , shortName(name)
     , filename(path)

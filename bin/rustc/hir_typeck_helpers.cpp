@@ -9,7 +9,7 @@
 
 namespace {
     // TODO: De-duplicate this with `static.cpp`
-    const HIR::GenericParams emptyParams;
+    const HIRGenericParams emptyParams;
 
     // Give every fresh placeholder in one active trait goal the same stable
     // spelling.  This makes a recurrence through independently-instantiated
@@ -32,13 +32,13 @@ namespace {
         }
 
     public:
-        explicit CanonicalizeTraitGoal(::HIR::TypeInterner& types)
+        explicit CanonicalizeTraitGoal(HIRTypeInterner& types)
             : Monomorphiser(types)
         {
         }
 
-        ::HIR::TypeRef getType(
-            const Span&, const ::HIR::GenericRef& generic
+        HIRTypeRef getType(
+            const Span&, const HIRGenericRef& generic
         ) const override {
             return generic.isPlaceholder()
                 ? types.generic(
@@ -47,22 +47,22 @@ namespace {
                 : types.generic(generic.name, generic.binding);
         }
 
-        ::HIR::ConstGeneric getValue(
-            const Span&, const ::HIR::GenericRef& generic
+        HIRConstGeneric getValue(
+            const Span&, const HIRGenericRef& generic
         ) const override {
-            return ::HIR::ConstGeneric(
+            return HIRConstGeneric(
                 generic.isPlaceholder()
-                    ? ::HIR::GenericRef(
+                    ? HIRGenericRef(
                         canonicalPlaceholderName(generic.name), generic.binding
                     )
                     : generic
             );
         }
 
-        ::HIR::LifetimeRef getLifetime(
-            const Span&, const ::HIR::GenericRef& generic
+        HIRLifetimeRef getLifetime(
+            const Span&, const HIRGenericRef& generic
         ) const override {
-            return ::HIR::LifetimeRef(generic.binding);
+            return HIRLifetimeRef(generic.binding);
         }
 
         const ::std::vector<::std::pair<RcString, RcString>>&
@@ -96,7 +96,7 @@ namespace {
 
     public:
         InstantiateCanonicalTraitResponse(
-            ::HIR::TypeInterner& types,
+            HIRTypeInterner& types,
             const ::std::vector<::std::pair<RcString, RcString>>& goalNames,
             uint64_t instance
         )
@@ -106,8 +106,8 @@ namespace {
         {
         }
 
-        ::HIR::TypeRef getType(
-            const Span&, const ::HIR::GenericRef& generic
+        HIRTypeRef getType(
+            const Span&, const HIRGenericRef& generic
         ) const override {
             return types.generic(
                 generic.isPlaceholder()
@@ -117,12 +117,12 @@ namespace {
             );
         }
 
-        ::HIR::ConstGeneric getValue(
-            const Span&, const ::HIR::GenericRef& generic
+        HIRConstGeneric getValue(
+            const Span&, const HIRGenericRef& generic
         ) const override {
-            return ::HIR::ConstGeneric(
+            return HIRConstGeneric(
                 generic.isPlaceholder()
-                    ? ::HIR::GenericRef(
+                    ? HIRGenericRef(
                         instantiatePlaceholderName(generic.name),
                         generic.binding
                     )
@@ -130,10 +130,10 @@ namespace {
             );
         }
 
-        ::HIR::LifetimeRef getLifetime(
-            const Span&, const ::HIR::GenericRef& generic
+        HIRLifetimeRef getLifetime(
+            const Span&, const HIRGenericRef& generic
         ) const override {
-            return ::HIR::LifetimeRef(generic.binding);
+            return HIRLifetimeRef(generic.binding);
         }
     };
 
@@ -145,10 +145,10 @@ namespace {
     class InstantiateTraitResponseForCaller final: public Monomorphiser {
         HMTypeInferrence& ivars;
         const ::std::vector<::std::pair<RcString, RcString>>& goalNames;
-        mutable ::std::vector<::std::pair<::HIR::GenericRef, ::HIR::TypeRef>> typeValues;
-        mutable ::std::vector<::std::pair<::HIR::GenericRef, ::HIR::ConstGeneric>> values;
+        mutable ::std::vector<::std::pair<HIRGenericRef, HIRTypeRef>> typeValues;
+        mutable ::std::vector<::std::pair<HIRGenericRef, HIRConstGeneric>> values;
 
-        bool isGoalPlaceholder(const ::HIR::GenericRef& generic) const {
+        bool isGoalPlaceholder(const HIRGenericRef& generic) const {
             for (const auto& entry : goalNames) {
                 if (entry.first == generic.name) {
                     return true;
@@ -159,7 +159,7 @@ namespace {
 
     public:
         InstantiateTraitResponseForCaller(
-            ::HIR::TypeInterner& types,
+            HIRTypeInterner& types,
             HMTypeInferrence& ivars,
             const ::std::vector<::std::pair<RcString, RcString>>& goalNames
         )
@@ -169,8 +169,8 @@ namespace {
         {
         }
 
-        ::HIR::TypeRef getType(
-            const Span&, const ::HIR::GenericRef& generic
+        HIRTypeRef getType(
+            const Span&, const HIRGenericRef& generic
         ) const override {
             if (!generic.isPlaceholder() || isGoalPlaceholder(generic)) {
                 return Monomorphiser::types.generic(generic.name, generic.binding);
@@ -185,88 +185,88 @@ namespace {
             return fresh;
         }
 
-        ::HIR::ConstGeneric getValue(
-            const Span&, const ::HIR::GenericRef& generic
+        HIRConstGeneric getValue(
+            const Span&, const HIRGenericRef& generic
         ) const override {
             if (!generic.isPlaceholder() || isGoalPlaceholder(generic)) {
-                return ::HIR::ConstGeneric(generic);
+                return HIRConstGeneric(generic);
             }
             for (const auto& entry : values) {
                 if (entry.first == generic) {
                     return entry.second.clone();
                 }
             }
-            auto fresh = ::HIR::ConstGeneric::make_Infer({ivars.newIvarVal()});
+            auto fresh = HIRConstGeneric::make_Infer({ivars.newIvarVal()});
             values.push_back({generic, fresh.clone()});
             return fresh;
         }
 
-        ::HIR::LifetimeRef getLifetime(
-            const Span&, const ::HIR::GenericRef& generic
+        HIRLifetimeRef getLifetime(
+            const Span&, const HIRGenericRef& generic
         ) const override {
-            return ::HIR::LifetimeRef(generic.binding);
+            return HIRLifetimeRef(generic.binding);
         }
     };
 
-    struct MatchHrls: public HIR::MatchGenerics, public Monomorphiser {
-        ::HIR::PathParams hrls;
+    struct MatchHrls: public HIRMatchGenerics, public Monomorphiser {
+        HIRPathParams hrls;
 
-        MatchHrls(HIR::TypeInterner& types, const ::HIR::GenericParams* x)
+        MatchHrls(HIRTypeInterner& types, const HIRGenericParams* x)
             : MatchHrls(types, x ? *x : emptyParams)
         {
         }
 
-        MatchHrls(HIR::TypeInterner& types, const ::HIR::GenericParams& x)
+        MatchHrls(HIRTypeInterner& types, const HIRGenericParams& x)
             : Monomorphiser(types)
             , hrls(x.makeEmptyParams(true))
         {
         }
 
-        virtual ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, HIR::tCbResolveType resolveCb) {
-            return (ty->is_Generic() && ty->as_Generic().binding == g.binding) ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal;
+        virtual HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) {
+            return (ty->is_Generic() && ty->as_Generic().binding == g.binding) ? HIRCompare::Equal : HIRCompare::Unequal;
         }
 
-        virtual ::HIR::Compare matchVal(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) {
-            return sz == g ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal;
+        virtual HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) {
+            return sz == g ? HIRCompare::Equal : HIRCompare::Unequal;
         }
 
-        virtual ::HIR::Compare matchLft(const ::HIR::GenericRef& g, const ::HIR::LifetimeRef& lft) {
-            if (!::HIR::MatchGenerics::hasHrb() && g.group() == ::HIR::GENERICHrtb) {
+        virtual HIRCompare matchLft(const HIRGenericRef& g, const HIRLifetimeRef& lft) {
+            if (!HIRMatchGenerics::hasHrb() && g.group() == GENERICHrtb) {
                 ASSERT_BUG(Span(), g.idx() < hrls.mLifetimes.size(), "HRL index out of range");
                 hrls.mLifetimes.at(g.idx()) = lft;
-                return ::HIR::Compare::Equal;
+                return HIRCompare::Equal;
             }
-            return lft.binding == g.binding ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal;
+            return lft.binding == g.binding ? HIRCompare::Equal : HIRCompare::Unequal;
         }
 
         // Monomorphiser
-        ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& g) const {
+        HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const {
             return types.generic(g.name, g.binding);
         }
 
-        ::HIR::ConstGeneric getValue(const Span& sp, const ::HIR::GenericRef& g) const {
+        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const {
             return g;
         }
 
-        ::HIR::LifetimeRef getLifetime(const Span& sp, const ::HIR::GenericRef& g) const {
-            if (g.group() == ::HIR::GENERICHrtb) {
+        HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const {
+            if (g.group() == GENERICHrtb) {
                 return hrls.mLifetimes.at(g.idx());
             }
-            return ::HIR::LifetimeRef(g.binding);
+            return HIRLifetimeRef(g.binding);
         }
     };
 
-    HIR::PathParams getHrls(HIR::TypeInterner& types, const Span& sp, const ::HIR::GenericParams* x, const ::HIR::PathParams& traitPps, const ::HIR::PathParams& desPps) {
+    HIRPathParams getHrls(HIRTypeInterner& types, const Span& sp, const HIRGenericParams* x, const HIRPathParams& traitPps, const HIRPathParams& desPps) {
         MatchHrls m{types, x};
-        traitPps.matchTestGenericsFuzz(sp, desPps, HIR::ResolvePlaceholdersNop(), m);
+        traitPps.matchTestGenericsFuzz(sp, desPps, HIRResolvePlaceholdersNop(), m);
         return std::move(m.hrls);
     }
 
-    HIR::PathParams getHrls(HIR::TypeInterner& types, const Span& sp, const ::HIR::GenericParams& x, const ::HIR::PathParams& traitPps, const ::HIR::PathParams& desPps) {
+    HIRPathParams getHrls(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& x, const HIRPathParams& traitPps, const HIRPathParams& desPps) {
         return getHrls(types, sp, &x, traitPps, desPps);
     }
 
-    HIR::PathParams getHrls(HIR::TypeInterner& types, const Span& sp, const ::std::unique_ptr<::HIR::GenericParams>& x, const ::HIR::PathParams& traitPps, const ::HIR::PathParams& desPps) {
+    HIRPathParams getHrls(HIRTypeInterner& types, const Span& sp, const ::std::unique_ptr<HIRGenericParams>& x, const HIRPathParams& traitPps, const HIRPathParams& desPps) {
         return getHrls(types, sp, x.get(), traitPps, desPps);
     }
 }
@@ -315,8 +315,8 @@ void HMTypeInferrence::checkForLoops() {
     struct LoopChecker {
         ::std::vector<unsigned int> indexes;
 
-        void checkTy(const HMTypeInferrence& ivars, const ::HIR::TypeData* ty) {
-            visitTyWith(ty, [&](const HIR::TypeData* t) {
+        void checkTy(const HMTypeInferrence& ivars, const HIRTypeData* ty) {
+            visitTyWith(ty, [&](const HIRTypeData* t) {
                 if (const auto* ep = t->opt_Infer()) {
                     const auto& e = *ep;
                     for (auto idx : indexes) {
@@ -338,17 +338,17 @@ void HMTypeInferrence::checkForLoops() {
     struct LoopChecker {
         ::std::vector<unsigned int> indexes;
 
-        void checkPathparams(const HMTypeInferrence& ivars, const ::HIR::PathParams& pp) {
+        void checkPathparams(const HMTypeInferrence& ivars, const HIRPathParams& pp) {
             for (const auto& ty : pp.types) {
                 this->checkTy(ivars, ty);
             }
         }
 
-        void checkPath(const HMTypeInferrence& ivars, const ::HIR::Path& path) {
-            TU_MATCH(::HIR::Path::Data, (path.mData), (pe), (Generic, this->checkPathparams(ivars, pe.mParams);), (UfcsKnown, this->checkTy(ivars, pe.type); this->checkPathparams(ivars, pe.trait.mParams); this->checkPathparams(ivars, pe.params);), (UfcsInherent, this->checkTy(ivars, pe.type); this->checkPathparams(ivars, pe.params);), (UfcsUnknown, BUG(Span(), "UfcsUnknown");))
+        void checkPath(const HMTypeInferrence& ivars, const HIRPath& path) {
+            TU_MATCH(HIRPath::Data, (path.mData), (pe), (Generic, this->checkPathparams(ivars, pe.mParams);), (UfcsKnown, this->checkTy(ivars, pe.type); this->checkPathparams(ivars, pe.trait.mParams); this->checkPathparams(ivars, pe.params);), (UfcsInherent, this->checkTy(ivars, pe.type); this->checkPathparams(ivars, pe.params);), (UfcsUnknown, BUG(Span(), "UfcsUnknown");))
         }
 
-        void checkTy(const HMTypeInferrence& ivars, const ::HIR::TypeData* ty) {
+        void checkTy(const HMTypeInferrence& ivars, const HIRTypeData* ty) {
             TU_MATCH_HDRA( (*ty), {)
             TU_ARMA(Infer, e) {
                     for (auto idx : indexes) {
@@ -464,17 +464,17 @@ bool HMTypeInferrence::applyDefaults() {
         if (!v.isAlias()) {
             if (const auto* e = v.type->opt_Infer()) {
                 switch (e->tyClass) {
-                    case ::HIR::InferClass::None:
+                    case HIRInferClass::None:
                         break;
-                    case ::HIR::InferClass::Integer:
+                    case HIRInferClass::Integer:
                         rv = true;
                         DEBUG("- IVar " << e->index << " = i32");
-                        v.type = types.primitive(::HIR::CoreType::I32);
+                        v.type = types.primitive(HIRCoreType::I32);
                         break;
-                    case ::HIR::InferClass::Float:
+                    case HIRInferClass::Float:
                         rv = true;
                         DEBUG("- IVar " << e->index << " = f64");
-                        v.type = types.primitive(::HIR::CoreType::F64);
+                        v.type = types.primitive(HIRCoreType::F64);
                         break;
                 }
             }
@@ -483,7 +483,7 @@ bool HMTypeInferrence::applyDefaults() {
     return rv;
 }
 
-void HMTypeInferrence::printType(::std::ostream& os, const ::HIR::TypeData* tr, LList<const ::HIR::TypeData*> outerStack) const {
+void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LList<const HIRTypeData*> outerStack) const {
     const auto& ty = this->getType(tr);
     for (const auto* pty : outerStack) {
         if (pty) {
@@ -493,16 +493,16 @@ void HMTypeInferrence::printType(::std::ostream& os, const ::HIR::TypeData* tr, 
             }
         }
     }
-    auto stack = LList<const ::HIR::TypeData*>(&outerStack, ty);
+    auto stack = LList<const HIRTypeData*>(&outerStack, ty);
 
-    auto printTraitpath = [&](const HIR::TraitPath& tp) {
+    auto printTraitpath = [&](const HIRTraitPath& tp) {
         if (tp.hrtbs && !tp.hrtbs->isEmpty()) {
             os << "for" << tp.hrtbs->fmtArgs() << " ";
         }
         this->printGenericpath(os, tp.mPath, stack);
         // TODO: ATYs?
     };
-    auto printPath = [&](const HIR::Path& path) {
+    auto printPath = [&](const HIRPath& path) {
         TU_MATCH_HDRA( (path.mData), {)
         TU_ARMA(Generic, pe) {
                 this->printGenericpath(os, pe, stack);
@@ -545,17 +545,17 @@ void HMTypeInferrence::printType(::std::ostream& os, const ::HIR::TypeData* tr, 
         }
         TU_ARMA(Borrow, e) {
             os << "&";
-            if (e.lifetime != ::HIR::LifetimeRef()) {
+            if (e.lifetime != HIRLifetimeRef()) {
                 os << e.lifetime << " ";
             }
             switch (e.type) {
-                case ::HIR::BorrowType::Shared:
+                case HIRBorrowType::Shared:
                     os << "";
                     break;
-                case ::HIR::BorrowType::Unique:
+                case HIRBorrowType::Unique:
                     os << "mut ";
                     break;
-                case ::HIR::BorrowType::Owned:
+                case HIRBorrowType::Owned:
                     os << "move ";
                     break;
             }
@@ -563,13 +563,13 @@ void HMTypeInferrence::printType(::std::ostream& os, const ::HIR::TypeData* tr, 
         }
         TU_ARMA(Pointer, e) {
             switch (e.type) {
-                case ::HIR::BorrowType::Shared:
+                case HIRBorrowType::Shared:
                     os << "*const ";
                     break;
-                case ::HIR::BorrowType::Unique:
+                case HIRBorrowType::Unique:
                     os << "*mut ";
                     break;
-                case ::HIR::BorrowType::Owned:
+                case HIRBorrowType::Owned:
                     os << "*move ";
                     break;
             }
@@ -630,7 +630,7 @@ void HMTypeInferrence::printType(::std::ostream& os, const ::HIR::TypeData* tr, 
                 os << "+";
                 this->printGenericpath(os, marker, stack);
             }
-            if (e.lifetime != ::HIR::LifetimeRef::newStatic()) {
+            if (e.lifetime != HIRLifetimeRef::newStatic()) {
                 os << "+" << e.lifetime;
             }
             os << ")";
@@ -676,12 +676,12 @@ void HMTypeInferrence::printType(::std::ostream& os, const ::HIR::TypeData* tr, 
     }
 }
 
-void HMTypeInferrence::printGenericpath(::std::ostream& os, const ::HIR::GenericPath& gp, LList<const ::HIR::TypeData*> stack) const {
+void HMTypeInferrence::printGenericpath(::std::ostream& os, const HIRGenericPath& gp, LList<const HIRTypeData*> stack) const {
     os << gp.mPath;
     this->printPathparams(os, gp.mParams, stack);
 }
 
-void HMTypeInferrence::printPathparams(::std::ostream& os, const ::HIR::PathParams& pps, LList<const ::HIR::TypeData*> stack) const {
+void HMTypeInferrence::printPathparams(::std::ostream& os, const HIRPathParams& pps, LList<const HIRTypeData*> stack) const {
     if (pps.hasParams() || !pps.mLifetimes.empty()) {
         os << "<";
         for (const auto& ppL : pps.mLifetimes) {
@@ -700,14 +700,14 @@ void HMTypeInferrence::printPathparams(::std::ostream& os, const ::HIR::PathPara
     }
 }
 
-void HMTypeInferrence::expandIvars(::HIR::TypeRef& type) {
+void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
     if (!type->hasTypeInfer()) {
         return;
     }
     if (::std::find(expandStack.begin(), expandStack.end(), type) != expandStack.end()) return;
     expandStack.push_back(type);
     struct Guard {
-        ::std::vector<HIR::TypeRef>& stack;
+        ::std::vector<HIRTypeRef>& stack;
         ~Guard() { stack.pop_back(); }
     } guard{expandStack};
 
@@ -720,8 +720,8 @@ void HMTypeInferrence::expandIvars(::HIR::TypeRef& type) {
     auto data = type->cloneData();
 
     struct H {
-        static void expandIvarsPath(/*const*/ HMTypeInferrence& self, ::HIR::Path& path) {
-            TU_MATCH(::HIR::Path::Data, (path.mData), (e2), (Generic, self.expandIvarsParams(e2.mParams);), (UfcsKnown, self.expandIvars(e2.type); self.expandIvarsParams(e2.trait.mParams); self.expandIvarsParams(e2.params);), (UfcsUnknown, self.expandIvars(e2.type); self.expandIvarsParams(e2.params);), (UfcsInherent, self.expandIvars(e2.type); self.expandIvarsParams(e2.params);))
+        static void expandIvarsPath(/*const*/ HMTypeInferrence& self, HIRPath& path) {
+            TU_MATCH(HIRPath::Data, (path.mData), (e2), (Generic, self.expandIvarsParams(e2.mParams);), (UfcsKnown, self.expandIvars(e2.type); self.expandIvarsParams(e2.trait.mParams); self.expandIvarsParams(e2.params);), (UfcsUnknown, self.expandIvars(e2.type); self.expandIvarsParams(e2.params);), (UfcsInherent, self.expandIvars(e2.type); self.expandIvarsParams(e2.params);))
         }
     };
 
@@ -793,13 +793,13 @@ void HMTypeInferrence::expandIvars(::HIR::TypeRef& type) {
     type = types.intern(std::move(data));
 }
 
-void HMTypeInferrence::expandIvarsParams(::HIR::PathParams& params) {
+void HMTypeInferrence::expandIvarsParams(HIRPathParams& params) {
     for (auto& arg : params.types) {
         expandIvars(arg);
     }
 }
 
-void HMTypeInferrence::addIvars(::HIR::TypeRef& type) {
+void HMTypeInferrence::addIvars(HIRTypeRef& type) {
     if (type->is_Infer() && type->as_Infer().index == ~0u) {
         type = newIvarTr(type->as_Infer().tyClass);
         this->markChange();
@@ -817,7 +817,7 @@ void HMTypeInferrence::addIvars(::HIR::TypeRef& type) {
         }
         TU_ARMA(Path, e) {
             // Iterate all arguments
-            TU_MATCH(::HIR::Path::Data, (e.path.mData), (e2), (Generic, this->addIvarsParams(e2.mParams);), (UfcsKnown, this->addIvars(e2.type); this->addIvarsParams(e2.trait.mParams); this->addIvarsParams(e2.params);), (UfcsUnknown, this->addIvars(e2.type); this->addIvarsParams(e2.params);), (UfcsInherent, this->addIvars(e2.type); this->addIvarsParams(e2.params);))
+            TU_MATCH(HIRPath::Data, (e.path.mData), (e2), (Generic, this->addIvarsParams(e2.mParams);), (UfcsKnown, this->addIvars(e2.type); this->addIvarsParams(e2.trait.mParams); this->addIvarsParams(e2.params);), (UfcsUnknown, this->addIvars(e2.type); this->addIvarsParams(e2.params);), (UfcsInherent, this->addIvars(e2.type); this->addIvarsParams(e2.params);))
         }
         TU_ARMA(Generic, e) {
         }
@@ -873,7 +873,7 @@ void HMTypeInferrence::addIvars(::HIR::TypeRef& type) {
     type = types.intern(std::move(data));
 }
 
-void HMTypeInferrence::addIvars(::HIR::ConstGeneric& val) {
+void HMTypeInferrence::addIvars(HIRConstGeneric& val) {
     if (val.is_Infer()) {
         if (val.as_Infer().index == ~0u) {
             val.as_Infer().index = newIvarVal();
@@ -883,7 +883,7 @@ void HMTypeInferrence::addIvars(::HIR::ConstGeneric& val) {
     }
 }
 
-void HMTypeInferrence::addIvarsParams(::HIR::PathParams& params) {
+void HMTypeInferrence::addIvarsParams(HIRPathParams& params) {
     for (auto& arg : params.types) {
         addIvars(arg);
     }
@@ -892,14 +892,14 @@ void HMTypeInferrence::addIvarsParams(::HIR::PathParams& params) {
     }
 }
 
-unsigned int HMTypeInferrence::newIvar(HIR::InferClass ic /* = HIR::InferClass::None*/) {
+unsigned int HMTypeInferrence::newIvar(HIRInferClass ic /* = HIR::InferClass::None*/) {
     auto rv = ivars.size();
     ivars.emplace_back(types.infer(rv, ic));
     DEBUG("New type IVar " << rv);
     return rv;
 }
 
-::HIR::TypeRef HMTypeInferrence::newIvarTr(HIR::InferClass ic /* = HIR::InferClass::None*/) {
+HIRTypeRef HMTypeInferrence::newIvarTr(HIRInferClass ic /* = HIR::InferClass::None*/) {
     return ivars.at(this->newIvar(ic)).type;
 }
 
@@ -909,7 +909,7 @@ unsigned int HMTypeInferrence::newIvarVal() {
     return values.size() - 1;
 }
 
-void HMTypeInferrence::setIvarValTo(unsigned int slot, ::HIR::ConstGeneric val) {
+void HMTypeInferrence::setIvarValTo(unsigned int slot, HIRConstGeneric val) {
     ASSERT_BUG(Span(), slot < values.size(), "slot " << slot << " >= " << values.size());
     ASSERT_BUG(Span(), !values[slot].isAlias(), "slot " << slot);
     if (*values[slot].val == val) {
@@ -951,7 +951,7 @@ void HMTypeInferrence::ivarValUnify(unsigned int leftSlot, unsigned int rightSlo
 //    }
 //}
 
-const ::HIR::TypeData* HMTypeInferrence::getType(const ::HIR::TypeData* type) const {
+const HIRTypeData* HMTypeInferrence::getType(const HIRTypeData* type) const {
     const auto* current = &type;
     for (size_t count = 0; count <= ivars.size(); count++) {
         const auto* e = (*current)->opt_Infer();
@@ -970,7 +970,7 @@ const ::HIR::TypeData* HMTypeInferrence::getType(const ::HIR::TypeData* type) co
     BUG(Span(), "Loop detected while resolving type " << type);
 }
 
-::HIR::TypeRef& HMTypeInferrence::getType(unsigned idx) {
+HIRTypeRef& HMTypeInferrence::getType(unsigned idx) {
     assert(idx != ~0u);
     auto* current = &getPointedIvar(idx).type;
     for (size_t count = 0; count <= ivars.size(); count++) {
@@ -988,7 +988,7 @@ const ::HIR::TypeData* HMTypeInferrence::getType(const ::HIR::TypeData* type) co
     BUG(Span(), "Loop detected while resolving type ivar " << idx);
 }
 
-const ::HIR::TypeData* HMTypeInferrence::getType(unsigned idx) const {
+const HIRTypeData* HMTypeInferrence::getType(unsigned idx) const {
     assert(idx != ~0u);
     const auto* current = &getPointedIvar(idx).type;
     for (size_t count = 0; count <= ivars.size(); count++) {
@@ -1006,7 +1006,7 @@ const ::HIR::TypeData* HMTypeInferrence::getType(unsigned idx) const {
     BUG(Span(), "Loop detected while resolving type ivar " << idx);
 }
 
-void HMTypeInferrence::setIvarTo(unsigned int slot, ::HIR::TypeRef type) {
+void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
     auto sp = Span();
     auto& rootIvar = this->getPointedIvar(slot);
     DEBUG("set_ivar_to(" << slot << " { " << rootIvar.type << " }, " << type << ")");
@@ -1014,16 +1014,16 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, ::HIR::TypeRef type) {
     // If the left type was '_', alias the right to it
     if (const auto* lE = type->opt_Infer()) {
         assert(lE->index != slot);
-        if (lE->tyClass != ::HIR::InferClass::None) {
+        if (lE->tyClass != HIRInferClass::None) {
             TU_MATCH_DEF(
-                ::HIR::TypeData,
+                HIRTypeData,
                 ((*rootIvar.type)),
                 (e),
                 (ERROR(sp, E0000, "Type unificiation of literal with invalid type - " << rootIvar.type);),
                 (Primitive, checkTypeClassPrimitive(sp, type, lE->tyClass, e);),
                 (Infer,
                  // Check for right having a ty_class
-                 if (e.tyClass != ::HIR::InferClass::None && e.tyClass != lE->tyClass) { ERROR(sp, E0000, "Unifying types with mismatching literal classes - " << type << " := " << rootIvar.type); })
+                 if (e.tyClass != HIRInferClass::None && e.tyClass != lE->tyClass) { ERROR(sp, E0000, "Unifying types with mismatching literal classes - " << type << " := " << rootIvar.type); })
             )
         }
 
@@ -1045,34 +1045,34 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, ::HIR::TypeRef type) {
 #if 1
         // TODO: Avoid needing to clone in all cases?
         struct MonomorphAddLifetimes: public Monomorphiser {
-            explicit MonomorphAddLifetimes(HIR::TypeInterner& types): Monomorphiser(types) {}
+            explicit MonomorphAddLifetimes(HIRTypeInterner& types): Monomorphiser(types) {}
 
-            ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& g) const override {
+            HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override {
                 return types.generic(g.name, g.binding);
             }
 
-            ::HIR::ConstGeneric getValue(const Span& sp, const ::HIR::GenericRef& g) const override {
+            HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override {
                 return g;
             }
 
-            ::HIR::LifetimeRef getLifetime(const Span& sp, const ::HIR::GenericRef& g) const override {
-                return HIR::LifetimeRef();
+            HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const override {
+                return HIRLifetimeRef();
             }
 
-            ::HIR::LifetimeRef monomorphLifetime(const Span& sp, const ::HIR::LifetimeRef& tpl) const override {
+            HIRLifetimeRef monomorphLifetime(const Span& sp, const HIRLifetimeRef& tpl) const override {
                 if (tpl.isParam()) {
                     return Monomorphiser::monomorphLifetime(sp, tpl);
                 }
-                return HIR::LifetimeRef();
+                return HIRLifetimeRef();
             }
 
         };
 
         type = MonomorphAddLifetimes(types).monomorphType(sp, type, true);
 #else
-        if (type->is_Borrow() && type->as_Borrow().lifetime != HIR::LifetimeRef()) {
+        if (type->is_Borrow() && type->as_Borrow().lifetime != HIRLifetimeRef()) {
             auto& t = type.getUnique();
-            t.as_Borrow().lifetime = HIR::LifetimeRef();
+            t.as_Borrow().lifetime = HIRLifetimeRef();
         }
 #endif
 
@@ -1080,10 +1080,10 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, ::HIR::TypeRef type) {
         DEBUG("Set IVar " << slot << " = " << type);
         if (const auto* e = rootIvar.type->opt_Infer()) {
             switch (e->tyClass) {
-                case ::HIR::InferClass::None:
+                case HIRInferClass::None:
                     break;
-                case ::HIR::InferClass::Integer:
-                case ::HIR::InferClass::Float:
+                case HIRInferClass::Integer:
+                case HIRInferClass::Float:
                     // `type` can't be an ivar, so it has to be a primitive (or an associated?)
                     if (const auto* lE = type->opt_Primitive()) {
                         checkTypeClassPrimitive(sp, type, e->tyClass, *lE);
@@ -1116,12 +1116,12 @@ void HMTypeInferrence::ivarUnify(unsigned int leftSlot, unsigned int rightSlot) 
         if (const auto* re = rootIvar.type->opt_Infer()) {
             DEBUG("Class unify " << leftIvar.type << " <- " << rootIvar.type);
 
-            if (re->tyClass != ::HIR::InferClass::None) {
+            if (re->tyClass != HIRInferClass::None) {
                 if (const auto* le = leftIvar.type->opt_Infer()) {
-                    if (le->tyClass != ::HIR::InferClass::None && le->tyClass != re->tyClass) {
+                    if (le->tyClass != HIRInferClass::None && le->tyClass != re->tyClass) {
                         ERROR(sp, E0000, "Unifying types with mismatching literal classes - " << leftIvar.type << " := " << rootIvar.type);
                     }
-                    if (le->tyClass == ::HIR::InferClass::None) {
+                    if (le->tyClass == HIRInferClass::None) {
                         leftIvar.type = types.infer(le->index, re->tyClass);
                     }
                 } else if (const auto* le = leftIvar.type->opt_Primitive()) {
@@ -1143,7 +1143,7 @@ void HMTypeInferrence::ivarUnify(unsigned int leftSlot, unsigned int rightSlot) 
     }
 }
 
-const ::HIR::ConstGeneric& HMTypeInferrence::getValue(const ::HIR::ConstGeneric& val) const {
+const HIRConstGeneric& HMTypeInferrence::getValue(const HIRConstGeneric& val) const {
     if (val.is_Infer()) {
         return getValue(val.as_Infer().index);
     } else {
@@ -1151,7 +1151,7 @@ const ::HIR::ConstGeneric& HMTypeInferrence::getValue(const ::HIR::ConstGeneric&
     }
 }
 
-const ::HIR::ConstGeneric& HMTypeInferrence::getValue(unsigned slot) const {
+const HIRConstGeneric& HMTypeInferrence::getValue(unsigned slot) const {
     ASSERT_BUG(Span(), slot != ~0u, "HMTypeInferrence::get_value: Value generic ivar index not assigned");
     auto index = slot;
     // Limit the iteration count to the number of ivars
@@ -1183,7 +1183,7 @@ HMTypeInferrence::IVar& HMTypeInferrence::getPointedIvar(unsigned int slot) cons
     return const_cast<IVar&>(ivars.at(index));
 }
 
-bool HMTypeInferrence::pathparamsContainIvars(const ::HIR::PathParams& pps, bool onlyUnbound) const {
+bool HMTypeInferrence::pathparamsContainIvars(const HIRPathParams& pps, bool onlyUnbound) const {
     for (const auto& ty : pps.types) {
         if (this->typeContainsIvars(ty, onlyUnbound)) {
             return true;
@@ -1192,17 +1192,17 @@ bool HMTypeInferrence::pathparamsContainIvars(const ::HIR::PathParams& pps, bool
     return false;
 }
 
-bool HMTypeInferrence::typeContainsIvars(const ::HIR::TypeData* ty, bool onlyUnbound) const {
+bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound) const {
     if (!ty->hasTypeInfer()) {
         return false;
     }
     TRACE_FUNCTION_F("ty = " << ty);
-    auto pathContainsIvars = [this](const HIR::Path& path, bool onlyUnbound) {
-        TU_MATCH(::HIR::Path::Data, (path.mData), (pe), (Generic, return this->pathparamsContainIvars(pe.mParams, onlyUnbound);), (UfcsKnown, if (this->typeContainsIvars(pe.type, onlyUnbound)) return true; if (this->pathparamsContainIvars(pe.trait.mParams, onlyUnbound)) return true; return this->pathparamsContainIvars(pe.params, onlyUnbound);), (UfcsInherent, if (this->typeContainsIvars(pe.type, onlyUnbound)) return true; return this->pathparamsContainIvars(pe.params, onlyUnbound);), (UfcsUnknown, BUG(Span(), "UfcsUnknown");))
+    auto pathContainsIvars = [this](const HIRPath& path, bool onlyUnbound) {
+        TU_MATCH(HIRPath::Data, (path.mData), (pe), (Generic, return this->pathparamsContainIvars(pe.mParams, onlyUnbound);), (UfcsKnown, if (this->typeContainsIvars(pe.type, onlyUnbound)) return true; if (this->pathparamsContainIvars(pe.trait.mParams, onlyUnbound)) return true; return this->pathparamsContainIvars(pe.params, onlyUnbound);), (UfcsInherent, if (this->typeContainsIvars(pe.type, onlyUnbound)) return true; return this->pathparamsContainIvars(pe.params, onlyUnbound);), (UfcsUnknown, BUG(Span(), "UfcsUnknown");))
         throw "";
     };
     //TU_MATCH(::HIR::TypeData, (this->get_type(ty).m_data), (e),
-    TU_MATCH(::HIR::TypeData, (*ty), (e),
+    TU_MATCH(HIRTypeData, (*ty), (e),
     (Infer,
         if( onlyUnbound ) {
         return e.index == ~0u;
@@ -1271,7 +1271,7 @@ TU_ARMA(Alias, ee) {
         }
 
         namespace {
-            bool typeListEqual(const HMTypeInferrence& context, const ::std::vector<::HIR::TypeRef>& l, const ::std::vector<::HIR::TypeRef>& r) {
+            bool typeListEqual(const HMTypeInferrence& context, const ::std::vector<HIRTypeRef>& l, const ::std::vector<HIRTypeRef>& r) {
                 if (l.size() != r.size()) {
                     return false;
                 }
@@ -1284,7 +1284,7 @@ TU_ARMA(Alias, ee) {
                 return true;
             }
 
-            bool typeListEqual(const HMTypeInferrence& context, const ThinVector<::HIR::TypeRef>& l, const ThinVector<::HIR::TypeRef>& r) {
+            bool typeListEqual(const HMTypeInferrence& context, const ThinVector<HIRTypeRef>& l, const ThinVector<HIRTypeRef>& r) {
                 if (l.size() != r.size()) {
                     return false;
                 }
@@ -1298,11 +1298,11 @@ TU_ARMA(Alias, ee) {
             }
         }
 
-        bool HMTypeInferrence::pathparamsEqual(const ::HIR::PathParams& ppsL, const ::HIR::PathParams& ppsR) const {
+        bool HMTypeInferrence::pathparamsEqual(const HIRPathParams& ppsL, const HIRPathParams& ppsR) const {
             return typeListEqual(*this, ppsL.types, ppsR.types);
         }
 
-        bool HMTypeInferrence::typesEqual(const ::HIR::TypeData* rl, const ::HIR::TypeData* rr) const {
+        bool HMTypeInferrence::typesEqual(const HIRTypeData* rl, const HIRTypeData* rr) const {
             const auto& l = this->getType(rl);
             const auto& r = this->getType(rr);
             if (l->tag() != r->tag()) {
@@ -1310,16 +1310,16 @@ TU_ARMA(Alias, ee) {
             }
 
             struct H {
-                static bool comparePath(const HMTypeInferrence& self, const ::HIR::Path& l, const ::HIR::Path& r) {
+                static bool comparePath(const HMTypeInferrence& self, const HIRPath& l, const HIRPath& r) {
                     if (l.mData.tag() != r.mData.tag()) {
                         return false;
                     }
-                    TU_MATCH(::HIR::Path::Data, (l.mData, r.mData), (lpe, rpe), (Generic, if (lpe.mPath != rpe.mPath) return false; return self.pathparamsEqual(lpe.mParams, rpe.mParams);), (UfcsKnown, if (lpe.item != rpe.item) return false; if (!self.typesEqual(lpe.type, rpe.type)) return false; if (!self.pathparamsEqual(lpe.trait.mParams, rpe.trait.mParams)) return false; return self.pathparamsEqual(lpe.params, rpe.params);), (UfcsInherent, if (lpe.item != rpe.item) return false; if (!self.typesEqual(lpe.type, rpe.type)) return false; return self.pathparamsEqual(lpe.params, rpe.params);), (UfcsUnknown, BUG(Span(), "UfcsUnknown");))
+                    TU_MATCH(HIRPath::Data, (l.mData, r.mData), (lpe, rpe), (Generic, if (lpe.mPath != rpe.mPath) return false; return self.pathparamsEqual(lpe.mParams, rpe.mParams);), (UfcsKnown, if (lpe.item != rpe.item) return false; if (!self.typesEqual(lpe.type, rpe.type)) return false; if (!self.pathparamsEqual(lpe.trait.mParams, rpe.trait.mParams)) return false; return self.pathparamsEqual(lpe.params, rpe.params);), (UfcsInherent, if (lpe.item != rpe.item) return false; if (!self.typesEqual(lpe.type, rpe.type)) return false; return self.pathparamsEqual(lpe.params, rpe.params);), (UfcsUnknown, BUG(Span(), "UfcsUnknown");))
                     throw "";
                 }
             };
 
-    TU_MATCH(::HIR::TypeData, (*l, *r), (le, re),
+    TU_MATCH(HIRTypeData, (*l, *r), (le, re),
     (Infer, return le.index == re.index; ),
     (Primitive, return le == re; ),
     (Diverge, return true; ),
@@ -1380,8 +1380,8 @@ TU_ARMA(Alias, ee) {
             return false;
         TU_MATCH_HDRA( (le.inner, re.inner), {)
         TU_ARMA(Fcn, l,r) {
-            ASSERT_BUG(Span(), l.origin != ::HIR::SimplePath(), "Erased type with unset origin");
-            ASSERT_BUG(Span(), r.origin != ::HIR::SimplePath(), "Erased type with unset origin");
+            ASSERT_BUG(Span(), l.origin != HIRSimplePath(), "Erased type with unset origin");
+            ASSERT_BUG(Span(), r.origin != HIRSimplePath(), "Erased type with unset origin");
             return H::comparePath(*this, l.origin, r.origin);
         }
 
@@ -1409,41 +1409,41 @@ TU_ARMA(Alias, ee) {
         // --------------------------------------------------------------------
 
         namespace {
-            ::HIR::Compare compareValue(const Span& sp, const ::HIR::ConstGeneric& leftRaw, const ::HIR::ConstGeneric& rightRaw, const HMTypeInferrence& infer) {
+            HIRCompare compareValue(const Span& sp, const HIRConstGeneric& leftRaw, const HIRConstGeneric& rightRaw, const HMTypeInferrence& infer) {
                 const auto& left = leftRaw.is_Infer() ? infer.getValue(leftRaw.as_Infer().index) : leftRaw;
                 const auto& right = rightRaw.is_Infer() ? infer.getValue(rightRaw.as_Infer().index) : rightRaw;
                 if (left == right) {
-                    return ::HIR::Compare::Equal;
+                    return HIRCompare::Equal;
                 }
                 if (left.is_Infer() || right.is_Infer()) {
-                    return ::HIR::Compare::Fuzzy;
+                    return HIRCompare::Fuzzy;
                 }
                 if (left.is_Generic() && left.as_Generic().isPlaceholder()) {
-                    return ::HIR::Compare::Fuzzy;
+                    return HIRCompare::Fuzzy;
                 }
                 if (right.is_Generic() && right.as_Generic().isPlaceholder()) {
-                    return ::HIR::Compare::Fuzzy;
+                    return HIRCompare::Fuzzy;
                 }
                 //TODO(sp, "compare_value: " << left << " == " << right);
-                return ::HIR::Compare::Unequal;
+                return HIRCompare::Unequal;
             }
         }
 
-        ::HIR::Compare TraitResolution::comparePp(const Span& sp, const ::HIR::PathParams& left, const ::HIR::PathParams& right) const {
+        HIRCompare TraitResolution::comparePp(const Span& sp, const HIRPathParams& left, const HIRPathParams& right) const {
             ASSERT_BUG(sp, left.types.size() == right.types.size(), "Parameter count mismatch - `" << left << "` vs `" << right << "`");
             ASSERT_BUG(sp, left.values.size() == right.values.size(), "Parameter count mismatch - `" << left << "` vs `" << right << "`");
-            ::HIR::Compare ord = ::HIR::Compare::Equal;
+            HIRCompare ord = HIRCompare::Equal;
             for (unsigned int i = 0; i < left.types.size(); i++) {
                 // TODO: Should allow fuzzy matches using placeholders (match_test_generics_fuzz works for that)
                 // - Better solution is to remove the placeholders in method searching.
                 ord &= left.types[i]->compareWithPlaceholders(sp, right.types[i], this->ivars.callbackResolveInfer());
-                if (ord == ::HIR::Compare::Unequal) {
+                if (ord == HIRCompare::Unequal) {
                     return ord;
                 }
             }
             for (unsigned int i = 0; i < left.values.size(); i++) {
                 ord &= compareValue(sp, left.values[i], right.values[i], this->ivars);
-                if (ord == ::HIR::Compare::Unequal) {
+                if (ord == HIRCompare::Unequal) {
                     return ord;
                 }
             }
@@ -1453,8 +1453,8 @@ TU_ARMA(Alias, ee) {
         // -------------------------------------------------------------------------------------------------------------------
         //
         // -------------------------------------------------------------------------------------------------------------------
-        bool TraitResolution::iterateBoundsTraits(const Span& sp, const HIR::TypeData* type, const HIR::SimplePath& trait, tCbBound cb) const {
-            return iterateBoundsTraits(sp, type, [&](HIR::Compare cmp, const HIR::TypeData* t, const HIR::GenericPath& tr, const CachedBound& b) {
+        bool TraitResolution::iterateBoundsTraits(const Span& sp, const HIRTypeData* type, const HIRSimplePath& trait, tCbBound cb) const {
+            return iterateBoundsTraits(sp, type, [&](HIRCompare cmp, const HIRTypeData* t, const HIRGenericPath& tr, const CachedBound& b) {
                 if (tr.mPath != trait) {
                     return false;
                 }
@@ -1462,10 +1462,10 @@ TU_ARMA(Alias, ee) {
             });
         }
 
-        bool TraitResolution::iterateBoundsTraits(const Span& sp, const HIR::TypeData* type, tCbBound cb) const {
+        bool TraitResolution::iterateBoundsTraits(const Span& sp, const HIRTypeData* type, tCbBound cb) const {
             for (const auto& b : traitBounds) {
                 auto cmp = b.first.first->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
-                if (cmp == HIR::Compare::Unequal) {
+                if (cmp == HIRCompare::Unequal) {
                     continue;
                 }
                 if (cb(cmp, b.first.first, b.first.second, b.second)) {
@@ -1477,15 +1477,15 @@ TU_ARMA(Alias, ee) {
 
         bool TraitResolution::iterateBoundsTraits(const Span& sp, tCbBound cb) const {
             for (const auto& b : traitBounds) {
-                if (cb(HIR::Compare::Equal, b.first.first, b.first.second, b.second)) {
+                if (cb(HIRCompare::Equal, b.first.first, b.first.second, b.second)) {
                     return true;
                 }
             }
             return false;
         }
 
-        bool TraitResolution::iterateAtyBounds(const Span& sp, const ::HIR::Path::Data::Data_UfcsKnown& pe, ::std::function<bool(const ::HIR::TraitPath&)> cb) const {
-            ::HIR::GenericPath traitPath;
+        bool TraitResolution::iterateAtyBounds(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, ::std::function<bool(const HIRTraitPath&)> cb) const {
+            HIRGenericPath traitPath;
             DEBUG("Checking ATY bounds on " << pe.trait << " :: " << pe.item);
             if (!this->traitContainsType(sp, pe.trait, this->crate.getTraitByPath(sp, pe.trait.mPath), pe.item.c_str(), traitPath)) {
                 BUG(sp, "Cannot find associated type " << pe.item << " anywhere in trait " << pe.trait);
@@ -1532,9 +1532,9 @@ TU_ARMA(Alias, ee) {
             return false;
         }
 
-        bool TraitResolution::findTraitImplsMagic(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams& params, const ::HIR::TypeData* ty, tCbTraitImplR callback) const {
-            static ::HIR::PathParams nullParams;
-            static ::HIR::TraitPath::assocListT nullAssoc;
+        bool TraitResolution::findTraitImplsMagic(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* ty, tCbTraitImplR callback) const {
+            static HIRPathParams nullParams;
+            static HIRTraitPath::assocListT nullAssoc;
 
             const auto langCoerceUnsized = this->crate.getLangItemPathOpt("coerce_unsized");
             const auto langFnPtr = this->crate.getLangItemPathOpt("fn_ptr_trait");
@@ -1545,7 +1545,7 @@ TU_ARMA(Alias, ee) {
 
             if (trait == mLangSized) {
                 auto cmp = typeIsSized(sp, type);
-                if (cmp != ::HIR::Compare::Unequal) {
+                if (cmp != HIRCompare::Unequal) {
                     return callback(ImplRef(type, &nullParams, &nullAssoc), cmp);
                 } else {
                     return false;
@@ -1554,7 +1554,7 @@ TU_ARMA(Alias, ee) {
 
             if (trait == mLangCopy) {
                 auto cmp = this->typeIsCopy(sp, type);
-                if (cmp != ::HIR::Compare::Unequal) {
+                if (cmp != HIRCompare::Unequal) {
                     return callback(ImplRef(type, &nullParams, &nullAssoc), cmp);
                 } else {
                     return false;
@@ -1563,7 +1563,7 @@ TU_ARMA(Alias, ee) {
 
             if (!langFnPtr.components().empty() && trait == langFnPtr) {
                 if (type->is_Function()) {
-                    return callback(ImplRef(type, &nullParams, &nullAssoc), HIR::Compare::Equal);
+                    return callback(ImplRef(type, &nullParams, &nullAssoc), HIRCompare::Equal);
                 }
             }
 
@@ -1575,7 +1575,7 @@ TU_ARMA(Alias, ee) {
                     || type->is_NamedFunction()
                     || TU_TEST1(*type, Path, .isClosure()))) {
                 auto cmp = this->typeIsClone(sp, type);
-                if (cmp != ::HIR::Compare::Unequal) {
+                if (cmp != HIRCompare::Unequal) {
                     return callback(ImplRef(type, &nullParams, &nullAssoc), cmp);
                 } else {
                     return false;
@@ -1589,37 +1589,37 @@ TU_ARMA(Alias, ee) {
 
                 if (type->is_Infer() || (type->is_Path() && type->as_Path().binding.is_Unbound())) {
                     // TODO: How to prevent EAT from expanding (or setting opaque) too early?
-                    return callback(ImplRef(type, HIR::PathParams(), ::HIR::TraitPath::assocListT()), ::HIR::Compare::Fuzzy);
+                    return callback(ImplRef(type, HIRPathParams(), HIRTraitPath::assocListT()), HIRCompare::Fuzzy);
                 } else if (type->is_Generic() || (type->is_Path() && type->as_Path().binding.is_Opaque())) {
-                    ::HIR::TraitPath::assocListT assocList;
-                    assocList.insert(std::make_pair(nameDiscriminant, HIR::TraitPath::AtyEqual{trait, {}, crate.types.path(HIR::Path(type, trait.clone(), nameDiscriminant), HIR::TypePathBinding::make_Opaque({}))}));
-                    return callback(ImplRef(type, HIR::PathParams(), ::HIR::TraitPath::assocListT()), ::HIR::Compare::Equal);
+                    HIRTraitPath::assocListT assocList;
+                    assocList.insert(std::make_pair(nameDiscriminant, HIRTraitPath::AtyEqual{trait, {}, crate.types.path(HIRPath(type, trait.clone(), nameDiscriminant), HIRTypePathBinding::make_Opaque({}))}));
+                    return callback(ImplRef(type, HIRPathParams(), HIRTraitPath::assocListT()), HIRCompare::Equal);
                     //return false;
                 } else if (type->is_Path() && type->as_Path().binding.is_Enum()) {
                     const auto& enm = *type->as_Path().binding.as_Enum();
-                    HIR::TypeRef tagTy = crate.types.primitive(enm.getReprType(enm.tagRepr));
-                    ::HIR::TraitPath::assocListT assocList;
-                    assocList.insert(std::make_pair(nameDiscriminant, HIR::TraitPath::AtyEqual{trait, {}, std::move(tagTy)}));
-                    return callback(ImplRef(type, {}, std::move(assocList)), ::HIR::Compare::Equal);
+                    HIRTypeRef tagTy = crate.types.primitive(enm.getReprType(enm.tagRepr));
+                    HIRTraitPath::assocListT assocList;
+                    assocList.insert(std::make_pair(nameDiscriminant, HIRTraitPath::AtyEqual{trait, {}, std::move(tagTy)}));
+                    return callback(ImplRef(type, {}, std::move(assocList)), HIRCompare::Equal);
                 } else {
-                    ::HIR::TraitPath::assocListT assocList;
-                    assocList.insert(std::make_pair(nameDiscriminant, HIR::TraitPath::AtyEqual{trait, {}, crate.types.primitive(HIR::CoreType::U8)}));
-                    return callback(ImplRef(type, {}, std::move(assocList)), ::HIR::Compare::Equal);
+                    HIRTraitPath::assocListT assocList;
+                    assocList.insert(std::make_pair(nameDiscriminant, HIRTraitPath::AtyEqual{trait, {}, crate.types.primitive(HIRCoreType::U8)}));
+                    return callback(ImplRef(type, {}, std::move(assocList)), HIRCompare::Equal);
                 }
             }
             if (!mLangPointee.components().empty() && trait == mLangPointee) {
                 static auto nameMetadata = RcString::newInterned("Metadata");
                 // TODO: This logic is near identical to the logic in `static.cpp` - can it be de-duplicated?
 
-                HIR::TypeRef metaTy = crate.types.infer();
+                HIRTypeRef metaTy = crate.types.infer();
                 bool hasMetaTy = false;
                 if (type->is_Infer() || (type->is_Path() && type->as_Path().binding.is_Unbound())) {
-                    return callback(ImplRef(type, HIR::PathParams(), ::HIR::TraitPath::assocListT()), ::HIR::Compare::Fuzzy);
+                    return callback(ImplRef(type, HIRPathParams(), HIRTraitPath::assocListT()), HIRCompare::Fuzzy);
                 }
                 // Generics (or opaque ATYs)
                 else if (type->is_Generic() || (type->is_Path() && type->as_Path().binding.is_Opaque())) {
                     // If the type is `Sized` return `()` as the type
-                    if (typeIsSized(sp, type) != HIR::Compare::Unequal) {
+                    if (typeIsSized(sp, type) != HIRCompare::Unequal) {
                         metaTy = crate.types.unit();
                         hasMetaTy = true;
                     } else {
@@ -1629,25 +1629,25 @@ TU_ARMA(Alias, ee) {
                 }
                 // Trait object: `Metadata=DynMetadata<T>`
                 else if (type->is_TraitObject()) {
-                    metaTy = crate.types.path(::HIR::Path(::HIR::GenericPath(this->crate.getLangItemPath(sp, "dyn_metadata"), HIR::PathParams(type))), HIR::TypePathBinding::make_Struct(&crate.getStructByPath(sp, this->crate.getLangItemPath(sp, "dyn_metadata"))));
+                    metaTy = crate.types.path(HIRPath(HIRGenericPath(this->crate.getLangItemPath(sp, "dyn_metadata"), HIRPathParams(type))), HIRTypePathBinding::make_Struct(&crate.getStructByPath(sp, this->crate.getLangItemPath(sp, "dyn_metadata"))));
                     hasMetaTy = true;
                 }
                 // Slice and str
-                else if (type->is_Slice() || TU_TEST1(*type, Primitive, == HIR::CoreType::Str)) {
-                    metaTy = crate.types.primitive(HIR::CoreType::Usize);
+                else if (type->is_Slice() || TU_TEST1(*type, Primitive, == HIRCoreType::Str)) {
+                    metaTy = crate.types.primitive(HIRCoreType::Usize);
                     hasMetaTy = true;
                 }
                 // Structs: Can delegate their metadata
                 else if (type->is_Path() && type->as_Path().binding.is_Struct()) {
                     const auto& str = *type->as_Path().binding.as_Struct();
                     switch (str.structMarkings.dstType) {
-                        case HIR::StructMarkings::DstType::None:
+                        case HIRStructMarkings::DstType::None:
                             metaTy = crate.types.unit();
                             hasMetaTy = true;
                             break;
-                        case HIR::StructMarkings::DstType::Possible:
-                        case HIR::StructMarkings::DstType::TraitObject: {
-                            const ::HIR::TypeData* tailTpl = nullptr;
+                        case HIRStructMarkings::DstType::Possible:
+                        case HIRStructMarkings::DstType::TraitObject: {
+                            const HIRTypeData* tailTpl = nullptr;
                             TU_MATCHA((str.mData), (se),
                                 (Unit, BUG(sp, "Unsized unit struct in Pointee lookup - " << type);),
                                 (Tuple, ASSERT_BUG(sp, !se.empty(), "Unsized tuple struct without fields - " << type); tailTpl = se.back().ent;),
@@ -1659,17 +1659,17 @@ TU_ARMA(Alias, ee) {
                             auto tailTy = MonomorphStatePtr(crate.types, type, &path.mParams, nullptr).monomorphType(sp, tailTpl);
                             tailTy = this->expandAssociatedTypes(sp, std::move(tailTy));
 
-                            return this->findTraitImpls(sp, trait, params, tailTy, [&](ImplRef impl, HIR::Compare cmp) {
-                                ::HIR::TraitPath::assocListT assoc;
+                            return this->findTraitImpls(sp, trait, params, tailTy, [&](ImplRef impl, HIRCompare cmp) {
+                                HIRTraitPath::assocListT assoc;
                                 auto metadataTy = impl.getType(crate.types, "Metadata", {});
                                 if (metadataTy) {
-                                    assoc.insert(std::make_pair(nameMetadata, HIR::TraitPath::AtyEqual{trait, {}, std::move(metadataTy)}));
+                                    assoc.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{trait, {}, std::move(metadataTy)}));
                                 }
                                 return callback(ImplRef(type, params.clone(), std::move(assoc)), cmp);
                             });
                         }
-                        case HIR::StructMarkings::DstType::Slice:
-                            metaTy = crate.types.primitive(HIR::CoreType::Usize);
+                        case HIRStructMarkings::DstType::Slice:
+                            metaTy = crate.types.primitive(HIRCoreType::Usize);
                             hasMetaTy = true;
                             break;
                     }
@@ -1678,22 +1678,22 @@ TU_ARMA(Alias, ee) {
                     hasMetaTy = true;
                 }
                 DEBUG("<" << type << " as Pointee>::Metadata = " << metaTy);
-                ::HIR::TraitPath::assocListT assocList;
+                HIRTraitPath::assocListT assocList;
                 if (hasMetaTy) {
-                    assocList.insert(std::make_pair(RcString::newInterned("Metadata"), HIR::TraitPath::AtyEqual{trait, {}, mv$(metaTy)}));
+                    assocList.insert(std::make_pair(RcString::newInterned("Metadata"), HIRTraitPath::AtyEqual{trait, {}, mv$(metaTy)}));
                 }
 
-                return callback(ImplRef(type, {}, std::move(assocList)), ::HIR::Compare::Equal);
+                return callback(ImplRef(type, {}, std::move(assocList)), HIRCompare::Equal);
             }
             // - `Tuple`
             if (!langTuple.components().empty() && trait == langTuple) {
                 // Fuzzy impl for `_` and unbound ATYs
                 if (type->is_Infer() || (type->is_Path() && type->as_Path().binding.is_Unbound())) {
-                    return callback(ImplRef(type, HIR::PathParams(), ::HIR::TraitPath::assocListT()), ::HIR::Compare::Fuzzy);
+                    return callback(ImplRef(type, HIRPathParams(), HIRTraitPath::assocListT()), HIRCompare::Fuzzy);
                 }
                 // Impl for tuples
                 if (type->is_Tuple()) {
-                    return callback(ImplRef(type, {}, ::HIR::TraitPath::assocListT()), ::HIR::Compare::Equal);
+                    return callback(ImplRef(type, {}, HIRTraitPath::assocListT()), HIRCompare::Equal);
                 }
                 // No impls for anything else
                 return false;
@@ -1710,8 +1710,8 @@ TU_ARMA(Alias, ee) {
 
                 bool rv = false;
                 auto cb = [&](auto newDst) {
-                    ::HIR::PathParams realParams{mv$(newDst)};
-                    rv = callback(ImplRef(type, mv$(realParams), {}), ::HIR::Compare::Fuzzy);
+                    HIRPathParams realParams{mv$(newDst)};
+                    rv = callback(ImplRef(type, mv$(realParams), {}), HIRCompare::Fuzzy);
                 };
                 //if( dst_ty->is_Infer() || type->is_Infer() )
                 //{
@@ -1719,9 +1719,9 @@ TU_ARMA(Alias, ee) {
                 //    return rv;
                 //}
                 auto cmp = this->canUnsize(sp, dstTy, type, cb);
-                if (cmp == ::HIR::Compare::Equal) {
+                if (cmp == HIRCompare::Equal) {
                     assert(!rv);
-                    rv = callback(ImplRef(type, params.clone(), {}), ::HIR::Compare::Equal);
+                    rv = callback(ImplRef(type, params.clone(), {}), HIRCompare::Equal);
                 }
                 return rv;
             }
@@ -1738,8 +1738,8 @@ TU_ARMA(Alias, ee) {
                     if (const auto* de = dstTy->opt_Pointer()) {
                         if (de->type < e->type) {
                             auto cmp = e->inner->compareWithPlaceholders(sp, de->inner, this->ivars.callbackResolveInfer());
-                            if (cmp != ::HIR::Compare::Unequal) {
-                                ::HIR::PathParams pp;
+                            if (cmp != HIRCompare::Unequal) {
+                                HIRPathParams pp;
                                 pp.types.push_back(dstTy);
                                 if (callback(ImplRef(type, mv$(pp), {}), cmp)) {
                                     return true;
@@ -1753,7 +1753,7 @@ TU_ARMA(Alias, ee) {
                     return true;
                 }
                 // Lowest level of sizedness: This _might_ be sized (i.e. it's not an extern type?)
-                return callback(ImplRef(type, {}, ::HIR::TraitPath::assocListT()), ::HIR::Compare::Equal);
+                return callback(ImplRef(type, {}, HIRTraitPath::assocListT()), HIRCompare::Equal);
             } else if (trait == mLangMetaSized) {
                 TODO(sp, "MetaSized");
                 // Next level of sizedness: There's metadata that allows getting the size
@@ -1777,13 +1777,13 @@ TU_ARMA(Alias, ee) {
                     return true;
                 }
                 // Lowest level of sizedness: This _might_ be sized (i.e. it's not an extern type?)
-                return callback(ImplRef(type, {}, ::HIR::TraitPath::assocListT()), ::HIR::Compare::Equal);
+                return callback(ImplRef(type, {}, HIRTraitPath::assocListT()), HIRCompare::Equal);
             }
 
             return false;
         }
 
-        bool TraitResolution::findTraitImplsTypes(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams& params, const ::HIR::TypeData* type, tCbTraitImplR callback) const {
+        bool TraitResolution::findTraitImplsTypes(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback) const {
     TU_MATCH_HDRA( (*type), {)
     default:
         break;
@@ -1805,25 +1805,25 @@ TU_ARMA(Alias, ee) {
                             return false;
                         }
 
-                        auto cmp = ::HIR::Compare::Equal;
-                        ::std::vector<::HIR::TypeRef> args;
+                        auto cmp = HIRCompare::Equal;
+                        ::std::vector<HIRTypeRef> args;
                         for (unsigned int i = 0; i < nodeP->mArgs.size(); i++) {
                             const auto& at = nodeP->mArgs[i].second;
                             args.push_back(at);
                             DEBUG(at << " ?= " << argsDes[i]);
                             cmp &= at->compareWithPlaceholders(sp, argsDes[i], this->ivars.callbackResolveInfer());
                         }
-                        if (cmp != ::HIR::Compare::Unequal) {
+                        if (cmp != HIRCompare::Unequal) {
                             // NOTE: This is a conditional "true", we know nothing about the move/mut-ness of this closure yet
                             // - Could we?
                             // - Not until after the first stage of typeck
 
                             DEBUG("Closure Fn* impl - cmp = " << cmp);
 
-                            ::HIR::PathParams pp;
+                            HIRPathParams pp;
                             pp.types.push_back(crate.types.tuple(mv$(args)));
-                            ::HIR::TraitPath::assocListT types;
-                            types.insert(::std::make_pair("Output", ::HIR::TraitPath::AtyEqual{::HIR::GenericPath(mLangFnOnce, pp.clone()), {}, nodeP->returnType}));
+                            HIRTraitPath::assocListT types;
+                            types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, pp.clone()), {}, nodeP->returnType}));
                             return callback(ImplRef(type, mv$(pp), mv$(types)), cmp);
                         } else {
                             DEBUG("Closure Fn* impl - cmp = Compare::Unequal");
@@ -1835,20 +1835,20 @@ TU_ARMA(Alias, ee) {
                     if (trait == mLangGenerator) {
                         static const RcString rcstringYield = RcString::newInterned("Yield");
                         static const RcString rcstringReturn = RcString::newInterned("Return");
-                        ::HIR::TraitPath::assocListT assoc;
-                        assoc.insert(::std::make_pair(rcstringYield, ::HIR::TraitPath::AtyEqual{trait.clone(), {}, nodeP->yieldTy}));
-                        assoc.insert(::std::make_pair(rcstringReturn, ::HIR::TraitPath::AtyEqual{trait.clone(), {}, nodeP->returnType}));
-                        HIR::PathParams params;
+                        HIRTraitPath::assocListT assoc;
+                        assoc.insert(::std::make_pair(rcstringYield, HIRTraitPath::AtyEqual{trait.clone(), {}, nodeP->yieldTy}));
+                        assoc.insert(::std::make_pair(rcstringReturn, HIRTraitPath::AtyEqual{trait.clone(), {}, nodeP->returnType}));
+                        HIRPathParams params;
                         params.types.push_back(nodeP->resumeTy);
-                        return callback(ImplRef(type, mv$(params), mv$(assoc)), ::HIR::Compare::Equal);
+                        return callback(ImplRef(type, mv$(params), mv$(assoc)), HIRCompare::Equal);
                     }
                 }
                 TU_ARMA(Async, nodeP) {
                     if (trait == mLangFuture) {
                         static const RcString rcstringOutput = RcString::newInterned("Output");
-                        ::HIR::TraitPath::assocListT assoc;
-                        assoc.insert(::std::make_pair(rcstringOutput, ::HIR::TraitPath::AtyEqual{trait.clone(), {}, nodeP->mCode->resType}));
-                        return callback(ImplRef(type, {}, mv$(assoc)), ::HIR::Compare::Equal);
+                        HIRTraitPath::assocListT assoc;
+                        assoc.insert(::std::make_pair(rcstringOutput, HIRTraitPath::AtyEqual{trait.clone(), {}, nodeP->mCode->resType}));
+                        return callback(ImplRef(type, {}, mv$(assoc)), HIRCompare::Equal);
                     }
                 }
         }
@@ -1875,18 +1875,18 @@ TU_ARMA(Alias, ee) {
                 }
                 DEBUG("- Magic impl of Fn* for " << type);
 
-                auto cmp = ::HIR::Compare::Equal;
-                ::std::vector<::HIR::TypeRef> args;
+                auto cmp = HIRCompare::Equal;
+                ::std::vector<HIRTypeRef> args;
                 for (unsigned int i = 0; i < e.argTypes.size(); i++) {
                     const auto& at = e.argTypes[i];
                     args.push_back(at);
                     cmp &= at->compareWithPlaceholders(sp, argsDes[i], this->ivars.callbackResolveInfer());
                 }
 
-                ::HIR::PathParams pp;
+                HIRPathParams pp;
                 pp.types.push_back(crate.types.tuple(mv$(args)));
-                ::HIR::TraitPath::assocListT types;
-                types.insert(::std::make_pair("Output", ::HIR::TraitPath::AtyEqual{::HIR::GenericPath(mLangFnOnce, pp.clone()), {}, e.mRettype}));
+                HIRTraitPath::assocListT types;
+                types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, pp.clone()), {}, e.mRettype}));
                 auto hrls = getHrls(crate.types, sp, e.hrls, pp, params);
                 return callback(ImplRef(std::move(hrls), type, mv$(pp), mv$(types)), cmp);
             }
@@ -1920,18 +1920,18 @@ TU_ARMA(Alias, ee) {
                 }
                 DEBUG("- Magic impl of Fn* for " << type);
 
-                auto cmp = ::HIR::Compare::Equal;
-                ::std::vector<::HIR::TypeRef> args;
+                auto cmp = HIRCompare::Equal;
+                ::std::vector<HIRTypeRef> args;
                 for (unsigned int i = 0; i < e.argTypes.size(); i++) {
                     const auto& at = e.argTypes[i];
                     args.push_back(at);
                     cmp &= at->compareWithPlaceholders(sp, argsDes[i], this->ivars.callbackResolveInfer());
                 }
 
-                ::HIR::PathParams pp;
+                HIRPathParams pp;
                 pp.types.push_back(crate.types.tuple(mv$(args)));
-                ::HIR::TraitPath::assocListT types;
-                types.insert(::std::make_pair("Output", ::HIR::TraitPath::AtyEqual{::HIR::GenericPath(mLangFnOnce, pp.clone()), {}, e.mRettype}));
+                HIRTraitPath::assocListT types;
+                types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, pp.clone()), {}, e.mRettype}));
                 auto hrls = getHrls(crate.types, sp, e.hrls, pp, params);
                 return callback(ImplRef(std::move(hrls), type, mv$(pp), mv$(types)), cmp);
             }
@@ -1946,16 +1946,16 @@ TU_ARMA(Alias, ee) {
 
         bool TraitResolution::findTraitImplsLegacy(
             const Span& sp,
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* ty,
+            const HIRSimplePath& trait,
+            const HIRPathParams& params,
+            const HIRTypeData* ty,
             tCbTraitImplR callback,
             bool magicTraitImpls /*=true*/,
             bool searchCrate /*=true*/,
             bool searchBounds /*=true*/
         ) const {
-            static ::HIR::PathParams nullParams;
-            static ::HIR::TraitPath::assocListT nullAssoc;
+            static HIRPathParams nullParams;
+            static HIRTraitPath::assocListT nullAssoc;
 
             const auto& type = this->ivars.getType(ty);
             TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
@@ -1983,7 +1983,7 @@ TU_ARMA(Alias, ee) {
         TU_ARMA(TraitObject, e) {
             if (trait == e.mTrait.mPath.mPath) {
                 auto cmp = comparePp(sp, e.mTrait.mPath.mParams, params);
-                if (cmp != ::HIR::Compare::Unequal) {
+                if (cmp != HIRCompare::Unequal) {
                     DEBUG("TraitObject impl params" << e.mTrait.mPath.mParams);
                     auto hrls = getHrls(crate.types, sp, e.mTrait.hrtbs, e.mTrait.mPath.mParams, params);
                     return callback(ImplRef(std::move(hrls), type, &e.mTrait.mPath.mParams, &e.mTrait.typeBounds, e.mTrait.constness), cmp);
@@ -1993,24 +1993,24 @@ TU_ARMA(Alias, ee) {
             for (const auto& mt : e.markers) {
                 if (trait == mt.mPath) {
                     auto cmp = comparePp(sp, mt.mParams, params);
-                    if (cmp != ::HIR::Compare::Unequal) {
+                    if (cmp != HIRCompare::Unequal) {
                         //auto hrls = get_hrls(sp, e.m_trait.m_hrtbs, e.m_trait.m_path.m_params, params);
-                        return callback(ImplRef(HIR::PathParams(), type, &mt.mParams, &nullAssoc), cmp);
+                        return callback(ImplRef(HIRPathParams(), type, &mt.mParams, &nullAssoc), cmp);
                     }
                 }
             }
 
-            if (e.mTrait.mPath.mPath != HIR::SimplePath()) {
+            if (e.mTrait.mPath.mPath != HIRSimplePath()) {
                 // - Check if the desired trait is a supertrait of this.
                 // NOTE: `params` (aka des_params) is not used (TODO)
                 bool rv = false;
                 bool isSupertrait = false;
-                this->findNamedTraitInTrait(sp, trait, params, *e.mTrait.traitPtr, e.mTrait.mPath.mPath, e.mTrait.mPath.mParams, type, [&](const HIR::TraitPath& iTp) {
+                this->findNamedTraitInTrait(sp, trait, params, *e.mTrait.traitPtr, e.mTrait.mPath.mPath, e.mTrait.mPath.mParams, type, [&](const HIRTraitPath& iTp) {
                     // The above is just the monomorphised params and associated set. Comparison is still needed.
                     auto cmp = this->comparePp(sp, iTp.mPath.mParams, params);
-                    if (cmp != ::HIR::Compare::Unequal) {
+                    if (cmp != HIRCompare::Unequal) {
                         // Invoke callback with a proper ImplRef
-                        ::HIR::TraitPath::assocListT assocClone;
+                        HIRTraitPath::assocListT assocClone;
                         for (const auto& e : iTp.typeBounds) {
                             assocClone.insert(::std::make_pair(e.first, e.second.clone()));
                         }
@@ -2020,7 +2020,7 @@ TU_ARMA(Alias, ee) {
                                     sp,
                                     bound.second.sourceTrait.mParams,
                                     iTp.mPath.mParams
-                                ) != ::HIR::Compare::Unequal) {
+                                ) != HIRCompare::Unequal) {
                                 assocClone.erase(bound.first);
                                 assocClone.insert(::std::make_pair(
                                     bound.first, bound.second.clone()
@@ -2033,7 +2033,7 @@ TU_ARMA(Alias, ee) {
                         DEBUG("TraitObject: - ir = " << ir);
                         isSupertrait = true;
                         rv = callback(mv$(ir), cmp);
-                        return cmp == ::HIR::Compare::Equal; // Shortcut if perfect match
+                        return cmp == HIRCompare::Equal; // Shortcut if perfect match
                     }
                     return false;
                 });
@@ -2046,7 +2046,7 @@ TU_ARMA(Alias, ee) {
             for (const auto& traitPath : e.traits) {
                 if (trait == traitPath.mPath.mPath) {
                     auto cmp = comparePp(sp, traitPath.mPath.mParams, params);
-                    if (cmp != ::HIR::Compare::Unequal) {
+                    if (cmp != HIRCompare::Unequal) {
                         DEBUG("TraitObject impl params" << traitPath.mPath.mParams);
                         auto hrls = getHrls(crate.types, sp, traitPath.hrtbs, traitPath.mPath.mParams, params);
                         return callback(ImplRef(std::move(hrls), type, &traitPath.mPath.mParams, &traitPath.typeBounds, traitPath.constness), cmp);
@@ -2057,12 +2057,12 @@ TU_ARMA(Alias, ee) {
                 // NOTE: `params` (aka des_params) is not used (TODO)
                 bool rv = false;
                 bool isSupertrait = false;
-                this->findNamedTraitInTrait(sp, trait, params, *traitPath.traitPtr, traitPath.mPath.mPath, traitPath.mPath.mParams, type, [&](const HIR::TraitPath& iTp) {
+                this->findNamedTraitInTrait(sp, trait, params, *traitPath.traitPtr, traitPath.mPath.mPath, traitPath.mPath.mParams, type, [&](const HIRTraitPath& iTp) {
                     // The above is just the monomorphised params and associated set. Comparison is still needed.
                     auto cmp = this->comparePp(sp, iTp.mPath.mParams, params);
-                    if (cmp != ::HIR::Compare::Unequal) {
+                    if (cmp != HIRCompare::Unequal) {
                         // Invoke callback with a proper ImplRef
-                        ::HIR::TraitPath::assocListT assocClone;
+                        HIRTraitPath::assocListT assocClone;
                         for (const auto& e : iTp.typeBounds) {
                             assocClone.insert(::std::make_pair(e.first, e.second.clone()));
                         }
@@ -2077,7 +2077,7 @@ TU_ARMA(Alias, ee) {
                                     sp,
                                     e.second.sourceTrait.mParams,
                                     iTp.mPath.mParams
-                                ) != ::HIR::Compare::Unequal) {
+                                ) != HIRCompare::Unequal) {
                                 assocClone.erase(e.first);
                                 assocClone.insert(::std::make_pair(
                                     e.first, e.second.clone()
@@ -2090,7 +2090,7 @@ TU_ARMA(Alias, ee) {
                         DEBUG("ErasedType: - ir = " << ir);
                         isSupertrait = true;
                         rv = callback(mv$(ir), cmp);
-                        return cmp == HIR::Compare::Equal;
+                        return cmp == HIRCompare::Equal;
                     }
                     return false;
                 });
@@ -2104,7 +2104,7 @@ TU_ARMA(Alias, ee) {
             if ((e.binding >> 8) == 2) {
                 // TODO: This is probably going to break something in the future.
                 DEBUG("- Magic impl for placeholder type");
-                return callback(ImplRef(type, &nullParams, &nullAssoc), ::HIR::Compare::Fuzzy);
+                return callback(ImplRef(type, &nullParams, &nullAssoc), HIRCompare::Fuzzy);
             }
         } // TU_ARMA(Generic)
         // If this type is an opaque UfcsKnown - check bounds
@@ -2116,15 +2116,15 @@ TU_ARMA(Alias, ee) {
                 // TODO: Should Self here be `type` or `pe.type`
                 // - Depends... if implicit it should be `type` (as it relates to the associated type), but if explicit it's referring to the trait
                 auto monomorphCb = MonomorphStatePtr(crate.types, pe.type, &pe.trait.mParams, &pe.params);
-                auto rv = this->iterateAtyBounds(sp, pe, [&](const HIR::TraitPath& bound) {
+                auto rv = this->iterateAtyBounds(sp, pe, [&](const HIRTraitPath& bound) {
                     DEBUG("Bound on ATY: " << bound);
-                    static const HIR::GenericParams emptyParams;
+                    static const HIRGenericParams emptyParams;
                     const auto& hrlsDef = (bound.hrtbs && !bound.hrtbs->isEmpty()) ? *bound.hrtbs : emptyParams;
                     auto ppHrb = hrlsDef.makeEmptyParams(true);
                     monomorphCb.ppHrb = &ppHrb;
                     const auto& bParams = bound.mPath.mParams;
-                    ::HIR::PathParams paramsMonoO;
-                    const ::HIR::PathParams* bParamsMono = &bParams;
+                    HIRPathParams paramsMonoO;
+                    const HIRPathParams* bParamsMono = &bParams;
                     if (monomorphisePathparamsNeeded(bParams)) {
                         paramsMonoO = monomorphCb.monomorphPathParams(sp, bParams, false);
                         bParamsMono = &paramsMonoO;
@@ -2141,14 +2141,14 @@ TU_ARMA(Alias, ee) {
                         this->expandAssociatedTypesParams(sp, paramsMonoO);
                     }
 
-                    ::HIR::TraitPath::assocListT bAtys;
+                    HIRTraitPath::assocListT bAtys;
                     for (const auto& aty : bound.typeBounds) {
-                        bAtys.insert(::std::make_pair(aty.first, ::HIR::TraitPath::AtyEqual{monomorphCb.monomorphGenericpath(sp, aty.second.sourceTrait, false), {}, monomorphCb.monomorphType(sp, aty.second.type)}));
+                        bAtys.insert(::std::make_pair(aty.first, HIRTraitPath::AtyEqual{monomorphCb.monomorphGenericpath(sp, aty.second.sourceTrait, false), {}, monomorphCb.monomorphType(sp, aty.second.type)}));
                     }
 
                     if (bound.mPath.mPath == trait) {
                         auto cmp = this->comparePp(sp, *bParamsMono, params);
-                        if (cmp != ::HIR::Compare::Unequal) {
+                        if (cmp != HIRCompare::Unequal) {
                             if (bParamsMono == &paramsMonoO) {
                                 // TODO: assoc bounds
                                 if (callback(ImplRef(type, mv$(paramsMonoO), mv$(bAtys), bound.constness), cmp)) {
@@ -2174,14 +2174,14 @@ TU_ARMA(Alias, ee) {
 
                     bool rv = false;
                     bool ret = false;
-                    this->findNamedTraitInTrait(sp, trait, params, *bound.traitPtr, bound.mPath.mPath, *bParamsMono, type, [&](const HIR::TraitPath& iTp) {
+                    this->findNamedTraitInTrait(sp, trait, params, *bound.traitPtr, bound.mPath.mPath, *bParamsMono, type, [&](const HIRTraitPath& iTp) {
                         auto cmp = this->comparePp(sp, iTp.mPath.mParams, params);
                         DEBUG("Opaque Path: cmp=" << cmp << ", impl " << iTp.mPath << " for " << type << " -- desired " << trait << params);
                         ASSERT_BUG(sp, !bound.hrtbs || !iTp.hrtbs, "TODO: Handle two layers of HRTBs - " << bound.mPath << " and " << iTp);
-                        const HIR::GenericParams* hrtbs = bound.hrtbs ? bound.hrtbs.get() : iTp.hrtbs.get();
+                        const HIRGenericParams* hrtbs = bound.hrtbs ? bound.hrtbs.get() : iTp.hrtbs.get();
                         auto hrls = getHrls(crate.types, sp, hrtbs, iTp.mPath.mParams, params);
                         auto ir = ImplRef(std::move(hrls), type, iTp.mPath.mParams.clone(), {}, iTp.constness);
-                        rv |= (cmp != ::HIR::Compare::Unequal && callback(std::move(ir), cmp));
+                        rv |= (cmp != HIRCompare::Unequal && callback(std::move(ir), cmp));
                         ret = true;
                         return false; // Continue
                     });
@@ -2234,10 +2234,10 @@ class NextTraitGoalEvaluator {
 
         struct Candidate {
             ImplRef impl;
-            ::HIR::Compare headMatch;
+            HIRCompare headMatch;
             Certainty certainty;
-            const ::HIR::MarkerImpl* markerImpl;
-            ::HIR::PathParams markerImplParams;
+            const HIRMarkerImpl* markerImpl;
+            HIRPathParams markerImplParams;
             bool autoBuiltin;
             CandidateSource source;
             bool ambiguityBeyondHead = false;
@@ -2245,9 +2245,9 @@ class NextTraitGoalEvaluator {
 
             Candidate(
                 ImplRef impl,
-                ::HIR::Compare headMatch,
-                const ::HIR::MarkerImpl* markerImpl,
-                ::HIR::PathParams markerImplParams,
+                HIRCompare headMatch,
+                const HIRMarkerImpl* markerImpl,
+                HIRPathParams markerImplParams,
                 bool autoBuiltin,
                 CandidateSource source
             )
@@ -2297,17 +2297,17 @@ class NextTraitGoalEvaluator {
 
         struct GoalKey {
             size_t hash;
-            ::HIR::SimplePath trait;
-            ::HIR::PathParams params;
-            ::HIR::TypeRef type;
-            ::HIR::TraitPath::assocListT associated;
+            HIRSimplePath trait;
+            HIRPathParams params;
+            HIRTypeRef type;
+            HIRTraitPath::assocListT associated;
 
             GoalKey(
                 size_t hash,
-                const ::HIR::SimplePath& trait,
-                const ::HIR::PathParams& params,
-                const ::HIR::TypeData* type,
-                const ::HIR::TraitPath::assocListT* associated
+                const HIRSimplePath& trait,
+                const HIRPathParams& params,
+                const HIRTypeData* type,
+                const HIRTraitPath::assocListT* associated
             )
                 : hash(hash)
                 , trait(trait)
@@ -2322,15 +2322,15 @@ class NextTraitGoalEvaluator {
             GoalKey goal;
             Certainty certainty;
             ImplRef response;
-            ::HIR::Compare responseCertainty = ::HIR::Compare::Fuzzy;
+            HIRCompare responseCertainty = HIRCompare::Fuzzy;
             bool hasResponse = false;
 
             CachedGoal(
                 size_t hash,
-                const ::HIR::SimplePath& trait,
-                const ::HIR::PathParams& params,
-                const ::HIR::TypeData* type,
-                const ::HIR::TraitPath::assocListT* associated,
+                const HIRSimplePath& trait,
+                const HIRPathParams& params,
+                const HIRTypeData* type,
+                const HIRTraitPath::assocListT* associated,
                 Certainty certainty
             )
                 : goal(hash, trait, params, type, associated)
@@ -2340,7 +2340,7 @@ class NextTraitGoalEvaluator {
         };
 
         const TraitResolution& mResolve;
-        const ::HIR::Crate& crate;
+        const HIRCrate& crate;
         const Span* mSpan = nullptr;
         bool coherenceMode = false;
 
@@ -2359,11 +2359,11 @@ class NextTraitGoalEvaluator {
         uint64_t responseInstanceCounter = 0;
 
         struct CanonicalGoal {
-            ::HIR::PathParams params;
-            ::HIR::TypeRef type;
-            ::HIR::TraitPath::assocListT associated;
+            HIRPathParams params;
+            HIRTypeRef type;
+            HIRTraitPath::assocListT associated;
 
-            CanonicalGoal(::HIR::PathParams params, ::HIR::TypeRef type)
+            CanonicalGoal(HIRPathParams params, HIRTypeRef type)
                 : params(::std::move(params))
                 , type(type)
             {
@@ -2376,9 +2376,9 @@ class NextTraitGoalEvaluator {
         }
 
         CanonicalGoal canonicalizeGoal(
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type,
-            const ::HIR::TraitPath::assocListT* associated,
+            const HIRPathParams& params,
+            const HIRTypeData* type,
+            const HIRTraitPath::assocListT* associated,
             CanonicalizeTraitGoal& canonicalizer
         ) const {
             auto canonicalParams = canonicalizer.monomorphPathParams(
@@ -2394,7 +2394,7 @@ class NextTraitGoalEvaluator {
                 for (const auto& entry : *associated) {
                     result.associated.insert({
                         entry.first,
-                        ::HIR::TraitPath::AtyEqual{
+                        HIRTraitPath::AtyEqual{
                             canonicalizer.monomorphGenericpath(
                                 span(), entry.second.sourceTrait, true
                             ),
@@ -2429,7 +2429,7 @@ class NextTraitGoalEvaluator {
             return !impl.mData.is_TraitImpl();
         }
 
-        bool paramsHaveUnknownTypes(const ::HIR::PathParams& params) const {
+        bool paramsHaveUnknownTypes(const HIRPathParams& params) const {
             for (const auto& type : params.types) {
                 if (typeHasUnknown(type)) {
                     return true;
@@ -2438,7 +2438,7 @@ class NextTraitGoalEvaluator {
             return false;
         }
 
-        bool pathHasUnknownTypes(const ::HIR::Path& path) const {
+        bool pathHasUnknownTypes(const HIRPath& path) const {
             if (const auto* pe = path.mData.opt_Generic()) {
                 return paramsHaveUnknownTypes(pe->mParams);
             }
@@ -2457,7 +2457,7 @@ class NextTraitGoalEvaluator {
                 || paramsHaveUnknownTypes(pe.params);
         }
 
-        bool traitPathHasUnknownTypes(const ::HIR::TraitPath& trait) const {
+        bool traitPathHasUnknownTypes(const HIRTraitPath& trait) const {
             if (paramsHaveUnknownTypes(trait.mPath.mParams)) {
                 return true;
             }
@@ -2483,7 +2483,7 @@ class NextTraitGoalEvaluator {
         }
 
         bool valueHasUnassignedInfer(
-            const ::HIR::ConstGeneric& value
+            const HIRConstGeneric& value
         ) const {
             if (const auto* infer = value.opt_Infer()) {
                 return infer->index == ~0u;
@@ -2496,7 +2496,7 @@ class NextTraitGoalEvaluator {
         }
 
         bool paramsHaveUnassignedInfer(
-            const ::HIR::PathParams& params
+            const HIRPathParams& params
         ) const {
             for (const auto& type : params.types) {
                 if (typeHasUnassignedInfer(type)) {
@@ -2511,7 +2511,7 @@ class NextTraitGoalEvaluator {
             return false;
         }
 
-        bool pathHasUnassignedInfer(const ::HIR::Path& path) const {
+        bool pathHasUnassignedInfer(const HIRPath& path) const {
             if (const auto* pe = path.mData.opt_Generic()) {
                 return paramsHaveUnassignedInfer(pe->mParams);
             }
@@ -2531,7 +2531,7 @@ class NextTraitGoalEvaluator {
         }
 
         bool traitPathHasUnassignedInfer(
-            const ::HIR::TraitPath& trait
+            const HIRTraitPath& trait
         ) const {
             if (paramsHaveUnassignedInfer(trait.mPath.mParams)) {
                 return true;
@@ -2562,7 +2562,7 @@ class NextTraitGoalEvaluator {
         }
 
         bool typeHasUnassignedInfer(
-            const ::HIR::TypeData* input
+            const HIRTypeData* input
         ) const {
             if (const auto* infer = input->opt_Infer()) {
                 if (infer->index == ~0u) {
@@ -2640,9 +2640,9 @@ class NextTraitGoalEvaluator {
         }
 
         bool goalHasUnassignedInfer(
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type,
-            const ::HIR::TraitPath::assocListT* associated
+            const HIRPathParams& params,
+            const HIRTypeData* type,
+            const HIRTraitPath::assocListT* associated
         ) const {
             if (paramsHaveUnassignedInfer(params)
                 || typeHasUnassignedInfer(type)) {
@@ -2663,7 +2663,7 @@ class NextTraitGoalEvaluator {
         }
 
         bool selfIsUnresolvedProjectionOverIvar(
-            const ::HIR::TypeData* type
+            const HIRTypeData* type
         ) const {
             const auto* path = type->opt_Path();
             return path
@@ -2672,7 +2672,7 @@ class NextTraitGoalEvaluator {
                 && mResolve.typeContainsIvars(type);
         }
 
-        bool typeHasUnknown(const ::HIR::TypeData* input) const {
+        bool typeHasUnknown(const HIRTypeData* input) const {
             const auto& type = mResolve.resolveType(input);
             if (type->is_Infer() || type->is_Generic()) {
                 return true;
@@ -2743,30 +2743,30 @@ class NextTraitGoalEvaluator {
         }
 
         static bool typeHasCandidatePlaceholder(
-            const ::HIR::TypeData* type
+            const HIRTypeData* type
         ) {
             bool found = false;
-            visitTyWith(type, [&](const ::HIR::TypeData* inner) {
+            visitTyWith(type, [&](const HIRTypeData* inner) {
                 if (const auto* generic = inner->opt_Generic()) {
-                    found |= generic->group() == ::HIR::GENERICPlaceholder;
+                    found |= generic->group() == GENERICPlaceholder;
                 }
                 return found;
             });
             return found;
         }
 
-        static bool typeHasUfcsUnknown(const ::HIR::TypeData* type) {
+        static bool typeHasUfcsUnknown(const HIRTypeData* type) {
             if (!type) {
                 return false;
             }
-            return visitTyWith(type, [](const ::HIR::TypeData* inner) {
+            return visitTyWith(type, [](const HIRTypeData* inner) {
                 const auto* path = inner->opt_Path();
                 return path && path->path.mData.is_UfcsUnknown();
             });
         }
 
         static bool paramsHaveCandidatePlaceholders(
-            const ::HIR::PathParams& params
+            const HIRPathParams& params
         ) {
             for (const auto& type : params.types) {
                 if (typeHasCandidatePlaceholder(type)) {
@@ -2775,7 +2775,7 @@ class NextTraitGoalEvaluator {
             }
             for (const auto& value : params.values) {
                 if (value.is_Generic()
-                    && value.as_Generic().group() == ::HIR::GENERICPlaceholder) {
+                    && value.as_Generic().group() == GENERICPlaceholder) {
                     return true;
                 }
             }
@@ -2800,13 +2800,13 @@ class NextTraitGoalEvaluator {
         }
 
         static bool paramsNeedResponseConstraints(
-            const ::HIR::PathParams& params
+            const HIRPathParams& params
         ) {
             for (const auto& type : params.types) {
                 bool found = false;
-                visitTyWith(type, [&](const ::HIR::TypeData* inner) {
+                visitTyWith(type, [&](const HIRTypeData* inner) {
                     if (const auto* generic = inner->opt_Generic()) {
-                        found |= generic->group() == ::HIR::GENERICPlaceholder;
+                        found |= generic->group() == GENERICPlaceholder;
                     } else if (const auto* infer = inner->opt_Infer()) {
                         found |= !infer->isLit();
                     }
@@ -2820,7 +2820,7 @@ class NextTraitGoalEvaluator {
                 if (value.is_Infer()
                     || (value.is_Generic()
                         && value.as_Generic().group()
-                            == ::HIR::GENERICPlaceholder)) {
+                            == GENERICPlaceholder)) {
                     return true;
                 }
             }
@@ -2838,7 +2838,7 @@ class NextTraitGoalEvaluator {
         }
 
         OrphanVisit orphanVisitResolvedType(
-            const ::HIR::TypeData* type,
+            const HIRTypeData* type,
             OrphanPerspective perspective
         ) const {
             if (type->is_Infer() || type->is_Generic()) {
@@ -2889,7 +2889,7 @@ class NextTraitGoalEvaluator {
             if (const auto* object = type->opt_TraitObject()) {
                 const auto& principal = object->mTrait.mPath.mPath;
                 if (perspective == OrphanPerspective::Local
-                    && principal != ::HIR::SimplePath()
+                    && principal != HIRSimplePath()
                     && principal.crateName() == crate.crateName) {
                     return OrphanVisit::LocalKey;
                 }
@@ -2914,7 +2914,7 @@ class NextTraitGoalEvaluator {
         }
 
         OrphanVisit orphanVisitType(
-            const ::HIR::TypeData* input,
+            const HIRTypeData* input,
             OrphanPerspective perspective
         ) const {
             const auto& resolved = mResolve.resolveType(input);
@@ -2936,8 +2936,8 @@ class NextTraitGoalEvaluator {
         }
 
         bool orphanCheckTraitRef(
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type,
+            const HIRPathParams& params,
+            const HIRTypeData* type,
             OrphanPerspective perspective
         ) const {
             const auto selfResult = orphanVisitType(type, perspective);
@@ -2954,9 +2954,9 @@ class NextTraitGoalEvaluator {
         }
 
         bool traitRefIsKnowable(
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type
+            const HIRSimplePath& trait,
+            const HIRPathParams& params,
+            const HIRTypeData* type
         ) const {
             if (orphanCheckTraitRef(
                     params, type, OrphanPerspective::Remote
@@ -2981,7 +2981,7 @@ class NextTraitGoalEvaluator {
             return state ^ (value + 0x9e3779b97f4a7c15ULL + (state << 6) + (state >> 2));
         }
 
-        static size_t hashSimplePath(const ::HIR::SimplePath& path) {
+        static size_t hashSimplePath(const HIRSimplePath& path) {
             size_t result = ::std::hash<RcString>()(path.crateName());
             for (const auto& component : path.components()) {
                 result = hashMix(result, ::std::hash<RcString>()(component));
@@ -2989,7 +2989,7 @@ class NextTraitGoalEvaluator {
             return result;
         }
 
-        static size_t hashType(const ::HIR::TypeData* type) {
+        static size_t hashType(const HIRTypeData* type) {
             if (const auto* path = type->getSortPath()) {
                 return hashMix(0x10, hashSimplePath(*path));
             }
@@ -3034,10 +3034,10 @@ class NextTraitGoalEvaluator {
         }
 
         static size_t goalHash(
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type,
-            const ::HIR::TraitPath::assocListT* associated
+            const HIRSimplePath& trait,
+            const HIRPathParams& params,
+            const HIRTypeData* type,
+            const HIRTraitPath::assocListT* associated
         ) {
             size_t result = hashSimplePath(trait);
             result = hashMix(result, params.types.size());
@@ -3057,10 +3057,10 @@ class NextTraitGoalEvaluator {
             return result;
         }
 
-        static ::HIR::TraitPath::assocListT cloneAssociated(
-            const ::HIR::TraitPath::assocListT* associated
+        static HIRTraitPath::assocListT cloneAssociated(
+            const HIRTraitPath::assocListT* associated
         ) {
-            ::HIR::TraitPath::assocListT result;
+            HIRTraitPath::assocListT result;
             if (associated) {
                 for (const auto& entry : *associated) {
                     result.insert({entry.first, entry.second.clone()});
@@ -3074,9 +3074,9 @@ class NextTraitGoalEvaluator {
             const Monomorphiser& monomorph
         ) const {
             auto monomorphAssociated = [&](
-                const ::HIR::TraitPath::assocListT* associated
+                const HIRTraitPath::assocListT* associated
             ) {
-                ::HIR::TraitPath::assocListT result;
+                HIRTraitPath::assocListT result;
                 if (associated) {
                     for (const auto& entry : *associated) {
                         result.insert({
@@ -3137,10 +3137,10 @@ class NextTraitGoalEvaluator {
 
         static bool goalMatches(
             const GoalKey& goal,
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type,
-            const ::HIR::TraitPath::assocListT* associated
+            const HIRSimplePath& trait,
+            const HIRPathParams& params,
+            const HIRTypeData* type,
+            const HIRTraitPath::assocListT* associated
         ) {
             if (goal.trait != trait || goal.params != params || goal.type != type) {
                 return false;
@@ -3166,10 +3166,10 @@ class NextTraitGoalEvaluator {
 
         CachedGoal* findCachedGoal(
             size_t hash,
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type,
-            const ::HIR::TraitPath::assocListT* associated
+            const HIRSimplePath& trait,
+            const HIRPathParams& params,
+            const HIRTypeData* type,
+            const HIRTraitPath::assocListT* associated
         ) const {
             const auto range = goalCacheIndex.equal_range(hash);
             for (auto it = range.first; it != range.second; ++it) {
@@ -3182,10 +3182,10 @@ class NextTraitGoalEvaluator {
 
         GoalKey* findActiveGoal(
             size_t hash,
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type,
-            const ::HIR::TraitPath::assocListT* associated
+            const HIRSimplePath& trait,
+            const HIRPathParams& params,
+            const HIRTypeData* type,
+            const HIRTraitPath::assocListT* associated
         ) const {
             const auto range = activeGoalIndex.equal_range(hash);
             for (auto it = range.first; it != range.second; ++it) {
@@ -3198,10 +3198,10 @@ class NextTraitGoalEvaluator {
 
         GoalKey* pushActiveGoal(
             size_t hash,
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type,
-            const ::HIR::TraitPath::assocListT* associated
+            const HIRSimplePath& trait,
+            const HIRPathParams& params,
+            const HIRTypeData* type,
+            const HIRTraitPath::assocListT* associated
         ) {
             auto* goal = activeGoalNodes.make(hash, trait, params, type, associated);
             goalStack.push_back(goal);
@@ -3226,10 +3226,10 @@ class NextTraitGoalEvaluator {
 
         Certainty cacheGoal(
             size_t hash,
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type,
-            const ::HIR::TraitPath::assocListT* associated,
+            const HIRSimplePath& trait,
+            const HIRPathParams& params,
+            const HIRTypeData* type,
+            const HIRTraitPath::assocListT* associated,
             Certainty certainty
         ) {
             auto* goal = cachedGoalNodes.make(
@@ -3242,17 +3242,17 @@ class NextTraitGoalEvaluator {
 
         CachedGoal* cacheResponse(
             size_t hash,
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type,
-            const ::HIR::TraitPath::assocListT* associated,
+            const HIRSimplePath& trait,
+            const HIRPathParams& params,
+            const HIRTypeData* type,
+            const HIRTraitPath::assocListT* associated,
             ImplRef response,
-            ::HIR::Compare responseCertainty
+            HIRCompare responseCertainty
         ) {
             auto* cached = findCachedGoal(
                 hash, trait, params, type, associated
             );
-            const auto certainty = responseCertainty == ::HIR::Compare::Equal
+            const auto certainty = responseCertainty == HIRCompare::Equal
                 ? Certainty::Proven
                 : Certainty::Ambiguous;
             if (!cached) {
@@ -3277,14 +3277,14 @@ class NextTraitGoalEvaluator {
             goalCache.clear();
         }
 
-        static const ::HIR::PathParams& boundedHrls(const ImplRef& impl) {
+        static const HIRPathParams& boundedHrls(const ImplRef& impl) {
             if (const auto* bounded = impl.mData.opt_BoundedPtr()) {
                 return bounded->hrls;
             }
             return impl.mData.as_Bounded().hrls;
         }
 
-        static const ::HIR::TraitPath::assocListT& boundedAssociated(
+        static const HIRTraitPath::assocListT& boundedAssociated(
             const ImplRef& impl
         ) {
             if (const auto* bounded = impl.mData.opt_BoundedPtr()) {
@@ -3294,8 +3294,8 @@ class NextTraitGoalEvaluator {
         }
 
         static bool associatedResponsesEqual(
-            const ::HIR::TraitPath::assocListT& left,
-            const ::HIR::TraitPath::assocListT& right
+            const HIRTraitPath::assocListT& left,
+            const HIRTraitPath::assocListT& right
         ) {
             if (left.size() != right.size()) {
                 return false;
@@ -3350,13 +3350,13 @@ class NextTraitGoalEvaluator {
         void pushCandidate(
             size_t frameIndex,
             ImplRef impl,
-            ::HIR::Compare match,
-            const ::HIR::MarkerImpl* markerImpl = nullptr,
-            ::HIR::PathParams markerImplParams = {},
+            HIRCompare match,
+            const HIRMarkerImpl* markerImpl = nullptr,
+            HIRPathParams markerImplParams = {},
             bool autoBuiltin = false,
             CandidateSource source = CandidateSource::Other
         ) {
-            if (match == ::HIR::Compare::Unequal) {
+            if (match == HIRCompare::Unequal) {
                 return;
             }
             auto& candidates = frames[frameIndex]->candidates;
@@ -3385,12 +3385,12 @@ class NextTraitGoalEvaluator {
 
         void assembleCandidates(
             size_t frameIndex,
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type
+            const HIRSimplePath& trait,
+            const HIRPathParams& params,
+            const HIRTypeData* type
         ) {
             auto collect = [&](CandidateSource source) {
-                return [&, source](ImplRef impl, ::HIR::Compare match) {
+                return [&, source](ImplRef impl, HIRCompare match) {
                     pushCandidate(
                         frameIndex, ::std::move(impl), match,
                         nullptr, {}, false, source
@@ -3425,8 +3425,8 @@ class NextTraitGoalEvaluator {
                     trait,
                     resolvedType,
                     mResolve.ivars.callbackResolveInfer(),
-                    [&](const ::HIR::TraitImpl& impl) {
-                        ::HIR::PathParams implParams;
+                    [&](const HIRTraitImpl& impl) {
+                        HIRPathParams implParams;
                         const auto match = mResolve.fticCheckParams(
                             span(),
                             trait,
@@ -3438,7 +3438,7 @@ class NextTraitGoalEvaluator {
                             implParams,
                             false
                         );
-                        if (match != ::HIR::Compare::Unequal) {
+                        if (match != HIRCompare::Unequal) {
                             pushCandidate(
                                 frameIndex,
                                 ImplRef(
@@ -3465,8 +3465,8 @@ class NextTraitGoalEvaluator {
                     trait,
                     resolvedType,
                     mResolve.ivars.callbackResolveInfer(),
-                    [&](const ::HIR::MarkerImpl& impl) {
-                        ::HIR::PathParams implParams;
+                    [&](const HIRMarkerImpl& impl) {
+                        HIRPathParams implParams;
                         const auto match = mResolve.fticCheckParams(
                             span(),
                             trait,
@@ -3478,7 +3478,7 @@ class NextTraitGoalEvaluator {
                             implParams,
                             false
                         );
-                        if (match != ::HIR::Compare::Unequal) {
+                        if (match != HIRCompare::Unequal) {
                             auto monomorph = MonomorphStatePtr(
                                 crate.types, nullptr, &implParams, nullptr
                             );
@@ -3493,7 +3493,7 @@ class NextTraitGoalEvaluator {
                                 ImplRef(
                                     ::std::move(responseType),
                                     ::std::move(responseParams),
-                                    ::HIR::TraitPath::assocListT()
+                                    HIRTraitPath::assocListT()
                                 ),
                                 match,
                                 &impl,
@@ -3513,12 +3513,12 @@ class NextTraitGoalEvaluator {
                     ImplRef(
                         resolvedType,
                         params.clone(),
-                        ::HIR::TraitPath::assocListT()
+                        HIRTraitPath::assocListT()
                     ),
                     mResolve.typeContainsIvars(resolvedType)
                         || mResolve.paramsContainIvars(params)
-                        ? ::HIR::Compare::Fuzzy
-                        : ::HIR::Compare::Equal,
+                        ? HIRCompare::Fuzzy
+                        : HIRCompare::Equal,
                     nullptr,
                     {},
                     true,
@@ -3527,28 +3527,28 @@ class NextTraitGoalEvaluator {
             }
         }
 
-        ::HIR::TypeRef makeAssociatedProjection(
-            const ::HIR::TypeData* type,
-            const ::HIR::GenericPath& sourceTrait,
+        HIRTypeRef makeAssociatedProjection(
+            const HIRTypeData* type,
+            const HIRGenericPath& sourceTrait,
             const RcString& name,
-            const ::HIR::PathParams& associatedParams
+            const HIRPathParams& associatedParams
         ) const {
             return crate.types.path(
-                ::HIR::Path(
+                HIRPath(
                     type,
                     sourceTrait.clone(),
                     name,
                     associatedParams.clone()
                 ),
-                ::HIR::TypePathBinding::make_Opaque({})
+                HIRTypePathBinding::make_Opaque({})
             );
         }
 
-        ::HIR::TypeRef makeAssociatedProjection(
+        HIRTypeRef makeAssociatedProjection(
             const ImplRef& impl,
-            const ::HIR::GenericPath& sourceTrait,
+            const HIRGenericPath& sourceTrait,
             const RcString& name,
-            const ::HIR::PathParams& associatedParams
+            const HIRPathParams& associatedParams
         ) const {
             return makeAssociatedProjection(
                 impl.getImplType(crate.types), sourceTrait, name, associatedParams
@@ -3557,11 +3557,11 @@ class NextTraitGoalEvaluator {
 
         bool bindCandidatePlaceholders(
             Candidate& candidate,
-            const ::HIR::TypeData* nestedType,
-            const ::HIR::TraitPath::assocListT& associated,
+            const HIRTypeData* nestedType,
+            const HIRTraitPath::assocListT& associated,
             bool useCandidateResponse = false
         ) {
-            ::HIR::PathParams* candidateParams = nullptr;
+            HIRPathParams* candidateParams = nullptr;
             if (auto* traitImpl = candidate.impl.mData.opt_TraitImpl()) {
                 candidateParams = &traitImpl->implParams;
             } else if (candidate.markerImpl) {
@@ -3571,15 +3571,15 @@ class NextTraitGoalEvaluator {
                 return false;
             }
 
-            class BindPlaceholders final: public ::HIR::MatchGenerics {
+            class BindPlaceholders final: public HIRMatchGenerics {
                 const Span& mSpan;
-                ::HIR::TypeInterner& types;
-                ::HIR::PathParams& mParams;
-                ::std::vector<::std::pair<::HIR::TypeRef, ::HIR::TypeRef>> mBindings;
+                HIRTypeInterner& types;
+                HIRPathParams& mParams;
+                ::std::vector<::std::pair<HIRTypeRef, HIRTypeRef>> mBindings;
 
-                bool isBindable(const ::HIR::TypeData* type) const {
+                bool isBindable(const HIRTypeData* type) const {
                     if (const auto* generic = type->opt_Generic()) {
-                        return generic->group() == ::HIR::GENERICPlaceholder;
+                        return generic->group() == GENERICPlaceholder;
                     }
                     if (const auto* infer = type->opt_Infer()) {
                         return !infer->isLit();
@@ -3587,10 +3587,10 @@ class NextTraitGoalEvaluator {
                     return false;
                 }
 
-                ::std::optional<::HIR::Compare> bindType(
-                    const ::HIR::TypeData* pattern,
-                    const ::HIR::TypeData* value,
-                    ::HIR::tCbResolveType resolve
+                ::std::optional<HIRCompare> bindType(
+                    const HIRTypeData* pattern,
+                    const HIRTypeData* value,
+                    tCbResolveType resolve
                 ) {
                     for (const auto& binding : mBindings) {
                         if (binding.first == pattern) {
@@ -3606,7 +3606,7 @@ class NextTraitGoalEvaluator {
                     for (const auto& parameter : mParams.types) {
                         isParameter |= visitTyWith(
                             parameter,
-                            [&](const ::HIR::TypeData* inner) {
+                            [&](const HIRTypeData* inner) {
                                 return inner == pattern;
                             }
                         );
@@ -3615,15 +3615,15 @@ class NextTraitGoalEvaluator {
                         return {};
                     }
                     if (pattern == value) {
-                        return ::HIR::Compare::Equal;
+                        return HIRCompare::Equal;
                     }
                     for (auto& parameter : mParams.types) {
                         parameter = cloneTyWith(
                             types,
                             mSpan,
                             parameter,
-                            [&](const ::HIR::TypeData* input,
-                                ::HIR::TypeRef& output) {
+                            [&](const HIRTypeData* input,
+                                HIRTypeRef& output) {
                                 if (input != pattern) {
                                     return false;
                                 }
@@ -3634,7 +3634,7 @@ class NextTraitGoalEvaluator {
                     }
                     mBindings.push_back({pattern, value});
                     changed = true;
-                    return ::HIR::Compare::Equal;
+                    return HIRCompare::Equal;
                 }
 
             public:
@@ -3642,8 +3642,8 @@ class NextTraitGoalEvaluator {
 
                 BindPlaceholders(
                     const Span& span,
-                    ::HIR::TypeInterner& types,
-                    ::HIR::PathParams& params
+                    HIRTypeInterner& types,
+                    HIRPathParams& params
                 )
                     : mSpan(span)
                     , types(types)
@@ -3651,24 +3651,24 @@ class NextTraitGoalEvaluator {
                 {
                 }
 
-                ::HIR::Compare cmpType(
+                HIRCompare cmpType(
                     const Span& span,
-                    const ::HIR::TypeData* pattern,
-                    const ::HIR::TypeData* value,
-                    ::HIR::tCbResolveType resolve
+                    const HIRTypeData* pattern,
+                    const HIRTypeData* value,
+                    tCbResolveType resolve
                 ) override {
                     if (auto result = bindType(pattern, value, resolve)) {
                         return *result;
                     }
-                    return ::HIR::MatchGenerics::cmpType(
+                    return HIRMatchGenerics::cmpType(
                         span, pattern, value, resolve
                     );
                 }
 
-                ::HIR::Compare matchTy(
-                    const ::HIR::GenericRef& generic,
-                    const ::HIR::TypeData* type,
-                    ::HIR::tCbResolveType resolve
+                HIRCompare matchTy(
+                    const HIRGenericRef& generic,
+                    const HIRTypeData* type,
+                    tCbResolveType resolve
                 ) override {
                     const auto pattern = types.generic(
                         generic.name, generic.binding
@@ -3681,24 +3681,24 @@ class NextTraitGoalEvaluator {
                     );
                 }
 
-                ::HIR::Compare matchVal(
-                    const ::HIR::GenericRef& generic,
-                    const ::HIR::ConstGeneric& value
+                HIRCompare matchVal(
+                    const HIRGenericRef& generic,
+                    const HIRConstGeneric& value
                 ) override {
                     if (value.is_Generic() && value.as_Generic() == generic) {
-                        return ::HIR::Compare::Equal;
+                        return HIRCompare::Equal;
                     }
-                    if (generic.group() == ::HIR::GENERICPlaceholder) {
+                    if (generic.group() == GENERICPlaceholder) {
                         for (auto& parameter : mParams.values) {
                             if (parameter.is_Generic()
                                 && parameter.as_Generic() == generic) {
                                 parameter = value.clone();
                                 changed = true;
-                                return ::HIR::Compare::Equal;
+                                return HIRCompare::Equal;
                             }
                         }
                     }
-                    return ::HIR::Compare::Fuzzy;
+                    return HIRCompare::Fuzzy;
                 }
             } binder{span(), crate.types, *candidateParams};
 
@@ -3708,7 +3708,7 @@ class NextTraitGoalEvaluator {
                     ? candidate.impl.getType(
                         crate.types, requirement.first.c_str(), requirement.second.atyParams
                     )
-                    : ::HIR::TypeRef();
+                    : HIRTypeRef();
                 if (!useCandidateResponse) {
                     // An impl parameter can occur only in a nested projection
                     // equality (for example `I: Iterator<Item = &'a T>`).
@@ -3719,8 +3719,8 @@ class NextTraitGoalEvaluator {
                         requirement.second.sourceTrait.mPath,
                         requirement.second.sourceTrait.mParams,
                         nestedType,
-                        [&](ImplRef impl, ::HIR::Compare certainty) {
-                            if (certainty != ::HIR::Compare::Equal
+                        [&](ImplRef impl, HIRCompare certainty) {
+                            if (certainty != HIRCompare::Equal
                                 || impl.isAmbiguousIdentity()) {
                                 return false;
                             }
@@ -3729,7 +3729,7 @@ class NextTraitGoalEvaluator {
                                 requirement.first.c_str(),
                                 requirement.second.atyParams
                             );
-                            if (output == ::HIR::TypeRef()) {
+                            if (output == HIRTypeRef()) {
                                 return false;
                             }
                             candidateOutput = ::std::move(output);
@@ -3740,7 +3740,7 @@ class NextTraitGoalEvaluator {
                         &requirement.second.atyParams
                     );
                 }
-                if (candidateOutput == ::HIR::TypeRef()) {
+                if (candidateOutput == HIRTypeRef()) {
                     candidateOutput = makeAssociatedProjection(
                         nestedType,
                         requirement.second.sourceTrait,
@@ -3775,7 +3775,7 @@ class NextTraitGoalEvaluator {
                     mResolve.ivars.callbackResolveInfer(),
                     binder
                 );
-                if (match == ::HIR::Compare::Unequal) {
+                if (match == HIRCompare::Unequal) {
                     *candidateParams = saved.clone();
                 }
             }
@@ -3797,11 +3797,11 @@ class NextTraitGoalEvaluator {
 
         bool bindCandidateResponse(
             Candidate& candidate,
-            const ::HIR::TypeData* nestedType,
-            const ::HIR::PathParams& nestedParams,
+            const HIRTypeData* nestedType,
+            const HIRPathParams& nestedParams,
             const ImplRef& response
         ) {
-            ::HIR::PathParams* candidateParams = nullptr;
+            HIRPathParams* candidateParams = nullptr;
             if (auto* traitImpl = candidate.impl.mData.opt_TraitImpl()) {
                 candidateParams = &traitImpl->implParams;
             } else if (candidate.markerImpl) {
@@ -3811,15 +3811,15 @@ class NextTraitGoalEvaluator {
                 return false;
             }
 
-            class BindResponse final: public ::HIR::MatchGenerics {
+            class BindResponse final: public HIRMatchGenerics {
                 const Span& mSpan;
-                ::HIR::TypeInterner& types;
-                ::HIR::PathParams& mParams;
-                ::std::vector<::std::pair<::HIR::TypeRef, ::HIR::TypeRef>> mBindings;
+                HIRTypeInterner& types;
+                HIRPathParams& mParams;
+                ::std::vector<::std::pair<HIRTypeRef, HIRTypeRef>> mBindings;
 
-                bool isBindable(const ::HIR::TypeData* type) const {
+                bool isBindable(const HIRTypeData* type) const {
                     if (const auto* generic = type->opt_Generic()) {
-                        return generic->group() == ::HIR::GENERICPlaceholder;
+                        return generic->group() == GENERICPlaceholder;
                     }
                     if (const auto* infer = type->opt_Infer()) {
                         return !infer->isLit();
@@ -3827,10 +3827,10 @@ class NextTraitGoalEvaluator {
                     return false;
                 }
 
-                ::std::optional<::HIR::Compare> bindType(
-                    const ::HIR::TypeData* pattern,
-                    const ::HIR::TypeData* value,
-                    ::HIR::tCbResolveType resolve
+                ::std::optional<HIRCompare> bindType(
+                    const HIRTypeData* pattern,
+                    const HIRTypeData* value,
+                    tCbResolveType resolve
                 ) {
                     for (const auto& binding : mBindings) {
                         if (binding.first == pattern) {
@@ -3846,7 +3846,7 @@ class NextTraitGoalEvaluator {
                     for (const auto& parameter : mParams.types) {
                         isParameter |= visitTyWith(
                             parameter,
-                            [&](const ::HIR::TypeData* inner) {
+                            [&](const HIRTypeData* inner) {
                                 return inner == pattern;
                             }
                         );
@@ -3855,15 +3855,15 @@ class NextTraitGoalEvaluator {
                         return {};
                     }
                     if (pattern == value) {
-                        return ::HIR::Compare::Equal;
+                        return HIRCompare::Equal;
                     }
                     for (auto& parameter : mParams.types) {
                         parameter = cloneTyWith(
                             types,
                             mSpan,
                             parameter,
-                            [&](const ::HIR::TypeData* input,
-                                ::HIR::TypeRef& output) {
+                            [&](const HIRTypeData* input,
+                                HIRTypeRef& output) {
                                 if (input != pattern) {
                                     return false;
                                 }
@@ -3874,7 +3874,7 @@ class NextTraitGoalEvaluator {
                     }
                     mBindings.push_back({pattern, value});
                     changed = true;
-                    return ::HIR::Compare::Equal;
+                    return HIRCompare::Equal;
                 }
 
             public:
@@ -3882,8 +3882,8 @@ class NextTraitGoalEvaluator {
 
                 BindResponse(
                     const Span& span,
-                    ::HIR::TypeInterner& types,
-                    ::HIR::PathParams& params
+                    HIRTypeInterner& types,
+                    HIRPathParams& params
                 )
                     : mSpan(span)
                     , types(types)
@@ -3891,24 +3891,24 @@ class NextTraitGoalEvaluator {
                 {
                 }
 
-                ::HIR::Compare cmpType(
+                HIRCompare cmpType(
                     const Span& span,
-                    const ::HIR::TypeData* pattern,
-                    const ::HIR::TypeData* value,
-                    ::HIR::tCbResolveType resolve
+                    const HIRTypeData* pattern,
+                    const HIRTypeData* value,
+                    tCbResolveType resolve
                 ) override {
                     if (auto result = bindType(pattern, value, resolve)) {
                         return *result;
                     }
-                    return ::HIR::MatchGenerics::cmpType(
+                    return HIRMatchGenerics::cmpType(
                         span, pattern, value, resolve
                     );
                 }
 
-                ::HIR::Compare matchTy(
-                    const ::HIR::GenericRef& generic,
-                    const ::HIR::TypeData* value,
-                    ::HIR::tCbResolveType resolve
+                HIRCompare matchTy(
+                    const HIRGenericRef& generic,
+                    const HIRTypeData* value,
+                    tCbResolveType resolve
                 ) override {
                     const auto pattern = types.generic(
                         generic.name, generic.binding
@@ -3921,25 +3921,25 @@ class NextTraitGoalEvaluator {
                     );
                 }
 
-                ::HIR::Compare matchVal(
-                    const ::HIR::GenericRef& generic,
-                    const ::HIR::ConstGeneric& value
+                HIRCompare matchVal(
+                    const HIRGenericRef& generic,
+                    const HIRConstGeneric& value
                 ) override {
                     if (value.is_Generic() && value.as_Generic() == generic) {
-                        return ::HIR::Compare::Equal;
+                        return HIRCompare::Equal;
                     }
-                    if (generic.group() != ::HIR::GENERICPlaceholder) {
-                        return ::HIR::Compare::Fuzzy;
+                    if (generic.group() != GENERICPlaceholder) {
+                        return HIRCompare::Fuzzy;
                     }
                     for (auto& parameter : mParams.values) {
                         if (parameter.is_Generic()
                             && parameter.as_Generic() == generic) {
                             parameter = value.clone();
                             changed = true;
-                            return ::HIR::Compare::Equal;
+                            return HIRCompare::Equal;
                         }
                     }
-                    return ::HIR::Compare::Fuzzy;
+                    return HIRCompare::Fuzzy;
                 }
             } binder{span(), crate.types, *candidateParams};
 
@@ -3956,7 +3956,7 @@ class NextTraitGoalEvaluator {
                 mResolve.ivars.callbackResolveInfer(),
                 binder
             );
-            if (match == ::HIR::Compare::Unequal) {
+            if (match == HIRCompare::Unequal) {
                 *candidateParams = saved.clone();
                 return false;
             }
@@ -3977,9 +3977,9 @@ class NextTraitGoalEvaluator {
         }
 
         Certainty matchAssociatedTypes(
-            const ::HIR::SimplePath& trait,
+            const HIRSimplePath& trait,
             const ImplRef& impl,
-            const ::HIR::TraitPath::assocListT* associated
+            const HIRTraitPath::assocListT* associated
         ) {
             if (!associated || associated->empty()) {
                 return Certainty::Proven;
@@ -3996,9 +3996,9 @@ class NextTraitGoalEvaluator {
                     continue;
                 }
                 auto output = impl.getType(crate.types, requirement.first.c_str(), aty.atyParams);
-                if (output == ::HIR::TypeRef()) {
+                if (output == HIRTypeRef()) {
                     if (aty.sourceTrait.mPath != trait) {
-                        ::HIR::TraitPath::assocListT sourceAssociated;
+                        HIRTraitPath::assocListT sourceAssociated;
                         sourceAssociated.insert({
                             requirement.first,
                             requirement.second.clone()
@@ -4036,12 +4036,12 @@ class NextTraitGoalEvaluator {
                 // inference variable from the requested equality. That is an
                 // exact response, not an ambiguous comparison of two ivars.
                 const auto cmp = output == aty.type
-                    ? ::HIR::Compare::Equal
+                    ? HIRCompare::Equal
                     : mResolve.compareTy(span(), output, aty.type);
-                if (cmp == ::HIR::Compare::Unequal) {
+                if (cmp == HIRCompare::Unequal) {
                     return Certainty::NoSolution;
                 }
-                if (cmp == ::HIR::Compare::Fuzzy) {
+                if (cmp == HIRCompare::Fuzzy) {
                     result = Certainty::Ambiguous;
                 }
             }
@@ -4049,9 +4049,9 @@ class NextTraitGoalEvaluator {
         }
 
         Certainty evaluateAutoBuiltin(
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type
+            const HIRSimplePath& trait,
+            const HIRPathParams& params,
+            const HIRTypeData* type
         ) {
             auto combine = [](Certainty& result, Certainty nested) {
                 if (nested == Certainty::NoSolution) {
@@ -4061,7 +4061,7 @@ class NextTraitGoalEvaluator {
                     result = Certainty::Ambiguous;
                 }
             };
-            auto evaluateInner = [&](const ::HIR::TypeData* inner) {
+            auto evaluateInner = [&](const HIRTypeData* inner) {
                 return solveGoal(trait, params, inner, nullptr);
             };
 
@@ -4070,11 +4070,11 @@ class NextTraitGoalEvaluator {
                 return Certainty::Proven;
             TU_ARMA(Path, e) {
                 if (const auto* pe = e.path.mData.opt_Generic()) {
-                    ::HIR::TypeRef tmp;
+                    HIRTypeRef tmp;
                     auto monomorph = MonomorphStatePtr(
                         crate.types, nullptr, &pe->mParams, nullptr
                     );
-                    auto evaluateField = [&](const ::HIR::TypeData* field) {
+                    auto evaluateField = [&](const HIRTypeData* field) {
                         const auto& fieldType = monomorphiseTypeNeeded(field)
                             ? (tmp = mResolve.expandAssociatedTypes(
                                 span(), monomorph.monomorphType(span(), field)
@@ -4090,7 +4090,7 @@ class NextTraitGoalEvaluator {
                     if (const auto* strPtr = e.binding.opt_Struct()) {
                         const auto& str = **strPtr;
                         TU_MATCH(
-                            ::HIR::Struct::Data,
+                            HIRStruct::Data,
                             (str.mData),
                             (se),
                             (Unit, ),
@@ -4161,8 +4161,8 @@ class NextTraitGoalEvaluator {
         Certainty evaluateCandidate(
             size_t frameIndex,
             size_t candidateIndex,
-            const ::HIR::SimplePath& trait,
-            const ::HIR::TraitPath::assocListT* associated
+            const HIRSimplePath& trait,
+            const HIRTraitPath::assocListT* associated
         ) {
             auto* candidate = frames[frameIndex]->candidates[candidateIndex];
             candidate->ambiguityBeyondHead = false;
@@ -4175,10 +4175,10 @@ class NextTraitGoalEvaluator {
                 );
             }
             const bool environmentResponseConstraint =
-                candidate->headMatch == ::HIR::Compare::Fuzzy
+                candidate->headMatch == HIRCompare::Fuzzy
                 && isEnvironmentOrBuiltin(candidate->impl)
                 && !candidateHasPlaceholders(*candidate);
-            auto result = candidate->headMatch == ::HIR::Compare::Equal
+            auto result = candidate->headMatch == HIRCompare::Equal
                     || environmentResponseConstraint
                 ? Certainty::Proven : Certainty::Ambiguous;
 
@@ -4210,7 +4210,7 @@ class NextTraitGoalEvaluator {
             }
 
             const auto* traitImpl = candidate->impl.mData.opt_TraitImpl();
-            const ::HIR::GenericParams* implParamsDef = markerImpl
+            const HIRGenericParams* implParamsDef = markerImpl
                 ? &markerImpl->mParams
                 : (traitImpl && traitImpl->impl
                     ? &traitImpl->impl->mParams
@@ -4221,15 +4221,15 @@ class NextTraitGoalEvaluator {
 
             for (const auto& bound : implParamsDef->bounds) {
                 if (const auto* be = bound.opt_TraitBound()) {
-                    ::HIR::TypeRef nestedType;
-                    ::HIR::SimplePath nestedTrait;
-                    ::HIR::PathParams nestedParams;
-                    ::HIR::TraitPath::assocListT nestedAssociated;
+                    HIRTypeRef nestedType;
+                    HIRSimplePath nestedTrait;
+                    HIRPathParams nestedParams;
+                    HIRTraitPath::assocListT nestedAssociated;
 
                     // Candidate and response storage is pool-backed, so nested
                     // goals cannot relocate this parent slot.
                     auto monomorphBound = [&](auto& ms) {
-                        static const ::HIR::GenericParams noHrbs;
+                        static const HIRGenericParams noHrbs;
                         const bool outerPresent = be->hrtbs && !be->hrtbs->isEmpty();
                         auto hrbGuard = ms.pushHrb(outerPresent ? *be->hrtbs : noHrbs);
                         auto boundType = ms.monomorphType(span(), be->type);
@@ -4243,16 +4243,16 @@ class NextTraitGoalEvaluator {
                         const auto hrlParams = outerPresent
                             ? be->hrtbs->makeNopParams(
                                 crate.types,
-                                ::HIR::GENERICHrtb,
+                                GENERICHrtb,
                                 true
                             )
                             : (boundTrait.hrtbs
                                 ? boundTrait.hrtbs->makeNopParams(
                                     crate.types,
-                                    ::HIR::GENERICHrtb,
+                                    GENERICHrtb,
                                     true
                                 )
-                                : ::HIR::PathParams());
+                                : HIRPathParams());
                         auto hrlMonomorph = MonomorphHrlsOnly(crate.types, hrlParams);
                         nestedType = hrlMonomorph.monomorphType(span(), boundType, true);
                         nestedTrait = boundTrait.mPath.mPath;
@@ -4328,7 +4328,7 @@ class NextTraitGoalEvaluator {
                             nestedTrait,
                             nestedParams,
                             nestedType,
-                            [&](ImplRef response, ::HIR::Compare certainty) {
+                            [&](ImplRef response, HIRCompare certainty) {
                                 bindCandidateResponse(
                                     *candidate,
                                     nestedType,
@@ -4336,7 +4336,7 @@ class NextTraitGoalEvaluator {
                                     response
                                 );
                                 responseCertainty = certainty
-                                        == ::HIR::Compare::Equal
+                                        == HIRCompare::Equal
                                     ? Certainty::Proven
                                     : Certainty::Ambiguous;
                                 return true;
@@ -4355,8 +4355,8 @@ class NextTraitGoalEvaluator {
                         result = Certainty::Ambiguous;
                     }
                 } else if (const auto* equality = bound.opt_TypeEquality()) {
-                    ::HIR::TypeRef left;
-                    ::HIR::TypeRef right;
+                    HIRTypeRef left;
+                    HIRTypeRef right;
                     if (markerImpl) {
                         auto ms = MonomorphStatePtr(
                             crate.types,
@@ -4372,16 +4372,16 @@ class NextTraitGoalEvaluator {
                         right = ms.monomorphType(span(), equality->otherType);
                     }
                     const auto cmp = mResolve.compareTy(span(), left, right);
-                    if (cmp == ::HIR::Compare::Unequal) {
+                    if (cmp == HIRCompare::Unequal) {
                         return Certainty::NoSolution;
                     }
-                    if (cmp == ::HIR::Compare::Fuzzy) {
+                    if (cmp == HIRCompare::Fuzzy) {
                         candidate->ambiguityBeyondHead = true;
                         result = Certainty::Ambiguous;
                     }
                 } else if (const auto* lifetime = bound.opt_Lifetime()) {
-                    ::HIR::LifetimeRef test;
-                    ::HIR::LifetimeRef validFor;
+                    HIRLifetimeRef test;
+                    HIRLifetimeRef validFor;
                     if (markerImpl) {
                         auto ms = MonomorphStatePtr(
                             crate.types,
@@ -4417,10 +4417,10 @@ class NextTraitGoalEvaluator {
         }
 
         Certainty solveGoal(
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type,
-            const ::HIR::TraitPath::assocListT* associated
+            const HIRSimplePath& trait,
+            const HIRPathParams& params,
+            const HIRTypeData* type,
+            const HIRTraitPath::assocListT* associated
         ) {
             const auto availableDepth = availableDepthForNested();
             if (!availableDepth) {
@@ -4601,22 +4601,22 @@ class NextTraitGoalEvaluator {
         }
 
         Certainty matchRootAssociated(
-            const ::HIR::SimplePath& trait,
+            const HIRSimplePath& trait,
             const ImplRef& impl,
             const char* assocName,
-            const ::HIR::TypeData* assocType,
-            const ::HIR::PathParams* assocParams
+            const HIRTypeData* assocType,
+            const HIRPathParams* assocParams
         ) const {
             if (!assocName || !assocName[0]) {
                 return Certainty::Proven;
             }
-            const static ::HIR::PathParams noParams;
+            const static HIRPathParams noParams;
             const auto& params = assocParams ? *assocParams : noParams;
             if (!impl.mData.is_TraitImpl() && params.hasParams()) {
                 return Certainty::Ambiguous;
             }
             auto output = impl.getType(crate.types, assocName, params);
-            if (output == ::HIR::TypeRef()) {
+            if (output == HIRTypeRef()) {
                 if (impl.mData.is_TraitImpl()) {
                     return Certainty::Ambiguous;
                 }
@@ -4628,7 +4628,7 @@ class NextTraitGoalEvaluator {
                 }
                 output = makeAssociatedProjection(
                     impl,
-                    ::HIR::GenericPath(trait, impl.getTraitParams(crate.types)),
+                    HIRGenericPath(trait, impl.getTraitParams(crate.types)),
                     RcString::newInterned(assocName),
                     params
                 );
@@ -4637,42 +4637,42 @@ class NextTraitGoalEvaluator {
                 return Certainty::Proven;
             }
             const auto cmp = mResolve.compareTy(span(), assocType, output);
-            if (cmp == ::HIR::Compare::Unequal) {
+            if (cmp == HIRCompare::Unequal) {
                 return Certainty::NoSolution;
             }
             // A normalizes-to goal with a caller inference variable has a
             // proven response plus an equality constraint. The caller applies
             // that constraint from the returned ImplRef; the unassigned
             // destination alone must not turn a unique response into `Maybe`.
-            if (cmp == ::HIR::Compare::Fuzzy
+            if (cmp == HIRCompare::Fuzzy
                 && mResolve.typeContainsIvars(assocType)
                 && !mResolve.typeContainsIvars(output)
                 && !typeHasCandidatePlaceholder(output)) {
                 return Certainty::Proven;
             }
-            return cmp == ::HIR::Compare::Equal
+            return cmp == HIRCompare::Equal
                 ? Certainty::Proven
                 : Certainty::Ambiguous;
         }
 
         ImplRef materializeRootAssociated(
             ImplRef impl,
-            const ::HIR::SimplePath& trait,
+            const HIRSimplePath& trait,
             const char* assocName,
-            const ::HIR::PathParams* assocParams
+            const HIRPathParams* assocParams
         ) const {
             if (!assocName || !assocName[0] || impl.mData.is_TraitImpl()) {
                 return impl;
             }
-            const static ::HIR::PathParams noParams;
+            const static HIRPathParams noParams;
             const auto& itemParams = assocParams ? *assocParams : noParams;
-            if (impl.getType(crate.types, assocName, itemParams) != ::HIR::TypeRef()) {
+            if (impl.getType(crate.types, assocName, itemParams) != HIRTypeRef()) {
                 return impl;
             }
 
             auto type = impl.getImplType(crate.types);
             auto params = impl.getTraitParams(crate.types);
-            ::HIR::TraitPath::assocListT associated;
+            HIRTraitPath::assocListT associated;
             if (const auto* bounded = impl.mData.opt_BoundedPtr()) {
                 for (const auto& entry : *bounded->assoc) {
                     associated.insert({entry.first, entry.second.clone()});
@@ -4684,14 +4684,14 @@ class NextTraitGoalEvaluator {
             }
 
             const auto name = RcString::newInterned(assocName);
-            auto sourceTrait = ::HIR::GenericPath(trait, params.clone());
+            auto sourceTrait = HIRGenericPath(trait, params.clone());
             auto projection = makeAssociatedProjection(
                 type, sourceTrait, name, itemParams
             );
             associated.erase(name);
             associated.insert({
                 name,
-                ::HIR::TraitPath::AtyEqual{
+                HIRTraitPath::AtyEqual{
                     ::std::move(sourceTrait),
                     itemParams.clone(),
                     ::std::move(projection)
@@ -4713,11 +4713,11 @@ class NextTraitGoalEvaluator {
             const ImplRef& left,
             const ImplRef& right,
             const char* assocName,
-            const ::HIR::PathParams* assocParams
+            const HIRPathParams* assocParams
         ) const {
-            auto typesEqualAfterNormalization = [&](const ::HIR::TypeData* lhs,
-                                                       const ::HIR::TypeData* rhs) {
-                if (lhs == ::HIR::TypeRef() || rhs == ::HIR::TypeRef()) {
+            auto typesEqualAfterNormalization = [&](const HIRTypeData* lhs,
+                                                       const HIRTypeData* rhs) {
+                if (lhs == HIRTypeRef() || rhs == HIRTypeRef()) {
                     return lhs == rhs;
                 }
                 // TypeRef identity is structural equality after interning.
@@ -4732,8 +4732,8 @@ class NextTraitGoalEvaluator {
                 auto normalizedRhs = mResolve.expandAssociatedTypes(
                     span(), rhs
                 );
-                if (normalizedLhs == ::HIR::TypeRef()
-                    || normalizedRhs == ::HIR::TypeRef()) {
+                if (normalizedLhs == HIRTypeRef()
+                    || normalizedRhs == HIRTypeRef()) {
                     return normalizedLhs == normalizedRhs;
                 }
                 const auto* resolvedLhs = mResolve.resolveType(normalizedLhs);
@@ -4741,8 +4741,8 @@ class NextTraitGoalEvaluator {
                 return resolvedLhs == resolvedRhs
                     || resolvedLhs->equalsIgnoringRegions(resolvedRhs);
             };
-            auto paramsEqualAfterNormalization = [&](const ::HIR::PathParams& lhs,
-                                                        const ::HIR::PathParams& rhs) {
+            auto paramsEqualAfterNormalization = [&](const HIRPathParams& lhs,
+                                                        const HIRPathParams& rhs) {
                 if (lhs.mLifetimes.size() != rhs.mLifetimes.size()
                     || lhs.types.size() != rhs.types.size()
                     || lhs.values.size() != rhs.values.size()) {
@@ -4782,7 +4782,7 @@ class NextTraitGoalEvaluator {
             if (!assocName || !assocName[0]) {
                 return true;
             }
-            const static ::HIR::PathParams noParams;
+            const static HIRPathParams noParams;
             const auto& params = assocParams ? *assocParams : noParams;
             if ((!left.mData.is_TraitImpl() || !right.mData.is_TraitImpl())
                 && params.hasParams()) {
@@ -4797,7 +4797,7 @@ class NextTraitGoalEvaluator {
     public:
         NextTraitGoalEvaluator(
             const TraitResolution& resolve,
-            const ::HIR::Crate& crate
+            const HIRCrate& crate
         )
             : mResolve(resolve)
             , crate(crate)
@@ -4814,9 +4814,9 @@ class NextTraitGoalEvaluator {
 
         bool evaluateOverlap(
             const Span& callSpan,
-            const ::HIR::SimplePath& trait,
-            const ::HIR::TraitImpl& left,
-            const ::HIR::TraitImpl& right
+            const HIRSimplePath& trait,
+            const HIRTraitImpl& left,
+            const HIRTraitImpl& right
         ) {
             ASSERT_BUG(callSpan, !mSpan, "nested coherence overlap session");
             ASSERT_BUG(callSpan, !coherenceMode, "coherence mode leaked before overlap probe");
@@ -4848,7 +4848,7 @@ class NextTraitGoalEvaluator {
                 callSpan, left.traitArgs, true
             );
 
-            ::HIR::PathParams rightParams;
+            HIRPathParams rightParams;
             const auto rightMatch = mResolve.fticCheckParams(
                 callSpan,
                 trait,
@@ -4860,7 +4860,7 @@ class NextTraitGoalEvaluator {
                 rightParams,
                 false
             );
-            if (rightMatch == ::HIR::Compare::Unequal) {
+            if (rightMatch == HIRCompare::Unequal) {
                 return false;
             }
 
@@ -4889,7 +4889,7 @@ class NextTraitGoalEvaluator {
             pushCandidate(
                 frameIndex,
                 ImplRef(::std::move(leftParams), traitDef, trait, left),
-                ::HIR::Compare::Equal,
+                HIRCompare::Equal,
                 nullptr, {}, false, CandidateSource::TraitImpl
             );
             pushCandidate(
@@ -4911,13 +4911,13 @@ class NextTraitGoalEvaluator {
 
         bool evaluate(
             const Span& callSpan,
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* type,
+            const HIRSimplePath& trait,
+            const HIRPathParams& params,
+            const HIRTypeData* type,
             TraitResolution::tCbTraitImplR callback,
             const char* assocName,
-            const ::HIR::TypeData* assocType,
-            const ::HIR::PathParams* assocParams
+            const HIRTypeData* assocType,
+            const HIRPathParams* assocParams
         ) {
             const bool outermost = mSpan == nullptr;
             if (outermost) {
@@ -4953,7 +4953,7 @@ class NextTraitGoalEvaluator {
                 auto ambiguous = ImplRef(
                     goalType,
                     goalParams.clone(),
-                    ::HIR::TraitPath::assocListT()
+                    HIRTraitPath::assocListT()
                 );
                 ambiguous.markAmbiguousIdentity();
                 return callback(
@@ -4963,7 +4963,7 @@ class NextTraitGoalEvaluator {
                         assocName,
                         assocParams
                     ),
-                    ::HIR::Compare::Fuzzy
+                    HIRCompare::Fuzzy
                 );
             };
             if (goalHasUnassignedInfer(
@@ -5047,7 +5047,7 @@ class NextTraitGoalEvaluator {
                     );
                 }
             }
-            auto emitResponse = [&](ImplRef response, ::HIR::Compare certainty) {
+            auto emitResponse = [&](ImplRef response, HIRCompare certainty) {
                 if (!cacheableResponse) {
                     return callback(
                         instantiateForCaller(::std::move(response)), certainty
@@ -5077,15 +5077,15 @@ class NextTraitGoalEvaluator {
                     canonical.type,
                     nullptr
                 )) {
-                static const ::HIR::TraitPath::assocListT noAssociated;
+                static const HIRTraitPath::assocListT noAssociated;
                 const bool coinductive = crate.getTraitByPath(
                     span(), trait
                 ).isCoinductive;
                 return callback(
                     ImplRef(resolvedType, &goalParams, &noAssociated),
                     coinductive
-                        ? ::HIR::Compare::Equal
-                        : ::HIR::Compare::Fuzzy
+                        ? HIRCompare::Equal
+                        : HIRCompare::Fuzzy
                 );
             }
             auto* rootGoal = pushActiveGoal(
@@ -5137,7 +5137,7 @@ class NextTraitGoalEvaluator {
             bool suppressAutoBuiltin = false;
             bool negativeProven = false;
             bool negativeAmbiguous = false;
-            const ::HIR::TypeData* candidateAssocType = assocType;
+            const HIRTypeData* candidateAssocType = assocType;
             if (candidateAssocType) {
                 if (const auto* erased = candidateAssocType->opt_ErasedType()) {
                     if (const auto* alias = erased->inner.opt_Alias();
@@ -5151,13 +5151,13 @@ class NextTraitGoalEvaluator {
                     }
                 }
             }
-            ::HIR::TraitPath::assocListT rootAssociated;
+            HIRTraitPath::assocListT rootAssociated;
             if (assocName && assocName[0] && candidateAssocType) {
-                const static ::HIR::PathParams noAssocParams;
+                const static HIRPathParams noAssocParams;
                 rootAssociated.insert({
                     RcString::newInterned(assocName),
-                    ::HIR::TraitPath::AtyEqual{
-                        ::HIR::GenericPath(trait, goalParams.clone()),
+                    HIRTraitPath::AtyEqual{
+                        HIRGenericPath(trait, goalParams.clone()),
                         assocParams ? assocParams->clone() : noAssocParams.clone(),
                         candidateAssocType
                     }
@@ -5365,7 +5365,7 @@ class NextTraitGoalEvaluator {
                 if (certainty != Certainty::Proven) {
                     return emitResponse(
                         ::std::move(selected->impl),
-                        ::HIR::Compare::Fuzzy
+                        HIRCompare::Fuzzy
                     );
                 }
                 return emitResponse(
@@ -5375,7 +5375,7 @@ class NextTraitGoalEvaluator {
                         assocName,
                         assocParams
                     ),
-                    ::HIR::Compare::Equal
+                    HIRCompare::Equal
                 );
             }
 
@@ -5386,7 +5386,7 @@ class NextTraitGoalEvaluator {
             auto ambiguous = ImplRef(
                 resolvedType,
                 goalParams.clone(),
-                ::HIR::TraitPath::assocListT()
+                HIRTraitPath::assocListT()
             );
             ambiguous.markAmbiguousIdentity();
             return emitResponse(
@@ -5396,18 +5396,18 @@ class NextTraitGoalEvaluator {
                     assocName,
                     assocParams
                 ),
-                ::HIR::Compare::Fuzzy
+                HIRCompare::Fuzzy
             );
         }
     };
 
 TraitResolution::TraitResolution(
     const HMTypeInferrence& ivars,
-    const ::HIR::Crate& crate,
-    const ::HIR::GenericParams* implParams,
-    const ::HIR::GenericParams* itemParams,
-    const ::HIR::SimplePath& visPath,
-    const ::HIR::GenericPath* currentTrait
+    const HIRCrate& crate,
+    const HIRGenericParams* implParams,
+    const HIRGenericParams* itemParams,
+    const HIRSimplePath& visPath,
+    const HIRGenericPath* currentTrait
 )
     : TraitResolveCommon(crate)
     , mLangDeref(crate.getLangItemPathOpt("deref"))
@@ -5425,8 +5425,8 @@ TraitResolution::TraitResolution(
 TraitResolution::~TraitResolution() = default;
 
 void TraitResolution::setGenericContext(
-    const ::HIR::GenericParams* implParams,
-    const ::HIR::GenericParams* itemParams
+    const HIRGenericParams* implParams,
+    const HIRGenericParams* itemParams
 ) {
     if (mImplGenerics == implParams && mItemGenerics == itemParams) {
         return;
@@ -5438,12 +5438,12 @@ void TraitResolution::setGenericContext(
     prepIndexes(Span());
 }
 
-::HIR::PathParams TraitResolution::makeFreshImplParams(
-    const ::HIR::GenericParams& params
+HIRPathParams TraitResolution::makeFreshImplParams(
+    const HIRGenericParams& params
 ) const {
     auto& mutIvars = const_cast<HMTypeInferrence&>(this->ivars);
-    ::HIR::PathParams result;
-    result.mLifetimes = ThinVector<::HIR::LifetimeRef>(params.mLifetimes.size());
+    HIRPathParams result;
+    result.mLifetimes = ThinVector<HIRLifetimeRef>(params.mLifetimes.size());
     result.types.reserve(params.types.size());
     for (size_t i = 0; i < params.types.size(); i++) {
         result.types.push_back(mutIvars.newIvarTr());
@@ -5451,7 +5451,7 @@ void TraitResolution::setGenericContext(
     result.values.reserve(params.values.size());
     for (size_t i = 0; i < params.values.size(); i++) {
         result.values.push_back(
-            ::HIR::ConstGeneric::make_Infer({mutIvars.newIvarVal()})
+            HIRConstGeneric::make_Infer({mutIvars.newIvarVal()})
         );
     }
     return result;
@@ -5510,13 +5510,13 @@ bool TraitResolution::implsOverlap(
 
 bool TraitResolution::findTraitImplsNext(
     const Span& sp,
-    const ::HIR::SimplePath& trait,
-    const ::HIR::PathParams& params,
-    const ::HIR::TypeData* type,
+    const HIRSimplePath& trait,
+    const HIRPathParams& params,
+    const HIRTypeData* type,
     tCbTraitImplR callback,
     const char* assocName,
-    const ::HIR::TypeData* assocType,
-    const ::HIR::PathParams* assocParams
+    const HIRTypeData* assocType,
+    const HIRPathParams* assocParams
 ) const {
     TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
     if (!nextSolver) {
@@ -5530,9 +5530,9 @@ bool TraitResolution::findTraitImplsNext(
 
 bool TraitResolution::findTraitImpls(
     const Span& sp,
-    const ::HIR::SimplePath& trait,
-    const ::HIR::PathParams& params,
-    const ::HIR::TypeData* type,
+    const HIRSimplePath& trait,
+    const HIRPathParams& params,
+    const HIRTypeData* type,
     tCbTraitImplR callback,
     bool magicTraitImpls
 ) const {
@@ -5583,12 +5583,12 @@ bool TraitResolution::findTraitImpls(
             }
         }
 
-        bool TraitResolution::hasAssociatedType(const ::HIR::TypeData* input) const {
+        bool TraitResolution::hasAssociatedType(const HIRTypeData* input) const {
             if (!input->mayHaveAssociatedType()) {
                 return false;
             }
             struct H {
-                static bool checkPathparams(const TraitResolution& r, const ::HIR::PathParams& pp) {
+                static bool checkPathparams(const TraitResolution& r, const HIRPathParams& pp) {
                     for (const auto& arg : pp.types) {
                         if (r.hasAssociatedType(arg)) {
                             return true;
@@ -5597,8 +5597,8 @@ bool TraitResolution::findTraitImpls(
                     return false;
                 }
 
-                static bool checkPath(const TraitResolution& r, const ::HIR::Path& p) {
-                    TU_MATCH(::HIR::Path::Data, (p.mData), (e2), (Generic, return H::checkPathparams(r, e2.mParams);), (UfcsInherent, if (r.hasAssociatedType(e2.type)) return true; if (H::checkPathparams(r, e2.params)) return true; return false;), (UfcsKnown, if (r.hasAssociatedType(e2.type)) return true; if (H::checkPathparams(r, e2.trait.mParams)) return true; if (H::checkPathparams(r, e2.params)) return true; return false;), (UfcsUnknown, BUG(Span(), "Encountered UfcsUnknown - " << p);))
+                static bool checkPath(const TraitResolution& r, const HIRPath& p) {
+                    TU_MATCH(HIRPath::Data, (p.mData), (e2), (Generic, return H::checkPathparams(r, e2.mParams);), (UfcsInherent, if (r.hasAssociatedType(e2.type)) return true; if (H::checkPathparams(r, e2.params)) return true; return false;), (UfcsKnown, if (r.hasAssociatedType(e2.type)) return true; if (H::checkPathparams(r, e2.trait.mParams)) return true; if (H::checkPathparams(r, e2.params)) return true; return false;), (UfcsUnknown, BUG(Span(), "Encountered UfcsUnknown - " << p);))
                     throw "";
                 }
             };
@@ -5699,15 +5699,15 @@ bool TraitResolution::findTraitImpls(
     BUG(Span(), "Fell off the end of has_associated_type - input=" << input);
         }
 
-        void TraitResolution::expandAssociatedTypesInplace(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const {
+        void TraitResolution::expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack) const {
             struct H {
-                static void expandAssociatedTypesParams(const Span& sp, const TraitResolution& res, ::HIR::PathParams& params, LList<const ::HIR::TypeData*> stack) {
+                static void expandAssociatedTypesParams(const Span& sp, const TraitResolution& res, HIRPathParams& params, LList<const HIRTypeData*> stack) {
                     for (auto& arg : params.types) {
                         res.expandAssociatedTypesInplace(sp, arg, stack);
                     }
                 }
 
-                static void expandAssociatedTypesTp(const Span& sp, const TraitResolution& res, ::HIR::TraitPath& input, LList<const ::HIR::TypeData*> stack) {
+                static void expandAssociatedTypesTp(const Span& sp, const TraitResolution& res, HIRTraitPath& input, LList<const HIRTypeData*> stack) {
                     expandAssociatedTypesParams(sp, res, input.mPath.mParams, stack);
                     for (auto& arg : input.typeBounds) {
                         expandAssociatedTypesParams(sp, res, arg.second.sourceTrait.mParams, stack);
@@ -5762,7 +5762,7 @@ bool TraitResolution::findTraitImpls(
                 TU_ARMA(UfcsKnown, pe) {
                     struct D {
                         const TraitResolution& tr;
-                        D(const TraitResolution& tr, ::HIR::TypeRef v)
+                        D(const TraitResolution& tr, HIRTypeRef v)
                             : tr(tr)
                         {
                             tr.eatActiveStack.push_back(v);
@@ -5777,7 +5777,7 @@ bool TraitResolution::findTraitImpls(
                     // State stack to avoid infinite recursion
                     assert(eatActiveStack.size() > 0);
                     auto& prevStack = stack;
-                    LList<const ::HIR::TypeData*> stack(&prevStack, eatActiveStack.back());
+                    LList<const HIRTypeData*> stack(&prevStack, eatActiveStack.back());
 
                     expandAssociatedTypesInplace(sp, pe.type, stack);
                     H::expandAssociatedTypesParams(sp, *this, pe.params, stack);
@@ -5885,17 +5885,17 @@ bool TraitResolution::findTraitImpls(
             input = crate.types.intern(mv$(data));
         }
 
-        bool TraitResolution::expandAssociatedTypesInplaceUfcsInherent(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const {
+        bool TraitResolution::expandAssociatedTypesInplaceUfcsInherent(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack) const {
             TRACE_FUNCTION_FR(input, input);
             ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.mData.is_UfcsInherent(), input);
 
             const auto& pe = input->as_Path().path.mData.as_UfcsInherent();
-            const ::HIR::TypeAlias* alias = nullptr;
-            const ::HIR::GenericParams* implParamsDef = nullptr;
-            const ::HIR::TypeImpl* selectedImpl = nullptr;
-            ::HIR::PathParams implParams;
-            ::HIR::Compare bestMatch = ::HIR::Compare::Unequal;
-            static const ::HIR::PathParams noTraitParams;
+            const HIRTypeAlias* alias = nullptr;
+            const HIRGenericParams* implParamsDef = nullptr;
+            const HIRTypeImpl* selectedImpl = nullptr;
+            HIRPathParams implParams;
+            HIRCompare bestMatch = HIRCompare::Unequal;
+            static const HIRPathParams noTraitParams;
 
             crate.findTypeImpls(pe.type, ivars.callbackResolveInfer(), [&](const auto& impl) {
                 const auto itemIt = impl.types.find(pe.item);
@@ -5903,10 +5903,10 @@ bool TraitResolution::findTraitImpls(
                     return false;
                 }
 
-                ::HIR::PathParams candidateParams;
+                HIRPathParams candidateParams;
                 const auto match = this->fticCheckParams(
                     sp,
-                    ::HIR::SimplePath(),
+                    HIRSimplePath(),
                     nullptr,
                     pe.type,
                     impl.mParams,
@@ -5914,15 +5914,15 @@ bool TraitResolution::findTraitImpls(
                     impl.mType,
                     candidateParams
                 );
-                if (match != ::HIR::Compare::Unequal
-                    && (bestMatch == ::HIR::Compare::Unequal || match == ::HIR::Compare::Equal)) {
+                if (match != HIRCompare::Unequal
+                    && (bestMatch == HIRCompare::Unequal || match == HIRCompare::Equal)) {
                     alias = &itemIt->second.data;
                     implParamsDef = &impl.mParams;
                     selectedImpl = &impl;
                     implParams = mv$(candidateParams);
                     bestMatch = match;
                 }
-                return bestMatch == ::HIR::Compare::Equal;
+                return bestMatch == HIRCompare::Equal;
             });
 
             if (!alias) {
@@ -5967,7 +5967,7 @@ bool TraitResolution::findTraitImpls(
             return true;
         }
 
-        void TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const {
+        void TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack) const {
             TRACE_FUNCTION_FR("input=" << input, input);
             auto data = input->cloneData();
             auto& builderE = data.as_Path();
@@ -5982,7 +5982,7 @@ bool TraitResolution::findTraitImpls(
             const auto& pe = e.path.mData.as_UfcsKnown();
             auto markOpaque = [&]() {
                 auto opaqueData = input->cloneData();
-                opaqueData.as_Path().binding = ::HIR::TypePathBinding::make_Opaque({});
+                opaqueData.as_Path().binding = HIRTypePathBinding::make_Opaque({});
                 input = crate.types.intern(mv$(opaqueData));
             };
 
@@ -5998,7 +5998,7 @@ bool TraitResolution::findTraitImpls(
             // If there are impl params present, return early
             // TODO: There is still information available for placeholders (if the impl block is available)
             {
-                auto cb = [](const ::HIR::TypeData* ty) {
+                auto cb = [](const HIRTypeData* ty) {
                     return !(ty->is_Generic() && ty->as_Generic().isPlaceholder());
                 };
                 bool hasImplPlaceholders = false;
@@ -6020,7 +6020,7 @@ bool TraitResolution::findTraitImpls(
             }
 
             // Search for the actual trait containing this associated type
-            ::HIR::GenericPath traitPath;
+            HIRGenericPath traitPath;
             if (!this->traitContainsType(sp, pe.trait, this->crate.getTraitByPath(sp, pe.trait.mPath), pe.item.c_str(), traitPath)) {
                 BUG(sp, "Cannot find associated type " << pe.item << " anywhere in trait " << pe.trait);
             }
@@ -6079,9 +6079,9 @@ bool TraitResolution::findTraitImpls(
         TU_ARMA(TraitObject, te) {
             const auto& dataTrait = te.mTrait.mPath;
             if (pe.trait.mPath == dataTrait.mPath) {
-                auto cmp = ::HIR::Compare::Equal;
+                auto cmp = HIRCompare::Equal;
                 if (pe.trait.mParams.types.size() != dataTrait.mParams.types.size()) {
-                    cmp = ::HIR::Compare::Unequal;
+                    cmp = HIRCompare::Unequal;
                 } else {
                     for (unsigned int i = 0; i < pe.trait.mParams.types.size(); i++) {
                         const auto& l = pe.trait.mParams.types[i];
@@ -6089,7 +6089,7 @@ bool TraitResolution::findTraitImpls(
                         cmp &= l->compareWithPlaceholders(sp, r, ivars.callbackResolveInfer());
                     }
                 }
-                if (cmp != ::HIR::Compare::Unequal) {
+                if (cmp != HIRCompare::Unequal) {
                     auto it = te.mTrait.typeBounds.find(pe.item);
                     if (it == te.mTrait.typeBounds.end()) {
                         // TODO: Mark as opaque and return.
@@ -6097,7 +6097,7 @@ bool TraitResolution::findTraitImpls(
                         TODO(sp, "Handle unconstrained associate type " << pe.item << " from " << pe.type);
                     }
 
-                    auto hrlPps = te.mTrait.hrtbs ? te.mTrait.hrtbs->makeEmptyParams(true) : HIR::PathParams();
+                    auto hrlPps = te.mTrait.hrtbs ? te.mTrait.hrtbs->makeEmptyParams(true) : HIRPathParams();
                     input = MonomorphHrlsOnly(crate.types, hrlPps).monomorphType(sp, it->second.type);
                     return;
                 }
@@ -6105,10 +6105,10 @@ bool TraitResolution::findTraitImpls(
 
             // - Check if the desired trait is a supertrait of this.
             // NOTE: `params` (aka des_params) is not used (TODO)
-            bool isSupertrait = this->findNamedTraitInTrait(sp, pe.trait.mPath, pe.trait.mParams, *te.mTrait.traitPtr, dataTrait.mPath, dataTrait.mParams, pe.type, [&](const HIR::TraitPath& iTp) {
+            bool isSupertrait = this->findNamedTraitInTrait(sp, pe.trait.mPath, pe.trait.mParams, *te.mTrait.traitPtr, dataTrait.mPath, dataTrait.mParams, pe.type, [&](const HIRTraitPath& iTp) {
                 // The above is just the monomorphised params and associated set. Comparison is still needed.
                 auto cmp = this->comparePp(sp, iTp.mPath.mParams, pe.trait.mParams);
-                if (cmp != ::HIR::Compare::Unequal) {
+                if (cmp != HIRCompare::Unequal) {
                     // Search for bounded types in this TraitPath (from `find_named_trait_in_trait` and in the original input TraitPath `te.m_trait`)
                     auto it = iTp.typeBounds.find(pe.item);
                     if (it == iTp.typeBounds.end()) {
@@ -6117,7 +6117,7 @@ bool TraitResolution::findTraitImpls(
                     }
                     if (it != te.mTrait.typeBounds.end()) {
                         // Remove HRLs (TODO: Match them? not really needed in this stage I think)
-                        auto hrlPps = te.mTrait.hrtbs ? te.mTrait.hrtbs->makeEmptyParams(true) : iTp.hrtbs ? iTp.hrtbs->makeEmptyParams(true) : HIR::PathParams();
+                        auto hrlPps = te.mTrait.hrtbs ? te.mTrait.hrtbs->makeEmptyParams(true) : iTp.hrtbs ? iTp.hrtbs->makeEmptyParams(true) : HIRPathParams();
                         input = MonomorphHrlsOnly(crate.types, hrlPps).monomorphType(sp, it->second.type);
                         return true;
                     }
@@ -6135,9 +6135,9 @@ bool TraitResolution::findTraitImpls(
             for (const auto& trait : te.traits) {
                 const auto& traitGp = trait.mPath;
                 if (traitPath.mPath == traitGp.mPath) {
-                    auto cmp = ::HIR::Compare::Equal;
+                    auto cmp = HIRCompare::Equal;
                     if (traitPath.mParams.types.size() != traitGp.mParams.types.size()) {
-                        cmp = ::HIR::Compare::Unequal;
+                        cmp = HIRCompare::Unequal;
                     } else {
                         for (unsigned int i = 0; i < traitPath.mParams.types.size(); i++) {
                             const auto& l = traitPath.mParams.types[i];
@@ -6145,7 +6145,7 @@ bool TraitResolution::findTraitImpls(
                             cmp &= l->compareWithPlaceholders(sp, r, ivars.callbackResolveInfer());
                         }
                     }
-                    if (cmp != ::HIR::Compare::Unequal) {
+                    if (cmp != HIRCompare::Unequal) {
                         auto hrls = getHrls(crate.types, sp, trait.hrtbs, traitGp.mParams, traitPath.mParams);
                         {
                             auto it = trait.typeBounds.find(pe.item);
@@ -6170,13 +6170,13 @@ bool TraitResolution::findTraitImpls(
 
                 // - Check if the desired trait is a supertrait of this.
                 // NOTE: `params` (aka des_params) is not used (TODO)
-                bool isSupertrait = this->findNamedTraitInTrait(sp, traitPath.mPath, traitPath.mParams, *trait.traitPtr, traitGp.mPath, traitGp.mParams, pe.type, [&](const HIR::TraitPath& iTp) {
+                bool isSupertrait = this->findNamedTraitInTrait(sp, traitPath.mPath, traitPath.mParams, *trait.traitPtr, traitGp.mPath, traitGp.mParams, pe.type, [&](const HIRTraitPath& iTp) {
                     if (iTp.hrtbs && !iTp.hrtbs->isEmpty() && trait.hrtbs && !trait.hrtbs->isEmpty()) {
                         TODO(sp, "Nested HRTBs");
                     }
                     // The above is just the monomorphised params and associated set. Comparison is still needed.
                     auto cmp = this->comparePp(sp, iTp.mPath.mParams, pe.trait.mParams);
-                    if (cmp != ::HIR::Compare::Unequal) {
+                    if (cmp != HIRCompare::Unequal) {
                         //auto hrls = get_hrls(sp, trait.m_hrtbs, i_tp.m_path.m_params, trait_path.m_params);
                         auto it = iTp.typeBounds.find(pe.item);
                         if (it == iTp.typeBounds.end()) {
@@ -6221,20 +6221,20 @@ bool TraitResolution::findTraitImpls(
             resultType = ResultType::Recurse;
             DEBUG("Equality: for" << it->second.hrbs.fmtArgs());
             MatchHrls m{crate.types, &it->second.hrbs};
-            input->matchTestGenericsFuzz(sp, it->first, HIR::ResolvePlaceholdersNop(), m);
+            input->matchTestGenericsFuzz(sp, it->first, HIRResolvePlaceholdersNop(), m);
             input = MonomorphHrlsOnly(crate.types, m.hrls).monomorphType(sp, it->second.ty);
             rv = true;
         }
     }
     if(!rv)
     {
-        rv = this->iterateBoundsTraits(sp, pe.type, traitPath.mPath, [&](HIR::Compare cmp, const ::HIR::TypeData* boundType, const ::HIR::GenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
+        rv = this->iterateBoundsTraits(sp, pe.type, traitPath.mPath, [&](HIRCompare cmp, const HIRTypeData* boundType, const HIRGenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
             DEBUG("[expand_associated_types_inplace__UfcsKnown] Trait bound - " << boundType << " : " << boundTrait);
             // 2. Check if the trait (or any supertrait) includes pe.trait
             // TODO: If fuzzy, bail and leave unresolved?
             cmp &= boundTrait.compareWithPlaceholders(sp, traitPath, this->ivars.callbackResolveInfer());
             //if( cmp != HIR::Compare::Unequal ) {
-            if (cmp == HIR::Compare::Equal) {
+            if (cmp == HIRCompare::Equal) {
                 auto it = boundInfo.assoc.find(pe.item);
                 // 1. Check if the bounds include the desired item
                 if (it == boundInfo.assoc.end()) {
@@ -6244,7 +6244,7 @@ bool TraitResolution::findTraitImpls(
 
                     // Flag so if no impl was found by the lower checks, it gets correctly set to Opaque (or left unbound)
                     foundBoundWithNoType = true;
-                    if (cmp == HIR::Compare::Fuzzy) {
+                    if (cmp == HIRCompare::Fuzzy) {
                         resultType = ResultType::LeaveUnbound;
                     } else {
                         resultType = ResultType::Opaque;
@@ -6281,7 +6281,7 @@ bool TraitResolution::findTraitImpls(
             // TODO: Search for equality bounds on this associated type (pe_inner) that match the entire type (pe)
             // - Does simplification of complex associated types
             //
-            ::HIR::GenericPath traitPath;
+            HIRGenericPath traitPath;
             if (!this->traitContainsType(sp, peInner.trait, this->crate.getTraitByPath(sp, peInner.trait.mPath), peInner.item.c_str(), traitPath)) {
                 BUG(sp, "Cannot find associated type " << peInner.item << " anywhere in trait " << peInner.trait);
             }
@@ -6303,7 +6303,7 @@ bool TraitResolution::findTraitImpls(
                     }
                     auto cmp = sourceTrait.compareWithPlaceholders(sp, pe.trait, ivars.callbackResolveInfer());
                     cmp &= atyParams.compareWithPlaceholders(sp, pe.params, ivars.callbackResolveInfer());
-                    if (cmp == HIR::Compare::Equal) {
+                    if (cmp == HIRCompare::Equal) {
                         input = monomorphiseTypeNeeded(it->second.type)
                             ? cbPlaceholdersTrait.monomorphType(sp, it->second.type)
                             : it->second.type;
@@ -6322,7 +6322,7 @@ bool TraitResolution::findTraitImpls(
 
                 // TODO: Find trait in this trait.
                 const auto& boundTrait = crate.getTraitByPath(sp, boundTp.mPath);
-                bool replaced = this->findNamedTraitInTrait(sp, pe.trait.mPath, pe.trait.mParams, boundTrait, boundTp.mPath, boundTp.mParams, pe.type, [&](const HIR::TraitPath& tp) {
+                bool replaced = this->findNamedTraitInTrait(sp, pe.trait.mPath, pe.trait.mParams, boundTrait, boundTp.mPath, boundTp.mParams, pe.type, [&](const HIRTraitPath& tp) {
                     auto it = tp.typeBounds.find(pe.item);
                     if (it != tp.typeBounds.end()) {
                         input = it->second.type;
@@ -6346,20 +6346,20 @@ bool TraitResolution::findTraitImpls(
             traitPath.mPath,
             traitPath.mParams,
             pe.type,
-            [&](ImplRef impl, ::HIR::Compare certainty) {
+            [&](ImplRef impl, HIRCompare certainty) {
                 if (impl.isAmbiguousIdentity()) {
                     ambiguous = true;
                     return true;
                 }
 
                 auto output = impl.getType(crate.types, pe.item.c_str(), pe.params);
-                if (output == ::HIR::TypeRef() || output == input) {
+                if (output == HIRTypeRef() || output == input) {
                     ambiguous = true;
                     return true;
                 }
                 input = ::std::move(output);
                 normalized = true;
-                ambiguous = certainty == ::HIR::Compare::Fuzzy;
+                ambiguous = certainty == HIRCompare::Fuzzy;
                 return true;
             },
             pe.item.c_str(),
@@ -6385,10 +6385,10 @@ bool TraitResolution::findTraitImpls(
     if( this->findTraitImplsMagic(sp, traitPath.mPath, traitPath.mParams, pe.type, [&](auto impl, auto qual)->bool {
         DEBUG("[expand_associated_types__UfcsKnown] Found " << impl << " qual=" << qual);
         // If it's a fuzzy match, keep going (but count if a concrete hasn't been found)
-        if (qual == ::HIR::Compare::Fuzzy) {
+        if (qual == HIRCompare::Fuzzy) {
         } else {
             auto ty = impl.getType(crate.types, pe.item.c_str(), pe.params);
-            if (ty == ::HIR::TypeRef()) {
+            if (ty == HIRTypeRef()) {
                 DEBUG("Assuming that " << input << " is an opaque name");
                 markOpaque();
             } else {
@@ -6404,10 +6404,10 @@ bool TraitResolution::findTraitImpls(
     if( this->findTraitImplsTypes(sp, traitPath.mPath, traitPath.mParams, pe.type, [&](auto impl, auto qual)->bool {
         DEBUG("[expand_associated_types__UfcsKnown] Found " << impl << " qual=" << qual);
         // If it's a fuzzy match, keep going (but count if a concrete hasn't been found)
-        if (qual == ::HIR::Compare::Fuzzy) {
+        if (qual == HIRCompare::Fuzzy) {
         } else {
             auto ty = impl.getType(crate.types, pe.item.c_str(), pe.params);
-            if (ty == ::HIR::TypeRef()) {
+            if (ty == HIRTypeRef()) {
                 DEBUG("Assuming that " << input << " is an opaque name");
                 markOpaque();
             } else {
@@ -6427,10 +6427,10 @@ bool TraitResolution::findTraitImpls(
     bool isSpecialisable = false;
     bool isBound = false;
     ImplRef bestImpl;
-    auto cbFindImpl = [&](ImplRef impl, HIR::Compare qual)->bool {
+    auto cbFindImpl = [&](ImplRef impl, HIRCompare qual)->bool {
         DEBUG("[expand_associated_types__UfcsKnown] Found " << impl << " qual=" << qual);
         // If it's a fuzzy match, keep going (but count if a concrete hasn't been found)
-        if (qual == ::HIR::Compare::Fuzzy) {
+        if (qual == HIRCompare::Fuzzy) {
             if (canFuzz) {
                 count += 1;
                 if (count == 1 && impl.getImplType(crate.types)->tag() == pe.type->tag()) {
@@ -6455,7 +6455,7 @@ bool TraitResolution::findTraitImpls(
                 return false;
             } else {
                 auto ty = impl.getType(crate.types, pe.item.c_str(), pe.params);
-                if (ty == ::HIR::TypeRef()) {
+                if (ty == HIRTypeRef()) {
                     if (isBound) {
                         return false;
                     } else {
@@ -6498,7 +6498,7 @@ bool TraitResolution::findTraitImpls(
             return;
         } else {
             auto ty = bestImpl.getType(crate.types, pe.item.c_str(), pe.params);
-            if (ty == ::HIR::TypeRef()) {
+            if (ty == HIRTypeRef()) {
                 if (!this->ivars.typeContainsIvars(input, false)) {
                     DEBUG("Assuming opaque - best impl didn't have ATY");
                     markOpaque();
@@ -6535,7 +6535,7 @@ bool TraitResolution::findTraitImpls(
                     sp,
                     visitTyWith(
                         input,
-                        [](const HIR::TypeData* ty) {
+                        [](const HIRTypeData* ty) {
                     return ty->is_ErasedType() || ty->is_Infer();
                 }
                     ) || monomorphiseTypeNeeded(input),
@@ -6586,7 +6586,7 @@ bool TraitResolution::findTraitImpls(
         // -------------------------------------------------------------------------------------------------------------------
         //
         // -------------------------------------------------------------------------------------------------------------------
-        bool TraitResolution::findNamedTraitInTrait(const Span& sp, const ::HIR::SimplePath& des, const ::HIR::PathParams& desParams, const ::HIR::Trait& traitPtr, const ::HIR::SimplePath& traitPath, const ::HIR::PathParams& pp, const ::HIR::TypeData* targetType, tCbFindTrait callback) const {
+        bool TraitResolution::findNamedTraitInTrait(const Span& sp, const HIRSimplePath& des, const HIRPathParams& desParams, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* targetType, tCbFindTrait callback) const {
             TRACE_FUNCTION_F(des << desParams << " in " << traitPath << pp);
             if (pp.types.size() != traitPtr.mParams.types.size()) {
                 BUG(sp, "Incorrect number of parameters for trait " << traitPath);
@@ -6620,9 +6620,9 @@ bool TraitResolution::findTraitImpls(
             return false;
         }
 
-        bool TraitResolution::findTraitImplsBound(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams& params, const ::HIR::TypeData* type, tCbTraitImplR callback) const {
+        bool TraitResolution::findTraitImplsBound(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback) const {
             TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
-            const ::HIR::Path::Data::Data_UfcsKnown* assocInfo = nullptr;
+            const HIRPath::Data::Data_UfcsKnown* assocInfo = nullptr;
             if (const auto* e = type->opt_Path()) {
                 assocInfo = e->path.mData.opt_UfcsKnown();
             }
@@ -6640,10 +6640,10 @@ bool TraitResolution::findTraitImpls(
             // E.g. `T: IntoIterator<Item=&u8>` implies `<T as IntoIterator>::IntoIter : Iterator<Item=&u8>`
             // > Would maybe want a list of all explicit and implied bounds instead.
             {
-                bool rv = this->iterateBoundsTraits(sp, type, trait, [&](HIR::Compare cmp, const HIR::TypeData* boundTy, const ::HIR::GenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
+                bool rv = this->iterateBoundsTraits(sp, type, trait, [&](HIRCompare cmp, const HIRTypeData* boundTy, const HIRGenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
                     const auto& storedParams = boundTrait.mParams;
-                    ::HIR::PathParams normalisedParams;
-                    const ::HIR::PathParams* bParams = &storedParams;
+                    HIRPathParams normalisedParams;
+                    const HIRPathParams* bParams = &storedParams;
                     if (::std::any_of(
                             storedParams.types.begin(), storedParams.types.end(),
                             [&](const auto& ty) { return this->hasAssociatedType(ty); }
@@ -6659,11 +6659,11 @@ bool TraitResolution::findTraitImpls(
                     DEBUG("[find_trait_impls_bound] Checking params " << params << " vs " << *bParams);
                     auto ord = cmp;
                     ord &= this->comparePp(sp, *bParams, params);
-                    if (ord == ::HIR::Compare::Unequal) {
+                    if (ord == HIRCompare::Unequal) {
                         DEBUG("[find_trait_impls_bound] - Mismatch");
                         return false;
                     }
-                    if (ord == ::HIR::Compare::Fuzzy) {
+                    if (ord == HIRCompare::Fuzzy) {
                         DEBUG("[find_trait_impls_bound] - Fuzzy match");
                     }
                     DEBUG("[find_trait_impls_bound] Match for" << boundInfo.hrbs.fmtArgs() << " " << boundTy << " : " << boundTrait);
@@ -6682,12 +6682,12 @@ bool TraitResolution::findTraitImpls(
             }
 
             if (assocInfo) {
-                bool rv = this->iterateBoundsTraits(sp, assocInfo->type, assocInfo->trait.mPath, [&](HIR::Compare cmp, const HIR::TypeData* boundTy, const ::HIR::GenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
+                bool rv = this->iterateBoundsTraits(sp, assocInfo->type, assocInfo->trait.mPath, [&](HIRCompare cmp, const HIRTypeData* boundTy, const HIRGenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
                     // Check the trait params
                     cmp &= this->comparePp(sp, boundTrait.mParams, assocInfo->trait.mParams);
-                    if (cmp == ::HIR::Compare::Fuzzy) {
+                    if (cmp == HIRCompare::Fuzzy) {
                         //TODO(sp, "Handle fuzzy matches searching for associated type bounds");
-                    } else if (cmp == ::HIR::Compare::Unequal) {
+                    } else if (cmp == HIRCompare::Unequal) {
                         return false;
                     }
                     auto outerOrd = cmp;
@@ -6699,7 +6699,7 @@ bool TraitResolution::findTraitImpls(
                             auto monomorphCb = MonomorphStatePtr(crate.types, assocInfo->type, &assocInfo->trait.mParams, nullptr);
 
                             DEBUG("- Found an associated type bound for this trait via another bound");
-                            ::HIR::Compare ord = outerOrd;
+                            HIRCompare ord = outerOrd;
                             if (monomorphisePathparamsNeeded(bound.mPath.mParams)) {
                                 // TODO: Use a compare+callback method instead
                                 auto bParamsMono = monomorphCb.monomorphPathParams(sp, bound.mPath.mParams, false);
@@ -6708,10 +6708,10 @@ bool TraitResolution::findTraitImpls(
                             } else {
                                 ord &= this->comparePp(sp, bound.mPath.mParams, params);
                             }
-                            if (ord == ::HIR::Compare::Unequal) {
+                            if (ord == HIRCompare::Unequal) {
                                 return false;
                             }
-                            if (ord == ::HIR::Compare::Fuzzy) {
+                            if (ord == HIRCompare::Fuzzy) {
                                 DEBUG("Fuzzy match");
                             }
 
@@ -6741,15 +6741,15 @@ bool TraitResolution::findTraitImpls(
             return false;
         }
 
-        bool TraitResolution::findTraitImplsCrate(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* paramsPtr, const ::HIR::TypeData* type, tCbTraitImplR callback) const {
+        bool TraitResolution::findTraitImplsCrate(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* paramsPtr, const HIRTypeData* type, tCbTraitImplR callback) const {
             // TODO: Have a global cache of impls that don't reference either generics or ivars
 
-            static ::HIR::TraitPath::assocListT nullAssoc;
+            static HIRTraitPath::assocListT nullAssoc;
             TRACE_FUNCTION_F(trait << FMT_CB(ss, if (paramsPtr) { ss << *paramsPtr; } else { ss << "<?>"; }) << " for " << type);
 
             CanonicalizeTraitGoal canonicalizer(crate.types);
             const auto canonicalType = canonicalizer.monomorphType(sp, type, true);
-            ::HIR::PathParams canonicalParams;
+            HIRPathParams canonicalParams;
             const bool hasParams = paramsPtr != nullptr;
             if (hasParams) {
                 canonicalParams = canonicalizer.monomorphPathParams(
@@ -6767,8 +6767,8 @@ bool TraitResolution::findTraitImpls(
                 // rustc treats an inductive recursive trait predicate as
                 // ambiguous, while productive recursive traits are proven.
                 const auto cmp = crate.getTraitByPath(sp, trait).isCoinductive
-                    ? ::HIR::Compare::Equal
-                    : ::HIR::Compare::Fuzzy;
+                    ? HIRCompare::Equal
+                    : HIRCompare::Fuzzy;
                 DEBUG("Legacy trait goal recurred: " << trait
                     << FMT_CB(ss, if (paramsPtr) { ss << *paramsPtr; } else { ss << "<?>"; })
                     << " for " << type << ", result=" << cmp);
@@ -6781,11 +6781,11 @@ bool TraitResolution::findTraitImpls(
             // on every step (for example, tuple Distribution impls).  If the
             // current fresh goal is compatible with an older goal for the
             // same trait, further candidate search is ambiguous.
-            const auto typeIsFresh = [&](const ::HIR::TypeData* ty) {
+            const auto typeIsFresh = [&](const HIRTypeData* ty) {
                 if (ivars.typeContainsIvars(ty, false)) {
                     return true;
                 }
-                return visitTyWith(ty, [](const ::HIR::TypeData* inner) {
+                return visitTyWith(ty, [](const HIRTypeData* inner) {
                     return inner->is_Generic()
                         && inner->as_Generic().isPlaceholder();
                 });
@@ -6814,13 +6814,13 @@ bool TraitResolution::findTraitImpls(
                     }
                     if (canonicalType->compareWithPlaceholders(
                             sp, activeGoal.type, resolve
-                        ) == ::HIR::Compare::Unequal) {
+                        ) == HIRCompare::Unequal) {
                         continue;
                     }
                     if (hasParams && activeGoal.hasParams
                         && canonicalParams.compareWithPlaceholders(
                             sp, activeGoal.params, resolve
-                        ) == ::HIR::Compare::Unequal) {
+                        ) == HIRCompare::Unequal) {
                         continue;
                     }
 
@@ -6830,7 +6830,7 @@ bool TraitResolution::findTraitImpls(
                         << " for " << type << ", result=Fuzzy");
                     return callback(
                         ImplRef(type, paramsPtr, &nullAssoc),
-                        ::HIR::Compare::Fuzzy
+                        HIRCompare::Fuzzy
                     );
                 }
             }
@@ -6851,10 +6851,10 @@ bool TraitResolution::findTraitImpls(
                 // NOTE: Expected behavior is for Ivars to return false
                 // TODO: Should they return Compare::Fuzzy instead?
                 if (type->is_Infer()) {
-                    return callback(ImplRef(type, paramsPtr, &nullAssoc), ::HIR::Compare::Fuzzy);
+                    return callback(ImplRef(type, paramsPtr, &nullAssoc), HIRCompare::Fuzzy);
                 }
 
-                const ::HIR::TraitMarkings* markings = nullptr;
+                const HIRTraitMarkings* markings = nullptr;
                 if (const auto* e = type->opt_Path()) {
                     if (TU_TEST1(e->path.mData, Generic, .mParams.types.size() == 0)) {
                         markings = e->binding.getTraitMarkings();
@@ -6869,7 +6869,7 @@ bool TraitResolution::findTraitImpls(
                         if (!it->second.conditions.empty()) {
                             TODO(sp, "Conditional auto trait impl");
                         } else if (it->second.isImpled) {
-                            return callback(ImplRef(type, paramsPtr, &nullAssoc), ::HIR::Compare::Equal);
+                            return callback(ImplRef(type, paramsPtr, &nullAssoc), HIRCompare::Equal);
                         } else {
                             return false;
                         }
@@ -6888,9 +6888,9 @@ bool TraitResolution::findTraitImpls(
                     DEBUG("[find_trait_impls_crate] - Auto Pos Found impl" << impl.mParams.fmtArgs() << " " << trait << impl.traitArgs << " for " << impl.mType << " " << impl.mParams.fmtBounds());
 
                     // Compare with `params`
-                    HIR::PathParams implParams;
+                    HIRPathParams implParams;
                     auto match = this->fticCheckParams(sp, trait, paramsPtr, type, impl.mParams, impl.traitArgs, impl.mType, implParams);
-                    if (match == ::HIR::Compare::Unequal) {
+                    if (match == HIRCompare::Unequal) {
                         // If any bound failed, return false (continue searching)
                         return false;
                     }
@@ -6921,9 +6921,9 @@ bool TraitResolution::findTraitImpls(
                     DEBUG("[find_trait_impls_crate] - Found auto neg impl" << impl.mParams.fmtArgs() << " " << trait << impl.traitArgs << " for " << impl.mType << " " << impl.mParams.fmtBounds());
 
                     // Compare with `params`
-                    HIR::PathParams implParams;
+                    HIRPathParams implParams;
                     auto match = this->fticCheckParams(sp, trait, paramsPtr, type, impl.mParams, impl.traitArgs, impl.mType, implParams);
-                    if (match == ::HIR::Compare::Unequal) {
+                    if (match == HIRCompare::Unequal) {
                         // If any bound failed, return false (continue searching)
                         return false;
                     }
@@ -6937,15 +6937,15 @@ bool TraitResolution::findTraitImpls(
                 }
 
                 auto cmp = this->checkAutoTraitImplDestructure(sp, trait, paramsPtr, type);
-                if (cmp != ::HIR::Compare::Unequal) {
+                if (cmp != HIRCompare::Unequal) {
                     if (markings) {
-                        ASSERT_BUG(sp, cmp == ::HIR::Compare::Equal, "Auto trait with no params returned a fuzzy match from destructure - " << trait << " for " << type);
-                        markings->autoImpls.insert(::std::make_pair(trait, ::HIR::TraitMarkings::AutoMarking{{}, true}));
+                        ASSERT_BUG(sp, cmp == HIRCompare::Equal, "Auto trait with no params returned a fuzzy match from destructure - " << trait << " for " << type);
+                        markings->autoImpls.insert(::std::make_pair(trait, HIRTraitMarkings::AutoMarking{{}, true}));
                     }
                     return callback(ImplRef(type, paramsPtr, &nullAssoc), cmp);
                 } else {
                     if (markings) {
-                        markings->autoImpls.insert(::std::make_pair(trait, ::HIR::TraitMarkings::AutoMarking{{}, false}));
+                        markings->autoImpls.insert(::std::make_pair(trait, HIRTraitMarkings::AutoMarking{{}, false}));
                     }
                     return false;
                 }
@@ -6960,19 +6960,19 @@ bool TraitResolution::findTraitImpls(
 #elif 0
             if (type->is_Infer() && !type->as_Infer().isLit()) {
                 return this->crate.findTraitImpls(trait, type, this->ivars.callbackResolveInfer(), [&](const auto& impl) {
-                    HIR::PathParams implParams;
+                    HIRPathParams implParams;
                     // Fill all params with placeholders?
-                    return callback(ImplRef(mv$(implParams), trait, impl), HIR::Compare::Fuzzy);
+                    return callback(ImplRef(mv$(implParams), trait, impl), HIRCompare::Fuzzy);
                 });
             }
 #endif
 
-            return this->crate.findTraitImpls(trait, type, this->ivars.callbackResolveInfer(), [&](const HIR::TraitImpl& impl) {
+            return this->crate.findTraitImpls(trait, type, this->ivars.callbackResolveInfer(), [&](const HIRTraitImpl& impl) {
                 DEBUG("[find_trait_impls_crate] Found impl" << impl.mParams.fmtArgs() << " " << trait << impl.traitArgs << " for " << impl.mType << " " << impl.mParams.fmtBounds());
                 // Compare with `params`
-                HIR::PathParams implParams;
+                HIRPathParams implParams;
                 auto match = this->fticCheckParams(sp, trait, paramsPtr, type, impl.mParams, impl.traitArgs, impl.mType, implParams);
-                if (match == ::HIR::Compare::Unequal) {
+                if (match == HIRCompare::Unequal) {
                     // If any bound failed, return false (continue searching)
                     DEBUG("[find_trait_impls_crate] - Params mismatch");
                     return false;
@@ -6983,14 +6983,14 @@ bool TraitResolution::findTraitImpls(
             });
         }
 
-        ::HIR::Compare TraitResolution::checkAutoTraitImplDestructure(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* paramsPtr, const ::HIR::TypeData* type) const {
+        HIRCompare TraitResolution::checkAutoTraitImplDestructure(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* paramsPtr, const HIRTypeData* type) const {
             TRACE_FUNCTION_F("trait = " << trait << ", type = " << type);
             // HELPER: Search for an impl of this trait for an inner type, and return the match type
-            auto typeImplsTrait = [&](const auto& innerTy) -> ::HIR::Compare {
-                auto lRes = ::HIR::Compare::Unequal;
+            auto typeImplsTrait = [&](const auto& innerTy) -> HIRCompare {
+                auto lRes = HIRCompare::Unequal;
                 this->findTraitImpls(sp, trait, *paramsPtr, innerTy, [&](auto, auto cmp) {
                     lRes = cmp;
-                    return (cmp == ::HIR::Compare::Equal);
+                    return (cmp == HIRCompare::Equal);
                 });
                 DEBUG("[check_auto_trait_impl_destructure] " << innerTy << " - " << lRes);
                 return lRes;
@@ -7000,15 +7000,15 @@ bool TraitResolution::findTraitImpls(
     TU_MATCH_HDRA( (*type), { )
     default:
         // Otherwise, there's no negative so it must be positive
-        return ::HIR::Compare::Equal;
+        return HIRCompare::Equal;
         TU_ARMA(Path, e) {
-            ::HIR::Compare res = ::HIR::Compare::Equal;
+            HIRCompare res = HIRCompare::Equal;
         TU_MATCH_HDRA( (e.path.mData), {)
         TU_ARMA(Generic, pe) { //(
-                    ::HIR::TypeRef tmp;
+                    HIRTypeRef tmp;
                     auto monomorph = MonomorphStatePtr(crate.types, nullptr, &pe.mParams, nullptr);
                     // HELPER: Get a possibily monomorphised version of the input type (stored in `tmp` if needed)
-                    auto monomorphGet = [&](const auto& ty) -> const ::HIR::TypeData* {
+                    auto monomorphGet = [&](const auto& ty) -> const HIRTypeData* {
                         if (monomorphiseTypeNeeded(ty)) {
                             return (tmp = this->expandAssociatedTypes(sp, monomorph.monomorphType(sp, ty)));
                         } else {
@@ -7030,7 +7030,7 @@ bool TraitResolution::findTraitImpls(
                             // - Map of trait->does_impl for local fields?
                             // - Problems occur with type parameters
                             TU_MATCH(
-                                ::HIR::Struct::Data,
+                                HIRStruct::Data,
                                 (str.mData),
                                 (se),
                                 (Unit, ),
@@ -7039,8 +7039,8 @@ bool TraitResolution::findTraitImpls(
                                      const auto& fldTyMono = monomorphGet(fld.ent);
                                      DEBUG("Struct::Tuple " << fldTyMono);
                                      res &= typeImplsTrait(fldTyMono);
-                                     if (res == ::HIR::Compare::Unequal) {
-                                         return ::HIR::Compare::Unequal;
+                                     if (res == HIRCompare::Unequal) {
+                                         return HIRCompare::Unequal;
                                      }
                                  }),
                                 (Named, for (const auto& fld : se) {
@@ -7049,8 +7049,8 @@ bool TraitResolution::findTraitImpls(
                                     DEBUG("Struct::Named '" << fld.name << "' " << fldTyMono);
 
                                     res &= typeImplsTrait(fldTyMono);
-                                    if (res == ::HIR::Compare::Unequal) {
-                                        return ::HIR::Compare::Unequal;
+                                    if (res == HIRCompare::Unequal) {
+                                        return HIRCompare::Unequal;
                                     }
                                 })
                             )
@@ -7061,8 +7061,8 @@ bool TraitResolution::findTraitImpls(
                                     const auto& fldTyMono = monomorphGet(var.type);
                                     DEBUG("Enum '" << var.name << "'" << fldTyMono);
                                     res &= typeImplsTrait(fldTyMono);
-                                    if (res == ::HIR::Compare::Unequal) {
-                                        return ::HIR::Compare::Unequal;
+                                    if (res == HIRCompare::Unequal) {
+                                        return HIRCompare::Unequal;
                                     }
                                 }
                             }
@@ -7072,8 +7072,8 @@ bool TraitResolution::findTraitImpls(
                                 const auto& fldTyMono = monomorphGet(fld.ty);
                                 DEBUG("Union '" << fld.name << "' " << fldTyMono);
                                 res &= typeImplsTrait(fldTyMono);
-                                if (res == ::HIR::Compare::Unequal) {
-                                    return ::HIR::Compare::Unequal;
+                                if (res == HIRCompare::Unequal) {
+                                    return HIRCompare::Unequal;
                                 }
                             }
                         }
@@ -7090,12 +7090,12 @@ bool TraitResolution::findTraitImpls(
                     // If unbound, use Fuzzy {
                     if (e.binding.is_Unbound()) {
                         DEBUG("- Unbound UfcsKnown, returning Fuzzy");
-                        return ::HIR::Compare::Fuzzy;
+                        return HIRCompare::Fuzzy;
                     }
                     // Otherwise, it's opaque. Check the bounds on the trait.
                     if (TU_TEST1(*pe.type, Generic, .binding >> 8 == 2)) {
                         DEBUG("- UfcsKnown of placeholder, returning Fuzzy");
-                        return ::HIR::Compare::Fuzzy;
+                        return HIRCompare::Fuzzy;
                     }
                     TODO(sp, "Check trait bounds for bound on " << type);
                 }
@@ -7106,19 +7106,19 @@ bool TraitResolution::findTraitImpls(
         return res;
         }
         TU_ARMA(Generic, e) {
-            auto lRes = ::HIR::Compare::Unequal;
+            auto lRes = HIRCompare::Unequal;
             this->findTraitImpls(sp, trait, *paramsPtr, type, [&](auto, auto cmp) {
                 lRes = cmp;
-                return (cmp == ::HIR::Compare::Equal);
+                return (cmp == HIRCompare::Equal);
             });
             return lRes;
         }
         TU_ARMA(Tuple, e) {
-            ::HIR::Compare res = ::HIR::Compare::Equal;
+            HIRCompare res = HIRCompare::Equal;
             for (const auto& sty : e) {
                 res &= typeImplsTrait(sty);
-                if (res == ::HIR::Compare::Unequal) {
-                    return ::HIR::Compare::Unequal;
+                if (res == HIRCompare::Unequal) {
+                    return HIRCompare::Unequal;
                 }
             }
             return res;
@@ -7130,42 +7130,42 @@ bool TraitResolution::findTraitImpls(
     throw "";
         }
 
-        ::HIR::Compare TraitResolution::fticCheckParams(
+        HIRCompare TraitResolution::fticCheckParams(
             const Span& sp,
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams* paramsPtr,
-            const ::HIR::TypeData* type,
-            const ::HIR::GenericParams& implParamsDef,
-            const ::HIR::PathParams& implTraitArgs,
-            const ::HIR::TypeData* implTy,
-            /*Out->*/ HIR::PathParams& outImplParams,
+            const HIRSimplePath& trait,
+            const HIRPathParams* paramsPtr,
+            const HIRTypeData* type,
+            const HIRGenericParams& implParamsDef,
+            const HIRPathParams& implTraitArgs,
+            const HIRTypeData* implTy,
+            /*Out->*/ HIRPathParams& outImplParams,
             bool evaluateBounds /*=true*/
         ) const {
             TRACE_FUNCTION_FR("impl" << implParamsDef.fmtArgs() << " " << trait << implTraitArgs << " for " << implTy, outImplParams);
 
-            class GetParams: public ::HIR::MatchGenerics {
+            class GetParams: public HIRMatchGenerics {
                 Span sp;
-                HIR::PathParams& outImplParams;
+                HIRPathParams& outImplParams;
 
             public:
-                GetParams(Span sp, HIR::PathParams& outImplParams)
+                GetParams(Span sp, HIRPathParams& outImplParams)
                     : sp(sp)
                     , outImplParams(outImplParams)
                 {
                 }
 
-                ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::tCbResolveType resolveCb) override {
+                HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override {
                     assert(g.binding < outImplParams.types.size());
-                    if (outImplParams.types[g.binding] == HIR::TypeRef()) {
+                    if (outImplParams.types[g.binding] == HIRTypeRef()) {
                         DEBUG("[ftic_check_params] Param " << g.binding << " = " << ty);
                         outImplParams.types[g.binding] = ty;
-                        return ::HIR::Compare::Equal;
+                        return HIRCompare::Equal;
                     } else {
                         DEBUG("[ftic_check_params] Param " << g.binding << " " << outImplParams.types[g.binding] << " == " << ty);
                         auto rv = outImplParams.types[g.binding]->compareWithPlaceholders(sp, ty, resolveCb);
                         // If the existing is an ivar, replace with this.
                         // - TODO: Store the least fuzzy option, or store all fuzzy options?
-                        if (rv == ::HIR::Compare::Fuzzy && outImplParams.types[g.binding]->is_Infer()) {
+                        if (rv == HIRCompare::Fuzzy && outImplParams.types[g.binding]->is_Infer()) {
                             // The same impl parameter can be learned through more than one
                             // component of an impl header.  `Y = X` followed by `Y = &X`
                             // is not a fuzzy refinement: it would require the infinite type
@@ -7174,7 +7174,7 @@ bool TraitResolution::findTraitImpls(
                             const auto& existingResolved = resolveCb.getType(sp, outImplParams.types[g.binding]);
                             const auto* existingInfer = existingResolved->opt_Infer();
                             if (existingInfer && existingInfer->index != ~0u) {
-                                const bool recursive = visitTyWith(ty, [&](const ::HIR::TypeData* inner) {
+                                const bool recursive = visitTyWith(ty, [&](const HIRTypeData* inner) {
                                     if (const auto* infer = inner->opt_Infer()) {
                                         if (infer->index == ~0u) {
                                             return false;
@@ -7187,7 +7187,7 @@ bool TraitResolution::findTraitImpls(
                                 });
                                 if (recursive) {
                                     DEBUG("[ftic_check_params] Param " << g.binding << " would form an infinite type " << existingResolved << " = " << ty);
-                                    return ::HIR::Compare::Unequal;
+                                    return HIRCompare::Unequal;
                                 }
                             }
                             DEBUG("[ftic_check_params] Param " << g.binding << " fuzzy, use " << ty);
@@ -7197,46 +7197,46 @@ bool TraitResolution::findTraitImpls(
                     }
                 }
 
-                ::HIR::Compare matchVal(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) override {
+                HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override {
                     ASSERT_BUG(sp, g.binding < outImplParams.values.size(), "Value generic " << g << " out of range (" << outImplParams.values.size() << ")");
                     if (sz.is_Infer()) {
                         ASSERT_BUG(sp, sz.as_Infer().index != ~0u, "");
                     }
-                    if (outImplParams.values[g.binding] == HIR::ConstGeneric()) {
+                    if (outImplParams.values[g.binding] == HIRConstGeneric()) {
                         DEBUG("[ftic_check_params] Value param " << g.binding << " = " << sz);
                         outImplParams.values[g.binding] = sz.clone();
-                        return ::HIR::Compare::Equal;
+                        return HIRCompare::Equal;
                     } else {
                         if (outImplParams.values[g.binding] == sz) {
-                            return ::HIR::Compare::Equal;
+                            return HIRCompare::Equal;
                         }
                         if (outImplParams.values[g.binding].is_Infer()) {
                             if (!sz.is_Infer()) {
                                 DEBUG("[ftic_check_params] Value param " << g.binding << " fuzzy, use " << sz);
                                 outImplParams.values[g.binding] = sz.clone();
                             }
-                            return ::HIR::Compare::Fuzzy;
+                            return HIRCompare::Fuzzy;
                         }
                         if (sz.is_Infer()) {
-                            return ::HIR::Compare::Fuzzy;
+                            return HIRCompare::Fuzzy;
                         }
                         TODO(Span(), "PtrImplMatcher::match_val " << g << "(" << outImplParams.values[g.binding] << ") with " << sz);
                     }
                 }
 
-                ::HIR::Compare matchLft(
-                    const ::HIR::GenericRef& g,
-                    const ::HIR::LifetimeRef& lifetime
+                HIRCompare matchLft(
+                    const HIRGenericRef& g,
+                    const HIRLifetimeRef& lifetime
                 ) override {
                     // Region equality is deliberately not part of impl-head
                     // selection, but the candidate substitution must retain
                     // a higher-ranked placeholder. It marks a fresh universe
                     // and is needed later to reject leaking outlives bounds.
                     // Elided/inferred regions carry no such information.
-                    if (g.group() != ::HIR::GENERICImpl
-                        || lifetime.binding == ::HIR::LifetimeRef::UNKNOWN
-                        || lifetime.binding == ::HIR::LifetimeRef::INFER) {
-                        return ::HIR::Compare::Equal;
+                    if (g.group() != GENERICImpl
+                        || lifetime.binding == HIRLifetimeRef::UNKNOWN
+                        || lifetime.binding == HIRLifetimeRef::INFER) {
+                        return HIRCompare::Equal;
                     }
                     ASSERT_BUG(
                         sp,
@@ -7245,12 +7245,12 @@ bool TraitResolution::findTraitImpls(
                             << outImplParams.mLifetimes.size() << ")"
                     );
                     auto& current = outImplParams.mLifetimes[g.binding];
-                    if (current.binding == ::HIR::LifetimeRef::UNKNOWN
-                        || current.binding == ::HIR::LifetimeRef::INFER
+                    if (current.binding == HIRLifetimeRef::UNKNOWN
+                        || current.binding == HIRLifetimeRef::INFER
                         || (!current.isHrl() && lifetime.isHrl())) {
                         current = lifetime;
                     }
-                    return ::HIR::Compare::Equal;
+                    return HIRCompare::Equal;
                 }
             };
 
@@ -7262,19 +7262,19 @@ bool TraitResolution::findTraitImpls(
 
             // NOTE: If this type references an associated type, the match will incorrectly fail.
             // - HACK: match_test_generics_fuzz has been changed to return Fuzzy if there's a tag mismatch and the LHS is an Opaque path
-            auto match = ::HIR::Compare::Equal;
+            auto match = HIRCompare::Equal;
             match &= implTy->matchTestGenericsFuzz(sp, type, this->ivars.callbackResolveInfer(), getParams);
             if (paramsPtr) {
                 const auto& params = *paramsPtr;
                 match &= implTraitArgs.matchTestGenericsFuzz(sp, params, this->ivars.callbackResolveInfer(), getParams);
-                if (match == ::HIR::Compare::Unequal) {
+                if (match == HIRCompare::Unequal) {
                     DEBUG("- Failed to match parameters - " << implTraitArgs << "+" << implTy << " != " << params << "+" << type);
-                    return ::HIR::Compare::Unequal;
+                    return HIRCompare::Unequal;
                 }
             } else {
-                if (match == ::HIR::Compare::Unequal) {
+                if (match == HIRCompare::Unequal) {
                     DEBUG("- Failed to match type - " << implTy << " != " << type);
-                    return ::HIR::Compare::Unequal;
+                    return HIRCompare::Unequal;
                 }
             }
 
@@ -7283,17 +7283,17 @@ bool TraitResolution::findTraitImpls(
             // Some impl blocks have type params used as part of type bounds.
             // - A rough idea is to have monomorph return a third class of generic for params that are not yet bound.
             //  - compare_with_placeholders gets called on both ivars and generics, so that can be used to replace it once known.
-            ::HIR::PathParams placeholders;
+            HIRPathParams placeholders;
             RcString placeholderName;
             bool placeholdersNeeded = false;
             {
                 for (const auto& ty : outImplParams.types) {
-                    if (ty == HIR::TypeRef()) {
+                    if (ty == HIRTypeRef()) {
                         placeholdersNeeded = true;
                     }
                 }
                 for (const auto& val : outImplParams.values) {
-                    if (val == HIR::ConstGeneric()) {
+                    if (val == HIRConstGeneric()) {
                         placeholdersNeeded = true;
                     }
                 }
@@ -7306,7 +7306,7 @@ bool TraitResolution::findTraitImpls(
                     << freshImplPlaceholderCounter++
                 ));
                 for (unsigned int i = 0; i < outImplParams.types.size(); i++) {
-                    if (outImplParams.types[i] == HIR::TypeRef()) {
+                    if (outImplParams.types[i] == HIRTypeRef()) {
                         if (placeholders.types.size() == 0) {
                             placeholders.types.resize(outImplParams.types.size());
                         }
@@ -7315,11 +7315,11 @@ bool TraitResolution::findTraitImpls(
                     }
                 }
                 for (unsigned int i = 0; i < outImplParams.values.size(); i++) {
-                    if (outImplParams.values[i] == HIR::ConstGeneric()) {
+                    if (outImplParams.values[i] == HIRConstGeneric()) {
                         if (placeholders.values.size() == 0) {
                             placeholders.values.resize(outImplParams.values.size());
                         }
-                        placeholders.values[i] = ::HIR::GenericRef(placeholderName, 2 * 256 + i);
+                        placeholders.values[i] = HIRGenericRef(placeholderName, 2 * 256 + i);
                         DEBUG("Create placeholder value for " << i << " = " << placeholders.values[i]);
                     }
                 }
@@ -7330,12 +7330,12 @@ bool TraitResolution::findTraitImpls(
 
             if (!evaluateBounds) {
                 for (size_t i = 0; i < outImplParams.types.size(); i++) {
-                    if (outImplParams.types[i] == HIR::TypeRef()) {
+                    if (outImplParams.types[i] == HIRTypeRef()) {
                         outImplParams.types[i] = ::std::move(placeholders.types[i]);
                     }
                 }
                 for (size_t i = 0; i < outImplParams.values.size(); i++) {
-                    if (outImplParams.values[i] == HIR::ConstGeneric()) {
+                    if (outImplParams.values[i] == HIRConstGeneric()) {
                         outImplParams.values[i] = ::std::move(placeholders.values[i]);
                     }
                 }
@@ -7343,13 +7343,13 @@ bool TraitResolution::findTraitImpls(
             }
             auto cbInfer = this->ivars.callbackResolveInfer();
 
-            struct Matcher: public ::HIR::MatchGenerics, public Monomorphiser {
+            struct Matcher: public HIRMatchGenerics, public Monomorphiser {
                 Span sp;
-                const HIR::PathParams& implParams;
+                const HIRPathParams& implParams;
                 RcString placeholderName;
-                ::HIR::PathParams& placeholders;
+                HIRPathParams& placeholders;
 
-                Matcher(HIR::TypeInterner& types, Span sp, const HIR::PathParams& implParams, RcString placeholderName, ::HIR::PathParams& placeholders)
+                Matcher(HIRTypeInterner& types, Span sp, const HIRPathParams& implParams, RcString placeholderName, HIRPathParams& placeholders)
                     : Monomorphiser(types)
                     , sp(sp)
                     , implParams(implParams)
@@ -7358,15 +7358,15 @@ bool TraitResolution::findTraitImpls(
                 {
                 }
 
-                ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::tCbResolveType resolveCb) override {
+                HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override {
                     if (const auto* e = ty->opt_Generic()) {
                         if (e->binding == g.binding && e->name == g.name) {
-                            return ::HIR::Compare::Equal;
+                            return HIRCompare::Equal;
                         }
                     }
                     if (g.isPlaceholder() && g.name == placeholderName) {
                         auto i = g.idx();
-                        ASSERT_BUG(sp, implParams.types[i] == HIR::TypeRef(), "Placeholder to populated type returned - " << implParams.types[i] << " vs " << ty);
+                        ASSERT_BUG(sp, implParams.types[i] == HIRTypeRef(), "Placeholder to populated type returned - " << implParams.types[i] << " vs " << ty);
                         auto& ph = placeholders.types[i];
                         // TODO: Only want to do this if ... what?
                         // - Problem: This can poison the output if the result was fuzzy
@@ -7374,7 +7374,7 @@ bool TraitResolution::findTraitImpls(
                         if (ph->is_Generic() && ph->as_Generic().binding == g.binding) {
                             DEBUG("[ftic_check_params:cb_match] Bind placeholder " << i << " to " << ty);
                             ph = ty;
-                            return ::HIR::Compare::Equal;
+                            return HIRCompare::Equal;
                         } else {
                             DEBUG("[ftic_check_params:cb_match] Compare placeholder " << i << " " << ph << " == " << ty);
                             return ph->compareWithPlaceholders(sp, ty, resolveCb);
@@ -7382,38 +7382,38 @@ bool TraitResolution::findTraitImpls(
                     } else {
                         if (g.isPlaceholder()) {
                             DEBUG("[ftic_check_params:cb_match] External impl param " << g);
-                            return ::HIR::Compare::Fuzzy;
+                            return HIRCompare::Fuzzy;
                         }
                         // If the RHS is a non-literal ivar, return fuzzy
                         if (ty->is_Infer() && !ty->as_Infer().isLit()) {
-                            return ::HIR::Compare::Fuzzy;
+                            return HIRCompare::Fuzzy;
                         }
                         // If the RHS is an unbound UfcsKnown, also fuzzy
                         if (ty->is_Path() && ty->as_Path().binding.is_Unbound()) {
-                            return ::HIR::Compare::Fuzzy;
+                            return HIRCompare::Fuzzy;
                         }
                         if (ty->is_Generic() && ty->as_Generic().isPlaceholder()) {
-                            return ::HIR::Compare::Fuzzy;
+                            return HIRCompare::Fuzzy;
                         }
                         DEBUG("Unequal generic type - " << g << " != " << ty);
-                        return ::HIR::Compare::Unequal;
+                        return HIRCompare::Unequal;
                     }
                 }
 
-                ::HIR::Compare matchVal(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& v) override {
+                HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& v) override {
                     if (const auto* e = v.opt_Generic()) {
                         if (e->binding == g.binding && e->name == g.name) {
-                            return ::HIR::Compare::Equal;
+                            return HIRCompare::Equal;
                         }
                     }
                     if (g.isPlaceholder() && g.name == placeholderName) {
                         auto i = g.idx();
-                        ASSERT_BUG(sp, implParams.values[i] == HIR::ConstGeneric(), "Placeholder to populated value returned - " << implParams.values[i] << " vs " << v);
+                        ASSERT_BUG(sp, implParams.values[i] == HIRConstGeneric(), "Placeholder to populated value returned - " << implParams.values[i] << " vs " << v);
                         auto& ph = placeholders.values[i];
                         if (ph.is_Generic() && ph.as_Generic().binding == g.binding) {
                             DEBUG("[ftic_check_params:cb_match] Bind placeholder " << i << " to " << v);
                             ph = v.clone();
-                            return ::HIR::Compare::Equal;
+                            return HIRCompare::Equal;
                         } else {
                             DEBUG("[ftic_check_params:cb_match] Compare placeholder " << i << " " << ph << " == " << v);
                             TODO(Span(), "[ftic_check_params:cb_match] Compare placeholder " << i << " " << ph << " == " << v);
@@ -7422,18 +7422,18 @@ bool TraitResolution::findTraitImpls(
                     } else {
                         if (g.isPlaceholder()) {
                             DEBUG("[ftic_check_params:cb_match] External impl param " << g);
-                            return ::HIR::Compare::Fuzzy;
+                            return HIRCompare::Fuzzy;
                         }
                         // If the RHS is a non-literal ivar, return fuzzy
                         if (v.is_Infer()) {
-                            return ::HIR::Compare::Fuzzy;
+                            return HIRCompare::Fuzzy;
                         }
                         DEBUG("Unequal generic value - " << g << " != " << v);
-                        return ::HIR::Compare::Unequal;
+                        return HIRCompare::Unequal;
                     }
                 }
 
-                ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& ge) const override {
+                HIRTypeRef getType(const Span& sp, const HIRGenericRef& ge) const override {
                     //if( ge.is_self() ) {
                     //    // TODO: `impl_type` or `des_type`
                     //    DEBUG("[find_impl__check_crate_raw] Self - " << impl_type << " or " << des_type);
@@ -7441,24 +7441,24 @@ bool TraitResolution::findTraitImpls(
                     //    return impl_type;
                     //}
                     ASSERT_BUG(sp, !ge.isPlaceholder(), "[find_impl__check_crate_raw] Placeholder param seen - " << ge);
-                    if (implParams.types.at(ge.binding) != HIR::TypeRef()) {
+                    if (implParams.types.at(ge.binding) != HIRTypeRef()) {
                         return implParams.types.at(ge.binding);
                     }
                     ASSERT_BUG(sp, placeholders.types.size() == implParams.types.size(), "Placeholder size mismatch: " << placeholders.types.size() << " != " << implParams.types.size());
                     return placeholders.types.at(ge.binding);
                 }
 
-                ::HIR::ConstGeneric getValue(const Span& sp, const ::HIR::GenericRef& val) const override {
+                HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override {
                     ASSERT_BUG(sp, val.binding < 256, "Generic value binding in " << val << " out of range (>=256)");
                     ASSERT_BUG(sp, val.binding < implParams.values.size(), "Generic value binding in " << val << " out of range (>= " << implParams.values.size() << ")");
-                    if (implParams.values.at(val.binding) != HIR::ConstGeneric()) {
+                    if (implParams.values.at(val.binding) != HIRConstGeneric()) {
                         return implParams.values.at(val.binding).clone();
                     }
                     ASSERT_BUG(sp, placeholders.values.size() == implParams.values.size(), "Placeholder size mismatch: " << placeholders.values.size() << " != " << implParams.values.size());
                     return placeholders.values.at(val.binding).clone();
                 }
 
-                ::HIR::LifetimeRef getLifetime(const Span& sp, const ::HIR::GenericRef& g) const override {
+                HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const override {
                     ASSERT_BUG(sp, g.binding < 256, "Generic lifetime binding in " << g << " out of range (>=256)");
                     ASSERT_BUG(sp, g.binding < implParams.mLifetimes.size(), "Generic lifetime binding in " << g << " out of range (>= " << implParams.mLifetimes.size() << ")");
                     return implParams.mLifetimes.at(g.binding);
@@ -7473,7 +7473,7 @@ bool TraitResolution::findTraitImpls(
 
             // Keep looping while placeholders are updated
             int loops = 0;
-            HIR::PathParams lastPlaceholders;
+            HIRPathParams lastPlaceholders;
             do {
                 DEBUG(">> LOOP " << loops);
                 ASSERT_BUG(sp, loops < 4, "Excessive iterations while resolving bound placeholders");
@@ -7489,7 +7489,7 @@ bool TraitResolution::findTraitImpls(
                 }
                 TU_ARMA(TraitBound, be) {
                     DEBUG("Check bound " << be.type << " : " << be.trait);
-                    static const HIR::GenericParams emptyParams;
+                    static const HIRGenericParams emptyParams;
                     auto _ = matcher.pushHrb(be.hrtbs);
                     auto realType = matcher.monomorphType(sp, be.type, false);
                     auto realTrait = matcher.monomorphTraitpath(sp, be.trait, false);
@@ -7520,15 +7520,15 @@ bool TraitResolution::findTraitImpls(
                         foundFuzzyMatch = true;
                     }
                     // NOTE: Save the placeholder state and restore if the result was Fuzzy
-                    ::HIR::PathParams savedPh = placeholders.clone();
-                    ::HIR::PathParams fuzzyPh;
+                    HIRPathParams savedPh = placeholders.clone();
+                    HIRPathParams fuzzyPh;
                     unsigned numFuzzy = 0;       //!< Number of detected fuzzy impls
                     bool fuzzyCompatible = true; //!< Indicates that the `fuzzy_ph` applies to all detected fuzzy impls
                     auto rv = this->findTraitImpls(sp, realTraitPath.mPath, realTraitPath.mParams, realType, [&](auto impl, auto implCmp) {
                         // TODO: Save and restore placeholders if this isn't a full match
                         DEBUG("[ftic_check_params] impl_cmp = " << implCmp << ", impl = " << impl);
                         auto cmp = implCmp;
-                        if (cmp == ::HIR::Compare::Fuzzy) {
+                        if (cmp == HIRCompare::Fuzzy) {
                             // If the match was fuzzy, try again filling in with `cb_match`
                             auto iTy = impl.getImplType(crate.types);
                             this->expandAssociatedTypesInplace(sp, iTy, {});
@@ -7543,13 +7543,13 @@ bool TraitResolution::findTraitImpls(
                             DEBUG("[ftic_check_params] - Re-check result: " << cmp);
                         }
                         for (const auto& assocBound : realTrait.typeBounds) {
-                            ::HIR::TypeRef tmp;
-                            const ::HIR::TypeData* ty;
+                            HIRTypeRef tmp;
+                            const HIRTypeData* ty;
 
                             tmp = impl.getType(crate.types, assocBound.first.c_str(), assocBound.second.atyParams);
-                            if (tmp == ::HIR::TypeRef()) {
+                            if (tmp == HIRTypeRef()) {
                                 // This bound isn't from this particular trait, go the slow way of using expand_associated_types
-                                tmp = this->expandAssociatedTypes(sp, crate.types.path(::HIR::Path(::HIR::Path::Data::Data_UfcsKnown{realType, realTraitPath.clone(), assocBound.first, {}}), {}));
+                                tmp = this->expandAssociatedTypes(sp, crate.types.path(HIRPath(HIRPath::Data::Data_UfcsKnown{realType, realTraitPath.clone(), assocBound.first, {}}), {}));
                                 ty = tmp;
                             } else {
                                 // Expand after extraction, just to make sure.
@@ -7561,27 +7561,27 @@ bool TraitResolution::findTraitImpls(
                             // `assoc_bound.second` = Desired type (monomorphised too)
                             auto cmpI = assocBound.second.type->matchTestGenericsFuzz(sp, ty, cbInfer, matcher);
                             switch (cmpI) {
-                                case ::HIR::Compare::Equal:
+                                case HIRCompare::Equal:
                                     DEBUG("Equal");
                                     break;
-                                case ::HIR::Compare::Unequal:
+                                case HIRCompare::Unequal:
                                     DEBUG("Assoc `" << assocBound.first << "` didn't match - " << ty << " != " << assocBound.second.type);
-                                    cmp = ::HIR::Compare::Unequal;
+                                    cmp = HIRCompare::Unequal;
                                     break;
-                                case ::HIR::Compare::Fuzzy:
+                                case HIRCompare::Fuzzy:
                                     // TODO: When a fuzzy match is encountered on a conditional bound, returning `false` can lead to an false negative (and a compile error)
                                     // BUT, returning `true` could lead to it being selected. (Is this a problem, should a later validation pass check?)
                                     DEBUG("[ftic_check_params] Fuzzy match assoc bound between " << ty << " and " << assocBound.second.type);
-                                    cmp = ::HIR::Compare::Fuzzy;
+                                    cmp = HIRCompare::Fuzzy;
                                     break;
                             }
-                            if (cmp == ::HIR::Compare::Unequal) {
+                            if (cmp == HIRCompare::Unequal) {
                                 break;
                             }
                         }
 
                         DEBUG("[ftic_check_params] impl_cmp = " << implCmp << ", cmp = " << cmp);
-                        if (cmp == ::HIR::Compare::Fuzzy) {
+                        if (cmp == HIRCompare::Fuzzy) {
                             foundFuzzyMatch |= true;
                             // `fuzzy_ph` is set (num_fuzzy > 0) then check if the PH set is equal, if not then flag not equal
                             if (numFuzzy > 0 && fuzzyPh != placeholders) {
@@ -7595,7 +7595,7 @@ bool TraitResolution::findTraitImpls(
                             placeholders.types.resize(fuzzyPh.types.size());
                             placeholders.values.resize(fuzzyPh.values.size());
                         }
-                        if (cmp != ::HIR::Compare::Equal) {
+                        if (cmp != HIRCompare::Equal) {
                             // Restore placeholders
                             // - Maybe save the results for later?
                             DEBUG("[ftic_check_params] Restore placeholders: " << savedPh);
@@ -7603,7 +7603,7 @@ bool TraitResolution::findTraitImpls(
                             placeholders = savedPh.clone();
                         }
                         // If the match isn't a concrete equal, return false (to keep searching)
-                        return (cmp == ::HIR::Compare::Equal);
+                        return (cmp == HIRCompare::Equal);
                     });
                     if (rv) {
                         DEBUG("- Bound " << realType << " : " << realTraitPath << " matched");
@@ -7621,16 +7621,16 @@ bool TraitResolution::findTraitImpls(
                             //
                             DEBUG("TODO: Multiple fuzzy matches (" << numFuzzy << "), which placeholder set to use?");
                         }
-                        match = ::HIR::Compare::Fuzzy;
-                    } else if (TU_TEST1(*realType, Infer, .tyClass == ::HIR::InferClass::None)) {
+                        match = HIRCompare::Fuzzy;
+                    } else if (TU_TEST1(*realType, Infer, .tyClass == HIRInferClass::None)) {
                         DEBUG("- Bound " << realType << " : " << realTraitPath << " full infer type - make result fuzzy");
-                        match = ::HIR::Compare::Fuzzy;
+                        match = HIRCompare::Fuzzy;
                     } else if (TU_TEST1(*realType, Generic, .isPlaceholder())) {
                         DEBUG("- Bound " << realType << " : " << realTraitPath << " placeholder - make result fuzzy");
-                        match = ::HIR::Compare::Fuzzy;
+                        match = HIRCompare::Fuzzy;
                     } else {
                         DEBUG("- Bound " << realType << " : " << realTraitPath << " failed");
-                        return ::HIR::Compare::Unequal;
+                        return HIRCompare::Unequal;
                     }
 
                     //if( !rv ) {
@@ -7645,25 +7645,25 @@ bool TraitResolution::findTraitImpls(
             } while (placeholders != lastPlaceholders);
 
             for (size_t i = 0; i < outImplParams.types.size(); i++) {
-                if (outImplParams.types[i] == HIR::TypeRef()) {
+                if (outImplParams.types[i] == HIRTypeRef()) {
                     outImplParams.types[i] = std::move(placeholders.types[i]);
                 }
-                ASSERT_BUG(sp, outImplParams.types[i] != HIR::TypeRef(), "");
+                ASSERT_BUG(sp, outImplParams.types[i] != HIRTypeRef(), "");
             }
             for (size_t i = 0; i < outImplParams.values.size(); i++) {
-                if (outImplParams.values[i] == HIR::ConstGeneric()) {
+                if (outImplParams.values[i] == HIRConstGeneric()) {
                     outImplParams.values[i] = std::move(placeholders.values[i]);
                 }
-                ASSERT_BUG(sp, outImplParams.values[i] != HIR::ConstGeneric(), "");
+                ASSERT_BUG(sp, outImplParams.values[i] != HIRConstGeneric(), "");
             }
 
             for (size_t i = 0; i < implParamsDef.types.size(); i++) {
                 if (implParamsDef.types.at(i).isSized) {
-                    if (outImplParams.types[i] != HIR::TypeRef()) {
+                    if (outImplParams.types[i] != HIRTypeRef()) {
                         auto cmp = typeIsSized(sp, outImplParams.types[i]);
-                        if (cmp == ::HIR::Compare::Unequal) {
+                        if (cmp == HIRCompare::Unequal) {
                             DEBUG("- Sized bound failed for " << outImplParams.types[i]);
-                            return ::HIR::Compare::Unequal;
+                            return HIRCompare::Unequal;
                         }
                     } else {
                         // TODO: Set match to fuzzy?
@@ -7675,7 +7675,7 @@ bool TraitResolution::findTraitImpls(
         }
 
         namespace {
-            bool traitContainsMethodInner(const ::HIR::Trait& traitPtr, const RcString& name, const ::HIR::Function*& outFcnPtr) {
+            bool traitContainsMethodInner(const HIRTrait& traitPtr, const RcString& name, const HIRFunction*& outFcnPtr) {
                 auto it = traitPtr.values.find(name);
                 if (it != traitPtr.values.end()) {
                     if (it->second.is_Function()) {
@@ -7688,9 +7688,9 @@ bool TraitResolution::findTraitImpls(
             }
         }
 
-        const ::HIR::Function* TraitResolution::traitContainsMethod(const Span& sp, const ::HIR::GenericPath& traitPath, const ::HIR::Trait& traitPtr, const ::HIR::TypeData* self, const RcString& name, ::HIR::GenericPath& outPath) const {
+        const HIRFunction* TraitResolution::traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRTypeData* self, const RcString& name, HIRGenericPath& outPath) const {
             TRACE_FUNCTION_FR("trait_path=" << traitPath << ",name=" << name, outPath);
-            const ::HIR::Function* rv = nullptr;
+            const HIRFunction* rv = nullptr;
 
             if (traitContainsMethodInner(traitPtr, name, rv)) {
                 assert(rv);
@@ -7703,7 +7703,7 @@ bool TraitResolution::findTraitImpls(
                 if (traitContainsMethodInner(*st.traitPtr, name, rv)) {
                     assert(rv);
                     // TODO: HRLs
-                    static ::HIR::GenericParams emptyHrtbs;
+                    static HIRGenericParams emptyHrtbs;
                     auto _h = monomorphCb.pushHrb(st.hrtbs ? *st.hrtbs : emptyHrtbs);
                     outPath.mPath = st.mPath.mPath;
                     outPath.mParams = monomorphCb.monomorphPathParams(sp, st.mPath.mParams, false);
@@ -7713,7 +7713,7 @@ bool TraitResolution::findTraitImpls(
             return nullptr;
         }
 
-        bool TraitResolution::traitContainsType(const Span& sp, const ::HIR::GenericPath& traitPath, const ::HIR::Trait& traitPtr, const char* name, ::HIR::GenericPath& outPath) const {
+        bool TraitResolution::traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const {
             TRACE_FUNCTION_FR(traitPath << " has " << name, outPath);
 
             auto it = traitPtr.types.find(name);
@@ -7735,27 +7735,27 @@ bool TraitResolution::findTraitImpls(
             return false;
         }
 
-        ::HIR::Compare TraitResolution::typeIsSized(const Span& sp, const ::HIR::TypeData* type) const {
+        HIRCompare TraitResolution::typeIsSized(const Span& sp, const HIRTypeData* type) const {
             bool isFuzzy = false;
             bool hasEq = false;
             if (!mLangSized.components().empty()) {
-                hasEq = findTraitImpls(sp, mLangSized, ::HIR::PathParams{}, type, [&](auto, auto c) -> bool {
+                hasEq = findTraitImpls(sp, mLangSized, HIRPathParams{}, type, [&](auto, auto c) -> bool {
                     switch (c) {
-                        case ::HIR::Compare::Equal:
+                        case HIRCompare::Equal:
                             return true;
-                        case ::HIR::Compare::Fuzzy:
+                        case HIRCompare::Fuzzy:
                             isFuzzy = true;
                             return false;
-                        case ::HIR::Compare::Unequal:
+                        case HIRCompare::Unequal:
                             return false;
                     }
                     throw "";
                 }, /*magic_trait_impls=*/false);
             }
             if (hasEq) {
-                return ::HIR::Compare::Equal;
+                return HIRCompare::Equal;
             } else if (isFuzzy) {
-                return ::HIR::Compare::Fuzzy;
+                return HIRCompare::Fuzzy;
             } else {
             }
 
@@ -7764,20 +7764,20 @@ bool TraitResolution::findTraitImpls(
         // Any unknown - it's sized
     TU_ARMA(Infer, e) {
             switch (e.tyClass) {
-                case ::HIR::InferClass::Integer:
-                case ::HIR::InferClass::Float:
-                    return ::HIR::Compare::Equal;
+                case HIRInferClass::Integer:
+                case HIRInferClass::Float:
+                    return HIRCompare::Equal;
                 default:
-                    return ::HIR::Compare::Fuzzy;
+                    return HIRCompare::Fuzzy;
             }
         }
         TU_ARMA(Primitive, e) {
-            if (e == ::HIR::CoreType::Str) {
-                return ::HIR::Compare::Unequal;
+            if (e == HIRCoreType::Str) {
+                return HIRCompare::Unequal;
             }
         }
         TU_ARMA(Slice, e) {
-            return ::HIR::Compare::Unequal;
+            return HIRCompare::Unequal;
         }
         TU_ARMA(Path, e) {
             // TODO: Check that only ?Sized parameters are !Sized
@@ -7794,7 +7794,7 @@ bool TraitResolution::findTraitImpls(
                 ),
                 (ExternType,
                  // Is it sized? No.
-                 return ::HIR::Compare::Unequal;),
+                 return HIRCompare::Unequal;),
                 (
                     Enum,
                     // HAS to be Sized
@@ -7806,74 +7806,74 @@ bool TraitResolution::findTraitImpls(
                 (Struct,
                  // Possibly not sized
                  switch (pb->structMarkings.dstType) {
-                     case ::HIR::StructMarkings::DstType::None:
+                     case HIRStructMarkings::DstType::None:
                          break;
-                     case ::HIR::StructMarkings::DstType::Possible:
+                     case HIRStructMarkings::DstType::Possible:
                          // Check sized-ness of the unsized param
                          return typeIsSized(sp, e.path.mData.as_Generic().mParams.types.at(pb->structMarkings.unsizedParam));
-                     case ::HIR::StructMarkings::DstType::Slice:
-                     case ::HIR::StructMarkings::DstType::TraitObject:
-                         return ::HIR::Compare::Unequal;
+                     case HIRStructMarkings::DstType::Slice:
+                     case HIRStructMarkings::DstType::TraitObject:
+                         return HIRCompare::Unequal;
                  })
             )
         }
         TU_ARMA(Generic, e) {
             switch (e.group()) {
                 case 0:
-                    return this->mImplGenerics->types.at(e.idx()).isSized ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal;
+                    return this->mImplGenerics->types.at(e.idx()).isSized ? HIRCompare::Equal : HIRCompare::Unequal;
                 case 1:
-                    return this->mItemGenerics->types.at(e.idx()).isSized ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal;
+                    return this->mItemGenerics->types.at(e.idx()).isSized ? HIRCompare::Equal : HIRCompare::Unequal;
                 default:
                     // Assume sized for anything else?
-                    return ::HIR::Compare::Equal;
+                    return HIRCompare::Equal;
             }
         }
         TU_ARMA(ErasedType, e) {
-            return e.isSized ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal;
+            return e.isSized ? HIRCompare::Equal : HIRCompare::Unequal;
         }
         TU_ARMA(TraitObject, e) {
-            return ::HIR::Compare::Unequal;
+            return HIRCompare::Unequal;
         }
     }
-    return ::HIR::Compare::Equal;
+    return HIRCompare::Equal;
         }
 
-        ::HIR::Compare TraitResolution::typeIsCopy(const Span& sp, const ::HIR::TypeData* ty) const {
+        HIRCompare TraitResolution::typeIsCopy(const Span& sp, const HIRTypeData* ty) const {
             const auto& type = this->ivars.getType(ty);
     TU_MATCH_HDRA( (*type), {)
     default: {
             bool isFuzzy = false;
-            bool hasEq = findTraitImpls(sp, mLangCopy, ::HIR::PathParams{}, ty, [&](auto, auto c) -> bool {
+            bool hasEq = findTraitImpls(sp, mLangCopy, HIRPathParams{}, ty, [&](auto, auto c) -> bool {
                 switch (c) {
-                    case ::HIR::Compare::Equal:
+                    case HIRCompare::Equal:
                         return true;
-                    case ::HIR::Compare::Fuzzy:
+                    case HIRCompare::Fuzzy:
                         isFuzzy = true;
                         return false;
-                    case ::HIR::Compare::Unequal:
+                    case HIRCompare::Unequal:
                         return false;
                 }
                 throw "";
             }, /*magic_trait_impls=*/false);
             if (hasEq) {
-                return ::HIR::Compare::Equal;
+                return HIRCompare::Equal;
             } else if (isFuzzy) {
-                return ::HIR::Compare::Fuzzy;
+                return HIRCompare::Fuzzy;
             } else {
                 if (type->is_Path() && type->as_Path().binding.is_Unbound()) {
-                    return ::HIR::Compare::Fuzzy;
+                    return HIRCompare::Fuzzy;
                 }
-                return ::HIR::Compare::Unequal;
+                return HIRCompare::Unequal;
             }
         }
         TU_ARMA(Infer, e) {
             switch (e.tyClass) {
-                case ::HIR::InferClass::Integer:
-                case ::HIR::InferClass::Float:
-                    return ::HIR::Compare::Equal;
+                case HIRInferClass::Integer:
+                case HIRInferClass::Float:
+                    return HIRCompare::Equal;
                 default:
                     DEBUG("Fuzzy Copy impl for ivar?");
-                    return ::HIR::Compare::Fuzzy;
+                    return HIRCompare::Fuzzy;
             }
         }
         TU_ARMA(Generic, e) {
@@ -7882,44 +7882,44 @@ bool TraitResolution::findTraitImpls(
                        sp,
                        ty,
                        mLangCopy,
-                       [&](HIR::Compare _cmp, const ::HIR::TypeData* beType, const ::HIR::GenericPath& beTrait, const CachedBound& info) -> bool {
+                       [&](HIRCompare _cmp, const HIRTypeData* beType, const HIRGenericPath& beTrait, const CachedBound& info) -> bool {
                 return true;
             }
                    )
-                       ? ::HIR::Compare::Equal
-                       : ::HIR::Compare::Unequal;
+                       ? HIRCompare::Equal
+                       : HIRCompare::Unequal;
         }
         TU_ARMA(Primitive, e) {
-            if (e == ::HIR::CoreType::Str) {
-                return ::HIR::Compare::Unequal;
+            if (e == HIRCoreType::Str) {
+                return HIRCompare::Unequal;
             }
-            return ::HIR::Compare::Equal;
+            return HIRCompare::Equal;
         }
         TU_ARMA(Borrow, e) {
-            return e.type == ::HIR::BorrowType::Shared ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal;
+            return e.type == HIRBorrowType::Shared ? HIRCompare::Equal : HIRCompare::Unequal;
         }
         TU_ARMA(Pointer, e) {
-            return ::HIR::Compare::Equal;
+            return HIRCompare::Equal;
         }
         TU_ARMA(Tuple, e) {
-            auto rv = ::HIR::Compare::Equal;
+            auto rv = HIRCompare::Equal;
             for (const auto& sty : e) {
                 rv &= typeIsCopy(sp, sty);
             }
             return rv;
         }
         TU_ARMA(Slice, e) {
-            return ::HIR::Compare::Unequal;
+            return HIRCompare::Unequal;
         }
         TU_ARMA(NamedFunction, e) {
-            return ::HIR::Compare::Equal;
+            return HIRCompare::Equal;
         }
         TU_ARMA(Function, e) {
-            return ::HIR::Compare::Equal;
+            return HIRCompare::Equal;
         }
         TU_ARMA(NodeType, e) {
             // NOTE: This isn't strictly true, we're leaving the actual checking up to the validate pass
-            return ::HIR::Compare::Equal;
+            return HIRCompare::Equal;
         }
         TU_ARMA(Array, e) {
             return typeIsCopy(sp, e.inner);
@@ -7928,44 +7928,44 @@ bool TraitResolution::findTraitImpls(
     throw "";
         }
 
-        ::HIR::Compare TraitResolution::typeIsClone(const Span& sp, const ::HIR::TypeData* ty) const {
+        HIRCompare TraitResolution::typeIsClone(const Span& sp, const HIRTypeData* ty) const {
             TRACE_FUNCTION_F(ty);
             const auto& type = this->ivars.getType(ty);
     TU_MATCH_HDRA( (*type), {)
     default: {
             if (type->is_Path() && type->as_Path().isClosure()) {
                 // If it was a closure, assume true (later code can check)
-                return ::HIR::Compare::Equal;
+                return HIRCompare::Equal;
             }
             bool isFuzzy = false;
-            bool hasEq = findTraitImpls(sp, mLangClone, ::HIR::PathParams{}, ty, [&](auto, auto c) -> bool {
+            bool hasEq = findTraitImpls(sp, mLangClone, HIRPathParams{}, ty, [&](auto, auto c) -> bool {
                 switch (c) {
-                    case ::HIR::Compare::Equal:
+                    case HIRCompare::Equal:
                         return true;
-                    case ::HIR::Compare::Fuzzy:
+                    case HIRCompare::Fuzzy:
                         isFuzzy = true;
                         return false;
-                    case ::HIR::Compare::Unequal:
+                    case HIRCompare::Unequal:
                         return false;
                 }
                 throw "";
             }, /*magic_trait_impls=*/false);
             if (hasEq) {
-                return ::HIR::Compare::Equal;
+                return HIRCompare::Equal;
             } else if (isFuzzy) {
-                return ::HIR::Compare::Fuzzy;
+                return HIRCompare::Fuzzy;
             } else {
-                return ::HIR::Compare::Unequal;
+                return HIRCompare::Unequal;
             }
         }
         TU_ARMA(Infer, e) {
             switch (e.tyClass) {
-                case ::HIR::InferClass::Integer:
-                case ::HIR::InferClass::Float:
-                    return ::HIR::Compare::Equal;
+                case HIRInferClass::Integer:
+                case HIRInferClass::Float:
+                    return HIRCompare::Equal;
                 default:
                     DEBUG("Fuzzy Clone impl for ivar?");
-                    return ::HIR::Compare::Fuzzy;
+                    return HIRCompare::Fuzzy;
             }
         }
         TU_ARMA(Generic, e) {
@@ -7974,45 +7974,45 @@ bool TraitResolution::findTraitImpls(
                        sp,
                        ty,
                        mLangClone,
-                       [&](HIR::Compare _cmp, const ::HIR::TypeData* beType, const ::HIR::GenericPath& beTrait, const CachedBound& info) -> bool {
+                       [&](HIRCompare _cmp, const HIRTypeData* beType, const HIRGenericPath& beTrait, const CachedBound& info) -> bool {
                 return true;
             }
                    )
-                       ? ::HIR::Compare::Equal
-                       : ::HIR::Compare::Unequal;
+                       ? HIRCompare::Equal
+                       : HIRCompare::Unequal;
         }
         TU_ARMA(Primitive, e) {
-            if (e == ::HIR::CoreType::Str) {
-                return ::HIR::Compare::Unequal;
+            if (e == HIRCoreType::Str) {
+                return HIRCompare::Unequal;
             }
-            return ::HIR::Compare::Equal;
+            return HIRCompare::Equal;
         }
         TU_ARMA(Borrow, e) {
-            return e.type == ::HIR::BorrowType::Shared ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal;
+            return e.type == HIRBorrowType::Shared ? HIRCompare::Equal : HIRCompare::Unequal;
         }
         TU_ARMA(Pointer, e) {
-            return ::HIR::Compare::Equal;
+            return HIRCompare::Equal;
         }
         TU_ARMA(Tuple, e) {
-            auto rv = ::HIR::Compare::Equal;
+            auto rv = HIRCompare::Equal;
             for (const auto& sty : e) {
                 rv &= typeIsClone(sp, sty);
             }
             return rv;
         }
         TU_ARMA(Slice, e) {
-            return ::HIR::Compare::Unequal;
+            return HIRCompare::Unequal;
         }
         TU_ARMA(NamedFunction, e) {
-            return ::HIR::Compare::Equal;
+            return HIRCompare::Equal;
         }
         TU_ARMA(Function, e) {
-            return ::HIR::Compare::Equal;
+            return HIRCompare::Equal;
         }
         TU_ARMA(NodeType, e) {
             // NOTE: This isn't strictly true, we're leaving the actual checking up to the validate pass
             // TODO: Determine captures earlier and check captures here
-            return ::HIR::Compare::Equal;
+            return HIRCompare::Equal;
         }
         TU_ARMA(Array, e) {
             return typeIsClone(sp, e.inner);
@@ -8031,14 +8031,14 @@ bool TraitResolution::findTraitImpls(
         // usecases:
         // - Checking for an impl as part of impl selection (return True/False/Maybe with required match for Maybe)
         // - Checking for an impl as part of typeck (return True/False/Maybe with unsize possibility OR required equality)
-        ::HIR::Compare TraitResolution::canUnsize(const Span& sp, const ::HIR::TypeData* dstTy, const ::HIR::TypeData* srcTy, ::std::function<void(::HIR::TypeRef newDst)>* newTypeCallback, ::std::function<void(const ::HIR::TypeData* dst, const ::HIR::TypeData* src)>* inferCallback) const {
+        HIRCompare TraitResolution::canUnsize(const Span& sp, const HIRTypeData* dstTy, const HIRTypeData* srcTy, ::std::function<void(HIRTypeRef newDst)>* newTypeCallback, ::std::function<void(const HIRTypeData* dst, const HIRTypeData* src)>* inferCallback) const {
             TRACE_FUNCTION_F(dstTy << " <- " << srcTy);
 
             // 1. Test for type equality
             {
                 auto cmp = dstTy->compareWithPlaceholders(sp, srcTy, ivars.callbackResolveInfer());
-                if (cmp == ::HIR::Compare::Equal) {
-                    return ::HIR::Compare::Unequal;
+                if (cmp == HIRCompare::Equal) {
+                    return HIRCompare::Unequal;
                 }
             }
 
@@ -8049,49 +8049,49 @@ bool TraitResolution::findTraitImpls(
                 if (inferCallback) {
                     (*inferCallback)(dstTy, srcTy);
                 }
-                return ::HIR::Compare::Fuzzy;
+                return HIRCompare::Fuzzy;
             }
 
             {
-                bool foundBound = this->iterateBoundsTraits(sp, srcTy, mLangUnsize, [&](HIR::Compare cmp, const ::HIR::TypeData* beType, const ::HIR::GenericPath& beTrait, const CachedBound& info) -> bool {
+                bool foundBound = this->iterateBoundsTraits(sp, srcTy, mLangUnsize, [&](HIRCompare cmp, const HIRTypeData* beType, const HIRGenericPath& beTrait, const CachedBound& info) -> bool {
                     const auto& beDst = beTrait.mParams.types.at(0);
 
                     cmp &= dstTy->compareWithPlaceholders(sp, beDst, ivars.callbackResolveInfer());
-                    if (cmp == ::HIR::Compare::Unequal) {
+                    if (cmp == HIRCompare::Unequal) {
                         return false;
                     }
 
-                    if (cmp != ::HIR::Compare::Equal) {
+                    if (cmp != HIRCompare::Equal) {
                         TODO(sp, "Found bound " << dstTy << "=" << beDst << " <- " << srcTy << "=" << beType);
                     }
                     return true;
                 });
                 if (foundBound) {
-                    return ::HIR::Compare::Equal;
+                    return HIRCompare::Equal;
                 }
             }
 
             // Associated types, check the bounds in the trait.
             if (srcTy->is_Path() && srcTy->as_Path().path.mData.is_UfcsKnown()) {
-                ::HIR::Compare rv = ::HIR::Compare::Equal;
+                HIRCompare rv = HIRCompare::Equal;
                 const auto& pe = srcTy->as_Path().path.mData.as_UfcsKnown();
                 auto monomorphCb = MonomorphStatePtr(crate.types, pe.type, &pe.trait.mParams, nullptr);
-                auto foundBound = this->iterateAtyBounds(sp, pe, [&](const ::HIR::TraitPath& bound) {
+                auto foundBound = this->iterateAtyBounds(sp, pe, [&](const HIRTraitPath& bound) {
                     if (bound.mPath.mPath != mLangUnsize) {
                         return false;
                     }
                     const auto& beDstTpl = bound.mPath.mParams.types.at(0);
-                    ::HIR::TypeRef tmpTy;
+                    HIRTypeRef tmpTy;
                     const auto& beDst = monomorphCb.maybeMonomorphType(sp, tmpTy, beDstTpl);
 
                     auto cmp = dstTy->compareWithPlaceholders(sp, beDst, ivars.callbackResolveInfer());
-                    if (cmp == ::HIR::Compare::Unequal) {
+                    if (cmp == HIRCompare::Unequal) {
                         return false;
                     }
 
-                    if (cmp != ::HIR::Compare::Equal) {
+                    if (cmp != HIRCompare::Equal) {
                         DEBUG("[can_unsize] > Found bound (fuzzy) " << dstTy << "=" << beDst << " <- " << srcTy);
-                        rv = ::HIR::Compare::Fuzzy;
+                        rv = HIRCompare::Fuzzy;
                     }
                     return true;
                 });
@@ -8112,7 +8112,7 @@ bool TraitResolution::findTraitImpls(
 
                     if (dstGp == srcGp) {
                         DEBUG("Can't Unsize, destination and source are identical");
-                        return ::HIR::Compare::Unequal;
+                        return HIRCompare::Unequal;
                     } else if (dstGp.mPath == srcGp.mPath) {
                         DEBUG("Checking for Unsize " << dstGp << " <- " << srcGp);
                         // Structures are equal, add the requirement that the ?Sized parameter also impl Unsize
@@ -8125,17 +8125,17 @@ bool TraitResolution::findTraitImpls(
                             // Re-create structure with s/d
                             auto dstGpNew = dstGp.clone();
                             dstGpNew.mParams.types.at(str.structMarkings.unsizedParam) = mv$(d);
-                            (*newTypeCallback)(crate.types.path(::HIR::Path(mv$(dstGpNew)), ::HIR::TypePathBinding::make_Struct(&str)));
+                            (*newTypeCallback)(crate.types.path(HIRPath(mv$(dstGpNew)), HIRTypePathBinding::make_Struct(&str)));
                         };
                         if (newTypeCallback) {
-                            ::std::function<void(::HIR::TypeRef)> cbP = cb;
+                            ::std::function<void(HIRTypeRef)> cbP = cb;
                             return this->canUnsize(sp, dstInner, srcInner, &cbP, inferCallback);
                         } else {
                             return this->canUnsize(sp, dstInner, srcInner, nullptr, inferCallback);
                         }
                     } else {
                         DEBUG("Can't Unsize, destination and source are different structs");
-                        return ::HIR::Compare::Unequal;
+                        return HIRCompare::Unequal;
                     }
                 }
             }
@@ -8149,14 +8149,14 @@ bool TraitResolution::findTraitImpls(
 
                 // (Trait) <- (Trait+Foo)
                 if (const auto* se = srcTy->opt_TraitObject()) {
-                    auto rv = ::HIR::Compare::Equal;
+                    auto rv = HIRCompare::Equal;
 
                     // Project the source principal to the requested
                     // supertrait.  A trait may contain the same supertrait
                     // with different substitutions, so compare the fully
                     // monomorphised parameters instead of only its path.
-                    const ::HIR::TraitPath* projected = nullptr;
-                    ::HIR::TraitPath projectedStorage;
+                    const HIRTraitPath* projected = nullptr;
+                    HIRTraitPath projectedStorage;
                     if (de->mTrait.mPath.mPath == se->mTrait.mPath.mPath) {
                         rv &= comparePp(
                             sp,
@@ -8164,7 +8164,7 @@ bool TraitResolution::findTraitImpls(
                             de->mTrait.mPath.mParams
                         );
                         projected = &se->mTrait;
-                    } else if (se->mTrait.mPath.mPath != ::HIR::SimplePath()) {
+                    } else if (se->mTrait.mPath.mPath != HIRSimplePath()) {
                         findNamedTraitInTrait(
                             sp,
                             de->mTrait.mPath.mPath,
@@ -8173,24 +8173,24 @@ bool TraitResolution::findTraitImpls(
                             se->mTrait.mPath.mPath,
                             se->mTrait.mPath.mParams,
                             srcTy,
-                            [&](const ::HIR::TraitPath& parent) {
+                            [&](const HIRTraitPath& parent) {
                                 const auto cmp = comparePp(
                                     sp,
                                     parent.mPath.mParams,
                                     de->mTrait.mPath.mParams
                                 );
-                                if (cmp == ::HIR::Compare::Unequal) {
+                                if (cmp == HIRCompare::Unequal) {
                                     return false;
                                 }
                                 rv &= cmp;
                                 projectedStorage = parent.clone();
                                 projected = &projectedStorage;
-                                return cmp == ::HIR::Compare::Equal;
+                                return cmp == HIRCompare::Equal;
                             }
                         );
                     }
-                    if (!projected || rv == ::HIR::Compare::Unequal) {
-                        return ::HIR::Compare::Unequal;
+                    if (!projected || rv == HIRCompare::Unequal) {
+                        return HIRCompare::Unequal;
                     }
 
                     // Every associated-type equality required by the
@@ -8199,14 +8199,14 @@ bool TraitResolution::findTraitImpls(
                     for (const auto& required : de->mTrait.typeBounds) {
                         const auto source = projected->typeBounds.find(required.first);
                         if (source == projected->typeBounds.end()) {
-                            return ::HIR::Compare::Unequal;
+                            return HIRCompare::Unequal;
                         }
                         rv &= source->second.type->compareWithPlaceholders(
                             sp,
                             required.second.type,
                             ivars.callbackResolveInfer()
                         );
-                        if (rv == ::HIR::Compare::Unequal) {
+                        if (rv == HIRCompare::Unequal) {
                             return rv;
                         }
                     }
@@ -8223,34 +8223,34 @@ bool TraitResolution::findTraitImpls(
                         }
                         if (!found) {
                             // Return early.
-                            return ::HIR::Compare::Unequal;
+                            return HIRCompare::Unequal;
                         }
                     }
 
-                    if (rv == ::HIR::Compare::Fuzzy && newTypeCallback) {
+                    if (rv == HIRCompare::Fuzzy && newTypeCallback) {
                         // TODO: Inner type
                     }
                     return rv;
                 }
 
                 bool good;
-                ::HIR::Compare totalCmp = ::HIR::Compare::Equal;
+                HIRCompare totalCmp = HIRCompare::Equal;
 
-                ::HIR::TypeData::Data_TraitObject tmpE;
+                HIRTypeData::Data_TraitObject tmpE;
                 tmpE.mTrait.mPath = de->mTrait.mPath.mPath;
 
                 // Check data trait first.
-                if (de->mTrait.mPath.mPath == ::HIR::SimplePath()) {
+                if (de->mTrait.mPath.mPath == HIRSimplePath()) {
                     ASSERT_BUG(sp, de->markers.size() > 0, "TraitObject with no traits - " << dstTy);
                     good = true;
                 } else {
                     good = findTraitImpls(sp, de->mTrait.mPath.mPath, de->mTrait.mPath.mParams, srcTy, [&](const auto impl, auto cmp) {
-                        if (cmp == ::HIR::Compare::Unequal) {
+                        if (cmp == HIRCompare::Unequal) {
                             return false;
                         }
 
                         auto candidateCmp = cmp;
-                        ::HIR::TypeData::Data_TraitObject candidateE;
+                        HIRTypeData::Data_TraitObject candidateE;
                         candidateE.mTrait.mPath = de->mTrait.mPath.mPath;
                         candidateE.mTrait.mPath.mParams = impl.getTraitParams(crate.types);
 
@@ -8258,17 +8258,17 @@ bool TraitResolution::findTraitImpls(
                         // declaring trait path.  Rebuild that path with the
                         // selected principal-trait response instead of mixing
                         // response parameters with the original goal.
-                        auto remapSourceTrait = [&](const ::HIR::GenericPath& sourceTrait) {
+                        auto remapSourceTrait = [&](const HIRGenericPath& sourceTrait) {
                             if (sourceTrait.mPath == de->mTrait.mPath.mPath) {
-                                return ::HIR::GenericPath(
+                                return HIRGenericPath(
                                     sourceTrait.mPath,
                                     candidateE.mTrait.mPath.mParams.clone()
                                 );
                             }
 
-                            ::HIR::GenericPath result = sourceTrait.clone();
+                            HIRGenericPath result = sourceTrait.clone();
                             if (!de->mTrait.traitPtr) {
-                                candidateCmp = ::HIR::Compare::Fuzzy;
+                                candidateCmp = HIRCompare::Fuzzy;
                                 return result;
                             }
 
@@ -8293,38 +8293,38 @@ bool TraitResolution::findTraitImpls(
                                 const auto parentCmp = comparePp(
                                     sp, goalParent.mParams, sourceTrait.mParams
                                 );
-                                if (parentCmp == ::HIR::Compare::Unequal
-                                    || (foundEqual && parentCmp != ::HIR::Compare::Equal)) {
+                                if (parentCmp == HIRCompare::Unequal
+                                    || (foundEqual && parentCmp != HIRCompare::Equal)) {
                                     continue;
                                 }
 
                                 auto responseParent = responseMonomorph.monomorphGenericpath(
                                     sp, parent.mPath, false
                                 );
-                                if (!found || parentCmp == ::HIR::Compare::Equal) {
+                                if (!found || parentCmp == HIRCompare::Equal) {
                                     result = ::std::move(responseParent);
                                     found = true;
-                                    foundEqual = parentCmp == ::HIR::Compare::Equal;
+                                    foundEqual = parentCmp == HIRCompare::Equal;
                                 } else if (result != responseParent) {
                                     // Multiple fuzzy supertrait projections
                                     // are a legitimate ambiguous response.
-                                    candidateCmp = ::HIR::Compare::Fuzzy;
+                                    candidateCmp = HIRCompare::Fuzzy;
                                 }
                             }
                             if (!found) {
-                                candidateCmp = ::HIR::Compare::Fuzzy;
+                                candidateCmp = HIRCompare::Fuzzy;
                             } else if (!foundEqual) {
-                                candidateCmp = ::HIR::Compare::Fuzzy;
+                                candidateCmp = HIRCompare::Fuzzy;
                             }
                             return result;
                         };
 
                         for (const auto& aty : de->mTrait.typeBounds) {
                             auto atyv = impl.getType(crate.types, aty.first.c_str(), aty.second.atyParams);
-                            if (atyv == ::HIR::TypeRef()) {
+                            if (atyv == HIRTypeRef()) {
                                 // Get the trait from which this associated type comes.
                                 // Insert a UfcsKnown path for that
-                                auto p = ::HIR::Path(
+                                auto p = HIRPath(
                                     srcTy,
                                     aty.second.sourceTrait.clone(),
                                     aty.first,
@@ -8338,11 +8338,11 @@ bool TraitResolution::findTraitImpls(
                                 sp, aty.second.type
                             );
                             const auto atyCmp = compareTy(sp, atyv, desired);
-                            if (atyCmp == ::HIR::Compare::Unequal) {
+                            if (atyCmp == HIRCompare::Unequal) {
                                 return false;
                             }
                             candidateCmp &= atyCmp;
-                            candidateE.mTrait.typeBounds[aty.first] = ::HIR::TraitPath::AtyEqual{
+                            candidateE.mTrait.typeBounds[aty.first] = HIRTraitPath::AtyEqual{
                                 remapSourceTrait(aty.second.sourceTrait),
                                 aty.second.atyParams.clone(),
                                 mv$(atyv)
@@ -8357,7 +8357,7 @@ bool TraitResolution::findTraitImpls(
 
                 // Then markers
                 auto cb = [&](const auto impl, auto cmp) {
-                    if (cmp == ::HIR::Compare::Unequal) {
+                    if (cmp == HIRCompare::Unequal) {
                         return false;
                     }
                     totalCmp &= cmp;
@@ -8372,8 +8372,8 @@ bool TraitResolution::findTraitImpls(
                     good &= findTraitImpls(sp, marker.mPath, marker.mParams, srcTy, cb);
                 }
 
-                if (good && totalCmp == ::HIR::Compare::Fuzzy && newTypeCallback) {
-                    (*newTypeCallback)(crate.types.intern(::HIR::TypeData::make_TraitObject(mv$(tmpE))));
+                if (good && totalCmp == HIRCompare::Fuzzy && newTypeCallback) {
+                    (*newTypeCallback)(crate.types.intern(HIRTypeData::make_TraitObject(mv$(tmpE))));
                 }
                 return totalCmp;
             }
@@ -8385,7 +8385,7 @@ bool TraitResolution::findTraitImpls(
                     auto cmp = de->inner->compareWithPlaceholders(sp, se->inner, ivars.callbackResolveInfer());
                     // TODO: Indicate to caller that for this to be true, these two must be the same.
                     // - I.E. if true, equate these types
-                    if (cmp == ::HIR::Compare::Fuzzy && newTypeCallback) {
+                    if (cmp == HIRCompare::Fuzzy && newTypeCallback) {
                         (*newTypeCallback)(crate.types.slice(se->inner));
                     }
                     return cmp;
@@ -8393,10 +8393,10 @@ bool TraitResolution::findTraitImpls(
             }
 
             DEBUG("Can't unsize, no rules matched");
-            return ::HIR::Compare::Unequal;
+            return HIRCompare::Unequal;
         }
 
-        const ::HIR::TypeData* TraitResolution::typeIsOwnedBox(const Span& sp, const ::HIR::TypeData* ty) const {
+        const HIRTypeData* TraitResolution::typeIsOwnedBox(const Span& sp, const HIRTypeData* ty) const {
             if (const auto* e = ty->opt_Path()) {
                 if (const auto* pe = e->path.mData.opt_Generic()) {
                     if (pe->mPath == mLangBox) {
@@ -8412,9 +8412,9 @@ bool TraitResolution::findTraitImpls(
         // -------------------------------------------------------------------------------------------------------------------
         TraitResolution::AutoderefResult TraitResolution::autoderefStep(
             const Span& sp,
-            const ::HIR::TypeData* tyIn,
-            ::HIR::TypeRef& target,
-            ::std::optional<::HIR::TypeRef>* implType
+            const HIRTypeData* tyIn,
+            HIRTypeRef& target,
+            ::std::optional<HIRTypeRef>* implType
         ) const {
             if (implType) {
                 implType->reset();
@@ -8439,21 +8439,21 @@ bool TraitResolution::findTraitImpls(
             else if (ty->is_Slice() || ty->is_Primitive() || ty->is_Tuple() || ty->is_Array()) {
                 return AutoderefResult::NoMatch;
             } else {
-                ::std::optional<::HIR::TypeRef> candidateTarget;
-                ::std::optional<::HIR::TypeRef> candidateImplType;
+                ::std::optional<HIRTypeRef> candidateTarget;
+                ::std::optional<HIRTypeRef> candidateImplType;
                 bool exact = false;
                 bool ambiguous = false;
 
-                this->findTraitImpls(sp, mLangDeref, ::HIR::PathParams{}, ty, [&](auto impl, auto match) {
+                this->findTraitImpls(sp, mLangDeref, HIRPathParams{}, ty, [&](auto impl, auto match) {
                     auto foundTarget = impl.getType(crate.types, "Target", {});
-                    if (foundTarget == ::HIR::TypeRef()) {
-                        foundTarget = crate.types.path(::HIR::Path(ty, mLangDeref, RcString::newInterned("Target")), ::HIR::TypePathBinding::make_Opaque({}));
+                    if (foundTarget == HIRTypeRef()) {
+                        foundTarget = crate.types.path(HIRPath(ty, mLangDeref, RcString::newInterned("Target")), HIRTypePathBinding::make_Opaque({}));
                     } else {
                         this->expandAssociatedTypesInplace(sp, foundTarget, {});
                     }
                     auto foundImplType = impl.getImplType(crate.types);
 
-                    if (match == ::HIR::Compare::Equal) {
+                    if (match == HIRCompare::Equal) {
                         candidateTarget = foundTarget;
                         candidateImplType = foundImplType;
                         exact = true;
@@ -8486,7 +8486,7 @@ bool TraitResolution::findTraitImpls(
             }
         }
 
-        const ::HIR::TypeData* TraitResolution::autoderef(const Span& sp, const ::HIR::TypeData* ty, ::HIR::TypeRef& tmpType) const {
+        const HIRTypeData* TraitResolution::autoderef(const Span& sp, const HIRTypeData* ty, HIRTypeRef& tmpType) const {
             return autoderefStep(sp, ty, tmpType) == AutoderefResult::Match
                 ? tmpType
                 : nullptr;
@@ -8494,17 +8494,17 @@ bool TraitResolution::findTraitImpls(
 
         unsigned int TraitResolution::autoderefFindMethod(
             const Span& sp,
-            const HIR::tTraitList& traits,
+            const tTraitList& traits,
             const ::std::vector<unsigned>& ivars,
             unsigned int typeIvarCount,
-            const ::HIR::TypeData* topTy,
+            const HIRTypeData* topTy,
             const RcString& methodName,
-            /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, ::HIR::Path>>& possibilities
+            /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities
         ) const {
             try {
                 TRACE_FUNCTION_F("{" << topTy << "}." << methodName);
                 unsigned int derefCount = 0;
-                ::HIR::TypeRef tmpType; // Temporary type used for handling Deref
+                HIRTypeRef tmpType; // Temporary type used for handling Deref
                 const auto& topTyR = this->ivars.getType(topTy);
                 const auto* currentTy = topTyR;
 
@@ -8521,7 +8521,7 @@ bool TraitResolution::findTraitImpls(
                         return;
                     }
 
-                    ::std::vector<::HIR::SimplePath> candidateTraits;
+                    ::std::vector<HIRSimplePath> candidateTraits;
                     candidateTraits.reserve(possibilities.size());
                     for (const auto& possibility : possibilities) {
                         const auto* path = possibility.second.mData.opt_UfcsKnown();
@@ -8567,15 +8567,15 @@ bool TraitResolution::findTraitImpls(
                     }
 
                     // Auto-ref
-                    auto borrowTy = crate.types.borrow(::HIR::BorrowType::Shared, ty);
+                    auto borrowTy = crate.types.borrow(HIRBorrowType::Shared, ty);
                     if (this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, MethodAccess::Move, AutoderefBorrow::Shared, possibilities)) {
                         DEBUG("FOUND & *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
                     }
-                    borrowTy = crate.types.borrow(::HIR::BorrowType::Unique, ty);
+                    borrowTy = crate.types.borrow(HIRBorrowType::Unique, ty);
                     if (curAccess >= MethodAccess::Unique && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, MethodAccess::Move, AutoderefBorrow::Unique, possibilities)) {
                         DEBUG("FOUND &mut *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
                     }
-                    borrowTy = crate.types.borrow(::HIR::BorrowType::Owned, ty);
+                    borrowTy = crate.types.borrow(HIRBorrowType::Owned, ty);
                     if (curAccess >= MethodAccess::Move && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, MethodAccess::Move, AutoderefBorrow::Owned, possibilities)) {
                         DEBUG("FOUND &move *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
                     }
@@ -8670,20 +8670,20 @@ bool TraitResolution::findTraitImpls(
 
         // Checks that a given real receiver type matches a desired receiver type (with the correct access)
         // Returns the matched `Self` type, or nothing if there's a mismatch.
-        ::std::optional<::HIR::TypeRef> TraitResolution::checkMethodReceiver(const Span& sp, const ::HIR::Function& fcn, const ::HIR::TypeData* ty, TraitResolution::MethodAccess access) const {
+        ::std::optional<HIRTypeRef> TraitResolution::checkMethodReceiver(const Span& sp, const HIRFunction& fcn, const HIRTypeData* ty, TraitResolution::MethodAccess access) const {
             switch (fcn.receiver) {
-                case ::HIR::Function::Receiver::Free:
+                case HIRFunction::Receiver::Free:
                     // Free functions are never usable
                     return ::std::nullopt;
-                case ::HIR::Function::Receiver::Value:
+                case HIRFunction::Receiver::Value:
                     if (access >= TraitResolution::MethodAccess::Move) {
                         return this->ivars.getType(ty);
                     }
                     break;
-                case ::HIR::Function::Receiver::BorrowOwned:
+                case HIRFunction::Receiver::BorrowOwned:
                     if (!ty->is_Borrow())
                         ;
-                    else if (ty->as_Borrow().type != ::HIR::BorrowType::Owned)
+                    else if (ty->as_Borrow().type != HIRBorrowType::Owned)
                         ;
                     else if (access < TraitResolution::MethodAccess::Move)
                         ;
@@ -8691,10 +8691,10 @@ bool TraitResolution::findTraitImpls(
                         return this->ivars.getType(ty->as_Borrow().inner);
                     }
                     break;
-                case ::HIR::Function::Receiver::BorrowUnique:
+                case HIRFunction::Receiver::BorrowUnique:
                     if (!ty->is_Borrow())
                         ;
-                    else if (ty->as_Borrow().type != ::HIR::BorrowType::Unique)
+                    else if (ty->as_Borrow().type != HIRBorrowType::Unique)
                         ;
                     else if (access < TraitResolution::MethodAccess::Unique)
                         ;
@@ -8702,10 +8702,10 @@ bool TraitResolution::findTraitImpls(
                         return this->ivars.getType(ty->as_Borrow().inner);
                     }
                     break;
-                case ::HIR::Function::Receiver::BorrowShared:
+                case HIRFunction::Receiver::BorrowShared:
                     if (!ty->is_Borrow())
                         ;
-                    else if (ty->as_Borrow().type != ::HIR::BorrowType::Shared)
+                    else if (ty->as_Borrow().type != HIRBorrowType::Shared)
                         ;
                     else if (access < TraitResolution::MethodAccess::Shared)
                         ;
@@ -8713,13 +8713,13 @@ bool TraitResolution::findTraitImpls(
                         return this->ivars.getType(ty->as_Borrow().inner);
                     }
                     break;
-                case ::HIR::Function::Receiver::Custom: {
+                case HIRFunction::Receiver::Custom: {
                     const auto& receiverType = fcn.mArgs.front().second;
                     ASSERT_BUG(
                         sp,
                         visitTyWith(
                             receiverType,
-                            [](const HIR::TypeData* v) {
+                            [](const HIRTypeData* v) {
                         return v->is_Generic() && v->as_Generic().isSelf();
                     }
                         ),
@@ -8728,17 +8728,17 @@ bool TraitResolution::findTraitImpls(
                     // TODO: Handle custom-receiver functions
                     // - match_test_generics, if it succeeds return the matched Self
                     {
-                        struct GetSelf: public ::HIR::MatchGenerics {
-                            ::std::optional<::HIR::TypeRef> detectedSelfTy;
+                        struct GetSelf: public HIRMatchGenerics {
+                            ::std::optional<HIRTypeRef> detectedSelfTy;
 
-                            ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::tCbResolveType _resolve_cb) override {
+                            HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override {
                                 if (g.isSelf()) {
                                     detectedSelfTy = ty;
                                 }
-                                return ::HIR::Compare::Equal;
+                                return HIRCompare::Equal;
                             }
 
-                            ::HIR::Compare matchVal(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) override {
+                            HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override {
                                 TODO(Span(), "GetSelf::match_val " << g << " with " << sz);
                             }
                         } getself;
@@ -8750,7 +8750,7 @@ bool TraitResolution::findTraitImpls(
                     }
                     return ::std::nullopt;
                 }
-                case ::HIR::Function::Receiver::Box:
+                case HIRFunction::Receiver::Box:
                     if (const auto* ity = this->typeIsOwnedBox(sp, ty)) {
                         if (access < TraitResolution::MethodAccess::Move) {
                         } else {
@@ -8762,26 +8762,26 @@ bool TraitResolution::findTraitImpls(
             return ::std::nullopt;
         }
 
-        bool TraitResolution::findMethod(const Span& sp, const HIR::tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const ::HIR::TypeData* ty, const RcString& methodName, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, ::HIR::Path>>& possibilities) const {
+        bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities) const {
             bool rv = false;
             TRACE_FUNCTION_FR("ty=" << ty << ", name=" << methodName << ", access=" << access, rv << " " << possibilities);
             auto cbInfer = this->ivars.callbackResolveInfer();
 
-            auto getIvaredParams = [&](const ::HIR::GenericParams& tpl) -> ::HIR::PathParams {
+            auto getIvaredParams = [&](const HIRGenericParams& tpl) -> HIRPathParams {
                 unsigned int nParams = tpl.types.size();
                 ASSERT_BUG(sp, typeIvarCount <= ivars.size(), "Invalid method ivar split: " << typeIvarCount << " type ivars in a pool of " << ivars.size());
                 ASSERT_BUG(sp, nParams <= typeIvarCount, "Not enough type ivars allocated for method: " << nParams << " needed but " << typeIvarCount << " allocated by caller\ntpl = " << tpl.fmtArgs());
-                ::HIR::PathParams traitParams;
+                HIRPathParams traitParams;
                 traitParams.types.reserve(nParams);
                 for (unsigned int i = 0; i < nParams; i++) {
-                    traitParams.types.push_back(crate.types.infer(ivars[i], ::HIR::InferClass::None));
+                    traitParams.types.push_back(crate.types.infer(ivars[i], HIRInferClass::None));
                     ASSERT_BUG(sp, this->ivars.getType(traitParams.types.back())->as_Infer().index == ivars[i], "A method selection ivar was bound");
                 }
                 const unsigned int nValues = tpl.values.size();
                 ASSERT_BUG(sp, nValues <= ivars.size() - typeIvarCount, "Not enough value ivars allocated for method: " << nValues << " needed but " << ivars.size() - typeIvarCount << " allocated by caller\ntpl = " << tpl.fmtArgs());
                 traitParams.values.reserve(nValues);
                 for (unsigned int i = 0; i < nValues; i++) {
-                    traitParams.values.push_back(::HIR::ConstGeneric::make_Infer({ivars[typeIvarCount + i]}));
+                    traitParams.values.push_back(HIRConstGeneric::make_Infer({ivars[typeIvarCount + i]}));
                 }
                 return traitParams;
             };
@@ -8791,16 +8791,16 @@ bool TraitResolution::findTraitImpls(
             // TODO: Have a cache of name+receiver_type to a list of types and impls
             // e.g. `len` `&Self` = `[T]`
             DEBUG("> Inherent methods");
-            crate.inherentMethodCache.find(sp, methodName, ty, this->ivars.callbackResolveInfer(), [&](const HIR::TypeData* selfTy, const HIR::TypeImpl& impl) {
+            crate.inherentMethodCache.find(sp, methodName, ty, this->ivars.callbackResolveInfer(), [&](const HIRTypeData* selfTy, const HIRTypeImpl& impl) {
                 if (!impl.methods.at(methodName).publicity.isVisible(this->mVisPath)) {
                     // Ignore method: Not visibile
                     return;
                 }
-                ::HIR::PathParams implParams;
-                auto cmp = fticCheckParams(sp, ::HIR::SimplePath(), nullptr, selfTy, impl.mParams, {}, impl.mType, implParams);
-                if (cmp != HIR::Compare::Unequal) {
+                HIRPathParams implParams;
+                auto cmp = fticCheckParams(sp, HIRSimplePath(), nullptr, selfTy, impl.mParams, {}, impl.mType, implParams);
+                if (cmp != HIRCompare::Unequal) {
                     DEBUG("Found `impl" << impl.mParams.fmtArgs() << " " << impl.mType << "` fn " << methodName /* << " - " << top_ty*/);
-                    possibilities.push_back(::std::make_pair(borrowType, ::HIR::Path(selfTy, methodName, {})));
+                    possibilities.push_back(::std::make_pair(borrowType, HIRPath(selfTy, methodName, {})));
                     DEBUG("++ " << possibilities.back());
                     rv = true;
                 }
@@ -8819,8 +8819,8 @@ bool TraitResolution::findTraitImpls(
 
                 assert(eTraitInfo.traitPtr);
                 // 1. Find the named method in the trait.
-                ::HIR::GenericPath finalTraitPath;
-                const ::HIR::Function* fcnPtr;
+                HIRGenericPath finalTraitPath;
+                const HIRFunction* fcnPtr;
                 if (!(fcnPtr = this->traitContainsMethod(sp, eTraitGp, *eTraitInfo.traitPtr, eType, methodName, finalTraitPath))) {
                     DEBUG("- Method '" << methodName << "' missing");
                     continue;
@@ -8834,25 +8834,25 @@ bool TraitResolution::findTraitImpls(
                     struct MonomorphEraseHrls: public Monomorphiser {
                         using Monomorphiser::Monomorphiser;
 
-                        ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& ty) const override {
+                        HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override {
                             if (ty.group() == 3) {
                                 return types.infer();
                             }
                             return types.generic(ty.name, ty.binding);
                         }
 
-                        ::HIR::ConstGeneric getValue(const Span& sp, const ::HIR::GenericRef& val) const override {
+                        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override {
                             if (val.group() == 3) {
-                                return ::HIR::ConstGeneric();
+                                return HIRConstGeneric();
                             }
-                            return HIR::ConstGeneric(val);
+                            return HIRConstGeneric(val);
                         }
 
-                        ::HIR::LifetimeRef getLifetime(const Span& sp, const ::HIR::GenericRef& lftRef) const override {
+                        HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& lftRef) const override {
                             if (lftRef.group() == 3) {
-                                return ::HIR::LifetimeRef();
+                                return HIRLifetimeRef();
                             }
-                            return ::HIR::LifetimeRef(lftRef.binding);
+                            return HIRLifetimeRef(lftRef.binding);
                         }
                     };
 
@@ -8864,20 +8864,20 @@ bool TraitResolution::findTraitImpls(
                     }
                     // TODO: Do a fuzzy match here?
                     auto cmp = (*selfTy)->compareWithPlaceholders(sp, eType, cbInfer);
-                    if (cmp == ::HIR::Compare::Equal) {
+                    if (cmp == HIRCompare::Equal) {
                         // TODO: Re-monomorphise final trait using `ty`?
                         // - Could collide with legitimate uses of `Self`
 
                         // Found the method, return the UFCS path for it
-                        possibilities.push_back(::std::make_pair(borrowType, ::HIR::Path(::HIR::Path::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}}))));
+                        possibilities.push_back(::std::make_pair(borrowType, HIRPath(HIRPath::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}}))));
                         DEBUG("++ " << possibilities.back());
                         rv = true;
                         foundBound = true;
-                    } else if (cmp == ::HIR::Compare::Fuzzy) {
+                    } else if (cmp == HIRCompare::Fuzzy) {
                         DEBUG("Fuzzy match checking bounded method - " << *selfTy << " != " << eType);
 
                         // Found the method, return the UFCS path for it
-                        possibilities.push_back(::std::make_pair(borrowType, ::HIR::Path(::HIR::Path::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}}))));
+                        possibilities.push_back(::std::make_pair(borrowType, HIRPath(HIRPath::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}}))));
                         DEBUG("++ " << possibilities.back());
                         rv = true;
                         foundBound = true;
@@ -8894,8 +8894,8 @@ bool TraitResolution::findTraitImpls(
 
             // 2. Search the current trait (if in an impl block)
             if (mCurrentTraitPath) {
-                ::HIR::GenericPath finalTraitPath;
-                const ::HIR::Function* fcnPtr;
+                HIRGenericPath finalTraitPath;
+                const HIRFunction* fcnPtr;
                 if ((fcnPtr = this->traitContainsMethod(sp, *mCurrentTraitPath, *currentTraitPtr, ty, methodName, finalTraitPath))) {
                     DEBUG("- Found trait " << finalTraitPath << " (current)");
                     if (auto selfTy = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
@@ -8924,7 +8924,7 @@ bool TraitResolution::findTraitImpls(
                             });
                             if (crateImplFound) {
                                 DEBUG("Found trait impl " << mCurrentTraitPath->mPath << traitParams << " for " << *selfTy << " (" << this->ivars.fmtType(*selfTy) << ")");
-                                possibilities.push_back(::std::make_pair(borrowType, ::HIR::Path(*selfTy, ::HIR::GenericPath(finalTraitPath.mPath, mv$(traitParams)), methodName, {})));
+                                possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTy, HIRGenericPath(finalTraitPath.mPath, mv$(traitParams)), methodName, {})));
                                 DEBUG("++ " << possibilities.back());
                                 return true;
                             } else {
@@ -8937,7 +8937,7 @@ bool TraitResolution::findTraitImpls(
                 }
             }
 
-            auto getInnerType = [this, sp](const ::HIR::TypeData* ty, ::std::function<bool(const ::HIR::TypeData*)> cb) -> const ::HIR::TypeData* {
+            auto getInnerType = [this, sp](const HIRTypeData* ty, ::std::function<bool(const HIRTypeData*)> cb) -> const HIRTypeData* {
                 if (cb(ty)) {
                     return ty;
                 } else if (ty->is_Borrow()) {
@@ -8967,7 +8967,7 @@ bool TraitResolution::findTraitImpls(
                 const auto& trait = this->crate.getTraitByPath(sp, e.mTrait.mPath.mPath);
 
                 bool foundTraitObject = false;
-                auto addTraitObjectMethod = [&](const ::HIR::Function& fcn, ::HIR::GenericPath finalTraitPath) {
+                auto addTraitObjectMethod = [&](const HIRFunction& fcn, HIRGenericPath finalTraitPath) {
                     DEBUG("- Found trait " << finalTraitPath << " (trait object)");
                     // - If the receiver is valid, then it's correct (no need to check the type again)
                     if (auto selfTyP = checkMethodReceiver(sp, fcn, ty, access)) {
@@ -8975,14 +8975,14 @@ bool TraitResolution::findTraitImpls(
                             auto pps = e.mTrait.hrtbs->makeEmptyParams(true);
                             finalTraitPath.mParams = MonomorphHrlsOnly(crate.types, pps).monomorphPathParams(sp, finalTraitPath.mParams, true);
                         }
-                        possibilities.push_back(::std::make_pair(borrowType, ::HIR::Path(*selfTyP, mv$(finalTraitPath), methodName, {})));
+                        possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
                         DEBUG("++ " << possibilities.back());
                         rv = true;
                         foundTraitObject = true;
                     }
                 };
 
-                const ::HIR::Function* fcnPtr = nullptr;
+                const HIRFunction* fcnPtr = nullptr;
                 if (traitContainsMethodInner(trait, methodName, fcnPtr)) {
                     assert(fcnPtr);
                     addTraitObjectMethod(*fcnPtr, e.mTrait.mPath.clone());
@@ -8995,9 +8995,9 @@ bool TraitResolution::findTraitImpls(
                             continue;
                         }
                         assert(fcnPtr);
-                        static ::HIR::GenericParams emptyHrtbs;
+                        static HIRGenericParams emptyHrtbs;
                         auto _h = monomorphCb.pushHrb(st.hrtbs ? *st.hrtbs : emptyHrtbs);
-                        auto finalTraitPath = ::HIR::GenericPath(st.mPath.mPath, monomorphCb.monomorphPathParams(sp, st.mPath.mParams, false));
+                        auto finalTraitPath = HIRGenericPath(st.mPath.mPath, monomorphCb.monomorphPathParams(sp, st.mPath.mParams, false));
                         addTraitObjectMethod(*fcnPtr, std::move(finalTraitPath));
                     }
                 }
@@ -9017,12 +9017,12 @@ bool TraitResolution::findTraitImpls(
                 for (const auto& traitPath : e.traits) {
                     const auto& trait = this->crate.getTraitByPath(sp, traitPath.mPath.mPath);
 
-                    ::HIR::GenericPath finalTraitPath;
+                    HIRGenericPath finalTraitPath;
                     if (const auto* fcnPtr = this->traitContainsMethod(sp, traitPath.mPath, trait, crate.types.self(), methodName, finalTraitPath)) {
                         DEBUG("- Found trait " << finalTraitPath << " (erased type)");
 
                         if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
-                            possibilities.push_back(::std::make_pair(borrowType, ::HIR::Path(*selfTyP, mv$(finalTraitPath), methodName, {})));
+                            possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
                             DEBUG("++ " << possibilities.back());
                             rv = true;
                         }
@@ -9052,21 +9052,21 @@ bool TraitResolution::findTraitImpls(
                 // NOTE: The bounds here have 'Self' = the type
                 for (const auto& bound : assocTy.traitBounds) {
                     ASSERT_BUG(sp, bound.traitPtr, "Pointer to trait " << bound.mPath << " not set in " << e.trait.mPath);
-                    ::HIR::GenericPath finalTraitPath;
+                    HIRGenericPath finalTraitPath;
 
-                    auto tySelf = crate.types.path(::HIR::Path(crate.types.self(), bound.mPath.clone(), e.item), HIR::TypePathBinding::make_Opaque({}));
+                    auto tySelf = crate.types.path(HIRPath(crate.types.self(), bound.mPath.clone(), e.item), HIRTypePathBinding::make_Opaque({}));
                     if (const auto* fcnPtr = this->traitContainsMethod(sp, bound.mPath, *bound.traitPtr, tySelf, methodName, finalTraitPath)) {
                         DEBUG("- Found trait " << finalTraitPath << " (UFCS Known, aty bounds)");
 
                         if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
                             if (*selfTyP == ityp) {
-                                auto ppHrb = bound.hrtbs ? bound.hrtbs->makeEmptyParams(true) : HIR::PathParams();
+                                auto ppHrb = bound.hrtbs ? bound.hrtbs->makeEmptyParams(true) : HIRPathParams();
                                 monomorphCb.ppHrb = &ppHrb;
                                 finalTraitPath = monomorphCb.monomorphGenericpath(sp, finalTraitPath, false);
                                 DEBUG("- Monomorph to " << finalTraitPath);
 
                                 // Found the method, return the UFCS path for it
-                                possibilities.push_back(::std::make_pair(borrowType, ::HIR::Path(*selfTyP, mv$(finalTraitPath), methodName, {})));
+                                possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
                                 DEBUG("++ " << possibilities.back());
                                 rv = true;
                             }
@@ -9101,7 +9101,7 @@ bool TraitResolution::findTraitImpls(
 
                     // Found such a bound, now to test if it is useful
 
-                    ::HIR::GenericPath finalTraitPath;
+                    HIRGenericPath finalTraitPath;
                     if (const auto* fcnPtr = this->traitContainsMethod(sp, be.trait.mPath, *be.trait.traitPtr, crate.types.self(), methodName, finalTraitPath)) {
                         DEBUG("- Found trait " << finalTraitPath << " (UFCS Known, trait bounds)");
 
@@ -9113,7 +9113,7 @@ bool TraitResolution::findTraitImpls(
                                 }
 
                                 // Found the method, return the UFCS path for it
-                                possibilities.push_back(::std::make_pair(borrowType, ::HIR::Path(*selfTyP, mv$(finalTraitPath), methodName, {})));
+                                possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
                                 DEBUG("++ " << possibilities.back());
                                 rv = true;
                             }
@@ -9130,8 +9130,8 @@ bool TraitResolution::findTraitImpls(
                     break;
                 }
 
-                ::HIR::GenericPath finalTraitPath;
-                const ::HIR::Function* fcnPtr;
+                HIRGenericPath finalTraitPath;
+                const HIRFunction* fcnPtr;
                 if (!(fcnPtr = this->traitContainsMethod(sp, *traitRef.first, *traitRef.second, crate.types.self(), methodName, finalTraitPath))) {
                     continue;
                 }
@@ -9142,7 +9142,7 @@ bool TraitResolution::findTraitImpls(
                     DEBUG("Search for impl of " << *traitRef.first << " for " << selfTy);
 
                     // Use the set of ivars we were given to populate the trait parameters
-                    ::HIR::PathParams traitParams = getIvaredParams(traitRef.second->mParams);
+                    HIRPathParams traitParams = getIvaredParams(traitRef.second->mParams);
 
                     // TODO: Re-monomorphise the trait path!
 
@@ -9171,7 +9171,7 @@ bool TraitResolution::findTraitImpls(
                     }
                     if (crateImplFound) {
                         DEBUG("Found trait impl " << *traitRef.first << traitParams << " for " << selfTy << " (" << this->ivars.fmtType(selfTy) << ")");
-                        possibilities.push_back(::std::make_pair(borrowType, ::HIR::Path(selfTy, ::HIR::GenericPath(*traitRef.first, mv$(traitParams)), methodName, {})));
+                        possibilities.push_back(::std::make_pair(borrowType, HIRPath(selfTy, HIRGenericPath(*traitRef.first, mv$(traitParams)), methodName, {})));
                         DEBUG("++ " << possibilities.back());
                         rv = true;
                     }
@@ -9183,9 +9183,9 @@ bool TraitResolution::findTraitImpls(
             return rv;
         }
 
-        unsigned int TraitResolution::autoderefFindField(const Span& sp, const ::HIR::TypeData* topTy, const RcString& fieldName, /* Out -> */ ::HIR::TypeRef& fieldType) const {
+        unsigned int TraitResolution::autoderefFindField(const Span& sp, const HIRTypeData* topTy, const RcString& fieldName, /* Out -> */ HIRTypeRef& fieldType) const {
             unsigned int derefCount = 0;
-            ::HIR::TypeRef tmpType; // Temporary type used for handling Deref
+            HIRTypeRef tmpType; // Temporary type used for handling Deref
             const auto* currentTy = topTy;
             if (const auto* e = this->ivars.getType(topTy)->opt_Borrow()) {
                 currentTy = e->inner;
@@ -9223,7 +9223,7 @@ bool TraitResolution::findTraitImpls(
             TODO(sp, "Error when no field could be found, but type is known - (: " << topTy << ")." << fieldName);
         }
 
-        bool TraitResolution::findField(const Span& sp, const ::HIR::TypeData* ty, const RcString& name, /* Out -> */ ::HIR::TypeRef& fieldTy) const {
+        bool TraitResolution::findField(const Span& sp, const HIRTypeData* ty, const RcString& name, /* Out -> */ HIRTypeRef& fieldTy) const {
             if (const auto* e = ty->opt_Path()) {
         TU_MATCH_HDRA( (e->binding), {)
         TU_ARMA(Unbound, be) {
@@ -9293,25 +9293,25 @@ bool TraitResolution::findTraitImpls(
             return false;
         }
 
-HMTypeInferrence::FmtType::FmtType(const HMTypeInferrence& ctxt, const ::HIR::TypeData* ty)
+HMTypeInferrence::FmtType::FmtType(const HMTypeInferrence& ctxt, const HIRTypeData* ty)
     : ctxt(ctxt)
     , ty(ty) {
 }
-HMTypeInferrence::FmtPP::FmtPP(const HMTypeInferrence& ctxt, const ::HIR::PathParams& pps)
+HMTypeInferrence::FmtPP::FmtPP(const HMTypeInferrence& ctxt, const HIRPathParams& pps)
     : ctxt(ctxt)
     , pps(pps) {
 }
 // Null only when alias != ~0
 
-HMTypeInferrence::IVar::IVar(::HIR::TypeRef type)
+HMTypeInferrence::IVar::IVar(HIRTypeRef type)
     : alias(~0u)
     , type(type) {
 }
 HMTypeInferrence::IVarValue::IVarValue()
     : alias(~0u)
-    , val(new ::HIR::ConstGeneric()) {
+    , val(new HIRConstGeneric()) {
 }
-HMTypeInferrence::HMTypeInferrence(HIR::TypeInterner& types)
+HMTypeInferrence::HMTypeInferrence(HIRTypeInterner& types)
     : types(types)
     , hasChanged(false) {
 }
@@ -9330,10 +9330,10 @@ HMTypeInferrence::ResolvePlaceholders::ResolvePlaceholders(const HMTypeInferrenc
     : parent(parent) {
 }
 TraitResolution::LegacyTraitGoal::LegacyTraitGoal(
-    const ::HIR::SimplePath& trait,
-    const ::HIR::PathParams& params,
+    const HIRSimplePath& trait,
+    const HIRPathParams& params,
     bool hasParams,
-    const ::HIR::TypeData* type
+    const HIRTypeData* type
 )
     : trait(trait.clone())
     , params(params.clone())
@@ -9341,10 +9341,10 @@ TraitResolution::LegacyTraitGoal::LegacyTraitGoal(
     , hasParams(hasParams) {
 }
 bool TraitResolution::LegacyTraitGoal::matches(
-    const ::HIR::SimplePath& otherTrait,
-    const ::HIR::PathParams& otherParams,
+    const HIRSimplePath& otherTrait,
+    const HIRPathParams& otherParams,
     bool otherHasParams,
-    const ::HIR::TypeData* otherType
+    const HIRTypeData* otherType
 ) const {
     return trait == otherTrait
         && hasParams == otherHasParams
@@ -9352,18 +9352,18 @@ bool TraitResolution::LegacyTraitGoal::matches(
         && type == otherType;
 }
 /// Expand any located associated types in the input, operating in-place and returning the result
-::HIR::TypeRef TraitResolution::expandAssociatedTypes(const Span& sp, ::HIR::TypeRef input) const {
-    expandAssociatedTypesInplace(sp, input, LList<const ::HIR::TypeData*>());
+HIRTypeRef TraitResolution::expandAssociatedTypes(const Span& sp, HIRTypeRef input) const {
+    expandAssociatedTypesInplace(sp, input, LList<const HIRTypeData*>());
     return input;
 }
-const ::HIR::TypeData* TraitResolution::expandAssociatedTypes(const Span& sp, const ::HIR::TypeData* input, ::HIR::TypeRef& tmp) const {
+const HIRTypeData* TraitResolution::expandAssociatedTypes(const Span& sp, const HIRTypeData* input, HIRTypeRef& tmp) const {
     if (this->hasAssociatedType(input)) {
         return (tmp = this->expandAssociatedTypes(sp, input));
     } else {
         return input;
     }
 }
-void TraitResolution::expandAssociatedTypesParams(const Span& sp, ::HIR::PathParams& params) const {
+void TraitResolution::expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const {
     for (auto& type : params.types) {
         if (this->hasAssociatedType(type)) {
             type = this->expandAssociatedTypes(sp, type);
@@ -9371,14 +9371,14 @@ void TraitResolution::expandAssociatedTypesParams(const Span& sp, ::HIR::PathPar
     }
 }
 
-bool typeIsUnboundedInfer(const ::HIR::TypeData* ty) {
+bool typeIsUnboundedInfer(const HIRTypeData* ty) {
     if (const auto* te = ty->opt_Infer()) {
         switch (te->tyClass) {
-            case ::HIR::InferClass::Integer:
+            case HIRInferClass::Integer:
                 return false;
-            case ::HIR::InferClass::Float:
+            case HIRInferClass::Float:
                 return false;
-            case ::HIR::InferClass::None:
+            case HIRInferClass::None:
                 return true;
         }
     }
@@ -9393,14 +9393,14 @@ bool typeIsUnboundedInfer(const ::HIR::TypeData* ty) {
     return os;
 }
 
-const ::HIR::TypeData* HMTypeInferrence::ResolvePlaceholders::getType(const Span& sp, const HIR::TypeData* ty) const {
+const HIRTypeData* HMTypeInferrence::ResolvePlaceholders::getType(const Span& sp, const HIRTypeData* ty) const {
     if (ty->is_Infer()) {
         return parent.getType(ty);
     } else {
         return ty;
     }
 }
-const ::HIR::ConstGeneric& HMTypeInferrence::ResolvePlaceholders::getVal(const Span& sp, const HIR::ConstGeneric& v) const {
+const HIRConstGeneric& HMTypeInferrence::ResolvePlaceholders::getVal(const Span& sp, const HIRConstGeneric& v) const {
     if (v.is_Infer()) {
         return parent.getValue(v);
     } else {

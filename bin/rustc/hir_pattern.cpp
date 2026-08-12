@@ -3,10 +3,9 @@
 #include <cassert>
 #include <functional>
 
-namespace HIR {
-    ::std::ostream& operator<<(::std::ostream& os, const Pattern::Value& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const HIRPattern::Value& x) {
         TU_MATCH(
-            Pattern::Value,
+            HIRPattern::Value,
             (x),
             (e),
             (Integer,
@@ -22,17 +21,17 @@ namespace HIR {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const HIRPatternBinding& x) {
         if (x.isMutable) {
             os << "mut ";
         }
         switch (x.mType) {
-            case PatternBinding::Type::Move:
+            case HIRPatternBinding::Type::Move:
                 break;
-            case PatternBinding::Type::Ref:
+            case HIRPatternBinding::Type::Ref:
                 os << "ref ";
                 break;
-            case PatternBinding::Type::MutRef:
+            case HIRPatternBinding::Type::MutRef:
                 os << "ref mut ";
                 break;
         }
@@ -40,7 +39,7 @@ namespace HIR {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Pattern& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const HIRPattern& x) {
         for (const auto& pb : x.mBindings) {
             os << pb;
         }
@@ -56,13 +55,13 @@ namespace HIR {
             }
             TU_ARMA(Ref, e) {
                 switch (e.type) {
-                    case BorrowType::Shared:
+                    case HIRBorrowType::Shared:
                         os << "&";
                         break;
-                    case BorrowType::Unique:
+                    case HIRBorrowType::Unique:
                         os << "&mut ";
                         break;
-                    case BorrowType::Owned:
+                    case HIRBorrowType::Owned:
                         os << "&move ";
                         break;
                 }
@@ -159,10 +158,9 @@ namespace HIR {
         }
         return os;
     }
-} // namespace HIR
 
 namespace {
-    void visitPatternDeclarationSlots(const ::HIR::Pattern& pattern, ::std::vector<unsigned>& slots) {
+    void visitPatternDeclarationSlots(const HIRPattern& pattern, ::std::vector<unsigned>& slots) {
         for (const auto& binding : pattern.mBindings) {
             slots.push_back(binding.slot);
         }
@@ -186,10 +184,10 @@ namespace {
         )
     }
 
-    void visitPatternCandidateSlots(const ::HIR::Pattern& pattern, bool useLastAlternative, ::std::vector<unsigned>& slots) {
-        ::std::vector<const ::HIR::Pattern*> deferredOrPatterns;
-        ::std::function<void(const ::HIR::Pattern&)> visitImmediate;
-        visitImmediate = [&](const ::HIR::Pattern& current) {
+    void visitPatternCandidateSlots(const HIRPattern& pattern, bool useLastAlternative, ::std::vector<unsigned>& slots) {
+        ::std::vector<const HIRPattern*> deferredOrPatterns;
+        ::std::function<void(const HIRPattern&)> visitImmediate;
+        visitImmediate = [&](const HIRPattern& current) {
             TU_MATCHA(
                 (current.mData),
                 (e),
@@ -230,16 +228,16 @@ namespace {
     }
 }
 
-std::vector<unsigned> HIR::patternBindingSlots(const Pattern& pattern, PatternBindingOrder order) {
+std::vector<unsigned> patternBindingSlots(const HIRPattern& pattern, HIRPatternBindingOrder order) {
     std::vector<unsigned> slots;
     switch (order) {
-        case PatternBindingOrder::Declaration:
+        case HIRPatternBindingOrder::Declaration:
             visitPatternDeclarationSlots(pattern, slots);
             break;
-        case PatternBindingOrder::FirstCandidate:
+        case HIRPatternBindingOrder::FirstCandidate:
             visitPatternCandidateSlots(pattern, false, slots);
             break;
-        case PatternBindingOrder::LastCandidate:
+        case HIRPatternBindingOrder::LastCandidate:
             visitPatternCandidateSlots(pattern, true, slots);
             break;
     }
@@ -247,8 +245,8 @@ std::vector<unsigned> HIR::patternBindingSlots(const Pattern& pattern, PatternBi
 }
 
 namespace {
-    ::std::vector<::HIR::Pattern> clonePatVec(const ::std::vector<::HIR::Pattern>& pats) {
-        ::std::vector<::HIR::Pattern> rv;
+    ::std::vector<HIRPattern> clonePatVec(const ::std::vector<HIRPattern>& pats) {
+        ::std::vector<HIRPattern> rv;
         rv.reserve(pats.size());
         for (const auto& pat : pats) {
             rv.push_back(pat.clone());
@@ -256,7 +254,7 @@ namespace {
         return rv;
     }
 
-    typedef ::std::vector<::std::pair<RcString, ::HIR::Pattern>> patFieldsT;
+    typedef ::std::vector<::std::pair<RcString, HIRPattern>> patFieldsT;
 
     patFieldsT clonePatFields(const patFieldsT& pats) {
         patFieldsT rv;
@@ -267,52 +265,52 @@ namespace {
         return rv;
     }
 
-    ::HIR::Pattern::Value clonePatval(const ::HIR::Pattern::Value& val) {
-        TU_MATCH(::HIR::Pattern::Value, (val), (e), (Integer, return ::HIR::Pattern::Value::make_Integer(e);), (Float, return ::HIR::Pattern::Value::make_Float(e);), (String, return ::HIR::Pattern::Value::make_String(e);), (ByteString, return ::HIR::Pattern::Value(e);), (Named, return ::HIR::Pattern::Value::make_Named({e.path.clone(), e.binding});))
+    HIRPattern::Value clonePatval(const HIRPattern::Value& val) {
+        TU_MATCH(HIRPattern::Value, (val), (e), (Integer, return HIRPattern::Value::make_Integer(e);), (Float, return HIRPattern::Value::make_Float(e);), (String, return HIRPattern::Value::make_String(e);), (ByteString, return HIRPattern::Value(e);), (Named, return HIRPattern::Value::make_Named({e.path.clone(), e.binding});))
         throw "";
     }
 } // namespace
 
 namespace {
-    ::HIR::Pattern::Data clonePatternData(const ::HIR::Pattern::Data& mData) {
+    HIRPattern::Data clonePatternData(const HIRPattern::Data& mData) {
     TU_MATCH_HDRA( (mData), {)
     TU_ARMA(Any, e) {
-                return ::HIR::Pattern::Data::make_Any({});
+                return HIRPattern::Data::make_Any({});
             }
             TU_ARMA(Box, e) {
-                return ::HIR::Pattern::Data::make_Box({box$(e.sub->clone())});
+                return HIRPattern::Data::make_Box({box$(e.sub->clone())});
             }
             TU_ARMA(Ref, e) {
-                return ::HIR::Pattern::Data::make_Ref({e.type, box$(e.sub->clone())});
+                return HIRPattern::Data::make_Ref({e.type, box$(e.sub->clone())});
             }
             TU_ARMA(Tuple, e) {
-                return ::HIR::Pattern::Data::make_Tuple({clonePatVec(e.subPatterns)});
+                return HIRPattern::Data::make_Tuple({clonePatVec(e.subPatterns)});
             }
             TU_ARMA(SplitTuple, e) {
-                return ::HIR::Pattern::Data::make_SplitTuple({clonePatVec(e.leading), clonePatVec(e.trailing), e.totalSize});
+                return HIRPattern::Data::make_SplitTuple({clonePatVec(e.leading), clonePatVec(e.trailing), e.totalSize});
             }
             TU_ARMA(PathValue, e) {
-                return ::HIR::Pattern::Data::make_PathValue({e.path.clone(), e.binding.clone()});
+                return HIRPattern::Data::make_PathValue({e.path.clone(), e.binding.clone()});
             }
             TU_ARMA(PathTuple, e) {
-                return ::HIR::Pattern::Data::make_PathTuple({e.path.clone(), e.binding.clone(), clonePatVec(e.leading), e.isSplit, clonePatVec(e.trailing), e.totalSize});
+                return HIRPattern::Data::make_PathTuple({e.path.clone(), e.binding.clone(), clonePatVec(e.leading), e.isSplit, clonePatVec(e.trailing), e.totalSize});
             }
             TU_ARMA(PathNamed, e) {
-                return ::HIR::Pattern::Data::make_PathNamed({e.path.clone(), e.binding.clone(), clonePatFields(e.subPatterns), e.isExhaustive});
+                return HIRPattern::Data::make_PathNamed({e.path.clone(), e.binding.clone(), clonePatFields(e.subPatterns), e.isExhaustive});
             }
 
             TU_ARMA(Value, e) {
-                return ::HIR::Pattern::Data::make_Value({clonePatval(e.val)});
+                return HIRPattern::Data::make_Value({clonePatval(e.val)});
             }
             TU_ARMA(Range, e) {
-                return ::HIR::Pattern::Data::make_Range({box$(clonePatval(*e.start)), box$(clonePatval(*e.end)), e.isInclusive});
+                return HIRPattern::Data::make_Range({box$(clonePatval(*e.start)), box$(clonePatval(*e.end)), e.isInclusive});
             }
 
             TU_ARMA(Slice, e) {
-                return ::HIR::Pattern::Data::make_Slice({clonePatVec(e.subPatterns)});
+                return HIRPattern::Data::make_Slice({clonePatVec(e.subPatterns)});
             }
             TU_ARMA(SplitSlice, e) {
-                return ::HIR::Pattern::Data::make_SplitSlice({clonePatVec(e.leading), e.extraBind, clonePatVec(e.trailing)});
+                return HIRPattern::Data::make_SplitSlice({clonePatVec(e.leading), e.extraBind, clonePatVec(e.trailing)});
             }
             TU_ARMA(Or, e)
             return clonePatVec(e);
@@ -322,38 +320,36 @@ namespace {
     }
 }
 
-::HIR::Pattern HIR::Pattern::clone() const {
-    auto rv = Pattern(mBindings, clonePatternData(mData));
+HIRPattern HIRPattern::clone() const {
+    auto rv = HIRPattern(mBindings, clonePatternData(mData));
     rv.implicitDerefCount = implicitDerefCount;
     return rv;
 }
 
-namespace HIR {
 
-PatternBinding::PatternBinding()
+HIRPatternBinding::HIRPatternBinding()
     : isMutable(false)
     , mType(Type::Move)
     , mName("")
     , slot(0)
     , implicitDerefCount(0) {
 }
-PatternBinding::PatternBinding(bool mut, Type type, RcString name, unsigned int slot)
+HIRPatternBinding::HIRPatternBinding(bool mut, Type type, RcString name, unsigned int slot)
     : isMutable(mut)
     , mType(type)
     , mName(mv$(name))
     , slot(slot)
     , implicitDerefCount(0) {
 }
-Pattern::Pattern() {
+HIRPattern::HIRPattern() {
 }
-Pattern::Pattern(std::vector<PatternBinding> pbs, Data d)
+HIRPattern::HIRPattern(std::vector<HIRPatternBinding> pbs, Data d)
     : mBindings(mv$(pbs))
     , mData(mv$(d)) {
 }
-Pattern::Pattern(PatternBinding pb, Data d)
+HIRPattern::HIRPattern(HIRPatternBinding pb, Data d)
     : mData(mv$(d)) {
     if (pb.isValid()) {
         mBindings.push_back(std::move(pb));
     }
-}
 }

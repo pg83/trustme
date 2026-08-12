@@ -2,7 +2,7 @@
 #include "hir_typeck_static.h" // StaticTraitResolve
 #include "trans_mangling.h"
 
-TransListFunction* TransList::addFunction(HIR::TypeInterner& types, ::HIR::Path p) {
+TransListFunction* TransList::addFunction(HIRTypeInterner& types, HIRPath p) {
     auto symbol = FMT(TransMangle(p));
     auto existing = functionSymbols.find(symbol);
     if (existing != functionSymbols.end()) {
@@ -23,7 +23,7 @@ TransListFunction* TransList::addFunction(HIR::TypeInterner& types, ::HIR::Path 
     }
 }
 
-const TransListFunction* TransList::findFunction(const ::HIR::Path& p) const {
+const TransListFunction* TransList::findFunction(const HIRPath& p) const {
     auto exact = functions.find(p);
     if (exact != functions.end()) {
         return exact->second.get();
@@ -41,11 +41,11 @@ const TransListFunction* TransList::findFunction(const ::HIR::Path& p) const {
     return exact->second.get();
 }
 
-TransListFunction* TransList::findFunction(const ::HIR::Path& p) {
+TransListFunction* TransList::findFunction(const HIRPath& p) {
     return const_cast<TransListFunction*>(static_cast<const TransList&>(*this).findFunction(p));
 }
 
-bool TransList::hasType(::HIR::TypeRef type, bool shallow) const {
+bool TransList::hasType(HIRTypeRef type, bool shallow) const {
     const auto symbol = FMT(TransMangle(type));
     const auto existing = typeSymbols.find(symbol);
     if (existing == typeSymbols.end()) {
@@ -56,7 +56,7 @@ bool TransList::hasType(::HIR::TypeRef type, bool shallow) const {
     return existing->second.hasDefinition || (shallow && existing->second.hasPrototype);
 }
 
-bool TransList::addType(::HIR::TypeRef type, bool shallow) {
+bool TransList::addType(HIRTypeRef type, bool shallow) {
     auto symbol = FMT(TransMangle(type));
     auto existing = typeSymbols.find(symbol);
     if (existing == typeSymbols.end()) {
@@ -80,7 +80,7 @@ void TransList::clearTypes() {
     typeSymbols.clear();
 }
 
-TransListStatic* TransList::addStatic(HIR::TypeInterner& types, ::HIR::Path p) {
+TransListStatic* TransList::addStatic(HIRTypeInterner& types, HIRPath p) {
     auto symbol = FMT(TransMangle(p));
     auto existing = staticSymbols.find(symbol);
     if (existing != staticSymbols.end()) {
@@ -101,7 +101,7 @@ TransListStatic* TransList::addStatic(HIR::TypeInterner& types, ::HIR::Path p) {
     }
 }
 
-TransListConst* TransList::addConst(HIR::TypeInterner& types, ::HIR::Path p) {
+TransListConst* TransList::addConst(HIRTypeInterner& types, HIRPath p) {
     auto rv = constants.insert(::std::make_pair(mv$(p), nullptr));
     if (rv.second) {
         DEBUG("Const " << rv.first->first);
@@ -113,7 +113,7 @@ TransListConst* TransList::addConst(HIR::TypeInterner& types, ::HIR::Path p) {
     }
 }
 
-::HIR::Path TransParams::monomorph(const ::StaticTraitResolve& resolve, const ::HIR::Path& p) const {
+HIRPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPath& p) const {
     TRACE_FUNCTION_F(p);
     auto rv = this->monomorphPath(sp, p, false);
 
@@ -149,11 +149,11 @@ TransListConst* TransList::addConst(HIR::TypeInterner& types, ::HIR::Path p) {
     return rv;
 }
 
-::HIR::GenericPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const ::HIR::GenericPath& p) const {
-    return ::HIR::GenericPath(p.mPath, this->monomorph(resolve, p.mParams));
+HIRGenericPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRGenericPath& p) const {
+    return HIRGenericPath(p.mPath, this->monomorph(resolve, p.mParams));
 }
 
-::HIR::PathParams TransParams::monomorph(const ::StaticTraitResolve& resolve, const ::HIR::PathParams& p) const {
+HIRPathParams TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPathParams& p) const {
     auto rv = this->monomorphPathParams(sp, p, false);
     for (auto& arg : rv.types) {
         resolve.expandAssociatedTypes(sp, arg);
@@ -161,16 +161,16 @@ TransListConst* TransList::addConst(HIR::TypeInterner& types, ::HIR::Path p) {
     return rv;
 }
 
-::HIR::TypeRef TransParams::monomorph(const ::StaticTraitResolve& resolve, const ::HIR::TypeData* ty) const {
+HIRTypeRef TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRTypeData* ty) const {
     return resolve.monomorphExpand(sp, ty, *this);
 }
 
-TransParams::TransParams(HIR::TypeInterner& types)
+TransParams::TransParams(HIRTypeInterner& types)
     : MonomorphiserPP(types)
     , gdefImpl(nullptr)
     , forceMonomorphisation(false) {
 }
-TransParams::TransParams(HIR::TypeInterner& types, const Span& sp)
+TransParams::TransParams(HIRTypeInterner& types, const Span& sp)
     : MonomorphiserPP(types)
     , sp(sp)
     , gdefImpl(nullptr)
@@ -189,24 +189,24 @@ TransParams& TransParams::operator=(TransParams&& x) {
     forceMonomorphisation = x.forceMonomorphisation;
     return *this;
 }
-TransParams TransParams::newImpl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams implParams) {
+TransParams TransParams::newImpl(HIRTypeInterner& types, Span sp, HIRTypeRef ty, HIRPathParams implParams) {
     TransParams tp(types, sp);
     tp.selfType = std::move(ty);
     tp.ppImpl = std::move(implParams);
     return tp;
 }
-const ::HIR::TypeData* TransParams::maybeMonomorph(const ::StaticTraitResolve& resolve, ::HIR::TypeRef& tmp, const ::HIR::TypeData* p) const {
+const HIRTypeData* TransParams::maybeMonomorph(const ::StaticTraitResolve& resolve, HIRTypeRef& tmp, const HIRTypeData* p) const {
     if (monomorphiseTypeNeeded(p)) {
         return tmp = this->monomorph(resolve, p);
     } else {
         return p;
     }
 }
-TransListFunction::TransListFunction(HIR::TypeInterner& types, const ::HIR::Path& path)
+TransListFunction::TransListFunction(HIRTypeInterner& types, const HIRPath& path)
     : path(&path)
     , ptr(nullptr)
     , pp(types)
     , forcePrototype(false) {
 }
-TransListStatic::TransListStatic(HIR::TypeInterner& types): ptr(nullptr), pp(types) {}
-TransListConst::TransListConst(HIR::TypeInterner& types): ptr(nullptr), pp(types) {}
+TransListStatic::TransListStatic(HIRTypeInterner& types): ptr(nullptr), pp(types) {}
+TransListConst::TransListConst(HIRTypeInterner& types): ptr(nullptr), pp(types) {}

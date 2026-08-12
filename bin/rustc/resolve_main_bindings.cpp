@@ -14,7 +14,7 @@
 namespace {
     static const RcString rcstringSelf = RcString::newInterned("Self");
 
-    ASTAbsolutePath spToAp(const HIR::SimplePath& sp) {
+    ASTAbsolutePath spToAp(const HIRSimplePath& sp) {
         return ASTAbsolutePath(sp.crateName(), sp.componentsVec());
     }
 
@@ -487,13 +487,13 @@ namespace {
                 const auto& mp = srcContext.modPath();
                 DEBUG(mp);
                 if (mp.crate != "") {
-                    HIR::SimplePath visPath{mp.crate, mp.ents};
+                    HIRSimplePath visPath{mp.crate, mp.ents};
 
                     static Span sp;
                     // External crate path
                     ASSERT_BUG(sp, crate.externCrates.count(mp.crate), "Crate not loaded for " << mp);
                     const auto& extCrate = crate.externCrates.at(mp.crate);
-                    const HIR::Module* mod = &extCrate.hir->mRootModule;
+                    const HIRModule* mod = &extCrate.hir->mRootModule;
                     for (const auto& n : mp.ents) {
                         ASSERT_BUG(sp, mod->modItems.count(n), "Node `" << n << "` missing in path " << mp);
                         const auto& i = *mod->modItems.at(n);
@@ -501,7 +501,7 @@ namespace {
                         mod = &i.ent.as_Module();
                     }
                     ASTPath::Bindings bindings;
-                    const HIR::SimplePath* truePath = nullptr;
+                    const HIRSimplePath* truePath = nullptr;
                     switch (mode) {
                         case LookupMode::Constant:
                         case LookupMode::PatternValue:
@@ -1049,7 +1049,7 @@ namespace {
         return newPath;
     }
 
-    void ResolveAbsolutePathBindAbsoluteHirFromImport(Context& context, const Span& sp, bool isValue, ASTPath& path, const ::HIR::SimplePath& p) {
+    void ResolveAbsolutePathBindAbsoluteHirFromImport(Context& context, const Span& sp, bool isValue, ASTPath& path, const HIRSimplePath& p) {
         TRACE_FUNCTION_FR("path=" << path << ", p=" << p, path);
         if (p.crateName() == CRATE_BUILTINS) {
             ASTPath rv(p.crateName(), {});
@@ -1069,7 +1069,7 @@ namespace {
             return;
         }
         const auto& extCrate = context.crate.externCrates.at(p.crateName());
-        const ::HIR::Module* hmod = &extCrate.hir->mRootModule;
+        const HIRModule* hmod = &extCrate.hir->mRootModule;
         for (unsigned int i = 0; i < p.components().size() - 1; i++) {
             const auto& name = p.components()[i];
             auto it = hmod->modItems.find(name);
@@ -1208,7 +1208,7 @@ namespace {
             }
         }
 
-        const ::HIR::Module* hmod = &crate.hir->mRootModule;
+        const HIRModule* hmod = &crate.hir->mRootModule;
         for (unsigned int i = start; i < pathAbs.nodes.size() - 1; i++) {
             auto& n = pathAbs.nodes[i];
             assert(hmod);
@@ -1294,10 +1294,10 @@ namespace {
                     path = mv$(newPath);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
-                case ::HIR::TypeItem::TAG_ExternType:
-                case ::HIR::TypeItem::TAG_TypeAlias:
-                case ::HIR::TypeItem::TAG_Struct:
-                case ::HIR::TypeItem::TAG_Union:
+                case HIRTypeItem::TAG_ExternType:
+                case HIRTypeItem::TAG_TypeAlias:
+                case HIRTypeItem::TAG_Struct:
+                case HIRTypeItem::TAG_Union:
                     path = splitIntoCrate(sp, mv$(path), start, crate.mName);
                     path = splitIntoUfcsTy(sp, mv$(path), i - start);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
@@ -2870,7 +2870,7 @@ void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const
 }
 
 namespace {
-    ASTPath hirToAst(const HIR::SimplePath& p) {
+    ASTPath hirToAst(const HIRSimplePath& p) {
         // The crate name here has to be non-empty, because it's external.
         assert(p.crateName() != "");
         ASTPath rv(p.crateName(), {});
@@ -3132,7 +3132,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
     const Span& sp,
     const ASTCrate& crate,
     ASTModule& dstMod,
-    /*const AST::ExternCrate& hcrate,*/ const ::HIR::Module& hmod,
+    /*const AST::ExternCrate& hcrate,*/ const HIRModule& hmod,
     const ASTPath& path,
     const ASTVisibility& vis,
     ASTAbsolutePath modAp
@@ -3460,7 +3460,7 @@ void ResolveIndexModuleWildcard(ASTCrate& crate, ASTModule& mod) {
 
 void ResolveIndexModuleNormalisePathExt(const ASTCrate& crate, const Span& sp, ASTPath& path, IndexName loc, const ASTExternCrate& ext, unsigned int start) {
     auto& info = path.cls.as_Absolute();
-    const ::HIR::Module* hmod = &ext.hir->mRootModule;
+    const HIRModule* hmod = &ext.hir->mRootModule;
 
     // TODO: Mangle path into being absolute into the crate
     //info.crate = ext.m_name;
@@ -3494,7 +3494,7 @@ void ResolveIndexModuleNormalisePathExt(const ASTCrate& crate, const Span& sp, A
             itemPtr = &ec.hir->getTypeitemByPath(sp, e.path, /*ignore_crate_name=*/true);
         }
         TU_MATCH_DEF(
-            ::HIR::TypeItem,
+            HIRTypeItem,
             (*itemPtr),
             (e),
             (BUG(sp, "Path " << path << " pointed to non-module in component " << i);),
@@ -3514,7 +3514,7 @@ void ResolveIndexModuleNormalisePathExt(const ASTCrate& crate, const Span& sp, A
             auto itM = hmod->modItems.find(lastnode.name());
             if (itM != hmod->modItems.end()) {
                 TU_IFLET(
-                    ::HIR::TypeItem,
+                    HIRTypeItem,
                     itM->second->ent,
                     Import,
                     e,
@@ -3530,7 +3530,7 @@ void ResolveIndexModuleNormalisePathExt(const ASTCrate& crate, const Span& sp, A
             auto itV = hmod->valueItems.find(lastnode.name());
             if (itV != hmod->valueItems.end()) {
                 TU_IFLET(
-                    ::HIR::ValueItem,
+                    HIRValueItem,
                     itV->second->ent,
                     Import,
                     e,
@@ -3752,7 +3752,7 @@ void ResolveUseMod(const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::s
 ASTPath::Bindings ResolveUseGetBinding(const Span& span, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTPath& path, ::std::span<const ASTModule*> parentModules, bool typesOnly = false, bool softFail = false);
 
 ASTPath::Bindings ResolveUseGetBindingMod(const Span& span, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTModule& mod, const RcString& desItemName, ::std::span<const ASTModule*> parentModules, bool typesOnly = false, bool requireVisible = false);
-ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTExternCrate& ec, const ::HIR::Module& hmodr, const ASTPath& path, unsigned int start, ASTAbsolutePath ap = {});
+ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTExternCrate& ec, const HIRModule& hmodr, const ASTPath& path, unsigned int start, ASTAbsolutePath ap = {});
 ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTPath& path, const ASTExternCrate& ec, unsigned int start);
 
 void ResolveUse(ASTCrate& crate) {
@@ -4393,17 +4393,17 @@ ASTPath::Bindings ResolveUseGetBindingMod(
 }
 
 namespace {
-    const ::HIR::Module* getHirModByPath(const Span& sp, const ASTCrate& crate, const ::HIR::SimplePath& path);
+    const HIRModule* getHirModByPath(const Span& sp, const ASTCrate& crate, const HIRSimplePath& path);
 
-    const void* getHirModenumByPath(const Span& sp, const ASTCrate& crate, const ::HIR::SimplePath& path, bool& is_enum) {
+    const void* getHirModenumByPath(const Span& sp, const ASTCrate& crate, const HIRSimplePath& path, bool& is_enum) {
         const auto* hmod = &crate.externCrates.at(path.crateName()).hir->mRootModule;
         for (const auto& node : path.components()) {
             auto it = hmod->modItems.find(node);
             if (it == hmod->modItems.end()) {
                 BUG(sp, "");
             }
-            TU_IFLET(::HIR::TypeItem, (it->second->ent), Module, mod, hmod = &mod;)
-            else TU_IFLET(::HIR::TypeItem, (it->second->ent), Import, import, hmod = getHirModByPath(sp, crate, import.path); if (!hmod) BUG(sp, "Import in module position didn't resolve as a module - " << import.path);) else TU_IFLET(::HIR::TypeItem, (it->second->ent), Enum, enm, if (&node == &path.components().back()) {
+            TU_IFLET(HIRTypeItem, (it->second->ent), Module, mod, hmod = &mod;)
+            else TU_IFLET(HIRTypeItem, (it->second->ent), Import, import, hmod = getHirModByPath(sp, crate, import.path); if (!hmod) BUG(sp, "Import in module position didn't resolve as a module - " << import.path);) else TU_IFLET(HIRTypeItem, (it->second->ent), Enum, enm, if (&node == &path.components().back()) {
                 is_enum = true;
                 return &enm;
             } BUG(sp, "");) else {
@@ -4417,18 +4417,18 @@ namespace {
         return hmod;
     }
 
-    const ::HIR::Module* getHirModByPath(const Span& sp, const ASTCrate& crate, const ::HIR::SimplePath& path) {
+    const HIRModule* getHirModByPath(const Span& sp, const ASTCrate& crate, const HIRSimplePath& path) {
         bool is_enum = false;
         auto rv = getHirModenumByPath(sp, crate, path, is_enum);
         if (!rv) {
             return nullptr;
         }
         ASSERT_BUG(sp, !is_enum, "");
-        return reinterpret_cast<const ::HIR::Module*>(rv);
+        return reinterpret_cast<const HIRModule*>(rv);
     }
 }
 
-ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTExternCrate& hcrate, const ::HIR::Module& hmodr, const ASTPath& path, unsigned int start, ASTAbsolutePath ap) {
+ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTExternCrate& hcrate, const HIRModule& hmodr, const ASTPath& path, unsigned int start, ASTAbsolutePath ap) {
     if (ap.crate == "") {
         ap.crate = hcrate.mName;
     }
@@ -4437,7 +4437,7 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
     //TRACE_FUNCTION_FR(path << " offset " << start, rv.value << rv.type << rv.macro);
     TRACE_FUNCTION_F(path << " offset " << start << " [" << ap << "]");
     const auto& nodes = path.nodes();
-    const ::HIR::Module* hmod = &hmodr;
+    const HIRModule* hmod = &hmodr;
 
     //for(unsigned int i = start; i < nodes.size(); i ++)
     //    ap.nodes.push_back( nodes[i].name() );
@@ -4466,7 +4466,7 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
                     BUG(span, "Path component " << nodes[i].name() << " pointed to non-module (" << path << ")");
                 }
                 if (is_enum) {
-                    const auto& enm = *reinterpret_cast<const ::HIR::Enum*>(ptr);
+                    const auto& enm = *reinterpret_cast<const HIREnum*>(ptr);
                     i += 1;
                     if (i != nodes.size() - 1) {
                         ERROR(span, E0000, "Encountered enum at unexpected location in import");
@@ -4489,7 +4489,7 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
                 } else {
                     ap.crate = e.path.crateName();
                     ap.nodes = e.path.componentsVec();
-                    hmod = reinterpret_cast<const ::HIR::Module*>(ptr);
+                    hmod = reinterpret_cast<const HIRModule*>(ptr);
                 }
             }
             TU_ARMA(Module, e) {
