@@ -9,7 +9,6 @@
 
 #include <algorithm>
 
-
 namespace {
 
     const HIRGenericParams& getParamsForItem(const Span& sp, const HIRCrate& crate, const HIRSimplePath& path, HIRVisitor::PathContext pc) {

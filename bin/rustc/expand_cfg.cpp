@@ -18,8 +18,7 @@
 #include <optional>
 #include <stdexcept>
 
-namespace {
-}
+namespace {}
 
 // The cfg!() evaluation state: --cfg values/flags, value callbacks and the
 // --check-cfg expectations with their lint settings. Opaque outside this
@@ -41,7 +40,6 @@ namespace {
         size_t pos = 0;
 
     public:
-
         explicit CfgSpecParser(const ::std::string& input)
             : input(input)
         {
@@ -185,7 +183,6 @@ namespace {
             }
             return {::std::move(name), ::std::move(value)};
         }
-
     };
 
 }

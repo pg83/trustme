@@ -205,7 +205,6 @@ struct ProgramParams {
         /// Debugger aid: pause just after startup so a debugger can attach.
         bool pause = false;
 
-
         bool dumpAst = false;
         bool dumpHir = false;
         bool dumpMir = false;

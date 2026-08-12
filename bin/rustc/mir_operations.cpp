@@ -75,9 +75,7 @@ namespace {
 //::std::ostream& operator<<(::std::ostream& os, const T& v) {
 //}
 
-
 // --------------------------------------------------------------------
-
 
 namespace {
     /// @brief Used to tell the constant replacement code that replacements should be available
@@ -1476,7 +1474,6 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimiseUselessReborrows(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimiseGarbageCollectPartial(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn);
-
 
 /// A minimum set of optimisations:
 /// - Runs only the mandatory-inlining hook, not normal cost-based inlining
