@@ -108,7 +108,7 @@ TAGGED_UNION(
          bool exitStateValid;
          SplitEnd exitState;
          // TODO: Any drop flags allocated in the loop must be re-initialised at the start of the loop (or before a loopback)
-         ::MIR::BasicBlockId entryBb;
+         MIRBasicBlockId entryBb;
          ::std::vector<unsigned> dropFlags;
      }),
     (Freeze, struct {
@@ -177,16 +177,16 @@ class MirBuilder {
     const StaticTraitResolve& mResolve;
     const ::HIR::TypeData* retTy;
     const ::HIR::Function::argsT& mArgs;
-    ::MIR::Function& output;
+    MIRFunction& output;
 
     const ::HIR::SimplePath* mLangBox;
 
     unsigned int currentBlock;
     bool mBlockActive;
     bool buildingCleanup = false;
-    const MIR::LValue* unwindConsumedValue = nullptr;
+    const MIRLValue* unwindConsumedValue = nullptr;
 
-    ::MIR::RValue result;
+    MIRRValue result;
     bool resultValid;
 
     // TODO: Extra information (e.g. mutability)
@@ -222,16 +222,16 @@ class MirBuilder {
     ::std::vector<unsigned int> scopeStack;
     ScopeHandle mFcnScope;
 
-    typedef std::pair<HIR::PatternBinding::Type, MIR::LValue> varAliasT;
+    typedef std::pair<HIR::PatternBinding::Type, MIRLValue> varAliasT;
     ::std::vector<varAliasT> variableAliases;
 
     // LValue used only for the condition of `if`
     // - Using a fixed temporary simplifies parts of lowering (scope related) and reduces load on
     //   the optimiser.
-    ::MIR::LValue ifCondLval;
+    MIRLValue ifCondLval;
 
 public:
-    MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* retTy, const ::HIR::Function::argsT& args, ::MIR::Function& output);
+    MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* retTy, const ::HIR::Function::argsT& args, MIRFunction& output);
 
     void finalCleanup();
 
@@ -262,15 +262,15 @@ public:
     void restoreAliases(SavedAliases a);
 
     // Variable aliases (used for match guards)
-    void addVariableAlias(const Span& sp, unsigned idx, HIR::PatternBinding::Type ty, MIR::LValue lv);
+    void addVariableAlias(const Span& sp, unsigned idx, HIR::PatternBinding::Type ty, MIRLValue lv);
 
     const varAliasT* getVariableAlias(const Span& sp, unsigned idx) const;
 
     // - Values
-    ::MIR::LValue getVariable(const Span& sp, unsigned idx) const;
+    MIRLValue getVariable(const Span& sp, unsigned idx) const;
 
-    ::MIR::LValue newTemporary(const ::HIR::TypeData* ty);
-    ::MIR::LValue lvalueOrTemp(const Span& sp, const ::HIR::TypeData* ty, ::MIR::RValue val);
+    MIRLValue newTemporary(const ::HIR::TypeData* ty);
+    MIRLValue lvalueOrTemp(const Span& sp, const ::HIR::TypeData* ty, MIRRValue val);
     size_t localCount() const {
         return output.locals.size();
     }
@@ -279,40 +279,40 @@ public:
         return resultValid;
     }
 
-    void setResult(const Span& sp, ::MIR::RValue val);
-    ::MIR::RValue getResult(const Span& sp);
+    void setResult(const Span& sp, MIRRValue val);
+    MIRRValue getResult(const Span& sp);
     /// Obtains the result, unwrapping into a LValue (and erroring if not)
-    ::MIR::LValue getResultUnwrapLvalue(const Span& sp);
+    MIRLValue getResultUnwrapLvalue(const Span& sp);
     /// Obtains the result, copying into a temporary if required
-    ::MIR::LValue getResultInLvalue(const Span& sp, const ::HIR::TypeData* ty, bool allowMissingValue = false);
+    MIRLValue getResultInLvalue(const Span& sp, const ::HIR::TypeData* ty, bool allowMissingValue = false);
     /// Obtains a result in a param (or a lvalue)
-    ::MIR::Param getResultInParam(const Span& sp, const ::HIR::TypeData* ty, bool allowMissingValue = false);
+    MIRParam getResultInParam(const Span& sp, const ::HIR::TypeData* ty, bool allowMissingValue = false);
 
-    ::MIR::LValue getIfCond() const {
+    MIRLValue getIfCond() const {
         return ifCondLval.clone();
     }
 
-    ::MIR::LValue getRvalInIfCond(const Span& sp, ::MIR::RValue val);
+    MIRLValue getRvalInIfCond(const Span& sp, MIRRValue val);
 
-    ::MIR::LValue getResultInIfCond(const Span& sp) {
+    MIRLValue getResultInIfCond(const Span& sp) {
         return getRvalInIfCond(sp, getResult(sp));
     }
 
     // - Statements
     // Push an assignment. NOTE: This also marks the rvalue as moved
-    void pushStmtAssign(const Span& sp, ::MIR::LValue dst, ::MIR::RValue val, bool updateDestState = true);
+    void pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bool updateDestState = true);
     // Push a drop (likely only used by scope cleanup)
-    void pushStmtDrop(const Span& sp, ::MIR::LValue val, unsigned int dropFlag = ~0u);
+    void pushStmtDrop(const Span& sp, MIRLValue val, unsigned int dropFlag = ~0u);
     // Push a shallow drop (for Box)
-    void pushStmtDropShallow(const Span& sp, ::MIR::LValue val, unsigned int dropFlag = ~0u);
+    void pushStmtDropShallow(const Span& sp, MIRLValue val, unsigned int dropFlag = ~0u);
     // Push an inline assembly statement (NOTE: inputs aren't marked as moved)
-    void pushStmtAsm(const Span& sp, ::MIR::Statement::Data_Asm data);
+    void pushStmtAsm(const Span& sp, MIRStatement::Data_Asm data);
     // Push a setting/clearing of a drop flag
     void pushStmtSetDropflagVal(const Span& sp, unsigned int index, bool value);
     void pushStmtSetDropflagOther(const Span& sp, unsigned int index, unsigned int other);
     void pushStmtSetDropflagDefault(const Span& sp, unsigned int index);
 
-    void pushStmt(const Span& sp, ::MIR::Statement stmt);
+    void pushStmt(const Span& sp, MIRStatement stmt);
 
     // - Block management
     bool blockActive() const {
@@ -320,11 +320,11 @@ public:
     }
 
     // Mark a value as initialised (used for Call, because it has to be done after the panic block is populated)
-    void markValueAssigned(const Span& sp, const ::MIR::LValue& val);
+    void markValueAssigned(const Span& sp, const MIRLValue& val);
 
     // Moves control of temporaries up to the specified scope (or to above it)
-    void raiseTemporaries(const Span& sp, const ::MIR::LValue& val, const ScopeHandle& scope, bool toAbove = false);
-    void raiseTemporaries(const Span& sp, const ::MIR::RValue& rval, const ScopeHandle& scope, bool toAbove = false);
+    void raiseTemporaries(const Span& sp, const MIRLValue& val, const ScopeHandle& scope, bool toAbove = false);
+    void raiseTemporaries(const Span& sp, const MIRRValue& rval, const ScopeHandle& scope, bool toAbove = false);
 
     class SaveCodeProto {
         friend class MirBuilder;
@@ -345,7 +345,7 @@ public:
 
     class CloneMapper {
     public:
-        virtual MIR::BasicBlockId updateBbRef(MIR::BasicBlockId bbIdx) = 0;
+        virtual MIRBasicBlockId updateBbRef(MIRBasicBlockId bbIdx) = 0;
     };
 
     /// @brief Insert saved code, applying the supplied mapper
@@ -363,12 +363,12 @@ private:
 
 public:
     void setCurBlock(unsigned int newBlock);
-    ::MIR::BasicBlockId pauseCurBlock();
+    MIRBasicBlockId pauseCurBlock();
 
-    void endBlock(::MIR::Terminator term);
+    void endBlock(MIRTerminator term);
 
-    ::MIR::BasicBlockId newBbLinked();
-    ::MIR::BasicBlockId newBbUnlinked();
+    MIRBasicBlockId newBbLinked();
+    MIRBasicBlockId newBbUnlinked();
 
     unsigned int newDropFlag(bool defaultState);
     unsigned int newDropFlagAndSet(const Span& sp, bool setState);
@@ -416,13 +416,13 @@ public:
     /// Schedule an argument's value drop in the current variable scope.
     void scheduleArgumentDrop(unsigned int idx);
     /// Move a temporary's drop entry from `source` into the nearest variable scope.
-    void moveTemporaryDropToVariableScope(const Span& sp, const ::MIR::LValue& value, const ScopeHandle& source);
+    void moveTemporaryDropToVariableScope(const Span& sp, const MIRLValue& value, const ScopeHandle& source);
     /// Move a local binding from its lexical block into the scope selected for a `super let`.
     void moveVariableToScope(const Span& sp, unsigned int idx, const ScopeHandle& target);
     /// Drop a live value on the current control-flow path and mark it invalid.
-    void dropLvalue(const Span& sp, const ::MIR::LValue& value);
+    void dropLvalue(const Span& sp, const MIRLValue& value);
     // Helper - Marks a variable/... as moved (and checks if the move is valid)
-    void movedLvalue(const Span& sp, const ::MIR::LValue& lv);
+    void movedLvalue(const Span& sp, const MIRLValue& lv);
 
 private:
     enum class SlotType {
@@ -434,25 +434,25 @@ private:
     const VarState& getSlotState(const Span& sp, unsigned int idx, SlotType type, const ScopeHandle* aboveScope = nullptr) const;
     VarState& getSlotStateMut(const Span& sp, unsigned int idx, SlotType type);
 
-    VarState* getValStateMutP(const Span& sp, const ::MIR::LValue& lv, bool expectValid = false);
+    VarState* getValStateMutP(const Span& sp, const MIRLValue& lv, bool expectValid = false);
 
     void mergeSplitLists(const Span& sp, const ScopeHandle& handle, const ::std::map<unsigned int, VarState>& states, ::std::map<unsigned int, VarState>& endStates, MirBuilder::SlotType type);
 
     void terminateLoopEarly(const Span& sp, ScopeType::Data_Loop& sdLoop);
 
-    void dropValueFromState(const Span& sp, VarState& vs, ::MIR::LValue lv);
+    void dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv);
     void dropScopeValues(ScopeDef& sd);
-    ::MIR::UnwindAction makeUnwindAction(const Span& sp, const ::MIR::LValue* consumedValue = nullptr);
-    void pushDropTerminator(const Span& sp, ::MIR::eDropKind kind, ::MIR::LValue val, unsigned int dropFlag);
+    MIRUnwindAction makeUnwindAction(const Span& sp, const MIRLValue* consumedValue = nullptr);
+    void pushDropTerminator(const Span& sp, MIRDropKind kind, MIRLValue val, unsigned int dropFlag);
     /// Finalise a scope before it's fully destroyed. Doesn't emit destructors (already done by `drop_scope_values`)
     void completeScope(ScopeDef& sd);
 
 public:
-    void withValType(const Span& sp, const ::MIR::LValue& val, ::std::function<void(const ::HIR::TypeData*)> cb, const ::MIR::LValue::Wrapper* stopWrapper = nullptr) const;
-    bool lvalueIsCopy(const Span& sp, const ::MIR::LValue& lv) const;
+    void withValType(const Span& sp, const MIRLValue& val, ::std::function<void(const ::HIR::TypeData*)> cb, const MIRLValue::Wrapper* stopWrapper = nullptr) const;
+    bool lvalueIsCopy(const Span& sp, const MIRLValue& lv) const;
 
     // Obtain the base fat poiner for a dst reference. Errors if it wasn't via a fat pointer
-    ::MIR::LValue getPtrToDst(const Span& sp, const ::MIR::LValue& lv) const;
+    MIRLValue getPtrToDst(const Span& sp, const MIRLValue& lv) const;
 
     /// Get the set of currently valid (fully,optional,partial) variables
     class SavedActiveLocal {
@@ -470,7 +470,7 @@ public:
     std::map<unsigned, SavedActiveLocal> getActiveLocals(const Span& sp, std::set<unsigned>& savedDropFlags) const;
 
     // Calls `drop_value_from_state` on the value
-    void dropActveLocal(const Span& sp, ::MIR::LValue lv, const SavedActiveLocal& loc);
+    void dropActveLocal(const Span& sp, MIRLValue lv, const SavedActiveLocal& loc);
 
     /// Emits the drops needed when unwinding from the current point without
     /// changing the state used by the normal path.
@@ -509,22 +509,22 @@ public:
     virtual void registerPatternVariables(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
     virtual void scheduleRegisteredPatternDrops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
 
-    virtual void destructureFromList(const Span& sp, const ::HIR::TypeData* ty, ::MIR::LValue lval, const ::std::vector<PatternBinding>& bindings, bool updateStates = true) = 0;
-    virtual MIR::LValue getValueForBindingPath(const Span& sp, const ::HIR::TypeData* outerTy, const ::MIR::LValue& outerLval, const PatternBinding& b) = 0;
+    virtual void destructureFromList(const Span& sp, const ::HIR::TypeData* ty, MIRLValue lval, const ::std::vector<PatternBinding>& bindings, bool updateStates = true) = 0;
+    virtual MIRLValue getValueForBindingPath(const Span& sp, const ::HIR::TypeData* outerTy, const MIRLValue& outerLval, const PatternBinding& b) = 0;
     virtual const HIR::TypeData* getBindingType(const Span& sp, unsigned index) const = 0;
 
     virtual SaveAndEditVal<const ScopeHandle*> disableBorrowExtension() = 0;
 };
 
-extern void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue matchVal, const std::vector<unsigned>& letElseInitializerTemps);
-extern void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const ::HIR::Pattern& pat, ::MIR::LValue val, const ::HIR::ExprNode* elseNode);
+extern void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, MIRLValue matchVal, const std::vector<unsigned>& letElseInitializerTemps);
+extern void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const ::HIR::Pattern& pat, MIRLValue val, const ::HIR::ExprNode* elseNode);
 
 extern void MIRLowerHIRGetTypeValueForPath(
     const Span& sp,
     MirBuilder& builder,
     const ::HIR::TypeData* topTy,
-    const ::MIR::LValue& topVal,
+    const MIRLValue& topVal,
     const fieldPathT& fieldPath, // unsigned int field_path_ofs,
     /*Out ->*/ ::HIR::TypeRef& outTy,
-    ::MIR::LValue& outVal
+    MIRLValue& outVal
 );

@@ -294,7 +294,7 @@ namespace {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Fmt<::MIR::LValue>& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const Fmt<MIRLValue>& x) {
         for (const auto& w : ::reverse(x.e.wrappers)) {
             if (w.is_Deref()) {
                 os << "(*";
@@ -306,7 +306,7 @@ namespace {
             bool prevWasNum = wasNum;
             wasNum = false;
             switch (w.tag()) {
-                case ::MIR::LValue::Wrapper::TAGDEAD:
+                case MIRLValue::Wrapper::TAGDEAD:
                     throw "";
                     TU_ARM(w, Deref, e)
                     os << ")";
@@ -321,7 +321,7 @@ namespace {
                     }
                     break;
                     TU_ARM(w, Index, e) {
-                        os << "[" << fmt(::MIR::LValue::newLocal(e)) << "]";
+                        os << "[" << fmt(MIRLValue::newLocal(e)) << "]";
                     }
                     break;
                     TU_ARM(w, Downcast, variantIndex) {
@@ -334,7 +334,7 @@ namespace {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Fmt<::MIR::Constant>& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const Fmt<MIRConstant>& x) {
         struct H {
             static uint64_t doubleToU64(double v) {
                 uint64_t rv;
@@ -345,7 +345,7 @@ namespace {
 
         const auto& e = x.e;
         switch (e.tag()) {
-            case ::MIR::Constant::TAGDEAD:
+            case MIRConstant::TAGDEAD:
                 throw "";
                 TU_ARM(e, Int, v) {
                     os << (v.v < 0 ? "" : "+") << v.v << " " << v.t;
@@ -382,9 +382,9 @@ namespace {
         return os;
     }
 
-    ::std::ostream& operator<<(::std::ostream& os, const Fmt<::MIR::Param>& x) {
+    ::std::ostream& operator<<(::std::ostream& os, const Fmt<MIRParam>& x) {
         switch (x.e.tag()) {
-            case ::MIR::Param::TAGDEAD:
+            case MIRParam::TAGDEAD:
                 throw "";
                 TU_ARM(x.e, LValue, e)
                 os << fmt(e);
@@ -425,7 +425,7 @@ namespace {
 
         ::std::string outfilePath;
         ::std::ofstream of;
-        const ::MIR::TypeResolve* mirRes;
+        const MIRTypeResolve* mirRes;
 
     public:
         CodeGeneratorMonoMir(const ::HIR::Crate& crate, const ::std::string& outfile)
@@ -500,8 +500,8 @@ namespace {
 
         void emitType(const ::HIR::TypeData* ty) override {
             TRACE_FUNCTION_F(ty);
-            ::MIR::Function emptyFcn;
-            ::MIR::TypeResolve topMirRes {
+            MIRFunction emptyFcn;
+            MIRTypeResolve topMirRes {
                 sp, mResolve, FMT_CB(ss, ss << "type " << ty;), ::HIR::TypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
@@ -576,8 +576,8 @@ namespace {
         }
 
         void emitStruct(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Struct& item) override {
-            ::MIR::Function emptyFcn;
-            ::MIR::TypeResolve topMirRes {
+            MIRFunction emptyFcn;
+            MIRTypeResolve topMirRes {
                 sp, mResolve, FMT_CB(ss, ss << "struct " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
@@ -706,8 +706,8 @@ namespace {
         }
 
         void emitUnion(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Union& item) override {
-            ::MIR::Function emptyFcn;
-            ::MIR::TypeResolve topMirRes {
+            MIRFunction emptyFcn;
+            MIRTypeResolve topMirRes {
                 sp, mResolve, FMT_CB(ss, ss << "union " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
@@ -732,8 +732,8 @@ namespace {
         }
 
         void emitEnum(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Enum& item) override {
-            ::MIR::Function emptyFcn;
-            ::MIR::TypeResolve topMirRes {
+            MIRFunction emptyFcn;
+            MIRTypeResolve topMirRes {
                 sp, mResolve, FMT_CB(ss, ss << "enum " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
@@ -848,8 +848,8 @@ namespace {
         }
 
         void emitStaticLocal(const ::HIR::Path& p, const ::HIR::Static& item, const TransParams& params, const EncodedLiteral& encoded) override {
-            ::MIR::Function emptyFcn;
-            ::MIR::TypeResolve topMirRes {
+            MIRFunction emptyFcn;
+            MIRTypeResolve topMirRes {
                 sp, mResolve, FMT_CB(ss, ss << "static " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
@@ -880,8 +880,8 @@ namespace {
         }
 
         void emitFunctionExt(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params) override {
-            ::MIR::Function emptyFcn;
-            ::MIR::TypeResolve topMirRes {
+            MIRFunction emptyFcn;
+            MIRTypeResolve topMirRes {
                 sp, mResolve, FMT_CB(ss, ss << "extern fn " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
@@ -906,10 +906,10 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emitFunctionCode(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool isExternDef, const ::MIR::FunctionPointer& code) override {
+        void emitFunctionCode(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code) override {
             TRACE_FUNCTION_F(p);
 
-            ::MIR::TypeResolve::argsT argTypes;
+            MIRTypeResolve::argsT argTypes;
             for (const auto& ent : item.mArgs) {
                 argTypes.push_back(::std::make_pair(::HIR::Pattern{}, params.monomorph(mResolve, ent.second)));
             }
@@ -917,7 +917,7 @@ namespace {
             ::HIR::TypeRef retTypeTmp;
             const auto& retType = monomorphiseFcnReturn(retTypeTmp, item, params);
 
-            ::MIR::TypeResolve localMirRes {
+            MIRTypeResolve localMirRes {
                 sp, mResolve, FMT_CB(ss, ss << p;), retType, argTypes, *code
             };
             mirRes = &localMirRes;
@@ -955,12 +955,12 @@ namespace {
                     localMirRes.setCurStmt(i, (&stmt - &code->blocks[i].statements.front()));
                     DEBUG(stmt);
                     switch (stmt.tag()) {
-                        case ::MIR::Statement::TAGDEAD:
+                        case MIRStatement::TAGDEAD:
                             throw "";
                             TU_ARM(stmt, Assign, se) {
                                 of << "ASSIGN " << fmt(se.dst) << " = ";
                                 switch (se.src.tag()) {
-                                    case ::MIR::RValue::TAGDEAD:
+                                    case MIRRValue::TAGDEAD:
                                         throw "";
                                         TU_ARM(se.src, Use, e)
                                         of << "=" << fmt(e);
@@ -992,64 +992,64 @@ namespace {
                                         TU_ARM(se.src, BinOp, e) {
                                             of << "BINOP " << fmt(e.valL) << " ";
                                             switch (e.op) {
-                                                case ::MIR::eBinOp::ADD:
+                                                case MIRBinOp::ADD:
                                                     of << "+";
                                                     break;
-                                                case ::MIR::eBinOp::ADD_OV:
+                                                case MIRBinOp::ADD_OV:
                                                     of << "+^";
                                                     break;
-                                                case ::MIR::eBinOp::SUB:
+                                                case MIRBinOp::SUB:
                                                     of << "-";
                                                     break;
-                                                case ::MIR::eBinOp::SUB_OV:
+                                                case MIRBinOp::SUB_OV:
                                                     of << "-^";
                                                     break;
-                                                case ::MIR::eBinOp::MUL:
+                                                case MIRBinOp::MUL:
                                                     of << "*";
                                                     break;
-                                                case ::MIR::eBinOp::MUL_OV:
+                                                case MIRBinOp::MUL_OV:
                                                     of << "*^";
                                                     break;
-                                                case ::MIR::eBinOp::DIV:
+                                                case MIRBinOp::DIV:
                                                     of << "/";
                                                     break;
-                                                case ::MIR::eBinOp::DIV_OV:
+                                                case MIRBinOp::DIV_OV:
                                                     of << "/^";
                                                     break;
-                                                case ::MIR::eBinOp::MOD:
+                                                case MIRBinOp::MOD:
                                                     of << "%";
                                                     break;
-                                                case ::MIR::eBinOp::BIT_OR:
+                                                case MIRBinOp::BIT_OR:
                                                     of << "|";
                                                     break;
-                                                case ::MIR::eBinOp::BIT_AND:
+                                                case MIRBinOp::BIT_AND:
                                                     of << "&";
                                                     break;
-                                                case ::MIR::eBinOp::BIT_XOR:
+                                                case MIRBinOp::BIT_XOR:
                                                     of << "^";
                                                     break;
-                                                case ::MIR::eBinOp::BIT_SHR:
+                                                case MIRBinOp::BIT_SHR:
                                                     of << ">>";
                                                     break;
-                                                case ::MIR::eBinOp::BIT_SHL:
+                                                case MIRBinOp::BIT_SHL:
                                                     of << "<<";
                                                     break;
-                                                case ::MIR::eBinOp::NE:
+                                                case MIRBinOp::NE:
                                                     of << "!=";
                                                     break;
-                                                case ::MIR::eBinOp::EQ:
+                                                case MIRBinOp::EQ:
                                                     of << "==";
                                                     break;
-                                                case ::MIR::eBinOp::GT:
+                                                case MIRBinOp::GT:
                                                     of << ">";
                                                     break;
-                                                case ::MIR::eBinOp::GE:
+                                                case MIRBinOp::GE:
                                                     of << ">=";
                                                     break;
-                                                case ::MIR::eBinOp::LT:
+                                                case MIRBinOp::LT:
                                                     of << "<";
                                                     break;
-                                                case ::MIR::eBinOp::LE:
+                                                case MIRBinOp::LE:
                                                     of << "<=";
                                                     break;
                                             }
@@ -1059,10 +1059,10 @@ namespace {
                                         TU_ARM(se.src, UniOp, e) {
                                             of << "UNIOP ";
                                             switch (e.op) {
-                                                case ::MIR::eUniOp::INV:
+                                                case MIRUniOp::INV:
                                                     of << "!";
                                                     break;
-                                                case ::MIR::eUniOp::NEG:
+                                                case MIRUniOp::NEG:
                                                     of << "-";
                                                     break;
                                             }
@@ -1197,7 +1197,7 @@ namespace {
                 DEBUG("- " << term);
                 of << "\t\t";
                 switch (term.tag()) {
-                    case ::MIR::Terminator::TAGDEAD:
+                    case MIRTerminator::TAGDEAD:
                         throw "";
                         TU_ARM(term, Incomplete, _e)(void) _e;
                         of << "INCOMPLETE\n";
@@ -1229,7 +1229,7 @@ namespace {
                         TU_ARM(term, SwitchValue, e) {
                             of << "SWITCHVALUE " << fmt(e.val) << " { ";
                             switch (e.values.tag()) {
-                                case ::MIR::SwitchValues::TAGDEAD:
+                                case MIRSwitchValues::TAGDEAD:
                                     throw "";
                                     TU_ARM(e.values, String, ve)
                                     for (size_t i = 0; i < ve.size(); i++) {
@@ -1285,7 +1285,7 @@ namespace {
                         break;
                         TU_ARM(term, Drop, e) {
                             of << "DROP " << fmt(e.slot);
-                            if (e.kind == ::MIR::eDropKind::SHALLOW) of << " SHALLOW";
+                            if (e.kind == MIRDropKind::SHALLOW) of << " SHALLOW";
                             if (e.flagIdx != ~0u) of << " IF df" << e.flagIdx;
                             of << " goto " << e.target << " unwind " << e.unwind.tagStr() << "\n";
                         }
@@ -1301,7 +1301,7 @@ namespace {
                             }
                             of << "CALL " << fmt(e.retVal) << " = ";
                             switch (e.fcn.tag()) {
-                                case ::MIR::CallTarget::TAGDEAD:
+                                case MIRCallTarget::TAGDEAD:
                                     throw "";
                                     TU_ARM(e.fcn, Intrinsic, f) {
                                         of << "\"" << f.name << "\"";

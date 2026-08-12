@@ -6,13 +6,13 @@
 #include "hir_conv_constant_evaluation.h"
 
 namespace {
-    class Cloner: public ::MIR::Cloner {
+    class Cloner: public MIRCloner {
         const ::StaticTraitResolve& mResolve;
         const TransParams& params;
 
     public:
         Cloner(const Span& sp, const ::StaticTraitResolve& resolve, const TransParams& params)
-            : ::MIR::Cloner(sp, resolve.crate.types)
+            : MIRCloner(sp, resolve.crate.types)
             , mResolve(resolve)
             , params(params)
         {
@@ -41,12 +41,12 @@ namespace {
     };
 }
 
-::MIR::FunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const TransParams& params, const ::MIR::FunctionPointer& tpl) {
+MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const TransParams& params, const MIRFunctionPointer& tpl) {
     static Span sp;
     TRACE_FUNCTION;
     assert(tpl);
 
-    ::MIR::Function output;
+    MIRFunction output;
 
     // 1. Monomorphise locals and temporaries
     output.locals.reserve(tpl->locals.size());
@@ -61,7 +61,7 @@ namespace {
     // 2. Monomorphise all paths
     output.blocks.reserve(tpl->blocks.size());
     for (const auto& block : tpl->blocks) {
-        ::std::vector<::MIR::Statement> statements;
+        ::std::vector<MIRStatement> statements;
 
         TRACE_FUNCTION_F("bb" << output.blocks.size());
         statements.reserve(block.statements.size());
@@ -69,11 +69,11 @@ namespace {
             switch (stmt.tag()) {
                 // LAZY: These _should_ be in `clone_stmt`, but they're not needed in optimising and MIR cloning
                 TU_ARM(stmt, SaveDropFlag, e) {
-                    statements.push_back(::MIR::Statement::make_SaveDropFlag({e.slot.clone(), e.bitIndex, e.idx}));
+                    statements.push_back(MIRStatement::make_SaveDropFlag({e.slot.clone(), e.bitIndex, e.idx}));
                 }
                 break;
                 TU_ARM(stmt, LoadDropFlag, e) {
-                    statements.push_back(::MIR::Statement::make_LoadDropFlag({e.idx, e.slot.clone(), e.bitIndex}));
+                    statements.push_back(MIRStatement::make_LoadDropFlag({e.idx, e.slot.clone(), e.bitIndex}));
                 }
                 break;
                 default:
@@ -82,11 +82,11 @@ namespace {
             }
         }
 
-        ::MIR::Terminator terminator = c.cloneTerm(block.terminator);
-        output.blocks.push_back(::MIR::BasicBlock{mv$(statements), mv$(terminator)});
+        MIRTerminator terminator = c.cloneTerm(block.terminator);
+        output.blocks.push_back(MIRBasicBlock{mv$(statements), mv$(terminator)});
     }
 
-    return ::MIR::FunctionPointer(box$(output).release());
+    return MIRFunctionPointer(box$(output).release());
 }
 
 /// Monomorphise all functions in a TransList

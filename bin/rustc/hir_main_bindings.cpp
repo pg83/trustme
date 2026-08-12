@@ -553,95 +553,95 @@ public:
         return rv;
     }
 
-    ::MIR::FunctionPointer deserialiseMir();
-    ::MIR::BasicBlock deserialiseMirBasicblock();
-    ::MIR::Statement deserialiseMirStatement();
+    MIRFunctionPointer deserialiseMir();
+    MIRBasicBlock deserialiseMirBasicblock();
+    MIRStatement deserialiseMirStatement();
     AsmOptions deserialiseAsmOptions();
     AsmLineFragment deserialiseAsmLineFrag();
     AsmLine deserialiseAsmLine();
     AsmRegisterSpec deserialiseAsmSpec();
-    ::MIR::AsmParam deserialiseAsmParam();
-    ::MIR::Terminator deserialiseMirTerminator();
-    ::MIR::Terminator deserialise_mir_terminator_();
-    ::MIR::UnwindAction deserialiseMirUnwindAction();
-    ::MIR::SwitchValues deserialiseMirSwitchvalues();
-    ::MIR::CallTarget deserialiseMirCalltarget();
+    MIRAsmParam deserialiseAsmParam();
+    MIRTerminator deserialiseMirTerminator();
+    MIRTerminator deserialise_mir_terminator_();
+    MIRUnwindAction deserialiseMirUnwindAction();
+    MIRSwitchValues deserialiseMirSwitchvalues();
+    MIRCallTarget deserialiseMirCalltarget();
 
-    ::MIR::Param deserialiseMirParam() {
+    MIRParam deserialiseMirParam() {
         switch (auto tag = in.readTag()) {
-            case ::MIR::Param::TAG_LValue:
+            case MIRParam::TAG_LValue:
                 return deserialiseMirLvalue();
-            case ::MIR::Param::TAG_Borrow:
-                return ::MIR::Param::make_Borrow({static_cast<::HIR::BorrowType>(in.readTag()), deserialiseMirLvalue()});
-            case ::MIR::Param::TAG_Constant:
+            case MIRParam::TAG_Borrow:
+                return MIRParam::make_Borrow({static_cast<::HIR::BorrowType>(in.readTag()), deserialiseMirLvalue()});
+            case MIRParam::TAG_Constant:
                 return deserialiseMirConstant();
             default:
                 BUG(Span(), "Bad tag for MIR::Param - " << tag);
         }
     }
 
-    ::MIR::LValue deserialiseMirLvalue() {
-        ::MIR::LValue rv;
+    MIRLValue deserialiseMirLvalue() {
+        MIRLValue rv;
         TRACE_FUNCTION_FR("", rv);
         rv = deserialise_mir_lvalue_();
         return rv;
     }
 
-    ::MIR::LValue::Wrapper deserialiseMirLvalueWrapper() {
-        return ::MIR::LValue::Wrapper::fromInner(in.readCount());
+    MIRLValue::Wrapper deserialiseMirLvalueWrapper() {
+        return MIRLValue::Wrapper::fromInner(in.readCount());
     }
 
-    ::MIR::LValue deserialise_mir_lvalue_() {
+    MIRLValue deserialise_mir_lvalue_() {
         auto rootV = in.readCount();
-        auto root = (rootV == 3 ? ::MIR::LValue::Storage::newStatic(deserialisePath()) : ::MIR::LValue::Storage::fromInner(rootV));
-        return ::MIR::LValue(mv$(root), deserialiseVec<::MIR::LValue::Wrapper>());
+        auto root = (rootV == 3 ? MIRLValue::Storage::newStatic(deserialisePath()) : MIRLValue::Storage::fromInner(rootV));
+        return MIRLValue(mv$(root), deserialiseVec<MIRLValue::Wrapper>());
     }
 
-    ::MIR::RValue deserialiseMirRvalue() {
+    MIRRValue deserialiseMirRvalue() {
         TRACE_FUNCTION;
 
         switch (auto tag = in.readTag()) {
 #define _(x, ...)                \
-    case ::MIR::RValue::TAG_##x: \
-        return ::MIR::RValue::make_##x(__VA_ARGS__);
+    case MIRRValue::TAG_##x: \
+        return MIRRValue::make_##x(__VA_ARGS__);
             _(Use, deserialiseMirLvalue())
             _(Constant, deserialiseMirConstant())
             _(SizedArray, {deserialiseMirParam(), deserialiseArraysize()})
             _(Borrow, {static_cast<::HIR::BorrowType>(in.readTag()), in.readBool(), deserialiseMirLvalue()})
             _(Cast, {deserialiseMirLvalue(), deserialiseType()})
-            _(BinOp, {deserialiseMirParam(), static_cast<::MIR::eBinOp>(in.readTag()), deserialiseMirParam()})
-            _(UniOp, {deserialiseMirLvalue(), static_cast<::MIR::eUniOp>(in.readTag())})
+            _(BinOp, {deserialiseMirParam(), static_cast<MIRBinOp>(in.readTag()), deserialiseMirParam()})
+            _(UniOp, {deserialiseMirLvalue(), static_cast<MIRUniOp>(in.readTag())})
             _(DstMeta, {deserialiseMirLvalue()})
             _(DstPtr, {deserialiseMirLvalue()})
-            _(MakeDst, {deserialiseMirParam(), in.readBool() ? deserialiseMirParam() : MIR::Constant::make_ItemAddr({})})
-            _(Tuple, {deserialiseVec<::MIR::Param>()})
-            _(Array, {deserialiseVec<::MIR::Param>()})
+            _(MakeDst, {deserialiseMirParam(), in.readBool() ? deserialiseMirParam() : MIRConstant::make_ItemAddr({})})
+            _(Tuple, {deserialiseVec<MIRParam>()})
+            _(Array, {deserialiseVec<MIRParam>()})
             _(UnionVariant, {deserialiseGenericpath(), static_cast<unsigned int>(in.readCount()), deserialiseMirParam()})
-            _(EnumVariant, {deserialiseGenericpath(), static_cast<unsigned int>(in.readCount()), deserialiseVec<::MIR::Param>()})
-            _(Struct, {deserialiseGenericpath(), deserialiseVec<::MIR::Param>()})
+            _(EnumVariant, {deserialiseGenericpath(), static_cast<unsigned int>(in.readCount()), deserialiseVec<MIRParam>()})
+            _(Struct, {deserialiseGenericpath(), deserialiseVec<MIRParam>()})
 #undef _
             default:
                 BUG(Span(), "Bad tag for MIR::RValue - " << tag);
         }
     }
 
-    ::MIR::Constant deserialiseMirConstant() {
+    MIRConstant deserialiseMirConstant() {
         TRACE_FUNCTION;
 
         switch (auto tag = in.readTag()) {
 #define _(x, ...)                  \
-    case ::MIR::Constant::TAG_##x: \
+    case MIRConstant::TAG_##x: \
         DEBUG("- " #x);            \
-        return ::MIR::Constant::make_##x(__VA_ARGS__);
+        return MIRConstant::make_##x(__VA_ARGS__);
             _(Int, {in.readI128(), static_cast<::HIR::CoreType>(in.readTag())})
             _(Uint, {in.readU128(), static_cast<::HIR::CoreType>(in.readTag())})
             _(Float, {in.readFloatValue(), static_cast<::HIR::CoreType>(in.readTag())})
             _(Bool, {in.readBool()})
-            case ::MIR::Constant::TAG_Bytes: {
+            case MIRConstant::TAG_Bytes: {
                 ::std::vector<unsigned char> bytes;
                 bytes.resize(in.readCount());
                 in.read(bytes.data(), bytes.size());
-                return ::MIR::Constant::make_Bytes(mv$(bytes));
+                return MIRConstant::make_Bytes(mv$(bytes));
             }
                 _(StaticString, in.readString())
                 _(Const, {box$(deserialisePath())})
@@ -964,21 +964,21 @@ template <>
 DEF_D(::HIR::TraitValueItem, return d.deserialiseTraitvalueitem();)
 
 template <>
-DEF_D(::MIR::Param, return d.deserialiseMirParam();)
+DEF_D(MIRParam, return d.deserialiseMirParam();)
 template <>
-DEF_D(::MIR::LValue::Wrapper, return d.deserialiseMirLvalueWrapper();)
+DEF_D(MIRLValue::Wrapper, return d.deserialiseMirLvalueWrapper();)
 template <>
-DEF_D(::MIR::LValue, return d.deserialiseMirLvalue();)
+DEF_D(MIRLValue, return d.deserialiseMirLvalue();)
 template <>
 DEF_D(AsmLineFragment, return d.deserialiseAsmLineFrag();)
 template <>
 DEF_D(AsmLine, return d.deserialiseAsmLine();)
 template <>
-DEF_D(::MIR::AsmParam, return d.deserialiseAsmParam();)
+DEF_D(MIRAsmParam, return d.deserialiseAsmParam();)
 template <>
-DEF_D(::MIR::Statement, return d.deserialiseMirStatement();)
+DEF_D(MIRStatement, return d.deserialiseMirStatement();)
 template <>
-DEF_D(::MIR::BasicBlock, return d.deserialiseMirBasicblock();)
+DEF_D(MIRBasicBlock, return d.deserialiseMirBasicblock();)
 
 template <>
 DEF_D(::HIR::TraitPath::AtyEqual, auto src = d.deserialiseGenericpath(); return ::HIR::TraitPath::AtyEqual{mv$(src), d.deserialisePathparams(), d.deserialiseType()};)
@@ -1342,26 +1342,26 @@ EncodedLiteral HirDeserialiser::deserialiseEncodedliteral() {
     return rv;
 }
 
-::MIR::FunctionPointer HirDeserialiser::deserialiseMir() {
+MIRFunctionPointer HirDeserialiser::deserialiseMir() {
     TRACE_FUNCTION;
 
-    ::MIR::Function rv;
+    MIRFunction rv;
 
     rv.locals = deserialiseVec<::HIR::TypeRef>();
     //rv.local_names = deserialise_vec< ::std::string>( );
     rv.dropFlags = deserialiseVec<bool>();
-    rv.blocks = deserialiseVec<::MIR::BasicBlock>();
+    rv.blocks = deserialiseVec<MIRBasicBlock>();
 
-    return ::MIR::FunctionPointer(new ::MIR::Function(mv$(rv)));
+    return MIRFunctionPointer(new MIRFunction(mv$(rv)));
 }
 
-::MIR::BasicBlock HirDeserialiser::deserialiseMirBasicblock() {
+MIRBasicBlock HirDeserialiser::deserialiseMirBasicblock() {
     TRACE_FUNCTION;
 
-    auto statements = deserialiseVec<::MIR::Statement>();
+    auto statements = deserialiseVec<MIRStatement>();
     auto terminator = deserialiseMirTerminator();
     const auto isCleanup = in.readBool();
-    return ::MIR::BasicBlock{mv$(statements), mv$(terminator), isCleanup};
+    return MIRBasicBlock{mv$(statements), mv$(terminator), isCleanup};
 }
 
 AsmOptions HirDeserialiser::deserialiseAsmOptions() {
@@ -1407,51 +1407,51 @@ AsmRegisterSpec HirDeserialiser::deserialiseAsmSpec() {
     }
 }
 
-::MIR::AsmParam HirDeserialiser::deserialiseAsmParam() {
+MIRAsmParam HirDeserialiser::deserialiseAsmParam() {
     switch (auto tag = in.readTag()) {
-        case ::MIR::AsmParam::TAG_Sym:
-            return ::MIR::AsmParam::make_Sym(deserialisePath());
-        case ::MIR::AsmParam::TAG_Const:
-            return ::MIR::AsmParam::make_Const(deserialiseMirConstant());
-        case ::MIR::AsmParam::TAG_Reg:
-            return ::MIR::AsmParam::make_Reg({static_cast<AsmDirection>(in.readTag()), deserialiseAsmSpec(), in.readBool() ? ::std::make_unique<MIR::Param>(deserialiseMirParam()) : std::unique_ptr<MIR::Param>(), in.readBool() ? ::std::make_unique<MIR::LValue>(deserialiseMirLvalue()) : std::unique_ptr<MIR::LValue>()});
+        case MIRAsmParam::TAG_Sym:
+            return MIRAsmParam::make_Sym(deserialisePath());
+        case MIRAsmParam::TAG_Const:
+            return MIRAsmParam::make_Const(deserialiseMirConstant());
+        case MIRAsmParam::TAG_Reg:
+            return MIRAsmParam::make_Reg({static_cast<AsmDirection>(in.readTag()), deserialiseAsmSpec(), in.readBool() ? ::std::make_unique<MIRParam>(deserialiseMirParam()) : std::unique_ptr<MIRParam>(), in.readBool() ? ::std::make_unique<MIRLValue>(deserialiseMirLvalue()) : std::unique_ptr<MIRLValue>()});
         default:
             BUG(Span(), "Bad tag for MIR::AsmParam - " << tag);
     }
 }
 
-::MIR::Statement HirDeserialiser::deserialiseMirStatement() {
-    MIR::Statement rv;
+MIRStatement HirDeserialiser::deserialiseMirStatement() {
+    MIRStatement rv;
     TRACE_FUNCTION_FR("", rv);
     auto _ = in.openObject("MIR::Statement");
 
     switch (auto tag = in.readTag()) {
         case 0:
-            rv = ::MIR::Statement::make_Assign({deserialiseMirLvalue(), deserialiseMirRvalue()});
+            rv = MIRStatement::make_Assign({deserialiseMirLvalue(), deserialiseMirRvalue()});
             break;
         case 1:
             BUG(Span(), "Obsolete MIR statement Drop in metadata");
         case 2:
-            rv = ::MIR::Statement::make_Asm({in.readString(), deserialiseVec<::std::pair<::std::string, ::MIR::LValue>>(), deserialiseVec<::std::pair<::std::string, ::MIR::LValue>>(), deserialiseVec<::std::string>(), deserialiseVec<::std::string>()});
+            rv = MIRStatement::make_Asm({in.readString(), deserialiseVec<::std::pair<::std::string, MIRLValue>>(), deserialiseVec<::std::pair<::std::string, MIRLValue>>(), deserialiseVec<::std::string>(), deserialiseVec<::std::string>()});
             break;
         case 3: {
-            ::MIR::Statement::Data_SetDropFlag sdf;
+            MIRStatement::Data_SetDropFlag sdf;
             sdf.idx = static_cast<unsigned int>(in.readCount());
             sdf.newVal = in.readBool();
             sdf.other = static_cast<unsigned int>(in.readCount());
-            rv = ::MIR::Statement::make_SetDropFlag(sdf);
+            rv = MIRStatement::make_SetDropFlag(sdf);
         } break;
         case 4:
-            rv = ::MIR::Statement::make_ScopeEnd({deserialiseVec<unsigned int>()});
+            rv = MIRStatement::make_ScopeEnd({deserialiseVec<unsigned int>()});
             break;
         case 5:
-            rv = ::MIR::Statement::make_Asm2({deserialiseAsmOptions(), deserialiseVec<AsmLine>(), deserialiseVec<MIR::AsmParam>()});
+            rv = MIRStatement::make_Asm2({deserialiseAsmOptions(), deserialiseVec<AsmLine>(), deserialiseVec<MIRAsmParam>()});
             break;
         case 6:
-            rv = ::MIR::Statement::make_SaveDropFlag({deserialiseMirLvalue(), static_cast<unsigned>(in.readCount()), static_cast<unsigned>(in.readCount())});
+            rv = MIRStatement::make_SaveDropFlag({deserialiseMirLvalue(), static_cast<unsigned>(in.readCount()), static_cast<unsigned>(in.readCount())});
             break;
         case 7:
-            rv = ::MIR::Statement::make_LoadDropFlag({static_cast<unsigned>(in.readCount()), deserialiseMirLvalue(), static_cast<unsigned>(in.readCount())});
+            rv = MIRStatement::make_LoadDropFlag({static_cast<unsigned>(in.readCount()), deserialiseMirLvalue(), static_cast<unsigned>(in.readCount())});
             break;
         default:
             BUG(Span(), "Bad tag for MIR::Statement - " << tag);
@@ -1459,19 +1459,19 @@ AsmRegisterSpec HirDeserialiser::deserialiseAsmSpec() {
     return rv;
 }
 
-::MIR::Terminator HirDeserialiser::deserialiseMirTerminator() {
-    ::MIR::Terminator rv;
+MIRTerminator HirDeserialiser::deserialiseMirTerminator() {
+    MIRTerminator rv;
     TRACE_FUNCTION_FR("", rv);
     rv = this->deserialise_mir_terminator_();
     return rv;
 }
 
-::MIR::Terminator HirDeserialiser::deserialise_mir_terminator_() {
+MIRTerminator HirDeserialiser::deserialise_mir_terminator_() {
     switch (auto tag = in.readTag()) {
 #define _(x, ...)                    \
-    case ::MIR::Terminator::TAG_##x: \
-        return ::MIR::Terminator::make_##x(__VA_ARGS__);
-        case MIR::Terminator::TAGDEAD:
+    case MIRTerminator::TAG_##x: \
+        return MIRTerminator::make_##x(__VA_ARGS__);
+        case MIRTerminator::TAGDEAD:
             BUG(Span(), "MIR::Terminator::TAGDEAD found");
             _(Incomplete, {})
             _(Return, {})
@@ -1494,35 +1494,35 @@ AsmRegisterSpec HirDeserialiser::deserialiseAsmSpec() {
                 return static_cast<unsigned int>(in.readCount());
             }),
                deserialiseMirSwitchvalues()})
-            _(Drop, {static_cast<::MIR::eDropKind>(in.readTag()), deserialiseMirLvalue(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction()})
-            _(Call, {static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction(), deserialiseMirLvalue(), deserialiseMirCalltarget(), deserialiseVec<::MIR::Param>()})
+            _(Drop, {static_cast<MIRDropKind>(in.readTag()), deserialiseMirLvalue(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction()})
+            _(Call, {static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction(), deserialiseMirLvalue(), deserialiseMirCalltarget(), deserialiseVec<MIRParam>()})
 #undef _
         default:
             BUG(Span(), "Bad tag for MIR::Terminator - " << tag);
     }
 }
 
-::MIR::UnwindAction HirDeserialiser::deserialiseMirUnwindAction() {
+MIRUnwindAction HirDeserialiser::deserialiseMirUnwindAction() {
     switch (auto tag = in.readTag()) {
-        case ::MIR::UnwindAction::TAG_Continue:
-            return ::MIR::UnwindAction::make_Continue({});
-        case ::MIR::UnwindAction::TAG_Cleanup:
-            return ::MIR::UnwindAction::make_Cleanup(static_cast<unsigned int>(in.readCount()));
-        case ::MIR::UnwindAction::TAG_Terminate:
-            return ::MIR::UnwindAction::make_Terminate({});
-        case ::MIR::UnwindAction::TAG_Unreachable:
-            return ::MIR::UnwindAction::make_Unreachable({});
+        case MIRUnwindAction::TAG_Continue:
+            return MIRUnwindAction::make_Continue({});
+        case MIRUnwindAction::TAG_Cleanup:
+            return MIRUnwindAction::make_Cleanup(static_cast<unsigned int>(in.readCount()));
+        case MIRUnwindAction::TAG_Terminate:
+            return MIRUnwindAction::make_Terminate({});
+        case MIRUnwindAction::TAG_Unreachable:
+            return MIRUnwindAction::make_Unreachable({});
         default:
             BUG(Span(), "Bad tag for MIR::UnwindAction - " << tag);
     }
 }
 
-::MIR::SwitchValues HirDeserialiser::deserialiseMirSwitchvalues() {
+MIRSwitchValues HirDeserialiser::deserialiseMirSwitchvalues() {
     TRACE_FUNCTION;
     switch (auto tag = in.readTag()) {
 #define _(x, ...)                      \
-    case ::MIR::SwitchValues::TAG_##x: \
-        return ::MIR::SwitchValues::make_##x(__VA_ARGS__);
+    case MIRSwitchValues::TAG_##x: \
+        return MIRSwitchValues::make_##x(__VA_ARGS__);
         _(Unsigned, deserialiseVecC<uint64_t>([&]() {
             return in.readU64c();
         }))
@@ -1537,11 +1537,11 @@ AsmRegisterSpec HirDeserialiser::deserialiseAsmSpec() {
     }
 }
 
-::MIR::CallTarget HirDeserialiser::deserialiseMirCalltarget() {
+MIRCallTarget HirDeserialiser::deserialiseMirCalltarget() {
     switch (auto tag = in.readTag()) {
 #define _(x, ...)                    \
-    case ::MIR::CallTarget::TAG_##x: \
-        return ::MIR::CallTarget::make_##x(__VA_ARGS__);
+    case MIRCallTarget::TAG_##x: \
+        return MIRCallTarget::make_##x(__VA_ARGS__);
         _(Value, deserialiseMirLvalue())
         _(Path, deserialisePath())
         _(Intrinsic, {in.readIstring(), deserialisePathparams()})
@@ -3281,7 +3281,7 @@ public:
         serialiseVec(exp.erasedTypes);
     }
 
-    void serialise(const ::MIR::Function& mir) {
+    void serialise(const MIRFunction& mir) {
         // Write out MIR.
         serialiseVec(mir.locals);
         //serialise_vec( mir.slot_names );
@@ -3289,7 +3289,7 @@ public:
         serialiseVec(mir.blocks);
     }
 
-    void serialise(const ::MIR::BasicBlock& block) {
+    void serialise(const MIRBasicBlock& block) {
         serialiseVec(block.statements);
         serialise(block.terminator);
         out.writeBool(block.isCleanup);
@@ -3318,7 +3318,7 @@ public:
             }
     }
 
-    void serialise(const ::MIR::AsmParam& p) {
+    void serialise(const MIRAsmParam& p) {
         out.writeTag(static_cast<unsigned>(p.tag()));
             TU_MATCH_HDRA( (p), {)
             TU_ARMA(Sym, e) {
@@ -3358,7 +3358,7 @@ public:
         out.writeU16(bitflag1);
     }
 
-    void serialise(const ::MIR::Statement& stmt) {
+    void serialise(const MIRStatement& stmt) {
         auto _ = out.openObject("MIR::Statement");
             TU_MATCH_HDRA( (stmt), {)
             TU_ARMA(Assign, e) {
@@ -3405,10 +3405,10 @@ public:
             }
     }
 
-    void serialise(const ::MIR::Terminator& term) {
-        auto serialiseUnwind = [this](const ::MIR::UnwindAction& action) {
+    void serialise(const MIRTerminator& term) {
+        auto serialiseUnwind = [this](const MIRUnwindAction& action) {
             out.writeTag(static_cast<int>(action.tag()));
-            TU_IFLET(::MIR::UnwindAction, action, Cleanup, target, out.writeCount(target);)
+            TU_IFLET(MIRUnwindAction, action, Cleanup, target, out.writeCount(target);)
         };
         out.writeTag(static_cast<int>(term.tag()));
         TU_MATCHA(
@@ -3432,7 +3432,7 @@ public:
         )
     }
 
-    void serialise(const ::MIR::SwitchValues& sv) {
+    void serialise(const MIRSwitchValues& sv) {
         out.writeTag(static_cast<int>(sv.tag()));
             TU_MATCH_HDRA( (sv), {)
             TU_ARMA(Unsigned, e) {
@@ -3450,18 +3450,18 @@ public:
             }
     }
 
-    void serialise(const ::MIR::CallTarget& ct) {
+    void serialise(const MIRCallTarget& ct) {
         out.writeTag(static_cast<int>(ct.tag()));
         TU_MATCHA((ct), (e), (Value, serialise(e);), (Path, serialisePath(e);), (Intrinsic, out.writeString(e.name); serialisePathparams(e.params);))
     }
 
-    void serialise(const ::MIR::Param& p) {
+    void serialise(const MIRParam& p) {
         TRACE_FUNCTION_F("Param = " << p);
         out.writeTag(static_cast<int>(p.tag()));
         TU_MATCHA((p), (e), (LValue, serialise(e);), (Borrow, out.writeTag(static_cast<int>(e.type)); serialise(e.val);), (Constant, serialise(e);))
     }
 
-    void serialise(const ::MIR::LValue& lv) {
+    void serialise(const MIRLValue& lv) {
         TRACE_FUNCTION_F("LValue = " << lv);
         if (lv.root.is_Static()) {
             out.writeCount(3);
@@ -3472,17 +3472,17 @@ public:
         serialiseVec(lv.wrappers);
     }
 
-    void serialise(const ::MIR::LValue::Wrapper& w) {
+    void serialise(const MIRLValue::Wrapper& w) {
         out.writeCount(w.getInner());
     }
 
-    void serialise(const ::MIR::RValue& val) {
+    void serialise(const MIRRValue& val) {
         TRACE_FUNCTION_F("RValue = " << val);
         out.writeTag(val.tag());
         TU_MATCHA((val), (e), (Use, serialise(e);), (Constant, serialise(e);), (SizedArray, serialise(e.val); serialiseArraysize(e.count);), (Borrow, out.writeTag(static_cast<int>(e.type)); out.writeBool(e.isRaw); serialise(e.val);), (Cast, serialise(e.val); serialise(e.type);), (BinOp, serialise(e.valL); out.writeTag(static_cast<int>(e.op)); serialise(e.valR);), (UniOp, serialise(e.val); out.writeTag(static_cast<int>(e.op));), (DstMeta, serialise(e.val);), (DstPtr, serialise(e.val);), (MakeDst, serialise(e.ptrVal); auto b = !TU_TEST2(e.metaVal, Constant, , ItemAddr, .get() == nullptr); out.writeBool(b); if (b) serialise(e.metaVal);), (Tuple, serialiseVec(e.vals);), (Array, serialiseVec(e.vals);), (UnionVariant, serialiseGenericpath(e.path); out.writeCount(e.index); serialise(e.val);), (EnumVariant, serialiseGenericpath(e.path); out.writeCount(e.index); serialiseVec(e.vals);), (Struct, serialiseGenericpath(e.path); serialiseVec(e.vals);))
     }
 
-    void serialise(const ::MIR::Constant& v) {
+    void serialise(const MIRConstant& v) {
         out.writeTag(v.tag());
         TU_MATCHA((v), (e), (Int, out.writeU128(e.v.getInner()); out.writeTag(static_cast<unsigned>(e.t));), (Uint, out.writeU128(e.v); out.writeTag(static_cast<unsigned>(e.t));), (Float, out.writeFloatValue(e.v); out.writeTag(static_cast<unsigned>(e.t));), (Bool, out.writeBool(e.v);), (Bytes, out.writeCount(e.size()); out.write(e.data(), e.size());), (StaticString, out.writeString(e);), (Const, ASSERT_BUG(Span(), monomorphisePathNeeded(*e.p), "Unexpected Constant: " << *e.p); serialisePath(*e.p);), (Generic, serialise(e);), (Function, serialisePath(*e.p);), (ItemAddr, serialisePath(*e); out.writeU128(e.offset);))
     }

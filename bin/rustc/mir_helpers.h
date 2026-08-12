@@ -15,18 +15,17 @@ namespace HIR {
     struct SimplePath;
 }
 
-namespace MIR {
 
-    class Function;
-    struct LValue;
-    class Constant;
-    struct BasicBlock;
-    class Terminator;
-    class Statement;
-    class RValue;
-    class Param;
+    class MIRFunction;
+    struct MIRLValue;
+    class MIRConstant;
+    struct MIRBasicBlock;
+    class MIRTerminator;
+    class MIRStatement;
+    class MIRRValue;
+    class MIRParam;
 
-    typedef unsigned int BasicBlockId;
+    typedef unsigned int MIRBasicBlockId;
 
     struct CheckFailure: public ::std::exception {};
 
@@ -57,7 +56,7 @@ namespace MIR {
         DEBUG(FMT_CB(_ss, (state).fmtPos(_ss);) << __VA_ARGS__); \
     } while (0)
 
-    class TypeResolve {
+    class MIRTypeResolve {
     public:
         typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> argsT;
 
@@ -75,7 +74,7 @@ namespace MIR {
     public:
         const ::HIR::TypeData* retType;
         const argsT& mArgs;
-        const ::MIR::Function& fcn;
+        const MIRFunction& fcn;
 
         // If set, these override the list in `m_fcn`
         const ::HIR::TypeData* monomorphedRettype;
@@ -88,15 +87,15 @@ namespace MIR {
         unsigned int stmtIdx = 0;
 
     public:
-        TypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const ::HIR::TypeData* retType, const argsT& args, const ::MIR::Function& fcn);
+        MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const ::HIR::TypeData* retType, const argsT& args, const MIRFunction& fcn);
 
-        void setCurStmt(const ::MIR::BasicBlock& bb, const ::MIR::Statement& stmt);
+        void setCurStmt(const MIRBasicBlock& bb, const MIRStatement& stmt);
 
-        void setCurStmt(const ::MIR::BasicBlock& bb, unsigned int stmtIdx);
+        void setCurStmt(const MIRBasicBlock& bb, unsigned int stmtIdx);
 
         void setCurStmt(unsigned int bbIdx, unsigned int stmtIdx);
 
-        void setCurStmtTerm(const ::MIR::BasicBlock& bb);
+        void setCurStmtTerm(const MIRBasicBlock& bb);
 
         void setCurStmtTerm(unsigned int bbIdx);
 
@@ -118,48 +117,48 @@ namespace MIR {
 
         void printMsg(const char* tag, ::std::function<void(::std::ostream& os)> cb) const;
 
-        const ::MIR::BasicBlock& getBlock(::MIR::BasicBlockId id) const;
+        const MIRBasicBlock& getBlock(MIRBasicBlockId id) const;
 
         const ::HIR::TypeData* getStaticType(::HIR::TypeRef& tmp, const ::HIR::Path& path) const;
-        const ::HIR::TypeData* getLvalueType(::HIR::TypeRef& tmp, const ::MIR::LValue& val, unsigned wrapperSkipCount = 0) const;
+        const ::HIR::TypeData* getLvalueType(::HIR::TypeRef& tmp, const MIRLValue& val, unsigned wrapperSkipCount = 0) const;
 
-        const ::HIR::TypeData* getLvalueType(::HIR::TypeRef& tmp, const ::MIR::LValue::CRef& val) const {
+        const ::HIR::TypeData* getLvalueType(::HIR::TypeRef& tmp, const MIRLValue::CRef& val) const {
             return getLvalueType(tmp, val.lv(), val.lv().wrappers.size() - val.wrapperCount());
         }
 
-        const ::HIR::TypeData* getLvalueType(::HIR::TypeRef& tmp, const ::MIR::LValue::MRef& val) const {
+        const ::HIR::TypeData* getLvalueType(::HIR::TypeRef& tmp, const MIRLValue::MRef& val) const {
             return getLvalueType(tmp, val.lv(), val.lv().wrappers.size() - val.wrapperCount());
         }
 
-        const ::HIR::TypeData* getUnwrappedType(::HIR::TypeRef& tmp, const ::MIR::LValue::Wrapper& w, const ::HIR::TypeData* ty) const;
-        const ::HIR::TypeData* getParamType(::HIR::TypeRef& tmp, const ::MIR::Param& val) const;
+        const ::HIR::TypeData* getUnwrappedType(::HIR::TypeRef& tmp, const MIRLValue::Wrapper& w, const ::HIR::TypeData* ty) const;
+        const ::HIR::TypeData* getParamType(::HIR::TypeRef& tmp, const MIRParam& val) const;
 
-        ::HIR::TypeRef getConstType(const ::MIR::Constant& c) const;
+        ::HIR::TypeRef getConstType(const MIRConstant& c) const;
 
-        bool lvalueIsCopy(const ::MIR::LValue& val) const;
+        bool lvalueIsCopy(const MIRLValue& val) const;
         const ::HIR::TypeData* isTypeOwnedBox(const ::HIR::TypeData* ty) const;
 
         /// @brief Handler for the `offset_of` intrinsic
         /// @param ty Type
         /// @param params Field names (must be Const::String)
         /// @return Offset in bytes
-        size_t intrinsicOffsetOf(const ::HIR::TypeData* ty, const ::std::vector<MIR::Param>& params) const;
+        size_t intrinsicOffsetOf(const ::HIR::TypeData* ty, const ::std::vector<MIRParam>& params) const;
         /// @brief Handler for the `type_name` intrinsic, strips out mrustc's helper comments
         /// @param ty Type
         /// @return Clean string form of the type
         std::string intrinsicTypeName(const ::HIR::TypeData* ty) const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const TypeResolve& x);
+        friend ::std::ostream& operator<<(::std::ostream& os, const MIRTypeResolve& x);
     };
 
     // --------------------------------------------------------------------
     // MIR_Helper_GetLifetimes
     // --------------------------------------------------------------------
-    class ValueLifetime {
+    class MIRValueLifetime {
         ::std::vector<bool> statements;
 
     public:
-        ValueLifetime(::std::vector<bool> stmts);
+        MIRValueLifetime(::std::vector<bool> stmts);
 
         bool validAt(size_t ofs) const {
             return statements.at(ofs);
@@ -168,14 +167,14 @@ namespace MIR {
         // true if this value is used at any point
         bool isUsed() const;
 
-        bool overlaps(const ValueLifetime& x) const;
+        bool overlaps(const MIRValueLifetime& x) const;
 
-        void unify(const ValueLifetime& x);
+        void unify(const MIRValueLifetime& x);
     };
 
-    struct ValueLifetimes {
+    struct MIRValueLifetimes {
         ::std::vector<size_t> blockOffsets;
-        ::std::vector<ValueLifetime> slots;
+        ::std::vector<MIRValueLifetime> slots;
 
         bool slotValid(unsigned idx, unsigned bbIdx, unsigned stmtIdx) const {
             return slots.at(idx).validAt(blockOffsets[bbIdx] + stmtIdx);
@@ -189,14 +188,14 @@ namespace MIR {
         Borrow,
     };
 
-    extern bool visitMirLvalue(const ::MIR::LValue& lv, MIRValUsage u, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb);
-    extern bool visitMirLvalue(const ::MIR::Param& p, MIRValUsage u, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb);
-    extern bool visitMirLvalues(const ::MIR::RValue& rval, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb);
-    extern bool visitMirLvalues(const ::MIR::Statement& stmt, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb);
-    extern bool visitMirLvalues(const ::MIR::Terminator& term, ::std::function<bool(const ::MIR::LValue&, MIRValUsage)> cb);
+    extern bool visitMirLvalue(const MIRLValue& lv, MIRValUsage u, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb);
+    extern bool visitMirLvalue(const MIRParam& p, MIRValUsage u, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb);
+    extern bool visitMirLvalues(const MIRRValue& rval, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb);
+    extern bool visitMirLvalues(const MIRStatement& stmt, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb);
+    extern bool visitMirLvalues(const MIRTerminator& term, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb);
 
-    extern void visitTerminatorTargetMut(::MIR::Terminator& term, ::std::function<void(::MIR::BasicBlockId&)> cb);
-    extern void visitTerminatorTarget(const ::MIR::Terminator& term, ::std::function<void(const ::MIR::BasicBlockId&)> cb);
+    extern void visitTerminatorTargetMut(MIRTerminator& term, ::std::function<void(MIRBasicBlockId&)> cb);
+    extern void visitTerminatorTarget(const MIRTerminator& term, ::std::function<void(const MIRBasicBlockId&)> cb);
 
     template <typename Inner>
     class MIRDecMut {
@@ -250,9 +249,9 @@ namespace MIR {
             }
         }
 
-        virtual bool visitLvalue(typename Dec<::MIR::LValue>::Type& lv, MIRValUsage u) = 0;
+        virtual bool visitLvalue(typename Dec<MIRLValue>::Type& lv, MIRValUsage u) = 0;
 
-        virtual bool visitConst(typename Dec<::MIR::Constant>::Type& c) {
+        virtual bool visitConst(typename Dec<MIRConstant>::Type& c) {
             TU_MATCH_HDRA( (c), {)
             default:
                 break;
@@ -266,7 +265,7 @@ namespace MIR {
             return false;
         }
 
-        virtual bool visitParam(typename Dec<::MIR::Param>::Type& p, MIRValUsage u) {
+        virtual bool visitParam(typename Dec<MIRParam>::Type& p, MIRValUsage u) {
             TU_MATCH_HDRA( (p), {)
             TU_ARMA(LValue, e) {
                     return visitLvalue(e, u);
@@ -281,7 +280,7 @@ namespace MIR {
             throw "";
         }
 
-        virtual bool visitRvalue(typename Dec<::MIR::RValue>::Type& rval) {
+        virtual bool visitRvalue(typename Dec<MIRRValue>::Type& rval) {
             bool rv = false;
             TU_MATCH_HDRA( (rval), {)
             TU_ARMA(Use, se) {
@@ -350,7 +349,7 @@ namespace MIR {
             return rv;
         }
 
-        virtual bool visitStmt(typename Dec<::MIR::Statement>::Type& stmt) {
+        virtual bool visitStmt(typename Dec<MIRStatement>::Type& stmt) {
             bool rv = false;
             TU_MATCH_HDRA( (stmt), {)
             TU_ARMA(Assign, e) {
@@ -397,11 +396,11 @@ namespace MIR {
             return rv;
         }
 
-        virtual bool visitBlockId(typename Dec<::MIR::BasicBlockId>::Type& bbId) {
+        virtual bool visitBlockId(typename Dec<MIRBasicBlockId>::Type& bbId) {
             return false;
         }
 
-        virtual bool visitTerminator(typename Dec<::MIR::Terminator>::Type& term) {
+        virtual bool visitTerminator(typename Dec<MIRTerminator>::Type& term) {
             bool rv = false;
             TU_MATCH_HDRA( (term), {)
             TU_ARMA(Incomplete, e) {
@@ -441,7 +440,7 @@ namespace MIR {
                 TU_ARMA(Drop, e) {
                     rv |= visitLvalue(e.slot, MIRValUsage::Move);
                     rv |= visitBlockId(e.target);
-                    TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, rv |= visitBlockId(target);)
+                    TU_IFLET(MIRUnwindAction, e.unwind, Cleanup, target, rv |= visitBlockId(target);)
                 }
                 TU_ARMA(Call, e) {
                 TU_MATCH_HDRA( (e.fcn), {)
@@ -459,13 +458,13 @@ namespace MIR {
                     rv |= visitParam(v, MIRValUsage::Read);
                 rv |= visitLvalue(e.retVal, MIRValUsage::Write);
                 rv |= visitBlockId(e.retBlock);
-                TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, rv |= visitBlockId(target);)
+                TU_IFLET(MIRUnwindAction, e.unwind, Cleanup, target, rv |= visitBlockId(target);)
                 }
             }
             return rv;
         }
 
-        virtual void visitFunction(::MIR::TypeResolve& state, typename Dec<::MIR::Function>::Type& fcn) {
+        virtual void visitFunction(MIRTypeResolve& state, typename Dec<MIRFunction>::Type& fcn) {
             for (auto& t : fcn.locals) {
                 visitType(t);
             }
@@ -476,7 +475,7 @@ namespace MIR {
                     state.setCurStmt(blockIdx, (&stmt - &block.statements.front()));
                     visitStmt(stmt);
                 }
-                if (block.terminator.tag() == ::MIR::Terminator::TAGDEAD) {
+                if (block.terminator.tag() == MIRTerminator::TAGDEAD) {
                     continue;
                 }
                 state.setCurStmtTerm(blockIdx);
@@ -487,14 +486,13 @@ namespace MIR {
 
     class MIRVisitor: public MIRVisitorBase<MIRDecConst> {
     public:
-        virtual bool visitLvalue(const ::MIR::LValue& lv, MIRValUsage u) override;
+        virtual bool visitLvalue(const MIRLValue& lv, MIRValUsage u) override;
     };
 
     class MIRVisitorMut: public MIRVisitorBase<MIRDecMut> {
     public:
-        virtual bool visitLvalue(::MIR::LValue& lv, MIRValUsage u) override;
+        virtual bool visitLvalue(MIRLValue& lv, MIRValUsage u) override;
     };
 
-} // namespace MIR
 
-extern ::MIR::ValueLifetimes MIRHelperGetLifetimes(::MIR::TypeResolve& state, const ::MIR::Function& fcn, bool dumpDebug, const ::std::vector<bool>* mask = nullptr);
+extern MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const ::std::vector<bool>* mask = nullptr);

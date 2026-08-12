@@ -19,7 +19,7 @@ namespace {
         {
         }
 
-        void dumpMir(const ::MIR::Function& fcn) {
+        void dumpMir(const MIRFunction& fcn) {
             for (size_t i = 0; i < fcn.locals.size(); i++) {
                 os << indent() << "let _$" << i << ": " << fcn.locals[i] << ";\n";
             }
@@ -127,7 +127,7 @@ namespace {
                 }
 
                 os << indent();
-                auto fmtUnwind = [this](const ::MIR::UnwindAction& action) {
+                auto fmtUnwind = [this](const MIRUnwindAction& action) {
                     TU_MATCHA((action), (ue),
                         (Continue, os << "continue";),
                         (Cleanup, os << "cleanup bb" << ue;),
@@ -179,7 +179,7 @@ namespace {
                                                                                   })
                                                                              ) os
                                                                              << "_ => bb" << e.defTarget << "}\n";),
-                    (Drop, os << "drop(" << FMT_M(e.slot); if (e.kind == ::MIR::eDropKind::SHALLOW) os << " SHALLOW"; if (e.flagIdx != ~0u) os << " IF df$" << e.flagIdx; os << ") goto bb" << e.target << " unwind "; fmtUnwind(e.unwind); os << "\n";),
+                    (Drop, os << "drop(" << FMT_M(e.slot); if (e.kind == MIRDropKind::SHALLOW) os << " SHALLOW"; if (e.flagIdx != ~0u) os << " IF df$" << e.flagIdx; os << ") goto bb" << e.target << " unwind "; fmtUnwind(e.unwind); os << "\n";),
                     (Call, os << FMT_M(e.retVal) << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << FMT_M(e2) << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << FMT_M(arg) << ", "; os << ") goto bb" << e.retBlock << " unwind "; fmtUnwind(e.unwind); os << "\n";)
                 )
                 decIndent();
@@ -190,15 +190,15 @@ namespace {
 #undef FMT
         }
 
-        void fmtVal(::std::ostream& os, const ::MIR::LValue& lval) {
+        void fmtVal(::std::ostream& os, const MIRLValue& lval) {
             os << lval;
         }
 
-        void fmtVal(::std::ostream& os, const ::MIR::Constant& e) {
+        void fmtVal(::std::ostream& os, const MIRConstant& e) {
             os << e;
         }
 
-        void fmtVal(::std::ostream& os, const ::MIR::Param& param) {
+        void fmtVal(::std::ostream& os, const MIRParam& param) {
             TU_MATCHA(
                 (param),
                 (e),
@@ -221,7 +221,7 @@ namespace {
             )
         }
 
-        void fmtVal(::std::ostream& os, const ::MIR::RValue& rval) {
+        void fmtVal(::std::ostream& os, const MIRRValue& rval) {
             TU_MATCHA(
                 (rval),
                 (e),
@@ -248,68 +248,68 @@ namespace {
                 (Cast, os << "("; fmtVal(os, e.val); os << ") as " << e.type;),
                 (BinOp,
                  switch (e.op) {
-                     case ::MIR::eBinOp::ADD:
+                     case MIRBinOp::ADD:
                          os << "ADD";
                          break;
-                     case ::MIR::eBinOp::SUB:
+                     case MIRBinOp::SUB:
                          os << "SUB";
                          break;
-                     case ::MIR::eBinOp::MUL:
+                     case MIRBinOp::MUL:
                          os << "MUL";
                          break;
-                     case ::MIR::eBinOp::DIV:
+                     case MIRBinOp::DIV:
                          os << "DIV";
                          break;
-                     case ::MIR::eBinOp::MOD:
+                     case MIRBinOp::MOD:
                          os << "MOD";
                          break;
-                     case ::MIR::eBinOp::ADD_OV:
+                     case MIRBinOp::ADD_OV:
                          os << "ADD_OV";
                          break;
-                     case ::MIR::eBinOp::SUB_OV:
+                     case MIRBinOp::SUB_OV:
                          os << "SUB_OV";
                          break;
-                     case ::MIR::eBinOp::MUL_OV:
+                     case MIRBinOp::MUL_OV:
                          os << "MUL_OV";
                          break;
-                     case ::MIR::eBinOp::DIV_OV:
+                     case MIRBinOp::DIV_OV:
                          os << "DIV_OV";
                          break;
                          //case ::MIR::eBinOp::MOD_OV: os << "MOD_OV"; break;
 
-                     case ::MIR::eBinOp::BIT_OR:
+                     case MIRBinOp::BIT_OR:
                          os << "BIT_OR";
                          break;
-                     case ::MIR::eBinOp::BIT_AND:
+                     case MIRBinOp::BIT_AND:
                          os << "BIT_AND";
                          break;
-                     case ::MIR::eBinOp::BIT_XOR:
+                     case MIRBinOp::BIT_XOR:
                          os << "BIT_XOR";
                          break;
 
-                     case ::MIR::eBinOp::BIT_SHR:
+                     case MIRBinOp::BIT_SHR:
                          os << "BIT_SHR";
                          break;
-                     case ::MIR::eBinOp::BIT_SHL:
+                     case MIRBinOp::BIT_SHL:
                          os << "BIT_SHL";
                          break;
 
-                     case ::MIR::eBinOp::EQ:
+                     case MIRBinOp::EQ:
                          os << "EQ";
                          break;
-                     case ::MIR::eBinOp::NE:
+                     case MIRBinOp::NE:
                          os << "NE";
                          break;
-                     case ::MIR::eBinOp::GT:
+                     case MIRBinOp::GT:
                          os << "GT";
                          break;
-                     case ::MIR::eBinOp::GE:
+                     case MIRBinOp::GE:
                          os << "GE";
                          break;
-                     case ::MIR::eBinOp::LT:
+                     case MIRBinOp::LT:
                          os << "LT";
                          break;
-                     case ::MIR::eBinOp::LE:
+                     case MIRBinOp::LE:
                          os << "LE";
                          break;
                  } os << "(";
@@ -319,10 +319,10 @@ namespace {
                  os << ")";),
                 (UniOp,
                  switch (e.op) {
-                     case ::MIR::eUniOp::INV:
+                     case MIRUniOp::INV:
                          os << "INV";
                          break;
-                     case ::MIR::eUniOp::NEG:
+                     case MIRUniOp::NEG:
                          os << "NEG";
                          break;
                  } os << "(";
@@ -371,7 +371,7 @@ namespace {
         }
     };
 
-    void dumpMir(::std::ostream& os, unsigned int il, const ::MIR::Function& fcn) {
+    void dumpMir(::std::ostream& os, unsigned int il, const MIRFunction& fcn) {
         MirDumper md{os, il};
         md.dumpMir(fcn);
     }
@@ -555,7 +555,7 @@ void MIRDump(::std::ostream& sink, const ::HIR::Crate& crate) {
     tv.visitCrate(const_cast<::HIR::Crate&>(crate));
 }
 
-void MIRDumpFcn(::std::ostream& sink, const ::MIR::Function& fcn, unsigned int il) {
+void MIRDumpFcn(::std::ostream& sink, const MIRFunction& fcn, unsigned int il) {
     MirDumper md{sink, il};
     md.dumpMir(fcn);
 }

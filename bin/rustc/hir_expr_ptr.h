@@ -103,7 +103,7 @@ namespace HIR {
         ::std::vector<::HIR::TypeRef> erasedTypes;
 
         // Public because too much relies on access to it
-        ::MIR::FunctionPointer mir;
+        MIRFunctionPointer mir;
 
         ::HIR::ExprStatePtr state;
 
@@ -149,14 +149,14 @@ namespace HIR {
 
         //void ensure_typechecked(const ::HIR::Crate& crate) const;
         /// Get MIR (checks if the MIR should be available)
-        const ::MIR::Function* getMirOpt() const;
-        const ::MIR::Function& getMirOrError(const Span& sp) const;
-        ::MIR::Function& getMirOrErrorMut(const Span& sp);
+        const MIRFunction* getMirOpt() const;
+        const MIRFunction& getMirOrError(const Span& sp) const;
+        MIRFunction& getMirOrErrorMut(const Span& sp);
         /// Get external MIR, returns nullptr if none
-        const ::MIR::Function* getExtMir() const;
-        ::MIR::Function* getExtMirMut();
+        const MIRFunction* getExtMir() const;
+        MIRFunction* getExtMirMut();
 
-        void setMir(::MIR::FunctionPointer mir);
+        void setMir(MIRFunctionPointer mir);
     };
 
 } // namespace HIR

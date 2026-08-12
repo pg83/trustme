@@ -756,11 +756,11 @@ namespace HIR {
         bool findAutoTraitImpls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, tCbResolveType tyRes, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const;
         bool findTypeImpls(const ::HIR::TypeData* type, tCbResolveType tyRes, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const;
 
-        const ::MIR::Function* getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::argsT& args, ::HIR::TypeRef& retTy) const;
+        const MIRFunction* getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::argsT& args, ::HIR::TypeRef& retTy) const;
 
-        const ::MIR::Function* getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const;
+        const MIRFunction* getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const;
 
-        const ::MIR::Function* getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& expTy) const;
+        const MIRFunction* getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& expTy) const;
     };
 
     /// Helper for obtaining the matching target for PathTuple/PathNamed

@@ -15,15 +15,14 @@ struct MonomorphState;
 class StaticTraitResolve;
 class MonomorphiserNop;
 
-namespace MIR {
 
-    typedef unsigned int RegionId;
-    typedef unsigned int BasicBlockId;
+    typedef unsigned int MIRRegionId;
+    typedef unsigned int MIRBasicBlockId;
 
     // Store LValues as:
     // - A packed root value (one word, using the low bits as an enum descriminator)
     // - A list of (inner to outer) wrappers
-    struct LValue {
+    struct MIRLValue {
         class Storage {
         public:
             const static uintptr_t MAX_ARG = (1 << 30) - 1; // max value of 30 bits
@@ -193,33 +192,33 @@ namespace MIR {
         Storage root;
         ::std::vector<Wrapper> wrappers;
 
-        LValue();
+        MIRLValue();
 
-        LValue(Storage root, ::std::vector<Wrapper> wrappers);
+        MIRLValue(Storage root, ::std::vector<Wrapper> wrappers);
 
-        static LValue newReturn() {
-            return LValue(Storage::newReturn(), {});
+        static MIRLValue newReturn() {
+            return MIRLValue(Storage::newReturn(), {});
         }
 
-        static LValue newArgument(unsigned idx) {
-            return LValue(Storage::newArgument(idx), {});
+        static MIRLValue newArgument(unsigned idx) {
+            return MIRLValue(Storage::newArgument(idx), {});
         }
 
-        static LValue newLocal(unsigned idx) {
-            return LValue(Storage::newLocal(idx), {});
+        static MIRLValue newLocal(unsigned idx) {
+            return MIRLValue(Storage::newLocal(idx), {});
         }
 
-        static LValue newStatic(::HIR::Path p) {
-            return LValue(Storage::newStatic(::std::move(p)), {});
+        static MIRLValue newStatic(::HIR::Path p) {
+            return MIRLValue(Storage::newStatic(::std::move(p)), {});
         }
 
-        static LValue newDeref(LValue lv);
+        static MIRLValue newDeref(MIRLValue lv);
 
-        static LValue newField(LValue lv, unsigned idx);
+        static MIRLValue newField(MIRLValue lv, unsigned idx);
 
-        static LValue newDowncast(LValue lv, unsigned idx);
+        static MIRLValue newDowncast(MIRLValue lv, unsigned idx);
 
-        static LValue newIndex(LValue lv, unsigned localIdx);
+        static MIRLValue newIndex(MIRLValue lv, unsigned localIdx);
 
         bool is_Return() const {
             return wrappers.empty() && root.is_Return();
@@ -249,51 +248,51 @@ namespace MIR {
 
         void incDowncast();
 
-        Ordering ord(const LValue& x) const;
+        Ordering ord(const MIRLValue& x) const;
 
-        LValue monomorphise(const MonomorphState& ms, unsigned localOffset = 0);
+        MIRLValue monomorphise(const MonomorphState& ms, unsigned localOffset = 0);
 
         //LValue monomorphise(const TransParams& ms, unsigned local_offset=0);
-        LValue clone() const {
-            return LValue(root.clone(), wrappers);
+        MIRLValue clone() const {
+            return MIRLValue(root.clone(), wrappers);
         }
 
-        LValue cloneWrapped(::std::vector<Wrapper> wrappers) const;
+        MIRLValue cloneWrapped(::std::vector<Wrapper> wrappers) const;
 
         template <typename It>
-        LValue cloneWrapped(It beginIt, It endIt) const {
+        MIRLValue cloneWrapped(It beginIt, It endIt) const {
             ::std::vector<Wrapper> newWrappers;
             newWrappers.reserve(wrappers.size() + ::std::distance(beginIt, endIt));
             newWrappers.insert(newWrappers.end(), wrappers.begin(), wrappers.end());
             newWrappers.insert(newWrappers.end(), beginIt, endIt);
-            return LValue(root.clone(), ::std::move(newWrappers));
+            return MIRLValue(root.clone(), ::std::move(newWrappers));
         }
 
-        LValue cloneUnwrapped(unsigned count = 1) const;
+        MIRLValue cloneUnwrapped(unsigned count = 1) const;
 
         // Returns true if this LValue is a subset of the other (e.g. `_1.0` is a subset of `_1.0*`)
-        bool isSubsetOf(const LValue& other) const {
+        bool isSubsetOf(const MIRLValue& other) const {
             return root == other.root && other.wrappers.size() >= wrappers.size() && std::equal(wrappers.begin(), wrappers.end(), other.wrappers.begin());
         }
 
         // Returns true if one lvalue is a subset of the other
         // - Equivalent to `a.is_subset_of(b) || b.is_subset_of(a)` (but more efficient)
-        bool isEitherSubset(const LValue& other) const;
+        bool isEitherSubset(const MIRLValue& other) const;
 
         /// Helper class that represents a LValue unwrapped to a certain degree
         class RefCommon {
         protected:
-            const LValue* mLv;
+            const MIRLValue* mLv;
             size_t mWrapperCount;
 
-            RefCommon(const LValue& lv, size_t wrapperCount);
+            RefCommon(const MIRLValue& lv, size_t wrapperCount);
 
         public:
-            LValue clone() const {
-                return ::MIR::LValue(mLv->root.clone(), ::std::vector<Wrapper>(mLv->wrappers.begin(), mLv->wrappers.begin() + mWrapperCount));
+            MIRLValue clone() const {
+                return MIRLValue(mLv->root.clone(), ::std::vector<Wrapper>(mLv->wrappers.begin(), mLv->wrappers.begin() + mWrapperCount));
             }
 
-            const LValue& lv() const {
+            const MIRLValue& lv() const {
                 return *mLv;
             }
 
@@ -372,9 +371,9 @@ namespace MIR {
 
         class CRef: public RefCommon {
         public:
-            CRef(const LValue& lv);
+            CRef(const MIRLValue& lv);
 
-            CRef(const LValue& lv, size_t wc);
+            CRef(const MIRLValue& lv, size_t wc);
 
             /// Unwrap one level
             const CRef innerRef() const;
@@ -392,7 +391,7 @@ namespace MIR {
 
         class MRef: public RefCommon {
         public:
-            MRef(LValue& lv);
+            MRef(MIRLValue& lv);
 
             operator CRef() const {
                 return CRef(*mLv, mWrapperCount);
@@ -400,48 +399,48 @@ namespace MIR {
 
             MRef innerRef();
 
-            void replace(LValue x);
+            void replace(MIRLValue x);
 
             friend ::std::ostream& operator<<(::std::ostream& os, const MRef& x);
         };
 
-        Ordering ord(const LValue::CRef& x) const;
-        Ordering ord(const LValue::MRef& x) const;
+        Ordering ord(const MIRLValue::CRef& x) const;
+        Ordering ord(const MIRLValue::MRef& x) const;
     };
 
-    extern ::std::ostream& operator<<(::std::ostream& os, const LValue& x);
-    extern ::std::ostream& operator<<(::std::ostream& os, const LValue::Storage& x);
-    extern ::std::ostream& operator<<(::std::ostream& os, const LValue::Wrapper& x);
+    extern ::std::ostream& operator<<(::std::ostream& os, const MIRLValue& x);
+    extern ::std::ostream& operator<<(::std::ostream& os, const MIRLValue::Storage& x);
+    extern ::std::ostream& operator<<(::std::ostream& os, const MIRLValue::Wrapper& x);
 
-    static inline bool operator<(const LValue& a, const LValue::CRef& b) {
+    static inline bool operator<(const MIRLValue& a, const MIRLValue::CRef& b) {
         return a.ord(b) == OrdLess;
     }
 
-    static inline bool operator<(const LValue& a, const LValue::MRef& b) {
+    static inline bool operator<(const MIRLValue& a, const MIRLValue::MRef& b) {
         return a.ord(b) == OrdLess;
     }
 
-    static inline bool operator<(const LValue::CRef& a, const LValue& b) {
+    static inline bool operator<(const MIRLValue::CRef& a, const MIRLValue& b) {
         return b.ord(a) == OrdGreater;
     }
 
-    static inline bool operator<(const LValue::MRef& a, const LValue& b) {
+    static inline bool operator<(const MIRLValue::MRef& a, const MIRLValue& b) {
         return b.ord(a) == OrdGreater;
     }
 
-    static inline bool operator<(const LValue& a, const LValue& b) {
+    static inline bool operator<(const MIRLValue& a, const MIRLValue& b) {
         return a.ord(b) == OrdLess;
     }
 
-    static inline bool operator==(const LValue& a, const LValue& b) {
+    static inline bool operator==(const MIRLValue& a, const MIRLValue& b) {
         return a.ord(b) == OrdEqual;
     }
 
-    static inline bool operator!=(const LValue& a, const LValue& b) {
+    static inline bool operator!=(const MIRLValue& a, const MIRLValue& b) {
         return !(a == b);
     }
 
-    enum class eBinOp {
+    enum class MIRBinOp {
         ADD,
         ADD_OV,
         SUB,
@@ -466,7 +465,7 @@ namespace MIR {
         LT,
         LE,
     };
-    enum class eUniOp {
+    enum class MIRUniOp {
         INV,
         NEG
     };
@@ -515,7 +514,7 @@ namespace MIR {
 
     // Compile-time known values
     TAGGED_UNION_EX(
-        Constant,
+        MIRConstant,
         (),
         Int,
         ((Int,
@@ -549,87 +548,87 @@ namespace MIR {
          (ItemAddr, ItemAddress)),
         (),
         (),
-        (friend ::std::ostream & operator<<(::std::ostream& os, const Constant& v); ::Ordering ord(const Constant& b) const; inline bool operator==(const Constant& b) const { return ord(b) == ::OrdEqual; } inline bool operator!=(const Constant& b) const { return ord(b) != ::OrdEqual; } inline bool operator<(const Constant& b) const { return ord(b) == ::OrdLess; } inline bool operator<=(const Constant& b) const { return ord(b) != ::OrdGreater; } inline bool operator>(const Constant& b) const { return ord(b) == ::OrdGreater; } inline bool operator>=(const Constant& b) const { return ord(b) != ::OrdLess; } Constant clone() const;)
+        (friend ::std::ostream & operator<<(::std::ostream& os, const MIRConstant& v); ::Ordering ord(const MIRConstant& b) const; inline bool operator==(const MIRConstant& b) const { return ord(b) == ::OrdEqual; } inline bool operator!=(const MIRConstant& b) const { return ord(b) != ::OrdEqual; } inline bool operator<(const MIRConstant& b) const { return ord(b) == ::OrdLess; } inline bool operator<=(const MIRConstant& b) const { return ord(b) != ::OrdGreater; } inline bool operator>(const MIRConstant& b) const { return ord(b) == ::OrdGreater; } inline bool operator>=(const MIRConstant& b) const { return ord(b) != ::OrdLess; } MIRConstant clone() const;)
     );
 
     /// Parameter - A value used when a rvalue just reads (doesn't require a lvalue)
     /// Can be either a lvalue (memory address), or a constant
     TAGGED_UNION_EX(
-        Param,
+        MIRParam,
         (),
         Constant,
-        ((LValue, LValue),
+        ((LValue, MIRLValue),
          // TODO: Add `Borrow` here (makes some MIR manipulation more complex, but simplifies emitted code)
          (Borrow,
           struct {
               ::HIR::BorrowType type;
-              LValue val;
+              MIRLValue val;
           }),
-         (Constant, Constant)),
+         (Constant, MIRConstant)),
         (),
         (),
-        (Param clone() const; friend ::std::ostream & operator<<(::std::ostream& os, const Param& v); bool operator==(const Param& b) const; inline bool operator!=(const Param& b) const { return !(*this == b); })
+        (MIRParam clone() const; friend ::std::ostream & operator<<(::std::ostream& os, const MIRParam& v); bool operator==(const MIRParam& b) const; inline bool operator!=(const MIRParam& b) const { return !(*this == b); })
     );
 
     TAGGED_UNION_EX(
-        RValue,
+        MIRRValue,
         (),
         Tuple,
         (
             // TODO: Split "Use" into "Copy" and "Move" (Where 'move' indicates that the source is unused)
-            (Use, LValue),
+            (Use, MIRLValue),
             (Borrow,
              struct {
                  ::HIR::BorrowType type;
                  bool isRaw;
-                 LValue val;
+                 MIRLValue val;
              }),
-            (Constant, Constant),
+            (Constant, MIRConstant),
             (SizedArray,
              struct {
-                 Param val;
+                 MIRParam val;
                  ::HIR::ArraySize count;
              }),
             // Cast on primitives (thin pointers, integers, floats)
             (Cast,
              struct {
-                 LValue val;
+                 MIRLValue val;
                  ::HIR::TypeRef type;
              }),
             // Binary operation on primitives
             (BinOp,
              struct {
-                 Param valL;
-                 eBinOp op;
-                 Param valR;
+                 MIRParam valL;
+                 MIRBinOp op;
+                 MIRParam valR;
              }),
             // Unary operation on primitives
             (UniOp,
              struct {
-                 LValue val; // NOTE: Not a param, because UniOps can be const propagated
-                 eUniOp op;
+                 MIRLValue val; // NOTE: Not a param, because UniOps can be const propagated
+                 MIRUniOp op;
              }),
             // Extract the metadata from a DST pointer
             // NOTE: If used on an array, this yields the array size (for generics)
-            (DstMeta, struct { LValue val; }),
+            (DstMeta, struct { MIRLValue val; }),
             // Extract the pointer from a DST pointer (as *const ())
-            (DstPtr, struct { LValue val; }),
+            (DstPtr, struct { MIRLValue val; }),
             // Construct a DST pointer from a thin pointer and metadata
             // OR: (if `meta_val` is `Constant::ItemAddr(nullptr)`) A still-to-be-resolved unsizing coercion
             (MakeDst,
              struct {
-                 Param ptrVal;
-                 Param metaVal;
+                 MIRParam ptrVal;
+                 MIRParam metaVal;
              }),
-            (Tuple, struct { ::std::vector<Param> vals; }),
+            (Tuple, struct { ::std::vector<MIRParam> vals; }),
             // Array literal
-            (Array, struct { ::std::vector<Param> vals; }),
+            (Array, struct { ::std::vector<MIRParam> vals; }),
             // Create a new instance of a union
             (UnionVariant,
              struct {
                  ::HIR::GenericPath path;
                  unsigned int index;
-                 Param val;
+                 MIRParam val;
              }),
             // Create a new instance of an enum
             // - Separate from UnionVariant, as the contents is needed when creating the body
@@ -637,114 +636,114 @@ namespace MIR {
              struct {
                  ::HIR::GenericPath path;
                  unsigned int index;
-                 ::std::vector<Param> vals;
+                 ::std::vector<MIRParam> vals;
              }),
             // Create a new instance of a struct
             (Struct,
              struct {
                  ::HIR::GenericPath path;
-                 ::std::vector<Param> vals;
+                 ::std::vector<MIRParam> vals;
              })
         ),
         (),
         (),
-        (RValue clone() const;)
+        (MIRRValue clone() const;)
     );
-    extern ::std::ostream& operator<<(::std::ostream& os, const RValue& x);
-    extern bool operator==(const RValue& a, const RValue& b);
+    extern ::std::ostream& operator<<(::std::ostream& os, const MIRRValue& x);
+    extern bool operator==(const MIRRValue& a, const MIRRValue& b);
 
-    static inline bool operator!=(const RValue& a, const RValue& b) {
+    static inline bool operator!=(const MIRRValue& a, const MIRRValue& b) {
         return !(a == b);
     }
 
-    TAGGED_UNION(CallTarget, Intrinsic, (Value, LValue), (Path, ::HIR::Path), (Intrinsic, struct {
+    TAGGED_UNION(MIRCallTarget, Intrinsic, (Value, MIRLValue), (Path, ::HIR::Path), (Intrinsic, struct {
                      RcString name;
                      ::HIR::PathParams params;
                  }));
-    TAGGED_UNION_EX(SwitchValues, (), Unsigned, ((Unsigned, ::std::vector<uint64_t>), (Signed, ::std::vector<int64_t>), (String, ::std::vector<::std::string>), (ByteString, ::std::vector<::std::vector<uint8_t>>)), (), (), (SwitchValues clone() const; bool operator==(const SwitchValues& x) const; bool operator!=(const SwitchValues& x) const { return !(*this == x); }));
+    TAGGED_UNION_EX(MIRSwitchValues, (), Unsigned, ((Unsigned, ::std::vector<uint64_t>), (Signed, ::std::vector<int64_t>), (String, ::std::vector<::std::string>), (ByteString, ::std::vector<::std::vector<uint8_t>>)), (), (), (MIRSwitchValues clone() const; bool operator==(const MIRSwitchValues& x) const; bool operator!=(const MIRSwitchValues& x) const { return !(*this == x); }));
 
-    TAGGED_UNION(UnwindAction, Continue, (Continue, struct {}), (Cleanup, BasicBlockId), (Terminate, struct {}), (Unreachable, struct {}));
+    TAGGED_UNION(MIRUnwindAction, Continue, (Continue, struct {}), (Cleanup, MIRBasicBlockId), (Terminate, struct {}), (Unreachable, struct {}));
 
-    enum class eDropKind {
+    enum class MIRDropKind {
         SHALLOW,
         DEEP,
     };
 
     TAGGED_UNION(
-        Terminator,
+        MIRTerminator,
         Incomplete,
         (Incomplete, struct {}),      // Block isn't complete (ERROR in output)
         (Return, struct {}),          // Return clealy to caller
         (UnwindResume, struct {}),    // Resume the currently caught exception
         (UnwindTerminate, struct {}), // Abort if unwinding reaches this point
         (Unreachable, struct {}),     // This control-flow edge cannot be reached
-        (Goto, BasicBlockId),         // Jump to another block
+        (Goto, MIRBasicBlockId),         // Jump to another block
         (If,
          struct {
-             LValue cond;
-             BasicBlockId bbTrue;
-             BasicBlockId bbFalse;
+             MIRLValue cond;
+             MIRBasicBlockId bbTrue;
+             MIRBasicBlockId bbFalse;
          }),
         (Switch,
          struct {
-             LValue val;
-             ::std::vector<BasicBlockId> targets;
+             MIRLValue val;
+             ::std::vector<MIRBasicBlockId> targets;
              unsigned int validFlag = ~0u;
-             BasicBlockId invalidTarget = ~0u;
+             MIRBasicBlockId invalidTarget = ~0u;
          }),
         (SwitchValue,
          struct {
-             LValue val;
-             BasicBlockId defTarget;
-             ::std::vector<BasicBlockId> targets;
-             SwitchValues values;
+             MIRLValue val;
+             MIRBasicBlockId defTarget;
+             ::std::vector<MIRBasicBlockId> targets;
+             MIRSwitchValues values;
          }),
         (Drop,
          struct {
-             eDropKind kind;
-             LValue slot;
+             MIRDropKind kind;
+             MIRLValue slot;
              unsigned int flagIdx;
-             BasicBlockId target;
-             UnwindAction unwind;
+             MIRBasicBlockId target;
+             MIRUnwindAction unwind;
          }),
         (Call, struct {
-            BasicBlockId retBlock;
-            UnwindAction unwind;
-            LValue retVal;
-            CallTarget fcn;
-            ::std::vector<Param> args;
+            MIRBasicBlockId retBlock;
+            MIRUnwindAction unwind;
+            MIRLValue retVal;
+            MIRCallTarget fcn;
+            ::std::vector<MIRParam> args;
         })
     );
-    extern ::std::ostream& operator<<(::std::ostream& os, const Terminator& x);
-    extern bool operator==(const Terminator& a, const Terminator& b);
+    extern ::std::ostream& operator<<(::std::ostream& os, const MIRTerminator& x);
+    extern bool operator==(const MIRTerminator& a, const MIRTerminator& b);
 
-    static inline bool operator!=(const Terminator& a, const Terminator& b) {
+    static inline bool operator!=(const MIRTerminator& a, const MIRTerminator& b) {
         return !(a == b);
     }
 
-    TAGGED_UNION(AsmParam, Const, (Const, ::MIR::Constant), (Sym, ::HIR::Path), (Reg, struct {
+    TAGGED_UNION(MIRAsmParam, Const, (Const, MIRConstant), (Sym, ::HIR::Path), (Reg, struct {
                      AsmDirection dir;
                      AsmRegisterSpec spec;
-                     std::unique_ptr<MIR::Param> input;
-                     std::unique_ptr<MIR::LValue> output;
+                     std::unique_ptr<MIRParam> input;
+                     std::unique_ptr<MIRLValue> output;
                  }));
-    extern bool operator==(const AsmParam& a, const AsmParam& b);
+    extern bool operator==(const MIRAsmParam& a, const MIRAsmParam& b);
 
     TAGGED_UNION(
-        Statement,
+        MIRStatement,
         Asm,
         // Value assigment
         (Assign,
          struct {
-             LValue dst;
-             RValue src;
+             MIRLValue dst;
+             MIRRValue src;
          }),
         // Inline assembly (`llvm_asm!`)
         (Asm,
          struct {
              ::std::string tpl;
-             ::std::vector<::std::pair<::std::string, LValue>> outputs;
-             ::std::vector<::std::pair<::std::string, LValue>> inputs;
+             ::std::vector<::std::pair<::std::string, MIRLValue>> outputs;
+             ::std::vector<::std::pair<::std::string, MIRLValue>> inputs;
              ::std::vector<::std::string> clobbers;
              ::std::vector<::std::string> flags;
          }),
@@ -753,7 +752,7 @@ namespace MIR {
          struct {
              AsmOptions options;
              std::vector<AsmLine> lines;
-             ::std::vector<AsmParam> params;
+             ::std::vector<MIRAsmParam> params;
          }),
         // Update the state of a drop flag
         (SetDropFlag,
@@ -767,7 +766,7 @@ namespace MIR {
         (SaveDropFlag,
          struct {
              /// Destination bit-set, an array of unsigned integers (nominally `u8`)
-             LValue slot;
+             MIRLValue slot;
              /// Destination bit v
              unsigned int bitIndex;
              /// Source drop flag index
@@ -778,74 +777,74 @@ namespace MIR {
              /// Destination drop flag index
              unsigned int idx;
              /// Source bit-set, an array of unsigned integers (nominally `u8`)
-             LValue slot;
+             MIRLValue slot;
              /// Source bit index
              unsigned int bitIndex;
          }),
         (ScopeEnd, struct { ::std::vector<unsigned> slots; })
     );
-    extern ::std::ostream& operator<<(::std::ostream& os, const Statement& x);
-    extern bool operator==(const Statement& a, const Statement& b);
+    extern ::std::ostream& operator<<(::std::ostream& os, const MIRStatement& x);
+    extern bool operator==(const MIRStatement& a, const MIRStatement& b);
 
-    static inline bool operator!=(const Statement& a, const Statement& b) {
+    static inline bool operator!=(const MIRStatement& a, const MIRStatement& b) {
         return !(a == b);
     }
 
-    struct BasicBlock {
-        ::std::vector<Statement> statements;
-        Terminator terminator;
+    struct MIRBasicBlock {
+        ::std::vector<MIRStatement> statements;
+        MIRTerminator terminator;
         bool isCleanup = false;
     };
 
-    struct EnumCache; // Defined in trans/enumerate.cpp
+    struct MIREnumCache; // Defined in trans/enumerate.cpp
 
-    class EnumCachePtr {
-        const EnumCache* p;
+    class MIREnumCachePtr {
+        const MIREnumCache* p;
 
     public:
-        EnumCachePtr(const EnumCache* p = nullptr);
+        MIREnumCachePtr(const MIREnumCache* p = nullptr);
 
-        ~EnumCachePtr();
+        ~MIREnumCachePtr();
 
-        EnumCachePtr(EnumCachePtr&& x);
+        MIREnumCachePtr(MIREnumCachePtr&& x);
 
-        EnumCachePtr& operator=(EnumCachePtr&& x);
+        MIREnumCachePtr& operator=(MIREnumCachePtr&& x);
 
         operator bool() {
             return p != nullptr;
         }
 
-        const EnumCache& operator*() const {
+        const MIREnumCache& operator*() const {
             return *p;
         }
 
-        const EnumCache* operator->() const {
+        const MIREnumCache* operator->() const {
             return p;
         }
     };
 
-    class Function {
+    class MIRFunction {
     public:
         ::std::vector<::HIR::TypeRef> locals;
         //::std::vector< RcString>   local_names;
         ::std::vector<bool> dropFlags;
 
-        ::std::vector<BasicBlock> blocks;
+        ::std::vector<MIRBasicBlock> blocks;
 
         // Cache filled/used by enumerate
-        mutable EnumCachePtr transEnumState;
+        mutable MIREnumCachePtr transEnumState;
     };
 
-    class Cloner {
+    class MIRCloner {
         ::std::unique_ptr<MonomorphiserNop> nop;
 
     public:
         const Span& sp;
 
-        Cloner(const Span& sp, HIR::TypeInterner& types);
-        virtual ~Cloner();
+        MIRCloner(const Span& sp, HIR::TypeInterner& types);
+        virtual ~MIRCloner();
 
-        virtual ::MIR::BasicBlockId mapBbIdx(::MIR::BasicBlockId idx) const {
+        virtual MIRBasicBlockId mapBbIdx(MIRBasicBlockId idx) const {
             return idx;
         }
 
@@ -864,18 +863,18 @@ namespace MIR {
             return nullptr;
         }
 
-        virtual ::MIR::Statement cloneStmt(const ::MIR::Statement& src) const;
-        virtual ::MIR::Terminator cloneTerm(const ::MIR::Terminator& src) const;
+        virtual MIRStatement cloneStmt(const MIRStatement& src) const;
+        virtual MIRTerminator cloneTerm(const MIRTerminator& src) const;
 
-        virtual ::MIR::LValue cloneLval(const ::MIR::LValue& src) const;
-        virtual ::MIR::RValue cloneRval(const ::MIR::RValue& src) const;
-        virtual ::MIR::Param cloneParam(const ::MIR::Param& src) const;
-        virtual ::MIR::Constant cloneConstant(const ::MIR::Constant& src) const;
+        virtual MIRLValue cloneLval(const MIRLValue& src) const;
+        virtual MIRRValue cloneRval(const MIRRValue& src) const;
+        virtual MIRParam cloneParam(const MIRParam& src) const;
+        virtual MIRConstant cloneConstant(const MIRConstant& src) const;
 
-        ::std::vector<MIR::AsmParam> cloneAsmParams(const ::std::vector<MIR::AsmParam>& params) const;
-        ::std::vector<::std::pair<::std::string, ::MIR::LValue>> cloneNameLvalVec(const ::std::vector<::std::pair<::std::string, ::MIR::LValue>>& src) const;
-        ::std::vector<::MIR::Param> cloneParamVec(const ::std::vector<::MIR::Param>& src) const;
-        ::std::vector<::MIR::LValue> cloneLvalVec(const ::std::vector<::MIR::LValue>& src) const;
+        ::std::vector<MIRAsmParam> cloneAsmParams(const ::std::vector<MIRAsmParam>& params) const;
+        ::std::vector<::std::pair<::std::string, MIRLValue>> cloneNameLvalVec(const ::std::vector<::std::pair<::std::string, MIRLValue>>& src) const;
+        ::std::vector<MIRParam> cloneParamVec(const ::std::vector<MIRParam>& src) const;
+        ::std::vector<MIRLValue> cloneLvalVec(const ::std::vector<MIRLValue>& src) const;
 
         // -- Monomorphise various types
         ::HIR::TypeRef monomorph(const ::HIR::TypeData* x) const;
@@ -884,4 +883,3 @@ namespace MIR {
         ::HIR::PathParams monomorph(const ::HIR::PathParams& x) const;
     };
 
-} // namespace MIR

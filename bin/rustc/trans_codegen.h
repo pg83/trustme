@@ -14,9 +14,7 @@ namespace HIR {
     class GlobalAssembly;
 }
 
-namespace MIR {
-    class FunctionPointer;
-}
+    class MIRFunctionPointer;
 
 class CodeGenerator {
 public:
@@ -58,7 +56,7 @@ public:
     virtual void emitFunctionProto(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool isExternDef) {
     }
 
-    virtual void emitFunctionCode(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool isExternDef, const ::MIR::FunctionPointer& code) = 0;
+    virtual void emitFunctionCode(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code) = 0;
 
     virtual void emitGlobalAsm(const ::HIR::GlobalAssembly&) = 0;
 };

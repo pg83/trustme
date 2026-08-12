@@ -1695,7 +1695,7 @@ bool ::HIR::Crate::findTypeImpls(const ::HIR::TypeData* type, tCbResolveType tyR
     return false;
 }
 
-const ::MIR::Function* HIR::Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::argsT& args, ::HIR::TypeRef& retTy) const {
+const MIRFunction* HIR::Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::argsT& args, ::HIR::TypeRef& retTy) const {
     if (!ep) {
         // No HIR, so has to just have MIR - from a extern crate most likely
         ASSERT_BUG(Span(), ep.mir, "No HIR (!ep) and no MIR (!ep.m_mir) for " << ip);
@@ -2255,12 +2255,12 @@ namespace HIR {
         }
     }
 
-    const ::MIR::Function* Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const {
+    const MIRFunction* Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const {
         auto ty = fcn.returnType;
         return getOrGenMir(ip, fcn.mCode, fcn.mArgs, ty);
     }
 
-    const ::MIR::Function* Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& expTy) const {
+    const MIRFunction* Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& expTy) const {
         static ::HIR::Function::argsT sArgs;
         return getOrGenMir(ip, ep, sArgs, expTy);
     }

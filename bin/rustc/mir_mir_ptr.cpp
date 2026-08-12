@@ -1,56 +1,54 @@
 #include "mir_mir_ptr.h"
 #include "mir_mir.h"
 
-void ::MIR::FunctionPointer::reset() {
+void MIRFunctionPointer::reset() {
     if (this->ptr) {
         delete this->ptr;
         this->ptr = nullptr;
     }
 }
 
-namespace MIR {
 
-FunctionPointer::FunctionPointer()
+MIRFunctionPointer::MIRFunctionPointer()
     : ptr(nullptr) {
 }
-FunctionPointer::FunctionPointer(::MIR::Function* p)
+MIRFunctionPointer::MIRFunctionPointer(MIRFunction* p)
     : ptr(p) {
 }
-FunctionPointer::FunctionPointer(FunctionPointer&& x)
+MIRFunctionPointer::MIRFunctionPointer(MIRFunctionPointer&& x)
     : ptr(x.ptr) {
     x.ptr = nullptr;
 }
-FunctionPointer::~FunctionPointer() {
+MIRFunctionPointer::~MIRFunctionPointer() {
     reset();
 }
-FunctionPointer& FunctionPointer::operator=(FunctionPointer&& x) {
+MIRFunctionPointer& MIRFunctionPointer::operator=(MIRFunctionPointer&& x) {
     reset();
     ptr = x.ptr;
     x.ptr = nullptr;
     return *this;
 }
-::MIR::Function* FunctionPointer::operator->() {
+MIRFunction* MIRFunctionPointer::operator->() {
     if (!ptr) {
         throw "";
     }
     return ptr;
 }
-const ::MIR::Function* FunctionPointer::operator->() const {
+const MIRFunction* MIRFunctionPointer::operator->() const {
     if (!ptr) {
         throw "";
     }
     return ptr;
 }
-::MIR::Function& FunctionPointer::operator*() {
+MIRFunction& MIRFunctionPointer::operator*() {
     if (!ptr) {
         throw "";
     }
     return *ptr;
 }
-const ::MIR::Function& FunctionPointer::operator*() const {
+const MIRFunction& MIRFunctionPointer::operator*() const {
     if (!ptr) {
         throw "";
     }
     return *ptr;
-}
 }

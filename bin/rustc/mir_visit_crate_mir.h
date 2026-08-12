@@ -3,9 +3,8 @@
 #include "hir_visitor.h"
 #include "hir_typeck_static.h"
 
-namespace MIR {
 
-    class OuterVisitor: public ::HIR::Visitor {
+    class MIROuterVisitor: public ::HIR::Visitor {
     public:
         typedef ::std::function<void(const StaticTraitResolve& resolve, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& expr, const ::HIR::Function::argsT& args, const ::HIR::TypeData* retType)> cbT;
 
@@ -14,7 +13,7 @@ namespace MIR {
         cbT cb;
 
     public:
-        OuterVisitor(const ::HIR::Crate& crate, cbT cb);
+        MIROuterVisitor(const ::HIR::Crate& crate, cbT cb);
 
         void visitExpr(::HIR::ExprPtr& exp) override;
 
@@ -38,4 +37,3 @@ namespace MIR {
         void visitTraitImpl(const ::HIR::SimplePath& traitPath, ::HIR::TraitImpl& impl) override;
     };
 
-} // namespace MIR

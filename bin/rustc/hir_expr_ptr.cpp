@@ -44,28 +44,28 @@ const Span& HIR::ExprPtr::span() const {
     return staticSp;
 }
 
-const ::MIR::Function* HIR::ExprPtr::getMirOpt() const {
+const MIRFunction* HIR::ExprPtr::getMirOpt() const {
     if (!this->mir) {
         return nullptr;
     }
     return &*this->mir;
 }
 
-const ::MIR::Function& HIR::ExprPtr::getMirOrError(const Span& sp) const {
+const MIRFunction& HIR::ExprPtr::getMirOrError(const Span& sp) const {
     if (!this->mir) {
         BUG(sp, "No MIR");
     }
     return *this->mir;
 }
 
-::MIR::Function& HIR::ExprPtr::getMirOrErrorMut(const Span& sp) {
+MIRFunction& HIR::ExprPtr::getMirOrErrorMut(const Span& sp) {
     if (!this->mir) {
         BUG(sp, "No MIR");
     }
     return *this->mir;
 }
 
-const ::MIR::Function* HIR::ExprPtr::getExtMir() const {
+const MIRFunction* HIR::ExprPtr::getExtMir() const {
     if (this->node) {
         return nullptr;
     }
@@ -75,7 +75,7 @@ const ::MIR::Function* HIR::ExprPtr::getExtMir() const {
     return &*this->mir;
 }
 
-::MIR::Function* HIR::ExprPtr::getExtMirMut() {
+MIRFunction* HIR::ExprPtr::getExtMirMut() {
     if (this->node) {
         return nullptr;
     }
@@ -85,7 +85,7 @@ const ::MIR::Function* HIR::ExprPtr::getExtMir() const {
     return &*this->mir;
 }
 
-void HIR::ExprPtr::setMir(::MIR::FunctionPointer mir) {
+void HIR::ExprPtr::setMir(MIRFunctionPointer mir) {
     assert(!this->mir);
     this->mir = ::std::move(mir);
 }

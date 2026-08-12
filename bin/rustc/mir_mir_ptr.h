@@ -1,36 +1,34 @@
 #pragma once
 
-namespace MIR {
 
-    class Function;
+    class MIRFunction;
 
-    class FunctionPointer {
-        ::MIR::Function* ptr;
+    class MIRFunctionPointer {
+        MIRFunction* ptr;
 
     public:
-        FunctionPointer();
+        MIRFunctionPointer();
 
-        FunctionPointer(::MIR::Function* p);
+        MIRFunctionPointer(MIRFunction* p);
 
-        FunctionPointer(FunctionPointer&& x);
+        MIRFunctionPointer(MIRFunctionPointer&& x);
 
-        ~FunctionPointer();
+        ~MIRFunctionPointer();
 
-        FunctionPointer& operator=(FunctionPointer&& x);
+        MIRFunctionPointer& operator=(MIRFunctionPointer&& x);
 
         void reset();
 
-        ::MIR::Function* operator->();
+        MIRFunction* operator->();
 
-        const ::MIR::Function* operator->() const;
+        const MIRFunction* operator->() const;
 
-        ::MIR::Function& operator*();
+        MIRFunction& operator*();
 
-        const ::MIR::Function& operator*() const;
+        const MIRFunction& operator*() const;
 
         operator bool() const {
             return ptr != nullptr;
         }
     };
 
-}

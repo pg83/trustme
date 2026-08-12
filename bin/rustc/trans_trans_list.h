@@ -66,7 +66,7 @@ struct TransParams: public MonomorphiserPP {
 struct CachedFunction {
     ::HIR::TypeRef retTy;
     ::HIR::Function::argsT argTys;
-    ::MIR::FunctionPointer code;
+    MIRFunctionPointer code;
 };
 
 struct TransListFunction {
