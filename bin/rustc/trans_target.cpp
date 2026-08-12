@@ -1913,7 +1913,7 @@ namespace {
     static ::std::unordered_map<HIRTypeRef, const TypeRepr*> sCacheExact;
 
     bool hasAbiIdentity(HIRTypeRef ty) {
-        return !monomorphiseTypeNeeded(ty, /*ignore_lifetimes=*/true) && !ty->is_Infer() && !ty->is_ErasedType() && !ty->is_NodeType();
+        return !monomorphiseTypeNeeded(ty) && !ty->is_Infer() && !ty->is_ErasedType() && !ty->is_NodeType();
     }
 
     void setTypeRepr(const Span& sp, const HIRTypeData* ty, ::std::unique_ptr<TypeRepr> repr) {

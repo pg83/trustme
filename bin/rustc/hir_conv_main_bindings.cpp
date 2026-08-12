@@ -2600,23 +2600,7 @@ public:
     }
 
     HIRPath::Data getUfcsKnown(HIRVisitor::PathContext pc, HIRPath::Data::Data_UfcsUnknown e, HIRGenericPath traitPathReal, const HIRTrait& trait) const {
-        struct MonomorphEraseHrls: public Monomorphiser {
-            explicit MonomorphEraseHrls(HIRTypeInterner& types)
-                : Monomorphiser(types)
-            {
-            }
-
-            HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override {
-                return types.generic(g.name, g.binding);
-            }
-
-            HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override {
-                return g;
-            }
-
-        };
-
-        auto traitPath = MonomorphEraseHrls(crate.types).monomorphGenericpath(Span(), traitPathReal);
+        auto traitPath = traitPathReal.clone();
         if (pc == HIRVisitor::PathContext::TYPE) {
             // If the trait has missing type argumenst, replace them with the defaults
             // Get trait, check if the type has ATCs

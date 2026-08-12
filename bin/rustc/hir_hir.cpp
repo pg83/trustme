@@ -939,7 +939,7 @@ namespace {
 
         for (const auto& traitPathRaw : tr.allParentTraits) {
             // 1. Monomorph
-            auto traitPathMono = monomorphCb.monomorphTraitpath(sp, traitPathRaw, false, false);
+            auto traitPathMono = monomorphCb.monomorphTraitpath(sp, traitPathRaw, false);
             // 2. Add
             rv.push_back(HIRGenericBound::make_TraitBound({type, mv$(traitPathMono)}));
         }
@@ -1348,7 +1348,7 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
             if (!monomorphiseTraitpathNeeded(in)) {
                 return in;
             } else {
-                tmp = ms.monomorphTraitpath(sp, in, true, false);
+                tmp = ms.monomorphTraitpath(sp, in, true);
                 // TODO: EAT?
                 return tmp;
             }

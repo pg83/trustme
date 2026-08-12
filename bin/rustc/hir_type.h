@@ -280,7 +280,7 @@ TAGGED_UNION_EX(
             uint32_t flags = 0;
 
             bool hasTypeInfer() const { return flags & HAS_TYPE_INFER; }
-            bool needsMonomorphisation(bool ignoreLifetimes = false) const {
+            bool needsMonomorphisation() const {
                 return flags & (HAS_TYPE_PARAM | HAS_UNEVALUATED_CONST);
             }
             bool mayHaveAssociatedType() const {

@@ -160,7 +160,6 @@ struct HIRPathParams {
     bool equalsIgnoringRegions(const HIRPathParams& x) const;
 
     /// Indicates that params exist (and thus the target requires monomorphisation)
-    /// - Ignores lifetime params
     bool hasParams() const {
         return !types.empty() || !values.empty();
     }
@@ -247,9 +246,6 @@ public:
     assocListT typeBounds;
     ::std::map<RcString, AtyBound> traitBounds;
     HIRBoundConstness constness = HIRBoundConstness::Never;
-    // Parenthesised Fn-trait syntax uses function lifetime-elision rules.
-    // This is consumed and cleared by ConvertHIR_LifetimeElision.
-
     const HIRTrait* traitPtr;
 
     HIRTraitPath();

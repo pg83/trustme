@@ -2134,7 +2134,7 @@ const EncodedLiteral* MIRCleanupGetConstant(const MIRTypeResolve& state, const H
                 return &it->second;
             }
             case HIRConstant::ValueState::Unknown:
-                MIR_ASSERT(state, monomorphisePathNeeded(path, true), "Unevaluated constant - " << path);
+                MIR_ASSERT(state, monomorphisePathNeeded(path), "Unevaluated constant - " << path);
                 return nullptr;
         }
         throw "";
@@ -2186,22 +2186,6 @@ namespace {
 }
 
 MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mutator, EncodedLiteralSlice lit, HIRTypeRef ty, const MonomorphState& params, HIRPath path) {
-    struct M: Monomorphiser {
-        explicit M(HIRTypeInterner& types)
-            : Monomorphiser(types)
-        {
-        }
-
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override {
-            return types.generic(ty.name, ty.binding);
-        }
-
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override {
-            return HIRConstGeneric(val);
-        }
-
-    } monomorphEraseLifetimes(state.crate.types);
-
     TRACE_FUNCTION_F(ty << " <= " << lit);
     TU_MATCH_HDRA( (*ty), {)
     default:
@@ -2217,8 +2201,8 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
             lvals.reserve(repr->fields.size());
 
             for (const auto& fld : repr->fields) {
-                auto rval = MIRCleanupLiteralToRValue(state, mutator, lit.slice(fld.offset), monomorphEraseLifetimes.monomorphType(state.sp, fld.ty), params, HIRGenericPath());
-                lvals.push_back(mutator.inTemporary(monomorphEraseLifetimes.monomorphType(state.sp, fld.ty), mv$(rval)));
+                auto rval = MIRCleanupLiteralToRValue(state, mutator, lit.slice(fld.offset), fld.ty, params, HIRGenericPath());
+                lvals.push_back(mutator.inTemporary(fld.ty, mv$(rval)));
             }
 
             return MIRRValue::make_Tuple({mv$(lvals)});
@@ -2273,8 +2257,8 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
                 lvals.reserve(repr->fields.size());
 
                 for (const auto& fld : repr->fields) {
-                    auto rval = MIRCleanupLiteralToRValue(state, mutator, lit.slice(fld.offset), monomorphEraseLifetimes.monomorphType(state.sp, fld.ty), params, HIRGenericPath());
-                    lvals.push_back(mutator.inTemporary(monomorphEraseLifetimes.monomorphType(state.sp, fld.ty), mv$(rval)));
+                    auto rval = MIRCleanupLiteralToRValue(state, mutator, lit.slice(fld.offset), fld.ty, params, HIRGenericPath());
+                    lvals.push_back(mutator.inTemporary(fld.ty, mv$(rval)));
                 }
 
                 return MIRRValue::make_Struct({te.path.mData.as_Generic().clone(), mv$(lvals)});
@@ -2297,8 +2281,8 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
                         if (hasTagField && &fld == &repr->fields.back()) {
                             continue;
                         }
-                        auto rval = MIRCleanupLiteralToRValue(state, mutator, lit.slice(baseOfs + fld.offset), monomorphEraseLifetimes.monomorphType(state.sp, fld.ty), params, HIRGenericPath());
-                        vals.push_back(mutator.inTemporary(monomorphEraseLifetimes.monomorphType(state.sp, fld.ty), mv$(rval)));
+                        auto rval = MIRCleanupLiteralToRValue(state, mutator, lit.slice(baseOfs + fld.offset), fld.ty, params, HIRGenericPath());
+                        vals.push_back(mutator.inTemporary(fld.ty, mv$(rval)));
                     }
                 } else {
                     // Leave empty
@@ -2382,7 +2366,7 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
                     MIR_TODO(state, "MIR_Cleanup_LiteralToRValue - " << path << ": " << ty << " = " << lit << " - Decode union into MIR");
                 }
                 auto innerRval = MIRCleanupLiteralToRValue(state, mutator, lit, repr->fields[varIdx].ty, params, mv$(path));
-                auto innerLval = mutator.inTemporary(monomorphEraseLifetimes.monomorphType(state.sp, repr->fields[varIdx].ty), mv$(innerRval));
+                auto innerLval = mutator.inTemporary(repr->fields[varIdx].ty, mv$(innerRval));
                 return MIRRValue::make_UnionVariant({te.path.mData.as_Generic().clone(), varIdx, mv$(innerLval)});
             } else {
                 MIR_BUG(state, "Unexpected type for literal from " << path << " - " << ty << " (lit = " << lit << ")");

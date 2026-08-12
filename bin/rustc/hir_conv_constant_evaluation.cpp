@@ -3542,7 +3542,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
             implParamsDef
         );
         return true;
-    } else if (rv.is_NotFound() && monomorphisePathNeeded(path, true)) {
+    } else if (rv.is_NotFound() && monomorphisePathNeeded(path)) {
         throw Defer();
     } else if (rv.is_Struct()) {
         // Set destination, same way as `RValue::Struct` does

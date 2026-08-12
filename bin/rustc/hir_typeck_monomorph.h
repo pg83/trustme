@@ -4,17 +4,17 @@
 #include "hir_item_path.h"
 #include "hir_generic_params.h"
 
-extern bool monomorphisePathparamsNeeded(const HIRPathParams& tpl, bool ignoreLifetimes = false);
+extern bool monomorphisePathparamsNeeded(const HIRPathParams& tpl);
 
-static inline bool monomorphiseGenericpathNeeded(const HIRGenericPath& tpl, bool ignoreLifetimes = false) {
-    return monomorphisePathparamsNeeded(tpl.mParams, ignoreLifetimes);
+static inline bool monomorphiseGenericpathNeeded(const HIRGenericPath& tpl) {
+    return monomorphisePathparamsNeeded(tpl.mParams);
 }
 
-extern bool monomorphisePathNeeded(const HIRPath& tpl, bool ignoreLifetimes = false);
+extern bool monomorphisePathNeeded(const HIRPath& tpl);
 struct WireBoard;
 
-extern bool monomorphiseTraitpathNeeded(const HIRTraitPath& tpl, bool ignoreLifetimes = false);
-extern bool monomorphiseTypeNeeded(const HIRTypeData* tpl, bool ignoreLifetimes = false);
+extern bool monomorphiseTraitpathNeeded(const HIRTraitPath& tpl);
+extern bool monomorphiseTypeNeeded(const HIRTypeData* tpl);
 
 class Monomorphiser {
 protected:
@@ -40,10 +40,10 @@ public:
 
     virtual HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const;
     HIRPath monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer = true) const;
-    HIRTraitPath monomorphTraitpath(const Span& sp, const HIRTraitPath& tpl, bool allowInfer, bool ignoreHrls = false) const;
+    HIRTraitPath monomorphTraitpath(const Span& sp, const HIRTraitPath& tpl, bool allowInfer) const;
     HIRTraitPath::AtyEqual monomorphTpAtyEqual(const Span& sp, const HIRTraitPath::AtyEqual& tpl, bool allowInfer) const;
     HIRPathParams monomorphPathParams(const Span& sp, const HIRPathParams& tpl, bool allowInfer) const;
-    virtual HIRGenericPath monomorphGenericpath(const Span& sp, const HIRGenericPath& tpl, bool allowInfer = true, bool ignoreHrls = false) const;
+    virtual HIRGenericPath monomorphGenericpath(const Span& sp, const HIRGenericPath& tpl, bool allowInfer = true) const;
 
     HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const;
     HIRArraySize monomorphArraysize(const Span& sp, const HIRArraySize& tpl) const;
@@ -84,11 +84,11 @@ static inline const HIRPath& monomorphisePathWithOpt(const Span& sp, HIRPath& tm
 }
 
 static inline const HIRGenericPath& monomorphiseGenericpathWithOpt(const Span& sp, HIRGenericPath& tmp, const HIRGenericPath& tpl, const Monomorphiser& mono, bool allowInfer = true) {
-    return (monomorphiseGenericpathNeeded(tpl) ? tmp = mono.monomorphGenericpath(sp, tpl, allowInfer, false) : tpl);
+    return (monomorphiseGenericpathNeeded(tpl) ? tmp = mono.monomorphGenericpath(sp, tpl, allowInfer) : tpl);
 }
 
 static inline const HIRTraitPath& monomorphiseTraitpathWithOpt(const Span& sp, HIRTraitPath& tmp, const HIRTraitPath& tpl, const Monomorphiser& mono, bool allowInfer = true) {
-    return (monomorphiseTraitpathNeeded(tpl) ? tmp = mono.monomorphTraitpath(sp, tpl, allowInfer, false) : tpl);
+    return (monomorphiseTraitpathNeeded(tpl) ? tmp = mono.monomorphTraitpath(sp, tpl, allowInfer) : tpl);
 }
 
 static inline const HIRPathParams& monomorphisePathparamsWithOpt(const Span& sp, HIRPathParams& tmp, const HIRPathParams& tpl, const Monomorphiser& mono, bool allowInfer = true) {

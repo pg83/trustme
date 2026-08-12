@@ -348,20 +348,11 @@ bool rewritePathTysWith(HIRTypeInterner& types, HIRPath& path, tCbRewriteTy call
 }
 
 struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
-    bool ignoreLifetimes;
-
-    TyVisitorMonomorphNeeded(bool ignoreLifetimes)
-        : ignoreLifetimes(ignoreLifetimes)
-    {
-    }
-
     const HIRTypeData& getTyData(const HIRTypeData* ty) const override {
         return *ty;
     }
 
     bool visitPathParams(const HIRPathParams& pp) override {
-        if (!this->ignoreLifetimes) {
-        }
         for (const auto& v : pp.values) {
             if (v.is_Generic()) {
                 return true;
@@ -381,23 +372,23 @@ struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
     }
 };
 
-bool monomorphisePathparamsNeeded(const HIRPathParams& tpl, bool ignoreLifetimes /*=false*/) {
-    TyVisitorMonomorphNeeded v{ignoreLifetimes};
+bool monomorphisePathparamsNeeded(const HIRPathParams& tpl) {
+    TyVisitorMonomorphNeeded v{};
     return v.visitPathParams(tpl);
 }
 
-bool monomorphiseTraitpathNeeded(const HIRTraitPath& tpl, bool ignoreLifetimes /*=false*/) {
-    TyVisitorMonomorphNeeded v{ignoreLifetimes};
+bool monomorphiseTraitpathNeeded(const HIRTraitPath& tpl) {
+    TyVisitorMonomorphNeeded v{};
     return v.visitTraitPath(tpl);
 }
 
-bool monomorphisePathNeeded(const HIRPath& tpl, bool ignoreLifetimes /*=false*/) {
-    TyVisitorMonomorphNeeded v{ignoreLifetimes};
+bool monomorphisePathNeeded(const HIRPath& tpl) {
+    TyVisitorMonomorphNeeded v{};
     return v.visitPath(tpl);
 }
 
-bool monomorphiseTypeNeeded(const HIRTypeData* tpl, bool ignoreLifetimes /*=false*/) {
-    return tpl->needsMonomorphisation(ignoreLifetimes);
+bool monomorphiseTypeNeeded(const HIRTypeData* tpl) {
+    return tpl->needsMonomorphisation();
 }
 
 HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, bool allowInfer /*=true*/) const {
@@ -422,9 +413,9 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
         TU_ARMA(TraitObject, e) {
             HIRTypeData::Data_TraitObject to;
             {
-                to.mTrait = this->monomorphTraitpath(sp, e.mTrait, allowInfer, false);
+                to.mTrait = this->monomorphTraitpath(sp, e.mTrait, allowInfer);
                 for (const auto& trait : e.markers) {
-                    to.markers.push_back(this->monomorphGenericpath(sp, trait, allowInfer, false));
+                    to.markers.push_back(this->monomorphGenericpath(sp, trait, allowInfer));
                 }
             }
             return types.intern(HIRTypeData::make_TraitObject(mv$(to)));
@@ -433,7 +424,7 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
             ::std::vector<HIRTraitPath> traits;
             traits.reserve(e.traits.size());
             for (const auto& trait : e.traits) {
-                traits.push_back(this->monomorphTraitpath(sp, trait, allowInfer, false));
+                traits.push_back(this->monomorphTraitpath(sp, trait, allowInfer));
             }
 
             TypeDataErasedTypeInner inner;
@@ -508,10 +499,10 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
 HIRPath Monomorphiser::monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer /*=true*/) const {
     TU_MATCH_HDRA( (tpl.mData), {)
     TU_ARMA(Generic, e2) {
-            return HIRPath(this->monomorphGenericpath(sp, e2, allowInfer, false));
+            return HIRPath(this->monomorphGenericpath(sp, e2, allowInfer));
         }
         TU_ARMA(UfcsKnown, e2) {
-            auto rv = HIRPath(HIRPath::Data::make_UfcsKnown({this->monomorphType(sp, e2.type, allowInfer), this->monomorphGenericpath(sp, e2.trait, allowInfer, false), e2.item, this->monomorphPathParams(sp, e2.params, allowInfer)}));
+            auto rv = HIRPath(HIRPath::Data::make_UfcsKnown({this->monomorphType(sp, e2.type, allowInfer), this->monomorphGenericpath(sp, e2.trait, allowInfer), e2.item, this->monomorphPathParams(sp, e2.params, allowInfer)}));
             return rv;
         }
         TU_ARMA(UfcsUnknown, e2) {
@@ -524,16 +515,16 @@ HIRPath Monomorphiser::monomorphPath(const Span& sp, const HIRPath& tpl, bool al
     throw "";
 }
 
-HIRTraitPath Monomorphiser::monomorphTraitpath(const Span& sp, const HIRTraitPath& tpl, bool allowInfer, bool ignoreHrls) const {
-    HIRTraitPath rv{this->monomorphGenericpath(sp, tpl.mPath, allowInfer, true), {}, {}, tpl.traitPtr, tpl.constness};
+HIRTraitPath Monomorphiser::monomorphTraitpath(const Span& sp, const HIRTraitPath& tpl, bool allowInfer) const {
+    HIRTraitPath rv{this->monomorphGenericpath(sp, tpl.mPath, allowInfer), {}, {}, tpl.traitPtr, tpl.constness};
 
     for (const auto& assoc : tpl.typeBounds) {
         rv.typeBounds.insert(::std::make_pair(assoc.first, this->monomorphTpAtyEqual(sp, assoc.second, allowInfer)));
     }
     for (const auto& assoc : tpl.traitBounds) {
-        auto v = HIRTraitPath::AtyBound{this->monomorphGenericpath(sp, assoc.second.sourceTrait, allowInfer, false), {}};
+        auto v = HIRTraitPath::AtyBound{this->monomorphGenericpath(sp, assoc.second.sourceTrait, allowInfer), {}};
         for (const auto& trait : assoc.second.traits) {
-            v.traits.push_back(monomorphTraitpath(sp, trait, allowInfer, false));
+            v.traits.push_back(monomorphTraitpath(sp, trait, allowInfer));
         }
         rv.traitBounds.insert(::std::make_pair(assoc.first, std::move(v)));
     }
@@ -542,7 +533,7 @@ HIRTraitPath Monomorphiser::monomorphTraitpath(const Span& sp, const HIRTraitPat
 }
 
 HIRTraitPath::AtyEqual Monomorphiser::monomorphTpAtyEqual(const Span& sp, const HIRTraitPath::AtyEqual& tpl, bool allowInfer) const {
-    return HIRTraitPath::AtyEqual{this->monomorphGenericpath(sp, tpl.sourceTrait, allowInfer, false), {}, this->monomorphType(sp, tpl.type, allowInfer)};
+    return HIRTraitPath::AtyEqual{this->monomorphGenericpath(sp, tpl.sourceTrait, allowInfer), {}, this->monomorphType(sp, tpl.type, allowInfer)};
 }
 
 HIRConstGeneric Monomorphiser::monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const {
@@ -573,7 +564,7 @@ HIRPathParams Monomorphiser::monomorphPathParams(const Span& sp, const HIRPathPa
     return rv;
 }
 
-HIRGenericPath Monomorphiser::monomorphGenericpath(const Span& sp, const HIRGenericPath& tpl, bool allowInfer, bool ignoreHrls) const {
+HIRGenericPath Monomorphiser::monomorphGenericpath(const Span& sp, const HIRGenericPath& tpl, bool allowInfer) const {
     return HIRGenericPath(tpl.mPath, this->monomorphPathParams(sp, tpl.mParams, allowInfer));
 }
 

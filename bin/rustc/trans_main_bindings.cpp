@@ -1508,7 +1508,7 @@ namespace {
             }
 
             for (const auto& path : mirFcn.transEnumState->paths) {
-                if (!monomorphisePathNeeded(*path, true)) {
+                if (!monomorphisePathNeeded(*path)) {
                     DEBUG("Path " << *path);
                     MonomorphState unusedMs(state.crate.types);
                     auto v = state.resolve.getValue(sp, *path, unusedMs, true);
@@ -1870,14 +1870,14 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
 
     // Strip out any functions/types/statics that are still generic?
     for (auto it = rv.functions.begin(); it != rv.functions.end();) {
-        if (monomorphisePathNeeded(it->first, /*ignore_lifetimes*/ true)) {
+        if (monomorphisePathNeeded(it->first)) {
             rv.functions.erase(it++);
         } else {
             ++it;
         }
     }
     for (auto it = rv.statics.begin(); it != rv.statics.end();) {
-        if (monomorphisePathNeeded(it->first, /*ignore_lifetimes*/ true)) {
+        if (monomorphisePathNeeded(it->first)) {
             rv.statics.erase(it++);
         } else {
             ++it;
@@ -2756,8 +2756,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
     Span sp;
     bindTranslationNominals(state.crate, pathMono);
     TRACE_FUNCTION_F(pathMono);
-    // Don't want duplicates of lifetime-generic items
-    ASSERT_BUG(sp, !monomorphisePathNeeded(pathMono, /*ignore_lifetimes=*/false), "Path " << pathMono << " is generic");
+    ASSERT_BUG(sp, !monomorphisePathNeeded(pathMono), "Path " << pathMono << " is generic");
     // TODO: If already in the list, return early
     if (pathAlreadyEnumerated(state, pathMono)) {
         DEBUG("> Already enumerated");

@@ -66,7 +66,6 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
         return nextSolver->findImpl(sp, mImplGenerics, mItemGenerics, traitPath, traitParams, type, ::std::move(foundCb));
     }
 
-    static HIRGenericParams nullHrls;
     static HIRPathParams nullParams;
     static HIRTraitPath::assocListT nullAssoc;
 
@@ -871,7 +870,6 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
     struct BaseImplPlaceholderIdx {
         unsigned ty = 0;
         unsigned val = 0;
-        unsigned lft = 0;
     } baseImplPlaceholderIdx;
 
     if (desTraitParams) {
@@ -3234,7 +3232,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 });
                 if (!bestImpl.isValid()) {
                     // If the type and impl are fully known, then look for trait provided values/bodies
-                    if (!monomorphiseTypeNeeded(pe.type, true) && !monomorphisePathparamsNeeded(pe.trait.mParams, true)) {
+                    if (!monomorphiseTypeNeeded(pe.type) && !monomorphisePathparamsNeeded(pe.trait.mParams)) {
                         // Look for provided bodies
                     TU_MATCH_HDRA( (v), {)
                     TU_ARMA(Constant, ve) {
@@ -3266,7 +3264,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 }
                 if (bestIsSpec) {
                     // If there's generics present in the path, return NotYetKnown
-                    if (monomorphiseTypeNeeded(pe.type, true) || monomorphisePathparamsNeeded(pe.trait.mParams, true)) {
+                    if (monomorphiseTypeNeeded(pe.type) || monomorphisePathparamsNeeded(pe.trait.mParams)) {
                         DEBUG("Specialisable and still generic, return NotYetKnown");
                         return ValuePtr::make_NotYetKnown({});
                     }
