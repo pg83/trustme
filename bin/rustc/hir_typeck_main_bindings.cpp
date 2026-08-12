@@ -1,4 +1,5 @@
 #include "hir_typeck_main_bindings.h"
+#include "wire_board.h"
 #include "hir_typeck_main_bindings.h"
 
 #include "hir_hir.h"
@@ -820,7 +821,7 @@ namespace {
 
             assert( fcnPtr );
             const auto& fcn = *fcnPtr;
-            monomorphCb.setConstevalState(mResolve.crate, HIRItemPath(path));
+            monomorphCb.setConstevalState(mResolve.wb, HIRItemPath(path));
 
             // --- Monomorphise the argument/return types (into current context)
             cache.argTypes.clear();
@@ -1394,9 +1395,9 @@ namespace {
         StaticTraitResolve mResolve;
 
     public:
-        OuterVisitor(const HIRCrate& crate)
-            : HIRVisitor(nullptr, crate.types)
-            , mResolve(crate)
+        OuterVisitor(const WireBoard& wb)
+            : HIRVisitor(nullptr, wb.crate->types)
+            , mResolve(wb)
         {
         }
 
@@ -1513,8 +1514,8 @@ void TypecheckExpressionsValidateOne(const StaticTraitResolve& resolve, const ::
     ev.visitRoot(const_cast<HIRExprPtr&>(code));
 }
 
-void TypecheckExpressionsValidate(HIRCrate& crate) {
-    OuterVisitor ov(crate);
+void TypecheckExpressionsValidate(const WireBoard& wb, HIRCrate& crate) {
+    OuterVisitor ov(wb);
     ov.visitCrate(crate);
 }
 
@@ -1578,10 +1579,10 @@ namespace {
         tTraitImports traits;
 
     public:
-        Visitor(HIRCrate& crate)
+        Visitor(const WireBoard& wb, HIRCrate& crate)
             : HIRVisitor(nullptr, crate.types)
             , crate(crate)
-            , mResolve(crate)
+            , mResolve(wb)
         {
         }
 
@@ -2529,7 +2530,7 @@ namespace {
     };
 }
 
-void TypecheckModuleLevel(HIRCrate& crate) {
-    Visitor v{crate};
+void TypecheckModuleLevel(const WireBoard& wb, HIRCrate& crate) {
+    Visitor v{wb, crate};
     v.visitCrate(crate);
 }

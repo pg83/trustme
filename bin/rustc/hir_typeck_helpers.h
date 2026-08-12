@@ -183,7 +183,7 @@ private:
     ::std::function<void(const Span&, const HIRTypeData*, const HIRTypeData*)> inherentTypeConstraint;
 
 public:
-    TraitResolution(const HMTypeInferrence& ivars, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait);
+    TraitResolution(const HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait);
     ~TraitResolution();
 
     void setGenericContext(const HIRGenericParams* implParams, const HIRGenericParams* itemParams);

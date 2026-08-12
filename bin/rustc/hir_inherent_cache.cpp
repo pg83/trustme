@@ -3,7 +3,54 @@
 #include "hir_hir.h"
 #include "hir_type.h"
 
-void HIRInherentCache::Lowest::insert(const Span& sp, const HIRTypeImpl& impl) {
+#include <std/mem/obj_pool.h>
+
+#include <map>
+#include <memory>
+#include <vector>
+
+namespace {
+    /// Cached lookup logic for inherent (non-trait) methods on types
+    class InherentCacheImpl final: public HIRInherentCache {
+    public:
+        typedef ::std::function<void(const HIRTypeData* selfTy, const HIRTypeImpl& impl)> innerCallbackT;
+
+        struct Lowest {
+            // Same as HIR::Crate::ImplGroup
+            typedef ::std::vector<const HIRTypeImpl*> listT;
+            ::std::map<HIRSimplePath, listT> named;
+            listT nonNamed; // TODO: use a map of HIR::TypeRef::Data::Tag
+            listT generic;
+
+            void insert(const Span& sp, const HIRTypeImpl& impl);
+            void iterate(const HIRTypeData* ty, innerCallbackT& cb) const;
+        };
+
+        /// A layer of the cache
+        struct Inner {
+            /// Cache content used for just `Self`
+            Lowest byvalue;
+            // Sub-caches for different wrappers around `Self` (can recurse)
+            std::unique_ptr<Inner> ref;
+            std::unique_ptr<Inner> refMut;
+            std::unique_ptr<Inner> refMove;
+            std::unique_ptr<Inner> ptr;
+            std::unique_ptr<Inner> ptrMut;
+            std::unique_ptr<Inner> ptrMove;
+            std::map<HIRSimplePath, Inner> mPath;
+
+            void insert(const Span& sp, const HIRTypeData* receiver, const HIRTypeImpl& impl);
+            void find(const Span& sp, const HIRTypeData* curTy, tCbResolveType tyRes, innerCallbackT& cb) const;
+        };
+
+        std::map<RcString, Inner> items;
+
+        void insertAll(const Span& sp, const HIRTypeImpl& impl, const HIRSimplePath& langBox) override;
+        void find(const Span& sp, const RcString& name, const HIRTypeData* ty, tCbResolveType tyRes, callbackT cb) const override;
+    };
+}
+
+void InherentCacheImpl::Lowest::insert(const Span& sp, const HIRTypeImpl& impl) {
     const auto& type = impl.mType;
     if (const auto* path = type->getSortPath()) {
         this->named[*path].push_back(&impl);
@@ -14,7 +61,7 @@ void HIRInherentCache::Lowest::insert(const Span& sp, const HIRTypeImpl& impl) {
     }
 }
 
-void HIRInherentCache::Lowest::iterate(const HIRTypeData* type, HIRInherentCache::innerCallbackT& cb) const {
+void InherentCacheImpl::Lowest::iterate(const HIRTypeData* type, InherentCacheImpl::innerCallbackT& cb) const {
     auto visit = [&](const listT& l) {
         for (const HIRTypeImpl* implPtr : l) {
             cb(type, *implPtr);
@@ -35,7 +82,7 @@ void HIRInherentCache::Lowest::iterate(const HIRTypeData* type, HIRInherentCache
     }
 }
 
-void HIRInherentCache::Inner::insert(const Span& sp, const HIRTypeData* curTy, const HIRTypeImpl& impl) {
+void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, const HIRTypeImpl& impl) {
     struct H {
         static void insertInner(const Span& sp, const HIRTypeData* innerTy, const HIRTypeImpl& impl, std::unique_ptr<Inner>& slot) {
             if (!slot) {
@@ -91,7 +138,7 @@ void HIRInherentCache::Inner::insert(const Span& sp, const HIRTypeData* curTy, c
     }
 }
 
-void HIRInherentCache::Inner::find(const Span& sp, const HIRTypeData* curTyAct, tCbResolveType tyRes, HIRInherentCache::innerCallbackT& cb) const {
+void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct, tCbResolveType tyRes, InherentCacheImpl::innerCallbackT& cb) const {
     const auto& curTy = tyRes.getType(sp, curTyAct);
     TRACE_FUNCTION_F("[Inner] " << curTy);
     byvalue.iterate(curTy, cb);
@@ -154,7 +201,7 @@ void HIRInherentCache::Inner::find(const Span& sp, const HIRTypeData* curTyAct, 
     }
 }
 
-void HIRInherentCache::insertAll(const Span& sp, const HIRTypeImpl& impl, const HIRSimplePath& langBox) {
+void InherentCacheImpl::insertAll(const Span& sp, const HIRTypeImpl& impl, const HIRSimplePath& langBox) {
     for (const auto& m : impl.methods) {
         const auto& name = m.first;
         const auto& fcn = m.second.data;
@@ -200,7 +247,7 @@ void HIRInherentCache::insertAll(const Span& sp, const HIRTypeImpl& impl, const 
     }
 }
 
-void HIRInherentCache::find(const Span& sp, const RcString& name, const HIRTypeData* ty, tCbResolveType tyRes, callbackT cb) const {
+void InherentCacheImpl::find(const Span& sp, const RcString& name, const HIRTypeData* ty, tCbResolveType tyRes, callbackT cb) const {
     TRACE_FUNCTION_F(name << ", " << ty);
     // Callback that ensures that a potential impl fully matches the required receiver type
     innerCallbackT innerCb = [&](const HIRTypeData* roughSelfTy, const HIRTypeImpl& impl) {
@@ -234,4 +281,8 @@ void HIRInherentCache::find(const Span& sp, const RcString& name, const HIRTypeD
     if (it != items.end()) {
         it->second.find(sp, ty, tyRes, innerCb);
     }
+}
+
+HIRInherentCache* HIRInherentCache::create(stl::ObjPool& pool) {
+    return pool.make<InherentCacheImpl>();
 }

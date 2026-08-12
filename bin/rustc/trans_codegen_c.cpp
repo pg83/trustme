@@ -1,4 +1,5 @@
 #include "trans_codegen_c.h"
+#include "wire_board.h"
 
 #include "hir_hir.h"
 #include "mir_mir.h"
@@ -188,9 +189,9 @@ namespace {
         ::std::set<const TypeRepr*> embeddedTags;
 
     public:
-        CodeGeneratorC(const HIRCrate& crate, const ::std::string& outfile)
+        CodeGeneratorC(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile)
             : crate(crate)
-            , mResolve(crate)
+            , mResolve(wb)
             , outfilePath(outfile)
             , outfilePathC(outfile + ".cpp")
             , of(outfilePathC)
@@ -8028,6 +8029,6 @@ namespace {
     Span CodeGeneratorC::sp;
 }
 
-::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorC(const HIRCrate& crate, const ::std::string& outfile) {
-    return ::std::unique_ptr<CodeGenerator>(new CodeGeneratorC(crate, outfile));
+::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorC(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile) {
+    return ::std::unique_ptr<CodeGenerator>(new CodeGeneratorC(wb, crate, outfile));
 }

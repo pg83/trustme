@@ -1,4 +1,5 @@
 #include "mir_visit_crate_mir.h"
+#include "wire_board.h"
 
 #include "hir_expr.h"
 
@@ -103,9 +104,9 @@ void MIROuterVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImp
     HIRVisitor::visitTraitImpl(traitPath, impl);
 }
 
-MIROuterVisitor::MIROuterVisitor(const HIRCrate& crate, cbT cb)
+MIROuterVisitor::MIROuterVisitor(const WireBoard& wb, const HIRCrate& crate, cbT cb)
     : HIRVisitor(nullptr, crate.types)
-    , mResolve(crate)
+    , mResolve(wb)
     , cb(cb)
 {
 }

@@ -1,4 +1,5 @@
 #include "trans_main_bindings.h"
+#include "wire_board.h"
 #include "trans_main_bindings.h"
 
 #include "hir_hir.h"
@@ -29,9 +30,9 @@ namespace {
 
         HIRSimplePath langClone;
 
-        State(HIRCrate& crate, const TransList& transList)
+        State(const WireBoard& wb, HIRCrate& crate, const TransList& transList)
             : crate(crate)
-            , resolve(crate)
+            , resolve(wb)
             , transList(transList)
         {
             langClone = crate.getLangItemPathOpt("clone");
@@ -423,8 +424,8 @@ namespace {
     }
 }
 
-void TransAutoImpls(HIRCrate& crate, TransList& transList) {
-    State state{crate, transList};
+void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) {
+    State state{wb, crate, transList};
 
     {
         // Generate for all
@@ -1317,9 +1318,9 @@ namespace {
         // Map of locally-defined exported `link_name` functions
         ::std::unordered_map<std::string, std::pair<HIRSimplePath, const HIRFunction*>> linkFunctions;
 
-        EnumState(const HIRCrate& crate)
-            : crate(crate)
-            , resolve(crate)
+        EnumState(const WireBoard& wb)
+            : crate(*wb.crate)
+            , resolve(wb)
             , rv()
             , origList(nullptr)
         {
@@ -1451,10 +1452,10 @@ MIREnumCachePtr::~MIREnumCachePtr() {
 }
 
 /// Enumerate trans items starting from `::main` (binary crate)
-TransList TransEnumerateMain(const HIRCrate& crate) {
+TransList TransEnumerateMain(const WireBoard& wb, const HIRCrate& crate) {
     static Span sp;
 
-    EnumState state{crate};
+    EnumState state{wb};
 
     if (!crate.noMain) {
         auto cStartPath = crate.getLangItemPathOpt("mrustc-start");
@@ -1774,14 +1775,14 @@ namespace {
 }
 
 /// Enumerate trans items for all public non-generic items (library crate)
-TransList TransEnumeratePublic(HIRCrate& crate) {
+TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
     static Span sp;
-    EnumState state{crate};
+    EnumState state{wb};
 
     TransEnumeratePublicMod(state, crate.mRootModule, HIRSimplePath(crate.crateName, {}), true);
 
     // Impl blocks
-    StaticTraitResolve resolve{crate};
+    StaticTraitResolve resolve{wb};
     for (auto& implGroup : crate.traitImpls) {
         const auto& traitPath = implGroup.first;
         for (auto& implList : implGroup.second.named) {
@@ -1917,7 +1918,7 @@ namespace {
     }
 }
 
-void TransEnumerateCleanup(const HIRCrate& crate, TransList& list) {
+void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList& list) {
     // Clear the function enum cache and re-generate
     // - This is called after optimisation, so the cache may point to functions that have been optimised out
     for (const auto& fcnE : list.functions) {
@@ -1937,7 +1938,7 @@ void TransEnumerateCleanup(const HIRCrate& crate, TransList& list) {
     }
 
     // Completely re-run enumeration, but this time include the TransList so MIR recursion uses the optimised versions
-    EnumState state{crate};
+    EnumState state{wb};
     state.origList = &list;
     for (const auto& p : list.roots) {
         HIRPath path = p.clone();
@@ -2093,9 +2094,9 @@ namespace {
 
         ::std::set<HIRTypeRef> activeSet;
 
-        TypeVisitor(const HIRCrate& crate, TransList& out, const TransList* prevList)
-            : crate(crate)
-            , mResolve(crate)
+        TypeVisitor(const WireBoard& wb, TransList& out, const TransList* prevList)
+            : crate(*wb.crate)
+            , mResolve(wb)
             , out(out)
             , prevList(prevList)
         {
@@ -2474,7 +2475,7 @@ namespace {
 void TransEnumerateTypes(EnumState& state) {
     TRACE_FUNCTION;
     static Span sp;
-    TypeVisitor tv{state.crate, state.rv, state.origList};
+    TypeVisitor tv{state.resolve.wb, state.rv, state.origList};
 
     unsigned int typesCount = 0;
     bool constructorsAdded;
@@ -2613,7 +2614,7 @@ namespace {
         return state.rv.functions.count(path) || state.rv.statics.count(path) || state.rv.constants.count(path) || state.rv.vtables.count(path);
     }
 
-    void evaluateTranslationParams(const Span& sp, const HIRCrate& crate, const HIRGenericParams* defs, HIRPathParams& params) {
+    void evaluateTranslationParams(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* defs, HIRPathParams& params) {
         if (params.values.empty()) {
             return;
         }
@@ -2625,14 +2626,14 @@ namespace {
             if (value.is_Unevaluated()) {
                 const auto& type = defs->values[i].mType;
                 ASSERT_BUG(sp, !monomorphiseTypeNeeded(type), "Generic const parameter type " << type << " in " << defs->fmtArgs());
-                ConvertHIRConstantEvaluateConstGeneric(sp, crate, type, value);
+                ConvertHIRConstantEvaluateConstGeneric(sp, wb, crate, type, value);
             }
             ASSERT_BUG(sp, value.is_Evaluated(), "Const parameter was not concrete at translation: " << value);
         }
     }
 
-    void evaluateTranslationImplAndTraitParams(const Span& sp, const HIRCrate& crate, HIRPath& path, TransParams& pp) {
-        evaluateTranslationParams(sp, crate, pp.gdefImpl, pp.ppImpl);
+    void evaluateTranslationImplAndTraitParams(const Span& sp, const WireBoard& wb, const HIRCrate& crate, HIRPath& path, TransParams& pp) {
+        evaluateTranslationParams(sp, wb, crate, pp.gdefImpl, pp.ppImpl);
 
         TU_MATCH_HDRA((path.mData), {)
         TU_ARMA(Generic, _pe) {
@@ -2643,11 +2644,11 @@ namespace {
                 // handles this representation directly.
                 if (pe.trait.mPath != HIRSimplePath()) {
                     const auto& trait = crate.getTraitByPath(sp, pe.trait.mPath);
-                    evaluateTranslationParams(sp, crate, &trait.mParams, pe.trait.mParams);
+                    evaluateTranslationParams(sp, wb, crate, &trait.mParams, pe.trait.mParams);
                 }
             }
             TU_ARMA(UfcsInherent, pe) {
-                evaluateTranslationParams(sp, crate, pp.gdefImpl, pe.implParams);
+                evaluateTranslationParams(sp, wb, crate, pp.gdefImpl, pe.implParams);
             }
             TU_ARMA(UfcsUnknown, _pe) {
                 BUG(sp, "UfcsUnknown at translation: " << path);
@@ -2655,18 +2656,18 @@ namespace {
         }
     }
 
-    void evaluateTranslationItemParams(const Span& sp, const HIRCrate& crate, const HIRGenericParams& defs, HIRPath& path, TransParams& pp) {
-        evaluateTranslationParams(sp, crate, &defs, pp.ppMethod);
+    void evaluateTranslationItemParams(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams& defs, HIRPath& path, TransParams& pp) {
+        evaluateTranslationParams(sp, wb, crate, &defs, pp.ppMethod);
 
         TU_MATCH_HDRA((path.mData), {)
         TU_ARMA(Generic, pe) {
-                evaluateTranslationParams(sp, crate, &defs, pe.mParams);
+                evaluateTranslationParams(sp, wb, crate, &defs, pe.mParams);
             }
             TU_ARMA(UfcsKnown, pe) {
-                evaluateTranslationParams(sp, crate, &defs, pe.params);
+                evaluateTranslationParams(sp, wb, crate, &defs, pe.params);
             }
             TU_ARMA(UfcsInherent, pe) {
-                evaluateTranslationParams(sp, crate, &defs, pe.params);
+                evaluateTranslationParams(sp, wb, crate, &defs, pe.params);
             }
             TU_ARMA(UfcsUnknown, _pe) {
                 BUG(sp, "UfcsUnknown at translation: " << path);
@@ -2674,9 +2675,9 @@ namespace {
         }
     }
 
-    EntPtr getEntFullpath(const Span& sp, const HIRCrate& crate, const HIRPath& path, TransParams& params) {
+    EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRPath& path, TransParams& params) {
         TRACE_FUNCTION_F(path);
-        StaticTraitResolve resolve{crate};
+        StaticTraitResolve resolve{wb};
 
         if (path.mData.is_UfcsInherent() && path.mData.as_UfcsInherent().item == "#type_id") {
             return EntPtr::make_AutoGenerate({});
@@ -2790,11 +2791,11 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
     }
     // Get the item type
     // - Valid types are Function and Static
-    auto itemRef = getEntFullpath(sp, state.crate, pathMono, subPp);
+    auto itemRef = getEntFullpath(sp, state.resolve.wb, state.crate, pathMono, subPp);
     DEBUG("item_ref.tag_str() = " << itemRef.tagStr());
     DEBUG("sub_pp.pp_method = " << subPp.ppMethod);
     DEBUG("sub_pp.pp_impl = " << subPp.ppImpl);
-    evaluateTranslationImplAndTraitParams(sp, state.crate, pathMono, subPp);
+    evaluateTranslationImplAndTraitParams(sp, state.resolve.wb, state.crate, pathMono, subPp);
     TU_MATCH_HDRA( (itemRef), {)
     TU_ARMA(NotFound, e) {
             BUG(sp, "Item not found for " << pathMono);
@@ -2845,7 +2846,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                 ASSERT_BUG(sp, pe.item == "clone" || pe.item == "clone_from", "Unexpected Clone method called, " << pathMono);
                 const auto& innerTy = pe.type;
                 // If this is !Copy, then we need to ensure that the inner type's clone impls are also available
-                ::StaticTraitResolve resolve{state.crate};
+                ::StaticTraitResolve resolve{state.resolve.wb};
                 if (!resolve.typeIsCopy(sp, innerTy)) {
                     auto enumImpl = [&](const HIRTypeData* ity) {
                         if (!resolve.typeIsCopy(sp, ity)) {
@@ -2882,7 +2883,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             }
         }
         TU_ARMA(Function, e) {
-            evaluateTranslationItemParams(sp, state.crate, e->mParams, pathMono, subPp);
+            evaluateTranslationItemParams(sp, state.resolve.wb, state.crate, e->mParams, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
                 DEBUG("> Already enumerated after const evaluation");
                 return;
@@ -2891,7 +2892,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             state.enumFcn(mv$(pathMono), *e, mv$(subPp));
         }
         TU_ARMA(Static, e) {
-            evaluateTranslationItemParams(sp, state.crate, e->mParams, pathMono, subPp);
+            evaluateTranslationItemParams(sp, state.resolve.wb, state.crate, e->mParams, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
                 DEBUG("> Already enumerated after const evaluation");
                 return;
@@ -2901,7 +2902,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             }
         }
         TU_ARMA(Constant, e) {
-            evaluateTranslationItemParams(sp, state.crate, e->mParams, pathMono, subPp);
+            evaluateTranslationItemParams(sp, state.resolve.wb, state.crate, e->mParams, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
                 DEBUG("> Already enumerated after const evaluation");
                 return;

@@ -145,7 +145,7 @@ struct Context {
 
     const HIRSimplePath mLangBox;
 
-    Context(const HIRCrate& crate, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& modPath, const HIRGenericPath* currentTrait, const HIRTraitImpl* currentTraitImpl);
+    Context(const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& modPath, const HIRGenericPath* currentTrait, const HIRTraitImpl* currentTraitImpl);
 
     void dump() const;
 

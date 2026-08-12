@@ -1,4 +1,5 @@
 #include "hir_expand_main_bindings.h"
+#include "wire_board.h"
 #include "hir_expand_main_bindings.h"
 
 #include "hir_hir.h"
@@ -1341,9 +1342,9 @@ namespace {
         StaticTraitResolve mResolve;
 
     public:
-        AnnotateOuterVisitor(const HIRCrate& crate)
-            : HIRVisitor(nullptr, crate.types)
-            , mResolve(crate)
+        AnnotateOuterVisitor(const WireBoard& wb)
+            : HIRVisitor(nullptr, wb.crate->types)
+            , mResolve(wb)
         {
         }
 
@@ -1399,17 +1400,17 @@ namespace {
     };
 }
 
-void HIRExpandAnnotateUsageExpr(const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {
+void HIRExpandAnnotateUsageExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {
     TRACE_FUNCTION_F(ip);
     assert(exp);
-    StaticTraitResolve resolve{crate};
+    StaticTraitResolve resolve{wb};
     resolve.setBothGenericsRaw(exp.state->mImplGenerics, exp.state->mItemGenerics);
     AnnotateExprVisitorMark ev{resolve, exp.mBindings};
     ev.visitRoot(exp);
 }
 
-void HIRExpandAnnotateUsage(HIRCrate& crate) {
-    AnnotateOuterVisitor ov(crate);
+void HIRExpandAnnotateUsage(const WireBoard& wb, HIRCrate& crate) {
+    AnnotateOuterVisitor ov(wb);
     ov.visitCrate(crate);
 }
 
@@ -1734,10 +1735,10 @@ namespace {
         bool runEat;
 
     public:
-        ClosureExprVisitorFixup(const HIRCrate& crate, const HIRGenericParams* params, const Monomorphiser& monomorphiser, const OutState* out)
-            : HIRExprVisitorDef(crate.types)
-            , crate(crate)
-            , mResolve(crate)
+        ClosureExprVisitorFixup(const WireBoard& wb, const HIRGenericParams* params, const Monomorphiser& monomorphiser, const OutState* out)
+            : HIRExprVisitorDef(wb.crate->types)
+            , crate(*wb.crate)
+            , mResolve(wb)
             , pool(crate.pool)
             , monomorphiser(monomorphiser)
             , out(out)
@@ -2432,7 +2433,7 @@ namespace {
             // --- ---
             // - Fix type to replace closure types with known paths
             {
-                ClosureExprVisitorFixup fixup{mResolve.crate, &params, monomorphCb, &out};
+                ClosureExprVisitorFixup fixup{mResolve.wb, &params, monomorphCb, &out};
                 for (size_t i = 0; i < captureTypes.size(); i++) {
                     HIRTypeRef& tyMono = captureTypes[i].ent;
                     fixup.mResolve.expandAssociatedTypes(sp, tyMono);
@@ -2443,7 +2444,7 @@ namespace {
             DEBUG("params = " << params.fmtArgs() << params.fmtBounds());
 
             {
-                StaticTraitResolve localResolve{mResolve.crate};
+                StaticTraitResolve localResolve{mResolve.wb};
                 localResolve.setImplGenericsRaw(MetadataType::None, params); // Closure types are sized
 
                 for (const auto& v : captureTypes) {
@@ -2484,7 +2485,7 @@ namespace {
 
             {
                 DEBUG("-- Fixing types in body code");
-                ClosureExprVisitorFixup fixup{mResolve.crate, &params, monomorphCb, &out};
+                ClosureExprVisitorFixup fixup{mResolve.wb, &params, monomorphCb, &out};
                 fixup.visitRoot(bodyCode);
 
                 DEBUG("-- Fixing types in signature");
@@ -2881,7 +2882,7 @@ namespace {
             auto bodyNode = std::move(node.mCode);
             {
                 DEBUG("-- Fixing types in body code");
-                ClosureExprVisitorFixup fixup{mResolve.crate, &params, monomorphCb, &out};
+                ClosureExprVisitorFixup fixup{mResolve.wb, &params, monomorphCb, &out};
                 fixup.visitNodePtr(bodyNode);
             }
 
@@ -3019,7 +3020,7 @@ namespace {
             auto bodyNode = std::move(node.mCode);
             {
                 DEBUG("-- Fixing types in body code");
-                ClosureExprVisitorFixup fixup{mResolve.crate, &params, monomorphCb, &out};
+                ClosureExprVisitorFixup fixup{mResolve.wb, &params, monomorphCb, &out};
                 fixup.visitNodePtr(bodyNode);
             }
 
@@ -3104,9 +3105,9 @@ namespace {
         const HIRTypeData* selfType = nullptr;
 
     public:
-        ClosureOuterVisitor(const HIRCrate& crate)
-            : HIRVisitor(nullptr, crate.types)
-            , mResolve(crate)
+        ClosureOuterVisitor(const WireBoard& wb)
+            : HIRVisitor(nullptr, wb.crate->types)
+            , mResolve(wb)
             , curModPath(nullptr)
         {
         }
@@ -3213,7 +3214,7 @@ namespace {
 
                 {
                     MonomorphiserNop mm(mResolve.crate.types);
-                    ClosureExprVisitorFixup fixup{mResolve.crate, nullptr, mm, &out};
+                    ClosureExprVisitorFixup fixup{mResolve.wb, nullptr, mm, &out};
                     fixup.visitRoot(item.mCode);
                 }
             } else {
@@ -3229,7 +3230,7 @@ namespace {
 
                 {
                     MonomorphiserNop mm(mResolve.crate.types);
-                    ClosureExprVisitorFixup fixup{mResolve.crate, nullptr, mm, &out};
+                    ClosureExprVisitorFixup fixup{mResolve.wb, nullptr, mm, &out};
                     fixup.visitRoot(item.mValue);
                     fixup.visitType(item.mType);
                 }
@@ -3286,12 +3287,12 @@ namespace {
     };
 }
 
-void HIRExpandClosuresExpr(const HIRCrate& crateRo, HIRTypeRef& expTy, HIRExprPtr& exp) {
+void HIRExpandClosuresExpr(const WireBoard& wb, const HIRCrate& crateRo, HIRTypeRef& expTy, HIRExprPtr& exp) {
     Span sp;
     auto& crate = const_cast<HIRCrate&>(crateRo);
     TRACE_FUNCTION;
 
-    StaticTraitResolve resolve{crate};
+    StaticTraitResolve resolve{wb};
     assert(exp);
     resolve.setBothGenericsRaw(exp.state->mImplGenerics, exp.state->mItemGenerics);
 
@@ -3315,7 +3316,7 @@ void HIRExpandClosuresExpr(const HIRCrate& crateRo, HIRTypeRef& expTy, HIRExprPt
 
     {
         MonomorphiserNop mm(crate.types);
-        ClosureExprVisitorFixup fixup{crate, nullptr, mm, &out};
+        ClosureExprVisitorFixup fixup{wb, nullptr, mm, &out};
         fixup.visitRoot(exp);
         fixup.visitType(expTy);
     }
@@ -3344,23 +3345,23 @@ void HIRExpandClosuresExpr(const HIRCrate& crateRo, HIRTypeRef& expTy, HIRExprPt
     out.pushNewImpls(sp, crate);
 }
 
-void HIRExpandClosures(HIRCrate& crate) {
-    ClosureOuterVisitor ov(crate);
+void HIRExpandClosures(const WireBoard& wb, HIRCrate& crate) {
+    ClosureOuterVisitor ov(wb);
     ov.visitCrate(crate);
 
     struct ClosureOuterVisitorPass2: public HIRVisitor {
         StaticTraitResolve mResolve;
 
     public:
-        ClosureOuterVisitorPass2(const HIRCrate& crate)
-            : HIRVisitor(nullptr, crate.types)
-            , mResolve(crate)
+        ClosureOuterVisitorPass2(const WireBoard& wb)
+            : HIRVisitor(nullptr, wb.crate->types)
+            , mResolve(wb)
         {
         }
 
         void fixType(HIRTypeRef& ty) const {
             MonomorphiserNop mm(mResolve.crate.types);
-            ClosureExprVisitorFixup fixup{mResolve.crate, nullptr, mm, nullptr};
+            ClosureExprVisitorFixup fixup{mResolve.wb, nullptr, mm, nullptr};
             visitTyWith(ty, [&fixup](const HIRTypeData* ty) -> bool {
                 if (const auto* e = ty->opt_ErasedType()) {
                     if (const auto* ee = e->inner.opt_Alias()) {
@@ -3391,7 +3392,7 @@ void HIRExpandClosures(HIRCrate& crate) {
         }
     };
 
-    ClosureOuterVisitorPass2(crate).visitCrate(crate);
+    ClosureOuterVisitorPass2(wb).visitCrate(crate);
 }
 
 #undef NEWNODE
@@ -3542,9 +3543,9 @@ namespace {
         StaticTraitResolve mResolve;
 
     public:
-        ErasedOuterVisitor(const HIRCrate& crate)
-            : HIRVisitor(&mResolve, crate.types)
-            , mResolve(crate)
+        ErasedOuterVisitor(const WireBoard& wb)
+            : HIRVisitor(&mResolve, wb.crate->types)
+            , mResolve(wb)
         {
         }
 
@@ -3560,9 +3561,9 @@ namespace {
         StaticTraitResolve mResolve;
 
     public:
-        ErasedOuterVisitorFixup(const HIRCrate& crate)
-            : HIRVisitor(&mResolve, crate.types)
-            , mResolve(crate)
+        ErasedOuterVisitorFixup(const WireBoard& wb)
+            : HIRVisitor(&mResolve, wb.crate->types)
+            , mResolve(wb)
         {
         }
 
@@ -3573,11 +3574,11 @@ namespace {
     };
 }
 
-void HIRExpandErasedType(HIRCrate& crate) {
-    ErasedOuterVisitor ov(crate);
+void HIRExpandErasedType(const WireBoard& wb, HIRCrate& crate) {
+    ErasedOuterVisitor ov(wb);
     ov.visitCrate(crate);
 
-    ErasedOuterVisitorFixup ovFix(crate);
+    ErasedOuterVisitorFixup ovFix(wb);
     ovFix.visitCrate(crate);
 }
 
@@ -4009,8 +4010,8 @@ namespace {
     struct LocalTraitResolve: public StaticTraitResolve {
         ExprVisitorEnumerate* lifetimeState = nullptr;
 
-        LocalTraitResolve(const HIRCrate& crate)
-            : StaticTraitResolve(crate)
+        LocalTraitResolve(const WireBoard& wb)
+            : StaticTraitResolve(wb)
         {
         }
 
@@ -6239,9 +6240,9 @@ namespace {
         bool removeLocals;
 
     public:
-        LifetimeOuterVisitor(const HIRCrate& crate, bool removeLocals)
-            : HIRVisitor(nullptr, crate.types)
-            , mResolve(crate)
+        LifetimeOuterVisitor(const WireBoard& wb, bool removeLocals)
+            : HIRVisitor(nullptr, wb.crate->types)
+            , mResolve(wb)
             , removeLocals(removeLocals)
         {
         }
@@ -6412,20 +6413,20 @@ namespace {
     }
 }
 
-void HIRExpandLifetimeInfer(HIRCrate& crate) {
-    LifetimeOuterVisitor ov(crate, false);
+void HIRExpandLifetimeInfer(const WireBoard& wb, HIRCrate& crate) {
+    LifetimeOuterVisitor ov(wb, false);
     ov.visitCrate(crate);
 }
 
-void HIRExpandLifetimeInferValidate(HIRCrate& crate) {
+void HIRExpandLifetimeInferValidate(const WireBoard& wb, HIRCrate& crate) {
     // TODO: When running, clear all local lifetimes (replace with empty - to be turned into ivars)
-    LifetimeOuterVisitor ov(crate, true);
+    LifetimeOuterVisitor ov(wb, true);
     ov.visitCrate(crate);
 }
 
-void HIRExpandLifetimeInferExpr(const HIRCrate& crate, const HIRItemPath& ip, const HIRFunction::argsT& args, const HIRTypeData* retTy, HIRExprPtr& exp) {
+void HIRExpandLifetimeInferExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, const HIRFunction::argsT& args, const HIRTypeData* retTy, HIRExprPtr& exp) {
     TRACE_FUNCTION_F("ip=" << ip << " ret_ty=" << retTy << ", args=" << args);
-    LocalTraitResolve resolve{crate};
+    LocalTraitResolve resolve{wb};
     resolve.setBothGenericsRaw(exp.state->mImplGenerics, exp.state->mItemGenerics);
 
     HIRExpandLifetimeInferExprInner(resolve, args, retTy, exp, /*remove_locals*/ false, /*is_const_context=*/true);
@@ -6623,13 +6624,13 @@ namespace {
     };
 } // namespace
 
-void HIRExpandReborrowsExpr(const HIRCrate& crate, HIRExprPtr& exp) {
+void HIRExpandReborrowsExpr(const WireBoard& wb, const HIRCrate& crate, HIRExprPtr& exp) {
     TRACE_FUNCTION;
     ReborrowExprVisitorMutate ev(crate);
     ev.visitNodePtr(exp);
 }
 
-void HIRExpandReborrows(HIRCrate& crate) {
+void HIRExpandReborrows(const WireBoard& wb, HIRCrate& crate) {
     ReborrowOuterVisitor ov(crate);
     ov.visitCrate(crate);
 }
@@ -7126,10 +7127,10 @@ class StaticBorrowOuterVisitorMark: public HIRVisitor {
     const HIRModule* currentModule;
 
 public:
-    StaticBorrowOuterVisitorMark(const HIRCrate& crate)
-        : HIRVisitor(nullptr, crate.types)
-        , crate(crate)
-        , mResolve(crate)
+    StaticBorrowOuterVisitorMark(const WireBoard& wb)
+        : HIRVisitor(nullptr, wb.crate->types)
+        , crate(*wb.crate)
+        , mResolve(wb)
         , currentModule(nullptr)
     {
     }
@@ -7610,7 +7611,7 @@ public:
             DEBUG("-- Creating static");
             // Clone the in-scope generics (same as done in closure generation)
             // - Would be picky, but hard to get the bounds right.
-            StaticTraitResolve resolve{mResolve.crate};
+            StaticTraitResolve resolve{mResolve.wb};
             HIRGenericParams paramsDef;
             HIRPathParams constrParams;
             auto valExpr = extractNode(valuePtr, resolve, paramsDef, constrParams);
@@ -7641,7 +7642,7 @@ public:
             DEBUG("-- Creating const");
             auto usage = node.inner->usage;
 
-            StaticTraitResolve resolve{mResolve.crate};
+            StaticTraitResolve resolve{mResolve.wb};
             HIRGenericParams paramsDef;
             HIRPathParams constrParams;
             auto valExpr = extractNode(node.inner, resolve, paramsDef, constrParams);
@@ -7687,10 +7688,10 @@ class StaticBorrowOuterVisitor: public HIRVisitor {
     std::map<const HIRModule*, std::vector<NewStatic>> newStatics;
 
 public:
-    StaticBorrowOuterVisitor(const HIRCrate& crate)
-        : HIRVisitor(nullptr, crate.types)
-        , crate(crate)
-        , mResolve(crate)
+    StaticBorrowOuterVisitor(const WireBoard& wb)
+        : HIRVisitor(nullptr, wb.crate->types)
+        , crate(*wb.crate)
+        , mResolve(wb)
         , currentModule(nullptr)
     {
     }
@@ -7779,7 +7780,7 @@ public:
 
                 if (!newStatic.mParams.isGeneric()) {
                     newStatic.mValue.state->stage = HIRExprState::Stage::Sbc;
-                    newStatic.valueRes = HIREvaluator(sp, this->crate, nvs).evaluateConstant(newStaticPair.path, newStatic.mValue, newStatic.mType);
+                    newStatic.valueRes = HIREvaluator(sp, this->mResolve.wb, nvs).evaluateConstant(newStaticPair.path, newStatic.mValue, newStatic.mType);
                     newStatic.valueGenerated = true;
                 }
 
@@ -7925,9 +7926,9 @@ public:
     }
 };
 
-void HIRExpandStaticBorrowConstantsMarkExpr(const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {
+void HIRExpandStaticBorrowConstantsMarkExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {
     TRACE_FUNCTION_F(ip);
-    StaticTraitResolve resolve(crate);
+    StaticTraitResolve resolve(wb);
 
     // TODO: Get `Self` type
     StaticBorrowExprVisitorMark evm(resolve, nullptr, exp);
@@ -7938,9 +7939,9 @@ void HIRExpandStaticBorrowConstantsMarkExpr(const HIRCrate& crate, const HIRItem
     }
 }
 
-void HIRExpandStaticBorrowConstantsExpr(const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {
+void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {
     TRACE_FUNCTION_F(ip);
-    StaticTraitResolve resolve(crate);
+    StaticTraitResolve resolve(wb);
     resolve.setBothGenericsRaw(exp.state->mImplGenerics, exp.state->mItemGenerics);
 
     static int staticCount = 0;
@@ -8020,7 +8021,7 @@ void HIRExpandStaticBorrowConstantsExpr(const HIRCrate& crate, const HIRItemPath
 
         if (!newStatic.mParams.isGeneric()) {
             newStatic.mValue.state->stage = HIRExprState::Stage::Sbc;
-            newStatic.valueRes = HIREvaluator(sp, crate, nvs).evaluateConstant(path, newStatic.mValue, newStatic.mType);
+            newStatic.valueRes = HIREvaluator(sp, wb, nvs).evaluateConstant(path, newStatic.mValue, newStatic.mType);
             newStatic.valueGenerated = true;
         }
 
@@ -8042,13 +8043,13 @@ void HIRExpandStaticBorrowConstantsExpr(const HIRCrate& crate, const HIRItemPath
     ev.visitNodePtr(exp);
 }
 
-void HIRExpandStaticBorrowConstantsMark(HIRCrate& crate) {
-    StaticBorrowOuterVisitorMark ov(crate);
+void HIRExpandStaticBorrowConstantsMark(const WireBoard& wb, HIRCrate& crate) {
+    StaticBorrowOuterVisitorMark ov(wb);
     ov.visitCrate(crate);
 }
 
-void HIRExpandStaticBorrowConstants(HIRCrate& crate) {
-    StaticBorrowOuterVisitor ov(crate);
+void HIRExpandStaticBorrowConstants(const WireBoard& wb, HIRCrate& crate) {
+    StaticBorrowOuterVisitor ov(wb);
     ov.visitCrate(crate);
 
     // Consteval can run again, creating new items
@@ -8083,11 +8084,11 @@ namespace {
         HIRSimplePath mLangBox;
 
     public:
-        UfcsExprVisitorMutate(const HIRCrate& crate, const HIRTraitImpl* currentTraitImpl = nullptr)
-            : HIRExprVisitorDef(crate.types)
-            , crate(crate)
+        UfcsExprVisitorMutate(const WireBoard& wb, const HIRTraitImpl* currentTraitImpl = nullptr)
+            : HIRExprVisitorDef(wb.crate->types)
+            , crate(*wb.crate)
             , currentTraitImpl(currentTraitImpl)
-            , mResolve(crate)
+            , mResolve(wb)
         {
             if (crate.mLangItems.count("owned_box") > 0) {
                 mLangBox = crate.mLangItems.at("owned_box");
@@ -8649,13 +8650,15 @@ namespace {
     };
 
     class UfcsOuterVisitor: public HIRVisitor {
+        const WireBoard& wb;
         const HIRCrate& crate;
         const HIRTraitImpl* currentTraitImpl = nullptr;
 
     public:
-        UfcsOuterVisitor(const HIRCrate& crate)
-            : HIRVisitor(nullptr, crate.types)
-            , crate(crate) {
+        UfcsOuterVisitor(const WireBoard& wb)
+            : HIRVisitor(nullptr, wb.crate->types)
+            , wb(wb)
+            , crate(*wb.crate) {
         }
 
         // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
@@ -8665,7 +8668,7 @@ namespace {
 
         void visitConstgeneric(HIRConstGeneric& c) override {
             if (auto* e = c.opt_Unevaluated()) {
-                UfcsExprVisitorMutate ev(crate, currentTraitImpl);
+                UfcsExprVisitorMutate ev(wb, currentTraitImpl);
                 ev.visitNodePtr(*(*e)->expr);
             }
         }
@@ -8683,7 +8686,7 @@ namespace {
         void visitFunction(HIRItemPath p, HIRFunction& item) override {
             if (item.mCode) {
                 DEBUG("Function code " << p);
-                UfcsExprVisitorMutate ev(crate, currentTraitImpl);
+                UfcsExprVisitorMutate ev(wb, currentTraitImpl);
                 ev.visitNodePtr(item.mCode);
             } else {
                 DEBUG("Function code " << p << " (none)");
@@ -8692,14 +8695,14 @@ namespace {
 
         void visitStatic(HIRItemPath p, HIRStatic& item) override {
             if (item.mValue) {
-                UfcsExprVisitorMutate ev(crate, currentTraitImpl);
+                UfcsExprVisitorMutate ev(wb, currentTraitImpl);
                 ev.visitNodePtr(item.mValue);
             }
         }
 
         void visitConstant(HIRItemPath p, HIRConstant& item) override {
             if (item.mValue) {
-                UfcsExprVisitorMutate ev(crate, currentTraitImpl);
+                UfcsExprVisitorMutate ev(wb, currentTraitImpl);
                 ev.visitNodePtr(item.mValue);
             }
         }
@@ -8711,7 +8714,7 @@ namespace {
 
                     if (var.expr)
                     {
-                        UfcsExprVisitorMutate ev(crate, currentTraitImpl);
+                        UfcsExprVisitorMutate ev(wb, currentTraitImpl);
                         ev.visitNodePtr(var.expr);
                     }
                 }
@@ -8720,14 +8723,14 @@ namespace {
     };
 } // namespace
 
-void HIRExpandUfcsEverythingExpr(const HIRCrate& crate, HIRExprPtr& exp, const HIRTraitImpl* currentTraitImpl) {
+void HIRExpandUfcsEverythingExpr(const WireBoard& wb, const HIRCrate& crate, HIRExprPtr& exp, const HIRTraitImpl* currentTraitImpl) {
     TRACE_FUNCTION;
-    UfcsExprVisitorMutate ev{crate, currentTraitImpl};
+    UfcsExprVisitorMutate ev{wb, currentTraitImpl};
     ev.visitNodePtr(exp);
 }
 
-void HIRExpandUfcsEverything(HIRCrate& crate) {
-    UfcsOuterVisitor ov(crate);
+void HIRExpandUfcsEverything(const WireBoard& wb, HIRCrate& crate) {
+    UfcsOuterVisitor ov(wb);
     ov.visitCrate(crate);
 }
 
@@ -8864,15 +8867,17 @@ namespace {
     };
 
     class VtableOuterVisitor: public HIRVisitor {
+        const WireBoard& wb;
         const HIRCrate& crate;
         //StaticTraitResolve  m_resolve;
         ::std::function<HIRSimplePath(bool, RcString, HIRStruct)> newType;
         HIRSimplePath mLangSized;
 
     public:
-        VtableOuterVisitor(const HIRCrate& crate)
-            : HIRVisitor(nullptr, crate.types)
-            , crate(crate)
+        VtableOuterVisitor(const WireBoard& wb)
+            : HIRVisitor(nullptr, wb.crate->types)
+            , wb(wb)
+            , crate(*wb.crate)
         {
             mLangSized = crate.getLangItemPathOpt("sized");
         }
@@ -8900,7 +8905,7 @@ namespace {
             static Span sp;
             TRACE_FUNCTION_F(p);
 
-            StaticTraitResolve resolve{crate};
+            StaticTraitResolve resolve{wb};
             resolve.setImplGenericsRaw(MetadataType::Unknown, tr.mParams);
             HIRGenericPath traitPath(p.getSimplePath(), tr.mParams.makeNopParams(crate.types, 0));
 
@@ -9273,13 +9278,13 @@ namespace {
     };
 } // namespace
 
-void HIRExpandVTables(HIRCrate& crate) {
+void HIRExpandVTables(const WireBoard& wb, HIRCrate& crate) {
     {
         VisitorImplTrait v(crate.types);
         v.visitCrate(crate);
     }
 
-    VtableOuterVisitor ov(crate);
+    VtableOuterVisitor ov(wb);
     ov.visitCrate(crate);
 
     FixupVisitor fv(crate);

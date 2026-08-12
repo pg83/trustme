@@ -11,6 +11,8 @@ static inline bool monomorphiseGenericpathNeeded(const HIRGenericPath& tpl, bool
 }
 
 extern bool monomorphisePathNeeded(const HIRPath& tpl, bool ignoreLifetimes = false);
+struct WireBoard;
+
 extern bool monomorphiseTraitpathNeeded(const HIRTraitPath& tpl, bool ignoreLifetimes = false);
 extern bool monomorphiseTypeNeeded(const HIRTypeData* tpl, bool ignoreLifetimes = false);
 
@@ -19,7 +21,7 @@ protected:
     HIRTypeInterner& types;
 
 private:
-    const HIRCrate* constevalCrate;
+    const WireBoard* constevalWb;
     HIRItemPath constevalPath;
 
 public:
@@ -31,7 +33,7 @@ public:
         return types;
     }
 
-    void setConstevalState(const HIRCrate& crate, HIRItemPath ip);
+    void setConstevalState(const WireBoard& wb, HIRItemPath ip);
 
     virtual HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const = 0;
     virtual HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const = 0;

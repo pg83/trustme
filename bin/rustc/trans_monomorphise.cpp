@@ -1,4 +1,5 @@
 #include "trans_monomorphise.h"
+#include "wire_board.h"
 
 #include "hir_hir.h"
 #include "mir_mir.h"
@@ -91,8 +92,8 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
 }
 
 /// Monomorphise all functions in a TransList
-void TransMonomorphiseList(const HIRCrate& crate, TransList& list, unsigned mirOptLevel) {
-    ::StaticTraitResolve resolve{crate};
+void TransMonomorphiseList(const WireBoard& wb, const HIRCrate& crate, TransList& list, unsigned mirOptLevel) {
+    ::StaticTraitResolve resolve{wb};
 
     struct Nvs: public HIREvaluator::Newval {
         TransList& out;
@@ -136,7 +137,7 @@ void TransMonomorphiseList(const HIRCrate& crate, TransList& list, unsigned mirO
         TRACE_FUNCTION_FR("CONSTANT " << path, "CONSTANT " << path);
         auto ty = pp.monomorph(resolve, c.mType);
         // 1. Evaluate the constant
-        auto eval = HIREvaluator{pp.sp, crate, nvs};
+        auto eval = HIREvaluator{pp.sp, wb, nvs};
         eval.resolve.setBothGenericsRaw(pp.gdefImpl, &c.mParams);
         MonomorphState ms(crate.types);
         ms.selfTy = pp.selfType;
@@ -165,7 +166,7 @@ void TransMonomorphiseList(const HIRCrate& crate, TransList& list, unsigned mirO
         TRACE_FUNCTION_FR("STATIC " << path, "STATIC " << path);
         auto ty = pp.monomorph(resolve, s.mType);
         // 1. Evaluate the constant
-        auto eval = HIREvaluator{pp.sp, crate, nvs};
+        auto eval = HIREvaluator{pp.sp, wb, nvs};
         eval.resolve.setBothGenericsRaw(pp.gdefImpl, &s.mParams);
         MonomorphState ms(crate.types);
         ms.selfTy = pp.selfType;

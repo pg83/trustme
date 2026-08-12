@@ -1,5 +1,7 @@
 #include "hir_typeck_resolve_common.h"
 
+#include "wire_board.h"
+
 #include "hir_typeck_monomorph.h" // MonomorphStatePtr
 
 void TraitResolveCommon::prepIndexes(const Span& sp) {
@@ -209,8 +211,9 @@ Ordering TraitResolveCommon::CachedBoundCmp::ord(const keyT& a, const refSpT& b)
 
 // 1.90 (well, added earlier)
 
-TraitResolveCommon::TraitResolveCommon(const HIRCrate& crate)
-    : crate(crate)
+TraitResolveCommon::TraitResolveCommon(const WireBoard& wb)
+    : wb(wb)
+    , crate(*wb.crate)
     , mImplGenerics(nullptr)
     , mItemGenerics(nullptr)
 {

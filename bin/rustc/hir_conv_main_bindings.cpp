@@ -1,4 +1,7 @@
 #include "hir_conv_main_bindings.h"
+
+#include "wire_board.h"
+#include "hir_inherent_cache.h"
 #include "hir_conv_main_bindings.h"
 
 #include "hir_hir.h"
@@ -146,10 +149,10 @@ namespace {
         unsigned int fcnErasedCount = 0;
 
     public:
-        BindVisitor(const HIRCrate& crate)
-            : HIRVisitor(nullptr, crate.types)
-            , crate(crate)
-            , ms(crate)
+        BindVisitor(const WireBoard& wb)
+            : HIRVisitor(nullptr, wb.crate->types)
+            , crate(*wb.crate)
+            , ms(wb)
             , inExpr(0)
         {
             static HIRItemPath rootPath("");
@@ -1000,10 +1003,10 @@ namespace {
         TypeckModuleState ms;
 
     public:
-        VisitorPost(const HIRCrate& crate)
-            : HIRVisitor(nullptr, crate.types)
-            , crate(crate)
-            , ms(crate)
+        VisitorPost(const WireBoard& wb)
+            : HIRVisitor(nullptr, wb.crate->types)
+            , crate(*wb.crate)
+            , ms(wb)
         {
         }
 
@@ -1027,7 +1030,7 @@ namespace {
             auto data = ty->cloneData();
             if (auto* te = data.opt_NamedFunction()) {
                 if (te->def.is_Function() && te->def.as_Function() == nullptr) {
-                    StaticTraitResolve resolve{crate};
+                    StaticTraitResolve resolve{ms.wb};
                     resolve.setBothGenericsRaw(ms.mImplGenerics, ms.mItemGenerics);
                     MonomorphState unusedMs(crate.types);
                     const auto& v = resolve.getValue(sp, te->path, unusedMs, true);
@@ -1267,9 +1270,9 @@ namespace {
     };
 }
 
-void ConvertHIRBind(HIRCrate& crate) {
+void ConvertHIRBind(const WireBoard& wb, HIRCrate& crate) {
     {
-        BindVisitor exp{crate};
+        BindVisitor exp{wb};
         // Also visit extern crates to update their pointers
         for (auto& ec : crate.extCrates) {
             exp.visitCrate(*ec.second.mData);
@@ -1278,7 +1281,7 @@ void ConvertHIRBind(HIRCrate& crate) {
     }
 
     {
-        VisitorPost v{crate};
+        VisitorPost v{wb};
         for (auto& ec : crate.extCrates) {
             v.visitCrate(*ec.second.mData);
         }
@@ -3561,13 +3564,13 @@ class UfcsVisitor: public HIRVisitor {
     HIRSimplePath curModPath;
 
 public:
-    UfcsVisitor(const HIRCrate& crate, bool visitExprs)
-        : HIRVisitor(nullptr, crate.types)
-        , crate(crate)
+    UfcsVisitor(const WireBoard& wb, bool visitExprs)
+        : HIRVisitor(nullptr, wb.crate->types)
+        , crate(*wb.crate)
         , mVisitExprs(visitExprs)
         , runEat(visitExprs)
         , // Defaults to running when doing second-pass
-        mResolve(crate)
+        mResolve(wb)
     {
     }
 
@@ -4645,7 +4648,7 @@ void pushIndexInherentMethods(HIRInherentCache& icache, const HIRSimplePath& lan
     pushIndexInherentMethodsList(icache, langBox, src.typeImpls.generic);
 }
 
-void ConvertHIRResolveUFCSOuter(HIRCrate& crate) {
+void ConvertHIRResolveUFCSOuter(const WireBoard& wb, HIRCrate& crate) {
     for (auto& implGroup : crate.traitImpls) {
         auto expandList = [&](auto& implList) {
             for (auto& impl : implList) {
@@ -4659,23 +4662,23 @@ void ConvertHIRResolveUFCSOuter(HIRCrate& crate) {
         expandList(implGroup.second.generic);
     }
 
-    UfcsVisitor exp{crate, false};
+    UfcsVisitor exp{wb, false};
     exp.visitCrate(crate);
 }
 
-void ConvertHIRResolveUFCS(HIRCrate& crate) {
-    UfcsVisitor exp{crate, true};
+void ConvertHIRResolveUFCS(const WireBoard& wb, HIRCrate& crate) {
+    UfcsVisitor exp{wb, true};
     exp.visitCrate(crate);
 }
 
-void ConvertHIRResolveUFCSExpr(const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exprPtr) {
+void ConvertHIRResolveUFCSExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exprPtr) {
     TRACE_FUNCTION_F(ip);
     // Check innards but NOT the value
-    UfcsVisitor exp{crate, true};
+    UfcsVisitor exp{wb, true};
     exp.visitExpr(exprPtr);
 }
 
-void ConvertHIRResolveUFCSSortImpls(HIRCrate& crate) {
+void ConvertHIRResolveUFCSSortImpls(WireBoard& wb, HIRCrate& crate) {
     // Sort impls!
     sortImplGroup<HIRTypeImpl>(crate.typeImpls, [](::std::ostream& os, const HIRTypeImpl& i) {
         os << "impl" << i.mParams.fmtArgs() << " " << i.mType;
@@ -4700,9 +4703,9 @@ void ConvertHIRResolveUFCSSortImpls(HIRCrate& crate) {
 
     {
         const auto& langBox = crate.getLangItemPathOpt("owned_box");
-        pushIndexInherentMethods(crate.inherentMethodCache, langBox, crate);
+        pushIndexInherentMethods(*wb.inherentMethods, langBox, crate);
         for (const auto& ec : crate.extCrates) {
-            pushIndexInherentMethods(crate.inherentMethodCache, langBox, *ec.second.mData);
+            pushIndexInherentMethods(*wb.inherentMethods, langBox, *ec.second.mData);
         }
     }
 }

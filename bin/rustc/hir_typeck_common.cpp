@@ -1,5 +1,7 @@
 #include "hir_typeck_common.h"
 
+#include "wire_board.h"
+
 #include "hir_path.h"
 #include "trans_target.h"
 #include "hir_conv_main_bindings.h"
@@ -660,8 +662,8 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
 
         // Evaluate, if possible
         if (se->is_Unevaluated()) {
-            if (this->constevalCrate) {
-                ConvertHIRConstantEvaluateConstGeneric(sp, *this->constevalCrate, types.primitive(HIRCoreType::Usize), sz.as_Unevaluated());
+            if (this->constevalWb) {
+                ConvertHIRConstantEvaluateConstGeneric(sp, *this->constevalWb, *this->constevalWb->crate, types.primitive(HIRCoreType::Usize), sz.as_Unevaluated());
             } else {
                 DEBUG("TODO: Evaluate unevaluated generic for array size - " << *se);
             }

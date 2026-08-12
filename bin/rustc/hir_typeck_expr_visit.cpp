@@ -1,5 +1,7 @@
 #include "hir_typeck_expr_visit.h"
 
+#include "wire_board.h"
+
 #include "hir_hir.h"
 #include "hir_expr.h"
 #include "hir_visitor.h"
@@ -86,9 +88,9 @@ namespace {
         TypeckModuleState ms;
 
     public:
-        OuterVisitor(HIRCrate& crate)
+        OuterVisitor(const WireBoard& wb, HIRCrate& crate)
             : HIRVisitor(nullptr, crate.types)
-            , ms(crate)
+            , ms(wb)
         {
         }
 
@@ -222,13 +224,14 @@ namespace {
     };
 }
 
-void TypecheckExpressions(HIRCrate& crate) {
-    OuterVisitor visitor{crate};
+void TypecheckExpressions(const WireBoard& wb, HIRCrate& crate) {
+    OuterVisitor visitor{wb, crate};
     visitor.visitCrate(crate);
 }
 
-TypeckModuleState::TypeckModuleState(const HIRCrate& crate)
-    : crate(crate)
+TypeckModuleState::TypeckModuleState(const WireBoard& wb)
+    : wb(wb)
+    , crate(*wb.crate)
     , currentTrait(nullptr)
     , currentTraitImpl(nullptr)
     , mImplGenerics(nullptr)

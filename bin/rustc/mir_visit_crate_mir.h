@@ -1,3 +1,4 @@
+struct WireBoard;
 #pragma once
 
 #include "hir_visitor.h"
@@ -12,7 +13,7 @@ private:
     cbT cb;
 
 public:
-    MIROuterVisitor(const HIRCrate& crate, cbT cb);
+    MIROuterVisitor(const WireBoard& wb, const HIRCrate& crate, cbT cb);
 
     void visitExpr(HIRExprPtr& exp) override;
 

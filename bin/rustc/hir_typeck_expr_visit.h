@@ -5,7 +5,10 @@
 
 class HIRTraitImpl;
 
+struct WireBoard;
+
 struct TypeckModuleState {
+    const WireBoard& wb;
     const HIRCrate& crate;
 
     const HIRGenericPath* currentTrait;
@@ -16,7 +19,7 @@ struct TypeckModuleState {
     ::std::vector<::std::pair<const HIRSimplePath*, const HIRTrait*>> traits;
     ::std::vector<HIRSimplePath> modPaths;
 
-    TypeckModuleState(const HIRCrate& crate);
+    TypeckModuleState(const WireBoard& wb);
 
     template <typename T>
     class NullOnDrop {

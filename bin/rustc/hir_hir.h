@@ -10,7 +10,6 @@
 #include "tagged_union.h"
 #include "target_version.h"
 #include "hir_generic_params.h"
-#include "hir_inherent_cache.h"
 #include "hir_encoded_literal.h"
 #include "macro_rules_macro_rules_ptr.h"
 
@@ -38,6 +37,7 @@ class HIRTypeItem;
 class HIRMacroItem;
 
 class HIRItemPath;
+struct WireBoard;
 
 class HIRPublicity {
     static ::std::shared_ptr<HIRSimplePath> nonePath;
@@ -688,7 +688,6 @@ public:
     ImplGroup<::std::unique_ptr<HIRTypeImpl>> typeImpls;
 
     /// CACHE: Cache of all inherent (non-trait) methods (for faster lookup)
-    HIRInherentCache inherentMethodCache;
 
     /// Impl blocks
     ::std::map<HIRSimplePath, ImplGroup<::std::unique_ptr<HIRTraitImpl>>> traitImpls;
@@ -753,11 +752,11 @@ public:
     bool findAutoTraitImpls(const HIRSimplePath& path, const HIRTypeData* type, tCbResolveType tyRes, ::std::function<bool(const HIRMarkerImpl&)> callback) const;
     bool findTypeImpls(const HIRTypeData* type, tCbResolveType tyRes, ::std::function<bool(const HIRTypeImpl&)> callback) const;
 
-    const MIRFunction* getOrGenMir(const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, HIRTypeRef& retTy) const;
+    const MIRFunction* getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, HIRTypeRef& retTy) const;
 
-    const MIRFunction* getOrGenMir(const HIRItemPath& ip, const HIRFunction& fcn) const;
+    const MIRFunction* getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRFunction& fcn) const;
 
-    const MIRFunction* getOrGenMir(const HIRItemPath& ip, const HIRExprPtr& ep, HIRTypeRef& expTy) const;
+    const MIRFunction* getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, HIRTypeRef& expTy) const;
 };
 
 /// Helper for obtaining the matching target for PathTuple/PathNamed

@@ -1,6 +1,8 @@
 #include "hir_typeck_helpers.h"
 
-#include "trait_solver_mode.h"
+#include "hir_inherent_cache.h"
+#include "wire_board.h"
+
 #include "hir_conv_main_bindings.h"
 
 #include <std/mem/obj_list.h>
@@ -4294,8 +4296,8 @@ TU_ARMA(Alias, ee) {
             }
         };
 
-        TraitResolution::TraitResolution(const HMTypeInferrence& ivars, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait)
-            : TraitResolveCommon(crate)
+        TraitResolution::TraitResolution(const HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait)
+            : TraitResolveCommon(wb)
             , mLangDeref(crate.getLangItemPathOpt("deref"))
             , ivars(ivars)
             , coherenceIvars(crate.types)
@@ -4339,7 +4341,7 @@ TU_ARMA(Alias, ee) {
         bool TraitResolution::implsOverlap(const Span& sp, const ImplRef& left, const ImplRef& right) const {
             const auto* leftImpl = left.mData.opt_TraitImpl();
             const auto* rightImpl = right.mData.opt_TraitImpl();
-            if (!gTraitSolverConfig.coherence || !leftImpl || !rightImpl || !leftImpl->impl || !rightImpl->impl) {
+            if (!this->wb.solver.coherence || !leftImpl || !rightImpl || !leftImpl->impl || !rightImpl->impl) {
                 return left.overlapsWith(crate, right);
             }
             if (!leftImpl->traitPath || !rightImpl->traitPath || *leftImpl->traitPath != *rightImpl->traitPath) {
@@ -4356,7 +4358,7 @@ TU_ARMA(Alias, ee) {
             coherenceIvars.hasChanged = false;
             if (!coherenceResolve) {
                 ASSERT_BUG(sp, crate.pool, "next-solver coherence requires the crate object pool");
-                coherenceResolve = crate.pool->make<TraitResolution>(coherenceIvars, crate, mImplGenerics, mItemGenerics, mVisPath, mCurrentTraitPath);
+                coherenceResolve = crate.pool->make<TraitResolution>(coherenceIvars, this->wb, mImplGenerics, mItemGenerics, mVisPath, mCurrentTraitPath);
             } else {
                 coherenceResolve->setGenericContext(mImplGenerics, mItemGenerics);
             }
@@ -4376,7 +4378,7 @@ TU_ARMA(Alias, ee) {
         }
 
         bool TraitResolution::findTraitImpls(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, bool magicTraitImpls) const {
-            if (gTraitSolverConfig.globally && magicTraitImpls) {
+            if (this->wb.solver.globally && magicTraitImpls) {
                 return findTraitImplsNext(sp, trait, params, type, ::std::move(callback));
             }
             return findTraitImplsLegacy(sp, trait, params, type, ::std::move(callback), magicTraitImpls);
@@ -4578,7 +4580,7 @@ TU_ARMA(Alias, ee) {
         TU_ARMA(Path, e) {
         TU_MATCH_HDRA( (e.path.mData), {)
         TU_ARMA(Generic, pe) {
-                    ConvertHIRConstantEvaluateMethodParams(sp, crate, mVisPath, mImplGenerics, mItemGenerics, e.binding.getGenerics(), pe.mParams);
+                    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, mVisPath, mImplGenerics, mItemGenerics, e.binding.getGenerics(), pe.mParams);
                     H::expandAssociatedTypesParams(sp, *this, pe.mParams, stack);
                 }
                 TU_ARMA(UfcsInherent, pe) {
@@ -4664,7 +4666,7 @@ TU_ARMA(Alias, ee) {
             // Recurse?
         }
         TU_ARMA(Array, e) {
-            ConvertHIRConstantEvaluateArraySize(sp, crate, mVisPath, e.size);
+            ConvertHIRConstantEvaluateArraySize(sp, this->wb, crate, mVisPath, e.size);
             expandAssociatedTypesInplace(sp, e.inner, stack);
         }
         TU_ARMA(Slice, e) {
@@ -4749,7 +4751,7 @@ TU_ARMA(Alias, ee) {
                 return false;
             }
 
-            ConvertHIRConstantEvaluateMethodParams(sp, crate, mVisPath, mImplGenerics, mItemGenerics, implParamsDef, implParams);
+            ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, mVisPath, mImplGenerics, mItemGenerics, implParamsDef, implParams);
             if (inherentTypeConstraint) {
                 auto selectedType = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr).monomorphType(sp, selectedImpl->mType);
                 inherentTypeConstraint(sp, pe.type, selectedType);
@@ -4762,7 +4764,7 @@ TU_ARMA(Alias, ee) {
             if (itemParams.mLifetimes.size() != alias->mParams.mLifetimes.size() || itemParams.types.size() != alias->mParams.types.size() || itemParams.values.size() != alias->mParams.values.size()) {
                 ERROR(sp, E0000, "Incorrect generic arguments for inherent associated type " << input);
             }
-            ConvertHIRConstantEvaluateMethodParams(sp, crate, mVisPath, mImplGenerics, mItemGenerics, &alias->mParams, itemParams);
+            ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, mVisPath, mImplGenerics, mItemGenerics, &alias->mParams, itemParams);
 
             input = MonomorphStatePtr(crate.types, pe.type, &implParams, &itemParams).monomorphType(sp, alias->mType);
             return true;
@@ -5131,7 +5133,7 @@ TU_ARMA(Alias, ee) {
         }
     }
 
-    if (gTraitSolverConfig.globally) {
+    if (this->wb.solver.globally) {
         bool normalized = false;
         bool ambiguous = false;
         this->findTraitImplsNext(sp, traitPath.mPath, traitPath.mParams, pe.type, [&](ImplRef impl, HIRCompare certainty) {
@@ -7449,7 +7451,7 @@ TU_ARMA(Alias, ee) {
             // TODO: Have a cache of name+receiver_type to a list of types and impls
             // e.g. `len` `&Self` = `[T]`
             DEBUG("> Inherent methods");
-            crate.inherentMethodCache.find(sp, methodName, ty, this->ivars.callbackResolveInfer(), [&](const HIRTypeData* selfTy, const HIRTypeImpl& impl) {
+            this->wb.inherentMethods->find(sp, methodName, ty, this->ivars.callbackResolveInfer(), [&](const HIRTypeData* selfTy, const HIRTypeImpl& impl) {
                 if (!impl.methods.at(methodName).publicity.isVisible(this->mVisPath)) {
                     // Ignore method: Not visibile
                     return;

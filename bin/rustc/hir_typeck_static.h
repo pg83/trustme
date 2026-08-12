@@ -32,7 +32,7 @@ class StaticTraitResolve: public TraitResolveCommon {
     mutable NextSolverBridge* nextSolver = nullptr;
 
 public:
-    explicit StaticTraitResolve(const HIRCrate& crate);
+    explicit StaticTraitResolve(const WireBoard& wb);
 
 private:
     void prepIndexes();

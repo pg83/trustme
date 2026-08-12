@@ -1,4 +1,5 @@
 #include "mir_from_hir.h"
+#include "wire_board.h"
 
 #include "hir_hir.h"
 #include "mir_mir.h"
@@ -2998,10 +2999,10 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
 
 // --------------------------------------------------------------------
 
-void HIRGenerateMIRExpr(const HIRCrate& crate, const HIRItemPath& path, HIRExprPtr& exprPtr, const HIRFunction::argsT& args, const HIRTypeData* resTy) {
+void HIRGenerateMIRExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& path, HIRExprPtr& exprPtr, const HIRFunction::argsT& args, const HIRTypeData* resTy) {
     if (!exprPtr.mir) {
         TRACE_FUNCTION;
-        StaticTraitResolve resolve{crate};
+        StaticTraitResolve resolve{wb};
         resolve.setBothGenericsRaw(exprPtr.state->mImplGenerics, exprPtr.state->mItemGenerics);
         exprPtr.setMir(LowerMIR(resolve, path, exprPtr, resTy, args));
         // Run cleanup to simplify consteval?
@@ -3013,8 +3014,8 @@ void HIRGenerateMIRExpr(const HIRCrate& crate, const HIRItemPath& path, HIRExprP
     }
 }
 
-void HIRGenerateMIR(HIRCrate& crate) {
-    MIROuterVisitor ov{crate, [&](const auto& res, const auto& p, HIRExprPtr& exprPtr, const auto& args, const auto& ty) {
+void HIRGenerateMIR(const WireBoard& wb, HIRCrate& crate) {
+    MIROuterVisitor ov{wb, crate, [&](const auto& res, const auto& p, HIRExprPtr& exprPtr, const auto& args, const auto& ty) {
         if (!exprPtr.getMirOpt()) {
             exprPtr.setMir(LowerMIR(res, p, exprPtr, ty, args));
         }
@@ -4601,7 +4602,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     MonomorphState unusedMs(mResolve.crate.types);
                     const HIRGenericParams* implDef = nullptr;
                     auto v = mResolve.getValue(sp, pve->path, unusedMs, false, &implDef);
-                    ConvertHIRConstantEvaluateConstant(mResolve.crate, implDef, pve->path, const_cast<HIRConstant&>(*pve->binding));
+                    ConvertHIRConstantEvaluateConstant(mResolve.wb, mResolve.crate, implDef, pve->path, const_cast<HIRConstant&>(*pve->binding));
                 }
                 ASSERT_BUG(sp, pve->binding->valueState == HIRConstant::ValueState::Known, "Match with an unresolved constant - " << pve->path);
                 this->appendFromLit(sp, pve->binding->valueRes, ty);

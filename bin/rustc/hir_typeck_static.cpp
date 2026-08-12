@@ -1,7 +1,7 @@
 #include "hir_typeck_static.h"
+#include "wire_board.h"
 
 #include "hir_expr.h"
-#include "trait_solver_mode.h"
 #include "hir_typeck_helpers.h"
 #include "hir_conv_main_bindings.h"
 
@@ -85,10 +85,10 @@ class StaticTraitResolve::NextSolverBridge {
     TraitResolution mResolve;
 
 public:
-    explicit NextSolverBridge(const HIRCrate& crate)
-        : ivars(crate.types)
-        , visibility(crate.crateName, {})
-        , mResolve(ivars, crate, nullptr, nullptr, visibility, nullptr)
+    explicit NextSolverBridge(const WireBoard& wb)
+        : ivars(wb.crate->types)
+        , visibility(wb.crate->crateName, {})
+        , mResolve(ivars, wb, nullptr, nullptr, visibility, nullptr)
     {
     }
 
@@ -123,10 +123,10 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
     TRACE_FUNCTION_F(traitPath << FMT_CB(os, if (traitParams) { os << *traitParams; } else { os << "<?>"; }) << " for " << type);
     auto cbIdent = HIRResolvePlaceholdersNop();
 
-    if (gTraitSolverConfig.globally && !dontHandoffToSpecialised) {
+    if (this->wb.solver.globally && !dontHandoffToSpecialised) {
         if (!nextSolver) {
             ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
-            nextSolver = crate.pool->make<NextSolverBridge>(crate);
+            nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
         }
         return nextSolver->findImpl(sp, mImplGenerics, mItemGenerics, traitPath, traitParams, type, ::std::move(foundCb));
     }
@@ -1503,11 +1503,11 @@ void StaticTraitResolve::expandAssociatedTypes(const Span& sp, HIRTypeRef& input
 }
 
 void StaticTraitResolve::evaluateArraySize(const Span& sp, HIRArraySize& size) const {
-    ConvertHIRConstantEvaluateArraySize(sp, crate, HIRSimplePath(crate.crateName, {}), size);
+    ConvertHIRConstantEvaluateArraySize(sp, this->wb, crate, HIRSimplePath(crate.crateName, {}), size);
 }
 
 void StaticTraitResolve::evaluateConstGeneric(const Span& sp, HIRConstGeneric& value) const {
-    ConvertHIRConstantEvaluateConstGeneric(sp, crate, value);
+    ConvertHIRConstantEvaluateConstGeneric(sp, this->wb, crate, value);
 }
 
 void StaticTraitResolve::evaluatePathParams(const Span& sp, HIRPathParams& params) const {
@@ -1615,7 +1615,7 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
         TU_MATCH_HDRA( (e.path.mData), { )
         TU_ARMA(Generic, e2) {
                     evaluatePathParams(sp, e2.mParams);
-                    ConvertHIRConstantEvaluateMethodParams(sp, crate, HIRSimplePath(crate.crateName, {}), mImplGenerics, mItemGenerics, e.binding.getGenerics(), e2.mParams);
+                    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, HIRSimplePath(crate.crateName, {}), mImplGenerics, mItemGenerics, e.binding.getGenerics(), e2.mParams);
                     expandAssociatedTypesParams(sp, e2.mParams);
                 }
                 TU_ARMA(UfcsInherent, e2) {
@@ -1691,7 +1691,7 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
             }
         }
         TU_ARMA(Array, e) {
-            ConvertHIRConstantEvaluateArraySize(sp, crate, HIRSimplePath(crate.crateName, {}), e.size);
+            ConvertHIRConstantEvaluateArraySize(sp, this->wb, crate, HIRSimplePath(crate.crateName, {}), e.size);
             expandAssociatedTypesInner(sp, e.inner);
         }
         TU_ARMA(Slice, e) {
@@ -1788,7 +1788,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, HIRTy
         return false;
     }
 
-    ConvertHIRConstantEvaluateMethodParams(sp, crate, HIRSimplePath(crate.crateName, {}), mImplGenerics, mItemGenerics, implParamsDef, implParams);
+    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, HIRSimplePath(crate.crateName, {}), mImplGenerics, mItemGenerics, implParamsDef, implParams);
 
     auto itemParams = pe.params.clone();
     if (itemParams.mLifetimes.empty()) {
@@ -1797,7 +1797,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, HIRTy
     if (itemParams.mLifetimes.size() != alias->mParams.mLifetimes.size() || itemParams.types.size() != alias->mParams.types.size() || itemParams.values.size() != alias->mParams.values.size()) {
         ERROR(sp, E0000, "Incorrect generic arguments for inherent associated type " << input);
     }
-    ConvertHIRConstantEvaluateMethodParams(sp, crate, HIRSimplePath(crate.crateName, {}), mImplGenerics, mItemGenerics, &alias->mParams, itemParams);
+    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, HIRSimplePath(crate.crateName, {}), mImplGenerics, mItemGenerics, &alias->mParams, itemParams);
 
     input = MonomorphStatePtr(crate.types, pe.type, &implParams, &itemParams).monomorphType(sp, alias->mType);
     return true;
@@ -3540,8 +3540,8 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
     throw "";
 }
 
-StaticTraitResolve::StaticTraitResolve(const HIRCrate& crate)
-    : TraitResolveCommon(crate)
+StaticTraitResolve::StaticTraitResolve(const WireBoard& wb)
+    : TraitResolveCommon(wb)
 {
 }
 

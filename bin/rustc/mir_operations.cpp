@@ -1,4 +1,5 @@
 #include "mir_operations.h"
+#include "wire_board.h"
 #include "mir_operations.h"
 
 #include "mir_mir.h"
@@ -788,8 +789,8 @@ void MIRBorrowCheck(const StaticTraitResolve& resolve, const HIRItemPath& path, 
     // TODO: Figure out the rest
 }
 
-void MIRBorrowCheckCrate(HIRCrate& crate) {
-    MIROuterVisitor ov{crate, [&](const auto& res, const auto& p, HIRExprPtr& exprPtr, const auto& args, const auto& ty) {
+void MIRBorrowCheckCrate(const WireBoard& wb, HIRCrate& crate) {
+    MIROuterVisitor ov{wb, crate, [&](const auto& res, const auto& p, HIRExprPtr& exprPtr, const auto& args, const auto& ty) {
         MIRBorrowCheck(res, p, exprPtr.getMirOrErrorMut(Span()), args, ty);
     }};
     ov.visitCrate(crate);
@@ -1922,7 +1923,7 @@ void MIRValidate(const StaticTraitResolve& resolve, const HIRItemPath& path, con
                         const auto& p = e.fcn.as_Path();
 
                         MonomorphState outParams(types);
-                        outParams.setConstevalState(state.crate, HIRItemPath(p));
+                        outParams.setConstevalState(state.mResolve.wb, HIRItemPath(p));
                         const auto& sig = state.mResolve.getValue(sp, p, outParams, /*sig_only=*/true);
                         MIR_ASSERT(state, sig.is_Function(), "Call Fcn::Path with non-function value - " << p << " is " << sig.tagStr());
                         const auto& fcn = *sig.as_Function();
@@ -1976,8 +1977,8 @@ void MIRValidate(const StaticTraitResolve& resolve, const HIRItemPath& path, con
 
 // --------------------------------------------------------------------
 
-void MIRCheckCrate(/*const*/ HIRCrate& crate) {
-    MIROuterVisitor ov(crate, [](const auto& res, const auto& p, auto& expr, const auto& args, const auto& ty) {
+void MIRCheckCrate(const WireBoard& wb, /*const*/ HIRCrate& crate) {
+    MIROuterVisitor ov(wb, crate, [](const auto& res, const auto& p, auto& expr, const auto& args, const auto& ty) {
         MIRValidate(res, p, *expr.mir, args, ty);
     });
     ov.visitCrate(crate);
@@ -2798,8 +2799,8 @@ void MIRValidateFull(const StaticTraitResolve& resolve, const HIRItemPath& path,
 
 // --------------------------------------------------------------------
 
-void MIRCheckCrateFull(/*const*/ HIRCrate& crate) {
-    MIROuterVisitor ov(crate, [](const auto& res, const auto& p, auto& expr, const auto& args, const auto& ty) {
+void MIRCheckCrateFull(const WireBoard& wb, /*const*/ HIRCrate& crate) {
+    MIROuterVisitor ov(wb, crate, [](const auto& res, const auto& p, auto& expr, const auto& args, const auto& ty) {
         MIRValidateFull(res, p, *expr.mir, args, ty);
     });
     ov.visitCrate(crate);
@@ -4180,8 +4181,8 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
     }
 }
 
-void MIRCleanupCrate(HIRCrate& crate) {
-    MIROuterVisitor ov{crate, [&](const auto& res, const auto& p, HIRExprPtr& exprPtr, const auto& args, const auto& ty) {
+void MIRCleanupCrate(const WireBoard& wb, HIRCrate& crate) {
+    MIROuterVisitor ov{wb, crate, [&](const auto& res, const auto& p, HIRExprPtr& exprPtr, const auto& args, const auto& ty) {
         if (exprPtr) {
             MIRCleanup(res, p, exprPtr.getMirOrErrorMut(Span()), args, ty);
             MIRValidate(res, p, exprPtr.getMirOrErrorMut(Span()), args, ty);
@@ -9773,8 +9774,8 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
     fcn.blocks = mv$(newBlockList);
 }
 
-void MIROptimiseCrate(HIRCrate& crate, unsigned optLevel, bool enableInlining) {
-    MIROuterVisitor ov{crate, [optLevel, enableInlining](const auto& res, const auto& p, auto& expr, const auto& args, const auto& ty) {
+void MIROptimiseCrate(const WireBoard& wb, HIRCrate& crate, unsigned optLevel, bool enableInlining) {
+    MIROuterVisitor ov{wb, crate, [optLevel, enableInlining](const auto& res, const auto& p, auto& expr, const auto& args, const auto& ty) {
         //}
         auto& mir = expr.getMirOrErrorMut(Span());
         if (optLevel == 0) {
@@ -9790,10 +9791,10 @@ void MIROptimiseCrate(HIRCrate& crate, unsigned optLevel, bool enableInlining) {
     ov.visitCrate(crate);
 }
 
-void MIROptimiseCrateInlining(const HIRCrate& crate, TransList& list, bool postSave, unsigned optLevel, bool enableInlining) {
+void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransList& list, bool postSave, unsigned optLevel, bool enableInlining) {
     TRACE_FUNCTION;
 
-    ::StaticTraitResolve resolve{crate};
+    ::StaticTraitResolve resolve{wb};
 
     // If running after HIR has been serialised, we can eliminate calls to `const_eval_select` without
     // impacting constant evaluation in downstream crates

@@ -1,3 +1,4 @@
+struct WireBoard;
 #pragma once
 
 #include "trans_trans_list.h"
@@ -59,5 +60,5 @@ public:
     virtual void emitGlobalAsm(const HIRGlobalAssembly&) = 0;
 };
 
-extern ::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorC(const HIRCrate& crate, const ::std::string& outfile);
-extern ::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorMonoMir(const HIRCrate& crate, const ::std::string& outfile);
+extern ::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorC(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile);
+extern ::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile);

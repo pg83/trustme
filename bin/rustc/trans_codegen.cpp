@@ -1,4 +1,5 @@
 #include "trans_codegen.h"
+#include "wire_board.h"
 
 #include "hir_hir.h"
 #include "mir_mir.h"
@@ -15,14 +16,14 @@
 #include <iomanip>
 #include <algorithm>
 
-void TransCodegen(const ::std::string& outfile, CodegenOutput outTy, const TransOptions& opt, HIRCrate* cratePtr, TransList list, const ::std::string& hirFile) {
+void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutput outTy, const TransOptions& opt, HIRCrate* cratePtr, TransList list, const ::std::string& hirFile) {
     static Span sp;
 
     ::std::unique_ptr<CodeGenerator> codegen;
     if (opt.mode == "monomir") {
-        codegen = TransCodegenGetGeneratorMonoMir(*cratePtr, outfile);
+        codegen = TransCodegenGetGeneratorMonoMir(wb, *cratePtr, outfile);
     } else if (opt.mode == "c") {
-        codegen = TransCodegenGetGeneratorC(*cratePtr, outfile);
+        codegen = TransCodegenGetGeneratorC(wb, *cratePtr, outfile);
     } else {
         BUG(sp, "Unknown codegen mode '" << opt.mode << "'");
     }
@@ -425,9 +426,9 @@ namespace {
         const MIRTypeResolve* mirRes;
 
     public:
-        CodeGeneratorMonoMir(const HIRCrate& crate, const ::std::string& outfile)
+        CodeGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile)
             : crate(crate)
-            , mResolve(crate)
+            , mResolve(wb)
             , outfilePath(outfile)
             , of(outfilePath + ".mir")
         {
@@ -1371,8 +1372,8 @@ namespace {
     Span CodeGeneratorMonoMir::sp;
 }
 
-::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorMonoMir(const HIRCrate& crate, const ::std::string& outfile) {
-    return ::std::unique_ptr<CodeGenerator>(new CodeGeneratorMonoMir(crate, outfile));
+::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile) {
+    return ::std::unique_ptr<CodeGenerator>(new CodeGeneratorMonoMir(wb, crate, outfile));
 }
 
 CodeGenerator::~CodeGenerator() {

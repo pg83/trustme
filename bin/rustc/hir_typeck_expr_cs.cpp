@@ -1,10 +1,10 @@
 #include "hir_typeck_expr_cs.h"
+#include "wire_board.h"
 
 #include "hir_hir.h"
 #include "hir_expr.h"
 #include "hir_visitor.h"
 #include "hir_typeck_static.h"
-#include "trait_solver_mode.h"
 #include "hir_typeck_helpers.h"
 #include "hir_typeck_expr_visit.h"
 #include "hir_conv_main_bindings.h"
@@ -5806,7 +5806,7 @@ namespace {
                     // Re-exporting them into the legacy constraint loop
                     // evaluates the same proof a second time and turns a
                     // coinductive fixed point into an endless new rule.
-                    if (!gTraitSolverConfig.globally) {
+                    if (!context.mResolve.wb.solver.globally) {
                         addImplBounds(context, sp, impl);
                     }
                     return true;
@@ -5892,7 +5892,7 @@ namespace {
                     return false;
                 }
             };
-            const bool found = gTraitSolverConfig.globally ? context.mResolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp) : context.mResolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
+            const bool found = context.mResolve.wb.solver.globally ? context.mResolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp) : context.mResolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
             if (found) {
                 // Fully-known impl
                 DEBUG("Fully-known impl located");
@@ -8198,7 +8198,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
 
     auto rootPtr = expr.takeNode();
     assert(!ms.modPaths.empty());
-    Context context{ms.crate, ms.mImplGenerics, ms.mItemGenerics, ms.modPaths.back(), ms.currentTrait, ms.currentTraitImpl};
+    Context context{ms.wb, ms.mImplGenerics, ms.mItemGenerics, ms.modPaths.back(), ms.currentTrait, ms.currentTraitImpl};
 
     // - Build up ruleset from node tree
     TypecheckCodeCSEnumerateRules(context, ms, args, resultType, expr, rootPtr);
@@ -8547,7 +8547,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
 
     {
         DEBUG("==== FINAL VALIDATE ====");
-        StaticTraitResolve staticResolve(ms.crate);
+        StaticTraitResolve staticResolve(ms.wb);
         staticResolve.setBothGenericsRaw(ms.mImplGenerics, ms.mItemGenerics);
         TypecheckExpressionsValidateOne(staticResolve, args, resultType, expr);
 
@@ -8590,7 +8590,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                     auto valRef = staticResolve.getValue(node.span(), node.methodPath, outParams, /*signature_only=*/true, nullptr);
                     const HIRFunction& fcn = *valRef.as_Function();
                     const HIRGenericParams& gpDef = fcn.mParams;
-                    ConvertHIRConstantEvaluateMethodParams(node.span(), ms.crate, ms.modPaths.back(), ms.mImplGenerics, ms.mItemGenerics, &gpDef, *paramsPtr);
+                    ConvertHIRConstantEvaluateMethodParams(node.span(), ms.wb, ms.crate, ms.modPaths.back(), ms.mImplGenerics, ms.mItemGenerics, &gpDef, *paramsPtr);
                 }
             }
         } v(ms, staticResolve);
@@ -8902,7 +8902,7 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
         assert( fcnPtr );
         cache.fcn = fcnPtr;
         const auto& fcn = *fcnPtr;
-        cache.monomorph->setConstevalState(context.crate, HIRItemPath(path));
+        cache.monomorph->setConstevalState(context.mResolve.wb, HIRItemPath(path));
         const auto& monomorph = *cache.monomorph;
 
         // --- Monomorphise the argument/return types (into current context)
@@ -10932,11 +10932,11 @@ Context::TaitEntry::TaitEntry(const HIRPathParams& p, HIRTypeRef t)
 {
 }
 
-Context::Context(const HIRCrate& crate, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& modPath, const HIRGenericPath* currentTrait, const HIRTraitImpl* currentTraitImpl)
-    : crate(crate)
+Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& modPath, const HIRGenericPath* currentTrait, const HIRTraitImpl* currentTraitImpl)
+    : crate(*wb.crate)
     , currentTraitImpl(currentTraitImpl)
-    , ivars(crate.types)
-    , mResolve(ivars, crate, implParams, itemParams, modPath, currentTrait)
+    , ivars(wb.crate->types)
+    , mResolve(ivars, wb, implParams, itemParams, modPath, currentTrait)
     , nextRuleIdx(0)
     , mLangBox(crate.getLangItemPathOpt("owned_box"))
 {

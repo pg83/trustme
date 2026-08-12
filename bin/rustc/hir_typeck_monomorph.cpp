@@ -2,13 +2,13 @@
 
 Monomorphiser::Monomorphiser(HIRTypeInterner& types)
     : types(types)
-    , constevalCrate(nullptr)
+    , constevalWb(nullptr)
     , constevalPath("")
 {
 }
 
-void Monomorphiser::setConstevalState(const HIRCrate& crate, HIRItemPath ip) {
-    this->constevalCrate = &crate;
+void Monomorphiser::setConstevalState(const WireBoard& wb, HIRItemPath ip) {
+    this->constevalWb = &wb;
     this->constevalPath = ip;
 }
 

@@ -1,5 +1,7 @@
 #include "hir_hir.h"
 
+#include "wire_board.h"
+
 #include "floats.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
@@ -1678,7 +1680,7 @@ bool HIRCrate::findTypeImpls(const HIRTypeData* type, tCbResolveType tyRes, ::st
     return false;
 }
 
-const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, HIRTypeRef& retTy) const {
+const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, HIRTypeRef& retTy) const {
     if (!ep) {
         // No HIR, so has to just have MIR - from a extern crate most likely
         ASSERT_BUG(Span(), ep.mir, "No HIR (!ep) and no MIR (!ep.m_mir) for " << ip);
@@ -1706,8 +1708,8 @@ const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRExprPtr
                     ERROR(Span(), E0000, "Loop in constant evaluation");
                 }
                 ep.state->stage = HIRExprState::Stage::ConstEvalRequest;
-                ConvertHIRResolveUFCSExpr(*this, ip, epMut);
-                ConvertHIRConstantEvaluateExpr(*this, ip, epMut);
+                ConvertHIRResolveUFCSExpr(wb, *this, ip, epMut);
+                ConvertHIRConstantEvaluateExpr(wb, *this, ip, epMut);
                 ep.state->stage = HIRExprState::Stage::ConstEval;
             }
 
@@ -1720,7 +1722,7 @@ const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRExprPtr
 
                 // TODO: Set debug/timing stage
                 // - Can store that on the Expr, OR get it from the item path
-                TypeckModuleState ms{const_cast<HIRCrate&>(*this)};
+                TypeckModuleState ms{wb};
                 //ms.prepare_from_path( ip );   // <- Ideally would use this, but it's a lot of code for one usage
                 ms.mImplGenerics = ep.state->mImplGenerics;
                 ms.mItemGenerics = ep.state->mItemGenerics;
@@ -1733,11 +1735,11 @@ const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRExprPtr
                 ASSERT_BUG(Span(), ep.state->stage == HIRExprState::Stage::Typecheck, "Typecheck_Code didn't set stage");
             }
             if (ep.state->stage < HIRExprState::Stage::PostTypecheck) {
-                HIRExpandAnnotateUsageExpr(*this, ip, epMut);
-                HIRExpandStaticBorrowConstantsMarkExpr(*this, ip, epMut);
+                HIRExpandAnnotateUsageExpr(wb, *this, ip, epMut);
+                HIRExpandStaticBorrowConstantsMarkExpr(wb, *this, ip, epMut);
             }
             if (ep.state->stage < HIRExprState::Stage::Lifetimes) {
-                HIRExpandLifetimeInferExpr(*this, ip, args, retTy, epMut);
+                HIRExpandLifetimeInferExpr(wb, *this, ip, args, retTy, epMut);
                 ep.state->stage = HIRExprState::Stage::Lifetimes;
             }
             if (ep.state->stage < HIRExprState::Stage::Sbc) {
@@ -1745,16 +1747,16 @@ const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRExprPtr
                     ERROR(Span(), E0000, "Loop in constant evaluation");
                 }
                 ep.state->stage = HIRExprState::Stage::SbcRequest;
-                HIRExpandClosuresExpr(*this, retTy, epMut);
-                HIRExpandStaticBorrowConstantsExpr(*this, ip, epMut);
+                HIRExpandClosuresExpr(wb, *this, retTy, epMut);
+                HIRExpandStaticBorrowConstantsExpr(wb, *this, ip, epMut);
             }
             if (ep.state->stage < HIRExprState::Stage::Expand) {
                 if (ep.state->stage == HIRExprState::Stage::ExpandRequest) {
                     ERROR(Span(), E0000, "Loop in constant evaluation");
                 }
                 ep.state->stage = HIRExprState::Stage::ExpandRequest;
-                HIRExpandUfcsEverythingExpr(*this, epMut, ep.state->currentTraitImpl);
-                HIRExpandReborrowsExpr(*this, epMut);
+                HIRExpandUfcsEverythingExpr(wb, *this, epMut, ep.state->currentTraitImpl);
+                HIRExpandReborrowsExpr(wb, *this, epMut);
                 //HIR_Expand_ErasedType(*this, ep_mut);    // - Maybe?
 
                 ep.state->stage = HIRExprState::Stage::Expand;
@@ -1765,7 +1767,7 @@ const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRExprPtr
                     ERROR(Span(), E0000, "Loop in constant evaluation");
                 }
                 ep.state->stage = HIRExprState::Stage::MirRequest;
-                HIRGenerateMIRExpr(*this, ip, epMut, args, retTy);
+                HIRGenerateMIRExpr(wb, *this, ip, epMut, args, retTy);
                 ep.state->stage = HIRExprState::Stage::Mir;
             }
             assert(ep.mir);
@@ -2223,12 +2225,12 @@ const HIRConstant& HIRCrate::getConstantByPath(const Span& sp, const HIRSimplePa
     }
 }
 
-const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRFunction& fcn) const {
+const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRFunction& fcn) const {
     auto ty = fcn.returnType;
-    return getOrGenMir(ip, fcn.mCode, fcn.mArgs, ty);
+    return getOrGenMir(wb, ip, fcn.mCode, fcn.mArgs, ty);
 }
 
-const MIRFunction* HIRCrate::getOrGenMir(const HIRItemPath& ip, const HIRExprPtr& ep, HIRTypeRef& expTy) const {
+const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, HIRTypeRef& expTy) const {
     static HIRFunction::argsT sArgs;
-    return getOrGenMir(ip, ep, sArgs, expTy);
+    return getOrGenMir(wb, ip, ep, sArgs, expTy);
 }

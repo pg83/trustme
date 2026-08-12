@@ -1243,7 +1243,7 @@ namespace {
         };
 
         if (!enm.discriminantsEvaluated) {
-            ConvertHIRConstantEvaluateEnum(resolve.crate, te.path.mData.as_Generic().mPath, enm);
+            ConvertHIRConstantEvaluateEnum(resolve.wb, resolve.crate, te.path.mData.as_Generic().mPath, enm);
             assert(enm.discriminantsEvaluated);
         }
 

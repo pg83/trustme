@@ -1,3 +1,4 @@
+struct WireBoard;
 #pragma once
 
 /*
@@ -61,7 +62,7 @@ struct HIREvaluator {
     static unsigned sNextEvalIndex;
 
 public:
-    HIREvaluator(const Span& sp, const HIRCrate& crate, Newval& nvs);
+    HIREvaluator(const Span& sp, const WireBoard& wb, Newval& nvs);
 
     HIREvaluator(HIREvaluator&&) = default;
     HIREvaluator(const HIREvaluator&) = delete;

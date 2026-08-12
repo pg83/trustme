@@ -10,6 +10,7 @@
 #include <memory>
 
 struct TraitResolveCommon {
+    const WireBoard& wb;
     const HIRCrate& crate;
 
     const HIRGenericParams* mImplGenerics;
@@ -86,7 +87,7 @@ struct TraitResolveCommon {
     HIRSimplePath mLangDestruct;         // 1.90
     HIRSimplePath mLangFuture;           // 1.90 (well, added earlier)
 
-    TraitResolveCommon(const HIRCrate& crate);
+    TraitResolveCommon(const WireBoard& wb);
 
     bool hasSelf() const {
         return mImplGenerics ? true : false;
