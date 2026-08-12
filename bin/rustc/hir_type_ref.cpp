@@ -27,3 +27,15 @@ HIRTrackHrbStack::PopOnDrop HIRTrackHrbStack::pushHrb(const HIRGenericParams& pa
     hrbStack.push_back(&params);
     return PopOnDrop(hrbStack);
 }
+
+const HIRTypeData* HIRResolvePlaceholdersNop::getType(const Span&, const HIRTypeData* ty) const {
+    return ty;
+}
+
+const HIRConstGeneric& HIRResolvePlaceholdersNop::getVal(const Span&, const HIRConstGeneric& v) const {
+    return v;
+}
+
+HIRCompare HIRMatchGenerics::matchLft(const HIRGenericRef&, const HIRLifetimeRef&) {
+    return HIRCompare::Equal;
+}

@@ -62,9 +62,7 @@ public:
     Position getPosition() const override;
     Ident::Hygiene realGetHygiene() const override;
 
-    ASTEdition realGetEdition() const override {
-        return edition;
-    }
+    ASTEdition realGetEdition() const override;
 
     Token realGetToken() override;
 

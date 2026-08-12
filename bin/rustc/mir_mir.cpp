@@ -1187,3 +1187,19 @@ MIREnumCachePtr& MIREnumCachePtr::operator=(MIREnumCachePtr&& x) {
     x.fmt(os);
     return os;
 }
+
+MIRBasicBlockId MIRCloner::mapBbIdx(MIRBasicBlockId idx) const {
+    return idx;
+}
+
+unsigned MIRCloner::mapLocal(unsigned f) const {
+    return f;
+}
+
+unsigned MIRCloner::mapDropFlag(unsigned f) const {
+    return f;
+}
+
+const StaticTraitResolve* MIRCloner::resolve() const {
+    return nullptr;
+}

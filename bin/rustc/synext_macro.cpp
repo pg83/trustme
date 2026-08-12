@@ -2013,3 +2013,7 @@ MacroDef::MacroDef(::std::string name, ::std::unique_ptr<ExpandProcMacro> def)
 {
     RegisterSynextMacroStatic(this);
 }
+
+::std::unique_ptr<TokenStream> ExpandProcMacro::expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) {
+    ERROR(sp, E0000, "macro doesn't take an identifier");
+}

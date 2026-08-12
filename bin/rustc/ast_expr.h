@@ -750,9 +750,7 @@ public:
 
     void visit(ASTExprNodeP& cnode);
 
-    virtual bool isConst() const {
-        return false;
-    }
+    virtual bool isConst() const;
 
 #define NT(nt) \
     virtual void visit(nt& node) = 0 /*; \

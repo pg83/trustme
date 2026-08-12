@@ -71,17 +71,11 @@ class MonomorphiserNop: public Monomorphiser {
 public:
     using Monomorphiser::Monomorphiser;
 
-    HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override {
-        return types.generic(ty.name, ty.binding);
-    }
+    HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override;
 
-    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override {
-        return HIRConstGeneric(val);
-    }
+    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
 
-    HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& lftRef) const override {
-        return HIRLifetimeRef(lftRef.binding);
-    }
+    HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& lftRef) const override;
 };
 
 // Wrappers to only monomorphise if required
@@ -123,21 +117,13 @@ struct MonomorphStatePtr: public MonomorphiserPP {
 
     MonomorphStatePtr& operator=(MonomorphStatePtr&& x);
 
-    const HIRTypeData* getSelfType() const override {
-        return selfTy;
-    }
+    const HIRTypeData* getSelfType() const override;
 
-    const HIRPathParams* getImplParams() const override {
-        return ppImpl;
-    }
+    const HIRPathParams* getImplParams() const override;
 
-    const HIRPathParams* getMethodParams() const override {
-        return ppMethod;
-    }
+    const HIRPathParams* getMethodParams() const override;
 
-    const HIRPathParams* getHrbParams() const override {
-        return ppHrb;
-    }
+    const HIRPathParams* getHrbParams() const override;
 };
 
 struct MonomorphHrlsOnly: public Monomorphiser {
@@ -174,21 +160,13 @@ struct MonomorphState: public MonomorphiserPP {
         return (ppMethod && ppMethod->hasParams()) || (ppImpl && ppImpl->hasParams());
     }
 
-    const HIRTypeData* getSelfType() const override {
-        return selfTy;
-    }
+    const HIRTypeData* getSelfType() const override;
 
-    const HIRPathParams* getImplParams() const override {
-        return ppImpl;
-    }
+    const HIRPathParams* getImplParams() const override;
 
-    const HIRPathParams* getMethodParams() const override {
-        return ppMethod;
-    }
+    const HIRPathParams* getMethodParams() const override;
 
-    const HIRPathParams* getHrbParams() const override {
-        return nullptr;
-    }
+    const HIRPathParams* getHrbParams() const override;
 };
 
 extern ::std::ostream& operator<<(::std::ostream& os, const MonomorphState& ms);

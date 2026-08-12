@@ -1,8 +1,10 @@
 #include "span.h"
-#include <functional>
-#include <iostream>
-#include "parse_lex.h"
+
 #include "common.h"
+#include "parse_lex.h"
+
+#include <iostream>
+#include <functional>
 
 Span::Span(Span parent, RcString filename, unsigned int startLine, unsigned int startOfs, unsigned int endLine, unsigned int endOfs)
     : ptr(SpanInnerSource::alloc(parent, ::std::move(filename), startLine, startOfs, endLine, endOfs))
@@ -146,20 +148,25 @@ Span::Span()
     //: m_ptr(&s_empty_span)
     : ptr(nullptr) {
 }
+
 Span::Span(Span&& x)
-    : ptr(x.ptr) {
+    : ptr(x.ptr)
+{
     x.ptr = nullptr;
 }
+
 Span& Span::operator=(const Span& x) {
     this->~Span();
     new (this) Span(x);
     return *this;
 }
+
 Span& Span::operator=(Span&& x) {
     this->~Span();
     new (this) Span(std::move(x));
     return *this;
 }
+
 SpanInner* SpanInnerSource::alloc(Span parent, RcString filename, unsigned int startLine, unsigned int startOfs, unsigned int endLine, unsigned int endOfs) {
     auto* rv = new SpanInnerSource();
     rv->referenceCount = 1;
@@ -170,4 +177,12 @@ SpanInner* SpanInnerSource::alloc(Span parent, RcString filename, unsigned int s
     rv->endLine = endLine;
     rv->endOfs = endOfs;
     return rv;
+}
+
+RcString SpanInnerSource::crateName() const {
+    return RcString();
+}
+
+RcString SpanInnerMacro::crateName() const {
+    return crate;
 }

@@ -413,11 +413,7 @@ public:
 
     ASTPath& operator+=(ASTPathNode pn);
 
-    void append(ASTPathNode node) {
-        assert(!cls.is_Invalid());
-        nodes().push_back(mv$(node));
-        mBindings = Bindings();
-    }
+    void append(ASTPathNode node);
 
     bool isTrivial() const {
         TU_MATCH_DEF(Class, (cls), (e), (return false;), (Local, return true;), (Relative, return e.nodes.size() == 1 && e.nodes[0].args().isEmpty();))

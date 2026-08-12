@@ -226,3 +226,19 @@ TransListConst::TransListConst(HIRTypeInterner& types)
     , pp(types)
 {
 }
+
+const HIRTypeData* TransParams::getSelfType() const {
+    return selfType;
+}
+
+const HIRPathParams* TransParams::getImplParams() const {
+    return &ppImpl;
+}
+
+const HIRPathParams* TransParams::getMethodParams() const {
+    return &ppMethod;
+}
+
+const HIRPathParams* TransParams::getHrbParams() const {
+    return nullptr;
+}

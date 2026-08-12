@@ -753,13 +753,7 @@ NODE(
     }
 )
 
-NODE(
-    ASTExprNodeNamedValue,
-    {
-        mPath.printPretty(os, false);
-    },
-    { return NEWNODE(ASTExprNodeNamedValue, ASTPath(mPath)); }
-)
+NODE(ASTExprNodeNamedValue, { mPath.printPretty(os, false); }, { return NEWNODE(ASTExprNodeNamedValue, ASTPath(mPath)); })
 
 NODE(ASTExprNodeField, { os << "(" << *obj << ")." << mName; }, { return NEWNODE(ASTExprNodeField, obj->clone(), mName); })
 
@@ -1369,4 +1363,8 @@ void ASTNodeVisitorDef::visit(ASTExprNodeP& cnode) {
         TRACE_FUNCTION_F(cnode.typeName());
         cnode->visit(*this);
     }
+}
+
+bool ASTNodeVisitor::isConst() const {
+    return false;
 }

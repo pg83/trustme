@@ -169,3 +169,29 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
 
 CodeGenerator::~CodeGenerator() {
 }
+
+void CodeGenerator::finalise(const TransOptions& opt, CodegenOutput outTy, const ::std::string& hirFile) {
+}
+
+// Called on all types directly mentioned (e.g. variables, arguments, and fields)
+// - Inner-most types are visited first.
+void CodeGenerator::emitTypeProto(const HIRTypeData*) {
+}
+
+void CodeGenerator::emitType(const HIRTypeData*) {
+}
+
+void CodeGenerator::emitTypeId(const HIRTypeData*) {
+}
+
+void CodeGenerator::emitStaticExt(const HIRPath& p, const HIRStatic& item, const TransParams& params) {
+}
+
+void CodeGenerator::emitStaticProto(const HIRPath& p, const HIRStatic& item, const TransParams& params) {
+}
+
+void CodeGenerator::emitFunctionExt(const HIRPath& p, const HIRFunction& item, const TransParams& params) {
+}
+
+void CodeGenerator::emitFunctionProto(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef) {
+}

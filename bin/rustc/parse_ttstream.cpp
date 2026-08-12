@@ -132,3 +132,11 @@ Ident::Hygiene TTStreamO::realGetHygiene() const {
     }
     return *hygienePtr;
 }
+
+Span TTStream::outerSpan() const {
+    return parentSpan;
+}
+
+Span TTStreamO::outerSpan() const {
+    return parentSpan;
+}

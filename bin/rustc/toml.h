@@ -93,9 +93,7 @@ struct TomlValue {
 
         TypeError(Type h, Type e);
 
-        const char* what() const noexcept override {
-            return "toml type error";
-        }
+        const char* what() const noexcept override;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const TypeError& e);
     };

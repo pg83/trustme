@@ -1398,3 +1398,7 @@ void Lexer::popHygine() {
     DEBUG("<< " << mHygiene << " -> " << mHygiene.getParent());
     mHygiene = mHygiene.getParent();
 }
+
+ASTEdition Lexer::realGetEdition() const {
+    return edition;
+}

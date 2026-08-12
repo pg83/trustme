@@ -189,3 +189,13 @@ SavedParseState::~SavedParseState() {
     os << " }";
     return os;
 }
+
+void TokenStream::pushHygine() {
+}
+
+void TokenStream::popHygine() {
+}
+
+Span TokenStream::outerSpan() const {
+    return Span();
+}

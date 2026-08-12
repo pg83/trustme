@@ -45,21 +45,13 @@ struct TransParams: public MonomorphiserPP {
         return forceMonomorphisation || ppMethod.hasParams() || ppImpl.hasParams();
     }
 
-    const HIRTypeData* getSelfType() const override {
-        return selfType;
-    }
+    const HIRTypeData* getSelfType() const override;
 
-    const HIRPathParams* getImplParams() const override {
-        return &ppImpl;
-    }
+    const HIRPathParams* getImplParams() const override;
 
-    const HIRPathParams* getMethodParams() const override {
-        return &ppMethod;
-    }
+    const HIRPathParams* getMethodParams() const override;
 
-    const HIRPathParams* getHrbParams() const override {
-        return nullptr;
-    }
+    const HIRPathParams* getHrbParams() const override;
 };
 
 struct CachedFunction {

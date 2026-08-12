@@ -1,8 +1,9 @@
 #pragma once
 
 #include "rc_string.h"
-#include <functional>
+
 #include <memory>
+#include <functional>
 
 enum ErrorType {
     E0000,
@@ -110,9 +111,7 @@ public:
     ~SpanInnerSource() override;
     void fmt(::std::ostream& os) const override;
 
-    RcString crateName() const override {
-        return RcString();
-    }
+    RcString crateName() const override;
 
 private:
     static SpanInner* alloc(Span parent, RcString filename, unsigned int startLine, unsigned int startOfs, unsigned int endLine, unsigned int endOfs);
@@ -128,9 +127,7 @@ struct SpanInnerMacro: public SpanInner {
     ~SpanInnerMacro() override;
     void fmt(::std::ostream& os) const override;
 
-    RcString crateName() const override {
-        return crate;
-    }
+    RcString crateName() const override;
 
 private:
     static SpanInner* alloc(Span parent, RcString crate, RcString macro);

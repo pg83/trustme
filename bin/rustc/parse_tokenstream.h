@@ -71,11 +71,9 @@ public:
 
     Ident::Hygiene getHygiene() const;
 
-    virtual void pushHygine() {
-    }
+    virtual void pushHygine();
 
-    virtual void popHygine() {
-    }
+    virtual void popHygine();
 
     ParseState& parseState() {
         return mParseState;
@@ -104,9 +102,7 @@ public:
 protected:
     virtual Position getPosition() const = 0;
 
-    virtual Span outerSpan() const {
-        return Span();
-    }
+    virtual Span outerSpan() const;
 
     virtual Token realGetToken() = 0;
     virtual ASTEdition realGetEdition() const = 0;

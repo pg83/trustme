@@ -842,24 +842,16 @@ public:
     MIRCloner(const Span& sp, HIRTypeInterner& types);
     virtual ~MIRCloner();
 
-    virtual MIRBasicBlockId mapBbIdx(MIRBasicBlockId idx) const {
-        return idx;
-    }
+    virtual MIRBasicBlockId mapBbIdx(MIRBasicBlockId idx) const;
 
-    virtual unsigned mapLocal(unsigned f) const {
-        return f;
-    }
+    virtual unsigned mapLocal(unsigned f) const;
 
-    virtual unsigned mapDropFlag(unsigned f) const {
-        return f;
-    }
+    virtual unsigned mapDropFlag(unsigned f) const;
 
     virtual const HIRTypeData* valueGenericType(HIRGenericRef ce) const;
     virtual const Monomorphiser& monomorphiser() const;
 
-    virtual const StaticTraitResolve* resolve() const {
-        return nullptr;
-    }
+    virtual const StaticTraitResolve* resolve() const;
 
     virtual MIRStatement cloneStmt(const MIRStatement& src) const;
     virtual MIRTerminator cloneTerm(const MIRTerminator& src) const;

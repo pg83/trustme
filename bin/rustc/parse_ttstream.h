@@ -16,9 +16,7 @@ public:
 
     Position getPosition() const override;
 
-    Span outerSpan() const override {
-        return parentSpan;
-    }
+    Span outerSpan() const override;
 
 protected:
     ASTEdition realGetEdition() const override;
@@ -44,9 +42,7 @@ public:
 
     Position getPosition() const override;
 
-    Span outerSpan() const override {
-        return parentSpan;
-    }
+    Span outerSpan() const override;
 
 protected:
     ASTEdition realGetEdition() const override;

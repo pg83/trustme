@@ -569,3 +569,9 @@ size_t ASTPath::size() const {
     }
     return os;
 }
+
+void ASTPath::append(ASTPathNode node) {
+    assert(!cls.is_Invalid());
+    nodes().push_back(mv$(node));
+    mBindings = Bindings();
+}

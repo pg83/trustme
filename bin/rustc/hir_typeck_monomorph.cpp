@@ -131,3 +131,47 @@ HIRLifetimeRef MonomorphHrlsOnly::getLifetime(const Span& sp, const HIRGenericRe
     }
     return HIRLifetimeRef(lftRef.binding);
 }
+
+HIRTypeRef MonomorphiserNop::getType(const Span& sp, const HIRGenericRef& ty) const {
+    return types.generic(ty.name, ty.binding);
+}
+
+HIRConstGeneric MonomorphiserNop::getValue(const Span& sp, const HIRGenericRef& val) const {
+    return HIRConstGeneric(val);
+}
+
+HIRLifetimeRef MonomorphiserNop::getLifetime(const Span& sp, const HIRGenericRef& lftRef) const {
+    return HIRLifetimeRef(lftRef.binding);
+}
+
+const HIRTypeData* MonomorphStatePtr::getSelfType() const {
+    return selfTy;
+}
+
+const HIRPathParams* MonomorphStatePtr::getImplParams() const {
+    return ppImpl;
+}
+
+const HIRPathParams* MonomorphStatePtr::getMethodParams() const {
+    return ppMethod;
+}
+
+const HIRPathParams* MonomorphStatePtr::getHrbParams() const {
+    return ppHrb;
+}
+
+const HIRTypeData* MonomorphState::getSelfType() const {
+    return selfTy;
+}
+
+const HIRPathParams* MonomorphState::getImplParams() const {
+    return ppImpl;
+}
+
+const HIRPathParams* MonomorphState::getMethodParams() const {
+    return ppMethod;
+}
+
+const HIRPathParams* MonomorphState::getHrbParams() const {
+    return nullptr;
+}

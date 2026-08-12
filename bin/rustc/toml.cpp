@@ -671,47 +671,60 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
 
 TomlValue::TomlValue()
     : mType(Type::String)
-    , intValue(0) {
+    , intValue(0)
+{
 }
+
 TomlValue::TomlValue(::std::string s)
     : mType(Type::String)
     , intValue(0)
-    , strValue(::std::move(s)) {
+    , strValue(::std::move(s))
+{
 }
+
 TomlValue::TomlValue(int64_t v)
     : mType(Type::Integer)
-    , intValue(v) {
+    , intValue(v)
+{
 }
+
 TomlValue::TomlValue(bool v)
     : mType(Type::Boolean)
-    , intValue(v ? 1 : 0) {
+    , intValue(v ? 1 : 0)
+{
 }
+
 const ::std::string& TomlValue::asString() const {
     if (mType != Type::String) {
         throw TypeError{mType, Type::String};
     }
     return strValue;
 }
+
 bool TomlValue::asBool() const {
     if (mType != Type::Boolean) {
         throw TypeError{mType, Type::Boolean};
     }
     return intValue != 0;
 }
+
 uint64_t TomlValue::asInt() const {
     if (mType != Type::Integer) {
         throw TypeError{mType, Type::Integer};
     }
     return intValue;
 }
+
 const ::std::vector<TomlValue>& TomlValue::asList() const {
     if (mType != Type::List) {
         throw TypeError{mType, Type::List};
     }
     return subValues;
 }
+
 TomlFileIter::TomlFileIter(TomlFile& tf)
-    : reader(tf) {
+    : reader(tf)
+{
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const TomlValue::Type& e) {
@@ -731,6 +744,7 @@ TomlFileIter::TomlFileIter(TomlFile& tf)
     }
     return os;
 }
+
 ::std::ostream& operator<<(::std::ostream& os, const TomlValue& x) {
     switch (x.mType) {
         case TomlValue::Type::Boolean:
@@ -776,9 +790,15 @@ TomlFileIter::TomlFileIter(TomlFile& tf)
 
 TomlValue::TypeError::TypeError(TomlValue::Type h, TomlValue::Type e)
     : have(h)
-    , exp(e) {
+    , exp(e)
+{
 }
+
 ::std::ostream& operator<<(::std::ostream& os, const TomlValue::TypeError& e) {
     os << "expected " << e.exp << ", got " << e.have;
     return os;
+}
+
+const char* TomlValue::TypeError::what() const noexcept {
+    return "toml type error";
 }

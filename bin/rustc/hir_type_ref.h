@@ -36,13 +36,9 @@ public:
 };
 
 class HIRResolvePlaceholdersNop: public HIRResolvePlaceholders {
-    const HIRTypeData* getType(const Span&, const HIRTypeData* ty) const override {
-        return ty;
-    }
+    const HIRTypeData* getType(const Span&, const HIRTypeData* ty) const override;
 
-    const HIRConstGeneric& getVal(const Span&, const HIRConstGeneric& v) const override {
-        return v;
-    }
+    const HIRConstGeneric& getVal(const Span&, const HIRConstGeneric& v) const override;
 };
 
 using tCbResolveType = const HIRResolvePlaceholders&;
@@ -81,9 +77,7 @@ public:
     virtual HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) = 0;
     virtual HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) = 0;
 
-    virtual HIRCompare matchLft(const HIRGenericRef&, const HIRLifetimeRef&) {
-        return HIRCompare::Equal;
-    }
+    virtual HIRCompare matchLft(const HIRGenericRef&, const HIRLifetimeRef&);
 };
 
 enum class HIRInferClass {
