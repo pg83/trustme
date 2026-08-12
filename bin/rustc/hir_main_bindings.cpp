@@ -1866,7 +1866,7 @@ namespace {
 
             if (item.m_code) {
                 m_os << indent();
-                if (cast<::HIR::ExprNode_Block>(&*item.m_code)) {
+                if (cast<::HIR::ExprNodeBlock>(&*item.m_code)) {
                     item.m_code->visit(*this);
                 } else {
                     m_os << "{\n";
@@ -1916,19 +1916,19 @@ namespace {
 // - Misc
 
         bool node_is_leaf(const ::HIR::ExprNode& node) {
-            if (NODE_IS(&node, _PathValue)) {
+            if (NODE_IS(&node, PathValue)) {
                 return true;
             }
-            if (NODE_IS(&node, _Variable)) {
+            if (NODE_IS(&node, Variable)) {
                 return true;
             }
-            if (NODE_IS(&node, _Literal)) {
+            if (NODE_IS(&node, Literal)) {
                 return true;
             }
-            if (NODE_IS(&node, _CallPath)) {
+            if (NODE_IS(&node, CallPath)) {
                 return true;
             }
-            if (NODE_IS(&node, _Deref)) {
+            if (NODE_IS(&node, Deref)) {
                 return true;
             }
             return false;
@@ -1939,7 +1939,7 @@ namespace {
             m_os << "/*: " << node_ptr->m_res_type << " */";
         }
 
-        void visit(::HIR::ExprNode_Block& node) override {
+        void visit(::HIR::ExprNodeBlock& node) override {
             m_os << "{\n";
             inc_indent();
             for (auto& sn : node.m_nodes) {
@@ -1956,22 +1956,22 @@ namespace {
             m_os << indent() << "}";
         }
 
-        void visit(::HIR::ExprNode_ConstBlock& node) override {
+        void visit(::HIR::ExprNodeConstBlock& node) override {
             m_os << "const ";
             node.m_inner->visit(*this);
         }
 
-        void visit(::HIR::ExprNode_Asm& node) override {
+        void visit(::HIR::ExprNodeAsm& node) override {
             m_os << "llvm_asm!(";
             m_os << ")";
         }
 
-        void visit(::HIR::ExprNode_Asm2& node) override {
+        void visit(::HIR::ExprNodeAsm2& node) override {
             m_os << "asm!(";
             m_os << ")";
         }
 
-        void visit(::HIR::ExprNode_Return& node) override {
+        void visit(::HIR::ExprNodeReturn& node) override {
             m_os << "return";
             if (node.m_value) {
                 m_os << " ";
@@ -1979,7 +1979,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Yield& node) override {
+        void visit(::HIR::ExprNodeYield& node) override {
             m_os << "yield";
             if (node.m_value) {
                 m_os << " ";
@@ -1987,13 +1987,13 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_AWait& node) override {
+        void visit(::HIR::ExprNodeAWait& node) override {
             m_os << "(";
             this->visit_node_ptr(node.m_value);
             m_os << ").await";
         }
 
-        void visit(::HIR::ExprNode_Let& node) override {
+        void visit(::HIR::ExprNodeLet& node) override {
             m_os << "let " << node.m_pattern << ": " << node.m_type;
             if (node.m_value) {
                 m_os << " = ";
@@ -2002,7 +2002,7 @@ namespace {
             m_os << ";";
         }
 
-        void visit(::HIR::ExprNode_Loop& node) override {
+        void visit(::HIR::ExprNodeLoop& node) override {
             if (node.m_label != "") {
                 m_os << "'" << node.m_label << ": ";
             }
@@ -2010,7 +2010,7 @@ namespace {
             this->visit_node_ptr(node.m_code);
         }
 
-        void visit(::HIR::ExprNode_LoopControl& node) override {
+        void visit(::HIR::ExprNodeLoopControl& node) override {
             m_os << (node.m_continue ? "continue" : "break");
             if (node.m_label != "") {
                 m_os << " '" << node.m_label;
@@ -2021,7 +2021,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Match& node) override {
+        void visit(::HIR::ExprNodeMatch& node) override {
             m_os << "match ";
             this->visit_node_ptr(node.m_value);
             m_os << " {\n";
@@ -2051,28 +2051,28 @@ namespace {
             m_os << indent() << "}";
         }
 
-        void visit(::HIR::ExprNode_Assign& node) override {
+        void visit(::HIR::ExprNodeAssign& node) override {
             this->visit_node_ptr(node.m_slot);
-            m_os << " " << ::HIR::ExprNode_Assign::opname(node.m_op) << "= ";
+            m_os << " " << ::HIR::ExprNodeAssign::opname(node.m_op) << "= ";
             this->visit_node_ptr(node.m_value);
         }
 
-        void visit(::HIR::ExprNode_BinOp& node) override {
+        void visit(::HIR::ExprNodeBinOp& node) override {
             m_os << "(";
             this->visit_node_ptr(node.m_left);
             m_os << ")";
-            m_os << " " << ::HIR::ExprNode_BinOp::opname(node.m_op) << " ";
+            m_os << " " << ::HIR::ExprNodeBinOp::opname(node.m_op) << " ";
             m_os << "(";
             this->visit_node_ptr(node.m_right);
             m_os << ")";
         }
 
-        void visit(::HIR::ExprNode_UniOp& node) override {
+        void visit(::HIR::ExprNodeUniOp& node) override {
             switch (node.m_op) {
-                case ::HIR::ExprNode_UniOp::Op::Invert:
+                case ::HIR::ExprNodeUniOp::Op::Invert:
                     m_os << "!";
                     break;
-                case ::HIR::ExprNode_UniOp::Op::Negate:
+                case ::HIR::ExprNodeUniOp::Op::Negate:
                     m_os << "-";
                     break;
             }
@@ -2081,7 +2081,7 @@ namespace {
             m_os << ")";
         }
 
-        void visit(::HIR::ExprNode_Borrow& node) override {
+        void visit(::HIR::ExprNodeBorrow& node) override {
             m_os << "&";
             switch (node.m_type) {
                 case ::HIR::BorrowType::Shared:
@@ -2094,7 +2094,7 @@ namespace {
                     break;
             }
 
-            bool skip_parens = this->node_is_leaf(*node.m_value) || NODE_IS(node.m_value, _Deref);
+            bool skip_parens = this->node_is_leaf(*node.m_value) || NODE_IS(node.m_value, Deref);
             if (!skip_parens) {
                 m_os << "(";
             }
@@ -2104,7 +2104,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_RawBorrow& node) override {
+        void visit(::HIR::ExprNodeRawBorrow& node) override {
             m_os << "&raw ";
             switch (node.m_type) {
                 case ::HIR::BorrowType::Shared:
@@ -2117,7 +2117,7 @@ namespace {
                     break;
             }
 
-            bool skip_parens = this->node_is_leaf(*node.m_value) || NODE_IS(node.m_value, _Deref);
+            bool skip_parens = this->node_is_leaf(*node.m_value) || NODE_IS(node.m_value, Deref);
             if (!skip_parens) {
                 m_os << "(";
             }
@@ -2127,17 +2127,17 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Cast& node) override {
+        void visit(::HIR::ExprNodeCast& node) override {
             this->visit_node_ptr(node.m_value);
             m_os << " as " << node.m_dst_type;
         }
 
-        void visit(::HIR::ExprNode_Unsize& node) override {
+        void visit(::HIR::ExprNodeUnsize& node) override {
             this->visit_node_ptr(node.m_value);
             m_os << " : " << node.m_dst_type;
         }
 
-        void visit(::HIR::ExprNode_Index& node) override {
+        void visit(::HIR::ExprNodeIndex& node) override {
             // TODO: Avoid parens
             m_os << "(";
             this->visit_node_ptr(node.m_value);
@@ -2147,7 +2147,7 @@ namespace {
             m_os << "]";
         }
 
-        void visit(::HIR::ExprNode_Deref& node) override {
+        void visit(::HIR::ExprNodeDeref& node) override {
             m_os << "*";
 
             bool skip_parens = this->node_is_leaf(*node.m_value);
@@ -2160,8 +2160,8 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Emplace& node) override {
-            if (node.m_type == ::HIR::ExprNode_Emplace::Type::Noop) {
+        void visit(::HIR::ExprNodeEmplace& node) override {
+            if (node.m_type == ::HIR::ExprNodeEmplace::Type::Noop) {
                 return node.m_value->visit(*this);
             }
             m_os << "(";
@@ -2169,10 +2169,10 @@ namespace {
             m_os << " <- ";
             this->visit_node_ptr(node.m_value);
             m_os << ")";
-            m_os << "/*" << (node.m_type == ::HIR::ExprNode_Emplace::Type::Boxer ? "box" : "place") << "*/";
+            m_os << "/*" << (node.m_type == ::HIR::ExprNodeEmplace::Type::Boxer ? "box" : "place") << "*/";
         }
 
-        void visit(::HIR::ExprNode_TupleVariant& node) override {
+        void visit(::HIR::ExprNodeTupleVariant& node) override {
             m_os << node.m_path;
             m_os << "(";
             for (/*const*/ auto& arg : node.m_args) {
@@ -2182,7 +2182,7 @@ namespace {
             m_os << ")";
         }
 
-        void visit(::HIR::ExprNode_CallPath& node) override {
+        void visit(::HIR::ExprNodeCallPath& node) override {
             m_os << node.m_path;
             m_os << "(";
             for (/*const*/ auto& arg : node.m_args) {
@@ -2193,7 +2193,7 @@ namespace {
             m_os << "/* : " << node.m_res_type << " */";
         }
 
-        void visit(::HIR::ExprNode_CallValue& node) override {
+        void visit(::HIR::ExprNodeCallValue& node) override {
             // TODO: Avoid brackets if not needed
             m_os << "(";
             this->visit_node_ptr(node.m_value);
@@ -2206,7 +2206,7 @@ namespace {
             m_os << ")";
         }
 
-        void visit(::HIR::ExprNode_CallMethod& node) override {
+        void visit(::HIR::ExprNodeCallMethod& node) override {
             // TODO: Avoid brackets if not needed
             m_os << "(";
             this->visit_node_ptr(node.m_value);
@@ -2222,7 +2222,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Field& node) override {
+        void visit(::HIR::ExprNodeField& node) override {
             // TODO: Avoid brackets if not needed
             m_os << "(";
             this->visit_node_ptr(node.m_value);
@@ -2230,7 +2230,7 @@ namespace {
             m_os << "." << node.m_field;
         }
 
-        void visit(::HIR::ExprNode_Literal& node) override {
+        void visit(::HIR::ExprNodeLiteral& node) override {
             TU_MATCH_HDRA( (node.m_data), {)
             TU_ARMA(Integer, e) {
                     switch (e.m_type) {
@@ -2319,23 +2319,23 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_UnitVariant& node) override {
+        void visit(::HIR::ExprNodeUnitVariant& node) override {
             m_os << node.m_path;
         }
 
-        void visit(::HIR::ExprNode_PathValue& node) override {
+        void visit(::HIR::ExprNodePathValue& node) override {
             m_os << node.m_path;
         }
 
-        void visit(::HIR::ExprNode_Variable& node) override {
+        void visit(::HIR::ExprNodeVariable& node) override {
             m_os << node.m_name << "#" << node.m_slot;
         }
 
-        void visit(::HIR::ExprNode_ConstParam& node) override {
+        void visit(::HIR::ExprNodeConstParam& node) override {
             m_os << node.m_name << "#" << node.m_binding;
         }
 
-        void visit(::HIR::ExprNode_StructLiteral& node) override {
+        void visit(::HIR::ExprNodeStructLiteral& node) override {
             m_os << node.m_type << " {\n";
             inc_indent();
             for (/*const*/ auto& val : node.m_values) {
@@ -2352,7 +2352,7 @@ namespace {
             dec_indent();
         }
 
-        void visit(::HIR::ExprNode_Tuple& node) override {
+        void visit(::HIR::ExprNodeTuple& node) override {
             m_os << "(";
             for (/*const*/ auto& val : node.m_vals) {
                 this->visit_node_ptr(val);
@@ -2361,7 +2361,7 @@ namespace {
             m_os << ")";
         }
 
-        void visit(::HIR::ExprNode_ArrayList& node) override {
+        void visit(::HIR::ExprNodeArrayList& node) override {
             m_os << "[";
             for (/*const*/ auto& val : node.m_vals) {
                 this->visit_node_ptr(val);
@@ -2370,14 +2370,14 @@ namespace {
             m_os << "]";
         }
 
-        void visit(::HIR::ExprNode_ArraySized& node) override {
+        void visit(::HIR::ExprNodeArraySized& node) override {
             m_os << "[";
             this->visit_node_ptr(node.m_val);
             m_os << "; " << node.m_size;
             m_os << "]";
         }
 
-        void visit(::HIR::ExprNode_Closure& node) override {
+        void visit(::HIR::ExprNodeClosure& node) override {
             if (node.m_code) {
                 if (node.m_is_move) {
                     m_os << " move";
@@ -2398,7 +2398,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Generator& node) override {
+        void visit(::HIR::ExprNodeGenerator& node) override {
             if (node.m_code) {
                 m_os << "/*gen*/";
                 if (node.m_is_pinned) {
@@ -2422,7 +2422,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_GeneratorWrapper& node) override {
+        void visit(::HIR::ExprNodeGeneratorWrapper& node) override {
             m_os << "/*gen body*/";
             m_os << "|";
             //for(const auto& arg : node.m_args)
@@ -2431,7 +2431,7 @@ namespace {
             this->visit_node_ptr(node.m_code);
         }
 
-        void visit(::HIR::ExprNode_AsyncBlock& node) override {
+        void visit(::HIR::ExprNodeAsyncBlock& node) override {
             if (node.m_is_move) {
                 m_os << "move ";
             }

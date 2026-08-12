@@ -720,7 +720,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
     ::std::vector<RcString> m_try_stack;
     unsigned m_try_index = 0;
 
-    AST::ExprNode_Block* current_block = nullptr;
+    AST::ExprNodeBlock* current_block = nullptr;
     bool in_assign_lhs = false;
 
     CExpandExpr(const ExpandState& es)
@@ -763,7 +763,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         if (cnode.get()) {
             cnode->visit(*this);
             // If the node was a macro, and it was consumed, reset it
-            if (auto* n_mac = cast<AST::ExprNode_Macro>(cnode.get())) {
+            if (auto* n_mac = cast<AST::ExprNodeMacro>(cnode.get())) {
                 if (!n_mac->m_path.is_valid()) {
                     cnode.reset();
                 }
@@ -807,7 +807,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         }
     }
 
-    ::AST::ExprNodeP visit_macro(::AST::ExprNode_Macro& node, ::std::vector<::AST::ExprNode_Block::Line>* nodes_out) {
+    ::AST::ExprNodeP visit_macro(::AST::ExprNodeMacro& node, ::std::vector<::AST::ExprNodeBlock::Line>* nodes_out) {
         TRACE_FUNCTION_F(node.m_path << "!");
         if (!node.m_path.is_valid()) {
             return ::AST::ExprNodeP();
@@ -829,7 +829,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                 ASSERT_BUG(node.span(), it != mod.macros().rend(), "macro_rules! definition was not installed");
                 it->data->m_definition_hygiene = node.m_definition_hygiene;
                 if (nodes_out) {
-                    auto marker = ::AST::ExprNodeP(new ::AST::ExprNode_MacroDefinition(
+                    auto marker = ::AST::ExprNodeP(new ::AST::ExprNodeMacroDefinition(
                         it->data->m_definition_id,
                         it->data->m_hygiene,
                         it->data->m_definition_hygiene
@@ -879,7 +879,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         return mv$(rv);
     }
 
-    void visit(::AST::ExprNode_Macro& node) override {
+    void visit(::AST::ExprNodeMacro& node) override {
         TRACE_FUNCTION_F("ExprNode_Macro - name = " << node.m_path);
         if (!node.m_path.is_valid()) {
             return;
@@ -898,7 +898,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         }
     }
 
-    void visit(::AST::ExprNode_Block& node) override {
+    void visit(::AST::ExprNodeBlock& node) override {
         this->in_assign_lhs = false;
         unsigned int mod_item_count = 0;
 
@@ -920,7 +920,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         for (auto it = node.m_nodes.begin(); it != node.m_nodes.end();) {
             assert(it->node.get());
 
-            if (auto* node_mac = cast<::AST::ExprNode_Macro>(it->node.get())) {
+            if (auto* node_mac = cast<::AST::ExprNodeMacro>(it->node.get())) {
                 auto attrs = std::move(it->node->attrs());
                 Expand_Attrs_CfgAttr(attrs);
                 Expand_Attrs(expand_state, attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
@@ -934,7 +934,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
 
                 assert(it->node.get() == node_mac);
 
-                ::std::vector<::AST::ExprNode_Block::Line> new_nodes;
+                ::std::vector<::AST::ExprNodeBlock::Line> new_nodes;
                 this->visit_macro(*node_mac, &new_nodes);
                 for (const auto& n : new_nodes) {
                     DEBUG("++ " << *n.node << (n.has_semicolon ? " ;" : ""));
@@ -972,15 +972,15 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         this->expand_state.modstack = mv$(prev_modstack);
     }
 
-    void visit(::AST::ExprNode_AsyncBlock& node) override {
+    void visit(::AST::ExprNodeAsyncBlock& node) override {
         this->visit_nodelete(node, node.m_inner);
     }
 
-    void visit(::AST::ExprNode_GeneratorBlock& node) override {
+    void visit(::AST::ExprNodeGeneratorBlock& node) override {
         this->visit_nodelete(node, node.m_inner);
     }
 
-    void visit(::AST::ExprNode_Try& node) override {
+    void visit(::AST::ExprNodeTry& node) override {
         // Desugar into
         // ```
         // loop '#tryNNN {
@@ -996,12 +996,12 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         auto core_crate = crate.m_ext_cratename_core;
         auto path_Try = get_path(core_crate, "ops", "Try");
         auto path_Try_from_output = ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), path_Try, {::AST::PathNode(RcString::new_interned("from_output"))});
-        auto ok_node = ::AST::ExprNodeP(new ::AST::ExprNode_CallPath(mv$(path_Try_from_output), ::make_vec1(mv$(node.m_inner))));
-        auto break_node = AST::ExprNodeP(new AST::ExprNode_Flow(AST::ExprNode_Flow::BREAK, loop_name, mv$(ok_node)));
-        this->replacement = AST::ExprNodeP(new AST::ExprNode_Loop(loop_name, mv$(break_node)));
+        auto ok_node = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(mv$(path_Try_from_output), ::make_vec1(mv$(node.m_inner))));
+        auto break_node = AST::ExprNodeP(new AST::ExprNodeFlow(AST::ExprNodeFlow::BREAK, loop_name, mv$(ok_node)));
+        this->replacement = AST::ExprNodeP(new AST::ExprNodeLoop(loop_name, mv$(break_node)));
     }
 
-    void visit(::AST::ExprNode_Asm& node) override {
+    void visit(::AST::ExprNodeAsm& node) override {
         for (auto& v : node.m_output) {
             this->visit_nodelete(node, v.value);
         }
@@ -1010,7 +1010,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         }
     }
 
-    void visit(::AST::ExprNode_Asm2& node) override {
+    void visit(::AST::ExprNodeAsm2& node) override {
         for (auto& v : node.m_params) {
             TU_MATCH_HDRA((v), {)
             TU_ARMA(Const, e) {
@@ -1030,20 +1030,20 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         }
     }
 
-    void visit(::AST::ExprNode_Flow& node) override {
+    void visit(::AST::ExprNodeFlow& node) override {
         this->visit_nodelete(node, node.m_value);
 
-        if (node.m_type == AST::ExprNode_Flow::YEET) {
+        if (node.m_type == AST::ExprNodeFlow::YEET) {
             auto core_crate = crate.m_ext_cratename_core;
             auto path_ops_Yeet = get_path(core_crate, "ops", "Yeet");
             auto path_FromResidual_from_residual = get_path(core_crate, "ops", "FromResidual", "from_residual");
 
-            auto v = ::AST::ExprNodeP(new ::AST::ExprNode_CallPath(::AST::Path(path_ops_Yeet), ::make_vec1(std::move(node.m_value))));
+            auto v = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(::AST::Path(path_ops_Yeet), ::make_vec1(std::move(node.m_value))));
             v->set_span(node.span());
-            v = ::AST::ExprNodeP(new ::AST::ExprNode_CallPath(::AST::Path(path_FromResidual_from_residual), ::make_vec1(std::move(v))));
+            v = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(::AST::Path(path_FromResidual_from_residual), ::make_vec1(std::move(v))));
             v->set_span(node.span());
-            replacement = ::AST::ExprNodeP(new ::AST::ExprNode_Flow(
-                (m_try_stack.empty() ? ::AST::ExprNode_Flow::RETURN : ::AST::ExprNode_Flow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
+            replacement = ::AST::ExprNodeP(new ::AST::ExprNodeFlow(
+                (m_try_stack.empty() ? ::AST::ExprNodeFlow::RETURN : ::AST::ExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
                 (m_try_stack.empty() ? RcString("") : m_try_stack.back()),
                 std::move(v)
             ));
@@ -1051,14 +1051,14 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         }
     }
 
-    void visit(::AST::ExprNode_LetBinding& node) override {
+    void visit(::AST::ExprNodeLetBinding& node) override {
         Expand_Type(this->expand_state, this->cur_mod(), node.m_type);
         Expand_Pattern(this->expand_state, this->cur_mod(), node.m_pat, false);
         this->visit_nodelete(node, node.m_value);
         this->visit_nodelete(node, node.m_else);
     }
 
-    void visit(::AST::ExprNode_Assign& node) override {
+    void visit(::AST::ExprNodeAssign& node) override {
         in_assign_lhs = true;
         this->visit_nodelete(node, node.m_slot);
         in_assign_lhs = false;
@@ -1066,7 +1066,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
 
         // Desugar destructuring assignment
         // https://rust-lang.github.io/rfcs/2909-destructuring-assignment.html
-        if (node.m_op == ::AST::ExprNode_Assign::NONE) {
+        if (node.m_op == ::AST::ExprNodeAssign::NONE) {
             struct VisitorToPat: public ::AST::NodeVisitor {
                 std::vector<std::pair<RcString, AST::ExprNodeP>> m_slots;
                 ::AST::Pattern m_rv;
@@ -1112,112 +1112,112 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                     ERROR(v.span(), E0000, typeid(v).name() << " isn't valid on the LHS of an assignemnt");
                 }
 
-                void visit(::AST::ExprNode_Block& v) override {
+                void visit(::AST::ExprNodeBlock& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_AsyncBlock& v) override {
+                void visit(::AST::ExprNodeAsyncBlock& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_GeneratorBlock& v) override {
+                void visit(::AST::ExprNodeGeneratorBlock& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_Try& v) override {
+                void visit(::AST::ExprNodeTry& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_Macro& v) override {
+                void visit(::AST::ExprNodeMacro& v) override {
                     BUG(v.span(), "Encountered macro");
                 }
 
-                void visit(::AST::ExprNode_Asm& v) override {
+                void visit(::AST::ExprNodeAsm& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_Asm2& v) override {
+                void visit(::AST::ExprNodeAsm2& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_Flow& v) override {
+                void visit(::AST::ExprNodeFlow& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_LetBinding& v) override {
+                void visit(::AST::ExprNodeLetBinding& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_Assign& v) override {
+                void visit(::AST::ExprNodeAssign& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_CallPath& v) override {
+                void visit(::AST::ExprNodeCallPath& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_CallMethod& v) override {
+                void visit(::AST::ExprNodeCallMethod& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_CallObject& v) override {
+                void visit(::AST::ExprNodeCallObject& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_Loop& v) override {
+                void visit(::AST::ExprNodeLoop& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_For& v) override {
+                void visit(::AST::ExprNodeFor& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_While& v) override {
+                void visit(::AST::ExprNodeWhile& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_Match& v) override {
+                void visit(::AST::ExprNodeMatch& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_If& v) override {
+                void visit(::AST::ExprNodeIf& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_WildcardPattern& v) override {
+                void visit(::AST::ExprNodeWildcardPattern& v) override {
                     m_rv_set = true;
                     m_rv = AST::Pattern(v.span(), AST::Pattern::Data::make_Any({}));
                 }
 
-                void visit(::AST::ExprNode_Integer& v) override {
+                void visit(::AST::ExprNodeInteger& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_Float& v) override {
+                void visit(::AST::ExprNodeFloat& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_Bool& v) override {
+                void visit(::AST::ExprNodeBool& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_String& v) override {
+                void visit(::AST::ExprNodeString& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_ByteString& v) override {
+                void visit(::AST::ExprNodeByteString& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_CString& v) override {
+                void visit(::AST::ExprNodeCString& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_Closure& v) override {
+                void visit(::AST::ExprNodeClosure& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_StructLiteral& v) override {
+                void visit(::AST::ExprNodeStructLiteral& v) override {
                     if (v.m_base_value) {
                         TODO(v.span(), "Struct literal with `..value` in destructured assignment");
                     }
@@ -1228,7 +1228,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                     pat(AST::Pattern(AST::Pattern::TagStruct(), v.span(), v.m_path, std::move(subpats), true));
                 }
 
-                void visit(::AST::ExprNode_StructLiteralPattern& v) override {
+                void visit(::AST::ExprNodeStructLiteralPattern& v) override {
                     std::vector<AST::StructPatternEntry> subpats;
                     for (auto& m : v.m_values) {
                         subpats.push_back(AST::StructPatternEntry{std::move(m.attrs), m.name, lower(m.value)});
@@ -1236,7 +1236,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                     pat(AST::Pattern(AST::Pattern::TagStruct(), v.span(), v.m_path, std::move(subpats), false));
                 }
 
-                void visit(::AST::ExprNode_Array& v) override {
+                void visit(::AST::ExprNodeArray& v) override {
                     if (v.m_size) {
                         TODO(v.span(), "Sized Array literal in destructured assignment");
                     } else {
@@ -1248,13 +1248,13 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                     }
                 }
 
-                void visit(::AST::ExprNode_Tuple& v) override {
+                void visit(::AST::ExprNodeTuple& v) override {
                     bool is_split = false;
                     std::vector<AST::Pattern> subpats_start;
                     std::vector<AST::Pattern> subpats;
                     for (auto& m : v.m_values) {
-                        if (const auto* e = cast<AST::ExprNode_BinOp>(m.get())) {
-                            if (e->m_type == ::AST::ExprNode_BinOp::RANGE && !e->m_left && !e->m_right) {
+                        if (const auto* e = cast<AST::ExprNodeBinOp>(m.get())) {
+                            if (e->m_type == ::AST::ExprNodeBinOp::RANGE && !e->m_left && !e->m_right) {
                                 ASSERT_BUG(v.span(), !is_split, "Multiple `..` in tuple pattern?");
                                 is_split = true;
                                 subpats_start = std::move(subpats);
@@ -1271,39 +1271,39 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                 }
 
                 // Just emit as if it's a slot, `UnitStruct = Foo` isn't valid
-                void visit(::AST::ExprNode_NamedValue& v) override {
+                void visit(::AST::ExprNodeNamedValue& v) override {
                     slot(v);
                 }
 
-                void visit(::AST::ExprNode_Field& v) override {
+                void visit(::AST::ExprNodeField& v) override {
                     slot(v);
                 }
 
-                void visit(::AST::ExprNode_Index& v) override {
+                void visit(::AST::ExprNodeIndex& v) override {
                     slot(v);
                 }
 
-                void visit(::AST::ExprNode_Deref& v) override {
+                void visit(::AST::ExprNodeDeref& v) override {
                     slot(v);
                 }
 
-                void visit(::AST::ExprNode_Cast& v) override {
+                void visit(::AST::ExprNodeCast& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_TypeAnnotation& v) override {
+                void visit(::AST::ExprNodeTypeAnnotation& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_BinOp& v) override {
+                void visit(::AST::ExprNodeBinOp& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_UniOp& v) override {
+                void visit(::AST::ExprNodeUniOp& v) override {
                     invalid(v);
                 }
 
-                void visit(::AST::ExprNode_MacroDefinition& v) override {
+                void visit(::AST::ExprNodeMacroDefinition& v) override {
                     invalid(v);
                 }
             } v;
@@ -1316,37 +1316,37 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                 node.m_slot = std::move(v.m_slots.front().second);
             } else {
                 // Create a block with a `let` and individual assignments
-                auto rv = new AST::ExprNode_Block();
-                rv->m_nodes.push_back({true, AST::ExprNodeP(new AST::ExprNode_LetBinding(std::move(pat), TypeRef(node.span()), std::move(node.m_value)))});
+                auto rv = new AST::ExprNodeBlock();
+                rv->m_nodes.push_back({true, AST::ExprNodeP(new AST::ExprNodeLetBinding(std::move(pat), TypeRef(node.span()), std::move(node.m_value)))});
                 for (auto& slots : v.m_slots) {
-                    rv->m_nodes.push_back({true, AST::ExprNodeP(new AST::ExprNode_Assign(AST::ExprNode_Assign::NONE, std::move(slots.second), AST::ExprNodeP(new AST::ExprNode_NamedValue(AST::Path::new_local(std::move(slots.first))))))});
+                    rv->m_nodes.push_back({true, AST::ExprNodeP(new AST::ExprNodeAssign(AST::ExprNodeAssign::NONE, std::move(slots.second), AST::ExprNodeP(new AST::ExprNodeNamedValue(AST::Path::new_local(std::move(slots.first))))))});
                 }
                 this->replacement = AST::ExprNodeP(rv);
             }
         }
     }
 
-    void visit(::AST::ExprNode_CallPath& node) override {
+    void visit(::AST::ExprNodeCallPath& node) override {
         Expand_Path(this->expand_state, this->cur_mod(), node.m_path);
         this->visit_vector(node.m_args);
     }
 
-    void visit(::AST::ExprNode_CallMethod& node) override {
+    void visit(::AST::ExprNodeCallMethod& node) override {
         Expand_PathParams(this->expand_state, this->cur_mod(), node.m_method.args());
         this->visit_nodelete(node, node.m_val);
         this->visit_vector(node.m_args);
     }
 
-    void visit(::AST::ExprNode_CallObject& node) override {
+    void visit(::AST::ExprNodeCallObject& node) override {
         this->visit_nodelete(node, node.m_val);
         this->visit_vector(node.m_args);
     }
 
-    void visit(::AST::ExprNode_Loop& node) override {
+    void visit(::AST::ExprNodeLoop& node) override {
         this->visit_nodelete(node, node.m_code);
     }
 
-    void visit(::AST::ExprNode_For& node) override {
+    void visit(::AST::ExprNodeFor& node) override {
         Expand_Pattern(this->expand_state, this->cur_mod(), node.m_pattern, false);
         this->visit_nodelete(node, node.m_value);
         this->visit_nodelete(node, node.m_code);
@@ -1372,29 +1372,29 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         //         }
         //     }
         // }
-        ::std::vector<::AST::ExprNode_Match_Arm> arms;
+        ::std::vector<::AST::ExprNodeMatchArm> arms;
         // - `Some(pattern ) => code`
-        arms.push_back(::AST::ExprNode_Match_Arm(::make_vec1(::AST::Pattern(::AST::Pattern::TagNamedTuple(), node.span(), path_Some, ::make_vec1(mv$(node.m_pattern)))), {}, mv$(node.m_code)));
+        arms.push_back(::AST::ExprNodeMatchArm(::make_vec1(::AST::Pattern(::AST::Pattern::TagNamedTuple(), node.span(), path_Some, ::make_vec1(mv$(node.m_pattern)))), {}, mv$(node.m_code)));
         // - `None => break label`
-        arms.push_back(::AST::ExprNode_Match_Arm(::make_vec1(::AST::Pattern(::AST::Pattern::TagValue(), node.span(), ::AST::Pattern::Value::make_Named(path_None))), {}, ::AST::ExprNodeP(new ::AST::ExprNode_Flow(::AST::ExprNode_Flow::BREAK, node.m_label, nullptr))));
+        arms.push_back(::AST::ExprNodeMatchArm(::make_vec1(::AST::Pattern(::AST::Pattern::TagValue(), node.span(), ::AST::Pattern::Value::make_Named(path_None))), {}, ::AST::ExprNodeP(new ::AST::ExprNodeFlow(::AST::ExprNodeFlow::BREAK, node.m_label, nullptr))));
 
-        auto next_receiver = ::AST::ExprNodeP(new ::AST::ExprNode_NamedValue(::AST::Path::new_relative(
+        auto next_receiver = ::AST::ExprNodeP(new ::AST::ExprNodeNamedValue(::AST::Path::new_relative(
             iterator_hygiene,
             ::make_vec1(::AST::PathNode(rcstring_it))
         )));
-        auto next_receiver_borrow = ::AST::ExprNodeP(new ::AST::ExprNode_UniOp(::AST::ExprNode_UniOp::REFMUT, mv$(next_receiver)));
-        auto next_call = ::AST::ExprNodeP(new ::AST::ExprNode_CallPath(
+        auto next_receiver_borrow = ::AST::ExprNodeP(new ::AST::ExprNodeUniOp(::AST::ExprNodeUniOp::REFMUT, mv$(next_receiver)));
+        auto next_call = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(
             ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), path_Iterator, {::AST::PathNode(rcstring_next)}),
             ::make_vec1(mv$(next_receiver_borrow))));
-        auto next_match = ::AST::ExprNodeP(new ::AST::ExprNode_Match(mv$(next_call), mv$(arms)));
-        auto loop = ::AST::ExprNodeP(new ::AST::ExprNode_Loop(node.m_label, mv$(next_match)));
+        auto next_match = ::AST::ExprNodeP(new ::AST::ExprNodeMatch(mv$(next_call), mv$(arms)));
+        auto loop = ::AST::ExprNodeP(new ::AST::ExprNodeLoop(node.m_label, mv$(next_match)));
 
-        auto into_iter_call = ::AST::ExprNodeP(new ::AST::ExprNode_CallPath(
+        auto into_iter_call = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(
             ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), path_IntoIterator, {::AST::PathNode(rcstring_into_iter)}),
             ::make_vec1(mv$(node.m_value))));
-        auto outer_match = ::AST::ExprNodeP(new ::AST::ExprNode_Match(
+        auto outer_match = ::AST::ExprNodeP(new ::AST::ExprNodeMatch(
             mv$(into_iter_call),
-            ::make_vec1(::AST::ExprNode_Match_Arm(
+            ::make_vec1(::AST::ExprNodeMatchArm(
                 ::make_vec1(::AST::Pattern(::AST::Pattern::TagBind(), node.span(), Ident(iterator_hygiene, rcstring_it))),
                 {},
                 mv$(loop)))));
@@ -1403,13 +1403,13 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         // a block containing the match as a statement provides the same
         // terminating temporary scope without leaking head temporaries into a
         // surrounding initializer or call expression.
-        auto block = new ::AST::ExprNode_Block();
+        auto block = new ::AST::ExprNodeBlock();
         block->m_nodes.push_back({true, mv$(outer_match)});
         replacement.reset(block);
         replacement->set_span(node.span());
     }
 
-    void visit(::AST::ExprNode_While& node) override {
+    void visit(::AST::ExprNodeWhile& node) override {
         for (auto& cond : node.m_conditions) {
             if (cond.opt_pat) {
                 Expand_Pattern(this->expand_state, this->cur_mod(), *cond.opt_pat, true);
@@ -1419,7 +1419,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         this->visit_nodelete(node, node.m_code);
     }
 
-    void visit(::AST::ExprNode_Match& node) override {
+    void visit(::AST::ExprNodeMatch& node) override {
         this->visit_nodelete(node, node.m_val);
         for (auto& arm : node.m_arms) {
             Expand_Attrs_CfgAttr(arm.m_attrs);
@@ -1454,7 +1454,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         }
     }
 
-    void visit(::AST::ExprNode_If& node) override {
+    void visit(::AST::ExprNodeIf& node) override {
         for (auto& arm : node.m_arms) {
             for (auto& cond : arm.m_conditions) {
                 if (cond.opt_pat) {
@@ -1467,28 +1467,28 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         this->visit_nodelete(node, node.m_else);
     }
 
-    void visit(::AST::ExprNode_WildcardPattern& node) override {
+    void visit(::AST::ExprNodeWildcardPattern& node) override {
     }
 
-    void visit(::AST::ExprNode_Integer& node) override {
+    void visit(::AST::ExprNodeInteger& node) override {
     }
 
-    void visit(::AST::ExprNode_Float& node) override {
+    void visit(::AST::ExprNodeFloat& node) override {
     }
 
-    void visit(::AST::ExprNode_Bool& node) override {
+    void visit(::AST::ExprNodeBool& node) override {
     }
 
-    void visit(::AST::ExprNode_String& node) override {
+    void visit(::AST::ExprNodeString& node) override {
     }
 
-    void visit(::AST::ExprNode_ByteString& node) override {
+    void visit(::AST::ExprNodeByteString& node) override {
     }
 
-    void visit(::AST::ExprNode_CString& node) override {
+    void visit(::AST::ExprNodeCString& node) override {
     }
 
-    void visit(::AST::ExprNode_Closure& node) override {
+    void visit(::AST::ExprNodeClosure& node) override {
         auto try_stack = ::std::move(m_try_stack);
         for (auto& arg : node.m_args) {
             Expand_Pattern(this->expand_state, this->cur_mod(), arg.first, false);
@@ -1499,7 +1499,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         m_try_stack = std::move(try_stack);
     }
 
-    void visit(::AST::ExprNode_StructLiteral& node) override {
+    void visit(::AST::ExprNodeStructLiteral& node) override {
         this->visit_nodelete(node, node.m_base_value);
         for (auto& val : node.m_values) {
             Expand_Attrs_CfgAttr(val.attrs);
@@ -1523,7 +1523,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         }
     }
 
-    void visit(::AST::ExprNode_StructLiteralPattern& node) override {
+    void visit(::AST::ExprNodeStructLiteralPattern& node) override {
         for (auto& val : node.m_values) {
             Expand_Attrs_CfgAttr(val.attrs);
             Expand_Attrs(expand_state, val.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
@@ -1546,44 +1546,44 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         }
     }
 
-    void visit(::AST::ExprNode_Array& node) override {
+    void visit(::AST::ExprNodeArray& node) override {
         this->visit_nodelete(node, node.m_size);
         this->visit_vector(node.m_values);
     }
 
-    void visit(::AST::ExprNode_Tuple& node) override {
+    void visit(::AST::ExprNodeTuple& node) override {
         this->visit_vector(node.m_values);
     }
 
-    void visit(::AST::ExprNode_NamedValue& node) override {
+    void visit(::AST::ExprNodeNamedValue& node) override {
         Expand_Path(this->expand_state, this->cur_mod(), node.m_path);
     }
 
-    void visit(::AST::ExprNode_Field& node) override {
+    void visit(::AST::ExprNodeField& node) override {
         this->visit_nodelete(node, node.m_obj);
     }
 
-    void visit(::AST::ExprNode_Index& node) override {
+    void visit(::AST::ExprNodeIndex& node) override {
         this->in_assign_lhs = false;
         this->visit_nodelete(node, node.m_obj);
         this->visit_nodelete(node, node.m_idx);
     }
 
-    void visit(::AST::ExprNode_Deref& node) override {
+    void visit(::AST::ExprNodeDeref& node) override {
         this->visit_nodelete(node, node.m_value);
     }
 
-    void visit(::AST::ExprNode_Cast& node) override {
-        this->visit_nodelete(node, node.m_value);
-        Expand_Type(this->expand_state, this->cur_mod(), node.m_type);
-    }
-
-    void visit(::AST::ExprNode_TypeAnnotation& node) override {
+    void visit(::AST::ExprNodeCast& node) override {
         this->visit_nodelete(node, node.m_value);
         Expand_Type(this->expand_state, this->cur_mod(), node.m_type);
     }
 
-    void visit(::AST::ExprNode_BinOp& node) override {
+    void visit(::AST::ExprNodeTypeAnnotation& node) override {
+        this->visit_nodelete(node, node.m_value);
+        Expand_Type(this->expand_state, this->cur_mod(), node.m_type);
+    }
+
+    void visit(::AST::ExprNodeBinOp& node) override {
         this->visit_nodelete(node, node.m_left);
         this->visit_nodelete(node, node.m_right);
 
@@ -1593,7 +1593,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         static const RcString rcstring_start = RcString::new_interned("start");
         static const RcString rcstring_end = RcString::new_interned("end");
         switch (node.m_type) {
-            case ::AST::ExprNode_BinOp::RANGE: {
+            case ::AST::ExprNodeBinOp::RANGE: {
                 // NOTE: Not language items pre 1.39
                 auto core_crate = crate.m_ext_cratename_core;
                 auto path_Range = get_path(core_crate, "ops", "Range");
@@ -1601,39 +1601,39 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                 auto path_RangeTo = get_path(core_crate, "ops", "RangeTo");
                 auto path_RangeFull = get_path(core_crate, "ops", "RangeFull");
 
-                ::AST::ExprNode_StructLiteral::t_values values;
+                ::AST::ExprNodeStructLiteral::t_values values;
                 if (node.m_left && node.m_right) {
                     values.push_back({{}, rcstring_start, mv$(node.m_left)});
                     values.push_back({{}, rcstring_end, mv$(node.m_right)});
-                    replacement.reset(new ::AST::ExprNode_StructLiteral(mv$(path_Range), nullptr, mv$(values)));
+                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(path_Range), nullptr, mv$(values)));
                 } else if (node.m_left) {
                     values.push_back({{}, rcstring_start, mv$(node.m_left)});
-                    replacement.reset(new ::AST::ExprNode_StructLiteral(mv$(path_RangeFrom), nullptr, mv$(values)));
+                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(path_RangeFrom), nullptr, mv$(values)));
                 } else if (node.m_right) {
                     values.push_back({{}, rcstring_end, mv$(node.m_right)});
-                    replacement.reset(new ::AST::ExprNode_StructLiteral(mv$(path_RangeTo), nullptr, mv$(values)));
+                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(path_RangeTo), nullptr, mv$(values)));
                 } else {
-                    replacement.reset(new ::AST::ExprNode_StructLiteral(mv$(path_RangeFull), nullptr, mv$(values)));
+                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(path_RangeFull), nullptr, mv$(values)));
                 }
                 replacement->set_span(node.span());
                 break;
             }
-            case ::AST::ExprNode_BinOp::RANGE_INC: {
+            case ::AST::ExprNodeBinOp::RANGE_INC: {
                 // NOTE: Not language items pre 1.54
                 auto core_crate = crate.m_ext_cratename_core;
                 auto path_RangeInclusive_NonEmpty = get_path(core_crate, "ops", "RangeInclusive");
                 auto path_RangeToInclusive = get_path(core_crate, "ops", "RangeToInclusive");
 
                 if (node.m_left) {
-                    ::AST::ExprNode_StructLiteral::t_values values;
+                    ::AST::ExprNodeStructLiteral::t_values values;
                     values.push_back({{}, rcstring_start, mv$(node.m_left)});
                     values.push_back({{}, rcstring_end, mv$(node.m_right)});
-                    values.push_back({{}, RcString::new_interned("exhausted"), ::AST::ExprNodeP(new ::AST::ExprNode_Bool(false))});
-                    replacement.reset(new ::AST::ExprNode_StructLiteral(mv$(path_RangeInclusive_NonEmpty), nullptr, mv$(values)));
+                    values.push_back({{}, RcString::new_interned("exhausted"), ::AST::ExprNodeP(new ::AST::ExprNodeBool(false))});
+                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(path_RangeInclusive_NonEmpty), nullptr, mv$(values)));
                 } else {
-                    ::AST::ExprNode_StructLiteral::t_values values;
+                    ::AST::ExprNodeStructLiteral::t_values values;
                     values.push_back({{}, rcstring_end, mv$(node.m_right)});
-                    replacement.reset(new ::AST::ExprNode_StructLiteral(mv$(path_RangeToInclusive), nullptr, mv$(values)));
+                    replacement.reset(new ::AST::ExprNodeStructLiteral(mv$(path_RangeToInclusive), nullptr, mv$(values)));
                 }
                 replacement->set_span(node.span());
                 break;
@@ -1643,10 +1643,10 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         }
     }
 
-    void visit(::AST::ExprNode_UniOp& node) override {
+    void visit(::AST::ExprNodeUniOp& node) override {
         this->visit_nodelete(node, node.m_value);
         // - Desugar question mark operator before resolve so it can create names
-        if (node.m_type == ::AST::ExprNode_UniOp::QMARK) {
+        if (node.m_type == ::AST::ExprNodeUniOp::QMARK) {
             auto core_crate = crate.m_ext_cratename_core;
 
             // TODO: Find a way of creating bindings during HIR lower instead (so lang items are available)
@@ -1665,28 +1665,28 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                 auto path_ControlFlow_Break = get_path(core_crate, "ops", "ControlFlow", "Break");
                 auto path_FromResidual_from_residual = get_path(core_crate, "ops", "FromResidual", "from_residual");
 
-                ::std::vector<::AST::ExprNode_Match_Arm> arms;
+                ::std::vector<::AST::ExprNodeMatchArm> arms;
                 // `Continue(v) => v,`
-                arms.push_back(::AST::ExprNode_Match_Arm(::make_vec1(::AST::Pattern(::AST::Pattern::TagNamedTuple(), node.span(), path_ControlFlow_Continue, ::make_vec1(::AST::Pattern(::AST::Pattern::TagBind(), node.span(), rcstring_v)))), {}, ::AST::ExprNodeP(new ::AST::ExprNode_NamedValue(::AST::Path(rcstring_v)))));
+                arms.push_back(::AST::ExprNodeMatchArm(::make_vec1(::AST::Pattern(::AST::Pattern::TagNamedTuple(), node.span(), path_ControlFlow_Continue, ::make_vec1(::AST::Pattern(::AST::Pattern::TagBind(), node.span(), rcstring_v)))), {}, ::AST::ExprNodeP(new ::AST::ExprNodeNamedValue(::AST::Path(rcstring_v)))));
                 // `Break(r) => return R::from_residual(r),`
                 arms.push_back(
-                    ::AST::ExprNode_Match_Arm(
+                    ::AST::ExprNodeMatchArm(
                         ::make_vec1(::AST::Pattern(::AST::Pattern::TagNamedTuple(), node.span(), path_ControlFlow_Break, ::make_vec1(::AST::Pattern(::AST::Pattern::TagBind(), node.span(), rcstring_r)))),
                         {},
-                        ::AST::ExprNodeP(new ::AST::ExprNode_Flow(
-                            (m_try_stack.empty() ? ::AST::ExprNode_Flow::RETURN : ::AST::ExprNode_Flow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
+                        ::AST::ExprNodeP(new ::AST::ExprNodeFlow(
+                            (m_try_stack.empty() ? ::AST::ExprNodeFlow::RETURN : ::AST::ExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
                             (m_try_stack.empty() ? RcString("") : m_try_stack.back()),
-                            ::AST::ExprNodeP(new ::AST::ExprNode_CallPath(::AST::Path(path_FromResidual_from_residual), ::make_vec1(::AST::ExprNodeP(new ::AST::ExprNode_NamedValue(::AST::Path(rcstring_r))))))
+                            ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(::AST::Path(path_FromResidual_from_residual), ::make_vec1(::AST::ExprNodeP(new ::AST::ExprNodeNamedValue(::AST::Path(rcstring_r))))))
                         ))
                     )
                 );
 
-                replacement.reset(new ::AST::ExprNode_Match(::AST::ExprNodeP(new AST::ExprNode_CallPath(mv$(path_Try_branch), ::make_vec1(mv$(node.m_value)))), mv$(arms)));
+                replacement.reset(new ::AST::ExprNodeMatch(::AST::ExprNodeP(new AST::ExprNodeCallPath(mv$(path_Try_branch), ::make_vec1(mv$(node.m_value)))), mv$(arms)));
             }
         }
     }
 
-    void visit(::AST::ExprNode_MacroDefinition&) override {
+    void visit(::AST::ExprNodeMacroDefinition&) override {
     }
 };
 

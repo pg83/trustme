@@ -1061,15 +1061,15 @@ namespace {
     return intern(TypeData::make_Function(mv$(ft)));
 }
 
-::HIR::TypeRef HIR::TypeInterner::closure(ExprNode_Closure* node) {
+::HIR::TypeRef HIR::TypeInterner::closure(ExprNodeClosure* node) {
     return intern(TypeData::make_NodeType(TypeData_NodeType::make_Closure(node)));
 }
 
-::HIR::TypeRef HIR::TypeInterner::generator(ExprNode_Generator* node) {
+::HIR::TypeRef HIR::TypeInterner::generator(ExprNodeGenerator* node) {
     return intern(TypeData::make_NodeType(TypeData_NodeType::make_Generator(node)));
 }
 
-::HIR::TypeRef HIR::TypeInterner::async_block(ExprNode_AsyncBlock* node) {
+::HIR::TypeRef HIR::TypeInterner::async_block(ExprNodeAsyncBlock* node) {
     return intern(TypeData::make_NodeType(TypeData_NodeType::make_Async(node)));
 }
 

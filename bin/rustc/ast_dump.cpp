@@ -45,14 +45,14 @@ public:
         return true;
     }
 
-    virtual void visit(AST::ExprNode_Block& n) override {
+    virtual void visit(AST::ExprNodeBlock& n) override {
         switch (n.m_block_type) {
-            case AST::ExprNode_Block::Type::Bare:
+            case AST::ExprNodeBlock::Type::Bare:
                 break;
-            case AST::ExprNode_Block::Type::Unsafe:
+            case AST::ExprNodeBlock::Type::Unsafe:
                 m_os << "unsafe ";
                 break;
-            case AST::ExprNode_Block::Type::Const:
+            case AST::ExprNodeBlock::Type::Const:
                 m_os << "const ";
                 break;
         }
@@ -87,7 +87,7 @@ public:
         m_os << indent() << "}";
     }
 
-    virtual void visit(AST::ExprNode_AsyncBlock& n) override {
+    virtual void visit(AST::ExprNodeAsyncBlock& n) override {
         m_os << "async ";
         if (n.m_is_move) {
             m_os << "move ";
@@ -95,7 +95,7 @@ public:
         AST::NodeVisitor::visit(n.m_inner);
     }
 
-    virtual void visit(AST::ExprNode_GeneratorBlock& n) override {
+    virtual void visit(AST::ExprNodeGeneratorBlock& n) override {
         m_os << "gen ";
         if (n.m_is_move) {
             m_os << "move ";
@@ -103,7 +103,7 @@ public:
         AST::NodeVisitor::visit(n.m_inner);
     }
 
-    virtual void visit(AST::ExprNode_Try& n) override {
+    virtual void visit(AST::ExprNodeTry& n) override {
         m_os << "try ";
         AST::NodeVisitor::visit(n.m_inner);
     }
@@ -122,7 +122,7 @@ public:
         }
     }
 
-    virtual void visit(AST::ExprNode_Macro& n) override {
+    virtual void visit(AST::ExprNodeMacro& n) override {
         m_expr_root = false;
         m_os << n.m_path << "!";
         if (n.m_ident != "") {
@@ -134,7 +134,7 @@ public:
         m_os << (n.m_is_braced ? "}" : ")");
     }
 
-    virtual void visit(AST::ExprNode_Asm& n) override {
+    virtual void visit(AST::ExprNodeAsm& n) override {
         m_os << "asm!( \"" << n.m_text << "\"";
         m_os << " :";
         for (auto& v : n.m_output) {
@@ -159,7 +159,7 @@ public:
         m_os << " )";
     }
 
-    virtual void visit(AST::ExprNode_Asm2& n) override {
+    virtual void visit(AST::ExprNodeAsm2& n) override {
         m_os << "asm!( ";
         for (const auto& l : n.m_lines) {
             l.fmt(m_os);
@@ -201,22 +201,22 @@ public:
         m_os << ")";
     }
 
-    virtual void visit(AST::ExprNode_Flow& n) override {
+    virtual void visit(AST::ExprNodeFlow& n) override {
         m_expr_root = false;
         switch (n.m_type) {
-            case AST::ExprNode_Flow::RETURN:
+            case AST::ExprNodeFlow::RETURN:
                 m_os << "return ";
                 break;
-            case AST::ExprNode_Flow::YIELD:
+            case AST::ExprNodeFlow::YIELD:
                 m_os << "yield ";
                 break;
-            case AST::ExprNode_Flow::BREAK:
+            case AST::ExprNodeFlow::BREAK:
                 m_os << "break ";
                 break;
-            case AST::ExprNode_Flow::CONTINUE:
+            case AST::ExprNodeFlow::CONTINUE:
                 m_os << "continue ";
                 break;
-            case AST::ExprNode_Flow::YEET:
+            case AST::ExprNodeFlow::YEET:
                 m_os << "do yeet ";
                 break;
         }
@@ -226,7 +226,7 @@ public:
         AST::NodeVisitor::visit(n.m_value);
     }
 
-    virtual void visit(AST::ExprNode_LetBinding& n) override {
+    virtual void visit(AST::ExprNodeLetBinding& n) override {
         m_expr_root = false;
         m_os << "let ";
         print_pattern(n.m_pat, false);
@@ -243,48 +243,48 @@ public:
         m_os << ";";
     }
 
-    virtual void visit(AST::ExprNode_Assign& n) override {
+    virtual void visit(AST::ExprNodeAssign& n) override {
         m_expr_root = false;
         AST::NodeVisitor::visit(n.m_slot);
         switch (n.m_op) {
-            case AST::ExprNode_Assign::NONE:
+            case AST::ExprNodeAssign::NONE:
                 m_os << "  = ";
                 break;
-            case AST::ExprNode_Assign::ADD:
+            case AST::ExprNodeAssign::ADD:
                 m_os << " += ";
                 break;
-            case AST::ExprNode_Assign::SUB:
+            case AST::ExprNodeAssign::SUB:
                 m_os << " -= ";
                 break;
-            case AST::ExprNode_Assign::MUL:
+            case AST::ExprNodeAssign::MUL:
                 m_os << " *= ";
                 break;
-            case AST::ExprNode_Assign::DIV:
+            case AST::ExprNodeAssign::DIV:
                 m_os << " /= ";
                 break;
-            case AST::ExprNode_Assign::MOD:
+            case AST::ExprNodeAssign::MOD:
                 m_os << " %= ";
                 break;
-            case AST::ExprNode_Assign::AND:
+            case AST::ExprNodeAssign::AND:
                 m_os << " &= ";
                 break;
-            case AST::ExprNode_Assign::OR:
+            case AST::ExprNodeAssign::OR:
                 m_os << " |= ";
                 break;
-            case AST::ExprNode_Assign::XOR:
+            case AST::ExprNodeAssign::XOR:
                 m_os << " ^= ";
                 break;
-            case AST::ExprNode_Assign::SHR:
+            case AST::ExprNodeAssign::SHR:
                 m_os << " >>= ";
                 break;
-            case AST::ExprNode_Assign::SHL:
+            case AST::ExprNodeAssign::SHL:
                 m_os << " <<= ";
                 break;
         }
         AST::NodeVisitor::visit(n.m_value);
     }
 
-    virtual void visit(AST::ExprNode_CallPath& n) override {
+    virtual void visit(AST::ExprNodeCallPath& n) override {
         m_expr_root = false;
         m_os << n.m_path;
         m_os << "(";
@@ -300,9 +300,9 @@ public:
         m_os << ")";
     }
 
-    virtual void visit(AST::ExprNode_CallMethod& n) override {
+    virtual void visit(AST::ExprNodeCallMethod& n) override {
         m_expr_root = false;
-        WRAPIF(n.m_val, AST::ExprNode_Deref, AST::ExprNode_UniOp, AST::ExprNode_Cast, AST::ExprNode_BinOp, AST::ExprNode_Assign, AST::ExprNode_Match, AST::ExprNode_If, AST::ExprNode_Match);
+        WRAPIF(n.m_val, AST::ExprNodeDeref, AST::ExprNodeUniOp, AST::ExprNodeCast, AST::ExprNodeBinOp, AST::ExprNodeAssign, AST::ExprNodeMatch, AST::ExprNodeIf, AST::ExprNodeMatch);
         m_os << "." << n.m_method;
         m_os << "(";
         bool is_first = true;
@@ -317,7 +317,7 @@ public:
         m_os << ")";
     }
 
-    virtual void visit(AST::ExprNode_CallObject& n) override {
+    virtual void visit(AST::ExprNodeCallObject& n) override {
         m_expr_root = false;
         m_os << "(";
         AST::NodeVisitor::visit(n.m_val);
@@ -334,7 +334,7 @@ public:
         m_os << ")";
     }
 
-    virtual void visit(AST::ExprNode_Loop& n) override {
+    virtual void visit(AST::ExprNodeLoop& n) override {
         bool expr_root = m_expr_root;
         m_expr_root = false;
 
@@ -354,7 +354,7 @@ public:
         AST::NodeVisitor::visit(n.m_code);
     }
 
-    virtual void visit(AST::ExprNode_For& n) override {
+    virtual void visit(AST::ExprNodeFor& n) override {
         bool expr_root = m_expr_root;
         m_expr_root = false;
 
@@ -392,7 +392,7 @@ public:
         }
     }
 
-    void visit(AST::ExprNode_While& n) override {
+    void visit(AST::ExprNodeWhile& n) override {
         bool expr_root = m_expr_root;
         m_expr_root = false;
 
@@ -412,7 +412,7 @@ public:
         AST::NodeVisitor::visit(n.m_code);
     }
 
-    virtual void visit(AST::ExprNode_Match& n) override {
+    virtual void visit(AST::ExprNodeMatch& n) override {
         bool expr_root = m_expr_root;
         m_expr_root = false;
         m_os << "match ";
@@ -456,7 +456,7 @@ public:
         }
     }
 
-    virtual void visit(AST::ExprNode_If& n) override {
+    virtual void visit(AST::ExprNodeIf& n) override {
         bool expr_root = m_expr_root;
         m_expr_root = false;
         for (auto& arm : n.m_arms) {
@@ -470,7 +470,7 @@ public:
             m_os << "if ";
             visit_iflet_conditions(arm.m_conditions);
 
-            bool is_block = (cast<const AST::ExprNode_Block>(&*arm.m_body) != nullptr);
+            bool is_block = (cast<const AST::ExprNodeBlock>(&*arm.m_body) != nullptr);
             if (!is_block) {
                 m_os << "{ ";
             }
@@ -487,7 +487,7 @@ public:
                 m_os << indent();
             }
             m_os << "else";
-            bool is_block = (cast<const AST::ExprNode_Block>(&*n.m_else) != nullptr);
+            bool is_block = (cast<const AST::ExprNodeBlock>(&*n.m_else) != nullptr);
             if (!is_block) {
                 m_os << "{ ";
             }
@@ -498,7 +498,7 @@ public:
         }
     }
 
-    virtual void visit(AST::ExprNode_Closure& n) override {
+    virtual void visit(AST::ExprNodeClosure& n) override {
         m_expr_root = false;
         if (n.m_is_move) {
             m_os << "move ";
@@ -521,11 +521,11 @@ public:
         m_os << " }";
     }
 
-    virtual void visit(AST::ExprNode_WildcardPattern& n) override {
+    virtual void visit(AST::ExprNodeWildcardPattern& n) override {
         m_os << "_";
     }
 
-    virtual void visit(AST::ExprNode_Integer& n) override {
+    virtual void visit(AST::ExprNodeInteger& n) override {
         m_expr_root = false;
         switch (n.m_datatype) {
             case CORETYPE_INVAL:
@@ -580,7 +580,7 @@ public:
         }
     }
 
-    virtual void visit(AST::ExprNode_Float& n) override {
+    virtual void visit(AST::ExprNodeFloat& n) override {
         m_expr_root = false;
         switch (n.m_datatype) {
             case CORETYPE_ANY:
@@ -608,7 +608,7 @@ public:
         }
     }
 
-    virtual void visit(AST::ExprNode_Bool& n) override {
+    virtual void visit(AST::ExprNodeBool& n) override {
         m_expr_root = false;
         if (n.m_value) {
             m_os << "true";
@@ -617,22 +617,22 @@ public:
         }
     }
 
-    virtual void visit(AST::ExprNode_String& n) override {
+    virtual void visit(AST::ExprNodeString& n) override {
         m_expr_root = false;
         m_os << "\"" << FmtEscaped(n.m_value) << "\"";
     }
 
-    virtual void visit(AST::ExprNode_ByteString& n) override {
+    virtual void visit(AST::ExprNodeByteString& n) override {
         m_expr_root = false;
         m_os << "b\"" << FmtEscaped(n.m_value) << "\"";
     }
 
-    virtual void visit(AST::ExprNode_CString& n) override {
+    virtual void visit(AST::ExprNodeCString& n) override {
         m_expr_root = false;
         m_os << "c\"" << FmtEscaped(n.m_value) << "\"";
     }
 
-    virtual void visit(AST::ExprNode_StructLiteral& n) override {
+    virtual void visit(AST::ExprNodeStructLiteral& n) override {
         m_expr_root = false;
         m_os << n.m_path << " {\n";
         inc_indent();
@@ -651,7 +651,7 @@ public:
         dec_indent();
     }
 
-    virtual void visit(AST::ExprNode_StructLiteralPattern& n) override {
+    virtual void visit(AST::ExprNodeStructLiteralPattern& n) override {
         m_expr_root = false;
         m_os << n.m_path << " {\n";
         inc_indent();
@@ -666,7 +666,7 @@ public:
         dec_indent();
     }
 
-    virtual void visit(AST::ExprNode_Array& n) override {
+    virtual void visit(AST::ExprNodeArray& n) override {
         m_expr_root = false;
         m_os << "[";
         if (n.m_size.get()) {
@@ -682,7 +682,7 @@ public:
         m_os << "]";
     }
 
-    virtual void visit(AST::ExprNode_Tuple& n) override {
+    virtual void visit(AST::ExprNodeTuple& n) override {
         m_expr_root = false;
         m_os << "(";
         for (auto& item : n.m_values) {
@@ -692,124 +692,124 @@ public:
         m_os << ")";
     }
 
-    virtual void visit(AST::ExprNode_NamedValue& n) override {
+    virtual void visit(AST::ExprNodeNamedValue& n) override {
         m_expr_root = false;
         m_os << n.m_path;
     }
 
-    virtual void visit(AST::ExprNode_Field& n) override {
+    virtual void visit(AST::ExprNodeField& n) override {
         m_expr_root = false;
-        WRAPIF(n.m_obj, AST::ExprNode_Deref, AST::ExprNode_UniOp, AST::ExprNode_Cast, AST::ExprNode_BinOp, AST::ExprNode_Assign, AST::ExprNode_Match, AST::ExprNode_If, AST::ExprNode_Match);
+        WRAPIF(n.m_obj, AST::ExprNodeDeref, AST::ExprNodeUniOp, AST::ExprNodeCast, AST::ExprNodeBinOp, AST::ExprNodeAssign, AST::ExprNodeMatch, AST::ExprNodeIf, AST::ExprNodeMatch);
         m_os << "." << n.m_name;
     }
 
-    virtual void visit(AST::ExprNode_Index& n) override {
+    virtual void visit(AST::ExprNodeIndex& n) override {
         m_expr_root = false;
-        WRAPIF(n.m_obj, AST::ExprNode_Deref, AST::ExprNode_UniOp, AST::ExprNode_Cast, AST::ExprNode_BinOp, AST::ExprNode_Assign, AST::ExprNode_Match, AST::ExprNode_If, AST::ExprNode_Match);
+        WRAPIF(n.m_obj, AST::ExprNodeDeref, AST::ExprNodeUniOp, AST::ExprNodeCast, AST::ExprNodeBinOp, AST::ExprNodeAssign, AST::ExprNodeMatch, AST::ExprNodeIf, AST::ExprNodeMatch);
         m_os << "[";
         AST::NodeVisitor::visit(n.m_idx);
         m_os << "]";
     }
 
-    virtual void visit(AST::ExprNode_Deref& n) override {
+    virtual void visit(AST::ExprNodeDeref& n) override {
         m_expr_root = false;
         m_os << "*(";
         AST::NodeVisitor::visit(n.m_value);
         m_os << ")";
     }
 
-    virtual void visit(AST::ExprNode_Cast& n) override {
+    virtual void visit(AST::ExprNodeCast& n) override {
         m_expr_root = false;
         m_os << "(";
         AST::NodeVisitor::visit(n.m_value);
         m_os << ") as " << n.m_type;
     }
 
-    virtual void visit(AST::ExprNode_TypeAnnotation& n) override {
+    virtual void visit(AST::ExprNodeTypeAnnotation& n) override {
         m_expr_root = false;
         m_os << "(";
         AST::NodeVisitor::visit(n.m_value);
         m_os << ") : " << n.m_type;
     }
 
-    virtual void visit(AST::ExprNode_BinOp& n) override {
+    virtual void visit(AST::ExprNodeBinOp& n) override {
         m_expr_root = false;
-        auto* left_binop = cast<AST::ExprNode_BinOp>(n.m_left.get());
+        auto* left_binop = cast<AST::ExprNodeBinOp>(n.m_left.get());
         if (!n.m_left) {
             m_os << "/*null*/";
         } else if (left_binop && left_binop->m_type == n.m_type) {
             AST::NodeVisitor::visit(n.m_left);
         } else {
-            WRAPIF(n.m_left, AST::ExprNode_Cast, AST::ExprNode_BinOp);
+            WRAPIF(n.m_left, AST::ExprNodeCast, AST::ExprNodeBinOp);
         }
         m_os << " ";
         switch (n.m_type) {
-            case AST::ExprNode_BinOp::CMPEQU:
+            case AST::ExprNodeBinOp::CMPEQU:
                 m_os << "==";
                 break;
-            case AST::ExprNode_BinOp::CMPNEQU:
+            case AST::ExprNodeBinOp::CMPNEQU:
                 m_os << "!=";
                 break;
-            case AST::ExprNode_BinOp::CMPLT:
+            case AST::ExprNodeBinOp::CMPLT:
                 m_os << "<";
                 break;
-            case AST::ExprNode_BinOp::CMPLTE:
+            case AST::ExprNodeBinOp::CMPLTE:
                 m_os << "<=";
                 break;
-            case AST::ExprNode_BinOp::CMPGT:
+            case AST::ExprNodeBinOp::CMPGT:
                 m_os << ">";
                 break;
-            case AST::ExprNode_BinOp::CMPGTE:
+            case AST::ExprNodeBinOp::CMPGTE:
                 m_os << ">=";
                 break;
-            case AST::ExprNode_BinOp::BOOLAND:
+            case AST::ExprNodeBinOp::BOOLAND:
                 m_os << "&&";
                 break;
-            case AST::ExprNode_BinOp::BOOLOR:
+            case AST::ExprNodeBinOp::BOOLOR:
                 m_os << "||";
                 break;
-            case AST::ExprNode_BinOp::BITAND:
+            case AST::ExprNodeBinOp::BITAND:
                 m_os << "&";
                 break;
-            case AST::ExprNode_BinOp::BITOR:
+            case AST::ExprNodeBinOp::BITOR:
                 m_os << "|";
                 break;
-            case AST::ExprNode_BinOp::BITXOR:
+            case AST::ExprNodeBinOp::BITXOR:
                 m_os << "^";
                 break;
-            case AST::ExprNode_BinOp::SHL:
+            case AST::ExprNodeBinOp::SHL:
                 m_os << "<<";
                 break;
-            case AST::ExprNode_BinOp::SHR:
+            case AST::ExprNodeBinOp::SHR:
                 m_os << ">>";
                 break;
-            case AST::ExprNode_BinOp::MULTIPLY:
+            case AST::ExprNodeBinOp::MULTIPLY:
                 m_os << "*";
                 break;
-            case AST::ExprNode_BinOp::DIVIDE:
+            case AST::ExprNodeBinOp::DIVIDE:
                 m_os << "/";
                 break;
-            case AST::ExprNode_BinOp::MODULO:
+            case AST::ExprNodeBinOp::MODULO:
                 m_os << "%";
                 break;
-            case AST::ExprNode_BinOp::ADD:
+            case AST::ExprNodeBinOp::ADD:
                 m_os << "+";
                 break;
-            case AST::ExprNode_BinOp::SUB:
+            case AST::ExprNodeBinOp::SUB:
                 m_os << "-";
                 break;
-            case AST::ExprNode_BinOp::RANGE:
+            case AST::ExprNodeBinOp::RANGE:
                 m_os << "..";
                 break;
-            case AST::ExprNode_BinOp::RANGE_INC:
+            case AST::ExprNodeBinOp::RANGE_INC:
                 m_os << "...";
                 break;
-            case AST::ExprNode_BinOp::PLACE_IN:
+            case AST::ExprNodeBinOp::PLACE_IN:
                 m_os << "<-";
                 break;
         }
         m_os << " ";
-        auto* right_binop = cast<AST::ExprNode_BinOp>(n.m_right.get());
+        auto* right_binop = cast<AST::ExprNodeBinOp>(n.m_right.get());
         if (!n.m_right) {
             m_os << "/*null*/";
         } else if (right_binop && right_binop->m_type != n.m_type) {
@@ -819,37 +819,37 @@ public:
         }
     }
 
-    virtual void visit(AST::ExprNode_UniOp& n) override {
+    virtual void visit(AST::ExprNodeUniOp& n) override {
         m_expr_root = false;
         switch (n.m_type) {
-            case AST::ExprNode_UniOp::NEGATE:
+            case AST::ExprNodeUniOp::NEGATE:
                 m_os << "-";
                 break;
-            case AST::ExprNode_UniOp::INVERT:
+            case AST::ExprNodeUniOp::INVERT:
                 m_os << "!";
                 break;
-            case AST::ExprNode_UniOp::BOX:
+            case AST::ExprNodeUniOp::BOX:
                 m_os << "box ";
                 break;
-            case AST::ExprNode_UniOp::REF:
+            case AST::ExprNodeUniOp::REF:
                 m_os << "&";
                 break;
-            case AST::ExprNode_UniOp::REFMUT:
+            case AST::ExprNodeUniOp::REFMUT:
                 m_os << "&mut ";
                 break;
-            case AST::ExprNode_UniOp::RawBorrow:
+            case AST::ExprNodeUniOp::RawBorrow:
                 m_os << "&raw const ";
                 break;
-            case AST::ExprNode_UniOp::RawBorrowMut:
+            case AST::ExprNodeUniOp::RawBorrowMut:
                 m_os << "&raw mut ";
                 break;
-            case AST::ExprNode_UniOp::QMARK:
+            case AST::ExprNodeUniOp::QMARK:
                 break;
-            case AST::ExprNode_UniOp::AWait:
+            case AST::ExprNodeUniOp::AWait:
                 break;
         }
 
-        bool wrap = IS(*n.m_value, AST::ExprNode_BinOp) || IS(*n.m_value, AST::ExprNode_Cast);
+        bool wrap = IS(*n.m_value, AST::ExprNodeBinOp) || IS(*n.m_value, AST::ExprNodeCast);
         if (wrap) {
             m_os << "(";
         }
@@ -858,10 +858,10 @@ public:
             m_os << ")";
         }
         switch (n.m_type) {
-            case AST::ExprNode_UniOp::QMARK:
+            case AST::ExprNodeUniOp::QMARK:
                 m_os << "?";
                 break;
-            case AST::ExprNode_UniOp::AWait:
+            case AST::ExprNodeUniOp::AWait:
                 m_os << ".await";
                 break;
             default:
@@ -869,7 +869,7 @@ public:
         }
     }
 
-    virtual void visit(AST::ExprNode_MacroDefinition& n) override {
+    virtual void visit(AST::ExprNodeMacroDefinition& n) override {
         m_os << "/* macro definition #" << n.m_definition_id << " */";
     }
 

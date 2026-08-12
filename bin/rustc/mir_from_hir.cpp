@@ -76,7 +76,7 @@ namespace {
         } m_generator_state;
 
     public:
-        ExprVisitor_Conv(MirBuilder& builder, const ::std::vector<::HIR::TypeRef>& var_types, const ::HIR::ExprNode_GeneratorWrapper* is_generator)
+        ExprVisitor_Conv(MirBuilder& builder, const ::std::vector<::HIR::TypeRef>& var_types, const ::HIR::ExprNodeGeneratorWrapper* is_generator)
             : m_builder(builder)
             , m_variable_types(var_types)
             , m_is_generator(is_generator != nullptr)
@@ -362,7 +362,7 @@ namespace {
             ::HIR::ExprVisitor::visit_node_ptr(node_p);
         }
 
-        void visit(::HIR::ExprNode_Block& node) override {
+        void visit(::HIR::ExprNodeBlock& node) override {
             TRACE_FUNCTION_F("_Block");
             // NOTE: This doesn't create a BB, as BBs are not needed for scoping
             bool diverged = false;
@@ -382,10 +382,10 @@ namespace {
                 const Span& sp = subnode->span();
 
                 auto stmt_scope = m_builder.new_scope_temp(sp);
-                const auto* let_node = cast<::HIR::ExprNode_Let>(subnode.get());
+                const auto* let_node = cast<::HIR::ExprNodeLet>(subnode.get());
                 auto _super_let_scope = save_and_edit(m_super_let_scope, let_node && let_node->m_is_super ? m_super_let_scope : &stmt_scope);
                 // NOTE: Only set the statement scope if processing a block
-                auto _stmt_scope_push = save_and_edit(m_stmt_scope, cast<::HIR::ExprNode_Block>(subnode.get()) ? &stmt_scope : nullptr);
+                auto _stmt_scope_push = save_and_edit(m_stmt_scope, cast<::HIR::ExprNodeBlock>(subnode.get()) ? &stmt_scope : nullptr);
                 this->visit_node_ptr(subnode);
 
                 if (m_builder.block_active() || m_builder.has_result()) {
@@ -449,15 +449,15 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_ConstBlock& node) override {
-            if (cast<HIR::ExprNode_PathValue>(node.m_inner.get())) {
+        void visit(::HIR::ExprNodeConstBlock& node) override {
+            if (cast<HIR::ExprNodePathValue>(node.m_inner.get())) {
                 this->visit_node_ptr(node.m_inner);
             } else {
                 BUG(node.span(), "Const block shouldn't have reached MIR generation");
             }
         }
 
-        void visit(::HIR::ExprNode_Asm& node) override {
+        void visit(::HIR::ExprNodeAsm& node) override {
             TRACE_FUNCTION_F("_Asm");
 
             ::std::vector<::std::pair<::std::string, ::MIR::LValue>> inputs;
@@ -488,7 +488,7 @@ namespace {
             m_builder.set_result(node.span(), ::MIR::RValue::make_Tuple({}));
         }
 
-        void visit(::HIR::ExprNode_Asm2& node) override {
+        void visit(::HIR::ExprNodeAsm2& node) override {
             TRACE_FUNCTION_F("_Asm2");
 
             // TODO: How to represent inout in the MIR?
@@ -590,7 +590,7 @@ namespace {
             }
         }
 
-        // Common code used by both `ExprNode_Return` and the final return of a GeneratorWrapper
+        // Common code used by both `ExprNodeReturn` and the final return of a GeneratorWrapper
         void coroutine_return(const Span& sp, const ::HIR::TypeData* value_ty) {
             static RcString rcstring_Complete = RcString::new_interned("Complete");
             static RcString rcstring_Ready = RcString::new_interned("Ready"); // TODO: This is a lang item
@@ -612,7 +612,7 @@ namespace {
             m_builder.push_stmt_assign(sp, ::MIR::LValue::new_Return(), std::move(res));
         }
 
-        void visit(::HIR::ExprNode_Return& node) override {
+        void visit(::HIR::ExprNodeReturn& node) override {
             TRACE_FUNCTION_F("_Return");
             this->visit_node_ptr(node.m_value);
 
@@ -629,7 +629,7 @@ namespace {
             m_builder.end_block(::MIR::Terminator::make_Return({}));
         }
 
-        void visit(::HIR::ExprNode_Yield& node) override {
+        void visit(::HIR::ExprNodeYield& node) override {
             TRACE_FUNCTION_F("_Yield");
             if (m_is_generator) {
                 ASSERT_BUG(node.span(), !m_generator_state.is_future, "");
@@ -665,7 +665,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_AWait& node) override {
+        void visit(::HIR::ExprNodeAWait& node) override {
             const Span& sp = node.span();
             TRACE_FUNCTION_F("_AWait");
             ASSERT_BUG(node.span(), m_is_generator && m_generator_state.is_future, "`.await` not in an async block/function");
@@ -750,7 +750,7 @@ namespace {
             m_builder.set_result(node.span(), ::MIR::LValue::new_Field(::MIR::LValue::new_Downcast(std::move(lv_poll), variant_Ready), 0));
         }
 
-        void visit(::HIR::ExprNode_Let& node) override {
+        void visit(::HIR::ExprNodeLet& node) override {
             TRACE_FUNCTION_F("_Let " << node.m_pattern);
             if (node.m_value) {
                 auto _ = save_and_edit(m_borrow_raise_target, m_block_tmp_scope);
@@ -792,7 +792,7 @@ namespace {
             m_builder.set_result(node.span(), ::MIR::RValue::make_Tuple({}));
         }
 
-        void visit(::HIR::ExprNode_Loop& node) override {
+        void visit(::HIR::ExprNodeLoop& node) override {
             TRACE_FUNCTION_FR("_Loop", "_Loop");
             auto loop_block = m_builder.new_bb_linked();
             auto loop_body_scope = m_builder.new_scope_loop(node.span());
@@ -869,7 +869,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_LoopControl& node) override {
+        void visit(::HIR::ExprNodeLoopControl& node) override {
             TRACE_FUNCTION_F("_LoopControl \"" << node.m_label << "\"");
             if (m_loop_stack.size() == 0) {
                 BUG(node.span(), "Loop control outside of a loop");
@@ -909,7 +909,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Match& node) override {
+        void visit(::HIR::ExprNodeMatch& node) override {
             TRACE_FUNCTION_FR("_Match", "_Match");
             std::vector<unsigned> let_else_initializer_temps;
             size_t let_else_first_temporary = 0;
@@ -957,7 +957,7 @@ namespace {
             } else {
                 //m_builder.terminate_scope( node.span(), mv$(stmt_scope), false );
             }
-        } // ExprNode_Match
+        } // ExprNodeMatch
 
         void emit_if(/*const*/ ::HIR::ExprNodeP& cond, ::MIR::BasicBlockId true_branch, ::MIR::BasicBlockId false_branch) {
             TRACE_FUNCTION_F("true=bb" << true_branch << ", false=bb" << false_branch);
@@ -966,8 +966,8 @@ namespace {
             // - Convert ! into a reverse of the branches
             {
                 bool reverse = false;
-                while (auto* cond_uni = cast<::HIR::ExprNode_UniOp>(cond_p->get())) {
-                    ASSERT_BUG(cond_uni->span(), cond_uni->m_op == ::HIR::ExprNode_UniOp::Op::Invert, "Unexpected UniOp on boolean in `if` condition");
+                while (auto* cond_uni = cast<::HIR::ExprNodeUniOp>(cond_p->get())) {
+                    ASSERT_BUG(cond_uni->span(), cond_uni->m_op == ::HIR::ExprNodeUniOp::Op::Invert, "Unexpected UniOp on boolean in `if` condition");
                     cond_p = &cond_uni->m_value;
                     reverse = !reverse;
                 }
@@ -978,12 +978,12 @@ namespace {
             }
 
             // Short-circuit && and ||
-            if (auto* cond_bin = cast<::HIR::ExprNode_BinOp>(cond_p->get())) {
+            if (auto* cond_bin = cast<::HIR::ExprNodeBinOp>(cond_p->get())) {
                 switch (cond_bin->m_op) {
-                    case ::HIR::ExprNode_BinOp::Op::BoolAnd:
-                    case ::HIR::ExprNode_BinOp::Op::BoolOr: {
+                    case ::HIR::ExprNodeBinOp::Op::BoolAnd:
+                    case ::HIR::ExprNodeBinOp::Op::BoolOr: {
                         // TODO: Generate a SplitScope
-                        if (cond_bin->m_op == ::HIR::ExprNode_BinOp::Op::BoolAnd) {
+                        if (cond_bin->m_op == ::HIR::ExprNodeBinOp::Op::BoolAnd) {
                             DEBUG("- Short-circuit BoolAnd");
 
                             // IF left false: go to false immediately
@@ -1022,7 +1022,7 @@ namespace {
                 }
             }
 
-            if (auto* cond_lit = cast<::HIR::ExprNode_Literal>(cond_p->get())) {
+            if (auto* cond_lit = cast<::HIR::ExprNodeLiteral>(cond_p->get())) {
                 DEBUG("- constant condition");
                 if (cond_lit->m_data.as_Boolean()) {
                     m_builder.end_block(::MIR::Terminator::make_Goto(true_branch));
@@ -1138,7 +1138,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Assign& node) override {
+        void visit(::HIR::ExprNodeAssign& node) override {
             TRACE_FUNCTION_F("_Assign");
             const auto& sp = node.span();
             auto _ = disable_borrow_extension(); // A bit of a hack
@@ -1152,7 +1152,7 @@ namespace {
             const auto& ty_slot = node.m_slot->m_res_type;
             const auto& ty_val = node.m_value->m_res_type;
 
-            if (node.m_op != ::HIR::ExprNode_Assign::Op::None) {
+            if (node.m_op != ::HIR::ExprNodeAssign::Op::None) {
                 auto dst_clone = dst.clone();
                 ::MIR::Param val_p;
                 if (auto* e = val.opt_Use()) {
@@ -1166,7 +1166,7 @@ namespace {
                 ASSERT_BUG(sp, ty_slot->is_Primitive(), "Assignment operator overloads are only valid on primitives - ty_slot=" << ty_slot);
                 ASSERT_BUG(sp, ty_val->is_Primitive(), "Assignment operator overloads are only valid on primitives - ty_val=" << ty_val);
 
-#define _(v) ::HIR::ExprNode_Assign::Op::v
+#define _(v) ::HIR::ExprNodeAssign::Op::v
                 ::MIR::eBinOp op;
                 switch (node.m_op) {
                     case _(None):
@@ -1220,7 +1220,7 @@ namespace {
             m_builder.set_result(node.span(), ::MIR::RValue::make_Tuple({}));
         }
 
-        void visit(::HIR::ExprNode_BinOp& node) override {
+        void visit(::HIR::ExprNodeBinOp& node) override {
             const auto& sp = node.span();
             TRACE_FUNCTION_F("_BinOp");
 
@@ -1229,7 +1229,7 @@ namespace {
             auto res = m_builder.new_temporary(node.m_res_type);
 
             // Short-circuiting boolean operations
-            if (node.m_op == ::HIR::ExprNode_BinOp::Op::BoolAnd || node.m_op == ::HIR::ExprNode_BinOp::Op::BoolOr) {
+            if (node.m_op == ::HIR::ExprNodeBinOp::Op::BoolAnd || node.m_op == ::HIR::ExprNodeBinOp::Op::BoolOr) {
                 DEBUG("- ShortCircuit Left");
                 this->visit_node_ptr(node.m_left);
                 if (!m_builder.block_active()) {
@@ -1245,7 +1245,7 @@ namespace {
                 // Generate a SplitScope to handle the conditional nature of the next code
                 auto split_scope = m_builder.new_scope_split(node.span());
 
-                if (node.m_op == ::HIR::ExprNode_BinOp::Op::BoolOr) {
+                if (node.m_op == ::HIR::ExprNodeBinOp::Op::BoolOr) {
                     DEBUG("- ShortCircuit ||");
                     // If left is true, assign result true and return
                     m_builder.set_cur_block(bb_true);
@@ -1304,84 +1304,84 @@ namespace {
 
             ::MIR::eBinOp op;
             switch (node.m_op) {
-                case ::HIR::ExprNode_BinOp::Op::CmpEqu:
+                case ::HIR::ExprNodeBinOp::Op::CmpEqu:
                     op = ::MIR::eBinOp::EQ;
                     if (0) {
-                        case ::HIR::ExprNode_BinOp::Op::CmpNEqu:
+                        case ::HIR::ExprNodeBinOp::Op::CmpNEqu:
                             op = ::MIR::eBinOp::NE;
                     }
                     if (0) {
-                        case ::HIR::ExprNode_BinOp::Op::CmpLt:
+                        case ::HIR::ExprNodeBinOp::Op::CmpLt:
                             op = ::MIR::eBinOp::LT;
                     }
                     if (0) {
-                        case ::HIR::ExprNode_BinOp::Op::CmpLtE:
+                        case ::HIR::ExprNodeBinOp::Op::CmpLtE:
                             op = ::MIR::eBinOp::LE;
                     }
                     if (0) {
-                        case ::HIR::ExprNode_BinOp::Op::CmpGt:
+                        case ::HIR::ExprNodeBinOp::Op::CmpGt:
                             op = ::MIR::eBinOp::GT;
                     }
                     if (0) {
-                        case ::HIR::ExprNode_BinOp::Op::CmpGtE:
+                        case ::HIR::ExprNodeBinOp::Op::CmpGtE:
                             op = ::MIR::eBinOp::GE;
                     }
                     this->generate_checked_binop(sp, res.clone(), op, mv$(left), ty_l, mv$(right), ty_r);
                     break;
 
-                case ::HIR::ExprNode_BinOp::Op::Xor:
+                case ::HIR::ExprNodeBinOp::Op::Xor:
                     op = ::MIR::eBinOp::BIT_XOR;
                     if (0) {
-                        case ::HIR::ExprNode_BinOp::Op::Or:
+                        case ::HIR::ExprNodeBinOp::Op::Or:
                             op = ::MIR::eBinOp::BIT_OR;
                     }
                     if (0) {
-                        case ::HIR::ExprNode_BinOp::Op::And:
+                        case ::HIR::ExprNodeBinOp::Op::And:
                             op = ::MIR::eBinOp::BIT_AND;
                     }
                     this->generate_checked_binop(sp, res.clone(), op, mv$(left), ty_l, mv$(right), ty_r);
                     break;
 
-                case ::HIR::ExprNode_BinOp::Op::Shr:
+                case ::HIR::ExprNodeBinOp::Op::Shr:
                     op = ::MIR::eBinOp::BIT_SHR;
                     if (0) {
-                        case ::HIR::ExprNode_BinOp::Op::Shl:
+                        case ::HIR::ExprNodeBinOp::Op::Shl:
                             op = ::MIR::eBinOp::BIT_SHL;
                     }
                     this->generate_checked_binop(sp, res.clone(), op, mv$(left), ty_l, mv$(right), ty_r);
                     break;
 
-                case ::HIR::ExprNode_BinOp::Op::Add:
+                case ::HIR::ExprNodeBinOp::Op::Add:
                     op = ::MIR::eBinOp::ADD;
                     if (0) {
-                        case ::HIR::ExprNode_BinOp::Op::Sub:
+                        case ::HIR::ExprNodeBinOp::Op::Sub:
                             op = ::MIR::eBinOp::SUB;
                     }
                     if (0) {
-                        case ::HIR::ExprNode_BinOp::Op::Mul:
+                        case ::HIR::ExprNodeBinOp::Op::Mul:
                             op = ::MIR::eBinOp::MUL;
                     }
                     if (0) {
-                        case ::HIR::ExprNode_BinOp::Op::Div:
+                        case ::HIR::ExprNodeBinOp::Op::Div:
                             op = ::MIR::eBinOp::DIV;
                     }
                     if (0) {
-                        case ::HIR::ExprNode_BinOp::Op::Mod:
+                        case ::HIR::ExprNodeBinOp::Op::Mod:
                             op = ::MIR::eBinOp::MOD;
                     }
                     this->generate_checked_binop(sp, res.clone(), op, mv$(left), ty_l, mv$(right), ty_r);
                     break;
 
                 // Short-circuiting boolean operations
-                case ::HIR::ExprNode_BinOp::Op::BoolAnd:
-                case ::HIR::ExprNode_BinOp::Op::BoolOr:
+                case ::HIR::ExprNodeBinOp::Op::BoolAnd:
+                case ::HIR::ExprNodeBinOp::Op::BoolOr:
                     BUG(node.span(), "");
                     break;
             }
             m_builder.set_result(node.span(), mv$(res));
         }
 
-        void visit(::HIR::ExprNode_UniOp& node) override {
+        void visit(::HIR::ExprNodeUniOp& node) override {
             TRACE_FUNCTION_F("_UniOp");
 
             const auto& ty_val = node.m_value->m_res_type;
@@ -1390,7 +1390,7 @@ namespace {
 
             ::MIR::RValue res;
             switch (node.m_op) {
-                case ::HIR::ExprNode_UniOp::Op::Invert:
+                case ::HIR::ExprNodeUniOp::Op::Invert:
                     if (ty_val->is_Primitive()) {
                         switch (ty_val->as_Primitive()) {
                             case ::HIR::CoreType::Str:
@@ -1407,7 +1407,7 @@ namespace {
                     }
                     res = ::MIR::RValue::make_UniOp({mv$(val), ::MIR::eUniOp::INV});
                     break;
-                case ::HIR::ExprNode_UniOp::Op::Negate:
+                case ::HIR::ExprNodeUniOp::Op::Negate:
                     if (ty_val->is_Primitive()) {
                         switch (ty_val->as_Primitive()) {
                             case ::HIR::CoreType::Str:
@@ -1435,7 +1435,7 @@ namespace {
             m_builder.set_result(node.span(), mv$(res));
         }
 
-        void visit(::HIR::ExprNode_Borrow& node) override {
+        void visit(::HIR::ExprNodeBorrow& node) override {
             TRACE_FUNCTION_F("_Borrow");
 
             auto _ = save_and_edit(m_in_borrow, true);
@@ -1452,7 +1452,7 @@ namespace {
             m_builder.set_result(node.span(), ::MIR::RValue::make_Borrow({node.m_type, false, mv$(val)}));
         }
 
-        void visit(::HIR::ExprNode_RawBorrow& node) override {
+        void visit(::HIR::ExprNodeRawBorrow& node) override {
             TRACE_FUNCTION_F("_RawBorrow");
 
             auto _ = save_and_edit(m_in_borrow, true);
@@ -1469,7 +1469,7 @@ namespace {
             m_builder.set_result(node.span(), ::MIR::RValue::make_Borrow({node.m_type, true, mv$(val)}));
         }
 
-        void visit(::HIR::ExprNode_Cast& node) override {
+        void visit(::HIR::ExprNodeCast& node) override {
             TRACE_FUNCTION_F("_Cast " << node.m_res_type);
             this->visit_node_ptr(node.m_value);
 
@@ -1602,7 +1602,7 @@ namespace {
             m_builder.set_result( node.span(), mv$(res) );
         }
 
-        void visit(::HIR::ExprNode_Unsize& node) override {
+        void visit(::HIR::ExprNodeUnsize& node) override {
             TRACE_FUNCTION_F("_Unsize");
             this->visit_node_ptr(node.m_value);
 
@@ -1677,7 +1677,7 @@ namespace {
             }
         }
 
-        void visit_index_operator(::HIR::ExprNode_Index& node, const ::HIR::TypeData* ty_val, MIR::LValue value, const ::HIR::TypeData* ty_idx, MIR::LValue index) {
+        void visit_index_operator(::HIR::ExprNodeIndex& node, const ::HIR::TypeData* ty_val, MIR::LValue value, const ::HIR::TypeData* ty_idx, MIR::LValue index) {
             DEBUG("");
             const Span& sp = node.span();
 
@@ -1738,7 +1738,7 @@ namespace {
             m_builder.set_result(node.span(), ::MIR::LValue::new_Deref(std::move(res_val)));
         }
 
-        void visit(::HIR::ExprNode_Index& node) override {
+        void visit(::HIR::ExprNodeIndex& node) override {
             TRACE_FUNCTION_F("_Index");
 
             // NOTE: Calculate the index first (so if it borrows from the source, it's over by the time that's needed)
@@ -1823,7 +1823,7 @@ namespace {
             m_builder.set_result( node.span(), ::MIR::LValue::new_Index( mv$(value), index.m_root.as_Local() ) );
         }
 
-        void visit(::HIR::ExprNode_Deref& node) override {
+        void visit(::HIR::ExprNodeDeref& node) override {
             const Span& sp = node.span();
             TRACE_FUNCTION_F("_Deref");
 
@@ -1831,8 +1831,8 @@ namespace {
             this->visit_node_ptr(node.m_value);
             auto val = m_builder.get_result_in_lvalue(node.m_value->span(), ty_val);
 
-            bool use_trait = node.m_trait_used == ::HIR::ExprNode_Deref::TraitUsed::Trait;
-            if (node.m_trait_used == ::HIR::ExprNode_Deref::TraitUsed::Unknown) {
+            bool use_trait = node.m_trait_used == ::HIR::ExprNodeDeref::TraitUsed::Trait;
+            if (node.m_trait_used == ::HIR::ExprNodeDeref::TraitUsed::Unknown) {
                 use_trait = !ty_val->is_Pointer() && !ty_val->is_Borrow() && !m_builder.is_type_owned_box(ty_val);
             }
 
@@ -1886,8 +1886,8 @@ namespace {
             m_builder.set_result( node.span(), ::MIR::LValue::new_Deref( mv$(val) ) );
         }
 
-        void visit(::HIR::ExprNode_Emplace& node) override {
-            assert(node.m_type == ::HIR::ExprNode_Emplace::Type::Boxer);
+        void visit(::HIR::ExprNodeEmplace& node) override {
+            assert(node.m_type == ::HIR::ExprNodeEmplace::Type::Boxer);
             const auto& data_ty = node.m_value->m_res_type;
 
             node.m_value->visit(*this);
@@ -1964,7 +1964,7 @@ namespace {
             m_builder.set_result(node.span(), mv$(res));
         }
 
-        void visit(::HIR::ExprNode_TupleVariant& node) override {
+        void visit(::HIR::ExprNodeTupleVariant& node) override {
             const Span& sp = node.span();
             TRACE_FUNCTION_F("_TupleVariant");
             ::std::vector<::MIR::Param> values;
@@ -2028,7 +2028,7 @@ namespace {
             return values;
         }
 
-        void visit(::HIR::ExprNode_CallPath& node) override {
+        void visit(::HIR::ExprNodeCallPath& node) override {
             TRACE_FUNCTION_F("_CallPath " << node.m_path);
             // TODO: if this is a `<foo as Index[Mut]>::index[_mut]` call then allow the borrow raise to go through to the receiver
             ::std::vector<MIR::Param> values;
@@ -2207,7 +2207,7 @@ namespace {
             m_builder.set_result(node.span(), mv$(res));
         }
 
-        void visit(::HIR::ExprNode_CallValue& node) override {
+        void visit(::HIR::ExprNodeCallValue& node) override {
             TRACE_FUNCTION_F("_CallValue " << node.m_value->m_res_type);
             auto _ = save_and_edit(m_borrow_raise_target, nullptr);
 
@@ -2241,12 +2241,12 @@ namespace {
             m_builder.set_result(node.span(), mv$(res));
         }
 
-        void visit(::HIR::ExprNode_CallMethod& node) override {
+        void visit(::HIR::ExprNodeCallMethod& node) override {
             // TODO: Allow use on trait objects? May not be needed, depends.
             BUG(node.span(), "Leftover _CallMethod");
         }
 
-        void visit(::HIR::ExprNode_Field& node) override {
+        void visit(::HIR::ExprNodeField& node) override {
             TRACE_FUNCTION_F("_Field \"" << node.m_field << "\"");
             this->visit_node_ptr(node.m_value);
             auto val = m_builder.get_result_in_lvalue(node.m_value->span(), node.m_value->m_res_type);
@@ -2277,7 +2277,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Literal& node) override {
+        void visit(::HIR::ExprNodeLiteral& node) override {
             TRACE_FUNCTION_F("_Literal");
             TU_MATCH_HDRA( (node.m_data), {)
             TU_ARMA(Integer, e) {
@@ -2344,7 +2344,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_UnitVariant& node) override {
+        void visit(::HIR::ExprNodeUnitVariant& node) override {
             const Span& sp = node.span();
             TRACE_FUNCTION_F("_UnitVariant");
             if (!node.m_is_struct) {
@@ -2369,10 +2369,10 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_PathValue& node) override {
+        void visit(::HIR::ExprNodePathValue& node) override {
             const auto& sp = node.span();
             TRACE_FUNCTION_F("_PathValue - " << node.m_path);
-            if (node.m_res_type->is_NamedFunction() && node.m_target != ::HIR::ExprNode_PathValue::STATIC && node.m_target != ::HIR::ExprNode_PathValue::CONSTANT) {
+            if (node.m_res_type->is_NamedFunction() && node.m_target != ::HIR::ExprNodePathValue::STATIC && node.m_target != ::HIR::ExprNodePathValue::CONSTANT) {
                 auto tmp = m_builder.new_temporary(node.m_res_type);
                 m_builder.push_stmt_assign(sp, tmp.clone(), ::MIR::Constant::make_Function({box$(node.m_path.clone())}));
                 //m_builder.push_stmt_assign( sp, tmp.clone(), ::MIR::Constant::make_ItemAddr({ box$(node.m_path.clone()) }) );
@@ -2382,7 +2382,7 @@ namespace {
             TU_MATCH_HDRA( (node.m_path.m_data), { )
             TU_ARMA(Generic, pe) {
                     // Enum variant constructor.
-                    if (node.m_target == ::HIR::ExprNode_PathValue::ENUM_VAR_CONSTR) {
+                    if (node.m_target == ::HIR::ExprNodePathValue::ENUM_VAR_CONSTR) {
                         BUG(node.span(), "Should have produced a NamedFunction type and have been handled above");
                     }
                     const auto& vi = m_builder.crate().get_valitem_by_path(node.span(), pe.m_path);
@@ -2452,7 +2452,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Variable& node) override {
+        void visit(::HIR::ExprNodeVariable& node) override {
             TRACE_FUNCTION_F("_Variable - " << node.m_name << " #" << node.m_slot);
 #if 1
             // If there's an alias active, emit that
@@ -2474,12 +2474,12 @@ namespace {
             m_builder.set_result(node.span(), m_builder.get_variable(node.span(), node.m_slot));
         }
 
-        void visit(::HIR::ExprNode_ConstParam& node) override {
+        void visit(::HIR::ExprNodeConstParam& node) override {
             TRACE_FUNCTION_F("_ConstParam - " << node.m_name << " #" << node.m_binding);
             m_builder.set_result(node.span(), ::MIR::Constant::make_Generic({node.m_name, node.m_binding}));
         }
 
-        void visit_sl_inner(::HIR::ExprNode_StructLiteral& node, const ::HIR::Struct& str, const ::HIR::GenericPath& path) {
+        void visit_sl_inner(::HIR::ExprNodeStructLiteral& node, const ::HIR::Struct& str, const ::HIR::GenericPath& path) {
             const Span& sp = node.span();
 
             ASSERT_BUG(sp, str.m_data.is_Named(), "");
@@ -2542,7 +2542,7 @@ namespace {
             m_builder.set_result(node.span(), ::MIR::RValue::make_Struct({path.clone(), mv$(values)}));
         }
 
-        void visit(::HIR::ExprNode_StructLiteral& node) override {
+        void visit(::HIR::ExprNodeStructLiteral& node) override {
             TRACE_FUNCTION_F("_StructLiteral");
 
             const auto& ty_path = node.m_real_path;
@@ -2608,7 +2608,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Tuple& node) override {
+        void visit(::HIR::ExprNodeTuple& node) override {
             TRACE_FUNCTION_F("_Tuple");
             auto values = get_args(node.m_vals);
             if (!m_builder.block_active()) {
@@ -2618,7 +2618,7 @@ namespace {
             m_builder.set_result(node.span(), ::MIR::RValue::make_Tuple({mv$(values)}));
         }
 
-        void visit(::HIR::ExprNode_ArrayList& node) override {
+        void visit(::HIR::ExprNodeArrayList& node) override {
             TRACE_FUNCTION_F("_ArrayList");
             auto values = get_args(node.m_vals);
             if (!m_builder.block_active()) {
@@ -2628,7 +2628,7 @@ namespace {
             m_builder.set_result(node.span(), ::MIR::RValue::make_Array({mv$(values)}));
         }
 
-        void visit(::HIR::ExprNode_ArraySized& node) override {
+        void visit(::HIR::ExprNodeArraySized& node) override {
             TRACE_FUNCTION_F("_ArraySized");
             this->visit_node_ptr(node.m_val);
             if (!m_builder.block_active()) {
@@ -2641,7 +2641,7 @@ namespace {
             node.m_size = HIR::ArraySize();
         }
 
-        void visit(::HIR::ExprNode_Closure& node) override {
+        void visit(::HIR::ExprNodeClosure& node) override {
             TRACE_FUNCTION_F("_Closure - " << node.m_obj_path);
             auto _ = save_and_edit(m_borrow_raise_target, nullptr);
 
@@ -2693,7 +2693,7 @@ namespace {
             m_builder.set_result(sp, ::MIR::RValue::make_Struct({obj_path.clone(), mv$(vals)}));
         }
 
-        void visit(::HIR::ExprNode_Generator& node) override {
+        void visit(::HIR::ExprNodeGenerator& node) override {
             TRACE_FUNCTION_F("_Generator - " << node.m_obj_path);
             ASSERT_BUG(node.span(), node.m_obj_ptr, "Generator not created");
             ASSERT_BUG(node.span(), !node.m_code, "Encountered outer generator wrapper");
@@ -2701,11 +2701,11 @@ namespace {
             visit_common_cr(node.span(), node.m_obj_path, node.m_state_data_type, node.m_captures);
         }
 
-        void visit(::HIR::ExprNode_GeneratorWrapper& node) override {
+        void visit(::HIR::ExprNodeGeneratorWrapper& node) override {
             BUG(node.span(), "Unexpected");
         }
 
-        void visit(::HIR::ExprNode_AsyncBlock& node) override {
+        void visit(::HIR::ExprNodeAsyncBlock& node) override {
             TRACE_FUNCTION_F("_AsyncBlock - " << node.m_obj_path);
             ASSERT_BUG(node.span(), node.m_obj_ptr, "Future not created");
             ASSERT_BUG(node.span(), !node.m_code, "Encountered code inside post-expand async block");
@@ -2730,7 +2730,7 @@ namespace {
 
         ::HIR::ExprNode& root_node = const_cast<::HIR::ExprNode&>(*ptr);
         MirBuilder builder{ptr->span(), resolve, ret_ty, args, fcn};
-        ExprVisitor_Conv ev{builder, ptr.m_bindings, cast<::HIR::ExprNode_GeneratorWrapper>(&root_node)};
+        ExprVisitor_Conv ev{builder, ptr.m_bindings, cast<::HIR::ExprNodeGeneratorWrapper>(&root_node)};
 
         // 1. Apply destructuring to arguments
         unsigned int i = 0;
@@ -2749,7 +2749,7 @@ namespace {
         }
 
         // 2. Destructure code
-        if (auto* gen_node = cast<::HIR::ExprNode_GeneratorWrapper>(&root_node)) {
+        if (auto* gen_node = cast<::HIR::ExprNodeGeneratorWrapper>(&root_node)) {
             // Mark all capture locals as valid (for later rewrite into variable acesses)
             ::std::map<unsigned, std::vector<MIR::LValue::Wrapper>> mappings;
             for (size_t i = 0; i < gen_node->m_capture_usages.size(); i++) {
@@ -3032,7 +3032,7 @@ void HIR_GenerateMIR(::HIR::Crate& crate) {
 }
 
 
-void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps);
+void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps);
 
 namespace {
     void get_ty_and_val(
@@ -3152,10 +3152,10 @@ struct ArmCode {
 
 typedef ::std::vector<PatternRuleset> t_arm_rules;
 
-void MIR_LowerHIR_Match_Simple(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arm_code, ::MIR::BasicBlockId first_cmp_block);
+void MIR_LowerHIR_Match_Simple(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arm_code, ::MIR::BasicBlockId first_cmp_block);
 int MIR_LowerHIR_Match_Simple__GeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int num_rules, const ::HIR::TypeData* top_ty, const ::MIR::LValue& top_val, unsigned int field_path_ofs, ::MIR::BasicBlockId fail_bb);
 void MIR_LowerHIR_Match_Grouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIR::TypeData* match_ty, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block);
-void MIR_LowerHIR_Match_DecisionTree(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arm_code, ::MIR::BasicBlockId first_cmp_block);
+void MIR_LowerHIR_Match_DecisionTree(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arm_code, ::MIR::BasicBlockId first_cmp_block);
 
 /// Helper to construct rules from a passed pattern
 struct PatternRulesetBuilder {
@@ -3351,7 +3351,7 @@ void MIR_LowerHIR_Let(MirBuilder& builder, MirConverter& conv, const Span& sp, c
 // Handles lowering non-trivial matches to MIR
 // - Non-trivial means that there's more than one pattern
 // - Trivial matches are handled using `MIR_LowerHIR_Let`
-void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps) {
+void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps) {
     TRACE_FUNCTION;
     // NOTE: Lowers to the following pattern:
     // ```
@@ -5640,7 +5640,7 @@ namespace {
 // Dumb and Simple
 // --------------------------------------------------------------------
 
-void MIR_LowerHIR_Match_Simple(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block) {
+void MIR_LowerHIR_Match_Simple(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block) {
     TRACE_FUNCTION;
 
     // 1. Generate pattern matches

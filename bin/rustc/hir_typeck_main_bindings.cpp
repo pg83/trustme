@@ -34,7 +34,7 @@ namespace {
         };
 
         ::std::vector<RetTarget> closure_ret_types;
-        ::std::vector<const ::HIR::ExprNode_Loop*> m_loops;
+        ::std::vector<const ::HIR::ExprNodeLoop*> m_loops;
         //const ::HIR::ExprPtr* m_cur_expr;
 
         ::HIR::SimplePath m_lang_Index;
@@ -74,7 +74,7 @@ namespace {
             check_types_equal(sp, ret_type, node_ptr->m_res_type);
         }
 
-        void visit(::HIR::ExprNode_Block& node) override {
+        void visit(::HIR::ExprNodeBlock& node) override {
             TRACE_FUNCTION_F(&node << " { ... }");
             for (auto& n : node.m_nodes) {
                 n->visit(*this);
@@ -85,13 +85,13 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_ConstBlock& node) override {
+        void visit(::HIR::ExprNodeConstBlock& node) override {
             TRACE_FUNCTION_F(&node << " const { ... }");
             node.m_inner->visit(*this);
             check_types_equal(node.span(), node.m_res_type, node.m_inner->m_res_type);
         }
 
-        void visit(::HIR::ExprNode_Asm& node) override {
+        void visit(::HIR::ExprNodeAsm& node) override {
             TRACE_FUNCTION_F(&node << " llvm_asm! ...");
 
             // TODO: Check result types
@@ -103,7 +103,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Asm2& node) override {
+        void visit(::HIR::ExprNodeAsm2& node) override {
             TRACE_FUNCTION_F(&node << " asm! ...");
 
             // TODO: Check result types
@@ -129,7 +129,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Return& node) override {
+        void visit(::HIR::ExprNodeReturn& node) override {
             TRACE_FUNCTION_F(&node << " return ...");
             // Check against return type
             const auto* ret_ty = (this->closure_ret_types.size() > 0 ? this->closure_ret_types.back().ret_type : this->ret_type);
@@ -137,7 +137,7 @@ namespace {
             node.m_value->visit(*this);
         }
 
-        void visit(::HIR::ExprNode_Yield& node) override {
+        void visit(::HIR::ExprNodeYield& node) override {
             TRACE_FUNCTION_F(&node << " yield ...");
             ASSERT_BUG(node.span(), !this->closure_ret_types.empty(), "Yield outside a generator closure");
             ASSERT_BUG(node.span(), this->closure_ret_types.back().yield_type, "Yield outside a generator closure");
@@ -145,21 +145,21 @@ namespace {
             node.m_value->visit(*this);
         }
 
-        void visit(::HIR::ExprNode_AWait& node) override {
+        void visit(::HIR::ExprNodeAWait& node) override {
             node.m_value->visit(*this);
             auto t = m_resolve.m_crate.m_types.path(::HIR::Path(node.m_value->m_res_type, m_resolve.m_lang_Future, "Output"), {});
             m_resolve.expand_associated_types(node.span(), t);
             check_types_equal(node.span(), node.m_res_type, t);
         }
 
-        void visit(::HIR::ExprNode_Loop& node) override {
+        void visit(::HIR::ExprNodeLoop& node) override {
             TRACE_FUNCTION_F(&node << " loop { ... }");
             m_loops.push_back(&node);
             node.m_code->visit(*this);
             m_loops.pop_back();
         }
 
-        void visit(::HIR::ExprNode_LoopControl& node) override {
+        void visit(::HIR::ExprNodeLoopControl& node) override {
             TRACE_FUNCTION_F(&node << " " << (node.m_continue ? "continue" : "break") << " '" << node.m_label);
 
             if (node.m_value) {
@@ -178,7 +178,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Let& node) override {
+        void visit(::HIR::ExprNodeLet& node) override {
             TRACE_FUNCTION_F(&node << " let " << node.m_pattern << ": " << node.m_type);
             if (node.m_value) {
                 check_pattern(node.m_pattern, node.m_value->m_res_type);
@@ -187,7 +187,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Match& node) override {
+        void visit(::HIR::ExprNodeMatch& node) override {
             TRACE_FUNCTION_F(&node << " match ...");
             node.m_value->visit(*this);
             for (auto& arm : node.m_arms) {
@@ -199,10 +199,10 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Assign& node) override {
+        void visit(::HIR::ExprNodeAssign& node) override {
             TRACE_FUNCTION_F(&node << "... ?= ...");
 
-            if (node.m_op == ::HIR::ExprNode_Assign::Op::None) {
+            if (node.m_op == ::HIR::ExprNodeAssign::Op::None) {
                 check_types_equal(node.span(), node.m_slot->m_res_type, node.m_value->m_res_type);
             } else {
                 // Type inferrence using the +=
@@ -210,45 +210,45 @@ namespace {
                 const char* lang_item = nullptr;
                 auto operator_kind = typeck::PrimitiveOperator::None;
                 switch (node.m_op) {
-                    case ::HIR::ExprNode_Assign::Op::None:
+                    case ::HIR::ExprNodeAssign::Op::None:
                         throw "";
-                    case ::HIR::ExprNode_Assign::Op::Add:
+                    case ::HIR::ExprNodeAssign::Op::Add:
                         lang_item = "add_assign";
                         operator_kind = typeck::PrimitiveOperator::AddAssign;
                         break;
-                    case ::HIR::ExprNode_Assign::Op::Sub:
+                    case ::HIR::ExprNodeAssign::Op::Sub:
                         lang_item = "sub_assign";
                         operator_kind = typeck::PrimitiveOperator::SubAssign;
                         break;
-                    case ::HIR::ExprNode_Assign::Op::Mul:
+                    case ::HIR::ExprNodeAssign::Op::Mul:
                         lang_item = "mul_assign";
                         operator_kind = typeck::PrimitiveOperator::MulAssign;
                         break;
-                    case ::HIR::ExprNode_Assign::Op::Div:
+                    case ::HIR::ExprNodeAssign::Op::Div:
                         lang_item = "div_assign";
                         operator_kind = typeck::PrimitiveOperator::DivAssign;
                         break;
-                    case ::HIR::ExprNode_Assign::Op::Mod:
+                    case ::HIR::ExprNodeAssign::Op::Mod:
                         lang_item = "rem_assign";
                         operator_kind = typeck::PrimitiveOperator::RemAssign;
                         break;
-                    case ::HIR::ExprNode_Assign::Op::And:
+                    case ::HIR::ExprNodeAssign::Op::And:
                         lang_item = "bitand_assign";
                         operator_kind = typeck::PrimitiveOperator::BitAndAssign;
                         break;
-                    case ::HIR::ExprNode_Assign::Op::Or:
+                    case ::HIR::ExprNodeAssign::Op::Or:
                         lang_item = "bitor_assign";
                         operator_kind = typeck::PrimitiveOperator::BitOrAssign;
                         break;
-                    case ::HIR::ExprNode_Assign::Op::Xor:
+                    case ::HIR::ExprNodeAssign::Op::Xor:
                         lang_item = "bitxor_assign";
                         operator_kind = typeck::PrimitiveOperator::BitXorAssign;
                         break;
-                    case ::HIR::ExprNode_Assign::Op::Shr:
+                    case ::HIR::ExprNodeAssign::Op::Shr:
                         lang_item = "shr_assign";
                         operator_kind = typeck::PrimitiveOperator::ShrAssign;
                         break;
-                    case ::HIR::ExprNode_Assign::Op::Shl:
+                    case ::HIR::ExprNodeAssign::Op::Shl:
                         lang_item = "shl_assign";
                         operator_kind = typeck::PrimitiveOperator::ShlAssign;
                         break;
@@ -264,43 +264,43 @@ namespace {
             node.m_value->visit(*this);
         }
 
-        void visit(::HIR::ExprNode_BinOp& node) override {
-            TRACE_FUNCTION_F(&node << "... " << ::HIR::ExprNode_BinOp::opname(node.m_op) << " ...");
+        void visit(::HIR::ExprNodeBinOp& node) override {
+            TRACE_FUNCTION_F(&node << "... " << ::HIR::ExprNodeBinOp::opname(node.m_op) << " ...");
 
             switch (node.m_op) {
-                case ::HIR::ExprNode_BinOp::Op::CmpEqu:
-                case ::HIR::ExprNode_BinOp::Op::CmpNEqu:
-                case ::HIR::ExprNode_BinOp::Op::CmpLt:
-                case ::HIR::ExprNode_BinOp::Op::CmpLtE:
-                case ::HIR::ExprNode_BinOp::Op::CmpGt:
-                case ::HIR::ExprNode_BinOp::Op::CmpGtE: {
+                case ::HIR::ExprNodeBinOp::Op::CmpEqu:
+                case ::HIR::ExprNodeBinOp::Op::CmpNEqu:
+                case ::HIR::ExprNodeBinOp::Op::CmpLt:
+                case ::HIR::ExprNodeBinOp::Op::CmpLtE:
+                case ::HIR::ExprNodeBinOp::Op::CmpGt:
+                case ::HIR::ExprNodeBinOp::Op::CmpGtE: {
                     check_types_equal(node.span(), m_resolve.m_crate.m_types.primitive(::HIR::CoreType::Bool), node.m_res_type);
 
                     const char* item_name = nullptr;
                     switch (node.m_op) {
-                        case ::HIR::ExprNode_BinOp::Op::CmpEqu:
+                        case ::HIR::ExprNodeBinOp::Op::CmpEqu:
                             item_name = "eq";
                             break;
-                        case ::HIR::ExprNode_BinOp::Op::CmpNEqu:
+                        case ::HIR::ExprNodeBinOp::Op::CmpNEqu:
                             item_name = "eq";
                             break;
-                        case ::HIR::ExprNode_BinOp::Op::CmpLt:
+                        case ::HIR::ExprNodeBinOp::Op::CmpLt:
                             item_name = "partial_ord";
                             break;
-                        case ::HIR::ExprNode_BinOp::Op::CmpLtE:
+                        case ::HIR::ExprNodeBinOp::Op::CmpLtE:
                             item_name = "partial_ord";
                             break;
-                        case ::HIR::ExprNode_BinOp::Op::CmpGt:
+                        case ::HIR::ExprNodeBinOp::Op::CmpGt:
                             item_name = "partial_ord";
                             break;
-                        case ::HIR::ExprNode_BinOp::Op::CmpGtE:
+                        case ::HIR::ExprNodeBinOp::Op::CmpGtE:
                             item_name = "partial_ord";
                             break;
                         default:
                             break;
                     }
                     assert(item_name);
-                    auto operator_kind = node.m_op == ::HIR::ExprNode_BinOp::Op::CmpEqu || node.m_op == ::HIR::ExprNode_BinOp::Op::CmpNEqu
+                    auto operator_kind = node.m_op == ::HIR::ExprNodeBinOp::Op::CmpEqu || node.m_op == ::HIR::ExprNodeBinOp::Op::CmpNEqu
                         ? typeck::PrimitiveOperator::Equal
                         : typeck::PrimitiveOperator::Order;
                     if (!typeck::primitive_operator_has_builtin(operator_kind, node.m_left->m_res_type, node.m_right->m_res_type)) {
@@ -310,70 +310,70 @@ namespace {
                     break;
                 }
 
-                case ::HIR::ExprNode_BinOp::Op::BoolAnd:
-                case ::HIR::ExprNode_BinOp::Op::BoolOr:
+                case ::HIR::ExprNodeBinOp::Op::BoolAnd:
+                case ::HIR::ExprNodeBinOp::Op::BoolOr:
                     // No validation needed, result forced in typeck
                     break;
                 default: {
                     const char* item_name = nullptr;
                     auto operator_kind = typeck::PrimitiveOperator::None;
                     switch (node.m_op) {
-                        case ::HIR::ExprNode_BinOp::Op::CmpEqu:
+                        case ::HIR::ExprNodeBinOp::Op::CmpEqu:
                             throw "";
-                        case ::HIR::ExprNode_BinOp::Op::CmpNEqu:
+                        case ::HIR::ExprNodeBinOp::Op::CmpNEqu:
                             throw "";
-                        case ::HIR::ExprNode_BinOp::Op::CmpLt:
+                        case ::HIR::ExprNodeBinOp::Op::CmpLt:
                             throw "";
-                        case ::HIR::ExprNode_BinOp::Op::CmpLtE:
+                        case ::HIR::ExprNodeBinOp::Op::CmpLtE:
                             throw "";
-                        case ::HIR::ExprNode_BinOp::Op::CmpGt:
+                        case ::HIR::ExprNodeBinOp::Op::CmpGt:
                             throw "";
-                        case ::HIR::ExprNode_BinOp::Op::CmpGtE:
+                        case ::HIR::ExprNodeBinOp::Op::CmpGtE:
                             throw "";
-                        case ::HIR::ExprNode_BinOp::Op::BoolAnd:
+                        case ::HIR::ExprNodeBinOp::Op::BoolAnd:
                             throw "";
-                        case ::HIR::ExprNode_BinOp::Op::BoolOr:
+                        case ::HIR::ExprNodeBinOp::Op::BoolOr:
                             throw "";
 
-                        case ::HIR::ExprNode_BinOp::Op::Add:
+                        case ::HIR::ExprNodeBinOp::Op::Add:
                             item_name = "add";
                             operator_kind = typeck::PrimitiveOperator::Add;
                             break;
-                        case ::HIR::ExprNode_BinOp::Op::Sub:
+                        case ::HIR::ExprNodeBinOp::Op::Sub:
                             item_name = "sub";
                             operator_kind = typeck::PrimitiveOperator::Sub;
                             break;
-                        case ::HIR::ExprNode_BinOp::Op::Mul:
+                        case ::HIR::ExprNodeBinOp::Op::Mul:
                             item_name = "mul";
                             operator_kind = typeck::PrimitiveOperator::Mul;
                             break;
-                        case ::HIR::ExprNode_BinOp::Op::Div:
+                        case ::HIR::ExprNodeBinOp::Op::Div:
                             item_name = "div";
                             operator_kind = typeck::PrimitiveOperator::Div;
                             break;
-                        case ::HIR::ExprNode_BinOp::Op::Mod:
+                        case ::HIR::ExprNodeBinOp::Op::Mod:
                             item_name = "rem";
                             operator_kind = typeck::PrimitiveOperator::Rem;
                             break;
 
-                        case ::HIR::ExprNode_BinOp::Op::And:
+                        case ::HIR::ExprNodeBinOp::Op::And:
                             item_name = "bitand";
                             operator_kind = typeck::PrimitiveOperator::BitAnd;
                             break;
-                        case ::HIR::ExprNode_BinOp::Op::Or:
+                        case ::HIR::ExprNodeBinOp::Op::Or:
                             item_name = "bitor";
                             operator_kind = typeck::PrimitiveOperator::BitOr;
                             break;
-                        case ::HIR::ExprNode_BinOp::Op::Xor:
+                        case ::HIR::ExprNodeBinOp::Op::Xor:
                             item_name = "bitxor";
                             operator_kind = typeck::PrimitiveOperator::BitXor;
                             break;
 
-                        case ::HIR::ExprNode_BinOp::Op::Shr:
+                        case ::HIR::ExprNodeBinOp::Op::Shr:
                             item_name = "shr";
                             operator_kind = typeck::PrimitiveOperator::Shr;
                             break;
-                        case ::HIR::ExprNode_BinOp::Op::Shl:
+                        case ::HIR::ExprNodeBinOp::Op::Shl:
                             item_name = "shl";
                             operator_kind = typeck::PrimitiveOperator::Shl;
                             break;
@@ -391,17 +391,17 @@ namespace {
             node.m_right->visit(*this);
         }
 
-        void visit(::HIR::ExprNode_UniOp& node) override {
-            TRACE_FUNCTION_F(&node << " " << ::HIR::ExprNode_UniOp::opname(node.m_op) << "...");
+        void visit(::HIR::ExprNodeUniOp& node) override {
+            TRACE_FUNCTION_F(&node << " " << ::HIR::ExprNodeUniOp::opname(node.m_op) << "...");
             auto operator_kind = typeck::PrimitiveOperator::None;
             switch (node.m_op) {
-                case ::HIR::ExprNode_UniOp::Op::Invert:
+                case ::HIR::ExprNodeUniOp::Op::Invert:
                     operator_kind = typeck::PrimitiveOperator::Not;
                     if (!typeck::primitive_operator_has_builtin(operator_kind, node.m_value->m_res_type)) {
                         check_associated_type(node.span(), node.m_res_type, this->get_lang_item_path(node.span(), "not"), {}, node.m_value->m_res_type, "Output");
                     }
                     break;
-                case ::HIR::ExprNode_UniOp::Op::Negate:
+                case ::HIR::ExprNodeUniOp::Op::Negate:
                     operator_kind = typeck::PrimitiveOperator::Neg;
                     if (!typeck::primitive_operator_has_builtin(operator_kind, node.m_value->m_res_type)) {
                         check_associated_type(node.span(), node.m_res_type, this->get_lang_item_path(node.span(), "neg"), {}, node.m_value->m_res_type, "Output");
@@ -411,19 +411,19 @@ namespace {
             node.m_value->visit(*this);
         }
 
-        void visit(::HIR::ExprNode_Borrow& node) override {
+        void visit(::HIR::ExprNodeBorrow& node) override {
             TRACE_FUNCTION_F(&node << " &_ ...");
             check_types_equal(node.span(), node.m_res_type, m_resolve.m_crate.m_types.borrow(node.m_type, node.m_value->m_res_type));
             node.m_value->visit(*this);
         }
 
-        void visit(::HIR::ExprNode_RawBorrow& node) override {
+        void visit(::HIR::ExprNodeRawBorrow& node) override {
             TRACE_FUNCTION_F(&node << " &raw _ ...");
             check_types_equal(node.span(), node.m_res_type, m_resolve.m_crate.m_types.pointer(node.m_type, node.m_value->m_res_type));
             node.m_value->visit(*this);
         }
 
-        void visit(::HIR::ExprNode_Index& node) override {
+        void visit(::HIR::ExprNodeIndex& node) override {
             TRACE_FUNCTION_F(&node << " ... [ ... ]");
             check_associated_type(node.span(), node.m_res_type, m_lang_Index, {node.m_index->m_res_type}, node.m_value->m_res_type, "Output");
 
@@ -431,7 +431,7 @@ namespace {
             node.m_index->visit(*this);
         }
 
-        void visit(::HIR::ExprNode_Cast& node) override {
+        void visit(::HIR::ExprNodeCast& node) override {
             TRACE_FUNCTION_F(&node << " " << node.m_value->m_res_type << " as " << node.m_dst_type);
             const Span& sp = node.span();
             DEBUG("Cast res type " << node.m_res_type);
@@ -536,7 +536,7 @@ namespace {
             node.m_value->visit( *this );
         }
 
-        void visit(::HIR::ExprNode_Unsize& node) override {
+        void visit(::HIR::ExprNodeUnsize& node) override {
             TRACE_FUNCTION_F(&node << " ... : " << node.m_res_type);
             const Span& sp = node.span();
 
@@ -573,12 +573,12 @@ namespace {
             node.m_value->visit(*this);
         }
 
-        void visit(::HIR::ExprNode_Deref& node) override {
+        void visit(::HIR::ExprNodeDeref& node) override {
             TRACE_FUNCTION_F(&node << " *...");
             const auto& ty = node.m_value->m_res_type;
 
-            const bool builtin = node.m_trait_used == ::HIR::ExprNode_Deref::TraitUsed::Builtin
-                || (node.m_trait_used == ::HIR::ExprNode_Deref::TraitUsed::Unknown
+            const bool builtin = node.m_trait_used == ::HIR::ExprNodeDeref::TraitUsed::Builtin
+                || (node.m_trait_used == ::HIR::ExprNodeDeref::TraitUsed::Unknown
                     && typeck::primitive_operator_has_builtin(typeck::PrimitiveOperator::Deref, ty));
             if (builtin && ty->is_Pointer()) {
                 check_types_equal(node.span(), node.m_res_type, ty->as_Pointer().inner);
@@ -591,17 +591,17 @@ namespace {
             node.m_value->visit(*this);
         }
 
-        void visit(::HIR::ExprNode_Emplace& node) override {
+        void visit(::HIR::ExprNodeEmplace& node) override {
             switch (node.m_type) {
-                case ::HIR::ExprNode_Emplace::Type::Noop:
+                case ::HIR::ExprNodeEmplace::Type::Noop:
                     assert(!node.m_place);
 
                     check_types_equal(node.span(), node.m_res_type, node.m_value->m_res_type);
                     break;
-                case ::HIR::ExprNode_Emplace::Type::Boxer:
+                case ::HIR::ExprNodeEmplace::Type::Boxer:
                     // TODO: Check trait and associated type
                     break;
-                case ::HIR::ExprNode_Emplace::Type::Placer:
+                case ::HIR::ExprNodeEmplace::Type::Placer:
                     // TODO: Check trait
                     break;
             }
@@ -612,7 +612,7 @@ namespace {
             this->visit_node_ptr(node.m_value);
         }
 
-        void visit(::HIR::ExprNode_TupleVariant& node) override {
+        void visit(::HIR::ExprNodeTupleVariant& node) override {
             TRACE_FUNCTION_F(&node << " " << node.m_path << "(...,) [" << (node.m_is_struct ? "struct" : "enum") << "]");
             const auto& sp = node.span();
 
@@ -644,7 +644,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_StructLiteral& node) override {
+        void visit(::HIR::ExprNodeStructLiteral& node) override {
             TRACE_FUNCTION_F(&node << " " << node.m_real_path << "{...} [" << (node.m_is_struct ? "struct" : "enum") << "]");
             const auto& sp = node.span();
             if (node.m_base_value) {
@@ -733,7 +733,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_UnitVariant& node) override {
+        void visit(::HIR::ExprNodeUnitVariant& node) override {
             TRACE_FUNCTION_F(&node << " " << node.m_path << " [" << (node.m_is_struct ? "struct" : "enum") << "]");
             const auto& sp = node.span();
             const auto& ty = node.m_res_type;
@@ -905,7 +905,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_CallPath& node) override {
+        void visit(::HIR::ExprNodeCallPath& node) override {
             const auto& sp = node.span();
             TRACE_FUNCTION_F(&node << " " << node.m_path << "(..., )");
 
@@ -928,7 +928,7 @@ namespace {
             check_types_equal(sp, node.m_res_type, node.m_cache.m_arg_types.back());
         }
 
-        void visit(::HIR::ExprNode_CallValue& node) override {
+        void visit(::HIR::ExprNodeCallValue& node) override {
             TRACE_FUNCTION_F(&node << " (...)(..., )");
 
             const auto& val_ty = node.m_value->m_res_type;
@@ -951,18 +951,18 @@ namespace {
                     check_types_equal(node.m_args[i]->span(), m.monomorph_type(node.span(), e->m_arg_types[i]), node.m_args[i]->m_res_type);
                 }
                 check_types_equal(node.span(), node.m_res_type, m.monomorph_type(node.span(), e->m_rettype));
-            } else if (node.m_trait_used == ::HIR::ExprNode_CallValue::TraitUsed::Unknown) {
+            } else if (node.m_trait_used == ::HIR::ExprNodeCallValue::TraitUsed::Unknown) {
             } else {
                 // 1. Look up the encoded trait
                 const ::HIR::SimplePath* trait_p;
                 switch (node.m_trait_used) {
-                    case ::HIR::ExprNode_CallValue::TraitUsed::Fn:
+                    case ::HIR::ExprNodeCallValue::TraitUsed::Fn:
                         trait_p = &m_resolve.m_crate.get_lang_item_path(node.span(), "fn");
                         break;
-                    case ::HIR::ExprNode_CallValue::TraitUsed::FnMut:
+                    case ::HIR::ExprNodeCallValue::TraitUsed::FnMut:
                         trait_p = &m_resolve.m_crate.get_lang_item_path(node.span(), "fn_mut");
                         break;
-                    case ::HIR::ExprNode_CallValue::TraitUsed::FnOnce:
+                    case ::HIR::ExprNodeCallValue::TraitUsed::FnOnce:
                         trait_p = &m_resolve.m_crate.get_lang_item_path(node.span(), "fn_once");
                         break;
                     default:
@@ -995,7 +995,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_CallMethod& node) override {
+        void visit(::HIR::ExprNodeCallMethod& node) override {
             TRACE_FUNCTION_F(&node << " (...)." << node.m_method << "(...,) - " << node.m_method_path);
 
             node.m_value->visit(*this);
@@ -1019,7 +1019,7 @@ namespace {
             check_types_equal(sp, node.m_res_type, node.m_cache.m_arg_types.back());
         }
 
-        void visit(::HIR::ExprNode_Field& node) override {
+        void visit(::HIR::ExprNodeField& node) override {
             TRACE_FUNCTION_F(&node << " (...)." << node.m_field);
             const auto& sp = node.span();
             const auto& str_ty = node.m_value->m_res_type;
@@ -1044,7 +1044,7 @@ namespace {
             node.m_value->visit(*this);
         }
 
-        void visit(::HIR::ExprNode_Tuple& node) override {
+        void visit(::HIR::ExprNodeTuple& node) override {
             TRACE_FUNCTION_F(&node << " (...,)");
             ASSERT_BUG(node.span(), node.m_res_type->is_Tuple(), "Tuple literal didn't return tuple");
             const auto& tys = node.m_res_type->as_Tuple();
@@ -1059,7 +1059,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_ArrayList& node) override {
+        void visit(::HIR::ExprNodeArrayList& node) override {
             TRACE_FUNCTION_F(&node << " [...,]");
             // Cleanly equate into array (with coercions)
             const auto& inner_ty = node.m_res_type->as_Array().inner;
@@ -1072,7 +1072,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_ArraySized& node) override {
+        void visit(::HIR::ExprNodeArraySized& node) override {
             TRACE_FUNCTION_F(&node << " [...; " << node.m_size << "]");
 
             //check_types_equal(node.m_size->span(), ::HIR::TypeRef(::HIR::Primitive::Usize), node.m_size->m_res_type);
@@ -1086,11 +1086,11 @@ namespace {
             //}
         }
 
-        void visit(::HIR::ExprNode_Literal& node) override {
+        void visit(::HIR::ExprNodeLiteral& node) override {
             // No validation needed
         }
 
-        void visit(::HIR::ExprNode_PathValue& node) override {
+        void visit(::HIR::ExprNodePathValue& node) override {
             TRACE_FUNCTION_F(&node << " " << node.m_path);
             const Span& sp = node.span();
 
@@ -1135,15 +1135,15 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Variable& node) override {
+        void visit(::HIR::ExprNodeVariable& node) override {
             // TODO: Check against variable slot? Nah.
         }
 
-        void visit(::HIR::ExprNode_ConstParam& node) override {
+        void visit(::HIR::ExprNodeConstParam& node) override {
             // TODO: Check against variable slot? Nah.
         }
 
-        void visit(::HIR::ExprNode_Closure& node) override {
+        void visit(::HIR::ExprNodeClosure& node) override {
             TRACE_FUNCTION_F(&node << " |...| ...");
 
             if (node.m_code) {
@@ -1159,7 +1159,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_Generator& node) override {
+        void visit(::HIR::ExprNodeGenerator& node) override {
             TRACE_FUNCTION_F(&node << " /*gen*/ |...| ...");
 
             if (node.m_code) {
@@ -1174,7 +1174,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_GeneratorWrapper& node) override {
+        void visit(::HIR::ExprNodeGeneratorWrapper& node) override {
             TRACE_FUNCTION_F(&node << " /*gen w*/ |...| ...");
 
             if (node.m_code) {
@@ -1189,7 +1189,7 @@ namespace {
             }
         }
 
-        void visit(::HIR::ExprNode_AsyncBlock& node) override {
+        void visit(::HIR::ExprNodeAsyncBlock& node) override {
             TRACE_FUNCTION_F(&node << " async { ... }");
 
             // Can be null after generation

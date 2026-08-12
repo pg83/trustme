@@ -9976,7 +9976,7 @@ void MIR_SortBlocks(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
 
 void MIR_OptimiseCrate(::HIR::Crate& crate, unsigned opt_level, bool enable_inlining) {
     ::MIR::OuterVisitor ov{crate, [opt_level, enable_inlining](const auto& res, const auto& p, auto& expr, const auto& args, const auto& ty) {
-        //if( ! cast<::HIR::ExprNode_Block>(expr.get()) ) {
+        //if( ! cast<::HIR::ExprNodeBlock>(expr.get()) ) {
         //    return ;
         //}
         auto& mir = expr.get_mir_or_error_mut(Span());

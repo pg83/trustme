@@ -20,9 +20,9 @@ namespace HIR {
     class GenericParams;
 
     class ExprPtr;
-    struct ExprNode_Closure;
-    struct ExprNode_Generator;
-    struct ExprNode_AsyncBlock;
+    struct ExprNodeClosure;
+    struct ExprNodeGenerator;
+    struct ExprNodeAsyncBlock;
 
     enum Compare {
         Equal,

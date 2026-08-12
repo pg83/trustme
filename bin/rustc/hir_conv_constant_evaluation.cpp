@@ -3957,7 +3957,7 @@ namespace {
                     as = val.read_usize(0);
                     //DEBUG("Array size = " << as);
                 } catch (const Defer&) {
-                    const auto* tn = cast<const HIR::ExprNode_ConstParam>(&*expr_ptr);
+                    const auto* tn = cast<const HIR::ExprNodeConstParam>(&*expr_ptr);
                     if (tn) {
                         as = HIR::ConstGeneric(HIR::GenericRef(tn->m_name, tn->m_binding));
                     } else {
@@ -4116,17 +4116,17 @@ namespace {
                     m_exp.visit_generic_path(p, pc);
                 }
 
-                void visit(::HIR::ExprNode_CallMethod& node) override {
+                void visit(::HIR::ExprNodeCallMethod& node) override {
                     auto saved = m_exp.m_get_params;
                     m_exp.m_get_params = [&](const Span& sp) -> const ::HIR::GenericParams& {
-                        DEBUG("visit(ExprNode_CallMethod)[m_get_params] Defer until after main typecheck");
+                        DEBUG("visit(ExprNodeCallMethod)[m_get_params] Defer until after main typecheck");
                         throw Defer();
                     };
                     ::HIR::ExprVisitorDef::visit(node);
                     m_exp.m_get_params = std::move(saved);
                 }
 
-                void visit(::HIR::ExprNode_ArraySized& node) override {
+                void visit(::HIR::ExprNodeArraySized& node) override {
                     ::HIR::ExprVisitorDef::visit(node);
                     m_exp.visit_arraysize(node.m_size, FMT("array_" << &node << "#"));
                 }

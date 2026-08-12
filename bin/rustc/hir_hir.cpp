@@ -133,7 +133,7 @@ namespace HIR {
             return index < params->m_values.size() ? &params->m_values[index] : nullptr;
         }
 
-        bool const_expr_literals_equal(const ::HIR::ExprNode_Literal& left, const ::HIR::ExprNode_Literal& right) {
+        bool const_expr_literals_equal(const ::HIR::ExprNodeLiteral& left, const ::HIR::ExprNodeLiteral& right) {
             if (left.m_data.tag() != right.m_data.tag()) {
                 return false;
             }
@@ -149,8 +149,8 @@ namespace HIR {
         }
 
         bool const_expr_nodes_equal(const ::HIR::ConstGeneric_Unevaluated& left_value, const ::HIR::ExprNode& left, const ::HIR::ConstGeneric_Unevaluated& right_value, const ::HIR::ExprNode& right) {
-            if (const auto* l = cast<const ::HIR::ExprNode_ConstParam>(&left)) {
-                const auto* r = cast<const ::HIR::ExprNode_ConstParam>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNodeConstParam>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNodeConstParam>(&right);
                 if (!r) {
                     return false;
                 }
@@ -158,28 +158,28 @@ namespace HIR {
                 const auto* r_param = get_unevaluated_param(right_value, r->m_binding);
                 return l_param && r_param ? *l_param == *r_param : l->m_binding == r->m_binding;
             }
-            if (const auto* l = cast<const ::HIR::ExprNode_Literal>(&left)) {
-                const auto* r = cast<const ::HIR::ExprNode_Literal>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNodeLiteral>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNodeLiteral>(&right);
                 return r && const_expr_literals_equal(*l, *r);
             }
-            if (const auto* l = cast<const ::HIR::ExprNode_BinOp>(&left)) {
-                const auto* r = cast<const ::HIR::ExprNode_BinOp>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNodeBinOp>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNodeBinOp>(&right);
                 return r && l->m_op == r->m_op && const_expr_nodes_equal(left_value, *l->m_left, right_value, *r->m_left) && const_expr_nodes_equal(left_value, *l->m_right, right_value, *r->m_right);
             }
-            if (const auto* l = cast<const ::HIR::ExprNode_UniOp>(&left)) {
-                const auto* r = cast<const ::HIR::ExprNode_UniOp>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNodeUniOp>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNodeUniOp>(&right);
                 return r && l->m_op == r->m_op && const_expr_nodes_equal(left_value, *l->m_value, right_value, *r->m_value);
             }
-            if (const auto* l = cast<const ::HIR::ExprNode_Cast>(&left)) {
-                const auto* r = cast<const ::HIR::ExprNode_Cast>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNodeCast>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNodeCast>(&right);
                 return r && l->m_dst_type == r->m_dst_type && const_expr_nodes_equal(left_value, *l->m_value, right_value, *r->m_value);
             }
-            if (const auto* l = cast<const ::HIR::ExprNode_ConstBlock>(&left)) {
-                const auto* r = cast<const ::HIR::ExprNode_ConstBlock>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNodeConstBlock>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNodeConstBlock>(&right);
                 return r && const_expr_nodes_equal(left_value, *l->m_inner, right_value, *r->m_inner);
             }
-            if (const auto* l = cast<const ::HIR::ExprNode_CallPath>(&left)) {
-                const auto* r = cast<const ::HIR::ExprNode_CallPath>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNodeCallPath>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNodeCallPath>(&right);
                 if (!r || l->m_path != r->m_path || l->m_args.size() != r->m_args.size()) {
                     return false;
                 }
@@ -190,8 +190,8 @@ namespace HIR {
                 }
                 return true;
             }
-            if (const auto* l = cast<const ::HIR::ExprNode_Block>(&left)) {
-                const auto* r = cast<const ::HIR::ExprNode_Block>(&right);
+            if (const auto* l = cast<const ::HIR::ExprNodeBlock>(&left)) {
+                const auto* r = cast<const ::HIR::ExprNodeBlock>(&right);
                 if (!r || l->m_nodes.size() != r->m_nodes.size() || static_cast<bool>(l->m_value_node) != static_cast<bool>(r->m_value_node)) {
                     return false;
                 }
@@ -219,8 +219,8 @@ namespace HIR {
 
             // HACK: If the inner is a const param on both, sort based on that.
             // - Very similar to the ordering of TypeRef::Generic
-            const auto* tn = cast<const HIR::ExprNode_ConstParam>(&**this->expr);
-            const auto* xn = cast<const HIR::ExprNode_ConstParam>(&**x.expr);
+            const auto* tn = cast<const HIR::ExprNodeConstParam>(&**this->expr);
+            const auto* xn = cast<const HIR::ExprNodeConstParam>(&**x.expr);
             if (tn && xn) {
                 // Is this valid? What if they're from different scopes?
                 return ::ord(tn->m_binding, xn->m_binding);

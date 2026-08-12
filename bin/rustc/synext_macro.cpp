@@ -22,7 +22,7 @@ namespace {
     ::std::string get_string(const Span& sp, TokenStream& lex, const ::AST::Crate& crate, AST::Module& mod) {
         auto n = Expand_ParseAndExpand_ExprVal(crate, mod, lex);
 
-        auto* format_string_np = cast<AST::ExprNode_String>(&*n);
+        auto* format_string_np = cast<AST::ExprNodeString>(&*n);
         if (!format_string_np) {
             ERROR(sp, E0000, "asm! requires a string literal - got " << *n);
         }
@@ -50,8 +50,8 @@ public:
         auto lex = TTStream(sp, ParseState(), tt);
 
         auto template_text = get_string(sp, lex, crate, mod);
-        ::std::vector<::AST::ExprNode_Asm::ValRef> outputs;
-        ::std::vector<::AST::ExprNode_Asm::ValRef> inputs;
+        ::std::vector<::AST::ExprNodeAsm::ValRef> outputs;
+        ::std::vector<::AST::ExprNodeAsm::ValRef> inputs;
         ::std::vector<::std::string> clobbers;
         ::std::vector<::std::string> flags;
 
@@ -71,7 +71,7 @@ public:
                 auto val = Parse_Expr0(lex);
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
-                outputs.push_back(::AST::ExprNode_Asm::ValRef{mv$(name), mv$(val)});
+                outputs.push_back(::AST::ExprNodeAsm::ValRef{mv$(name), mv$(val)});
 
                 if (lex.lookahead(0) != TOK_COMMA) {
                     break;
@@ -97,7 +97,7 @@ public:
                 auto val = Parse_Expr0(lex);
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
-                inputs.push_back(::AST::ExprNode_Asm::ValRef{mv$(name), mv$(val)});
+                inputs.push_back(::AST::ExprNodeAsm::ValRef{mv$(name), mv$(val)});
 
                 if (lex.lookahead(0) != TOK_COMMA) {
                     break;
@@ -166,7 +166,7 @@ public:
         }
 
         // Convert this into an AST node and insert as an intepolated expression
-        ::AST::ExprNodeP rv = ::AST::ExprNodeP(new ::AST::ExprNode_Asm{mv$(template_text), mv$(outputs), mv$(inputs), mv$(clobbers), mv$(flags)});
+        ::AST::ExprNodeP rv = ::AST::ExprNodeP(new ::AST::ExprNodeAsm{mv$(template_text), mv$(outputs), mv$(inputs), mv$(clobbers), mv$(flags)});
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
     }
 };
@@ -246,7 +246,7 @@ public:
             GET_CHECK_TOK(tok, lex, TOK_COMMA);
         } while (lex.lookahead(0) == TOK_STRING || lex.lookahead(0) == TOK_HASH);
 
-        std::vector<AST::ExprNode_Asm2::Param> params;
+        std::vector<AST::ExprNodeAsm2::Param> params;
         std::vector<RcString> names;
         AsmCommon::Options options;
         while (tok.type() == TOK_COMMA) {
@@ -319,13 +319,13 @@ public:
                 v = get_tok_ident_rword(lex);
             }
 
-            AST::ExprNode_Asm2::Param param_spec;
+            AST::ExprNodeAsm2::Param param_spec;
             if (v == "const") {
                 auto e = Parse_Expr0(lex);
-                param_spec = AST::ExprNode_Asm2::Param::make_Const(std::move(e));
+                param_spec = AST::ExprNodeAsm2::Param::make_Const(std::move(e));
             } else if (v == "sym") {
                 auto p = Parse_Path(lex, PATH_GENERIC_EXPR);
-                param_spec = AST::ExprNode_Asm2::Param::make_Sym(std::move(p));
+                param_spec = AST::ExprNodeAsm2::Param::make_Sym(std::move(p));
             } else {
                 AsmCommon::Direction dir;
                 if (v == "inlateout") {
@@ -365,7 +365,7 @@ public:
                         default:
                             ERROR(sp, E0000, "Invalid use of _ in asm!");
                     }
-                    param_spec = AST::ExprNode_Asm2::Param::make_Reg({dir, std::move(reg_spec), nullptr, nullptr});
+                    param_spec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(reg_spec), nullptr, nullptr});
                 } else {
                     auto e = Parse_Expr0(lex);
 
@@ -381,14 +381,14 @@ public:
                         GET_TOK(tok, lex);
                         if (lex.lookahead(0) == TOK_UNDERSCORE) {
                             GET_TOK(tok, lex);
-                            param_spec = AST::ExprNode_Asm2::Param::make_Reg({dir, std::move(reg_spec), mv$(e), nullptr});
+                            param_spec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(reg_spec), mv$(e), nullptr});
                         } else {
                             auto e2 = Parse_Expr0(lex);
-                            param_spec = AST::ExprNode_Asm2::Param::make_Reg({dir, std::move(reg_spec), mv$(e), mv$(e2)});
+                            param_spec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(reg_spec), mv$(e), mv$(e2)});
                         }
                     } else {
                         // Note: Different variant to handle `inout(reg) foo` without duplicating
-                        param_spec = AST::ExprNode_Asm2::Param::make_RegSingle({dir, std::move(reg_spec), mv$(e)});
+                        param_spec = AST::ExprNodeAsm2::Param::make_RegSingle({dir, std::move(reg_spec), mv$(e)});
                     }
                 }
             }
@@ -514,7 +514,7 @@ public:
         }
 
         // Convert this into an AST node and insert as an intepolated expression
-        ::AST::ExprNodeP rv = ::AST::ExprNodeP(new ::AST::ExprNode_Asm2{mv$(options), mv$(lines), mv$(params)});
+        ::AST::ExprNodeP rv = ::AST::ExprNodeP(new ::AST::ExprNodeAsm2{mv$(options), mv$(lines), mv$(params)});
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
     }
 };
@@ -525,7 +525,7 @@ public:
         auto o = CAsmExpander().expand(sp, crate, tt, mod);
 
         auto node = o->getToken().take_frag_node();
-        auto* node_ap = cast<AST::ExprNode_Asm2>(node.get());
+        auto* node_ap = cast<AST::ExprNodeAsm2>(node.get());
         ASSERT_BUG(sp, node_ap, "");
         auto& node_a = *node_ap;
 
@@ -548,7 +548,7 @@ public:
         auto o = CAsmExpander().expand(sp, crate, tt, mod);
 
         auto node = o->getToken().take_frag_node();
-        auto* node_ap = cast<AST::ExprNode_Asm2>(node.get());
+        auto* node_ap = cast<AST::ExprNodeAsm2>(node.get());
         ASSERT_BUG(sp, node_ap, "");
         node_ap->m_options.naked = true;
 
@@ -673,17 +673,17 @@ class CConcatExpander: public ExpandProcMacro {
             Expand_BareExpr(crate, mod, v);
             DEBUG("concat[pe] - v=" << *v);
             // TODO: Visitor instead
-            if (auto* vp = cast<AST::ExprNode_String>(v.get())) {
+            if (auto* vp = cast<AST::ExprNodeString>(v.get())) {
                 rv += vp->m_value;
-            } else if (auto* vp = cast<AST::ExprNode_Integer>(v.get())) {
+            } else if (auto* vp = cast<AST::ExprNodeInteger>(v.get())) {
                 if (vp->m_datatype == CORETYPE_CHAR) {
                     rv += Codepoint{static_cast<uint32_t>(vp->m_value.truncate_u64())};
                 } else {
                     rv += FMT(vp->m_value);
                 }
-            } else if (auto* vp = cast<AST::ExprNode_Float>(v.get())) {
+            } else if (auto* vp = cast<AST::ExprNodeFloat>(v.get())) {
                 rv += FMT(vp->m_value);
-            } else if (auto* vp = cast<AST::ExprNode_Bool>(v.get())) {
+            } else if (auto* vp = cast<AST::ExprNodeBool>(v.get())) {
                 rv += (vp->m_value ? "true" : "false");
             } else {
                 ERROR(sp, E0000, "Unexpected expression type in concat! argument");
@@ -741,7 +741,7 @@ namespace {
         }
         Expand_BareExpr(crate, mod, n);
 
-        auto* string_np = cast<AST::ExprNode_String>(&*n);
+        auto* string_np = cast<AST::ExprNodeString>(&*n);
         if (!string_np) {
             ERROR(sp, E0000, "Expected a string literal - got " << *n);
         }
@@ -1378,7 +1378,7 @@ namespace {
         ASSERT_BUG(sp, format_string_node, "No expression returned");
         Expand_BareExpr(crate, lex.parse_state().get_current_mod(), format_string_node);
 
-        auto* format_string_np = cast<AST::ExprNode_String>(&*format_string_node);
+        auto* format_string_np = cast<AST::ExprNodeString>(&*format_string_node);
         if (!format_string_np) {
             ERROR(sp, E0000, "format_args! requires a string literal - got " << *format_string_node);
         }
@@ -1749,7 +1749,7 @@ namespace {
         }
         Expand_BareExpr(crate, mod, n);
 
-        auto* string_np = cast<AST::ExprNode_String>(&*n);
+        auto* string_np = cast<AST::ExprNodeString>(&*n);
         if (!string_np) {
             ERROR(sp, E0000, "include! requires a string literal - got " << *n);
         }

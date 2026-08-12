@@ -636,13 +636,13 @@ namespace {
                     ::HIR::ExprVisitorDef::visit_node_ptr(node_ptr);
                 }
 
-                void visit(::HIR::ExprNode_Let& node) override {
+                void visit(::HIR::ExprNodeLet& node) override {
                     upper_visitor.visit_type(node.m_type);
                     upper_visitor.visit_pattern(node.m_pattern);
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
-                void visit(::HIR::ExprNode_Match& node) override {
+                void visit(::HIR::ExprNodeMatch& node) override {
                     for (auto& arm : node.m_arms) {
                         for (auto& pat : arm.m_patterns) {
                             upper_visitor.visit_pattern(pat);
@@ -654,11 +654,11 @@ namespace {
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
-                void visit(::HIR::ExprNode_PathValue& node) override {
+                void visit(::HIR::ExprNodePathValue& node) override {
                     upper_visitor.visit_path(node.m_path, ::HIR::Visitor::PathContext::VALUE);
                 }
 
-                void visit(::HIR::ExprNode_CallPath& node) override {
+                void visit(::HIR::ExprNodeCallPath& node) override {
                     upper_visitor.visit_path(node.m_path, ::HIR::Visitor::PathContext::VALUE);
                     ::HIR::ExprVisitorDef::visit(node);
 
@@ -675,7 +675,7 @@ namespace {
                                     assert(arg_node);
                                     // TODO: Check that the expression is a valid const (no locals referenced, no function calls?)
                                     // - Allow: Arithmatic, casts, literals
-                                    //if( !cast<const HIR::ExprNode_Literal>(arg_node.get()) )
+                                    //if( !cast<const HIR::ExprNodeLiteral>(arg_node.get()) )
                                     //    ERROR(arg_node->span(), E0000, "Argument " << idx << " must be a literal for #[rustc_legacy_const_generics] tagged function");
                                     HIR::ExprPtr ep{std::move(arg_node)};
                                     e->m_params.m_values.push_back(HIR::ConstGeneric(std::make_unique<HIR::ConstGeneric_Unevaluated>(std::move(ep))));
@@ -693,18 +693,18 @@ namespace {
                     }
                 }
 
-                void visit(::HIR::ExprNode_CallMethod& node) override {
+                void visit(::HIR::ExprNodeCallMethod& node) override {
                     upper_visitor.visit_path_params(node.m_params);
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
-                void visit(::HIR::ExprNode_StructLiteral& node) override {
+                void visit(::HIR::ExprNodeStructLiteral& node) override {
                     upper_visitor.visit_type_inner(node.m_type, false);
 
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
-                void visit(::HIR::ExprNode_ArraySized& node) override {
+                void visit(::HIR::ExprNodeArraySized& node) override {
                     auto& as = node.m_size;
                     if (as.is_Unevaluated()) {
                         upper_visitor.visit_constgeneric(as.as_Unevaluated());
@@ -712,7 +712,7 @@ namespace {
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
-                void visit(::HIR::ExprNode_Closure& node) override {
+                void visit(::HIR::ExprNodeClosure& node) override {
                     upper_visitor.visit_type(node.m_return);
                     for (auto& arg : node.m_args) {
                         upper_visitor.visit_pattern(arg.first);
@@ -1167,13 +1167,13 @@ namespace {
                     ::HIR::ExprVisitorDef::visit_node_ptr(node_ptr);
                 }
 
-                void visit(::HIR::ExprNode_Let& node) override {
+                void visit(::HIR::ExprNodeLet& node) override {
                     upper_visitor.visit_type(node.m_type);
                     upper_visitor.visit_pattern(node.m_pattern);
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
-                void visit(::HIR::ExprNode_Match& node) override {
+                void visit(::HIR::ExprNodeMatch& node) override {
                     for (auto& arm : node.m_arms) {
                         for (auto& pat : arm.m_patterns) {
                             upper_visitor.visit_pattern(pat);
@@ -1185,27 +1185,27 @@ namespace {
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
-                void visit(::HIR::ExprNode_PathValue& node) override {
+                void visit(::HIR::ExprNodePathValue& node) override {
                     upper_visitor.visit_path(node.m_path, ::HIR::Visitor::PathContext::VALUE);
                 }
 
-                void visit(::HIR::ExprNode_CallPath& node) override {
+                void visit(::HIR::ExprNodeCallPath& node) override {
                     upper_visitor.visit_path(node.m_path, ::HIR::Visitor::PathContext::VALUE);
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
-                void visit(::HIR::ExprNode_CallMethod& node) override {
+                void visit(::HIR::ExprNodeCallMethod& node) override {
                     upper_visitor.visit_path_params(node.m_params);
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
-                void visit(::HIR::ExprNode_StructLiteral& node) override {
+                void visit(::HIR::ExprNodeStructLiteral& node) override {
                     upper_visitor.visit_type_inner(node.m_type, false);
 
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
-                void visit(::HIR::ExprNode_ArraySized& node) override {
+                void visit(::HIR::ExprNodeArraySized& node) override {
                     auto& as = node.m_size;
                     if (as.is_Unevaluated()) {
                         upper_visitor.visit_constgeneric(as.as_Unevaluated());
@@ -1213,7 +1213,7 @@ namespace {
                     ::HIR::ExprVisitorDef::visit(node);
                 }
 
-                void visit(::HIR::ExprNode_Closure& node) override {
+                void visit(::HIR::ExprNodeClosure& node) override {
                     upper_visitor.visit_type(node.m_return);
                     for (auto& arg : node.m_args) {
                         upper_visitor.visit_pattern(arg.first);
@@ -1738,7 +1738,7 @@ public:
             }
 
             // Custom impl to visit the inner expression
-            void visit(::HIR::ExprNode_ArraySized& node) override {
+            void visit(::HIR::ExprNodeArraySized& node) override {
                 auto& as = node.m_size;
                 if (as.is_Unevaluated() && as.as_Unevaluated().is_Unevaluated()) {
                     upper_visitor.visit_expr(*as.as_Unevaluated().as_Unevaluated()->expr);
@@ -1851,7 +1851,7 @@ public:
             }
 
             // Custom impl to visit the inner expression
-            void visit(::HIR::ExprNode_ArraySized& node) override {
+            void visit(::HIR::ExprNodeArraySized& node) override {
                 auto& as = node.m_size;
                 if (as.is_Unevaluated() && as.as_Unevaluated().is_Unevaluated()) {
                     upper_visitor.visit_expr(*as.as_Unevaluated().as_Unevaluated()->expr);
@@ -3820,7 +3820,7 @@ namespace resolve_ufcs {
                 }
 
                 // Custom to visit the inner expression
-                void visit(::HIR::ExprNode_ArraySized& node) override {
+                void visit(::HIR::ExprNodeArraySized& node) override {
                     auto& as = node.m_size;
                     if (as.is_Unevaluated()) {
                         upper_visitor.visit_constgeneric(as.as_Unevaluated());
@@ -3829,7 +3829,7 @@ namespace resolve_ufcs {
                 }
 
                 // Custom visitor for enum/struct constructors
-                void visit(::HIR::ExprNode_CallPath& node) override {
+                void visit(::HIR::ExprNodeCallPath& node) override {
                     ::HIR::ExprVisitorDef::visit(node);
                     const Span& sp = node.span();
                     if (node.m_path.m_data.is_Generic()) {
@@ -3839,7 +3839,7 @@ namespace resolve_ufcs {
                             const auto& ent = upper_visitor.m_crate.get_typeitem_by_path(sp, gp.m_path, /*ign_crate*/ false, true);
                             if (ent.is_Enum() && ent.as_Enum().find_variant(gp.m_path.components().back()) != SIZE_MAX) {
                                 // Rewrite!
-                                m_replacement.reset(upper_visitor.m_crate.m_pool->make<::HIR::ExprNode_TupleVariant>(sp, mv$(gp), /*is_struct*/ false, mv$(node.m_args)));
+                                m_replacement.reset(upper_visitor.m_crate.m_pool->make<::HIR::ExprNodeTupleVariant>(sp, mv$(gp), /*is_struct*/ false, mv$(node.m_args)));
                                 DEBUG(&node << ": Replacing with TupleVariant " << m_replacement.get());
                                 return;
                             }
@@ -3850,16 +3850,16 @@ namespace resolve_ufcs {
                     MonomorphState discard(upper_visitor.m_crate.m_types);
                     auto v = upper_visitor.m_resolve.get_value(node.span(), node.m_path, discard, true);
                     if (v.is_Constant() || v.is_Static()) {
-                        auto* value_node = upper_visitor.m_crate.m_pool->make<HIR::ExprNode_PathValue>(sp, std::move(node.m_path), v.is_Constant() ? ::HIR::ExprNode_PathValue::Target::CONSTANT : v.is_Static() ? ::HIR::ExprNode_PathValue::Target::STATIC : ::HIR::ExprNode_PathValue::Target::UNKNOWN);
+                        auto* value_node = upper_visitor.m_crate.m_pool->make<HIR::ExprNodePathValue>(sp, std::move(node.m_path), v.is_Constant() ? ::HIR::ExprNodePathValue::Target::CONSTANT : v.is_Static() ? ::HIR::ExprNodePathValue::Target::STATIC : ::HIR::ExprNodePathValue::Target::UNKNOWN);
                         value_node->m_res_type = upper_visitor.m_crate.m_types.infer();
-                        m_replacement.reset(upper_visitor.m_crate.m_pool->make<::HIR::ExprNode_CallValue>(sp, ::HIR::ExprNodeP(value_node), mv$(node.m_args)));
+                        m_replacement.reset(upper_visitor.m_crate.m_pool->make<::HIR::ExprNodeCallValue>(sp, ::HIR::ExprNodeP(value_node), mv$(node.m_args)));
                         DEBUG(&node << ": Replacing with CallValue " << m_replacement.get());
                         return;
                     }
                 }
 
                 // Custom visitor for enum/struct constructors
-                void visit(::HIR::ExprNode_PathValue& node) override {
+                void visit(::HIR::ExprNodePathValue& node) override {
                     ::HIR::ExprVisitorDef::visit(node);
                     const Span& sp = node.span();
                     if (node.m_path.m_data.is_Generic()) {
@@ -3871,10 +3871,10 @@ namespace resolve_ufcs {
                                 const auto& enm = ent.as_Enum();
                                 auto idx = enm.find_variant(gp.m_path.components().back());
                                 if (enm.m_data.is_Value() || enm.m_data.as_Data().at(idx).type == upper_visitor.m_crate.m_types.unit()) {
-                                    m_replacement.reset(upper_visitor.m_crate.m_pool->make<::HIR::ExprNode_UnitVariant>(sp, mv$(gp), /*is_struct*/ false));
+                                    m_replacement.reset(upper_visitor.m_crate.m_pool->make<::HIR::ExprNodeUnitVariant>(sp, mv$(gp), /*is_struct*/ false));
                                     DEBUG(&node << ": Replacing with UnitVariant " << m_replacement.get());
                                 } else {
-                                    node.m_target = ::HIR::ExprNode_PathValue::ENUM_VAR_CONSTR;
+                                    node.m_target = ::HIR::ExprNodePathValue::ENUM_VAR_CONSTR;
                                 }
                                 return;
                             }
@@ -3884,7 +3884,7 @@ namespace resolve_ufcs {
                     }
                 }
 #if 1
-                void visit(::HIR::ExprNode_StructLiteral& node) override {
+                void visit(::HIR::ExprNodeStructLiteral& node) override {
                     ::HIR::ExprVisitorDef::visit(node);
                     const Span& sp = node.span();
                     if (node.m_type->is_Path() && node.m_type->as_Path().path.m_data.is_Generic()) {
@@ -3909,7 +3909,7 @@ namespace resolve_ufcs {
 #endif
 
                 // NOTE: Custom needed for trait scoping
-                void visit(::HIR::ExprNode_Block& node) override {
+                void visit(::HIR::ExprNodeBlock& node) override {
                     if (node.m_traits.size() == 0 && node.m_local_mod.components().size() > 0) {
                         const auto& mod = upper_visitor.m_crate.get_mod_by_path(node.span(), node.m_local_mod);
                         for (const auto& trait_path : mod.m_traits) {

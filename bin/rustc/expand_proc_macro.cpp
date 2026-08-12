@@ -19,7 +19,7 @@
 extern char** environ;
 #endif
 
-#define NEWNODE(_ty, ...) ::AST::ExprNodeP(new ::AST::ExprNode##_ty(__VA_ARGS__))
+#define NEWNODE(ty, ...) ::AST::ExprNodeP(new ::AST::ExprNode##ty(__VA_ARGS__))
 
 class Decorator_ProcMacroDerive: public ExpandDecorator {
 public:
@@ -125,7 +125,7 @@ void Expand_ProcMacro(::AST::Crate& crate) {
     // ---- main function ----
     auto main_fn = ::AST::Function{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
     {
-        auto call_node = NEWNODE(_CallPath, ::AST::Path(crate.m_ext_cratename_procmacro, {::AST::PathNode("main")}), ::make_vec1(NEWNODE(_UniOp, ::AST::ExprNode_UniOp::REF, NEWNODE(_NamedValue, ::AST::Path("", {::AST::PathNode("proc_macro#"), ::AST::PathNode("MACROS")})))));
+        auto call_node = NEWNODE(CallPath, ::AST::Path(crate.m_ext_cratename_procmacro, {::AST::PathNode("main")}), ::make_vec1(NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, NEWNODE(NamedValue, ::AST::Path("", {::AST::PathNode("proc_macro#"), ::AST::PathNode("MACROS")})))));
         main_fn.set_code(mv$(call_node));
     }
 
@@ -141,18 +141,18 @@ void Expand_ProcMacro(::AST::Crate& crate) {
             default:
                 break;
         }
-        ::AST::ExprNode_StructLiteral::t_values desc_vals;
+        ::AST::ExprNodeStructLiteral::t_values desc_vals;
         // `name: "foo",`
-        desc_vals.push_back({{}, "name", NEWNODE(_String, desc.name.c_str())});
+        desc_vals.push_back({{}, "name", NEWNODE(String, desc.name.c_str())});
         // `handler`: ::foo
-        desc_vals.push_back({{}, "handler", NEWNODE(_CallPath, ::AST::Path(crate.m_ext_cratename_procmacro, {::AST::PathNode("MacroType"), ::AST::PathNode(type_name)}), ::make_vec1(NEWNODE(_NamedValue, AST::Path(desc.path))))});
+        desc_vals.push_back({{}, "handler", NEWNODE(CallPath, ::AST::Path(crate.m_ext_cratename_procmacro, {::AST::PathNode("MacroType"), ::AST::PathNode(type_name)}), ::make_vec1(NEWNODE(NamedValue, AST::Path(desc.path))))});
 
-        test_nodes.push_back(NEWNODE(_StructLiteral, ::AST::Path(crate.m_ext_cratename_procmacro, {::AST::PathNode("MacroDesc")}), nullptr, mv$(desc_vals)));
+        test_nodes.push_back(NEWNODE(StructLiteral, ::AST::Path(crate.m_ext_cratename_procmacro, {::AST::PathNode("MacroDesc")}), nullptr, mv$(desc_vals)));
     }
-    auto* tests_array = new ::AST::ExprNode_Array(mv$(test_nodes));
+    auto* tests_array = new ::AST::ExprNodeArray(mv$(test_nodes));
 
     size_t test_count = tests_array->m_values.size();
-    auto tests_list = ::AST::Static{::AST::Static::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), TypeRef(Span(), ::AST::Path(crate.m_ext_cratename_procmacro, {::AST::PathNode("MacroDesc")})), ::std::shared_ptr<::AST::ExprNode>(new ::AST::ExprNode_Integer(U128(test_count), CORETYPE_UINT))), ::AST::Expr(mv$(tests_array))};
+    auto tests_list = ::AST::Static{::AST::Static::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), TypeRef(Span(), ::AST::Path(crate.m_ext_cratename_procmacro, {::AST::PathNode("MacroDesc")})), ::std::shared_ptr<::AST::ExprNode>(new ::AST::ExprNodeInteger(U128(test_count), CORETYPE_UINT))), ::AST::Expr(mv$(tests_array))};
 
     // ---- module ----
     auto newmod = ::AST::Module{::AST::AbsolutePath("", {"proc_macro#"})};

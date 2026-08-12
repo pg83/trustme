@@ -2,7 +2,7 @@
 
 #include "mir_mir.h"
 #include "hir_type.h"
-#include "hir_expr.h"          // for ExprNode_Match
+#include "hir_expr.h"          // for ExprNodeMatch
 #include "hir_typeck_static.h" // StaticTraitResolve for Copy
 
 class MirBuilder;
@@ -516,7 +516,7 @@ public:
     virtual SaveAndEditVal<const ScopeHandle*> disable_borrow_extension() = 0;
 };
 
-extern void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps);
+extern void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps);
 extern void MIR_LowerHIR_Let(MirBuilder& builder, MirConverter& conv, const Span& sp, const ::HIR::Pattern& pat, ::MIR::LValue val, const ::HIR::ExprNode* else_node);
 
 extern void MIR_LowerHIR_GetTypeValueForPath(

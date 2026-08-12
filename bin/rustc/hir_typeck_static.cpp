@@ -427,19 +427,19 @@ bool StaticTraitResolve::find_impl(const Span& sp, const ::HIR::SimplePath& trai
                             trait_params = &null_params;
                         }
                         switch (node_p->m_class) {
-                            case ::HIR::ExprNode_Closure::Class::Unknown:
+                            case ::HIR::ExprNodeClosure::Class::Unknown:
                                 break;
-                            case ::HIR::ExprNode_Closure::Class::NoCapture:
+                            case ::HIR::ExprNodeClosure::Class::NoCapture:
                                 break;
-                            case ::HIR::ExprNode_Closure::Class::Once:
+                            case ::HIR::ExprNodeClosure::Class::Once:
                                 if (trait_path == m_lang_FnMut) {
                                     return false;
                                 }
-                            case ::HIR::ExprNode_Closure::Class::Mut:
+                            case ::HIR::ExprNodeClosure::Class::Mut:
                                 if (trait_path == m_lang_Fn) {
                                     return false;
                                 }
-                            case ::HIR::ExprNode_Closure::Class::Shared:
+                            case ::HIR::ExprNodeClosure::Class::Shared:
                                 break;
                         }
                         ::HIR::TraitPath::assoc_list_t assoc;
@@ -3016,7 +3016,7 @@ HIR::Compare StaticTraitResolve::type_is_interior_mutable(const Span& sp, const 
         TU_MATCH_HDRA((e), {)
         TU_ARMA(Closure, node_p) {
                     // Return fuzzy (i.e. might be) if the closure class is still unknown.
-                    if (node_p->m_class == HIR::ExprNode_Closure::Class::Unknown) {
+                    if (node_p->m_class == HIR::ExprNodeClosure::Class::Unknown) {
                         return HIR::Compare::Fuzzy;
                     }
                     // Shortcut: Copy closures won't be imut

@@ -27,8 +27,8 @@ namespace HIR {
     class Enum;
     class Function;
     class ItemPath;
-    struct ExprNode_Closure;
-    struct ExprNode_Generator;
+    struct ExprNodeClosure;
+    struct ExprNodeGenerator;
 
     enum class CoreType {
         Usize,
@@ -213,9 +213,9 @@ namespace HIR {
         TypeData_NodeType,
         (),
         Closure,
-        ((Closure, const ::HIR::ExprNode_Closure*),
-         (Generator, const ::HIR::ExprNode_Generator*), // Aka a coroutine
-         (Async, const ::HIR::ExprNode_AsyncBlock*)),
+        ((Closure, const ::HIR::ExprNodeClosure*),
+         (Generator, const ::HIR::ExprNodeGenerator*), // Aka a coroutine
+         (Async, const ::HIR::ExprNodeAsyncBlock*)),
         (),
         (),
         (bool operator==(const TypeData_NodeType& x) const; bool operator!=(const TypeData_NodeType& x) const { return !(*this == x); } Ordering ord(const ::HIR::TypeData_NodeType& x) const; TypeData_NodeType clone() const; void fmt(::std::ostream& os) const;)
@@ -335,9 +335,9 @@ namespace HIR {
         TypeRef array(TypeRef inner, ConstGeneric size);
         TypeRef path(Path path, TypePathBinding binding, ::std::unique_ptr<GenericParams> hrtbs = {});
         TypeRef function(TypeData_FunctionPointer ft);
-        TypeRef closure(ExprNode_Closure* node);
-        TypeRef generator(ExprNode_Generator* node);
-        TypeRef async_block(ExprNode_AsyncBlock* node);
+        TypeRef closure(ExprNodeClosure* node);
+        TypeRef generator(ExprNodeGenerator* node);
+        TypeRef async_block(ExprNodeAsyncBlock* node);
     };
 
     inline bool operator==(TypeRef ty, CoreType ct) {

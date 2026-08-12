@@ -23,7 +23,7 @@ namespace AST {
 
     class Expr;
     class ExprNode;
-    struct ExprNode_Match_Arm;
+    struct ExprNodeMatchArm;
 
     class ImplDef;
     class Impl;
@@ -87,12 +87,12 @@ public:
     }
 
     // NOTE: To delete, clear the patterns vector
-    virtual void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNode_Match_Arm& expr) const {
+    virtual void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNodeMatchArm& expr) const {
         unexpected(sp, mi, "match arm");
     }
 
     // NOTE: To delete, clear the value
-    virtual void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNode_StructLiteral::Ent& expr) const {
+    virtual void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNodeStructLiteral::Ent& expr) const {
         unexpected(sp, mi, "struct literal ent");
     }
 };

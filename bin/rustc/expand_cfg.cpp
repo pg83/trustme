@@ -508,7 +508,7 @@ namespace {
                 std::string val;
                 if (lex.lookahead(0) == TOK_INTERPOLATED_EXPR) {
                     auto n = lex.getTokenCheck(TOK_INTERPOLATED_EXPR).take_frag_node();
-                    const auto* np = cast<AST::ExprNode_String>(n.get());
+                    const auto* np = cast<AST::ExprNodeString>(n.get());
                     ASSERT_BUG(n->span(), np, "");
                     val = np->m_value;
                 } else {
@@ -760,14 +760,14 @@ class CCfgHandler: public ExpandDecorator {
         }
     }
 
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNode_Match_Arm& i) const override {
+    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNodeMatchArm& i) const override {
         DEBUG("#[cfg] match arm - " << mi);
         if (!check_cfg(sp, mi)) {
             i.m_patterns.clear();
         }
     }
 
-    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNode_StructLiteral::Ent& i) const override {
+    void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNodeStructLiteral::Ent& i) const override {
         DEBUG("#[cfg] struct lit - " << mi);
         if (!check_cfg(sp, mi)) {
             i.value.reset();

@@ -877,7 +877,7 @@ void Resolve_Absolute_PathParams(/*const*/ Context& context, const Span& sp, ::A
                         auto new_path = context.lookup_opt(p.nodes[0].name(), p.hygiene, Context::LookupMode::Constant);
                         if (new_path != AST::Path()) {
                             // If that lookup succeeds, then create a value (and visit it - just in case)
-                            ent = AST::PathParamEnt::make_Value(new AST::ExprNode_NamedValue(std::move(new_path)));
+                            ent = AST::PathParamEnt::make_Value(new AST::ExprNodeNamedValue(std::move(new_path)));
                             Resolve_Absolute_ExprNode(context, *ent.as_Value());
                         } else {
                             // Otherwise, visit (which will most likely fail)
@@ -2162,7 +2162,7 @@ void Resolve_Absolute_ExprNode(Context& context, ::AST::ExprNode& node) {
         {
         }
 
-        void visit(AST::ExprNode_Block& node) override {
+        void visit(AST::ExprNodeBlock& node) override {
             DEBUG("ExprNode_Block");
             if (node.m_local_mod) {
                 auto _h = context.clear_rootblock();
@@ -2173,7 +2173,7 @@ void Resolve_Absolute_ExprNode(Context& context, ::AST::ExprNode& node) {
             }
             this->context.push_block();
             for (auto& line : node.m_nodes) {
-                if (const auto* definition = cast<AST::ExprNode_MacroDefinition>(line.node.get())) {
+                if (const auto* definition = cast<AST::ExprNodeMacroDefinition>(line.node.get())) {
                     this->context.push_macro_definition(
                         definition->m_definition_id,
                         definition->m_token_hygiene,
@@ -2189,7 +2189,7 @@ void Resolve_Absolute_ExprNode(Context& context, ::AST::ExprNode& node) {
             }
         }
 
-        void visit(AST::ExprNode_Match& node) override {
+        void visit(AST::ExprNodeMatch& node) override {
             DEBUG("ExprNode_Match");
             node.m_val->visit(*this);
             for (auto& arm : node.m_arms) {
@@ -2221,24 +2221,24 @@ void Resolve_Absolute_ExprNode(Context& context, ::AST::ExprNode& node) {
             }
         }
 
-        void visit(AST::ExprNode_Loop& node) override {
+        void visit(AST::ExprNodeLoop& node) override {
             this->context.push_block();
             node.m_code->visit(*this);
             this->context.pop_block();
         }
 
-        void visit(AST::ExprNode_For& node) override {
+        void visit(AST::ExprNodeFor& node) override {
             BUG(node.span(), "`for` should be desugared");
         }
 
-        void visit(AST::ExprNode_While& node) override {
+        void visit(AST::ExprNodeWhile& node) override {
             this->context.push_block();
             visit_if_let_conditions(node.m_conditions);
             node.m_code->visit(*this);
             this->context.pop_block();
         }
 
-        void visit(AST::ExprNode_LetBinding& node) override {
+        void visit(AST::ExprNodeLetBinding& node) override {
             DEBUG("ExprNode_LetBinding");
             Resolve_Absolute_Type(this->context, node.m_type);
             AST::NodeVisitorDef::visit(node);
@@ -2268,7 +2268,7 @@ void Resolve_Absolute_ExprNode(Context& context, ::AST::ExprNode& node) {
             }
         }
 
-        void visit(AST::ExprNode_If& node) override {
+        void visit(AST::ExprNodeIf& node) override {
             for (auto& arm : node.m_arms) {
                 this->context.push_block();
                 visit_if_let_conditions(arm.m_conditions);
@@ -2280,48 +2280,48 @@ void Resolve_Absolute_ExprNode(Context& context, ::AST::ExprNode& node) {
             }
         }
 
-        void visit(AST::ExprNode_StructLiteral& node) override {
+        void visit(AST::ExprNodeStructLiteral& node) override {
             DEBUG("ExprNode_StructLiteral");
             Resolve_Absolute_Path(this->context, node.span(), Context::LookupMode::Type, node.m_path);
             AST::NodeVisitorDef::visit(node);
         }
 
-        void visit(AST::ExprNode_StructLiteralPattern& node) override {
+        void visit(AST::ExprNodeStructLiteralPattern& node) override {
             DEBUG("ExprNode_StructLiteralPattern");
             Resolve_Absolute_Path(this->context, node.span(), Context::LookupMode::Type, node.m_path);
             AST::NodeVisitorDef::visit(node);
         }
 
-        void visit(AST::ExprNode_CallPath& node) override {
+        void visit(AST::ExprNodeCallPath& node) override {
             DEBUG("ExprNode_CallPath");
             Resolve_Absolute_Path(this->context, node.span(), Context::LookupMode::Variable, node.m_path);
             AST::NodeVisitorDef::visit(node);
         }
 
-        void visit(AST::ExprNode_CallMethod& node) override {
+        void visit(AST::ExprNodeCallMethod& node) override {
             DEBUG("ExprNode_CallMethod");
             Resolve_Absolute_PathParams(this->context, node.span(), node.m_method.args());
             AST::NodeVisitorDef::visit(node);
         }
 
-        void visit(AST::ExprNode_NamedValue& node) override {
+        void visit(AST::ExprNodeNamedValue& node) override {
             DEBUG("(" << node.span() << ") ExprNode_NamedValue - " << node.m_path);
             Resolve_Absolute_Path(this->context, node.span(), Context::LookupMode::Variable, node.m_path);
         }
 
-        void visit(AST::ExprNode_Cast& node) override {
+        void visit(AST::ExprNodeCast& node) override {
             DEBUG("ExprNode_Cast");
             Resolve_Absolute_Type(this->context, node.m_type);
             AST::NodeVisitorDef::visit(node);
         }
 
-        void visit(AST::ExprNode_TypeAnnotation& node) override {
+        void visit(AST::ExprNodeTypeAnnotation& node) override {
             DEBUG("ExprNode_TypeAnnotation");
             Resolve_Absolute_Type(this->context, node.m_type);
             AST::NodeVisitorDef::visit(node);
         }
 
-        void visit(AST::ExprNode_Closure& node) override {
+        void visit(AST::ExprNodeClosure& node) override {
             DEBUG("ExprNode_Closure");
 
             Resolve_Absolute_Type(this->context, node.m_return);
@@ -3976,7 +3976,7 @@ void Resolve_Use_Mod(const ::AST::Crate& crate, ::AST::Module& mod, ::AST::Path 
             this->parent_modules.push_back(&cur_module);
         }
 
-        void visit(AST::ExprNode_Block& node) override {
+        void visit(AST::ExprNodeBlock& node) override {
             if (node.m_local_mod) {
                 Resolve_Use_Mod(this->crate, *node.m_local_mod, node.m_local_mod->path(), this->parent_modules);
 
