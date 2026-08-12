@@ -11,6 +11,9 @@
 #include "hir_typeck_static.h"
 #include "hir_typeck_expr_visit.h" // For ModuleState
 #include "hir_expr_state.h"
+#include "hir_hir.h"
+#include "hir_typeck_common.h" // monomorphise_type_with
+#include <std/mem/obj_pool.h>
 
 void ConvertHIR_Bind(::HIR::Crate& crate);
 
@@ -1294,11 +1297,6 @@ void ConvertHIR_Bind(::HIR::Crate& crate) {
     Visitor_EnumSuperTraits(crate).visit_crate(crate);
 }
 
-#include "hir_conv_main_bindings.h"
-#include "hir_hir.h"
-#include "hir_expr.h"
-#include "hir_visitor.h"
-#include "hir_typeck_common.h" // monomorphise_type_with
 
 HIR::PathParams ConvertHIR_CompleteAliasParams(HIR::TypeInterner& types, const Span& sp, const ::HIR::GenericParams& params_def, const ::HIR::GenericPath& path, bool is_expr) {
     auto pp = path.m_params.clone();
@@ -1944,11 +1942,6 @@ void ConvertHIR_ExpandAliases_Self_Expr(
     exp.visit_expr(expr);
 }
 
-#include "hir_hir.h"
-#include "hir_visitor.h"
-#include "hir_typeck_static.h"
-#include "hir_expr.h" // ExprVisitor
-#include "hir_conv_main_bindings.h"
 
 namespace {
     /// <summary>
@@ -3239,12 +3232,7 @@ void ConvertHIR_LifetimeElision(::HIR::Crate& crate) {
     v.visit_crate(crate);
 }
 
-#include "hir_conv_main_bindings.h"
-#include "hir_visitor.h"
-#include "hir_expr.h"
-#include <algorithm> // std::find_if
 
-#include "hir_typeck_static.h"
 
 namespace {
 
@@ -3576,13 +3564,6 @@ void ConvertHIR_Markings(::HIR::Crate& crate) {
     exp2.visit_crate(crate);
 }
 
-#include "hir_conv_main_bindings.h"
-#include "hir_hir.h"
-#include "hir_expr.h"
-#include "hir_visitor.h"
-#include "hir_typeck_static.h"
-#include <std/mem/obj_pool.h>
-#include <algorithm> // std::remove_if
 
 namespace resolve_ufcs {
     void expand_trait_impl_type_defaults(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) {

@@ -5,12 +5,12 @@
  * tools/common/toml.cpp
  * - A very basic (and probably incomplete) streaming TOML parser
  */
-#define NOLOG // Disable logging
 #include "toml.h"
 #include "common_debug.h"
 #include <cassert>
 #include <string>
 #include <iostream>
+#define NOLOG // Disable logging
 
 /// Representation of a syntatic token in a TOML file
 struct TomlToken {

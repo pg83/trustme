@@ -5,6 +5,9 @@
 #include "ast_expr.h"
 #include "main_bindings.h"
 #include "hir_hir.h"
+#include "macro_rules_macro_rules.h"
+#include "stdspan.h" // std::span
+#include "pop_on_drop.h"
 
 #define FLAG_CONST_GENERIC (1u << 31)
 
@@ -2836,11 +2839,6 @@ void Resolve_Absolutise(AST::Crate& crate) {
 
 #undef FLAG_CONST_GENERIC
 
-#include "ast_ast.h"
-#include "ast_crate.h"
-#include "main_bindings.h"
-#include "hir_hir.h"
-#include "macro_rules_macro_rules.h"
 
 enum class IndexName {
     Namespace,
@@ -3747,13 +3745,6 @@ void Resolve_Index(AST::Crate& crate) {
     Resolve_Index_Module_Normalise(crate, Span(), crate.m_root_module);
 }
 
-#include "main_bindings.h"
-#include "ast_crate.h"
-#include "ast_ast.h"
-#include "ast_expr.h"
-#include "hir_hir.h"
-#include "stdspan.h" // std::span
-#include "pop_on_drop.h"
 
 enum class Lookup {
     Any,    // Allow binding to anything

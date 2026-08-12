@@ -7,6 +7,16 @@
 #include <iostream>
 #include "parse_tokentree.h"
 #include "parse_interpolated_fragment.h"
+#include "ast_crate.h"
+#include <std/mem/obj_pool.h>
+#include <cassert>
+#include "hir_hir.h"    // ABI_RUST - TODO: Move elsewhere?
+#include "expand_cfg.h" // check_cfg - for `mod nonexistant;`
+#include <fstream>        // Used by directory path
+#include "parse_lex.h"  // New file lexer
+#include "macro_rules_macro_rules.h"
+#include "path.h"
+#include "ast_types.h"
 
 using AST::ExprNode;
 using AST::ExprNodeP;
@@ -1546,9 +1556,6 @@ TokenTree Parse_TT(TokenStream& lex, bool unwrapped) {
 #undef NEWNODE
 #undef LEFTASSOC
 
-#include "parse_parseerror.h"
-#include "parse_common.h"
-#include "ast_ast.h"
 
 AST::Path Parse_Path(TokenStream& lex, eParsePathGenericMode generic_mode);
 AST::Path Parse_Path(TokenStream& lex, bool is_abs, eParsePathGenericMode generic_mode);
@@ -1833,9 +1840,6 @@ AST::Path Parse_Path(TokenStream& lex, bool is_abs, eParsePathGenericMode generi
     return rv;
 }
 
-#include "parse_common.h"
-#include "parse_parseerror.h"
-#include "ast_expr.h" // To convert :expr
 
 // NEWNODE is needed for the Value pattern type
 typedef ::std::unique_ptr<AST::ExprNode> PatternExprNodeP;
@@ -2412,20 +2416,6 @@ AST::Pattern Parse_PatternStruct(TokenStream& lex, ProtoSpan ps, AST::Path path)
 
 #undef NEWNODE
 
-#include "ast_ast.h"
-#include "ast_crate.h"
-#include "parse_parseerror.h"
-#include "parse_common.h"
-#include <std/mem/obj_pool.h>
-#include <cassert>
-#include "hir_hir.h"    // ABI_RUST - TODO: Move elsewhere?
-#include "expand_cfg.h" // check_cfg - for `mod nonexistant;`
-#include <fstream>        // Used by directory path
-#include "parse_lex.h"  // New file lexer
-#include "parse_interpolated_fragment.h"
-#include "ast_expr.h"
-#include "macro_rules_macro_rules.h"
-#include "path.h"
 
 template <typename T>
 Spanned<T> get_spanned(TokenStream& lex, ::std::function<T()> f) {
@@ -4655,10 +4645,6 @@ AST::Crate* Parse_Crate(stl::ObjPool* pool, HIR::TypeInterner& types, ::std::str
 #undef GET_SPANNED
 #undef LOOKAHEAD2
 
-#include "parse_common.h"
-#include "parse_parseerror.h"
-#include "ast_types.h"
-#include "ast_ast.h"
 
 // === PROTOTYPES ===
 //TypeRef Parse_Type(TokenStream& lex, bool allow_trait_list);

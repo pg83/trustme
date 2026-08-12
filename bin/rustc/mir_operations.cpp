@@ -9,6 +9,13 @@
 #include "mir_visit_crate_mir.h"
 #include <algorithm>
 #include <iomanip>
+#include "trans_target.h"
+#include <cmath>
+#include <limits>
+#include <unordered_map>
+#include <unordered_set>
+#include "trans_trans_list.h" // Note: This is included for inlining after enumeration and monomorph
+#include "hir_expr.h" // The optimiser section accesses complete HIR expression nodes.
 
 namespace {
     /// Value states
@@ -793,14 +800,6 @@ void MIR_BorrowCheck_Crate(::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-#include <algorithm>
-#include "mir_main_bindings.h"
-#include "mir_mir.h"
-#include "hir_visitor.h"
-#include "hir_typeck_static.h"
-#include "mir_helpers.h"
-#include "mir_visit_crate_mir.h"
-#include "mir_operations.h"
 
 namespace {
     ::HIR::TypeRef get_metadata_type(const ::MIR::TypeResolve& state, const ::HIR::TypeData* unsized_ty) {
@@ -2040,12 +2039,6 @@ void MIR_CheckCrate(/*const*/ ::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-#include "mir_main_bindings.h"
-#include "mir_mir.h"
-#include "hir_visitor.h"
-#include "hir_typeck_static.h"
-#include "mir_helpers.h"
-#include "mir_visit_crate_mir.h"
 
 namespace {
     struct State {
@@ -2885,15 +2878,6 @@ void MIR_CheckCrate_Full(/*const*/ ::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-#include "mir_main_bindings.h"
-#include "mir_mir.h"
-#include "hir_visitor.h"
-#include "hir_typeck_static.h"
-#include "mir_helpers.h"
-#include "mir_operations.h"
-#include "mir_visit_crate_mir.h"
-#include "trans_target.h"
-#include <algorithm>
 
 namespace {
     /// @brief Used to tell the constant replacement code that replacements should be available
@@ -4287,23 +4271,7 @@ void MIR_Cleanup_SetPostMonomorph() {
     g_is_post_monomorph = true;
 }
 
-#include "mir_main_bindings.h"
-#include "mir_mir.h"
-#include "hir_visitor.h"
-#include "hir_typeck_static.h"
-#include "mir_helpers.h"
-#include "mir_operations.h"
-#include "mir_visit_crate_mir.h"
-#include <algorithm>
-#include <cmath>
-#include <iomanip>
-#include <limits>
-#include <unordered_map>
-#include <unordered_set>
-#include "trans_target.h"
-#include "trans_trans_list.h" // Note: This is included for inlining after enumeration and monomorph
 
-#include "hir_expr.h" // The optimiser section accesses complete HIR expression nodes.
 
 #define DUMP_BEFORE_ALL 1
 #define DUMP_BEFORE_CONSTPROPAGATE 0

@@ -5,6 +5,7 @@
 #include "hir_typeck_static.h"
 #include "hir_typeck_main_bindings.h"
 #include <algorithm>
+#include "hir_hir.h"
 
 namespace {
     typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> t_args;
@@ -1539,9 +1540,6 @@ void Typecheck_Expressions_Validate(::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-#include "hir_hir.h"
-#include "hir_visitor.h"
-#include "hir_typeck_static.h"
 
 namespace {
 

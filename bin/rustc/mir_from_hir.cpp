@@ -14,6 +14,9 @@
 #include "trans_target.h" // Target_GetSizeAndAlignOf - for `box`
 #include <cctype>           // isdigit
 #include "mir_helpers.h"
+#include <numeric>
+#include <limits> // std::numeric_limits
+#include "hir_conv_main_bindings.h" // For consteval
 
 namespace {
     class ExprVisitor_Conv: public MirConverter {
@@ -3028,13 +3031,6 @@ void HIR_GenerateMIR(::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-#include "mir_from_hir.h"
-#include "hir_typeck_common.h" // monomorphise_type
-#include <algorithm>
-#include <numeric>
-#include <limits> // std::numeric_limits
-#include "trans_target.h"
-#include "hir_conv_main_bindings.h" // For consteval
 
 void MIR_LowerHIR_Match(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNode_Match& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps);
 
@@ -7055,8 +7051,6 @@ void MatchGenGrouped::gen_dispatch_splitslice(const field_path_t& field_path, co
     }
 }
 
-#include <algorithm>
-#include "mir_from_hir.h"
 
 // --------------------------------------------------------------------
 // MirBuilder

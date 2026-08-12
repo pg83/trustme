@@ -1,4 +1,14 @@
 #include "hir_main_bindings.h"
+#include "hir_hir.h"
+#include "mir_mir.h"
+#include "macro_rules_macro_rules.h"
+#include "hir_serialise_lowlevel.h"
+#include <std/mem/obj_pool.h>
+#include <typeinfo>
+#include "hir_visitor.h"
+#include "hir_expr.h"
+#include "hir_expr_state.h"
+#include "hir_typeck_monomorph.h" // monomorphise_path_needed
 
 // TODO: Have an environment variable that controls if debug is enabled here.
 #define DEBUG_EXTRA_ENABLE &&des_debug_enabled()
@@ -8,13 +18,6 @@ namespace {
 }
 
 //#define DISABLE_DEBUG   //  Disable debug for this function - too hot
-#include "hir_hir.h"
-#include "hir_main_bindings.h"
-#include "mir_mir.h"
-#include "macro_rules_macro_rules.h"
-#include "hir_serialise_lowlevel.h"
-#include <std/mem/obj_pool.h>
-#include <typeinfo>
 
 namespace {
     bool des_debug_enabled() {
@@ -1638,10 +1641,6 @@ RcString HIR_Deserialise_JustName(const ::std::string& filename) {
 #define DEBUG_EXTRA_ENABLE
 #undef DEF_D
 
-#include "hir_main_bindings.h"
-#include "hir_visitor.h"
-#include "hir_expr.h"
-#include "hir_expr_state.h"
 
 #define NODE_IS(valptr, tysuf) (cast<const ::HIR::ExprNode##tysuf>(&*valptr) != nullptr)
 
@@ -2480,12 +2479,6 @@ void HIR_DumpExpr(::std::ostream& sink, const ::HIR::ExprPtr& expr) {
 
 #undef NODE_IS
 
-#include "hir_hir.h"
-#include "hir_main_bindings.h"
-#include "macro_rules_macro_rules.h"
-#include "mir_mir.h"
-#include "hir_serialise_lowlevel.h"
-#include "hir_typeck_monomorph.h" // monomorphise_path_needed
 
 //namespace {
 class HirSerialiser {

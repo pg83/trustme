@@ -5,6 +5,15 @@
 #include "ast_ast.h"
 #include "parse_ttstream.h"
 #include "expand_cfg.h"
+#include "ast_crate.h"
+#include "common.h"
+#include "ast_expr.h"
+#include "hir_hir.h"      // ABI_RUST
+#include "parse_common.h" // Parse_ModRoot_Items
+#include "expand_proc_macro.h"
+#include "expand_common.h" // Expand_LookupMacro
+#include "parse_parseerror.h" // ParseError
+#include "parse_interpolated_fragment.h"
 
 namespace {
     class Common_Function: public ExpandDecorator {
@@ -653,8 +662,6 @@ class CHandler_Unsafe: public ExpandDecorator {
 
 STATIC_DECORATOR("unsafe", CHandler_Unsafe);
 
-#include "synext.h"
-#include "ast_crate.h"
 
 class Decorator_CrateType: public ExpandDecorator {
 public:
@@ -754,16 +761,6 @@ STATIC_DECORATOR("allocator", Decorator_Allocator)
 STATIC_DECORATOR("panic_runtime", Decorator_PanicRuntime)
 STATIC_DECORATOR("needs_panic_runtime", Decorator_NeedsPanicRuntime)
 
-#include "synext.h"
-#include "common.h"
-#include "ast_ast.h"
-#include "ast_expr.h"
-#include "ast_crate.h"
-#include "hir_hir.h"      // ABI_RUST
-#include "parse_common.h" // Parse_ModRoot_Items
-#include "parse_ttstream.h"
-#include "expand_proc_macro.h"
-#include "expand_common.h" // Expand_LookupMacro
 
 namespace {
     const RcString rcstring_Self = RcString::new_interned("Self");
@@ -2536,8 +2533,6 @@ STATIC_DECORATOR("derive", Decorator_Derive)
 class Decorator_DeriveConst: public Decorator_Derive {};
 STATIC_DECORATOR("derive_const", Decorator_DeriveConst)
 
-#include "synext.h"
-#include "ast_generics.h"
 
 class CDocHandler: public ExpandDecorator {
     AttrStage stage() const override {
@@ -2571,10 +2566,6 @@ class CDocHandler: public ExpandDecorator {
 
 STATIC_DECORATOR("doc", CDocHandler);
 
-#include "synext.h"
-#include "common.h"
-#include "ast_ast.h"
-#include "ast_crate.h"
 
 enum eItemType {
     ITEM_TRAIT,
@@ -3212,9 +3203,6 @@ STATIC_DECORATOR("rustc_std_internal_symbol", Decorator_RustcStdInternalSymbol);
 STATIC_DECORATOR("alloc_error_handler", Decorator_AllocErrorHandler);
 STATIC_DECORATOR("global_allocator", Decorator_GlobalAllocator);
 
-#include "synext.h"
-#include "ast_generics.h"
-#include "ast_ast.h"
 
 class CMultiHandler_Lint: public ExpandDecorator {
     AttrStage stage() const override {
@@ -3268,9 +3256,6 @@ class CHandler_Forbid: public CMultiHandler_Lint {};
 
 STATIC_DECORATOR("forbid", CHandler_Forbid);
 
-#include "synext.h"
-#include "ast_generics.h"
-#include "ast_ast.h"
 
 // #[must_use] - Marks a type needing to be consumed
 class CHandler_MustUse: public ExpandDecorator {
@@ -3373,9 +3358,6 @@ class CHandler_RustcOnUnimiplemented: public ExpandDecorator {
 
 STATIC_DECORATOR("rustc_on_unimplemented", CHandler_RustcOnUnimiplemented);
 
-#include "synext.h"
-#include "ast_generics.h"
-#include "ast_ast.h"
 
 // #[rustc_box] - Marks the `Box::new` inner constructor
 class CHandler_RustBox: public ExpandDecorator {
@@ -3396,8 +3378,6 @@ class CHandler_RustBox: public ExpandDecorator {
 
 STATIC_DECORATOR("rustc_box", CHandler_RustBox);
 
-#include "synext.h"
-#include "ast_generics.h"
 
 class CMultiHandler_Stability: public ExpandDecorator {
     AttrStage stage() const override {
@@ -3458,8 +3438,6 @@ class CHandler_AllowInternalUnstable: public ExpandDecorator {
 
 STATIC_DECORATOR("allow_internal_unstable", CHandler_AllowInternalUnstable);
 
-#include "synext.h"
-#include "ast_crate.h"
 
 class Decorator_NoStd: public ExpandDecorator {
 public:
@@ -3563,13 +3541,6 @@ void Expand_init_std_prelude() {
     Register_Synext_Decorator_G<Decorator_NoPrelude>("no_prelude");
 }
 
-#include "synext_decorator.h"
-#include "ast_ast.h"
-#include "ast_crate.h"
-#include "parse_ttstream.h"
-#include "synext.h"           // Expand_ParseAndExpand_ExprVal
-#include "parse_parseerror.h" // ParseError
-#include "parse_interpolated_fragment.h"
 
 class CTestHandler: public ExpandDecorator {
     AttrStage stage() const override {

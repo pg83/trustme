@@ -8780,11 +8780,7 @@ void Typecheck_Code_CS(const typeck::ModuleState& ms, t_args& args, const ::HIR:
     }
 }
 
-#include "hir_typeck_expr_cs.h"
-#include "hir_typeck_expr_visit.h"
-#include "hir_expr.h"
 
-#include <algorithm>
 
 namespace {
     inline ::HIR::SimplePath get_rule_parent_path(const ::HIR::SimplePath& sp) {

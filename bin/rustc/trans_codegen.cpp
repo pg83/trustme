@@ -8,6 +8,11 @@
 #include "trans_target.h"
 
 #include "trans_monomorphise.h"
+#include "hir_typeck_static.h"
+#include "mir_helpers.h"
+#include "trans_mangling.h"
+#include <iomanip>
+#include <fstream>
 
 void Trans_Codegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* crate_ptr, TransList list, const ::std::string& hir_file) {
     static Span sp;
@@ -171,14 +176,7 @@ void Trans_Codegen(const ::std::string& outfile, CodegenOutput out_ty, const Tra
     codegen->finalise(opt, out_ty, hir_file);
 }
 
-#include "trans_codegen.h"
-#include "hir_typeck_static.h"
-#include "mir_helpers.h"
-#include "trans_mangling.h"
-#include "trans_target.h"
 
-#include <iomanip>
-#include <fstream>
 
 namespace {
 

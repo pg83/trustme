@@ -11,6 +11,7 @@
 #include "ast_expr.h"
 #include "ast_crate.h"
 #include "hir_hir.h" // HIR::Crate
+#include "parse_tokentree.h"
 
 // Map of: LoopIndex=>(Path=>Count)
 typedef std::map<unsigned, std::map<std::vector<unsigned>, unsigned>> loop_counts_t;
@@ -2510,14 +2511,7 @@ const ::std::vector<MacroExpansionEnt>* MacroExpandState::getCurLayer() const {
     return ents;
 }
 
-#include "common.h"
-#include "macro_rules_macro_rules.h"
-#include "parse_parseerror.h"
-#include "parse_tokentree.h"
-#include "parse_common.h"
-#include <limits.h>
 
-#include "macro_rules_pattern_checks.h"
 
 bool is_token_path(eTokenType tt) {
     switch (tt) {
@@ -2865,12 +2859,6 @@ MacroRules::~MacroRules() {
 MacroRulesArm::~MacroRulesArm() {
 }
 
-#include "common.h"
-#include "parse_common.h"
-#include "parse_parseerror.h"
-#include "macro_rules_macro_rules.h"
-#include "macro_rules_pattern_checks.h"
-#include "ast_crate.h" // for editions
 
 MacroRulesPtr Parse_MacroRules(TokenStream& lex);
 

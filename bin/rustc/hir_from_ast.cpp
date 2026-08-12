@@ -14,6 +14,8 @@
 #include "hir_typeck_helpers.h" // monomorph
 #include "trans_target.h"
 #include <unordered_set>
+#include "hir_expr_ptr.h"
+#include "hir_expr.h"
 
 ::HIR::ExprPtr LowerHIR_Expr(const ::AST::Expr& e);
 ::HIR::Module LowerHIR_Module(const ::AST::Module& module, ::HIR::ItemPath path, ::std::vector<::HIR::SimplePath> traits = {});
@@ -2821,13 +2823,6 @@ public:
     return &rv;
 }
 
-#include "hir_expr_ptr.h"
-#include "hir_expr.h"
-#include "ast_expr.h"
-#include "ast_ast.h"
-#include "hir_from_ast.h"
-#include "hir_hir.h"
-#include <std/mem/obj_pool.h>
 
 struct LowerHIR_ExprNode_Visitor: public ::AST::NodeVisitor {
     ::HIR::ExprNodeP m_rv;

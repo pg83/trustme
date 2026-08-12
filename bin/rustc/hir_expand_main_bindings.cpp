@@ -6,6 +6,11 @@
 #include <algorithm>
 #include "hir_expand_main_bindings.h"
 #include "hir_expr_state.h"
+#include <std/mem/obj_pool.h>
+#include "hir_conv_constant_evaluation.h"
+#include "trans_target.h"
+#include "hir_hir.h"
+#include "hir_typeck_common.h" // visit_ty_with
 
 namespace {
 
@@ -1407,13 +1412,6 @@ void HIR_Expand_AnnotateUsage(::HIR::Crate& crate) {
     ov.visit_crate(crate);
 }
 
-#include "hir_visitor.h"
-#include "hir_expr.h"
-#include "hir_typeck_static.h"
-#include <algorithm>
-#include "hir_expr_state.h"
-#include "hir_expand_main_bindings.h"
-#include <std/mem/obj_pool.h>
 
 namespace {
     inline HIR::ExprNodeP closure_mk_exprnodep(HIR::ExprNode* en, ::HIR::TypeRef ty) {
@@ -3465,11 +3463,6 @@ void HIR_Expand_Closures(::HIR::Crate& crate) {
 
 #undef NEWNODE
 
-#include "hir_visitor.h"
-#include "hir_expr.h"
-#include "hir_typeck_static.h"
-#include <algorithm>
-#include "hir_expand_main_bindings.h"
 
 namespace {
 
@@ -3657,12 +3650,6 @@ void HIR_Expand_ErasedType(::HIR::Crate& crate) {
     ov_fix.visit_crate(crate);
 }
 
-#include "hir_visitor.h"
-#include "hir_expr.h"
-#include "hir_typeck_static.h"
-#include <algorithm>
-#include "hir_expr_state.h"
-#include "hir_expand_main_bindings.h"
 
 namespace {
     struct LifetimeInferState {
@@ -6537,12 +6524,6 @@ void HIR_Expand_LifetimeInfer_Expr(const ::HIR::Crate& crate, const ::HIR::ItemP
     HIR_Expand_LifetimeInfer_ExprInner(resolve, args, ret_ty, exp, /*remove_locals*/ false, /*is_const_context=*/true);
 }
 
-#include "hir_visitor.h"
-#include "hir_expr.h"
-#include "hir_typeck_static.h"
-#include <algorithm>
-#include "hir_expand_main_bindings.h"
-#include <std/mem/obj_pool.h>
 
 namespace {
     inline HIR::ExprNodeP reborrow_mk_exprnodep(HIR::ExprNode* en, ::HIR::TypeRef ty) {
@@ -6750,15 +6731,6 @@ void HIR_Expand_Reborrows(::HIR::Crate& crate) {
 
 #undef NEWNODE
 
-#include "hir_visitor.h"
-#include "hir_expr.h"
-#include "hir_typeck_static.h"
-#include "hir_conv_constant_evaluation.h"
-#include <algorithm>
-#include "hir_expand_main_bindings.h"
-#include "hir_expr_state.h"
-#include "trans_target.h"
-#include <std/mem/obj_pool.h>
 
 extern RcString g_core_crate; // Defined in hir/from_ast.cpp
 
@@ -8196,12 +8168,6 @@ void HIR_Expand_StaticBorrowConstants(::HIR::Crate& crate) {
 
 #undef NEWNODE
 
-#include "hir_visitor.h"
-#include "hir_expr.h"
-#include "hir_typeck_static.h"
-#include <algorithm>
-#include "hir_expand_main_bindings.h"
-#include <std/mem/obj_pool.h>
 
 namespace {
     inline HIR::ExprNodeP ufcs_mk_exprnodep(HIR::ExprNode* en, ::HIR::TypeRef ty) {
@@ -8876,12 +8842,6 @@ void HIR_Expand_UfcsEverything(::HIR::Crate& crate) {
 
 #undef NEWNODE
 
-#include "hir_expand_main_bindings.h"
-#include "hir_hir.h"
-#include "hir_visitor.h"
-#include "hir_typeck_common.h" // visit_ty_with
-#include "hir_typeck_static.h" // visit_ty_with
-#include <algorithm>             // ::std::any_of
 
 namespace {
     class Visitor_ImplTrait: public ::HIR::Visitor {

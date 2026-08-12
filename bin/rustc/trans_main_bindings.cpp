@@ -12,6 +12,11 @@
 #include "mir_operations.h"
 #include "mir_helpers.h"
 #include "trans_allocator.h"
+#include "hir_conv_main_bindings.h"
+#include "hir_item_path.h"
+#include "hir_visitor.h"
+#include "trans_mangling.h"
+#include <unordered_set>
 
 namespace {
     struct State {
@@ -1259,21 +1264,6 @@ void Trans_AutoImpls(::HIR::Crate& crate, TransList& trans_list) {
     }
 }
 
-#include "trans_main_bindings.h"
-#include "trans_trans_list.h"
-#include "hir_hir.h"
-#include "mir_mir.h"
-#include "mir_helpers.h"
-#include "hir_typeck_common.h" // monomorph
-#include "hir_typeck_static.h" // StaticTraitResolve
-#include "hir_conv_main_bindings.h"
-#include "hir_item_path.h"
-#include "hir_visitor.h"
-#include <deque>
-#include <algorithm>
-#include "trans_target.h"
-#include "trans_mangling.h"
-#include <unordered_set>
 
 namespace {
     // Translation paths are assembled after inference and monomorphisation.

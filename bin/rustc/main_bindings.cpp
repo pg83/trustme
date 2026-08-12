@@ -6,6 +6,30 @@
 #include "ast_crate.h"
 #include "main_bindings.h"
 #include "hir_hir.h" // ABI_RUST
+#include <iostream>
+#include <iomanip>
+#include <string>
+#include <set>
+#include <climits>
+#include "version.h"
+#include "parse_lex.h"
+#include "parse_parseerror.h"
+#include "parse_common.h" // For edition checks
+#include <cstring>
+#include "resolve_main_bindings.h"
+#include "hir_main_bindings.h"
+#include "hir_conv_main_bindings.h"
+#include "hir_typeck_main_bindings.h"
+#include "hir_expand_main_bindings.h"
+#include "mir_main_bindings.h"
+#include "trans_main_bindings.h"
+#include "trans_target.h"
+#include "trait_solver_mode.h"
+#include "expand_cfg.h"
+#include "target_detect.h" // tools/common/target_detect.h
+#include "debug_inner.h"
+#include "memory_dump.h"
+#include <std/mem/obj_pool.h>
 
 #define NEWNODE(_ty, ...) ::AST::ExprNodeP(new ::AST::ExprNode##_ty(__VA_ARGS__))
 
@@ -121,34 +145,7 @@ void Expand_TestHarness(::AST::Crate& crate) {
 
 #undef NEWNODE
 
-#include <iostream>
-#include <iomanip>
-#include <string>
-#include <set>
-#include <climits>
-#include "version.h"
-#include "parse_lex.h"
-#include "parse_parseerror.h"
-#include "parse_common.h" // For edition checks
-#include "ast_ast.h"
-#include "ast_crate.h"
-#include <cstring>
-#include "main_bindings.h"
-#include "resolve_main_bindings.h"
-#include "hir_main_bindings.h"
-#include "hir_conv_main_bindings.h"
-#include "hir_typeck_main_bindings.h"
-#include "hir_expand_main_bindings.h"
-#include "mir_main_bindings.h"
-#include "trans_main_bindings.h"
-#include "trans_target.h"
-#include "trait_solver_mode.h"
 
-#include "expand_cfg.h"
-#include "target_detect.h" // tools/common/target_detect.h
-#include "debug_inner.h"
-#include "memory_dump.h"
-#include <std/mem/obj_pool.h>
 
 #ifndef __has_feature
     #define __has_feature(x) 0

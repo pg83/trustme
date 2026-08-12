@@ -8,6 +8,11 @@
 #include "mir_main_bindings.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
+#include "macro_rules_macro_rules.h" // Used to update the crate name
+#include "hir_conv_main_bindings.h"
+#include "trans_target.h"
+#include "floats.h"
+#include <optional>
 
 namespace HIR {
     ::std::ostream& operator<<(::std::ostream& os, const Publicity& x) {
@@ -662,8 +667,6 @@ const ::HIR::Static& ::HIR::Crate::get_static_by_path(const Span& sp, const ::HI
     BUG(sp, "`static` path " << path << " can't be found");
 }
 
-#include "hir_hir.h"
-#include "macro_rules_macro_rules.h" // Used to update the crate name
 
 void HIR::Crate::post_load_update(const RcString& name) {
     // TODO: Do a pass across m_hir that
@@ -672,18 +675,6 @@ void HIR::Crate::post_load_update(const RcString& name) {
     // 3. Updates macros with the crate name
 }
 
-#include "hir_hir.h"
-#include <algorithm>
-#include "hir_typeck_common.h"
-#include "hir_typeck_expr_visit.h" // for invoking typecheck
-#include "hir_item_path.h"
-#include "hir_expr_state.h"
-#include "hir_conv_main_bindings.h"
-#include "hir_expand_main_bindings.h"
-#include "mir_main_bindings.h"
-#include "trans_target.h"
-#include "floats.h"
-#include <optional>
 
 namespace {
     bool is_unbounded_infer(const ::HIR::TypeData* type) {
