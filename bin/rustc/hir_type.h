@@ -125,7 +125,6 @@ struct HIRTypeDataPath {
 struct HIRTypeDataTraitObject {
     HIRTraitPath mTrait;
     ::std::vector<HIRGenericPath> markers;
-    HIRLifetimeRef lifetime;
 };
 
 struct HIRTypeDataErasedTypeAliasInner {
@@ -165,7 +164,6 @@ static inline bool operator!=(const TypeDataErasedTypeInner& a, const TypeDataEr
 struct HIRTypeDataErasedType {
     bool isSized;
     ::std::vector<HIRTraitPath> traits;
-    ::std::vector<HIRLifetimeRef> lifetimeBounds;
     TypeDataErasedTypeInner inner;
     /// Contents of the `use<...>` annotation/bound
     HIRPathParams use;
@@ -253,7 +251,6 @@ TAGGED_UNION_EX(
         (Tuple, ::std::vector<HIRTypeRef>),
         (Borrow,
          struct {
-             HIRLifetimeRef lifetime;
              HIRBorrowType type;
              HIRTypeRef inner;
          }),
@@ -322,7 +319,7 @@ public:
     HIRTypeRef self();
     HIRTypeRef unit();
     HIRTypeRef diverge();
-    HIRTypeRef borrow(HIRBorrowType bt, HIRTypeRef inner, HIRLifetimeRef lft = HIRLifetimeRef());
+    HIRTypeRef borrow(HIRBorrowType bt, HIRTypeRef inner);
     HIRTypeRef pointer(HIRBorrowType bt, HIRTypeRef inner);
     HIRTypeRef tuple(::std::vector<HIRTypeRef> types);
     HIRTypeRef slice(HIRTypeRef inner);

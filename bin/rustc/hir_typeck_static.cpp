@@ -993,9 +993,6 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
                     unsigned implIdx = t->as_Generic().idx();
                     maxImplIdxTy = ::std::max(maxImplIdxTy, implIdx);
                 }
-                if (const auto* te = t->opt_Borrow()) {
-                    visitLft(te->lifetime);
-                }
                 // TODO: Path param lifetimes, etc
                 return false;
             });

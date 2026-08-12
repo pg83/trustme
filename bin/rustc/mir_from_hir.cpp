@@ -3450,7 +3450,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                 DEBUG("Set alias for: " << *b.binding << " := " << val);
                 if (b.binding->mType != HIRPatternBinding::Type::Move) {
                     const auto& borrow = finalTy->as_Borrow();
-                    finalTy = builder.resolve().crate.types.borrow(HIRBorrowType::Shared, borrow.inner, borrow.lifetime);
+                    finalTy = builder.resolve().crate.types.borrow(HIRBorrowType::Shared, borrow.inner);
                     // Not a move binding, still need to borrow but no deref
                     // - Or, make another temporary for the borrow (no scope needed)
                     auto tmp2 = builder.newTemporary(finalTy);
@@ -3620,7 +3620,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                             if (bindingTempsAlt[j] == ~0u) {
                                 auto finalTy = conv.getBindingType(sp, b.binding->slot);
                                 const auto& borrow = finalTy->as_Borrow();
-                                finalTy = builder.resolve().crate.types.borrow(HIRBorrowType::Shared, borrow.inner, borrow.lifetime);
+                                finalTy = builder.resolve().crate.types.borrow(HIRBorrowType::Shared, borrow.inner);
                                 tmp2 = builder.newTemporary(finalTy);
                                 bindingTempsAlt[j] = tmp2.as_Local();
                             } else {
@@ -3723,7 +3723,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                             // - Or, make another temporary for the borrow (no scope needed)
                             auto finalTy = conv.getBindingType(sp, b.binding->slot);
                             const auto& borrow = finalTy->as_Borrow();
-                            finalTy = builder.resolve().crate.types.borrow(HIRBorrowType::Shared, borrow.inner, borrow.lifetime);
+                            finalTy = builder.resolve().crate.types.borrow(HIRBorrowType::Shared, borrow.inner);
                             tmp2 = builder.newTemporary(finalTy);
                             bindingTempsAlt[j] = tmp2.as_Local();
                         } else {

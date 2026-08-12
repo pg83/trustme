@@ -10349,18 +10349,18 @@ public:
             TU_ARMA(String, e) {
                 // TODO: &'static
                 DEBUG("_Literal (&str)");
-                ty = this->context.crate.types.borrow(HIRBorrowType::Shared, this->context.crate.types.primitive(HIRCoreType::Str), HIRLifetimeRef::newStatic());
+                ty = this->context.crate.types.borrow(HIRBorrowType::Shared, this->context.crate.types.primitive(HIRCoreType::Str));
             }
             TU_ARMA(ByteString, e) {
                 // TODO: &'static
                 DEBUG("_Literal (&[u8])");
-                ty = this->context.crate.types.borrow(HIRBorrowType::Shared, this->context.crate.types.array(this->context.crate.types.primitive(HIRCoreType::U8), e.size()), HIRLifetimeRef::newStatic());
+                ty = this->context.crate.types.borrow(HIRBorrowType::Shared, this->context.crate.types.array(this->context.crate.types.primitive(HIRCoreType::U8), e.size()));
             }
             TU_ARMA(CString, e) {
                 DEBUG("_Literal (&CStr)");
                 auto p = context.crate.getLangItemPath(node.span(), "CStr");
                 ty = this->context.crate.types.path(p, &context.crate.getStructByPath(node.span(), p));
-                ty = this->context.crate.types.borrow(HIRBorrowType::Shared, ty, HIRLifetimeRef::newStatic());
+                ty = this->context.crate.types.borrow(HIRBorrowType::Shared, ty);
             }
             }
             this->context.addIvars(ty);

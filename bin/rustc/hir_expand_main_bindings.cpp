@@ -1931,7 +1931,7 @@ namespace {
         static HIRTraitImpl makeFnmut(HIRTypeInterner& types, HIRGenericParams params, HIRPathParams traitParams, HIRTypeRef closureType, ::std::pair<HIRPattern, HIRTypeRef> argsArgent, HIRTypeRef retTy, HIRExprPtr code) {
             HIRGenericParams fcnParams;
             fcnParams.mLifetimes.push_back(HIRLifetimeDef());
-            auto tyOfSelf = types.borrow(HIRBorrowType::Unique, closureType, HIRLifetimeRef(256 + 0));
+            auto tyOfSelf = types.borrow(HIRBorrowType::Unique, closureType);
             fixFnParams(code, tyOfSelf, argsArgent.second);
             return HIRTraitImpl{mv$(params), mv$(traitParams), mv$(closureType), makeMap1(rcstringCallMut, HIRTraitImpl::ImplEnt<HIRFunction>{false, HIRFunction{HIRFunction::Receiver::BorrowUnique, mv$(fcnParams), makeVec2(::std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, rcstringSelfLower, 0}, {}}, mv$(tyOfSelf)), mv$(argsArgent)), retTy, mv$(code)}}), {}, {}, {}, HIRSimplePath()};
         }
@@ -2295,12 +2295,12 @@ namespace {
                         BUG(sp, "ValueUsage::Unkown on " << binding.rootSlot);
                     case HIRValueUsage::Borrow:
                         bt = HIRBorrowType::Shared;
-                        captureNodes.push_back(NEWNODE(mResolve.crate.types.borrow(bt, capTy, HIRLifetimeRef(HIRLifetimeRef::MAX_LOCAL + 1)), Borrow, sp, bt, mv$(valNode)));
+                        captureNodes.push_back(NEWNODE(mResolve.crate.types.borrow(bt, capTy), Borrow, sp, bt, mv$(valNode)));
                         tyMono = mResolve.crate.types.borrow(bt, tyMono);
                         break;
                     case HIRValueUsage::Mutate:
                         bt = HIRBorrowType::Unique;
-                        captureNodes.push_back(NEWNODE(mResolve.crate.types.borrow(bt, capTy, HIRLifetimeRef(HIRLifetimeRef::MAX_LOCAL + 1)), Borrow, sp, bt, mv$(valNode)));
+                        captureNodes.push_back(NEWNODE(mResolve.crate.types.borrow(bt, capTy), Borrow, sp, bt, mv$(valNode)));
                         tyMono = mResolve.crate.types.borrow(bt, tyMono);
                         break;
                     case HIRValueUsage::Move:

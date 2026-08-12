@@ -1569,7 +1569,6 @@ namespace {
         unsigned int fcnErasedCount = 0;
 
         ::std::vector<const HIRTypeData*> selfTypes;
-        ::std::vector<HIRLifetimeRef*> currentLifetime;
 
         typedef ::std::vector<::std::pair<const HIRSimplePath*, const HIRTrait*>> tTraitImports;
         tTraitImports traits;
@@ -1657,40 +1656,9 @@ namespace {
         }
 
     public:
-        void visitLifetime(const Span& sp, HIRLifetimeRef& lft) {
-            if (!lft.isParam()) {
-                switch (lft.binding) {
-                    case HIRLifetimeRef::STATIC: // 'static
-                        break;
-                    case HIRLifetimeRef::INFER: // '_
-                        //TODO(sp, "Handle explicitly elided lifetimes");
-                    case HIRLifetimeRef::UNKNOWN: // <none>
-                        // If there's a current liftime (i.e. we're within a borrow), then use that
-                        if (!currentLifetime.empty() && currentLifetime.back()) {
-                            lft = *currentLifetime.back();
-                        }
-                        // Otherwise, try to make a new one
-                        else if (curParams) {
-                            auto idx = curParams->mLifetimes.size();
-                            curParams->mLifetimes.push_back(HIRLifetimeDef{RcString::newInterned(FMT("elided#" << idx))});
-                            lft.binding = curParamsLevel * 256 + idx;
-                        } else {
-                            // TODO: Would error here, but don't fully support HKTs (e.g. `Fn(&i32)`)
-                        }
-                        break;
-                    default:
-                        BUG(sp, "Unexpected lifetime binding - " << lft);
-                }
-            }
-        }
-
         void visitPathParams(HIRPathParams& pp) override {
             static Span _sp;
             const Span& sp = _sp;
-
-            for (auto& lft : pp.mLifetimes) {
-                visitLifetime(sp, lft);
-            }
 
             HIRVisitor::visitPathParams(pp);
         }
@@ -1701,12 +1669,6 @@ namespace {
 
             assert(ty);
             auto data = ty->cloneData();
-
-            // Lifetime elision logic!
-            if (auto* e = data.opt_Borrow()) {
-                visitLifetime(sp, e->lifetime);
-                currentLifetime.push_back(&e->lifetime);
-            }
 
             auto self = crate.types.self();
             if (data.is_ErasedType()) {
@@ -1772,21 +1734,6 @@ namespace {
 
             if (data.is_ErasedType()) {
                 selfTypes.pop_back();
-            }
-
-            if (data.is_Borrow()) {
-                currentLifetime.pop_back();
-            }
-
-
-            if (auto* e = data.opt_TraitObject()) {
-                visitLifetime(sp, e->lifetime);
-            }
-
-            if (auto* e = data.opt_ErasedType()) {
-                for (auto& lft : e->lifetimeBounds) {
-                    visitLifetime(sp, lft);
-                }
             }
 
             ty = crate.types.intern(mv$(data));
@@ -2112,29 +2059,6 @@ namespace {
             curParamsLevel = savedParams.second;
         }
 
-        void addLifetimeBoundsForImplType(const Span& sp, HIRGenericParams& dst, const HIRTypeData* ty) {
-            // REF: rustc-1.29.0-src/src/vendor/clap/src/args/arg.rs:54 - Omitted lifetime bounds
-
-            // https://rust-lang.github.io/rfcs/2089-implied-bounds.html ?
-            // HACK: Just grab the lifetime bounds from a path type
-            if (ty->is_Path() && ty->as_Path().path.mData.is_Generic()) {
-                const auto& gp = ty->as_Path().path.mData.as_Generic();
-                const auto& ti = mResolve.crate.getTypeitemByPath(sp, gp.mPath);
-
-                const HIRGenericParams* params = nullptr;
-                if (const auto* e = ti.opt_Struct()) {
-                    params = &e->mParams;
-                } else if (const auto* e = ti.opt_Enum()) {
-                    params = &e->mParams;
-                } else if (const auto* e = ti.opt_Union()) {
-                    params = &e->mParams;
-                } else {
-                    DEBUG("TODO: Obtain bounds from " << ti.tagStr());
-                }
-
-                (void)params;
-            }
-        }
 
         void visitTypeImpl(HIRTypeImpl& impl) override {
             TRACE_FUNCTION_F("impl " << impl.mType);
@@ -2149,8 +2073,6 @@ namespace {
                 curParams = nullptr;
             }
 
-            // Propagate bounds from the type
-            addLifetimeBoundsForImplType(Span(), impl.mParams, impl.mType);
 
             HIRVisitor::visitTypeImpl(impl);
             // TODO: Check that the type is valid
@@ -2173,8 +2095,6 @@ namespace {
                 curParams = nullptr;
             }
 
-            // Propagate bounds from the type
-            addLifetimeBoundsForImplType(Span(), impl.mParams, impl.mType);
 
             HIRVisitor::visitTraitImpl(traitPath, impl);
             selfTypes.pop_back();
@@ -2403,8 +2323,6 @@ namespace {
                 curParams = nullptr;
             }
 
-            // Propagate bounds from the type/trait
-            addLifetimeBoundsForImplType(Span(), impl.mParams, impl.mType);
 
             HIRVisitor::visitMarkerImpl(traitPath, impl);
             // TODO: Check that the type+trait is valid
@@ -2424,7 +2342,6 @@ namespace {
             visitParams(item.mParams);
 
             fcnPtr = &item;
-            auto firstElidedLifetimeIdx = item.mParams.mLifetimes.size();
 
             // Visit arguments
             // - Used to convert `impl Trait` in argument position into generics
@@ -2437,29 +2354,6 @@ namespace {
             }
             curParams = nullptr;
 
-            // Get output lifetime
-            // - Try `&self`'s lifetime (if it was an elided lifetime)
-            HIRLifetimeRef elidedOutputLifetime;
-            if (item.receiver != HIRFunction::Receiver::Free) {
-                if (const auto* b = item.mArgs[0].second->opt_Borrow()) {
-                    // If this was an elided lifetime.
-                    if (b->lifetime.isParam() && (b->lifetime.binding >> 8) == 1 && (b->lifetime.binding & 0xFF) > firstElidedLifetimeIdx) {
-                        elidedOutputLifetime = b->lifetime;
-                    }
-                }
-            }
-            // - OR, look for only one elided lifetime
-            if (elidedOutputLifetime == HIRLifetimeRef()) {
-                if (item.mParams.mLifetimes.size() == firstElidedLifetimeIdx + 1) {
-                    elidedOutputLifetime = HIRLifetimeRef(256 + firstElidedLifetimeIdx);
-                }
-            }
-            // If present, set it (push to the stack)
-            assert(currentLifetime.empty());
-            if (elidedOutputLifetime != HIRLifetimeRef()) {
-                currentLifetime.push_back(&elidedOutputLifetime);
-            }
-
             // Visit return type (populates path for `impl Trait` in return position
             fcnPath = &p;
             fcnErasedCount = 0;
@@ -2469,11 +2363,6 @@ namespace {
             }
             fcnPath = nullptr;
             fcnPtr = nullptr;
-
-            if (elidedOutputLifetime != HIRLifetimeRef()) {
-                currentLifetime.pop_back();
-            }
-            assert(currentLifetime.empty());
 
             if (item.receiver == HIRFunction::Receiver::Custom) {
                 ASSERT_BUG(Span(), item.receiverType, "Custom receiver without a receiver type");

@@ -301,9 +301,6 @@ void HIRTypeData::fmt(::std::ostream& os) const {
             for (const auto& tr : e.markers) {
                 os << "+" << tr;
             }
-            if (e.lifetime != HIRLifetimeRef::newStatic()) {
-                os << "+" << e.lifetime;
-            }
             os << ")";
         }
         TU_ARMA(ErasedType, e) {
@@ -313,11 +310,6 @@ void HIRTypeData::fmt(::std::ostream& os) const {
                     os << "+";
                 }
                 os << tr;
-            }
-            if (!e.lifetimeBounds.empty()) {
-                for (const auto& lft : e.lifetimeBounds) {
-                    os << "+" << lft;
-                }
             }
             os << "+use" << e.use;
             os << "/*";
@@ -349,7 +341,6 @@ void HIRTypeData::fmt(::std::ostream& os) const {
         }
         TU_ARMA(Borrow, e) {
             os << "&";
-            os << e.lifetime << " ";
             switch (e.type) {
                 case HIRBorrowType::Shared:
                     os << "";
@@ -645,7 +636,7 @@ namespace {
             }
             TU_ARMA(Generic, ae, be) return exactGenericRefEqual(ae, be);
             TU_ARMA(TraitObject, ae, be) {
-                if (!exactTraitPathEqual(ae.mTrait, be.mTrait) || ae.lifetime != be.lifetime || ae.markers.size() != be.markers.size()) {
+                if (!exactTraitPathEqual(ae.mTrait, be.mTrait) || ae.markers.size() != be.markers.size()) {
                     return false;
                 }
                 for (size_t i = 0; i < ae.markers.size(); i++) {
@@ -656,7 +647,7 @@ namespace {
                 return true;
             }
             TU_ARMA(ErasedType, ae, be) {
-                if (ae.isSized != be.isSized || ae.usePresent != be.usePresent || ae.traits.size() != be.traits.size() || ae.lifetimeBounds != be.lifetimeBounds || !exactErasedInnerEqual(ae.inner, be.inner) || !exactPathParamsEqual(ae.use, be.use)) {
+                if (ae.isSized != be.isSized || ae.usePresent != be.usePresent || ae.traits.size() != be.traits.size() || !exactErasedInnerEqual(ae.inner, be.inner) || !exactPathParamsEqual(ae.use, be.use)) {
                     return false;
                 }
                 for (size_t i = 0; i < ae.traits.size(); i++) {
@@ -669,7 +660,7 @@ namespace {
             TU_ARMA(Array, ae, be) return ae.inner == be.inner && exactArraySizeEqual(ae.size, be.size);
             TU_ARMA(Slice, ae, be) return ae.inner == be.inner;
             TU_ARMA(Tuple, ae, be) return ae == be;
-            TU_ARMA(Borrow, ae, be) return ae.lifetime == be.lifetime && ae.type == be.type && ae.inner == be.inner;
+            TU_ARMA(Borrow, ae, be) return ae.type == be.type && ae.inner == be.inner;
             TU_ARMA(Pointer, ae, be) return ae.type == be.type && ae.inner == be.inner;
             TU_ARMA(NamedFunction, ae, be) {
                 if (!exactPathEqual(ae.path, be.path) || ae.def.tag() != be.def.tag()) {
@@ -789,16 +780,12 @@ namespace {
                 for (const auto& marker : e.markers) {
                     flags |= typeFlags(marker);
                 }
-                addLifetimeFlags(flags, e.lifetime);
             }
             TU_ARMA(ErasedType, e) {
                 for (const auto& trait : e.traits) {
                     flags |= typeFlags(trait);
                 }
                 flags |= typeFlags(e.use);
-                for (const auto lifetime : e.lifetimeBounds) {
-                    addLifetimeFlags(flags, lifetime);
-                }
             TU_MATCH_HDRA((e.inner), {)
             TU_ARMA(Fcn, inner) flags |= typeFlags(inner.origin);
                     TU_ARMA(Known, inner) addTypeFlags(flags, inner);
@@ -815,7 +802,6 @@ namespace {
             TU_ARMA(Tuple, e) for (const auto inner : e) addTypeFlags(flags, inner);
             TU_ARMA(Borrow, e) {
                 addTypeFlags(flags, e.inner);
-                addLifetimeFlags(flags, e.lifetime);
             }
             TU_ARMA(Pointer, e) addTypeFlags(flags, e.inner);
             TU_ARMA(NamedFunction, e) flags |= typeFlags(e.path);
@@ -972,7 +958,6 @@ namespace {
             TU_ARMA(TraitObject, e) {
                 h = hashMix(h, hashGenericPath(e.mTrait.mPath));
                 h = hashMix(h, reinterpret_cast<uintptr_t>(e.mTrait.traitPtr));
-                h = hashMix(h, e.lifetime.binding);
                 for (const auto& marker : e.markers) {
                     h = hashMix(h, hashGenericPath(marker));
                 }
@@ -1006,7 +991,6 @@ namespace {
                 }
             }
             TU_ARMA(Borrow, e) {
-                h = hashMix(h, e.lifetime.binding);
                 h = hashMix(h, static_cast<size_t>(e.type));
                 h = hashMix(h, hashTypeRef(e.inner));
             }
@@ -1074,8 +1058,8 @@ HIRTypeRef HIRTypeInterner::diverge() {
     return intern(HIRTypeData::make_Diverge({}));
 }
 
-HIRTypeRef HIRTypeInterner::borrow(HIRBorrowType bt, HIRTypeRef inner, HIRLifetimeRef lft) {
-    return intern(HIRTypeData::make_Borrow({lft, bt, inner}));
+HIRTypeRef HIRTypeInterner::borrow(HIRBorrowType bt, HIRTypeRef inner) {
+    return intern(HIRTypeData::make_Borrow({bt, inner}));
 }
 
 HIRTypeRef HIRTypeInterner::pointer(HIRBorrowType bt, HIRTypeRef inner) {
@@ -1620,10 +1604,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
                 return HIRCompare::Unequal;
             }
 
-            if (te.lifetime.isParam()) {
-                /*cmp &= */ this->matchLft(HIRGenericRef("", te.lifetime.binding), xe.lifetime);
-            }
-
             return cmp;
         }
         TU_ARMA(ErasedType, te, xe) {
@@ -1693,11 +1673,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
                 return HIRCompare::Unequal;
             }
             auto rv = HIRCompare::Equal;
-            if (te.lifetime.isParam()) {
-                /*rv &=*/this->matchLft(te.lifetime.asParam(), xe.lifetime);
-            } else {
-                //if( te.lifetime != xe.lifetime )
-            }
             rv &= this->cmpType(sp, te.inner, xe.inner, resolvePlaceholder);
             return rv;
         }
@@ -1800,7 +1775,6 @@ HIRTypeData HIRTypeData::cloneData() const {
             for (const auto& trait : e.markers) {
                 rv.markers.push_back(trait.clone());
             }
-            rv.lifetime = e.lifetime;
             return HIRTypeData::make_TraitObject(mv$(rv));
         }
         TU_ARMA(ErasedType, e) {
@@ -1823,7 +1797,6 @@ HIRTypeData HIRTypeData::cloneData() const {
         return HIRTypeData::make_ErasedType({
             e.isSized,
             mv$(traits),
-            e.lifetimeBounds,
             mv$(inner),
             e.use.clone(),
             e.usePresent
@@ -1843,7 +1816,7 @@ HIRTypeData HIRTypeData::cloneData() const {
             return HIRTypeData::make_Tuple(mv$(types));
         }
         TU_ARMA(Borrow, e) {
-            return HIRTypeData::make_Borrow({e.lifetime, e.type, e.inner});
+            return HIRTypeData::make_Borrow({e.type, e.inner});
         }
         TU_ARMA(Pointer, e) {
             return HIRTypeData::make_Pointer({e.type, e.inner});

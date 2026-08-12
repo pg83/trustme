@@ -1084,7 +1084,7 @@ HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
         }
         TU_ARMA(Borrow, e) {
             auto cl = (e.isMut ? HIRBorrowType::Unique : HIRBorrowType::Shared);
-            return gCratePtr->types.borrow(cl, LowerHIRType(*e.inner), LowerHIRLifetimeRef(e.lifetime));
+            return gCratePtr->types.borrow(cl, LowerHIRType(*e.inner));
         }
         TU_ARMA(Pointer, e) {
             auto cl = (e.isMut ? HIRBorrowType::Unique : HIRBorrowType::Shared);
@@ -1137,13 +1137,6 @@ HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
         }
         TU_ARMA(TraitObject, e) {
             HIRTypeData::Data_TraitObject v;
-            if (e.lifetimes.empty()) {
-                // Lifetime elision should have handled this?
-            } else if (e.lifetimes.size() == 1) {
-                v.lifetime = LowerHIRLifetimeRef(e.lifetimes[0]);
-            } else {
-                BUG(ty.span(), "Handle multiple lifetimes on a trait object - " << ty);
-            }
             TraitObjectLowering lowering(ty.span(), v);
             for (const auto& t : e.traits) {
                 DEBUG("t = " << *t.path);
@@ -1174,10 +1167,6 @@ HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
                     TODO(ty.span(), "Optional trait (not Sized) - " << ty);
                 }
             }
-            std::vector<HIRLifetimeRef> lfts;
-            for (const auto& lft : e->lifetimes) {
-                lfts.push_back(LowerHIRLifetimeRef(lft));
-            }
             TypeDataErasedTypeInner inner;
             if (gImplTraitSource.path) {
                 if (gImplTraitSource.paramsInner && gImplTraitSource.paramsInner->isGeneric()) {
@@ -1187,7 +1176,7 @@ HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
             } else {
                 inner = TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}; // Populated in bind, could be populated now?
             }
-            return gCratePtr->types.intern(HIRTypeData::make_ErasedType({isSized, mv$(traits), mv$(lfts), mv$(inner), e->use ? LowerHIRPathParams(ty.span(), *e->use, false) : HIRPathParams(), e->use ? HIRTypeDataErasedType::Use::Present : (e->isEdition2024OrLater ? HIRTypeDataErasedType::Use::Omitted2024 : HIRTypeDataErasedType::Use::OmittedOld)}));
+            return gCratePtr->types.intern(HIRTypeData::make_ErasedType({isSized, mv$(traits), mv$(inner), e->use ? LowerHIRPathParams(ty.span(), *e->use, false) : HIRPathParams(), e->use ? HIRTypeDataErasedType::Use::Present : (e->isEdition2024OrLater ? HIRTypeDataErasedType::Use::Omitted2024 : HIRTypeDataErasedType::Use::OmittedOld)}));
         }
         TU_ARMA(Function, e) {
             HIRGenericParams params;
@@ -1735,7 +1724,7 @@ HIRFunction LowerHIRFunction(HIRItemPath p, const ASTAttributeList& attrs, const
                     if (!isValidCustomReceiver(inner)) {
                         return false;
                     }
-                    ty = gCratePtr->types.borrow(e.type, inner, e.lifetime);
+                    ty = gCratePtr->types.borrow(e.type, inner);
                     return true;
                 } else if (ty->is_Pointer()) {
                     const auto& e = ty->as_Pointer();
@@ -1756,7 +1745,7 @@ HIRFunction LowerHIRFunction(HIRItemPath p, const ASTAttributeList& attrs, const
         } else if (const auto* e = argSelfTy->opt_Borrow()) {
             if (e->inner == gCratePtr->types.self() || e->inner == realSelfType) {
                 if (e->inner == realSelfType) {
-                    argSelfTy = gCratePtr->types.borrow(e->type, gCratePtr->types.self(), e->lifetime);
+                    argSelfTy = gCratePtr->types.borrow(e->type, gCratePtr->types.self());
                 }
                 switch (e->type) {
                     case HIRBorrowType::Owned:
@@ -1772,7 +1761,7 @@ HIRFunction LowerHIRFunction(HIRItemPath p, const ASTAttributeList& attrs, const
             } else {
                 auto inner = e->inner;
                 if (ivcr.isValidCustomReceiver(inner)) {
-                    argSelfTy = gCratePtr->types.borrow(e->type, inner, e->lifetime);
+                    argSelfTy = gCratePtr->types.borrow(e->type, inner);
                     receiver = HIRFunction::Receiver::Custom;
                 }
             }
@@ -1908,7 +1897,7 @@ HIRFunction LowerHIRFunction(HIRItemPath p, const ASTAttributeList& attrs, const
         HIRTraitPath futurePath;
         futurePath.mPath.mPath = gCratePtr->getLangItemPath(sp, "future_trait");
         futurePath.typeBounds.insert(std::make_pair(RcString::newInterned("Output"), HIRTraitPath::AtyEqual{futurePath.mPath.clone(), {}, std::move(rv.returnType)}));
-        rv.returnType = gCratePtr->types.intern(HIRTypeData::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(futurePath)), {}, TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
+        rv.returnType = gCratePtr->types.intern(HIRTypeData::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(futurePath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
     }
 
     return rv;

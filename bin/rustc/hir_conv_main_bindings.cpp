@@ -359,7 +359,7 @@ namespace {
                             (Enum, fixParamCount(crate.types, sp, pe, e3.mParams, pe.mParams, /*fill_infer=*/inExpr != 0); e->binding = HIRTypePathBinding::make_Enum(&e3); DEBUG("- " << ty);),
                             (Trait,
                              // TODO: Should this reassign instead?
-                             data = HIRTypeData::make_TraitObject({HIRTraitPath{{}, mv$(pe), {}, {}}, {}, {}});)
+                             data = HIRTypeData::make_TraitObject({HIRTraitPath{{}, mv$(pe), {}, {}}, {}});)
                         )
                     }
                     TU_ARMA(UfcsUnknown, pe) {

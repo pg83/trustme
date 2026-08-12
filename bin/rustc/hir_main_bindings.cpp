@@ -1049,13 +1049,13 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
         _(Primitive, static_cast<HIRCoreType>(in.readTag()))
         _(Path, {deserialisePath(), {}, in.readBool() ? box$(deserialiseGenericparams()) : nullptr})
         _(Generic, deserialiseGenericref())
-        _(TraitObject, {deserialiseTraitpath(), deserialiseVec<HIRGenericPath>(), deserialiseLifetimeref()})
+        _(TraitObject, {deserialiseTraitpath(), deserialiseVec<HIRGenericPath>()})
         case HIRTypeData::TAG_ErasedType:
             TODO(Span(), "ErasedType");
             _(Array, {deserialiseType(), deserialiseArraysize()})
             _(Slice, {deserialiseType()})
             _(Tuple, deserialiseVec<HIRTypeRef>())
-            _(Borrow, {deserialiseLifetimeref(), static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
+            _(Borrow, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(Pointer, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(NamedFunction, {deserialisePath()})
             _(Function, {deserialiseGenericparams(), in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVec<HIRTypeRef>()})
@@ -2694,14 +2694,12 @@ public:
             TU_ARMA(TraitObject, e) {
                 serialiseTraitpath(e.mTrait);
                 serialiseVec(e.markers);
-                serialise(e.lifetime);
             }
             TU_ARMA(ErasedType, e) {
                 TODO(Span(), "Serialse ErasedType?");
 
                 out.writeBool(e.isSized);
                 serialiseVec(e.traits);
-                serialiseVec(e.lifetimeBounds);
                 serialisePathparams(e.use);
             }
             TU_ARMA(Array, e) {
@@ -2715,7 +2713,6 @@ public:
                 serialiseVec(e);
             }
             TU_ARMA(Borrow, e) {
-                serialise(e.lifetime);
                 out.writeTag(static_cast<int>(e.type));
                 serialiseType(e.inner);
             }

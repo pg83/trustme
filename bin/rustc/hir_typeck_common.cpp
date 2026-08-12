@@ -386,21 +386,6 @@ struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
         if (ty->is_Array() && ty->as_Array().size.is_Unevaluated() /*&& ty->as_Array().size.as_Unevaluated().*/) {
             return true;
         }
-        if (!this->ignoreLifetimes) {
-            if (ty->is_Borrow() && isGenericLft(ty->as_Borrow().lifetime)) {
-                return true;
-            }
-            if (ty->is_TraitObject() && isGenericLft(ty->as_TraitObject().lifetime)) {
-                return true;
-            }
-            if (ty->is_ErasedType()) {
-                for (const auto& l : ty->as_ErasedType().lifetimeBounds) {
-                    if (isGenericLft(l)) {
-                        return true;
-                    }
-                }
-            }
-        }
         return TyVisitor::visitType(ty);
     }
 };
@@ -456,7 +441,6 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
                     to.markers.push_back(this->monomorphGenericpath(sp, trait, allowInfer, false));
                 }
             }
-            to.lifetime = monomorphLifetime(sp, e.lifetime);
             return types.intern(HIRTypeData::make_TraitObject(mv$(to)));
         }
         TU_ARMA(ErasedType, e) {
@@ -464,10 +448,6 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
             traits.reserve(e.traits.size());
             for (const auto& trait : e.traits) {
                 traits.push_back(this->monomorphTraitpath(sp, trait, allowInfer, false));
-            }
-            ::std::vector<HIRLifetimeRef> lfts;
-            for (const auto& lft : e.lifetimeBounds) {
-                lfts.push_back(monomorphLifetime(sp, lft));
             }
 
             TypeDataErasedTypeInner inner;
@@ -486,7 +466,6 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
         return types.intern(HIRTypeData::make_ErasedType(HIRTypeData::Data_ErasedType {
             e.isSized,
             mv$(traits),
-            mv$(lfts),
             mv$(inner),
             this->monomorphPathParams(sp, e.use, allowInfer),
             e.usePresent
@@ -506,7 +485,7 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
             return this->types.tuple(mv$(types));
         }
         TU_ARMA(Borrow, e) {
-            return types.borrow(e.type, this->monomorphType(sp, e.inner, allowInfer), monomorphLifetime(sp, e.lifetime));
+            return types.borrow(e.type, this->monomorphType(sp, e.inner, allowInfer));
         }
         TU_ARMA(Pointer, e) {
             return types.pointer(e.type, this->monomorphType(sp, e.inner, allowInfer));

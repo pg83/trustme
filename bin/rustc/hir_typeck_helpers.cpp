@@ -410,9 +410,6 @@ void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LLis
         }
         TU_ARMA(Borrow, e) {
             os << "&";
-            if (e.lifetime != HIRLifetimeRef()) {
-                os << e.lifetime << " ";
-            }
             switch (e.type) {
                 case HIRBorrowType::Shared:
                     os << "";
@@ -495,9 +492,6 @@ void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LLis
                 os << "+";
                 this->printGenericpath(os, marker, stack);
             }
-            if (e.lifetime != HIRLifetimeRef::newStatic()) {
-                os << "+" << e.lifetime;
-            }
             os << ")";
         }
         TU_ARMA(ErasedType, e) {
@@ -507,11 +501,6 @@ void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LLis
                     os << "+";
                 }
                 printTraitpath(tr);
-            }
-            if (!e.lifetimeBounds.empty()) {
-                for (const auto& lft : e.lifetimeBounds) {
-                    os << "+" << lft;
-                }
             }
             os << "+use";
             this->printPathparams(os, e.use, outerStack);
